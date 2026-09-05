@@ -20,7 +20,8 @@ export async function persistPrinterProfile(
 	const id = existingId ?? uuidv4();
 	if (existingId) {
 		const doc = await collection.findOne(existingId).exec();
-		if (doc) await doc.patch(profileData);
+		if (!doc) throw new Error(`Printer profile ${existingId} no longer exists`);
+		await doc.patch(profileData);
 	} else {
 		await collection.insert({ id, ...profileData });
 	}

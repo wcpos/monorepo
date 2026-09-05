@@ -45,10 +45,21 @@ export function classifyPrinter(
 	return lane && canPrintLane(lane.protocol, createIdentifyProbes()) ? 'ready' : 'unknown';
 }
 interface SetupState {
-	phase: 'scanning' | 'results' | 'printing' | 'asking' | 'trouble' | 'saving' | 'saved' | 'error';
+	phase:
+		| 'scanning'
+		| 'results'
+		| 'printing'
+		| 'asking'
+		| 'width'
+		| 'trouble'
+		| 'saving'
+		| 'saved'
+		| 'error';
 	found: SetupCandidate[];
 	selected?: SetupCandidate;
 	columns: number;
+	/** False when neither identification nor the model table knows the paper width. */
+	columnsKnown: boolean;
 	testPages: number;
 	failure?: TestPrintFailure;
 	profileDraft: PrinterFormValues;
@@ -81,6 +92,7 @@ export function usePrinterSetupFlow(
 		phase: 'scanning',
 		found: [],
 		columns: 42,
+		columnsKnown: false,
 		testPages: 0,
 		profileDraft: {
 			...DEFAULT_FORM_VALUES,
@@ -122,6 +134,9 @@ export function usePrinterSetupFlow(
 			(keepDraft ? current.current.profileDraft.vendor : undefined) ??
 			'generic';
 		if (web) vendor = vendor === 'star' ? 'star' : 'epson';
+		// A chooser-picked device on Electron carries no identity; plain ESC/POS is the safe profile.
+		else if (/^web(usb|bluetooth):/.test(selected.address) && !selected.identity?.vendor)
+			vendor = 'generic';
 		const lane = selected.identity?.lane;
 		// A lane this platform cannot print (e.g. WebPRNT on Electron) must not become the raw port.
 		const lanePort =
@@ -129,7 +144,15 @@ export function usePrinterSetupFlow(
 		const base = keepDraft
 			? current.current.profileDraft
 			: { ...DEFAULT_FORM_VALUES, isDefault: printerCount === 0 };
-		update({ selected: candidate(selected), failure: undefined });
+		const knownColumns =
+			selected.connectionType === 'network'
+				? selected.identity?.columns
+				: identifyModel(selected.name).columns;
+		update({
+			selected: candidate(selected),
+			failure: undefined,
+			columnsKnown: knownColumns != null,
+		});
 		updateDraft({
 			...base,
 			name: keepDraft ? base.name : selected.name,
@@ -140,10 +163,7 @@ export function usePrinterSetupFlow(
 			port: web
 				? resolveWebPort(vendor, lane?.port ?? selected.port)
 				: (lanePort ?? selected.port ?? base.port ?? 9100),
-			columns:
-				selected.connectionType === 'network'
-					? (selected.identity?.columns ?? base.columns ?? 42)
-					: (identifyModel(selected.name).columns ?? 42),
+			columns: knownColumns ?? (selected.connectionType === 'network' ? (base.columns ?? 42) : 42),
 		});
 	}
 	function fail(error: unknown, phase: 'trouble' | 'error') {
@@ -254,15 +274,15 @@ export function usePrinterSetupFlow(
 			select(device, false);
 		}
 	}, [discovery.isBluetoothScanning, discovery.printers]);
+	function chooseWidth(columns: number) {
+		updateDraft({ columns });
+		update({ columnsKnown: true });
+		return testPrint();
+	}
 	async function answer(value: 'ok' | 'short' | 'none') {
 		if (value === 'none') return update({ phase: 'trouble', failure: undefined });
-		if (value === 'short') {
-			const widths = [42, 48, 64, 32];
-			updateDraft({
-				columns: widths[(widths.indexOf(current.current.columns) + 1) % widths.length],
-			});
-			return testPrint();
-		}
+		// The ruler answer opens the width choice; the next page prints on the cashier's pick.
+		if (value === 'short') return update({ phase: 'width' });
 		if (current.current.phase === 'saving') return;
 		update({ phase: 'saving' });
 		try {
@@ -287,17 +307,22 @@ export function usePrinterSetupFlow(
 				createIdentifyProbes()
 			);
 			if (!active.current) return;
-			select(
-				{
-					id: values.address,
-					address: values.address,
-					name: values.name,
-					connectionType: 'network',
-					identity,
-				},
-				true
-			);
-			await testPrint();
+			const manual: DiscoveredPrinter = {
+				id: values.address,
+				address: values.address,
+				name: values.name,
+				connectionType: 'network',
+				identity,
+			};
+			// The checked address lands as a selected card; printing stays the cashier's tap.
+			update({
+				phase: 'results',
+				found: [
+					...current.current.found.filter((p) => p.address !== manual.address),
+					candidate(manual),
+				],
+			});
+			select(manual, true);
 		} catch (error) {
 			if (active.current) fail(error, 'error');
 		}
@@ -314,6 +339,7 @@ export function usePrinterSetupFlow(
 		start,
 		startBluetoothScan,
 		startUsbPicker,
+		chooseWidth,
 		select,
 		testPrint,
 		answer,

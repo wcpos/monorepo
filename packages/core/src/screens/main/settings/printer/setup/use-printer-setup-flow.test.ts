@@ -156,6 +156,10 @@ it('cycles a short ruler from 42 to 48 and prints a second page', async () => {
 	await act(async () => {
 		await flow.answer('short');
 	});
+	expect(flow.state.phase).toBe('width');
+	await act(async () => {
+		await flow.chooseWidth(48);
+	});
 	expect(flow.state.columns).toBe(48);
 	expect(flow.state.profileDraft.columns).toBe(48);
 	expect(flow.state.testPages).toBe(2);

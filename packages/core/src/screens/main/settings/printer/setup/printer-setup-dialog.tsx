@@ -87,7 +87,16 @@ export function PrinterSetupDialog({
 		},
 		{ platform }
 	);
-	const { phase, found, selected, columns, testPages, failure, profileDraft: draft } = flow.state;
+	const {
+		phase,
+		found,
+		selected,
+		columns,
+		columnsKnown,
+		testPages,
+		failure,
+		profileDraft: draft,
+	} = flow.state;
 	const schema = web ? webPrinterSchema : electronPrinterSchema;
 	const form = useForm<PrinterFormValues>({
 		values: draft,
@@ -203,7 +212,7 @@ export function PrinterSetupDialog({
 		selected &&
 		(isUsbLikeDevice(selected) ||
 			hasTargetKind(selected, 'serial') ||
-			(web && /^web(usb|bluetooth):/.test(selected.address)));
+			/^web(usb|bluetooth):/.test(selected.address));
 	const officeOnly =
 		printable.length === 0 && found.some((p) => classifyPrinter(p, platform) === 'notprinter');
 	const scanning = busy && !bleScanning;
@@ -251,11 +260,16 @@ export function PrinterSetupDialog({
 		<View className="gap-0.5">
 			<Text className="text-2xl font-bold tracking-tight">{draft.name}</Text>
 			<Text className="text-muted-foreground text-sm">
-				{t('settings.setup_details', {
-					address: draft.address,
-					vendor: vendors.find((v) => v.value === draft.vendor)?.label,
-					port: draft.port,
-				})}
+				{deviceLane
+					? t('settings.setup_details_device', {
+							source: t(`settings.setup_source_${selected?.source ?? 'usb'}`),
+							vendor: vendors.find((v) => v.value === draft.vendor)?.label,
+						})
+					: t('settings.setup_details', {
+							address: draft.address,
+							vendor: vendors.find((v) => v.value === draft.vendor)?.label,
+							port: draft.port,
+						})}
 			</Text>
 		</View>
 	);
@@ -296,7 +310,7 @@ export function PrinterSetupDialog({
 								<>
 									{heading(
 										printable.length === 1
-											? 'found_one'
+											? 'found_single'
 											: printable.length > 1
 												? 'which_printer'
 												: officeOnly
@@ -305,6 +319,20 @@ export function PrinterSetupDialog({
 									)}
 									{cards}
 									{printable.length === 0 && line('none_help')}
+									{selected &&
+										!columnsKnown &&
+										printable.some((p) => p.address === selected.address) &&
+										row(
+											<Text key="label" className="text-muted-foreground text-sm">
+												{t('settings.setup_paper_label')}
+											</Text>,
+											...([32, 48] as const).map((n) =>
+												action(`setup_paper_${n}`, () => flow.updateDraft({ columns: n }), {
+													variant: columns === n ? 'default' : 'outline',
+													disabled: printerBusy,
+												})
+											)
+										)}
 									{selected &&
 										printable.some((p) => p.address === selected.address) &&
 										action('setup_print_test', () => void flow.testPrint(), {
@@ -329,7 +357,7 @@ export function PrinterSetupDialog({
 									{chooser}
 								</>
 							)}
-							{(phase === 'asking' || phase === 'trouble') && headline}
+							{(phase === 'asking' || phase === 'width' || phase === 'trouble') && headline}
 							{phase === 'asking' && (
 								<>
 									{heading('question')}
@@ -347,11 +375,30 @@ export function PrinterSetupDialog({
 									</Text>
 								</>
 							)}
+							{phase === 'width' && (
+								<>
+									{heading('width_question')}
+									<VStack className="gap-2.5">
+										{([32, 42, 48, 64] as const).map((n) =>
+											action(`setup_width_${n}`, () => void flow.chooseWidth(n), {
+												variant: columns === n ? 'default' : 'outline',
+												full: true,
+											})
+										)}
+									</VStack>
+								</>
+							)}
 							{phase === 'trouble' && (
 								<>
 									<View className="gap-1">
 										{heading('trouble')}
-										{line(deviceLane ? 'trouble_device' : 'trouble_network')}
+										{line(
+											selected?.source === 'bluetooth'
+												? 'trouble_bluetooth'
+												: deviceLane
+													? 'trouble_device'
+													: 'trouble_network'
+										)}
 									</View>
 									{failure && <TestPrintError error={failure} />}
 									{row(
@@ -368,10 +415,10 @@ export function PrinterSetupDialog({
 								<>
 									<TestPrintError error={failure ?? null} />
 									{row(
-										action('setup_scan_again', () => void flow.rescan(), {
+										action('setup_retry', answer('ok'), {
+											variant: 'default',
 											icon: 'arrowRotateRight',
 										}),
-										action('save_anyway', answer('ok')),
 										guide
 									)}
 								</>
@@ -402,120 +449,122 @@ export function PrinterSetupDialog({
 									</View>
 								</View>
 							)}
-							<View className="border-border mt-1 border-t pt-3">
-								<Collapsible open={optionsOpen} onOpenChange={setOptionsOpen}>
-									<CollapsibleTrigger testID="printer-setup-options">
-										<View className="flex-row items-center gap-1.5">
-											<Icon
-												name={optionsOpen ? 'chevronDown' : 'chevronRight'}
-												size="xs"
-												className="text-muted-foreground"
-											/>
-											<Text className="text-muted-foreground text-sm font-semibold">
-												{t('settings.setup_options')}
-											</Text>
-										</View>
-									</CollapsibleTrigger>
-									<CollapsibleContent>
-										<VStack className="gap-3 pt-3">
-											<FormField
-												control={form.control}
-												name="name"
-												render={({ field }) => (
-													<FormInput
-														{...field}
-														testID="printer-setup-name"
-														editable={!busy && phase !== 'saved'}
-														label={t('settings.printer_name')}
-													/>
-												)}
-											/>
-											<View className="flex-row gap-3">
-												<View className="flex-1">
-													<FormField
-														control={form.control}
-														name="address"
-														render={({ field }) => (
-															<FormInput
-																{...field}
-																testID="printer-setup-address"
-																editable={!busy && phase !== 'saved'}
-																label={t('settings.printer_address')}
-																autoFocus={focusAddress}
-															/>
-														)}
-													/>
-												</View>
-												<View className="w-28">
-													<FormField
-														control={form.control}
-														name="port"
-														render={({ field }) => (
-															<FormInput
-																{...field}
-																testID="printer-setup-port"
-																editable={!busy && phase !== 'saved'}
-																label={t('settings.printer_port')}
-																type="numeric"
-															/>
-														)}
-													/>
-												</View>
+							{phase !== 'saved' && (
+								<View className="border-border mt-1 border-t pt-3">
+									<Collapsible open={optionsOpen} onOpenChange={setOptionsOpen}>
+										<CollapsibleTrigger testID="printer-setup-options">
+											<View className="flex-row items-center gap-1.5">
+												<Icon
+													name={optionsOpen ? 'chevronDown' : 'chevronRight'}
+													size="xs"
+													className="text-muted-foreground"
+												/>
+												<Text className="text-muted-foreground text-sm font-semibold">
+													{t('settings.setup_options')}
+												</Text>
 											</View>
-											<FormField
-												control={form.control}
-												name="vendor"
-												render={({ field }) =>
-													web ? (
-														<WebVendorSegmented
-															vendor={field.value}
-															onSelect={(vendor) => {
-																field.onChange(vendor);
-																form.setValue('port', deriveWebVendorDefaults(vendor).port);
-															}}
+										</CollapsibleTrigger>
+										<CollapsibleContent>
+											<VStack className="gap-3 pt-3">
+												<FormField
+													control={form.control}
+													name="name"
+													render={({ field }) => (
+														<FormInput
+															{...field}
+															testID="printer-setup-name"
+															editable={!busy}
+															label={t('settings.printer_name')}
 														/>
-													) : (
+													)}
+												/>
+												<View className="flex-row gap-3">
+													<View className="flex-1">
+														<FormField
+															control={form.control}
+															name="address"
+															render={({ field }) => (
+																<FormInput
+																	{...field}
+																	testID="printer-setup-address"
+																	editable={!busy}
+																	label={t('settings.printer_address')}
+																	autoFocus={focusAddress}
+																/>
+															)}
+														/>
+													</View>
+													<View className="w-28">
+														<FormField
+															control={form.control}
+															name="port"
+															render={({ field }) => (
+																<FormInput
+																	{...field}
+																	testID="printer-setup-port"
+																	editable={!busy}
+																	label={t('settings.printer_port')}
+																	type="numeric"
+																/>
+															)}
+														/>
+													</View>
+												</View>
+												<FormField
+													control={form.control}
+													name="vendor"
+													render={({ field }) =>
+														web ? (
+															<WebVendorSegmented
+																vendor={field.value}
+																onSelect={(vendor) => {
+																	field.onChange(vendor);
+																	form.setValue('port', deriveWebVendorDefaults(vendor).port);
+																}}
+															/>
+														) : (
+															<FormSelect
+																{...field}
+																customComponent={VendorSelect}
+																options={vendors}
+																label={t('settings.printer_vendor')}
+															/>
+														)
+													}
+												/>
+												<FormField
+													control={form.control}
+													name="columns"
+													render={({ field }) => (
 														<FormSelect
 															{...field}
-															customComponent={VendorSelect}
-															options={vendors}
-															label={t('settings.printer_vendor')}
+															value={String(field.value)}
+															onChange={(value: string) => field.onChange(Number(value))}
+															customComponent={SetupWidthSelect}
+															label={t('settings.printer_text_width')}
 														/>
-													)
-												}
-											/>
-											<FormField
-												control={form.control}
-												name="columns"
-												render={({ field }) => (
-													<FormSelect
-														{...field}
-														value={String(field.value)}
-														onChange={(value: string) => field.onChange(Number(value))}
-														customComponent={SetupWidthSelect}
-														label={t('settings.printer_text_width')}
-													/>
+													)}
+												/>
+												<PrinterToggleGroup form={form} />
+												{row(
+													action(
+														'setup_check_address',
+														() => void form.handleSubmit((data) => flow.checkAddress(data))(),
+														{ variant: 'default' }
+													),
+													!scanScreen &&
+														action('setup_scan_again', () => void flow.rescan(), {
+															icon: 'arrowRotateRight',
+														}),
+													!scanScreen && usb,
+													!scanScreen && bluetooth
 												)}
-											/>
-											<PrinterToggleGroup form={form} />
-											{row(
-												action(
-													'setup_check_address',
-													() => void form.handleSubmit((data) => flow.checkAddress(data))(),
-													{ variant: 'default' }
-												),
-												!scanScreen &&
-													action('setup_scan_again', () => void flow.rescan(), {
-														icon: 'arrowRotateRight',
-													}),
-												!scanScreen && usb,
-												!scanScreen && bluetooth
-											)}
-											{!scanScreen && chooser}
-										</VStack>
-									</CollapsibleContent>
-								</Collapsible>
-							</View>
+												{!scanScreen && chooser}
+											</VStack>
+										</CollapsibleContent>
+									</Collapsible>
+								</View>
+							)}
 						</VStack>
 					</Form>
 				</DialogBody>

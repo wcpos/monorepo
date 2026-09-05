@@ -36,7 +36,7 @@ export function PrintersEmptyState({ onAddPrinter }: PrintersEmptyStateProps) {
 						<Text>{t('settings.add_printer')}</Text>
 					</Button>
 					<DocsLink testID="printing-printer-guide-link" href={PRINTER_DOCS_URL}>
-						{t('settings.set_up_a_printer')}
+						{t('settings.setup_open_guide')}
 					</DocsLink>
 				</HStack>
 			</VStack>
