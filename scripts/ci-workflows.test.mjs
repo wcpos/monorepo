@@ -2252,7 +2252,7 @@ test('relaunch recovery retries one launch and preserves each caller readiness t
 // carry the identical wrapper; this finds it wherever it lives.
 function coldStartRetry(flow, filename) {
 	const issuesLink = (command) =>
-		String(command.retry?.commands?.[0]?.openLink ?? '').startsWith('wcpos://');
+		String(command.retry?.commands?.[0]?.openLink ?? '').startsWith('wcpos-dev://');
 	const topLevel = flow.find(issuesLink)?.retry;
 	if (topLevel) return topLevel;
 	const recovery = flow.find(
@@ -2298,7 +2298,7 @@ test('clean-start flows re-issue a dropped openLink, gated on the connect screen
 		assert.equal(wrapper.maxRetries, 1, `${filename}: one re-issue of the link`);
 		assert.match(
 			String(wrapper.commands[0].openLink ?? ''),
-			/^wcpos:\/\/expo-development-client\//,
+			/^wcpos-dev:\/\/expo-development-client\//,
 			`${filename}: the wrapper must START by (re-)issuing the launch link`
 		);
 		const iosLaunch = wrapper.commands.find((command) => command.runFlow?.when?.platform === 'iOS')

@@ -7,19 +7,41 @@ import { buildAuthUrl, generateState, getRedirectUri, parseAuthResult } from './
 
 // Mock expo-auth-session for getRedirectUri
 jest.mock('expo-auth-session', () => ({
-	makeRedirectUri: jest.fn(() => 'wcpos://callback'),
+	makeRedirectUri: jest.fn(() => 'https://pos.example.test/callback'),
+}));
+
+const appInfo = { platform: 'web', scheme: 'wcpos' };
+jest.mock('@wcpos/utils/app-info', () => ({
+	get AppInfo() {
+		return appInfo;
+	},
 }));
 
 describe('use-wcpos-auth utils', () => {
 	describe('getRedirectUri', () => {
-		it('lets expo resolve the scheme from the app config instead of hardcoding one', () => {
-			// The scheme is per build profile (wcpos / wcpos-dev / wcpos-adhoc, see
-			// apps/main/app.config.ts). A hardcoded `scheme` here would send every
-			// variant's login back through the production app.
+		beforeEach(() => {
 			jest.mocked(makeRedirectUri).mockClear();
-			getRedirectUri();
+		});
+
+		it.each(['ios', 'android'])(
+			'on %s returns the scheme the installed binary registered, never the manifest one',
+			(platform) => {
+				// The scheme is per build profile (wcpos / wcpos-dev / wcpos-adhoc, see
+				// apps/main/app.config.ts) and a dev client's Metro manifest can carry
+				// the wrong one, so the redirect must come from AppInfo, not
+				// expo-linking.
+				appInfo.platform = platform;
+				appInfo.scheme = 'wcpos-dev';
+				expect(getRedirectUri()).toBe('wcpos-dev://');
+				expect(makeRedirectUri).not.toHaveBeenCalled();
+			}
+		);
+
+		it('on web defers to expo-auth-session for the page origin', () => {
+			appInfo.platform = 'web';
+			appInfo.scheme = 'wcpos';
+			expect(getRedirectUri()).toBe('https://pos.example.test/callback');
 			expect(makeRedirectUri).toHaveBeenCalledTimes(1);
-			expect(jest.mocked(makeRedirectUri).mock.calls[0][0]).not.toHaveProperty('scheme');
 		});
 	});
 

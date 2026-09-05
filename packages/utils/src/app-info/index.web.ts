@@ -5,6 +5,7 @@
  * For web, platformVersion equals version since there's no separate
  * platform-specific version (no App Store/Play Store release).
  */
+import { DEFAULT_APP_SCHEME } from './scheme';
 
 interface AppInfo {
 	/** Cross-platform JS bundle version from Expo config (e.g., '1.8.1') */
@@ -26,6 +27,8 @@ interface AppInfo {
 	 * (B10, wcpos-infra#72): a blank or library UA on a POST earns AIOS bans.
 	 */
 	userAgentHeader: Record<string, string>;
+	/** App URL scheme; only native derives it from the binary (see ./scheme.ts). */
+	scheme: string;
 }
 
 const version = process.env.EXPO_PUBLIC_APP_VERSION ?? '0.0.0';
@@ -38,6 +41,7 @@ const AppInfo: AppInfo = {
 	platform: 'web',
 	userAgent: `WCPOS/${version} (web)`,
 	userAgentHeader: {},
+	scheme: DEFAULT_APP_SCHEME,
 };
 
 export { AppInfo };

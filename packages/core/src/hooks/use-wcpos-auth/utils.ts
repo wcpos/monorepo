@@ -1,17 +1,28 @@
 import { makeRedirectUri } from 'expo-auth-session';
 
+import { AppInfo } from '@wcpos/utils/app-info';
+
 import type { WcposAuthParams, WcposAuthResult } from './types';
 
 /**
  * Get the redirect URI for auth callbacks.
  *
- * No `scheme` is passed on purpose: expo-linking resolves it from the app
- * config, which sets one scheme per build profile (`wcpos`, `wcpos-dev`,
- * `wcpos-adhoc` - see apps/main/app.config.ts). Hardcoding `wcpos` here sent
- * every variant's login back through the production scheme, so a device with
- * two variants installed could not tell which app to return to.
+ * Native: `<scheme>://`, where the scheme is the one the INSTALLED binary
+ * registered (`wcpos`, `wcpos-dev`, `wcpos-adhoc` - one per build profile,
+ * see apps/main/app.config.ts). It is derived from the binary's application
+ * id rather than resolved by expo-linking from the manifest: a dev client
+ * loads its manifest from Metro, which evaluates app.config.ts with the
+ * developer's shell environment and so publishes the production `wcpos`
+ * scheme for a binary that only owns `wcpos-dev`. Hardcoding `wcpos` had the
+ * same effect: every variant's login returned through the production app.
+ *
+ * Web/Electron: the page origin (plus the web bundle's baseUrl), via
+ * expo-auth-session, which ignores custom schemes on web.
  */
 export function getRedirectUri(): string {
+	if (AppInfo.platform === 'ios' || AppInfo.platform === 'android') {
+		return `${AppInfo.scheme}://`;
+	}
 	return makeRedirectUri({
 		path: typeof window !== 'undefined' ? ((window as any).baseUrl ?? undefined) : undefined,
 	});
