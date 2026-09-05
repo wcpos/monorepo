@@ -5,6 +5,8 @@ import { probeEposEndpoint } from '../epos-endpoint';
 const { info } = vi.hoisted(() => ({ info: vi.fn() }));
 vi.mock('../../logger', () => ({ printerLogger: { debug: vi.fn(), info } }));
 
+const SOCKET_IO_BODY = 'Welcome to socket.io.';
+
 const SUCCESS_BODY =
 	'<response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" code="" status="251658262" />';
 const SCHEMA_ERROR_BODY =
@@ -52,5 +54,32 @@ describe('probeEposEndpoint', () => {
 
 		await expect(probeEposEndpoint('192.168.1.32', post)).resolves.toBeNull();
 		expect(post.mock.calls.map(([port]) => port)).toEqual([443, 8043, 80, 8008]);
+	});
+	it('says why it rejected an ePOS-Device endpoint that answered 200', async () => {
+		info.mockClear();
+		const post = vi.fn(async (port: number) => {
+			if (port === 8043) return { status: 200, body: SOCKET_IO_BODY };
+			throw new Error('connection refused');
+		});
+
+		await expect(probeEposEndpoint('192.168.1.33', post)).resolves.toBeNull();
+		expect(info).toHaveBeenCalledWith('ePOS endpoint rejected', {
+			context: {
+				host: '192.168.1.33',
+				port: 8043,
+				reason: 'Unexpected Epson ePOS response from printer',
+				elapsedMs: expect.any(Number),
+			},
+		});
+	});
+
+	it('keeps looking at the remaining ports after a rejection', async () => {
+		const post = vi.fn(async (port: number) => {
+			if (port === 8043) return { status: 200, body: SOCKET_IO_BODY };
+			if (port === 8008) return { status: 200, body: SUCCESS_BODY };
+			throw new Error('connection refused');
+		});
+
+		await expect(probeEposEndpoint('192.168.1.34', post)).resolves.toBe(8008);
 	});
 });

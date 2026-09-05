@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { isPrinterConnectionError } from '../../utils/connection-error';
 import { EpsonEposAdapter } from '../epson-epos-adapter.electron';
+import { PRINT_JOB_TIMEOUT_MS } from '../print-timeouts';
 
 const response = (success: boolean, code = '') => ({
 	status: 200,
@@ -29,7 +30,7 @@ describe('Electron EpsonEposAdapter', () => {
 			port: 443,
 			path: '/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000',
 			xml: expect.stringContaining('<command>1b40</command>'),
-			timeoutMs: 15000,
+			timeoutMs: PRINT_JOB_TIMEOUT_MS,
 		});
 	});
 

@@ -23,7 +23,23 @@ export async function probeEposEndpoint(host: string, postFn: EposPostFn): Promi
 				});
 				continue;
 			}
-			parseEposResponse(response.body);
+			try {
+				parseEposResponse(response.body);
+			} catch (error) {
+				// 8043 answers `Welcome to socket.io.` (ePOS-Device, not ePOS-Print) and 80 can answer
+				// the printer's web page. Both are a 2xx that would look like a lane; only the missing
+				// `<response>` element keeps them out, and the rejection has to say so or a port that
+				// answered the wrong thing reads exactly like a port that was never probed.
+				printerLogger.info('ePOS endpoint rejected', {
+					context: {
+						host,
+						port,
+						reason: error instanceof Error ? error.message : String(error),
+						elapsedMs: Date.now() - startedAt,
+					},
+				});
+				continue;
+			}
 			printerLogger.debug('ePOS port probe', {
 				context: { host, port, outcome: 'ok', elapsedMs: Date.now() - startedAt },
 			});

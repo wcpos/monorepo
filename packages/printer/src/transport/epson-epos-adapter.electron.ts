@@ -3,11 +3,10 @@ import { encodeThermalTemplateToEpos } from '@wcpos/receipt-renderer';
 import { buildConnectionError } from '../utils/connection-error';
 import { buildEposXml, commandFromBytes, parseEposResponse } from './epson-epos-protocol';
 import { getIpc } from './ipc-print.electron';
+import { PRINT_JOB_TIMEOUT_MS } from './print-timeouts';
 import { logPrintJob } from './log-print-job';
 
 import type { MarkupPrintJob, PrinterTransport, PrintJobShape } from '../types';
-
-const REQUEST_TIMEOUT_MS = 15_000;
 
 export async function postEposHttp(
 	host: string,
@@ -59,7 +58,7 @@ export class EpsonEposAdapter implements PrinterTransport {
 				this.port,
 				path,
 				buildEposXml(innerXml),
-				REQUEST_TIMEOUT_MS
+				PRINT_JOB_TIMEOUT_MS
 			);
 		} catch (cause) {
 			throw this.connectionError(url, cause);

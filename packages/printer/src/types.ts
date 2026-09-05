@@ -111,6 +111,13 @@ export interface PrinterProfile {
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns: number;
 	/**
+	 * ESC/POS code page for receipt text, named as the encoder library expects ('cp437',
+	 * 'cp1252', 'cp936'…). Absent means the encoder picks a page per string, which is right for
+	 * Latin receipts and wrong for a printer whose character tables are a Chinese, Thai or
+	 * Cyrillic set — that receipt prints as question marks (gotcha N38).
+	 */
+	codePage?: string;
+	/**
 	 * Emit `ESC !` print-mode bytes alongside `GS !` size bytes.
 	 * Default `true`. Some printers and simulators only honour one of the two
 	 * size commands; emitting both maximizes compatibility. Disable as an
