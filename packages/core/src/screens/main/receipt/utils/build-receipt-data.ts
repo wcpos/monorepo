@@ -225,6 +225,13 @@ function isNumeric(value: unknown): boolean {
 	);
 }
 
+/** Meta text for a receipt line: strings and numbers only, never a typed object. */
+function metaText(value: unknown): string {
+	if (typeof value === 'string') return value;
+	if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+	return '';
+}
+
 function getPosPriceData(item: Record<string, any>): PosPriceData | null {
 	const entry = Array.isArray(item.meta_data)
 		? item.meta_data.find((meta: Record<string, any>) => meta?.key === POS_META_KEYS.posData)
@@ -602,10 +609,16 @@ export function buildReceiptData(
 		const meta = Array.isArray(item.meta_data)
 			? item.meta_data
 					.filter((entry: Record<string, unknown>) => !String(entry?.key ?? '').startsWith('_'))
+					// Variation attributes are written with only display_key/display_value
+					// (pos/hooks/utils.ts, the variations popover, barcode scans), and a
+					// server round-trip adds display_* beside a taxonomy `key` such as
+					// pa_size. Prefer the display pair, as WC's get_formatted_meta_data
+					// does for the PHP builder, and drop entries with nothing to show.
 					.map((entry: Record<string, unknown>) => ({
-						key: String(entry?.key ?? ''),
-						value: String(entry?.value ?? ''),
+						key: metaText(entry?.display_key) || metaText(entry?.key),
+						value: metaText(entry?.display_value) || metaText(entry?.value),
 					}))
+					.filter(({ key, value }) => key !== '' || value !== '')
 			: [];
 
 		const { raw: savingsRaw, ...priceConvenience } = getLinePriceConvenienceFields({
