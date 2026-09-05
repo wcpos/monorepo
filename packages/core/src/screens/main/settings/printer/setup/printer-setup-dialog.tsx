@@ -95,6 +95,7 @@ export function PrinterSetupDialog({
 		columnsKnown,
 		testPages,
 		failure,
+		troubleReason,
 		profileDraft: draft,
 	} = flow.state;
 	const schema = web ? webPrinterSchema : electronPrinterSchema;
@@ -405,7 +406,7 @@ export function PrinterSetupDialog({
 					</Button>
 				)}
 			</View>
-			{failure && <TestPrintError error={failure} />}
+			{failure && <TestPrintError error={failure} hideGuide />}
 			{line('address_help', 'text-muted-foreground text-sm')}
 			{links(link('setup_scan_again', startOver), guide)}
 		</>
@@ -580,14 +581,16 @@ export function PrinterSetupDialog({
 									<View className="gap-1">
 										{heading('trouble')}
 										{line(
-											selected?.source === 'bluetooth'
-												? 'trouble_bluetooth'
-												: deviceLane
-													? 'trouble_device'
-													: 'trouble_network'
+											troubleReason && troubleReason !== 'lane'
+												? `trouble_${troubleReason}`
+												: selected?.source === 'bluetooth'
+													? 'trouble_bluetooth'
+													: deviceLane
+														? 'trouble_device'
+														: 'trouble_network'
 										)}
 									</View>
-									{failure && <TestPrintError error={failure} />}
+									{failure && <TestPrintError error={failure} hideGuide />}
 									{row(
 										action('setup_retry', () => void flow.retry(), {
 											variant: 'default',
@@ -600,7 +603,7 @@ export function PrinterSetupDialog({
 							)}
 							{phase === 'error' && (
 								<>
-									<TestPrintError error={failure ?? null} />
+									<TestPrintError error={failure ?? null} hideGuide />
 									{row(
 										action('setup_retry', answer('ok'), {
 											variant: 'default',

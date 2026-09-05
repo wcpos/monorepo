@@ -9,6 +9,7 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../contexts/translations';
+import { describePrinterError } from '../describe-printer-error';
 import { PRINTER_DOCS_URL } from '../printer-docs';
 
 import type { TestPrintFailure } from './use-printer-dialog-form';
@@ -40,13 +41,16 @@ function buildSupportDetails(error: TestPrintFailure): string {
 
 interface TestPrintErrorProps {
 	error: TestPrintFailure | null;
+	/** The setup dialog already offers the printer guide; a second link on the same screen is noise. */
+	hideGuide?: boolean;
 }
 
 /**
- * Test-print failure alert rendered inside the dialog body (not the footer),
- * structured as attempt → likely reason → next steps → support details.
+ * A failed test print, the way the app talks everywhere else: one line the cashier can act
+ * on, the copyable details behind a disclosure, and the guide (roadmap#161 P1). The raw
+ * transport string stays in the support details, never on screen.
  */
-export function TestPrintError({ error }: TestPrintErrorProps) {
+export function TestPrintError({ error, hideGuide = false }: TestPrintErrorProps) {
 	const t = useT();
 
 	const handleCopy = React.useCallback(async () => {
@@ -65,7 +69,6 @@ export function TestPrintError({ error }: TestPrintErrorProps) {
 
 	if (!error) return null;
 
-	const d = error.diagnostics;
 	const canCopy = typeof navigator !== 'undefined' && !!navigator.clipboard;
 
 	return (
@@ -73,64 +76,38 @@ export function TestPrintError({ error }: TestPrintErrorProps) {
 			testID="add-printer-test-error"
 			className="border-destructive/50 bg-destructive/10 gap-2 rounded-md border p-3"
 		>
-			{d ? (
-				<>
-					<Text className="text-destructive text-sm font-medium">
-						{t('settings.test_print_failed_title')}
+			<Text testID="add-printer-test-error-line" className="text-destructive text-sm">
+				{t(describePrinterError(error.message).key)}
+			</Text>
+			<Collapsible>
+				<CollapsibleTrigger testID="add-printer-support-details-toggle">
+					<Text className="text-muted-foreground text-xs font-medium">
+						{t('settings.support_details')}
 					</Text>
-					<VStack className="gap-0.5">
-						<Text className="text-xs font-medium">{t('settings.we_tried')}</Text>
-						<Text className="text-xs">{d.attemptLabel}</Text>
-						<Text testID="add-printer-test-error-url" className="text-xs">
-							{d.url}
+				</CollapsibleTrigger>
+				<CollapsibleContent>
+					<VStack className="items-start gap-1 pt-1">
+						<Text testID="add-printer-support-details" className="text-muted-foreground text-xs">
+							{buildSupportDetails(error)}
 						</Text>
+						{canCopy && (
+							<Button
+								testID="add-printer-copy-support-details"
+								variant="outline"
+								size="sm"
+								onPress={() => void handleCopy()}
+							>
+								<Text>{t('settings.copy_support_details')}</Text>
+							</Button>
+						)}
 					</VStack>
-					<VStack className="gap-0.5">
-						<Text className="text-xs font-medium">{t('settings.likely_reason')}</Text>
-						<Text className="text-xs">{d.likelyReason}</Text>
-					</VStack>
-					<VStack className="gap-0.5">
-						<Text className="text-xs font-medium">{t('settings.try_next')}</Text>
-						{d.suggestions.map((suggestion, index) => (
-							<Text key={suggestion} className="text-xs">
-								{index + 1}. {suggestion}
-							</Text>
-						))}
-					</VStack>
-					<Collapsible>
-						<CollapsibleTrigger testID="add-printer-support-details-toggle">
-							<Text className="text-muted-foreground text-xs font-medium">
-								{t('settings.support_details')}
-							</Text>
-						</CollapsibleTrigger>
-						<CollapsibleContent>
-							<VStack className="items-start gap-1 pt-1">
-								<Text
-									testID="add-printer-support-details"
-									className="text-muted-foreground text-xs"
-								>
-									{buildSupportDetails(error)}
-								</Text>
-								{canCopy && (
-									<Button
-										testID="add-printer-copy-support-details"
-										variant="outline"
-										size="sm"
-										onPress={handleCopy}
-									>
-										<Text>{t('settings.copy_support_details')}</Text>
-									</Button>
-								)}
-							</VStack>
-						</CollapsibleContent>
-					</Collapsible>
-				</>
-			) : (
-				<Text className="text-destructive text-sm">{error.message}</Text>
+				</CollapsibleContent>
+			</Collapsible>
+			{!hideGuide && (
+				<DocsLink testID="add-printer-having-trouble" href={PRINTER_DOCS_URL}>
+					{t('settings.having_trouble')}
+				</DocsLink>
 			)}
-			<DocsLink testID="add-printer-having-trouble" href={PRINTER_DOCS_URL}>
-				{t('settings.having_trouble')}
-			</DocsLink>
 		</VStack>
 	);
 }

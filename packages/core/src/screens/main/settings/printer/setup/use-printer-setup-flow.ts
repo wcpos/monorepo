@@ -44,6 +44,26 @@ export function classifyPrinter(
 	if (platform === 'electron' && lane?.protocol === 'raw') return 'unsure';
 	return lane && canPrintLane(lane.protocol, createIdentifyProbes()) ? 'ready' : 'unknown';
 }
+/**
+ * Why nothing printed, read off the signatures identification already collected plus the
+ * failure text — the setup dialog turns each one into a single line (roadmap#161 P1).
+ * `lane` is the fallback: nothing specific, so the per-lane advice stands.
+ */
+export type TroubleReason = 'secure' | 'held' | 'permission' | 'pairing' | 'unresponsive' | 'lane';
+const PERMISSION_RE = /permission|not allowed|NotAllowedError|LIBUSB_ERROR_ACCESS|EACCES|denied/i;
+const PAIRING_RE = /pair|bt-none-found|no supported print service|not found/i;
+const UNRESPONSIVE_RE = /not responding|no longer in range|timed out/i;
+export function troubleReasonFor(
+	selected: Pick<SetupCandidate, 'source' | 'identity'> | undefined,
+	failure = ''
+): TroubleReason {
+	if (selected?.identity?.securePrinting) return 'secure';
+	if (selected?.identity?.ports?.some((port) => port.httpStatus === 503)) return 'held';
+	if (PERMISSION_RE.test(failure)) return 'permission';
+	if (selected?.source === 'bluetooth' && PAIRING_RE.test(failure)) return 'pairing';
+	if (UNRESPONSIVE_RE.test(failure)) return 'unresponsive';
+	return 'lane';
+}
 interface SetupState {
 	phase:
 		| 'scanning'
@@ -63,6 +83,7 @@ interface SetupState {
 	columnsKnown: boolean;
 	testPages: number;
 	failure?: TestPrintFailure;
+	troubleReason?: TroubleReason;
 	profileDraft: PrinterFormValues;
 }
 interface SetupArgs {
@@ -110,9 +131,15 @@ export function usePrinterSetupFlow(
 	const [scanComplete, setScanComplete] = React.useState(false);
 	function update(patch: Partial<SetupState>) {
 		current.current = { ...current.current, ...patch };
+		// The reason is read once, on the way in, from the signatures identification already has.
+		if (patch.phase === 'trouble')
+			current.current = {
+				...current.current,
+				troubleReason: troubleReasonFor(current.current.selected, current.current.failure?.message),
+			};
 		setState(current.current);
 		if (patch.phase) {
-			const { phase, selected, columns, testPages } = current.current;
+			const { phase, selected, columns, testPages, troubleReason } = current.current;
 			printerLogger.debug('Printer setup phase', {
 				context: {
 					phase,
@@ -120,6 +147,7 @@ export function usePrinterSetupFlow(
 					source: selected?.source,
 					columns,
 					testPages,
+					troubleReason,
 				},
 			});
 			// Terminal phases are the outcome support and telemetry pivot on (roadmap#161 P0).
@@ -135,6 +163,7 @@ export function usePrinterSetupFlow(
 					columns,
 					testPages,
 					securePrinting: selected?.identity?.securePrinting,
+					troubleReason: current.current.troubleReason,
 					failure: current.current.failure?.message,
 				};
 				printerLogger.info('Printer setup outcome', { context: outcome });

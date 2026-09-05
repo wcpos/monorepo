@@ -129,8 +129,10 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 
+const mockToastShow = jest.fn();
 jest.mock('@wcpos/components/toast', () => ({
-	Toast: { show: jest.fn() },
+	// Referenced lazily: a jest.mock factory runs before the const above is initialised.
+	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
 }));
 
 jest.mock('@wcpos/components/vstack', () => ({
@@ -150,6 +152,8 @@ jest.mock('@wcpos/printer', () => ({
 		) {}
 
 		testPrint(profile: PrinterProfile) {
+			// Local lanes are not the cloud queue's business; the wired-up cloud path is asserted below.
+			if (profile.connectionType !== 'cloud') return Promise.resolve();
 			const cloudPrinterId = profile.cloudPrinterId;
 			const queue = this.options.cloudEnqueueFactory?.(profile);
 			if (!cloudPrinterId || !queue) {
@@ -251,6 +255,7 @@ describe('PrintingSettings cloud printers', () => {
 		mockAvailableProfiles = { printers: [cloudProfile], isLoading: false };
 		enqueue.mockClear();
 		httpPost.mockClear();
+		mockToastShow.mockClear();
 	});
 
 	it('uses the server diagnostic endpoint when testing a cloud printer', async () => {
@@ -264,6 +269,58 @@ describe('PrintingSettings cloud printers', () => {
 			})
 		);
 		expect(enqueue).not.toHaveBeenCalled();
+	});
+
+	it('claims the print only on a lane that acknowledges it', async () => {
+		render(<PrintingSettings />);
+
+		fireEvent.click(screen.getByTestId('printer-row-cloud:reg-7-test'));
+
+		await waitFor(() =>
+			expect(mockToastShow).toHaveBeenCalledWith(
+				expect.objectContaining({ title: 'Printed on Cloud kitchen', type: 'success' })
+			)
+		);
+	});
+
+	it('says only that the job was sent on a raw lane that cannot confirm', async () => {
+		mockAvailableProfiles = {
+			printers: [
+				{
+					...cloudProfile,
+					id: 'raw',
+					name: 'Counter',
+					connectionType: 'network',
+					vendor: 'epson',
+					address: '192.168.1.10',
+					port: 9100,
+				},
+			],
+			isLoading: false,
+		};
+		render(<PrintingSettings />);
+
+		fireEvent.click(screen.getByTestId('printer-row-raw-test'));
+
+		await waitFor(() =>
+			expect(mockToastShow).toHaveBeenCalledWith(
+				expect.objectContaining({ title: 'Sent to Counter', type: 'success' })
+			)
+		);
+	});
+
+	it('shows one actionable line instead of the raw failure string', async () => {
+		httpPost.mockRejectedValueOnce(new Error('connect ECONNREFUSED 10.0.0.5:443'));
+		render(<PrintingSettings />);
+
+		fireEvent.click(screen.getByTestId('printer-row-cloud:reg-7-test'));
+
+		await waitFor(() =>
+			expect(mockToastShow).toHaveBeenCalledWith({
+				title: 'The printer refused the connection. Check its network settings, then try again.',
+				type: 'error',
+			})
+		);
 	});
 
 	it('does not offer a local default action for synthesized cloud printers', () => {

@@ -121,6 +121,7 @@ export const PRINTER_OUTCOME_FIELDS = [
 	'columns',
 	'testPages',
 	'securePrinting',
+	'troubleReason',
 ] as const;
 
 export function capturePrinterOutcome(

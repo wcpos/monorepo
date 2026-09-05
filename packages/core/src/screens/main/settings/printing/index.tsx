@@ -12,7 +12,6 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
-import { getErrorMessage } from '@wcpos/utils/logger';
 import type {
 	PrinterProfileDocument,
 	TemplateDocument,
@@ -23,9 +22,10 @@ import { PrinterRow } from './printer-row';
 import { PrintersEmptyState } from './printers-empty-state';
 import { TemplateRow } from './template-row';
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
-import { AUTO_VALUE } from './utils';
+import { AUTO_VALUE, laneAcknowledgesPrint } from './utils';
 import { SettingsSection } from '../components/settings-section';
 import { PrinterDialog } from '../printer/add-printer';
+import { describePrinterError } from '../printer/describe-printer-error';
 import { useAvailablePrinterProfiles } from '../printer/use-available-printer-profiles';
 import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -161,14 +161,18 @@ export function PrintingSettings() {
 				} else {
 					await printerService.testPrint(profile);
 				}
+				// Only a lane that answers proves the paper moved; everything else was merely sent.
 				Toast.show({
-					title: t('settings.test_print_sent').replace('%s', profile.name),
+					title: t(
+						laneAcknowledgesPrint(profile)
+							? 'settings.test_print_done'
+							: 'settings.test_print_dispatched'
+					).replace('%s', profile.name),
 					type: 'success',
 				});
 			} catch (err) {
 				Toast.show({
-					title: t('settings.test_print_failed'),
-					description: getErrorMessage(err),
+					title: t(describePrinterError(err).key),
 					type: 'error',
 				});
 			} finally {

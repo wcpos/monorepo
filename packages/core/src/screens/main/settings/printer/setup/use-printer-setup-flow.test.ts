@@ -5,7 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { DiscoveredPrinter, DiscoveryError } from '@wcpos/printer';
 
 import { isWindowsPlatform } from '../dialog/connection/is-windows';
-import { classifyPrinter, usePrinterSetupFlow } from './use-printer-setup-flow';
+import { classifyPrinter, troubleReasonFor, usePrinterSetupFlow } from './use-printer-setup-flow';
 
 jest.mock('../dialog/connection/is-windows', () => ({ isWindowsPlatform: jest.fn(() => false) }));
 jest.mock('@wcpos/printer', () => ({
@@ -324,5 +324,54 @@ it.each([9100, 8123])('resolves an Epson web draft port from %s', async (port) =
 		vendor: 'epson',
 		language: 'esc-pos',
 		port: port === 9100 ? 8008 : 8123,
+	});
+});
+
+describe('trouble reason', () => {
+	const identity = { vendor: 'epson' as const, lane: null, ports: [] };
+
+	it('reads Secure Printing off the identity before anything else', () => {
+		expect(
+			troubleReasonFor({ source: 'network', identity: { ...identity, securePrinting: true } })
+		).toBe('secure');
+	});
+
+	it('reads a held queue off a 503 on any probed port', () => {
+		expect(
+			troubleReasonFor({
+				source: 'network',
+				identity: {
+					...identity,
+					ports: [{ port: 443, state: 'open', protocol: 'epos-print', httpStatus: 503 }],
+				},
+			})
+		).toBe('held');
+	});
+
+	it.each([
+		['LIBUSB_ERROR_ACCESS', 'permission'],
+		['NotAllowedError: user denied', 'permission'],
+		['The printer is not responding', 'unresponsive'],
+		['Connection timed out', 'unresponsive'],
+		['Database unavailable', 'lane'],
+	])('reads %s as %s', (failure, reason) => {
+		expect(troubleReasonFor({ source: 'network', identity }, failure)).toBe(reason);
+	});
+
+	it('only blames pairing on a Bluetooth printer', () => {
+		expect(troubleReasonFor({ source: 'bluetooth', identity: undefined }, 'bt-none-found')).toBe(
+			'pairing'
+		);
+		expect(troubleReasonFor({ source: 'network', identity }, 'bt-none-found')).toBe('lane');
+	});
+
+	it('stores the reason when the flow enters trouble', async () => {
+		await scan([epson]);
+		printerService.testPrint.mockRejectedValueOnce(new Error('The printer is not responding'));
+		await act(async () => {
+			await flow.testPrint();
+		});
+		expect(flow.state.phase).toBe('trouble');
+		expect(flow.state.troubleReason).toBe('unresponsive');
 	});
 });
