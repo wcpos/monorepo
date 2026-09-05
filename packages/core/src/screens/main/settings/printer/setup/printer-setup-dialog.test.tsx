@@ -45,6 +45,7 @@ const mockConnectUsb = jest.fn();
 const mockStopScan = jest.fn();
 const mockTestPrint = jest.fn(async () => {});
 const mockUsbPrinters: { id: string; name: string; address: string; connectionType: 'usb' }[] = [];
+const mockExtraPrinters: Record<string, unknown>[] = [];
 jest.mock('@wcpos/printer', () => ({
 	resolveNativePrinterColumns: async () => ({ columns: 48, source: 'printer' }),
 	isWebUsbSupported: () => true,
@@ -72,6 +73,7 @@ jest.mock('@wcpos/printer', () => ({
 			},
 			printers: [
 				...mockUsbPrinters,
+				...mockExtraPrinters,
 				...ble,
 				{
 					id: 'epson',
@@ -270,4 +272,39 @@ it('scans with the SDKs on native, without picker buttons', async () => {
 	}
 	act(() => renderer.unmount());
 	mockWebScanning = false;
+});
+
+it('offers the receipt language under More options for ESC/POS and hides it for Star', async () => {
+	Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(<PrinterSetupDialog open onOpenChange={jest.fn()} onSave={jest.fn()} />);
+	});
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_more_options' }).props.onPress();
+	});
+	// The sole result is an Epson, so the draft is ESC/POS and the code page applies.
+	expect(renderer.root.findAllByProps({ name: 'codePage' })).toHaveLength(1);
+	act(() => renderer.unmount());
+
+	// Star Line has its own character tables; the ESC/POS code page would do nothing there.
+	mockExtraPrinters.push({
+		id: 'star',
+		name: 'Star counter',
+		address: '192.168.1.11',
+		connectionType: 'network',
+		identity: { vendor: 'star', columns: 48, lane: { port: 9100, protocol: 'raw' }, ports: [] },
+	});
+	await act(async () => {
+		renderer = create(<PrinterSetupDialog open onOpenChange={jest.fn()} onSave={jest.fn()} />);
+	});
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-result-192.168.1.11' }).props.onPress();
+	});
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_more_options' }).props.onPress();
+	});
+	expect(renderer.root.findAllByProps({ name: 'codePage' })).toHaveLength(0);
+	act(() => renderer.unmount());
+	mockExtraPrinters.length = 0;
 });

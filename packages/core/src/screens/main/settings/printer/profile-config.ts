@@ -10,6 +10,7 @@ export interface PrinterProfileFormData {
 	cloudProvider?: PrinterProfile['cloudProvider'];
 	port: number;
 	language: PrinterProfile['language'];
+	codePage?: string;
 	columns: number;
 	emitEscPrintMode: boolean;
 	fullReceiptRaster: boolean;
@@ -95,6 +96,9 @@ export function buildPrinterProfileFields(
 			? { nativeInterfaceType: transport.nativeInterfaceType }
 			: {}),
 		language: data.language,
+		// 'auto' is the encoder's own per-string choice, which is what a profile without the field
+		// already gets — so it stays unwritten and existing profiles are untouched.
+		...(data.codePage && data.codePage !== 'auto' ? { codePage: data.codePage } : {}),
 		columns: data.columns,
 		emitEscPrintMode: data.emitEscPrintMode,
 		fullReceiptRaster: data.fullReceiptRaster,

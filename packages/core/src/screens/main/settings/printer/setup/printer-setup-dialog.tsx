@@ -25,6 +25,7 @@ import {
 	usePrinterDiscovery,
 } from '@wcpos/printer';
 
+import { CodePageSelect } from '../components/code-page-select';
 import { VendorSelect } from '../components/vendor-select';
 import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
 import { ElectronBtPicker } from '../dialog/connection/electron-bt-picker';
@@ -505,6 +506,19 @@ export function PrinterSetupDialog({
 					/>
 				)}
 			/>
+			{draft.language === 'esc-pos' && (
+				<FormField
+					control={form.control}
+					name="codePage"
+					render={({ field }) => (
+						<FormSelect
+							{...field}
+							customComponent={CodePageSelect}
+							label={t('settings.printer_code_page')}
+						/>
+					)}
+				/>
+			)}
 			<PrinterToggleGroup form={form} />
 		</VStack>
 	);

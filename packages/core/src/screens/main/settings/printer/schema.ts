@@ -12,6 +12,8 @@ export interface PrinterFormValues {
 	cloudProvider?: 'star-cloudprnt' | 'epson-sdp' | 'printnode';
 	port: number;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
+	/** ESC/POS character table, by encoder code-page name; 'auto' lets the encoder pick per string. */
+	codePage: string;
 	columns: number;
 	emitEscPrintMode: boolean;
 	fullReceiptRaster: boolean;
@@ -37,6 +39,7 @@ export const DEFAULT_FORM_VALUES: PrinterFormValues = {
 	cloudPrinterId: '',
 	port: 9100,
 	language: 'esc-pos',
+	codePage: 'auto',
 	columns: 42,
 	emitEscPrintMode: true,
 	fullReceiptRaster: false,
@@ -50,6 +53,7 @@ const baseShape = {
 	name: z.string().min(1),
 	port: z.coerce.number().int().min(1).max(65535).default(9100),
 	language: z.enum(['esc-pos', 'star-prnt', 'star-line']).default('esc-pos'),
+	codePage: z.string().default('auto'),
 	columns: z.coerce.number().int().min(1).default(42),
 	emitEscPrintMode: z.boolean().default(true),
 	fullReceiptRaster: z.boolean().default(false),

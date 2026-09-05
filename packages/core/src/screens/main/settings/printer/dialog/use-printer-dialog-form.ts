@@ -155,6 +155,7 @@ export function usePrinterDialogForm({
 				address: printer.address ?? '',
 				port: printer.port ?? 9100,
 				language: printer.language ?? 'esc-pos',
+				codePage: printer.codePage ?? 'auto',
 				columns: printer.columns ?? 42,
 				emitEscPrintMode: printer.emitEscPrintMode ?? true,
 				fullReceiptRaster: printer.fullReceiptRaster ?? false,
