@@ -3,19 +3,36 @@ import * as React from 'react';
 import {
 	canPrintLane,
 	createIdentifyProbes,
+	identifyModel,
 	identifyPrinter,
 	isPrinterConnectionError,
 } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterDiscovery, PrinterService } from '@wcpos/printer';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
+import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
+import { isWindowsPlatform } from '../dialog/connection/is-windows';
 import { buildPrinterProfileFields } from '../profile-config';
 import { DEFAULT_FORM_VALUES, type PrinterFormValues } from '../schema';
 
 import type { TestPrintFailure } from '../dialog/use-printer-dialog-form';
 
 const printerLogger = getLogger(['wcpos', 'printer', 'setup']);
+interface SetupCandidate extends DiscoveredPrinter {
+	source: 'network' | 'usb' | 'bluetooth' | 'system';
+}
+function candidate(printer: DiscoveredPrinter): SetupCandidate {
+	return {
+		...printer,
+		source: hasTargetKind(printer, 'winspool')
+			? 'system'
+			: hasTargetKind(printer, 'serial')
+				? 'bluetooth'
+				: printer.connectionType,
+	};
+}
 export function classifyPrinter(printer: DiscoveredPrinter) {
+	if (isUsbLikeDevice(printer) || hasTargetKind(printer, 'serial')) return 'ready';
 	if (printer.identity?.notReceiptPrinter) return 'notprinter';
 	const lane = printer.identity?.lane;
 	if (lane?.protocol === 'raw') return 'unsure';
@@ -23,15 +40,27 @@ export function classifyPrinter(printer: DiscoveredPrinter) {
 }
 interface SetupState {
 	phase: 'scanning' | 'results' | 'printing' | 'asking' | 'trouble' | 'saving' | 'saved' | 'error';
-	found: DiscoveredPrinter[];
-	selected?: DiscoveredPrinter;
+	found: SetupCandidate[];
+	selected?: SetupCandidate;
 	columns: number;
 	testPages: number;
 	failure?: TestPrintFailure;
 	profileDraft: PrinterFormValues;
 }
 interface SetupArgs {
-	discovery: Pick<PrinterDiscovery, 'startScan' | 'stopScan' | 'printers' | 'isScanning' | 'error'>;
+	discovery: Pick<
+		PrinterDiscovery,
+		| 'startScan'
+		| 'stopScan'
+		| 'printers'
+		| 'isScanning'
+		| 'error'
+		| 'connectUsbDevice'
+		| 'connectSerialDevice'
+		| 'connectBluetoothDevice'
+		| 'isBluetoothScanning'
+		| 'cancelBluetoothScan'
+	>;
 	printerService: Pick<PrinterService, 'testPrint'>;
 	persist: (data: PrinterFormValues) => Promise<string>;
 	t: (key: string) => string;
@@ -64,7 +93,13 @@ export function usePrinterSetupFlow({
 		if (patch.phase) {
 			const { phase, selected, columns, testPages } = current.current;
 			printerLogger.debug('Printer setup phase', {
-				context: { phase, selected: selected?.address, columns, testPages },
+				context: {
+					phase,
+					selected: selected?.address,
+					source: selected?.source,
+					columns,
+					testPages,
+				},
 			});
 		}
 	}
@@ -77,7 +112,7 @@ export function usePrinterSetupFlow({
 		const vendor =
 			selected.identity?.vendor ??
 			selected.vendor ??
-			current.current.profileDraft.vendor ??
+			(keepDraft ? current.current.profileDraft.vendor : undefined) ??
 			'generic';
 		const lane = selected.identity?.lane;
 		// A lane this platform cannot print (e.g. WebPRNT on Electron) must not become the raw port.
@@ -86,14 +121,19 @@ export function usePrinterSetupFlow({
 		const base = keepDraft
 			? current.current.profileDraft
 			: { ...DEFAULT_FORM_VALUES, isDefault: printerCount === 0 };
-		update({ selected, failure: undefined });
+		update({ selected: candidate(selected), failure: undefined });
 		updateDraft({
 			...base,
 			name: keepDraft ? base.name : selected.name,
 			address: selected.address,
+			connectionType: selected.connectionType,
+			nativeInterfaceType: selected.nativeInterfaceType,
 			vendor,
 			port: lanePort ?? selected.port ?? base.port ?? 9100,
-			columns: selected.identity?.columns ?? base.columns ?? 42,
+			columns:
+				selected.connectionType === 'network'
+					? (selected.identity?.columns ?? base.columns ?? 42)
+					: (identifyModel(selected.name).columns ?? 42),
 		});
 	}
 	function fail(error: unknown, phase: 'trouble' | 'error') {
@@ -123,16 +163,20 @@ export function usePrinterSetupFlow({
 		active.current = true;
 		setScanComplete(false);
 		update({ phase: 'scanning', found: [], selected: undefined, failure: undefined });
-		try {
-			await discovery.startScan();
-			if (!active.current) return;
-			// Electron's discovery swallows its own errors and keeps the previous list; a failed rescan
-			// must not replay stale results as a fresh scan (and never auto-print on them).
-			if (discovery.error) return update({ phase: 'results', found: [] });
-			setScanComplete(true);
-		} catch (error) {
-			if (active.current) fail(error, 'error');
+		const scans = await Promise.allSettled([
+			discovery.startScan(),
+			discovery.connectUsbDevice?.(),
+			// Windows installed queues already come from usb-discovery.
+			!isWindowsPlatform() ? discovery.connectSerialDevice?.() : undefined,
+		]);
+		for (const result of scans) {
+			if (result.status === 'rejected') {
+				printerLogger.debug('Printer setup scan failed', {
+					context: { error: getErrorMessage(result.reason) },
+				});
+			}
 		}
+		if (active.current) setScanComplete(true);
 	}
 	// Discovery publishes React state, not a return value; consume it after the completed scan commits.
 	React.useEffect(() => {
@@ -140,9 +184,16 @@ export function usePrinterSetupFlow({
 		setScanComplete(false);
 		const found = [
 			...new Map(
-				discovery.printers.filter((p) => p.connectionType === 'network').map((p) => [p.address, p])
+				discovery.printers
+					.filter(
+						(p) =>
+							p.connectionType === 'network' || isUsbLikeDevice(p) || hasTargetKind(p, 'serial')
+					)
+					.map((p) => [p.address, candidate(p)])
 			).values(),
 		];
+		// A printer tapped while the Wi-Fi scan was still running is already printing; only refresh the list.
+		if (current.current.phase !== 'scanning') return update({ found });
 		update({ phase: 'results', found });
 		const printable = found.filter((p) => ['ready', 'unsure'].includes(classifyPrinter(p)));
 		if (printable.length === 1) {
@@ -150,6 +201,33 @@ export function usePrinterSetupFlow({
 			void testPrint();
 		}
 	}, [scanComplete, discovery.isScanning, discovery.printers]);
+	// Plugged-in and OS-paired printers enumerate in a second; list them while the Wi-Fi scan continues.
+	React.useEffect(() => {
+		if (current.current.phase !== 'scanning' || !active.current) return;
+		const early = discovery.printers
+			.filter((p) => isUsbLikeDevice(p) || hasTargetKind(p, 'serial'))
+			.map(candidate);
+		const addresses = (list: DiscoveredPrinter[]) => list.map((p) => p.address).join();
+		if (early.length > 0 && addresses(early) !== addresses(current.current.found))
+			update({ found: early });
+	}, [discovery.printers]);
+	const pendingBle = React.useRef<DiscoveredPrinter[] | null>(null);
+	function startBluetoothScan() {
+		pendingBle.current = discovery.printers;
+		discovery.connectBluetoothDevice?.();
+	}
+	// The external chooser publishes its connected device through discovery state.
+	React.useEffect(() => {
+		if (!pendingBle.current || discovery.isBluetoothScanning || !active.current) return;
+		const device = discovery.printers.find(
+			(p) => p.address.startsWith('webbluetooth:') && !pendingBle.current?.includes(p)
+		);
+		pendingBle.current = null;
+		if (device) {
+			select(device, false);
+			void testPrint();
+		}
+	}, [discovery.isBluetoothScanning, discovery.printers]);
 	async function answer(value: 'ok' | 'short' | 'none') {
 		if (value === 'none') return update({ phase: 'trouble', failure: undefined });
 		if (value === 'short') {
@@ -200,6 +278,7 @@ export function usePrinterSetupFlow({
 	}
 	function stop() {
 		active.current = false;
+		discovery.cancelBluetoothScan?.();
 		void discovery.stopScan();
 	}
 	// The hook owns the scan lifecycle and must stop discovery on unmount.
@@ -207,6 +286,7 @@ export function usePrinterSetupFlow({
 	return {
 		state,
 		start,
+		startBluetoothScan,
 		select,
 		testPrint,
 		answer,

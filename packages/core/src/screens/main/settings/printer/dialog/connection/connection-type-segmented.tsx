@@ -13,7 +13,7 @@ type ConnType = 'network' | 'bluetooth' | 'usb';
 
 interface ConnectionTypeSegmentedProps {
 	form: Pick<UseFormReturn<PrinterFormValues>, 'clearErrors'>;
-	value: ConnType;
+	value: PrinterFormValues['connectionType'];
 	onChange: (value: ConnType) => void;
 	availableTypes?: readonly ConnType[];
 }
@@ -43,7 +43,7 @@ export function ConnectionTypeSegmented({
 
 	return (
 		<Tabs
-			value={value}
+			value={value === 'system' ? 'usb' : value}
 			onValueChange={(next) => {
 				if (isConnectionType(next)) {
 					onChange(next);

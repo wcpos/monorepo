@@ -532,3 +532,33 @@ describe('usePrinterDiscovery (electron)', () => {
 		expect(result.current.isBluetoothScanning).toBe(true);
 	});
 });
+
+it.each([false, true])('keeps USB results when a late network scan fails=%s', async (fail) => {
+	const usb: DiscoveredPrinter = {
+		id: 'usb-device',
+		name: 'Receipt',
+		connectionType: 'usb',
+		address: 'usb:1:2:3:4',
+	};
+	let finish!: (rows: DiscoveredPrinter[]) => void;
+	let reject!: (error: Error) => void;
+	const network = new Promise<DiscoveredPrinter[]>((resolve, onReject) => {
+		finish = resolve;
+		reject = onReject;
+	});
+	installIpc((channel) => (channel === 'printer-discovery' ? network : Promise.resolve([usb])));
+	const { result, unmount } = renderHook(() => usePrinterDiscovery());
+	let scan!: Promise<void>;
+	await act(async () => {
+		scan = result.current.startScan();
+		await result.current.connectUsbDevice?.();
+	});
+	await act(async () => {
+		if (fail) reject(new Error('Network unavailable'));
+		else finish([]);
+		await scan;
+	});
+	expect(result.current.printers).toEqual([usb]);
+	unmount();
+	removeIpc();
+});

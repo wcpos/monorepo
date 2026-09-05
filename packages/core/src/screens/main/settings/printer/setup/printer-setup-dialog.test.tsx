@@ -5,7 +5,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { PrinterSetupDialog } from './printer-setup-dialog';
 import { createTestT } from '../../../../../../jest/translate';
 
-jest.mock('react-native', () => ({ ActivityIndicator: 'Spinner' }));
+jest.mock('react-native', () => ({
+	ActivityIndicator: 'Spinner',
+	Pressable: 'Pressable',
+	View: 'View',
+}));
 jest.mock('@wcpos/components/button', () => ({ Button: 'Button' }));
 jest.mock('@wcpos/components/text', () => ({ Text: 'Text' }));
 jest.mock('@wcpos/components/vstack', () => ({ VStack: 'Stack' }));
@@ -21,7 +25,7 @@ jest.mock('@wcpos/components/select', () => ({ OptionSelect: 'Select' }));
 jest.mock('@wcpos/components/collapsible', () => ({
 	Collapsible: 'Collapsible',
 	CollapsibleTrigger: 'Trigger',
-	CollapsibleContent: () => null,
+	CollapsibleContent: 'Options',
 }));
 jest.mock('../components/vendor-select', () => ({ VendorSelect: () => null }));
 jest.mock('../dialog/printer-toggle-group', () => ({ PrinterToggleGroup: () => null }));
@@ -31,31 +35,51 @@ jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: {} }),
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => createTestT() }));
+const mockTestPrint = jest.fn(async () => {});
+const mockUsbPrinters: { id: string; name: string; address: string; connectionType: 'usb' }[] = [];
 jest.mock('@wcpos/printer', () => ({
 	PrinterService: class {
-		async testPrint() {}
+		testPrint = mockTestPrint;
 		async dispose() {}
 	},
-	usePrinterDiscovery: () => ({
-		printers: [
-			{
-				id: 'epson',
-				name: 'Counter',
-				address: '192.168.1.10',
-				connectionType: 'network',
-				identity: {
-					vendor: 'epson',
-					columns: 48,
-					lane: { port: 443, protocol: 'epos-print' },
-					ports: [],
-				},
+	usePrinterDiscovery: function useDiscovery() {
+		const [ble, setBle] = React.useState<
+			{ id: string; name: string; address: string; connectionType: 'bluetooth' }[]
+		>([]);
+		const [isBluetoothScanning, setScanning] = React.useState(false);
+		return {
+			isBluetoothScanning,
+			connectBluetoothDevice: () => setScanning(true),
+			bluetoothCandidates: [{ id: 'ble', name: 'TM-P20' }],
+			selectBluetoothCandidate: () => {
+				setBle([
+					{ id: 'ble', name: 'TM-P20', address: 'webbluetooth:ble', connectionType: 'bluetooth' },
+				]);
+				setScanning(false);
 			},
-		],
-		isScanning: false,
-		error: null,
-		startScan: async () => {},
-		stopScan: jest.fn(),
-	}),
+			printers: [
+				...mockUsbPrinters,
+				...ble,
+				{
+					id: 'epson',
+					name: 'Counter',
+					address: '192.168.1.10',
+					connectionType: 'network',
+					identity: {
+						vendor: 'epson',
+						columns: 48,
+						lane: { port: 443, protocol: 'epos-print' },
+						ports: [],
+					},
+				},
+			],
+			isScanning: false,
+			error: null,
+			startScan: async () => {},
+			stopScan: jest.fn(),
+		};
+	},
+	identifyModel: jest.requireActual('@wcpos/printer/discovery/identify-models').identifyModel,
 	canPrintLane: () => true,
 	createIdentifyProbes: () => ({}),
 	isPrinterConnectionError: () => false,
@@ -78,4 +102,69 @@ it('renders the asking screen with all three answers and the test page footer', 
 		'Test page 1 · 48 characters per line'
 	);
 	act(() => renderer.unmount());
+});
+
+it('shows source labels on result cards', async () => {
+	mockUsbPrinters.push({
+		id: 'usb',
+		name: 'USB printer',
+		address: 'usb:1:2:3:4',
+		connectionType: 'usb',
+	});
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(<PrinterSetupDialog open onOpenChange={jest.fn()} onSave={jest.fn()} />);
+	});
+	for (const [address, label] of [
+		['192.168.1.10', 'Wi-Fi'],
+		['usb:1:2:3:4', 'USB'],
+	]) {
+		const card = renderer.root.findByProps({ testID: `printer-setup-result-${address}` });
+		expect(card.findAllByType('Text' as React.ElementType).map((n) => n.props.children)).toContain(
+			label
+		);
+	}
+	act(() => renderer.unmount());
+	mockUsbPrinters.length = 0;
+});
+
+it('keeps the Bluetooth button in view and tests the device the chooser resolves', async () => {
+	// Two printable candidates: the results screen stays up, with the Bluetooth button beside the cards.
+	mockUsbPrinters.push({
+		id: 'usb',
+		name: 'USB printer',
+		address: 'usb:1:2:3:4',
+		connectionType: 'usb',
+	});
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(<PrinterSetupDialog open onOpenChange={jest.fn()} onSave={jest.fn()} />);
+	});
+	mockTestPrint.mockClear();
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_add_ble' }).props.onPress();
+	});
+	// The chooser renders beside the button, never inside the collapsed Options section.
+	expect(
+		renderer.root
+			.findByType('Options' as React.ElementType)
+			.findAllByProps({ testID: 'electron-bt-device-ble' })
+	).toHaveLength(0);
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'electron-bt-device-ble' }).props.onPress();
+	});
+	expect(mockTestPrint).toHaveBeenCalledTimes(1);
+	expect(mockTestPrint).toHaveBeenCalledWith(
+		expect.objectContaining({
+			address: 'webbluetooth:ble',
+			connectionType: 'bluetooth',
+			columns: 32,
+		}),
+		{ openDrawer: false }
+	);
+	expect(renderer.root.findByProps({ testID: 'printer-setup-footer' }).props.children).toBe(
+		'Test page 1 · 32 characters per line'
+	);
+	act(() => renderer.unmount());
+	mockUsbPrinters.length = 0;
 });

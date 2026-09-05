@@ -185,3 +185,8 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   print times out: `WebBluetoothAdapter` reconnects via the library's `getDevices()` path, which
   needs persisted device permissions Electron does not keep. Open (Spec H: connect through the
   device object in hand). Same lesson for any browser session without a persisted permission.
+- **2026-09-05 · Scan-first setup must not read as a Wi-Fi scan.** A shop with only a USB or
+  Bluetooth printer saw "Looking for printers on your network…" and a Bluetooth button hidden
+  under Options. Chromium only opens the Bluetooth LE chooser from a click, so that button has to
+  stay in view on every scan screen; USB and OS-paired printers enumerate in a second and are
+  listed while the Wi-Fi scan continues. Copy is one line per screen plus the printer guide link.

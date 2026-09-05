@@ -2,11 +2,14 @@ import * as React from 'react';
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { DiscoveredPrinter } from '@wcpos/printer';
+import type { DiscoveredPrinter, DiscoveryError } from '@wcpos/printer';
 
+import { isWindowsPlatform } from '../dialog/connection/is-windows';
 import { classifyPrinter, usePrinterSetupFlow } from './use-printer-setup-flow';
 
+jest.mock('../dialog/connection/is-windows', () => ({ isWindowsPlatform: jest.fn(() => false) }));
 jest.mock('@wcpos/printer', () => ({
+	identifyModel: jest.requireActual('@wcpos/printer/discovery/identify-models').identifyModel,
 	canPrintLane: (protocol: string) => ['epos-print', 'raw'].includes(protocol),
 	createIdentifyProbes: () => ({}),
 	identifyPrinter: jest.fn(),
@@ -29,19 +32,42 @@ let flow: ReturnType<typeof usePrinterSetupFlow>;
 const printerService = { testPrint: jest.fn(async () => {}) };
 const persist = jest.fn(async () => 'saved-id');
 const stopScan = jest.fn();
+const enumerateUsb = jest.fn<Promise<DiscoveredPrinter[]>, []>();
+const enumerateSerial = jest.fn<Promise<DiscoveredPrinter[]>, []>();
+const usb: DiscoveredPrinter = {
+	id: 'usb-device',
+	name: 'TM-m30III',
+	address: 'usb:1208:3605:1:2',
+	connectionType: 'usb',
+	vendor: 'epson',
+	nativeInterfaceType: 'USB',
+};
 async function scan(printers: DiscoveredPrinter[]) {
 	function Harness() {
 		const [found, setFound] = React.useState<DiscoveredPrinter[]>([]);
+		const [error, setError] = React.useState<DiscoveryError | null>(null);
 		// Test harness: expose the hook result to the test body.
 		// eslint-disable-next-line react-compiler/react-compiler
 		flow = usePrinterSetupFlow({
 			discovery: {
 				printers: found,
 				isScanning: false,
-				error: null,
+				error,
+				connectUsbDevice: async () => {
+					const devices = await enumerateUsb();
+					setFound((prev) => [...prev, ...devices]);
+				},
+				connectSerialDevice: async () => {
+					try {
+						const devices = await enumerateSerial();
+						setFound((prev) => [...prev, ...devices]);
+					} catch {
+						setError({ code: 'discovery-failed' });
+					}
+				},
 				stopScan,
 				startScan: async () => {
-					setFound(printers);
+					setFound((prev) => [...prev, ...printers]);
 				},
 			},
 			printerService,
@@ -63,6 +89,9 @@ beforeAll(() => {
 });
 beforeEach(() => {
 	jest.clearAllMocks();
+	jest.mocked(isWindowsPlatform).mockReturnValue(false);
+	enumerateUsb.mockResolvedValue([]);
+	enumerateSerial.mockResolvedValue([]);
 });
 afterEach(() => {
 	act(() => renderer?.unmount());
@@ -151,4 +180,52 @@ it('auto-tests unsure raw printers and handles nothing coming out', async () => 
 	});
 	expect(flow.state.phase).toBe('trouble');
 	expect(flow.state.failure).toBeUndefined();
+});
+
+it('lists network and USB together without auto-testing', async () => {
+	enumerateUsb.mockResolvedValue([usb]);
+	await scan([epson]);
+	expect(flow.state.phase).toBe('results');
+	expect(flow.state.found.map((p) => p.source).sort()).toEqual(['network', 'usb']);
+	expect(printerService.testPrint).not.toHaveBeenCalled();
+});
+it('auto-tests a sole USB device using its model width and native hint', async () => {
+	enumerateUsb.mockResolvedValue([usb]);
+	await scan([]);
+	expect(flow.state.phase).toBe('asking');
+	expect(printerService.testPrint).toHaveBeenCalledWith(
+		expect.objectContaining({
+			connectionType: 'usb',
+			address: 'usb:1208:3605:1:2',
+			columns: 48,
+			nativeInterfaceType: 'USB',
+			vendor: 'epson',
+		}),
+		{ openDrawer: false }
+	);
+});
+it.each([
+	['bluetooth', 'serial:/dev/cu.Printer'],
+	['system', 'winspool:Receipt'],
+] as const)('auto-tests a sole %s printer by its device key', async (connectionType, address) => {
+	jest.mocked(isWindowsPlatform).mockReturnValue(connectionType === 'system');
+	const device = { id: address, name: 'Paired printer', address, connectionType };
+	(connectionType === 'system' ? enumerateUsb : enumerateSerial).mockResolvedValue([device]);
+	await scan([]);
+	expect(flow.state.phase).toBe('asking');
+	expect(flow.state.selected?.source).toBe(connectionType);
+	if (connectionType === 'system') expect(enumerateSerial).not.toHaveBeenCalled();
+	expect(printerService.testPrint).toHaveBeenCalledWith(
+		expect.objectContaining({ connectionType, address, columns: 42 }),
+		{ openDrawer: false }
+	);
+});
+it.each(['usb', 'serial'])('keeps other results when %s enumeration fails', async (source) => {
+	(source === 'usb' ? enumerateUsb : enumerateSerial).mockRejectedValueOnce(
+		new Error('Unavailable')
+	);
+	await scan([epson, { ...epson, id: 'second', address: '192.168.1.11' }]);
+	expect(flow.state.phase).toBe('results');
+	expect(flow.state.found).toHaveLength(2);
+	expect(printerService.testPrint).not.toHaveBeenCalled();
 });
