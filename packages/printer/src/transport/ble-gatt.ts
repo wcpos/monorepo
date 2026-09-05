@@ -88,6 +88,12 @@ export async function connectBleReceiptPrinter(
 
 		if (!match) {
 			const uuids = (await server.getPrimaryServices()).map((service) => service.uuid);
+			// Release the link: a connected BLE printer stops advertising until it is dropped.
+			try {
+				server.disconnect();
+			} catch {
+				// Nothing more to release.
+			}
 			throw new Error(
 				`No supported print service on ${device.name ?? device.id} (services: ${uuids.join(', ')})`
 			);

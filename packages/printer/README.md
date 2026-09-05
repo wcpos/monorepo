@@ -167,6 +167,20 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   network path consulted the model table. Ruling (Paul): ask the printer. On Epson SDK lanes the
   adapter now reads the configured paper width (`getPrinterSetting(PAPERWIDTH)`: 58/60/70/76/80 mm →
   32/35/42/45/48 columns); the model table is the fallback, the ruler the last resort (G7).
+- **2026-09-05 · Netum NT-1809 (58 mm generic) over USB on Electron · implementation complete;
+  corrected output pending physical verification.** Found
+  and printing at once (it enumerates as USB printer class 7 despite its Winbond VCP VID/PID; the
+  class filter is fine). Two defects: the profile defaulted to 42 columns (no width source on the
+  generic USB lane — open, the width must be asked at add time), and the store-hours block printed
+  off-centre: a multi-line centred `<text>` bypassed the aligned-line path, so the encoder padded each
+  line *and* a mid-line `ESC a 1` reached the printer; Epson ignores mid-line alignment, the Netum
+  honours it (double-centring). The implementation now emits each line through the aligned path
+  (Spec I1); the result has not yet been verified on paper.
+  The dotted rule and the shifted payment amounts in the same photo were **not** in the emitted
+  bytes — the raw job hex is now available during the explicit 24-hour verbose-diagnostics mode
+  (Spec I2), so the next test can compare bytes, not theories. An earlier 32-column diagnostic print
+  narrowed the investigation; the corrected receipt and byte capture still need a dated
+  Netum/Electron paper run.
 - **2026-09-05 · Netum NT-1809 over BLE · Electron.** Its GATT (read from the Mac): `18f0/2af1`,
   `ff00/ff02`, ISSC `49535343-…`, `e7810a71-…`, MTU 240; a 30-byte ESC/POS job written to `2af1`
   without response in 20-byte chunks printed at once. The app's Web Bluetooth path printed nothing

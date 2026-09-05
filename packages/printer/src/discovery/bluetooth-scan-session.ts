@@ -114,6 +114,8 @@ export function createBluetoothScanSession(
 			});
 			request?.catch((err: unknown) => {
 				if (gen !== generation) return;
+				// A rejected request while the chooser is still open must cancel it in main.
+				if (phase === 'discovering') deps.sendSelection('');
 				finish();
 				callbacks.onError({
 					code: 'discovery-failed',
@@ -186,6 +188,9 @@ export function requestKnownBluetoothDevice(
 				sendSelection: (id) => ipc?.send('bluetooth-device-selected', id),
 				startChooser: (onConnected) =>
 					(navigator as WebBluetoothNavigator).bluetooth!.requestDevice(options).then((live) => {
+						if (live.id !== deviceId) {
+							throw new Error(`Selected Bluetooth device ${live.id} is not the saved printer`);
+						}
 						device = live;
 						onConnected({ type: 'bluetooth', id: live.id, language: 'esc-pos' });
 					}),
