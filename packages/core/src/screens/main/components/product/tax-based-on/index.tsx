@@ -32,13 +32,13 @@ export function TaxBasedOn() {
 		<HoverCard>
 			<HoverCardTrigger>
 				{rates.length > 0 ? (
-					<Text variant="link" className="text-xs">
+					<Text variant="link" className="text-xs" numberOfLines={1}>
 						{taxBasedOnLabel}
 					</Text>
 				) : (
 					<HStack space="xs">
 						<Icon size="sm" variant="error" name="triangleExclamation" />
-						<Text variant="link" className="text-error text-xs">
+						<Text variant="link" className="text-error text-xs" numberOfLines={1}>
 							{taxBasedOnLabel}
 						</Text>
 					</HStack>
