@@ -9,6 +9,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from '@wcpos/printer';
 
+import { PrinterSetupDialog } from './setup/printer-setup-dialog';
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import {
@@ -105,7 +106,12 @@ interface PrinterDialogProps {
 	prefill?: PrinterDialogPrefill;
 }
 
-export function PrinterDialog({
+export function PrinterDialog(props: PrinterDialogProps) {
+	if (!props.printer) return props.open ? <PrinterSetupDialog {...props} /> : null;
+	return <EditPrinterDialog {...props} />;
+}
+
+function EditPrinterDialog({
 	open,
 	onOpenChange,
 	onSave,

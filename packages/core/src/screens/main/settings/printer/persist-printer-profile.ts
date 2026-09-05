@@ -1,0 +1,28 @@
+import { v4 as uuidv4 } from 'uuid';
+
+import type { StoreDatabase } from '@wcpos/database';
+
+import { buildPrinterProfileFields, type PrinterProfileFormData } from './profile-config';
+
+export async function persistPrinterProfile(
+	storeDB: StoreDatabase,
+	data: PrinterProfileFormData,
+	existingId?: string
+): Promise<string> {
+	const collection = storeDB.collections.printer_profiles;
+	if (data.isDefault) {
+		const existingDefaults = await collection.find({ selector: { isDefault: true } }).exec();
+		for (const doc of existingDefaults) {
+			if (doc.id !== existingId) await doc.patch({ isDefault: false });
+		}
+	}
+	const profileData = buildPrinterProfileFields(data);
+	const id = existingId ?? uuidv4();
+	if (existingId) {
+		const doc = await collection.findOne(existingId).exec();
+		if (doc) await doc.patch(profileData);
+	} else {
+		await collection.insert({ id, ...profileData });
+	}
+	return id;
+}

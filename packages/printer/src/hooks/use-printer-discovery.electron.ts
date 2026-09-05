@@ -106,6 +106,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 				action: 'start',
 			});
 			if (scanGenerationRef.current !== generation) return;
+			setPrinters((prev) => mergePrinters(prev, result));
 			const identified = await identifyDiscoveredPrinters(result, createIdentifyProbes());
 			if (scanGenerationRef.current !== generation) return;
 			setPrinters((prev) => {
