@@ -11,7 +11,11 @@ import { createVirtualPrinter } from '../../../virtual-printer/lib.mjs';
 import { identifyPrinter } from '../discovery/identify';
 import { EpsonEposAdapter } from '../transport/epson-epos-adapter';
 import { StarWebPrntAdapter } from '../transport/star-webprnt-adapter';
-import { createScenarioProbes, type VirtualPrinterPorts } from './scenario-probes';
+import {
+	createScenarioProbes,
+	type ScenarioTls,
+	type VirtualPrinterPorts,
+} from './scenario-probes';
 
 const { debug, info, warn } = vi.hoisted(() => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn() }));
 vi.mock('../logger', () => ({ printerLogger: { debug, info, warn } }));
@@ -20,6 +24,7 @@ interface VirtualPrinter {
 	ports: VirtualPrinterPorts;
 	jobs: { lane: string; held: boolean; xml?: string; bytes?: Buffer; status?: number }[];
 	events: { lane: string; path?: string }[];
+	tls: ScenarioTls;
 	close: () => Promise<void>;
 }
 
