@@ -263,14 +263,14 @@ importers:
         specifier: 13.16.1
         version: 13.16.1(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       react-native-worklet-fs:
-        specifier: github:wcpos/rxdb-storage-worklet#c38b758&path:/packages/react-native-worklet-fs
-        version: git+https://git@github.com:wcpos/rxdb-storage-worklet.git#c38b758d7e3642190d04f71a97f634d963483051&path:/packages/react-native-worklet-fs(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))
+        specifier: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/react-native-worklet-fs-0.1.0.tgz
+        version: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/react-native-worklet-fs-0.1.0.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))
       react-native-worklets:
         specifier: 0.11.4
         version: 0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       rxdb-storage-worklet:
-        specifier: github:wcpos/rxdb-storage-worklet#c38b758&path:/packages/rxdb-storage-worklet
-        version: https://codeload.github.com/wcpos/rxdb-storage-worklet/tar.gz/c38b758d7e3642190d04f71a97f634d963483051#path:/packages/rxdb-storage-worklet(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2))
+        specifier: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/rxdb-storage-worklet-0.1.0.tgz
+        version: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/rxdb-storage-worklet-0.1.0.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2))
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -281,8 +281,8 @@ importers:
         specifier: ^41.26.0
         version: 41.26.0(3a169bfd56e8085bea7a24baf8a2b3ed)
       worklet-opfs:
-        specifier: github:wcpos/rxdb-storage-worklet#c38b758&path:/packages/worklet-opfs
-        version: https://codeload.github.com/wcpos/rxdb-storage-worklet/tar.gz/c38b758d7e3642190d04f71a97f634d963483051#path:/packages/worklet-opfs(react-native-worklet-fs@git+https://git@github.com:wcpos/rxdb-storage-worklet.git#c38b758d7e3642190d04f71a97f634d963483051&path:/packages/react-native-worklet-fs(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)))
+        specifier: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/worklet-opfs-0.1.0.tgz
+        version: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/worklet-opfs-0.1.0.tgz(react-native-worklet-fs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/react-native-worklet-fs-0.1.0.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)))
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7
@@ -8669,8 +8669,8 @@ packages:
       react: 19.2.3
       react-native: 0.86.2
 
-  react-native-worklet-fs@git+https://git@github.com:wcpos/rxdb-storage-worklet.git#c38b758d7e3642190d04f71a97f634d963483051&path:/packages/react-native-worklet-fs:
-    resolution: {commit: c38b758d7e3642190d04f71a97f634d963483051, path: /packages/react-native-worklet-fs, repo: git@github.com:wcpos/rxdb-storage-worklet.git, type: git}
+  react-native-worklet-fs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/react-native-worklet-fs-0.1.0.tgz:
+    resolution: {integrity: sha512-tTpKKgvvsdTBvt28hLbjLqUlYDlByxYqDqRgRpV9vZaApGQ46z4rteH8B2KBtrNFYyTqWO/u2kzVD7NLT4jf9A==, tarball: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/react-native-worklet-fs-0.1.0.tgz}
     version: 0.1.0
     peerDependencies:
       react-native: 0.86.2
@@ -8883,8 +8883,8 @@ packages:
       rxdb: 17.4.0
       rxjs: '*'
 
-  rxdb-storage-worklet@https://codeload.github.com/wcpos/rxdb-storage-worklet/tar.gz/c38b758d7e3642190d04f71a97f634d963483051#path:/packages/rxdb-storage-worklet:
-    resolution: {gitHosted: true, integrity: sha512-MctZOn8WNFE+bmtmllXElWQ2ZFpWRWc4zs4VOgwxll3RJLznltheTRY+fmacfLnGuxBMP0slvQR7hpdxKMA2Zw==, tarball: https://codeload.github.com/wcpos/rxdb-storage-worklet/tar.gz/c38b758d7e3642190d04f71a97f634d963483051}
+  rxdb-storage-worklet@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/rxdb-storage-worklet-0.1.0.tgz:
+    resolution: {integrity: sha512-KfQzQRY/NQOTDv2mxAd/xksU1zKzGxA+6PV9cdvFkAOlj2i3MUe+zF41FDMQdwGkwXxyz/Inok9b7npTCcNzJQ==, tarball: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/rxdb-storage-worklet-0.1.0.tgz}
     version: 0.1.0
     peerDependencies:
       react-native-worklets: 0.11.4
@@ -9950,8 +9950,8 @@ packages:
     resolution: {integrity: sha512-JNjcULU2e4KJwUNv6CHgI46UvDGitb6dGryHajXTDiLgg1/RiGoPSDw4kZfYnwGtEXf2ZMeIewDQgFGzkCB2Sg==}
     engines: {node: '>=12.17'}
 
-  worklet-opfs@https://codeload.github.com/wcpos/rxdb-storage-worklet/tar.gz/c38b758d7e3642190d04f71a97f634d963483051#path:/packages/worklet-opfs:
-    resolution: {gitHosted: true, integrity: sha512-MctZOn8WNFE+bmtmllXElWQ2ZFpWRWc4zs4VOgwxll3RJLznltheTRY+fmacfLnGuxBMP0slvQR7hpdxKMA2Zw==, tarball: https://codeload.github.com/wcpos/rxdb-storage-worklet/tar.gz/c38b758d7e3642190d04f71a97f634d963483051}
+  worklet-opfs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/worklet-opfs-0.1.0.tgz:
+    resolution: {integrity: sha512-pRoLDonLpfj/yA6mQ8+P1m1jk+ZKmYkQaSfWswd1EbmpwA7WGv7QMRuK3j7b2eZiYF43T7maX+B9HewjLY5wfw==, tarball: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/worklet-opfs-0.1.0.tgz}
     version: 0.1.0
     peerDependencies:
       react-native-worklet-fs: ^0.1.0
@@ -19116,7 +19116,7 @@ snapshots:
       react: 19.2.3
       react-native: 0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
 
-  react-native-worklet-fs@git+https://git@github.com:wcpos/rxdb-storage-worklet.git#c38b758d7e3642190d04f71a97f634d963483051&path:/packages/react-native-worklet-fs(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)):
+  react-native-worklet-fs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/react-native-worklet-fs-0.1.0.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)):
     dependencies:
       react-native: 0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
       react-native-worklets: 0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
@@ -19413,7 +19413,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  rxdb-storage-worklet@https://codeload.github.com/wcpos/rxdb-storage-worklet/tar.gz/c38b758d7e3642190d04f71a97f634d963483051#path:/packages/rxdb-storage-worklet(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2)):
+  rxdb-storage-worklet@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/rxdb-storage-worklet-0.1.0.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2)):
     dependencies:
       rxdb: 17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2)
       rxjs: 7.8.2
@@ -20534,9 +20534,9 @@ snapshots:
 
   wordwrapjs@5.1.0: {}
 
-  worklet-opfs@https://codeload.github.com/wcpos/rxdb-storage-worklet/tar.gz/c38b758d7e3642190d04f71a97f634d963483051#path:/packages/worklet-opfs(react-native-worklet-fs@git+https://git@github.com:wcpos/rxdb-storage-worklet.git#c38b758d7e3642190d04f71a97f634d963483051&path:/packages/react-native-worklet-fs(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))):
+  worklet-opfs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/worklet-opfs-0.1.0.tgz(react-native-worklet-fs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/react-native-worklet-fs-0.1.0.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))):
     dependencies:
-      react-native-worklet-fs: git+https://git@github.com:wcpos/rxdb-storage-worklet.git#c38b758d7e3642190d04f71a97f634d963483051&path:/packages/react-native-worklet-fs(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))
+      react-native-worklet-fs: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.0/react-native-worklet-fs-0.1.0.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))
 
   wrap-ansi@7.0.0:
     dependencies:
