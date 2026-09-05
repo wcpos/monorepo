@@ -133,7 +133,7 @@ export function TaxSettings() {
 				},
 			});
 		} catch (error) {
-			const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 			uiLogger[logLevel]('Failed to restore server settings', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: {

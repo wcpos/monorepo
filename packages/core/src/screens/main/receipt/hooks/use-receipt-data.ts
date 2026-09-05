@@ -114,7 +114,7 @@ export function useReceiptData({
 				if (cancelled) return;
 
 				const error = err instanceof Error ? err : new Error(String(err));
-				const logLevel = isExpectedPreflightBlock(err) ? 'info' : 'error';
+				const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
 				logger[logLevel]('Failed to fetch receipt data', {
 					code: ERROR_CODES.PRINT_UNEXPECTED,
 					context: { orderId, mode, error: error.message },

@@ -52,7 +52,7 @@ export function useDownloadReceiptPdf() {
 					},
 				});
 			} catch (error) {
-				const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+				const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 				httpLogger[logLevel]('Failed to download receipt PDF', {
 					showToast: true,
 					code: ERROR_CODES.RECEIPT_DELIVERY_FAILED,

@@ -302,7 +302,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						error?.response?.data,
 						'Failed to fetch user data from server'
 					);
-					const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+					const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 					appLogger[logLevel](serverMessage, {
 						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {
@@ -458,7 +458,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					});
 				} else {
 					const errorMsg = getErrorMessage(error);
-					const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+					const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 					appLogger[logLevel]('[stores] validation FAILED', {
 						code: ERROR_CODES.AUTH_UNEXPECTED,
 						context: {

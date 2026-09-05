@@ -96,7 +96,7 @@ export function syncTemplates(
 				deferredCollections.add(collection);
 				templatesLogger.debug('Templates sync deferred — app is in background');
 			} else {
-				const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+				const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 				templatesLogger[logLevel]('Failed to sync templates', {
 					code: ERROR_CODES.PRINT_UNEXPECTED,
 					context: { error: error?.message },

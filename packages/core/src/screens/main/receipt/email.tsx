@@ -145,7 +145,7 @@ export function EmailForm({ order }: Props) {
 					) {
 						return;
 					}
-					const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+					const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 					httpLogger[logLevel]('Failed to send receipt email', {
 						showToast: true,
 						toast: { text2: failure.reason },

@@ -155,6 +155,44 @@ describe('sentry-sink.web', () => {
 		).toEqual(['AUTH201']);
 	});
 
+	it('normalises merchant origins so one failure class is one issue, not one per store', () => {
+		expect(messageTemplate('Failed to connect to https://shop.example.com/wp-json/: timeout')).toBe(
+			'Failed to connect to {}/wp-json/: timeout'
+		);
+		expect(
+			buildCaptureOptions({
+				message: 'Failed to connect to https://a.example.com/wp-json/: timeout',
+				code: 'AUTH999',
+			}).fingerprint
+		).toEqual(
+			buildCaptureOptions({
+				message: 'Failed to connect to https://b.example.org/wp-json/: timeout',
+				code: 'AUTH999',
+			}).fingerprint
+		);
+	});
+
+	it('groups HTTP failures by method and endpoint template, whatever the code', () => {
+		const products = buildCaptureOptions({
+			message: 'HTTP request failed: GET /wp-json/wcpos/v2/products',
+			code: 'SYNC131',
+			context: { method: 'GET', endpoint: '/wp-json/wcpos/v2/products', status: 503 },
+		}).fingerprint;
+		const orders = buildCaptureOptions({
+			message: 'HTTP request failed: GET /wp-json/wcpos/v2/orders/12',
+			code: 'SYNC131',
+			context: { method: 'GET', endpoint: '/wp-json/wcpos/v2/orders/12', status: 503 },
+		}).fingerprint;
+		const orders2 = buildCaptureOptions({
+			message: 'HTTP request failed: GET /wp-json/wcpos/v2/orders/99',
+			code: 'SYNC131',
+			context: { method: 'GET', endpoint: '/wp-json/wcpos/v2/orders/99', status: 503 },
+		}).fingerprint;
+		expect(products).toEqual(['SYNC131', 'GET', '/wp-json/wcpos/v2/products']);
+		expect(products).not.toEqual(orders);
+		expect(orders).toEqual(orders2);
+	});
+
 	it('captures Error context as an exception', () => {
 		setTelemetryConsent('allowed');
 		const error = new Error('Checkout failed');

@@ -120,7 +120,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 					return;
 				}
 				const errorMsg = getErrorMessage(err);
-				const logLevel = isExpectedPreflightBlock(err) ? 'info' : 'error';
+				const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
 				appLogger[logLevel]('Failed to fetch site info', {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: {

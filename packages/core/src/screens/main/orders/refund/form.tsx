@@ -389,7 +389,7 @@ export function RefundOrderForm({ order }: Props) {
 			if (isStorageBlockedError(err)) return;
 
 			const serverMessage = extractErrorMessage(err?.response?.data, t('orders.refund_failed'));
-			const logLevel = isExpectedPreflightBlock(err) ? 'info' : 'error';
+			const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
 			refundLogger[logLevel](serverMessage, {
 				showToast: true,
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,

@@ -156,7 +156,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				throw new ApiDiscoveryError(t('auth.bad_api_response'));
 			}
 
-			const logLevel = isExpectedPreflightBlock(error) ? 'info' : 'error';
+			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
 			discoveryLogger[logLevel](`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
 				showToast: true,
 				code: ERROR_CODES.AUTH_UNEXPECTED,

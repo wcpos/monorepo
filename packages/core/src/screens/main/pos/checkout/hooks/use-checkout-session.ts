@@ -279,7 +279,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			if (handleStockRejection(err)) return;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
-			const logLevel = isExpectedPreflightBlock(err) ? 'info' : 'error';
+			const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
 			checkoutLogger[logLevel](message, {
 				showToast: true,
 				code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,

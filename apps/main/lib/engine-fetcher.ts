@@ -135,7 +135,11 @@ export function createEngineFetcher(input: {
 	// a property of the session (a cashier role without that capability), not of
 	// the tick, so it is reported at error ONCE per path and at info after that;
 	// the fetcher is created per engine, so a new session starts clean (#1876).
+	// A same-site cashier swap keeps the fetcher and replaces `auth.credentials`
+	// in place, so the set is owned by the credentials object it was built for
+	// and starts over when that object changes.
 	const forbiddenPaths = new Set<string>();
+	let forbiddenPathsOwner: unknown = input.auth.credentials;
 
 	// One logical request = one arc. When a 401 enters the refresh path, the arc's
 	// rows — the absorbed attempt, the refresh layer's "Session renewed
@@ -156,7 +160,11 @@ export function createEngineFetcher(input: {
 		 * double-counts the request, never loses it. `settle`, not `emit`, because
 		 * emitting a log row is only half of what it does.
 		 */
-		settle: (level: SyncEvent['level'], extraFields?: Record<string, unknown>) => void;
+		settle: (
+			level: SyncEvent['level'],
+			extraFields?: Record<string, unknown>,
+			overrides?: { failed?: boolean }
+		) => void;
 	};
 
 	/** Execute one logical request arc, including any authentication retry. */
@@ -389,17 +397,19 @@ export function createEngineFetcher(input: {
 
 			return {
 				response,
-				settle: (level, extraFields) => {
+				settle: (level, extraFields, overrides) => {
 					// A failure is what the merchant would recognise as one: warn or
 					// error. Everything the rubric settles as info or debug — a 2xx, a
 					// 304 conditional poll, a tick-probe 404 the change signal is built
 					// to fall back from, an absorbed 401 whose retry then succeeded —
-					// is a healthy request, not an amber hour.
+					// is a healthy request, not an amber hour. A caller may pin the bit
+					// when the LOG level is quieter than the outcome (a repeated 403 is
+					// still a failed request in the hourly metrics).
 					recordTransport({
 						atMs,
 						durationMs,
 						bytes,
-						failed: level === 'warn' || level === 'error',
+						failed: overrides?.failed ?? (level === 'warn' || level === 'error'),
 						epoch: epochAtStart,
 					});
 					input.emitTransport({
@@ -440,13 +450,20 @@ export function createEngineFetcher(input: {
 			else if (status === 404 && isTickProbe)
 				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
 			else if (status === 403) {
+				if (forbiddenPathsOwner !== input.auth.credentials) {
+					forbiddenPaths.clear();
+					forbiddenPathsOwner = input.auth.credentials;
+				}
 				const forbiddenKey = requestPath ?? url;
 				const repeat = forbiddenPaths.has(forbiddenKey);
 				forbiddenPaths.add(forbiddenKey);
-				attempt.settle(repeat ? 'info' : 'error', {
-					...(repeat ? { outcome: 'forbidden-repeat' } : {}),
-					...extraFields,
-				});
+				// The repeat row is quiet, but the request still failed: keep the
+				// hourly transport metric honest.
+				attempt.settle(
+					repeat ? 'info' : 'error',
+					{ ...(repeat ? { outcome: 'forbidden-repeat' } : {}), ...extraFields },
+					{ failed: true }
+				);
 			} else attempt.settle('warn', extraFields);
 		};
 

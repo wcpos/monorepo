@@ -28,8 +28,8 @@ describe('useReceiptData', () => {
 	});
 
 	it.each([
-		[{ isSleeping: true }, 'info'],
-		[{ blockCode: 'preflight-offline' }, 'info'],
+		[{ isSleeping: true }, 'warn'],
+		[{ blockCode: 'preflight-offline' }, 'warn'],
 		[{ blockCode: 'preflight-auth-required' }, 'error'],
 		[{}, 'error'],
 	] as const)(
@@ -43,7 +43,7 @@ describe('useReceiptData', () => {
 				code: 'PRINT999',
 				context: { orderId: 42, mode: 'live', error: 'refused' },
 			});
-			expect(getLogger([])[level === 'info' ? 'error' : 'info']).not.toHaveBeenCalled();
+			expect(getLogger([])[level === 'warn' ? 'error' : 'warn']).not.toHaveBeenCalled();
 		}
 	);
 
