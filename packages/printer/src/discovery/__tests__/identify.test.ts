@@ -340,4 +340,29 @@ describe('identifyDiscoveredPrinters', () => {
 
 		expect(identified.vendor).toBe('epson');
 	});
+	it('skips the raw touch for an Epson whose name says nothing, on the discovery vendor alone', async () => {
+		debug.mockClear();
+		const connectTcp = vi.fn(async () => 'open' as const);
+		const counter: DiscoveredPrinter = {
+			id: 'mdns-counter',
+			name: 'Counter',
+			connectionType: 'network',
+			address: '192.168.1.41',
+			port: 9100,
+			// From the mDNS row: the _epsonpos service type / EPSON TXT record, not the name.
+			vendor: 'epson',
+		};
+
+		const [identified] = await identifyDiscoveredPrinters([counter], probes({ connectTcp }));
+
+		expect(connectTcp).not.toHaveBeenCalled();
+		expect(identified?.identity?.ports.some((entry) => entry.port === 9100)).toBe(false);
+		expect(debug).toHaveBeenCalledWith('Raw probe skipped', {
+			context: {
+				host: '192.168.1.41',
+				ports: [9100, 631],
+				reason: 'epson hint — a raw touch quarantines every lane',
+			},
+		});
+	});
 });

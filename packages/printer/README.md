@@ -215,3 +215,25 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   under the explicit 24-hour verbose-diagnostics mode, capped like the raw hex preview. A skipped
   probe logs *why* it was skipped: a decision with no line is indistinguishable from a lane that
   was never reached.
+- **2026-09-06 · no printer involved · what a read of the code found.** The gotcha audit
+  (wcpos/roadmap#161) turned up defects no test print would have shown, because each needs a
+  second printer, a clone, or a non-Latin store to reproduce. Fixed here: the cash drawer opened
+  only on Epsons — the standalone kick was the real-time `DLE DC4`, which many clones do not
+  implement, so a generic profile now gets the queued `ESC p 0 25 250`; one hung job held every
+  printer's receipts, because the service had a single print queue for all profiles (now one
+  serial queue per profile id, jobs for different printers run side by side, and `cancelQueued`
+  drops a profile's not-yet-started jobs — a job already at the transport cannot be aborted
+  safely); the same stalled printer timed out after 10, 15, 20 or 30 seconds depending on the
+  lane (one `PRINT_JOB_TIMEOUT_MS` now, with a line at 8 s while the cashier is still watching);
+  the store logo was sized for 80 mm paper whenever the template left `paper_width` null, which
+  is most templates, so a 58 mm printer cropped it (the profile's column count decides now); an
+  ePOS-Device endpoint on 8043 answering `Welcome to socket.io.` was rejected silently, and a
+  rejected port read exactly like a port that was never probed (`ePOS endpoint rejected` says
+  host, port and reason); and a receipt of question marks had no way to be fixed, since the
+  encoder chose a code page per string — `PrinterProfile.codePage` now names one and the
+  substitution warning says which page substituted. Two audit rows turned out to be wrong about
+  the code and are recorded rather than "fixed": the raw-9100 skip already keys on the discovery
+  vendor, not the printer's name (an mDNS `_epsonpos` row named "Counter" is skipped — tested),
+  and every ESC/POS job already selects Font A, because the encoder library's `initialize()`
+  emits `ESC @ FS . ESC M 0`; `withEscposFontA` is now a guard that inserts the command only if
+  the header lacks it, so the ruler's column count keeps its meaning if that ever changes.

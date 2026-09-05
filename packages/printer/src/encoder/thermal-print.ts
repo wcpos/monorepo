@@ -14,7 +14,7 @@ import type {
 } from '@wcpos/receipt-renderer';
 
 import { printerLogger } from '../logger';
-import { createEncodabilityGate } from './escpos-text';
+import { createEncodabilityGate, withEscposFontA } from './escpos-text';
 import { formatReceiptData } from './format-receipt-data';
 import { mapReceiptData } from './map-receipt-data';
 import { rasterizeThermalImage } from './thermal-raster';
@@ -49,6 +49,8 @@ export interface EncodeThermalTemplateForPrintInput {
 	maxWidthDots: number;
 	encodeOptions?: EscposRenderOptions;
 	imageSrcResolver?: ThermalImageSrcResolver;
+	/** ESC/POS code page name for the receipt text. Default: the encoder's automatic choice. */
+	codePage?: string;
 }
 
 export function renderTemplatePlaceholders(
@@ -171,7 +173,10 @@ export async function encodeThermalTemplateForPrint(
 	input: EncodeThermalTemplateForPrintInput
 ): Promise<Uint8Array> {
 	const job = await buildThermalTemplateMarkupJob(input);
-	return encodeThermalTemplate(job.template, job.data, job.options);
+	return withEscposFontA(
+		encodeThermalTemplate(job.template, job.data, job.options),
+		job.options.language ?? 'esc-pos'
+	);
 }
 
 export async function buildThermalTemplateMarkupJob(
@@ -179,7 +184,7 @@ export async function buildThermalTemplateMarkupJob(
 ): Promise<MarkupPrintJob> {
 	const canonical = mapReceiptData((input.receiptData ?? {}) as Record<string, unknown>);
 	const language = input.encodeOptions?.language ?? 'esc-pos';
-	const gate = createEncodabilityGate(language);
+	const gate = createEncodabilityGate(language, input.codePage);
 	const formatted = formatReceiptData(canonical, { isSymbolEncodable: gate.isSymbolEncodable });
 	gate.logSubstitutions();
 	const renderedTemplateXml = renderTemplatePlaceholders(
@@ -236,10 +241,28 @@ function isSafeRootRelativeImageSrc(value: string): boolean {
 	);
 }
 
+// Printable width in dots at the 8 dots/mm head density every printer in the model table uses:
+// 58 mm paper prints 48 mm of it (384 dots), 80 mm paper prints 72 mm (576 dots).
+export const MAX_DOTS_58MM = 384;
+export const MAX_DOTS_80MM = 576;
+// 32 columns is 58 mm at the 12-dot Font A pitch; a 58 mm printer never offers more.
+const NARROW_PAPER_MAX_COLUMNS = 32;
+
 export function maxDotsForPaperWidth(paperWidth: '58mm' | '80mm' | string): number {
-	if (paperWidth === '58mm') return 384;
-	if (paperWidth === '80mm') return 576;
-	return 576;
+	if (paperWidth === '58mm') return MAX_DOTS_58MM;
+	return MAX_DOTS_80MM;
+}
+
+/**
+ * Logo width for a printer whose template says nothing about paper width — the common case, since
+ * `paper_width` is a template field and most templates leave it null. Falling back to 576 dots
+ * crops or wraps the logo on every 58 mm printer (gotcha N41), so the profile's column count
+ * decides instead.
+ */
+export function maxDotsForColumns(columns: number | undefined): number {
+	return typeof columns === 'number' && columns <= NARROW_PAPER_MAX_COLUMNS
+		? MAX_DOTS_58MM
+		: MAX_DOTS_80MM;
 }
 
 export { normalizeThermalImageSize } from './thermal-raster-shared';

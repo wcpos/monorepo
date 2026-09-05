@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sampleReceiptData } from '../encoder/__tests__/fixtures';
 import { isVerboseDiagnostics, printerLogger } from '../logger';
 import { PrinterService } from '../printer-service';
+import { PRINT_JOB_SLOW_MS } from '../transport/print-timeouts';
 
 import type { PrinterProfile, PrinterTransport } from '../types';
 
@@ -225,6 +226,7 @@ describe('PrinterService', () => {
 		expect(printerLogger.debug).toHaveBeenCalledWith('Print job timing', {
 			context: {
 				kind: 'raw',
+				profileId: 'markup-printer',
 				outcome: 'ok',
 				waitMs: expect.any(Number),
 				transportMs: expect.any(Number),
@@ -245,6 +247,7 @@ describe('PrinterService', () => {
 		expect(printerLogger.debug).toHaveBeenCalledWith('Print job timing', {
 			context: {
 				kind: 'raw',
+				profileId: 'markup-printer',
 				outcome: 'failed',
 				waitMs: expect.any(Number),
 				transportMs: expect.any(Number),
@@ -794,5 +797,204 @@ describe('PrinterService', () => {
 			'bluetooth',
 			'BluetoothLE'
 		);
+	});
+	it('opens a clone drawer with the queued ESC p pulse instead of the Epson real-time kick', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+		await service.openDrawer(networkProfile({ vendor: 'generic' }));
+
+		expect(transport.printRaw).toHaveBeenCalledWith(Uint8Array.from([0x1b, 0x70, 0x00, 25, 250]), {
+			cutPaper: false,
+		});
+	});
+
+	it('keeps the ESC p connector selection for a pin5 clone drawer', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+		await service.openDrawer(networkProfile({ vendor: 'generic', drawerConnector: 'pin5' }));
+
+		expect(transport.printRaw).toHaveBeenCalledWith(Uint8Array.from([0x1b, 0x70, 0x01, 25, 250]), {
+			cutPaper: false,
+		});
+	});
+
+	it('keeps the Epson real-time kick for an Epson profile', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+		await service.openDrawer(networkProfile({ vendor: 'epson' }));
+
+		expect(transport.printRaw).toHaveBeenCalledWith(
+			Uint8Array.from([0x10, 0x14, 0x01, 0x00, 0x03]),
+			{ cutPaper: false }
+		);
+	});
+
+	it('runs jobs for two printers at the same time', async () => {
+		const service = new PrinterService();
+		const started: string[] = [];
+		const release: Record<string, () => void> = {};
+		const blocked = (id: string) =>
+			new Promise<void>((resolve) => {
+				release[id] = resolve;
+			});
+		Reflect.set(
+			service,
+			'getTransport',
+			vi.fn(async (profile: PrinterProfile) => ({
+				name: profile.id,
+				printRaw: vi.fn(() => {
+					started.push(profile.id);
+					return blocked(profile.id);
+				}),
+				printHtml: vi.fn(),
+			}))
+		);
+
+		const first = service.printRaw(new Uint8Array([1]), networkProfile({ id: 'counter' }));
+		const second = service.printRaw(new Uint8Array([2]), networkProfile({ id: 'kitchen' }));
+		await vi.waitFor(() => expect(started).toEqual(['counter', 'kitchen']));
+
+		release.counter!();
+		release.kitchen!();
+		await expect(Promise.all([first, second])).resolves.toEqual([undefined, undefined]);
+	});
+
+	it('keeps one printer\u2019s jobs serial', async () => {
+		const service = new PrinterService();
+		const started: number[] = [];
+		let release!: () => void;
+		const blocking = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const transport = {
+			name: 'slow',
+			printRaw: vi.fn((data: Uint8Array) => {
+				started.push(data[0]!);
+				return started.length === 1 ? blocking : Promise.resolve();
+			}),
+			printHtml: vi.fn(),
+		};
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+		const first = service.printRaw(new Uint8Array([1]), networkProfile({ id: 'counter' }));
+		const second = service.printRaw(new Uint8Array([2]), networkProfile({ id: 'counter' }));
+		await vi.waitFor(() => expect(started).toEqual([1]));
+
+		release();
+		await Promise.all([first, second]);
+		expect(started).toEqual([1, 2]);
+	});
+
+	it('settles queued jobs on every printer when the service is disposed', async () => {
+		const service = new PrinterService();
+		let release!: () => void;
+		const blocking = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const transport = { name: 'slow', printRaw: vi.fn(() => blocking), printHtml: vi.fn() };
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+		const counterRunning = service.printRaw(new Uint8Array([1]), networkProfile({ id: 'counter' }));
+		const kitchenRunning = service.printRaw(new Uint8Array([2]), networkProfile({ id: 'kitchen' }));
+		await vi.waitFor(() => expect(transport.printRaw).toHaveBeenCalledTimes(2));
+		const counterQueued = service.printRaw(new Uint8Array([3]), networkProfile({ id: 'counter' }));
+		const kitchenQueued = service.printRaw(new Uint8Array([4]), networkProfile({ id: 'kitchen' }));
+
+		const disposed = service.dispose();
+
+		await expect(counterQueued).rejects.toThrow('Printer service is closing');
+		await expect(kitchenQueued).rejects.toThrow('Printer service is closing');
+		release();
+		await expect(Promise.all([counterRunning, kitchenRunning])).resolves.toEqual([
+			undefined,
+			undefined,
+		]);
+		await disposed;
+	});
+
+	it('cancels a printer\u2019s queued jobs and leaves the running one alone', async () => {
+		const service = new PrinterService();
+		let release!: () => void;
+		const blocking = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const transport = {
+			name: 'slow',
+			printRaw: vi.fn(() => blocking),
+			printHtml: vi.fn(),
+		};
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+		const running = service.printRaw(new Uint8Array([1]), networkProfile({ id: 'counter' }));
+		await vi.waitFor(() => expect(transport.printRaw).toHaveBeenCalledTimes(1));
+		const queued = service.printRaw(new Uint8Array([2]), networkProfile({ id: 'counter' }));
+		const otherPrinter = service.printRaw(new Uint8Array([3]), networkProfile({ id: 'kitchen' }));
+
+		service.cancelQueued('counter');
+
+		await expect(queued).rejects.toThrow('Print job cancelled');
+		release();
+		await expect(running).resolves.toBeUndefined();
+		await expect(otherPrinter).resolves.toBeUndefined();
+		await service.dispose();
+	});
+
+	it('logs one line when a job is still running after the slow threshold', async () => {
+		vi.useFakeTimers();
+		try {
+			const service = new PrinterService();
+			let release!: () => void;
+			const blocking = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			const transport = { name: 'slow', printRaw: vi.fn(() => blocking), printHtml: vi.fn() };
+			Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+			const running = service.printRaw(new Uint8Array([1]), networkProfile({ id: 'counter' }));
+
+			await vi.advanceTimersByTimeAsync(PRINT_JOB_SLOW_MS);
+
+			expect(printerLogger.debug).toHaveBeenCalledWith('Print job still running', {
+				context: { kind: 'raw', profileId: 'counter', elapsedMs: expect.any(Number) },
+			});
+			release();
+			await running;
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('says nothing about a job that finished before the slow threshold', async () => {
+		vi.useFakeTimers();
+		try {
+			const service = new PrinterService();
+			const transport = markupTransport();
+			Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+			await service.printRaw(new Uint8Array([1]), networkProfile({ id: 'counter' }));
+			await vi.advanceTimersByTimeAsync(PRINT_JOB_SLOW_MS * 2);
+
+			expect(printerLogger.debug).not.toHaveBeenCalledWith(
+				'Print job still running',
+				expect.anything()
+			);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

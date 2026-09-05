@@ -1,5 +1,7 @@
 import type { IpcInvokeChannels, TypedIpcRenderer } from '@wcpos/printer/ipc-channels';
 
+import { PRINT_JOB_TIMEOUT_MS } from './print-timeouts';
+
 export function getIpc(): TypedIpcRenderer {
 	const w = window as {
 		ipcRenderer?: TypedIpcRenderer;
@@ -10,7 +12,8 @@ export function getIpc(): TypedIpcRenderer {
 	return ipc;
 }
 
-export const PRINT_TIMEOUT_MS = 30_000;
+/** Raw TCP, USB and serial all print through this channel, so they share the one ceiling. */
+export const PRINT_TIMEOUT_MS = PRINT_JOB_TIMEOUT_MS;
 
 /** Raw ESC/POS print channels — bytes cross IPC as a structured-cloned Uint8Array. */
 type RawPrintChannel = 'print-raw-serial' | 'print-raw-usb' | 'print-raw-tcp';
