@@ -18,6 +18,9 @@ describe('graftServerLineIdentity', () => {
 					{ id: 11, product_id: null },
 					{ id: 10, product_id: 1, quantity: 3 },
 					{ id: 12, product_id: 2 },
+					// wc/v3 also deletes a line posted with quantity 0 — a completed
+					// tombstone once the server omits it, never a live line to restore.
+					{ id: 13, product_id: 3, quantity: 0 },
 				],
 			};
 			const document = {

@@ -210,7 +210,11 @@ export function graftServerLineIdentity<T extends Record<string, unknown>>(
 		);
 		const lines = localItems.flatMap((line) => {
 			if (!isRecord(line) || !hasServerId(line) || ids.has(readServerId(line.id))) return [line];
-			if (line.product_id === null) return [];
+			// A completed deletion: wc/v3 removes a line posted with `product_id: null`
+			// (`item_is_null`) OR `quantity: 0`, and omits it from the echo. Both are
+			// tombstones the server has honoured, so they leave — only a LIVE line
+			// whose id was retired is kept (without the id) as cashier intent.
+			if (line.product_id === null || line.quantity === 0) return [];
 			const { id: _id, ...live } = line;
 			return [live];
 		});

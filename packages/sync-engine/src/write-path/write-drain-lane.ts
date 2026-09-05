@@ -101,9 +101,10 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 	if (typeof residentPayload !== 'object' || residentPayload === null) return mutation;
 	const payload = (mutation.payload ?? {}) as Record<string, unknown>;
 	// Pending create acks promote remoteId without adopting payload.id.
+	const remoteId = Number(row?.remoteId);
 	const grafted = facet.graftAckIdentity(payload, {
 		...residentPayload,
-		id: residentPayload.id ?? Number(row?.remoteId),
+		...(residentPayload.id === undefined && Number.isFinite(remoteId) ? { id: remoteId } : {}),
 	});
 	return grafted === payload ? mutation : { ...mutation, payload: grafted };
 }
