@@ -477,7 +477,6 @@ export function PrinterSetupDialog({
 		usb,
 		bluetooth,
 		phase === 'results' && found.length > 0 && link('setup_not_this', startOver),
-		phase === 'results' && found.length === 0 && link('setup_scan_again', startOver),
 		link('setup_enter_address', enterAddress),
 		phase === 'results' && link('setup_more_options', () => setOptionsOpen((v) => !v), false),
 		phase === 'results' && printable.length === 0 && guide
@@ -511,16 +510,24 @@ export function PrinterSetupDialog({
 							{scanScreen && !bleScanning && addressOpen && phase !== 'checking' && addressScreen}
 							{scanScreen && !bleScanning && !addressOpen && (
 								<>
-									{phase === 'results' &&
-										heading(
-											printable.length === 1
-												? 'found_single'
-												: printable.length > 1
-													? 'which_printer'
-													: officeOnly
-														? 'office_heading'
-														: 'none'
-										)}
+									{phase === 'results' && (
+										<View className="flex-row items-center justify-between gap-3">
+											{heading(
+												printable.length === 1
+													? 'found_single'
+													: printable.length > 1
+														? 'which_printer'
+														: officeOnly
+															? 'office_heading'
+															: 'none'
+											)}
+											{printable.length === 0 &&
+												action('setup_scan_again', startOver, {
+													variant: 'ghost',
+													icon: 'arrowRotateRight',
+												})}
+										</View>
+									)}
 									{cards}
 									{phase === 'results' && printable.length === 0 && line('none_help')}
 									{widthToggle}
