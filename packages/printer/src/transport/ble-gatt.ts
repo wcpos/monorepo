@@ -1,9 +1,17 @@
 import { printerLogger } from '../logger';
 
-interface BluetoothDevice {
+export interface BluetoothDevice {
 	readonly id: string;
 	readonly name?: string | null;
 	readonly gatt: BluetoothRemoteGATTServer;
+}
+export interface WebBluetoothNavigator {
+	bluetooth?: {
+		requestDevice(options: {
+			acceptAllDevices: true;
+			optionalServices: string[];
+		}): Promise<BluetoothDevice>;
+	};
 }
 interface BluetoothRemoteGATTServer {
 	connect(): Promise<BluetoothRemoteGATTServer>;
@@ -30,6 +38,8 @@ const PRINT_PROFILES = [
 	['49535343-fe7d-4ae5-8fa9-9fafd205e455', '49535343-8841-43f4-a8d4-ecbe34729bb3'],
 	['e7810a71-73ae-499d-8c15-faa9aef0c3f2', 'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'],
 ] as const;
+
+export const BLE_PRINT_SERVICE_UUIDS = PRINT_PROFILES.map(([service]) => service);
 
 const pause = () => new Promise<void>((resolve) => setTimeout(resolve, CHUNK_PAUSE_MS));
 
