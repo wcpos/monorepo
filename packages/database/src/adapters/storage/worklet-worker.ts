@@ -1,13 +1,14 @@
-import { getWorkletFs } from 'react-native-worklet-fs';
 import { scheduleOnRN } from 'react-native-worklets';
 import { getRxStorageAbstractFilesystem } from 'rxdb-premium/plugins/storage-abstract-filesystem';
-import { exposeWorkletRxStorage, type receiveWorkletMessage } from 'rxdb-storage-worklet';
+
+import { getWorkletFs } from '@wcpos/react-native-worklet-fs';
+import { exposeWorkletRxStorage, type receiveWorkletMessage } from '@wcpos/rxdb-storage-worklet';
 import {
 	createAbstractFilesystemAdapter,
 	createPromiseQueueLock,
 	createWorkletOpfs,
 	installWorkletRuntimePolyfills,
-} from 'worklet-opfs';
+} from '@wcpos/worklet-opfs';
 
 import { withTargetedOpfsRecovery } from '../../plugins/opfs-targeted-recovery.mjs';
 

@@ -1,7 +1,8 @@
 import { Paths } from 'expo-file-system';
-import { installWorkletFs } from 'react-native-worklet-fs';
 import { createWorkletRuntime, scheduleOnRuntime } from 'react-native-worklets';
-import { getRxStorageWorklet, receiveWorkletMessage } from 'rxdb-storage-worklet';
+
+import { installWorkletFs } from '@wcpos/react-native-worklet-fs';
+import { getRxStorageWorklet, receiveWorkletMessage } from '@wcpos/rxdb-storage-worklet';
 
 import { exposeStorage } from './worklet-worker';
 

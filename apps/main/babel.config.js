@@ -17,9 +17,9 @@ module.exports = function (api) {
 							'rxdb/plugins/utils',
 							'rxdb-premium/plugins/storage-abstract-filesystem',
 							'rxdb-premium/plugins/shared',
-							'rxdb-storage-worklet',
-							'worklet-opfs',
-							'react-native-worklet-fs',
+							'@wcpos/rxdb-storage-worklet',
+							'@wcpos/worklet-opfs',
+							'@wcpos/react-native-worklet-fs',
 							'@wcpos/database/plugins/opfs-targeted-recovery.mjs',
 						],
 						// Only the worker initializer's local imports; never the database barrel

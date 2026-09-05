@@ -15,7 +15,11 @@ let config = getDefaultConfig(__dirname);
 
 // Local link: packages live outside this worktree; watch them and resolve their
 // imports from the app too. These paths also work once the packages come from npm.
-const workletPackages = ['rxdb-storage-worklet', 'worklet-opfs', 'react-native-worklet-fs'];
+const workletPackages = [
+	'@wcpos/rxdb-storage-worklet',
+	'@wcpos/worklet-opfs',
+	'@wcpos/react-native-worklet-fs',
+];
 const workletPackageRoots = Object.fromEntries(
 	workletPackages.map((name) => {
 		const moduleRoot = require.resolve
@@ -126,7 +130,7 @@ if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
 }
 
 // Uniwind must wrap Bundle Mode, or its class transforms stop applying
-// (rxdb-storage-worklet example, 2026-09-05).
+// (@wcpos/rxdb-storage-worklet example, 2026-09-05).
 config = withUniwindConfig(getBundleModeMetroConfig(config), {
 	cssEntryFile: './global.css',
 	extraThemes: ['ocean', 'sunset', 'monochrome'],

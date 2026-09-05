@@ -13,12 +13,12 @@ jest.mock('react-native-worklets', () => ({
 	scheduleOnRN: (task: (...args: unknown[]) => void, ...args: unknown[]) => task(...args),
 }));
 jest.mock(
-	'react-native-worklet-fs',
+	'@wcpos/react-native-worklet-fs',
 	() => ({ installWorkletFs: mockInstall, getWorkletFs: () => ({}) }),
 	{ virtual: true }
 );
 jest.mock(
-	'rxdb-storage-worklet',
+	'@wcpos/rxdb-storage-worklet',
 	() => ({
 		getRxStorageWorklet: () => mockRemote,
 		receiveWorkletMessage: mockReceive,
@@ -27,7 +27,7 @@ jest.mock(
 	{ virtual: true }
 );
 jest.mock(
-	'worklet-opfs',
+	'@wcpos/worklet-opfs',
 	() => ({
 		installWorkletRuntimePolyfills: jest.fn(),
 		createWorkletOpfs: jest.fn(),
@@ -91,7 +91,7 @@ it.each(['native install', 'worker setup', 'async exposure', 'missing callback']
 				throw new Error('native install failed');
 			});
 		if (failure === 'worker setup') {
-			const { installWorkletRuntimePolyfills } = await import('worklet-opfs');
+			const { installWorkletRuntimePolyfills } = await import('@wcpos/worklet-opfs');
 			jest.mocked(installWorkletRuntimePolyfills).mockImplementationOnce(() => {
 				throw new Error('worker setup failed');
 			});
