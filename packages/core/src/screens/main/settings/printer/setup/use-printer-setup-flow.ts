@@ -8,7 +8,7 @@ import {
 	isPrinterConnectionError,
 } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterDiscovery, PrinterService } from '@wcpos/printer';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { capturePrinterOutcome, getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
 import { isWindowsPlatform } from '../dialog/connection/is-windows';
@@ -122,6 +122,24 @@ export function usePrinterSetupFlow(
 					testPages,
 				},
 			});
+			// Terminal phases are the outcome support and telemetry pivot on (roadmap#161 P0).
+			if (phase === 'saved' || phase === 'trouble' || phase === 'error') {
+				const outcome = {
+					result: phase,
+					platform,
+					source: selected?.source,
+					vendor: current.current.profileDraft.vendor,
+					model: selected?.identity?.model,
+					lane: selected?.identity?.lane?.protocol,
+					port: current.current.profileDraft.port,
+					columns,
+					testPages,
+					securePrinting: selected?.identity?.securePrinting,
+					failure: current.current.failure?.message,
+				};
+				printerLogger.info('Printer setup outcome', { context: outcome });
+				capturePrinterOutcome(outcome);
+			}
 		}
 	}
 	function updateDraft(patch: Partial<PrinterFormValues>) {

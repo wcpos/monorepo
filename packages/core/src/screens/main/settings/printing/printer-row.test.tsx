@@ -42,6 +42,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('../printer/copy-setup-report', () => ({ useCopySetupReport: () => jest.fn() }));
 jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({ testID }: { testID?: string }) => <button type="button" data-testid={testID} />,
 }));

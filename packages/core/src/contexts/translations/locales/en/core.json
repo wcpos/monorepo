@@ -789,6 +789,8 @@
 	"settings.setup_trouble_device": "Check the cable and that the printer is switched on, then try again.",
 	"settings.setup_trouble_network": "Check the printer is on and on the same Wi-Fi as this computer, then try again.",
 	"settings.setup_open_guide": "Open the printer guide",
+	"settings.setup_copy_report": "Copy setup report",
+	"settings.setup_report_copied": "Setup report copied",
 	"settings.add_printer": "Add Printer",
 	"settings.having_trouble": "Having trouble?",
 	"settings.open_printer_settings": "Open printer settings",

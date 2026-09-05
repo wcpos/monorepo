@@ -237,6 +237,7 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 }));
 
 let mockAvailableProfiles = { printers: [cloudProfile], isLoading: false };
+jest.mock('../printer/copy-setup-report', () => ({ useCopySetupReport: () => jest.fn() }));
 jest.mock('@wcpos/components/docs-link', () => {
 	const React = require('react');
 	return {

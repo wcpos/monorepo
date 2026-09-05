@@ -33,6 +33,7 @@ import { formatDiscoveryError } from '../dialog/discovery-error-message';
 import { PrinterToggleGroup } from '../dialog/printer-toggle-group';
 import { TestPrintError } from '../dialog/test-print-error';
 import { persistPrinterProfile } from '../persist-printer-profile';
+import { CopySetupReport } from '../copy-setup-report';
 import { PRINTER_DOCS_URL } from '../printer-docs';
 import { electronPrinterSchema, type PrinterFormValues, webPrinterSchema } from '../schema';
 import { deriveWebVendorDefaults } from '../web-network-defaults';
@@ -201,6 +202,28 @@ export function PrinterSetupDialog({
 		<DocsLink key="guide" testID="printer-setup-setup_open_guide" href={PRINTER_DOCS_URL}>
 			{t('settings.setup_open_guide')}
 		</DocsLink>
+	);
+	const copyReport = (variant: 'outline' | 'ghost' = 'outline') => (
+		<CopySetupReport
+			key="copy-report"
+			testID="printer-setup-copy-report"
+			variant={variant}
+			report={{
+				printer: {
+					name: draft.name,
+					vendor: draft.vendor,
+					model: selected?.identity?.model,
+					connectionType: draft.connectionType,
+					address: draft.address,
+					port: draft.port,
+					columns,
+					language: draft.language,
+					source: selected?.source,
+				},
+				identity: selected?.identity,
+				setup: { phase, testPages, failure },
+			}}
+		/>
 	);
 	// The browser pickers and the Electron chooser only open from a tap: they stay in the links line.
 	const usb = web && isWebUsbSupported() && link('setup_add_usb', flow.startUsbPicker);
@@ -572,7 +595,7 @@ export function PrinterSetupDialog({
 										}),
 										action('save_anyway', answer('ok'))
 									)}
-									{links(link('setup_start_over', startOver, false), guide)}
+									{links(link('setup_start_over', startOver, false), copyReport(), guide)}
 								</>
 							)}
 							{phase === 'error' && (
@@ -614,6 +637,7 @@ export function PrinterSetupDialog({
 										)}
 									</View>
 									{line('saved_help', 'text-muted-foreground mt-2 text-center text-xs')}
+									{copyReport('ghost')}
 								</View>
 							)}
 						</VStack>
