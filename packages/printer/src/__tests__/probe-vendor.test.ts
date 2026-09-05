@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildSweepCandidates, sweepForPrinters } from '../discovery/network-sweep';
 import { probeVendor, probeVendorEndpoint } from '../utils/probe-vendor';
 
 describe('probeVendor', () => {
@@ -64,6 +65,39 @@ describe('probeVendor', () => {
 });
 
 describe('probeVendorEndpoint', () => {
+	it.each([undefined, 1500])(
+		'bounds the entire host probe to %s ms (default 3000)',
+		async (timeoutMs) => {
+			vi.useFakeTimers();
+			vi.spyOn(globalThis, 'fetch').mockImplementation(
+				(_, init) =>
+					new Promise((_, reject) => {
+						init?.signal?.addEventListener('abort', () =>
+							reject(new DOMException('', 'AbortError'))
+						);
+					})
+			);
+			try {
+				const result = probeVendorEndpoint('192.168.1.131', timeoutMs);
+				await vi.advanceTimersByTimeAsync(timeoutMs ?? 3000);
+				await expect(result).resolves.toBeNull();
+				expect(vi.getTimerCount()).toBe(0);
+				if (timeoutMs === 1500) {
+					const startedAt = Date.now();
+					const sweep = sweepForPrinters({
+						hosts: buildSweepCandidates({ subnetBases: ['192.168.1'] }),
+						probe: probeVendorEndpoint,
+					});
+					await vi.runAllTimersAsync();
+					await expect(sweep).resolves.toEqual([]);
+					expect(Date.now() - startedAt).toBe(15000);
+				}
+			} finally {
+				vi.useRealTimers();
+			}
+		}
+	);
+
 	afterEach(() => {
 		vi.restoreAllMocks();
 	});
