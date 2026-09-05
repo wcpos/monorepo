@@ -14,7 +14,7 @@ import type {
 } from '@wcpos/receipt-renderer';
 
 import { printerLogger } from '../logger';
-import { isEscposTextEncodable } from './escpos-text';
+import { createEncodabilityGate } from './escpos-text';
 import { formatReceiptData } from './format-receipt-data';
 import { mapReceiptData } from './map-receipt-data';
 import { rasterizeThermalImage } from './thermal-raster';
@@ -179,9 +179,9 @@ export async function buildThermalTemplateMarkupJob(
 ): Promise<MarkupPrintJob> {
 	const canonical = mapReceiptData((input.receiptData ?? {}) as Record<string, unknown>);
 	const language = input.encodeOptions?.language ?? 'esc-pos';
-	const formatted = formatReceiptData(canonical, {
-		isSymbolEncodable: (symbol) => isEscposTextEncodable(symbol, language),
-	});
+	const gate = createEncodabilityGate(language);
+	const formatted = formatReceiptData(canonical, { isSymbolEncodable: gate.isSymbolEncodable });
+	gate.logSubstitutions();
 	const renderedTemplateXml = renderTemplatePlaceholders(
 		input.templateXml,
 		formatted as Record<string, unknown>

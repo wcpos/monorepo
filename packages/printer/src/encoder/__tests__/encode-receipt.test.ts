@@ -1,6 +1,15 @@
+import { vi } from 'vitest';
+
 import { encodeReceipt } from '../encode-receipt';
 import { formatMoney } from '../format-money';
 import { sampleReceiptData } from './fixtures';
+
+const { warn } = vi.hoisted(() => ({
+	warn: vi.fn<(message: string, options: { context: { count: number } }) => void>(),
+}));
+vi.mock('../../logger', () => ({
+	printerLogger: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() },
+}));
 
 describe('encodeReceipt', () => {
 	function encodeCurrency(currency: string): Uint8Array {
@@ -48,6 +57,24 @@ describe('encodeReceipt', () => {
 		const text = new TextDecoder().decode(result);
 		expect(text).toContain('INR 25.00');
 		expect(Array.from(result)).not.toContain(0x3f);
+	});
+
+	it('warns once per job with the number of substituted characters', () => {
+		warn.mockClear();
+		encodeCurrency('INR');
+
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledWith('Unencodable characters substituted', {
+			context: { count: expect.any(Number), language: 'esc-pos', codepage: 'auto' },
+		});
+		expect(warn.mock.calls[0]?.[1]?.context.count).toBeGreaterThan(0);
+	});
+
+	it('stays quiet when every character encodes', () => {
+		warn.mockClear();
+		encodeCurrency('USD');
+
+		expect(warn).not.toHaveBeenCalled();
 	});
 
 	it('keeps the encodable EUR symbol instead of falling back by code point', () => {

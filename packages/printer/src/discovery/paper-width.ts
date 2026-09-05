@@ -25,6 +25,7 @@ export async function resolveNativePrinterColumns(input: {
 	vendor?: 'epson' | 'star' | 'generic';
 	name?: string;
 }): Promise<{ columns: number | undefined; source: 'printer' | 'model' | 'default' }> {
+	printerLogger.debug('Printer columns query started', { context: { ...input } });
 	let columns: number | undefined;
 	let source: 'printer' | 'model' | 'default' = 'default';
 	const isNativeEpson =

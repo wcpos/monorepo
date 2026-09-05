@@ -133,7 +133,7 @@ describe('PrinterService', () => {
 		await service.printRaw(data, networkProfile());
 
 		expect(transport.printRaw).toHaveBeenCalledExactlyOnceWith(data);
-		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+		expect(printerLogger.debug).toHaveBeenCalledWith('Raw job dispatched', {
 			context: { transport: 'markup', bytes: size, hexPreview, truncated },
 		});
 	});
@@ -145,7 +145,7 @@ describe('PrinterService', () => {
 
 		await service.printRaw(Uint8Array.from([0xde, 0xad]), networkProfile());
 
-		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+		expect(printerLogger.debug).toHaveBeenCalledWith('Raw job dispatched', {
 			context: { transport: 'markup', bytes: 2 },
 		});
 	});
@@ -161,6 +161,77 @@ describe('PrinterService', () => {
 		starNativePrintRawMock.mockClear();
 		epsonNativeCtorMock.mockClear();
 		starNativeCtorMock.mockClear();
+	});
+
+	it('logs the markup dispatch the raw lane would have logged', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+		await service.printReceipt(sampleReceiptData, networkProfile());
+
+		expect(printerLogger.debug).toHaveBeenCalledWith('Markup job dispatched', {
+			context: { transport: 'markup', kind: 'receipt', dataKeys: ['receipt'] },
+		});
+	});
+
+	it('previews the serialised markup job in verbose diagnostics', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+		vi.mocked(isVerboseDiagnostics).mockReturnValue(true);
+
+		await service.printReceipt(sampleReceiptData, networkProfile());
+
+		expect(printerLogger.debug).toHaveBeenCalledWith('Markup job dispatched', {
+			context: {
+				transport: 'markup',
+				kind: 'receipt',
+				dataKeys: ['receipt'],
+				preview: JSON.stringify({
+					template: '<receipt><text>receipt</text></receipt>',
+					data: { receipt: true },
+				}),
+				truncated: false,
+			},
+		});
+	});
+
+	it('separates queue wait from transport time on every job', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+		await service.printRaw(Uint8Array.from([0x1b, 0x40]), networkProfile());
+
+		expect(printerLogger.debug).toHaveBeenCalledWith('Print job timing', {
+			context: {
+				kind: 'raw',
+				outcome: 'ok',
+				waitMs: expect.any(Number),
+				transportMs: expect.any(Number),
+			},
+		});
+	});
+
+	it('reports a failed outcome on the timing line', async () => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		transport.printRaw.mockRejectedValueOnce(new Error('printer offline'));
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+
+		await expect(service.printRaw(Uint8Array.from([0x1b]), networkProfile())).rejects.toThrow(
+			'printer offline'
+		);
+
+		expect(printerLogger.debug).toHaveBeenCalledWith('Print job timing', {
+			context: {
+				kind: 'raw',
+				outcome: 'failed',
+				waitMs: expect.any(Number),
+				transportMs: expect.any(Number),
+			},
+		});
 	});
 
 	it('uses markup for built-in receipts when supported', async () => {
@@ -259,7 +330,7 @@ describe('PrinterService', () => {
 			})
 		);
 		expect(transport.printRaw).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
-		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+		expect(printerLogger.debug).toHaveBeenCalledWith('Raw job dispatched', {
 			context: { transport: 'test', bytes: 3 },
 		});
 	});
@@ -322,13 +393,15 @@ describe('PrinterService', () => {
 		resolveSecond?.(new Uint8Array([2]));
 		await second;
 		expect(transport.printRaw).toHaveBeenNthCalledWith(2, new Uint8Array([2]));
-		expect(printerLogger.debug).toHaveBeenCalledTimes(2);
-		expect(printerLogger.debug).toHaveBeenNthCalledWith(1, 'Raw job dispatched', {
-			context: { transport: 'test', bytes: 1 },
-		});
-		expect(printerLogger.debug).toHaveBeenNthCalledWith(2, 'Raw job dispatched', {
-			context: { transport: 'test', bytes: 1 },
-		});
+		// One dispatch line per job, in job order — the timing lines interleave between them.
+		expect(
+			vi
+				.mocked(printerLogger.debug)
+				.mock.calls.filter(([message]) => message === 'Raw job dispatched')
+		).toEqual([
+			['Raw job dispatched', { context: { transport: 'test', bytes: 1 } }],
+			['Raw job dispatched', { context: { transport: 'test', bytes: 1 } }],
+		]);
 	});
 
 	it('forwards autoOpenDrawer to encodeThermalTemplateForPrint so the setting works for thermal templates', async () => {
@@ -397,7 +470,7 @@ describe('PrinterService', () => {
 			Uint8Array.from([0x10, 0x14, 0x01, 0x01, 0x03]),
 			{ cutPaper: false }
 		);
-		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+		expect(printerLogger.debug).toHaveBeenCalledWith('Raw job dispatched', {
 			context: { transport: 'test', bytes: 5 },
 		});
 	});
@@ -503,7 +576,7 @@ describe('PrinterService', () => {
 		const raw = [...bytes];
 		const pulseIndex = raw.findIndex((byte, index) => byte === 0x1b && raw[index + 1] === 0x70);
 		expect(pulseIndex).toBeGreaterThanOrEqual(0);
-		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+		expect(printerLogger.debug).toHaveBeenCalledWith('Raw job dispatched', {
 			context: { transport: 'test', bytes: bytes.byteLength },
 		});
 	});
