@@ -167,3 +167,11 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   network path consulted the model table. Ruling (Paul): ask the printer. On Epson SDK lanes the
   adapter now reads the configured paper width (`getPrinterSetting(PAPERWIDTH)`: 58/60/70/76/80 mm →
   32/35/42/45/48 columns); the model table is the fallback, the ruler the last resort (G7).
+- **2026-09-05 · Netum NT-1809 over BLE · Electron.** Its GATT (read from the Mac): `18f0/2af1`,
+  `ff00/ff02`, ISSC `49535343-…`, `e7810a71-…`, MTU 240; a 30-byte ESC/POS job written to `2af1`
+  without response in 20-byte chunks printed at once. The app's Web Bluetooth path printed nothing
+  because it reconnected through the library's `getDevices()` route, which needs persisted device
+  permissions Electron does not keep (timeout after 10 s). Fixed: print through the `BluetoothDevice`
+  in hand — `transport/ble-gatt.ts`, profiles probed in the order above (Spec H). Two gotchas for the
+  wizard copy: a BLE printer that is *connected* (even by a stale link) stops advertising and vanishes
+  from every scan until power-cycled; the Netum also advertises Bluetooth Classic to macOS.

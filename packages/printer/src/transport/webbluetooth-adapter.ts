@@ -1,8 +1,13 @@
 /// <reference path="../types/point-of-sale-connectors.d.ts" />
+import { connectBleReceiptPrinter } from './ble-gatt';
 import { loadWebDevice } from './web-device-store';
 import { waitForWebPrinterReconnect } from './web-reconnect';
 
 import type { PrinterTransport } from '../types';
+
+function hasGatt(device: unknown): device is Parameters<typeof connectBleReceiptPrinter>[0] {
+	return typeof device === 'object' && device !== null && 'gatt' in device && Boolean(device.gatt);
+}
 
 export class WebBluetoothAdapter implements PrinterTransport {
 	readonly name = 'webbluetooth';
@@ -15,6 +20,15 @@ export class WebBluetoothAdapter implements PrinterTransport {
 			throw new Error(
 				'Bluetooth printer is not connected. Open printer settings and reconnect it.'
 			);
+		}
+		if (hasGatt(device)) {
+			const printer = await connectBleReceiptPrinter(device);
+			try {
+				await printer.write(data);
+			} finally {
+				await printer.disconnect();
+			}
+			return;
 		}
 		const { default: WebBluetoothReceiptPrinter } =
 			await import('@point-of-sale/webbluetooth-receipt-printer');
