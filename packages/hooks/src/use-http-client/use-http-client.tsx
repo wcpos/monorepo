@@ -121,15 +121,21 @@ const processErrorHandlers = async (
 				break;
 			}
 		} catch (handlerError) {
-			httpLogger.error(`Error handler ${handler.name} threw an error`, {
-				code: 'CLIENT999',
-				context: {
-					error: handlerError instanceof Error ? handlerError.message : String(handlerError),
-					originalStatus: error.response?.status,
-					handlerIntercepts: handler.intercepts,
-					willStopChain: handler.intercepts,
-				},
-			});
+			if (handlerError === error) {
+				httpLogger.debug(`Error handler ${handler.name} passed through the original error`, {
+					context: { handlerName: handler.name, status: error.response?.status },
+				});
+			} else {
+				httpLogger.error(`Error handler ${handler.name} threw an error`, {
+					code: 'CLIENT999',
+					context: {
+						error: handlerError instanceof Error ? handlerError.message : String(handlerError),
+						originalStatus: error.response?.status,
+						handlerIntercepts: handler.intercepts,
+						willStopChain: handler.intercepts,
+					},
+				});
+			}
 
 			// Special case: If token refresh handler throws an error with refresh token invalid flag,
 			// continue the chain to let the fallback handler process it

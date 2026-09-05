@@ -71,8 +71,9 @@ export function createAutomaticTickGate(options: {
 				level: 'error',
 				message: `automatic tick failed: ${message}`,
 				fields: {
-					...(lane === undefined ? {} : { lane }),
+					lane: lane ?? 'reconnect-retick',
 					status: 'error',
+					error: message,
 					durationMs: options.now() - startedAtMs,
 				},
 			});
