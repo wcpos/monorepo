@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { sampleReceiptData } from '../encoder/__tests__/fixtures';
+import { printerLogger } from '../logger';
 import { PrinterService } from '../printer-service';
 
 import type { PrinterProfile, PrinterTransport } from '../types';
+
+vi.mock('../logger', () => ({ printerLogger: { debug: vi.fn() } }));
 
 const {
 	buildReceiptMarkupJobMock,
@@ -110,6 +113,28 @@ function markupTransport() {
 }
 
 describe('PrinterService', () => {
+	it.each([
+		{ size: 10, hexPreview: '00010203040506070809', truncated: false },
+		{ size: 8192, hexPreview: 'ab'.repeat(8192), truncated: false },
+		{ size: 9000, hexPreview: 'ab'.repeat(8192), truncated: true },
+	])('captures the outgoing $size-byte raw job', async ({ size, hexPreview, truncated }) => {
+		const service = new PrinterService();
+		const transport = markupTransport();
+		const data =
+			size === 10
+				? Uint8Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+				: new Uint8Array(size).fill(0xab);
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
+		vi.mocked(printerLogger.debug).mockClear();
+
+		await service.printRaw(data, networkProfile());
+
+		expect(transport.printRaw).toHaveBeenCalledExactlyOnceWith(data);
+		expect(printerLogger.debug).toHaveBeenCalledExactlyOnceWith('Raw job dispatched', {
+			context: { transport: 'markup', bytes: size, hexPreview, truncated },
+		});
+	});
+
 	beforeEach(() => {
 		encodeReceiptMock.mockClear();
 		buildReceiptMarkupJobMock.mockClear();

@@ -10,6 +10,7 @@ import {
 	buildThermalTemplateMarkupJob,
 	encodeThermalTemplateForPrint,
 } from './encoder/thermal-print';
+import { printerLogger } from './logger';
 import { encodeThermalTemplate } from './renderer';
 import { CloudAdapter } from './transport/cloud-adapter';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
@@ -18,6 +19,9 @@ import type { EncodeReceiptOptions } from './encoder/encode-receipt';
 import type { ReceiptData } from './encoder/types';
 import type { CloudEnqueueFn } from './transport/cloud-adapter';
 import type { PrinterProfile, PrinterTransport } from './types';
+
+// Receipts are a few KB; diagnostics exports and live printer tests need exact bytes.
+const RAW_JOB_HEX_PREVIEW_BYTES = 8192;
 
 /** Cache key that captures config-relevant fields so stale transports are evicted. */
 function transportKey(profile: PrinterProfile, cloudFactoryVersion: number): string {
@@ -183,6 +187,16 @@ export class PrinterService {
 	async printRaw(data: Uint8Array, profile: PrinterProfile): Promise<void> {
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
+			printerLogger.debug('Raw job dispatched', {
+				context: {
+					transport: transport.name,
+					bytes: data.byteLength,
+					hexPreview: Array.from(data.subarray(0, RAW_JOB_HEX_PREVIEW_BYTES), (byte) =>
+						byte.toString(16).padStart(2, '0')
+					).join(''),
+					truncated: data.byteLength > RAW_JOB_HEX_PREVIEW_BYTES,
+				},
+			});
 			await transport.printRaw(data);
 		});
 	}

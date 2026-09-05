@@ -813,6 +813,28 @@ function writeIndentedStandaloneTextLine(
 	return true;
 }
 
+function splitInlineTextLines(nodes: ThermalNode[]): ThermalNode[][] {
+	const lines: ThermalNode[][] = [[]];
+	for (const node of nodes) {
+		let parts: ThermalNode[][];
+		if (node.type === 'raw-text') {
+			parts = node.value.split(/\r\n|\r|\n/).map((value) => [{ ...node, value }]);
+		} else if (
+			node.type === 'bold' ||
+			node.type === 'underline' ||
+			node.type === 'invert' ||
+			node.type === 'size'
+		) {
+			parts = splitInlineTextLines(node.children).map((children) => [{ ...node, children }]);
+		} else {
+			parts = [[node]];
+		}
+		lines[lines.length - 1].push(...parts[0]);
+		lines.push(...parts.slice(1));
+	}
+	return lines;
+}
+
 function writeAlignedStandaloneTextLine(
 	encoder: ReceiptPrinterEncoder,
 	nodes: ThermalNode[],
@@ -830,9 +852,21 @@ function writeAlignedStandaloneTextLine(
 
 	const text = extractText(nodes);
 	const normalized = context.normalizeText ? normalizeThermalText(text) : text;
+	if (hasLineBreak(normalized)) {
+		for (const line of splitInlineTextLines(nodes)) {
+			if (!extractText(line)) {
+				writeNewline(encoder, context);
+			} else if (!writeAlignedStandaloneTextLine(encoder, line, context)) {
+				walkNodes(encoder, line, context);
+				writeNewline(encoder, context);
+			}
+			if (context.lineHasText) writeNewline(encoder, context);
+		}
+		writePrinterAlign(encoder, context, context.align);
+		return true;
+	}
 	if (
 		!normalized ||
-		hasLineBreak(normalized) ||
 		(context.supportsCp932 && containsJapaneseText(normalized)) ||
 		displayWidth(normalized) > context.columns
 	) {
@@ -873,9 +907,11 @@ function writeAlignedRawTextLine(
 	}
 
 	const normalized = context.normalizeText ? normalizeThermalText(value) : value;
+	if (hasLineBreak(normalized)) {
+		return writeAlignedStandaloneTextLine(encoder, [{ type: 'raw-text', value }], context);
+	}
 	if (
 		!normalized ||
-		hasLineBreak(normalized) ||
 		(context.supportsCp932 && containsJapaneseText(normalized)) ||
 		displayWidth(normalized) > context.columns
 	) {
