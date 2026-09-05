@@ -156,12 +156,10 @@ describe('mapReceiptData', () => {
 			payments: [],
 			refunds: [],
 		};
-		const mapped = mapReceiptData(offline as Record<string, any>);
+		const mapped = mapReceiptData(offline);
 		expect(mapped.store.price_decimals).toBe(0);
-		const noDecimals = mapReceiptData({
-			...offline,
-			store: { ...offline.store, price_decimals: undefined },
-		} as Record<string, any>);
+		const { price_decimals: _dropped, ...storeWithoutPrecision } = offline.store;
+		const noDecimals = mapReceiptData({ ...offline, store: storeWithoutPrecision });
 		expect(noDecimals.store.price_decimals).toBeUndefined();
 	});
 

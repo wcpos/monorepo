@@ -989,6 +989,8 @@ function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 	return {
 		id: 1,
 		name,
+		// Store money precision, as wc_get_price_decimals() would report it.
+		price_decimals: 'JPY' === pool.currency ? 0 : 2,
 		address: {
 			address_1: street,
 			city: cityName,
@@ -1077,6 +1079,7 @@ function buildCustomer(rand: () => number, pool: LocalePool): ReceiptCustomer {
 	const customer: ReceiptCustomer = {
 		id: isGuest ? 0 : Math.floor(rand() * 9999) + 1,
 		name: isGuest ? 'Guest customer' : fullName,
+		first_name: isGuest ? 'Guest' : fullName.split(' ')[0],
 	};
 	if (!isGuest) {
 		// Real customers in the live app almost always have a billing address.

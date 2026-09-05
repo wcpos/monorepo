@@ -103,6 +103,9 @@ export const ReceiptStoreMetaSchema = z.object({
 	name: z.string().describe('Store display name'),
 	price_decimals: z
 		.number()
+		.int()
+		.min(0)
+		.max(20)
 		.optional()
 		.describe('Store money precision from wc_get_price_decimals()'),
 	address: ReceiptStoreAddressSchema.optional().describe(
