@@ -321,6 +321,35 @@ describe('buildReceiptData', () => {
 		expect(result.lines[0].meta).toEqual([{ key: 'Size', value: 'XL' }]);
 	});
 
+	it('shows variation attributes written with display_key/display_value only', () => {
+		// The POS writes a variation's attributes this way (pos/hooks/utils.ts and
+		// every add-variation caller); a server round-trip adds the display pair
+		// beside a taxonomy key. Either way the customer sees "Size: XL", never ": ".
+		const result = buildReceiptData(
+			{
+				...mockOrder,
+				line_items: [
+					{
+						...mockOrder.line_items[0],
+						meta_data: [
+							{ attr_id: 3, display_key: 'Size', display_value: 'XL' },
+							{ key: 'pa_colour', value: 'red', display_key: 'Colour', display_value: 'Red' },
+							{ key: '_woocommerce_pos_data', value: { price: 5 } },
+							{ key: 'note', value: { nested: true } },
+						],
+					},
+				],
+			},
+			mockStore
+		);
+
+		expect(result.lines[0].meta).toEqual([
+			{ key: 'Size', value: 'XL' },
+			{ key: 'Colour', value: 'Red' },
+			{ key: 'note', value: '' },
+		]);
+	});
+
 	it('maps totals', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.totals.subtotal).toBe('25.00');
