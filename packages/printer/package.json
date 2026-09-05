@@ -36,7 +36,7 @@
 		"@wcpos/receipt-renderer": "workspace:*",
 		"@wcpos/utils": "workspace:*",
 		"p-queue": "^9.3.3",
-		"zod": "^4.4.3"
+		"zod": "^4.5.4"
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.2",
