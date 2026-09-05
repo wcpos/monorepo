@@ -231,6 +231,23 @@ describe('buildReceiptData', () => {
 		expect(result.store.tax_ids).toEqual([]);
 	});
 
+	it.each([0, 3, undefined])('carries server price decimals (%s) into receipt data', (decimals) => {
+		const result = buildReceiptData(mockOrder, {
+			...mockStore,
+			wc_price_decimals: decimals,
+			price_num_decimals: 2,
+		});
+		expect(result.store).toMatchObject({ price_decimals: decimals });
+		expect(ReceiptDataSchema.parse(mapReceiptData(result)).store).toMatchObject({
+			price_decimals: decimals,
+		});
+	});
+
+	it('defaults an absent billing first name to an empty string', () => {
+		const result = buildReceiptData({ ...mockOrder, billing: { last_name: 'Doe' } }, mockStore);
+		expect(result.customer).toMatchObject({ first_name: '' });
+	});
+
 	it('includes translated receipt labels from the store', () => {
 		const result = buildReceiptData(mockOrder, {
 			...mockStore,
@@ -286,6 +303,10 @@ describe('buildReceiptData', () => {
 	it('maps customer section from billing', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.customer.name).toBe('John Doe');
+		expect(result.customer).toMatchObject({ first_name: 'John' });
+		expect(ReceiptDataSchema.parse(mapReceiptData(result)).customer).toMatchObject({
+			first_name: 'John',
+		});
 		expect(result.customer.email).toBe('john@example.com');
 		expect(result.customer.phone).toBe('555-1234');
 	});
@@ -386,6 +407,7 @@ describe('buildReceiptData', () => {
 		const orderNoBilling = { ...mockOrder, billing: undefined };
 		const result = buildReceiptData(orderNoBilling, mockStore);
 		expect(result.customer.name).toBe('');
+		expect(result.customer).toMatchObject({ first_name: '' });
 		expect(result.customer.email).toBe('');
 	});
 

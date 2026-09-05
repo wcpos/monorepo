@@ -23,6 +23,7 @@ const offlineReceiptData = {
 		email: 'store@example.com',
 	},
 	customer: {
+		first_name: 'John',
 		name: 'John Doe',
 		email: 'john@example.com',
 		phone: '(555) 987-6543',
@@ -140,6 +141,30 @@ const offlineReceiptDataWithAdjustments = {
 };
 
 describe('mapReceiptData', () => {
+	it('forwards the store price_decimals so the formatter honours it end to end', () => {
+		const offline = {
+			store: { id: 1, name: 'JPY Store', price_decimals: 0, address: '', phone: '', email: '' },
+			order: { id: 1, number: '1', currency: 'JPY', currency_symbol: '¥', created_at: '' },
+			customer: { id: null, name: '' },
+			lines: [],
+			fees: [],
+			shipping: [],
+			discounts: [],
+			totals: { subtotal: 1234, total: 1234, tax_total: 0, discount_total: 0 },
+			tax: {},
+			tax_summary: [],
+			payments: [],
+			refunds: [],
+		};
+		const mapped = mapReceiptData(offline as Record<string, any>);
+		expect(mapped.store.price_decimals).toBe(0);
+		const noDecimals = mapReceiptData({
+			...offline,
+			store: { ...offline.store, price_decimals: undefined },
+		} as Record<string, any>);
+		expect(noDecimals.store.price_decimals).toBeUndefined();
+	});
+
 	afterEach(() => {
 		vi.useRealTimers();
 	});
@@ -540,10 +565,24 @@ describe('mapReceiptData', () => {
 
 		it('maps customer fields', () => {
 			expect(mapped.customer.name).toBe('John Doe');
+			expect(ReceiptDataSchema.parse(mapped).customer.first_name).toBe('John');
 			// No id on the offline shape = guest (schema: null/0 = guest).
 			expect(mapped.customer.id).toBeNull();
 			expect(mapped.customer.billing_address).toEqual({});
 			expect(mapped.customer.shipping_address).toEqual({});
+		});
+
+		it('defaults an absent customer first name to an empty string', () => {
+			const result = mapReceiptData({ customer: { name: 'Doe' } });
+			expect(result.customer.first_name).toBe('');
+		});
+
+		it.each([0, 3, undefined])('preserves store price_decimals=%s', (decimals) => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				store: { ...offlineReceiptData.store, price_decimals: decimals },
+			});
+			expect(ReceiptDataSchema.parse(result).store.price_decimals).toBe(decimals);
 		});
 
 		it('passes a real customer id through and nulls guest ids', () => {

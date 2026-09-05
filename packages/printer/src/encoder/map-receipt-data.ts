@@ -117,9 +117,18 @@ function mapStore(src: Record<string, any>): ReceiptStoreMeta {
 				? Number(src.id)
 				: 0;
 
+	const priceDecimals =
+		typeof src.price_decimals === 'number' &&
+		Number.isInteger(src.price_decimals) &&
+		src.price_decimals >= 0
+			? src.price_decimals
+			: undefined;
+
 	return {
 		id: Math.trunc(numericId),
 		name: toStr(src.name),
+		// Money precision from the store record; the formatter falls back to the currency default when absent.
+		...(priceDecimals === undefined ? {} : { price_decimals: priceDecimals }),
 		address_lines: addressLines,
 		...(taxIds.length > 0 ? { tax_ids: taxIds } : {}),
 		phone: toStr(src.phone),
@@ -178,6 +187,7 @@ function mapCustomer(src: Record<string, any>): ReceiptCustomer {
 	return {
 		id: id > 0 ? id : null,
 		name: toStr(src.name),
+		first_name: toStr(src.first_name),
 		billing_address: {},
 		shipping_address: {},
 		tax_ids: taxIds,
