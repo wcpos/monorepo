@@ -116,6 +116,12 @@ overrides:
   "@svgr/plugin-svgo>svgo": ">=3.3.4 <4"
 allowBuilds:
   "@firebase/util": false
+  # rxdb-storage-worklet packages come from the GitHub tag until 0.1.0 is on npm; pnpm must
+  # be allowed to prepare git-hosted packages (their prepack builds lib/). Drop these three
+  # lines with the npm switch.
+  "rxdb-storage-worklet": true
+  "worklet-opfs": true
+  "react-native-worklet-fs": true
   # sentry-cli's postinstall downloads the platform binary @sentry/webpack-plugin
   # (apps/electron sourcemap upload) shells out to; without it the strict install
   # fails outright (ERR_PNPM_IGNORED_BUILDS broke the 1.10.5 Publish Web Bundle run).
