@@ -128,6 +128,12 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('@wcpos/components/toast', () => ({
 	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
 }));
+const mockStartNotifier = {
+	listeners: new Set<() => void>(),
+	notify() {
+		mockStartNotifier.listeners.forEach((listener) => listener());
+	},
+};
 jest.mock('../../../../services/customer-display', () => ({
 	getCustomerDisplayService: () => customerDisplayService,
 	isSupportedDisplayAdvertisement: (
@@ -136,17 +142,6 @@ jest.mock('../../../../services/customer-display', () => ({
 		display?.contract === 1 &&
 		typeof display.signaling === 'string' &&
 		display.signaling.startsWith('/wcpos/v2/'),
-}));
-const mockStartNotifier = {
-	version: 0,
-	listeners: new Set<() => void>(),
-	notify() {
-		mockStartNotifier.version += 1;
-		mockStartNotifier.listeners.forEach((listener) => listener());
-	},
-};
-jest.mock('../../pos/customer-display/customer-display-service-start', () => ({
-	getCustomerDisplayServiceStartVersion: () => mockStartNotifier.version,
 	subscribeCustomerDisplayServiceStart: (listener: () => void) => {
 		mockStartNotifier.listeners.add(listener);
 		return () => mockStartNotifier.listeners.delete(listener);

@@ -25,9 +25,14 @@ module.exports = {
 		// kept React Compiler from serving a stale memo. v9's store subscription
 		// is supposed to make that unnecessary — compiling this file the way the
 		// app compiles it is what actually holds that claim to account.
-		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index)\\.tsx$':
+		//
+		// settings/customer-display/index.tsx joined with the cold-load pairing bug
+		// (wcpos/roadmap#129): the compiler cached a module-level service read
+		// behind a memo sentinel, so the screen never saw the service that started
+		// after it mounted. Uncompiled, the same component passed every test.
+		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index|settings/customer-display/index)\\.tsx$':
 			'<rootDir>/jest/react-compiler-transform.js',
-		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index)\\.tsx$).+\\.(ts|tsx)$':
+		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index|settings/customer-display/index)\\.tsx$).+\\.(ts|tsx)$':
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
 	transformIgnorePatterns: [
