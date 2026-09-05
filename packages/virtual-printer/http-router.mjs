@@ -61,6 +61,8 @@ export function routeHttpRequest(method, url, config = 'both', body = '') {
 		if (method !== 'POST') return { status: 405, body: 'Method Not Allowed' };
 		// Holding printer: the endpoint is up, the job is refused.
 		if (epos === 'busy' && isPrintJob(body)) return { status: 503, body: 'Service Unavailable' };
+		// 'held': the printer answers 503 to probes and jobs alike (Epson holding the print engine).
+		if (epos === 'held') return { status: 503, body: 'Service Unavailable' };
 		return { status: 200, body: EPSON_PRINT_RESPONSE, contentType: 'text/xml' };
 	}
 	if (path === STAR_WEBPRNT_PATH && webprnt) {

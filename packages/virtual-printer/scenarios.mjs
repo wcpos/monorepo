@@ -31,7 +31,7 @@ export const SCENARIOS = {
 	},
 
 	// An Epson holding jobs (cover open, out of paper, busy): the endpoint answers, the job gets 503.
-	'held-503': { raw: 'hold', http: { epos: 'busy' }, mdns: { name: 'EPSON TM-T88VII' } },
+	'held-503': { raw: 'hold', http: { epos: 'held' }, mdns: { name: 'EPSON TM-T88VII' } },
 
 	// A printer with ePOS-Print switched off in its network settings; raw 9100 still prints.
 	'epos-off': { raw: 'print', http: { epos: 'off' }, mdns: { name: 'Receipt Printer' } },

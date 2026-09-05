@@ -83,9 +83,12 @@ describe('identify against the virtual printer', () => {
 			createScenarioProbes(printer.ports)
 		);
 
-		expect(identity.lane?.protocol).toBe('epos-print');
-		// KNOWN GAP: identify only records `httpStatus` for the port it selected, so a printer that
-		// answers 503 to real jobs is reported as a healthy ePOS lane. The 503 surfaces on print.
+		// A held printer answers 503 to everything: no ePOS lane, but the 503 is on the port row,
+		// which is the signature the setup flow turns into "The printer is holding jobs".
+		expect(identity.lane?.protocol).not.toBe('epos-print');
+		expect(
+			identity.ports.some((port) => port.protocol === 'epos-print' && port.httpStatus === 503)
+		).toBe(true);
 		await expect(
 			new EpsonEposAdapter('127.0.0.1', printer.ports.http!).printRaw(Uint8Array.from([0x1b, 0x40]))
 		).rejects.toThrow(/HTTP 503/);
@@ -102,8 +105,12 @@ describe('identify against the virtual printer', () => {
 		);
 
 		expect(identity.lane).toEqual({ port: 9100, protocol: 'raw', encrypted: false });
+		// The port answered (404: ePOS off) but never became a lane; the status row is kept for the report.
 		expect(
-			identity.ports.some((port) => port.protocol === 'epos-print' && port.state === 'open')
+			identity.ports.some(
+				(port) =>
+					port.protocol === 'epos-print' && port.state === 'open' && (port.httpStatus ?? 200) < 300
+			)
 		).toBe(false);
 	});
 
@@ -142,15 +149,18 @@ describe('identify against the virtual printer', () => {
 			createScenarioProbes(printer.ports)
 		);
 
+		// The port answered (404: ePOS off) but never became a lane; the status row is kept for the report.
 		expect(
-			identity.ports.some((port) => port.protocol === 'epos-print' && port.state === 'open')
+			identity.ports.some(
+				(port) =>
+					port.protocol === 'epos-print' && port.state === 'open' && (port.httpStatus ?? 200) < 300
+			)
 		).toBe(false);
 		expect(identity.lane?.protocol).not.toBe('epos-print');
-		// The rejection is logged as a failed ePOS port probe — there is no dedicated log for it.
-		expect(debug).toHaveBeenCalledWith(
-			'ePOS port probe',
+		expect(info).toHaveBeenCalledWith(
+			'ePOS endpoint rejected',
 			expect.objectContaining({
-				context: expect.objectContaining({ cause: 'Unexpected Epson ePOS response from printer' }),
+				context: expect.objectContaining({ reason: expect.stringContaining('ePOS') }),
 			})
 		);
 	});

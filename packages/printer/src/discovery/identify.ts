@@ -122,6 +122,10 @@ export async function identifyPrinter(
 				);
 				if (response === EXPIRED) throw EXPIRED;
 				eposStatusByPort.set(port, response.status);
+				// A port that answered but refused (503 held/busy, 404 ePOS off) is a signature in its
+				// own right; without this row a held printer read exactly like one never probed.
+				if (response.status < 200 || response.status >= 300)
+					ports.push({ port, state: 'open', protocol: 'epos-print', httpStatus: response.status });
 				return response;
 			} catch (error) {
 				ports.push({ port, state: eposFailureState(error), protocol: 'epos-print' });
