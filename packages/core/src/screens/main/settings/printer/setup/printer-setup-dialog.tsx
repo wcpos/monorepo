@@ -365,7 +365,12 @@ export function PrinterSetupDialog({
 				{row(
 					action(
 						'setup_check_address',
-						() => void form.handleSubmit((data) => flow.checkAddress(data))(),
+						() =>
+							void form.handleSubmit(async (data) => {
+								await flow.checkAddress(data);
+								// The checked printer lands as a selected card; the form gets out of its way.
+								setAddressOpen(false);
+							})(),
 						{ variant: 'default' }
 					),
 					<Button
