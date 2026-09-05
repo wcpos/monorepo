@@ -1,5 +1,8 @@
 import type { RxStorage, RxStorageInstance, RxStorageInstanceCreationParams } from 'rxdb';
-export const STORAGE_TIMING_PROBE_ENABLED = true; // Measurement build for the September 2026 native JS-thread investigation; set to false before release.
+// Bundle-time gate, inlined by Expo like EXPO_PUBLIC_WCPOS_E2E: in a release bundle this folds to
+// `false` and the storage chain is untouched. Measurement builds opt in with
+// `EXPO_PUBLIC_WCPOS_STORAGE_PROBE=1 npx expo start --no-dev --minify --clear`.
+export const STORAGE_TIMING_PROBE_ENABLED = process.env.EXPO_PUBLIC_WCPOS_STORAGE_PROBE === '1';
 export const STORAGE_SLOW_CALL_MS = 16; // One 60 Hz frame.
 const STORAGE_SLOW_SAMPLE_LIMIT = 5; // Keeps recent outliers without making each log row noisy.
 type StorageTimingLayer = 'raw' | 'wrapped';
