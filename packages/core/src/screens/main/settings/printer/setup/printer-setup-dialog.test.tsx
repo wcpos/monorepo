@@ -92,11 +92,15 @@ jest.mock('@wcpos/printer', () => ({
 	createIdentifyProbes: () => ({}),
 	isPrinterConnectionError: () => false,
 }));
-it('renders the asking screen with all three answers and the test page footer', async () => {
+it('pre-selects the sole printer, prints on the button, then asks with three answers', async () => {
 	Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 	let renderer!: ReactTestRenderer;
 	await act(async () => {
 		renderer = create(<PrinterSetupDialog open onOpenChange={jest.fn()} onSave={jest.fn()} />);
+	});
+	expect(mockTestPrint).not.toHaveBeenCalled();
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_print_test' }).props.onPress();
 	});
 	const t = createTestT();
 	for (const key of ['setup_ok', 'setup_short', 'setup_nothing']) {
@@ -136,7 +140,7 @@ it('shows source labels on result cards', async () => {
 	mockUsbPrinters.length = 0;
 });
 
-it('keeps the Bluetooth button in view and tests the device the chooser resolves', async () => {
+it('keeps the Bluetooth button in view and selects the device the chooser resolves', async () => {
 	// Two printable candidates: the results screen stays up, with the Bluetooth button beside the cards.
 	mockUsbPrinters.push({
 		id: 'usb',
@@ -160,6 +164,11 @@ it('keeps the Bluetooth button in view and tests the device the chooser resolves
 	).toHaveLength(0);
 	await act(async () => {
 		renderer.root.findByProps({ testID: 'electron-bt-device-ble' }).props.onPress();
+	});
+	expect(mockTestPrint).not.toHaveBeenCalled();
+	renderer.root.findByProps({ testID: 'printer-setup-result-webbluetooth:ble' });
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_print_test' }).props.onPress();
 	});
 	expect(mockTestPrint).toHaveBeenCalledTimes(1);
 	expect(mockTestPrint).toHaveBeenCalledWith(

@@ -730,6 +730,8 @@
 	"settings.setup_scanning": "Looking for printers on USB, Bluetooth and Wi-Fi…",
 	"settings.setup_checking": "Checking what each one can do…",
 	"settings.setup_which_printer": "Which printer is yours?",
+	"settings.setup_found_one": "Found your printer",
+	"settings.setup_print_test": "Print a test page",
 	"settings.setup_ready": "Ready to print",
 	"settings.setup_unsure": "Found — test needed",
 	"settings.setup_unknown": "Found — no print connection identified",

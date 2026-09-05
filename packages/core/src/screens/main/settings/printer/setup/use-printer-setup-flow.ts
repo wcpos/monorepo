@@ -36,7 +36,8 @@ export function classifyPrinter(
 	printer: DiscoveredPrinter,
 	platform: 'electron' | 'web' = 'electron'
 ) {
-	if (platform === 'web' && /^web(usb|bluetooth):/.test(printer.address)) return 'ready';
+	// A webusb:/webbluetooth: row only exists once the browser or Electron chooser resolved the device.
+	if (/^web(usb|bluetooth):/.test(printer.address)) return 'ready';
 	if (isUsbLikeDevice(printer) || hasTargetKind(printer, 'serial')) return 'ready';
 	if (printer.identity?.notReceiptPrinter) return 'notprinter';
 	const lane = printer.identity?.lane;
@@ -208,13 +209,11 @@ export function usePrinterSetupFlow(
 		// A printer tapped while the Wi-Fi scan was still running is already printing; only refresh the list.
 		if (current.current.phase !== 'scanning') return update({ found });
 		update({ phase: 'results', found });
+		// Printing is the cashier's tap (Paul, 2026-09-05): a sole find is pre-selected, never auto-printed.
 		const printable = found.filter((p) =>
 			['ready', 'unsure'].includes(classifyPrinter(p, platform))
 		);
-		if (printable.length === 1 && !(web && pendingPicker.current)) {
-			select(printable[0]);
-			void testPrint();
-		}
+		if (printable.length === 1 && !current.current.selected) select(printable[0]);
 	}, [scanComplete, discovery.isScanning, discovery.printers]);
 	// Plugged-in and OS-paired printers enumerate in a second; list them while the Wi-Fi scan continues.
 	React.useEffect(() => {
@@ -246,8 +245,13 @@ export function usePrinterSetupFlow(
 		if (web && !device) return;
 		pendingPicker.current = null;
 		if (device) {
+			// The chooser's pick lands as a selected card; the test page is still the user's tap.
+			const found = [
+				...current.current.found.filter((p) => p.address !== device.address),
+				candidate(device),
+			];
+			update({ phase: 'results', found });
 			select(device, false);
-			void testPrint();
 		}
 	}, [discovery.isBluetoothScanning, discovery.printers]);
 	async function answer(value: 'ok' | 'short' | 'none') {

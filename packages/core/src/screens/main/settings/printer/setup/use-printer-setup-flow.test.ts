@@ -105,10 +105,16 @@ afterEach(() => {
 	act(() => renderer?.unmount());
 });
 
-it('auto-tests one Epson, then saves its identified profile on confirmation', async () => {
+it('pre-selects one Epson, prints on request, then saves its identified profile', async () => {
 	await scan([epson, epson]);
-	expect(flow.state.phase).toBe('asking');
+	expect(flow.state.phase).toBe('results');
 	expect(flow.state.found).toHaveLength(1);
+	expect(flow.state.selected?.address).toBe(epson.address);
+	expect(printerService.testPrint).not.toHaveBeenCalled();
+	await act(async () => {
+		await flow.testPrint();
+	});
+	expect(flow.state.phase).toBe('asking');
 	expect(printerService.testPrint).toHaveBeenCalledWith(
 		expect.objectContaining({ port: 443, vendor: 'epson', columns: 48 }),
 		{ openDrawer: false }
@@ -145,6 +151,9 @@ it('lists two printers and prints only the selected one', async () => {
 it('cycles a short ruler from 42 to 48 and prints a second page', async () => {
 	await scan([{ ...epson, identity: { ...epson.identity!, columns: 42 } }]);
 	await act(async () => {
+		await flow.testPrint();
+	});
+	await act(async () => {
 		await flow.answer('short');
 	});
 	expect(flow.state.columns).toBe(48);
@@ -171,7 +180,7 @@ it('shows empty results when nothing is found', async () => {
 	expect(flow.state.found).toEqual([]);
 	expect(printerService.testPrint).not.toHaveBeenCalled();
 });
-it('auto-tests unsure raw printers and handles nothing coming out', async () => {
+it('pre-selects unsure raw printers and handles nothing coming out', async () => {
 	const raw: DiscoveredPrinter = {
 		...epson,
 		identity: {
@@ -182,6 +191,10 @@ it('auto-tests unsure raw printers and handles nothing coming out', async () => 
 	};
 	await scan([raw]);
 	expect(classifyPrinter(raw)).toBe('unsure');
+	expect(flow.state.selected?.address).toBe(raw.address);
+	await act(async () => {
+		await flow.testPrint();
+	});
 	expect(flow.state.phase).toBe('asking');
 	await act(async () => {
 		await flow.answer('none');
@@ -197,9 +210,13 @@ it('lists network and USB together without auto-testing', async () => {
 	expect(flow.state.found.map((p) => p.source).sort()).toEqual(['network', 'usb']);
 	expect(printerService.testPrint).not.toHaveBeenCalled();
 });
-it('auto-tests a sole USB device using its model width and native hint', async () => {
+it('pre-selects a sole USB device using its model width and native hint', async () => {
 	enumerateUsb.mockResolvedValue([usb]);
 	await scan([]);
+	expect(flow.state.phase).toBe('results');
+	await act(async () => {
+		await flow.testPrint();
+	});
 	expect(flow.state.phase).toBe('asking');
 	expect(printerService.testPrint).toHaveBeenCalledWith(
 		expect.objectContaining({
@@ -215,13 +232,17 @@ it('auto-tests a sole USB device using its model width and native hint', async (
 it.each([
 	['bluetooth', 'serial:/dev/cu.Printer'],
 	['system', 'winspool:Receipt'],
-] as const)('auto-tests a sole %s printer by its device key', async (connectionType, address) => {
+] as const)('pre-selects a sole %s printer by its device key', async (connectionType, address) => {
 	jest.mocked(isWindowsPlatform).mockReturnValue(connectionType === 'system');
 	const device = { id: address, name: 'Paired printer', address, connectionType };
 	(connectionType === 'system' ? enumerateUsb : enumerateSerial).mockResolvedValue([device]);
 	await scan([]);
-	expect(flow.state.phase).toBe('asking');
+	expect(flow.state.phase).toBe('results');
 	expect(flow.state.selected?.source).toBe(connectionType);
+	await act(async () => {
+		await flow.testPrint();
+	});
+	expect(flow.state.phase).toBe('asking');
 	if (connectionType === 'system') expect(enumerateSerial).not.toHaveBeenCalled();
 	expect(printerService.testPrint).toHaveBeenCalledWith(
 		expect.objectContaining({ connectionType, address, columns: 42 }),
@@ -244,7 +265,7 @@ it('only scans the network on web without opening device pickers', async () => {
 	expect(enumerateUsb).not.toHaveBeenCalled();
 	expect(enumerateSerial).not.toHaveBeenCalled();
 });
-it('adopts a new web USB row after intervening discovery updates and tests it once', async () => {
+it('adopts a new web USB row after intervening discovery updates as the selected card', async () => {
 	await scan([], 'web');
 	await act(async () => flow.startUsbPicker());
 	// A sweep update before the chooser resolves must not consume the pending picker.
@@ -252,8 +273,14 @@ it('adopts a new web USB row after intervening discovery updates and tests it on
 	expect(printerService.testPrint).not.toHaveBeenCalled();
 	const device = { ...usb, address: 'webusb:device', vendor: 'generic' as const };
 	await act(async () => publishPrinters([device]));
-	expect(flow.state.phase).toBe('asking');
+	expect(flow.state.phase).toBe('results');
+	expect(flow.state.found.map((p) => p.address)).toContain('webusb:device');
+	expect(flow.state.selected?.address).toBe('webusb:device');
 	expect(classifyPrinter(device, 'web')).toBe('ready');
+	await act(async () => {
+		await flow.testPrint();
+	});
+	expect(flow.state.phase).toBe('asking');
 	expect(printerService.testPrint).toHaveBeenCalledTimes(1);
 	expect(printerService.testPrint).toHaveBeenCalledWith(
 		expect.objectContaining({ address: 'webusb:device', connectionType: 'usb', vendor: 'epson' }),

@@ -126,7 +126,7 @@ function EditPrinterDialog({
 		);
 	}, []);
 	const availableTypes = React.useMemo(() => {
-		const types: PrinterFormValues['connectionType'][] = ['network'];
+		const types: Exclude<PrinterFormValues['connectionType'], 'system'>[] = ['network'];
 		if (isWebUsbSupported()) {
 			types.push('usb');
 		}

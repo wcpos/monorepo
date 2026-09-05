@@ -220,12 +220,11 @@ export function PrinterSetupDialog({
 				key={p.address}
 				testID={`printer-setup-result-${p.address}`}
 				variant="outline"
-				className="h-auto w-full justify-between rounded-xl px-4 py-3"
+				className={`h-auto w-full justify-between rounded-xl px-4 py-3 ${
+					selected?.address === p.address ? 'border-primary bg-primary/5' : ''
+				}`}
 				disabled={!['ready', 'unsure'].includes(status)}
-				onPress={() => {
-					flow.select(p);
-					void flow.testPrint();
-				}}
+				onPress={() => flow.select(p)}
 			>
 				<View className="w-full flex-row items-center justify-between gap-3">
 					<View className="shrink gap-0.5">
@@ -295,10 +294,23 @@ export function PrinterSetupDialog({
 							{phase === 'results' && (
 								<>
 									{heading(
-										printable.length > 0 ? 'which_printer' : officeOnly ? 'office_heading' : 'none'
+										printable.length === 1
+											? 'found_one'
+											: printable.length > 1
+												? 'which_printer'
+												: officeOnly
+													? 'office_heading'
+													: 'none'
 									)}
 									{cards}
 									{printable.length === 0 && line('none_help')}
+									{selected &&
+										printable.some((p) => p.address === selected.address) &&
+										action('setup_print_test', () => void flow.testPrint(), {
+											variant: 'default',
+											icon: 'printer',
+											full: true,
+										})}
 								</>
 							)}
 							{scanScreen && (
