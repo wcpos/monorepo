@@ -70,6 +70,11 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 					vendor: 'star' as const,
 					promise: import('../discovery/star-native-discovery').then(({ discover }) => discover()),
 				},
+				// Generic BLE printers have no vendor SDK; they are scanned straight off the radio.
+				{
+					vendor: 'ble' as const,
+					promise: import('../discovery/ble-native-discovery').then(({ discover }) => discover()),
+				},
 			];
 			const discoveryResults = await Promise.all(
 				discoveryTasks.map(async ({ vendor, promise }) => ({

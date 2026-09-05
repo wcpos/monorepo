@@ -1,4 +1,13 @@
 import { printerLogger } from '../logger';
+import {
+	BLE_KEEP_ALIVE_MS,
+	CHUNK_PAUSE_MS,
+	DEFAULT_CHUNK_SIZE,
+	PRINT_PROFILES,
+	TAIL_SETTLE_MS,
+} from './ble-profiles';
+
+export { BLE_KEEP_ALIVE_MS, BLE_PRINT_SERVICE_UUIDS } from './ble-profiles';
 
 export interface BluetoothDevice extends Pick<
 	EventTarget,
@@ -32,17 +41,6 @@ interface BluetoothRemoteGATTCharacteristic {
 	writeValueWithResponse(value: ArrayBufferView): Promise<void>;
 	writeValueWithoutResponse(value: ArrayBufferView): Promise<void>;
 }
-// 20 bytes is the BLE default-MTU floor that every printer accepts.
-const DEFAULT_CHUNK_SIZE = 20;
-const CHUNK_PAUSE_MS = 20;
-// Write-without-response gives no delivery confirmation, and disconnecting right after the last
-// chunk dropped the tail of receipts on the Netum NT-1809 (roadmap#136 #38). The last chunk goes
-// as an acknowledged write and the link stays up briefly so the printer drains its buffer.
-const TAIL_SETTLE_MS = 300;
-// macOS Chromium says "no longer in range" when a disconnected printer stops advertising.
-// Keep the link alive between jobs rather than requiring a fresh advertisement each time.
-export const BLE_KEEP_ALIVE_MS = 60_000;
-
 interface BleConnection {
 	server: BluetoothRemoteGATTServer;
 	timer?: ReturnType<typeof setTimeout>;
@@ -61,15 +59,6 @@ export function disconnectBleDevice(deviceId: string): void {
 		throw cause;
 	}
 }
-
-const PRINT_PROFILES = [
-	['000018f0-0000-1000-8000-00805f9b34fb', '00002af1-0000-1000-8000-00805f9b34fb'],
-	['0000ff00-0000-1000-8000-00805f9b34fb', '0000ff02-0000-1000-8000-00805f9b34fb'],
-	['49535343-fe7d-4ae5-8fa9-9fafd205e455', '49535343-8841-43f4-a8d4-ecbe34729bb3'],
-	['e7810a71-73ae-499d-8c15-faa9aef0c3f2', 'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'],
-] as const;
-
-export const BLE_PRINT_SERVICE_UUIDS = PRINT_PROFILES.map(([service]) => service);
 
 const pause = () => new Promise<void>((resolve) => setTimeout(resolve, CHUNK_PAUSE_MS));
 

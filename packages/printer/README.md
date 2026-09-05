@@ -237,3 +237,11 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   and every ESC/POS job already selects Font A, because the encoder library's `initialize()`
   emits `ESC @ FS . ESC M 0`; `withEscposFontA` is now a guard that inserts the command only if
   the header lacks it, so the ruler's column count keeps its meaning if that ever changes.
+- **2026-09-06 · generic BLE printers on phones · the same GATT profiles as the browser.** A phone
+  needs no vendor SDK to print to a clone: `transport/ble-native-adapter.ts` connects with
+  react-native-ble-plx and writes 20-byte chunks to the same service/characteristic pairs the Web
+  Bluetooth lane probes, now shared from `transport/ble-profiles.ts` — one table, one order, one
+  set of pacing constants for both lanes. `discovery/ble-native-discovery.ts` scans on those
+  service UUIDs and falls back to a name match, because most clones advertise a name and nothing
+  else. Bluetooth *Classic* (SPP) printers stay unsupported on iOS/Android: nothing in the JS
+  ecosystem speaks SPP, so that lane needs a native module of its own.
