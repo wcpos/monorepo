@@ -4,7 +4,10 @@
  */
 import { Platform } from 'react-native';
 
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
+
+import { schemeForApplicationId } from './scheme';
 
 interface AppInfo {
 	/** Cross-platform JS bundle version from Expo config (e.g., '1.8.1') */
@@ -26,6 +29,12 @@ interface AppInfo {
 	 * (B10, wcpos-infra#72): a blank or library UA on a POST earns AIOS bans.
 	 */
 	userAgentHeader: Record<string, string>;
+	/**
+	 * URL scheme registered by the INSTALLED binary (`wcpos`, `wcpos-dev`,
+	 * `wcpos-adhoc`), derived from its application id - not from the Expo
+	 * manifest, which a dev client loads from Metro. See ./scheme.ts.
+	 */
+	scheme: string;
 }
 
 const version = Constants.expoConfig?.version ?? '0.0.0';
@@ -42,6 +51,7 @@ const AppInfo: AppInfo = {
 	platform: Platform.OS as 'ios' | 'android',
 	userAgent: `WCPOS/${version} (${Platform.OS}; build ${platformVersion})`,
 	userAgentHeader: { 'User-Agent': `WCPOS/${version} (${Platform.OS}; build ${platformVersion})` },
+	scheme: schemeForApplicationId(Application.applicationId),
 };
 
 export { AppInfo };

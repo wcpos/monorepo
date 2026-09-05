@@ -45,6 +45,10 @@ import {
 	resetMetricsBuckets,
 } from '../../lib/metrics';
 import { SyncStatusPersistenceBridge } from '../../lib/sync-status-persistence-bridge';
+import {
+	startStorageTimingReporter,
+	STORAGE_TIMING_PROBE_ENABLED,
+} from '../../lib/storage-timing-report';
 import { currentUpdateRequired, subscribeUpdateRequired } from '../../lib/update-required-gate';
 
 const METRICS_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
@@ -64,6 +68,12 @@ function AppStack() {
 	const { storeDB, site, wpCredentials, store } = useStoreSession();
 	const { locale } = useLocale();
 	const t = useT();
+
+	React.useEffect(() => {
+		// The diagnostic timers belong to the native app lifecycle and must stop on unmount.
+		if (Platform.OS === 'web' || !STORAGE_TIMING_PROBE_ENABLED) return;
+		return startStorageTimingReporter();
+	}, []);
 
 	React.useEffect(() => {
 		// React Native Web does not route browser activity or visibility through responders.

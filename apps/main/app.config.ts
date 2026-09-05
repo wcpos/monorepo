@@ -43,7 +43,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
 		orientation: 'default',
 		icon: './assets/images/icon.png',
-		scheme: 'wcpos',
+		// One URL scheme per build profile, mirroring the bundle ids below. The
+		// login redirect returns through this scheme; when two variants share
+		// one, Android shows a chooser and iOS picks an arbitrary app (Apple
+		// documents it as undefined). The plugin's redirect_uri allow-list
+		// (includes/Templates/Auth.php) must accept every scheme listed here.
+		// The dev-client deep link matches on host, so
+		// `wcpos-dev://expo-development-client/?url=…` works unchanged.
+		scheme: isDev ? 'wcpos-dev' : isAdhoc ? 'wcpos-adhoc' : 'wcpos',
 		userInterfaceStyle: 'automatic',
 
 		ios: {

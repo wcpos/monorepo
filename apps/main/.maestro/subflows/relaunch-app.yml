@@ -49,7 +49,7 @@ appId: com.wcpos.main.dev
           when:
             platform: Android
           commands:
-            - openLink: 'wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1'
+            - openLink: 'wcpos-dev://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1'
       - waitForAnimationToEnd:
           timeout: 5000
       # Android: the deep link can still land on the dev launcher's HOME screen
@@ -60,7 +60,7 @@ appId: com.wcpos.main.dev
             platform: Android
             visible: '(?i)fetch development servers'
           commands:
-            - openLink: 'wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1'
+            - openLink: 'wcpos-dev://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1'
             - waitForAnimationToEnd:
                 timeout: 5000
       # A login tab left in the task stack can sit over the relaunched app.

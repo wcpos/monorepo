@@ -21,7 +21,7 @@ env:
 - runFlow:
     when:
       notVisible:
-        id: "store-url-input"
+        id: 'store-url-input'
     commands:
       - evalScript: "${console.log('WCPOS_E2E connect screen not ready at flow 02 start, cold-starting')}"
       - clearState
@@ -40,7 +40,7 @@ env:
       - retry:
           maxRetries: 1
           commands:
-            - openLink: "wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1"
+            - openLink: 'wcpos-dev://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1'
             # Launch blockers. The dev client's own overlays (floating dev-menu button,
             # menu-at-launch, onboarding card) are switched OFF by default in the
             # development build — apps/main/plugins/with-quiet-dev-menu.js — so the only
@@ -65,7 +65,7 @@ env:
                   platform: Android
                 commands:
                   - tapOn:
-                      text: "Wait"
+                      text: 'Wait'
                       optional: true
             - runFlow:
                 when:
@@ -73,16 +73,16 @@ env:
                 commands:
                   - extendedWaitUntil:
                       visible:
-                        text: "Open in .*WCPOS.*"
+                        text: 'Open in .*WCPOS.*'
                       timeout: 45000
                       optional: true
                   - runFlow:
                       when:
                         visible:
-                          text: "Open in .*WCPOS.*"
+                          text: 'Open in .*WCPOS.*'
                       commands:
                         - tapOn:
-                            text: "Open"
+                            text: 'Open'
                         # The app is mid-launch after "Open"; a hierarchy query during the
                         # scene transition can answer kAXErrorInvalidUIElement, which
                         # Maestro 2.6.1 raises as an UNCAUGHT exception (run 33262053590
@@ -96,26 +96,26 @@ env:
                   # prompt sitting in front of it can still be cleared next.
                   - extendedWaitUntil:
                       visible:
-                        id: "store-url-input"
+                        id: 'store-url-input'
                       timeout: 60000
                       optional: true
                   - runFlow:
                       when:
                         visible:
-                          text: "Open in .*WCPOS.*"
+                          text: 'Open in .*WCPOS.*'
                       commands:
                         - tapOn:
-                            text: "Open"
+                            text: 'Open'
                         # Same settle as the early-prompt tap above: the required wait
                         # below is the next hierarchy query, and the app is mid-launch.
                         - waitForAnimationToEnd:
                             timeout: 5000
             - extendedWaitUntil:
                 visible:
-                  id: "store-url-input"
+                  id: 'store-url-input'
                 timeout: 180000
 - assertVisible:
-    id: "store-url-input"
+    id: 'store-url-input'
 # Char-by-char in a retry: one driver call per key, erase-then-retype on a
 # failed attempt - see flow 01's INVALID_URL comment for the evidence (run
 # 33348495405: a whole-string inputText is ONE gRPC call and a starved
@@ -133,12 +133,12 @@ env:
       - runFlow:
           when:
             visible:
-              id: "store-url-clear"
+              id: 'store-url-clear'
           commands:
             - tapOn:
-                id: "store-url-clear"
+                id: 'store-url-clear'
       - tapOn:
-          id: "store-url-input"
+          id: 'store-url-input'
       - eraseText
       - evalScript: ${output.urlCharIndex = 0}
       - repeat:
@@ -172,12 +172,12 @@ env:
       # log it and skip the assert; the alert is handled below like any other.
       - runFlow:
           when:
-            visible: "Continue"
+            visible: 'Continue'
           commands:
             - evalScript: "${console.log('WCPOS_E2E sign-in consent alert already up after typing the URL; connect and add-user were not tapped by this flow')}"
       - runFlow:
           when:
-            notVisible: "Continue"
+            notVisible: 'Continue'
           commands:
             - assertVisible:
                 text: '${STORE_URL.replace(/\./g, "\\.")}'
@@ -187,18 +187,18 @@ env:
 # retry above): they lead exactly there, and tapping under an alert fails.
 - runFlow:
     when:
-      notVisible: "Continue"
+      notVisible: 'Continue'
     commands:
       - hideKeyboard:
           optional: true
       - tapOn:
-          id: "connect-store-button"
+          id: 'connect-store-button'
       - extendedWaitUntil:
           visible:
-            id: "add-user-button"
+            id: 'add-user-button'
           timeout: 60000
       - tapOn:
-          id: "add-user-button"
+          id: 'add-user-button'
 # iOS shows the ASWebAuthenticationSession consent alert ("WCPOS" Wants to
 # Use "wcpos.com" to Sign In); Android goes straight to the Custom Tab (spike
 # #696 / check on #698). The alert is NOT immediate: on the CI simulator it
@@ -207,39 +207,63 @@ env:
 # spent its whole 60 s login-page wait looking at the alert. Wait for EITHER
 # surface first; the tap stays conditional, so Android and an already-
 # consented simulator skip it.
+#
+# The add-user press can be LOST on the starved runner: main run 33854536075
+# (iPad) reported the tap COMPLETED at 09:28:51, then waited 67 s looking at the
+# connected-store card with "Sign in with WordPress" still idle — no consent
+# alert, no login page, nothing in the app log. Same class as the flow 04/07
+# lost presses (#1719, #1832): the event was delivered, the UI did not react.
+# One logged re-tap, only when NEITHER sign-in surface is up AND the button is
+# still there (a slow-but-arriving alert leaves the button covered/gone).
 - extendedWaitUntil:
-    visible: "Continue|Use without an account|Username or Email Address|Nombre de usuario o correo electrónico"
+    visible: 'Continue|Use without an account|Username or Email Address|Nombre de usuario o correo electrónico'
+    timeout: 20000
+    optional: true
+- runFlow:
+    when:
+      notVisible: 'Continue|Use without an account|Username or Email Address|Nombre de usuario o correo electrónico'
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: 'add-user-button'
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E add-user tap did not open sign-in within 20 s, tapping again')}"
+            - tapOn:
+                id: 'add-user-button'
+- extendedWaitUntil:
+    visible: 'Continue|Use without an account|Username or Email Address|Nombre de usuario o correo electrónico'
     timeout: 60000
 - runFlow:
     when:
-      visible: "Continue"
+      visible: 'Continue'
     commands:
-      - tapOn: "Continue"
+      - tapOn: 'Continue'
 # Fresh CI emulators open the Custom Tab into Chrome's FIRST-RUN experience
 # ("Welcome to Chrome") — the login page sits behind it, which is where every
 # Android nightly died (verified from run 33066217397's failure screenshot).
 # Wait for either surface, then dismiss whichever FRE screens appear; each
 # tap is conditional, so this is inert on iOS and once Chrome skips its FRE.
 - extendedWaitUntil:
-    visible: "Use without an account|Username or Email Address|Nombre de usuario o correo electrónico"
+    visible: 'Use without an account|Username or Email Address|Nombre de usuario o correo electrónico'
     timeout: 60000
 - runFlow:
     when:
-      visible: "Use without an account"
+      visible: 'Use without an account'
     commands:
-      - tapOn: "Use without an account"
+      - tapOn: 'Use without an account'
 - runFlow:
     when:
-      visible: "No thanks|No, thanks|Not now|Got it"
+      visible: 'No thanks|No, thanks|Not now|Got it'
     commands:
-      - tapOn: "No thanks|No, thanks|Not now|Got it"
+      - tapOn: 'No thanks|No, thanks|Not now|Got it'
 # The WP login form arrives EMPTY on dev-pro, and the page may render
 # localized (observed: Spanish). Match EN|ES labels until the store's login
 # locale is pinned (spec §3c).
 - extendedWaitUntil:
-    visible: "Username or Email Address|Nombre de usuario o correo electrónico"
+    visible: 'Username or Email Address|Nombre de usuario o correo electrónico'
     timeout: 60000
-- tapOn: "Username or Email Address|Nombre de usuario o correo electrónico"
+- tapOn: 'Username or Email Address|Nombre de usuario o correo electrónico'
 - inputText: ${E2E_USERNAME}
 # Android: the soft keyboard covers the password field — ENTER advances focus.
 - runFlow:
@@ -247,7 +271,7 @@ env:
       platform: Android
     commands:
       - pressKey: Enter
-- tapOn: "Password|Contraseña"
+- tapOn: 'Password|Contraseña'
 - inputText: ${E2E_PASSWORD}
 # Android: the soft keyboard covers the submit button — dismiss it, then tap.
 # iOS: tapping the web form's submit button killed the XCUITest runner on
@@ -260,7 +284,7 @@ env:
       platform: Android
     commands:
       - hideKeyboard
-      - tapOn: "Log In|Acceder"
+      - tapOn: 'Log In|Acceder'
 - runFlow:
     when:
       platform: iOS
@@ -276,15 +300,15 @@ env:
 # keystrokes too, the 120 s wait below still fails the flow.
 - extendedWaitUntil:
     visible:
-      id: "logged-in-users-label"
+      id: 'logged-in-users-label'
     timeout: 45000
     optional: true
 - runFlow:
     when:
-      visible: "Username or Email Address|Nombre de usuario o correo electrónico"
+      visible: 'Username or Email Address|Nombre de usuario o correo electrónico'
     commands:
       - evalScript: "${console.log('WCPOS_E2E login form still visible after submit, retyping once')}"
-      - tapOn: "Username or Email Address|Nombre de usuario o correo electrónico"
+      - tapOn: 'Username or Email Address|Nombre de usuario o correo electrónico'
       - eraseText
       - inputText: ${E2E_USERNAME}
       - runFlow:
@@ -292,7 +316,7 @@ env:
             platform: Android
           commands:
             - pressKey: Enter
-      - tapOn: "Password|Contraseña"
+      - tapOn: 'Password|Contraseña'
       - eraseText
       - inputText: ${E2E_PASSWORD}
       - runFlow:
@@ -300,16 +324,17 @@ env:
             platform: Android
           commands:
             - hideKeyboard
-            - tapOn: "Log In|Acceder"
+            - tapOn: 'Log In|Acceder'
       - runFlow:
           when:
             platform: iOS
           commands:
             - inputText: "\n"
-# Redirect returns through the wcpos:// deep link.
+# Redirect returns through the dev client's wcpos-dev:// deep link (the
+# scheme is per build profile - see apps/main/app.config.ts).
 - extendedWaitUntil:
     visible:
-      id: "logged-in-users-label"
+      id: 'logged-in-users-label'
     timeout: 120000
 # The login Custom Tab (Chrome's CustomTabActivity, living in the APP's task)
 # survives this return with web history inside (authorize → login form), so a
@@ -337,10 +362,10 @@ env:
 # Select the first store and open the POS (store rows tagged in PR #730).
 - extendedWaitUntil:
     visible:
-      id: "store-option-.*"
+      id: 'store-option-.*'
     timeout: 120000
 - tapOn:
-    id: "store-option-.*"
+    id: 'store-option-.*'
 # StoreSelect keeps the button disabled while cashier validation is in flight;
 # tapping a disabled native button no-ops silently. Validation itself is one
 # fast round-trip (~1.5s even on CI emulators — the store rows this flow just
@@ -354,22 +379,22 @@ env:
 # failed validation keeps the button disabled and still fails here.
 - extendedWaitUntil:
     visible:
-      id: "open-pos-button"
+      id: 'open-pos-button'
       enabled: true
     timeout: 180000
 - tapOn:
-    id: "open-pos-button"
+    id: 'open-pos-button'
 # Initial RxDB product sync on a cold database (240s budget was never
 # approached in the spike, but keep the headroom).
 - extendedWaitUntil:
     visible:
-      id: "search-products"
+      id: 'search-products'
     timeout: 240000
 # The demo catalog defaults to an In-Stock filter that can hide products.
 - runFlow:
     when:
       visible:
-        id: "filter-pill-remove-stock_status"
+        id: 'filter-pill-remove-stock_status'
     commands:
       - tapOn:
-          id: "filter-pill-remove-stock_status"
+          id: 'filter-pill-remove-stock_status'

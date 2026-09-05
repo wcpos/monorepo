@@ -4,6 +4,7 @@
  * - version: The Expo JS bundle version (same as web/native)
  * - platformVersion: The Electron app version from package.json
  */
+import { DEFAULT_APP_SCHEME } from './scheme';
 
 declare global {
 	interface Window {
@@ -34,6 +35,8 @@ interface AppInfo {
 	 * (B10, wcpos-infra#72): a blank or library UA on a POST earns AIOS bans.
 	 */
 	userAgentHeader: Record<string, string>;
+	/** App URL scheme; Electron owns `wcpos://` via setAsDefaultProtocolClient. */
+	scheme: string;
 }
 
 // Expo bundle version (injected at build time via app.config.ts)
@@ -49,6 +52,7 @@ const AppInfo: AppInfo = {
 	platform: 'electron',
 	userAgent: `WCPOS/${version} (electron ${platformVersion})`,
 	userAgentHeader: { 'User-Agent': `WCPOS/${version} (electron ${platformVersion})` },
+	scheme: DEFAULT_APP_SCHEME,
 };
 
 export { AppInfo };

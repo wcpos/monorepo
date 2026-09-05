@@ -94,3 +94,11 @@ This repo has two permanent trunks:
 - **`next`** — the **in-development** major/minor (1.10, then 1.11, 2.0 …).
 
 Feature work usually targets `next`; patches to the shipped release target `main`. Never commit directly to either trunk — branch off the correct one in a worktree, and target the PR's base at the same lane. **If it isn't clear which lane a task belongs to, ask "main or next?" before branching, pulling (`git pull origin <lane>`), or opening a PR — don't default to `main`.**
+
+### Web bundle ref per lane (jsDelivr)
+
+The WordPress plugin loads the POS JS/CSS from `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@<ref>/build/`. There is exactly **one ref per lane, named after the lane** (owner ruling, 2026-09-04):
+
+- **`next` lane → `@next`** — `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@next`. The `next` _branch_ of `wcpos/web-bundle` **is** the dev lane's tag; there is no versioned or prerelease tag for `next`, and nobody should ask for one. Publishing it is the whole deploy: `gh workflow run publish-web-bundle.yml --ref main -f monorepo_ref=<next SHA> -f bundle_branch=next -f override_release_gate='I accept a red main'`. `dev-next.wcpos.com` reads `@next` (`WCPOS_WEB_BUNDLE_REF=next` in its `wp-config.php`).
+- **Released lane → `@<major.minor>`** — e.g. `@1.10` today, and `@1.11` once `next` moves to `main`. The plugin derives that ref from its own version, and the release train cuts the tag; `publish-web-bundle.yml` never does.
+- Publishing to the web-bundle `main` _branch_ is staging only. It moves nothing a released plugin loads.

@@ -35,11 +35,14 @@
 		"@point-of-sale/webusb-receipt-printer": "2.0.0",
 		"@wcpos/receipt-renderer": "workspace:*",
 		"@wcpos/utils": "workspace:*",
+		"jpeg-js": "0.4.4",
 		"p-queue": "^9.3.3",
+		"upng-js": "2.1.0",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@testing-library/react": "^16.3.2",
+		"@types/upng-js": "2.1.5",
 		"jsdom": "^30.0.1",
 		"react-dom": "19.2.7",
 		"vitest": "^4.1.10"

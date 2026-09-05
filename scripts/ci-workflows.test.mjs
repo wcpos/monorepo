@@ -328,6 +328,7 @@ if [ "$1" = "api" ]; then printf '%s' "$GH_MAIN_SHA"; fi
 		ios = 'success',
 		issues,
 		mainSha = '0123456789abcdef',
+		attempt = '1',
 	}) => {
 		writeFileSync(trace, '');
 		const result = runShell(ledger.steps[0].run, {
@@ -342,6 +343,7 @@ if [ "$1" = "api" ]; then printf '%s' "$GH_MAIN_SHA"; fi
 				RUN_URL: 'https://github.test/actions/runs/2',
 				GH_MAIN_SHA: mainSha,
 				GH_REPO: 'wcpos/monorepo',
+				RUN_ATTEMPT: attempt,
 			},
 		});
 		return { result, trace: readFileSync(trace, 'utf8') };
@@ -379,16 +381,44 @@ if [ "$1" = "api" ]; then printf '%s' "$GH_MAIN_SHA"; fi
 		assert.doesNotMatch(skipped.trace, /issue (create|comment|close)|label create/);
 		assert.match(skipped.result.stdout, /devices did not both succeed/i);
 
-		// A rerun of an older push (its SHA is no longer main's tip) must never
-		// move the ledger: not close it on an old green, not reopen it on an old red.
+		// Main moved while the devices ran (the ~45 min norm): a first-attempt RED
+		// on the older commit is still recorded — run 33854536075's iPad red was
+		// lost when this was "not the tip → unchanged".
+		const behindRed = run({ gate: 'failure', issues: '[]', mainSha: 'fedcba9876543210' });
+		assert.equal(behindRed.result.status, 0, behindRed.result.stdout + behindRed.result.stderr);
+		assert.match(behindRed.trace, /issue create/);
+		const behindRedRefresh = run({
+			gate: 'failure',
+			issues: '[{"number":42}]',
+			mainSha: 'fedcba9876543210',
+		});
+		assert.match(behindRedRefresh.trace, /issue comment 42/);
+		// ...but an old GREEN never closes the issue for a newer tip.
+		const behindGreen = run({
+			gate: 'success',
+			issues: '[{"number":42}]',
+			mainSha: 'fedcba9876543210',
+		});
+		assert.equal(
+			behindGreen.result.status,
+			0,
+			behindGreen.result.stdout + behindGreen.result.stderr
+		);
+		assert.doesNotMatch(behindGreen.trace, /issue (create|comment|close)|label create/);
+		assert.match(behindGreen.result.stdout, /only the tip closes/i);
+		// A RERUN of an older push (attempt > 1, SHA no longer the tip) must never
+		// move the ledger in either direction.
 		for (const gate of ['success', 'failure']) {
-			const stale = run({ gate, issues: '[{"number":42}]', mainSha: 'fedcba9876543210' });
+			const stale = run({
+				gate,
+				issues: '[{"number":42}]',
+				mainSha: 'fedcba9876543210',
+				attempt: '2',
+			});
 			assert.equal(stale.result.status, 0, stale.result.stdout + stale.result.stderr);
 			assert.doesNotMatch(stale.trace, /issue (create|comment|close)|label create/);
 			assert.match(stale.result.stdout, /stale rerun/i);
 		}
-		const staleRed = run({ gate: 'failure', issues: '[]', mainSha: 'fedcba9876543210' });
-		assert.doesNotMatch(staleRed.trace, /issue create/);
 
 		for (const cancelled of ['gate', 'android', 'ios']) {
 			const superseded = run({
@@ -2222,7 +2252,7 @@ test('relaunch recovery retries one launch and preserves each caller readiness t
 // carry the identical wrapper; this finds it wherever it lives.
 function coldStartRetry(flow, filename) {
 	const issuesLink = (command) =>
-		String(command.retry?.commands?.[0]?.openLink ?? '').startsWith('wcpos://');
+		String(command.retry?.commands?.[0]?.openLink ?? '').startsWith('wcpos-dev://');
 	const topLevel = flow.find(issuesLink)?.retry;
 	if (topLevel) return topLevel;
 	const recovery = flow.find(
@@ -2268,7 +2298,7 @@ test('clean-start flows re-issue a dropped openLink, gated on the connect screen
 		assert.equal(wrapper.maxRetries, 1, `${filename}: one re-issue of the link`);
 		assert.match(
 			String(wrapper.commands[0].openLink ?? ''),
-			/^wcpos:\/\/expo-development-client\//,
+			/^wcpos-dev:\/\/expo-development-client\//,
 			`${filename}: the wrapper must START by (re-)issuing the launch link`
 		);
 		const iosLaunch = wrapper.commands.find((command) => command.runFlow?.when?.platform === 'iOS')
