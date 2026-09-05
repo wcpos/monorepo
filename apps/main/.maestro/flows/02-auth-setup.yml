@@ -40,7 +40,7 @@ env:
       - retry:
           maxRetries: 1
           commands:
-            - openLink: 'wcpos://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1'
+            - openLink: 'wcpos-dev://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081&disableOnboarding=1'
             # Launch blockers. The dev client's own overlays (floating dev-menu button,
             # menu-at-launch, onboarding card) are switched OFF by default in the
             # development build — apps/main/plugins/with-quiet-dev-menu.js — so the only
@@ -330,7 +330,8 @@ env:
             platform: iOS
           commands:
             - inputText: "\n"
-# Redirect returns through the wcpos:// deep link.
+# Redirect returns through the dev client's wcpos-dev:// deep link (the
+# scheme is per build profile - see apps/main/app.config.ts).
 - extendedWaitUntil:
     visible:
       id: 'logged-in-users-label'
