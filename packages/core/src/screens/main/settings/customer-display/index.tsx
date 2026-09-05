@@ -14,11 +14,8 @@ import {
 	type CustomerDisplayState,
 	getCustomerDisplayService,
 	isSupportedDisplayAdvertisement,
-} from '../../../../services/customer-display';
-import {
-	getCustomerDisplayServiceStartVersion,
 	subscribeCustomerDisplayServiceStart,
-} from '../../pos/customer-display/customer-display-service-start';
+} from '../../../../services/customer-display';
 
 const DOCS_URL = 'https://docs.wcpos.com/customer-display';
 const EMPTY_STATE: CustomerDisplayState = { displays: [], pairingCode: null };
@@ -47,12 +44,18 @@ function hostPageUrl(siteUrl: string, useRestRouteParam: boolean): string {
 }
 
 function AdvertisedSettings({ url }: { url: string }) {
-	React.useSyncExternalStore(
+	// The service reference is the external-store value: the start/stop notifier
+	// is the subscription and getCustomerDisplayService() the snapshot. Subscribing
+	// to a version counter and reading the service as a bare call looks the same,
+	// but React Compiler memoizes a call with no reactive inputs for the life of
+	// the mount, so a cold-loaded page kept the null it read before the root hook
+	// started the service (wcpos/roadmap#129). Returned from the hook, the
+	// service is a reactive value and everything below re-derives from it.
+	const service = React.useSyncExternalStore(
 		subscribeCustomerDisplayServiceStart,
-		getCustomerDisplayServiceStartVersion,
-		getCustomerDisplayServiceStartVersion
+		getCustomerDisplayService,
+		getCustomerDisplayService
 	);
-	const service = getCustomerDisplayService();
 	// Opening settings is an explicit request for the latest registry state; polling remains service-owned.
 	React.useEffect(() => {
 		void service?.refreshDisplays().catch(() => undefined);
