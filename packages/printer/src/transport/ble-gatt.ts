@@ -4,8 +4,19 @@ import {
 	CHUNK_PAUSE_MS,
 	DEFAULT_CHUNK_SIZE,
 	PRINT_PROFILES,
+	statusNotifyCharacteristic,
 	TAIL_SETTLE_MS,
 } from './ble-profiles';
+import {
+	DLE_EOT,
+	isStatusReply,
+	logStatusRead,
+	STATUS_QUERIES,
+	STATUS_REPLY_TIMEOUT_MS,
+	statusQueryUnavailable,
+} from './escpos-status';
+
+import type { PrinterStatus } from './escpos-status';
 
 export { BLE_KEEP_ALIVE_MS, BLE_PRINT_SERVICE_UUIDS } from './ble-profiles';
 
@@ -36,10 +47,14 @@ interface BluetoothRemoteGATTService {
 	readonly uuid: string;
 	getCharacteristic(uuid: string): Promise<BluetoothRemoteGATTCharacteristic>;
 }
-interface BluetoothRemoteGATTCharacteristic {
+interface BluetoothRemoteGATTCharacteristic extends Partial<
+	Pick<EventTarget, 'addEventListener' | 'removeEventListener'>
+> {
 	readonly properties: { readonly write: boolean; readonly writeWithoutResponse: boolean };
 	writeValueWithResponse(value: ArrayBufferView): Promise<void>;
 	writeValueWithoutResponse(value: ArrayBufferView): Promise<void>;
+	startNotifications?(): Promise<unknown>;
+	stopNotifications?(): Promise<unknown>;
 }
 interface BleConnection {
 	server: BluetoothRemoteGATTServer;
@@ -68,12 +83,61 @@ function warnFailure(cause: unknown): void {
 	});
 }
 
+/**
+ * Writes one `DLE EOT n` and resolves with the byte the printer notifies back, or null when it
+ * says nothing within STATUS_REPLY_TIMEOUT_MS or the write itself fails.
+ */
+function nextStatusByte(
+	notify: BluetoothRemoteGATTCharacteristic,
+	send: () => Promise<void>
+): Promise<number | null> {
+	return new Promise((resolve) => {
+		let timer: ReturnType<typeof setTimeout>;
+		const settle = (byte: number | null) => {
+			clearTimeout(timer);
+			notify.removeEventListener?.('characteristicvaluechanged', onValue);
+			resolve(byte);
+		};
+		const onValue = (event: Event) => {
+			const value = (event.target as { value?: DataView } | null)?.value;
+			if (value && value.byteLength > 0) settle(value.getUint8(0));
+		};
+		notify.addEventListener?.('characteristicvaluechanged', onValue);
+		timer = setTimeout(() => settle(null), STATUS_REPLY_TIMEOUT_MS);
+		send().catch(() => settle(null));
+	});
+}
+
+/** Subscribes, asks for each status byte in turn, and always unsubscribes. */
+async function readStatus(
+	service: BluetoothRemoteGATTService,
+	write: BluetoothRemoteGATTCharacteristic,
+	notifyUuid: string
+): Promise<PrinterStatus | null> {
+	const notify = await service.getCharacteristic(notifyUuid);
+	await notify.startNotifications?.();
+	const bytes: number[] = [];
+	try {
+		for (const n of STATUS_QUERIES) {
+			const byte = await nextStatusByte(notify, () => write.writeValueWithResponse(DLE_EOT(n)));
+			// A printer that stops answering, or answers something that is not a status byte, has
+			// said all it is going to say; what came back before it still counts.
+			if (byte == null || !isStatusReply(byte)) break;
+			bytes.push(byte);
+		}
+	} finally {
+		await notify.stopNotifications?.().catch(() => undefined);
+	}
+	return logStatusRead('ble-gatt', bytes);
+}
+
 export async function connectBleReceiptPrinter(
 	device: BluetoothDevice,
 	options: { chunkSize?: number } = {}
 ): Promise<{
 	profile: string;
 	write(bytes: Uint8Array): Promise<void>;
+	queryStatus(): Promise<PrinterStatus | null>;
 	disconnect(): Promise<void>;
 }> {
 	printerLogger.debug('BLE GATT connect started', {
@@ -107,6 +171,7 @@ export async function connectBleReceiptPrinter(
 					profile: string;
 					characteristicUuid: string;
 					characteristic: BluetoothRemoteGATTCharacteristic;
+					service: BluetoothRemoteGATTService;
 			  }
 			| undefined;
 
@@ -115,7 +180,7 @@ export async function connectBleReceiptPrinter(
 				const service = await server.getPrimaryService(profile);
 				const characteristic = await service.getCharacteristic(characteristicUuid);
 				if (!characteristic.properties.write) continue;
-				match = { profile, characteristicUuid, characteristic };
+				match = { profile, characteristicUuid, characteristic, service };
 				break;
 			} catch {
 				// Try the next known receipt-printer profile.
@@ -129,7 +194,7 @@ export async function connectBleReceiptPrinter(
 			);
 		}
 
-		const { profile, characteristicUuid, characteristic } = match;
+		const { profile, characteristicUuid, characteristic, service } = match;
 		printerLogger.info('BLE GATT print profile matched', {
 			context: { profile, characteristic: characteristicUuid },
 		});
@@ -162,6 +227,19 @@ export async function connectBleReceiptPrinter(
 				} catch (cause) {
 					warnFailure(cause);
 					throw cause;
+				}
+			},
+			async queryStatus() {
+				const notifyUuid = statusNotifyCharacteristic(profile);
+				if (!notifyUuid) return statusQueryUnavailable('ble-gatt');
+				// Hold the link open across the query; disconnect() re-arms the keep-alive after it.
+				clearTimeout(activeConnection.timer);
+				try {
+					return await readStatus(service, characteristic, notifyUuid);
+				} catch (cause) {
+					// A status read is a nicety: the page is on paper either way.
+					warnFailure(cause);
+					return null;
 				}
 			},
 			async disconnect() {

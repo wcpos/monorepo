@@ -14,7 +14,7 @@ vi.mock('../transport/system-print-adapter', () => ({
 vi.mock('../transport/device-adapter', () => import('../transport/device-adapter.electron'));
 vi.mock('../logger', () => ({
 	isVerboseDiagnostics: () => false,
-	printerLogger: { debug: vi.fn() },
+	printerLogger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 afterEach(() => {

@@ -13,12 +13,14 @@ import {
 import { isVerboseDiagnostics, printerLogger } from './logger';
 import { encodeThermalTemplate } from './renderer';
 import { CloudAdapter } from './transport/cloud-adapter';
+import { describeStatus } from './transport/escpos-status';
 import { PRINT_JOB_SLOW_MS } from './transport/print-timeouts';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
 
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
 import type { ReceiptData } from './encoder/types';
 import type { CloudEnqueueFn } from './transport/cloud-adapter';
+import type { PrinterStatus } from './transport/escpos-status';
 import type { MarkupPrintJob, PrinterProfile, PrinterTransport, PrintRawOptions } from './types';
 
 // Receipts are a few KB; diagnostics exports and live printer tests need exact bytes.
@@ -89,6 +91,45 @@ export interface PrinterServiceOptions {
 export interface TestPrintOptions {
 	/** Override whether the diagnostic print should include a cash drawer pulse. */
 	openDrawer?: boolean;
+}
+
+/**
+ * What the test page came back with. `status` is null on every lane that cannot ask the printer
+ * (audit D4) — the caller learns nothing, which is what it knew before.
+ */
+export interface TestPrintResult {
+	status: PrinterStatus | null;
+}
+
+/**
+ * Asks the printer what state it is in once the test page has gone out, so paper-out and
+ * cover-open stop being a question for the cashier (audit D4). The read never fails the print:
+ * a lane that cannot ask, or one that throws trying, answers null.
+ */
+async function readStatusAfterTest(transport: PrinterTransport): Promise<PrinterStatus | null> {
+	if (!transport.queryStatus) return null;
+	try {
+		const status = await transport.queryStatus();
+		// A lane that cannot ask has logged why already; only a real answer is worth an info line.
+		if (!status) {
+			printerLogger.debug('Printer status after test page', {
+				context: { transport: transport.name, state: 'unknown' },
+			});
+			return null;
+		}
+		printerLogger.info('Printer status after test page', {
+			context: { transport: transport.name, state: describeStatus(status), raw: status.raw },
+		});
+		return status;
+	} catch (cause) {
+		printerLogger.warn('Printer status query failed', {
+			context: {
+				transport: transport.name,
+				cause: cause instanceof Error ? cause.message : String(cause),
+			},
+		});
+		return null;
+	}
 }
 
 export class PrinterService {
@@ -300,7 +341,7 @@ export class PrinterService {
 	 * behind other jobs from the time the transport itself took, and so a job that outlives
 	 * PRINT_JOB_SLOW_MS says so while the cashier is still watching the spinner.
 	 */
-	private enqueue(kind: PrintJobKind, profileId: string, run: () => Promise<void>): Promise<void> {
+	private enqueue<T>(kind: PrintJobKind, profileId: string, run: () => Promise<T>): Promise<T> {
 		if (this.closing) return Promise.reject(new Error('Printer service is closing'));
 		const enqueuedAt = Date.now();
 		// p-queue's clear() drops queued tasks without settling their promises: race each job
@@ -323,7 +364,7 @@ export class PrinterService {
 			const startedAt = Date.now();
 			let outcome: 'ok' | 'failed' = 'ok';
 			try {
-				await run();
+				return await run();
 			} catch (error) {
 				outcome = 'failed';
 				throw error;
@@ -487,7 +528,10 @@ export class PrinterService {
 	 * Send a test print to verify connectivity.
 	 * System profiles without a Windows queue key get an HTML page via the system print dialog.
 	 */
-	async testPrint(profile: PrinterProfile, options: TestPrintOptions = {}): Promise<void> {
+	async testPrint(
+		profile: PrinterProfile,
+		options: TestPrintOptions = {}
+	): Promise<TestPrintResult> {
 		if (profile.connectionType === 'system' && !profile.address?.startsWith('winspool:')) {
 			const html = `<html><body style="font-family:monospace;text-align:center;padding:2em">
         <h2>WCPOS</h2><p>Test Print</p>
@@ -496,7 +540,8 @@ export class PrinterService {
         <p>Date: ${new Date().toLocaleString()}</p>
         <br/><p>If you can read this, printing works!</p>
       </body></html>`;
-			return this.printHtml(html);
+			await this.printHtml(html);
+			return { status: null };
 		}
 
 		return this.enqueue('diagnostic', profile.id, async () => {
@@ -521,6 +566,7 @@ export class PrinterService {
 					encodeThermalTemplate(job.template, job.data, job.options)
 				);
 			}
+			return { status: await readStatusAfterTest(transport) };
 		});
 	}
 

@@ -7,9 +7,11 @@ import {
 	connectBleReceiptPrinter,
 	type WebBluetoothNavigator,
 } from './ble-gatt';
+import { statusQueryUnavailable } from './escpos-status';
 import { loadWebDevice } from './web-device-store';
 import { waitForWebPrinterReconnect } from './web-reconnect';
 
+import type { PrinterStatus } from './escpos-status';
 import type { PrinterTransport } from '../types';
 
 // Give a temporarily unavailable BLE printer a moment before retrying the connection once.
@@ -81,6 +83,29 @@ export class WebBluetoothAdapter implements PrinterTransport {
 		const printer = new WebBluetoothReceiptPrinter();
 		await waitForWebPrinterReconnect(printer, device, 'Bluetooth');
 		printer.print(data);
+	}
+
+	/**
+	 * Only the GATT path can ask: the library fallback owns its own connection and exposes no read.
+	 * The keep-alive link from the job just printed is the one this reads over.
+	 */
+	async queryStatus(): Promise<PrinterStatus | null> {
+		const live = getBleDevice(this.deviceKey);
+		if (!live) return statusQueryUnavailable(this.name);
+		let printer;
+		try {
+			printer = await connectBleReceiptPrinter(live);
+		} catch (cause) {
+			printerLogger.debug('Status query could not reach the printer', {
+				context: { cause: cause instanceof Error ? cause.message : String(cause) },
+			});
+			return null;
+		}
+		try {
+			return await printer.queryStatus();
+		} finally {
+			await printer.disconnect();
+		}
 	}
 
 	async printHtml(_html: string): Promise<void> {

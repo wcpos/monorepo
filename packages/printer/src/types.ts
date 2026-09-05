@@ -7,6 +7,7 @@ import type {
 } from '@wcpos/receipt-renderer';
 
 import type { PrinterIdentity } from './discovery/identify';
+import type { PrinterStatus } from './transport/escpos-status';
 
 export type { DrawerConnector };
 
@@ -54,6 +55,13 @@ export interface PrinterTransport {
 	 * Some transports include this in printRaw; this is for standalone kicks.
 	 */
 	openCashDrawer?(): Promise<void>;
+
+	/**
+	 * Ask the printer for its real-time status (`DLE EOT`). Resolves null when this lane cannot
+	 * ask — a write-only channel, or a BLE profile with no notify characteristic (audit D4).
+	 * Never throws: a status read is a nicety and must not fail the print it followed.
+	 */
+	queryStatus?(): Promise<PrinterStatus | null>;
 
 	/** Disconnect / clean up resources */
 	disconnect?(): Promise<void>;

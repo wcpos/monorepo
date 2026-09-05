@@ -26,6 +26,7 @@ jest.mock('@wcpos/printer', () => ({
 	createIdentifyProbes: () => ({}),
 	identifyPrinter: jest.fn(),
 	isPrinterConnectionError: () => false,
+	describeStatus: jest.requireActual('@wcpos/printer/transport/escpos-status').describeStatus,
 }));
 const epson: DiscoveredPrinter = {
 	id: 'epson',
@@ -41,7 +42,20 @@ const epson: DiscoveredPrinter = {
 };
 let renderer: ReactTestRenderer;
 let flow: ReturnType<typeof usePrinterSetupFlow>;
-const printerService = { testPrint: jest.fn(async () => {}) };
+const okStatus = {
+	online: true,
+	coverOpen: false,
+	paperOut: false,
+	paperNearEnd: false,
+	error: false,
+	raw: [0x16, 0x12, 0x12],
+};
+const paperOutStatus = { ...okStatus, online: false, paperOut: true, raw: [0x1e, 0x32, 0x72] };
+const printerService = {
+	testPrint: jest.fn<Promise<{ status: typeof okStatus | null }>, []>(async () => ({
+		status: null,
+	})),
+};
 const persist = jest.fn(async () => 'saved-id');
 const stopScan = jest.fn();
 const enumerateUsb = jest.fn<Promise<DiscoveredPrinter[]>, []>();
@@ -159,8 +173,8 @@ it('lists two printers and prints only the selected one', async () => {
 	let finish!: () => void;
 	printerService.testPrint.mockImplementationOnce(
 		() =>
-			new Promise<void>((resolve) => {
-				finish = resolve;
+			new Promise<{ status: null }>((resolve) => {
+				finish = () => resolve({ status: null });
 			})
 	);
 	act(() => {
@@ -376,6 +390,27 @@ describe('trouble reason', () => {
 			'pairing'
 		);
 		expect(troubleReasonFor({ source: 'network', identity }, 'bt-none-found')).toBe('lane');
+	});
+
+	it('goes straight to trouble when the printer says it is out of paper', async () => {
+		await scan([epson]);
+		printerService.testPrint.mockResolvedValueOnce({ status: paperOutStatus });
+		await act(async () => {
+			await flow.testPrint();
+		});
+		expect(flow.state.phase).toBe('trouble');
+		expect(flow.state.troubleReason).toBe('paper');
+		expect(flow.state.lastStatus).toEqual(paperOutStatus);
+	});
+
+	it('still asks the cashier when the printer says nothing is wrong', async () => {
+		await scan([epson]);
+		printerService.testPrint.mockResolvedValueOnce({ status: okStatus });
+		await act(async () => {
+			await flow.testPrint();
+		});
+		expect(flow.state.phase).toBe('asking');
+		expect(flow.state.troubleReason).toBeUndefined();
 	});
 
 	it('stores the reason when the flow enters trouble', async () => {

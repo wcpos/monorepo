@@ -245,3 +245,22 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   service UUIDs and falls back to a name match, because most clones advertise a name and nothing
   else. Bluetooth *Classic* (SPP) printers stay unsupported on iOS/Android: nothing in the JS
   ecosystem speaks SPP, so that lane needs a native module of its own.
+- **2026-09-06 · every raw lane · asking the printer what is wrong.** Paper out, cover open and
+  "did it print" were unanswerable outside ePOS (audit D4, roadmap#161 P3). ESC/POS answers them
+  in real time — `DLE EOT n` (`0x10 0x04 n`), one byte back per query, always with bit 4 set and
+  bit 7 clear: **n=1** printer status (bit 3 offline), **n=2** offline cause (bit 2 cover open,
+  bit 5 paper end, bit 6 error), **n=3** error cause (not asked), **n=4** paper sensor (bits 2-3
+  near end, bits 5-6 paper end). `transport/escpos-status.ts` builds the queries and reads the
+  replies; a missing byte is tolerated, so a printer that answers only the first query still says
+  something. **Which lanes can ask:** BLE, both lanes, and only on a profile that has a notify
+  characteristic — the Netum NT-1809's `18f0` service notifies on `2af0` (`GS I` is ignored), and
+  that is the only status channel observed so far, so `ff00`, ISSC and `e7810a71` return null
+  until one is read off a printer. Write `DLE EOT`, take the byte off the notify characteristic
+  within 800 ms, unsubscribe. **Which cannot yet:** Electron USB and raw TCP 9100 — both send
+  through the main process, which lives in another repo and holds a write-only handle; USB has a
+  read path and needs a `usb-query-status` channel beside `print-raw-usb` before this lane can
+  ask. Vendor SDK lanes report their own codes and are untouched. Every read logs its raw bytes,
+  every failure degrades to null, and a status query never fails the print it followed: the test
+  page is on paper either way. Setup uses it for one thing — a printer that says paper-out or
+  cover-open sends the cashier to the paper line instead of asking them to read a page that never
+  came. Unit-tested against the byte patterns; still needs a paper-out run at a real Netum.

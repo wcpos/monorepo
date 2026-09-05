@@ -43,11 +43,12 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => createTes
 let mockWebScanning = false;
 const mockConnectUsb = jest.fn();
 const mockStopScan = jest.fn();
-const mockTestPrint = jest.fn(async () => {});
+const mockTestPrint = jest.fn(async () => ({ status: null }));
 const mockUsbPrinters: { id: string; name: string; address: string; connectionType: 'usb' }[] = [];
 const mockExtraPrinters: Record<string, unknown>[] = [];
 jest.mock('@wcpos/printer', () => ({
 	resolveNativePrinterColumns: async () => ({ columns: 48, source: 'printer' }),
+	describeStatus: jest.requireActual('@wcpos/printer/transport/escpos-status').describeStatus,
 	isWebUsbSupported: () => true,
 	isWebBluetoothSupported: () => true,
 	PrinterService: class {

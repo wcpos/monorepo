@@ -4,11 +4,21 @@ import {
 	CHUNK_PAUSE_MS,
 	DEFAULT_CHUNK_SIZE,
 	PRINT_PROFILES,
+	statusNotifyCharacteristic,
 	TAIL_SETTLE_MS,
 } from './ble-profiles';
 import { BLE_PREFIX } from './device-key';
+import {
+	DLE_EOT,
+	isStatusReply,
+	logStatusRead,
+	STATUS_QUERIES,
+	STATUS_REPLY_TIMEOUT_MS,
+	statusQueryUnavailable,
+} from './escpos-status';
 import { logPrintJob } from './log-print-job';
 
+import type { PrinterStatus } from './escpos-status';
 import type { PrinterTransport } from '../types';
 
 type BlePlx = typeof import('react-native-ble-plx');
@@ -57,6 +67,51 @@ function toBase64(bytes: Uint8Array): string {
 	let binary = '';
 	for (const byte of bytes) binary += String.fromCharCode(byte);
 	return btoa(binary);
+}
+
+function firstByte(value: string | null | undefined): number | undefined {
+	if (!value) return undefined;
+	const decoded = atob(value);
+	return decoded.length > 0 ? decoded.charCodeAt(0) : undefined;
+}
+
+/**
+ * Asks for each `DLE EOT` byte in turn over one monitor subscription, which is always removed.
+ * Anything that goes wrong reads as "this printer did not say", never as a failed print.
+ */
+async function readStatus(connection: BleConnection): Promise<PrinterStatus | null> {
+	const notifyUuid = statusNotifyCharacteristic(connection.service);
+	if (!notifyUuid) return statusQueryUnavailable('ble-native');
+	const { device, service, characteristic } = connection;
+	let deliver: ((byte: number | null) => void) | undefined;
+	const subscription = device.monitorCharacteristicForService(
+		service,
+		notifyUuid,
+		(error, monitored) => deliver?.(error ? null : (firstByte(monitored?.value) ?? null))
+	);
+	const bytes: number[] = [];
+	try {
+		for (const n of STATUS_QUERIES) {
+			const byte = await new Promise<number | null>((resolve) => {
+				const timer = setTimeout(() => resolve(null), STATUS_REPLY_TIMEOUT_MS);
+				deliver = (value) => {
+					clearTimeout(timer);
+					resolve(value);
+				};
+				device
+					.writeCharacteristicWithResponseForService(service, characteristic, toBase64(DLE_EOT(n)))
+					.catch(() => deliver?.(null));
+			});
+			// A printer that stops answering, or answers something that is not a status byte, has
+			// said all it is going to say; what came back before it still counts.
+			if (byte == null || !isStatusReply(byte)) break;
+			bytes.push(byte);
+		}
+	} finally {
+		deliver = undefined;
+		subscription.remove();
+	}
+	return logStatusRead('ble-native', bytes);
 }
 
 /**
@@ -182,6 +237,21 @@ export class BleNativeAdapter implements PrinterTransport {
 				scheduleIdleDisconnect(connection);
 			}
 		);
+	}
+
+	async queryStatus(): Promise<PrinterStatus | null> {
+		let connection: BleConnection | undefined;
+		try {
+			connection = await openConnection(this.deviceId);
+			return await readStatus(connection);
+		} catch (cause) {
+			printerLogger.debug('Status query could not reach the printer', {
+				context: { cause: cause instanceof Error ? cause.message : String(cause) },
+			});
+			return null;
+		} finally {
+			if (connection) scheduleIdleDisconnect(connection);
+		}
 	}
 
 	async printHtml(_html: string): Promise<void> {

@@ -13,6 +13,19 @@ export const PRINT_PROFILES = [
 
 export const BLE_PRINT_SERVICE_UUIDS = PRINT_PROFILES.map(([service]) => service);
 
+/**
+ * The characteristic a print service notifies its `DLE EOT` status byte on. Read off a Netum
+ * NT-1809: the 18F0 service answers on 2AF0 while `GS I` is ignored (roadmap#136 catalogue). No
+ * status channel has been observed on the other profiles, so those lanes cannot ask (audit D4).
+ */
+const STATUS_NOTIFY_BY_SERVICE: Record<string, string> = {
+	'000018f0-0000-1000-8000-00805f9b34fb': '00002af0-0000-1000-8000-00805f9b34fb',
+};
+
+export function statusNotifyCharacteristic(service: string): string | undefined {
+	return STATUS_NOTIFY_BY_SERVICE[service.toLowerCase()];
+}
+
 // 20 bytes is the BLE default-MTU floor that every printer accepts.
 export const DEFAULT_CHUNK_SIZE = 20;
 export const CHUNK_PAUSE_MS = 20;
