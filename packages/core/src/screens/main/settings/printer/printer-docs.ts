@@ -1,8 +1,2 @@
-import { Linking } from 'react-native';
-
-/** The printer setup and troubleshooting page; "Having trouble?" opens it until the in-app wizard ships. */
+/** The printer setup and troubleshooting page; every printer "Having trouble?" link is a DocsLink to it. */
 export const PRINTER_DOCS_URL = 'https://docs.wcpos.com/hardware/printers';
-
-export function openPrinterDocs(): void {
-	void Linking.openURL(PRINTER_DOCS_URL);
-}

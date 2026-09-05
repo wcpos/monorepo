@@ -15,6 +15,13 @@ jest.mock('react-native', () => ({
 	),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('@wcpos/components/docs-link', () => {
+	const React = require('react');
+	return {
+		DocsLink: ({ children, href, testID }: { children: string; href: string; testID?: string }) =>
+			React.createElement('a', { 'data-testid': testID, href }, children),
+	};
+});
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<button type="button" data-testid={testID}>

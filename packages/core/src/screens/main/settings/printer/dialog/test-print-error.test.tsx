@@ -54,8 +54,13 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
-const mockOpenPrinterDocs = jest.fn();
-jest.mock('../printer-docs', () => ({ openPrinterDocs: () => mockOpenPrinterDocs() }));
+jest.mock('@wcpos/components/docs-link', () => {
+	const React = require('react');
+	return {
+		DocsLink: ({ children, href, testID }: { children: string; href: string; testID?: string }) =>
+			React.createElement('a', { 'data-testid': testID, href }, children),
+	};
+});
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () =>
 		jest
@@ -131,17 +136,14 @@ describe('TestPrintError', () => {
 });
 
 describe('TestPrintError help entry', () => {
-	afterEach(() => {
-		mockOpenPrinterDocs.mockClear();
-	});
-
 	it('offers "Having trouble?" and opens the printer guide', () => {
 		render(
 			<TestPrintError
 				error={{ message: 'Printer did not answer', diagnostics: undefined } as never}
 			/>
 		);
-		fireEvent.click(screen.getByTestId('add-printer-having-trouble'));
-		expect(mockOpenPrinterDocs).toHaveBeenCalled();
+		expect(screen.getByTestId('add-printer-having-trouble').getAttribute('href')).toBe(
+			'https://docs.wcpos.com/hardware/printers'
+		);
 	});
 });

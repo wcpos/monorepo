@@ -237,8 +237,13 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 }));
 
 let mockAvailableProfiles = { printers: [cloudProfile], isLoading: false };
-const mockOpenPrinterDocs = jest.fn();
-jest.mock('../printer/printer-docs', () => ({ openPrinterDocs: () => mockOpenPrinterDocs() }));
+jest.mock('@wcpos/components/docs-link', () => {
+	const React = require('react');
+	return {
+		DocsLink: ({ children, href, testID }: { children: string; href: string; testID?: string }) =>
+			React.createElement('a', { 'data-testid': testID, href }, children),
+	};
+});
 
 describe('PrintingSettings cloud printers', () => {
 	beforeEach(() => {
@@ -291,8 +296,9 @@ it('renders help once outside saved rows and opens the printer guide', () => {
 	};
 	render(<PrintingSettings />);
 	expect(screen.getAllByText('Having trouble?')).toHaveLength(1);
-	fireEvent.click(screen.getByText('Having trouble?'));
-	expect(mockOpenPrinterDocs).toHaveBeenCalled();
+	expect(screen.getByTestId('printing-having-trouble').getAttribute('href')).toBe(
+		'https://docs.wcpos.com/hardware/printers'
+	);
 	expect(
 		within(screen.getByTestId('printer-row-second')).queryByText('Having trouble?')
 	).toBeNull();

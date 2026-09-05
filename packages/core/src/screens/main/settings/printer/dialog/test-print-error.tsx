@@ -2,13 +2,14 @@ import * as React from 'react';
 import { Platform } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../contexts/translations';
-import { openPrinterDocs } from '../printer-docs';
+import { PRINTER_DOCS_URL } from '../printer-docs';
 
 import type { TestPrintFailure } from './use-printer-dialog-form';
 
@@ -127,15 +128,9 @@ export function TestPrintError({ error }: TestPrintErrorProps) {
 			) : (
 				<Text className="text-destructive text-sm">{error.message}</Text>
 			)}
-			<Button
-				testID="add-printer-having-trouble"
-				variant="ghost-quiet"
-				size="sm"
-				className="self-start"
-				onPress={openPrinterDocs}
-			>
-				<Text>{t('settings.having_trouble')}</Text>
-			</Button>
+			<DocsLink testID="add-printer-having-trouble" href={PRINTER_DOCS_URL}>
+				{t('settings.having_trouble')}
+			</DocsLink>
 		</VStack>
 	);
 }

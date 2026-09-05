@@ -5,6 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Button } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -30,7 +31,7 @@ import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
 import { useStoreSession } from '../../../../contexts/app-state';
-import { openPrinterDocs } from '../printer/printer-docs';
+import { PRINTER_DOCS_URL } from '../printer/printer-docs';
 import { useT } from '../../../../contexts/translations';
 
 export function PrintingSettings() {
@@ -235,9 +236,9 @@ export function PrintingSettings() {
 						</HStack>
 					</>
 				)}
-				<Button variant="ghost-quiet" size="sm" onPress={openPrinterDocs}>
-					<Text>{t('settings.having_trouble')}</Text>
-				</Button>
+				<DocsLink testID="printing-having-trouble" href={PRINTER_DOCS_URL}>
+					{t('settings.having_trouble')}
+				</DocsLink>
 			</SettingsSection>
 
 			{/* Receipt Templates section */}

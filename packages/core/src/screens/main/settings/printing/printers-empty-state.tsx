@@ -3,11 +3,12 @@ import { View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
-import { openPrinterDocs } from '../printer/printer-docs';
+import { PRINTER_DOCS_URL } from '../printer/printer-docs';
 import { useT } from '../../../../contexts/translations';
 
 interface PrintersEmptyStateProps {
@@ -34,9 +35,9 @@ export function PrintersEmptyState({ onAddPrinter }: PrintersEmptyStateProps) {
 					<Button leftIcon="plus" onPress={onAddPrinter} testID="printing-add-printer-button">
 						<Text>{t('settings.add_printer')}</Text>
 					</Button>
-					<Button variant="secondary" onPress={openPrinterDocs}>
-						<Text>{t('settings.set_up_a_printer')}</Text>
-					</Button>
+					<DocsLink testID="printing-printer-guide-link" href={PRINTER_DOCS_URL}>
+						{t('settings.set_up_a_printer')}
+					</DocsLink>
 				</HStack>
 			</VStack>
 		</View>

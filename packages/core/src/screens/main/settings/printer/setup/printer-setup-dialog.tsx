@@ -6,6 +6,7 @@ import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	Dialog,
 	DialogBody,
@@ -33,7 +34,7 @@ import { formatDiscoveryError } from '../dialog/discovery-error-message';
 import { PrinterToggleGroup } from '../dialog/printer-toggle-group';
 import { TestPrintError } from '../dialog/test-print-error';
 import { persistPrinterProfile } from '../persist-printer-profile';
-import { openPrinterDocs } from '../printer-docs';
+import { PRINTER_DOCS_URL } from '../printer-docs';
 import { electronPrinterSchema, type PrinterFormValues, webPrinterSchema } from '../schema';
 import { deriveWebVendorDefaults } from '../web-network-defaults';
 import { classifyPrinter, usePrinterSetupFlow } from './use-printer-setup-flow';
@@ -164,11 +165,11 @@ export function PrinterSetupDialog({
 			<Text className="text-lg font-semibold">{text}</Text>
 		</View>
 	);
-	const guide = action('setup_open_guide', openPrinterDocs, {
-		disabled: false,
-		variant: 'link',
-		icon: 'circleQuestion',
-	});
+	const guide = (
+		<DocsLink key="guide" testID="printer-setup-setup_open_guide" href={PRINTER_DOCS_URL}>
+			{t('settings.setup_open_guide')}
+		</DocsLink>
+	);
 	// Bluetooth LE printers only appear through the system chooser, which needs a tap: keep the
 	// button in view on every scan screen rather than under Options.
 	const usb =
