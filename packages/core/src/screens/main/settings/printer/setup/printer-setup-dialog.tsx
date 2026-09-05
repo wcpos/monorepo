@@ -78,7 +78,7 @@ export function PrinterSetupDialog({
 	});
 	const [optionsOpen, setOptionsOpen] = React.useState(false);
 	const [focusAddress, setFocusAddress] = React.useState(false);
-	const busy = phase === 'scanning' || phase === 'printing';
+	const busy = phase === 'scanning' || phase === 'printing' || phase === 'saving';
 	const vendors = [
 		{ value: 'epson' as const, label: 'Epson' },
 		{ value: 'star' as const, label: 'Star Micronics' },
@@ -228,7 +228,7 @@ export function PrinterSetupDialog({
 									{text('network_help')}
 									{failure && <TestPrintError error={failure} />}
 									{action('setup_retry', () => void flow.retry())}
-									{failure && action('save_anyway', answer('ok'))}
+									{action('save_anyway', answer('ok'))}
 								</>
 							)}
 							{phase === 'error' && (
@@ -307,7 +307,7 @@ export function PrinterSetupDialog({
 										<PrinterToggleGroup form={form} />
 										{action(
 											'setup_check_address',
-											() => void form.handleSubmit((data) => flow.checkAddress(data.address))()
+											() => void form.handleSubmit((data) => flow.checkAddress(data))()
 										)}
 									</VStack>
 								</CollapsibleContent>

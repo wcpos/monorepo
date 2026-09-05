@@ -22,7 +22,7 @@ export function classifyPrinter(printer: DiscoveredPrinter) {
 	return lane && canPrintLane(lane.protocol, createIdentifyProbes()) ? 'ready' : 'unknown';
 }
 interface SetupState {
-	phase: 'scanning' | 'results' | 'printing' | 'asking' | 'trouble' | 'saved' | 'error';
+	phase: 'scanning' | 'results' | 'printing' | 'asking' | 'trouble' | 'saving' | 'saved' | 'error';
 	found: DiscoveredPrinter[];
 	selected?: DiscoveredPrinter;
 	columns: number;
@@ -73,17 +73,27 @@ export function usePrinterSetupFlow({
 		if (patch.vendor) profileDraft.language = patch.vendor === 'star' ? 'star-line' : 'esc-pos';
 		update({ profileDraft, columns: profileDraft.columns });
 	}
-	function select(selected: DiscoveredPrinter) {
-		const vendor = selected.identity?.vendor ?? selected.vendor ?? 'generic';
+	function select(selected: DiscoveredPrinter, keepDraft = false) {
+		const vendor =
+			selected.identity?.vendor ??
+			selected.vendor ??
+			current.current.profileDraft.vendor ??
+			'generic';
+		const lane = selected.identity?.lane;
+		// A lane this platform cannot print (e.g. WebPRNT on Electron) must not become the raw port.
+		const lanePort =
+			lane && canPrintLane(lane.protocol, createIdentifyProbes()) ? lane.port : undefined;
+		const base = keepDraft
+			? current.current.profileDraft
+			: { ...DEFAULT_FORM_VALUES, isDefault: printerCount === 0 };
 		update({ selected, failure: undefined });
 		updateDraft({
-			...DEFAULT_FORM_VALUES,
-			name: selected.name,
+			...base,
+			name: keepDraft ? base.name : selected.name,
 			address: selected.address,
 			vendor,
-			port: selected.identity?.lane?.port ?? selected.port ?? 9100,
-			columns: selected.identity?.columns ?? 42,
-			isDefault: printerCount === 0,
+			port: lanePort ?? selected.port ?? base.port ?? 9100,
+			columns: selected.identity?.columns ?? base.columns ?? 42,
 		});
 	}
 	function fail(error: unknown, phase: 'trouble' | 'error') {
@@ -115,7 +125,11 @@ export function usePrinterSetupFlow({
 		update({ phase: 'scanning', found: [], selected: undefined, failure: undefined });
 		try {
 			await discovery.startScan();
-			if (active.current) setScanComplete(true);
+			if (!active.current) return;
+			// Electron's discovery swallows its own errors and keeps the previous list; a failed rescan
+			// must not replay stale results as a fresh scan (and never auto-print on them).
+			if (discovery.error) return update({ phase: 'results', found: [] });
+			setScanComplete(true);
 		} catch (error) {
 			if (active.current) fail(error, 'error');
 		}
@@ -145,6 +159,8 @@ export function usePrinterSetupFlow({
 			});
 			return testPrint();
 		}
+		if (current.current.phase === 'saving') return;
+		update({ phase: 'saving' });
 		try {
 			await persist(current.current.profileDraft);
 			update({ phase: 'saved' });
@@ -152,18 +168,31 @@ export function usePrinterSetupFlow({
 			fail(error, 'error');
 		}
 	}
-	async function checkAddress(address: string) {
-		update({ phase: 'scanning', failure: undefined });
+	async function checkAddress(values: PrinterFormValues) {
+		update({
+			phase: 'scanning',
+			failure: undefined,
+			profileDraft: values,
+			columns: values.columns,
+		});
 		try {
-			const identity = await identifyPrinter(address, {}, createIdentifyProbes());
+			// Name and vendor hints keep identify off raw 9100 on an Epson whose ePOS lane is down.
+			const identity = await identifyPrinter(
+				values.address,
+				{ name: values.name, vendor: values.vendor },
+				createIdentifyProbes()
+			);
 			if (!active.current) return;
-			select({
-				id: address,
-				address,
-				name: current.current.profileDraft.name,
-				connectionType: 'network',
-				identity,
-			});
+			select(
+				{
+					id: values.address,
+					address: values.address,
+					name: values.name,
+					connectionType: 'network',
+					identity,
+				},
+				true
+			);
 			await testPrint();
 		} catch (error) {
 			if (active.current) fail(error, 'error');
