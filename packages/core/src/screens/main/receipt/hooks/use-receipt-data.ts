@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -113,7 +114,8 @@ export function useReceiptData({
 				if (cancelled) return;
 
 				const error = err instanceof Error ? err : new Error(String(err));
-				logger.error('Failed to fetch receipt data', {
+				const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
+				logger[logLevel]('Failed to fetch receipt data', {
 					code: ERROR_CODES.PRINT_UNEXPECTED,
 					context: { orderId, mode, error: error.message },
 				});

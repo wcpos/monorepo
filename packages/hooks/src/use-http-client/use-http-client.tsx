@@ -372,12 +372,12 @@ export const useHttpClient = (
 						...(wpError?.triage && { triage: true }),
 					};
 					if (reqConfig.quietErrors) {
-						httpLogger.warn('HTTP request failed', {
+						httpLogger.warn(`HTTP request failed: ${method} ${endpoint}`, {
 							code: errorCode ?? 'CLIENT999',
 							context: failureContext,
 						});
 					} else {
-						httpLogger.error('HTTP request failed', {
+						httpLogger.error(`HTTP request failed: ${method} ${endpoint}`, {
 							code: errorCode ?? 'CLIENT999',
 							context: failureContext,
 						});

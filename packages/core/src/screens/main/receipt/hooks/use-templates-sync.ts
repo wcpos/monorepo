@@ -10,6 +10,7 @@
 
 import * as React from 'react';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { isAsleepBlock, requestStateManager } from '@wcpos/hooks/use-http-client';
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -95,7 +96,8 @@ export function syncTemplates(
 				deferredCollections.add(collection);
 				templatesLogger.debug('Templates sync deferred — app is in background');
 			} else {
-				templatesLogger.error('Failed to sync templates', {
+				const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
+				templatesLogger[logLevel]('Failed to sync templates', {
 					code: ERROR_CODES.PRINT_UNEXPECTED,
 					context: { error: error?.message },
 				});

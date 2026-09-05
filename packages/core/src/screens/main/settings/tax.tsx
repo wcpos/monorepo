@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Form,
@@ -132,7 +133,8 @@ export function TaxSettings() {
 				},
 			});
 		} catch (error) {
-			uiLogger.error('Failed to restore server settings', {
+			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
+			uiLogger[logLevel]('Failed to restore server settings', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: {
 					error: getErrorMessage(error),

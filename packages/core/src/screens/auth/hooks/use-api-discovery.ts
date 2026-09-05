@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -155,7 +156,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				throw new ApiDiscoveryError(t('auth.bad_api_response'));
 			}
 
-			discoveryLogger.error(`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
+			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
+			discoveryLogger[logLevel](`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
 				showToast: true,
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 				context: { wpApiUrl },
