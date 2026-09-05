@@ -8,6 +8,9 @@ import {
 } from '../encoder/thermal-print';
 import { sampleReceiptData } from '../encoder/__tests__/fixtures';
 
+const { debug, warn } = vi.hoisted(() => ({ debug: vi.fn(), warn: vi.fn() }));
+vi.mock('../logger', () => ({ printerLogger: { debug, warn } }));
+
 const ONE_PIXEL_PNG =
 	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
 
@@ -15,6 +18,7 @@ afterEach(() => {
 	delete (window as Window & { electron?: unknown }).electron;
 	vi.useRealTimers();
 	vi.restoreAllMocks();
+	vi.clearAllMocks();
 	vi.unstubAllGlobals();
 });
 
@@ -165,6 +169,25 @@ describe('encodeThermalTemplateForPrint', () => {
 
 		expect(requestedSrc).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
 		expect(decodeURIComponent(requestedSrc.split(',', 2)[1] ?? '')).toContain('<svg');
+		expect(debug).toHaveBeenCalledWith('Thermal barcode asset skipped', {
+			context: expect.objectContaining({ fallback: 'native-barcode' }),
+		});
+	});
+
+	it('logs a skipped image when its resolver fails', async () => {
+		const src = 'https://example.test/logo.png';
+		const result = await prepareThermalPrintAssets({
+			renderedTemplateXml: `<receipt><image src="${src}" /></receipt>`,
+			maxWidthDots: 384,
+			imageSrcResolver: async () => {
+				throw new Error('loader failed');
+			},
+		});
+
+		expect(result.imageAssets).toEqual({});
+		expect(warn).toHaveBeenCalledWith('Thermal image asset skipped', {
+			context: { src, cause: 'loader failed' },
+		});
 	});
 
 	it('loads Electron remote thermal images through canvas-safe data URLs', async () => {

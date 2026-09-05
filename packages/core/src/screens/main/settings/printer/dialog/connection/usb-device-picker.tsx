@@ -6,12 +6,11 @@ import { type UseFormReturn, useWatch } from 'react-hook-form';
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { usePrinterDiscovery } from '@wcpos/printer';
+import { resolveNativePrinterColumns, usePrinterDiscovery } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
 import { isUsbLikeDevice } from './discovered-printer-filters';
-
-import type { PrinterFormValues } from '../../schema';
+import { DEFAULT_FORM_VALUES, type PrinterFormValues } from '../../schema';
 
 export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValues> }) {
 	const t = useT();
@@ -31,12 +30,22 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 					<Pressable
 						key={device.id}
 						testID={`add-printer-usb-device-${device.id}`}
-						onPress={() => {
+						onPress={async () => {
+							const resolveColumns = form.getValues('columns') === DEFAULT_FORM_VALUES.columns;
 							form.setValue('address', device.address ?? '');
 							form.setValue('name', device.name);
 							if (device.vendor)
 								form.setValue('vendor', device.vendor as PrinterFormValues['vendor']);
 							form.setValue('nativeInterfaceType', device.nativeInterfaceType ?? undefined);
+							if (resolveColumns) {
+								const { columns } = await resolveNativePrinterColumns({
+									address: device.address,
+									connectionType: 'usb',
+									vendor: device.vendor,
+									name: device.name,
+								});
+								if (columns !== undefined) form.setValue('columns', columns);
+							}
 						}}
 						className={`flex-row items-center gap-2 rounded-md border p-2 ${
 							selected ? 'border-primary bg-primary/5' : 'border-border'

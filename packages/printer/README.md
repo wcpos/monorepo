@@ -132,3 +132,37 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   with the printer switched off; and the unreachable-printer panel gives certificate/port-8008/Chrome
   advice inside Electron. Remedy: status label only from probe results; a distinct "No response from
   <ip>" outcome. Open.
+- **2026-09-04 · iOS + Android (dev clients on main) · network.** The native network lane is raw
+  ESC/POS over `react-native-tcp-socket` to the profile port (default 9100), vendor ignored — not
+  ePOS. With Secure Printing OFF it prints on the TM-m30III from both OSes (verified on paper); with
+  it ON it is the raw-9100 quarantine by the app's own path. The identify probes on native: 443/8043
+  fail on the self-signed certificate (`The certificate for this server is invalid` on iOS, `Trust
+  anchor for certification path not found` on Android), 80/8008 are blocked on Android by the
+  cleartext policy (`CLEARTEXT communication to <ip> not permitted`). Wizard remedy for RED printers
+  stays "disable Secure Printing" (Lightspeed's six Web Config steps); the Epson SDK's `TCPS:` lane
+  is the candidate encrypted native lane (prints with SP OFF; SP ON not yet tested).
+- **2026-09-04 · iOS/Android · identify.** `parseEposResponse` used `DOMParser`, absent on Hermes, so
+  every HTTP ePOS probe that got an answer ended in `ReferenceError: Property 'DOMParser' doesn't
+  exist` and identify said "No ePOS port". DOM-free parse (G1). Same scan: the SDK-discovered
+  `TM-m30III` was relabelled `generic` because the name hint only knew the word "epson" and
+  identify's answer overrode the discovery vendor; discovery vendor now wins over an errored probe,
+  `TM-`/`TSP`/`mC-Print` prefixes count as hints, and `TM-m30III_055889` (Bluetooth names carry a
+  serial after `_`) now matches the model table (G2).
+- **2026-09-04 · native · silent paths.** The raw TCP print and the dropped-logo `catch` logged
+  nothing; a test print left zero lines. Both log now (G3, G5). The Epson discovery start error was
+  swallowed too (a denied Nearby-devices permission looked like "nothing found"); logged (G6).
+- **2026-09-04 · Android, raw 9100 · receipt.** Barcode printed without its number: the encoder
+  was called with a bare height and `@point-of-sale/receipt-printer-encoder` defaults HRI text off;
+  `text: true` now (G4). Logo missing: the image raster needs a browser canvas, which native has
+  none of — logged now, native raster still open (G8).
+- **2026-09-04 · Android · Bluetooth, TM-m30III.** Pairing needs the printer's Bluetooth Status
+  Sheet (feed-button sequence) to enter pairing mode; the SDK then prints over Bluetooth Classic
+  (verified on paper). Two gotchas: the `BT:` row only appears while the printer is discoverable
+  although it is already bonded (the SDK's bonded-devices option is not used — open), and the
+  Bluetooth picker listed the printer's `TCPS:` network targets, including its `[local_display]`
+  and `[local_TSE]` sub-devices, as Bluetooth candidates — `TCPS:` now folds into the printer's one
+  network row as `secureTarget`, sub-devices are dropped (G6).
+- **2026-09-04 · Bluetooth/USB profiles · width.** Saved at the 42-column default because only the
+  network path consulted the model table. Ruling (Paul): ask the printer. On Epson SDK lanes the
+  adapter now reads the configured paper width (`getPrinterSetting(PAPERWIDTH)`: 58/60/70/76/80 mm →
+  32/35/42/45/48 columns); the model table is the fallback, the ruler the last resort (G7).

@@ -73,14 +73,15 @@ async function beforeDeadline<T>(deadline: number, task: () => Promise<T>) {
 }
 export async function identifyPrinter(
 	host: string,
-	hints: { name?: string },
+	hints: { name?: string; vendor?: Vendor },
 	probes: IdentifyProbes,
 	opts: { timeoutMs?: number } = {}
 ): Promise<PrinterIdentity> {
 	const startedAt = Date.now();
 	const deadline = startedAt + (opts.timeoutMs ?? 4_000);
 	const ports: PrinterIdentity['ports'] = [];
-	const hintedVendor = vendorFromName(hints.name);
+	const namedVendor = vendorFromName(hints.name);
+	const hintedVendor = hints.vendor ?? namedVendor;
 	let eposPort: number | null = null;
 	let rawOpen = false;
 	const tcp = async (port: number) => {
@@ -171,6 +172,8 @@ export async function identifyPrinter(
 			: rawOpen
 				? (hintedVendor ?? 'generic')
 				: hintedVendor;
+	const vendorSource =
+		eposPort || star ? 'probe' : hints.vendor ? 'discovery' : namedVendor ? 'name' : 'none';
 	const ippOpen = ports.some((entry) => entry.port === 631 && entry.state === 'open');
 	// Only raw/IPP results say whether a *named* host is a receipt printer at all; refused ePOS
 	// candidates on an Epson whose ePOS-Print is off prove nothing (its raw ports were skipped).
@@ -200,6 +203,7 @@ export async function identifyPrinter(
 		context: {
 			host,
 			vendor,
+			vendorSource,
 			lane: lane ? { port: lane.port, protocol: lane.protocol } : null,
 			portStates: ports.map(({ port, state, protocol }) => ({ port, state, protocol })),
 			elapsedMs: Date.now() - startedAt,
@@ -208,8 +212,8 @@ export async function identifyPrinter(
 	return identity;
 }
 function vendorFromName(name?: string): Vendor {
-	if (/epson/i.test(name ?? '')) return 'epson';
-	if (/star/i.test(name ?? '')) return 'star';
+	if (/epson|\bTM-/i.test(name ?? '')) return 'epson';
+	if (/star|\b(TSP|mC-Print|mPOP|SM-)/i.test(name ?? '')) return 'star';
 	return null;
 }
 export async function identifyDiscoveredPrinters(
@@ -223,15 +227,19 @@ export async function identifyDiscoveredPrinters(
 	for (let offset = 0; offset < pending.length; offset += 4) {
 		await Promise.all(
 			pending.slice(offset, offset + 4).map(async ({ printer, index }) => {
-				const identity = await identifyPrinter(printer.address, { name: printer.name }, probes);
+				const identity = await identifyPrinter(
+					printer.address,
+					{ name: printer.name, vendor: printer.vendor },
+					probes
+				);
 				identified[index] = {
 					...printer,
 					identity,
+					vendor:
+						identity.vendor && identity.vendor !== 'generic' ? identity.vendor : printer.vendor,
 					...(identity.lane && canPrintLane(identity.lane.protocol, probes)
-						? { port: identity.lane.port, vendor: identity.vendor ?? printer.vendor }
-						: identity.vendor
-							? { vendor: identity.vendor }
-							: {}),
+						? { port: identity.lane.port }
+						: {}),
 				};
 			})
 		);

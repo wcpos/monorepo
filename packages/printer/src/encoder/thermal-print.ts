@@ -13,6 +13,7 @@ import type {
 	ThermalRasterImage,
 } from '@wcpos/receipt-renderer';
 
+import { printerLogger } from '../logger';
 import { isEscposTextEncodable } from './escpos-text';
 import { formatReceiptData } from './format-receipt-data';
 import { mapReceiptData } from './map-receipt-data';
@@ -117,8 +118,13 @@ export async function prepareThermalPrintAssets(input: {
 					maxWidth: input.maxWidthDots,
 				});
 				if (asset) imageAssets[thermalImageAssetKey(image)] = asset;
-			} catch {
-				// Thermal image assets are optional: a missing/offline logo must not abort printing.
+			} catch (error) {
+				printerLogger.warn('Thermal image asset skipped', {
+					context: {
+						src: image.src,
+						cause: error instanceof Error ? error.message : String(error),
+					},
+				});
 			}
 		})
 	);
@@ -313,7 +319,13 @@ export async function renderThermalBarcodeAsset(input: {
 				threshold: 128,
 			},
 		};
-	} catch {
+	} catch (error) {
+		printerLogger.debug('Thermal barcode asset skipped', {
+			context: {
+				cause: error instanceof Error ? error.message : String(error),
+				fallback: 'native-barcode',
+			},
+		});
 		return undefined;
 	}
 }

@@ -8,6 +8,7 @@ const {
 	epsonConnectMock,
 	epsonAddCommandMock,
 	epsonSendDataMock,
+	epsonGetPrinterSettingMock,
 	epsonDisconnectMock,
 	StarConnectionSettingsMock,
 	StarPrinterMock,
@@ -20,6 +21,7 @@ const {
 	epsonConnectMock: vi.fn().mockResolvedValue(undefined),
 	epsonAddCommandMock: vi.fn().mockResolvedValue(undefined),
 	epsonSendDataMock: vi.fn().mockResolvedValue(undefined),
+	epsonGetPrinterSettingMock: vi.fn().mockResolvedValue({ value: 80 }),
 	epsonDisconnectMock: vi.fn().mockResolvedValue(undefined),
 	StarConnectionSettingsMock: vi.fn(),
 	StarPrinterMock: vi.fn(),
@@ -31,6 +33,7 @@ const {
 
 vi.mock('react-native-esc-pos-printer', () => ({
 	Printer: PrinterMock,
+	PrinterGetSettingsType: { PRINTER_SETTING_PAPERWIDTH: 7 },
 }));
 
 vi.mock('react-native-star-io10', () => ({
@@ -50,6 +53,7 @@ describe('native printer adapters', () => {
 		epsonConnectMock.mockClear();
 		epsonAddCommandMock.mockClear();
 		epsonSendDataMock.mockClear();
+		epsonGetPrinterSettingMock.mockClear();
 		epsonDisconnectMock.mockClear();
 
 		StarConnectionSettingsMock.mockReset();
@@ -64,6 +68,7 @@ describe('native printer adapters', () => {
 			this.connect = epsonConnectMock;
 			this.addCommand = epsonAddCommandMock;
 			this.sendData = epsonSendDataMock;
+			this.getPrinterSetting = epsonGetPrinterSettingMock;
 			this.disconnect = epsonDisconnectMock;
 		});
 
@@ -106,6 +111,15 @@ describe('native printer adapters', () => {
 			target: 'BT:AB:CD:EF:12:34:56',
 			deviceName: 'WCPOS Epson Printer',
 		});
+	});
+
+	it('EpsonNativeAdapter queries and returns the SDK paper width', async () => {
+		const adapter = new EpsonNativeAdapter('BT:printer', 'bluetooth');
+
+		await expect(adapter.getPaperWidthMm()).resolves.toBe(80);
+		expect(epsonConnectMock).toHaveBeenCalledWith(5_000);
+		expect(epsonGetPrinterSettingMock).toHaveBeenCalledWith(7, 5_000);
+		expect(epsonDisconnectMock).toHaveBeenCalled();
 	});
 
 	it('StarNativeAdapter opens the Star printer and sends raw byte arrays', async () => {

@@ -175,6 +175,12 @@ describe('identifyPrinter', () => {
 		expect(identity.columns).toBeUndefined();
 	});
 
+	it('recognises bare Epson model names and underscore-delimited serials', async () => {
+		const identity = await identifyPrinter('192.168.1.34', { name: 'TM-m30III_055889' }, probes());
+
+		expect(identity).toMatchObject({ vendor: 'epson', model: 'TM-m30III', columns: 48 });
+	});
+
 	it('does not classify a fully filtered host as a non-receipt printer', async () => {
 		const identity = await identifyPrinter(
 			'192.168.1.35',
@@ -236,5 +242,40 @@ describe('identifyDiscoveredPrinters', () => {
 			starProbes(new Set(['epos-print', 'webprnt']))
 		);
 		expect(identified).toMatchObject({ port: 80, vendor: 'star' });
+	});
+
+	it('preserves an Epson discovery vendor when probes only fail', async () => {
+		const [identified] = await identifyDiscoveredPrinters(
+			[
+				{
+					id: 'epson-sdk',
+					name: 'TM-m30III',
+					connectionType: 'network',
+					address: '192.168.1.41',
+					vendor: 'epson',
+				},
+			],
+			probes({ connectTcp: async (_host, port) => (port === 9100 ? 'open' : 'closed') })
+		);
+
+		expect(identified.vendor).toBe('epson');
+		expect(info).toHaveBeenLastCalledWith(
+			'Printer identified',
+			expect.objectContaining({ context: expect.objectContaining({ vendorSource: 'discovery' }) })
+		);
+	});
+
+	it('upgrades a generic discovery vendor when ePOS answers', async () => {
+		const [identified] = await identifyDiscoveredPrinters(
+			[{ ...star, id: 'generic', name: 'Printer', vendor: 'generic' }],
+			probes({
+				postEpos: async (_host, port) => {
+					if (port === 80) return { status: 200, body: EPOS_RESPONSE };
+					throw new Error('closed');
+				},
+			})
+		);
+
+		expect(identified.vendor).toBe('epson');
 	});
 });
