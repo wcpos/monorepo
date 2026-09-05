@@ -1,7 +1,5 @@
 import { POS_META_KEYS } from '@wcpos/sync-core';
 
-import { materializeLocalOnly } from '../materialization/record-materialization';
-
 /**
  * Server line-IDENTITY graft (#818) — the residual duplication window left by
  * #815.
@@ -53,6 +51,13 @@ const GRAFTABLE_LINE_FIELDS = [
 	'fee_lines',
 	'coupon_lines',
 ] as const;
+
+const DELETION_MARKERS = {
+	line_items: 'product_id',
+	shipping_lines: 'method_id',
+	fee_lines: 'name',
+	coupon_lines: 'code',
+} as const;
 
 /** The per-LINE identity meta the POS cart hooks stamp (same key as the record uuid). */
 const LINE_UUID_META_KEY = POS_META_KEYS.lineUuid;
@@ -175,51 +180,46 @@ export function pairLinesByUuid(localLines: unknown[], serverLines: unknown[]): 
 	return pairs;
 }
 
-/** Use the same materialization boundary as order ack adoption; silence is not deletion. */
-export function hasFullServerLineItems(document: Record<string, unknown>): boolean {
-	if (!Array.isArray(document.line_items)) return false;
-	try {
-		materializeLocalOnly(document);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 /**
  * Graft the ack document's server-assigned line ids onto `payload`, matching on
  * the line's `_woocommerce_pos_uuid` meta. Local values are never touched and
- * a full materializable line_items array also retires absent ids and completed tombstones.
+ * caller-confirmed full arrays also retire absent ids and completed tombstones:
+ * line_items uses product_id: null or quantity: 0; fee_lines uses name: null;
+ * shipping_lines uses method_id: null; coupon_lines uses code: null.
+ * Omitted fields are silence, never deletion.
  *
  * @param payload - The local payload (a resident's stored payload, or a frozen queue snapshot).
  * @param document - The server document from the push ack — identity source ONLY.
+ * @param options - Retirement requires serverLinesComplete: true (default false).
  * @returns The payload with ids grafted, or the SAME reference when nothing changed.
  */
 export function graftServerLineIdentity<T extends Record<string, unknown>>(
 	payload: T,
-	document: Record<string, unknown> | null | undefined
+	document: Record<string, unknown> | null | undefined,
+	options: { serverLinesComplete?: boolean } = {}
 ): T {
 	if (!isRecord(document)) return payload;
 	let next: Record<string, unknown> = payload;
-	const localItems = payload.line_items;
-	if (Array.isArray(localItems) && hasFullServerLineItems(document)) {
-		const ids = new Set(
-			(document.line_items as unknown[]).map((line) =>
-				isRecord(line) ? readServerId(line.id) : null
-			)
-		);
+	for (const field of GRAFTABLE_LINE_FIELDS) {
+		const localItems = payload[field];
+		const serverLines = document[field];
+		if (
+			options.serverLinesComplete !== true ||
+			!Array.isArray(localItems) ||
+			!Array.isArray(serverLines)
+		)
+			continue;
+		const ids = new Set(serverLines.map((line) => (isRecord(line) ? readServerId(line.id) : null)));
 		const lines = localItems.flatMap((line) => {
 			if (!isRecord(line) || !hasServerId(line) || ids.has(readServerId(line.id))) return [line];
-			// A completed deletion: wc/v3 removes a line posted with `product_id: null`
-			// (`item_is_null`) OR `quantity: 0`, and omits it from the echo. Both are
-			// tombstones the server has honoured, so they leave — only a LIVE line
-			// whose id was retired is kept (without the id) as cashier intent.
-			if (line.product_id === null || line.quantity === 0) return [];
+			// Drop honoured tombstones; preserve live cashier intent without its retired id.
+			if (line[DELETION_MARKERS[field]] === null || (field === 'line_items' && line.quantity === 0))
+				return [];
 			const { id: _id, ...live } = line;
 			return [live];
 		});
 		if (lines.length !== localItems.length || lines.some((line, i) => line !== localItems[i])) {
-			next = { ...payload, line_items: lines };
+			next = { ...next, [field]: lines };
 		}
 	}
 	for (const field of GRAFTABLE_LINE_FIELDS) {

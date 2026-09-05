@@ -62,10 +62,7 @@ import {
 	EngineOrderRepository,
 	POS_ORDER_IDENTITY_META_KEYS,
 } from '../write-path/engine-order-repository';
-import {
-	graftServerLineIdentity,
-	hasFullServerLineItems,
-} from '../write-path/graft-server-line-identity';
+import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
 import { preserveEquivalentLocalPrecision } from '../write-path/order-money-divergence';
 import { type WooTaxRatePayload } from './tax-rate-schema';
 
@@ -233,7 +230,8 @@ export type WriteAck = {
  */
 export type AckIdentityGraft = (
 	payload: Record<string, unknown>,
-	source: Record<string, unknown>
+	source: Record<string, unknown>,
+	options?: { serverLinesComplete?: boolean }
 ) => Record<string, unknown>;
 
 /**
@@ -396,12 +394,15 @@ function ackBookkeeping(options: {
 				// document was not materializable, or the born-twice arm withheld it —
 				// the resident would keep its pre-create, ID-LESS lines, and every push
 				// built from it makes WooCommerce APPEND duplicates. Take the server's
-				// line IDENTITY so local values still win. A materializable full array
+				// line IDENTITY so local values still win. A caller-confirmed full array
 				// also retires deleted ids and drops completed deletion tombstones.
 				let identityPatch: Record<string, unknown> = {};
 				if (!adopting && graftAckIdentity && ack.identityDocument) {
 					const residentPayload = (data.payload ?? {}) as Record<string, unknown>;
-					const grafted = graftAckIdentity(residentPayload, ack.identityDocument);
+					const grafted = graftAckIdentity(residentPayload, ack.identityDocument, {
+						// Without a pending successor, this ack patch would replace the local arrays.
+						serverLinesComplete: ackDocumentPatch !== null,
+					});
 					// Payload ONLY: the promoted filter/sort columns derive from values
 					// this graft never touches, so re-promoting them here would smuggle
 					// the ack's status/total past the pending-successor guard.
@@ -655,12 +656,13 @@ const ordersWriteFacet = createWriteFacet({
 	//    A number that genuinely CHANGED is adopted verbatim: server is truth.
 	adoptPayload: (localPayload, adoptedPayload) => {
 		const merged = { ...localPayload, ...adoptedPayload };
-		if (Array.isArray(localPayload.line_items) && hasFullServerLineItems(adoptedPayload)) {
+		if (Array.isArray(localPayload.line_items) && Array.isArray(adoptedPayload.line_items)) {
 			// A live line whose Woo id was retired is still cashier intent, even
 			// when no successor has been enqueued yet (Undo can race the ack).
 			const retired = graftServerLineIdentity(
 				{ line_items: localPayload.line_items.filter((line) => line?.id) },
-				adoptedPayload
+				adoptedPayload,
+				{ serverLinesComplete: true }
 			).line_items.filter((line) => !line.id);
 			merged.line_items = [...(adoptedPayload.line_items as unknown[]), ...retired];
 		}
@@ -671,8 +673,8 @@ const ordersWriteFacet = createWriteFacet({
 	// every push built from it — keeps posting ID-LESS lines and duplicates the
 	// cart. Identity only, never a value. The display-field strip re-applies
 	// because a payload may predate it (#885/#890) and this rewrites line arrays.
-	graftAckIdentity: (payload, source) =>
-		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source)),
+	graftAckIdentity: (payload, source, options) =>
+		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source, options)),
 	upsert: async (db, document) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
 	},

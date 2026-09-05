@@ -13,6 +13,32 @@ const kept = { id: 13, product_id: 83 };
 const truth = { id: 900, meta_data, line_items: [kept] };
 
 describe('checkout line identity', () => {
+	it.each([null, { id: 900, line_items: [] }])(
+		'preserves ids and tombstones when the adoption document cannot materialize: %j',
+		async (document) => {
+			const { engine } = await createEngineHarness({ mode: 'manual' });
+			try {
+				await engine.ready;
+				const db = engine.active()!.database;
+				const facet = writeFacetFor('orders')!;
+				const payload = { ...truth, line_items: [live, tombstone, kept] };
+				await facet.upsertServerDocument(db, facet.documentFromServerPayload(payload));
+				await facet.reconcile(db, {
+					recordId: UUID,
+					remoteId: remoteId(900),
+					currentRevision: 'server-base',
+					mutation: { mutationId: 'deletion-A', operation: 'update', recordId: UUID },
+					document,
+					identityDocument: { ...truth, line_items: [] },
+				});
+				const doc = await db.collections.orders.findOne(UUID).exec();
+				expect(doc!.toJSON().payload.line_items).toEqual([live, tombstone, kept]);
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
 	it.each([
 		'successor',
 		'undo',

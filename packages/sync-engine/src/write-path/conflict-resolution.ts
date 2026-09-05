@@ -324,7 +324,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 										: undefined;
 								const reconcile = (payload: Record<string, unknown>) =>
 									graft && entry.conflictDocument
-										? graft(payload, entry.conflictDocument)
+										? graft(payload, entry.conflictDocument, { serverLinesComplete: true })
 										: payload;
 								await queue.replace({
 									...intact,

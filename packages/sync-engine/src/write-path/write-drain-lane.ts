@@ -102,10 +102,14 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 	const payload = (mutation.payload ?? {}) as Record<string, unknown>;
 	// Pending create acks promote remoteId without adopting payload.id.
 	const remoteId = Number(row?.remoteId);
-	const grafted = facet.graftAckIdentity(payload, {
-		...residentPayload,
-		...(residentPayload.id === undefined && Number.isFinite(remoteId) ? { id: remoteId } : {}),
-	});
+	const grafted = facet.graftAckIdentity(
+		payload,
+		{
+			...residentPayload,
+			...(residentPayload.id === undefined && Number.isFinite(remoteId) ? { id: remoteId } : {}),
+		},
+		{ serverLinesComplete: true }
+	);
 	return grafted === payload ? mutation : { ...mutation, payload: grafted };
 }
 
@@ -443,7 +447,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									...data,
 									payload: facet.graftAckIdentity!(
 										(data.payload ?? {}) as Record<string, unknown>,
-										current
+										current,
+										{ serverLinesComplete: true }
 									),
 								}));
 							},

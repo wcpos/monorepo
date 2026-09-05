@@ -11,7 +11,7 @@ const uuidMeta = (value: string) => [{ key: '_woocommerce_pos_uuid', value }];
 
 describe('graftServerLineIdentity', () => {
 	it.each([{ line_items: [] }, { line_items: [{ id: 12, product_id: 2 }] }])(
-		'reconciles deleted identities only against a materializable full array: %j',
+		'reconciles deleted identities only with explicit full-array provenance: %j',
 		({ line_items }) => {
 			const payload = {
 				line_items: [
@@ -28,7 +28,8 @@ describe('graftServerLineIdentity', () => {
 				meta_data: uuidMeta('22222222-2222-4222-8222-222222222222'),
 				line_items,
 			};
-			const outbound = graftServerLineIdentity(payload, document);
+			expect(graftServerLineIdentity(payload, document)).toBe(payload);
+			const outbound = graftServerLineIdentity(payload, document, { serverLinesComplete: true });
 			expect(outbound.line_items).toEqual([
 				{ product_id: 1, quantity: 3 },
 				line_items.length ? { id: 12, product_id: 2 } : { product_id: 2 },
@@ -41,6 +42,32 @@ describe('graftServerLineIdentity', () => {
 			expect(payload.line_items[0]).toEqual({ id: 11, product_id: null });
 		}
 	);
+
+	it.each([
+		['fee_lines', 'name', 'Fee'],
+		['shipping_lines', 'method_id', 'flat_rate'],
+		['coupon_lines', 'code', 'SAVE'],
+	])('reconciles %s only when its full server array is present', (field, marker, value) => {
+		const payload = {
+			[field]: [
+				{ id: 11, [marker]: null },
+				{ id: 12, [marker]: value },
+			],
+		};
+		const document = { [field]: [] };
+		expect(graftServerLineIdentity(payload, document)).toBe(payload);
+		expect(graftServerLineIdentity(payload, document, { serverLinesComplete: false })).toBe(
+			payload
+		);
+		expect(graftServerLineIdentity(payload, {}, { serverLinesComplete: true })).toBe(payload);
+		expect(graftServerLineIdentity(payload, document, { serverLinesComplete: true })).toEqual({
+			[field]: [{ [marker]: value }],
+		});
+		expect(payload[field]).toEqual([
+			{ id: 11, [marker]: null },
+			{ id: 12, [marker]: value },
+		]);
+	});
 
 	it('grafts the server id onto the uuid-matched line and keeps every local value', () => {
 		const payload = {
