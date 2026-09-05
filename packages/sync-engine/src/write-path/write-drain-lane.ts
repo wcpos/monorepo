@@ -72,7 +72,8 @@ export { fetchOrderServerRevision } from './order-server-revision';
  * those as new items (duplicated cart, multiplied total, real money). The
  * resident learned that identity when the create was acked (`reconcile`'s
  * graft), so the resident is the authority here: whatever ids it holds are
- * stamped onto the outgoing payload, and nothing else about it is read.
+ * stamped onto the outgoing payload. Its reconciled line_items also retire
+ * stale ids in frozen snapshots; local removals retain ids as tombstones until acked.
  *
  * Doing this at PUSH time rather than rewriting the queue rows is deliberate.
  * The durable row stays the honest record of what the cashier intended; no
@@ -95,10 +96,21 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 	const resident = await database.collections[mutation.collectionName]
 		?.findOne(mutation.recordId)
 		.exec();
-	const residentPayload = (resident?.toJSON() as { payload?: unknown } | undefined)?.payload;
+	const row = resident?.toJSON() as
+		{ payload?: Record<string, unknown>; remoteId?: unknown } | undefined;
+	const residentPayload = row?.payload;
 	if (typeof residentPayload !== 'object' || residentPayload === null) return mutation;
 	const payload = (mutation.payload ?? {}) as Record<string, unknown>;
-	const grafted = facet.graftAckIdentity(payload, residentPayload as Record<string, unknown>);
+	// Pending create acks promote remoteId without adopting payload.id.
+	const remoteId = Number(row?.remoteId);
+	const grafted = facet.graftAckIdentity(
+		payload,
+		{
+			...residentPayload,
+			...(residentPayload.id === undefined && Number.isFinite(remoteId) ? { id: remoteId } : {}),
+		},
+		{ serverLinesComplete: true }
+	);
 	return grafted === payload ? mutation : { ...mutation, payload: grafted };
 }
 
@@ -426,6 +438,21 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							// server-side bookkeeping churn — not a competing edit. Every other
 							// collection keeps parking on the first conflict.
 							autoRecoverConflict: (mutation) => mutation.collectionName === 'orders',
+							reconcileConflict: async (mutation, current) => {
+								const facet = writeFacetFor(mutation.collectionName);
+								if (!facet?.graftAckIdentity || mutation.operation === 'delete') return;
+								const doc = await database.collections[mutation.collectionName]
+									?.findOne(mutation.recordId)
+									.exec();
+								await doc?.incrementalModify((data: Record<string, unknown>) => ({
+									...data,
+									payload: facet.graftAckIdentity!(
+										(data.payload ?? {}) as Record<string, unknown>,
+										current,
+										{ serverLinesComplete: true }
+									),
+								}));
+							},
 							refreshRevision: async (mutation) => {
 								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet) {
