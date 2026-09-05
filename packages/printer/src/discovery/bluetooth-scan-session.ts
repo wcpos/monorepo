@@ -6,7 +6,8 @@ import type { PosConnectedDevice } from '../types/point-of-sale-connectors';
 
 export function getIpcRenderer(): TypedIpcRenderer | null {
 	if (typeof window === 'undefined') return null;
-	const w = window as {
+	// Window shares nothing with the preload shape, so the cast has to go through unknown.
+	const w = window as unknown as {
 		ipcRenderer?: TypedIpcRenderer;
 		electronAPI?: { ipcRenderer?: TypedIpcRenderer };
 	};
