@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BLE_KEEP_ALIVE_MS, connectBleReceiptPrinter, disconnectBleDevice } from '../ble-gatt';
+import { STATUS_REPLY_TIMEOUT_MS } from '../escpos-status';
 
 const PROFILE_18F0 = {
 	service: '000018f0-0000-1000-8000-00805f9b34fb',
@@ -192,5 +193,100 @@ describe('connectBleReceiptPrinter', () => {
 		// The tail goes as an acknowledged write so the link is not dropped with bytes in flight.
 		const acknowledged = vi.mocked(characteristic.writeValueWithResponse).mock.calls;
 		expect(acknowledged.map(([chunk]) => chunk.byteLength)).toEqual([10]);
+	});
+});
+
+const NOTIFY_2AF0 = '00002af0-0000-1000-8000-00805f9b34fb';
+
+/**
+ * A printer that notifies one status byte per `DLE EOT` write, in the order the queries go out.
+ * `replies` shorter than the query list is a printer that stopped answering.
+ */
+function mockStatusDevice(service: string, replies: number[]) {
+	const notify = new EventTarget() as EventTarget & {
+		properties: { write: boolean; writeWithoutResponse: boolean };
+		startNotifications: ReturnType<typeof vi.fn>;
+		stopNotifications: ReturnType<typeof vi.fn>;
+		writeValueWithResponse: ReturnType<typeof vi.fn>;
+		writeValueWithoutResponse: ReturnType<typeof vi.fn>;
+		value?: DataView;
+	};
+	notify.properties = { write: false, writeWithoutResponse: false };
+	notify.startNotifications = vi.fn(async () => undefined);
+	notify.stopNotifications = vi.fn(async () => undefined);
+	const queries: number[] = [];
+	const write = {
+		uuid: PROFILE_18F0.characteristic,
+		properties: { write: true, writeWithoutResponse: true },
+		writeValueWithoutResponse: vi.fn(async () => undefined),
+		writeValueWithResponse: vi.fn(async (value: ArrayBufferView) => {
+			const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+			if (bytes[0] !== 0x10 || bytes[1] !== 0x04) return;
+			queries.push(bytes[2]);
+			const reply = replies[queries.length - 1];
+			if (reply == null) return;
+			notify.value = new DataView(Uint8Array.of(reply).buffer);
+			notify.dispatchEvent(new Event('characteristicvaluechanged'));
+		}),
+	};
+	events = new EventTarget();
+	const primary = {
+		uuid: service,
+		getCharacteristic: vi.fn(async (uuid: string) => {
+			if (uuid === NOTIFY_2AF0) return notify;
+			if (uuid === PROFILE_18F0.characteristic) return write;
+			throw new Error('Not found');
+		}),
+	};
+	const device = {
+		id: 'status-printer',
+		name: 'Receipt Printer',
+		addEventListener: events.addEventListener.bind(events),
+		removeEventListener: events.removeEventListener.bind(events),
+		gatt: {
+			connect: vi.fn(async () => ({
+				connected: true,
+				getPrimaryService: vi.fn(async (uuid: string) => {
+					if (uuid !== service) throw new Error('Not found');
+					return primary;
+				}),
+				getPrimaryServices: vi.fn(async () => [primary]),
+				disconnect: vi.fn(),
+			})),
+		},
+	} as unknown as Parameters<typeof connectBleReceiptPrinter>[0];
+	return { device, notify, queries };
+}
+
+describe('queryStatus', () => {
+	it('asks DLE EOT 1, 2 and 4 on the notify characteristic and reads paper out', async () => {
+		const { device, notify, queries } = mockStatusDevice(PROFILE_18F0.service, [0x1e, 0x32, 0x72]);
+		const connection = await connectBleReceiptPrinter(device);
+
+		const status = await connection.queryStatus();
+
+		expect(queries).toEqual([1, 2, 4]);
+		expect(status).toMatchObject({ paperOut: true, online: false, raw: [0x1e, 0x32, 0x72] });
+		expect(notify.startNotifications).toHaveBeenCalledOnce();
+		expect(notify.stopNotifications).toHaveBeenCalledOnce();
+	});
+
+	it('keeps what the printer did answer when it stops replying, and unsubscribes', async () => {
+		vi.useFakeTimers();
+		const { device, notify } = mockStatusDevice(PROFILE_18F0.service, [0x16]);
+		const connection = await connectBleReceiptPrinter(device);
+
+		const pending = connection.queryStatus();
+		await vi.advanceTimersByTimeAsync(STATUS_REPLY_TIMEOUT_MS);
+
+		expect(await pending).toMatchObject({ online: true, raw: [0x16] });
+		expect(notify.stopNotifications).toHaveBeenCalledOnce();
+	});
+
+	it('answers null on a profile with no status channel', async () => {
+		const { device } = mockDevice({ [PROFILE_FF00.service]: [PROFILE_FF00.characteristic] });
+		const connection = await connectBleReceiptPrinter(device);
+
+		expect(await connection.queryStatus()).toBeNull();
 	});
 });

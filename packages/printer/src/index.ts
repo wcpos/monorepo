@@ -50,7 +50,9 @@ export {
 } from './renderer';
 export type { EscposRenderOptions } from './renderer';
 export { PrinterService } from './printer-service';
-export type { PrinterServiceOptions } from './printer-service';
+export type { PrinterServiceOptions, TestPrintResult } from './printer-service';
+export { describeStatus, parsePrinterStatus } from './transport/escpos-status';
+export type { PrinterStatus, PrinterStatusState } from './transport/escpos-status';
 export {
 	acceptsRawCloudUpload,
 	CloudAdapter,

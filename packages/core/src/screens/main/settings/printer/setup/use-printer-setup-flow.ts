@@ -3,13 +3,19 @@ import * as React from 'react';
 import {
 	canPrintLane,
 	createIdentifyProbes,
+	describeStatus,
 	identifyModel,
 	identifyPrinter,
 	isPrinterConnectionError,
 	queryUsbPrinterModel,
 	resolveNativePrinterColumns,
 } from '@wcpos/printer';
-import type { DiscoveredPrinter, PrinterDiscovery, PrinterService } from '@wcpos/printer';
+import type {
+	DiscoveredPrinter,
+	PrinterDiscovery,
+	PrinterService,
+	PrinterStatus,
+} from '@wcpos/printer';
 import { capturePrinterOutcome, getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
@@ -64,16 +70,25 @@ export function secureTargetFor(printer: Pick<DiscoveredPrinter, 'identity' | 's
 /**
  * Why nothing printed, read off the signatures identification already collected plus the
  * failure text — the setup dialog turns each one into a single line (roadmap#161 P1).
- * `lane` is the fallback: nothing specific, so the per-lane advice stands.
+ * `paper` is the printer's own answer (`DLE EOT`); `lane` is the fallback: nothing specific,
+ * so the per-lane advice stands.
  */
-export type TroubleReason = 'secure' | 'held' | 'permission' | 'pairing' | 'unresponsive' | 'lane';
+export type TroubleReason =
+	'secure' | 'held' | 'permission' | 'pairing' | 'unresponsive' | 'paper' | 'lane';
 const PERMISSION_RE = /permission|not allowed|NotAllowedError|LIBUSB_ERROR_ACCESS|EACCES|denied/i;
 const PAIRING_RE = /pair|bt-none-found|no supported print service|not found/i;
 const UNRESPONSIVE_RE = /not responding|no longer in range|timed out/i;
+/** The two things a printer says about itself that the cashier fixes at the printer. */
+function saysPaperTrouble(status: PrinterStatus | null | undefined): boolean {
+	return status != null && ['paper-out', 'cover-open'].includes(describeStatus(status));
+}
 export function troubleReasonFor(
 	selected: Pick<SetupCandidate, 'source' | 'identity'> | undefined,
-	failure = ''
+	failure = '',
+	status?: PrinterStatus | null
 ): TroubleReason {
+	// The printer answering "no paper" or "cover open" outranks anything inferred from a failure.
+	if (saysPaperTrouble(status)) return 'paper';
 	if (selected?.identity?.securePrinting) return 'secure';
 	if (selected?.identity?.ports?.some((port) => port.httpStatus === 503)) return 'held';
 	if (PERMISSION_RE.test(failure)) return 'permission';
@@ -104,6 +119,8 @@ interface SetupState {
 	lane?: string;
 	testPages: number;
 	failure?: TestPrintFailure;
+	/** What the printer said about itself after the last test page; null when it cannot be asked. */
+	lastStatus?: PrinterStatus | null;
 	troubleReason?: TroubleReason;
 	profileDraft: PrinterFormValues;
 }
@@ -158,7 +175,11 @@ export function usePrinterSetupFlow(
 		if (patch.phase === 'trouble')
 			current.current = {
 				...current.current,
-				troubleReason: troubleReasonFor(current.current.selected, current.current.failure?.message),
+				troubleReason: troubleReasonFor(
+					current.current.selected,
+					current.current.failure?.message,
+					current.current.lastStatus
+				),
 			};
 		setState(current.current);
 		if (patch.phase) {
@@ -325,15 +346,22 @@ export function usePrinterSetupFlow(
 		});
 	}
 	async function testPrint() {
-		update({ phase: 'printing', testPages: current.current.testPages + 1, failure: undefined });
+		update({
+			phase: 'printing',
+			testPages: current.current.testPages + 1,
+			failure: undefined,
+			lastStatus: undefined,
+		});
 		const tempProfile = {
 			id: `test-${Date.now()}`,
 			...buildPrinterProfileFields(current.current.profileDraft),
 			isBuiltIn: false,
 		};
 		try {
-			await printerService.testPrint(tempProfile, { openDrawer: false });
-			if (active.current) update({ phase: 'asking' });
+			const { status } = await printerService.testPrint(tempProfile, { openDrawer: false });
+			if (!active.current) return;
+			// The printer said what is wrong: don't ask the cashier to read a page that never came.
+			update({ phase: saysPaperTrouble(status) ? 'trouble' : 'asking', lastStatus: status });
 		} catch (error) {
 			if (active.current) fail(error, 'trouble');
 		}

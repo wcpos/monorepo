@@ -47,12 +47,19 @@ import {
 	classifyPrinter,
 	secureTargetFor,
 	type SetupPlatform,
+	type TroubleReason,
 	usePrinterSetupFlow,
 } from './use-printer-setup-flow';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 
 import type * as z from 'zod';
+
+/**
+ * Reasons whose line is copy that already exists elsewhere in setup: a printer that answered
+ * "no paper" or "cover open" gets the paper line, not a trouble_ key of its own.
+ */
+const TROUBLE_LINES: Partial<Record<TroubleReason, string>> = { paper: 'err_paper' };
 
 function SetupWidthSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
@@ -625,7 +632,7 @@ export function PrinterSetupDialog({
 										{heading('trouble')}
 										{line(
 											troubleReason && troubleReason !== 'lane'
-												? `trouble_${troubleReason}`
+												? (TROUBLE_LINES[troubleReason] ?? `trouble_${troubleReason}`)
 												: selected?.source === 'bluetooth'
 													? 'trouble_bluetooth'
 													: deviceLane
