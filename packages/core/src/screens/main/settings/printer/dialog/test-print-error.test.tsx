@@ -54,6 +54,8 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('../../../mini-apps/catalog', () => ({ usePrinterWizardAvailable: () => false }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () =>
 		jest

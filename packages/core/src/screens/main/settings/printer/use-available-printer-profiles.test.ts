@@ -1,5 +1,10 @@
+/** @jest-environment jsdom */
+import { act, renderHook } from '@testing-library/react';
+import { Subject } from 'rxjs';
+
 import type { PrinterProfile } from '@wcpos/printer';
 
+import { useAvailablePrinterProfiles } from './use-available-printer-profiles';
 import { mergeAvailablePrinterProfiles } from './available-printer-profiles';
 
 const localPrinter: PrinterProfile = {
@@ -115,3 +120,25 @@ describe('mergeAvailablePrinterProfiles', () => {
 		]);
 	});
 });
+
+const mockProfiles$ = new Subject<PrinterProfile[]>();
+const mockStoreDB = { collections: { printer_profiles: { find: () => ({ $: mockProfiles$ }) } } };
+const mockHttp = { get: () => new Promise(() => {}) };
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ storeDB: mockStoreDB }),
+}));
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
+
+it.each<[PrinterProfile[]]>([[[]], [[localPrinter]]])(
+	'waits for the first local emission: %j',
+	(profiles) => {
+		const { result } = renderHook(() => useAvailablePrinterProfiles());
+		expect(result.current.isLoading).toBe(true);
+		expect(result.current.printers.map((p) => p.id)).toEqual(['system']);
+		act(() => mockProfiles$.next(profiles));
+		expect(result.current.isLoading).toBe(false);
+		expect(result.current.printers.map((p) => p.id)).toEqual(
+			profiles.length ? ['local-1', 'system'] : ['system']
+		);
+	}
+);

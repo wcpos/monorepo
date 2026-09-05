@@ -17,7 +17,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 
 const printerLogger = getLogger(['wcpos', 'printer', 'available-profiles']);
 
-export function useAvailablePrinterProfiles(): PrinterProfile[] {
+export function useAvailablePrinterProfiles() {
 	const { storeDB } = useStoreSession();
 	const http = useRestHttpClient();
 	const [cloudPayload, setCloudPayload] = React.useState<CloudPrintResponse | null>(null);
@@ -29,7 +29,7 @@ export function useAvailablePrinterProfiles(): PrinterProfile[] {
 				.$.pipe(map((docs) => (docs as PrinterProfileDocument[]).map(toPrinterProfile))),
 		[storeDB]
 	);
-	const localProfiles = useObservableState<PrinterProfile[]>(profiles$, []);
+	const localProfiles = useObservableState<PrinterProfile[] | undefined>(profiles$, undefined);
 
 	React.useEffect(() => {
 		let cancelled = false;
@@ -55,7 +55,10 @@ export function useAvailablePrinterProfiles(): PrinterProfile[] {
 	}, [http]);
 
 	return React.useMemo(
-		() => mergeAvailablePrinterProfiles(localProfiles, cloudPayload),
+		() => ({
+			printers: mergeAvailablePrinterProfiles(localProfiles ?? [], cloudPayload),
+			isLoading: localProfiles === undefined,
+		}),
 		[localProfiles, cloudPayload]
 	);
 }

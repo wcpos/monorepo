@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
+import { useRouter } from 'expo-router';
+
 import { Button } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { Text } from '@wcpos/components/text';
@@ -8,6 +10,7 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../contexts/translations';
+import { usePrinterWizardAvailable } from '../../../mini-apps/catalog';
 
 import type { TestPrintFailure } from './use-printer-dialog-form';
 
@@ -46,6 +49,8 @@ interface TestPrintErrorProps {
  */
 export function TestPrintError({ error }: TestPrintErrorProps) {
 	const t = useT();
+	const router = useRouter();
+	const showWizard = usePrinterWizardAvailable('settings.printers.trouble');
 
 	const handleCopy = React.useCallback(async () => {
 		if (!error) return;
@@ -125,6 +130,17 @@ export function TestPrintError({ error }: TestPrintErrorProps) {
 				</>
 			) : (
 				<Text className="text-destructive text-sm">{error.message}</Text>
+			)}
+			{showWizard && (
+				<Button
+					testID="add-printer-having-trouble"
+					variant="ghost-quiet"
+					size="sm"
+					className="self-start"
+					onPress={() => router.push('/settings/mini-app/printer-wizard')}
+				>
+					<Text>{t('settings.having_trouble')}</Text>
+				</Button>
 			)}
 		</VStack>
 	);

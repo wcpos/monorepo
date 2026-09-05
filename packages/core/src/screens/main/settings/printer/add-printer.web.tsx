@@ -211,16 +211,15 @@ export function PrinterDialog({
 			connectionSection={
 				<>
 					<ConnectionTypeSegmented
+						form={form}
 						value={connectionType}
 						availableTypes={availableTypes}
 						onChange={(v) => {
 							form.setValue('connectionType', v, {
 								shouldDirty: true,
-								shouldValidate: true,
 							});
 							form.setValue('address', '', {
 								shouldDirty: true,
-								shouldValidate: true,
 							});
 						}}
 					/>
