@@ -36,7 +36,7 @@ export function PrinterDialogFooter({
 }: PrinterDialogFooterProps) {
 	const t = useT();
 	return (
-		<HStack className="w-full items-center justify-end gap-2">
+		<HStack className="w-full flex-wrap items-center justify-end gap-2">
 			{showSaveAnyway && (
 				<Button
 					testID="add-printer-save-anyway-button"

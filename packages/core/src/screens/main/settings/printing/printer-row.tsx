@@ -83,16 +83,20 @@ export function PrinterRow({
 	return (
 		<View
 			testID={`printer-row-${profile.id}`}
-			className="web:hover:bg-accent flex-row items-center gap-3 rounded-lg px-2 py-2.5"
+			className="web:hover:bg-accent flex-row flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-2 py-2.5"
 		>
 			<View className="bg-muted rounded-md p-2">
 				<Icon name={printerIconName(profile)} variant="muted" size="lg" />
 			</View>
-			<VStack className="flex-1 gap-0.5">
-				<Text className="text-sm font-medium">{profile.name}</Text>
-				<Text className="text-muted-foreground text-xs">{connectionLabel}</Text>
+			<VStack className="min-w-40 flex-1 gap-0.5">
+				<Text className="text-sm font-medium" numberOfLines={1}>
+					{profile.name}
+				</Text>
+				<Text className="text-muted-foreground text-xs" numberOfLines={1}>
+					{connectionLabel}
+				</Text>
 			</VStack>
-			<HStack className="items-center gap-2">
+			<HStack className="ml-auto flex-wrap items-center gap-2">
 				{profile.isDefault && <StatusBadge variant="default" label={t('common.default')} />}
 				<Button
 					variant="outline"
