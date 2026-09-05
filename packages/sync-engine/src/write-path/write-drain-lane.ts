@@ -43,6 +43,7 @@ import type {
 
 import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
 import {
+	classifyMoneyDivergence,
 	compareOrderMoney,
 	type MoneyDivergenceField,
 	type MoneyPrecisionMode,
@@ -626,6 +627,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										mutationId: ack.mutationId,
 										outcome: 'failed',
 										mode: ack.mode,
+										roundingClass: classifyMoneyDivergence(ack.fields),
 										divergentFields: ack.fields.map((field) => field.field).join(','),
 										detail: ack.fields
 											.map((field) => `${field.field}: ${field.expected} -> ${field.got}`)

@@ -293,6 +293,24 @@ export function roundDecimalString(value: string, decimals: number): string | nu
 /** Cents — the floor the narrower-ack tolerance may never dip below. */
 const CENT_DECIMALS = 2;
 
+/** Classify diagnostic magnitude at cents, not at the field's comparison width. */
+export function classifyMoneyDivergence(
+	fields: MoneyDivergenceField[]
+): 'sub-cent' | 'cent' | 'material' {
+	let result: 'sub-cent' | 'cent' = 'sub-cent';
+	for (const { expected, got, decimals } of fields) {
+		if (decimals === null) return 'material';
+		const width = Math.max(decimals, CENT_DECIMALS);
+		const scaled = (value: string) => BigInt(roundDecimalString(value, width)!.replace('.', ''));
+		const delta = scaled(got) - scaled(expected);
+		const difference = delta < 0n ? -delta : delta;
+		const unit = 10n ** BigInt(width - CENT_DECIMALS);
+		if (difference > unit) return 'material';
+		if (difference === unit) result = 'cent';
+	}
+	return result;
+}
+
 /**
  * Whether two already-rounded decimal strings at `width` are within the
  * rounding-tie epsilon. Digit-string arithmetic via BigInt — no float ever
@@ -334,6 +352,9 @@ function withinRoundingTie(
 
 /**
  * THE width at which two spellings of money count as the same number.
+ * Server width is EFFECTIVE (trailing fractional zeros stripped); POS width
+ * stays authored. A dp-rendered ack padded to contract width claims no
+ * precision beyond dp, including REST-rendered line taxes (#1875).
  *
  * One function, used by BOTH halves on purpose. Detection and adoption have to
  * agree about equality or they open a gap between them: adoption would take a
@@ -348,18 +369,18 @@ function withinRoundingTie(
  *    pre-#1466 plugin sends `"6.71"` for `6.71328`), so the ack's width is the
  *    most it claims and the rounding artefact is tolerated. Floored at CENTS,
  *    because
- *    rounding to the ack's width lets UNRELATED numbers collide: `29.97`
- *    against a one-decimal `"30.0"` agrees at 1dp, and adoption would discard
+ *    rounding to the ack's width lets UNRELATED numbers collide: `29.93`
+ *    against a one-decimal `"29.9"` agrees at 1dp, and adoption would discard
  *    a 0.03 correction as "the same number". Below a cent there is no money
  *    left to protect. A zero-width ack is different: POS arithmetic goes
  *    through `String(...)`, so `"7"` has no decimal point but does not claim
  *    zero-decimal storage precision; the wider POS width is retained.
- *  - The ack is as precise or MORE precise. Then it is either padding (`36.68`
- *    against `36.680000`, equal once the POS value is widened) or a real
- *    correction, and the wider width is what tells them apart. Capped at six,
+ *  - The ack is effectively as precise or MORE precise (`36.68` against
+ *    `36.680001`). The wider width preserves real corrections. Capped at six,
  *    the contract width.
  */
-function equivalenceDecimals(posDecimals: number, serverDecimals: number): number {
+function equivalenceDecimals(posDecimals: number, serverValue: string): number {
+	const serverDecimals = serverValue.split('.')[1]?.replace(/0+$/, '').length ?? 0;
 	if (serverDecimals > 0 && serverDecimals < posDecimals) {
 		return Math.min(EXACT_COMPARISON_DECIMALS, Math.max(serverDecimals, CENT_DECIMALS));
 	}
@@ -382,7 +403,7 @@ function comparisonDecimals(
 	const pos = decimalsOf(posValue);
 	const server = decimalsOf(serverValue);
 	if (pos === null || server === null) return null;
-	return equivalenceDecimals(pos, server);
+	return equivalenceDecimals(pos, serverValue);
 }
 
 /**
@@ -594,7 +615,7 @@ export function preserveEquivalentLocalPrecision(
 		// keep the POS spelling too — adopting the server's microunit would make
 		// use-order-totals recompute the POS value, see a difference, and patch
 		// it back: the write loop this function exists to prevent.
-		const width = equivalenceDecimals(posDecimals, serverDecimals);
+		const width = equivalenceDecimals(posDecimals, server);
 		const roundedPos = roundDecimalString(pos, width);
 		const roundedServer = roundDecimalString(server, width);
 		if (roundedPos === null || roundedServer === null) return;
