@@ -194,3 +194,10 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   under Options. Chromium only opens the Bluetooth LE chooser from a click, so that button has to
   stay in view on every scan screen; USB and OS-paired printers enumerate in a second and are
   listed while the Wi-Fi scan continues. Copy is one line per screen plus the printer guide link.
+- **2026-09-05 · Netum NT-1809 over BLE · macOS Electron reconnect.** After a link drops,
+  the Netum can stop advertising; macOS Chromium then rejects `gatt.connect()` with "Bluetooth
+  Device is no longer in range." Keep GATT alive for 60 seconds after the last write and reuse it
+  between jobs. Retry a transient connection failure once after 1.5 seconds, but never forget the
+  session's device on a transient error: that forces a chooser needing a user gesture and an
+  advertising printer. Only replace the remembered object when the chooser supplies another one.
+  Unit-tested; this keep-alive change still needs physical-printer verification.

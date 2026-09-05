@@ -117,7 +117,9 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			});
 		} catch (err) {
 			if (scanGenerationRef.current !== generation) return;
-			setPrinters((prev) => prev.filter((p) => p.connectionType !== 'network'));
+			setPrinters((prev) =>
+				prev.filter((p) => p.connectionType !== 'network' || p.id.includes(':'))
+			);
 			setError({
 				code: 'discovery-failed',
 				detail: err instanceof Error ? err.message : String(err),

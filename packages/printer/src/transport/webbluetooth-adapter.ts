@@ -1,7 +1,7 @@
 /// <reference path="../types/point-of-sale-connectors.d.ts" />
 import { requestKnownBluetoothDevice } from '../discovery/bluetooth-scan-session';
 import { printerLogger } from '../logger';
-import { forgetBleDevice, getBleDevice, rememberBleDevice } from './ble-device-registry';
+import { getBleDevice, rememberBleDevice } from './ble-device-registry';
 import {
 	BLE_PRINT_SERVICE_UUIDS,
 	connectBleReceiptPrinter,
@@ -11,6 +11,9 @@ import { loadWebDevice } from './web-device-store';
 import { waitForWebPrinterReconnect } from './web-reconnect';
 
 import type { PrinterTransport } from '../types';
+
+// Give a temporarily unavailable BLE printer a moment before retrying the connection once.
+export const BLE_RECONNECT_DELAY_MS = 1500;
 
 export class WebBluetoothAdapter implements PrinterTransport {
 	readonly name = 'webbluetooth';
@@ -44,17 +47,27 @@ export class WebBluetoothAdapter implements PrinterTransport {
 			}
 		}
 		if (live) {
+			let printer;
 			try {
-				const printer = await connectBleReceiptPrinter(live);
-				try {
-					await printer.write(data);
-				} finally {
-					await printer.disconnect();
-				}
+				printer = await connectBleReceiptPrinter(live);
 			} catch (error) {
-				if (/NetworkError|disconnected|not connected/i.test(String(error)))
-					forgetBleDevice(this.deviceKey);
-				throw error;
+				if (!/no longer in range|NetworkError/i.test(String(error))) throw error;
+				printerLogger.debug('Bluetooth connection failed, retrying once', {
+					context: { cause: String(error) },
+				});
+				await new Promise<void>((resolve) => setTimeout(resolve, BLE_RECONNECT_DELAY_MS));
+				try {
+					printer = await connectBleReceiptPrinter(live);
+				} catch {
+					throw new Error(
+						'Bluetooth printer is not responding. Turn it off and on again, then try again.'
+					);
+				}
+			}
+			try {
+				await printer.write(data);
+			} finally {
+				await printer.disconnect();
 			}
 			return;
 		}

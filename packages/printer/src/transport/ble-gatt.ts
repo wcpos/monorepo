@@ -1,6 +1,9 @@
 import { printerLogger } from '../logger';
 
-export interface BluetoothDevice {
+export interface BluetoothDevice extends Pick<
+	EventTarget,
+	'addEventListener' | 'removeEventListener'
+> {
 	readonly id: string;
 	readonly name?: string | null;
 	readonly gatt: BluetoothRemoteGATTServer;
@@ -14,6 +17,7 @@ export interface WebBluetoothNavigator {
 	};
 }
 interface BluetoothRemoteGATTServer {
+	readonly connected: boolean;
 	connect(): Promise<BluetoothRemoteGATTServer>;
 	disconnect(): void;
 	getPrimaryService(uuid: string): Promise<BluetoothRemoteGATTService>;
@@ -35,6 +39,28 @@ const CHUNK_PAUSE_MS = 20;
 // chunk dropped the tail of receipts on the Netum NT-1809 (roadmap#136 #38). The last chunk goes
 // as an acknowledged write and the link stays up briefly so the printer drains its buffer.
 const TAIL_SETTLE_MS = 300;
+// macOS Chromium says "no longer in range" when a disconnected printer stops advertising.
+// Keep the link alive between jobs rather than requiring a fresh advertisement each time.
+export const BLE_KEEP_ALIVE_MS = 60_000;
+
+interface BleConnection {
+	server: BluetoothRemoteGATTServer;
+	timer?: ReturnType<typeof setTimeout>;
+	clear(): void;
+}
+const connections = new Map<string, BleConnection>();
+
+export function disconnectBleDevice(deviceId: string): void {
+	const connection = connections.get(deviceId);
+	if (!connection) return;
+	connection.clear();
+	try {
+		connection.server.disconnect();
+	} catch (cause) {
+		warnFailure(cause);
+		throw cause;
+	}
+}
 
 const PRINT_PROFILES = [
 	['000018f0-0000-1000-8000-00805f9b34fb', '00002af1-0000-1000-8000-00805f9b34fb'],
@@ -65,9 +91,28 @@ export async function connectBleReceiptPrinter(
 		context: { device: device.name ?? device.id },
 	});
 
+	let connection = connections.get(device.id);
+	if (connection && !connection.server.connected) {
+		connection.clear();
+		connection = undefined;
+	}
+	clearTimeout(connection?.timer);
 	let server: BluetoothRemoteGATTServer | undefined;
 	try {
-		server = await device.gatt.connect();
+		server = connection?.server ?? (await device.gatt.connect());
+		if (!connection) {
+			const entry: BleConnection = {
+				server,
+				clear() {
+					clearTimeout(entry.timer);
+					connections.delete(device.id);
+					device.removeEventListener('gattserverdisconnected', entry.clear);
+				},
+			};
+			connection = entry;
+			connections.set(device.id, entry);
+			device.addEventListener('gattserverdisconnected', entry.clear);
+		}
 		let match:
 			| {
 					profile: string;
@@ -99,11 +144,13 @@ export async function connectBleReceiptPrinter(
 		printerLogger.info('BLE GATT print profile matched', {
 			context: { profile, characteristic: characteristicUuid },
 		});
-		const connectedServer = server;
+		const activeConnection = connection;
+		let lastWriteAt = Date.now();
 
 		return {
 			profile,
 			async write(bytes) {
+				clearTimeout(activeConnection.timer);
 				try {
 					const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
 					let chunks = 0;
@@ -115,6 +162,7 @@ export async function connectBleReceiptPrinter(
 						} else {
 							await characteristic.writeValueWithResponse(chunk);
 						}
+						lastWriteAt = Date.now();
 						chunks += 1;
 						if (!last) await pause();
 					}
@@ -128,15 +176,22 @@ export async function connectBleReceiptPrinter(
 				}
 			},
 			async disconnect() {
-				try {
-					connectedServer.disconnect();
-				} catch (cause) {
-					warnFailure(cause);
-					throw cause;
-				}
+				if (connections.get(device.id) !== activeConnection) return;
+				clearTimeout(activeConnection.timer);
+				activeConnection.timer = setTimeout(
+					() => {
+						try {
+							disconnectBleDevice(device.id);
+						} catch {
+							// Deferred cleanup has no caller; disconnectBleDevice already logged the failure.
+						}
+					},
+					Math.max(0, BLE_KEEP_ALIVE_MS - (Date.now() - lastWriteAt))
+				);
 			},
 		};
 	} catch (cause) {
+		connection?.clear();
 		try {
 			server?.disconnect();
 		} catch {

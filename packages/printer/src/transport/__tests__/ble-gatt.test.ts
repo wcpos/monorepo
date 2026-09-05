@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { connectBleReceiptPrinter } from '../ble-gatt';
+import { BLE_KEEP_ALIVE_MS, connectBleReceiptPrinter, disconnectBleDevice } from '../ble-gatt';
 
 const PROFILE_18F0 = {
 	service: '000018f0-0000-1000-8000-00805f9b34fb',
@@ -10,6 +10,12 @@ const PROFILE_FF00 = {
 	service: '0000ff00-0000-1000-8000-00805f9b34fb',
 	characteristic: '0000ff02-0000-1000-8000-00805f9b34fb',
 };
+
+let events: EventTarget;
+afterEach(() => {
+	events?.dispatchEvent(new Event('gattserverdisconnected'));
+	vi.useRealTimers();
+});
 
 function mockDevice(services: Record<string, string[]>, supportsAcknowledgedWrites = true) {
 	const characteristics = new Map<
@@ -33,7 +39,9 @@ function mockDevice(services: Record<string, string[]>, supportsAcknowledgedWrit
 			return characteristic;
 		}),
 	}));
+	events = new EventTarget();
 	const server = {
+		connected: true,
 		getPrimaryService: vi.fn(async (uuid: string) => {
 			const service = primaryServices.find((candidate) => candidate.uuid === uuid);
 			if (!service) throw new Error('Not found');
@@ -45,12 +53,82 @@ function mockDevice(services: Record<string, string[]>, supportsAcknowledgedWrit
 	const device = {
 		id: 'printer-id',
 		name: 'Receipt Printer',
+		addEventListener: events.addEventListener.bind(events),
+		removeEventListener: events.removeEventListener.bind(events),
 		gatt: { connect: vi.fn(async () => server) },
 	} as unknown as Parameters<typeof connectBleReceiptPrinter>[0];
 	return { device, server, characteristics };
 }
 
 describe('connectBleReceiptPrinter', () => {
+	it('reuses the server and cancels the idle disconnect when a second job starts', async () => {
+		vi.useFakeTimers();
+		const { device, server } = mockDevice({
+			[PROFILE_18F0.service]: [PROFILE_18F0.characteristic],
+		});
+		const first = await connectBleReceiptPrinter(device);
+		const writing = first.write(Uint8Array.of(1));
+		await vi.advanceTimersByTimeAsync(300);
+		await writing;
+		await first.disconnect();
+		await vi.advanceTimersByTimeAsync(30_000);
+		const second = await connectBleReceiptPrinter(device);
+		await vi.advanceTimersByTimeAsync(BLE_KEEP_ALIVE_MS);
+		expect(device.gatt.connect).toHaveBeenCalledOnce();
+		expect(server.disconnect).not.toHaveBeenCalled();
+		const secondWrite = second.write(Uint8Array.of(2));
+		await vi.advanceTimersByTimeAsync(300);
+		await secondWrite;
+		await second.disconnect();
+	});
+
+	it('disconnects after the keep-alive window measured from the last write', async () => {
+		vi.useFakeTimers();
+		const { device, server } = mockDevice({
+			[PROFILE_18F0.service]: [PROFILE_18F0.characteristic],
+		});
+		const printer = await connectBleReceiptPrinter(device);
+		const writing = printer.write(Uint8Array.of(1));
+		await vi.advanceTimersByTimeAsync(300);
+		await writing;
+		await printer.disconnect();
+		await vi.advanceTimersByTimeAsync(BLE_KEEP_ALIVE_MS - 301);
+		expect(server.disconnect).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(server.disconnect).toHaveBeenCalledOnce();
+		await connectBleReceiptPrinter(device);
+		expect(device.gatt.connect).toHaveBeenCalledTimes(2);
+	});
+
+	it('clears the cached server and idle timer on gattserverdisconnected', async () => {
+		vi.useFakeTimers();
+		const { device, server } = mockDevice({
+			[PROFILE_18F0.service]: [PROFILE_18F0.characteristic],
+		});
+		const printer = await connectBleReceiptPrinter(device);
+		await printer.disconnect();
+		events.dispatchEvent(new Event('gattserverdisconnected'));
+		await connectBleReceiptPrinter(device);
+		await vi.advanceTimersByTimeAsync(BLE_KEEP_ALIVE_MS);
+		expect(device.gatt.connect).toHaveBeenCalledTimes(2);
+		expect(server.disconnect).not.toHaveBeenCalled();
+	});
+
+	it('disconnectBleDevice drops the link now and clears its idle timer and cache', async () => {
+		vi.useFakeTimers();
+		const { device, server } = mockDevice({
+			[PROFILE_18F0.service]: [PROFILE_18F0.characteristic],
+		});
+		const printer = await connectBleReceiptPrinter(device);
+		await printer.disconnect();
+		disconnectBleDevice(device.id);
+		expect(server.disconnect).toHaveBeenCalledOnce();
+		await connectBleReceiptPrinter(device);
+		await vi.advanceTimersByTimeAsync(BLE_KEEP_ALIVE_MS);
+		expect(device.gatt.connect).toHaveBeenCalledTimes(2);
+		expect(server.disconnect).toHaveBeenCalledOnce();
+	});
+
 	it('chooses the ff00/ff02 profile when it is the first available profile', async () => {
 		const { device } = mockDevice({ [PROFILE_FF00.service]: [PROFILE_FF00.characteristic] });
 
