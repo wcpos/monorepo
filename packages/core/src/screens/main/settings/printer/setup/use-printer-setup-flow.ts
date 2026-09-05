@@ -6,6 +6,8 @@ import {
 	identifyModel,
 	identifyPrinter,
 	isPrinterConnectionError,
+	queryUsbPrinterModel,
+	resolveNativePrinterColumns,
 } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterDiscovery, PrinterService } from '@wcpos/printer';
 import { capturePrinterOutcome, getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -19,6 +21,9 @@ import { deriveWebVendorDefaults, resolveWebPort } from '../web-network-defaults
 import type { TestPrintFailure } from '../dialog/use-printer-dialog-form';
 
 const printerLogger = getLogger(['wcpos', 'printer', 'setup']);
+export type SetupPlatform = 'electron' | 'web' | 'native';
+/** The SDK asks the printer for its paper width; the results screen never waits longer than this. */
+const WIDTH_QUERY_TIMEOUT_MS = 4000;
 interface SetupCandidate extends DiscoveredPrinter {
 	source: 'network' | 'usb' | 'bluetooth' | 'system';
 }
@@ -32,17 +37,29 @@ function candidate(printer: DiscoveredPrinter): SetupCandidate {
 				: printer.connectionType,
 	};
 }
-export function classifyPrinter(
-	printer: DiscoveredPrinter,
-	platform: 'electron' | 'web' = 'electron'
-) {
+export function classifyPrinter(printer: DiscoveredPrinter, platform: SetupPlatform = 'electron') {
 	// A webusb:/webbluetooth: row only exists once the browser or Electron chooser resolved the device.
 	if (/^web(usb|bluetooth):/.test(printer.address)) return 'ready';
+	// Native SDK discovery only lists the Bluetooth printers it can already talk to.
+	if (platform === 'native' && printer.connectionType === 'bluetooth') return 'ready';
 	if (isUsbLikeDevice(printer) || hasTargetKind(printer, 'serial')) return 'ready';
 	if (printer.identity?.notReceiptPrinter) return 'notprinter';
 	const lane = printer.identity?.lane;
-	if (platform === 'electron' && lane?.protocol === 'raw') return 'unsure';
+	// The native raw lane prints, so a vendor the SDK knows is ready; on Electron raw is only a guess.
+	if (lane?.protocol === 'raw' && platform !== 'web')
+		return platform === 'native' &&
+			['epson', 'star'].includes(printer.identity?.vendor ?? printer.vendor ?? '')
+			? 'ready'
+			: 'unsure';
 	return lane && canPrintLane(lane.protocol, createIdentifyProbes()) ? 'ready' : 'unknown';
+}
+/**
+ * Epson Secure Printing: discovery folds the printer's TCPS: sibling onto its one network row, and
+ * that encrypted target is the only one that prints while the setting is on (Spec L).
+ */
+export function secureTargetFor(printer: Pick<DiscoveredPrinter, 'identity' | 'secureTarget'>) {
+	const secure = printer.identity?.securePrinting || printer.identity?.lane?.encrypted;
+	return secure ? printer.secureTarget : undefined;
 }
 /**
  * Why nothing printed, read off the signatures identification already collected plus the
@@ -81,6 +98,10 @@ interface SetupState {
 	columns: number;
 	/** False when neither identification nor the model table knows the paper width. */
 	columnsKnown: boolean;
+	/** True while the native SDK is still being asked for the paper width (roadmap#31). */
+	columnsPending: boolean;
+	/** Replaces the identified lane in the log when the draft took another route (Secure Printing). */
+	lane?: string;
 	testPages: number;
 	failure?: TestPrintFailure;
 	troubleReason?: TroubleReason;
@@ -107,14 +128,16 @@ interface SetupArgs {
 }
 export function usePrinterSetupFlow(
 	{ discovery, printerService, persist, t, printerCount = 0 }: SetupArgs,
-	{ platform = 'electron' }: { platform?: 'electron' | 'web' } = {}
+	{ platform = 'electron' }: { platform?: SetupPlatform } = {}
 ) {
 	const web = platform === 'web';
+	const native = platform === 'native';
 	const [state, setState] = React.useState<SetupState>({
 		phase: 'scanning',
 		found: [],
 		columns: 42,
 		columnsKnown: false,
+		columnsPending: false,
 		testPages: 0,
 		profileDraft: {
 			...DEFAULT_FORM_VALUES,
@@ -140,11 +163,14 @@ export function usePrinterSetupFlow(
 		setState(current.current);
 		if (patch.phase) {
 			const { phase, selected, columns, testPages, troubleReason } = current.current;
+			// The Secure Printing target replaces the identified lane on the draft (Spec L).
+			const lane = current.current.lane ?? selected?.identity?.lane?.protocol;
 			printerLogger.debug('Printer setup phase', {
 				context: {
 					phase,
 					selected: selected?.address,
 					source: selected?.source,
+					lane,
 					columns,
 					testPages,
 					troubleReason,
@@ -158,7 +184,7 @@ export function usePrinterSetupFlow(
 					source: selected?.source,
 					vendor: current.current.profileDraft.vendor,
 					model: selected?.identity?.model,
-					lane: selected?.identity?.lane?.protocol,
+					lane,
 					port: current.current.profileDraft.port,
 					columns,
 					testPages,
@@ -193,6 +219,10 @@ export function usePrinterSetupFlow(
 		// A chooser-picked device on Electron carries no identity; plain ESC/POS is the safe profile.
 		else if (/^web(usb|bluetooth):/.test(selected.address) && !selected.identity?.vendor)
 			vendor = 'generic';
+		// Bluetooth and USB run through the Epson and Star SDKs; native has no generic device transport.
+		if (native && selected.connectionType !== 'network' && vendor === 'generic') vendor = 'epson';
+		const secureTarget = native ? secureTargetFor(selected) : undefined;
+		if (secureTarget) vendor = 'epson';
 		const lane = selected.identity?.lane;
 		// A lane this platform cannot print (e.g. WebPRNT on Electron) must not become the raw port.
 		const lanePort =
@@ -208,11 +238,12 @@ export function usePrinterSetupFlow(
 			selected: candidate(selected),
 			failure: undefined,
 			columnsKnown: knownColumns != null,
+			lane: secureTarget ? 'sdk-secure' : undefined,
 		});
 		updateDraft({
 			...base,
 			name: keepDraft ? base.name : selected.name,
-			address: selected.address,
+			address: secureTarget ?? selected.address,
 			connectionType: selected.connectionType,
 			nativeInterfaceType: selected.nativeInterfaceType,
 			vendor,
@@ -231,6 +262,58 @@ export function usePrinterSetupFlow(
 							? (base.columns ?? 42)
 							: 42),
 		});
+		// 'system' is an Electron spooler queue; a native row is only network, Bluetooth or USB.
+		if (native && selected.connectionType !== 'system')
+			void queryColumns({
+				address: secureTarget ?? selected.address,
+				connectionType: selected.connectionType,
+				vendor,
+				name: selected.name,
+			});
+		// Electron USB: the printer can say its model (GS I 67) when its product string did not (Spec K3).
+		else if (platform === 'electron' && knownColumns == null && /^usb:/.test(selected.address))
+			void queryUsbColumns(selected.address);
+	}
+	async function queryUsbColumns(address: string) {
+		const generation = ++columnsQuery.current;
+		update({ columnsPending: true });
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const model = await Promise.race([
+			queryUsbPrinterModel(address),
+			new Promise<null>((resolve) => {
+				timer = setTimeout(() => resolve(null), WIDTH_QUERY_TIMEOUT_MS);
+			}),
+		]);
+		clearTimeout(timer);
+		if (!active.current || generation !== columnsQuery.current) return;
+		const columns = model ? identifyModel(model).columns : undefined;
+		printerLogger.debug('USB model query resolved', { context: { address, model, columns } });
+		if (columns != null) updateDraft({ columns });
+		update({ columnsPending: false, columnsKnown: columns != null });
+	}
+	// The width query is a nicety: it never blocks the test page, and a later pick supersedes it.
+	const columnsQuery = React.useRef(0);
+	async function queryColumns(input: Parameters<typeof resolveNativePrinterColumns>[0]) {
+		const generation = ++columnsQuery.current;
+		update({ columnsPending: true });
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		let resolved: Awaited<ReturnType<typeof resolveNativePrinterColumns>> | null = null;
+		try {
+			resolved = await Promise.race([
+				resolveNativePrinterColumns(input),
+				new Promise<null>((resolve) => {
+					timer = setTimeout(() => resolve(null), WIDTH_QUERY_TIMEOUT_MS);
+				}),
+			]);
+		} catch (error) {
+			printerLogger.debug('Printer columns query failed', {
+				context: { error: getErrorMessage(error) },
+			});
+		}
+		clearTimeout(timer);
+		if (!active.current || generation !== columnsQuery.current) return;
+		if (resolved?.columns != null) updateDraft({ columns: resolved.columns });
+		update({ columnsPending: false, columnsKnown: resolved?.columns != null });
 	}
 	function fail(error: unknown, phase: 'trouble' | 'error' | 'results') {
 		update({
@@ -263,9 +346,10 @@ export function usePrinterSetupFlow(
 		update({ phase: 'scanning', found: [], selected: undefined, failure: undefined });
 		const scans = await Promise.allSettled([
 			discovery.startScan(),
-			!web ? discovery.connectUsbDevice?.() : undefined,
+			// Native SDK discovery lists Bluetooth and USB printers itself; there is nothing to pick.
+			!web && !native ? discovery.connectUsbDevice?.() : undefined,
 			// Windows installed queues already come from usb-discovery.
-			!web && !isWindowsPlatform() ? discovery.connectSerialDevice?.() : undefined,
+			!web && !native && !isWindowsPlatform() ? discovery.connectSerialDevice?.() : undefined,
 		]);
 		for (const result of scans) {
 			if (result.status === 'rejected') {
@@ -288,6 +372,7 @@ export function usePrinterSetupFlow(
 							p.connectionType === 'network' ||
 							isUsbLikeDevice(p) ||
 							hasTargetKind(p, 'serial') ||
+							(native && p.connectionType === 'bluetooth') ||
 							(web && /^webbluetooth:/.test(p.address))
 					)
 					.map((p) => [p.address, candidate(p)])
@@ -351,6 +436,8 @@ export function usePrinterSetupFlow(
 		update({ phase: 'results' });
 	}
 	function chooseWidth(columns: number) {
+		// The cashier's pick outranks a width query still in flight.
+		columnsQuery.current += 1;
 		updateDraft({ columns });
 		update({ columnsKnown: true });
 		return testPrint();

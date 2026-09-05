@@ -5,10 +5,22 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { DiscoveredPrinter, DiscoveryError } from '@wcpos/printer';
 
 import { isWindowsPlatform } from '../dialog/connection/is-windows';
-import { classifyPrinter, troubleReasonFor, usePrinterSetupFlow } from './use-printer-setup-flow';
+import {
+	classifyPrinter,
+	type SetupPlatform,
+	troubleReasonFor,
+	usePrinterSetupFlow,
+} from './use-printer-setup-flow';
 
 jest.mock('../dialog/connection/is-windows', () => ({ isWindowsPlatform: jest.fn(() => false) }));
+const mockQueryUsbModel = jest.fn(async (_address: string): Promise<string | null> => null);
+const mockResolveColumns = jest.fn<
+	Promise<{ columns: number | undefined; source: 'printer' | 'model' | 'default' }>,
+	[unknown]
+>();
 jest.mock('@wcpos/printer', () => ({
+	resolveNativePrinterColumns: (input: unknown) => mockResolveColumns(input),
+	queryUsbPrinterModel: (address: string) => mockQueryUsbModel(address),
 	identifyModel: jest.requireActual('@wcpos/printer/discovery/identify-models').identifyModel,
 	canPrintLane: (protocol: string) => ['epos-print', 'raw'].includes(protocol),
 	createIdentifyProbes: () => ({}),
@@ -43,7 +55,7 @@ const usb: DiscoveredPrinter = {
 	nativeInterfaceType: 'USB',
 };
 let publishPrinters: (printers: DiscoveredPrinter[]) => void;
-async function scan(printers: DiscoveredPrinter[], platform: 'electron' | 'web' = 'electron') {
+async function scan(printers: DiscoveredPrinter[], platform: SetupPlatform = 'electron') {
 	function Harness() {
 		const [found, setFound] = React.useState<DiscoveredPrinter[]>([]);
 		// Expose discovery updates to the test outside rendering.
@@ -100,6 +112,7 @@ beforeEach(() => {
 	jest.mocked(isWindowsPlatform).mockReturnValue(false);
 	enumerateUsb.mockResolvedValue([]);
 	enumerateSerial.mockResolvedValue([]);
+	mockResolveColumns.mockResolvedValue({ columns: undefined, source: 'default' });
 });
 afterEach(() => {
 	act(() => renderer?.unmount());
@@ -374,4 +387,109 @@ describe('trouble reason', () => {
 		expect(flow.state.phase).toBe('trouble');
 		expect(flow.state.troubleReason).toBe('unresponsive');
 	});
+});
+
+describe('native', () => {
+	const bluetooth: DiscoveredPrinter = {
+		id: 'bt',
+		name: 'Receipt printer',
+		address: 'BT:00:11:22:33:44:55',
+		connectionType: 'bluetooth',
+		vendor: 'epson',
+	};
+
+	it('lists an SDK Bluetooth printer as ready and prints on it', async () => {
+		await scan([bluetooth], 'native');
+		expect(classifyPrinter(bluetooth, 'native')).toBe('ready');
+		expect(flow.state.phase).toBe('results');
+		expect(flow.state.selected?.address).toBe(bluetooth.address);
+		expect(enumerateUsb).not.toHaveBeenCalled();
+		await act(async () => {
+			await flow.testPrint();
+		});
+		expect(flow.state.phase).toBe('asking');
+		expect(printerService.testPrint).toHaveBeenCalledWith(
+			expect.objectContaining({
+				address: bluetooth.address,
+				connectionType: 'bluetooth',
+				vendor: 'epson',
+			}),
+			{ openDrawer: false }
+		);
+	});
+
+	it('prints to the Secure Printing target when the printer folded one on', async () => {
+		await scan(
+			[
+				{
+					...epson,
+					secureTarget: 'TCPS:192.168.1.10',
+					identity: { ...epson.identity!, securePrinting: true },
+				},
+			],
+			'native'
+		);
+		expect(flow.state.profileDraft).toMatchObject({
+			address: 'TCPS:192.168.1.10',
+			vendor: 'epson',
+		});
+		expect(mockResolveColumns).toHaveBeenCalledWith(
+			expect.objectContaining({ address: 'TCPS:192.168.1.10', connectionType: 'network' })
+		);
+	});
+
+	it('keeps the printer address when Secure Printing has no folded target', async () => {
+		await scan([{ ...epson, identity: { ...epson.identity!, securePrinting: true } }], 'native');
+		expect(flow.state.profileDraft.address).toBe(epson.address);
+	});
+
+	it('holds the width pending until the printer answers with its paper width', async () => {
+		let answer!: (value: { columns: number; source: 'printer' }) => void;
+		mockResolveColumns.mockReturnValueOnce(
+			new Promise((resolve) => {
+				answer = resolve;
+			})
+		);
+		await scan([bluetooth], 'native');
+		expect(flow.state.columnsPending).toBe(true);
+		expect(mockResolveColumns).toHaveBeenCalledWith({
+			address: bluetooth.address,
+			connectionType: 'bluetooth',
+			vendor: 'epson',
+			name: bluetooth.name,
+		});
+		await act(async () => {
+			answer({ columns: 32, source: 'printer' });
+		});
+		expect(flow.state).toMatchObject({
+			columnsPending: false,
+			columnsKnown: true,
+			profileDraft: expect.objectContaining({ columns: 32 }),
+		});
+	});
+
+	it('falls back to the width toggle when the query never answers', async () => {
+		mockResolveColumns.mockReturnValueOnce(new Promise(() => {}));
+		jest.useFakeTimers();
+		await scan([bluetooth], 'native');
+		expect(flow.state.columnsPending).toBe(true);
+		await act(async () => {
+			jest.advanceTimersByTime(4000);
+		});
+		jest.useRealTimers();
+		expect(flow.state).toMatchObject({ columnsPending: false, columnsKnown: false });
+	});
+});
+
+it('asks an Electron USB printer its model when the product string is generic', async () => {
+	mockQueryUsbModel.mockResolvedValueOnce('TM-m30III');
+	enumerateUsb.mockResolvedValue([{ ...usb, name: 'USB Printer' }]);
+	await scan([]);
+	expect(flow.state.selected?.address).toBe(usb.address);
+	await act(async () => {
+		await Promise.resolve();
+	});
+	expect(mockQueryUsbModel).toHaveBeenCalledWith(usb.address);
+	expect(flow.state.columnsKnown).toBe(true);
+	expect(flow.state.columns).toBe(48);
 });

@@ -46,6 +46,7 @@ const mockStopScan = jest.fn();
 const mockTestPrint = jest.fn(async () => {});
 const mockUsbPrinters: { id: string; name: string; address: string; connectionType: 'usb' }[] = [];
 jest.mock('@wcpos/printer', () => ({
+	resolveNativePrinterColumns: async () => ({ columns: 48, source: 'printer' }),
 	isWebUsbSupported: () => true,
 	isWebBluetoothSupported: () => true,
 	PrinterService: class {
@@ -93,6 +94,7 @@ jest.mock('@wcpos/printer', () => ({
 	},
 	identifyModel: jest.requireActual('@wcpos/printer/discovery/identify-models').identifyModel,
 	canPrintLane: () => true,
+	queryUsbPrinterModel: async () => null,
 	createIdentifyProbes: () => ({}),
 	isPrinterConnectionError: () => false,
 }));
@@ -248,6 +250,24 @@ it('offers Stop while scanning and stops discovery on tap', async () => {
 	});
 	expect(mockStopScan).toHaveBeenCalled();
 	expect(renderer.root.findAllByProps({ testID: 'printer-setup-stop' })).toHaveLength(0);
+	act(() => renderer.unmount());
+	mockWebScanning = false;
+});
+
+it('scans with the SDKs on native, without picker buttons', async () => {
+	mockWebScanning = true;
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(
+			<PrinterSetupDialog platform="native" open onOpenChange={jest.fn()} onSave={jest.fn()} />
+		);
+	});
+	expect(
+		renderer.root.findAllByType('Text' as React.ElementType).map((n) => n.props.children)
+	).toContain('Wi-Fi, Bluetooth and USB (Epson and Star)');
+	for (const key of ['setup_add_usb', 'setup_add_ble']) {
+		expect(renderer.root.findAllByProps({ testID: `printer-setup-${key}` })).toHaveLength(0);
+	}
 	act(() => renderer.unmount());
 	mockWebScanning = false;
 });

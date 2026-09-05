@@ -35,9 +35,19 @@ import { TestPrintError } from '../dialog/test-print-error';
 import { persistPrinterProfile } from '../persist-printer-profile';
 import { CopySetupReport } from '../copy-setup-report';
 import { PRINTER_DOCS_URL } from '../printer-docs';
-import { electronPrinterSchema, type PrinterFormValues, webPrinterSchema } from '../schema';
+import {
+	electronPrinterSchema,
+	nativePrinterSchema,
+	type PrinterFormValues,
+	webPrinterSchema,
+} from '../schema';
 import { deriveWebVendorDefaults } from '../web-network-defaults';
-import { classifyPrinter, usePrinterSetupFlow } from './use-printer-setup-flow';
+import {
+	classifyPrinter,
+	secureTargetFor,
+	type SetupPlatform,
+	usePrinterSetupFlow,
+} from './use-printer-setup-flow';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 
@@ -70,10 +80,11 @@ export function PrinterSetupDialog({
 	onOpenChange: (open: boolean) => void;
 	onSave: () => void;
 	printerCount?: number;
-	platform?: 'electron' | 'web';
+	platform?: SetupPlatform;
 }) {
 	const t = useT();
 	const web = platform === 'web';
+	const native = platform === 'native';
 	const discovery = usePrinterDiscovery();
 	const { storeDB } = useStoreSession();
 	const printerService = React.useMemo(() => new PrinterService(), []);
@@ -93,12 +104,13 @@ export function PrinterSetupDialog({
 		selected,
 		columns,
 		columnsKnown,
+		columnsPending,
 		testPages,
 		failure,
 		troubleReason,
 		profileDraft: draft,
 	} = flow.state;
-	const schema = web ? webPrinterSchema : electronPrinterSchema;
+	const schema = web ? webPrinterSchema : native ? nativePrinterSchema : electronPrinterSchema;
 	const form = useForm<PrinterFormValues>({
 		values: draft,
 		resolver: standardSchemaResolver(schema as z.ZodType<PrinterFormValues, PrinterFormValues>),
@@ -117,7 +129,10 @@ export function PrinterSetupDialog({
 	const vendors = [
 		{ value: 'epson' as const, label: 'Epson' },
 		{ value: 'star' as const, label: 'Star Micronics' },
-		{ value: 'generic' as const, label: t('settings.printer_vendor_generic') },
+		// Native Bluetooth and USB go through the Epson and Star SDKs; generic has no device transport.
+		...(native && draft.connectionType !== 'network'
+			? []
+			: [{ value: 'generic' as const, label: t('settings.printer_vendor_generic') }]),
 	];
 	// Mirror user edits in the reused controls into the draft; a reset from the draft itself is a no-op.
 	const values = useWatch({ control: form.control });
@@ -229,7 +244,9 @@ export function PrinterSetupDialog({
 	// The browser pickers and the Electron chooser only open from a tap: they stay in the links line.
 	const usb = web && isWebUsbSupported() && link('setup_add_usb', flow.startUsbPicker);
 	const bluetoothSupported = !web || isWebBluetoothSupported();
+	// Native SDK discovery lists Bluetooth and USB printers itself, so there is no picker to open.
 	const bluetooth =
+		!native &&
 		discovery.connectBluetoothDevice &&
 		bluetoothSupported &&
 		link('setup_add_ble', flow.startBluetoothScan);
@@ -243,6 +260,7 @@ export function PrinterSetupDialog({
 		selected &&
 		(isUsbLikeDevice(selected) ||
 			hasTargetKind(selected, 'serial') ||
+			(native && selected.connectionType === 'bluetooth') ||
 			/^web(usb|bluetooth):/.test(selected.address));
 	const officeOnly =
 		printable.length === 0 && found.some((p) => classifyPrinter(p, platform) === 'notprinter');
@@ -281,7 +299,9 @@ export function PrinterSetupDialog({
 										: ''}
 							</Text>
 							<Text className="border-border text-muted-foreground rounded-md border px-1.5 text-xs">
-								{t(`settings.setup_source_${p.source}`)}
+								{native && secureTargetFor(p)
+									? t('settings.setup_source_network_secure')
+									: t(`settings.setup_source_${p.source}`)}
 							</Text>
 						</View>
 					</View>
@@ -323,20 +343,27 @@ export function PrinterSetupDialog({
 					? t('settings.setup_print_test_on', { name: selected?.name })
 					: undefined,
 		});
+	// The width query runs beside the card and never blocks the test page (roadmap#31).
 	const widthToggle =
 		selectedPrintable &&
-		!columnsKnown &&
-		row(
-			<Text key="label" className="text-muted-foreground text-sm">
-				{t('settings.setup_paper_label')}
-			</Text>,
-			...([32, 48] as const).map((n) =>
-				action(`setup_paper_${n}`, () => flow.updateDraft({ columns: n }), {
-					variant: columns === n ? 'default' : 'outline',
-					disabled: printerBusy,
-				})
+		(columnsPending ? (
+			<Text testID="printer-setup-width-checking" className="text-muted-foreground ml-1 text-sm">
+				{t('settings.setup_width_checking')}
+			</Text>
+		) : (
+			!columnsKnown &&
+			row(
+				<Text key="label" className="text-muted-foreground text-sm">
+					{t('settings.setup_paper_label')}
+				</Text>,
+				...([32, 48] as const).map((n) =>
+					action(`setup_paper_${n}`, () => flow.updateDraft({ columns: n }), {
+						variant: columns === n ? 'default' : 'outline',
+						disabled: printerBusy,
+					})
+				)
 			)
-		);
+		));
 	const scanHelp = web
 		? [
 				t('settings.setup_scanning_sources_web'),
@@ -346,7 +373,7 @@ export function PrinterSetupDialog({
 			]
 				.filter(Boolean)
 				.join(' · ')
-		: t('settings.setup_scanning_sources');
+		: t(native ? 'settings.setup_scanning_sources_native' : 'settings.setup_scanning_sources');
 	const addressScreen = (
 		<>
 			{heading('address_heading')}
@@ -537,7 +564,9 @@ export function PrinterSetupDialog({
 										</View>
 									)}
 									{cards}
-									{phase === 'results' && printable.length === 0 && line('none_help')}
+									{phase === 'results' &&
+										printable.length === 0 &&
+										line(native ? 'none_help_native' : 'none_help')}
 									{widthToggle}
 									{printButton}
 									{phase !== 'checking' && scanLinks}
