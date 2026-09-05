@@ -84,7 +84,7 @@ export function discoverThermalAssetRequests(template: string): ThermalAssetRequ
 	return {
 		images: uniqueImages(
 			Array.from(template.matchAll(/<image\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)).map((match) => ({
-				src: match[1] ?? '',
+				src: decodeAttributeEntities(match[1] ?? ''),
 				width: numberFromAttributeText(match[0] ?? '', 'width') ?? DEFAULT_THERMAL_IMAGE_WIDTH_DOTS,
 			}))
 		),
@@ -107,6 +107,16 @@ export async function prepareThermalPrintAssets(input: {
 	imageSrcResolver?: ThermalImageSrcResolver;
 }): Promise<ThermalPrintAssets> {
 	const requests = discoverThermalAssetRequests(input.renderedTemplateXml);
+	printerLogger.debug('Thermal assets requested', {
+		context: {
+			images: requests.images.map((image) => ({
+				src: image.src.slice(0, 120),
+				width: image.width,
+			})),
+			barcodes: requests.barcodes.length,
+			maxWidthDots: input.maxWidthDots,
+		},
+	});
 	const imageAssets: ThermalImageAssets = {};
 	const barcodeImages: ThermalBarcodeImages = {};
 
@@ -119,7 +129,16 @@ export async function prepareThermalPrintAssets(input: {
 					requestedWidth: image.width ?? DEFAULT_THERMAL_IMAGE_WIDTH_DOTS,
 					maxWidth: input.maxWidthDots,
 				});
-				if (asset) imageAssets[thermalImageAssetKey(image)] = asset;
+				if (asset) {
+					imageAssets[thermalImageAssetKey(image)] = asset;
+					printerLogger.debug('Thermal image asset ready', {
+						context: {
+							source: describeImageSource(image.src),
+							width: asset.width,
+							height: asset.height,
+						},
+					});
+				}
 			} catch (error) {
 				printerLogger.warn('Thermal image asset skipped', {
 					context: {
@@ -577,4 +596,26 @@ function parsePositiveInt(value: string | null | undefined): number | undefined 
 	if (!trimmed || !/^[1-9]\d*$/.test(trimmed)) return undefined;
 	const parsed = Number(trimmed);
 	return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+/**
+ * The regex path (React Native has no DOMParser) sees attribute values as written in the
+ * markup, entities included (`https:&#x2F;&#x2F;…`); the DOM path decodes them for free.
+ */
+function decodeAttributeEntities(value: string): string {
+	return value
+		.replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+		.replace(/&#(\d+);/g, (_match, dec: string) => String.fromCodePoint(parseInt(dec, 10)))
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;|&apos;/g, "'")
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&amp;/g, '&');
+}
+
+/** Log-safe image source: type plus host and path, never the query string (signed URLs). */
+function describeImageSource(src: string): string {
+	if (/^data:/i.test(src)) return 'data-url';
+	const match = /^(https?:\/\/[^/?#]+[^?#]*)/i.exec(src);
+	return match ? match[1].slice(0, 120) : 'other';
 }

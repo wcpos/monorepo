@@ -12,6 +12,12 @@ export async function rasterizeThermalImage(input: {
 	maxWidth: number;
 }): Promise<ThermalRasterImage | undefined> {
 	try {
+		printerLogger.debug('Native thermal raster start', {
+			context: {
+				sourceType: /^data:/i.test(input.loadSrc) ? 'data-url' : 'remote-url',
+				requestedWidth: input.requestedWidth,
+			},
+		});
 		const bytes = await loadBytes(input.loadSrc);
 		const decoded = decodeImage(bytes);
 		if (!decoded) throw new Error('Unsupported thermal image format');

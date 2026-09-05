@@ -76,6 +76,24 @@ function countSequence(bytes: Uint8Array, sequence: readonly number[]): number {
 	return count;
 }
 
+describe('discoverThermalAssetRequests without a DOM (React Native)', () => {
+	it('decodes attribute entities in image src values on the regex path', () => {
+		const original = globalThis.DOMParser;
+		// Hermes has no DOMParser; force the regex branch.
+		(globalThis as { DOMParser?: unknown }).DOMParser = undefined;
+		try {
+			const requests = discoverThermalAssetRequests(
+				'<receipt><image src="https:&#x2F;&#x2F;shop.example&#x2F;logo.jpg?a=1&amp;b=2" width="200" /></receipt>'
+			);
+			expect(requests.images).toEqual([
+				{ src: 'https://shop.example/logo.jpg?a=1&b=2', width: 200 },
+			]);
+		} finally {
+			(globalThis as { DOMParser?: unknown }).DOMParser = original;
+		}
+	});
+});
+
 describe('encodeThermalTemplateForPrint', () => {
 	it('uses ISO currency text when the INR symbol would be substituted', async () => {
 		const data = structuredClone(sampleReceiptData);
