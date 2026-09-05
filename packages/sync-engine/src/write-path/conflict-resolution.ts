@@ -318,8 +318,17 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									nextAttemptAt: _gate,
 									...intact
 								} = entry;
+								const graft =
+									entry.operation !== 'delete'
+										? writeFacetFor(entry.collectionName)?.graftAckIdentity
+										: undefined;
+								const reconcile = (payload: Record<string, unknown>) =>
+									graft && entry.conflictDocument
+										? graft(payload, entry.conflictDocument)
+										: payload;
 								await queue.replace({
 									...intact,
+									payload: reconcile(entry.payload),
 									baseRevision: serverBase ?? entry.baseRevision,
 									status: 'pending',
 								});
@@ -337,6 +346,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									const revision = serverBase;
 									await doc.incrementalModify((data) => ({
 										...data,
+										payload: reconcile((data.payload ?? {}) as Record<string, unknown>),
 										sync: { ...((data.sync ?? {}) as object), revision },
 									}));
 								}

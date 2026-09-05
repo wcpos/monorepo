@@ -10,6 +10,35 @@ import { graftServerLineIdentity } from './graft-server-line-identity';
 const uuidMeta = (value: string) => [{ key: '_woocommerce_pos_uuid', value }];
 
 describe('graftServerLineIdentity', () => {
+	it.each([{ line_items: [] }, { line_items: [{ id: 12, product_id: 2 }] }])(
+		'reconciles deleted identities only against a materializable full array: %j',
+		({ line_items }) => {
+			const payload = {
+				line_items: [
+					{ id: 11, product_id: null },
+					{ id: 10, product_id: 1, quantity: 3 },
+					{ id: 12, product_id: 2 },
+				],
+			};
+			const document = {
+				id: 900,
+				meta_data: uuidMeta('22222222-2222-4222-8222-222222222222'),
+				line_items,
+			};
+			const outbound = graftServerLineIdentity(payload, document);
+			expect(outbound.line_items).toEqual([
+				{ product_id: 1, quantity: 3 },
+				line_items.length ? { id: 12, product_id: 2 } : { product_id: 2 },
+			]);
+			expect(
+				outbound.line_items.every(
+					(line) => !line.id || line_items.some((server) => server.id === line.id)
+				)
+			).toBe(true);
+			expect(payload.line_items[0]).toEqual({ id: 11, product_id: null });
+		}
+	);
+
 	it('grafts the server id onto the uuid-matched line and keeps every local value', () => {
 		const payload = {
 			total: '52.00',

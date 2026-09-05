@@ -62,7 +62,10 @@ import {
 	EngineOrderRepository,
 	POS_ORDER_IDENTITY_META_KEYS,
 } from '../write-path/engine-order-repository';
-import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
+import {
+	graftServerLineIdentity,
+	hasFullServerLineItems,
+} from '../write-path/graft-server-line-identity';
 import { preserveEquivalentLocalPrecision } from '../write-path/order-money-divergence';
 import { type WooTaxRatePayload } from './tax-rate-schema';
 
@@ -393,7 +396,8 @@ function ackBookkeeping(options: {
 				// document was not materializable, or the born-twice arm withheld it —
 				// the resident would keep its pre-create, ID-LESS lines, and every push
 				// built from it makes WooCommerce APPEND duplicates. Take the server's
-				// line IDENTITY (and nothing else) so local values still win.
+				// line IDENTITY so local values still win. A materializable full array
+				// also retires deleted ids and drops completed deletion tombstones.
 				let identityPatch: Record<string, unknown> = {};
 				if (!adopting && graftAckIdentity && ack.identityDocument) {
 					const residentPayload = (data.payload ?? {}) as Record<string, unknown>;
@@ -649,8 +653,19 @@ const ordersWriteFacet = createWriteFacet({
 	//    sub-cent tax components 1.9 shipped AND stops the cart from patching the
 	//    rounded value straight back — an oscillation the cashier never asked for.
 	//    A number that genuinely CHANGED is adopted verbatim: server is truth.
-	adoptPayload: (localPayload, adoptedPayload) =>
-		preserveEquivalentLocalPrecision(localPayload, { ...localPayload, ...adoptedPayload }),
+	adoptPayload: (localPayload, adoptedPayload) => {
+		const merged = { ...localPayload, ...adoptedPayload };
+		if (Array.isArray(localPayload.line_items) && hasFullServerLineItems(adoptedPayload)) {
+			// A live line whose Woo id was retired is still cashier intent, even
+			// when no successor has been enqueued yet (Undo can race the ack).
+			const retired = graftServerLineIdentity(
+				{ line_items: localPayload.line_items.filter((line) => line?.id) },
+				adoptedPayload
+			).line_items.filter((line) => !line.id);
+			merged.line_items = [...(adoptedPayload.line_items as unknown[]), ...retired];
+		}
+		return preserveEquivalentLocalPrecision(localPayload, merged);
+	},
 	// #818: WooCommerce APPENDS an order line posted without an `id`. Adoption is
 	// skipped while a successor is queued, so without this the resident — and
 	// every push built from it — keeps posting ID-LESS lines and duplicates the

@@ -323,6 +323,8 @@ export async function drainMutationQueue(input: {
 	 * conflicts every time still parks on its first drain rather than looping.
 	 */
 	autoRecoverConflict?: (mutation: RecordMutation) => boolean;
+	/** Reconcile server line identity before the automatic retry, without adopting values. */
+	reconcileConflict?: (mutation: RecordMutation, current: Record<string, unknown>) => Promise<void>;
 }): Promise<DrainResult> {
 	const emit = (event: SyncEvent): void => {
 		try {
@@ -719,6 +721,7 @@ export async function drainMutationQueue(input: {
 				const reanchored = { ...draining, baseRevision: serverRevision };
 				let retry: PushResult;
 				try {
+					if (serverDocument) await input.reconcileConflict?.(reanchored, serverDocument);
 					retry = await input.push(reanchored);
 				} catch (retryError) {
 					// The re-anchored push THREW: settle it exactly as a first-attempt

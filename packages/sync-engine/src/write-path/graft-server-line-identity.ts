@@ -1,5 +1,7 @@
 import { POS_META_KEYS } from '@wcpos/sync-core';
 
+import { materializeLocalOnly } from '../materialization/record-materialization';
+
 /**
  * Server line-IDENTITY graft (#818) — the residual duplication window left by
  * #815.
@@ -173,10 +175,21 @@ export function pairLinesByUuid(localLines: unknown[], serverLines: unknown[]): 
 	return pairs;
 }
 
+/** Use the same materialization boundary as order ack adoption; silence is not deletion. */
+export function hasFullServerLineItems(document: Record<string, unknown>): boolean {
+	if (!Array.isArray(document.line_items)) return false;
+	try {
+		materializeLocalOnly(document);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Graft the ack document's server-assigned line ids onto `payload`, matching on
  * the line's `_woocommerce_pos_uuid` meta. Local values are never touched and
- * no server field other than `id` is ever read.
+ * a full materializable line_items array also retires absent ids and completed tombstones.
  *
  * @param payload - The local payload (a resident's stored payload, or a frozen queue snapshot).
  * @param document - The server document from the push ack — identity source ONLY.
@@ -188,8 +201,25 @@ export function graftServerLineIdentity<T extends Record<string, unknown>>(
 ): T {
 	if (!isRecord(document)) return payload;
 	let next: Record<string, unknown> = payload;
+	const localItems = payload.line_items;
+	if (Array.isArray(localItems) && hasFullServerLineItems(document)) {
+		const ids = new Set(
+			(document.line_items as unknown[]).map((line) =>
+				isRecord(line) ? readServerId(line.id) : null
+			)
+		);
+		const lines = localItems.flatMap((line) => {
+			if (!isRecord(line) || !hasServerId(line) || ids.has(readServerId(line.id))) return [line];
+			if (line.product_id === null) return [];
+			const { id: _id, ...live } = line;
+			return [live];
+		});
+		if (lines.length !== localItems.length || lines.some((line, i) => line !== localItems[i])) {
+			next = { ...payload, line_items: lines };
+		}
+	}
 	for (const field of GRAFTABLE_LINE_FIELDS) {
-		const localLines = payload[field];
+		const localLines = next[field];
 		const serverLines = document[field];
 		if (!Array.isArray(localLines) || !Array.isArray(serverLines)) continue;
 		if (localLines.length === 0 || serverLines.length === 0) continue;
