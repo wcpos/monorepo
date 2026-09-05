@@ -19,6 +19,7 @@ import { defaultConfig } from '@wcpos/database/adapters/default';
 import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { reportNetworkResponse } from '@wcpos/hooks';
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import {
 	createRxdbSyncEngine,
@@ -570,6 +571,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				fetchWooQueryTotal: (input) => fetchWooQueryTotal(input, fetcher, site.wpJsonRoot),
 			},
 			connectivity: getEngineConnectivity,
+			holdAutomaticTicks: () => requestStateManager.isAuthFailed(),
 			// The one authored product default (initial-settings) — the engine's
 			// boot seed and trickle fallback derive from it, never restate it.
 			...(hostDefaultProductBrowseSort
