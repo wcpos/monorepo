@@ -128,6 +128,7 @@ export function PrinterSetupDialog({
 		};
 	}, []);
 	const enterAddress = () => {
+		flow.cancelScan();
 		setOptionsOpen(true);
 		setFocusAddress(true);
 		form.setFocus('address');

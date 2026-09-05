@@ -284,6 +284,13 @@ export function usePrinterSetupFlow(
 			select(device, false);
 		}
 	}, [discovery.isBluetoothScanning, discovery.printers]);
+	/** The cashier already knows the address: stop looking and keep whatever was found so far. */
+	function cancelScan() {
+		if (current.current.phase !== 'scanning') return;
+		void discovery.stopScan();
+		setScanComplete(false);
+		update({ phase: 'results' });
+	}
 	function chooseWidth(columns: number) {
 		updateDraft({ columns });
 		update({ columnsKnown: true });
@@ -350,6 +357,7 @@ export function usePrinterSetupFlow(
 		startBluetoothScan,
 		startUsbPicker,
 		chooseWidth,
+		cancelScan,
 		select,
 		testPrint,
 		answer,

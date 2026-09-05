@@ -41,6 +41,7 @@ jest.mock('../../../../../contexts/app-state', () => ({
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 let mockWebScanning = false;
 const mockConnectUsb = jest.fn();
+const mockStopScan = jest.fn();
 const mockTestPrint = jest.fn(async () => {});
 const mockUsbPrinters: { id: string; name: string; address: string; connectionType: 'usb' }[] = [];
 jest.mock('@wcpos/printer', () => ({
@@ -86,7 +87,7 @@ jest.mock('@wcpos/printer', () => ({
 			isScanning: mockWebScanning,
 			error: null,
 			startScan: async () => {},
-			stopScan: jest.fn(),
+			stopScan: mockStopScan,
 		};
 	},
 	identifyModel: jest.requireActual('@wcpos/printer/discovery/identify-models').identifyModel,
@@ -215,6 +216,25 @@ it('offers gesture-only web pickers beside the web scanning status and sweep pro
 	});
 	expect(renderer.root.findAllByProps({ testID: 'electron-bt-device-ble' })).toHaveLength(0);
 	expect(texts).not.toContain(createTestT()('settings.web_printer_limitation'));
+	act(() => renderer.unmount());
+	mockWebScanning = false;
+});
+
+it('stops the scan when the cashier already knows the address', async () => {
+	mockWebScanning = true;
+	let renderer!: ReactTestRenderer;
+	await act(async () => {
+		renderer = create(
+			<PrinterSetupDialog platform="web" open onOpenChange={jest.fn()} onSave={jest.fn()} />
+		);
+	});
+	await act(async () => {
+		renderer.root.findByProps({ testID: 'printer-setup-setup_enter_address' }).props.onPress();
+	});
+	expect(mockStopScan).toHaveBeenCalled();
+	// The results screen is up (Scan again is offered) and Options is open on the address field.
+	renderer.root.findByProps({ testID: 'printer-setup-setup_scan_again' });
+	expect(renderer.root.findByType('Collapsible' as React.ElementType).props.open).toBe(true);
 	act(() => renderer.unmount());
 	mockWebScanning = false;
 });
