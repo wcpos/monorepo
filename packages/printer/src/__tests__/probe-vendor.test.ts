@@ -115,6 +115,7 @@ describe('probeVendorEndpoint', () => {
 			vendor: 'epson',
 			port: 8008,
 			protocol: 'http',
+			status: 405,
 		});
 	});
 
@@ -129,6 +130,7 @@ describe('probeVendorEndpoint', () => {
 			vendor: 'star',
 			port: 443,
 			protocol: 'https',
+			status: 200,
 		});
 	});
 
@@ -145,6 +147,7 @@ describe('probeVendorEndpoint', () => {
 			vendor: 'star',
 			port: 80,
 			protocol: 'http',
+			status: 405,
 		});
 	});
 
@@ -161,6 +164,7 @@ describe('probeVendorEndpoint', () => {
 			vendor: 'star',
 			port: 8008,
 			protocol: 'http',
+			status: 405,
 		});
 	});
 });

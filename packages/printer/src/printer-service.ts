@@ -18,10 +18,17 @@ import { SystemPrintAdapter } from './transport/system-print-adapter';
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
 import type { ReceiptData } from './encoder/types';
 import type { CloudEnqueueFn } from './transport/cloud-adapter';
-import type { PrinterProfile, PrinterTransport, PrintRawOptions } from './types';
+import type { MarkupPrintJob, PrinterProfile, PrinterTransport, PrintRawOptions } from './types';
 
 // Receipts are a few KB; diagnostics exports and live printer tests need exact bytes.
 const RAW_JOB_HEX_PREVIEW_BYTES = 8192;
+// A markup job serialises to the receipt text plus its template — the same order of magnitude as
+// the raw hex preview, which is what a merchant's copied report has to carry.
+const MARKUP_JOB_PREVIEW_CHARS = 8192;
+
+/** What a queued job was for — the label on its timing line. */
+type PrintJobKind =
+	'receipt' | 'raw' | 'drawer' | 'cloud-order' | 'thermal-template' | 'html' | 'diagnostic';
 
 /** Cache key that captures config-relevant fields so stale transports are evicted. */
 function transportKey(profile: PrinterProfile, cloudFactoryVersion: number): string {
@@ -33,6 +40,18 @@ function encodeEscposRealtimeDrawerKick(profile: PrinterProfile): Uint8Array | n
 	if (profile.language !== 'esc-pos') return null;
 	const connector = profile.drawerConnector === 'pin5' ? 1 : 0;
 	return Uint8Array.from([0x10, 0x14, 0x01, connector, 0x03]);
+}
+
+/**
+ * Verbose-diagnostics only, mirroring the raw hex preview: the template and its data, never the
+ * render options — those carry rasterised image buffers, megabytes of unreadable pixels.
+ */
+function markupPreview(job: MarkupPrintJob): { preview: string; truncated: boolean } {
+	const serialised = JSON.stringify({ template: job.template, data: job.data });
+	return {
+		preview: serialised.slice(0, MARKUP_JOB_PREVIEW_CHARS),
+		truncated: serialised.length > MARKUP_JOB_PREVIEW_CHARS,
+	};
 }
 
 export interface PrinterServiceOptions {
@@ -152,7 +171,7 @@ export class PrinterService {
 		html?: string,
 		decimals?: number
 	): Promise<void> {
-		return this.queue.add(async () => {
+		return this.enqueue('receipt', async () => {
 			if (
 				!profile ||
 				(profile.connectionType === 'system' && !profile.address?.startsWith('winspool:'))
@@ -178,7 +197,11 @@ export class PrinterService {
 				decimals,
 			};
 			if (await transport.supportsMarkup?.()) {
-				await transport.printMarkup!(buildReceiptMarkupJob(receiptData, encodeOpts));
+				await this.dispatchMarkup(
+					transport,
+					buildReceiptMarkupJob(receiptData, encodeOpts),
+					'receipt'
+				);
 			} else {
 				await this.dispatchRaw(transport, encodeReceipt(receiptData, encodeOpts));
 			}
@@ -208,11 +231,55 @@ export class PrinterService {
 		else await transport.printRaw(data);
 	}
 
+	/** Markup jobs dispatch through here so the acknowledged lane logs like the raw one. */
+	private async dispatchMarkup(
+		transport: PrinterTransport,
+		job: MarkupPrintJob,
+		kind: PrintJobKind
+	): Promise<void> {
+		printerLogger.debug('Markup job dispatched', {
+			context: {
+				transport: transport.name,
+				kind,
+				dataKeys: Object.keys(job.data),
+				...(isVerboseDiagnostics() ? markupPreview(job) : {}),
+			},
+		});
+		await transport.printMarkup!(job);
+	}
+
+	/**
+	 * Every queued job runs through here so one line separates the time a job spent waiting
+	 * behind other jobs from the time the transport itself took.
+	 */
+	private enqueue(kind: PrintJobKind, run: () => Promise<void>): Promise<void> {
+		const enqueuedAt = Date.now();
+		return this.queue.add(async () => {
+			const startedAt = Date.now();
+			let outcome: 'ok' | 'failed' = 'ok';
+			try {
+				await run();
+			} catch (error) {
+				outcome = 'failed';
+				throw error;
+			} finally {
+				printerLogger.debug('Print job timing', {
+					context: {
+						kind,
+						outcome,
+						waitMs: startedAt - enqueuedAt,
+						transportMs: Date.now() - startedAt,
+					},
+				});
+			}
+		});
+	}
+
 	/**
 	 * Print pre-encoded raw bytes.
 	 */
 	async printRaw(data: Uint8Array, profile: PrinterProfile): Promise<void> {
-		return this.queue.add(async () => {
+		return this.enqueue('raw', async () => {
 			const transport = await this.getTransport(profile);
 			await this.dispatchRaw(transport, data);
 		});
@@ -227,14 +294,18 @@ export class PrinterService {
 			throw new Error('Open drawer is not supported for this printer profile.');
 		}
 
-		return this.queue.add(async () => {
+		return this.enqueue('drawer', async () => {
 			const transport = await this.getTransport(profile);
 			if (await transport.supportsMarkup?.()) {
-				await transport.printMarkup!({
-					template: '<receipt><drawer/></receipt>',
-					data: {},
-					options: { drawerConnector: profile.drawerConnector },
-				});
+				await this.dispatchMarkup(
+					transport,
+					{
+						template: '<receipt><drawer/></receipt>',
+						data: {},
+						options: { drawerConnector: profile.drawerConnector },
+					},
+					'drawer'
+				);
 				return;
 			}
 			const bytes =
@@ -265,7 +336,7 @@ export class PrinterService {
 		orderId: number,
 		templateId: string
 	): Promise<void> {
-		return this.queue.add(async () => {
+		return this.enqueue('cloud-order', async () => {
 			const transport = await this.getTransport(profile);
 			if (!(transport instanceof CloudAdapter)) {
 				throw new Error('Order-based printing requires a cloud printer profile');
@@ -289,7 +360,7 @@ export class PrinterService {
 		templateXml: string,
 		maxWidthDots: number
 	): Promise<void> {
-		return this.queue.add(async () => {
+		return this.enqueue('thermal-template', async () => {
 			const transport = await this.getTransport(profile);
 			const input = {
 				templateXml,
@@ -305,7 +376,11 @@ export class PrinterService {
 				},
 			};
 			if (await transport.supportsMarkup?.()) {
-				await transport.printMarkup!(await buildThermalTemplateMarkupJob(input));
+				await this.dispatchMarkup(
+					transport,
+					await buildThermalTemplateMarkupJob(input),
+					'thermal-template'
+				);
 				return;
 			}
 			const bytes = await encodeThermalTemplateForPrint(input);
@@ -317,7 +392,7 @@ export class PrinterService {
 	 * Print HTML via system dialog.
 	 */
 	async printHtml(html: string): Promise<void> {
-		return this.queue.add(async () => {
+		return this.enqueue('html', async () => {
 			const transport = new SystemPrintAdapter();
 			await transport.printHtml(html);
 		});
@@ -339,7 +414,7 @@ export class PrinterService {
 			return this.printHtml(html);
 		}
 
-		return this.queue.add(async () => {
+		return this.enqueue('diagnostic', async () => {
 			const transport = await this.getTransport(profile);
 			const job = {
 				template: buildDiagnosticTemplate(profile.columns),
@@ -353,7 +428,8 @@ export class PrinterService {
 					drawerConnector: profile.drawerConnector,
 				},
 			};
-			if (await transport.supportsMarkup?.()) await transport.printMarkup!(job);
+			if (await transport.supportsMarkup?.())
+				await this.dispatchMarkup(transport, job, 'diagnostic');
 			else {
 				await this.dispatchRaw(
 					transport,

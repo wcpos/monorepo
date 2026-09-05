@@ -100,8 +100,8 @@ describe('buildSweepCandidates', () => {
 	});
 });
 
-const epsonHttp = { vendor: 'epson', port: 8008, protocol: 'http' } as const;
-const starHttps = { vendor: 'star', port: 443, protocol: 'https' } as const;
+const epsonHttp = { vendor: 'epson', port: 8008, protocol: 'http', status: 405 } as const;
+const starHttps = { vendor: 'star', port: 443, protocol: 'https', status: 200 } as const;
 
 describe('sweepForPrinters', () => {
 	it.each([undefined, 2])(

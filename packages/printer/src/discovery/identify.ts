@@ -17,7 +17,14 @@ export interface PrinterIdentity {
 		protocol: 'epos-print' | 'webprnt' | 'raw' | 'raw-tls';
 		encrypted: boolean;
 	} | null;
-	ports: { port: number; state: TcpState; protocol: PortProtocol; latencyMs?: number }[];
+	ports: {
+		port: number;
+		state: TcpState;
+		protocol: PortProtocol;
+		latencyMs?: number;
+		/** HTTP status the ePOS/WebPRNT probe got back, when the port answered one. */
+		httpStatus?: number;
+	}[];
 	securePrinting?: boolean;
 	columns?: number;
 	notReceiptPrinter?: boolean;
@@ -40,7 +47,9 @@ export interface IdentifyProbes {
 		xml: string,
 		timeoutMs: number
 	) => Promise<{ status: number; body: string }>;
-	fetchStar: (host: string) => Promise<{ port: number; protocol: 'http' | 'https' } | null>;
+	fetchStar: (
+		host: string
+	) => Promise<{ port: number; protocol: 'http' | 'https'; status?: number } | null>;
 }
 const EXPIRED = Symbol('expired');
 
@@ -102,6 +111,7 @@ export async function identifyPrinter(
 			ports.push({ port, state: 'error', protocol: null });
 		}
 	};
+	const eposStatusByPort = new Map<number, number>();
 	const epsonTask = (async () => {
 		let request: { path: string; xml: string } | undefined;
 		eposPort = await probeEposEndpoint(host, async (port, path, xml, timeoutMs) => {
@@ -111,6 +121,7 @@ export async function identifyPrinter(
 					probes.postEpos(host, port, path, xml, Math.min(timeoutMs, deadline - Date.now()))
 				);
 				if (response === EXPIRED) throw EXPIRED;
+				eposStatusByPort.set(port, response.status);
 				return response;
 			} catch (error) {
 				ports.push({ port, state: eposFailureState(error), protocol: 'epos-print' });
@@ -118,7 +129,12 @@ export async function identifyPrinter(
 			}
 		});
 		if (eposPort === null) return;
-		ports.push({ port: eposPort, state: 'open', protocol: 'epos-print' });
+		ports.push({
+			port: eposPort,
+			state: 'open',
+			protocol: 'epos-print',
+			...httpStatusOf(eposStatusByPort.get(eposPort)),
+		});
 		if (eposPort === 443 && request) {
 			try {
 				const response = await beforeDeadline(deadline, () =>
@@ -127,7 +143,12 @@ export async function identifyPrinter(
 				if (response === EXPIRED) throw EXPIRED;
 				if (response.status >= 200 && response.status < 300) {
 					parseEposResponse(response.body);
-					ports.push({ port: 80, state: 'open', protocol: 'epos-print' });
+					ports.push({
+						port: 80,
+						state: 'open',
+						protocol: 'epos-print',
+						httpStatus: response.status,
+					});
 				}
 			} catch (error) {
 				ports.push({ port: 80, state: eposFailureState(error), protocol: 'epos-print' });
@@ -138,7 +159,12 @@ export async function identifyPrinter(
 		try {
 			const result = await beforeDeadline(deadline, () => probes.fetchStar(host));
 			if (result === EXPIRED || !result) return null;
-			ports.push({ port: result.port, state: 'open', protocol: 'webprnt' });
+			ports.push({
+				port: result.port,
+				state: 'open',
+				protocol: 'webprnt',
+				...httpStatusOf(result.status),
+			});
 			return result;
 		} catch {
 			return null;
@@ -152,7 +178,18 @@ export async function identifyPrinter(
 	// (443 answering 503 was seen live, wcpos/roadmap#136) still quarantines on a raw touch.
 	// 9143 (TLS raw) is not probed at all until there is a TLS raw lane to use it.
 	const [, star] = await Promise.all([epsonTask, starTask]);
-	if (!eposPort && !star && hintedVendor !== 'epson') {
+	const rawProbeSkipReason = eposPort
+		? 'epos-print answered'
+		: star
+			? 'webprnt answered'
+			: hintedVendor === 'epson'
+				? 'epson hint — a raw touch quarantines every lane'
+				: null;
+	if (rawProbeSkipReason) {
+		printerLogger.debug('Raw probe skipped', {
+			context: { host, ports: [9100, 631], reason: rawProbeSkipReason },
+		});
+	} else {
 		await Promise.all([tcp(9100), tcp(631)]);
 	}
 	const lane: PrinterIdentity['lane'] = eposPort
@@ -214,11 +251,17 @@ export async function identifyPrinter(
 			vendor,
 			vendorSource,
 			lane: lane ? { port: lane.port, protocol: lane.protocol } : null,
-			portStates: ports.map(({ port, state, protocol }) => ({ port, state, protocol })),
+			// The ports array as identify built it — httpStatus included, so a merchant's copied
+			// report says which status decided the lane.
+			ports,
 			elapsedMs: Date.now() - startedAt,
 		},
 	});
 	return identity;
+}
+/** Optional-property spread: an absent status must not become an explicit `httpStatus: undefined`. */
+function httpStatusOf(status: number | undefined): { httpStatus?: number } {
+	return status === undefined ? {} : { httpStatus: status };
 }
 function vendorFromName(name?: string): Vendor {
 	if (/epson|\bTM-/i.test(name ?? '')) return 'epson';

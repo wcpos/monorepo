@@ -8,7 +8,7 @@ vi.mock('../../transport/epson-native-adapter', () => ({
 		getPaperWidthMm = getPaperWidthMm;
 	},
 }));
-vi.mock('../../logger', () => ({ printerLogger: { info: vi.fn() } }));
+vi.mock('../../logger', () => ({ printerLogger: { debug: vi.fn(), info: vi.fn() } }));
 
 describe('native printer paper width', () => {
 	it.each([

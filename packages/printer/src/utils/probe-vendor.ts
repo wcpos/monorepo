@@ -1,3 +1,4 @@
+import { printerLogger } from '../logger';
 import { withTargetAddressSpace } from './local-fetch';
 
 // Manual vendor detection allows slower printers three seconds to answer.
@@ -8,12 +9,14 @@ const VENDOR_PROBE_TIMEOUT_MS = 3000;
  *
  * `port`/`protocol` describe the endpoint that actually responded, so callers
  * can configure the printer with a port the browser can genuinely reach —
- * web printing never uses raw TCP 9100.
+ * web printing never uses raw TCP 9100. `status` is the HTTP status that
+ * decided it, which identify copies onto the port it reports.
  */
 export interface ProbedEndpoint {
 	vendor: 'epson' | 'star';
 	port: number;
 	protocol: 'http' | 'https';
+	status: number;
 }
 
 /**
@@ -39,6 +42,8 @@ export async function probeVendorEndpoint(
 	const controller = new AbortController();
 	// Share one deadline so Star fallback attempts cannot multiply scan time.
 	const id = setTimeout(() => controller.abort(), timeoutMs);
+	// Every status this host answered with, so an undecided probe says what it saw.
+	const statusesSeen: string[] = [];
 
 	const probeEpson = async (): Promise<ProbedEndpoint | null> => {
 		const url = `http://${host}:8008/cgi-bin/epos/service.cgi`;
@@ -47,7 +52,10 @@ export async function probeVendorEndpoint(
 				url,
 				withTargetAddressSpace(url, { method: 'GET', signal: controller.signal })
 			);
-			return isEndpointPresent(response) ? { vendor: 'epson', port: 8008, protocol: 'http' } : null;
+			statusesSeen.push(`epos-print:8008=${response.status}`);
+			return isEndpointPresent(response)
+				? { vendor: 'epson', port: 8008, protocol: 'http', status: response.status }
+				: null;
 		} catch {
 			return null;
 		}
@@ -59,7 +67,10 @@ export async function probeVendorEndpoint(
 				method: 'GET',
 				signal: controller.signal,
 			});
-			return isEndpointPresent(response) ? { vendor: 'star', port: 443, protocol: 'https' } : null;
+			statusesSeen.push(`webprnt:443=${response.status}`);
+			return isEndpointPresent(response)
+				? { vendor: 'star', port: 443, protocol: 'https', status: response.status }
+				: null;
 		} catch {
 			// Star printers on HTTPS with self-signed certs will fail in
 			// browsers due to certificate rejection. Try HTTP as fallback —
@@ -73,8 +84,9 @@ export async function probeVendorEndpoint(
 						httpUrl,
 						withTargetAddressSpace(httpUrl, { method: 'GET', signal: controller.signal })
 					);
+					statusesSeen.push(`webprnt:${port}=${response.status}`);
 					if (isEndpointPresent(response)) {
-						return { vendor: 'star', port, protocol: 'http' };
+						return { vendor: 'star', port, protocol: 'http', status: response.status };
 					}
 				} catch {
 					// keep trying the next HTTP port
@@ -86,7 +98,21 @@ export async function probeVendorEndpoint(
 
 	try {
 		const [epson, star] = await Promise.all([probeEpson(), probeStar()]);
-		return epson ?? star ?? null;
+		const endpoint = epson ?? star ?? null;
+		if (endpoint) {
+			printerLogger.debug('Vendor probe decided', {
+				context: {
+					host,
+					vendor: endpoint.vendor,
+					port: endpoint.port,
+					protocol: endpoint.protocol,
+					status: endpoint.status,
+				},
+			});
+		} else {
+			printerLogger.debug('Vendor probe undecided', { context: { host, statusesSeen } });
+		}
+		return endpoint;
 	} finally {
 		clearTimeout(id);
 	}

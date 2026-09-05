@@ -30,7 +30,9 @@ describe('usePrinterDiscovery (web)', () => {
 			.mockReset()
 			.mockImplementation(async (printers) => printers);
 		vi.mocked(probeVendorEndpoint).mockImplementation(async (host) =>
-			host === '192.168.1.131' ? { vendor: 'epson', port: 8008, protocol: 'http' } : null
+			host === '192.168.1.131'
+				? { vendor: 'epson' as const, port: 8008, protocol: 'http' as const, status: 405 }
+				: null
 		);
 		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
 			if (String(url) === 'http://192.168.1.1/') return new Response();

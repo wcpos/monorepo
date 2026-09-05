@@ -201,3 +201,17 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   session's device on a transient error: that forces a chooser needing a user gesture and an
   advertising printer. Only replace the remembered object when the chooser supplies another one.
   Unit-tested; this keep-alive change still needs physical-printer verification.
+- **2026-09-05 · every lane · the reporting loop.** A merchant's copied report could not explain a
+  failed print because whole lanes logged nothing: both native SDK adapters (Epson, Star) printed
+  in silence, so did the browser and Electron ePOS lanes and Star WebPRNT; markup jobs — the
+  acknowledged lanes, the ones most printers now use — dispatched with no line at all while raw
+  jobs had one; a job's queue wait was indistinguishable from the printer's own response time; the
+  raw-9100 skip (the guard that keeps a Secure Printing Epson out of quarantine) left no trace, so
+  a scan that skipped the port looked identical to one where the port was closed; and a receipt
+  that printed "INR" where the merchant expected the rupee sign said nothing either. Rule, from
+  here on: **every lane logs its dispatch, its timing and its outcome** — target (host/port or
+  device key), bytes or markup length, elapsed ms, HTTP status when there is one, and the error
+  message on failure. Receipt text and addresses stay out of it; the serialised job appears only
+  under the explicit 24-hour verbose-diagnostics mode, capped like the raw hex preview. A skipped
+  probe logs *why* it was skipped: a decision with no line is indistinguishable from a lane that
+  was never reached.

@@ -15,6 +15,10 @@ export interface PrintRawOptions {
 	cutPaper?: boolean;
 }
 
+/** What a logged print dispatch carries: bytes for raw, markup characters for a job. */
+export type PrintJobShape =
+	{ kind: 'raw'; bytes: number } | { kind: 'markup'; markupLength: number };
+
 export interface MarkupPrintJob {
 	template: string;
 	data: Record<string, unknown>;
