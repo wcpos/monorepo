@@ -44,7 +44,13 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 									vendor: device.vendor,
 									name: device.name,
 								});
-								if (columns !== undefined) form.setValue('columns', columns);
+								if (
+									columns !== undefined &&
+									form.getValues('address') === (device.address ?? '') &&
+									form.getValues('columns') === DEFAULT_FORM_VALUES.columns
+								) {
+									form.setValue('columns', columns);
+								}
 							}
 						}}
 						className={`flex-row items-center gap-2 rounded-md border p-2 ${

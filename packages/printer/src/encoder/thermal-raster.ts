@@ -1,5 +1,6 @@
 import type { ThermalRasterImage } from '@wcpos/receipt-renderer';
 
+import { printerLogger } from '../logger';
 import { normalizeThermalImageSize } from './thermal-raster-shared';
 
 export async function rasterizeThermalImage(input: {
@@ -32,7 +33,10 @@ export async function rasterizeThermalImage(input: {
 			algorithm: 'atkinson',
 			threshold: 128,
 		};
-	} catch {
+	} catch (error) {
+		printerLogger.debug('Thermal image asset skipped', {
+			context: { cause: error instanceof Error ? error.message : String(error) },
+		});
 		return undefined;
 	}
 }

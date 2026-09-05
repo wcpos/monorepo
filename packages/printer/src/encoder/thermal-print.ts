@@ -123,7 +123,11 @@ export async function prepareThermalPrintAssets(input: {
 			} catch (error) {
 				printerLogger.warn('Thermal image asset skipped', {
 					context: {
-						src: image.src,
+						sourceType: /^data:/i.test(image.src)
+							? 'data-url'
+							: /^https?:/i.test(image.src)
+								? 'remote-url'
+								: 'other',
 						cause: error instanceof Error ? error.message : String(error),
 					},
 				});

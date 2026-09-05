@@ -2,9 +2,12 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import { resolveNativePrinterColumns } from '@wcpos/printer';
 
 import { BluetoothDevicePicker } from './bluetooth-device-picker';
+import { UsbDevicePicker } from './usb-device-picker';
 
 jest.mock('@wcpos/printer', () => ({
 	resolveNativePrinterColumns: jest.fn(async () => ({ columns: 48, source: 'printer' })),
@@ -15,6 +18,13 @@ jest.mock('@wcpos/printer', () => ({
 				name: 'TM-m30III',
 				connectionType: 'bluetooth',
 				address: 'BT:printer',
+				vendor: 'epson',
+			},
+			{
+				id: 'epson-usb',
+				name: 'TM-m30III',
+				connectionType: 'usb',
+				address: 'USB:printer',
 				vendor: 'epson',
 			},
 		],
@@ -46,15 +56,63 @@ jest.mock('@wcpos/components/vstack', () => ({
 }));
 jest.mock('../../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 
-it('applies queried columns when the form still has the default', async () => {
+function createForm() {
+	const values: Record<string, unknown> = { address: '', columns: 42 };
+	const setValue = jest.fn((name: string, value: unknown) => {
+		values[name] = value;
+	});
 	const form = {
 		control: {},
-		getValues: jest.fn(() => 42),
-		setValue: jest.fn(),
+		getValues: jest.fn((name: string) => values[name]),
+		setValue,
 	} as unknown as React.ComponentProps<typeof BluetoothDevicePicker>['form'];
+	return { form, setValue, values };
+}
+
+it('applies queried columns when the form still has the default', async () => {
+	const { form, setValue } = createForm();
 	render(<BluetoothDevicePicker form={form} />);
 
 	fireEvent.click(screen.getByTestId('add-printer-bt-device-epson-bt'));
 
-	await waitFor(() => expect(form.setValue).toHaveBeenCalledWith('columns', 48));
+	await waitFor(() => expect(setValue).toHaveBeenCalledWith('columns', 48));
+});
+
+it.each([
+	['Bluetooth', BluetoothDevicePicker, 'add-printer-bt-device-epson-bt', 'BT:new-printer'],
+	['USB', UsbDevicePicker, 'add-printer-usb-device-epson-usb', 'USB:new-printer'],
+] as const)(
+	'does not apply %s columns after the selection changes',
+	async (_, Picker, testID, address) => {
+		let resolveWidth: (value: { columns: number; source: 'printer' }) => void = () => undefined;
+		jest
+			.mocked(resolveNativePrinterColumns)
+			.mockImplementationOnce(() => new Promise((resolve) => (resolveWidth = resolve)));
+		const { form, setValue, values } = createForm();
+		render(<Picker form={form} />);
+
+		fireEvent.click(screen.getByTestId(testID));
+		values.address = address;
+		await act(async () => resolveWidth({ columns: 48, source: 'printer' }));
+
+		expect(setValue).not.toHaveBeenCalledWith('columns', 48);
+	}
+);
+
+it.each([
+	['Bluetooth', BluetoothDevicePicker, 'add-printer-bt-device-epson-bt'],
+	['USB', UsbDevicePicker, 'add-printer-usb-device-epson-usb'],
+] as const)('does not apply %s columns after columns are edited', async (_, Picker, testID) => {
+	let resolveWidth: (value: { columns: number; source: 'printer' }) => void = () => undefined;
+	jest
+		.mocked(resolveNativePrinterColumns)
+		.mockImplementationOnce(() => new Promise((resolve) => (resolveWidth = resolve)));
+	const { form, setValue, values } = createForm();
+	render(<Picker form={form} />);
+
+	fireEvent.click(screen.getByTestId(testID));
+	values.columns = 32;
+	await act(async () => resolveWidth({ columns: 48, source: 'printer' }));
+
+	expect(setValue).not.toHaveBeenCalledWith('columns', 48);
 });

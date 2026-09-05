@@ -81,7 +81,8 @@ export async function identifyPrinter(
 	const deadline = startedAt + (opts.timeoutMs ?? 4_000);
 	const ports: PrinterIdentity['ports'] = [];
 	const namedVendor = vendorFromName(hints.name);
-	const hintedVendor = hints.vendor ?? namedVendor;
+	const hintedVendor =
+		hints.vendor && hints.vendor !== 'generic' ? hints.vendor : (namedVendor ?? hints.vendor);
 	let eposPort: number | null = null;
 	let rawOpen = false;
 	const tcp = async (port: number) => {
@@ -171,9 +172,17 @@ export async function identifyPrinter(
 			? 'star'
 			: rawOpen
 				? (hintedVendor ?? 'generic')
-				: hintedVendor;
+				: (hintedVendor ?? null);
 	const vendorSource =
-		eposPort || star ? 'probe' : hints.vendor ? 'discovery' : namedVendor ? 'name' : 'none';
+		eposPort || star
+			? 'probe'
+			: hints.vendor && hints.vendor !== 'generic'
+				? 'discovery'
+				: namedVendor
+					? 'name'
+					: hints.vendor
+						? 'discovery'
+						: 'none';
 	const ippOpen = ports.some((entry) => entry.port === 631 && entry.state === 'open');
 	// Only raw/IPP results say whether a *named* host is a receipt printer at all; refused ePOS
 	// candidates on an Epson whose ePOS-Print is off prove nothing (its raw ports were skipped).

@@ -181,6 +181,22 @@ describe('identifyPrinter', () => {
 		expect(identity).toMatchObject({ vendor: 'epson', model: 'TM-m30III', columns: 48 });
 	});
 
+	it('uses a concrete name vendor when discovery reports generic', async () => {
+		const connectTcp = vi.fn(async () => 'closed' as const);
+		const identity = await identifyPrinter(
+			'192.168.1.34',
+			{ name: 'TM-m30III', vendor: 'generic' },
+			probes({ connectTcp })
+		);
+
+		expect(identity).toMatchObject({ vendor: 'epson', model: 'TM-m30III', columns: 48 });
+		expect(connectTcp).not.toHaveBeenCalled();
+		expect(info).toHaveBeenLastCalledWith(
+			'Printer identified',
+			expect.objectContaining({ context: expect.objectContaining({ vendorSource: 'name' }) })
+		);
+	});
+
 	it('does not classify a fully filtered host as a non-receipt printer', async () => {
 		const identity = await identifyPrinter(
 			'192.168.1.35',

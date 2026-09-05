@@ -142,6 +142,9 @@ describe('encodeThermalTemplateForPrint', () => {
 		await vi.advanceTimersByTimeAsync(10000);
 
 		await expect(assets).resolves.toEqual({ imageAssets: {}, barcodeImages: {} });
+		expect(debug).toHaveBeenCalledWith('Thermal image asset skipped', {
+			context: { cause: 'Timed out loading thermal image asset' },
+		});
 	});
 
 	it('loads rendered SVG barcode assets through a URL-encoded data URI', async () => {
@@ -175,7 +178,7 @@ describe('encodeThermalTemplateForPrint', () => {
 	});
 
 	it('logs a skipped image when its resolver fails', async () => {
-		const src = 'https://example.test/logo.png';
+		const src = 'https://example.test/logo.png?signature=secret';
 		const result = await prepareThermalPrintAssets({
 			renderedTemplateXml: `<receipt><image src="${src}" /></receipt>`,
 			maxWidthDots: 384,
@@ -186,8 +189,12 @@ describe('encodeThermalTemplateForPrint', () => {
 
 		expect(result.imageAssets).toEqual({});
 		expect(warn).toHaveBeenCalledWith('Thermal image asset skipped', {
-			context: { src, cause: 'loader failed' },
+			context: { sourceType: 'remote-url', cause: 'loader failed' },
 		});
+		expect(warn).not.toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ context: expect.objectContaining({ src }) })
+		);
 	});
 
 	it('loads Electron remote thermal images through canvas-safe data URLs', async () => {

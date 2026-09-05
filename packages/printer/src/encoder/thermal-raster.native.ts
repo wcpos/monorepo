@@ -43,9 +43,15 @@ async function loadBytes(src: string): Promise<Uint8Array> {
 		const binary = atob(payload + '='.repeat((4 - (payload.length % 4)) % 4));
 		return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 	}
-	const response = await fetch(src);
-	if (!response.ok) throw new Error('Failed to fetch thermal image asset');
-	return new Uint8Array(await response.arrayBuffer());
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), 10_000);
+	try {
+		const response = await fetch(src, { signal: controller.signal });
+		if (!response.ok) throw new Error('Failed to fetch thermal image asset');
+		return new Uint8Array(await response.arrayBuffer());
+	} finally {
+		clearTimeout(timeout);
+	}
 }
 
 function decodeImage(
