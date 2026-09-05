@@ -70,7 +70,7 @@ function DeviceList({
 						testID={`add-printer-electron-${type}-device-${device.id}`}
 						onPress={() => {
 							form.setValue('connectionType', type);
-							form.setValue('address', device.address ?? '');
+							form.setValue('address', device.address ?? '', { shouldValidate: true });
 							form.setValue('name', device.name);
 							if (device.vendor) {
 								form.setValue('vendor', device.vendor as PrinterFormValues['vendor']);

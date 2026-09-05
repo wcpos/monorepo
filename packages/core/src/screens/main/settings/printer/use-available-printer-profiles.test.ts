@@ -123,7 +123,8 @@ describe('mergeAvailablePrinterProfiles', () => {
 
 const mockProfiles$ = new Subject<PrinterProfile[]>();
 const mockStoreDB = { collections: { printer_profiles: { find: () => ({ $: mockProfiles$ }) } } };
-const mockHttp = { get: () => new Promise(() => {}) };
+// The cloud request settles immediately so the loading state is driven by the local query.
+const mockHttp = { get: () => Promise.resolve({ data: null }) };
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ storeDB: mockStoreDB }),
 }));
@@ -131,11 +132,14 @@ jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => 
 
 it.each<[PrinterProfile[]]>([[[]], [[localPrinter]]])(
 	'waits for the first local emission: %j',
-	(profiles) => {
+	async (profiles) => {
 		const { result } = renderHook(() => useAvailablePrinterProfiles());
 		expect(result.current.isLoading).toBe(true);
 		expect(result.current.printers.map((p) => p.id)).toEqual(['system']);
-		act(() => mockProfiles$.next(profiles));
+		// Flush the settled cloud request and the local emission together.
+		await act(async () => {
+			mockProfiles$.next(profiles);
+		});
 		expect(result.current.isLoading).toBe(false);
 		expect(result.current.printers.map((p) => p.id)).toEqual(
 			profiles.length ? ['local-1', 'system'] : ['system']
