@@ -167,33 +167,12 @@ export function PrinterSetupDialog({
 			</Text>
 		</Button>
 	);
-	// Secondary actions read as one line of links, not a wall of buttons.
-	const link = (key: string, onPress: () => void, disabled = printerBusy) => (
-		<Button
-			key={key}
-			testID={`printer-setup-${key}`}
-			variant="link"
-			size="sm"
-			className="h-auto px-0 py-0"
-			disabled={disabled}
-			onPress={onPress}
-		>
-			<Text className="text-sm font-semibold">{t(`settings.${key}`)}</Text>
-		</Button>
+	// Secondary actions are compact buttons in a wrapping row (Paul, 2026-09-05: buttons over links).
+	const link = (key: string, onPress: () => void, disabled = printerBusy) =>
+		action(key, onPress, { disabled });
+	const links = (...items: React.ReactNode[]) => (
+		<View className="flex-row flex-wrap items-center gap-2">{items.filter(Boolean)}</View>
 	);
-	const links = (...items: React.ReactNode[]) => {
-		const present = items.filter(Boolean);
-		return (
-			<View className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
-				{present.map((item, i) => (
-					<React.Fragment key={i}>
-						{i > 0 && <Text className="text-border">|</Text>}
-						{item}
-					</React.Fragment>
-				))}
-			</View>
-		);
-	};
 	const line = (key: string, className = 'text-muted-foreground') => (
 		<Text key={key} className={className}>
 			{t(`settings.setup_${key}`)}
@@ -483,7 +462,7 @@ export function PrinterSetupDialog({
 	);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent size="lg">
+			<DialogContent size="xl">
 				<DialogHeader>
 					<DialogTitle>{t('settings.add_printer')}</DialogTitle>
 				</DialogHeader>
