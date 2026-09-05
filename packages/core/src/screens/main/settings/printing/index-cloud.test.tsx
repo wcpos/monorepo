@@ -237,13 +237,17 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 }));
 
 let mockAvailableProfiles = { printers: [cloudProfile], isLoading: false };
-let mockShowWizard = true;
-jest.mock('../../mini-apps/catalog', () => ({ usePrinterWizardAvailable: () => mockShowWizard }));
+jest.mock('@wcpos/components/docs-link', () => {
+	const React = require('react');
+	return {
+		DocsLink: ({ children, href, testID }: { children: string; href: string; testID?: string }) =>
+			React.createElement('a', { 'data-testid': testID, href }, children),
+	};
+});
 
 describe('PrintingSettings cloud printers', () => {
 	beforeEach(() => {
 		mockAvailableProfiles = { printers: [cloudProfile], isLoading: false };
-		mockShowWizard = true;
 		enqueue.mockClear();
 		httpPost.mockClear();
 	});
@@ -285,26 +289,22 @@ it('hides the list until loaded, then shows the empty state', () => {
 	expect(screen.getByTestId('printers-empty-state')).toBeInTheDocument();
 });
 
-it('renders help once outside saved rows only when available', () => {
-	mockShowWizard = true;
+it('renders help once outside saved rows and opens the printer guide', () => {
 	mockAvailableProfiles = {
 		printers: [cloudProfile, { ...cloudProfile, id: 'second' }],
 		isLoading: false,
 	};
-	const { rerender } = render(<PrintingSettings />);
+	render(<PrintingSettings />);
 	expect(screen.getAllByText('Having trouble?')).toHaveLength(1);
-	fireEvent.click(screen.getByText('Having trouble?'));
-	expect(mockRouterPush).toHaveBeenCalledWith('/settings/mini-app/printer-wizard');
+	expect(screen.getByTestId('printing-having-trouble').getAttribute('href')).toBe(
+		'https://docs.wcpos.com/hardware/printers'
+	);
 	expect(
 		within(screen.getByTestId('printer-row-second')).queryByText('Having trouble?')
 	).toBeNull();
-	mockShowWizard = false;
-	rerender(<PrintingSettings />);
-	expect(screen.queryByText('Having trouble?')).toBeNull();
 });
 
 it('does not render help on a saved local printer row', () => {
-	mockShowWizard = true;
 	render(
 		<PrinterRow
 			profile={{ ...cloudProfile, isBuiltIn: false }}

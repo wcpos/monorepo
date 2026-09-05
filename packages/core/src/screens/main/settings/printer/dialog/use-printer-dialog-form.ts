@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
-import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
 import {
@@ -17,6 +16,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
+import { persistPrinterProfile } from '../persist-printer-profile';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 
@@ -346,22 +346,12 @@ export function usePrinterDialogForm({
 	}, [form, buildProfile, printerService, t]);
 
 	const persistProfile = React.useCallback(
-		async (data: PrinterFormValues) => {
-			const collection = storeDB.collections.printer_profiles;
-			if (data.isDefault) {
-				const existingDefaults = await collection.find({ selector: { isDefault: true } }).exec();
-				for (const doc of existingDefaults) {
-					if (doc.id !== printer?.id) await doc.patch({ isDefault: false });
-				}
-			}
-			const profileData = buildPrinterProfileFields(data, { printer, prefill });
-			if (printer) {
-				const doc = await collection.findOne(printer.id).exec();
-				if (doc) await doc.patch(profileData);
-			} else {
-				await collection.insert({ id: uuidv4(), ...profileData });
-			}
-		},
+		(data: PrinterFormValues) =>
+			persistPrinterProfile(
+				storeDB,
+				{ ...data, ...buildPrinterProfileFields(data, { printer, prefill }) },
+				printer?.id
+			),
 		[storeDB, printer, prefill]
 	);
 

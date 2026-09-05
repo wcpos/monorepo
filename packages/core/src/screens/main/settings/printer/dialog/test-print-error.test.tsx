@@ -54,12 +54,13 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
-const mockRouterPush = jest.fn();
-let mockShowWizard = false;
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockRouterPush }) }));
-jest.mock('../../../mini-apps/catalog', () => ({
-	usePrinterWizardAvailable: () => mockShowWizard,
-}));
+jest.mock('@wcpos/components/docs-link', () => {
+	const React = require('react');
+	return {
+		DocsLink: ({ children, href, testID }: { children: string; href: string; testID?: string }) =>
+			React.createElement('a', { 'data-testid': testID, href }, children),
+	};
+});
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () =>
 		jest
@@ -134,29 +135,15 @@ describe('TestPrintError', () => {
 	});
 });
 
-describe('TestPrintError wizard entry', () => {
-	afterEach(() => {
-		mockShowWizard = false;
-		mockRouterPush.mockClear();
-	});
-
-	it('offers "Having trouble?" only when the wizard is available and routes to it', () => {
-		mockShowWizard = true;
+describe('TestPrintError help entry', () => {
+	it('offers "Having trouble?" and opens the printer guide', () => {
 		render(
 			<TestPrintError
 				error={{ message: 'Printer did not answer', diagnostics: undefined } as never}
 			/>
 		);
-		fireEvent.click(screen.getByTestId('add-printer-having-trouble'));
-		expect(mockRouterPush).toHaveBeenCalledWith('/settings/mini-app/printer-wizard');
-	});
-
-	it('hides the wizard entry when it is not available', () => {
-		render(
-			<TestPrintError
-				error={{ message: 'Printer did not answer', diagnostics: undefined } as never}
-			/>
+		expect(screen.getByTestId('add-printer-having-trouble').getAttribute('href')).toBe(
+			'https://docs.wcpos.com/hardware/printers'
 		);
-		expect(screen.queryByTestId('add-printer-having-trouble')).toBeNull();
 	});
 });

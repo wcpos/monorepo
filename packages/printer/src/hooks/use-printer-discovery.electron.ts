@@ -10,6 +10,7 @@ import { identifyDiscoveredPrinters } from '../discovery/identify';
 import { createIdentifyProbes } from '../discovery/identify-probes.electron';
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
 import { mergePrinters } from '../discovery/merge-printers';
+import { parseTarget } from '../transport/device-key';
 import { rememberBleDevice } from '../transport/ble-device-registry';
 import { BLE_PRINT_SERVICE_UUIDS, type WebBluetoothNavigator } from '../transport/ble-gatt';
 import { saveWebDevice } from '../transport/web-device-store';
@@ -82,6 +83,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 	}, []);
 
 	const startScan = React.useCallback(async () => {
+		setPrinters((prev) => prev.filter((p) => p.connectionType !== 'network' || p.id.includes(':')));
 		const ipc = getIpcRenderer();
 		if (!ipc) {
 			setError({ code: 'ipc-unavailable' });
@@ -100,9 +102,11 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			const identified = await identifyDiscoveredPrinters(result, createIdentifyProbes());
 			if (scanGenerationRef.current !== generation) return;
 			setPrinters((prev) => {
-				// Keep manually-added printers (id format: "address:port")
+				// Keep other sources and manually-added printers (id format: "address:port")
 				// Discovered printers use prefixed ids like "mdns-host" or "epson-addr"
-				const manualPrinters = prev.filter((p) => p.id.includes(':'));
+				const manualPrinters = prev.filter(
+					(p) => p.connectionType !== 'network' || p.id.includes(':')
+				);
 				const merged = [...manualPrinters];
 				for (const discovered of identified) {
 					if (!merged.some((p) => p.id === discovered.id)) {
@@ -113,6 +117,9 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			});
 		} catch (err) {
 			if (scanGenerationRef.current !== generation) return;
+			setPrinters((prev) =>
+				prev.filter((p) => p.connectionType !== 'network' || p.id.includes(':'))
+			);
 			setError({
 				code: 'discovery-failed',
 				detail: err instanceof Error ? err.message : String(err),
@@ -123,6 +130,9 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 	}, []);
 
 	const connectUsbDevice = React.useCallback(async () => {
+		setPrinters((prev) =>
+			prev.filter((p) => p.connectionType !== 'usb' && parseTarget(p.address).kind !== 'winspool')
+		);
 		const ipc = getIpcRenderer();
 		if (!ipc) {
 			setError({ code: 'ipc-unavailable' });
@@ -145,6 +155,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 	}, []);
 
 	const connectSerialDevice = React.useCallback(async () => {
+		setPrinters((prev) => prev.filter((p) => parseTarget(p.address).kind !== 'serial'));
 		const ipc = getIpcRenderer();
 		if (!ipc) {
 			setError({ code: 'ipc-unavailable' });
@@ -205,7 +216,7 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 				onConnected: (device) => {
 					const discovered = mapWebDeviceToDiscoveredPrinter(device);
 					saveWebDevice(discovered.address, device);
-					setPrinters((prev) => mergePrinters(prev, [discovered]));
+					setPrinters((prev) => [...prev.filter((p) => p.id !== discovered.id), discovered]);
 				},
 			}
 		);

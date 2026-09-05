@@ -8,6 +8,7 @@ import { identifyDiscoveredPrinters } from '../discovery/identify';
 import { createIdentifyProbes } from '../discovery/identify-probes.web';
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
 import { mergePrinters } from '../discovery/merge-printers';
+import { printerLogger } from '../logger';
 import { saveWebDevice } from '../transport/web-device-store';
 
 import type { DiscoveredPrinter, DiscoveryError, PrinterDiscovery } from '../types';
@@ -64,8 +65,12 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 
 		try {
 			const { probeVendorEndpoint } = await import('../utils/probe-vendor');
-			const { buildSweepCandidates, sweepForPrinters } = await import('../discovery/network-sweep');
-			const hosts = buildSweepCandidates();
+			const { buildSweepCandidates, detectLiveSubnets, sweepForPrinters } =
+				await import('../discovery/network-sweep');
+			const bases = await detectLiveSubnets(fetch, undefined, controller.signal);
+			if (abortRef.current !== controller || controller.signal.aborted) return;
+			printerLogger.debug('Web sweep subnets', { context: { bases } });
+			const hosts = buildSweepCandidates({ subnetBases: bases });
 			setScanCandidates(hosts);
 			setScanProgress({ tested: 0, total: hosts.length });
 			const discovered = await sweepForPrinters({

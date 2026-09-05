@@ -21,8 +21,28 @@ jest.mock('react-native', () => ({
 		</button>
 	),
 	View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	ScrollView: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children?: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+	}) => (
+		<button type="button" data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('../../../../../../contexts/translations', () => ({
+	useT: () => (key: string, values?: Record<string, unknown>) =>
+		`${key}${values ? JSON.stringify(values) : ''}`,
+}));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -37,20 +57,28 @@ describe('ElectronBtPicker', () => {
 		expect(container).toBeEmptyDOMElement();
 	});
 
-	it('renders candidates and reports selection', () => {
+	it('ranks printer-like names first, hides unnamed devices behind a toggle, reports selection', () => {
 		const onSelect = jest.fn();
 		render(
 			<ElectronBtPicker
 				candidates={[
+					{ id: 'c', name: '' },
+					{ id: 'p', name: 'Paul’s Phone' },
 					{ id: 'a', name: 'Printer A' },
-					{ id: 'b', name: '' },
 				]}
 				onSelect={onSelect}
 			/>
 		);
-		expect(screen.getByText('Printer A')).toBeInTheDocument();
-		// Unnamed devices fall back to their id.
-		expect(screen.getByText('b')).toBeInTheDocument();
+		const buttons = screen.getAllByTestId(/electron-bt-device-/);
+		expect(buttons.map((b) => b.getAttribute('data-testid'))).toEqual([
+			'electron-bt-device-a',
+			'electron-bt-device-p',
+		]);
+		expect(screen.getByText('settings.bt_likely_printer')).toBeInTheDocument();
+		expect(screen.queryByText('c')).not.toBeInTheDocument();
+		fireEvent.click(screen.getByTestId('electron-bt-toggle-unnamed'));
+		// Unnamed devices fall back to their id once shown.
+		expect(screen.getByText('c')).toBeInTheDocument();
 		fireEvent.click(screen.getByTestId('electron-bt-device-a'));
 		expect(onSelect).toHaveBeenCalledWith('a');
 	});

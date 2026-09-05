@@ -4,7 +4,7 @@ import type { DrawerConnector } from '@wcpos/printer';
 
 export interface PrinterFormValues {
 	name: string;
-	connectionType: 'network' | 'bluetooth' | 'usb';
+	connectionType: 'network' | 'bluetooth' | 'usb' | 'system';
 	vendor: 'epson' | 'star' | 'generic';
 	address: string;
 	cloudPrinterId?: string;
@@ -73,7 +73,7 @@ export const webPrinterSchema = z.object({
 /** Electron: all vendors; network, USB (raw libusb), or Bluetooth (Web Bluetooth). */
 export const electronPrinterSchema = z.object({
 	...baseShape,
-	connectionType: z.enum(['network', 'usb', 'bluetooth']).default('network'),
+	connectionType: z.enum(['network', 'usb', 'bluetooth', 'system']).default('network'),
 	vendor: z.enum(['epson', 'star', 'generic']).default('generic'),
 	address: z.string().min(1, 'A printer address or device is required'),
 });

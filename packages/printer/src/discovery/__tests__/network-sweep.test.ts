@@ -1,8 +1,62 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { buildSweepCandidates, sweepForPrinters } from '../network-sweep';
+import { buildSweepCandidates, detectLiveSubnets, sweepForPrinters } from '../network-sweep';
+
+afterEach(() => vi.useRealTimers());
+
+describe('detectLiveSubnets', () => {
+	it('keeps resolved/refused gateways, drops timeouts, and annotates both gateway targets', async () => {
+		vi.useFakeTimers();
+		const probe = vi.fn(async (url: string, init?: RequestInit) => {
+			if (url === 'http://192.168.1.254/') return new Response();
+			if (url === 'http://10.0.0.1/') throw new TypeError('connection refused');
+			return new Promise<Response>((_, reject) => {
+				init?.signal?.addEventListener('abort', () => reject(new DOMException('', 'AbortError')));
+			});
+		});
+		const result = detectLiveSubnets(probe, ['192.168.1', '10.0.0', '192.168.4']);
+		expect(probe).toHaveBeenCalledTimes(6);
+		await vi.advanceTimersByTimeAsync(1500);
+		await expect(result).resolves.toEqual(['192.168.1', '10.0.0']);
+		expect(probe).toHaveBeenCalledWith(
+			'http://192.168.1.1/',
+			expect.objectContaining({
+				mode: 'no-cors',
+				targetAddressSpace: 'local',
+				signal: expect.any(AbortSignal),
+			})
+		);
+	});
+
+	it('returns promptly on cancellation and skips already-aborted scans', async () => {
+		const controller = new AbortController();
+		const probe = vi.fn(() => new Promise<Response>(() => {}));
+		const result = detectLiveSubnets(probe, ['192.168.1'], controller.signal);
+		controller.abort();
+		await expect(result).resolves.toEqual([]);
+		probe.mockClear();
+		await expect(detectLiveSubnets(probe, undefined, controller.signal)).resolves.toEqual([]);
+		expect(probe).not.toHaveBeenCalled();
+	});
+});
 
 describe('buildSweepCandidates', () => {
+	it('expands multiple /24s after common hosts without duplicates, retaining singular input', () => {
+		const hosts = buildSweepCandidates({
+			subnetBases: ['192.168.1', '10.0.0', '192.168.1'],
+			subnetBase: '192.168.1',
+		});
+		expect(hosts.slice(0, 4)).toEqual(['localhost', 'printer.local', 'epson.local', 'star.local']);
+		expect(hosts.indexOf('172.16.0.254')).toBeLessThan(hosts.indexOf('192.168.1.3'));
+		for (const base of ['192.168.1', '10.0.0']) {
+			expect(hosts.filter((host) => host.startsWith(`${base}.`))).toHaveLength(254);
+			expect(hosts).toContain(`${base}.131`);
+			expect(hosts).not.toContain(`${base}.0`);
+			expect(hosts).not.toContain(`${base}.255`);
+		}
+		expect(new Set(hosts).size).toBe(hosts.length);
+	});
+
 	it('includes localhost and recognizable common LAN printer addresses by default', () => {
 		const hosts = buildSweepCandidates();
 		expect(hosts).toEqual(
@@ -50,6 +104,33 @@ const epsonHttp = { vendor: 'epson', port: 8008, protocol: 'http' } as const;
 const starHttps = { vendor: 'star', port: 443, protocol: 'https' } as const;
 
 describe('sweepForPrinters', () => {
+	it.each([undefined, 2])(
+		'caps concurrency at %s (default 32), forwards timeout and expanded totals',
+		async (concurrency) => {
+			vi.useFakeTimers();
+			let active = 0;
+			let peak = 0;
+			const probe = vi.fn(async () => {
+				peak = Math.max(peak, ++active);
+				await new Promise((resolve) => setTimeout(resolve, 1500));
+				active--;
+				return null;
+			});
+			const onProgress = vi.fn();
+			const result = sweepForPrinters({
+				hosts: buildSweepCandidates({ subnetBases: ['192.168.1'] }),
+				probe,
+				concurrency,
+				onProgress,
+			});
+			await vi.runAllTimersAsync();
+			await result;
+			expect(peak).toBe(concurrency ?? 32);
+			expect(probe).toHaveBeenCalledWith('192.168.1.131', 1500);
+			expect(onProgress).toHaveBeenLastCalledWith(312, 312);
+		}
+	);
+
 	// Regression: results used to claim raw TCP port 9100, which browsers cannot
 	// reach — the discovered port must be the web endpoint that actually answered.
 	it('returns a DiscoveredPrinter with the probed web endpoint port', async () => {

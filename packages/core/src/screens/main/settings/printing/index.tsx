@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useRouter } from 'expo-router';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Button } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -31,13 +31,11 @@ import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
 import { useStoreSession } from '../../../../contexts/app-state';
-import { usePrinterWizardAvailable } from '../../mini-apps/catalog';
+import { PRINTER_DOCS_URL } from '../printer/printer-docs';
 import { useT } from '../../../../contexts/translations';
 
 export function PrintingSettings() {
 	const t = useT();
-	const router = useRouter();
-	const showWizard = usePrinterWizardAvailable('settings.printers.trouble');
 	const { storeDB } = useStoreSession();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
 	const [editingPrinter, setEditingPrinter] = React.useState<PrinterProfile | undefined>();
@@ -238,15 +236,9 @@ export function PrintingSettings() {
 						</HStack>
 					</>
 				)}
-				{showWizard && (
-					<Button
-						variant="ghost-quiet"
-						size="sm"
-						onPress={() => router.push('/settings/mini-app/printer-wizard')}
-					>
-						<Text>{t('settings.having_trouble')}</Text>
-					</Button>
-				)}
+				<DocsLink testID="printing-having-trouble" href={PRINTER_DOCS_URL}>
+					{t('settings.having_trouble')}
+				</DocsLink>
 			</SettingsSection>
 
 			{/* Receipt Templates section */}

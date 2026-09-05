@@ -95,7 +95,8 @@ export class PrinterService {
 
 		let transport: PrinterTransport;
 
-		switch (profile.connectionType) {
+		// Installed Windows queues use the device adapter, not the generic OS print dialog.
+		switch (profile.address?.startsWith('winspool:') ? 'usb' : profile.connectionType) {
 			case 'network': {
 				if (!profile.address) {
 					throw new Error('Network printer profile is missing an address');
@@ -152,7 +153,10 @@ export class PrinterService {
 		decimals?: number
 	): Promise<void> {
 		return this.queue.add(async () => {
-			if (!profile || profile.connectionType === 'system') {
+			if (
+				!profile ||
+				(profile.connectionType === 'system' && !profile.address?.startsWith('winspool:'))
+			) {
 				// Fallback: system print dialog with HTML
 				const transport = new SystemPrintAdapter();
 				if (!html) {
@@ -321,10 +325,10 @@ export class PrinterService {
 
 	/**
 	 * Send a test print to verify connectivity.
-	 * System profiles get an HTML test page via the system print dialog.
+	 * System profiles without a Windows queue key get an HTML page via the system print dialog.
 	 */
 	async testPrint(profile: PrinterProfile, options: TestPrintOptions = {}): Promise<void> {
-		if (profile.connectionType === 'system') {
+		if (profile.connectionType === 'system' && !profile.address?.startsWith('winspool:')) {
 			const html = `<html><body style="font-family:monospace;text-align:center;padding:2em">
         <h2>WCPOS</h2><p>Test Print</p>
         <p>Printer: ${profile.name}</p>

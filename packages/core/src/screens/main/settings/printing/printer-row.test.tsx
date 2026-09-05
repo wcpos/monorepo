@@ -15,6 +15,13 @@ jest.mock('react-native', () => ({
 	),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('@wcpos/components/docs-link', () => {
+	const React = require('react');
+	return {
+		DocsLink: ({ children, href, testID }: { children: string; href: string; testID?: string }) =>
+			React.createElement('a', { 'data-testid': testID, href }, children),
+	};
+});
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<button type="button" data-testid={testID}>
@@ -44,7 +51,6 @@ jest.mock('@wcpos/components/status-badge', () => ({
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
-jest.mock('../../mini-apps/catalog', () => ({ usePrinterWizardAvailable: () => true }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 
 const profile: PrinterProfile = {
