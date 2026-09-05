@@ -380,7 +380,13 @@ function withinRoundingTie(
  *    the contract width.
  */
 function equivalenceDecimals(posDecimals: number, serverValue: string): number {
-	const serverDecimals = serverValue.split('.')[1]?.replace(/0+$/, '').length ?? 0;
+	const fraction = serverValue.split('.')[1];
+	// Effective width: trailing zeros claim no precision. A fraction that is ALL
+	// zeros (`0.000000`, a sub-cent tax rendered at 2dp then padded) is still a
+	// display-width spelling, so it floors at cents rather than reading as the
+	// integer spelling `"7"`, which has no decimal point and keeps the POS width.
+	const serverDecimals =
+		fraction === undefined ? 0 : Math.max(fraction.replace(/0+$/, '').length, CENT_DECIMALS);
 	if (serverDecimals > 0 && serverDecimals < posDecimals) {
 		return Math.min(EXACT_COMPARISON_DECIMALS, Math.max(serverDecimals, CENT_DECIMALS));
 	}

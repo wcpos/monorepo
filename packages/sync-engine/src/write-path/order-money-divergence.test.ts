@@ -215,6 +215,9 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 		['1.735537', '1.740000'],
 		['2.290909', '2.290000'],
 		['5.206612', '5.210000'],
+		// A sub-cent tax rendered at 2dp is an all-zero fraction once padded: still
+		// a display-width spelling (cents), not the integer spelling `"0"`.
+		['0.0049', '0.000000'],
 	])('preserves line taxes %s when the ack merely renders %s', (expected, got) => {
 		const pushed = clone(pos);
 		const acked = clone(pos);
