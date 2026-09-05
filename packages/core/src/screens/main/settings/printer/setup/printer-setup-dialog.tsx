@@ -241,8 +241,12 @@ export function PrinterSetupDialog({
 						<Text className="text-base font-semibold">{p.name}</Text>
 						<View className="flex-row items-center gap-2">
 							<Text className="text-muted-foreground text-sm">
-								{p.address}
-								{p.identity?.model ? ` · ${p.identity.model}` : ''}
+								{p.source === 'network' ? p.address : t(`settings.setup_source_${p.source}`)}
+								{p.identity?.model
+									? ` · ${p.identity.model}`
+									: p.identity?.vendor
+										? ` · ${vendors.find((v) => v.value === p.identity?.vendor)?.label ?? ''}`
+										: ''}
 							</Text>
 							<Text className="border-border text-muted-foreground rounded-md border px-1.5 text-xs">
 								{t(`settings.setup_source_${p.source}`)}
@@ -423,11 +427,14 @@ export function PrinterSetupDialog({
 									)}
 								</>
 							)}
-							{discovery.error && phase === 'results' && (
-								<Text className="text-destructive text-sm">
-									{formatDiscoveryError(discovery.error, t)}
-								</Text>
-							)}
+							{/* "none found" is already the heading; only real failures earn a red line. */}
+							{discovery.error &&
+								discovery.error.code !== 'network-none-found' &&
+								phase === 'results' && (
+									<Text className="text-destructive text-sm">
+										{formatDiscoveryError(discovery.error, t)}
+									</Text>
+								)}
 							{phase === 'saved' && (
 								<View className="items-center gap-2 py-6">
 									<View className="bg-success/15 mb-1 size-14 items-center justify-center rounded-full">

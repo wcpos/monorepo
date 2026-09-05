@@ -749,7 +749,7 @@
 	"settings.setup_details": "{address} · {vendor} · port {port}",
 	"settings.setup_question": "Did the test page print?",
 	"settings.setup_ok": "Yes, and it looks right",
-	"settings.setup_short": "Yes, but the ruler stops before the edge",
+	"settings.setup_short": "Printed, but the ruler is off",
 	"settings.setup_nothing": "Nothing came out",
 	"settings.setup_footer": "Test page {n} · {columns} characters per line",
 	"settings.setup_trouble": "Nothing printed",

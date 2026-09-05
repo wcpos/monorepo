@@ -163,7 +163,17 @@ export function usePrinterSetupFlow(
 			port: web
 				? resolveWebPort(vendor, lane?.port ?? selected.port)
 				: (lanePort ?? selected.port ?? base.port ?? 9100),
-			columns: knownColumns ?? (selected.connectionType === 'network' ? (base.columns ?? 42) : 42),
+			// Unknown width: pre-select the likely paper so the toggle starts on it. Epson and Star are
+			// 80 mm (48) almost always; a chooser-picked generic Bluetooth printer is the cheap 58 mm kind.
+			columns:
+				knownColumns ??
+				(vendor === 'epson' || vendor === 'star'
+					? 48
+					: /^webbluetooth:/.test(selected.address)
+						? 32
+						: selected.connectionType === 'network'
+							? (base.columns ?? 42)
+							: 42),
 		});
 	}
 	function fail(error: unknown, phase: 'trouble' | 'error') {
