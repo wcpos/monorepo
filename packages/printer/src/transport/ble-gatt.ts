@@ -31,6 +31,10 @@ interface BluetoothRemoteGATTCharacteristic {
 // 20 bytes is the BLE default-MTU floor that every printer accepts.
 const DEFAULT_CHUNK_SIZE = 20;
 const CHUNK_PAUSE_MS = 20;
+// Write-without-response gives no delivery confirmation, and disconnecting right after the last
+// chunk dropped the tail of receipts on the Netum NT-1809 (roadmap#136 #38). The last chunk goes
+// as an acknowledged write and the link stays up briefly so the printer drains its buffer.
+const TAIL_SETTLE_MS = 300;
 
 const PRINT_PROFILES = [
 	['000018f0-0000-1000-8000-00805f9b34fb', '00002af1-0000-1000-8000-00805f9b34fb'],
@@ -102,14 +106,16 @@ export async function connectBleReceiptPrinter(
 					let chunks = 0;
 					for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
 						const chunk = bytes.slice(offset, offset + chunkSize);
-						if (characteristic.properties.writeWithoutResponse) {
+						const last = offset + chunkSize >= bytes.byteLength;
+						if (characteristic.properties.writeWithoutResponse && !last) {
 							await characteristic.writeValueWithoutResponse(chunk);
 						} else {
 							await characteristic.writeValue(chunk);
 						}
 						chunks += 1;
-						if (offset + chunkSize < bytes.byteLength) await pause();
+						if (!last) await pause();
 					}
+					await new Promise<void>((resolve) => setTimeout(resolve, TAIL_SETTLE_MS));
 					printerLogger.info('BLE GATT print job written', {
 						context: { bytes: bytes.byteLength, chunks },
 					});

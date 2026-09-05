@@ -80,7 +80,7 @@ describe('connectBleReceiptPrinter', () => {
 		);
 	});
 
-	it('writes a 50-byte job in 20/20/10-byte chunks without response', async () => {
+	it('writes a 50-byte job in 20/20-byte chunks without response and the last 10 bytes acknowledged', async () => {
 		const { device, characteristics } = mockDevice({
 			[PROFILE_18F0.service]: [PROFILE_18F0.characteristic],
 		});
@@ -92,7 +92,9 @@ describe('connectBleReceiptPrinter', () => {
 			`${PROFILE_18F0.service}/${PROFILE_18F0.characteristic}`
 		)!;
 		const writes = vi.mocked(characteristic.writeValueWithoutResponse).mock.calls;
-		expect(writes.map(([chunk]) => chunk.byteLength)).toEqual([20, 20, 10]);
-		expect(characteristic.writeValue).not.toHaveBeenCalled();
+		expect(writes.map(([chunk]) => chunk.byteLength)).toEqual([20, 20]);
+		// The tail goes as an acknowledged write so the link is not dropped with bytes in flight.
+		const acknowledged = vi.mocked(characteristic.writeValue).mock.calls;
+		expect(acknowledged.map(([chunk]) => chunk.byteLength)).toEqual([10]);
 	});
 });
