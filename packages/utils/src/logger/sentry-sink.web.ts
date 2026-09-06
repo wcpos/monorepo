@@ -136,6 +136,46 @@ export function captureLoggedError(input: SentryCaptureInput): void {
 	}
 }
 
+/**
+ * Opt-in printer setup outcome (roadmap#161 P0): one info-level message per terminal setup
+ * phase, tagged so Sentry can pivot by vendor/lane/platform. Sent only when the merchant
+ * allowed telemetry; carries no addresses or device keys.
+ */
+// Only stable, address-free fields leave the device; failure text can carry a printer endpoint.
+export const PRINTER_OUTCOME_FIELDS = [
+	'result',
+	'platform',
+	'source',
+	'vendor',
+	'model',
+	'lane',
+	'columns',
+	'testPages',
+	'securePrinting',
+	'troubleReason',
+] as const;
+
+export function capturePrinterOutcome(
+	context: Record<string, string | number | boolean | undefined>
+): void {
+	if (!isInitialized) return;
+	try {
+		const safe = Object.fromEntries(
+			PRINTER_OUTCOME_FIELDS.filter((key) => context[key] !== undefined).map((key) => [
+				key,
+				String(context[key]),
+			])
+		);
+		Sentry.captureMessage('Printer setup outcome', {
+			level: 'info',
+			tags: safe,
+			extra: { context: safe },
+		});
+	} catch {
+		// Diagnostics must never interfere with the logger.
+	}
+}
+
 // Development builds never report, whatever the merchant chose: dev noise
 // would drown the production signal. ts-jest leaves __DEV__ undefined.
 const isDevelopment = typeof __DEV__ !== 'undefined' && __DEV__;

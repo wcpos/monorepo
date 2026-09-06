@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildCloudTarget,
 	buildSerialKey,
+	buildSppKey,
 	buildUsbKey,
 	buildWinspoolKey,
 	connectionTypeForTarget,
@@ -21,6 +22,15 @@ describe('device-key target codec', () => {
 			raw,
 		});
 		expect(connectionTypeForTarget(raw)).toBe('bluetooth');
+	});
+
+	it('builds and parses Bluetooth Classic keys as bluetooth targets', () => {
+		const raw = buildSppKey('AA:BB:CC:DD:EE:FF');
+
+		expect(raw).toBe('spp:AA:BB:CC:DD:EE:FF');
+		expect(parseTarget(raw)).toEqual({ kind: 'spp', address: 'AA:BB:CC:DD:EE:FF', raw });
+		expect(connectionTypeForTarget(raw)).toBe('bluetooth');
+		expect(parseTarget('spp:')).toEqual({ kind: 'unknown', raw: 'spp:' });
 	});
 
 	it('rejects empty serial device keys as unknown', () => {

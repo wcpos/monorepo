@@ -76,3 +76,4 @@ module.exports.setVerboseDiagnostics = jest.fn((enabled) => {
 module.exports.recorderStats = jest.fn(() => ({ events: 0, bytes: 0 }));
 module.exports.snapshotRecorder = jest.fn(() => []);
 module.exports.promoteRecorder = jest.fn();
+module.exports.capturePrinterOutcome = jest.fn();

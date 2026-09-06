@@ -17,6 +17,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { PrinterProfile } from '@wcpos/printer';
 
 import { printerIconName } from './utils';
+import { useCopySetupReport } from '../printer/copy-setup-report';
 import { useT } from '../../../../contexts/translations';
 
 interface PrinterRowProps {
@@ -72,8 +73,9 @@ export function PrinterRow({
 
 	// Built-in/server-owned targets are not backed by mutable printer_profiles documents.
 	const canSetDefault = !profile.isDefault && !profile.isBuiltIn;
+	const copyReport = useCopySetupReport();
 	const canDelete = !profile.isBuiltIn;
-	const showMenu = canSetDefault || canDelete;
+	const showMenu = true; // the setup report is always offered
 
 	return (
 		<View
@@ -119,6 +121,26 @@ export function PrinterRow({
 							<IconButton name="ellipsisVertical" testID={`printer-row-${profile.id}-menu`} />
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
+							<DropdownMenuItem
+								onPress={() =>
+									void copyReport({
+										printer: {
+											name: profile.name,
+											vendor: profile.vendor,
+											model: profile.printerModel,
+											connectionType: profile.connectionType,
+											address: profile.address,
+											port: profile.port,
+											columns: profile.columns,
+											language: profile.language,
+										},
+									})
+								}
+								testID={`printer-row-${profile.id}-copy-report`}
+							>
+								<Icon name="circleInfo" />
+								<Text>{t('settings.setup_copy_report')}</Text>
+							</DropdownMenuItem>
 							{canSetDefault && (
 								<DropdownMenuItem
 									onPress={() => onSetDefault(profile.id)}

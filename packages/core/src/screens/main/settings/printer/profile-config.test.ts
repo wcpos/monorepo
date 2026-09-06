@@ -302,4 +302,31 @@ describe('buildPrinterProfileFields', () => {
 			})
 		).not.toHaveProperty('cloudProvider');
 	});
+
+	const escPosProfile = {
+		name: 'Counter',
+		connectionType: 'network' as const,
+		vendor: 'generic' as const,
+		address: '192.168.1.100',
+		port: 9100,
+		language: 'esc-pos' as const,
+		columns: 42,
+		emitEscPrintMode: true,
+		fullReceiptRaster: false,
+		autoCut: true,
+		autoOpenDrawer: false,
+		isDefault: false,
+	};
+
+	it('leaves the code page unwritten when the cashier kept Automatic', () => {
+		expect(buildPrinterProfileFields({ ...escPosProfile, codePage: 'auto' })).not.toHaveProperty(
+			'codePage'
+		);
+	});
+
+	it('writes the chosen code page through', () => {
+		expect(buildPrinterProfileFields({ ...escPosProfile, codePage: 'windows1251' })).toEqual(
+			expect.objectContaining({ codePage: 'windows1251' })
+		);
+	});
 });

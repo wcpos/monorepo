@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { forgetBleDevice, getBleDevice, rememberBleDevice } from '../ble-device-registry';
 import { BLE_PRINT_SERVICE_UUIDS } from '../ble-gatt';
-import { WebBluetoothAdapter } from '../webbluetooth-adapter';
+import { BLE_RECONNECT_DELAY_MS, WebBluetoothAdapter } from '../webbluetooth-adapter';
 
 const mocks = vi.hoisted(() => ({
 	connectBleReceiptPrinter: vi.fn(),
@@ -41,7 +41,10 @@ describe('WebBluetoothAdapter', () => {
 		});
 	});
 
-	afterEach(() => vi.unstubAllGlobals());
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
+	});
 
 	it('prefers the live BluetoothDevice even without a stored descriptor', async () => {
 		const device = liveDevice();
@@ -57,15 +60,54 @@ describe('WebBluetoothAdapter', () => {
 	});
 
 	it.each(['disconnected', 'not connected', 'NetworkError'])(
-		'forgets a device after GATT failure: %s',
+		'retains a device after a write failure without replaying the job: %s',
 		async (message) => {
-			rememberBleDevice('profile-1', liveDevice());
+			const device = liveDevice();
+			rememberBleDevice('profile-1', device);
 			mocks.write.mockRejectedValueOnce(new Error(message));
 			await expect(new WebBluetoothAdapter('profile-1').printRaw(Uint8Array.of(1))).rejects.toThrow(
 				message
 			);
-			expect(getBleDevice('profile-1')).toBeUndefined();
+			expect(getBleDevice('profile-1')).toBe(device);
+			expect(mocks.connectBleReceiptPrinter).toHaveBeenCalledOnce();
 			expect(mocks.disconnect).toHaveBeenCalledOnce();
+		}
+	);
+
+	it.each([false, true])(
+		'retries a transient connection failure once, fails twice=%s',
+		async (twice) => {
+			vi.useFakeTimers();
+			const device = liveDevice();
+			rememberBleDevice('profile-1', device);
+			mocks.connectBleReceiptPrinter.mockRejectedValueOnce(
+				new Error('Bluetooth Device is no longer in range.')
+			);
+			if (twice)
+				mocks.connectBleReceiptPrinter.mockRejectedValueOnce(
+					new DOMException('Offline', 'NetworkError')
+				);
+			const data = Uint8Array.of(1, 2);
+			const printing = new WebBluetoothAdapter('profile-1').printRaw(data);
+			const outcome = printing.then(
+				() => undefined,
+				(error: unknown) => error
+			);
+			await vi.advanceTimersByTimeAsync(BLE_RECONNECT_DELAY_MS - 1);
+			expect(mocks.connectBleReceiptPrinter).toHaveBeenCalledOnce();
+			await vi.advanceTimersByTimeAsync(1);
+			if (twice)
+				expect(await outcome).toEqual(
+					new Error(
+						'Bluetooth printer is not responding. Turn it off and on again, then try again.'
+					)
+				);
+			else expect(await outcome).toBeUndefined();
+			expect(mocks.connectBleReceiptPrinter).toHaveBeenCalledTimes(2);
+			expect(getBleDevice('profile-1')).toBe(device);
+			if (twice) expect(mocks.write).not.toHaveBeenCalled();
+			else expect(mocks.write).toHaveBeenCalledExactlyOnceWith(data);
+			expect(mocks.waitForWebPrinterReconnect).not.toHaveBeenCalled();
 		}
 	);
 
@@ -134,7 +176,10 @@ describe('WebBluetoothAdapter', () => {
 function liveDevice() {
 	return {
 		id: 'printer-id',
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
 		gatt: {
+			connected: false,
 			connect: vi.fn(),
 			disconnect: vi.fn(),
 			getPrimaryService: vi.fn(),

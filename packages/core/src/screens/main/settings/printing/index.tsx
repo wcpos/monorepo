@@ -1,18 +1,17 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useRouter } from 'expo-router';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Button } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
-import { getErrorMessage } from '@wcpos/utils/logger';
 import type {
 	PrinterProfileDocument,
 	TemplateDocument,
@@ -23,21 +22,20 @@ import { PrinterRow } from './printer-row';
 import { PrintersEmptyState } from './printers-empty-state';
 import { TemplateRow } from './template-row';
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
-import { AUTO_VALUE } from './utils';
+import { AUTO_VALUE, laneAcknowledgesPrint } from './utils';
 import { SettingsSection } from '../components/settings-section';
 import { PrinterDialog } from '../printer/add-printer';
+import { describePrinterError } from '../printer/describe-printer-error';
 import { useAvailablePrinterProfiles } from '../printer/use-available-printer-profiles';
 import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
 import { useStoreSession } from '../../../../contexts/app-state';
-import { usePrinterWizardAvailable } from '../../mini-apps/catalog';
+import { PRINTER_DOCS_URL } from '../printer/printer-docs';
 import { useT } from '../../../../contexts/translations';
 
 export function PrintingSettings() {
 	const t = useT();
-	const router = useRouter();
-	const showWizard = usePrinterWizardAvailable('settings.printers.trouble');
 	const { storeDB } = useStoreSession();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
 	const [editingPrinter, setEditingPrinter] = React.useState<PrinterProfile | undefined>();
@@ -163,14 +161,18 @@ export function PrintingSettings() {
 				} else {
 					await printerService.testPrint(profile);
 				}
+				// Only a lane that answers proves the paper moved; everything else was merely sent.
 				Toast.show({
-					title: t('settings.test_print_sent').replace('%s', profile.name),
+					title: t(
+						laneAcknowledgesPrint(profile)
+							? 'settings.test_print_done'
+							: 'settings.test_print_dispatched'
+					).replace('%s', profile.name),
 					type: 'success',
 				});
 			} catch (err) {
 				Toast.show({
-					title: t('settings.test_print_failed'),
-					description: getErrorMessage(err),
+					title: t(describePrinterError(err).key),
 					type: 'error',
 				});
 			} finally {
@@ -238,15 +240,9 @@ export function PrintingSettings() {
 						</HStack>
 					</>
 				)}
-				{showWizard && (
-					<Button
-						variant="ghost-quiet"
-						size="sm"
-						onPress={() => router.push('/settings/mini-app/printer-wizard')}
-					>
-						<Text>{t('settings.having_trouble')}</Text>
-					</Button>
-				)}
+				<DocsLink testID="printing-having-trouble" href={PRINTER_DOCS_URL}>
+					{t('settings.having_trouble')}
+				</DocsLink>
 			</SettingsSection>
 
 			{/* Receipt Templates section */}

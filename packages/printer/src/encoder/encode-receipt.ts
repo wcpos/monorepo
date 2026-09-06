@@ -2,7 +2,7 @@ import type { EscposRenderOptions } from '@wcpos/receipt-renderer';
 
 import { encodeThermalTemplate } from '../renderer';
 import { DEFAULT_THERMAL_TEMPLATE } from './default-thermal-template';
-import { isEscposTextEncodable } from './escpos-text';
+import { createEncodabilityGate, withEscposFontA } from './escpos-text';
 import { formatMoney } from './format-money';
 
 import type { ReceiptData } from './types';
@@ -30,6 +30,8 @@ export interface EncodeReceiptOptions {
 	drawerConnector?: DrawerConnector;
 	/** Decimal places for monetary formatting. Default: 2 */
 	decimals?: number;
+	/** ESC/POS code page name for the receipt text. Default: the encoder's automatic choice. */
+	codePage?: string;
 }
 
 export function buildReceiptMarkupJob(
@@ -46,13 +48,14 @@ export function buildReceiptMarkupJob(
 		openDrawer = false,
 		drawerConnector = 'pin2',
 		decimals: dp,
+		codePage,
 	} = options;
 
 	const currency = data.order.currency;
 	const locale = data.presentation_hints?.locale;
-	const isSymbolEncodable = (symbol: string): boolean => isEscposTextEncodable(symbol, language);
+	const gate = createEncodabilityGate(language, codePage);
 	const fmt = (value: number, decimals?: number): string =>
-		formatMoney(value, currency, locale, decimals, isSymbolEncodable);
+		formatMoney(value, currency, locale, decimals, gate.isSymbolEncodable);
 
 	// Compute column widths
 	const infoColRight = Math.max(12, Math.floor(columns / 2));
@@ -131,14 +134,27 @@ export function buildReceiptMarkupJob(
 		})),
 	};
 
+	gate.logSubstitutions();
+
 	return {
 		template: DEFAULT_THERMAL_TEMPLATE,
 		data: templateData,
-		options: { printerModel, language, columns, enableCp932, emitEscPrintMode, drawerConnector },
+		options: {
+			printerModel,
+			language,
+			columns,
+			enableCp932,
+			emitEscPrintMode,
+			drawerConnector,
+			codePage,
+		},
 	};
 }
 
 export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions = {}): Uint8Array {
 	const job = buildReceiptMarkupJob(data, options);
-	return encodeThermalTemplate(job.template, job.data, job.options);
+	return withEscposFontA(
+		encodeThermalTemplate(job.template, job.data, job.options),
+		job.options.language ?? 'esc-pos'
+	);
 }

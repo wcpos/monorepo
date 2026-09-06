@@ -1,16 +1,21 @@
 /// <reference path="../types/point-of-sale-connectors.d.ts" />
 import { requestKnownBluetoothDevice } from '../discovery/bluetooth-scan-session';
 import { printerLogger } from '../logger';
-import { forgetBleDevice, getBleDevice, rememberBleDevice } from './ble-device-registry';
+import { getBleDevice, rememberBleDevice } from './ble-device-registry';
 import {
 	BLE_PRINT_SERVICE_UUIDS,
 	connectBleReceiptPrinter,
 	type WebBluetoothNavigator,
 } from './ble-gatt';
+import { statusQueryUnavailable } from './escpos-status';
 import { loadWebDevice } from './web-device-store';
 import { waitForWebPrinterReconnect } from './web-reconnect';
 
+import type { PrinterStatus } from './escpos-status';
 import type { PrinterTransport } from '../types';
+
+// Give a temporarily unavailable BLE printer a moment before retrying the connection once.
+export const BLE_RECONNECT_DELAY_MS = 1500;
 
 export class WebBluetoothAdapter implements PrinterTransport {
 	readonly name = 'webbluetooth';
@@ -44,17 +49,32 @@ export class WebBluetoothAdapter implements PrinterTransport {
 			}
 		}
 		if (live) {
+			let printer;
 			try {
-				const printer = await connectBleReceiptPrinter(live);
-				try {
-					await printer.write(data);
-				} finally {
-					await printer.disconnect();
-				}
+				printer = await connectBleReceiptPrinter(live);
 			} catch (error) {
-				if (/NetworkError|disconnected|not connected/i.test(String(error)))
-					forgetBleDevice(this.deviceKey);
-				throw error;
+				if (!/no longer in range|NetworkError/i.test(String(error))) throw error;
+				printerLogger.debug('Bluetooth connection failed, retrying once', {
+					context: { cause: String(error) },
+				});
+				await new Promise<void>((resolve) => setTimeout(resolve, BLE_RECONNECT_DELAY_MS));
+				try {
+					printer = await connectBleReceiptPrinter(live);
+				} catch (retryError) {
+					printerLogger.debug('Bluetooth connection retry failed', {
+						context: {
+							cause: retryError instanceof Error ? retryError.message : String(retryError),
+						},
+					});
+					throw new Error(
+						'Bluetooth printer is not responding. Turn it off and on again, then try again.'
+					);
+				}
+			}
+			try {
+				await printer.write(data);
+			} finally {
+				await printer.disconnect();
 			}
 			return;
 		}
@@ -63,6 +83,29 @@ export class WebBluetoothAdapter implements PrinterTransport {
 		const printer = new WebBluetoothReceiptPrinter();
 		await waitForWebPrinterReconnect(printer, device, 'Bluetooth');
 		printer.print(data);
+	}
+
+	/**
+	 * Only the GATT path can ask: the library fallback owns its own connection and exposes no read.
+	 * The keep-alive link from the job just printed is the one this reads over.
+	 */
+	async queryStatus(): Promise<PrinterStatus | null> {
+		const live = getBleDevice(this.deviceKey);
+		if (!live) return statusQueryUnavailable(this.name);
+		let printer;
+		try {
+			printer = await connectBleReceiptPrinter(live);
+		} catch (cause) {
+			printerLogger.debug('Status query could not reach the printer', {
+				context: { cause: cause instanceof Error ? cause.message : String(cause) },
+			});
+			return null;
+		}
+		try {
+			return await printer.queryStatus();
+		} finally {
+			await printer.disconnect();
+		}
 	}
 
 	async printHtml(_html: string): Promise<void> {

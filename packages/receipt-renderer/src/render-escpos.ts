@@ -18,6 +18,8 @@ import type {
 export interface EscposRenderOptions {
 	printerModel?: string;
 	language?: 'esc-pos' | 'star-prnt' | 'star-line';
+	/** ESC/POS code page for text ('auto' lets the encoder pick per character). */
+	codePage?: string;
 	columns?: number;
 	enableCp932?: boolean;
 	/**
@@ -144,7 +146,14 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 	}
 
 	const encoder = new ReceiptPrinterEncoder(encoderOpts);
-	encoder.initialize().codepage('auto');
+	encoder.initialize();
+	// A code page the encoder does not know (or the printer model cannot use) must not fail the
+	// receipt: fall back to automatic selection, the same way the text gate does.
+	try {
+		encoder.codepage(options.codePage ?? 'auto');
+	} catch {
+		encoder.codepage('auto');
+	}
 	const resolvedLanguage = encoder.language as 'esc-pos' | 'star-prnt' | 'star-line';
 
 	const context: RenderContext = {

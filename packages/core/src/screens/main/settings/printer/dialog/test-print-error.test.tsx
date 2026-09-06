@@ -54,12 +54,13 @@ jest.mock('@wcpos/components/collapsible', () => ({
 	CollapsibleContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
-const mockRouterPush = jest.fn();
-let mockShowWizard = false;
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockRouterPush }) }));
-jest.mock('../../../mini-apps/catalog', () => ({
-	usePrinterWizardAvailable: () => mockShowWizard,
-}));
+jest.mock('@wcpos/components/docs-link', () => {
+	const React = require('react');
+	return {
+		DocsLink: ({ children, href, testID }: { children: string; href: string; testID?: string }) =>
+			React.createElement('a', { 'data-testid': testID, href }, children),
+	};
+});
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () =>
 		jest
@@ -93,18 +94,28 @@ describe('TestPrintError', () => {
 		expect(container).toBeEmptyDOMElement();
 	});
 
-	it('renders the structured attempt, reason, suggestions, and support details', () => {
+	it('shows one actionable line instead of the attempt, reason and numbered suggestions', () => {
 		render(<TestPrintError error={failureWithDiagnostics} />);
 
-		expect(screen.getByText('Test print failed')).toBeInTheDocument();
-		expect(screen.getByText('Epson ePOS over HTTPS')).toBeInTheDocument();
-		expect(screen.getByTestId('add-printer-test-error-url')).toHaveTextContent(
-			'https://localhost:8043/cgi-bin/epos/service.cgi?devid=local_printer&timeout=10000'
+		expect(screen.getByTestId('add-printer-test-error-line')).toHaveTextContent(
+			'The printer did not accept the job.'
 		);
-		expect(
-			screen.getByText("The printer did not respond on Epson's HTTPS ePOS port.")
-		).toBeInTheDocument();
-		expect(screen.getByText(/1\. If this is a local virtual printer/)).toBeInTheDocument();
+		expect(screen.queryByText('We tried')).not.toBeInTheDocument();
+		expect(screen.queryByText('Likely reason')).not.toBeInTheDocument();
+		expect(screen.queryByText(/1\. If this is a local virtual printer/)).not.toBeInTheDocument();
+		expect(screen.queryByText(failureWithDiagnostics.message)).not.toBeInTheDocument();
+	});
+
+	it('maps a known transport failure to its line', () => {
+		render(<TestPrintError error={{ message: 'connect ECONNREFUSED', diagnostics: null }} />);
+
+		expect(screen.getByTestId('add-printer-test-error-line')).toHaveTextContent(
+			'The printer refused the connection. Check its network settings, then try again.'
+		);
+	});
+
+	it('keeps the raw message in the support details', () => {
+		render(<TestPrintError error={failureWithDiagnostics} />);
 
 		const details = screen.getByTestId('add-printer-support-details');
 		expect(details).toHaveTextContent('Vendor: Epson');
@@ -126,37 +137,20 @@ describe('TestPrintError', () => {
 			expect.stringContaining('Endpoint: https://localhost:8043')
 		);
 	});
-
-	it('falls back to the plain message without diagnostics', () => {
-		render(<TestPrintError error={{ message: 'Printer exploded', diagnostics: null }} />);
-		expect(screen.getByText('Printer exploded')).toBeInTheDocument();
-		expect(screen.queryByText('We tried')).not.toBeInTheDocument();
-	});
 });
 
-describe('TestPrintError wizard entry', () => {
-	afterEach(() => {
-		mockShowWizard = false;
-		mockRouterPush.mockClear();
+describe('TestPrintError help entry', () => {
+	it('offers "Having trouble?" and opens the printer guide', () => {
+		render(<TestPrintError error={{ message: 'Printer did not answer', diagnostics: null }} />);
+		expect(screen.getByTestId('add-printer-having-trouble').getAttribute('href')).toBe(
+			'https://docs.wcpos.com/hardware/printers'
+		);
 	});
 
-	it('offers "Having trouble?" only when the wizard is available and routes to it', () => {
-		mockShowWizard = true;
+	it('drops the guide where the screen already offers one', () => {
 		render(
-			<TestPrintError
-				error={{ message: 'Printer did not answer', diagnostics: undefined } as never}
-			/>
+			<TestPrintError error={{ message: 'Printer did not answer', diagnostics: null }} hideGuide />
 		);
-		fireEvent.click(screen.getByTestId('add-printer-having-trouble'));
-		expect(mockRouterPush).toHaveBeenCalledWith('/settings/mini-app/printer-wizard');
-	});
-
-	it('hides the wizard entry when it is not available', () => {
-		render(
-			<TestPrintError
-				error={{ message: 'Printer did not answer', diagnostics: undefined } as never}
-			/>
-		);
-		expect(screen.queryByTestId('add-printer-having-trouble')).toBeNull();
+		expect(screen.queryByTestId('add-printer-having-trouble')).not.toBeInTheDocument();
 	});
 });

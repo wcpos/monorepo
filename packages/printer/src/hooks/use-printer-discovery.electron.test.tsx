@@ -258,6 +258,21 @@ describe('usePrinterDiscovery (electron)', () => {
 		]);
 	});
 
+	it('keeps a manual network printer when a scan fails', async () => {
+		installIpc(async () => {
+			throw new Error('Network unavailable');
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+		act(() => result.current.addManualPrinter('Manual', '192.168.1.50', 9100));
+		await act(async () => {
+			await result.current.startScan();
+		});
+		expect(result.current.printers).toMatchObject([
+			{ id: '192.168.1.50:9100', name: 'Manual', connectionType: 'network' },
+		]);
+		expect(result.current.error?.code).toBe('discovery-failed');
+	});
+
 	it('identifies a discovered network printer and uses its printing lane port', async () => {
 		installIpc((channel: string) => {
 			if (channel === 'printer-discovery') {
@@ -289,7 +304,7 @@ describe('usePrinterDiscovery (electron)', () => {
 		});
 	});
 
-	it('does not merge identification results after the scan is stopped', async () => {
+	it('does not expose results while identification is pending or after the scan is stopped', async () => {
 		const discovered: DiscoveredPrinter = {
 			id: 'mdns-epson',
 			name: 'EPSON TM-m30III',
@@ -314,6 +329,7 @@ describe('usePrinterDiscovery (electron)', () => {
 			scan = result.current.startScan();
 			await vi.waitFor(() => expect(identifyDiscoveredPrinters).toHaveBeenCalled());
 		});
+		expect(result.current.printers).toEqual([]);
 		await act(async () => {
 			await result.current.stopScan();
 		});
@@ -545,4 +561,34 @@ describe('usePrinterDiscovery (electron)', () => {
 		expect(requestDeviceMock).toHaveBeenCalledTimes(2);
 		expect(result.current.isBluetoothScanning).toBe(true);
 	});
+});
+
+it.each([false, true])('keeps USB results when a late network scan fails=%s', async (fail) => {
+	const usb: DiscoveredPrinter = {
+		id: 'usb-device',
+		name: 'Receipt',
+		connectionType: 'usb',
+		address: 'usb:1:2:3:4',
+	};
+	let finish!: (rows: DiscoveredPrinter[]) => void;
+	let reject!: (error: Error) => void;
+	const network = new Promise<DiscoveredPrinter[]>((resolve, onReject) => {
+		finish = resolve;
+		reject = onReject;
+	});
+	installIpc((channel) => (channel === 'printer-discovery' ? network : Promise.resolve([usb])));
+	const { result, unmount } = renderHook(() => usePrinterDiscovery());
+	let scan!: Promise<void>;
+	await act(async () => {
+		scan = result.current.startScan();
+		await result.current.connectUsbDevice?.();
+	});
+	await act(async () => {
+		if (fail) reject(new Error('Network unavailable'));
+		else finish([]);
+		await scan;
+	});
+	expect(result.current.printers).toEqual([usb]);
+	unmount();
+	removeIpc();
 });

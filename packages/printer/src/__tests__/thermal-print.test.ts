@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	discoverThermalAssetRequests,
 	encodeThermalTemplateForPrint,
+	maxDotsForColumns,
+	maxDotsForPaperWidth,
 	prepareThermalPrintAssets,
 	renderThermalBarcodeAsset,
 } from '../encoder/thermal-print';
@@ -359,3 +361,23 @@ function baseReceiptData() {
 		totals: { total: 0 },
 	};
 }
+
+describe('logo width when the template names no paper width', () => {
+	it.each([
+		{ columns: 32, dots: 384 },
+		{ columns: 42, dots: 576 },
+		{ columns: 48, dots: 576 },
+		{ columns: 64, dots: 576 },
+	])('gives a $columns-column printer $dots dots', ({ columns, dots }) => {
+		expect(maxDotsForColumns(columns)).toBe(dots);
+	});
+
+	it('falls back to the 80 mm width when the profile has no column count', () => {
+		expect(maxDotsForColumns(undefined)).toBe(576);
+	});
+
+	it('still trusts the template when it does name a paper width', () => {
+		expect(maxDotsForPaperWidth('58mm')).toBe(384);
+		expect(maxDotsForPaperWidth('80mm')).toBe(576);
+	});
+});

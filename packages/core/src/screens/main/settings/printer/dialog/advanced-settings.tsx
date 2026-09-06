@@ -12,6 +12,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { DrawerEmulationWarning } from './drawer-emulation-warning';
 import { FullReceiptRasterField } from './full-receipt-raster-field';
 import { DrawerConnectorField } from './drawer-connector-field';
+import { CodePageSelect } from '../components/code-page-select';
 import { LanguageSelect } from '../components/language-select';
 import { PaperWidthSelect } from '../components/paper-width-select';
 import { VendorSelect } from '../components/vendor-select';
@@ -99,6 +100,21 @@ export function AdvancedSettings({
 							)}
 						/>
 					</HStack>
+					{language === 'esc-pos' && (
+						<FormField
+							control={form.control}
+							name="codePage"
+							render={({ field: { value, onChange, ...rest } }) => (
+								<FormSelect
+									customComponent={CodePageSelect}
+									label={t('settings.printer_code_page')}
+									value={value}
+									onChange={onChange}
+									{...rest}
+								/>
+							)}
+						/>
+					)}
 					<DrawerEmulationWarning vendor={vendor} language={language} />
 					<FullReceiptRasterField form={form} />
 					<DrawerConnectorField form={form} />

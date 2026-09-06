@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { DEFAULT_THERMAL_TEMPLATE } from '../encoder/default-thermal-template';
+import { MAX_DOTS_58MM, MAX_DOTS_80MM, maxDotsForColumns } from '../encoder/thermal-print';
 import { mapReceiptData } from '../encoder/map-receipt-data';
 import { prepareSystemPrintHtml } from '../print-html';
 import { PrinterService } from '../printer-service';
@@ -72,12 +73,24 @@ function extractIframeHtml(
 	}
 }
 
-function resolvePaperGeometry(paperWidth: string | null | undefined): {
+/**
+ * The template's paper width decides the logo width when it has one; most templates leave
+ * `paper_width` null, and then the printer's own column count decides rather than a fixed 80 mm.
+ */
+function resolvePaperGeometry(
+	paperWidth: string | null | undefined,
+	columns?: number
+): {
 	paperFrameClass: 'thermal-58' | 'thermal-80';
 	maxWidthDots: number;
 } {
-	if (paperWidth === '58mm') return { paperFrameClass: 'thermal-58', maxWidthDots: 384 };
-	return { paperFrameClass: 'thermal-80', maxWidthDots: 576 };
+	if (paperWidth === '58mm') return { paperFrameClass: 'thermal-58', maxWidthDots: MAX_DOTS_58MM };
+	if (paperWidth) return { paperFrameClass: 'thermal-80', maxWidthDots: MAX_DOTS_80MM };
+	const maxWidthDots = maxDotsForColumns(columns);
+	return {
+		paperFrameClass: maxWidthDots === MAX_DOTS_58MM ? 'thermal-58' : 'thermal-80',
+		maxWidthDots,
+	};
 }
 
 export function usePrint(options: UsePrintOptions) {
@@ -147,7 +160,7 @@ export function usePrint(options: UsePrintOptions) {
 					// then send the finished bytes via the existing printRaw.
 					const effectiveTemplateXml =
 						templateEngine === 'thermal' && templateXml ? templateXml : DEFAULT_THERMAL_TEMPLATE;
-					const geometry = resolvePaperGeometry(paperWidth);
+					const geometry = resolvePaperGeometry(paperWidth, printerProfile.columns);
 					const bytes = await rasterize({
 						templateXml: effectiveTemplateXml,
 						receiptData: normalised as Record<string, unknown>,
@@ -164,7 +177,7 @@ export function usePrint(options: UsePrintOptions) {
 					});
 					await service.printRaw(bytes, printerProfile);
 				} else if (templateEngine === 'thermal' && templateXml) {
-					const geometry = resolvePaperGeometry(paperWidth);
+					const geometry = resolvePaperGeometry(paperWidth, printerProfile.columns);
 					await service.printThermalTemplateForPrint(
 						normalised,
 						printerProfile,

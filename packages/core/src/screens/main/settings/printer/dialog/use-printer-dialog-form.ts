@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
-import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
 import {
@@ -17,8 +16,10 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
+import { persistPrinterProfile } from '../persist-printer-profile';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { laneAcknowledgesPrint } from '../../printing/utils';
 
 import type * as z from 'zod';
 import type { PrinterFormValues } from '../schema';
@@ -105,6 +106,9 @@ export function usePrinterDialogForm({
 	const [detectedVendor, setDetectedVendor] = React.useState<string | null>(null);
 
 	const manualVendorRef = React.useRef(false);
+	// #18: the vendor's default port may only overwrite a configured one when the vendor is known
+	// for certain — the cashier picked it, or a probe answered. A guess off the name never does.
+	const vendorConfirmedRef = React.useRef(false);
 	const probeRequestIdRef = React.useRef(0);
 
 	const form = useForm<PrinterFormValues>({
@@ -151,6 +155,7 @@ export function usePrinterDialogForm({
 				address: printer.address ?? '',
 				port: printer.port ?? 9100,
 				language: printer.language ?? 'esc-pos',
+				codePage: printer.codePage ?? 'auto',
 				columns: printer.columns ?? 42,
 				emitEscPrintMode: printer.emitEscPrintMode ?? true,
 				fullReceiptRaster: printer.fullReceiptRaster ?? false,
@@ -205,6 +210,7 @@ export function usePrinterDialogForm({
 		setProbing(false);
 		setDetectedVendor(null);
 		manualVendorRef.current = false;
+		vendorConfirmedRef.current = false;
 	}, [open, printer, prefill, form, printerCount, t, defaultValues, deriveVendorDefaults]);
 
 	// Vendor change → derive language/port.
@@ -216,7 +222,10 @@ export function usePrinterDialogForm({
 			const d = deriveVendorDefaults(vendor);
 			const currentPort = form.getValues('port');
 			form.setValue('language', d.language);
-			if (currentPort == null || currentPort === previousDefaults.port) {
+			if (
+				vendorConfirmedRef.current &&
+				(currentPort == null || currentPort === previousDefaults.port)
+			) {
 				form.setValue('port', d.port);
 			}
 		}
@@ -248,14 +257,17 @@ export function usePrinterDialogForm({
 			identifyPrinter(trimmed, { name: form.getValues('name') }, probes)
 				.then((identity) => {
 					if (probeRequestIdRef.current !== requestId) return;
-					if (identity.vendor) {
+					// #20: a vendor guessed from the name is not a detection. Only a lane the probe
+					// actually answered on proves the printer is there and is what it says it is.
+					if (identity.vendor && identity.lane) {
 						const result = identity.vendor;
+						vendorConfirmedRef.current = true;
 						setDetectedVendor(result);
 						form.setValue('vendor', result as PrinterFormValues['vendor']);
 						const d = deriveVendorDefaults(result as PrinterFormValues['vendor']);
 						form.setValue('language', d.language);
 						form.setValue('port', d.port);
-						if (identity.lane && canPrintLane(identity.lane.protocol, probes)) {
+						if (canPrintLane(identity.lane.protocol, probes)) {
 							form.setValue('port', identity.lane.port);
 						}
 						if (
@@ -271,6 +283,9 @@ export function usePrinterDialogForm({
 				})
 				.catch((error) => {
 					printerLogger.warn('Printer vendor probe failed', { context: { error: String(error) } });
+					// A probe that never answered leaves nothing detected: the label must not claim a
+					// printer the cashier has switched off.
+					if (probeRequestIdRef.current === requestId) setDetectedVendor(null);
 				})
 				.finally(() => {
 					if (probeRequestIdRef.current === requestId) setProbing(false);
@@ -281,6 +296,7 @@ export function usePrinterDialogForm({
 
 	const setManualVendor = React.useCallback(() => {
 		manualVendorRef.current = true;
+		vendorConfirmedRef.current = true;
 		probeRequestIdRef.current += 1;
 		setProbing(false);
 		setDetectedVendor(null);
@@ -306,9 +322,15 @@ export function usePrinterDialogForm({
 		setTestLoading(true);
 		setTestError(null);
 		try {
-			await printerService.testPrint(buildProfile(data));
+			const profile = buildProfile(data);
+			await printerService.testPrint(profile);
+			// Only an acknowledging lane may claim "printed"; a raw lane only knows it sent.
 			Toast.show({
-				title: t('settings.test_print_sent').replace('%s', data.name || 'printer'),
+				title: t(
+					laneAcknowledgesPrint(profile)
+						? 'settings.test_print_done'
+						: 'settings.test_print_dispatched'
+				).replace('%s', data.name || 'printer'),
 				type: 'success',
 			});
 		} catch (err) {
@@ -346,22 +368,12 @@ export function usePrinterDialogForm({
 	}, [form, buildProfile, printerService, t]);
 
 	const persistProfile = React.useCallback(
-		async (data: PrinterFormValues) => {
-			const collection = storeDB.collections.printer_profiles;
-			if (data.isDefault) {
-				const existingDefaults = await collection.find({ selector: { isDefault: true } }).exec();
-				for (const doc of existingDefaults) {
-					if (doc.id !== printer?.id) await doc.patch({ isDefault: false });
-				}
-			}
-			const profileData = buildPrinterProfileFields(data, { printer, prefill });
-			if (printer) {
-				const doc = await collection.findOne(printer.id).exec();
-				if (doc) await doc.patch(profileData);
-			} else {
-				await collection.insert({ id: uuidv4(), ...profileData });
-			}
-		},
+		(data: PrinterFormValues) =>
+			persistPrinterProfile(
+				storeDB,
+				{ ...data, ...buildPrinterProfileFields(data, { printer, prefill }) },
+				printer?.id
+			),
 		[storeDB, printer, prefill]
 	);
 
