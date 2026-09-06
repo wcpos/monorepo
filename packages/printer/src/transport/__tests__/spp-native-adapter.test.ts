@@ -59,6 +59,18 @@ describe('SppNativeAdapter', () => {
 		expect(native.disconnect).not.toHaveBeenCalled();
 	});
 
+	it('disconnects after a failed write so the next job opens a fresh socket', async () => {
+		native.write.mockRejectedValueOnce(new Error('socket closed'));
+		const adapter = new SppNativeAdapter('spp:AA:BB:CC:DD:EE:FF');
+
+		await expect(adapter.printRaw(new Uint8Array(8))).rejects.toThrow('socket closed');
+
+		expect(native.disconnect).toHaveBeenCalledTimes(1);
+		expect(state.connected).toBe(false);
+		await adapter.printRaw(new Uint8Array(8));
+		expect(native.connect).toHaveBeenCalledTimes(2);
+	});
+
 	it('passes the module line through unchanged', async () => {
 		native.connect.mockRejectedValueOnce(
 			new Error(
