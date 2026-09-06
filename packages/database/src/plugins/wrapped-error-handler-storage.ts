@@ -38,6 +38,14 @@ type InstanceLatchState = {
 	 * tears its side down; that is teardown noise, not a live-store outage.
 	 */
 	closing: boolean;
+	/**
+	 * `method:remoteErrorName` signatures that have already been logged at error
+	 * on this instance and not yet cleared by a success of that method. One entry
+	 * per signature (not one slot) so two methods failing in alternation each log
+	 * once, not once per turn.
+	 */
+	activeRemoteErrorSignatures: Set<string>;
+	notFoundWriteStreak: number;
 };
 const instancesByDatabaseName = new Map<string, Set<InstanceLatchState>>();
 
@@ -46,6 +54,8 @@ const instancesByDatabaseName = new Map<string, Set<InstanceLatchState>>();
 // ---------------------------------------------------------------------------
 
 const REQUEST_REMOTE_ERROR_MARKER = 'could not requestRemote: ';
+// One failure can be a transient handle race; three consecutive without success means the collection's OPFS file is gone and every later write will fail the same way.
+const NOT_FOUND_WRITES_BEFORE_DEGRADED = 3;
 const WORKER_CONNECTION_FAILURE =
 	/(?:worker|message (?:channel|port)).*(?:closed|disconnected|gone|lost|terminated|unavailable)|(?:closed|disconnected|gone|lost|terminated|unavailable).*(?:worker|message (?:channel|port))/i;
 
@@ -266,6 +276,33 @@ export function clearStorageDegradation(databaseName?: string): void {
 	publishDegradedStorage();
 }
 
+/** A successful RPC re-arms error-level logging for that method's signatures only. */
+function clearRemoteErrorSignatures(state: InstanceLatchState, methodName: string): void {
+	for (const signature of state.activeRemoteErrorSignatures) {
+		if (signature.startsWith(`${methodName}:`)) state.activeRemoteErrorSignatures.delete(signature);
+	}
+}
+
+function getRemoteErrorDetails(message: string) {
+	if (!message.startsWith(REQUEST_REMOTE_ERROR_MARKER)) return {};
+	try {
+		const envelope: unknown = JSON.parse(message.slice(REQUEST_REMOTE_ERROR_MARKER.length));
+		if (envelope === null || typeof envelope !== 'object') return {};
+		const remoteError = (envelope as { error?: unknown }).error;
+		// The worker may serialise the error as a bare string; keep it as the message.
+		if (typeof remoteError === 'string') return { message: remoteError.slice(0, 200) };
+		if (remoteError === null || typeof remoteError !== 'object') return {};
+		const { name, message: remoteMessage, code } = remoteError as Record<string, unknown>;
+		return {
+			name: typeof name === 'string' ? name : undefined,
+			message: typeof remoteMessage === 'string' ? remoteMessage.slice(0, 200) : undefined,
+			code: typeof code === 'string' || typeof code === 'number' ? code : undefined,
+		};
+	} catch {
+		return {};
+	}
+}
+
 function getRemoteErrorDescription(message: string): string | null {
 	if (!message.startsWith(REQUEST_REMOTE_ERROR_MARKER)) return null;
 	try {
@@ -425,6 +462,7 @@ function getTargetedRecovery(message: string): RegExpMatchArray | null {
 function handleStorageError(
 	methodName: string,
 	error: unknown,
+	state: InstanceLatchState,
 	context: Record<string, unknown> = {}
 ): boolean {
 	const message = error instanceof Error ? error.message : String(error);
@@ -491,13 +529,20 @@ function handleStorageError(
 	// failure or an ordinary storage-method exception.
 	if (message.startsWith(REQUEST_REMOTE_ERROR_MARKER)) {
 		const workerFailure = isStorageWorkerFailure(error);
-		storageLogger.error(
+		const remoteError = getRemoteErrorDetails(message);
+		const signature = `${methodName}:${remoteError.name ?? remoteError.message ?? ''}`;
+		const level = state.activeRemoteErrorSignatures.has(signature) ? 'debug' : 'error';
+		state.activeRemoteErrorSignatures.add(signature);
+		storageLogger[level](
 			`${workerFailure ? 'Storage worker error' : 'Storage remote method error'} in ${methodName}`,
 			{
 				code: workerFailure ? ERROR_CODES.LOCAL_DB_UNAVAILABLE : ERROR_CODES.SYNC_UNEXPECTED,
 				context: {
 					method: methodName,
 					...context,
+					remoteErrorName: remoteError.name,
+					remoteErrorMessage: remoteError.message,
+					remoteErrorCode: remoteError.code,
 					recoveryDocumentId: targetedRecovery?.[1],
 					recoveryFailure: targetedRecovery?.[2],
 				},
@@ -597,7 +642,7 @@ function containCleanupFailure(
 	const teardown = state.closing || state.failureReason !== null;
 	if (!teardown && !reportedCleanupFailures.has(key)) {
 		reportedCleanupFailures.add(key);
-		handleStorageError('cleanup', error, {
+		handleStorageError('cleanup', error, state, {
 			databaseName: state.databaseName,
 			collectionName,
 		});
@@ -728,9 +773,11 @@ function wrapStorageInstance<RxDocType>(
 
 	instance.findDocumentsById = async (ids, withDeleted) => {
 		try {
-			return await originalFindDocumentsById(ids, withDeleted);
+			const result = await originalFindDocumentsById(ids, withDeleted);
+			clearRemoteErrorSignatures(state, 'findDocumentsById');
+			return result;
 		} catch (error) {
-			const handled = handleStorageError('findDocumentsById', error, {
+			const handled = handleStorageError('findDocumentsById', error, state, {
 				collectionName: instance.collectionName,
 				documentId: ids.join(' '),
 			});
@@ -744,9 +791,22 @@ function wrapStorageInstance<RxDocType>(
 
 	instance.bulkWrite = async (documentWrites, context) => {
 		try {
-			return await originalBulkWrite(documentWrites, context);
+			const result = await originalBulkWrite(documentWrites, context);
+			state.notFoundWriteStreak = 0;
+			clearRemoteErrorSignatures(state, 'bulkWrite');
+			return result;
 		} catch (error) {
-			const handled = handleStorageError('bulkWrite', error);
+			const message = error instanceof Error ? error.message : String(error);
+			const notFound = getRemoteErrorDetails(message).name === 'NotFoundError';
+			state.notFoundWriteStreak = notFound ? state.notFoundWriteStreak + 1 : 0;
+			if (
+				state.notFoundWriteStreak >= NOT_FOUND_WRITES_BEFORE_DEGRADED &&
+				!state.closing &&
+				state.failureReason === null
+			) {
+				latchDegradedStorage(databaseName, 'bulkWrite', error);
+			}
+			const handled = handleStorageError('bulkWrite', error, state);
 			if (handled) {
 				// Return all writes as errors so the caller can handle partial results.
 				// RxStorageBulkWriteResponse only has an `error` array in RxDB 16.x.
@@ -770,6 +830,8 @@ function wrapStorageInstance<RxDocType>(
 		failureReason: null,
 		inFlight: new Set(),
 		closing: false,
+		activeRemoteErrorSignatures: new Set(),
+		notFoundWriteStreak: 0,
 	};
 	const instances = instancesByDatabaseName.get(databaseName) ?? new Set();
 	instances.add(state);
@@ -797,6 +859,7 @@ function wrapStorageInstance<RxDocType>(
 	instance.cleanup = (...args) =>
 		raceStorageCall(state, 'cleanup', () => cleanup(...args)).then(
 			(result) => {
+				clearRemoteErrorSignatures(state, 'cleanup');
 				// Only a completed round re-arms reporting — see containCleanupFailure.
 				if (result === true) reportedCleanupFailures.delete(cleanupKey);
 				return result;

@@ -3,6 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { AppInfo } from '@wcpos/utils/app-info';
 
 jest.mock('@wcpos/utils/logger', () => {
+	const debug = jest.fn();
 	const info = jest.fn();
 	const error = jest.fn();
 	const warn = jest.fn();
@@ -11,9 +12,10 @@ jest.mock('@wcpos/utils/logger', () => {
 		context: { name: 'Error', message: 'network down' },
 	}));
 	return {
-		getLogger: jest.fn(() => ({ debug: jest.fn(), info, warn, error })),
+		getLogger: jest.fn(() => ({ debug, info, warn, error })),
 		getDatabaseEpoch: jest.fn(() => 0),
 		mapExceptionToCode,
+		__debug: debug,
 		__info: info,
 		__error: error,
 		__warn: warn,
@@ -43,6 +45,7 @@ import { useHttpClient } from './use-http-client';
 /* eslint-enable import/first */
 
 const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
+	__debug: jest.Mock;
 	__info: jest.Mock;
 	__error: jest.Mock;
 	__warn: jest.Mock;
@@ -141,7 +144,7 @@ describe('useHttpClient network audit logs', () => {
 			)
 		).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				method: 'GET',
@@ -168,7 +171,7 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				serverCode: 'merchant_plugin_unknown_error',
@@ -211,7 +214,7 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'CLIENT999',
 			context: expect.objectContaining({
 				status: 0,
@@ -233,16 +236,65 @@ describe('useHttpClient network audit logs', () => {
 		).rejects.toBe(failure);
 
 		expect(loggerMock.__error).not.toHaveBeenCalled();
-		expect(loggerMock.__warn).toHaveBeenCalledWith('HTTP request failed', {
-			code: 'CLIENT999',
-			context: expect.objectContaining({
-				method: 'GET',
-				endpoint: '/wp-content/uploads/product.jpg',
-				status: 0,
-				codeFallback: true,
-			}),
-		});
+		expect(loggerMock.__warn).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/product.jpg',
+			{
+				code: 'CLIENT999',
+				context: expect.objectContaining({
+					method: 'GET',
+					endpoint: '/wp-content/uploads/product.jpg',
+					status: 0,
+					codeFallback: true,
+				}),
+			}
+		);
 	});
+
+	it.each([false, true])(
+		'logs handler failure only for a replacement error (%s)',
+		async (replace) => {
+			const failure = Object.assign(new Error('expired'), {
+				response: { status: 401 },
+				isRefreshTokenInvalid: true,
+			});
+			const handlerError = replace ? new Error('refresh broke') : failure;
+			(http.request as jest.Mock).mockRejectedValue(failure);
+			const recovered = { status: 200, data: {} } as import('axios').AxiosResponse;
+			const fallback = jest.fn(async () => recovered);
+			const { result } = renderHook(() =>
+				useHttpClient([
+					{
+						name: 'token-refresh',
+						priority: 100,
+						intercepts: true,
+						canHandle: () => true,
+						handle: async () => {
+							throw handlerError;
+						},
+					},
+					{ name: 'fallback', canHandle: () => true, handle: fallback },
+				])
+			);
+			if (replace) {
+				await expect(result.current.get('/wc/v3/products')).rejects.toBe(handlerError);
+				expect(fallback).not.toHaveBeenCalled();
+				expect(loggerMock.__error).toHaveBeenCalledWith(
+					'Error handler token-refresh threw an error',
+					expect.objectContaining({
+						code: 'CLIENT999',
+						context: expect.objectContaining({ error: 'refresh broke' }),
+					})
+				);
+			} else {
+				await expect(result.current.get('/wc/v3/products')).resolves.toBe(recovered);
+				expect(fallback).toHaveBeenCalledTimes(1);
+				expect(loggerMock.__error).not.toHaveBeenCalled();
+				expect(loggerMock.__debug).toHaveBeenCalledWith(expect.any(String), {
+					context: { handlerName: 'token-refresh', status: 401 },
+				});
+			}
+		}
+	);
 
 	it('does not persist a recovered request as a failure', async () => {
 		const failure = Object.assign(new Error('expired'), { response: { status: 401 } });

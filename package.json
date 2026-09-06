@@ -37,6 +37,7 @@
     "postinstall": "node scripts/patch-rxdb-premium-resurrection-leak.mjs && node scripts/patch-rxdb-premium-task-queue-containment.mjs && node scripts/patch-rxdb-premium-changelog-replay-safety.mjs && node scripts/patch-rxdb-premium-changes-file-salvage.mjs",
     "prepare": "git config core.hooksPath .githooks",
     "virtual-printer": "pnpm --filter @wcpos/virtual-printer start",
+		"virtual-printer:secure": "pnpm --filter @wcpos/virtual-printer start -- --scenario secure-printing",
     "submodules:update": "git submodule update --init --remote apps/electron apps/web && node ./scripts/stage-submodule-bumps.mjs"
   },
   "packageManager": "pnpm@11.1.1",

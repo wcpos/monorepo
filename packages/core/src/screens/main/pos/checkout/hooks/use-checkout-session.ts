@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
@@ -238,7 +239,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			if (handleStockRejection(err)) return;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
-			checkoutLogger.error(message, {
+			const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
+			checkoutLogger[logLevel](message, {
 				showToast: true,
 				code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,
 				context: {

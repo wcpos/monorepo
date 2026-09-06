@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 
 import {
 	AlertDialog,
@@ -26,6 +27,7 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
+import { cn } from '@wcpos/components/lib/utils';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage } from '@wcpos/utils/logger';
 
@@ -216,16 +218,38 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 	}
 }
 
+/**
+ * The table row's fixed columns (on device 80 + on server 96 + coverage 128 + size 80 +
+ * menu 36, five 12 px gaps) take 480 px before the collection column gets anything.
+ * Below this width the collection column wrapped one character per line (portrait iPad
+ * with the drawer rail open). The choice used to be the `md:` window breakpoint, but the
+ * width that matters is the table's own: a tablet rail or an open drawer narrows the
+ * content column without changing the window.
+ */
+const TABLE_LAYOUT_MIN_WIDTH = 640;
+
+/** Measured container width → whether the table layout fits; compact until measured. */
+function useTableLayout(): { wide: boolean; onLayout: (event: LayoutChangeEvent) => void } {
+	const [wide, setWide] = React.useState(false);
+	const onLayout = React.useCallback((event: LayoutChangeEvent) => {
+		const next = event.nativeEvent.layout.width >= TABLE_LAYOUT_MIN_WIDTH;
+		setWide((previous) => (previous === next ? previous : next));
+	}, []);
+	return { wide, onLayout };
+}
+
 function CollectionRowView({
 	row,
 	label,
 	sizeBytes,
 	stuckCount = 0,
+	wide,
 }: {
 	row: CollectionRow;
 	label: string;
 	sizeBytes: number | null | undefined;
 	stuckCount?: number;
+	wide: boolean;
 }) {
 	const t = useT();
 	const { engine } = useQueryRuntime();
@@ -323,12 +347,12 @@ function CollectionRowView({
 
 	return (
 		<>
-			{/* md+ — table row */}
+			{/* wide — table row */}
 			<HStack
 				testID={`db-row-${row.key}`}
-				className="border-border hidden items-center gap-3 border-b py-2 md:flex"
+				className={cn('border-border items-center gap-3 border-b py-2', wide ? 'flex' : 'hidden')}
 			>
-				<View className={isVariations ? 'flex-1 pl-4' : 'flex-1'}>
+				<View className={isVariations ? 'min-w-0 flex-1 pl-4' : 'min-w-0 flex-1'}>
 					<HStack className="items-center gap-2">
 						<Text className={isVariations ? undefined : 'font-medium'}>
 							{isVariations ? `↳ ${label}` : label}
@@ -364,10 +388,10 @@ function CollectionRowView({
 				{menu}
 			</HStack>
 
-			{/* below md — two-line list row */}
+			{/* compact — two-line list row */}
 			<HStack
 				testID={`db-row-sm-${row.key}`}
-				className="border-border items-center gap-2 border-b py-2 md:hidden"
+				className={cn('border-border items-center gap-2 border-b py-2', wide ? 'hidden' : 'flex')}
 			>
 				<View className="min-w-0 flex-1">
 					<HStack className="items-center gap-2">
@@ -511,6 +535,7 @@ function HowSyncingWorksLink() {
  */
 export function DatabaseScreen() {
 	const t = useT();
+	const tableLayout = useTableLayout();
 	const { syncing, sync } = useManualSync();
 	const { checking } = useCollectionCheck();
 	const status = useEngineStatus();
@@ -644,9 +669,10 @@ export function DatabaseScreen() {
 					</Callout>
 				) : null}
 
-				{/* Per-collection rows (table header md+ only; rows render both layouts) */}
-				<VStack className="gap-0">
-					<HairlineHeaderRow className="hidden md:flex">
+				{/* Per-collection rows (table header in the wide layout only; rows render both
+				    layouts and show one, chosen by the measured table width) */}
+				<VStack testID="db-table" className="gap-0" onLayout={tableLayout.onLayout}>
+					<HairlineHeaderRow className={tableLayout.wide ? 'flex' : 'hidden'}>
 						<HairlineHeaderCell className="flex-1">
 							{t('health.database.col_collection')}
 						</HairlineHeaderCell>
@@ -671,6 +697,7 @@ export function DatabaseScreen() {
 							sizeBytes={sizes[row.key]}
 							stuckCount={stuckByRow[row.key] ?? 0}
 							label={t(ROW_LABEL_KEYS[row.key])}
+							wide={tableLayout.wide}
 						/>
 					))}
 					{/* Measured storage the collection rows don't itemize — every bucket

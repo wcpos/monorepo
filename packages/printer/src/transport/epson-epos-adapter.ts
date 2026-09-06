@@ -3,8 +3,9 @@ import { encodeThermalTemplateToEpos } from '@wcpos/receipt-renderer';
 import { buildConnectionError } from '../utils/connection-error';
 import { withTargetAddressSpace } from '../utils/local-fetch';
 import { buildEposXml, commandFromBytes, parseEposResponse } from './epson-epos-protocol';
+import { logPrintJob } from './log-print-job';
 
-import type { MarkupPrintJob, PrinterTransport } from '../types';
+import type { MarkupPrintJob, PrinterTransport, PrintJobShape } from '../types';
 
 /**
  * Epson ePOS HTTP adapter for web browsers.
@@ -47,12 +48,14 @@ export class EpsonEposAdapter implements PrinterTransport {
 
 	async printRaw(data: Uint8Array): Promise<void> {
 		// <command> pass-through is not printable when Secure Printing is on; the service prefers printMarkup.
-		await this.sendEposPrint(commandFromBytes(data));
+		await this.sendEposPrint(commandFromBytes(data), { kind: 'raw', bytes: data.byteLength });
 	}
 
 	supportsMarkup = (): boolean => true;
-	printMarkup = async (job: MarkupPrintJob): Promise<void> =>
-		this.sendEposPrint(encodeThermalTemplateToEpos(job.template, job.data, job.options));
+	printMarkup = async (job: MarkupPrintJob): Promise<void> => {
+		const markup = encodeThermalTemplateToEpos(job.template, job.data, job.options);
+		await this.sendEposPrint(markup, { kind: 'markup', markupLength: markup.length });
+	};
 	async printHtml(_html: string): Promise<void> {
 		throw new Error('EpsonEposAdapter does not support HTML printing.');
 	}
@@ -61,7 +64,14 @@ export class EpsonEposAdapter implements PrinterTransport {
 		// HTTP is stateless — nothing to clean up
 	}
 
-	private async sendEposPrint(innerXml: string): Promise<void> {
+	private async sendEposPrint(innerXml: string, job: PrintJobShape): Promise<void> {
+		await logPrintJob('ePOS', { transport: this.name, url: this.baseUrl, ...job }, () =>
+			this.postEposPrint(innerXml)
+		);
+	}
+
+	/** Posts the job and reports the HTTP status the printer answered with. */
+	private async postEposPrint(innerXml: string): Promise<number> {
 		const url =
 			`${this.baseUrl}/cgi-bin/epos/service.cgi` +
 			`?devid=${encodeURIComponent(this.deviceId)}&timeout=10000`;
@@ -110,5 +120,6 @@ export class EpsonEposAdapter implements PrinterTransport {
 		if (!success) {
 			throw new Error(`Epson print failed (code: ${code || 'unknown'})`);
 		}
+		return response.status;
 	}
 }

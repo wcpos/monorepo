@@ -98,6 +98,27 @@ describe('useRemoveLineItem', () => {
 		expect(mockLoggerWarn).not.toHaveBeenCalled();
 	});
 
+	it.each([true, false])(
+		'Undo after deletion confirmed=%s restores only valid identity',
+		async (confirmed) => {
+			const original = {
+				id: 11,
+				product_id: 82,
+				name: 'Coffee',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-1' }],
+			};
+			mockLines = [original];
+			const { result } = renderHook(() => useRemoveLineItem());
+			await act(async () => result.current.removeLineItem('line-1', 'line_items'));
+			mockLines = confirmed ? [] : [{ ...original, product_id: null }];
+			await act(async () => mockLoggerSuccess.mock.calls[0][1].toast.action.onClick());
+			const restored = mockLocalPatch.mock.calls.at(-1)[0].data.line_items;
+			const { id, ...content } = original;
+			expect(restored).toEqual([confirmed ? content : original]);
+			expect(original.id).toBe(id);
+		}
+	);
+
 	it('warns when the line is no longer in the current order', async () => {
 		const { result } = renderHook(() => useRemoveLineItem());
 

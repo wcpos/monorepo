@@ -1,6 +1,15 @@
+import { vi } from 'vitest';
+
 import { encodeReceipt } from '../encode-receipt';
 import { formatMoney } from '../format-money';
 import { sampleReceiptData } from './fixtures';
+
+const { warn } = vi.hoisted(() => ({
+	warn: vi.fn<(message: string, options: { context: { count: number } }) => void>(),
+}));
+vi.mock('../../logger', () => ({
+	printerLogger: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() },
+}));
 
 describe('encodeReceipt', () => {
 	function encodeCurrency(currency: string): Uint8Array {
@@ -48,6 +57,24 @@ describe('encodeReceipt', () => {
 		const text = new TextDecoder().decode(result);
 		expect(text).toContain('INR 25.00');
 		expect(Array.from(result)).not.toContain(0x3f);
+	});
+
+	it('warns once per job with the number of substituted characters', () => {
+		warn.mockClear();
+		encodeCurrency('INR');
+
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledWith('Unencodable characters substituted', {
+			context: { count: expect.any(Number), language: 'esc-pos', codepage: 'auto' },
+		});
+		expect(warn.mock.calls[0]?.[1]?.context.count).toBeGreaterThan(0);
+	});
+
+	it('stays quiet when every character encodes', () => {
+		warn.mockClear();
+		encodeCurrency('USD');
+
+		expect(warn).not.toHaveBeenCalled();
 	});
 
 	it('keeps the encodable EUR symbol instead of falling back by code point', () => {
@@ -111,5 +138,45 @@ describe('encodeReceipt', () => {
 		const bytes = Array.from(result);
 		const hasCut = bytes.some((b, i) => b === 0x1d && bytes[i + 1] === 0x56);
 		expect(hasCut).toBe(false);
+	});
+	it('selects Font A in the job header so the column count means what it says', () => {
+		const bytes = Array.from(encodeReceipt(sampleReceiptData));
+		const fontSelects = bytes.flatMap((byte, index) =>
+			byte === 0x1b && bytes[index + 1] === 0x4d ? [index] : []
+		);
+
+		expect(bytes[0]).toBe(0x1b);
+		expect(bytes[1]).toBe(0x40);
+		// Exactly once, in the header, before any text.
+		expect(fontSelects).toHaveLength(1);
+		expect(fontSelects[0]).toBeLessThan(8);
+		expect(bytes[fontSelects[0]! + 2]).toBe(0x00);
+	});
+
+	it('emits no ESC M for a Star job', () => {
+		const bytes = Array.from(encodeReceipt(sampleReceiptData, { language: 'star-prnt' }));
+
+		expect(bytes.some((byte, index) => byte === 0x1b && bytes[index + 1] === 0x4d)).toBe(false);
+	});
+
+	it('names the profile code page on the substitution warning', () => {
+		warn.mockClear();
+		const data = structuredClone(sampleReceiptData);
+		data.order.currency = 'INR';
+		encodeReceipt(data, { codePage: 'cp437' });
+
+		expect(warn).toHaveBeenCalledWith('Unencodable characters substituted', {
+			context: { count: expect.any(Number), language: 'esc-pos', codepage: 'cp437' },
+		});
+	});
+
+	it('falls back to the automatic code page when the profile names an unknown one', () => {
+		warn.mockClear();
+		const result = encodeReceipt(sampleReceiptData, { codePage: 'cp-not-a-page' });
+
+		expect(result.length).toBeGreaterThan(0);
+		expect(warn).toHaveBeenCalledWith('Unknown code page', {
+			context: { codePage: 'cp-not-a-page', language: 'esc-pos' },
+		});
 	});
 });

@@ -2,11 +2,12 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type { PrinterProfile } from '@wcpos/printer';
 
 import { PrintingSettings } from './index';
+import { PrinterRow } from './printer-row';
 
 const cloudProfile: PrinterProfile = {
 	id: 'cloud:reg-7',
@@ -128,8 +129,10 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 
+const mockToastShow = jest.fn();
 jest.mock('@wcpos/components/toast', () => ({
-	Toast: { show: jest.fn() },
+	// Referenced lazily: a jest.mock factory runs before the const above is initialised.
+	Toast: { show: (...args: unknown[]) => mockToastShow(...args) },
 }));
 
 jest.mock('@wcpos/components/vstack', () => ({
@@ -149,6 +152,8 @@ jest.mock('@wcpos/printer', () => ({
 		) {}
 
 		testPrint(profile: PrinterProfile) {
+			// Local lanes are not the cloud queue's business; the wired-up cloud path is asserted below.
+			if (profile.connectionType !== 'cloud') return Promise.resolve();
 			const cloudPrinterId = profile.cloudPrinterId;
 			const queue = this.options.cloudEnqueueFactory?.(profile);
 			if (!cloudPrinterId || !queue) {
@@ -178,7 +183,7 @@ jest.mock('../printer/add-printer', () => ({
 }));
 
 jest.mock('./printers-empty-state', () => ({
-	PrintersEmptyState: () => null,
+	PrintersEmptyState: () => <div data-testid="printers-empty-state" />,
 }));
 
 jest.mock('../components/settings-section', () => ({
@@ -194,7 +199,7 @@ jest.mock('./use-ensure-system-printer', () => ({
 }));
 
 jest.mock('../printer/use-available-printer-profiles', () => ({
-	useAvailablePrinterProfiles: () => [cloudProfile],
+	useAvailablePrinterProfiles: () => mockAvailableProfiles,
 }));
 
 jest.mock('../../receipt/hooks/use-active-templates', () => ({
@@ -235,10 +240,22 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: httpPost }),
 }));
 
+let mockAvailableProfiles = { printers: [cloudProfile], isLoading: false };
+jest.mock('../printer/copy-setup-report', () => ({ useCopySetupReport: () => jest.fn() }));
+jest.mock('@wcpos/components/docs-link', () => {
+	const React = require('react');
+	return {
+		DocsLink: ({ children, href, testID }: { children: string; href: string; testID?: string }) =>
+			React.createElement('a', { 'data-testid': testID, href }, children),
+	};
+});
+
 describe('PrintingSettings cloud printers', () => {
 	beforeEach(() => {
+		mockAvailableProfiles = { printers: [cloudProfile], isLoading: false };
 		enqueue.mockClear();
 		httpPost.mockClear();
+		mockToastShow.mockClear();
 	});
 
 	it('uses the server diagnostic endpoint when testing a cloud printer', async () => {
@@ -254,6 +271,58 @@ describe('PrintingSettings cloud printers', () => {
 		expect(enqueue).not.toHaveBeenCalled();
 	});
 
+	it('claims the print only on a lane that acknowledges it', async () => {
+		render(<PrintingSettings />);
+
+		fireEvent.click(screen.getByTestId('printer-row-cloud:reg-7-test'));
+
+		await waitFor(() =>
+			expect(mockToastShow).toHaveBeenCalledWith(
+				expect.objectContaining({ title: 'Printed on Cloud kitchen', type: 'success' })
+			)
+		);
+	});
+
+	it('says only that the job was sent on a raw lane that cannot confirm', async () => {
+		mockAvailableProfiles = {
+			printers: [
+				{
+					...cloudProfile,
+					id: 'raw',
+					name: 'Counter',
+					connectionType: 'network',
+					vendor: 'epson',
+					address: '192.168.1.10',
+					port: 9100,
+				},
+			],
+			isLoading: false,
+		};
+		render(<PrintingSettings />);
+
+		fireEvent.click(screen.getByTestId('printer-row-raw-test'));
+
+		await waitFor(() =>
+			expect(mockToastShow).toHaveBeenCalledWith(
+				expect.objectContaining({ title: 'Sent to Counter', type: 'success' })
+			)
+		);
+	});
+
+	it('shows one actionable line instead of the raw failure string', async () => {
+		httpPost.mockRejectedValueOnce(new Error('connect ECONNREFUSED 10.0.0.5:443'));
+		render(<PrintingSettings />);
+
+		fireEvent.click(screen.getByTestId('printer-row-cloud:reg-7-test'));
+
+		await waitFor(() =>
+			expect(mockToastShow).toHaveBeenCalledWith({
+				title: 'The printer refused the connection. Check its network settings, then try again.',
+				type: 'error',
+			})
+		);
+	});
+
 	it('does not offer a local default action for synthesized cloud printers', () => {
 		render(<PrintingSettings />);
 
@@ -266,4 +335,43 @@ describe('PrintingSettings cloud printers', () => {
 		expect(screen.queryByTestId('printing-scan-network-button')).not.toBeInTheDocument();
 		expect(screen.queryByTestId('printing-scan-candidates')).not.toBeInTheDocument();
 	});
+});
+
+it('hides the list until loaded, then shows the empty state', () => {
+	mockAvailableProfiles = { printers: [], isLoading: true };
+	const { rerender } = render(<PrintingSettings />);
+	expect(screen.queryByTestId('printers-empty-state')).not.toBeInTheDocument();
+	expect(screen.queryByTestId('printing-add-printer-button')).not.toBeInTheDocument();
+	mockAvailableProfiles = { printers: [], isLoading: false };
+	rerender(<PrintingSettings />);
+	expect(screen.getByTestId('printers-empty-state')).toBeInTheDocument();
+});
+
+it('renders help once outside saved rows and opens the printer guide', () => {
+	mockAvailableProfiles = {
+		printers: [cloudProfile, { ...cloudProfile, id: 'second' }],
+		isLoading: false,
+	};
+	render(<PrintingSettings />);
+	expect(screen.getAllByText('Having trouble?')).toHaveLength(1);
+	expect(screen.getByTestId('printing-having-trouble').getAttribute('href')).toBe(
+		'https://docs.wcpos.com/hardware/printers'
+	);
+	expect(
+		within(screen.getByTestId('printer-row-second')).queryByText('Having trouble?')
+	).toBeNull();
+});
+
+it('does not render help on a saved local printer row', () => {
+	render(
+		<PrinterRow
+			profile={{ ...cloudProfile, isBuiltIn: false }}
+			isTesting={false}
+			onTest={jest.fn()}
+			onEdit={jest.fn()}
+			onDelete={jest.fn()}
+			onSetDefault={jest.fn()}
+		/>
+	);
+	expect(screen.queryByText('Having trouble?')).toBeNull();
 });

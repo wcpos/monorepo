@@ -77,7 +77,7 @@ export function OsPrintersSection({
 						key={p.id}
 						testID={`${testIdPrefix}-${p.id}`}
 						onPress={() => {
-							form.setValue('address', p.address ?? '');
+							form.setValue('address', p.address ?? '', { shouldValidate: true });
 							form.setValue('name', p.name);
 						}}
 						className={`flex-row items-center gap-2 rounded-md border p-2 ${

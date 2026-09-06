@@ -812,6 +812,45 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
 	});
 
+	it.each([32, 42])('physically aligns multiline text at %i columns', (columns) => {
+		for (const mode of ['center', 'right'] as const) {
+			for (const content of ['<text>{{hours}}</text>', '<bold>{{hours}}</bold>']) {
+				const bytes = encodeThermalTemplate(
+					`<receipt paper-width="${columns}"><align mode="${mode}">${content}</align><text>After</text></receipt>`,
+					{ hours: 'Mon 1:12 PM – 1:14 PM\nTue–Sun Cerrado' },
+					{ columns, language: 'esc-pos' }
+				);
+				const lines = simulateEscposTextLines(bytes, columns);
+				for (const text of ['Mon 1:12 PM - 1:14 PM', 'Tue-Sun Cerrado']) {
+					const padding =
+						mode === 'center' ? Math.floor((columns - text.length) / 2) : columns - text.length;
+					const index = sequenceIndex(bytes, Array.from(new TextEncoder().encode(text)));
+					expect(index).toBeGreaterThan(0);
+					expect(lastEscposAlignBefore(bytes, index)).toBe(0);
+					expect(decodePrintableAscii(bytes).split('\n')).toContain(
+						`${' '.repeat(padding)}${text}`
+					);
+					expect(lines.find((line) => line.text === text)?.xStart).toBe(padding);
+				}
+				expectSingleNewlineBetween(bytes, 'Mon 1:12 PM - 1:14 PM', 'Tue-Sun Cerrado');
+				expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
+			}
+		}
+	});
+
+	it('preserves empty lines within aligned multiline text', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><align mode="center"><text>{{value}}</text></align></receipt>',
+			{ value: 'Before\n\nAfter' },
+			{ columns: 32, language: 'esc-pos' }
+		);
+		const before = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Before')));
+		const after = sequenceIndex(bytes, Array.from(new TextEncoder().encode('After')));
+		expect(before).toBeGreaterThan(0);
+		expect(after).toBeGreaterThan(before);
+		expect(Array.from(bytes.slice(before, after)).filter((byte) => byte === 0x0a)).toHaveLength(2);
+	});
+
 	it('does not insert blank rows between centered standalone text lines', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt paper-width="48"><align mode="center"><text>Store</text><text>Name</text></align></receipt>',
@@ -1599,6 +1638,25 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(newlineIndex).toBeGreaterThan(bigIndex);
 		expect(restoreSpacingIndex).toBeGreaterThan(newlineIndex);
 		expect(nextIndex).toBeGreaterThan(restoreSpacingIndex);
+	});
+
+	it('reapplies scaled line spacing between aligned lines inside an outer size', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><size width="2" height="2"><align mode="center">A\nB</align></size></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const firstLineIndex = sequenceIndex(bytes, [0x41]);
+		const newlineIndex = sequenceIndex(bytes, [0x0a], firstLineIndex);
+		const restoreSpacingIndex = sequenceIndex(bytes, [0x1b, 0x32], newlineIndex);
+		const reappliedSpacingIndex = sequenceIndex(bytes, [0x1b, 0x33, 60], restoreSpacingIndex);
+		const secondLineIndex = sequenceIndex(bytes, [0x42], reappliedSpacingIndex);
+
+		expect(firstLineIndex).toBeGreaterThanOrEqual(0);
+		expect(newlineIndex).toBeGreaterThan(firstLineIndex);
+		expect(restoreSpacingIndex).toBeGreaterThan(newlineIndex);
+		expect(reappliedSpacingIndex).toBeGreaterThan(restoreSpacingIndex);
+		expect(secondLineIndex).toBeGreaterThan(reappliedSpacingIndex);
 	});
 
 	it('keeps height-only scaled mixed inline text on one physical line', () => {
