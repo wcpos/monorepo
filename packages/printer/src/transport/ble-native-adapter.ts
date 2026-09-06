@@ -238,7 +238,11 @@ export class BleNativeAdapter implements PrinterTransport {
 						context: { bytes: data.byteLength, chunks },
 					});
 				} catch (cause) {
+					// clear() only untracks: a half-open link keeps the printer from
+					// advertising and nothing is left to drop it, so cancel it here as
+					// openConnection does on its own failure path.
 					connection?.clear();
+					await connection?.device.cancelConnection().catch(() => undefined);
 					throw toPrinterError(cause);
 				}
 				scheduleIdleDisconnect(connection);
