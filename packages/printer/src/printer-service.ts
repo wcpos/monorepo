@@ -10,14 +10,34 @@ import {
 	buildThermalTemplateMarkupJob,
 	encodeThermalTemplateForPrint,
 } from './encoder/thermal-print';
+import { isVerboseDiagnostics, printerLogger } from './logger';
 import { encodeThermalTemplate } from './renderer';
 import { CloudAdapter } from './transport/cloud-adapter';
+import { describeStatus } from './transport/escpos-status';
+import { PRINT_JOB_SLOW_MS } from './transport/print-timeouts';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
 
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
 import type { ReceiptData } from './encoder/types';
 import type { CloudEnqueueFn } from './transport/cloud-adapter';
-import type { PrinterProfile, PrinterTransport } from './types';
+import type { PrinterStatus } from './transport/escpos-status';
+import type { MarkupPrintJob, PrinterProfile, PrinterTransport, PrintRawOptions } from './types';
+
+// Receipts are a few KB; diagnostics exports and live printer tests need exact bytes.
+const RAW_JOB_HEX_PREVIEW_BYTES = 8192;
+// A markup job serialises to the receipt text plus its template — the same order of magnitude as
+// the raw hex preview, which is what a merchant's copied report has to carry.
+const MARKUP_JOB_PREVIEW_CHARS = 8192;
+
+/**
+ * Queue key for jobs that belong to no profile — the system print dialog. The OS dialog is one
+ * shared resource, so those jobs stay serial with each other and never block a printer's queue.
+ */
+const SYSTEM_QUEUE_ID = 'system';
+
+/** What a queued job was for — the label on its timing line. */
+type PrintJobKind =
+	'receipt' | 'raw' | 'drawer' | 'cloud-order' | 'thermal-template' | 'html' | 'diagnostic';
 
 /** Cache key that captures config-relevant fields so stale transports are evicted. */
 function transportKey(profile: PrinterProfile, cloudFactoryVersion: number): string {
@@ -25,10 +45,37 @@ function transportKey(profile: PrinterProfile, cloudFactoryVersion: number): str
 	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}:${profile.nativeInterfaceType ?? ''}:${profile.cloudPrinterId ?? ''}:${factoryVersion}`;
 }
 
-function encodeEscposRealtimeDrawerKick(profile: PrinterProfile): Uint8Array | null {
+// ESC p pulse widths, in 2 ms units: 25 → 50 ms on, 250 → 500 ms off. Epson's own examples use
+// these, and they are the widest values the clones accept — a shorter pulse fails to throw the
+// solenoid on a stiff drawer.
+const ESCPOS_DRAWER_PULSE_ON = 25;
+const ESCPOS_DRAWER_PULSE_OFF = 250;
+
+/**
+ * The real-time kick (`DLE DC4 1 m t`) is an Epson command: it fires even while the printer is
+ * busy, which is why Epson lanes keep it. Many clones implement only the queued `ESC p m t1 t2`
+ * and ignore the real-time one entirely, so the drawer never opens — that is the whole of
+ * gotcha N37. Anything not identified as an Epson gets `ESC p`.
+ */
+function encodeEscposDrawerKick(profile: PrinterProfile): Uint8Array | null {
 	if (profile.language !== 'esc-pos') return null;
 	const connector = profile.drawerConnector === 'pin5' ? 1 : 0;
-	return Uint8Array.from([0x10, 0x14, 0x01, connector, 0x03]);
+	if (profile.vendor === 'epson') return Uint8Array.from([0x10, 0x14, 0x01, connector, 0x03]);
+	return Uint8Array.from([0x1b, 0x70, connector, ESCPOS_DRAWER_PULSE_ON, ESCPOS_DRAWER_PULSE_OFF]);
+}
+
+/**
+ * Verbose-diagnostics only, mirroring the raw hex preview: the template and its data, never the
+ * render options — those carry rasterised image buffers, megabytes of unreadable pixels.
+ */
+// The preview is the template source only: `job.data` carries customer, tax and payment fields,
+// and printer log lines end up in copied setup reports.
+function markupPreview(job: MarkupPrintJob): { templatePreview: string; truncated: boolean } {
+	const template = typeof job.template === 'string' ? job.template : JSON.stringify(job.template);
+	return {
+		templatePreview: template.slice(0, MARKUP_JOB_PREVIEW_CHARS),
+		truncated: template.length > MARKUP_JOB_PREVIEW_CHARS,
+	};
 }
 
 export interface PrinterServiceOptions {
@@ -46,8 +93,53 @@ export interface TestPrintOptions {
 	openDrawer?: boolean;
 }
 
+/**
+ * What the test page came back with. `status` is null on every lane that cannot ask the printer
+ * (audit D4) — the caller learns nothing, which is what it knew before.
+ */
+export interface TestPrintResult {
+	status: PrinterStatus | null;
+}
+
+/**
+ * Asks the printer what state it is in once the test page has gone out, so paper-out and
+ * cover-open stop being a question for the cashier (audit D4). The read never fails the print:
+ * a lane that cannot ask, or one that throws trying, answers null.
+ */
+async function readStatusAfterTest(transport: PrinterTransport): Promise<PrinterStatus | null> {
+	if (!transport.queryStatus) return null;
+	try {
+		const status = await transport.queryStatus();
+		// A lane that cannot ask has logged why already; only a real answer is worth an info line.
+		if (!status) {
+			printerLogger.debug('Printer status after test page', {
+				context: { transport: transport.name, state: 'unknown' },
+			});
+			return null;
+		}
+		printerLogger.info('Printer status after test page', {
+			context: { transport: transport.name, state: describeStatus(status), raw: status.raw },
+		});
+		return status;
+	} catch (cause) {
+		printerLogger.warn('Printer status query failed', {
+			context: {
+				transport: transport.name,
+				cause: cause instanceof Error ? cause.message : String(cause),
+			},
+		});
+		return null;
+	}
+}
+
 export class PrinterService {
-	private queue = new PQueue({ concurrency: 1 });
+	// One serial queue per profile id: a printer that hangs holds up its own receipts and nothing
+	// else. A single shared queue meant a stalled printer stalled the till (gotcha N44).
+	private queues = new Map<string, PQueue>();
+	// Jobs accepted but not started, per profile; dispose() and cancelQueued() settle them instead
+	// of leaving them pending forever.
+	private pending = new Map<string, Set<(error: Error) => void>>();
+	private closing = false;
 	private transports = new Map<string, PrinterTransport>();
 	private cloudFactoryVersion = 0;
 	/** Tracks the config fingerprint used to create each cached transport. */
@@ -91,7 +183,8 @@ export class PrinterService {
 
 		let transport: PrinterTransport;
 
-		switch (profile.connectionType) {
+		// Installed Windows queues use the device adapter, not the generic OS print dialog.
+		switch (profile.address?.startsWith('winspool:') ? 'usb' : profile.connectionType) {
 			case 'network': {
 				if (!profile.address) {
 					throw new Error('Network printer profile is missing an address');
@@ -147,8 +240,13 @@ export class PrinterService {
 		html?: string,
 		decimals?: number
 	): Promise<void> {
-		return this.queue.add(async () => {
-			if (!profile || profile.connectionType === 'system') {
+		// Anything that ends in the OS print dialog shares one queue, so two dialogs never open at once;
+		// winspool queues are raw jobs and keep their own.
+		const usesSystemDialog =
+			!profile ||
+			(profile.connectionType === 'system' && !profile.address?.startsWith('winspool:'));
+		return this.enqueue('receipt', usesSystemDialog ? SYSTEM_QUEUE_ID : profile.id, async () => {
+			if (usesSystemDialog) {
 				// Fallback: system print dialog with HTML
 				const transport = new SystemPrintAdapter();
 				if (!html) {
@@ -167,23 +265,150 @@ export class PrinterService {
 				drawerConnector: profile.drawerConnector,
 				cut: profile.autoCut,
 				openDrawer: profile.autoOpenDrawer,
+				codePage: profile.codePage,
 				decimals,
 			};
 			if (await transport.supportsMarkup?.()) {
-				await transport.printMarkup!(buildReceiptMarkupJob(receiptData, encodeOpts));
+				await this.dispatchMarkup(
+					transport,
+					buildReceiptMarkupJob(receiptData, encodeOpts),
+					'receipt'
+				);
 			} else {
-				await transport.printRaw(encodeReceipt(receiptData, encodeOpts));
+				await this.dispatchRaw(transport, encodeReceipt(receiptData, encodeOpts));
 			}
 		});
+	}
+
+	private async dispatchRaw(
+		transport: PrinterTransport,
+		data: Uint8Array,
+		options?: PrintRawOptions
+	): Promise<void> {
+		printerLogger.debug('Raw job dispatched', {
+			context: {
+				transport: transport.name,
+				bytes: data.byteLength,
+				...(isVerboseDiagnostics()
+					? {
+							hexPreview: Array.from(data.subarray(0, RAW_JOB_HEX_PREVIEW_BYTES), (byte) =>
+								byte.toString(16).padStart(2, '0')
+							).join(''),
+							truncated: data.byteLength > RAW_JOB_HEX_PREVIEW_BYTES,
+						}
+					: {}),
+			},
+		});
+		if (options) await transport.printRaw(data, options);
+		else await transport.printRaw(data);
+	}
+
+	/** Markup jobs dispatch through here so the acknowledged lane logs like the raw one. */
+	private async dispatchMarkup(
+		transport: PrinterTransport,
+		job: MarkupPrintJob,
+		kind: PrintJobKind
+	): Promise<void> {
+		printerLogger.debug('Markup job dispatched', {
+			context: {
+				transport: transport.name,
+				kind,
+				dataKeys: Object.keys(job.data),
+				...(isVerboseDiagnostics() ? markupPreview(job) : {}),
+			},
+		});
+		await transport.printMarkup!(job);
+	}
+
+	/** The profile's queue, created on first use. */
+	private queueFor(profileId: string): PQueue {
+		const existing = this.queues.get(profileId);
+		if (existing) return existing;
+		const queue = new PQueue({ concurrency: 1 });
+		this.queues.set(profileId, queue);
+		return queue;
+	}
+
+	/** The profile's set of accepted-but-unstarted rejection handles, created on first use. */
+	private pendingFor(profileId: string): Set<(error: Error) => void> {
+		const existing = this.pending.get(profileId);
+		if (existing) return existing;
+		const created = new Set<(error: Error) => void>();
+		this.pending.set(profileId, created);
+		return created;
+	}
+
+	/**
+	 * Every queued job runs through here so one line separates the time a job spent waiting
+	 * behind other jobs from the time the transport itself took, and so a job that outlives
+	 * PRINT_JOB_SLOW_MS says so while the cashier is still watching the spinner.
+	 */
+	private enqueue<T>(kind: PrintJobKind, profileId: string, run: () => Promise<T>): Promise<T> {
+		if (this.closing) return Promise.reject(new Error('Printer service is closing'));
+		const enqueuedAt = Date.now();
+		// p-queue's clear() drops queued tasks without settling their promises: race each job
+		// against a rejection handle that dispose() and cancelQueued() can fire for jobs they removed.
+		let rejectPending!: (error: Error) => void;
+		const removed = new Promise<never>((_, reject) => {
+			rejectPending = reject;
+		});
+		const pending = this.pendingFor(profileId);
+		pending.add(rejectPending);
+		let settled = false;
+		const slowTimer = setTimeout(() => {
+			if (settled) return;
+			printerLogger.debug('Print job still running', {
+				context: { kind, profileId, elapsedMs: Date.now() - enqueuedAt },
+			});
+		}, PRINT_JOB_SLOW_MS);
+		const job = this.queueFor(profileId).add(async () => {
+			pending.delete(rejectPending);
+			const startedAt = Date.now();
+			let outcome: 'ok' | 'failed' = 'ok';
+			try {
+				return await run();
+			} catch (error) {
+				outcome = 'failed';
+				throw error;
+			} finally {
+				printerLogger.debug('Print job timing', {
+					context: {
+						kind,
+						profileId,
+						outcome,
+						waitMs: startedAt - enqueuedAt,
+						transportMs: Date.now() - startedAt,
+					},
+				});
+			}
+		});
+		return Promise.race([job, removed]).finally(() => {
+			settled = true;
+			clearTimeout(slowTimer);
+			pending.delete(rejectPending);
+		});
+	}
+
+	/**
+	 * Drop this profile's jobs that have not started yet — the cashier's way out of a queue
+	 * stacked up behind a printer that is not answering. The job already at the transport keeps
+	 * running: its bytes are part-written, and no lane can be aborted safely mid-receipt.
+	 */
+	cancelQueued(profileId: string): void {
+		this.queues.get(profileId)?.clear();
+		const pending = this.pending.get(profileId);
+		if (!pending) return;
+		for (const reject of pending) reject(new Error('Print job cancelled'));
+		pending.clear();
 	}
 
 	/**
 	 * Print pre-encoded raw bytes.
 	 */
 	async printRaw(data: Uint8Array, profile: PrinterProfile): Promise<void> {
-		return this.queue.add(async () => {
+		return this.enqueue('raw', profile.id, async () => {
 			const transport = await this.getTransport(profile);
-			await transport.printRaw(data);
+			await this.dispatchRaw(transport, data);
 		});
 	}
 
@@ -196,18 +421,22 @@ export class PrinterService {
 			throw new Error('Open drawer is not supported for this printer profile.');
 		}
 
-		return this.queue.add(async () => {
+		return this.enqueue('drawer', profile.id, async () => {
 			const transport = await this.getTransport(profile);
 			if (await transport.supportsMarkup?.()) {
-				await transport.printMarkup!({
-					template: '<receipt><drawer/></receipt>',
-					data: {},
-					options: { drawerConnector: profile.drawerConnector },
-				});
+				await this.dispatchMarkup(
+					transport,
+					{
+						template: '<receipt><drawer/></receipt>',
+						data: {},
+						options: { drawerConnector: profile.drawerConnector },
+					},
+					'drawer'
+				);
 				return;
 			}
 			const bytes =
-				encodeEscposRealtimeDrawerKick(profile) ??
+				encodeEscposDrawerKick(profile) ??
 				encodeThermalTemplate(
 					'<receipt><drawer /></receipt>',
 					{},
@@ -219,7 +448,7 @@ export class PrinterService {
 						drawerConnector: profile.drawerConnector,
 					}
 				);
-			await transport.printRaw(bytes, { cutPaper: false });
+			await this.dispatchRaw(transport, bytes, { cutPaper: false });
 		});
 	}
 
@@ -234,7 +463,7 @@ export class PrinterService {
 		orderId: number,
 		templateId: string
 	): Promise<void> {
-		return this.queue.add(async () => {
+		return this.enqueue('cloud-order', profile.id, async () => {
 			const transport = await this.getTransport(profile);
 			if (!(transport instanceof CloudAdapter)) {
 				throw new Error('Order-based printing requires a cloud printer profile');
@@ -258,12 +487,13 @@ export class PrinterService {
 		templateXml: string,
 		maxWidthDots: number
 	): Promise<void> {
-		return this.queue.add(async () => {
+		return this.enqueue('thermal-template', profile.id, async () => {
 			const transport = await this.getTransport(profile);
 			const input = {
 				templateXml,
 				receiptData,
 				maxWidthDots,
+				codePage: profile.codePage,
 				encodeOptions: {
 					language: profile.language,
 					columns: profile.columns,
@@ -274,11 +504,15 @@ export class PrinterService {
 				},
 			};
 			if (await transport.supportsMarkup?.()) {
-				await transport.printMarkup!(await buildThermalTemplateMarkupJob(input));
+				await this.dispatchMarkup(
+					transport,
+					await buildThermalTemplateMarkupJob(input),
+					'thermal-template'
+				);
 				return;
 			}
 			const bytes = await encodeThermalTemplateForPrint(input);
-			await transport.printRaw(bytes);
+			await this.dispatchRaw(transport, bytes);
 		});
 	}
 
@@ -286,7 +520,7 @@ export class PrinterService {
 	 * Print HTML via system dialog.
 	 */
 	async printHtml(html: string): Promise<void> {
-		return this.queue.add(async () => {
+		return this.enqueue('html', SYSTEM_QUEUE_ID, async () => {
 			const transport = new SystemPrintAdapter();
 			await transport.printHtml(html);
 		});
@@ -294,10 +528,13 @@ export class PrinterService {
 
 	/**
 	 * Send a test print to verify connectivity.
-	 * System profiles get an HTML test page via the system print dialog.
+	 * System profiles without a Windows queue key get an HTML page via the system print dialog.
 	 */
-	async testPrint(profile: PrinterProfile, options: TestPrintOptions = {}): Promise<void> {
-		if (profile.connectionType === 'system') {
+	async testPrint(
+		profile: PrinterProfile,
+		options: TestPrintOptions = {}
+	): Promise<TestPrintResult> {
+		if (profile.connectionType === 'system' && !profile.address?.startsWith('winspool:')) {
 			const html = `<html><body style="font-family:monospace;text-align:center;padding:2em">
         <h2>WCPOS</h2><p>Test Print</p>
         <p>Printer: ${profile.name}</p>
@@ -305,10 +542,11 @@ export class PrinterService {
         <p>Date: ${new Date().toLocaleString()}</p>
         <br/><p>If you can read this, printing works!</p>
       </body></html>`;
-			return this.printHtml(html);
+			await this.printHtml(html);
+			return { status: null };
 		}
 
-		return this.queue.add(async () => {
+		return this.enqueue('diagnostic', profile.id, async () => {
 			const transport = await this.getTransport(profile);
 			const job = {
 				template: buildDiagnosticTemplate(profile.columns),
@@ -322,8 +560,15 @@ export class PrinterService {
 					drawerConnector: profile.drawerConnector,
 				},
 			};
-			if (await transport.supportsMarkup?.()) await transport.printMarkup!(job);
-			else await transport.printRaw(encodeThermalTemplate(job.template, job.data, job.options));
+			if (await transport.supportsMarkup?.())
+				await this.dispatchMarkup(transport, job, 'diagnostic');
+			else {
+				await this.dispatchRaw(
+					transport,
+					encodeThermalTemplate(job.template, job.data, job.options)
+				);
+			}
+			return { status: await readStatusAfterTest(transport) };
 		});
 	}
 
@@ -331,11 +576,17 @@ export class PrinterService {
 	 * Clean up all transports. Waits for in-flight jobs to finish first.
 	 */
 	async dispose(): Promise<void> {
-		// Prevent new jobs from being accepted
-		this.queue.clear();
-
-		// Wait for any currently executing job to complete
-		await this.queue.onIdle();
+		// Refuse new jobs, settle the ones that never started, let the running ones finish —
+		// across every profile's queue.
+		this.closing = true;
+		for (const queue of this.queues.values()) queue.clear();
+		for (const pending of this.pending.values()) {
+			for (const reject of pending) reject(new Error('Printer service is closing'));
+			pending.clear();
+		}
+		await Promise.all([...this.queues.values()].map((queue) => queue.onIdle()));
+		this.queues.clear();
+		this.pending.clear();
 
 		for (const transport of this.transports.values()) {
 			await transport.disconnect?.();

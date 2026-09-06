@@ -261,6 +261,8 @@ export type RxdbSyncEnginePorts = {
 	 * volatile database gets a volatile cursor for free. */
 	checkpoints?: EngineStringStore;
 	connectivity?: () => EngineConnectivity;
+	/** Hold automatic ticks while auth is required; manual sync() remains available. */
+	holdAutomaticTicks?: () => boolean;
 	/** Default: Web Crypto. Native hosts inject their UUID v4 generator. */
 	uuid?: () => string;
 	/** Default: Math.random. Injectable jitter source for deterministic tests. */
@@ -729,7 +731,18 @@ export function createRxdbSyncEngine(
 	// findOne().$ streams per target). Re-resolving through the hub swaps in the
 	// fresh collections; late-bound because the hub is created further down.
 	let onLedgerRebuilt: (() => void) | undefined;
+	// All tick emitters share per-lane severity state, including rejected automatic ticks.
+	const laneLastEmittedError = new Map<string, string>();
 	const diagnostics: SyncObserver = (event) => {
+		if (event.type === 'engine.lane.tick' && typeof event.fields?.lane === 'string') {
+			const { lane, status, error } = event.fields;
+			if (status === 'error' && typeof error === 'string') {
+				if (laneLastEmittedError.get(lane) === error) event = { ...event, level: 'info' };
+				laneLastEmittedError.set(lane, error);
+			} else {
+				laneLastEmittedError.delete(lane);
+			}
+		}
 		if (event.type === 'coverage.ledger-rebuilt') {
 			try {
 				onLedgerRebuilt?.();
@@ -1020,6 +1033,7 @@ export function createRxdbSyncEngine(
 			fields: {
 				lane: report.lane,
 				status: report.status,
+				...(report.status === 'error' ? { error: report.error } : {}),
 				...(report.reason !== undefined ? { reason: report.reason } : {}),
 				...(report.pushed !== undefined
 					? {
@@ -1918,7 +1932,11 @@ export function createRxdbSyncEngine(
 							type: 'engine.lane.tick',
 							level: 'error',
 							message: `rebaseline continuation failed: ${error instanceof Error ? error.message : String(error)}`,
-							fields: { lane: 'rebaseline-continuation', status: 'error' },
+							fields: {
+								lane: 'rebaseline-continuation',
+								status: 'error',
+								error: error instanceof Error ? error.message : String(error),
+							},
 						});
 					});
 				}
@@ -1972,7 +1990,7 @@ export function createRxdbSyncEngine(
 		return report;
 	};
 	const automaticTickGate = createAutomaticTickGate({
-		isGated: () => pendingLifecycleOps > 0,
+		isGated: () => ports.holdAutomaticTicks?.() === true || pendingLifecycleOps > 0,
 		// Mirror the rebaseline-hold emission below: the gate returns before
 		// tickLaneWithEvents can run, so it must name the skip itself — a gated
 		// tick used to emit nothing at all (#1348). Deliberately NOT recordTick:
@@ -1984,7 +2002,7 @@ export function createRxdbSyncEngine(
 				type: 'lane-finish',
 				lane,
 				status: 'skipped',
-				detail: 'lifecycle-gated',
+				detail: ports.holdAutomaticTicks?.() === true ? 'auth-required' : 'lifecycle-gated',
 			});
 		},
 		connectivity: readConnectivity,

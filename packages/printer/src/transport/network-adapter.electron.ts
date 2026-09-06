@@ -1,10 +1,12 @@
 // Doctrine: packages/printer/README.md — lane order and the raw-fallback rule are decided there,
 // not here; read the Lessons log before changing the probe/fallback sequence.
 import { EPOS_HTTP_PORTS, probeEposEndpoint } from './epos-endpoint';
+import { statusQueryUnavailable } from './escpos-status';
 import { EpsonEposAdapter, postEposHttp } from './epson-epos-adapter.electron';
 import { ipcPrintRaw, PRINT_TIMEOUT_MS } from './ipc-print.electron';
 import { printerLogger } from '../logger';
 
+import type { PrinterStatus } from './escpos-status';
 import type { MarkupPrintJob, PrinterTransport } from '../types';
 
 // Cache successes only: a cached miss can repeat the roadmap#136 gotcha #5 quarantine loop.
@@ -40,6 +42,15 @@ export class NetworkAdapter implements PrinterTransport {
 			},
 			`Print timed out after ${PRINT_TIMEOUT_MS}ms`
 		);
+	}
+
+	/**
+	 * Raw 9100 is write-only from here: the socket lives in the main process, which sends bytes
+	 * and reads nothing back. Reading the reply needs a `usb-query-status`-style channel of its
+	 * own; until then this lane cannot ask (audit D4).
+	 */
+	async queryStatus(): Promise<PrinterStatus | null> {
+		return statusQueryUnavailable(this.name);
 	}
 
 	async supportsMarkup(): Promise<boolean> {

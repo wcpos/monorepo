@@ -5,23 +5,14 @@ import {
 	BT_CONNECT_TIMEOUT_MS,
 	BT_DISCOVERY_TIMEOUT_MS,
 } from '../discovery/bluetooth-scan-session';
+import { forgetBleDevice, getBleDevice } from '../transport/ble-device-registry';
 import { identifyDiscoveredPrinters } from '../discovery/identify';
 import { usePrinterDiscovery } from './use-printer-discovery.electron';
 
 import type { BluetoothCandidate, DiscoveredPrinter } from '../types';
-import type { PosConnectedDevice } from '../types/point-of-sale-connectors';
 
-// vi.mock is hoisted by vitest to the top of the module, so the connectMock /
-// addEventListenerMock references inside the factory are valid even though the
-// const declarations appear below.
-const connectMock = vi.fn();
-const addEventListenerMock = vi.fn();
-vi.mock('@point-of-sale/webbluetooth-receipt-printer', () => ({
-	default: class MockPrinter {
-		addEventListener = addEventListenerMock;
-		connect = connectMock;
-	},
-}));
+const requestDeviceMock = vi.fn();
+let resolveDevice: (device: typeof btDevice) => void;
 
 // Wraps the real implementation so the lane test below exercises it; individual tests can
 // hold a single call open with mockReturnValueOnce.
@@ -75,20 +66,12 @@ function removeIpc() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Fire the 'connected' handler captured by addEventListenerMock (call index 0 by default). */
-function emitConnected(device: PosConnectedDevice, callIdx = 0) {
-	const call = addEventListenerMock.mock.calls[callIdx] as
-		[string, (device: PosConnectedDevice) => void] | undefined;
-	if (!call) throw new Error(`No addEventListener call at index ${callIdx}`);
-	call[1](device);
-}
-
-const btDevice: PosConnectedDevice = {
+const btDevice = {
 	type: 'bluetooth',
 	id: 'dev-1',
 	name: 'TM-P20',
 	language: 'esc-pos',
-	codepageMapping: 'epson',
+	gatt: { connect: vi.fn() },
 };
 
 // ---------------------------------------------------------------------------
@@ -98,13 +81,21 @@ const btDevice: PosConnectedDevice = {
 describe('usePrinterDiscovery (electron)', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
-		connectMock.mockReset();
-		addEventListenerMock.mockReset();
+		forgetBleDevice('webbluetooth:dev-1');
+		requestDeviceMock.mockReset();
+		requestDeviceMock.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveDevice = resolve;
+				})
+		);
+		vi.stubGlobal('navigator', { bluetooth: { requestDevice: requestDeviceMock } });
 		installIpc();
 	});
 
 	afterEach(() => {
 		removeIpc();
+		vi.unstubAllGlobals();
 		vi.useRealTimers();
 	});
 
@@ -126,9 +117,18 @@ describe('usePrinterDiscovery (electron)', () => {
 
 		act(() => {
 			result.current.connectBluetoothDevice?.();
+			expect(requestDeviceMock).toHaveBeenCalledWith({
+				acceptAllDevices: true,
+				optionalServices: [
+					'000018f0-0000-1000-8000-00805f9b34fb',
+					'0000ff00-0000-1000-8000-00805f9b34fb',
+					'49535343-fe7d-4ae5-8fa9-9fafd205e455',
+					'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+				],
+			});
 		});
 
-		expect(connectMock).toHaveBeenCalledTimes(1);
+		expect(requestDeviceMock).toHaveBeenCalledTimes(1);
 		expect(result.current.isBluetoothScanning).toBe(true);
 
 		// Second call while session is active — should be a no-op.
@@ -136,7 +136,7 @@ describe('usePrinterDiscovery (electron)', () => {
 			result.current.connectBluetoothDevice?.();
 		});
 
-		expect(connectMock).toHaveBeenCalledTimes(1);
+		expect(requestDeviceMock).toHaveBeenCalledTimes(1);
 	});
 
 	// 3. selectBluetoothCandidate sends ipc.send; connected event adds printer
@@ -158,12 +158,14 @@ describe('usePrinterDiscovery (electron)', () => {
 
 		// Fire connected event.
 		await act(async () => {
-			emitConnected(btDevice);
+			resolveDevice(btDevice);
 		});
 
 		expect(result.current.isBluetoothScanning).toBe(false);
 		expect(result.current.printers).toHaveLength(1);
 		expect(result.current.printers[0].connectionType).toBe('bluetooth');
+		expect(getBleDevice('webbluetooth:dev-1')).toBe(btDevice);
+		expect(btDevice.gatt.connect).not.toHaveBeenCalled();
 	});
 
 	// 4. discovery timeout → ipc.send('', ''), scanning false, error bt-none-found
@@ -256,6 +258,21 @@ describe('usePrinterDiscovery (electron)', () => {
 		]);
 	});
 
+	it('keeps a manual network printer when a scan fails', async () => {
+		installIpc(async () => {
+			throw new Error('Network unavailable');
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+		act(() => result.current.addManualPrinter('Manual', '192.168.1.50', 9100));
+		await act(async () => {
+			await result.current.startScan();
+		});
+		expect(result.current.printers).toMatchObject([
+			{ id: '192.168.1.50:9100', name: 'Manual', connectionType: 'network' },
+		]);
+		expect(result.current.error?.code).toBe('discovery-failed');
+	});
+
 	it('identifies a discovered network printer and uses its printing lane port', async () => {
 		installIpc((channel: string) => {
 			if (channel === 'printer-discovery') {
@@ -287,7 +304,7 @@ describe('usePrinterDiscovery (electron)', () => {
 		});
 	});
 
-	it('does not merge identification results after the scan is stopped', async () => {
+	it('does not expose results while identification is pending or after the scan is stopped', async () => {
 		const discovered: DiscoveredPrinter = {
 			id: 'mdns-epson',
 			name: 'EPSON TM-m30III',
@@ -312,6 +329,7 @@ describe('usePrinterDiscovery (electron)', () => {
 			scan = result.current.startScan();
 			await vi.waitFor(() => expect(identifyDiscoveredPrinters).toHaveBeenCalled());
 		});
+		expect(result.current.printers).toEqual([]);
 		await act(async () => {
 			await result.current.stopScan();
 		});
@@ -390,11 +408,11 @@ describe('usePrinterDiscovery (electron)', () => {
 		});
 
 		expect(result.current.error).toEqual({ code: 'ipc-unavailable' });
-		expect(connectMock).not.toHaveBeenCalled();
+		expect(requestDeviceMock).not.toHaveBeenCalled();
 	});
 
 	it('a synchronous chooser failure surfaces discovery-failed and clears scanning', () => {
-		connectMock.mockImplementationOnce(() => {
+		requestDeviceMock.mockImplementationOnce(() => {
 			throw new Error('Web Bluetooth API globally disabled');
 		});
 		const { result } = renderHook(() => usePrinterDiscovery());
@@ -413,6 +431,19 @@ describe('usePrinterDiscovery (electron)', () => {
 			result.current.connectBluetoothDevice?.();
 		});
 		expect(result.current.isBluetoothScanning).toBe(true);
+	});
+
+	it('requestDevice rejection ends scanning with the existing error', async () => {
+		requestDeviceMock.mockRejectedValueOnce(new DOMException('Cancelled', 'NotFoundError'));
+		const { result } = renderHook(() => usePrinterDiscovery());
+		await act(async () => {
+			result.current.connectBluetoothDevice?.();
+		});
+		expect(result.current.isBluetoothScanning).toBe(false);
+		expect(result.current.error).toEqual({
+			code: 'discovery-failed',
+			detail: expect.stringContaining('Cancelled'),
+		});
 	});
 
 	// 10. connectSerialDevice: success → printers list updated, isSerialScanning false
@@ -509,7 +540,7 @@ describe('usePrinterDiscovery (electron)', () => {
 			result.current.connectBluetoothDevice?.();
 		});
 		expect(result.current.isBluetoothScanning).toBe(true);
-		expect(connectMock).toHaveBeenCalledTimes(1);
+		expect(requestDeviceMock).toHaveBeenCalledTimes(1);
 
 		act(() => {
 			result.current.cancelBluetoothScan?.();
@@ -527,7 +558,37 @@ describe('usePrinterDiscovery (electron)', () => {
 			result.current.connectBluetoothDevice?.();
 		});
 
-		expect(connectMock).toHaveBeenCalledTimes(2);
+		expect(requestDeviceMock).toHaveBeenCalledTimes(2);
 		expect(result.current.isBluetoothScanning).toBe(true);
 	});
+});
+
+it.each([false, true])('keeps USB results when a late network scan fails=%s', async (fail) => {
+	const usb: DiscoveredPrinter = {
+		id: 'usb-device',
+		name: 'Receipt',
+		connectionType: 'usb',
+		address: 'usb:1:2:3:4',
+	};
+	let finish!: (rows: DiscoveredPrinter[]) => void;
+	let reject!: (error: Error) => void;
+	const network = new Promise<DiscoveredPrinter[]>((resolve, onReject) => {
+		finish = resolve;
+		reject = onReject;
+	});
+	installIpc((channel) => (channel === 'printer-discovery' ? network : Promise.resolve([usb])));
+	const { result, unmount } = renderHook(() => usePrinterDiscovery());
+	let scan!: Promise<void>;
+	await act(async () => {
+		scan = result.current.startScan();
+		await result.current.connectUsbDevice?.();
+	});
+	await act(async () => {
+		if (fail) reject(new Error('Network unavailable'));
+		else finish([]);
+		await scan;
+	});
+	expect(result.current.printers).toEqual([usb]);
+	unmount();
+	removeIpc();
 });

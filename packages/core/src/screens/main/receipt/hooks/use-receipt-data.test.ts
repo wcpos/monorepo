@@ -3,6 +3,8 @@
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { useReceiptData } from './use-receipt-data';
 
 const mockGet = jest.fn();
@@ -24,6 +26,26 @@ describe('useReceiptData', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 	});
+
+	it.each([
+		[{ isSleeping: true }, 'warn'],
+		[{ blockCode: 'preflight-offline' }, 'warn'],
+		[{ blockCode: 'preflight-auth-required' }, 'error'],
+		[{}, 'error'],
+	] as const)(
+		'logs receipt refusal %j at %s without changing the result',
+		async (fields, level) => {
+			const error = Object.assign(new Error('refused'), fields);
+			mockGet.mockRejectedValueOnce(error);
+			const { result } = renderHook(() => useReceiptData({ orderId: 42 }));
+			await waitFor(() => expect(result.current.error).toBe(error));
+			expect(getLogger([])[level]).toHaveBeenCalledWith('Failed to fetch receipt data', {
+				code: 'PRINT999',
+				context: { orderId: 42, mode: 'live', error: 'refused' },
+			});
+			expect(getLogger([])[level === 'warn' ? 'error' : 'warn']).not.toHaveBeenCalled();
+		}
+	);
 
 	it('does not expose the previous response while the next order is pending', async () => {
 		const nextResponse = createDeferred<Record<string, unknown>>();

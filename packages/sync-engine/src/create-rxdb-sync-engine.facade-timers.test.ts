@@ -229,6 +229,106 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		await engine.dispose();
 	});
 
+	it('holds automatic ticks for auth, but not manual sync, and resumes when cleared', async () => {
+		const captured = captureTimers();
+		let held = true;
+		const engine = engineWith({ mode: 'auto', holdAutomaticTicks: () => held });
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+		try {
+			await engine.ready;
+			await waitForAutomaticIntervals(captured.intervals);
+			events.length = 0;
+			const tick = captured.intervals[0]!;
+			tick.callback();
+			expect(events).toEqual([
+				{ type: 'lane-start', lane: expect.any(String) },
+				{
+					type: 'lane-finish',
+					lane: expect.any(String),
+					status: 'skipped',
+					detail: 'auth-required',
+				},
+			]);
+			const lane = (events[0] as Extract<EngineEvent, { type: 'lane-start' }>).lane;
+			expect(engine.status().lanes[lane].lastTick).toBeNull();
+			expect((await engine.sync(lane)).status).toBe('ran');
+			// Let the held run release its same-lane reservation before firing again.
+			await Promise.resolve();
+			held = false;
+			events.length = 0;
+			tick.callback();
+			await vi.waitFor(() =>
+				expect(events).toContainEqual({ type: 'lane-finish', lane, status: 'ran' })
+			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('keeps every tick row but lowers consecutive identical errors per lane', async () => {
+		let failure: string | null = null;
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			queryTotal: {
+				fetchWooQueryTotal: async () => {
+					if (failure !== null) throw new Error(failure);
+					return 0;
+				},
+			},
+			fetcher: async (url) => {
+				if (failure !== null) throw new Error(failure);
+				if (url.endsWith('/changes/tick')) return new Response(null, { status: 404 });
+				return new Response(
+					JSON.stringify({ changes: [], checkpoint: { since: 0, head: 0 }, complete: true }),
+					{
+						headers: { 'content-type': 'application/json' },
+					}
+				);
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			for (const message of [
+				'Census refresh failed for products',
+				'Census refresh failed for products',
+				'different',
+				null,
+				'different',
+			]) {
+				failure = message;
+				await engine.checkCollection('products');
+			}
+			const rows = diagnostics.mock.calls
+				.map(([event]) => event)
+				.filter(
+					(event) => event.type === 'engine.lane.tick' && event.fields.lane === 'change-signal'
+				);
+			expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error', 'info', 'error']);
+			expect(rows.map((event) => event.fields.error)).toEqual([
+				'Census refresh failed for products',
+				'Census refresh failed for products',
+				'different',
+				undefined,
+				'different',
+			]);
+			expect(rows[3].fields.status).toBe('ran');
+			const firstCensus = diagnostics.mock.calls
+				.map(([event]) => event)
+				.find(
+					(event) => event.type === 'engine.lane.tick' && event.fields.lane === 'query-total-retry'
+				);
+			expect(firstCensus).toMatchObject({
+				level: 'error',
+				fields: { error: 'Census refresh failed for products' },
+			});
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('arms and advances each automatic lane nextDueAtMs on fixed interval boundaries', async () => {
 		let nowMs = 1_000;
 		const captured = captureTimers();

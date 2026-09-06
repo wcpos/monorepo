@@ -5,8 +5,8 @@ import { identifyDiscoveredPrinters, identifyPrinter } from '../identify';
 import type { IdentifyProbes } from '../identify';
 import type { DiscoveredPrinter } from '../../types';
 
-const { info } = vi.hoisted(() => ({ info: vi.fn() }));
-vi.mock('../../logger', () => ({ printerLogger: { debug: vi.fn(), info } }));
+const { debug, info } = vi.hoisted(() => ({ debug: vi.fn(), info: vi.fn() }));
+vi.mock('../../logger', () => ({ printerLogger: { debug, info } }));
 
 const EPOS_RESPONSE =
 	'<response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" code="" status="0" />';
@@ -24,6 +24,47 @@ function probes(overrides: Partial<IdentifyProbes> = {}): IdentifyProbes {
 
 describe('identifyPrinter', () => {
 	afterEach(() => vi.useRealTimers());
+
+	it('records the HTTP status that decided the ePOS lane', async () => {
+		const identity = await identifyPrinter(
+			'192.168.1.30',
+			{ name: 'EPSON TM-m30III' },
+			probes({
+				postEpos: async (_host, port) => {
+					if (port === 8008) return { status: 200, body: EPOS_RESPONSE };
+					throw new Error('closed');
+				},
+			})
+		);
+
+		expect(identity.ports).toContainEqual({
+			port: 8008,
+			state: 'open',
+			protocol: 'epos-print',
+			httpStatus: 200,
+		});
+	});
+
+	it('skips the raw ports and says why when the printer is a named Epson', async () => {
+		debug.mockClear();
+		const connectTcp = vi.fn(async () => 'open' as const);
+
+		const identity = await identifyPrinter(
+			'192.168.1.31',
+			{ name: 'EPSON TM-T88VI' },
+			probes({ connectTcp })
+		);
+
+		expect(connectTcp).not.toHaveBeenCalled();
+		expect(identity.ports.some((entry) => entry.port === 9100)).toBe(false);
+		expect(debug).toHaveBeenCalledWith('Raw probe skipped', {
+			context: {
+				host: '192.168.1.31',
+				ports: [9100, 631],
+				reason: 'epson hint — a raw touch quarantines every lane',
+			},
+		});
+	});
 
 	it('prefers secure Epson ePOS over an open raw port', async () => {
 		const identity = await identifyPrinter(
@@ -74,7 +115,7 @@ describe('identifyPrinter', () => {
 			expect.arrayContaining([
 				{ port: 443, state: 'closed', protocol: 'epos-print' },
 				{ port: 8043, state: 'filtered', protocol: 'epos-print' },
-				{ port: 80, state: 'open', protocol: 'epos-print' },
+				{ port: 80, state: 'open', protocol: 'epos-print', httpStatus: 200 },
 			])
 		);
 	});
@@ -126,7 +167,12 @@ describe('identifyPrinter', () => {
 
 		expect(identity.lane).toEqual({ port: 443, protocol: 'epos-print', encrypted: true });
 		expect(identity.securePrinting).toBe(false);
-		expect(identity.ports).toContainEqual({ port: 80, state: 'open', protocol: 'epos-print' });
+		expect(identity.ports).toContainEqual({
+			port: 80,
+			state: 'open',
+			protocol: 'epos-print',
+			httpStatus: 200,
+		});
 	});
 
 	it('uses a Star WebPRNT endpoint as the printing lane', async () => {
@@ -293,5 +339,30 @@ describe('identifyDiscoveredPrinters', () => {
 		);
 
 		expect(identified.vendor).toBe('epson');
+	});
+	it('skips the raw touch for an Epson whose name says nothing, on the discovery vendor alone', async () => {
+		debug.mockClear();
+		const connectTcp = vi.fn(async () => 'open' as const);
+		const counter: DiscoveredPrinter = {
+			id: 'mdns-counter',
+			name: 'Counter',
+			connectionType: 'network',
+			address: '192.168.1.41',
+			port: 9100,
+			// From the mDNS row: the _epsonpos service type / EPSON TXT record, not the name.
+			vendor: 'epson',
+		};
+
+		const [identified] = await identifyDiscoveredPrinters([counter], probes({ connectTcp }));
+
+		expect(connectTcp).not.toHaveBeenCalled();
+		expect(identified?.identity?.ports.some((entry) => entry.port === 9100)).toBe(false);
+		expect(debug).toHaveBeenCalledWith('Raw probe skipped', {
+			context: {
+				host: '192.168.1.41',
+				ports: [9100, 631],
+				reason: 'epson hint — a raw touch quarantines every lane',
+			},
+		});
 	});
 });

@@ -5,6 +5,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Suspense } from '@wcpos/components/suspense';
 import {
 	Form,
@@ -181,7 +182,8 @@ function GeneralSettingsForm({
 				await localPatch({ document: store, data: patch as never });
 			}
 		} catch (error) {
-			uiLogger.error('Failed to restore server settings', {
+			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
+			uiLogger[logLevel]('Failed to restore server settings', {
 				code: ERROR_CODES.UNEXPECTED_ERROR,
 				context: {
 					error: getErrorMessage(error),

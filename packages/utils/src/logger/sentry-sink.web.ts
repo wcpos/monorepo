@@ -75,12 +75,43 @@ export function scrubEvent<T extends Sentry.Event>(event: T): T {
 	return event;
 }
 
+/**
+ * The message with everything per-store or per-record replaced by `{}`: URL
+ * origins (a merchant's hostname must not make one failure class into one
+ * issue per store), UUIDs, quoted strings and integers.
+ */
+export function messageTemplate(message: string): string {
+	return message
+		.replace(/\bhttps?:\/\/[^\s"'/]+/gi, '{}')
+		.replace(/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/gi, '{}')
+		.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '{}')
+		.replace(/\b\d+\b/g, '{}');
+}
+
+/**
+ * Sentry grouping key. A registry code names one condition, so it groups alone;
+ * the `*999` catch-alls add the message template so unrelated failures do not
+ * share an issue; an HTTP failure (the client stamps `context.endpoint`) adds
+ * method + endpoint template so a 503 on `/products` and one on `/orders` are
+ * two issues, whatever the code.
+ */
+function fingerprintFor(message: string, code: string, context: unknown) {
+	const fields =
+		context !== null && typeof context === 'object' ? (context as Record<string, unknown>) : {};
+	const endpoint = fields.endpoint;
+	if (typeof endpoint === 'string' && endpoint.length > 0) {
+		const method = typeof fields.method === 'string' ? fields.method : '';
+		return [code, method, messageTemplate(endpoint)];
+	}
+	return code.endsWith('999') ? [code, messageTemplate(message)] : [code];
+}
+
 export function buildCaptureOptions({ message, code, context }: SentryCaptureInput) {
 	return {
 		level: 'error' as const,
 		...(code !== undefined && {
 			tags: { errorCode: String(code) },
-			fingerprint: [String(code)],
+			fingerprint: fingerprintFor(message, String(code), context),
 		}),
 		extra: { message, context },
 	};
@@ -100,6 +131,46 @@ export function captureLoggedError(input: SentryCaptureInput): void {
 		} else {
 			Sentry.captureMessage(input.message, options);
 		}
+	} catch {
+		// Diagnostics must never interfere with the logger.
+	}
+}
+
+/**
+ * Opt-in printer setup outcome (roadmap#161 P0): one info-level message per terminal setup
+ * phase, tagged so Sentry can pivot by vendor/lane/platform. Sent only when the merchant
+ * allowed telemetry; carries no addresses or device keys.
+ */
+// Only stable, address-free fields leave the device; failure text can carry a printer endpoint.
+export const PRINTER_OUTCOME_FIELDS = [
+	'result',
+	'platform',
+	'source',
+	'vendor',
+	'model',
+	'lane',
+	'columns',
+	'testPages',
+	'securePrinting',
+	'troubleReason',
+] as const;
+
+export function capturePrinterOutcome(
+	context: Record<string, string | number | boolean | undefined>
+): void {
+	if (!isInitialized) return;
+	try {
+		const safe = Object.fromEntries(
+			PRINTER_OUTCOME_FIELDS.filter((key) => context[key] !== undefined).map((key) => [
+				key,
+				String(context[key]),
+			])
+		);
+		Sentry.captureMessage('Printer setup outcome', {
+			level: 'info',
+			tags: safe,
+			extra: { context: safe },
+		});
 	} catch {
 		// Diagnostics must never interfere with the logger.
 	}

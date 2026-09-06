@@ -9,6 +9,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from '@wcpos/printer';
 
+import { PrinterSetupDialog } from './setup/printer-setup-dialog';
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import {
@@ -70,7 +71,7 @@ function DeviceList({
 						testID={`add-printer-electron-${type}-device-${device.id}`}
 						onPress={() => {
 							form.setValue('connectionType', type);
-							form.setValue('address', device.address ?? '');
+							form.setValue('address', device.address ?? '', { shouldValidate: true });
 							form.setValue('name', device.name);
 							if (device.vendor) {
 								form.setValue('vendor', device.vendor as PrinterFormValues['vendor']);
@@ -105,7 +106,12 @@ interface PrinterDialogProps {
 	prefill?: PrinterDialogPrefill;
 }
 
-export function PrinterDialog({
+export function PrinterDialog(props: PrinterDialogProps) {
+	if (!props.printer) return props.open ? <PrinterSetupDialog {...props} /> : null;
+	return <EditPrinterDialog {...props} />;
+}
+
+function EditPrinterDialog({
 	open,
 	onOpenChange,
 	onSave,
@@ -279,12 +285,12 @@ export function PrinterDialog({
 			connectionSection={
 				<>
 					<ConnectionTypeSegmented
+						form={form}
 						value={connectionType}
 						onChange={(v) => {
 							form.setValue('connectionType', v);
 							form.setValue('address', '', {
 								shouldDirty: true,
-								shouldValidate: true,
 							});
 						}}
 					/>

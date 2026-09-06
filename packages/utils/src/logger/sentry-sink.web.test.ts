@@ -21,8 +21,13 @@ Object.defineProperty(globalThis, 'window', {
 	},
 });
 
-const { buildCaptureOptions, captureLoggedError, scrubEvent, setTelemetryConsent } =
-	jest.requireActual<typeof import('./sentry-sink.web')>('./sentry-sink.web');
+const {
+	buildCaptureOptions,
+	captureLoggedError,
+	messageTemplate,
+	scrubEvent,
+	setTelemetryConsent,
+} = jest.requireActual<typeof import('./sentry-sink.web')>('./sentry-sink.web');
 const sentryInitCallsOnImport = jest.mocked(Sentry.init).mock.calls.length;
 
 describe('sentry-sink.web', () => {
@@ -126,6 +131,66 @@ describe('sentry-sink.web', () => {
 			level: 'error',
 			extra: { message: 'Uncoded error', context: undefined },
 		});
+	});
+
+	it.each([
+		['Order 123 failed', 'Order {} failed'],
+		['Product 123e4567-e89b-12d3-a456-426614174000 failed', 'Product {} failed'],
+		['Product "Blue shirt" failed', 'Product {} failed'],
+		["Product 'Blue shirt' failed", 'Product {} failed'],
+	])('templates %s', (message, expected) => {
+		expect(messageTemplate(message)).toBe(expected);
+	});
+
+	it('separates catch-all messages but preserves specific-code grouping', () => {
+		const fingerprints = ['Barcode lookup failed', 'Stock refresh failed'].map(
+			(message) => buildCaptureOptions({ message, code: 'PRODUCT999' }).fingerprint
+		);
+		expect(fingerprints).toEqual([
+			['PRODUCT999', 'Barcode lookup failed'],
+			['PRODUCT999', 'Stock refresh failed'],
+		]);
+		expect(
+			buildCaptureOptions({ message: 'Order 123 failed', code: 'AUTH201' }).fingerprint
+		).toEqual(['AUTH201']);
+	});
+
+	it('normalises merchant origins so one failure class is one issue, not one per store', () => {
+		expect(messageTemplate('Failed to connect to https://shop.example.com/wp-json/: timeout')).toBe(
+			'Failed to connect to {}/wp-json/: timeout'
+		);
+		expect(
+			buildCaptureOptions({
+				message: 'Failed to connect to https://a.example.com/wp-json/: timeout',
+				code: 'AUTH999',
+			}).fingerprint
+		).toEqual(
+			buildCaptureOptions({
+				message: 'Failed to connect to https://b.example.org/wp-json/: timeout',
+				code: 'AUTH999',
+			}).fingerprint
+		);
+	});
+
+	it('groups HTTP failures by method and endpoint template, whatever the code', () => {
+		const products = buildCaptureOptions({
+			message: 'HTTP request failed: GET /wp-json/wcpos/v2/products',
+			code: 'SYNC131',
+			context: { method: 'GET', endpoint: '/wp-json/wcpos/v2/products', status: 503 },
+		}).fingerprint;
+		const orders = buildCaptureOptions({
+			message: 'HTTP request failed: GET /wp-json/wcpos/v2/orders/12',
+			code: 'SYNC131',
+			context: { method: 'GET', endpoint: '/wp-json/wcpos/v2/orders/12', status: 503 },
+		}).fingerprint;
+		const orders2 = buildCaptureOptions({
+			message: 'HTTP request failed: GET /wp-json/wcpos/v2/orders/99',
+			code: 'SYNC131',
+			context: { method: 'GET', endpoint: '/wp-json/wcpos/v2/orders/99', status: 503 },
+		}).fingerprint;
+		expect(products).toEqual(['SYNC131', 'GET', '/wp-json/wcpos/v2/products']);
+		expect(products).not.toEqual(orders);
+		expect(orders).toEqual(orders2);
 	});
 
 	it('captures Error context as an exception', () => {

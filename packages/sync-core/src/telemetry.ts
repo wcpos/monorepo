@@ -169,9 +169,10 @@ export type SyncEventFieldsByType = {
 		readonly backlog?: number;
 	};
 	'engine.lane.tick': {
-		readonly lane?: string;
+		readonly lane: string;
 		/** Lane report status — `'error'` is the one the observer keys on. */
 		readonly status: string;
+		readonly error?: string;
 		readonly reason?: string;
 		readonly pushed?: number;
 		readonly held?: number;

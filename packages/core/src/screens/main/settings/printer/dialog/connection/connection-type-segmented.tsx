@@ -6,10 +6,14 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../../contexts/translations';
 
+import type { UseFormReturn } from 'react-hook-form';
+import type { PrinterFormValues } from '../../schema';
+
 type ConnType = 'network' | 'bluetooth' | 'usb';
 
 interface ConnectionTypeSegmentedProps {
-	value: ConnType;
+	form: Pick<UseFormReturn<PrinterFormValues>, 'clearErrors'>;
+	value: PrinterFormValues['connectionType'];
 	onChange: (value: ConnType) => void;
 	availableTypes?: readonly ConnType[];
 }
@@ -19,6 +23,7 @@ function isConnectionType(value: string): value is ConnType {
 }
 
 export function ConnectionTypeSegmented({
+	form,
 	value,
 	onChange,
 	availableTypes,
@@ -38,10 +43,11 @@ export function ConnectionTypeSegmented({
 
 	return (
 		<Tabs
-			value={value}
+			value={value === 'system' ? 'usb' : value}
 			onValueChange={(next) => {
 				if (isConnectionType(next)) {
 					onChange(next);
+					form.clearErrors('address');
 				}
 			}}
 		>

@@ -160,8 +160,36 @@ describe('createAutomaticTickGate', () => {
 			type: 'engine.lane.tick',
 			level: 'error',
 			message: 'automatic tick failed: lane exploded',
-			fields: { lane: 'change-signal', status: 'error', durationMs: 15 },
+			fields: { lane: 'change-signal', status: 'error', error: 'lane exploded', durationMs: 15 },
 		});
+	});
+
+	it('names an unlabelled rejected retick and includes its error field', async () => {
+		const diagnostics = vi.fn();
+		const gate = createAutomaticTickGate({
+			isGated: () => false,
+			connectivity: () => 'online',
+			now: () => 0,
+			diagnostics,
+			onStatusChange: vi.fn(),
+			tickLane: vi.fn(),
+			recordTick: vi.fn(),
+			seedRetickLanes: [],
+		});
+		await gate.run(async () => {
+			throw 'retick failed';
+		});
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				message: 'automatic tick failed: retick failed',
+				fields: {
+					lane: 'reconnect-retick',
+					status: 'error',
+					error: 'retick failed',
+					durationMs: 0,
+				},
+			})
+		);
 	});
 
 	it('reticks seeds before drains on an offline-to-online edge', async () => {

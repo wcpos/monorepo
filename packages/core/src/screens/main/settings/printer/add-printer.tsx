@@ -6,6 +6,7 @@ import type { PrinterProfile } from '@wcpos/printer';
 import { usePrinterDiscovery } from '@wcpos/printer';
 import { Text } from '@wcpos/components/text';
 
+import { PrinterSetupDialog } from './setup/printer-setup-dialog';
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { BluetoothDevicePicker } from './dialog/connection/bluetooth-device-picker';
@@ -40,7 +41,13 @@ interface PrinterDialogProps {
 	prefill?: PrinterDialogPrefill;
 }
 
-export function PrinterDialog({
+export function PrinterDialog(props: PrinterDialogProps) {
+	if (!props.printer)
+		return props.open ? <PrinterSetupDialog {...props} platform="native" /> : null;
+	return <EditPrinterDialog {...props} />;
+}
+
+function EditPrinterDialog({
 	open,
 	onOpenChange,
 	onSave,
@@ -133,6 +140,7 @@ export function PrinterDialog({
 			connectionSection={
 				<>
 					<ConnectionTypeSegmented
+						form={form}
 						value={connectionType}
 						onChange={(v) => form.setValue('connectionType', v)}
 					/>

@@ -167,3 +167,120 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   network path consulted the model table. Ruling (Paul): ask the printer. On Epson SDK lanes the
   adapter now reads the configured paper width (`getPrinterSetting(PAPERWIDTH)`: 58/60/70/76/80 mm →
   32/35/42/45/48 columns); the model table is the fallback, the ruler the last resort (G7).
+- **2026-09-05 · Netum NT-1809 (58 mm generic) over USB on Electron · implementation complete;
+  corrected output pending physical verification.** Found
+  and printing at once (it enumerates as USB printer class 7 despite its Winbond VCP VID/PID; the
+  class filter is fine). Two defects: the profile defaulted to 42 columns (no width source on the
+  generic USB lane — open, the width must be asked at add time), and the store-hours block printed
+  off-centre: a multi-line centred `<text>` bypassed the aligned-line path, so the encoder padded each
+  line *and* a mid-line `ESC a 1` reached the printer; Epson ignores mid-line alignment, the Netum
+  honours it (double-centring). The implementation now emits each line through the aligned path
+  (Spec I1); the result has not yet been verified on paper.
+  The dotted rule and the shifted payment amounts in the same photo were **not** in the emitted
+  bytes — the raw job hex is now available during the explicit 24-hour verbose-diagnostics mode
+  (Spec I2), so the next test can compare bytes, not theories. An earlier 32-column diagnostic print
+  narrowed the investigation; the corrected receipt and byte capture still need a dated
+  Netum/Electron paper run.
+- **2026-09-05 · Netum NT-1809 over BLE · Electron.** Its GATT (read from the Mac): `18f0/2af1`,
+  `ff00/ff02`, ISSC `49535343-…`, `e7810a71-…`, MTU 240; a 30-byte ESC/POS job written to `2af1`
+  without response in 20-byte chunks printed at once. The app's Web Bluetooth path printed nothing
+  because it reconnected through the library's `getDevices()` route, which needs persisted device
+  permissions Electron does not keep (timeout after 10 s). Fixed: print through the `BluetoothDevice`
+  in hand — `transport/ble-gatt.ts`, profiles probed in the order above (Spec H). Two gotchas for the
+  wizard copy: a BLE printer that is *connected* (even by a stale link) stops advertising and vanishes
+  from every scan until power-cycled; the Netum also advertises Bluetooth Classic to macOS.
+- **2026-09-05 · Scan-first setup must not read as a Wi-Fi scan.** A shop with only a USB or
+  Bluetooth printer saw "Looking for printers on your network…" and a Bluetooth button hidden
+  under Options. Chromium only opens the Bluetooth LE chooser from a click, so that button has to
+  stay in view on every scan screen; USB and OS-paired printers enumerate in a second and are
+  listed while the Wi-Fi scan continues. Copy is one line per screen plus the printer guide link.
+- **2026-09-05 · Netum NT-1809 over BLE · macOS Electron reconnect.** After a link drops,
+  the Netum can stop advertising; macOS Chromium then rejects `gatt.connect()` with "Bluetooth
+  Device is no longer in range." Keep GATT alive for 60 seconds after the last write and reuse it
+  between jobs. Retry a transient connection failure once after 1.5 seconds, but never forget the
+  session's device on a transient error: that forces a chooser needing a user gesture and an
+  advertising printer. Only replace the remembered object when the chooser supplies another one.
+  Unit-tested; this keep-alive change still needs physical-printer verification.
+- **2026-09-05 · every lane · the reporting loop.** A merchant's copied report could not explain a
+  failed print because whole lanes logged nothing: both native SDK adapters (Epson, Star) printed
+  in silence, so did the browser and Electron ePOS lanes and Star WebPRNT; markup jobs — the
+  acknowledged lanes, the ones most printers now use — dispatched with no line at all while raw
+  jobs had one; a job's queue wait was indistinguishable from the printer's own response time; the
+  raw-9100 skip (the guard that keeps a Secure Printing Epson out of quarantine) left no trace, so
+  a scan that skipped the port looked identical to one where the port was closed; and a receipt
+  that printed "INR" where the merchant expected the rupee sign said nothing either. Rule, from
+  here on: **every lane logs its dispatch, its timing and its outcome** — target (host/port or
+  device key), bytes or markup length, elapsed ms, HTTP status when there is one, and the error
+  message on failure. Receipt text and addresses stay out of it; the serialised job appears only
+  under the explicit 24-hour verbose-diagnostics mode, capped like the raw hex preview. A skipped
+  probe logs *why* it was skipped: a decision with no line is indistinguishable from a lane that
+  was never reached.
+- **2026-09-06 · no printer involved · what a read of the code found.** The gotcha audit
+  (wcpos/roadmap#161) turned up defects no test print would have shown, because each needs a
+  second printer, a clone, or a non-Latin store to reproduce. Fixed here: the cash drawer opened
+  only on Epsons — the standalone kick was the real-time `DLE DC4`, which many clones do not
+  implement, so a generic profile now gets the queued `ESC p 0 25 250`; one hung job held every
+  printer's receipts, because the service had a single print queue for all profiles (now one
+  serial queue per profile id, jobs for different printers run side by side, and `cancelQueued`
+  drops a profile's not-yet-started jobs — a job already at the transport cannot be aborted
+  safely); the same stalled printer timed out after 10, 15, 20 or 30 seconds depending on the
+  lane (one `PRINT_JOB_TIMEOUT_MS` now, with a line at 8 s while the cashier is still watching);
+  the store logo was sized for 80 mm paper whenever the template left `paper_width` null, which
+  is most templates, so a 58 mm printer cropped it (the profile's column count decides now); an
+  ePOS-Device endpoint on 8043 answering `Welcome to socket.io.` was rejected silently, and a
+  rejected port read exactly like a port that was never probed (`ePOS endpoint rejected` says
+  host, port and reason); and a receipt of question marks had no way to be fixed, since the
+  encoder chose a code page per string — `PrinterProfile.codePage` now names one and the
+  substitution warning says which page substituted. Two audit rows turned out to be wrong about
+  the code and are recorded rather than "fixed": the raw-9100 skip already keys on the discovery
+  vendor, not the printer's name (an mDNS `_epsonpos` row named "Counter" is skipped — tested),
+  and every ESC/POS job already selects Font A, because the encoder library's `initialize()`
+  emits `ESC @ FS . ESC M 0`; `withEscposFontA` is now a guard that inserts the command only if
+  the header lacks it, so the ruler's column count keeps its meaning if that ever changes.
+- **2026-09-06 · generic BLE printers on phones · the same GATT profiles as the browser.** A phone
+  needs no vendor SDK to print to a clone: `transport/ble-native-adapter.ts` connects with
+  react-native-ble-plx and writes 20-byte chunks to the same service/characteristic pairs the Web
+  Bluetooth lane probes, now shared from `transport/ble-profiles.ts` — one table, one order, one
+  set of pacing constants for both lanes. `discovery/ble-native-discovery.ts` scans on those
+  service UUIDs and falls back to a name match, because most clones advertise a name and nothing
+  else. Bluetooth *Classic* (SPP) printers stay unsupported on iOS/Android: nothing in the JS
+  ecosystem speaks SPP, so that lane needs a native module of its own.
+- **2026-09-06 · every raw lane · asking the printer what is wrong.** Paper out, cover open and
+  "did it print" were unanswerable outside ePOS (audit D4, roadmap#161 P3). ESC/POS answers them
+  in real time — `DLE EOT n` (`0x10 0x04 n`), one byte back per query, always with bit 4 set and
+  bit 7 clear: **n=1** printer status (bit 3 offline), **n=2** offline cause (bit 2 cover open,
+  bit 5 paper end, bit 6 error), **n=3** error cause (not asked), **n=4** paper sensor (bits 2-3
+  near end, bits 5-6 paper end). `transport/escpos-status.ts` builds the queries and reads the
+  replies; a missing byte is tolerated, so a printer that answers only the first query still says
+  something. **Which lanes can ask:** BLE, both lanes, and only on a profile that has a notify
+  characteristic — the Netum NT-1809's `18f0` service notifies on `2af0` (`GS I` is ignored), and
+  that is the only status channel observed so far, so `ff00`, ISSC and `e7810a71` return null
+  until one is read off a printer. Write `DLE EOT`, take the byte off the notify characteristic
+  within 800 ms, unsubscribe. **Which cannot yet:** Electron USB and raw TCP 9100 — both send
+  through the main process, which lives in another repo and holds a write-only handle; USB has a
+  read path and needs a `usb-query-status` channel beside `print-raw-usb` before this lane can
+  ask. Vendor SDK lanes report their own codes and are untouched. Every read logs its raw bytes,
+  every failure degrades to null, and a status query never fails the print it followed: the test
+  page is on paper either way. Setup uses it for one thing — a printer that says paper-out or
+  cover-open sends the cashier to the paper line instead of asking them to read a page that never
+  came. Unit-tested against the byte patterns; still needs a paper-out run at a real Netum.
+
+- **2026-09-06 — Bluetooth Classic on Android is its own lane, and it is the paired list, not a
+  scan.** The cheap 58 mm printers an Android merchant buys first often speak only SPP (RFCOMM on
+  `00001101-…`), so the LE scan never sees them and the phone's answer was "no printer found" with
+  a developer string underneath. Neither `react-native-ble-plx` nor the vendor SDKs reach SPP, and
+  the one community module has sat at a release candidate for years, so the lane is a local Expo
+  module (`apps/main/modules/bluetooth-spp`, Android only — iOS has no third-party SPP) and needs a
+  dev-client rebuild. **What it does:** lists the phone's already-paired devices filtered to
+  printer class or printer-like name (there is no in-app scan; pairing happens in Android's
+  Bluetooth settings, and the empty results screen and the unpaired trouble line both open that
+  page), opens the socket once and keeps it for a quiet minute like the LE lane, writes in 512-byte
+  chunks with a short pause so a clone's small serial buffer drains, retries the connect through
+  the reflective channel-1 constructor that clones with a broken SDP record need, and asks
+  `DLE EOT 1/2/4` back over the same socket so paper-out lands on the paper line. **One printer,
+  one card:** a dual-mode printer answers both Bluetooth scans; the SPP row is hidden behind its
+  LE twin by MAC. **Errors are three lines** — not paired (→ Bluetooth settings), Bluetooth off or
+  not allowed, not responding — and every connect, chunk count and failure is logged. Width is
+  never known on this lane; the flow pre-selects 58 mm and asks. Unit-tested against a mocked
+  module; the first real SPP-only printer is still to be found — the Netum NT-1809 is dual-mode and
+  lands on its LE row.

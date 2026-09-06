@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { isAsleepBlock, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -119,7 +120,8 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 					return;
 				}
 				const errorMsg = getErrorMessage(err);
-				appLogger.error('Failed to fetch site info', {
+				const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
+				appLogger[logLevel]('Failed to fetch site info', {
 					code: ERROR_CODES.SYNC_UNEXPECTED,
 					context: {
 						error: errorMsg,

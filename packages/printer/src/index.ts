@@ -50,7 +50,9 @@ export {
 } from './renderer';
 export type { EscposRenderOptions } from './renderer';
 export { PrinterService } from './printer-service';
-export type { PrinterServiceOptions } from './printer-service';
+export type { PrinterServiceOptions, TestPrintResult } from './printer-service';
+export { describeStatus, parsePrinterStatus } from './transport/escpos-status';
+export type { PrinterStatus, PrinterStatusState } from './transport/escpos-status';
 export {
 	acceptsRawCloudUpload,
 	CloudAdapter,
@@ -92,3 +94,4 @@ export { buildPrintableReceiptHtml, normalizeReceiptPaperWidth } from './print-h
 export type { ReceiptPaperWidth } from './print-html';
 export { DEFAULT_THERMAL_TEMPLATE } from './encoder/default-thermal-template';
 export { printerLogger } from './logger';
+export { queryUsbPrinterModel } from './discovery/usb-model-query.electron';
