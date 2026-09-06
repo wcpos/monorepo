@@ -125,11 +125,11 @@ importers:
         specifier: workspace:*
         version: link:../../packages/query
       '@wcpos/react-native-worklet-fs':
-        specifier: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-react-native-worklet-fs-0.1.1.tgz
-        version: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-react-native-worklet-fs-0.1.1.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))
+        specifier: 0.1.1
+        version: 0.1.1(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))
       '@wcpos/rxdb-storage-worklet':
-        specifier: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-rxdb-storage-worklet-0.1.1.tgz
-        version: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-rxdb-storage-worklet-0.1.1.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2))
+        specifier: 0.1.1
+        version: 0.1.1(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2))
       '@wcpos/sync-core':
         specifier: workspace:*
         version: link:../../packages/sync-core
@@ -140,8 +140,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/utils
       '@wcpos/worklet-opfs':
-        specifier: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-worklet-opfs-0.1.1.tgz
-        version: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-worklet-opfs-0.1.1.tgz(@wcpos/react-native-worklet-fs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-react-native-worklet-fs-0.1.1.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)))
+        specifier: 0.1.1
+        version: 0.1.1(@wcpos/react-native-worklet-fs@0.1.1(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)))
       expo:
         specifier: ~57.0.13
         version: 57.0.14(459ea8a870cf0bf0cc26a6c39c5482ec)
@@ -4937,16 +4937,14 @@ packages:
   '@vitest/utils@4.1.10':
     resolution: {integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==}
 
-  '@wcpos/react-native-worklet-fs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-react-native-worklet-fs-0.1.1.tgz':
-    resolution: {integrity: sha512-zosdqCKvTzYksuUPaPWlecJXjtAVTlswu65FgPajSFN2EYMZ2vasxeNcVIERkAvF2AJcUQiKa6UzLaMkaGfldg==, tarball: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-react-native-worklet-fs-0.1.1.tgz}
-    version: 0.1.1
+  '@wcpos/react-native-worklet-fs@0.1.1':
+    resolution: {integrity: sha512-E05fFMbjeB0VVt7Bu43Au31cY2jEedDYzq7IVx1IJYhciieypRzwxBZ/3jSo+Na8Qqfrc2uWC4ajRK4Nym0X8g==}
     peerDependencies:
       react-native: 0.86.2
       react-native-worklets: 0.11.4
 
-  '@wcpos/rxdb-storage-worklet@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-rxdb-storage-worklet-0.1.1.tgz':
-    resolution: {integrity: sha512-ituNM0+O2cJLMdYFzFUjC89wPEh2Zk0ZW2is33x0f69D8Y+MRtMls6cj0KMxjcnKivwSf3hbfYJwRcHjL5xAWQ==, tarball: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-rxdb-storage-worklet-0.1.1.tgz}
-    version: 0.1.1
+  '@wcpos/rxdb-storage-worklet@0.1.1':
+    resolution: {integrity: sha512-FbStr13szxAEqwdGAvrBC+dhBcNtxUzdrcsx4dAaVmv/WKDmpNPA2ojDYL7P1VO5gV5g2xemI5eNw7wCUs2/JQ==}
     peerDependencies:
       react-native-worklets: 0.11.4
       rxdb: ^17.4.0
@@ -4954,9 +4952,8 @@ packages:
       react-native-worklets:
         optional: true
 
-  '@wcpos/worklet-opfs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-worklet-opfs-0.1.1.tgz':
-    resolution: {integrity: sha512-LC5CqtpKYcuPZSUdP7F3kio7M59q4QPOTMH2MWdkHm8bzWY3V40TJ+zRTR+6+owebuj4Jk17vwr8Oa80DAxtzA==, tarball: https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-worklet-opfs-0.1.1.tgz}
-    version: 0.1.1
+  '@wcpos/worklet-opfs@0.1.1':
+    resolution: {integrity: sha512-hjX5GfMT8pWm0lDWuhWjCw95w3CvpIVCTSW/jk750QiN479iDspvkxY08dAYgdwkunNiGCWwu/9zIlDlAWXcGA==}
     peerDependencies:
       '@wcpos/react-native-worklet-fs': ^0.1.1
 
@@ -14505,21 +14502,21 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@wcpos/react-native-worklet-fs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-react-native-worklet-fs-0.1.1.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))':
+  '@wcpos/react-native-worklet-fs@0.1.1(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))':
     dependencies:
       react-native: 0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
       react-native-worklets: 0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
 
-  '@wcpos/rxdb-storage-worklet@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-rxdb-storage-worklet-0.1.1.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2))':
+  '@wcpos/rxdb-storage-worklet@0.1.1(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(rxdb@17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2))':
     dependencies:
       rxdb: 17.4.0(patch_hash=87af07266a4345ec1c9a160d108d9a42e9624a2eff4cd8c418d1e863d6b3ba97)(react@19.2.3)(rxjs@7.8.2)
       rxjs: 7.8.2
     optionalDependencies:
       react-native-worklets: 0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
 
-  '@wcpos/worklet-opfs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-worklet-opfs-0.1.1.tgz(@wcpos/react-native-worklet-fs@https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-react-native-worklet-fs-0.1.1.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)))':
+  '@wcpos/worklet-opfs@0.1.1(@wcpos/react-native-worklet-fs@0.1.1(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)))':
     dependencies:
-      '@wcpos/react-native-worklet-fs': https://github.com/wcpos/rxdb-storage-worklet/releases/download/v0.1.1/wcpos-react-native-worklet-fs-0.1.1.tgz(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))
+      '@wcpos/react-native-worklet-fs': 0.1.1(react-native-worklets@0.11.4(patch_hash=7448454c6e5b794fcc2b38c467f5b3967f502fcab7c87e3ec8c0d322300f58ab)(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))
 
   '@webgpu/types@0.1.21': {}
 
@@ -15893,7 +15890,7 @@ snapshots:
       eslint: 9.39.5(jiti@2.7.0)
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0))
       eslint-plugin-expo: 1.1.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.5(jiti@2.7.0))
       eslint-plugin-react: 7.37.5(eslint@9.39.5(jiti@2.7.0))
       eslint-plugin-react-hooks: 7.1.1(eslint@9.39.5(jiti@2.7.0))
       globals: 16.5.0
@@ -15926,7 +15923,7 @@ snapshots:
       tinyglobby: 0.2.17
       unrs-resolver: 1.12.2
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.5(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -15950,7 +15947,7 @@ snapshots:
       - supports-color
       - typescript
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.61.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.5(jiti@2.7.0)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
