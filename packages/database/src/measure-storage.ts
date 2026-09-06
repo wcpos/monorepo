@@ -19,16 +19,17 @@ function measureDirectory(directory: Directory): number {
 }
 
 /**
- * Native: the same `.expo-opfs` root the storage adapter writes
- * (storage-filesystem-expo → expo-opfs), plus the legacy SQLite directory as
+ * Native: both the JS-thread `.expo-opfs` and worker `.worklet-opfs` roots,
+ * plus the legacy SQLite directory as
  * one aggregate legacy entry. Sizes come from expo-file-system's synchronous
  * directory API — the same seam clear-all-db already uses.
  */
 export async function measureAppStorage(): Promise<StorageFootprint | null> {
 	try {
 		const entries: StorageFootprintEntry[] = [];
-		const root = new Directory(Paths.document, '.expo-opfs');
-		if (root.exists) {
+		for (const rootName of ['.expo-opfs', '.worklet-opfs']) {
+			const root = new Directory(Paths.document, rootName);
+			if (!root.exists) continue;
 			for (const item of root.list()) {
 				if (!item.name.startsWith(RXDB_DIRECTORY_PREFIX)) continue;
 				// Failures isolate per entry: one unreadable directory must not hide

@@ -5,7 +5,7 @@ import type { RxStorage, RxStorageInstance, RxStorageInstanceCreationParams } fr
 export const STORAGE_TIMING_PROBE_ENABLED = process.env.EXPO_PUBLIC_WCPOS_STORAGE_PROBE === '1';
 export const STORAGE_SLOW_CALL_MS = 16; // One 60 Hz frame.
 const STORAGE_SLOW_SAMPLE_LIMIT = 5; // Keeps recent outliers without making each log row noisy.
-type StorageTimingLayer = 'raw' | 'wrapped';
+type StorageTimingLayer = 'raw' | 'raw-worklet-round-trip' | 'wrapped';
 type StorageTimingMethod = 'bulkWrite' | 'query' | 'findDocumentsById' | 'count';
 export interface StorageTimingEntry {
 	layer: StorageTimingLayer;

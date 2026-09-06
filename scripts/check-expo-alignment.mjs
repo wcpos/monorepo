@@ -25,8 +25,16 @@ export const ALLOWED_EXPO_MISMATCHES = new Map([
 		'react-native-reanimated',
 		'4.5.5: SDK 57 prescribes 4.5.1; 4.5.3 ships reanimated#9527 (settled animations no longer ' +
 			'revert to a stale value after a JS-thread stall, #9965) — the drawer-reappears-at-open ' +
-			'class, #1691/#1797/#1802. Same 4.5 line and worklets 0.10.x peer. Drop when the SDK ' +
-			'prescribes >= 4.5.3.',
+			'class, #1691/#1797/#1802. Same 4.5 line; its worklets peer is 0.10.x - 0.11.x. Drop when ' +
+			'the SDK prescribes >= 4.5.3.',
+	],
+	[
+		'react-native-worklets',
+		'0.11.4: SDK 57 prescribes 0.10.1; the native RxDB storage host (#1885) runs the storage ' +
+			'engine on a worklet runtime and needs 0.11 Bundle Mode (importForwarding, strictGlobal) ' +
+			'plus the runtime-lock install hook @wcpos/react-native-worklet-fs relies on. Within ' +
+			"reanimated 4.5.5's peer range (0.10.x - 0.11.x); the pnpm override and a patch under " +
+			'patches/ pin it. Drop when the SDK prescribes >= 0.11.4.',
 	],
 ]);
 

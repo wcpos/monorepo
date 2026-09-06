@@ -6,7 +6,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { isLegacyAppDatabaseName } from './database-names';
 
 const dbLogger = getLogger(['wcpos', 'db', 'purge-legacy']);
-const EXPO_OPFS_ROOT = new Directory(Paths.document, '.expo-opfs');
+const OPFS_ROOTS = ['.expo-opfs', '.worklet-opfs'].map(
+	(root) => new Directory(Paths.document, root)
+);
 const LEGACY_SQLITE_DIRECTORY = new Directory(Paths.document, 'SQLite');
 const RXDB_DIRECTORY_PREFIX = 'rxdb-';
 
@@ -52,20 +54,19 @@ const deleteLegacySQLiteDatabases = () => {
 };
 
 const deleteLegacyFilesystemDatabases = () => {
-	if (!EXPO_OPFS_ROOT.exists) {
-		dbLogger.debug('Expo OPFS root does not exist');
-		return 0;
+	let deleted = 0;
+	for (const root of OPFS_ROOTS) {
+		if (!root.exists) continue;
+		const contents = root.list();
+		const legacyEntries = contents.filter((item) => isLegacyAppFilesystemEntry(item.name));
+
+		for (const entry of legacyEntries) {
+			dbLogger.debug(`Deleting legacy filesystem-backed database entry: ${entry.name}`);
+			entry.delete();
+		}
+		deleted += legacyEntries.length;
 	}
-
-	const contents = EXPO_OPFS_ROOT.list();
-	const legacyEntries = contents.filter((item) => isLegacyAppFilesystemEntry(item.name));
-
-	for (const entry of legacyEntries) {
-		dbLogger.debug(`Deleting legacy filesystem-backed database entry: ${entry.name}`);
-		entry.delete();
-	}
-
-	return legacyEntries.length;
+	return deleted;
 };
 
 export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
