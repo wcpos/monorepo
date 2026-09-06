@@ -43,6 +43,19 @@ describe('native printer paper width', () => {
 		expect(getPaperWidthMm).not.toHaveBeenCalled();
 	});
 
+	it('asks the merchant for a paired Bluetooth Classic printer too', async () => {
+		getPaperWidthMm.mockClear();
+		await expect(
+			resolveNativePrinterColumns({
+				address: 'spp:AA:BB:CC:DD:EE:FF',
+				connectionType: 'bluetooth',
+				vendor: 'generic',
+				name: 'BlueTooth Printer',
+			})
+		).resolves.toEqual({ columns: undefined, source: 'default' });
+		expect(getPaperWidthMm).not.toHaveBeenCalled();
+	});
+
 	it('falls back to the model table when the SDK query fails', async () => {
 		getPaperWidthMm.mockRejectedValueOnce(new Error('query failed'));
 		await expect(

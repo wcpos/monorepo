@@ -264,3 +264,23 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   page is on paper either way. Setup uses it for one thing — a printer that says paper-out or
   cover-open sends the cashier to the paper line instead of asking them to read a page that never
   came. Unit-tested against the byte patterns; still needs a paper-out run at a real Netum.
+
+- **2026-09-06 — Bluetooth Classic on Android is its own lane, and it is the paired list, not a
+  scan.** The cheap 58 mm printers an Android merchant buys first often speak only SPP (RFCOMM on
+  `00001101-…`), so the LE scan never sees them and the phone's answer was "no printer found" with
+  a developer string underneath. Neither `react-native-ble-plx` nor the vendor SDKs reach SPP, and
+  the one community module has sat at a release candidate for years, so the lane is a local Expo
+  module (`apps/main/modules/bluetooth-spp`, Android only — iOS has no third-party SPP) and needs a
+  dev-client rebuild. **What it does:** lists the phone's already-paired devices filtered to
+  printer class or printer-like name (there is no in-app scan; pairing happens in Android's
+  Bluetooth settings, and the empty results screen and the unpaired trouble line both open that
+  page), opens the socket once and keeps it for a quiet minute like the LE lane, writes in 512-byte
+  chunks with a short pause so a clone's small serial buffer drains, retries the connect through
+  the reflective channel-1 constructor that clones with a broken SDP record need, and asks
+  `DLE EOT 1/2/4` back over the same socket so paper-out lands on the paper line. **One printer,
+  one card:** a dual-mode printer answers both Bluetooth scans; the SPP row is hidden behind its
+  LE twin by MAC. **Errors are three lines** — not paired (→ Bluetooth settings), Bluetooth off or
+  not allowed, not responding — and every connect, chunk count and failure is logged. Width is
+  never known on this lane; the flow pre-selects 58 mm and asks. Unit-tested against a mocked
+  module; the first real SPP-only printer is still to be found — the Netum NT-1809 is dual-mode and
+  lands on its LE row.

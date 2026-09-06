@@ -75,6 +75,11 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 					vendor: 'ble' as const,
 					promise: import('../discovery/ble-native-discovery').then(({ discover }) => discover()),
 				},
+				// Bluetooth Classic printers are whatever Android has already paired (no scan, Android only).
+				{
+					vendor: 'spp' as const,
+					promise: import('../discovery/spp-native-discovery').then(({ discover }) => discover()),
+				},
 			];
 			const discoveryResults = await Promise.all(
 				discoveryTasks.map(async ({ vendor, promise }) => ({
@@ -87,16 +92,21 @@ export function usePrinterDiscovery(): PrinterDiscovery {
 			);
 			if (scanGenerationRef.current !== generation) return;
 
+			// A dual-mode printer answers both Bluetooth scans; one printer must stay one card.
+			const { hideSppTwins } = await import('../discovery/spp-native-discovery');
+			const found = hideSppTwins(
+				discoveryResults.flatMap(({ result }) =>
+					result.status === 'fulfilled' ? result.value : []
+				)
+			);
 			for (const { vendor, result } of discoveryResults) {
 				if (result.status === 'fulfilled') {
 					sdkAvailable = true;
 
-					if (result.value.length > 0) {
+					const rows = result.value.filter((row) => found.includes(row));
+					if (rows.length > 0) {
 						foundAny = true;
-						const identified = await identifyDiscoveredPrinters(
-							result.value,
-							createIdentifyProbes()
-						);
+						const identified = await identifyDiscoveredPrinters(rows, createIdentifyProbes());
 						if (scanGenerationRef.current !== generation) return;
 						setPrinters((prev) => mergePrinters(prev, identified));
 					}

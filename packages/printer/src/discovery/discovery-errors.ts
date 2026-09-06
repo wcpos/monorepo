@@ -1,4 +1,4 @@
-export type NativeDiscoveryVendor = 'epson' | 'star' | 'ble';
+export type NativeDiscoveryVendor = 'epson' | 'star' | 'ble' | 'spp';
 
 export type DiscoveryFailureKind = 'package-missing' | 'native-module-missing' | 'scan-failed';
 
@@ -18,7 +18,8 @@ function stringifyError(error: unknown): string {
 
 function toVendorLabel(vendor: NativeDiscoveryVendor): string {
 	if (vendor === 'epson') return 'Epson';
-	return vendor === 'star' ? 'Star' : 'Bluetooth';
+	if (vendor === 'star') return 'Star';
+	return vendor === 'spp' ? 'Bluetooth Classic' : 'Bluetooth';
 }
 
 export function classifyDiscoveryFailure(
@@ -44,7 +45,8 @@ export function classifyDiscoveryFailure(
 		normalized.includes('turbomoduleregistry.getenforcing') ||
 		normalized.includes('registered in the native binary') ||
 		normalized.includes('nativeeventemitter') ||
-		normalized.includes('requires a non-null argument')
+		normalized.includes('requires a non-null argument') ||
+		normalized.includes('not registered in the native binary')
 	) {
 		return {
 			vendor,

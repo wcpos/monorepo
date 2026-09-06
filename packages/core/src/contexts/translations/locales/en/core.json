@@ -796,6 +796,8 @@
 	"settings.setup_trouble_held": "The printer is holding jobs. Turn it off and on again, then try again.",
 	"settings.setup_trouble_permission": "The app was not allowed to reach the printer. Allow it in your system settings, then try again.",
 	"settings.setup_trouble_pairing": "Put the printer in pairing mode, then try again.",
+	"settings.setup_trouble_unpaired": "Pair the printer in this phone's Bluetooth settings, then scan again.",
+	"settings.setup_open_bluetooth_settings": "Open Bluetooth settings",
 	"settings.setup_trouble_unresponsive": "The printer did not answer. Check it is on and connected, then try again.",
 	"settings.setup_err_bridge": "The app could not reach its printer service. Restart the app, then try again.",
 	"settings.setup_err_windows_usb": "On Windows, add this printer as an installed printer instead.",

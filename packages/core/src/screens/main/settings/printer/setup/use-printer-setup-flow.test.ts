@@ -385,6 +385,15 @@ describe('trouble reason', () => {
 		expect(troubleReasonFor({ source: 'network', identity }, failure)).toBe(reason);
 	});
 
+	it('sends a printer the phone has not paired to the Bluetooth settings line', () => {
+		expect(
+			troubleReasonFor(
+				{ source: 'bluetooth', identity: undefined },
+				'Bluetooth printer is not paired with this phone. Pair it in Bluetooth settings, then scan again.'
+			)
+		).toBe('unpaired');
+	});
+
 	it('only blames pairing on a Bluetooth printer', () => {
 		expect(troubleReasonFor({ source: 'bluetooth', identity: undefined }, 'bt-none-found')).toBe(
 			'pairing'
@@ -451,6 +460,24 @@ describe('native', () => {
 			}),
 			{ openDrawer: false }
 		);
+	});
+
+	it('keeps a paired Bluetooth Classic printer on plain ESC/POS at 58 mm', async () => {
+		const spp: DiscoveredPrinter = {
+			id: 'spp-AA:BB:CC:DD:EE:FF',
+			name: 'BlueTooth Printer',
+			address: 'spp:AA:BB:CC:DD:EE:FF',
+			connectionType: 'bluetooth',
+			vendor: 'generic',
+		};
+		await scan([spp], 'native');
+		expect(classifyPrinter(spp, 'native')).toBe('ready');
+		expect(flow.state.profileDraft).toMatchObject({
+			address: spp.address,
+			vendor: 'generic',
+			columns: 32,
+		});
+		expect(flow.state.columnsKnown).toBe(false);
 	});
 
 	it('prints to the Secure Printing target when the printer folded one on', async () => {

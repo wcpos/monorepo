@@ -1,6 +1,7 @@
 import { BleNativeAdapter } from './ble-native-adapter';
-import { BLE_PREFIX } from './device-key';
+import { BLE_PREFIX, SPP_PREFIX } from './device-key';
 import { EpsonNativeAdapter } from './epson-native-adapter';
+import { SppNativeAdapter } from './spp-native-adapter';
 import { StarNativeAdapter } from './star-native-adapter';
 
 import type { PrinterProfile, PrinterTransport } from '../types';
@@ -12,6 +13,10 @@ export async function createDeviceTransport(profile: PrinterProfile): Promise<Pr
 	}
 	if (!profile.address) {
 		throw new Error(`Native printer profile is missing an address for ${profile.name}`);
+	}
+	// Bluetooth Classic printers paired with the phone go through the app's own RFCOMM module.
+	if (profile.connectionType === 'bluetooth' && profile.address.startsWith(SPP_PREFIX)) {
+		return new SppNativeAdapter(profile.address);
 	}
 	// Generic BLE printers ride the same GATT profiles as the browser lane; no vendor SDK involved.
 	if (

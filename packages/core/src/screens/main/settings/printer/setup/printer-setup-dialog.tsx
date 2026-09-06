@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, View } from 'react-native';
 
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm, useWatch } from 'react-hook-form';
@@ -61,6 +61,11 @@ import type * as z from 'zod';
  * "no paper" or "cover open" gets the paper line, not a trouble_ key of its own.
  */
 const TROUBLE_LINES: Partial<Record<TroubleReason, string>> = { paper: 'err_paper' };
+// Android's own Bluetooth settings page, where a Classic printer gets paired (Android only).
+const ANDROID_BLUETOOTH_SETTINGS = 'android.settings.BLUETOOTH_SETTINGS';
+const openBluetoothSettings = () => {
+	void Linking.sendIntent(ANDROID_BLUETOOTH_SETTINGS).catch(() => undefined);
+};
 
 function SetupWidthSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
@@ -607,6 +612,14 @@ export function PrinterSetupDialog({
 									{phase === 'results' &&
 										printable.length === 0 &&
 										line(native ? 'none_help_native' : 'none_help')}
+									{phase === 'results' &&
+										printable.length === 0 &&
+										Platform.OS === 'android' &&
+										row(
+											action('setup_open_bluetooth_settings', openBluetoothSettings, {
+												variant: 'outline',
+											})
+										)}
 									{widthToggle}
 									{printButton}
 									{phase !== 'checking' && scanLinks}
@@ -667,6 +680,13 @@ export function PrinterSetupDialog({
 										}),
 										action('save_anyway', answer('ok'))
 									)}
+									{troubleReason === 'unpaired' &&
+										Platform.OS === 'android' &&
+										row(
+											action('setup_open_bluetooth_settings', openBluetoothSettings, {
+												variant: 'outline',
+											})
+										)}
 									{links(link('setup_start_over', startOver, false), copyReport(), guide)}
 								</>
 							)}

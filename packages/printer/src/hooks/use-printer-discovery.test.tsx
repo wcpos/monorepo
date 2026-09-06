@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { discover as discoverBle } from '../discovery/ble-native-discovery';
 import { discover as discoverEpson } from '../discovery/epson-native-discovery';
 import { identifyDiscoveredPrinters } from '../discovery/identify';
+import { discover as discoverSpp } from '../discovery/spp-native-discovery';
 import { discover as discoverStar } from '../discovery/star-native-discovery';
 import { usePrinterDiscovery } from './use-printer-discovery';
 
@@ -23,6 +24,10 @@ vi.mock('../discovery/epson-native-discovery', () => ({
 }));
 vi.mock('../discovery/star-native-discovery', () => ({ discover: vi.fn() }));
 vi.mock('../discovery/ble-native-discovery', () => ({ discover: vi.fn() }));
+vi.mock('../discovery/spp-native-discovery', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../discovery/spp-native-discovery')>()),
+	discover: vi.fn(),
+}));
 vi.mock('../discovery/identify', () => ({ identifyDiscoveredPrinters: vi.fn() }));
 vi.mock('../discovery/identify-probes', () => ({ createIdentifyProbes: () => ({}) }));
 
@@ -31,6 +36,7 @@ describe('usePrinterDiscovery (native)', () => {
 		vi.mocked(discoverEpson).mockReset().mockResolvedValue([discoveredPrinter]);
 		vi.mocked(discoverStar).mockReset().mockResolvedValue([]);
 		vi.mocked(discoverBle).mockReset().mockResolvedValue([]);
+		vi.mocked(discoverSpp).mockReset().mockResolvedValue([]);
 		vi.mocked(identifyDiscoveredPrinters).mockReset();
 	});
 
@@ -65,6 +71,29 @@ describe('usePrinterDiscovery (native)', () => {
 
 		expect(result.current.printers).toEqual([bleRow]);
 		expect(result.current.error).toBeNull();
+	});
+
+	it('shows a dual-mode printer once, on its LE row', async () => {
+		const bleRow: DiscoveredPrinter = {
+			id: 'ble-aa:bb:cc:dd:ee:01',
+			name: 'NT-1809',
+			connectionType: 'bluetooth',
+			address: 'ble:aa:bb:cc:dd:ee:01',
+			vendor: 'generic',
+		};
+		const sppRow: DiscoveredPrinter = { ...bleRow, id: 'spp-x', address: 'spp:AA:BB:CC:DD:EE:01' };
+		vi.mocked(discoverEpson).mockResolvedValue([]);
+		vi.mocked(discoverBle).mockResolvedValue([bleRow]);
+		vi.mocked(discoverSpp).mockResolvedValue([sppRow]);
+		vi.mocked(identifyDiscoveredPrinters).mockImplementation(async (rows) => rows);
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		await act(async () => {
+			await result.current.startScan();
+		});
+
+		expect(result.current.printers).toEqual([bleRow]);
+		expect(identifyDiscoveredPrinters).toHaveBeenCalledTimes(1);
 	});
 
 	it('does not merge identification results after the scan is stopped', async () => {

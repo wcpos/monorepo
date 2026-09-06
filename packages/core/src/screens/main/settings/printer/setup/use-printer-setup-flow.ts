@@ -74,9 +74,11 @@ export function secureTargetFor(printer: Pick<DiscoveredPrinter, 'identity' | 's
  * so the per-lane advice stands.
  */
 export type TroubleReason =
-	'secure' | 'held' | 'permission' | 'pairing' | 'unresponsive' | 'paper' | 'lane';
+	'secure' | 'held' | 'permission' | 'pairing' | 'unpaired' | 'unresponsive' | 'paper' | 'lane';
 const PERMISSION_RE = /permission|not allowed|NotAllowedError|LIBUSB_ERROR_ACCESS|EACCES|denied/i;
 const PAIRING_RE = /pair|bt-none-found|no supported print service|not found/i;
+// The Android SPP lane's own line: the fix is in the phone's Bluetooth settings, not at the printer.
+const UNPAIRED_RE = /not paired/i;
 const UNRESPONSIVE_RE = /not responding|no longer in range|timed out/i;
 /** The two things a printer says about itself that the cashier fixes at the printer. */
 function saysPaperTrouble(status: PrinterStatus | null | undefined): boolean {
@@ -92,6 +94,7 @@ export function troubleReasonFor(
 	if (selected?.identity?.securePrinting) return 'secure';
 	if (selected?.identity?.ports?.some((port) => port.httpStatus === 503)) return 'held';
 	if (PERMISSION_RE.test(failure)) return 'permission';
+	if (UNPAIRED_RE.test(failure)) return 'unpaired';
 	if (selected?.source === 'bluetooth' && PAIRING_RE.test(failure)) return 'pairing';
 	if (UNRESPONSIVE_RE.test(failure)) return 'unresponsive';
 	return 'lane';
@@ -244,12 +247,13 @@ export function usePrinterSetupFlow(
 		else if (/^web(usb|bluetooth):/.test(selected.address) && !selected.identity?.vendor)
 			vendor = 'generic';
 		// Bluetooth and USB run through the Epson and Star SDKs; native has no generic device transport.
-		// SDK Bluetooth/USB rows print through the Epson or Star SDK; a `ble:` row is the generic GATT lane.
+		// SDK Bluetooth/USB rows print through the Epson or Star SDK; a `ble:` row is the generic GATT
+		// lane and an `spp:` row the paired Bluetooth Classic lane, both plain ESC/POS.
 		if (
 			native &&
 			selected.connectionType !== 'network' &&
 			vendor === 'generic' &&
-			!/^ble:/i.test(selected.address)
+			!/^(ble|spp):/i.test(selected.address)
 		)
 			vendor = 'epson';
 		const secureTarget = native ? secureTargetFor(selected) : undefined;
@@ -287,7 +291,7 @@ export function usePrinterSetupFlow(
 				knownColumns ??
 				(vendor === 'epson' || vendor === 'star'
 					? 48
-					: /^webbluetooth:/.test(selected.address)
+					: /^(webbluetooth|spp):/.test(selected.address)
 						? 32
 						: selected.connectionType === 'network'
 							? (base.columns ?? 42)

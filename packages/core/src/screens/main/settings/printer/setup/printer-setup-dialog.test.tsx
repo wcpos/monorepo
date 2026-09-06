@@ -7,6 +7,8 @@ import { createTestT } from '../../../../../../jest/translate';
 
 jest.mock('react-native', () => ({
 	ActivityIndicator: 'Spinner',
+	Linking: { sendIntent: jest.fn(async () => undefined) },
+	Platform: { OS: 'ios' },
 	Pressable: 'Pressable',
 	View: 'View',
 	ScrollView: 'ScrollView',
