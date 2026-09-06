@@ -89,7 +89,7 @@
 		"expo-web-browser": "~57.0.2",
 		"js-base64": "^3.9.3",
 		"observable-hooks": "4.2.4",
-		"postcss": "^8.5.26",
+		"postcss": "^8.5.27",
 		"react": "19.2.3",
 		"react-dom": "19.2.3",
 		"react-native": "0.86.2",
@@ -110,7 +110,7 @@
 		"react-native-worklets": "0.10.1",
 		"tailwindcss": "^4.3.3",
 		"uniwind": "1.11.0",
-		"victory-native": "^41.26.0"
+		"victory-native": "^42.0.1"
 	},
 	"devDependencies": {
 		"@babel/core": "^7.29.7",
