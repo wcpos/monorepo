@@ -44,7 +44,11 @@ printer = await createVirtualPrinter({
 	log,
 });
 
-log(`scenario "${label}" — raw print listening on tcp://0.0.0.0:${printer.ports.raw}`);
+log(
+	printer.ports.raw === null
+		? `scenario "${label}" — raw 9100 closed`
+		: `scenario "${label}" — raw print listening on tcp://0.0.0.0:${printer.ports.raw}`
+);
 if (printer.ports.http) {
 	log(`${label} HTTP endpoints listening on http://0.0.0.0:${printer.ports.http}`);
 }

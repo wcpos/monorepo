@@ -12,7 +12,7 @@ import net from 'node:net';
 import { type IdentifyProbes } from '../discovery/identify';
 
 export interface VirtualPrinterPorts {
-	raw: number;
+	raw: number | null;
 	http: number | null;
 	https: number | null;
 	ipp: number | null;

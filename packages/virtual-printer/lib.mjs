@@ -51,7 +51,7 @@ const listen = async (server, port, host) => {
  * @param {boolean} [options.mdns] advertise over mDNS — off in library mode
  * @param {(...args: unknown[]) => void} [options.log]
  * @returns {Promise<{ scenario: import('./scenarios.mjs').Scenario, name: string,
- *   ports: { raw: number, http: number | null, https: number | null, ipp: number | null },
+ *   ports: { raw: number | null, http: number | null, https: number | null, ipp: number | null },
  *   jobs: PrinterJob[], events: PrinterEvent[], tls: { cert: string, fingerprint256: string },
  *   close: () => Promise<void> }>}
  */
@@ -76,10 +76,11 @@ export async function createVirtualPrinter(options = {}) {
 	const servers = [];
 
 	// Raw 9100. `hold` is the Secure Printing behaviour: the bytes are taken and quietly binned.
+	// `closed` means nothing listens at all (an office printer): a listener that drops the socket
+	// still reads as "open" to a TCP probe on Linux.
 	const rawServer = net.createServer((socket) => {
 		record({ lane: 'raw', event: 'connect' });
 		socket.on('error', () => {});
-		if (spec.raw === 'closed') return socket.destroy();
 		const chunks = [];
 		socket.on('data', (chunk) => chunks.push(chunk));
 		socket.on('close', () => {
@@ -90,9 +91,9 @@ export async function createVirtualPrinter(options = {}) {
 			jobs.push({ lane: 'raw', bytes, summary, held: spec.raw === 'hold', at: Date.now() });
 		});
 	});
-	servers.push(rawServer);
+	if (spec.raw !== 'closed') servers.push(rawServer);
 	const ports = {
-		raw: await listen(rawServer, rawPort, host),
+		raw: spec.raw === 'closed' ? null : await listen(rawServer, rawPort, host),
 		http: null,
 		https: null,
 		ipp: null,

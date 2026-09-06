@@ -29,6 +29,12 @@ interface VirtualPrinter {
 }
 
 const running: VirtualPrinter[] = [];
+
+/** Scenarios that print over 9100 always listen there; a null port is a scenario bug. */
+function rawPort(printer: VirtualPrinter): number {
+	if (printer.ports.raw == null) throw new Error('scenario has no raw port');
+	return printer.ports.raw;
+}
 afterEach(async () => {
 	await Promise.all(running.splice(0).map((printer) => printer.close()));
 	debug.mockClear();
@@ -226,7 +232,7 @@ describe('printing against the virtual printer', () => {
 	it('a raw TCP send lands in jobs', async () => {
 		const printer = await start('epos-off');
 
-		await sendRaw(printer.ports.raw, [0x1b, 0x40, 0x1d, 0x56, 0x00]);
+		await sendRaw(rawPort(printer), [0x1b, 0x40, 0x1d, 0x56, 0x00]);
 
 		expect(printer.jobs).toHaveLength(1);
 		expect(printer.jobs[0]).toMatchObject({ lane: 'raw', held: false });
@@ -236,7 +242,7 @@ describe('printing against the virtual printer', () => {
 	it('secure-printing takes the raw bytes and holds them — nothing prints', async () => {
 		const printer = await start('secure-printing');
 
-		await sendRaw(printer.ports.raw, [0x1b, 0x40]);
+		await sendRaw(rawPort(printer), [0x1b, 0x40]);
 
 		expect(printer.jobs[0]).toMatchObject({ lane: 'raw', held: true });
 	});
