@@ -76,7 +76,8 @@ test('secure printing takes the raw bytes and holds them', async () => {
 
 test('the office printer refuses raw 9100 but accepts IPP', async () => {
 	await withPrinter({ scenario: 'office-printer' }, async (printer) => {
-		await sendRaw(printer.ports.raw, [0x10, 0x04, 0x01]);
+		// Nothing listens on 9100 at all: an office printer refuses the connection outright.
+		assert.equal(printer.ports.raw, null);
 		assert.deepEqual(printer.jobs, [], 'nothing is ever printed');
 		const socket = net.connect(printer.ports.ipp, '127.0.0.1');
 		await once(socket, 'connect');
