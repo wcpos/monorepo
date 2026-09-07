@@ -47,10 +47,13 @@ function memoryCollection(key: string, options: { conflictOnce?: boolean } = {})
 		storageInstance: {
 			bulkWrite: vi.fn(async (rows: { previous?: Stored; document: Stored }[]) => {
 				const error: { status: number; documentId: string }[] = [];
+				// The forced conflict hits ONE row per batch, so a selective-retry regression stays visible.
+				let forcedConflictPending = conflictOnce;
 				for (const row of rows) {
 					const id = String(row.document[key]);
 					// Route the insert-conflict fixture through the existing per-record fallback.
-					if (conflictOnce || documents.get(id)?._rev !== row.previous?._rev) {
+					if (forcedConflictPending || documents.get(id)?._rev !== row.previous?._rev) {
+						forcedConflictPending = false;
 						error.push({ status: 409, documentId: id });
 					} else {
 						documents.set(id, row.document);
