@@ -1,4 +1,9 @@
-import { pendingRecordIds, RecordMutationQueue, RxRecordMutationStorage } from '@wcpos/sync-core';
+import {
+	checkpointInstantMs,
+	pendingRecordIds,
+	RecordMutationQueue,
+	RxRecordMutationStorage,
+} from '@wcpos/sync-core';
 
 import { isOpenCartHoldCandidate } from './open-cart-hold';
 
@@ -38,17 +43,38 @@ type OrderPayloadFacts = {
 type ResidentFacts = { payload?: OrderPayloadFacts };
 
 /**
- * Is the incoming document strictly newer than the one the till last adopted? WooCommerce
- * bumps `date_modified_gmt` on every save, payment included, and it is orderable — revisions
- * are hashes, so "different" would not mean "newer" and a stale, older response could pass.
+ * A WooCommerce GMT date as an instant, through the protocol's canonical parser
+ * (`checkpointInstantMs`: MySQL space form → ISO, UTC forced when no designator is present, so
+ * two spellings of one instant never order the wrong way round on a non-UTC client). The
+ * parser's 0 for a missing or unparseable value is mapped to NaN so callers can tell "no date"
+ * from the epoch.
+ */
+function gmtMs(value: unknown): number {
+	const ms = checkpointInstantMs(typeof value === 'string' ? value : null);
+	return ms === 0 ? Number.NaN : ms;
+}
+
+/**
+ * Is the incoming document newer than the one the till last adopted? WooCommerce bumps
+ * `date_modified_gmt` on every save, payment included, and it is orderable — revisions are
+ * hashes, so "different" would not mean "newer" and a stale, older response could pass.
+ *
+ * The dates have one-second resolution, so a payment taken within the same second as the
+ * checkout save ties. A tie is accepted when the incoming document is PAID: a resident that
+ * is an unpaid open cart has never adopted a paid document (the store never un-pays, and a
+ * reopen keeps its `date_paid`), so a paid document can never be older than it. A tie is
+ * NOT enough for a `pos-partial` document, which carries no `date_paid` — that is exactly the
+ * reopened-partial shape a same-second re-pull must leave alone.
+ *
  * An unparseable incoming date is never newer (protect); a resident with no date has adopted
  * nothing the incoming document could be older than.
  */
-function newerThanAdopted(incoming: unknown, adopted: unknown): boolean {
-	const incomingMs = typeof incoming === 'string' ? Date.parse(incoming) : Number.NaN;
+function newerThanAdopted(incoming: IncomingOrderSettlement, adopted: unknown): boolean {
+	const incomingMs = gmtMs(incoming.dateModified);
 	if (!Number.isFinite(incomingMs)) return false;
-	const adoptedMs = typeof adopted === 'string' ? Date.parse(adopted) : Number.NaN;
-	return !Number.isFinite(adoptedMs) || incomingMs > adoptedMs;
+	const adoptedMs = gmtMs(adopted);
+	if (!Number.isFinite(adoptedMs)) return true;
+	return incoming.datePaid ? incomingMs >= adoptedMs : incomingMs > adoptedMs;
 }
 
 /**
@@ -128,7 +154,7 @@ export function createOrderHeldRowDiscarder(
 		if (!resident) return 0;
 		const stored = resident.toJSON();
 		if (!tillBelievesUnpaidOpenCart(stored.payload)) return 0;
-		if (!newerThanAdopted(incoming.dateModified, stored.payload?.date_modified_gmt)) return 0;
+		if (!newerThanAdopted(incoming, stored.payload?.date_modified_gmt)) return 0;
 		const rows = (await queue.pending()).filter(
 			(row) => row.collectionName === 'orders' && row.recordId === recordId
 		);

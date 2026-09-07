@@ -121,6 +121,65 @@ describe('createOrderHeldRowDiscarder', () => {
 		);
 	});
 
+	it.each([
+		// One-second resolution: a payment taken within the same second as the checkout save.
+		{
+			label: 'a same-second paid document',
+			adopted: '2026-09-01T09:30:00',
+			incoming: '2026-09-01T09:30:00',
+		},
+		// Spellings: MySQL space form adopted, REST ISO form incoming — same clock, newer.
+		{
+			label: 'a MySQL-spelled adopted date',
+			adopted: '2026-09-01 09:30:00',
+			incoming: '2026-09-01T09:30:01',
+		},
+		// An explicitly zoned incoming value against a designator-less adopted one.
+		{
+			label: 'a zoned incoming date',
+			adopted: '2026-09-01T09:30:00',
+			incoming: '2026-09-01T09:30:01Z',
+		},
+	])(
+		'retires the held row for a paid document at or after the adopted one: $label',
+		async ({ adopted, incoming }) => {
+			const harness = await createEngineHarness();
+			await seedResident(harness, { status: 'pos-open', date_modified_gmt: adopted }, ['held']);
+			await harness.seed('recordMutations', [row('held', 1)]);
+
+			expect(
+				await (
+					await discarder(harness)
+				)(UUID, {
+					status: 'completed',
+					datePaid: incoming,
+					dateModified: incoming,
+				})
+			).toBe(1);
+
+			expect(await harness.collection('recordMutations').count().exec()).toBe(0);
+		}
+	);
+
+	it('keeps the reopen of a pos-partial order against a zoned spelling of the same instant', async () => {
+		const harness = await createEngineHarness();
+		await seedResident(harness, { status: 'pos-open', date_modified_gmt: '2026-09-01T09:30:00' }, [
+			'reopen',
+		]);
+		await harness.seed('recordMutations', [row('reopen', 1)]);
+
+		expect(
+			await (
+				await discarder(harness)
+			)(UUID, {
+				status: 'pos-partial',
+				dateModified: '2026-09-01T09:30:00+00:00',
+			})
+		).toBe(0);
+
+		expect(await harness.collection('recordMutations').count().exec()).toBe(1);
+	});
+
 	it('retires the held row when the settled document was saved after the one the till adopted', async () => {
 		const harness = await createEngineHarness();
 		await seedResident(harness, { status: 'pos-open', date_modified_gmt: '2026-09-01T09:30:00' }, [
