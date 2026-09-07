@@ -654,6 +654,7 @@
 	"pos_cart.will_be_backordered": "{name} will be backordered",
 	"pos_checkout.amount_to_pay": "Amount to Pay",
 	"pos_checkout.paid_amount": "Paid {amount}",
+	"pos_checkout.change_due": "Change {amount}",
 	"pos_checkout.change_due_label": "Change due",
 	"pos_checkout.printed_to": "Printed to {printer}",
 	"pos_checkout.no_receipt": "No receipt",

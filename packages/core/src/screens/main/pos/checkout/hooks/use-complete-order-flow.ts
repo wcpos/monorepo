@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useTheme } from '../../../../../contexts/theme';
 import { enterReceipt, leaveCheckout } from '../checkout-mode';
@@ -12,6 +13,7 @@ import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
 
 const ORDER_REFRESH_TIMEOUT_MS = 10_000;
+const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export interface CompleteOrderFlowOptions {
 	/**
@@ -64,6 +66,16 @@ export function useCompleteOrderFlow(
 							timer = setTimeout(resolve, ORDER_REFRESH_TIMEOUT_MS);
 						}),
 					]);
+				} catch (error) {
+					// The payment is already recorded and the receipt stage already shown; a
+					// refresh that fails must degrade to the local record, not surface as a
+					// payment error and skip the stock reconciliation below.
+					logger.warn('Post-payment order refresh failed; completing from the local record', {
+						context: {
+							orderId: order.uuid,
+							error: error instanceof Error ? error.message : String(error),
+						},
+					});
 				} finally {
 					if (timer) clearTimeout(timer);
 					handle.release();
