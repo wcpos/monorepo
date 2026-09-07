@@ -114,6 +114,7 @@ env:
                   notVisible:
                     id: 'pos-tab-products'
                 commands:
+                  - evalScript: "${console.log('WCPOS_E2E keyboard covering the tab bar in the re-add branch, dismissing')}"
                   - hideKeyboard:
                       optional: true
             - tapOn:

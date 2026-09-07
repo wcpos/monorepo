@@ -60,21 +60,13 @@ env:
     timeout: 60000
 # Dismiss the keyboard BEFORE opening the popover — hideKeyboard afterwards
 # could dismiss the popover overlay instead.
-# Guarded like ensure-pos-ready.yml: Maestro's Android hideKeyboard is
-# `input keyevent 4` (Back). The tab bar is visible here, so the keyboard
-# is not covering it, and an unguarded Back at the POS root leaves the app
-# for the launcher (run 34124672113, Android phone, flow 06). Dismiss only
-# when the tab bar is pushed off screen while the search box stays.
-- runFlow:
-    when:
-      true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
-      visible:
-        id: "search-products"
-      notVisible:
-        id: "pos-tab-products"
-    commands:
-      - hideKeyboard:
-          optional: true
+# optional — see flow 01: hideKeyboard is flaky on iOS and this is
+# housekeeping; a genuinely covered target fails at its own tap. The search
+# was just typed, so the keyboard is KNOWN to be open here on every lane and
+# Android's Back closes it rather than the app — the guarded form belongs only
+# where the keyboard state is unknown (the re-tap recovery below).
+- hideKeyboard:
+    optional: true
 - tapOn:
     id: "variable-product-tile-${typeof VARIABLE_PRODUCT_ID === 'undefined' ? '.*' : VARIABLE_PRODUCT_ID}"
     index: 0
@@ -108,6 +100,7 @@ env:
             notVisible:
               id: "pos-tab-products"
           commands:
+            - evalScript: "${console.log('WCPOS_E2E keyboard covering the tab bar in the popover re-tap, dismissing')}"
             - hideKeyboard:
                 optional: true
       - tapOn:
