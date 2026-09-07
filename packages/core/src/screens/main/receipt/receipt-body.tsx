@@ -44,6 +44,7 @@ export function ReceiptBody({
 		baseReceiptURL,
 		iframeRef,
 		handleLoad,
+		handleError,
 		handleContentSizeChange,
 	} = doc.previewProps;
 	const templateSwitcher = (
@@ -101,6 +102,7 @@ export function ReceiptBody({
 								? { srcDoc: renderedHtml }
 								: { src: receiptUrl || baseReceiptURL || '' })}
 							onLoad={handleLoad}
+							onError={handleError}
 							onMessage={() => {}}
 							onContentSizeChange={handleContentSizeChange}
 							className="h-full w-full"

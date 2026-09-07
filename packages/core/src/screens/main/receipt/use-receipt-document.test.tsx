@@ -115,3 +115,27 @@ it('does not auto-print again when a paid tab is revisited', async () => {
 	await act(async () => second.result.current.previewProps.handleLoad());
 	expect(mockPrint).toHaveBeenCalledTimes(1);
 });
+
+it('keeps finishing blocked until the frame settles the auto-print, not just until sync ends', async () => {
+	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
+	// Final data is in and the store is not syncing, but the preview frame has not loaded:
+	// New sale must still wait, or the configured print never fires.
+	expect(result.current.isSyncing).toBeFalsy();
+	expect(result.current.autoPrintPending).toBe(true);
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+	expect(result.current.autoPrintPending).toBe(false);
+});
+
+it('releases finishing when the frame fails to load', async () => {
+	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: true }));
+	expect(result.current.autoPrintPending).toBe(true);
+	await act(async () => result.current.previewProps.handleError());
+	expect(result.current.autoPrintPending).toBe(false);
+	expect(mockPrint).not.toHaveBeenCalled();
+});
+
+it('never blocks finishing in a host that does not auto-print', () => {
+	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
+	expect(result.current.autoPrintPending).toBe(false);
+});

@@ -178,6 +178,10 @@ export function useReceiptDocument({
 	const { uiSettings } = useUISettings('pos-cart');
 	const hasAutoPrintedRef = React.useRef(false);
 	const iframeLoadedRef = React.useRef(false);
+	// Reactive twins of the refs above, for `autoPrintPending`: the frame's own load and error
+	// events settle the wait, so no timer stands in for them.
+	const [frameState, setFrameState] = React.useState<'loading' | 'loaded' | 'failed'>('loading');
+	const [autoPrintAttempted, setAutoPrintAttempted] = React.useState(false);
 
 	// Reset auto-print guards when a new receipt is loaded
 	React.useEffect(() => {
@@ -195,6 +199,7 @@ export function useReceiptDocument({
 			claimReceiptAutoPrint(order.uuid)
 		) {
 			hasAutoPrintedRef.current = true;
+			setAutoPrintAttempted(true);
 			// Errors are logged via onPrintError; auto-print must not surface an unhandled rejection.
 			print().catch(() => undefined);
 		}
@@ -210,13 +215,21 @@ export function useReceiptDocument({
 	 */
 	const handleLoad = () => {
 		iframeLoadedRef.current = true;
+		setFrameState('loaded');
 		attemptAutoPrint();
 	};
+	const handleError = () => setFrameState('failed');
 
-	// True while a configured auto-print is still waiting on the receipt data. Bounded by
-	// `isSyncing`, not a timer: once the store round-trip ends there is nothing left to wait for.
+	// True while a configured auto-print is still waiting: on the store round-trip, or on the
+	// preview frame that has a document but has not loaded yet. Settled by the attempt itself,
+	// by the frame failing, or by there being no document to print — never by a timer.
+	const hasDocument = renderedHtml != null || Boolean(templateReceiptUrl || baseReceiptURL);
 	const autoPrintPending =
-		autoPrintAllowed && Boolean(uiSettings.autoPrintReceipt) && isSyncing && printedTo === null;
+		autoPrintAllowed &&
+		Boolean(uiSettings.autoPrintReceipt) &&
+		!autoPrintAttempted &&
+		frameState !== 'failed' &&
+		(isSyncing || (hasDocument && frameState !== 'loaded'));
 
 	return {
 		autoPrintPending,
@@ -247,6 +260,7 @@ export function useReceiptDocument({
 			baseReceiptURL,
 			iframeRef,
 			handleLoad,
+			handleError,
 			handleContentSizeChange,
 		},
 	};
