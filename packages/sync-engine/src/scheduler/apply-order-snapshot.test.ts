@@ -116,6 +116,30 @@ describe('applyOrderSnapshot', () => {
 		expect(upsertMany).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		{ status: 'completed', removed: 1, outcome: 'applied' },
+		{ status: 'completed', removed: 0, outcome: 'protected' },
+		{ status: 'pos-open', removed: 1, outcome: 'protected' },
+	])(
+		'discards held rows for $status only (removed=$removed)',
+		async ({ status, removed, outcome }) => {
+			const { repository, upsertMany } = fakeRepository();
+			const pending = new Set([UUID]);
+			const discardHeldOpenCartRows = vi.fn(async () => {
+				if (removed) pending.delete(UUID);
+				return removed;
+			});
+			await expect(
+				applyOrderSnapshot(
+					{ repository, pendingMutationOrderIds: async () => pending, discardHeldOpenCartRows },
+					orderPayload({ status })
+				)
+			).resolves.toBe(outcome);
+			expect(discardHeldOpenCartRows).toHaveBeenCalledTimes(status === 'pos-open' ? 0 : 1);
+			expect(upsertMany).toHaveBeenCalledTimes(outcome === 'applied' ? 1 : 0);
+		}
+	);
+
 	it('reports protected when the storage guard drops the document', async () => {
 		const { repository, upsertManifestRows } = fakeRepository([]);
 		await expect(applyOrderSnapshot({ repository }, orderPayload())).resolves.toBe('protected');

@@ -41,42 +41,60 @@ describe('RxdbSyncEngine.adoptOrderSnapshot', () => {
 		});
 	});
 
-	it('protects a resident order with pending local work', async () => {
-		const harness = await createEngineHarness();
-		const residentPayload = orderSnapshot('pos-open');
-		await harness.seed('orders', [
-			{
-				uuid: ORDER_UUID,
-				remoteId: remoteId(42),
-				number: '42',
-				dateCreatedGmt: '2026-09-01T10:00:00',
-				status: 'pos-open',
-				total: '10.00',
-				customerId: 0,
-				payload: residentPayload,
-				sync: { revision: '', partial: false, source: 'woo-rest' },
-				local: { dirty: false, pendingMutationIds: [] },
-			},
-		]);
-		await harness.seed('recordMutations', [
-			{
-				mutationId: 'mutation-42',
-				seq: 1,
-				status: 'pending',
-				recordId: ORDER_UUID,
-				collectionName: 'orders',
-				operation: 'update',
-				payload: { status: 'pos-open' },
-				queuedAt: '2026-09-01T10:02:00.000Z',
-			},
-		]);
+	it.each([
+		{ explicit: true, status: 'completed', outcome: 'protected' },
+		{ explicit: false, status: 'completed', outcome: 'applied' },
+		{ explicit: false, status: 'pos-open', outcome: 'protected' },
+	])(
+		'adopts $status over explicit=$explicit local work: $outcome',
+		async ({ explicit, status, outcome }) => {
+			const harness = await createEngineHarness();
+			const residentPayload = orderSnapshot('pos-open');
+			await harness.seed('orders', [
+				{
+					uuid: ORDER_UUID,
+					remoteId: remoteId(42),
+					number: '42',
+					dateCreatedGmt: '2026-09-01T10:00:00',
+					status: 'pos-open',
+					total: '10.00',
+					customerId: 0,
+					payload: residentPayload,
+					sync: { revision: '', partial: false, source: 'woo-rest' },
+					local: { dirty: true, pendingMutationIds: ['mutation-42'] },
+				},
+			]);
+			await harness.seed('recordMutations', [
+				{
+					mutationId: 'mutation-42',
+					explicit,
+					seq: 1,
+					status: 'pending',
+					recordId: ORDER_UUID,
+					collectionName: 'orders',
+					operation: 'update',
+					payload: { status: 'pos-open' },
+					queuedAt: '2026-09-01T10:02:00.000Z',
+				},
+			]);
 
-		expect(await harness.engine.adoptOrderSnapshot(orderSnapshot('completed'))).toBe('protected');
+			expect(await harness.engine.adoptOrderSnapshot(orderSnapshot(status))).toBe(outcome);
 
-		const stored = (await harness.collection('orders').findOne(ORDER_UUID).exec())?.toJSON() as
-			Record<string, unknown> | undefined;
-		expect(stored?.payload).toMatchObject({ status: 'pos-open' });
-	});
+			const stored = (await harness.collection('orders').findOne(ORDER_UUID).exec())?.toJSON() as
+				Record<string, unknown> | undefined;
+			expect(stored).toMatchObject({
+				status: outcome === 'applied' ? 'completed' : 'pos-open',
+				payload: { status: outcome === 'applied' ? 'completed' : 'pos-open' },
+				local: {
+					dirty: outcome !== 'applied',
+					pendingMutationIds: outcome === 'applied' ? [] : ['mutation-42'],
+				},
+			});
+			expect(await harness.collection('recordMutations').count().exec()).toBe(
+				outcome === 'applied' ? 0 : 1
+			);
+		}
+	);
 
 	it('re-resolves pending mutations after the mutation collection is reset', async () => {
 		const harness = await createEngineHarness();
@@ -87,6 +105,7 @@ describe('RxdbSyncEngine.adoptOrderSnapshot', () => {
 		await harness.seed('recordMutations', [
 			{
 				mutationId: 'mutation-after-reset',
+				explicit: true,
 				seq: 1,
 				status: 'pending',
 				recordId: ORDER_UUID,
