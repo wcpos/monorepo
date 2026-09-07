@@ -142,6 +142,9 @@ export class SppNativeAdapter implements PrinterTransport {
 					printerLogger.warn('Bluetooth SPP print failed', {
 						context: { cause: cause instanceof Error ? cause.message : String(cause), chunks },
 					});
+					// open() cleared the idle timer, so a failed socket would otherwise
+					// stay open for good and the next job would reuse it. Drop it now.
+					await module.disconnect(this.mac).catch(() => undefined);
 					throw cause;
 				}
 				printerLogger.info('Bluetooth SPP print job written', {

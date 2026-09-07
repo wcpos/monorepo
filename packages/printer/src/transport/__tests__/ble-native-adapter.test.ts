@@ -101,6 +101,19 @@ describe('BleNativeAdapter', () => {
 		expect(device.cancelConnection).not.toHaveBeenCalled();
 	});
 
+	it('cancels the link when a chunk write fails, so the printer advertises again', async () => {
+		device.writeCharacteristicWithoutResponseForService.mockRejectedValueOnce(
+			new Error('GATT write failed')
+		);
+
+		await expect(new BleNativeAdapter('ble:dev-1').printRaw(new Uint8Array(50))).rejects.toThrow();
+
+		expect(device.cancelConnection).toHaveBeenCalledTimes(1);
+		// The next job reconnects instead of reusing the dropped link.
+		await new BleNativeAdapter('ble:dev-1').printRaw(new Uint8Array(4));
+		expect(manager.connectToDevice).toHaveBeenCalledTimes(2);
+	});
+
 	it('falls back to the next print profile when the first is absent', async () => {
 		device = makeDevice([PROFILE_FF00]);
 		state.device = device;
