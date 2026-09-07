@@ -348,6 +348,7 @@ async function retireSettledHoldsThenFilter(
 		await input.discardHeldOpenCartRows(document.uuid, {
 			status: payload?.status,
 			datePaid: payload?.date_paid_gmt ?? payload?.date_paid,
+			revision: document.sync?.revision,
 		});
 		attempted = true;
 	}

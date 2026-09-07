@@ -140,9 +140,12 @@ describe('applyOrderSnapshot', () => {
 				expect(discardHeldOpenCartRows).not.toHaveBeenCalled();
 			} else {
 				// The discarder receives what it needs to decide: the status and the payment stamp.
+				// The revision is the materialized document's (its date_modified_gmt here), so the
+				// discarder can tell a re-pull of an adopted document from a newer one.
 				expect(discardHeldOpenCartRows).toHaveBeenCalledExactlyOnceWith(UUID, {
 					status,
 					datePaid,
+					revision: '2026-09-01T10:00:00',
 				});
 			}
 			expect(upsertMany).toHaveBeenCalledTimes(outcome === 'applied' ? 1 : 0);

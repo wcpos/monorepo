@@ -803,6 +803,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(discardHeldOpenCartRows).toHaveBeenCalledExactlyOnceWith(uuidFor(123), {
 			status: 'completed',
 			datePaid: '2026-09-01T10:02:00',
+			revision: expect.any(String),
 		});
 		// The materialized document carries status under `payload`; the promoted
 		// top-level `status` is added by the collection descriptor at write time.

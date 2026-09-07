@@ -22,9 +22,15 @@ export function createOrderPendingMutationIds(
 }
 
 /** What the discarder needs to know about the incoming (server) document. */
-export type IncomingOrderSettlement = { status?: unknown; datePaid?: unknown };
+export type IncomingOrderSettlement = {
+	status?: unknown;
+	datePaid?: unknown;
+	/** The incoming document's `sync.revision`; see the causality check in the discarder. */
+	revision?: unknown;
+};
 
 type OrderPayloadFacts = { status?: unknown; date_paid?: unknown; date_paid_gmt?: unknown };
+type ResidentFacts = { payload?: OrderPayloadFacts; sync?: { revision?: unknown } };
 
 /**
  * The store settled the sale: a status other than `pos-open` that came from a PAYMENT —
@@ -59,9 +65,22 @@ function tillBelievesUnpaidOpenCart(payload: OrderPayloadFacts | undefined): boo
  * row is a cart edit the hold deliberately never sent; once the store has taken payment
  * it is moot, and releasing it later would push a stale `pos-open` document over a paid
  * order. So: only when the STORE says the sale settled AND the TILL still holds it as an
- * unpaid open cart AND every non-rejected row is a hold candidate (pending, non-explicit,
- * not a delete) — remove the rows newest-first and clear their resident bookkeeping. Any
- * explicit, claimed, conflicted or delete row keeps the record protected exactly as before.
+ * unpaid open cart AND the incoming document is NEWER than what the till last adopted AND
+ * every non-rejected row is a hold candidate (pending, non-explicit, not a delete) — clear
+ * the rows' resident bookkeeping, then remove them newest-first. Any explicit, claimed,
+ * conflicted or delete row keeps the record protected exactly as before.
+ *
+ * Causality: a reopened `pos-partial` order is `pos-open` locally with no `date_paid` on
+ * either side, so the two predicates above cannot tell it from the bug. What can is the
+ * revision — the till adopted the `pos-partial` document before the cashier reopened it, so
+ * its rows postdate that revision and a pull carrying the SAME revision must leave them
+ * alone. The deadlocked sale's rows were queued against the checkout ack's revision; the
+ * paid document always carries a newer one.
+ *
+ * Ordering: bookkeeping first, rows second. A crash in between leaves rows that are still
+ * pending (so the record stays protected and the next settled snapshot retries the discard);
+ * the reverse order would leave a resident marked dirty for rows that no longer exist, which
+ * nothing could ever repair.
  *
  * Returns the number of rows removed; 0 means "nothing was touched".
  */
@@ -77,7 +96,7 @@ export function createOrderHeldRowDiscarder(
 	const orders = ordersCollection as {
 		findOne(id: string): {
 			exec(): Promise<{
-				toJSON(): { payload?: OrderPayloadFacts };
+				toJSON(): ResidentFacts;
 				incrementalModify(
 					fn: (data: Record<string, unknown>) => Record<string, unknown>
 				): Promise<unknown>;
@@ -87,28 +106,31 @@ export function createOrderHeldRowDiscarder(
 	return async (recordId, incoming) => {
 		if (!storeSettledSale(incoming)) return 0;
 		const resident = await orders.findOne(recordId).exec();
-		if (!resident || !tillBelievesUnpaidOpenCart(resident.toJSON().payload)) return 0;
+		if (!resident) return 0;
+		const stored = resident.toJSON();
+		if (!tillBelievesUnpaidOpenCart(stored.payload)) return 0;
+		const adopted = stored.sync?.revision;
+		if (typeof adopted === 'string' && adopted !== '' && adopted === incoming.revision) return 0;
 		const rows = (await queue.pending()).filter(
 			(row) => row.collectionName === 'orders' && row.recordId === recordId
 		);
 		if (!rows.length || !rows.every(isOpenCartHoldCandidate)) return 0;
-		const removed = new Set<string>();
+		const retiring = new Set(rows.map((row) => row.mutationId));
+		await resident.incrementalModify((data) => {
+			const local = (data.local ?? {}) as { pendingMutationIds?: string[] };
+			const remaining = (local.pendingMutationIds ?? []).filter((id) => !retiring.has(id));
+			return {
+				...data,
+				local: { ...local, pendingMutationIds: remaining, dirty: remaining.length > 0 },
+			};
+		});
+		let removed = 0;
 		for (const row of rows.reverse()) {
 			// A refused removal means a concurrent lane already took this row (another
 			// discarder, or the drain claiming it); keep going — the caller re-reads the
 			// pending set afterwards and a claimed row still protects the record.
-			if (await queue.removePending(row.mutationId)) removed.add(row.mutationId);
+			if (await queue.removePending(row.mutationId)) removed += 1;
 		}
-		if (removed.size) {
-			await resident.incrementalModify((data) => {
-				const local = (data.local ?? {}) as { pendingMutationIds?: string[] };
-				const remaining = (local.pendingMutationIds ?? []).filter((id) => !removed.has(id));
-				return {
-					...data,
-					local: { ...local, pendingMutationIds: remaining, dirty: remaining.length > 0 },
-				};
-			});
-		}
-		return removed.size;
+		return removed;
 	};
 }
