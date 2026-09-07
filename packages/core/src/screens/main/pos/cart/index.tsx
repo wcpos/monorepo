@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
-import { useDocField } from '@wcpos/query';
+import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import './register-cart-bar-entries';
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
@@ -16,6 +16,8 @@ import { OrderMetaButton } from './buttons/order-meta';
 import { PayButton } from './buttons/pay';
 import { SaveButton } from './buttons/save-order';
 import { VoidButton } from './buttons/void';
+import { CheckoutLedger } from './checkout-ledger';
+import { useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { CartHeader } from './cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { CartTable } from './table';
@@ -29,10 +31,12 @@ const NEVER_CHANGES = () => () => {};
 export function OpenOrders({ isColumn = false }) {
 	// The cart's single writer. Mounted HERE, once, because CartTable, Totals and
 	// useOrderTotals below all mount useCartLines — and settlement state must not be
-	// duplicated across them. See use-cart-settlement.ts.
+	// duplicated across them. Keep it mounted in checkout too: swapping the cart
+	// for the ledger must not remove its single settlement writer. See use-cart-settlement.ts.
 	useCartSettlement();
 
 	const { currentOrderRecord } = useCurrentOrder();
+	const stage = useOrderCheckoutStage(currentOrderRecord);
 	const { uiSettings } = useUISettings('pos-cart');
 	const position = useDocField(uiSettings, (value) => value.openOrdersPosition);
 	const view = React.useMemo<ReadonlyView<SlotContracts['pos.cart.bar']['value']>>(
@@ -71,7 +75,9 @@ export function OpenOrders({ isColumn = false }) {
 		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
 			{position === 'top' && cartBar}
 			<ErrorBoundary>
-				{isNewOrder ? (
+				{isColumn && !isNewOrder && stage === 'checkout' ? (
+					<CheckoutLedger order={currentOrderRecord as EngineRecord<'orders'>} />
+				) : isNewOrder ? (
 					<Card className="flex-1">
 						<CardHeader className="bg-card-header p-2">
 							<ErrorBoundary>

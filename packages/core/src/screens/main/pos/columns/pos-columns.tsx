@@ -1,13 +1,21 @@
 import * as React from 'react';
 
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
-import { useDocField } from '@wcpos/query';
+import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import '../register-panel-entries';
 import { Slot } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
+import { useCurrentOrder } from '../contexts/current-order';
+import { useOrderCheckoutStage } from '../checkout/checkout-mode';
+import { CheckoutColumn } from '../checkout/column/checkout-column';
 
 import type { ReadonlyView, SlotContracts } from '../../../../extensions/slots';
+
+// Ruled on wcpos/roadmap#165 from the prototype comparison (fade vs rise/slide/instant).
+export const CHECKOUT_SWAP_FADE_MS = 180;
 
 const PRODUCTS_ENTRY_ID = 'products';
 
@@ -28,11 +36,14 @@ const PANEL_VIEWS: Record<
 };
 
 export function POSColumns() {
+	const { currentOrderRecord } = useCurrentOrder();
+	const orderStage = useOrderCheckoutStage(currentOrderRecord);
+	const stage = (currentOrderRecord as { isNew?: boolean }).isNew ? 'cart' : orderStage;
 	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const position = useDocField(uiSettings, (value) => value.position);
 	const productsOnRight = position === 'right';
 
-	return (
+	const panels = (
 		<Slot
 			id="pos.columns.panel"
 			api={NO_API}
@@ -73,7 +84,22 @@ export function POSColumns() {
 									minSize={25}
 									id={descriptor.id}
 								>
-									{element}
+									{descriptor.id === PRODUCTS_ENTRY_ID ? (
+										<Animated.View
+											key={stage}
+											entering={FadeIn.duration(CHECKOUT_SWAP_FADE_MS)}
+											exiting={FadeOut.duration(CHECKOUT_SWAP_FADE_MS)}
+											style={{ flex: 1 }}
+										>
+											{stage === 'checkout' ? (
+												<CheckoutColumn order={currentOrderRecord as EngineRecord<'orders'>} />
+											) : (
+												element
+											)}
+										</Animated.View>
+									) : (
+										element
+									)}
 								</Panel>
 							</React.Fragment>
 						))}
@@ -82,4 +108,5 @@ export function POSColumns() {
 			}}
 		</Slot>
 	);
+	return panels;
 }

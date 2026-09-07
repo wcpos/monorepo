@@ -8,6 +8,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { getNetPaymentTotal } from '@wcpos/order-math';
 import { useRecordField } from '@wcpos/query';
 
+import { useTheme } from '../../../../../contexts/theme';
+import { usePaymentMethods } from '../../../hooks/use-payment-methods';
+import { enterCheckout } from '../../checkout/checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
@@ -26,6 +29,8 @@ export function PayButton() {
 	const lineItems = useRecordField(currentOrderRecord, (order) => order.payload.line_items);
 	const { format } = useCurrentOrderCurrencyFormat();
 	const router = useRouter();
+	const { screenSize } = useTheme();
+	const { loaded, unsupportedSchema } = usePaymentMethods();
 	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const t = useT();
@@ -67,10 +72,14 @@ export function PayButton() {
 						},
 					});
 
-					router.push({
-						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
-						params: { orderId: currentOrderRecord.uuid },
-					});
+					if (screenSize !== 'sm' && loaded && !unsupportedSchema) {
+						enterCheckout(currentOrderRecord.uuid);
+					} else {
+						router.push({
+							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+							params: { orderId: currentOrderRecord.uuid },
+						});
+					}
 				}
 			});
 		} catch (error) {
@@ -86,7 +95,18 @@ export function PayButton() {
 		} finally {
 			setLoading(false);
 		}
-	}, [blockIfDegraded, pushDocument, currentOrderRecord, lineItems, router, t, total]);
+	}, [
+		blockIfDegraded,
+		pushDocument,
+		currentOrderRecord,
+		lineItems,
+		router,
+		screenSize,
+		loaded,
+		unsupportedSchema,
+		t,
+		total,
+	]);
 
 	/**
 	 *

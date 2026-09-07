@@ -21,15 +21,21 @@ import {
 import type { OpenOrderHit } from './context';
 import type { RxDatabase } from 'rxdb';
 
-const OPEN_ORDERS_COMPILED = compileQuery(
-	'orders',
-	{
-		search: '',
-		filters: { status: 'pos-open' },
-		// This resource owns its read order; an unsupported wire sort preserves unbounded demand.
-		sort: { field: 'date_completed_gmt', direction: 'asc' },
-	},
-	{ id: 'pos:open-orders' }
+// record-manual-payment.ts patches status to derive().status, so a part-paid order
+// leaves pos-open and would drop out of the tabs mid-checkout. Include pos-partial
+// and pending to keep the order and its tender reachable, including after reload.
+const OPEN_ORDER_STATUSES = ['pos-open', 'pos-partial', 'pending'];
+const OPEN_ORDERS_COMPILED = OPEN_ORDER_STATUSES.map((status) =>
+	compileQuery(
+		'orders',
+		{
+			search: '',
+			filters: { status },
+			// Unsupported wire sort preserves unbounded demand; residents are sorted below.
+			sort: { field: 'date_completed_gmt', direction: 'asc' },
+		},
+		{ id: `pos:open-orders:${status}` }
+	)
 );
 
 function orderMeta(document: EngineRecord<'orders'>) {
@@ -61,7 +67,7 @@ export function useOpenOrdersResource(
 				const collection = engineCollection(database, 'orders');
 				if (!collection) return of([] as EngineRecord<'orders'>[]);
 				const statusPath = resolveLegacyField('orders', 'status').enginePath;
-				return collection.find({ selector: { [statusPath]: 'pos-open' } }).$;
+				return collection.find({ selector: { [statusPath]: { $in: OPEN_ORDER_STATUSES } } }).$;
 			}),
 			map((documents) =>
 				documents
@@ -89,7 +95,11 @@ export function useOpenOrdersResource(
 		// Keep remote demand and the resident subscription bound to the same resource lifetime.
 		const handles = declareRequirements(
 			runtime.engine,
-			requirementsForCompiledQuery(OPEN_ORDERS_COMPILED.demand, { id: 'pos:open-orders' })
+			OPEN_ORDERS_COMPILED.flatMap((compiled, index) =>
+				requirementsForCompiledQuery(compiled.demand, {
+					id: `pos:open-orders:${OPEN_ORDER_STATUSES[index]}`,
+				})
+			)
 		);
 		return () => {
 			for (const handle of handles) handle.release();

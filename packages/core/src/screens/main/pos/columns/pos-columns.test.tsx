@@ -8,6 +8,8 @@ import { render, screen } from '@testing-library/react';
 import { POSColumns } from './pos-columns';
 
 let mockPosition = 'left';
+let mockStage = 'cart';
+let mockIsNew = false;
 const mockPatchUI = jest.fn();
 type PanelProps = { children?: React.ReactNode; testID?: string; defaultSize?: number };
 
@@ -19,10 +21,30 @@ jest.mock('../../contexts/ui-settings', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
+	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
 // The real registration module populates the real slot registry with these panels.
-jest.mock('../cart', () => ({ OpenOrders: () => <div /> }));
-jest.mock('../products', () => ({ POSProducts: () => <div /> }));
+jest.mock('../cart', () => ({ OpenOrders: () => <div data-testid="open-orders-strip" /> }));
+jest.mock('../products', () => ({ POSProducts: () => <div data-testid="products" /> }));
+jest.mock('../contexts/current-order', () => ({
+	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'a', isNew: mockIsNew, payload: {} } }),
+}));
+jest.mock('../checkout/checkout-mode', () => ({
+	useOrderCheckoutStage: (record: { isNew?: boolean }) => (record.isNew ? 'cart' : mockStage),
+}));
+jest.mock('../checkout/tender/use-tender-flow', () => ({ useTenderFlow: () => ({ dp: 2 }) }));
+jest.mock('../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ format: String }),
+}));
+jest.mock('../checkout/column/checkout-column', () => ({
+	CheckoutColumn: () => <div data-testid="checkout-tender-pane" />,
+}));
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: ({ children }: PanelProps) => <div>{children}</div> },
+	FadeIn: { duration: () => ({}) },
+	FadeOut: { duration: () => ({}) },
+}));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -37,6 +59,41 @@ jest.mock('@wcpos/components/panels', () => ({
 }));
 
 describe('POSColumns', () => {
+	beforeEach(() => {
+		mockStage = 'cart';
+		mockIsNew = false;
+		mockPosition = 'left';
+	});
+	it.each(['left', 'right'])('swaps only the products content at %s', (position) => {
+		mockPosition = position;
+		const { rerender } = render(<POSColumns />);
+		expect(screen.getByTestId('products')).not.toBeNull();
+		const cartPanel = screen.getByTestId('pos-cart-panel');
+		const productsPanel = screen.getByTestId('pos-products-panel');
+		mockStage = 'checkout';
+		rerender(<POSColumns />);
+		expect(screen.getByTestId('pos-cart-panel')).toBe(cartPanel);
+		expect(screen.getByTestId('pos-products-panel')).toBe(productsPanel);
+		expect(screen.queryByTestId('products')).toBeNull();
+		expect(
+			screen.getByTestId('pos-cart-panel').contains(screen.getByTestId('open-orders-strip'))
+		).toBe(true);
+		expect(
+			screen.getByTestId('pos-products-panel').contains(screen.getByTestId('checkout-tender-pane'))
+		).toBe(true);
+		expect(screen.getAllByTestId(/^pos-.*-panel$/).map((el) => el.dataset.testid)).toEqual(
+			position === 'right'
+				? ['pos-cart-panel', 'pos-products-panel']
+				: ['pos-products-panel', 'pos-cart-panel']
+		);
+	});
+	it('never enters checkout for the new-order placeholder', () => {
+		mockIsNew = true;
+		mockStage = 'checkout';
+		render(<POSColumns />);
+		expect(screen.getByTestId('products')).not.toBeNull();
+		expect(screen.queryByTestId('checkout-tender-pane')).toBeNull();
+	});
 	it('reverses the registered panels when products move right, keeping complementary sizes', () => {
 		mockPosition = 'left';
 		const { rerender } = render(<POSColumns />);
