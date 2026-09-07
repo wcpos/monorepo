@@ -29,7 +29,8 @@ export function TabChip({
 	const rows = readLedger(payload.meta_data);
 	const stage = resolveStage(order.uuid, mode, rows);
 	const { balance } = derive(payload.total, rows, methods, { dp: store.price_num_decimals ?? 2 });
-	const captured = rows.some((row) => row.status === 'captured');
+	// Same approved set `derive` counts as paid: an authorized card leg is money already taken.
+	const captured = rows.some((row) => row.status === 'captured' || row.status === 'authorized');
 	const label =
 		stage === 'receipt'
 			? t('pos_checkout.chip_paid_receipt')

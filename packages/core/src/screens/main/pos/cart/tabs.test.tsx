@@ -115,7 +115,9 @@ it('keeps other tabs reachable when a receipt suspends or is missing', () => {
 	enterReceipt('missing');
 	enterReceipt('late');
 	render(<OpenOrderTabs />);
-	expect(screen.queryByTestId('open-order-tab-early')).toBeNull();
+	// A suspended receipt keeps its trigger (the list indexes direct children by value) with
+	// empty content; a missing one drops itself from the store and so from the strip.
+	expect(screen.getByTestId('open-order-tab-early').textContent).toBe('');
 	expect(screen.queryByTestId('open-order-tab-missing')).toBeNull();
 	expect(screen.getByTestId('open-order-tab-open')).not.toBeNull();
 	expect(screen.getByTestId('open-order-tab-late')).not.toBeNull();

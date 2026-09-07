@@ -148,6 +148,7 @@ export function OpenOrders({
 function ReceiptLedger({ uuid }: { uuid: string }) {
 	const resource = useEngineRecord('orders', uuid);
 	const order = useObservableSuspense(resource);
-	if (!order) throw new Error('Receipt order is not defined');
+	// The receipt stage in the other column drops the stale selection; render nothing meanwhile.
+	if (!order) return null;
 	return <CheckoutLedger order={order} />;
 }

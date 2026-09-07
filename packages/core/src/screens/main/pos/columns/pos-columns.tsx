@@ -96,7 +96,11 @@ export function POSColumns() {
 											{selectedReceiptOrder ? (
 												<ReceiptStage orderUuid={selectedReceiptOrder} compact={false} />
 											) : stage === 'checkout' ? (
-												<CheckoutColumn order={currentOrderRecord as EngineRecord<'orders'>} />
+												// Keyed by order: two orders in checkout must not share one keypad reducer.
+												<CheckoutColumn
+													key={currentOrderRecord.uuid}
+													order={currentOrderRecord as EngineRecord<'orders'>}
+												/>
 											) : (
 												element
 											)}

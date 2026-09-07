@@ -213,7 +213,13 @@ export function useReceiptDocument({
 		attemptAutoPrint();
 	};
 
+	// True while a configured auto-print is still waiting on the receipt data. Bounded by
+	// `isSyncing`, not a timer: once the store round-trip ends there is nothing left to wait for.
+	const autoPrintPending =
+		autoPrintAllowed && Boolean(uiSettings.autoPrintReceipt) && isSyncing && printedTo === null;
+
 	return {
+		autoPrintPending,
 		templates,
 		selectedTemplateId,
 		setSelectedTemplateId,

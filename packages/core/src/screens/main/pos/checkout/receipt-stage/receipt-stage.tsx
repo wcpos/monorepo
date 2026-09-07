@@ -11,6 +11,7 @@ import { derive, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import { useFinishSale } from './use-finish-sale';
+import { finishReceipt } from '../checkout-mode';
 import { useCheckoutBack } from '../column/use-checkout-back';
 import { useEngineRecord } from '../../../hooks/use-engine-document';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
@@ -29,7 +30,12 @@ function StageAction(props: React.ComponentProps<typeof Button>) {
 export function ReceiptStage({ orderUuid, compact }: { orderUuid: string; compact: boolean }) {
 	const resource = useEngineRecord('orders', orderUuid);
 	const order = useObservableSuspense(resource);
-	if (!order) throw new Error('Receipt order is not defined');
+	// A receipt selection that outlives its order (a store switch, a purge) must not strand the
+	// POS on a throw: drop the stale selection and let the columns fall back to the cart.
+	React.useEffect(() => {
+		if (!order) finishReceipt(orderUuid);
+	}, [order, orderUuid]);
+	if (!order) return null;
 	return <ReceiptStageDocument key={orderUuid} order={order} compact={compact} />;
 }
 
@@ -76,7 +82,7 @@ function ReceiptStageDocument({
 				{Number(derived.change) > 0 ? (
 					<View>
 						<Text className="text-muted-foreground text-xs uppercase">
-							{t('pos_checkout.change_due')}
+							{t('pos_checkout.change_due_label')}
 						</Text>
 						<Text testID="receipt-change-due" className="text-4xl font-bold tabular-nums">
 							{format(Number(derived.change))}
@@ -101,6 +107,7 @@ function ReceiptStageDocument({
 						className="shrink-0"
 						testID="receipt-no-receipt"
 						onPress={finishSale}
+						disabled={doc.autoPrintPending}
 					>
 						<ButtonText>{t('pos_checkout.no_receipt')}</ButtonText>
 					</Button>
@@ -112,6 +119,10 @@ function ReceiptStageDocument({
 					className={compact ? 'w-full' : 'ml-auto shrink-0'}
 					testID="receipt-new-sale"
 					onPress={finishSale}
+					// With auto-print on, finishing before the receipt data lands would unmount
+					// the stage before the configured print ever fires.
+					disabled={doc.autoPrintPending}
+					loading={doc.autoPrintPending}
 				>
 					<ButtonText>{t('pos_checkout.new_sale')}</ButtonText>
 				</Button>

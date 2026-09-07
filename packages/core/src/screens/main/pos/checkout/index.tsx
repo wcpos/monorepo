@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { Redirect, useLocalSearchParams } from 'expo-router';
 
 import { useTheme } from '../../../../contexts/theme';
@@ -12,8 +14,13 @@ export function CheckoutScreen() {
 
 	const { screenSize } = useTheme();
 	const { loaded, unsupportedSchema } = usePaymentMethods();
-	if (screenSize !== 'sm' && loaded && !unsupportedSchema) {
-		enterCheckout(orderId);
+	const redirectToColumns = screenSize !== 'sm' && loaded && !unsupportedSchema;
+	// Writing the external store during render would notify its subscribers mid-render; the
+	// transition belongs in an effect, with the redirect itself staying in render.
+	React.useEffect(() => {
+		if (redirectToColumns) enterCheckout(orderId);
+	}, [redirectToColumns, orderId]);
+	if (redirectToColumns) {
 		return (
 			<Redirect
 				href={{

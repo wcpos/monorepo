@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
+import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
 import { useDefaultCustomer } from '@wcpos/core/screens/main/hooks/use-default-customer';
 import {
@@ -29,6 +30,7 @@ export default function POSLayout() {
 	const { wpCredentials, store } = useStoreSession();
 	const cashierID = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeID = useDocField(store, (value) => value.id) as number | undefined;
+	useResetCheckoutModeOnStoreChange(storeID);
 	const segments: string[] = useSegments();
 	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();

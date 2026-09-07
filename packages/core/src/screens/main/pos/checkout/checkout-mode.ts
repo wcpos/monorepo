@@ -92,6 +92,23 @@ export function resolveStage(
 		return 'checkout';
 	return 'cart';
 }
+/**
+ * The store is module-global and survives a store switch; a receipt or checkout selection
+ * from the previous store would then be resolved against the new store's records. Reset on a
+ * CHANGE of store id only — never on mount, or leaving the POS for the Orders screen and
+ * coming back would drop every order that was mid-checkout.
+ */
+export function useResetCheckoutModeOnStoreChange(storeId: number | string | undefined) {
+	const previous = React.useRef(storeId);
+	// The store id is external session state; reacting to its change is the effect's purpose.
+	React.useEffect(() => {
+		if (previous.current !== storeId) {
+			previous.current = storeId;
+			resetCheckoutMode();
+		}
+	}, [storeId]);
+}
+
 export function useCheckoutMode() {
 	return React.useSyncExternalStore(
 		subscribeCheckoutMode,
