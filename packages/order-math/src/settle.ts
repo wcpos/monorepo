@@ -97,25 +97,32 @@ const PERSISTED_TOTAL_FIELDS = [
 	'total',
 ] as const;
 
+/**
+ * The money slots of an order document and its lines: the persisted totals, the line-level
+ * amounts (`taxes[]` included) and the coupon/fee slots. `meta_data` is opaque to this walk —
+ * `_woocommerce_pos_data` carries `price`/`regular_price` strings whose formatting IS data.
+ */
+const MONEY_KEYS: ReadonlySet<string> = new Set([
+	...PERSISTED_TOTAL_FIELDS,
+	'subtotal',
+	'subtotal_tax',
+	'price',
+	'discount',
+	'amount',
+	'tax_total',
+	'shipping_tax_total',
+]);
+
 /** Clone comparison values only; never rewrite the emitted patch or the snapshot. */
 function canonicalMoney(value: unknown, key = 'total'): unknown {
+	if (key === 'meta_data') return value;
 	if (Array.isArray(value)) return value.map((entry) => canonicalMoney(entry, key));
 	if (value !== null && typeof value === 'object') {
 		return Object.fromEntries(
 			Object.entries(value).map(([field, entry]) => [field, canonicalMoney(entry, field)])
 		);
 	}
-	const moneyKeys = [
-		...PERSISTED_TOTAL_FIELDS,
-		'subtotal',
-		'subtotal_tax',
-		'price',
-		'discount',
-		'amount',
-		'tax_total',
-		'shipping_tax_total',
-	];
-	return moneyKeys.includes(key) &&
+	return MONEY_KEYS.has(key) &&
 		(typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')) &&
 		Number.isFinite(Number(value))
 		? String(Number(value))
