@@ -90,8 +90,22 @@ env:
                 commands:
                   - tapOn:
                       id: "pos-tab-products"
-            - hideKeyboard:
-                optional: true
+            # Guarded like ensure-pos-ready.yml: Maestro's Android hideKeyboard is
+            # `input keyevent 4` (Back). The tab bar is visible here, so the keyboard
+            # is not covering it, and an unguarded Back at the POS root leaves the app
+            # for the launcher (run 34124672113, Android phone, flow 06). Dismiss only
+            # when the tab bar is pushed off screen while the search box stays.
+            - runFlow:
+                when:
+                  true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
+                  visible:
+                    id: "search-products"
+                  notVisible:
+                    id: "pos-tab-products"
+                commands:
+                  - evalScript: "${console.log('WCPOS_E2E keyboard covering the tab bar in the re-add branch, dismissing')}"
+                  - hideKeyboard:
+                      optional: true
             - tapOn:
                 id: "product-tile"
                 index: 0
