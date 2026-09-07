@@ -177,23 +177,27 @@ export function useReceiptDocument({
 	 */
 	const { uiSettings } = useUISettings('pos-cart');
 	const hasAutoPrintedRef = React.useRef(false);
-	// The frame guards are KEYED by the preview they describe, like `measuredContent` above: a
-	// template switch remounts the WebView, and a guard left from the old frame would let the
-	// auto-print fire — and finishing unblock — before the new preview has loaded. A different
-	// key therefore reads as "loading" without anything having to reset it.
+	// The frame guards are KEYED by the document they describe — order AND preview — like
+	// `measuredContent` above: a template switch (or, should a host ever reuse this hook across
+	// orders, a new order) remounts the WebView, and a guard left from the old frame would let
+	// the auto-print fire — and finishing unblock — before the new preview has loaded. A
+	// different key therefore reads as "loading" without anything having to reset it.
 	type FrameState = 'loading' | 'loaded' | 'failed';
+	const frameKey = `${order.uuid}:${previewKey}`;
 	const iframeLoadedRef = React.useRef<{ key: string; loaded: boolean }>({
-		key: previewKey,
+		key: frameKey,
 		loaded: false,
 	});
 	// Reactive twin of the ref, for `autoPrintPending`: the frame's own load and error events
 	// settle the wait, so no timer stands in for them.
 	const [frame, setFrame] = React.useState<{ key: string; state: FrameState }>({
-		key: previewKey,
+		key: frameKey,
 		state: 'loading',
 	});
-	const frameState: FrameState = frame.key === previewKey ? frame.state : 'loading';
-	const [autoPrintAttempted, setAutoPrintAttempted] = React.useState(false);
+	const frameState: FrameState = frame.key === frameKey ? frame.state : 'loading';
+	// The attempt belongs to an order: a new order on the same hook instance starts unattempted.
+	const [attemptedFor, setAttemptedFor] = React.useState<string | null>(null);
+	const autoPrintAttempted = attemptedFor === order.uuid;
 
 	// Reset auto-print guards when a new receipt is loaded
 	React.useEffect(() => {
@@ -206,18 +210,18 @@ export function useReceiptDocument({
 		if (
 			uiSettings.autoPrintReceipt &&
 			autoPrintAllowed &&
-			iframeLoadedRef.current.key === previewKey &&
+			iframeLoadedRef.current.key === frameKey &&
 			iframeLoadedRef.current.loaded &&
 			hasFinalData &&
 			!hasAutoPrintedRef.current &&
 			claimReceiptAutoPrint(order.uuid)
 		) {
 			hasAutoPrintedRef.current = true;
-			setAutoPrintAttempted(true);
+			setAttemptedFor(order.uuid);
 			// Errors are logged via onPrintError; auto-print must not surface an unhandled rejection.
 			print().catch(() => undefined);
 		}
-	}, [order.uuid, autoPrintAllowed, hasFinalData, previewKey, print, uiSettings.autoPrintReceipt]);
+	}, [order.uuid, autoPrintAllowed, hasFinalData, frameKey, print, uiSettings.autoPrintReceipt]);
 
 	// Final API data can arrive without causing the receipt frame to load again.
 	React.useEffect(() => {
@@ -228,11 +232,11 @@ export function useReceiptDocument({
 	 * Handle load — single-shot auto-print guard prevents duplicate prints on mode switch
 	 */
 	const handleLoad = () => {
-		iframeLoadedRef.current = { key: previewKey, loaded: true };
-		setFrame({ key: previewKey, state: 'loaded' });
+		iframeLoadedRef.current = { key: frameKey, loaded: true };
+		setFrame({ key: frameKey, state: 'loaded' });
 		attemptAutoPrint();
 	};
-	const handleError = () => setFrame({ key: previewKey, state: 'failed' });
+	const handleError = () => setFrame({ key: frameKey, state: 'failed' });
 
 	// True while a configured auto-print is still waiting: on the store round-trip, or on the
 	// preview frame that has a document but has not loaded yet. Settled by the attempt itself,

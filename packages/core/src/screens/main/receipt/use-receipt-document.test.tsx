@@ -139,3 +139,22 @@ it('never blocks finishing in a host that does not auto-print', () => {
 	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
 	expect(result.current.autoPrintPending).toBe(false);
 });
+
+it('starts a new order on the same hook instance unattempted and unloaded', async () => {
+	const second = { uuid: 'paid-2', payload: { id: 43 } } as never;
+	const { result, rerender } = renderHook(
+		({ current }: { current: unknown }) =>
+			useReceiptDocument({ order: current as never, autoPrintAllowed: true }),
+		{ initialProps: { current: order } }
+	);
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+	expect(result.current.autoPrintPending).toBe(false);
+
+	// Same template, different order: the guards must not carry over.
+	await act(async () => rerender({ current: second }));
+	expect(result.current.autoPrintPending).toBe(true);
+	await act(async () => result.current.previewProps.handleLoad());
+	expect(mockPrint).toHaveBeenCalledTimes(2);
+	expect(result.current.autoPrintPending).toBe(false);
+});
