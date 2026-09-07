@@ -20,7 +20,11 @@ function memoryCollection(key: string, options: { conflictOnce?: boolean } = {})
 	let conflictOnce = options.conflictOnce ?? false;
 	const wrapped = (id: string, value: Stored) => ({
 		...value,
-		toJSON: () => documents.get(id) ?? value,
+		toJSON: (withMeta = false) => {
+			const data = documents.get(id) ?? value;
+			const { _rev, _meta, _deleted, _attachments, ...plain } = data;
+			return withMeta ? data : plain;
+		},
 		incrementalModify: async (modify: (current: Stored) => Stored) => {
 			const next = modify(documents.get(id) ?? value);
 			if (next._deleted) documents.delete(id);
@@ -30,6 +34,31 @@ function memoryCollection(key: string, options: { conflictOnce?: boolean } = {})
 	});
 	return {
 		documents,
+		database: { token: 'memory-coverage-token' },
+		findByIds: vi.fn((ids: string[]) => ({
+			exec: async () =>
+				new Map(
+					ids.flatMap((id) => {
+						const value = documents.get(id);
+						return value ? [[id, wrapped(id, value)] as const] : [];
+					})
+				),
+		})),
+		storageInstance: {
+			bulkWrite: vi.fn(async (rows: { previous?: Stored; document: Stored }[]) => {
+				const error: { status: number; documentId: string }[] = [];
+				for (const row of rows) {
+					const id = String(row.document[key]);
+					// Route the insert-conflict fixture through the existing per-record fallback.
+					if (conflictOnce || documents.get(id)?._rev !== row.previous?._rev) {
+						error.push({ status: 409, documentId: id });
+					} else {
+						documents.set(id, row.document);
+					}
+				}
+				return { error };
+			}),
+		},
 		bulkUpsert: vi.fn(async (items: Stored[]) =>
 			items.forEach((item) => documents.set(String(item[key]), item))
 		),
