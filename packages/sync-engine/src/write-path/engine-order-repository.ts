@@ -19,7 +19,7 @@ import {
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
-import { hasPendingLocalWork, withoutLocallyProtected } from './local-work-guard';
+import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 
@@ -75,11 +75,11 @@ export class EngineOrderRepository {
 		// of the adapter-level pending-set filter, which can't see a row that is `local.dirty` (or holds
 		// `pendingMutationIds`) without being in the passed pending set. This is the same protection
 		// `resetForResync` (F8) and `removeDeletedOrders` (F6) already apply via `unprotectedOrders`.
-		const applicable = await withoutLocallyProtected(this.db.orders, documents);
-		if (applicable.length === 0) return [];
 		const residents = await this.db.orders
-			.findByIds(applicable.map((document) => document.uuid))
+			.findByIds(documents.map((document) => document.uuid))
 			.exec();
+		const applicable = await withoutLocallyProtected(this.db.orders, documents, residents);
+		if (applicable.length === 0) return [];
 		// Leg-3 (ADR 0015): the order existence manifest is seeded by the INGEST SITE, which holds the
 		// `Materialized` envelope and knows which documents it applied (ADR 0028 rider) — see
 		// `upsertManifestRows` below. This boundary only guarantees no `_rxdb_digest` reaches storage.
@@ -111,12 +111,13 @@ export class EngineOrderRepository {
 		}
 		// Promote the filter/sort columns at the single storage boundary so the in-flight OrderDocument
 		// stays free of storage concerns and every stored order is queryable by the indexed columns.
-		assertBulkSuccess(
-			await this.db.orders.bulkUpsert(
-				materialized.map(({ storedDocument }) => withOrderColumns(storedDocument))
-			),
-			'engine-order-repository upsert'
+		const changed = withoutUnchanged(
+			this.db.orders,
+			residents,
+			materialized.map(({ storedDocument }) => withOrderColumns(storedDocument))
 		);
+		if (changed.length > 0)
+			assertBulkSuccess(await this.db.orders.bulkUpsert(changed), 'engine-order-repository upsert');
 		return applicable;
 	}
 
