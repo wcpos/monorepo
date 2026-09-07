@@ -19,6 +19,7 @@ import {
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
+	processPayment,
 	readCartMoney,
 	readOrder,
 	type ServerOrder,
@@ -240,21 +241,10 @@ for (const targetStoreId of storeTargets) {
 						// UUID IDs already exist; shared-store tab counts would include other cashiers' orders.
 						const orderTab = page.getByTestId(`open-order-tab-${envelope.recordId}`);
 						await expect(orderTab).toBeAttached({ timeout: 30_000 });
-						// These selectors address the store-owned pay page, not app UI.
-						const frame = page.frameLocator('iframe[src*="order-pay"]');
-						await expect(frame.locator('#place_order')).toBeAttached({ timeout: 90_000 });
-						const pay = page.getByTestId('process-payment-button');
-						await expect(pay).toBeEnabled({ timeout: 60_000 });
-						const amount = page.getByTestId('checkout-amount-to-pay');
-						await expect(amount).toBeVisible({ timeout: 15_000 });
-						const tendered = ((await amount.textContent()) ?? '').replace(/\D/g, '');
-						expect(Number(tendered), 'checkout must show a positive amount').toBeGreaterThan(0);
-						await frame.locator('#pos-cash-tendered').fill(tendered);
-						await pay.click();
-						await page.waitForURL((url) => !/\/cart\/[^/]+\/checkout\/?$/.test(url.pathname), {
-							timeout: 120_000,
-						});
-						await expect(page.getByTestId('checkout-dialog')).not.toBeVisible({ timeout: 30_000 });
+						// The cash gateway tenders the full total when the field is left empty, so the
+						// shared helper (frame loaded → button enabled → click → checkout route left) is
+						// the whole payment.
+						await processPayment(page);
 
 						// 1. A paid snapshot must not be rejected as locally dirty.
 						expect(
