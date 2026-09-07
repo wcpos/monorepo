@@ -44,6 +44,7 @@ export const useUILabel = () => {
 					category: t('common.categories'),
 				},
 				'pos-cart': {
+					openOrdersPosition: t('pos_cart.open_orders_position'),
 					autoShowReceipt: t('common.automatically_show_receipt_after_checkout'),
 					autoPrintReceipt: t('common.automatically_print_receipt_after_checkout'),
 					receiptOutputType: t('receipt.output_type'),

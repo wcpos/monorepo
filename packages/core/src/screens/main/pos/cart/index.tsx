@@ -5,9 +5,12 @@ import { ButtonGroupSeparator } from '@wcpos/components/button';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
-import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
+import './register-cart-bar-entries';
+import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
+import { useUISettings } from '../../contexts/ui-settings';
 import { AddNoteButton } from './buttons/add-note';
 import { OrderMetaButton } from './buttons/order-meta';
 import { PayButton } from './buttons/pay';
@@ -16,15 +19,13 @@ import { VoidButton } from './buttons/void';
 import { CartHeader } from './cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { CartTable } from './table';
-import { OpenOrderTabs } from './tabs';
 import { Totals } from './totals';
 import { CartTotalsChangedBanner } from './totals-changed-banner';
 import { useCurrentOrder } from '../contexts/current-order';
 
-/**
- *
+const NO_API: SlotContracts['pos.cart.bar']['api'] = {};
+const NEVER_CHANGES = () => () => {};
 
- */
 export function OpenOrders({ isColumn = false }) {
 	// The cart's single writer. Mounted HERE, once, because CartTable, Totals and
 	// useOrderTotals below all mount useCartLines — and settlement state must not be
@@ -32,6 +33,16 @@ export function OpenOrders({ isColumn = false }) {
 	useCartSettlement();
 
 	const { currentOrderRecord } = useCurrentOrder();
+	const { uiSettings } = useUISettings('pos-cart');
+	const position = useDocField(uiSettings, (value) => value.openOrdersPosition);
+	const view = React.useMemo<ReadonlyView<SlotContracts['pos.cart.bar']['value']>>(
+		() => ({
+			value: { position: position === 'top' ? 'top' : 'bottom', isColumn },
+			subscribe: NEVER_CHANGES,
+		}),
+		[position, isColumn]
+	);
+	const cartBar = <Slot id="pos.cart.bar" api={NO_API} data={view} />;
 
 	if (!currentOrderRecord) {
 		throw new Error('Current order is not defined');
@@ -58,6 +69,7 @@ export function OpenOrders({ isColumn = false }) {
 	 */
 	return (
 		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
+			{position === 'top' && cartBar}
 			<ErrorBoundary>
 				{isNewOrder ? (
 					<Card className="flex-1">
@@ -109,11 +121,7 @@ export function OpenOrders({ isColumn = false }) {
 					</Card>
 				)}
 			</ErrorBoundary>
-			<ErrorBoundary>
-				<Suspense>
-					<OpenOrderTabs />
-				</Suspense>
-			</ErrorBoundary>
+			{position !== 'top' && cartBar}
 		</VStack>
 	);
 }
