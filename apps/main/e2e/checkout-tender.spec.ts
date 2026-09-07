@@ -1,9 +1,9 @@
 /**
- * Live smoke for the two-pane tender checkout (#1794, #1805; contract routes #1839).
+ * Live smoke for the in-place checkout columns (wcpos/roadmap#165; contract routes #1839).
  *
  * WHAT THIS COVERS that the unit suites cannot: the tender flow only renders when the
- * STORE serves `GET wcpos/v2/payment-methods` (`CheckoutDocument` latches the answer when
- * the modal opens), and every leg it records is a real `POST orders/{id}/payments` whose
+ * STORE serves `GET wcpos/v2/payment-methods`; at lg it replaces the products column
+ * in place, and every leg it records is a real `POST orders/{id}/payments` whose
  * result the app reads back out of the order's `_wcpos_payments` ledger. Tiles, keypad,
  * split and cancel are therefore only genuinely exercised against a live store.
  *
@@ -16,7 +16,7 @@ import { type APIRequestContext, expect, type Page, type TestInfo } from '@playw
 
 import { log } from '@wcpos/utils/logger';
 
-import { tryAddRunPrivateSimpleProduct } from './checkout-probe';
+import { addCheckoutProbeProductAgain, tryAddRunPrivateSimpleProduct } from './checkout-probe';
 import { getStoreUrl, getStoreVariant, wcposRestRoute } from './fixtures';
 import {
 	createPushOrdersResponseMatcher,
@@ -36,8 +36,6 @@ import {
 	storeRequestOptions,
 } from './probe-credential';
 
-const CHECKOUT_ROUTE = /\/cart\/[^/]+\/checkout$/;
-
 /** Digits only, so an amount reads the same in any currency or locale format. */
 function digitsOf(value: string): string {
 	return value.replace(/\D/g, '');
@@ -46,8 +44,8 @@ function digitsOf(value: string): string {
 /**
  * An amount rendered by a value-bearing testID, as MINOR UNITS.
  *
- * Every figure in this modal is held in minor units and formatted through one place
- * (`TenderCheckout.format`), so the rendered digits ARE the minor-unit number — which is
+ * Every figure in these checkout columns is held in minor units and formatted through one place
+ * (`useCurrencyFormat`), so the rendered digits ARE the minor-unit number — which is
  * also exactly what the keypad keys shift in. That makes it safe to compare a display
  * against a keypad entry without knowing the store's currency or decimal places.
  */
@@ -212,7 +210,7 @@ function ledgerRows(order: ServerOrder): LedgerRow[] {
 /**
  * Poll the server until the order satisfies `check`, then hand it back.
  *
- * Polling rather than one read: the app records a leg and routes away in the same tick,
+ * Polling rather than one read: the app records a leg and changes checkout stage in the same tick,
  * so a single read races the store's own write. The final order is returned so the caller
  * asserts against the exact document that satisfied the predicate.
  */
@@ -244,9 +242,9 @@ async function pollOrder(
 /**
  * `openCheckout` (order-lifecycle.ts) waits on `process-payment-button`, which exists only
  * in the LEGACY checkout — it can never see the tender flow. This is the same wait-on-the-
- * cause sequence (save → route → modal) ending on whichever checkout the store served.
+ * cause sequence (save → checkout container) ending on whichever checkout the store served.
  */
-async function openCheckoutModal(
+async function openCheckout(
 	page: Page,
 	onOrderCreated: (order: TrackedOrder) => void
 ): Promise<{ orderId: number; uuid: string; mode: 'tender' | 'legacy' }> {
@@ -261,7 +259,7 @@ async function openCheckoutModal(
 	if (response.status() >= 400) {
 		throw new Error(
 			`Order save failed: POST push/orders -> HTTP ${response.status()}. ` +
-				`The app stays on the cart when the save fails, so no checkout modal will open.`
+				`The app stays on the cart when the save fails, so no checkout will open.`
 		);
 	}
 	const ack = (await response.json().catch(() => null)) as { document?: { id?: number } } | null;
@@ -269,17 +267,13 @@ async function openCheckoutModal(
 	// Register before any wait that can fail: the order exists on the server from here on.
 	if (orderId > 0) onOrderCreated({ id: orderId, uuid });
 
-	await page.waitForURL(CHECKOUT_ROUTE, { timeout: 60_000 }).catch(() => {
-		throw new Error(`Checkout route never opened after the order saved (url: ${page.url()}).`);
+	// Tender checkout swaps into the products column; legacy stores still open a modal.
+	// Neither container appearing is a failure, not a missing-contract skip.
+	const tender = page.getByTestId('checkout-tender-pane');
+	const legacy = page.getByTestId('checkout-dialog');
+	await expect(tender.or(legacy).filter({ visible: true }).first()).toBeVisible({
+		timeout: 60_000,
 	});
-	await expect(page.getByTestId('checkout-dialog')).toBeVisible({ timeout: 30_000 });
-
-	// Which checkout the store served. The tabs belong to the tender flow; the process
-	// button belongs to the legacy one — waiting on either keeps a genuinely missing
-	// modal a failure while letting a legacy store reach its skip.
-	const tender = page.getByTestId('checkout-tab-payments');
-	const legacy = page.getByTestId('process-payment-button');
-	await expect(tender.or(legacy).first()).toBeVisible({ timeout: 30_000 });
 	const mode = (await tender.isVisible()) ? 'tender' : 'legacy';
 
 	if (orderId <= 0) {
@@ -308,16 +302,16 @@ async function openCheckoutModal(
 async function newOrderAtCheckout(
 	page: Page,
 	trackOrder: (order: TrackedOrder) => void
-): Promise<{ orderId: number; mode: 'tender' | 'legacy'; cartTotal: string }> {
+): Promise<{ orderId: number; uuid: string; mode: 'tender' | 'legacy'; cartTotal: string }> {
 	const added = await tryAddRunPrivateSimpleProduct(page);
 	liveTest.skip(!added, 'product-writer credentials are unavailable');
 	const label = newRunLabel();
 	await stampRunLabel(page, label);
 	const { total: cartTotal } = await readCartMoney(page);
-	const { orderId, mode } = await openCheckoutModal(page, (order) =>
+	const { orderId, uuid, mode } = await openCheckout(page, (order) =>
 		trackOrder({ ...order, label })
 	);
-	return { orderId, mode, cartTotal };
+	return { orderId, uuid, mode, cartTotal };
 }
 
 /** Tap a tile, then key in an exact minor-unit amount (digits shift in from the right). */
@@ -390,9 +384,13 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 
 			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
 
-			// Route departure is the app's own completion signal (see `processPayment`).
-			await page.waitForURL((url) => !CHECKOUT_ROUTE.test(url.pathname), { timeout: 120_000 });
-			await expect(page.getByTestId('checkout-dialog')).toBeHidden({ timeout: 30_000 });
+			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
+			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
+			await page.getByTestId('receipt-new-sale').click();
+			await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
+			await expect(
+				page.getByTestId('pos-products-panel').getByTestId('search-products')
+			).toBeVisible({ timeout: 30_000 });
 
 			const server = await pollOrder(
 				request,
@@ -451,8 +449,13 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				.toBe(balance - part);
 			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
 
-			await page.waitForURL((url) => !CHECKOUT_ROUTE.test(url.pathname), { timeout: 120_000 });
-			await expect(page.getByTestId('checkout-dialog')).toBeHidden({ timeout: 30_000 });
+			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
+			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
+			await page.getByTestId('receipt-new-sale').click();
+			await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
+			await expect(
+				page.getByTestId('pos-products-panel').getByTestId('search-products')
+			).toBeVisible({ timeout: 30_000 });
 
 			const server = await pollOrder(
 				request,
@@ -472,6 +475,81 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				Number(server.total),
 				2
 			);
+		}
+	);
+
+	liveTest(
+		'preserves a partly paid cart while a second cart completes checkout',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			const orderA = await newOrderAtCheckout(page, trackOrder);
+			const { descriptors } = await requireTenderCheckout(
+				request,
+				testInfo,
+				storeAuthorization,
+				orderA.mode
+			);
+			const manual = manualMethods(descriptors);
+			liveTest.skip(manual.length < 1, 'store declares no manual payment method');
+			const cash = manual.find((method) => method.kind === 'cash');
+			liveTest.skip(!cash, 'store declares no manual cash method');
+
+			const balance = await readAmountMinor(page, 'checkout-balance');
+			const part = Math.floor(balance / 2);
+			expect(part, 'the probe order must be big enough to part-pay').toBeGreaterThan(0);
+			await enterAmount(page, cash!.id, part);
+			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderA.orderId, 'record');
+			const ledgerRow = page.getByTestId('checkout-ledger').getByTestId(/^checkout-leg-/);
+			await expect(ledgerRow).toHaveCount(1);
+			const legTestId = await ledgerRow.getAttribute('data-testid');
+			expect(legTestId).toMatch(/^checkout-leg-.+/);
+			await expect
+				.poll(() => readAmountMinor(page, 'checkout-ledger-remaining'), { timeout: 60_000 })
+				.toBe(balance - part);
+			const remaining = await readAmountMinor(page, 'checkout-ledger-remaining');
+			expect(remaining).toBeGreaterThan(0);
+
+			await page.getByTestId('new-order-tab').click();
+			await addCheckoutProbeProductAgain(page);
+			const labelB = newRunLabel();
+			await stampRunLabel(page, labelB);
+			await readCartMoney(page);
+			const orderB = await openCheckout(page, (order) => trackOrder({ ...order, label: labelB }));
+			expect(orderB.mode).toBe('tender');
+			expect(orderB.uuid).not.toBe(orderA.uuid);
+			const balanceB = await readAmountMinor(page, 'checkout-balance');
+			expect(balanceB).toBeGreaterThan(0);
+			await enterAmount(page, cash!.id, balanceB);
+			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderB.orderId, 'record');
+			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
+			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
+			await page.getByTestId('receipt-new-sale').click();
+			await expect(page.getByTestId(`open-order-tab-${orderB.uuid}`)).toBeHidden();
+			await expect(page.getByTestId('checkout-tender-pane')).toBeHidden();
+			await expect(
+				page.getByTestId('pos-products-panel').getByTestId('search-products')
+			).toBeVisible({ timeout: 30_000 });
+
+			const tabA = page.getByTestId(`open-order-tab-${orderA.uuid}`);
+			await expect(tabA).toBeVisible();
+			await expect(tabA.getByTestId(`open-order-chip-${orderA.uuid}`)).toBeVisible();
+			await tabA.click();
+			await expect(page.getByTestId('checkout-tender-pane')).toBeVisible();
+			await expect(page.getByTestId('checkout-server-order-id')).toHaveText(String(orderA.orderId));
+			await expect(ledgerRow).toHaveCount(1);
+			await expect(page.getByTestId(legTestId!)).toBeVisible();
+			await expect.poll(() => readAmountMinor(page, 'checkout-ledger-remaining')).toBe(remaining);
+			await expect.poll(() => readAmountMinor(page, 'checkout-balance')).toBe(remaining);
+			await enterAmount(page, cash!.id, remaining);
+			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderA.orderId, 'record');
+			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
+			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
+			await page.getByTestId('receipt-new-sale').click();
+			await expect(page.getByTestId(`open-order-tab-${orderA.uuid}`)).toBeHidden();
+			await expect(page.getByTestId('checkout-tender-pane')).toBeHidden();
+			await expect(
+				page.getByTestId('pos-products-panel').getByTestId('search-products')
+			).toBeVisible({ timeout: 30_000 });
 		}
 	);
 
@@ -516,8 +594,10 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			).toBe(String(part));
 			await clickAndExpectPaymentWrite(page, 'checkout-cancel-confirm', orderId, 'void');
 
-			await page.waitForURL((url) => !CHECKOUT_ROUTE.test(url.pathname), { timeout: 120_000 });
-			await expect(page.getByTestId('checkout-dialog')).toBeHidden({ timeout: 30_000 });
+			await expect(page.getByTestId('checkout-tender-pane')).toBeHidden({ timeout: 30_000 });
+			await expect(
+				page.getByTestId('pos-products-panel').getByTestId('search-products')
+			).toBeVisible({ timeout: 30_000 });
 
 			const server = await pollOrder(
 				request,

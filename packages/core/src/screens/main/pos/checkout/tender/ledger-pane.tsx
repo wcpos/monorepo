@@ -14,6 +14,7 @@ import { statusLabelKey, statusVariant } from './labels';
 import { evenSplitShareMinor } from './tender-state';
 import { useT } from '../../../../../contexts/translations';
 
+import type { LedgerView } from './use-ledger-view';
 import type { TenderFlow } from './use-tender-flow';
 
 interface OrderLine {
@@ -38,29 +39,41 @@ const SPLIT_WAYS = [2, 3, 4] as const;
  * running account — the cashier should never have to add anything up themselves.
  */
 export function LedgerPane({ flow, lines, format, splitWays = SPLIT_WAYS }: Props) {
-	const t = useT();
-
 	return (
 		<VStack space="md" className="flex-1">
 			<BalanceHeadline flow={flow} format={format} />
 			<SplitControl flow={flow} format={format} splitWays={splitWays} />
-			<VStack space="xs">
-				{lines.map((line, index) => (
-					<HStack key={`${line.name}-${index}`} className="items-start justify-between gap-2">
-						<Text className="text-muted-foreground flex-1 text-sm" decodeHtml>
-							{`${line.quantity ?? 1} × ${line.name ?? ''}`}
-						</Text>
-						<Text className="text-sm tabular-nums">{line.total ?? ''}</Text>
-					</HStack>
-				))}
+			<LedgerLines lines={lines} totalMinor={flow.totalMinor} format={format} />
+			<LedgerLegs view={flow} format={format} />
+		</VStack>
+	);
+}
+
+export function LedgerLines({
+	lines,
+	totalMinor,
+	format,
+	withTotal = true,
+}: Pick<Props, 'lines' | 'format'> & { totalMinor: number; withTotal?: boolean }) {
+	const t = useT();
+	return (
+		<VStack space="xs">
+			{lines.map((line, index) => (
+				<HStack key={`${line.name}-${index}`} className="items-start justify-between gap-2">
+					<Text className="text-muted-foreground flex-1 text-sm" decodeHtml>
+						{`${line.quantity ?? 1} × ${line.name ?? ''}`}
+					</Text>
+					<Text className="text-sm tabular-nums">{line.total ?? ''}</Text>
+				</HStack>
+			))}
+			{withTotal ? (
 				<HStack className="border-border justify-between border-t pt-2">
 					<Text className="font-semibold">{t('common.total')}</Text>
 					<Text className="font-semibold tabular-nums" testID="checkout-order-total">
-						{format(flow.totalMinor)}
+						{format(totalMinor)}
 					</Text>
 				</HStack>
-			</VStack>
-			<LedgerLegs flow={flow} format={format} />
+			) : null}
 		</VStack>
 	);
 }
@@ -92,7 +105,7 @@ export function BalanceBar({
 			</CollapsibleTrigger>
 			<CollapsibleContent>
 				<VStack space="sm">
-					<LedgerLegs flow={flow} format={format} />
+					<LedgerLegs view={flow} format={format} />
 				</VStack>
 			</CollapsibleContent>
 			<SplitControl flow={flow} format={format} splitWays={splitWays} />
@@ -100,7 +113,7 @@ export function BalanceBar({
 	);
 }
 
-function BalanceHeadline({
+export function BalanceHeadline({
 	flow,
 	format,
 	compact,
@@ -135,10 +148,10 @@ function BalanceHeadline({
 	);
 }
 
-function LedgerLegs({ flow, format }: { flow: TenderFlow; format: (minor: number) => string }) {
+export function LedgerLegs({ view, format }: { view: LedgerView; format: Props['format'] }) {
 	const t = useT();
 
-	if (flow.rows.length === 0) {
+	if (view.rows.length === 0) {
 		return (
 			<Text className="text-muted-foreground text-sm">{t('pos_checkout.no_payments_yet')}</Text>
 		);
@@ -146,8 +159,8 @@ function LedgerLegs({ flow, format }: { flow: TenderFlow; format: (minor: number
 
 	return (
 		<VStack space="xs" testID="checkout-ledger">
-			{flow.rows.map((row) => (
-				<LedgerLeg key={row.id} row={row} flow={flow} format={format} />
+			{view.rows.map((row) => (
+				<LedgerLeg key={row.id} row={row} view={view} format={format} />
 			))}
 		</VStack>
 	);
@@ -155,20 +168,20 @@ function LedgerLegs({ flow, format }: { flow: TenderFlow; format: (minor: number
 
 function LedgerLeg({
 	row,
-	flow,
+	view,
 	format,
 }: {
 	row: PaymentRow;
-	flow: TenderFlow;
+	view: LedgerView;
 	format: (minor: number) => string;
 }) {
 	const t = useT();
-	const title = flow.tiles.find(({ method }) => method.id === row.method_id)?.method.title;
+	const title = view.tiles.find(({ method }) => method.id === row.method_id)?.method.title;
 	// Only cash carries a tendered figure, and only then is change worth a line.
 	const tendered = row.tendered
 		? {
-				tendered: format(toMinor(row.tendered, flow.dp)),
-				change: format(toMinor(row.change ?? 0, flow.dp)),
+				tendered: format(toMinor(row.tendered, view.dp)),
+				change: format(toMinor(row.change ?? 0, view.dp)),
 			}
 		: null;
 
@@ -182,7 +195,7 @@ function LedgerLeg({
 				<Text className="flex-1 text-sm font-medium" decodeHtml>
 					{title ?? row.method_id}
 				</Text>
-				<Text className="text-sm tabular-nums">{format(toMinor(row.amount, flow.dp))}</Text>
+				<Text className="text-sm tabular-nums">{format(toMinor(row.amount, view.dp))}</Text>
 				<StatusBadge label={t(statusLabelKey(row.status))} variant={statusVariant(row.status)} />
 			</HStack>
 			{tendered ? (
@@ -203,14 +216,14 @@ function LedgerLeg({
  * for them — so the even shares sit next to the balance and pre-fill the next
  * tender rather than starting a separate mode.
  */
-function SplitControl({
+export function SplitControl({
 	flow,
 	format,
-	splitWays,
+	splitWays = SPLIT_WAYS,
 }: {
 	flow: TenderFlow;
 	format: (minor: number) => string;
-	splitWays: readonly number[];
+	splitWays?: readonly number[];
 }) {
 	const t = useT();
 

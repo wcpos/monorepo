@@ -146,6 +146,7 @@
     "metaDataKeys": ""
   },
   "pos-cart": {
+    "openOrdersPosition": "bottom",
     "sortBy": "id",
     "sortDirection": "asc",
     "autoShowReceipt": true,

@@ -42,6 +42,7 @@
 		"./screens/main/orders/view": "./src/screens/main/orders/view/index.tsx",
 		"./screens/main/pos/cart": "./src/screens/main/pos/cart/index.tsx",
 		"./screens/main/pos/cart/add-misc-product": "./src/screens/main/pos/cart/add-misc-product.tsx",
+		"./screens/main/pos/columns": "./src/screens/main/pos/columns/index.ts",
 		"./screens/main/pos/checkout": "./src/screens/main/pos/checkout/index.tsx",
 		"./screens/main/pos/contexts/current-order": "./src/screens/main/pos/contexts/current-order/index.tsx",
 		"./screens/main/pos/contexts/order-money-divergence": "./src/screens/main/pos/contexts/order-money-divergence/index.tsx",

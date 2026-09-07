@@ -19,6 +19,10 @@ export const SLOT_API_VERSION = 1;
  * call. Both are plain and JSON-serializable — never an RxDB collection, document or query.
  */
 export interface SlotContracts {
+	'pos.cart.bar': {
+		value: { position: 'top' | 'bottom'; isColumn: boolean };
+		api: Record<string, never>;
+	};
 	'pos.columns.panel': {
 		value: { side: 'left' | 'right'; isColumn: boolean };
 		api: Record<string, never>;

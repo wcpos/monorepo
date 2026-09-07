@@ -6,14 +6,9 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
 
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
-import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
-import { Suspense } from '@wcpos/components/suspense';
 import { useTheme } from '@wcpos/core/contexts/theme';
-import { useUISettings } from '@wcpos/core/screens/main/contexts/ui-settings';
-import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 
 import { useNavigationBackground } from '../../../../../components/use-navigation-background';
 
@@ -85,7 +80,6 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 
 export default function TabsLayout() {
 	const { screenSize } = useTheme();
-	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const { bottom } = useSafeAreaInsets();
 
 	const tabPressListener = React.useMemo(
@@ -104,37 +98,7 @@ export default function TabsLayout() {
 	if (screenSize !== 'sm') {
 		return (
 			<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
-				<PanelGroup
-					onLayoutChanged={([productsWidth], { isUserInteraction }) => {
-						if (isUserInteraction) void patchUI({ width: productsWidth });
-					}}
-					direction="horizontal"
-				>
-					<Panel
-						testID="pos-products-panel"
-						defaultSize={uiSettings.width}
-						minSize={25}
-						id="products"
-					>
-						<Suspense>
-							<ErrorBoundary>
-								<POSProducts isColumn />
-							</ErrorBoundary>
-						</Suspense>
-					</Panel>
-					<PanelResizeHandle testID="pos-resize-handle" />
-					{/* Complementary defaultSize — see (columns)/index.tsx: an unsized
-					    panel beside a sized one renders flexGrow 60:1 (a cart sliver)
-					    until the group layout lands, and on slow devices that
-					    pre-layout style can stick. */}
-					<Panel defaultSize={100 - uiSettings.width} minSize={25} id="cart">
-						<Suspense>
-							<ErrorBoundary>
-								<OpenOrders isColumn />
-							</ErrorBoundary>
-						</Suspense>
-					</Panel>
-				</PanelGroup>
+				<POSColumns />
 			</View>
 		);
 	}

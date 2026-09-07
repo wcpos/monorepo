@@ -296,3 +296,8 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 		expect(mockPush).not.toHaveBeenCalled();
 	});
 });
+
+jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('../../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ loaded: false, unsupportedSchema: false }),
+}));

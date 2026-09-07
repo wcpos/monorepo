@@ -15,6 +15,8 @@ import type { TenderFlow } from './use-tender-flow';
 
 const mockPickMethod = jest.fn();
 const mockBack = jest.fn();
+const mockFinishSale = jest.fn();
+let mockStage = 'checkout';
 let mockOnClose: (() => void) | undefined;
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
@@ -40,6 +42,11 @@ const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethod
 	...overrides,
 });
 
+jest.mock('../checkout-mode', () => ({ useOrderCheckoutStage: () => mockStage }));
+jest.mock('../receipt-stage/receipt-stage', () => ({
+	ReceiptStage: () => <div data-testid="checkout-receipt-stage" />,
+}));
+jest.mock('../receipt-stage/use-finish-sale', () => ({ useFinishSale: () => mockFinishSale }));
 jest.mock('./use-tender-flow', () => ({ useTenderFlow: () => mockFlow }));
 jest.mock('./legacy-tab', () => ({ LegacyTab: () => <div data-testid="legacy-tab" /> }));
 jest.mock('../../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
@@ -151,8 +158,22 @@ describe('TenderCheckout', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockScreenSize = 'lg';
+		mockStage = 'checkout';
 		mockOnClose = undefined;
 		mockFlow = makeFlow();
+	});
+
+	it('replaces the phone tenders with the receipt and finishes on close', () => {
+		mockStage = 'receipt';
+		mockScreenSize = 'sm';
+		mockFlow = makeFlow({ hasLiveLeg: true });
+		render(<TenderCheckout order={order} />);
+		expect(screen.getByTestId('checkout-receipt-stage')).not.toBeNull();
+		expect(screen.queryByTestId('checkout-cancel-payment')).toBeNull();
+		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
+		mockOnClose?.();
+		expect(mockFinishSale).toHaveBeenCalledTimes(1);
+		expect(mockBack).not.toHaveBeenCalled();
 	});
 
 	it('shows the ledger pane beside the tenders on a wide screen', () => {

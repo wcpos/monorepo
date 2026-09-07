@@ -6,6 +6,8 @@ import { act, renderHook } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
+import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
+import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
 
 const mockRecordManualPayment = jest.fn();
@@ -65,6 +67,9 @@ jest.mock('../payments', () => ({
 }));
 jest.mock('../hooks/use-complete-order-flow', () => ({
 	useCompleteOrderFlow: () => mockCompleteOrderFlow,
+}));
+jest.mock('../../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ format: (value: number) => value.toFixed(2) }),
 }));
 jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({
@@ -140,6 +145,8 @@ function payment(overrides: Partial<PaymentRow> = {}): PaymentRow {
 
 describe('useTenderFlow', () => {
 	beforeEach(() => {
+		mockSize = 'sm';
+		resetCheckoutMode();
 		jest.clearAllMocks();
 		mockPayload = { total: '92.95', meta_data: [] };
 		mockMethods = methods;
@@ -150,6 +157,28 @@ describe('useTenderFlow', () => {
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockLocalPatch.mockResolvedValue({ document: order });
 	});
+
+	it.each(['online-website-available', 'offline'])(
+		'keeps the read-only ledger aligned with tender flow (%s)',
+		(status) => {
+			mockOnlineStatus = status;
+			const { result, rerender } = renderHook(() => ({
+				flow: useTenderFlow(order),
+				view: useLedgerView(order),
+			}));
+			expect(result.current.view.balanceMinor).toBe(9295);
+			mockPayload.meta_data = [
+				{ key: '_wcpos_payments', value: { schema: 1, payments: [payment()] } },
+			];
+			rerender();
+			const { format, ...view } = result.current.view;
+			expect(result.current.flow).toMatchObject(view);
+			expect(view.paidMinor).toBe(5000);
+			expect(format(view.balanceMinor)).toBe('42.95');
+			expect(mockRecordManualPayment).not.toHaveBeenCalled();
+			expect(mockVoidPayments).not.toHaveBeenCalled();
+		}
+	);
 
 	it('pre-fills a picked method with the ledger-derived balance', () => {
 		const { result } = renderHook(() => useTenderFlow(order));
@@ -327,4 +356,18 @@ describe('useTenderFlow', () => {
 		expect(result.current.paidMinor).toBe(5000);
 		expect(result.current.balanceMinor).toBe(4295);
 	});
+});
+
+let mockSize = 'sm';
+jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
+
+it('leaves wide checkout mode without navigating after cancellation', async () => {
+	jest.clearAllMocks();
+	mockSize = 'lg';
+	mockVoidPayments.mockResolvedValue({ failed: [] });
+	enterCheckout(order.uuid);
+	const { result } = renderHook(() => useTenderFlow(order));
+	await act(async () => result.current.cancelPayment());
+	expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(false);
+	expect(mockReplace).not.toHaveBeenCalled();
 });

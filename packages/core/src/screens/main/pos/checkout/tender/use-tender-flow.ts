@@ -16,6 +16,8 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
+import { useTheme } from '../../../../../contexts/theme';
+import { leaveCheckout } from '../checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -93,6 +95,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const voidPayments = useVoidPayments();
 	const completeOrderFlow = useCompleteOrderFlow(order);
 	const router = useRouter();
+	const { screenSize } = useTheme();
 	const t = useT();
 
 	const rows = React.useMemo(() => readLedger(payload.meta_data), [payload.meta_data]);
@@ -234,7 +237,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 			reducerDispatch({ type: 'reset' });
-			router.replace({ pathname: '/cart' });
+			leaveCheckout(order.uuid);
+			if (screenSize === 'sm') router.replace({ pathname: '/cart' });
 		} catch (error) {
 			logger.error(t('pos_checkout.void_failed'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
@@ -245,7 +249,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [order, router, t, voidPayments]);
+	}, [order, router, screenSize, t, voidPayments]);
 
 	return React.useMemo(
 		() => ({
