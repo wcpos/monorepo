@@ -13,11 +13,11 @@ afterEach(() => {
 	return createEngineHarness.disposeTrackedEngines();
 });
 const UUID = '5b8e1a3c-2f4d-4a6b-9c8e-000000000042';
-/** A paid document, newer than anything the till adopted (the seeded residents carry revision ''). */
+/** A paid document, newer than anything the till adopted (the seeded residents carry no date_modified_gmt). */
 const PAID: IncomingOrderSettlement = {
 	status: 'completed',
 	datePaid: '2026-09-01T10:03:00',
-	revision: 'paid-revision',
+	dateModified: '2026-09-01T10:03:00',
 };
 const row = (mutationId: string, seq: number, overrides: Partial<QueuedMutation> = {}) => ({
 	mutationId,
@@ -88,7 +88,7 @@ describe('createOrderHeldRowDiscarder', () => {
 		expect(
 			await (
 				await discarder(harness)
-			)(UUID, { status: 'pos-partial', revision: 'partial-2' })
+			)(UUID, { status: 'pos-partial', dateModified: '2026-09-01T10:03:00' })
 		).toBe(1);
 
 		expect(await harness.collection('recordMutations').count().exec()).toBe(0);
@@ -97,30 +97,48 @@ describe('createOrderHeldRowDiscarder', () => {
 		);
 	});
 
-	it('keeps the reopen of a pos-partial order: the incoming revision is the one the till already adopted', async () => {
+	it.each([
+		{ label: 'the same document the till adopted', dateModified: '2026-09-01T09:30:00' },
+		{ label: 'a stale, older response', dateModified: '2026-09-01T09:00:00' },
+		{ label: 'a document with no date_modified_gmt', dateModified: undefined },
+	])('keeps the reopen of a pos-partial order against $label', async ({ dateModified }) => {
 		const harness = await createEngineHarness();
-		// The till adopted the pos-partial document (revision = its date_modified_gmt), then the
-		// cashier reopened it: pos-open, no date_paid on either side, one held row.
+		// The till adopted the pos-partial document (date_modified_gmt 09:30), then the cashier
+		// reopened it: pos-open, no date_paid on either side, one held row. Only a document
+		// saved AFTER 09:30 may retire that row.
 		await seedResident(harness, { status: 'pos-open', date_modified_gmt: '2026-09-01T09:30:00' }, [
 			'reopen',
 		]);
 		await harness.seed('recordMutations', [row('reopen', 1)]);
 		const remove = vi.spyOn(RecordMutationQueue.prototype, 'removePending');
 
-		expect(
-			await (
-				await discarder(harness)
-			)(UUID, {
-				status: 'pos-partial',
-				revision: '2026-09-01T09:30:00',
-			})
-		).toBe(0);
+		expect(await (await discarder(harness))(UUID, { status: 'pos-partial', dateModified })).toBe(0);
 
 		expect(remove).not.toHaveBeenCalled();
 		expect(await harness.collection('recordMutations').count().exec()).toBe(1);
 		expect((await harness.collection('orders').findOne(UUID).exec())!.toJSON().local).toMatchObject(
 			{ dirty: true, pendingMutationIds: ['reopen'] }
 		);
+	});
+
+	it('retires the held row when the settled document was saved after the one the till adopted', async () => {
+		const harness = await createEngineHarness();
+		await seedResident(harness, { status: 'pos-open', date_modified_gmt: '2026-09-01T09:30:00' }, [
+			'held',
+		]);
+		await harness.seed('recordMutations', [row('held', 1)]);
+
+		expect(
+			await (
+				await discarder(harness)
+			)(UUID, {
+				status: 'completed',
+				datePaid: '2026-09-01T09:31:00',
+				dateModified: '2026-09-01T09:31:00',
+			})
+		).toBe(1);
+
+		expect(await harness.collection('recordMutations').count().exec()).toBe(0);
 	});
 
 	it('clears the resident bookkeeping before removing rows, so a refused removal leaves a recoverable state', async () => {

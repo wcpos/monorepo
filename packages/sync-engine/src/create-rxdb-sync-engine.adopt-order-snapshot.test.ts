@@ -18,7 +18,9 @@ function orderSnapshot(
 		number: '42',
 		status,
 		date_created_gmt: '2026-09-01T10:00:00',
-		date_modified_gmt: '2026-09-01T10:01:00',
+		// A paid document is a LATER save than the open cart the till adopted; the held-row
+		// discard requires that ordering, so the paid snapshot carries a newer modified date.
+		date_modified_gmt: status === 'pos-open' ? '2026-09-01T10:01:00' : '2026-09-01T10:02:30',
 		date_paid_gmt: datePaid,
 		total: '10.00',
 		customer_id: 0,

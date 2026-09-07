@@ -788,6 +788,7 @@ describe('createOrdersSchedulerFetcher', () => {
 						id: 123,
 						status: 'completed',
 						date_paid_gmt: '2026-09-01T10:02:00',
+						date_modified_gmt: '2026-09-01T10:02:30',
 						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
 					},
 				]),
@@ -803,7 +804,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(discardHeldOpenCartRows).toHaveBeenCalledExactlyOnceWith(uuidFor(123), {
 			status: 'completed',
 			datePaid: '2026-09-01T10:02:00',
-			revision: expect.any(String),
+			dateModified: '2026-09-01T10:02:30',
 		});
 		// The materialized document carries status under `payload`; the promoted
 		// top-level `status` is added by the collection descriptor at write time.

@@ -343,12 +343,18 @@ async function retireSettledHoldsThenFilter(
 	for (const document of documents) {
 		if (!initial.has(document.uuid)) continue;
 		const payload = document.payload as
-			{ status?: unknown; date_paid?: unknown; date_paid_gmt?: unknown } | undefined;
+			| {
+					status?: unknown;
+					date_paid?: unknown;
+					date_paid_gmt?: unknown;
+					date_modified_gmt?: unknown;
+			  }
+			| undefined;
 		if (payload?.status === 'pos-open') continue;
 		await input.discardHeldOpenCartRows(document.uuid, {
 			status: payload?.status,
 			datePaid: payload?.date_paid_gmt ?? payload?.date_paid,
-			revision: document.sync?.revision,
+			dateModified: payload?.date_modified_gmt,
 		});
 		attempted = true;
 	}

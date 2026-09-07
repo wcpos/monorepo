@@ -25,12 +25,31 @@ export function createOrderPendingMutationIds(
 export type IncomingOrderSettlement = {
 	status?: unknown;
 	datePaid?: unknown;
-	/** The incoming document's `sync.revision`; see the causality check in the discarder. */
-	revision?: unknown;
+	/** The incoming document's `date_modified_gmt`; see the causality check in the discarder. */
+	dateModified?: unknown;
 };
 
-type OrderPayloadFacts = { status?: unknown; date_paid?: unknown; date_paid_gmt?: unknown };
-type ResidentFacts = { payload?: OrderPayloadFacts; sync?: { revision?: unknown } };
+type OrderPayloadFacts = {
+	status?: unknown;
+	date_paid?: unknown;
+	date_paid_gmt?: unknown;
+	date_modified_gmt?: unknown;
+};
+type ResidentFacts = { payload?: OrderPayloadFacts };
+
+/**
+ * Is the incoming document strictly newer than the one the till last adopted? WooCommerce
+ * bumps `date_modified_gmt` on every save, payment included, and it is orderable — revisions
+ * are hashes, so "different" would not mean "newer" and a stale, older response could pass.
+ * An unparseable incoming date is never newer (protect); a resident with no date has adopted
+ * nothing the incoming document could be older than.
+ */
+function newerThanAdopted(incoming: unknown, adopted: unknown): boolean {
+	const incomingMs = typeof incoming === 'string' ? Date.parse(incoming) : Number.NaN;
+	if (!Number.isFinite(incomingMs)) return false;
+	const adoptedMs = typeof adopted === 'string' ? Date.parse(adopted) : Number.NaN;
+	return !Number.isFinite(adoptedMs) || incomingMs > adoptedMs;
+}
 
 /**
  * The store settled the sale: a status other than `pos-open` that came from a PAYMENT —
@@ -71,11 +90,11 @@ function tillBelievesUnpaidOpenCart(payload: OrderPayloadFacts | undefined): boo
  * conflicted or delete row keeps the record protected exactly as before.
  *
  * Causality: a reopened `pos-partial` order is `pos-open` locally with no `date_paid` on
- * either side, so the two predicates above cannot tell it from the bug. What can is the
- * revision — the till adopted the `pos-partial` document before the cashier reopened it, so
- * its rows postdate that revision and a pull carrying the SAME revision must leave them
- * alone. The deadlocked sale's rows were queued against the checkout ack's revision; the
- * paid document always carries a newer one.
+ * either side, so the two predicates above cannot tell it from the bug. What can is time —
+ * the till adopted the `pos-partial` document (its `date_modified_gmt`) before the cashier
+ * reopened it, so its rows postdate that document, and a pull carrying the same or an OLDER
+ * `date_modified_gmt` must leave them alone. The deadlocked sale's rows were queued against
+ * the checkout ack; the paid document is a later save and always carries a newer date.
  *
  * Ordering: bookkeeping first, rows second. A crash in between leaves rows that are still
  * pending (so the record stays protected and the next settled snapshot retries the discard);
@@ -109,8 +128,7 @@ export function createOrderHeldRowDiscarder(
 		if (!resident) return 0;
 		const stored = resident.toJSON();
 		if (!tillBelievesUnpaidOpenCart(stored.payload)) return 0;
-		const adopted = stored.sync?.revision;
-		if (typeof adopted === 'string' && adopted !== '' && adopted === incoming.revision) return 0;
+		if (!newerThanAdopted(incoming.dateModified, stored.payload?.date_modified_gmt)) return 0;
 		const rows = (await queue.pending()).filter(
 			(row) => row.collectionName === 'orders' && row.recordId === recordId
 		);
