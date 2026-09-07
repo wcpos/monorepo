@@ -86,7 +86,7 @@ export type SettleResult =
 
 // ===== internals =====
 
-/** Persisted money fields compared string-for-string for `changed` detection. */
+/** Persisted totals compare finite numeric strings by value, otherwise by identity. */
 const PERSISTED_TOTAL_FIELDS = [
 	'discount_total',
 	'discount_tax',
@@ -98,43 +98,63 @@ const PERSISTED_TOTAL_FIELDS = [
 ] as const;
 
 /**
- * `changed` = inequality of the patch's persisted fields against the snapshot's
- * persisted fields. A snapshot missing any persisted total ⇒ `true`. Array
- * fields are compared by JSON only when present in the patch.
+ * The money slots of an order document and its lines: the persisted totals, the line-level
+ * amounts (`taxes[]` included) and the coupon/fee slots. `meta_data` is opaque to this walk —
+ * `_woocommerce_pos_data` carries `price`/`regular_price` strings whose formatting IS data.
+ */
+const MONEY_KEYS: ReadonlySet<string> = new Set([
+	...PERSISTED_TOTAL_FIELDS,
+	'subtotal',
+	'subtotal_tax',
+	'price',
+	'discount',
+	'amount',
+	'tax_total',
+	'shipping_tax_total',
+]);
+
+/** Clone comparison values only; never rewrite the emitted patch or the snapshot. */
+function canonicalMoney(value: unknown, key = 'total'): unknown {
+	if (key === 'meta_data') return value;
+	if (Array.isArray(value)) return value.map((entry) => canonicalMoney(entry, key));
+	if (value !== null && typeof value === 'object') {
+		return Object.fromEntries(
+			Object.entries(value).map(([field, entry]) => [field, canonicalMoney(entry, field)])
+		);
+	}
+	return MONEY_KEYS.has(key) &&
+		(typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')) &&
+		Number.isFinite(Number(value))
+		? String(Number(value))
+		: value;
+}
+
+/**
+ * Missing totals are changes; finite numeric money compares by value, including in line arrays.
+ * Server acks use six decimals while the client writes shortest-repr: a reformat is not a
+ * cart change. Reporting one enqueues a held row that deadlocks adoption of a paid order.
  */
 function computeChanged(snapshot: CartSnapshot, patch: SettlePatch): boolean {
 	for (const field of PERSISTED_TOTAL_FIELDS) {
-		const previous = snapshot[field];
-		if (previous === undefined || previous !== patch[field]) {
+		if (
+			snapshot[field] === undefined ||
+			canonicalMoney(snapshot[field]) !== canonicalMoney(patch[field])
+		)
 			return true;
-		}
 	}
-	if (JSON.stringify(snapshot.tax_lines ?? []) !== JSON.stringify(patch.tax_lines)) {
-		return true;
-	}
-	if (
-		patch.line_items &&
-		JSON.stringify(snapshot.line_items ?? []) !== JSON.stringify(patch.line_items)
-	) {
-		return true;
-	}
-	if (
-		patch.coupon_lines &&
-		JSON.stringify(snapshot.coupon_lines ?? []) !== JSON.stringify(patch.coupon_lines)
-	) {
-		return true;
-	}
-	if (
-		patch.fee_lines &&
-		JSON.stringify(snapshot.fee_lines ?? []) !== JSON.stringify(patch.fee_lines)
-	) {
-		return true;
-	}
-	if (
-		patch.shipping_lines &&
-		JSON.stringify(snapshot.shipping_lines ?? []) !== JSON.stringify(patch.shipping_lines)
-	) {
-		return true;
+	for (const field of [
+		'line_items',
+		'coupon_lines',
+		'fee_lines',
+		'shipping_lines',
+		'tax_lines',
+	] as const) {
+		if (
+			patch[field] &&
+			JSON.stringify(canonicalMoney(snapshot[field] ?? [])) !==
+				JSON.stringify(canonicalMoney(patch[field]))
+		)
+			return true;
 	}
 	return false;
 }

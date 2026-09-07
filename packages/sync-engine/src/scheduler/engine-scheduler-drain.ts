@@ -41,7 +41,10 @@ import {
 } from './rx-scheduler-reference-fetcher';
 import { parseReferenceLaneQueryKey } from './reference-lane-descriptor';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
-import { createOrderPendingMutationIds } from '../write-path/order-pull-guard';
+import {
+	createOrderHeldRowDiscarder,
+	createOrderPendingMutationIds,
+} from '../write-path/order-pull-guard';
 import {
 	hasPendingLocalWork,
 	withoutLocallyProtected,
@@ -247,6 +250,7 @@ export type SchedulerDrainDatabase = OrderRepositoryDatabase &
 type OrderIngestInput = {
 	repository: EngineOrderRepository;
 	pendingMutationOrderIds: NonNullable<OrdersSchedulerFetcherInput['pendingMutationOrderIds']>;
+	discardHeldOpenCartRows: NonNullable<OrdersSchedulerFetcherInput['discardHeldOpenCartRows']>;
 };
 /**
  * Built FRESH on every call, never cached: `scope.resetCollection('mutations')` drops and
@@ -260,6 +264,7 @@ function orderIngestInput(db: SchedulerDrainDatabase): OrderIngestInput {
 	return {
 		repository: new EngineOrderRepository(db),
 		pendingMutationOrderIds: createOrderPendingMutationIds(db.recordMutations as never),
+		discardHeldOpenCartRows: createOrderHeldRowDiscarder(db.recordMutations, db.orders),
 	};
 }
 export function adoptOrderSnapshot(

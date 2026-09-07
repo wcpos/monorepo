@@ -401,6 +401,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							 * holds by design is never reported to the cashier as a change
 							 * stuck waiting to send.
 							 */
+							// Paid snapshots discard held rows via createOrderHeldRowDiscarder.
+							// A paid status must never RELEASE their stale open-cart payload.
 							shouldHold: async (mutation) => {
 								if (!isOpenCartHoldCandidate(mutation)) return false;
 								const doc = await database.collections.orders?.findOne(mutation.recordId).exec();
