@@ -148,6 +148,15 @@ app's code.
    iOS, verify dismissal with `notVisible … focused: true` and submit again if
    the field is still focused (`ensure-pos-ready.yml`). On Android a view's
    focus outlives the keyboard, so that check is iOS-only.
+   **On Android `hideKeyboard` is `input keyevent 4` (Back).** With no keyboard
+   up, that Back reaches the activity, and at the POS root it finishes the app:
+   the ❌ frame is the launcher home screen and the next assertion reads
+   "element not found" (runs 33662941896 and 34124672113, both in a recovery
+   branch right after tapping a VISIBLE tab). Never call it unconditionally on
+   the POS screens; use the `ensure-pos-ready.yml` guard — phone, `search-products`
+   visible, `pos-tab-products` NOT visible — which is the keyboard's only
+   reliable tell. Inside a form with a focused input (flows 01, 02, 08) the
+   keyboard is up and the plain call is fine.
 10. **Relaunch by platform.** iOS relaunches with `launchApp`. **Android
     relaunches with `openLink` to the dev-client URL** because Maestro's
     `launchApp` re-grants every manifest permission through `pm grant` first
