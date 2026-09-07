@@ -8,7 +8,18 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
 import { resolveStage, useCheckoutMode } from '../checkout/checkout-mode';
 
-export function TabChip({ order }: { order: EngineRecord<'orders'> }) {
+/**
+ * The chip tells the cashier about an order they are NOT looking at. On the active tab the
+ * same state is already on screen (ledger, tender pane or receipt stage), and a tinted badge
+ * on the filled tab reads blue-on-blue, so the active tab carries no chip.
+ */
+export function TabChip({
+	order,
+	active = false,
+}: {
+	order: EngineRecord<'orders'>;
+	active?: boolean;
+}) {
 	const payload = useRecordField(order, (record) => record.payload);
 	const mode = useCheckoutMode();
 	const { methods } = usePaymentMethods();
@@ -27,7 +38,7 @@ export function TabChip({ order }: { order: EngineRecord<'orders'> }) {
 				: stage === 'checkout' && !captured
 					? t('pos_checkout.chip_in_checkout')
 					: null;
-	return label ? (
+	return label && !active ? (
 		<StatusBadge
 			testID={`open-order-chip-${order.uuid}`}
 			label={label}

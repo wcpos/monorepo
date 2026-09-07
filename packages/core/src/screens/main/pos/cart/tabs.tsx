@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
+import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { ScrollableTabsList, Tabs, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
@@ -49,28 +49,24 @@ export function OpenOrderTabs() {
 	/**
 	 *
 	 */
+	const activeValue =
+		selectedReceiptOrder ??
+		((currentOrderRecord as { isNew?: boolean }).isNew ? 'new' : currentOrderRecord.uuid);
+
 	return (
-		<Tabs
-			value={
-				selectedReceiptOrder ??
-				((currentOrderRecord as { isNew?: boolean }).isNew ? 'new' : currentOrderRecord.uuid)
-			}
-			onValueChange={handleTabPress}
-			orientation="horizontal"
-			className=""
-		>
+		<Tabs value={activeValue} onValueChange={handleTabPress} orientation="horizontal" className="">
 			<ScrollableTabsList className="bg-transparent p-0">
 				{openOrders.map(({ id, record }) => (
 					<TabsTrigger key={id} value={id} testID={`open-order-tab-${id}`}>
-						<View className="items-center gap-1">
+						<HStack className="items-center gap-2">
 							<CartTabTitle order={record} />
-							<TabChip order={record} />
-						</View>
+							<TabChip order={record} active={id === activeValue} />
+						</HStack>
 					</TabsTrigger>
 				))}
 				{extraReceiptIds.map((uuid) => (
 					<React.Suspense key={uuid} fallback={null}>
-						<ReceiptTab uuid={uuid} />
+						<ReceiptTab uuid={uuid} active={uuid === activeValue} />
 					</React.Suspense>
 				))}
 				<TabsTrigger value="new" testID="new-order-tab">
@@ -88,16 +84,16 @@ export function OpenOrderTabs() {
 	);
 }
 
-function ReceiptTab({ uuid }: { uuid: string }) {
+function ReceiptTab({ uuid, active }: { uuid: string; active: boolean }) {
 	const resource = useEngineRecord('orders', uuid);
 	const record = useObservableSuspense(resource);
 	if (!record) return null;
 	return (
 		<TabsTrigger value={uuid} testID={`open-order-tab-${uuid}`}>
-			<View className="items-center gap-1">
+			<HStack className="items-center gap-2">
 				<CartTabTitle order={record} />
-				<TabChip order={record} />
-			</View>
+				<TabChip order={record} active={active} />
+			</HStack>
 		</TabsTrigger>
 	);
 }

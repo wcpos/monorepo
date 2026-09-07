@@ -31,18 +31,34 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 	return (
 		<Card className="flex-1">
 			<CardHeader className="bg-card-header p-2" testID="checkout-ledger-header">
-				<Text className="font-semibold">{payload.number}</Text>
-				<Text>{formatName({ ...payload.billing, customer_id: 0 })}</Text>
+				{/* Same height as the cart header it replaces, so the strip and totals below
+				    do not move when the column swaps. */}
+				<HStack className="min-h-8 items-center gap-2">
+					<Text className="font-bold">{`#${payload.number ?? ''}`}</Text>
+					<Text className="text-muted-foreground flex-1" numberOfLines={1}>
+						{formatName({ ...payload.billing, customer_id: 0 })}
+					</Text>
+				</HStack>
 			</CardHeader>
 			<CardContent className="border-border flex-1 border-t p-0">
-				<ScrollView className="flex-1" contentContainerClassName="p-4">
-					<LedgerLines lines={lines} totalMinor={view.totalMinor} format={format} />
-					<LedgerLegs view={view} format={format} />
+				<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
+					<LedgerLines
+						lines={lines}
+						totalMinor={view.totalMinor}
+						format={format}
+						withTotal={false}
+					/>
+					<View className="gap-2">
+						<Text className="text-muted-foreground text-xs tracking-wider uppercase">
+							{t('pos_checkout.payments_tab')}
+						</Text>
+						<LedgerLegs view={view} format={format} />
+					</View>
 				</ScrollView>
 				<View testID="checkout-ledger-totals" className="border-border gap-2 border-t p-4">
 					<HStack className="justify-between">
 						<Text>{t('common.total')}</Text>
-						<Text>{format(view.totalMinor)}</Text>
+						<Text testID="checkout-order-total">{format(view.totalMinor)}</Text>
 					</HStack>
 					<HStack className="justify-between">
 						<Text>{t('pos_checkout.paid')}</Text>

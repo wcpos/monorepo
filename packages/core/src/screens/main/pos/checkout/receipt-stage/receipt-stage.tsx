@@ -21,6 +21,11 @@ import { useReceiptDocument } from '../../../receipt/use-receipt-document';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 
+/** The receipt actions are choices, not the primary action: `New sale` alone is filled. */
+function StageAction(props: React.ComponentProps<typeof Button>) {
+	return <Button variant="outline" {...props} />;
+}
+
 export function ReceiptStage({ orderUuid, compact }: { orderUuid: string; compact: boolean }) {
 	const resource = useEngineRecord('orders', orderUuid);
 	const order = useObservableSuspense(resource);
@@ -60,7 +65,7 @@ function ReceiptStageDocument({
 	useCheckoutBack(finishSale, { escape: false });
 	return (
 		<View testID="checkout-receipt-stage" className="flex-1">
-			<View testID="receipt-paid-banner" className="bg-success/10 gap-2 p-4">
+			<View testID="receipt-paid-banner" className="bg-success/10 gap-1 px-4 py-3">
 				<HStack className="items-center gap-2">
 					<Icon name="check" className="text-success" />
 					<Text className="text-xl font-semibold">
@@ -87,10 +92,10 @@ function ReceiptStageDocument({
 			<View className="min-h-0 flex-1 p-3">
 				<ReceiptBody doc={doc} selectsInline={!compact} />
 			</View>
-			<HStack
-				className={`border-border items-center justify-between gap-2 border-t p-3 ${compact ? 'flex-wrap' : ''}`}
-			>
-				<HStack className="flex-1 flex-wrap gap-2">
+			<HStack className="border-border flex-wrap items-center justify-between gap-2 border-t p-3">
+				{/* Not flex-1: the group must not claim the row, or New sale gets pushed under it
+				    instead of wrapping to its own right-aligned line when the labels are long. */}
+				<HStack className="flex-wrap gap-2">
 					<Button
 						variant="outline"
 						className="shrink-0"
@@ -99,12 +104,12 @@ function ReceiptStageDocument({
 					>
 						<ButtonText>{t('pos_checkout.no_receipt')}</ButtonText>
 					</Button>
-					<ReceiptActions doc={doc} order={order} buttonComponent={Button} />
+					<ReceiptActions doc={doc} order={order} buttonComponent={StageAction} />
 				</HStack>
 				<Button
 					variant="success"
 					size="lg"
-					className={compact ? 'w-full' : 'shrink-0'}
+					className={compact ? 'w-full' : 'ml-auto shrink-0'}
 					testID="receipt-new-sale"
 					onPress={finishSale}
 				>

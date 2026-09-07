@@ -53,7 +53,8 @@ export function LedgerLines({
 	lines,
 	totalMinor,
 	format,
-}: Pick<Props, 'lines' | 'format'> & { totalMinor: number }) {
+	withTotal = true,
+}: Pick<Props, 'lines' | 'format'> & { totalMinor: number; withTotal?: boolean }) {
 	const t = useT();
 	return (
 		<VStack space="xs">
@@ -65,12 +66,14 @@ export function LedgerLines({
 					<Text className="text-sm tabular-nums">{line.total ?? ''}</Text>
 				</HStack>
 			))}
-			<HStack className="border-border justify-between border-t pt-2">
-				<Text className="font-semibold">{t('common.total')}</Text>
-				<Text className="font-semibold tabular-nums" testID="checkout-order-total">
-					{format(totalMinor)}
-				</Text>
-			</HStack>
+			{withTotal ? (
+				<HStack className="border-border justify-between border-t pt-2">
+					<Text className="font-semibold">{t('common.total')}</Text>
+					<Text className="font-semibold tabular-nums" testID="checkout-order-total">
+						{format(totalMinor)}
+					</Text>
+				</HStack>
+			) : null}
 		</VStack>
 	);
 }

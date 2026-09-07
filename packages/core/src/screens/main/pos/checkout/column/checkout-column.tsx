@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Icon } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
 import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
@@ -68,8 +67,13 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				{payload.id}
 			</Text>
 			<HStack className="items-center gap-3 p-2">
-				<Button variant="ghost" size="sm" testID="checkout-back-to-cart" onPress={back}>
-					<Icon name="arrowLeft" />
+				<Button
+					variant="ghost"
+					size="sm"
+					leftIcon="arrowLeft"
+					testID="checkout-back-to-cart"
+					onPress={back}
+				>
 					<ButtonText>{t('pos_checkout.back_to_cart')}</ButtonText>
 				</Button>
 				<Text className="text-foreground flex-1 text-lg font-semibold">
@@ -80,8 +84,10 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				<Tabs
 					value={flow.state.tab}
 					onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
+					orientation="horizontal"
 				>
-					<TabsList>
+					{/* TabsList sets no direction of its own; on web a View defaults to a column. */}
+					<TabsList className="flex-row">
 						<TabsTrigger value="payments" testID="checkout-tab-payments">
 							<Text>{t('pos_checkout.payments_tab')}</Text>
 						</TabsTrigger>
