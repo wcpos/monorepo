@@ -12,6 +12,9 @@ import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
+import { useOrderCheckoutStage } from '../checkout-mode';
+import { ReceiptStage } from '../receipt-stage/receipt-stage';
+import { useFinishSale } from '../receipt-stage/use-finish-sale';
 import { CancelPaymentView } from './cancel-payment-view';
 import { LegacyTab } from './legacy-tab';
 import { BalanceBar, LedgerPane } from './ledger-pane';
@@ -45,6 +48,8 @@ export function TenderCheckout({ order }: Props) {
 	const t = useT();
 
 	const compact = screenSize === 'sm';
+	const stage = useOrderCheckoutStage(order);
+	const finishSale = useFinishSale(order.uuid, compact);
 	// Every figure in this modal is carried as minor units and only becomes a
 	// display string here, so there is exactly one place a rounding rule applies.
 	const format = React.useCallback(
@@ -57,12 +62,16 @@ export function TenderCheckout({ order }: Props) {
 	// straight back to the cart would leave the cashier holding cash the order
 	// still counts as paid.
 	const handleClose = React.useCallback(() => {
+		if (stage === 'receipt') {
+			finishSale();
+			return;
+		}
 		if (flow.hasLiveLeg) {
 			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;
 		}
 		router.back();
-	}, [flow, router]);
+	}, [flow, router, stage, finishSale]);
 
 	const lines = React.useMemo(
 		() =>
@@ -116,6 +125,18 @@ export function TenderCheckout({ order }: Props) {
 			</View>
 		);
 	})();
+
+	if (stage === 'receipt') {
+		return (
+			<Modal onClose={handleClose}>
+				<ModalContent testID="checkout-dialog" size="full" className="h-full">
+					<ModalBody className="flex-1 px-0" contentContainerStyle={{ height: '100%' }}>
+						<ReceiptStage orderUuid={order.uuid} compact />
+					</ModalBody>
+				</ModalContent>
+			</Modal>
+		);
+	}
 
 	return (
 		<Modal onClose={handleClose}>

@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useObservableSuspense } from 'observable-hooks';
+
 import { ButtonGroupSeparator } from '@wcpos/components/button';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -16,6 +18,7 @@ import { OrderMetaButton } from './buttons/order-meta';
 import { PayButton } from './buttons/pay';
 import { SaveButton } from './buttons/save-order';
 import { VoidButton } from './buttons/void';
+import { useEngineRecord } from '../../hooks/use-engine-document';
 import { CheckoutLedger } from './checkout-ledger';
 import { useOrderCheckoutStage } from '../checkout/checkout-mode';
 import { CartHeader } from './cart-header';
@@ -28,7 +31,13 @@ import { useCurrentOrder } from '../contexts/current-order';
 const NO_API: SlotContracts['pos.cart.bar']['api'] = {};
 const NEVER_CHANGES = () => () => {};
 
-export function OpenOrders({ isColumn = false }) {
+export function OpenOrders({
+	isColumn = false,
+	receiptOrderUuid,
+}: {
+	isColumn?: boolean;
+	receiptOrderUuid?: string;
+}) {
 	// The cart's single writer. Mounted HERE, once, because CartTable, Totals and
 	// useOrderTotals below all mount useCartLines — and settlement state must not be
 	// duplicated across them. Keep it mounted in checkout too: swapping the cart
@@ -75,7 +84,11 @@ export function OpenOrders({ isColumn = false }) {
 		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
 			{position === 'top' && cartBar}
 			<ErrorBoundary>
-				{isColumn && !isNewOrder && stage === 'checkout' ? (
+				{isColumn && receiptOrderUuid ? (
+					<React.Suspense fallback={null}>
+						<ReceiptLedger uuid={receiptOrderUuid} />
+					</React.Suspense>
+				) : isColumn && !isNewOrder && stage === 'checkout' ? (
 					<CheckoutLedger order={currentOrderRecord as EngineRecord<'orders'>} />
 				) : isNewOrder ? (
 					<Card className="flex-1">
@@ -130,4 +143,11 @@ export function OpenOrders({ isColumn = false }) {
 			{position !== 'top' && cartBar}
 		</VStack>
 	);
+}
+
+function ReceiptLedger({ uuid }: { uuid: string }) {
+	const resource = useEngineRecord('orders', uuid);
+	const order = useObservableSuspense(resource);
+	if (!order) throw new Error('Receipt order is not defined');
+	return <CheckoutLedger order={order} />;
 }

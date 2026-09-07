@@ -16,6 +16,15 @@ let snapshot: CheckoutModeSnapshot = {
 	receiptOrders: new Set(),
 	selectedReceiptOrder: null,
 };
+// Receipt panes remount when cashiers switch tabs; an auto-print attempt belongs
+// to the sale, not the mount. Keep this transient and clear it when the sale ends.
+const receiptPrintAttempts = new Set<string>();
+export function claimReceiptAutoPrint(uuid: string) {
+	if (receiptPrintAttempts.has(uuid)) return false;
+	receiptPrintAttempts.add(uuid);
+	return true;
+}
+
 const listeners = new Set<() => void>();
 const publish = (next: CheckoutModeSnapshot) => {
 	snapshot = next;
@@ -48,6 +57,7 @@ export function enterReceipt(uuid: string) {
 	});
 }
 export function finishReceipt(uuid: string) {
+	receiptPrintAttempts.delete(uuid);
 	const receiptOrders = new Set(snapshot.receiptOrders);
 	receiptOrders.delete(uuid);
 	publish({
@@ -62,6 +72,7 @@ export function selectReceipt(uuid: string | null) {
 	publish({ ...snapshot, selectedReceiptOrder: uuid });
 }
 export function resetCheckoutMode() {
+	receiptPrintAttempts.clear();
 	publish({ checkoutOrders: new Set(), receiptOrders: new Set(), selectedReceiptOrder: null });
 }
 

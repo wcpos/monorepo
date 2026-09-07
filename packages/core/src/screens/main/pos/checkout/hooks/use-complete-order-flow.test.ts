@@ -3,6 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
 
 const mockReplace = jest.fn();
@@ -10,6 +11,10 @@ const mockRequire = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 let mockAutoShowReceipt = false;
+let mockScreenSize = 'lg';
+jest.mock('../../../../../contexts/theme', () => ({
+	useTheme: () => ({ screenSize: mockScreenSize }),
+}));
 
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace }),
@@ -43,6 +48,9 @@ describe('useCompleteOrderFlow', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockAutoShowReceipt = false;
+		mockScreenSize = 'lg';
+		resetCheckoutMode();
+		enterCheckout('uuid-42');
 		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
 	});
 
@@ -62,7 +70,8 @@ describe('useCompleteOrderFlow', () => {
 		expect(mockRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
 	});
 
 	it('skips refresh for an unpersisted offline order and can route to its receipt', async () => {
@@ -74,11 +83,18 @@ describe('useCompleteOrderFlow', () => {
 
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
+	});
+
+	it('closes the phone sheet when receipts are disabled', async () => {
+		mockScreenSize = 'sm';
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
+		await act(async () => result.current());
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({
-			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-			params: { orderId: 'uuid-42' },
-		});
+		expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
 	});
 
 	it('rejects a default refresh when the order has no remote id', async () => {
@@ -105,7 +121,31 @@ describe('useCompleteOrderFlow', () => {
 
 		expect(release).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
 		jest.useRealTimers();
 	});
 });
+
+it.each([true, false])(
+	'preserves the legacy modal completion when autoShowReceipt=%s',
+	async (autoShowReceipt) => {
+		mockAutoShowReceipt = autoShowReceipt;
+		mockScreenSize = 'lg';
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record, 'modal'));
+		await act(async () => result.current());
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(getCheckoutModeSnapshot().receiptOrders.size).toBe(0);
+		expect(mockReplace).toHaveBeenCalledWith(
+			autoShowReceipt
+				? {
+						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+						params: { orderId: 'uuid-42' },
+					}
+				: { pathname: '/cart' }
+		);
+	}
+);

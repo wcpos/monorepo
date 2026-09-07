@@ -9,6 +9,7 @@ import { POSColumns } from './pos-columns';
 
 let mockPosition = 'left';
 let mockStage = 'cart';
+let mockReceipt: string | null = null;
 let mockIsNew = false;
 const mockPatchUI = jest.fn();
 type PanelProps = { children?: React.ReactNode; testID?: string; defaultSize?: number };
@@ -30,6 +31,7 @@ jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'a', isNew: mockIsNew, payload: {} } }),
 }));
 jest.mock('../checkout/checkout-mode', () => ({
+	useCheckoutMode: () => ({ selectedReceiptOrder: mockReceipt }),
 	useOrderCheckoutStage: (record: { isNew?: boolean }) => (record.isNew ? 'cart' : mockStage),
 }));
 jest.mock('../checkout/tender/use-tender-flow', () => ({ useTenderFlow: () => ({ dp: 2 }) }));
@@ -38,6 +40,11 @@ jest.mock('../../hooks/use-currency-format', () => ({
 }));
 jest.mock('../checkout/column/checkout-column', () => ({
 	CheckoutColumn: () => <div data-testid="checkout-tender-pane" />,
+}));
+jest.mock('../checkout/receipt-stage/receipt-stage', () => ({
+	ReceiptStage: ({ orderUuid }: { orderUuid: string }) => (
+		<div data-testid="checkout-receipt-stage">{orderUuid}</div>
+	),
 }));
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
@@ -61,6 +68,7 @@ jest.mock('@wcpos/components/panels', () => ({
 describe('POSColumns', () => {
 	beforeEach(() => {
 		mockStage = 'cart';
+		mockReceipt = null;
 		mockIsNew = false;
 		mockPosition = 'left';
 	});
@@ -86,6 +94,21 @@ describe('POSColumns', () => {
 				? ['pos-cart-panel', 'pos-products-panel']
 				: ['pos-products-panel', 'pos-cart-panel']
 		);
+	});
+	it('hosts the selected paid order even when the current order is a new draft', () => {
+		mockIsNew = true;
+		mockReceipt = 'paid-order';
+		const { rerender } = render(<POSColumns />);
+		expect(
+			screen
+				.getByTestId('pos-products-panel')
+				.contains(screen.getByTestId('checkout-receipt-stage'))
+		).toBe(true);
+		expect(screen.getByTestId('checkout-receipt-stage').textContent).toBe('paid-order');
+		mockReceipt = null;
+		rerender(<POSColumns />);
+		expect(screen.queryByTestId('checkout-receipt-stage')).toBeNull();
+		expect(screen.getByTestId('products')).not.toBeNull();
 	});
 	it('never enters checkout for the new-order placeholder', () => {
 		mockIsNew = true;

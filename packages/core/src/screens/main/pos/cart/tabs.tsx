@@ -32,7 +32,7 @@ export function OpenOrderTabs() {
 	 */
 	const handleTabPress = React.useCallback(
 		(orderId: string) => {
-			if (receiptOrders.has(orderId) && !openOrders.some((order) => order.id === orderId)) {
+			if (receiptOrders.has(orderId)) {
 				selectReceipt(orderId);
 				return;
 			}
@@ -43,7 +43,7 @@ export function OpenOrderTabs() {
 				setCurrentOrderID(orderId);
 			}
 		},
-		[setCurrentOrderID, receiptOrders, openOrders]
+		[setCurrentOrderID, receiptOrders]
 	);
 
 	/**

@@ -14,10 +14,6 @@ const mockDownload = jest.fn();
 const mockPrint = jest.fn();
 const mockUseTemplateRenderer = jest.fn();
 const mockUseUISettings = jest.fn(() => ({ uiSettings: { autoPrintReceipt: false } }));
-type NavigationState = { routeNames: string[] };
-const mockUseNavigationState = jest.fn((selector: (state: NavigationState) => unknown) =>
-	selector({ routeNames: [] })
-);
 const mockUseDownloadReceiptPdf = jest.fn(() => ({
 	download: mockDownload,
 	isDownloading: false,
@@ -205,11 +201,6 @@ jest.mock('@wcpos/printer', () => ({
 	}),
 }));
 
-jest.mock('expo-router/react-navigation', () => ({
-	useNavigationState: (selector: (state: NavigationState) => unknown) =>
-		mockUseNavigationState(selector),
-}));
-
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: () => mockSuspenseValue,
 	useObservableEagerState: (subject: BehaviorSubject<unknown>) => subject?.getValue?.(),
@@ -280,60 +271,15 @@ describe('Receipt preview content size', () => {
 	});
 });
 
-describe('Receipt auto-print', () => {
-	beforeEach(() => {
+describe('Receipt reprint host', () => {
+	it('does not auto-print even when the setting is enabled', async () => {
 		jest.clearAllMocks();
-		capturedLoadHandlers.length = 0;
-		mockOrder.payload.id = 42;
 		mockSuspenseValue = mockOrder;
 		mockUseUISettings.mockReturnValue({ uiSettings: { autoPrintReceipt: true } });
-		mockUseNavigationState.mockImplementation((selector) => selector({ routeNames: ['Checkout'] }));
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: false });
-	});
-	afterEach(() => {
-		mockOrder.payload.id = 42;
-	});
-
-	it('waits for final data after the receipt frame loads and prints exactly once', () => {
-		const { rerender } = render(<Receipt resource={{} as never} />);
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).not.toHaveBeenCalled();
-
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
-		rerender(<Receipt resource={{} as never} />);
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-	});
-
-	it('waits for the receipt frame to load when final data is already available', () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
-
+		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
 		render(<Receipt resource={{} as never} />);
-
+		await act(async () => capturedLoadHandlers.at(-1)!());
 		expect(mockPrint).not.toHaveBeenCalled();
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-	});
-
-	it('waits for the new receipt frame to load after the order changes', () => {
-		mockUseTemplateRenderer.mockReturnValue({ ...defaultTemplateRenderer, hasFinalData: true });
-		const { rerender } = render(<Receipt resource={{} as never} />);
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-
-		act(() => {
-			mockOrder.payload.id = 43;
-			rerender(<Receipt resource={{} as never} />);
-		});
-		expect(mockPrint).toHaveBeenCalledTimes(1);
-
-		act(() => capturedLoadHandlers.at(-1)!());
-		expect(mockPrint).toHaveBeenCalledTimes(2);
 	});
 });
 
@@ -402,6 +348,7 @@ describe('Receipt PDF download action', () => {
 		fireEvent.click(screen.getByTestId('receipt-print-button'));
 		await act(async () => Promise.resolve());
 		expect(loggedBeforeTransport).toBe(true);
+		expect(screen.getByTestId('receipt-print-button').textContent).toBe('receipt.print_again');
 		expect(getLogger([]).info).toHaveBeenCalledWith(
 			'Receipt print attempted',
 			expect.objectContaining({

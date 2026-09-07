@@ -67,7 +67,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const orderData = useRecordField(order, (record) => record.payload);
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
-	const completeOrderFlow = useCompleteOrderFlow(order);
+	const completeOrderFlow = useCompleteOrderFlow(order, 'modal');
 
 	const gatewayId = React.useMemo(
 		() => orderData.payment_method || 'pos_cash',

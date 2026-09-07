@@ -4,12 +4,13 @@
 import * as React from 'react';
 import { BackHandler, Platform } from 'react-native';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
 import { CheckoutLedger } from '../../cart/checkout-ledger';
+import { useCheckoutBack } from './use-checkout-back';
 import { CheckoutColumn } from './checkout-column';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { initialTenderState } from '../tender/tender-state';
@@ -238,4 +239,11 @@ it('owns Android hardware back only while mounted', () => {
 	expect(remove).toHaveBeenCalled();
 	listener.mockRestore();
 	os.restore();
+});
+
+it('does not silently finish a receipt on Escape', () => {
+	const finishSale = jest.fn();
+	renderHook(() => useCheckoutBack(finishSale, { escape: false }));
+	fireEvent.keyDown(document, { key: 'Escape' });
+	expect(finishSale).not.toHaveBeenCalled();
 });

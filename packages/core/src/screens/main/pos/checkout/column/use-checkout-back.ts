@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { BackHandler, Platform } from 'react-native';
 
-export function useCheckoutBack(back: () => void) {
+export function useCheckoutBack(back: () => void, { escape = true } = {}) {
 	// Native hardware and DOM keyboard events are external sources; subscribe only
 	// while this checkout pane is mounted, and leave navigation itself unguarded.
 	React.useEffect(() => {
@@ -24,10 +24,11 @@ export function useCheckoutBack(back: () => void) {
 			event.preventDefault();
 			back();
 		};
-		if (typeof document !== 'undefined') document.addEventListener('keydown', keydown);
+		if (escape && typeof document !== 'undefined') document.addEventListener('keydown', keydown);
 		return () => {
 			hardware?.remove();
-			if (typeof document !== 'undefined') document.removeEventListener('keydown', keydown);
+			if (escape && typeof document !== 'undefined')
+				document.removeEventListener('keydown', keydown);
 		};
-	}, [back]);
+	}, [back, escape]);
 }

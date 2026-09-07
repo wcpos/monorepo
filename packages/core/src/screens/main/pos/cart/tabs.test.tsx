@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { OpenOrderTabs } from './tabs';
 import {
 	enterReceipt,
+	finishReceipt,
 	getCheckoutModeSnapshot,
 	resetCheckoutMode,
 } from '../checkout/checkout-mode';
@@ -96,6 +97,9 @@ it('appends receipt-only tabs after open orders, avoids duplicates, and selects 
 	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('late');
 	expect(screen.getByTestId('tabs').dataset.value).toBe('late');
 	expect(mockSetOrder).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByTestId('open-order-tab-open'));
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('open');
+	act(() => finishReceipt('open'));
 	fireEvent.click(screen.getByTestId('open-order-tab-open'));
 	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
 	expect(mockSetOrder).toHaveBeenCalledWith('open');

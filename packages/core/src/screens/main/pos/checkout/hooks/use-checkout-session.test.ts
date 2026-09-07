@@ -21,6 +21,7 @@ const mockResolveStockOwnerId = jest.fn((productId: number, variationId: number)
 	Promise.resolve(variationId || productId)
 );
 
+jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace }),
 }));

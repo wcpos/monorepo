@@ -9,7 +9,8 @@ import '../register-panel-entries';
 import { Slot } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrder } from '../contexts/current-order';
-import { useOrderCheckoutStage } from '../checkout/checkout-mode';
+import { useCheckoutMode, useOrderCheckoutStage } from '../checkout/checkout-mode';
+import { ReceiptStage } from '../checkout/receipt-stage/receipt-stage';
 import { CheckoutColumn } from '../checkout/column/checkout-column';
 
 import type { ReadonlyView, SlotContracts } from '../../../../extensions/slots';
@@ -37,6 +38,7 @@ const PANEL_VIEWS: Record<
 
 export function POSColumns() {
 	const { currentOrderRecord } = useCurrentOrder();
+	const { selectedReceiptOrder } = useCheckoutMode();
 	const orderStage = useOrderCheckoutStage(currentOrderRecord);
 	const stage = (currentOrderRecord as { isNew?: boolean }).isNew ? 'cart' : orderStage;
 	const { uiSettings, patchUI } = useUISettings('pos-products');
@@ -86,12 +88,14 @@ export function POSColumns() {
 								>
 									{descriptor.id === PRODUCTS_ENTRY_ID ? (
 										<Animated.View
-											key={stage}
+											key={selectedReceiptOrder ? `receipt:${selectedReceiptOrder}` : stage}
 											entering={FadeIn.duration(CHECKOUT_SWAP_FADE_MS)}
 											exiting={FadeOut.duration(CHECKOUT_SWAP_FADE_MS)}
 											style={{ flex: 1 }}
 										>
-											{stage === 'checkout' ? (
+											{selectedReceiptOrder ? (
+												<ReceiptStage orderUuid={selectedReceiptOrder} compact={false} />
+											) : stage === 'checkout' ? (
 												<CheckoutColumn order={currentOrderRecord as EngineRecord<'orders'>} />
 											) : (
 												element

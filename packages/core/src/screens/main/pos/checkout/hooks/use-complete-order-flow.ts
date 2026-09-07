@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 
+import { useTheme } from '../../../../../contexts/theme';
+import { enterReceipt, leaveCheckout } from '../checkout-mode';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
@@ -22,17 +24,27 @@ export interface CompleteOrderFlowOptions {
 
 /** Finish checkout from the freshest available order before leaving the cart. */
 export function useCompleteOrderFlow(
-	order: EngineRecord<'orders'>
+	order: EngineRecord<'orders'>,
+	receiptHost: 'stage' | 'modal' = 'stage'
 ): (options?: CompleteOrderFlowOptions) => Promise<void> {
 	const runtime = useQueryRuntime();
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
+	const { screenSize } = useTheme();
 	const { setCurrentOrderID } = useCurrentOrderActions();
 	const orderId = useRecordField(order, (record) => record.payload.id);
 
 	return React.useCallback(
 		async ({ refresh = true }: CompleteOrderFlowOptions = {}) => {
+			// Enter the receipt stage BEFORE the refresh below. The final payment has already
+			// patched the order out of `pos-open`, so the current-order provider is about to fall
+			// back to the new-order placeholder; if the stage waited for the (up to 10 s) refresh,
+			// the columns would show an empty cart while the paid order was nowhere on screen.
+			// The stage renders from its own record and shows the syncing badge until data lands.
+			if (receiptHost === 'stage' && uiSettings.autoShowReceipt) {
+				enterReceipt(order.uuid);
+			}
 			if (refresh) {
 				if (!orderId) {
 					throw new Error('checkout_refresh_requires_persisted_order');
@@ -65,22 +77,34 @@ export function useCompleteOrderFlow(
 				)
 			);
 			stockAdjustment(reducedStockItems);
-			setCurrentOrderID('');
 
-			if (uiSettings.autoShowReceipt) {
-				router.replace({
-					pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-					params: { orderId: order.uuid! },
-				});
-			} else {
-				router.replace({ pathname: '/cart' });
+			// The pre-tender contract checkout still hosts receipts in a routed modal.
+			if (receiptHost === 'modal') {
+				setCurrentOrderID('');
+				router.replace(
+					uiSettings.autoShowReceipt
+						? {
+								pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+								params: { orderId: order.uuid },
+							}
+						: { pathname: '/cart' }
+				);
+				return;
+			}
+
+			if (!uiSettings.autoShowReceipt) {
+				leaveCheckout(order.uuid);
+				setCurrentOrderID('');
+				if (screenSize === 'sm') router.replace({ pathname: '/cart' });
 			}
 		},
 		[
+			receiptHost,
 			runtime,
 			order,
 			orderId,
 			router,
+			screenSize,
 			setCurrentOrderID,
 			stockAdjustment,
 			uiSettings.autoShowReceipt,
