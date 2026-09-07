@@ -61,9 +61,12 @@ const couponTest = liveTest.extend<object, { probeCoupon: CouponProbe | null }>(
 				return;
 			}
 			const request = await playwrightRequest.newContext();
+			// The project's storeUrl is already the resolved store (playwright.config.ts gives a
+			// variant-specific E2E_STORE_URL_PRO precedence over E2E_STORE_URL); re-resolving the
+			// environment here would provision probes on one origin and check out on another.
 			const storeUrl =
-				process.env.E2E_STORE_URL ||
 				(workerInfo.project.use as { storeUrl?: string }).storeUrl ||
+				process.env.E2E_STORE_URL ||
 				'https://dev-next.wcpos.com';
 			let created: CouponProbe | null = null;
 			let product: SearchProbe | null = null;
