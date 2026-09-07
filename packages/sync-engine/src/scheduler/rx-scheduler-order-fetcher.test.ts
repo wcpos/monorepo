@@ -787,6 +787,7 @@ describe('createOrdersSchedulerFetcher', () => {
 					{
 						id: 123,
 						status: 'completed',
+						date_paid_gmt: '2026-09-01T10:02:00',
 						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
 					},
 				]),
@@ -799,7 +800,10 @@ describe('createOrdersSchedulerFetcher', () => {
 				mode: 'on-demand',
 			})
 		);
-		expect(discardHeldOpenCartRows).toHaveBeenCalledExactlyOnceWith(uuidFor(123));
+		expect(discardHeldOpenCartRows).toHaveBeenCalledExactlyOnceWith(uuidFor(123), {
+			status: 'completed',
+			datePaid: '2026-09-01T10:02:00',
+		});
 		// The materialized document carries status under `payload`; the promoted
 		// top-level `status` is added by the collection descriptor at write time.
 		expect(repository.upsertMany).toHaveBeenCalledWith([
