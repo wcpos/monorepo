@@ -1,5 +1,12 @@
 import get from 'lodash/get';
-import { removeCollectionStorages } from 'rxdb';
+import {
+	createRevision,
+	flatCloneDocWithMeta,
+	getPrimaryKeyOfInternalDocument,
+	INTERNAL_CONTEXT_PIPELINE_CHECKPOINT,
+	now,
+	removeCollectionStorages,
+} from 'rxdb';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -165,8 +172,7 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 
 /**
  * Create a new FlexSearch instance for a collection and locale.
- * If a FlexSearch collection already exists (e.g., after main collection reset),
- * it will be destroyed first to avoid DB3 "collection already exists" error.
+ * Reopen healthy persisted indexes; rebuild append histories larger than the source.
  */
 async function createSearchInstance(
 	collection: RxCollection,
@@ -187,27 +193,36 @@ async function createSearchInstance(
 		},
 	});
 
-	// Check if FlexSearch collection already exists (can happen after main collection reset)
-	// If so, remove it first to avoid DB3 error
-	if (database.collections[searchCollectionName]) {
-		searchLogger.debug('FlexSearch collection already exists, removing first', {
-			context: { searchCollection: searchCollectionName },
-		});
-		try {
-			await database.collections[searchCollectionName].remove();
-		} catch (removeError: any) {
-			searchLogger.warn('Failed to remove existing FlexSearch collection', {
-				context: {
-					searchCollection: searchCollectionName,
-					error: removeError.message,
-				},
-			});
+	const resetPipelineCheckpoint = async () => {
+		// Removing collection storage does not remove RxDB's pipeline checkpoint.
+		// Reset it too, otherwise the new empty index resumes AFTER the source rows.
+		const checkpointId = getPrimaryKeyOfInternalDocument(
+			`rx-pipeline-${getSearchIdentifier(collection.name, locale)}FlexSearch`,
+			INTERNAL_CONTEXT_PIPELINE_CHECKPOINT
+		);
+		const [checkpoint] = await database.internalStore.findDocumentsById([checkpointId], false);
+		if (checkpoint) {
+			const deleted = flatCloneDocWithMeta(checkpoint);
+			deleted._deleted = true;
+			deleted._meta.lwt = now();
+			deleted._rev = createRevision(database.token, checkpoint);
+			const result = await database.internalStore.bulkWrite(
+				[{ previous: checkpoint, document: deleted }],
+				'search-rebuild'
+			);
+			if (result.error.length) throw result.error[0];
 		}
+	};
+	const existing = database.collections[searchCollectionName];
+	if (existing) {
+		// A registered index belongs to a source collection that was just reset.
+		await resetPipelineCheckpoint();
+		await existing.remove();
 	}
 
 	await removeStaleSearchCollections(collection, locale);
 
-	const searchInstance = await addFulltextSearch({
+	const searchOptions: Parameters<typeof addFulltextSearch>[0] = {
 		identifier: getSearchIdentifier(collection.name, locale),
 		collection,
 		docToString: (doc: any) => {
@@ -231,7 +246,24 @@ async function createSearchInstance(
 			minlength: FLEXSEARCH_MIN_TERM_LENGTH,
 			language: locale,
 		},
-	});
+	};
+	let searchInstance = (await addFulltextSearch(searchOptions)) as FlexSearchInstance & {
+		close(): Promise<void>;
+		pipeline: { close(): Promise<void> };
+	};
+	const appendDocs = await searchInstance.collection.find({ selector: { type: 'append' } }).exec();
+	const appendedEntries = appendDocs.reduce((total, doc) => total + doc.get('dataAr').length, 0);
+	const sourceCount = await collection.count().exec();
+	if (appendedEntries > sourceCount) {
+		searchLogger.info('Rebuilding oversized search index', {
+			context: { collection: collection.name, locale, appendedEntries, sourceCount },
+		});
+		await searchInstance.close();
+		await searchInstance.pipeline.close();
+		await resetPipelineCheckpoint();
+		await searchInstance.collection.remove();
+		searchInstance = (await addFulltextSearch(searchOptions)) as typeof searchInstance;
+	}
 
 	searchLogger.debug('Search instance created successfully', {
 		context: { collection: collection.name, locale },

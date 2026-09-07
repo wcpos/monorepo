@@ -42,7 +42,11 @@ import {
 import { parseReferenceLaneQueryKey } from './reference-lane-descriptor';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import { createOrderPendingMutationIds } from '../write-path/order-pull-guard';
-import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
+import {
+	hasPendingLocalWork,
+	withoutLocallyProtected,
+	withoutUnchanged,
+} from '../write-path/local-work-guard';
 import {
 	type ManifestCollection,
 	upsertManifestRows,
@@ -180,7 +184,7 @@ type BulkUpsertCollection<T extends { uuid: string }> = {
 };
 
 /** The generic pull-apply adapter every non-order fetcher writes through. */
-function collectionSchedulerRepository<T extends { uuid: string }>(
+export function collectionSchedulerRepository<T extends { uuid: string }>(
 	collection: BulkUpsertCollection<T>
 ): {
 	upsertMany(documents: T[]): Promise<T[]>;
@@ -188,9 +192,13 @@ function collectionSchedulerRepository<T extends { uuid: string }>(
 } {
 	return {
 		async upsertMany(documents: T[]): Promise<T[]> {
-			const applicable = await withoutLocallyProtected(collection, documents);
-			if (applicable.length > 0)
-				assertBulkSuccess(await collection.bulkUpsert(applicable), 'engine-scheduler-drain upsert');
+			if (documents.length === 0) return [];
+			const stored = await collection.findByIds(documents.map(({ uuid }) => uuid)).exec();
+			const applicable = await withoutLocallyProtected(collection, documents, stored);
+			const changed = withoutUnchanged(collection, stored, applicable);
+			if (changed.length > 0)
+				assertBulkSuccess(await collection.bulkUpsert(changed), 'engine-scheduler-drain upsert');
+			// Applied means server truth is resident, including rows that needed no write.
 			return applicable;
 		},
 		async removeMany(documents: T[]): Promise<void> {
