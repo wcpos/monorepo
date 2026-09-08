@@ -185,6 +185,14 @@ export function useCheckoutMode() {
 		getCheckoutModeSnapshot
 	);
 }
+/**
+ * The store entry, with one derivation: a save still `saving` while the till is offline reads as
+ * `queued-offline`. The engine's connectivity port is pull-only and its status only notices a flip
+ * on the next automatic tick, so without this the pane would keep its skeletons for up to a tick
+ * after the network dropped. Only `'offline'` flips it; `'online-website-unavailable'` stays
+ * `saving` because that is exactly the "store is not answering" case. The pending settlement is
+ * untouched and still resolves on engine events (roadmap#171).
+ */
 export function useOrderSaveState(uuid: string | undefined): OrderSaveState | null {
 	const mode = useCheckoutMode();
 	const { status } = useOnlineStatus();
