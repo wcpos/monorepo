@@ -39,8 +39,7 @@ const PANEL_VIEWS: Record<
 export function POSColumns() {
 	const { currentOrderRecord } = useCurrentOrder();
 	const { selectedReceiptOrder } = useCheckoutMode();
-	const orderStage = useOrderCheckoutStage(currentOrderRecord);
-	const stage = (currentOrderRecord as { isNew?: boolean }).isNew ? 'cart' : orderStage;
+	const stage = useOrderCheckoutStage(currentOrderRecord);
 	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const position = useDocField(uiSettings, (value) => value.position);
 	const productsOnRight = position === 'right';

@@ -273,9 +273,10 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 	 * The window the ruling is really about: the cashier pressed Checkout while
 	 * storage was healthy and the worker died mid-push. The rendered `disabled`
 	 * state cannot help here — the guard has to re-read the latch after the await
-	 * or the cashier can tender against an order that never persisted.
+	 * or the cashier lands in the payment modal for an order that never persisted.
+	 * (This lane has no payment-methods contract, so it still waits for the save.)
 	 */
-	it('returns to the cart when the worker dies mid-checkout', async () => {
+	it('does not open the payment modal when the worker dies mid-checkout', async () => {
 		let resolvePush: (value: unknown) => void = () => undefined;
 		mockPushDocument.mockImplementation(
 			() =>
@@ -294,8 +295,8 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 		});
 
 		await waitFor(() => expectBlockedLog());
-		expect(mockPush).toHaveBeenCalledTimes(1);
-		expect(mockReplace).toHaveBeenCalledWith('/cart');
+		expect(mockPush).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
 	});
 });
 

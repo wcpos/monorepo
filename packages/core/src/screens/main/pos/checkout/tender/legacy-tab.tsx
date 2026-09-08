@@ -74,7 +74,9 @@ export function LegacyTab({ flow, order }: Props) {
 		);
 	}
 
-	if (!paymentURL && flow.saving) {
+	// Link or no link: a frame for the previous server copy could take payment
+	// against stale totals while the edited order is still saving.
+	if (flow.saving) {
 		return <View className="bg-muted m-4 flex-1 rounded-md" testID="checkout-legacy-skeleton" />;
 	}
 	if (!paymentURL) {

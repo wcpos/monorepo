@@ -143,9 +143,8 @@ export function useOrderCheckoutStage(
 ) {
 	const mode = useCheckoutMode();
 	const meta = useRecordField(record, (order) => order.payload.meta_data);
-	return resolveStage(
-		(record as { isNew?: boolean } | undefined)?.isNew ? undefined : record?.uuid,
-		mode,
-		readLedger(meta)
-	);
+	// A draft has no ledger to derive from, but Pay can flag it before its first
+	// save lands; the explicit store entry must swap the columns for it too.
+	const isNew = Boolean((record as { isNew?: boolean } | undefined)?.isNew);
+	return resolveStage(record?.uuid, mode, isNew ? [] : readLedger(meta));
 }

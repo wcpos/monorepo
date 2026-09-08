@@ -37,6 +37,7 @@ export function PayButton() {
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const { loaded, unsupportedSchema } = usePaymentMethods();
+	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const t = useT();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
@@ -56,21 +57,26 @@ export function PayButton() {
 		const uuid = currentOrderRecord.uuid;
 		if (getCheckoutModeSnapshot().savingOrders.has(uuid)) return;
 
-		// Optimistic: the tender pane opens now and shows skeletons while the order
-		// saves; the tiles stay inert until the server copy (and its id) exists.
+		const sheetRoute = {
+			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+			params: { orderId: uuid },
+		} as const;
+		// Optimistic only where the tender flow hosts the checkout: it reads the saving
+		// flag and keeps every tile inert until the server copy (and its id) exists. The
+		// legacy webview checkout has no such gate, so that lane still waits for the save.
+		const tenderFlow = loaded && !unsupportedSchema;
 		markOrderSaving(uuid);
-		if (screenSize !== 'sm' && loaded && !unsupportedSchema) {
+		if (tenderFlow && screenSize !== 'sm') {
 			enterCheckout(uuid);
+		} else if (tenderFlow) {
+			router.push(sheetRoute);
 		} else {
-			router.push({
-				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
-				params: { orderId: uuid },
-			});
+			setLoading(true);
 		}
 		// A save that fails or is blocked puts the cashier back at the cart to retry.
 		const abandon = () => {
 			leaveCheckout(uuid);
-			if (screenSize === 'sm') router.replace('/cart');
+			if (tenderFlow && screenSize === 'sm') router.replace('/cart');
 		};
 		const orderLogger = checkoutLogger.with({
 			orderId: currentOrderRecord.uuid,
@@ -95,6 +101,7 @@ export function PayButton() {
 							lineItemCount: lineItems?.length ?? 0,
 						},
 					});
+					if (!tenderFlow) router.push(sheetRoute);
 				} else {
 					abandon();
 				}
@@ -112,6 +119,7 @@ export function PayButton() {
 			});
 		} finally {
 			clearOrderSaving(uuid);
+			setLoading(false);
 		}
 	}, [
 		blockIfDegraded,
@@ -136,6 +144,7 @@ export function PayButton() {
 			onPress={handlePay}
 			variant="success"
 			className="flex-3 rounded-t-none rounded-bl-none"
+			loading={loading}
 			disabled={storageDegraded}
 		>
 			{t('pos_cart.checkout', {

@@ -82,7 +82,7 @@ it('publishes immutable snapshots, skips duplicate entry, and unsubscribes', () 
 	expect(listener).toHaveBeenCalledTimes(1);
 });
 
-it('subscribes the current order stage but never checks out a draft', () => {
+it('subscribes the current order stage; a draft flagged by Pay swaps too, its ledger ignored', () => {
 	mockDraft = false;
 	const { result, rerender } = renderHook(() =>
 		useOrderCheckoutStage({ ...mockRecord, isNew: mockDraft } as unknown as EngineRecord<'orders'>)
@@ -92,6 +92,8 @@ it('subscribes the current order stage but never checks out a draft', () => {
 	expect(result.current).toBe('checkout');
 	mockDraft = true;
 	rerender();
+	expect(result.current).toBe('checkout');
+	act(() => leaveCheckout('a'));
 	expect(result.current).toBe('cart');
 });
 
