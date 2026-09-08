@@ -44,15 +44,13 @@ env:
     visible:
       id: "product-tile"
     timeout: 60000
-# Keyboard down BEFORE the tile tap — same overlay no-op as flow 04
-# (monorepo#1614 defect 2); flow 07 set the pattern.
-# optional — see flow 01: hideKeyboard is flaky on iOS and this is
-# housekeeping; a genuinely covered target fails at its own tap.
-- hideKeyboard:
-    optional: true
+# A cashier taps a search result with the keyboard still open. The list must
+# deliver that first tap; dismissing the keyboard beforehand hides this bug.
 - tapOn:
     id: "product-tile"
     index: 0
+# Submit/dismiss only AFTER the product tap so the phone cart tab is reachable.
+- pressKey: Enter
 - runFlow:
     when:
       visible:
@@ -136,11 +134,13 @@ env:
 # iOS: hideKeyboard is unreliable and the numeric pad has no return key; the
 # keypad hides the phone tab bar, so the ending below could not reach the
 # products tab (local runs 2026-09-03, flow 06 red at its own ending twice).
-# Only a tap INSIDE the cart's ScrollView dismisses it — React Native's
-# keyboardShouldPersistTaps default swallows that tap as the dismissal; the
-# subtotal lives in the footer outside the scroll view and did nothing.
+# A blank-area tap INSIDE the cart list still dismisses the keyboard with
+# keyboardShouldPersistTaps="handled"; interactive children receive their taps.
 - tapOn:
     id: "cart-table-scroll"
+- assertVisible:
+    id: "cart-quantity-input"
+    text: "3"
 # Totals recalculate; subtotal stays visible and the cart is intact.
 - assertVisible:
     id: "cart-subtotal"

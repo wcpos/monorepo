@@ -77,6 +77,8 @@ function List<T>({
 		<Parent {...wrapperProps}>
 			<FlashList
 				ref={flashRef}
+				// Search results and cart controls must receive the first tap, not just dismiss the keyboard.
+				keyboardShouldPersistTaps="handled"
 				data={data}
 				{...(renderScrollComponent ? { renderScrollComponent, nestedScrollEnabled: true } : {})}
 				style={{ flex: 1 }}

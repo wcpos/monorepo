@@ -1,0 +1,38 @@
+appId: com.wcpos.main.dev
+---
+- runFlow:
+    file: ../subflows/ensure-pos-ready.yml
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-cart"
+    commands:
+      - tapOn:
+          id: "pos-tab-cart"
+- tapOn:
+    id: "cart-customer-clear"
+- extendedWaitUntil:
+    visible:
+      id: "customer-select-search"
+      focused: true
+    timeout: 10000
+- inputText: "e2e"
+# Guest is always available, independently of the store's customer records.
+# Do not dismiss the keyboard or retry the option tap: the first tap must select.
+- tapOn:
+    id: "customer-select-option-guest"
+- extendedWaitUntil:
+    notVisible:
+      id: "customer-select-option-guest"
+    timeout: 5000
+- assertVisible:
+    id: "cart-customer-name"
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
+- assertVisible:
+    id: "search-products"

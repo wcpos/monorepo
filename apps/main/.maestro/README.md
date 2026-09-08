@@ -55,7 +55,7 @@ is broken, whatever its verdict says.
 ## 2. Run it locally first
 
 ```bash
-scripts/e2e-native-local.sh --platform ios            # phone, flows 01–09, records screen.mp4
+scripts/e2e-native-local.sh --platform ios            # phone, flows 01–10, records screen.mp4
 scripts/e2e-native-local.sh --platform ios --device tablet
 scripts/e2e-native-local.sh --platform android --flow apps/main/.maestro/flows/07-variation-add-to-cart.yml
 ```
@@ -88,7 +88,7 @@ app's code.
    `pnpm --filter @wcpos/main test:e2e:native:check` verifies that every id a
    flow references exists in the app source, and resolves ids written as
    `${VAR}` through every `VAR: value` assignment in the flows.
-3. **Every POS flow (04–09) ends on the POS products screen with
+3. **Every POS flow (04–10) ends on the POS products screen with
    `search-products` visible**, established by `subflows/ensure-pos-ready.yml`,
    so the next flow starts from a known state. The onboarding flows are the
    exception by design: 01 ends on `store-url-input` for 02 to continue, and
@@ -190,6 +190,14 @@ no separate performance suite. For local native runs, start Metro with
 in `apps/main` before running the local script. CI already sets the E2E flag.
 The web test opts in at runtime, including on preview deployments; normal
 sessions do not display the timing readout.
+If Metro is running with `CI=1`, restart it after source edits: that mode
+disables file watching, so reloading the app alone can serve the old bundle.
+
+Flow 06 taps the product with the search keyboard open, then submits to dismiss
+it before phone navigation. Flow 10 selects a customer-picker result with the
+keyboard open. Neither interaction may need a second tap: native virtualized
+lists use `keyboardShouldPersistTaps="handled"` so interactive children receive
+the first press; unhandled blank-area taps still dismiss the keyboard.
 
 The shared metric is **add-handler entry → React cart-table commit containing
 the expected simple-product quantity**. It includes local processing and the
@@ -257,6 +265,7 @@ Known classes, by what the screenshot shows:
 | Flow 08 `new-order-tab` not visible after a void                                                                                         | Tab off the scrolled strip; the strip did not re-centre                                                             | App fix in the tabs component plus `scrollable-tabs-next` steps (#1814)                                                       |                                                                  |
 | Flow 07 popover still open after Add; cart holds only flow 06's line                                                                     | Add press lost inside RN on the starved runner                                                                      | Logged re-tap after 10 s (#1832); app-side pending guard                                                                      | double the wait                                                  |
 | Flow 06 `cart-quantity-input` reads "3" but the assert fails on iPad                                                                     | Value is `3331`: the tap landed left of the digit, `eraseText` deleted nothing                                      | `selectTextOnFocus` on the native number input                                                                                | trust a screenshot of a narrow field; read the hierarchy         |
+| Product/customer result's first tap only dismisses the keyboard; second tap acts | Native ScrollView's default `keyboardShouldPersistTaps="never"` captures the first press | Shared native virtualized list uses `handled`; flows 06 and 10 exercise keyboard-open selection | dismiss the keyboard before the test action; treat a recovery tap as a valid performance sample |
 | iOS flow 08 keyboard up over the tab bar; taps hit keys                                                                                  | Search-clear refocus vs Enter race                                                                                  | Focus-verified dismissal, iOS-only (#1833)                                                                                    |                                                                  |
 | iPad flow 02 consent alert already up after the URL was typed                                                                            | App reached sign-in without the flow's Connect/Add-user taps (trigger not established)                              | Flow 02 logs, skips those taps, and falls into the consent handling (#1841)                                                   |                                                                  |
 | Android tablet flow 09, cold start shows the default ~60% split; post-relaunch band assert fails                                         | The relaunch killed the process ~300 ms after the swipe, before the single async RxState width write landed         | 3 s write settle before the relaunch in flow 09 (the write has no UI observable)                                              | read it as a persistence bug; the app has no debounce to shorten |
