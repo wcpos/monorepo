@@ -22,9 +22,8 @@ import {
 	setTenderMethod,
 	subscribeCheckoutMode,
 	useOrderCheckoutStage,
-	useOrderSaveState,
-	useOrderSaving,
 } from './checkout-mode';
+import { useOrderSaveState, useOrderSaving } from './use-order-save-state';
 
 let mockDraft = false;
 const mockRecord = { uuid: 'a', payload: { meta_data: [] } };

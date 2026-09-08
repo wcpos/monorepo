@@ -9,7 +9,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
-import { useOrderSaving } from '../checkout/checkout-mode';
+import { useOrderSaving } from '../checkout/use-order-save-state';
 import { useLedgerView } from '../checkout/tender/use-ledger-view';
 import { LedgerLegs, LedgerLines } from '../checkout/tender/ledger-pane';
 

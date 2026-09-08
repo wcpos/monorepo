@@ -29,9 +29,9 @@ import {
 	leaveCheckout,
 	type OrderSaveState,
 	setTenderMethod,
-	useOrderSaveState,
 	useTenderMethod,
 } from '../checkout-mode';
+import { useOrderSaveState } from '../use-order-save-state';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';

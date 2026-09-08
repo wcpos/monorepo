@@ -6,7 +6,8 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
-import { resolveStage, useCheckoutMode, useOrderSaveState } from '../checkout/checkout-mode';
+import { resolveStage, useCheckoutMode } from '../checkout/checkout-mode';
+import { useOrderSaveState } from '../checkout/use-order-save-state';
 
 /**
  * The chip tells the cashier about an order they are NOT looking at. On the active tab the
