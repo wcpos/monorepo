@@ -63,15 +63,18 @@ describe('sentry-sink.native', () => {
 		expect(Sentry.init).toHaveBeenCalledWith(
 			expect.objectContaining({
 				dsn: 'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733',
-				release: 'wcpos-app@1.10.3',
-				dist: '42',
 				environment: platform,
 				sendDefaultPii: false,
 				enableWatchdogTerminationTracking: true,
 				beforeSend: expect.any(Function),
 			})
 		);
-		expect(jest.mocked(Sentry.init).mock.calls[0]?.[0]?.enabled).not.toBe(false);
+		const initOptions = jest.mocked(Sentry.init).mock.calls[0]?.[0];
+		expect(initOptions?.enabled).not.toBe(false);
+		// The SDK's derived `<applicationId>@<version>+<build>` is the key the native
+		// upload steps file symbols under; a custom release here would never match.
+		expect(initOptions?.release).toBeUndefined();
+		expect(initOptions?.dist).toBeUndefined();
 		expect(files.get(installIdPath)).toBe('e49735e4-34af-4abd-a8f6-78f17b350a82');
 		expect(Sentry.setUser).toHaveBeenCalledWith({ id: files.get(installIdPath) });
 	});
