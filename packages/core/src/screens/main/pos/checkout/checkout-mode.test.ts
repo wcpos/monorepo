@@ -15,6 +15,7 @@ import {
 	resetCheckoutMode,
 	resolveStage,
 	selectReceipt,
+	setTenderMethod,
 	subscribeCheckoutMode,
 	useOrderCheckoutStage,
 	useOrderSaving,
@@ -138,3 +139,32 @@ it('subscribes to saving for only the requested order', () => {
 	act(() => clearOrderSaving('a'));
 	expect(result.current).toEqual([false, false]);
 });
+
+it('publishes tender methods only on change, keeping old snapshots immutable', () => {
+	const listener = jest.fn();
+	const unsubscribe = subscribeCheckoutMode(listener);
+	const before = getCheckoutModeSnapshot();
+	setTenderMethod('a', null);
+	setTenderMethod('a', 'cash');
+	const picked = getCheckoutModeSnapshot();
+	setTenderMethod('a', 'cash');
+	expect(listener).toHaveBeenCalledTimes(1);
+	expect(before.tenderMethods.size).toBe(0);
+	expect(picked.tenderMethods.get('a')).toBe('cash');
+	setTenderMethod('a', 'card');
+	setTenderMethod('a', null);
+	setTenderMethod('a', null);
+	expect(listener).toHaveBeenCalledTimes(3);
+	expect(getCheckoutModeSnapshot().tenderMethods.size).toBe(0);
+	expect(picked.tenderMethods.get('a')).toBe('cash');
+	unsubscribe();
+});
+it.each([leaveCheckout, enterReceipt, finishReceipt, resetCheckoutMode])(
+	'clears the tender method on %p',
+	(exit) => {
+		enterCheckout('a');
+		setTenderMethod('a', 'cash');
+		exit('a');
+		expect(getCheckoutModeSnapshot().tenderMethods.has('a')).toBe(false);
+	}
+);

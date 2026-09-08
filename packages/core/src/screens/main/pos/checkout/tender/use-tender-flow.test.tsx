@@ -14,6 +14,7 @@ import {
 	getCheckoutModeSnapshot,
 	markOrderSaving,
 	resetCheckoutMode,
+	setTenderMethod,
 	useCheckoutMode,
 } from '../checkout-mode';
 import { useLedgerView } from './use-ledger-view';
@@ -112,6 +113,7 @@ let mockPayload: {
 	total: string;
 	meta_data: { key: string; value: unknown }[];
 } = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
+let mockMethodsLoaded = true;
 let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
 
@@ -130,7 +132,7 @@ jest.mock('../../../hooks/use-payment-methods', () => ({
 		methods: mockMethods,
 		byId: new Map(mockMethods.map((method) => [method.id, method])),
 		contract: 'payments-v1',
-		loaded: true,
+		loaded: mockMethodsLoaded,
 		unsupportedSchema: false,
 	}),
 }));
@@ -207,12 +209,51 @@ describe('useTenderFlow', () => {
 		jest.clearAllMocks();
 		mockPayload = { total: '92.95', meta_data: [] };
 		mockMethods = methods;
+		mockMethodsLoaded = true;
 		mockOnlineStatus = 'online-website-available';
 		mockBlockIfDegraded.mockReturnValue(false);
 		mockRecordManualPayment.mockResolvedValue(recorded);
 		mockVoidPayments.mockResolvedValue({ failed: [] });
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockLocalPatch.mockResolvedValue({ document: order });
+	});
+
+	it('publishes a picked method to the URL store', () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(getCheckoutModeSnapshot().tenderMethods.get(order.uuid)).toBe('pos_cash');
+	});
+	it('reopens the keypad for the method the store holds, prefilled with the balance', () => {
+		setTenderMethod(order.uuid, 'pos_cash');
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state).toMatchObject({
+			view: 'amount',
+			methodId: 'pos_cash',
+			entryMinor: result.current.balanceMinor,
+		});
+		act(() => result.current.dispatch({ type: 'back' }));
+		expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
+		expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
+	});
+	it('keeps the keypad closed for a stored method the till does not offer', async () => {
+		setTenderMethod(order.uuid, 'not_offered');
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state.methodId).toBe('not_offered');
+		expect(result.current.method).toBeNull();
+		await act(async () => {
+			await result.current.takeTender();
+		});
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	});
+	it('clears the published method once a leg is recorded', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
+		await act(async () => {
+			await result.current.takeTender();
+		});
+		expect(result.current.state.methodId).toBeNull();
+		expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
 	});
 
 	it('blocks method selection and recording while saving', async () => {

@@ -3,8 +3,6 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Platform } from '@wcpos/utils/platform';
-
 import {
 	type CurrentOrderActions,
 	CurrentOrderActionsContext,
@@ -119,18 +117,6 @@ export function CurrentOrderProvider({
 
 			// Also sync to URL for bookmarking/refresh/history purposes
 			router.setParams({ orderId: orderId ? [orderId] : undefined });
-
-			// On web, update the browser URL for nice URLs
-			// Run after setParams completes to override the query param URL
-			if (Platform.isWeb) {
-				requestAnimationFrame(() => {
-					// Get base path from homepage URL (e.g., '/foobar/' from 'https://wcpos.local/foobar/')
-					const homepage = (globalThis as any).initialProps?.homepage as string | undefined;
-					const basePath = homepage ? new URL(homepage).pathname.replace(/\/$/, '') : '';
-					const newPath = orderId ? `${basePath}/cart/${orderId}` : `${basePath}/cart`;
-					window.history.replaceState(null, '', newPath);
-				});
-			}
 		},
 		[router]
 	);

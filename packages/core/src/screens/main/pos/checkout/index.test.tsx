@@ -37,7 +37,7 @@ it('turns a wide tender deep link into order mode and the columns route', () => 
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(true);
 	expect(mockHref).toEqual({
 		pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
-		params: { orderId: ['a'] },
+		params: { orderId: ['a', 'checkout'] },
 	});
 });
 it.each(['phone', 'legacy', 'unsupported'])('retains the %s modal', (lane) => {
