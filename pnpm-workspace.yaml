@@ -37,6 +37,11 @@ minimumReleaseAgeExclude:
   - "@react-native/virtualized-lists"
   - "@expo/config-types"
 overrides:
+  # Expo/Jest still call Babel's synchronous config API, which Babel 8 removed.
+  "@babel/core": "7.29.7"
+  # Workspace packages invoke tsc without declaring it directly. Keep those peer resolutions on
+  # the repository's 5.9 line until its shared tsconfig is migrated for TypeScript 6.
+  "typescript": "5.9.3"
   "expo": "~57.0.13"
   "@expo/dom-webview": "57.0.1"
   "lightningcss": "1.30.1"
@@ -114,6 +119,9 @@ overrides:
   "@svgr/plugin-svgo>svgo": ">=3.3.4 <4"
 allowBuilds:
   "@firebase/util": false
+  # Jest 30.5 pulls this optional native watcher. Its install script only compiles when
+  # npm_config_build_from_source=true; supported platforms use the prebuilt optional package.
+  "@parcel/watcher": false
   # sentry-cli's postinstall downloads the platform binary @sentry/webpack-plugin
   # (apps/electron sourcemap upload) shells out to; without it the strict install
   # fails outright (ERR_PNPM_IGNORED_BUILDS broke the 1.10.5 Publish Web Bundle run).
