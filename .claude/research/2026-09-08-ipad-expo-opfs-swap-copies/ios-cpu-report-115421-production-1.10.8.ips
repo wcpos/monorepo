@@ -1,0 +1,589 @@
+{"incident_id":"30559C9B-6B78-4748-9DD5-0C2229DE7778","roots_installed":0,"app_name":"WCPOS","timestamp":"2026-09-08 11:54:21.00 +0200","app_version":"1.10.8","app_cohort":"2|date=1788858000000&sf=143454&tid=b5e71bc9061fe8de631ddd4a67c6e0c69e66fe2ba589e0af602a9a9bb9fbea2c&ttype=i","slice_uuid":"E5B02FD7-6B61-372C-A64A-CBBD68D1B1DE","adam_id":"6742204061","build_version":"21","bundleID":"com.wcpos.main","duration_ms":"174667","is_first_party":0,"share_with_app_devs":1,"bug_type":"202","os_version":"iPhone OS 26.6.1 (23G83)","distributor_id":"com.apple.TestFlight","name":"WCPOS","is_beta":1}
+Date/Time:        2026-09-08 11:51:16.579 +0200
+End time:         2026-09-08 11:54:11.246 +0200
+OS Version:       iPhone OS 26.6.1 (Build 23G83)
+Architecture:     arm64e
+Report Version:   72
+Incident Identifier: 30559C9B-6B78-4748-9DD5-0C2229DE7778
+Share With Devs:  Yes
+
+Data Source:      Microstackshots
+Shared Cache:     D4AE8DE6-326B-3EA2-8F8B-73E6D184066F slid base address 0x190ed4000, slide 0x10ed4000
+
+Command:          WCPOS
+Path:             /private/var/containers/Bundle/Application/EA218BE8-BD45-4CB2-8C6B-18BBAD40B645/WCPOS.app/WCPOS
+Identifier:       com.wcpos.main
+Version:          1.10.8 (21)
+Adam ID:          6742204061
+Is First Party:   No
+Is Beta:          Yes
+Cohort:           2|date=1788858000000&sf=143454&tid=b5e71bc9061fe8de631ddd4a67c6e0c69e66fe2ba589e0af602a9a9bb9fbea2c&ttype=i
+Beta Identifier:  102E181C-DF51-4876-97D8-BB57750FE514
+Resource Coalition: "com.wcpos.main"(808)
+Architecture:     arm64
+Parent:           UNKNOWN [1]
+PID:              62505
+
+Event:            cpu usage
+Action taken:     none
+CPU:              90 seconds cpu time over 175 seconds (52% cpu average), exceeding limit of 50% cpu over 180 seconds
+CPU limit:        90s
+Limit duration:   180s
+CPU used:         90s
+CPU duration:     175s
+Duration:         174.67s
+Duration Sampled: 172.25s (event starts 0.93s before samples, event ends 1.49s after samples)
+Steps:            31 (10 gigacycles/step, 47 samples lost)
+
+Hardware model:   iPad8,5
+Active cpus:      8
+Memory size:      3.66 GB
+HW page size:     16384
+VM page size:     16384
+Shared cache residency: 8.66% (515.41 MB / 5950.58 MB)
+
+Time Since Boot:  643715s
+Time Awake Since Boot: 597912s
+Time Since Wake:  62961s
+
+Total CPU Time:   112.917s
+Advisory levels:  Battery -> 2, User -> 3, ThermalPressure -> 0, Combined -> 2
+Free disk space:  106.54 GB/238.38 GB, low space threshold 150 MB
+Vnodes Available: 67.00% (13400/20000, 10000 allocated, 10000 soft limit)
+Models:           none
+
+Preferred User Language: en-AU, it-AU
+Country Code:     AU
+Keyboards:        en_AU QWERTY, es_ES QWERTY-Spanish;ml=1
+OS Cryptex File Extents: 1144
+
+Heaviest stack for the target process:
+  25  ??? (libsystem_pthread.dylib + 2252) [0x1f3cae8cc]
+  25  ??? (libsystem_pthread.dylib + 17464) [0x1f3cb2438]
+  25  ??? (Foundation + 583956) [0x1916da914]
+  25  ??? (React + 2865572) [0x1075339a4]
+  25  ??? (CoreFoundation + 189772) [0x1943e954c]
+  25  ??? (CoreFoundation + 194464) [0x1943ea7a0]
+  25  ??? (CoreFoundation + 186264) [0x1943e8798]
+  25  ??? (CoreFoundation + 187084) [0x1943e8acc]
+  23  ??? (React + 631288) [0x1073121f8]
+  23  ??? (React + 631848) [0x107312428]
+  23  ??? (React + 643784) [0x1073152c8]
+  23  ??? (React + 2778136) [0x10751e418]
+  23  ??? (React + 2651268) [0x1074ff484]
+  21  ??? (React + 2651980) [0x1074ff74c]
+  21  ??? (React + 2652408) [0x1074ff8f8]
+  21  ??? (hermesvm + 134396) [0x10835ccfc]
+  21  ??? (hermesvm + 1251680) [0x10846d960]
+  21  ??? (hermesvm + 1056324) [0x10843de44]
+  21  ??? (hermesvm + 1060772) [0x10843efa4]
+  21  ??? (hermesvm + 1738536) [0x1084e4728]
+  21  ??? (hermesvm + 1112764) [0x10844babc]
+  21  ??? (hermesvm + 1103684) [0x108449744]
+  21  ??? (hermesvm + 1060576) [0x10843eee0]
+  21  ??? (hermesvm + 1812948) [0x1084f69d4]
+  21  ??? (hermesvm + 1056708) [0x10843dfc4]
+  21  ??? (hermesvm + 1060772) [0x10843efa4]
+  21  ??? (hermesvm + 1738536) [0x1084e4728]
+  19  ??? (hermesvm + 1112764) [0x10844babc]
+  19  ??? (hermesvm + 1103684) [0x108449744]
+  19  ??? (hermesvm + 1060576) [0x10843eee0]
+  8   ??? (hermesvm + 1812948) [0x1084f69d4]
+  8   ??? (hermesvm + 1056708) [0x10843dfc4]
+  8   ??? (hermesvm + 1060772) [0x10843efa4]
+  8   ??? (hermesvm + 1738536) [0x1084e4728]
+  8   ??? (hermesvm + 1112764) [0x10844babc]
+  8   ??? (hermesvm + 1103684) [0x108449744]
+  8   ??? (hermesvm + 1060576) [0x10843eee0]
+  6   ??? (hermesvm + 185148) [0x10836933c]
+  6   ??? (hermesvm + 185860) [0x108369604]
+  6   ??? (ExpoModulesJSI + 151968) [0x1060c51a0]
+  6   ??? (ExpoModulesJSI + 132992) [0x1060c0780]
+  6   ??? (ExpoModulesJSI + 148300) [0x1060c434c]
+  6   ??? (ExpoModulesJSI + 148336) [0x1060c4370]
+  6   ??? (ExpoModulesJSI + 133588) [0x1060c09d4]
+  6   ??? (ExpoModulesCore + 579864) [0x10637d918]
+  6   ??? (ExpoModulesCore + 579032) [0x10637d5d8]
+  6   ??? (ExpoModulesCore + 577500) [0x10637cfdc]
+  3   ??? (ExpoModulesCore + 576352) [0x10637cb60]
+  3   ??? (ExpoModulesCore + 150352) [0x106314b50]
+  3   ??? (ExpoModulesCore + 150248) [0x106314ae8]
+  2   ??? (ExpoFileSystem + 119604) [0x105d75334]
+  2   ??? (ExpoFileSystem + 94256) [0x105d6f030]
+  2   ??? (Foundation + 2806612) [0x1918f9354]
+  2   ??? (Foundation + 2789284) [0x1918f4fa4]
+  2   ??? (libsystem_kernel.dylib + 20528) [0x2435ee030]
+
+
+Powerstats for:   WCPOS [62505]
+UUID:             E5B02FD7-6B61-372C-A64A-CBBD68D1B1DE
+Path:             /private/var/containers/Bundle/Application/EA218BE8-BD45-4CB2-8C6B-18BBAD40B645/WCPOS.app/WCPOS
+Identifier:       com.wcpos.main
+Version:          1.10.8 (21)
+Adam ID:          6742204061
+Is First Party:   No
+Is Beta:          Yes
+Cohort:           2|date=1788858000000&sf=143454&tid=b5e71bc9061fe8de631ddd4a67c6e0c69e66fe2ba589e0af602a9a9bb9fbea2c&ttype=i
+Beta Identifier:  102E181C-DF51-4876-97D8-BB57750FE514
+Resource Coalition: 31 samples "com.wcpos.main"(808)
+Architecture:     arm64
+Parent:           UNKNOWN [1]
+UID:              501
+Footprint:        78.08 MB -> 2181.83 MB (+2103.75 MB) (max 2647.73 MB )
+Pageins:          12266 pages
+Start time:       2026-09-08 11:51:17.507 +0200
+End time:         2026-09-08 11:54:09.754 +0200
+Num samples:      31 (100%)
+Energy:           5774.25 uWh
+Num threads:      2
+Primary state:    18 samples Frontmost App, Non-Suppressed, User mode, Effective Thread QoS User Interactive, Requested Thread QoS User Interactive, Override Thread QoS Unspecified, p-core
+User Activity:    0 samples Idle, 31 samples Active
+Power Source:     31 samples on Battery, 0 samples on AC
+  25  ??? (libsystem_pthread.dylib + 2252) [0x1f3cae8cc]
+    25  ??? (libsystem_pthread.dylib + 17464) [0x1f3cb2438]
+      25  ??? (Foundation + 583956) [0x1916da914]
+        25  ??? (React + 2865572) [0x1075339a4]
+          25  ??? (CoreFoundation + 189772) [0x1943e954c]
+            25  ??? (CoreFoundation + 194464) [0x1943ea7a0]
+              25  ??? (CoreFoundation + 186264) [0x1943e8798]
+                25  ??? (CoreFoundation + 187084) [0x1943e8acc]
+                  23  ??? (React + 631288) [0x1073121f8]
+                    23  ??? (React + 631848) [0x107312428]
+                      23  ??? (React + 643784) [0x1073152c8]
+                        23  ??? (React + 2778136) [0x10751e418]
+                          23  ??? (React + 2651268) [0x1074ff484]
+                            21  ??? (React + 2651980) [0x1074ff74c]
+                              21  ??? (React + 2652408) [0x1074ff8f8]
+                                21  ??? (hermesvm + 134396) [0x10835ccfc]
+                                  21  ??? (hermesvm + 1251680) [0x10846d960]
+                                    21  ??? (hermesvm + 1056324) [0x10843de44]
+                                      21  ??? (hermesvm + 1060772) [0x10843efa4]
+                                        21  ??? (hermesvm + 1738536) [0x1084e4728]
+                                          21  ??? (hermesvm + 1112764) [0x10844babc]
+                                            21  ??? (hermesvm + 1103684) [0x108449744]
+                                              21  ??? (hermesvm + 1060576) [0x10843eee0]
+                                                21  ??? (hermesvm + 1812948) [0x1084f69d4]
+                                                  21  ??? (hermesvm + 1056708) [0x10843dfc4]
+                                                    21  ??? (hermesvm + 1060772) [0x10843efa4]
+                                                      21  ??? (hermesvm + 1738536) [0x1084e4728]
+                                                        19  ??? (hermesvm + 1112764) [0x10844babc]
+                                                          19  ??? (hermesvm + 1103684) [0x108449744]
+                                                            19  ??? (hermesvm + 1060576) [0x10843eee0]
+                                                              8   ??? (hermesvm + 1812948) [0x1084f69d4]
+                                                                8   ??? (hermesvm + 1056708) [0x10843dfc4]
+                                                                  8   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                                    8   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                                      8   ??? (hermesvm + 1112764) [0x10844babc]
+                                                                        8   ??? (hermesvm + 1103684) [0x108449744]
+                                                                          8   ??? (hermesvm + 1060576) [0x10843eee0]
+                                                                            6   ??? (hermesvm + 185148) [0x10836933c]
+                                                                              6   ??? (hermesvm + 185860) [0x108369604]
+                                                                                6   ??? (ExpoModulesJSI + 151968) [0x1060c51a0]
+                                                                                  6   ??? (ExpoModulesJSI + 132992) [0x1060c0780]
+                                                                                    6   ??? (ExpoModulesJSI + 148300) [0x1060c434c]
+                                                                                      6   ??? (ExpoModulesJSI + 148336) [0x1060c4370]
+                                                                                        6   ??? (ExpoModulesJSI + 133588) [0x1060c09d4]
+                                                                                          6   ??? (ExpoModulesCore + 579864) [0x10637d918]
+                                                                                            6   ??? (ExpoModulesCore + 579032) [0x10637d5d8]
+                                                                                              6   ??? (ExpoModulesCore + 577500) [0x10637cfdc]
+                                                                                                3   ??? (ExpoModulesCore + 576352) [0x10637cb60]
+                                                                                                  3   ??? (ExpoModulesCore + 150352) [0x106314b50]
+                                                                                                    3   ??? (ExpoModulesCore + 150248) [0x106314ae8]
+                                                                                                      2   ??? (ExpoFileSystem + 119604) [0x105d75334]
+                                                                                                        2   ??? (ExpoFileSystem + 94256) [0x105d6f030]
+                                                                                                          2   ??? (Foundation + 2806612) [0x1918f9354]
+                                                                                                            2   ??? (Foundation + 2789284) [0x1918f4fa4]
+                                                                                                              2   ??? (libsystem_kernel.dylib + 20528) [0x2435ee030]
+                                                                                                                2   <Kernel mode>
+                                                                                                      1   ??? (ExpoFileSystem + 116404) [0x105d746b4]
+                                                                                                        1   ??? (ExpoFileSystem + 93032) [0x105d6eb68]
+                                                                                                          1   ??? (ExpoFileSystem + 93456) [0x105d6ed10]
+                                                                                                            1   ??? (Foundation + 3441412) [0x191994304]
+                                                                                                              1   ??? (Foundation + 1601044) [0x1917d2e14]
+                                                                                                                1   ??? (Foundation + 1601300) [0x1917d2f14]
+                                                                                                                  1   ??? (libsystem_kernel.dylib + 26500) [0x2435ef784]
+                                                                                                                    1   <Kernel mode>
+                                                                                                3   ??? (ExpoModulesCore + 573532) [0x10637c05c]
+                                                                                                  3   ??? (ExpoModulesCore + 462716) [0x106360f7c]
+                                                                                                    3   ??? (ExpoModulesCore + 462008) [0x106360cb8]
+                                                                                                      3   ??? (ExpoModulesJSI + 232016) [0x1060d8a50]
+                                                                                                        3   ??? (ExpoModulesJSI + 233152) [0x1060d8ec0]
+                                                                                                          3   ??? (ExpoModulesCore + 462988) [0x10636108c]
+                                                                                                            3   ??? (ExpoModulesCore + 462540) [0x106360ecc]
+                                                                                                              3   ??? (ExpoModulesCore + 463296) [0x1063611c0]
+                                                                                                                3   ??? (Foundation + 627912) [0x1916e54c8]
+                                                                                                                  3   ??? (Foundation + 627476) [0x1916e5314]
+                                                                                                                    3   ??? (libsystem_kernel.dylib + 12104) [0x2435ebf48]
+                                                                                                                      3   ??? (libsystem_kernel.dylib + 3284) [0x2435e9cd4]
+                                                                                                                        3   <Kernel mode>
+                                                                            2   ??? (hermesvm + 1812948) [0x1084f69d4]
+                                                                              2   ??? (hermesvm + 1056708) [0x10843dfc4]
+                                                                                2   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                                                  2   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                                                    2   ??? (hermesvm + 1106896) [0x10844a3d0]
+                                                                                      2   ??? (hermesvm + 1742772) [0x1084e57b4]
+                                                                                        2   ??? (hermesvm + 1060576) [0x10843eee0]
+                                                                                          2   ??? (hermesvm + 1818556) [0x1084f7fbc]
+                                                                                            2   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                                                              2   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                                                                1   ??? (hermesvm + 1117452) [0x10844cd0c]
+                                                                                                  1   ??? (hermesvm + 1743620) [0x1084e5b04]
+                                                                                                    1   ??? (hermesvm + 1154800) [0x108455ef0]
+                                                                                                      1   ??? (hermesvm + 1153372) [0x10845595c]
+                                                                                                1   ??? (hermesvm + 1117304) [0x10844cc78]
+                                                                                                  1   ??? (hermesvm + 1743580) [0x1084e5adc]
+                                                              7   ??? (hermesvm + 185148) [0x10836933c]
+                                                                7   ??? (hermesvm + 185860) [0x108369604]
+                                                                  7   ??? (ExpoModulesJSI + 151968) [0x1060c51a0]
+                                                                    7   ??? (ExpoModulesJSI + 132992) [0x1060c0780]
+                                                                      7   ??? (ExpoModulesJSI + 148300) [0x1060c434c]
+                                                                        7   ??? (ExpoModulesJSI + 148336) [0x1060c4370]
+                                                                          7   ??? (ExpoModulesJSI + 133588) [0x1060c09d4]
+                                                                            7   ??? (ExpoModulesCore + 579864) [0x10637d918]
+                                                                              7   ??? (ExpoModulesCore + 579032) [0x10637d5d8]
+                                                                                7   ??? (ExpoModulesCore + 577500) [0x10637cfdc]
+                                                                                  6   ??? (ExpoModulesCore + 576352) [0x10637cb60]
+                                                                                    6   ??? (ExpoModulesCore + 150352) [0x106314b50]
+                                                                                      6   ??? (ExpoModulesCore + 150248) [0x106314ae8]
+                                                                                        2   ??? (ExpoFileSystem + 133004) [0x105d7878c]
+                                                                                          2   ??? (ExpoFileSystem + 118216) [0x105d74dc8]
+                                                                                            2   ??? (ExpoFileSystem + 134252) [0x105d78c6c]
+                                                                                              2   ??? (Foundation + 972780) [0x1917397ec]
+                                                                                                2   ??? (Foundation + 973776) [0x191739bd0]
+                                                                                                  2   ??? (Foundation + 926588) [0x19172e37c]
+                                                                                                    2   ??? (Foundation + 926992) [0x19172e510]
+                                                                                                      1   ??? (libsystem_kernel.dylib + 26264) [0x2435ef698]
+                                                                                                        1   <Kernel mode>
+                                                                                                      1   ??? (libremovefile.dylib + 2084) [0x2b4a2b824]
+                                                                                                        1   ??? (libremovefile.dylib + 3808) [0x2b4a2bee0]
+                                                                                                          1   ??? (libsystem_c.dylib + 108860) [0x19ff5293c]
+                                                                                                            1   ??? (libsystem_kernel.dylib + 25956) [0x2435ef564]
+                                                                                                              1   <Kernel mode>
+                                                                                        2   ??? (ExpoFileSystem + 118292) [0x105d74e14]
+                                                                                          2   ??? (ExpoFileSystem + 123696) [0x105d76330]
+                                                                                            2   ??? (ExpoFileSystem + 78904) [0x105d6b438]
+                                                                                              1   ??? (ExpoFileSystem + 80012) [0x105d6b88c]
+                                                                                                1   ??? (Foundation + 1916436) [0x19181fe14]
+                                                                                                  1   ??? (Foundation + 1918096) [0x191820490]
+                                                                                                    1   ??? (Foundation + 1908744) [0x19181e008]
+                                                                                                      1   ??? (Foundation + 678520) [0x1916f1a78]
+                                                                                                        1   ??? (Foundation + 688880) [0x1916f42f0]
+                                                                                                          1   ??? (Foundation + 736080) [0x1916ffb50]
+                                                                                                            1   ??? (Foundation + 728676) [0x1916fde64]
+                                                                                                              1   ??? (Foundation + 698744) [0x1916f6978]
+                                                                                                                1   ??? (libsystem_coreservices.dylib + 5856) [0x1ac1c56e0]
+                                                                                                                  1   ??? (libsystem_kernel.dylib + 26264) [0x2435ef698]
+                                                                                                                    1   <Kernel mode>
+                                                                                              1   ??? (ExpoFileSystem + 79528) [0x105d6b6a8]
+                                                                                                1   ??? (Foundation + 1341116) [0x1917936bc]
+                                                                                                  1   ??? (Foundation + 5859372) [0x191be282c]
+                                                                                                    1   ??? (Foundation + 926588) [0x19172e37c]
+                                                                                                      1   ??? (Foundation + 928468) [0x19172ead4]
+                                                                                                        1   ??? (Foundation + 451876) [0x1916ba524]
+                                                                                                          1   ??? (Foundation + 8782636) [0x191eac32c]
+                                                                                                            1   ??? (Foundation + 452108) [0x1916ba60c]
+                                                                                                              1   ??? (Foundation + 452548) [0x1916ba7c4]
+                                                                                                                1   ??? (Foundation + 454824) [0x1916bb0a8]
+                                                                                                                  1   ??? (libsystem_malloc.dylib + 14828) [0x19fb4a9ec]
+                                                                                                                    1   ??? (libsystem_malloc.dylib + 17744) [0x19fb4b550]
+                                                                                        1   ??? (ExpoFileSystem + 119636) [0x105d75354]
+                                                                                          1   ??? (ExpoFileSystem + 94536) [0x105d6f148]
+                                                                                            1   ??? (Foundation + 1601456) [0x1917d2fb0]
+                                                                                              1   ??? (libsystem_kernel.dylib + 4832) [0x2435ea2e0]
+                                                                                                1   <Kernel mode>
+                                                                                        1   ??? (ExpoFileSystem + 119556) [0x105d75304]
+                                                                                          1   ??? (ExpoFileSystem + 93896) [0x105d6eec8]
+                                                                                            1   ??? (Foundation + 3361364) [0x191980a54]
+                                                                                              1   ??? (Foundation + 3361084) [0x19198093c]
+                                                                                                1   ??? (Foundation + 382468) [0x1916a9604]
+                                                                                                  1   ??? (libsystem_kernel.dylib + 24280) [0x2435eeed8]
+                                                                                                    1   <Kernel mode>
+                                                                                  1   ??? (ExpoModulesCore + 573532) [0x10637c05c]
+                                                                                    1   ??? (ExpoModulesCore + 462716) [0x106360f7c]
+                                                                                      1   ??? (ExpoModulesCore + 462008) [0x106360cb8]
+                                                                                        1   ??? (ExpoModulesJSI + 232016) [0x1060d8a50]
+                                                                                          1   ??? (ExpoModulesJSI + 233152) [0x1060d8ec0]
+                                                                                            1   ??? (ExpoModulesCore + 462988) [0x10636108c]
+                                                                                              1   ??? (ExpoModulesCore + 462540) [0x106360ecc]
+                                                                                                1   ??? (ExpoModulesCore + 463296) [0x1063611c0]
+                                                                                                  1   ??? (Foundation + 627912) [0x1916e54c8]
+                                                                                                    1   ??? (Foundation + 627476) [0x1916e5314]
+                                                                                                      1   ??? (libsystem_kernel.dylib + 12104) [0x2435ebf48]
+                                                                                                        1   ??? (libsystem_kernel.dylib + 3284) [0x2435e9cd4]
+                                                                                                          1   <Kernel mode>
+                                                              1   ??? (hermesvm + 1500216) [0x1084aa438]
+                                                              1   ??? (hermesvm + 1364692) [0x1084892d4]
+                                                              1   ??? (hermesvm + 1845264) [0x1084fe810]
+                                                                1   ??? (hermesvm + 1142396) [0x108452e7c]
+                                                              1   ??? (hermesvm + 1552576) [0x1084b70c0]
+                                                                1   ??? (hermesvm + 1038924) [0x108439a4c]
+                                                                  1   ??? (libc++.1.dylib + 10028) [0x1a3b2b72c]
+                                                        1   ??? (hermesvm + 1106248) [0x10844a148]
+                                                        1   ??? (hermesvm + 1110316) [0x10844b12c]
+                                                          1   ??? (hermesvm + 1124548) [0x10844e8c4]
+                                                            1   ??? (hermesvm + 1168232) [0x108459368]
+                            2   ??? (React + 2651968) [0x1074ff740]
+                              2   ??? (React + 2649760) [0x1074feea0]
+                                1   ??? (React + 2662624) [0x1075020e0]
+                                  1   ??? (React + 2803676) [0x1075247dc]
+                                    1   ??? (hermesvm + 160540) [0x10836331c]
+                                      1   ??? (hermesvm + 189844) [0x10836a594]
+                                        1   ??? (hermesvm + 1562880) [0x1084b9900]
+                                          1   ??? (hermesvm + 1563816) [0x1084b9ca8]
+                                            1   ??? (hermesvm + 1574368) [0x1084bc5e0]
+                                              1   ??? (hermesvm + 1585996) [0x1084bf34c]
+                                                1   ??? (hermesvm + 1585128) [0x1084befe8]
+                                                  1   ??? (hermesvm + 1572856) [0x1084bbff8]
+                                                    1   ??? (hermesvm + 1573488) [0x1084bc270]
+                                1   ??? (React + 2662556) [0x10750209c]
+                                  1   ??? (hermesvm + 150912) [0x108360d80]
+                                    1   ??? (hermesvm + 1058888) [0x10843e848]
+                                      1   ??? (hermesvm + 1060772) [0x10843efa4]
+                                        1   ??? (hermesvm + 1738536) [0x1084e4728]
+                                          1   ??? (hermesvm + 1112764) [0x10844babc]
+                                            1   ??? (hermesvm + 1103684) [0x108449744]
+                                              1   ??? (hermesvm + 1060576) [0x10843eee0]
+                                                1   ??? (hermesvm + 1801760) [0x1084f3e20]
+                                                  1   ??? (hermesvm + 1056924) [0x10843e09c]
+                                                    1   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                      1   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                        1   ??? (hermesvm + 1112764) [0x10844babc]
+                                                          1   ??? (hermesvm + 1103712) [0x108449760]
+                                                            1   ??? (hermesvm + 1058888) [0x10843e848]
+                                                              1   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                                1   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                                  1   ??? (hermesvm + 1106896) [0x10844a3d0]
+                                                                    1   ??? (hermesvm + 1742772) [0x1084e57b4]
+                                                                      1   ??? (hermesvm + 1060576) [0x10843eee0]
+                                                                        1   ??? (hermesvm + 1818556) [0x1084f7fbc]
+                                                                          1   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                                            1   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                                              1   ??? (hermesvm + 1112764) [0x10844babc]
+                                                                                1   ??? (hermesvm + 1103684) [0x108449744]
+                                                                                  1   ??? (hermesvm + 1060576) [0x10843eee0]
+                                                                                    1   ??? (hermesvm + 1791560) [0x1084f1648]
+                                                                                      1   ??? (hermesvm + 1056924) [0x10843e09c]
+                                                                                        1   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                                                          1   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                                                            1   ??? (hermesvm + 1112764) [0x10844babc]
+                                                                                              1   ??? (hermesvm + 1103684) [0x108449744]
+                                                                                                1   ??? (hermesvm + 1060576) [0x10843eee0]
+                                                                                                  1   ??? (hermesvm + 1791560) [0x1084f1648]
+                                                                                                    1   ??? (hermesvm + 1056924) [0x10843e09c]
+                                                                                                      1   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                                                                        1   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                                                                          1   ??? (hermesvm + 1112764) [0x10844babc]
+                                                                                                            1   ??? (hermesvm + 1103684) [0x108449744]
+                                                                                                              1   ??? (hermesvm + 1060576) [0x10843eee0]
+                                                                                                                1   ??? (hermesvm + 1791560) [0x1084f1648]
+                                                                                                                  1   ??? (hermesvm + 1056924) [0x10843e09c]
+                                                                                                                    1   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                                                                                      1   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                                                                                        1   ??? (hermesvm + 1105248) [0x108449d60]
+                  2   ??? (libobjc.A.dylib + 22148) [0x190f71684]
+                    2   ??? (libobjc.A.dylib + 22520) [0x190f717f8]
+                      1   ??? (CoreFoundation + 29412) [0x1943c22e4]
+                        1   ??? (CoreFoundation + 211928) [0x1943eebd8]
+                          1   ??? (CoreFoundation + 141008) [0x1943dd6d0]
+                      1   ??? (Foundation + 47172) [0x191657844]
+                        1   ??? (libsystem_malloc.dylib + 80224) [0x19fb5a960]
+                          1   ??? (libsystem_malloc.dylib + 80344) [0x19fb5a9d8]
+                            1   ??? (libsystem_kernel.dylib + 2888) [0x2435e9b48]
+                              1   <Kernel mode>
+  6   ??? (dyld + 19484) [0x190ff5c1c]
+    6   ??? (WCPOS + 21684) [0x10410d4b4]
+      6   ??? (UIKitCore + 2722468) [0x19a294aa4]
+        6   ??? (UIKitCore + 573784) [0x19a088158]
+          6   ??? (UIKitCore + 1185392) [0x19a11d670]
+            6   ??? (GraphicsServices + 5272) [0x239f79498]
+              6   ??? (CoreFoundation + 189772) [0x1943e954c]
+                3   ??? (CoreFoundation + 192928) [0x1943ea1a0]
+                  3   ??? (CoreFoundation + 415192) [0x1944205d8]
+                    3   ??? (CoreFoundation + 656132) [0x19445b304]
+                      3   ??? (CoreFoundation + 656272) [0x19445b390]
+                        3   ??? (UpdateCycle + 5484) [0x2a946556c]
+                          3   ??? (UIKitCore + 1018976) [0x19a0f4c60]
+                            3   ??? (UIKitCore + 1029844) [0x19a0f76d4]
+                              3   ??? (QuartzCore + 728256) [0x194e58cc0]
+                                3   ??? (QuartzCore + 634988) [0x194e4206c]
+                                  3   ??? (QuartzCore + 799108) [0x194e6a184]
+                                    3   ??? (WCPOS + 4815616) [0x10459fb00]
+                                      3   ??? (WCPOS + 4815432) [0x10459fa48]
+                                        3   ??? (WCPOS + 4814428) [0x10459f65c]
+                                          3   ??? (WCPOS + 4814720) [0x10459f780]
+                                            3   ??? (WCPOS + 5002292) [0x1045cd434]
+                                              3   ??? (hermesvm + 150912) [0x108360d80]
+                                                3   ??? (hermesvm + 1060772) [0x10843efa4]
+                                                  3   ??? (hermesvm + 1738536) [0x1084e4728]
+                                                    3   ??? (hermesvm + 1112764) [0x10844babc]
+                                                      3   ??? (hermesvm + 1103684) [0x108449744]
+                                                        3   ??? (hermesvm + 1060576) [0x10843eee0]
+                                                          3   ??? (hermesvm + 185148) [0x10836933c]
+                                                            3   ??? (hermesvm + 185860) [0x108369604]
+                                                              3   ??? (WCPOS + 4882216) [0x1045aff28]
+                                                                3   ??? (WCPOS + 4882216) [0x1045aff28]
+                                                                  3   ??? (WCPOS + 3945704) [0x1044cb4e8]
+                                                                    3   ??? (WCPOS + 3789400) [0x1044a5258]
+                                                                      3   ??? (WCPOS + 3641356) [0x10448100c]
+                                                                        3   ??? (WCPOS + 3732508) [0x10449741c]
+                                                                          3   ??? (WCPOS + 3733540) [0x104497824]
+                                                                            3   ??? (React + 1741680) [0x107421370]
+                                                                              3   ??? (WCPOS + 3766744) [0x10449f9d8]
+                                                                                3   ??? (React + 1720520) [0x10741c0c8]
+                                                                                  2   ??? (React + 1723744) [0x10741cd60]
+                                                                                    2   ??? (React + 1720128) [0x10741bf40]
+                                                                                      2   ??? (React + 1866596) [0x10743fb64]
+                                                                                        2   ??? (React + 1811228) [0x10743231c]
+                                                                                          2   ??? (React + 2268524) [0x1074a1d6c]
+                                                                                            2   ??? (React + 2291472) [0x1074a7710]
+                                                                                              2   ??? (React + 2254632) [0x10749e728]
+                                                                                                2   ??? (React + 2254940) [0x10749e85c]
+                                                                                                  1   ??? (React + 1745372) [0x1074221dc]
+                                                                                                    1   ??? (React + 2260664) [0x10749feb8]
+                                                                                                      1   ??? (React + 2261244) [0x1074a00fc]
+                                                                                                        1   ??? (React + 2066812) [0x10747097c]
+                                                                                                          1   ??? (React + 2264720) [0x1074a0e90]
+                                                                                                            1   ??? (React + 2264720) [0x1074a0e90]
+                                                                                                              1   ??? (React + 2187060) [0x10748df34]
+                                                                                                                1   ??? (React + 2264720) [0x1074a0e90]
+                                                                                                                  1   ??? (React + 2187060) [0x10748df34]
+                                                                                                                    1   ??? (React + 2264720) [0x1074a0e90]
+                                                                                                                      1   ??? (React + 2187060) [0x10748df34]
+                                                                                                                        1   ??? (React + 2264720) [0x1074a0e90]
+                                                                                                                          1   ??? (React + 2187060) [0x10748df34]
+                                                                                                                            1   ??? (React + 2264720) [0x1074a0e90]
+                                                                                                                              1   ??? (React + 2187060) [0x10748df34]
+                                                                                                                                1   ??? (React + 2264720) [0x1074a0e90]
+                                                                                                                                  1   ??? (React + 2187060) [0x10748df34]
+                                                                                                                                    1   ??? (React + 2264720) [0x1074a0e90]
+                                                                                                                                      1   ??? (React + 2187060) [0x10748df34]
+                                                                                                                                        1   ??? (React + 2264580) [0x1074a0e04]
+                                                                                                                                          1   ??? [0x19e6f18f0]
+                                                                                                  1   ??? (React + 1745000) [0x107422068]
+                                                                                                    1   ??? (React + 1710116) [0x107419824]
+                                                                                                      1   ??? (React + 1664384) [0x10740e580]
+                                                                                                        1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                          1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                            1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                              1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                  1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                    1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                      1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                        1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                          1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                            1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                              1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                  1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                    1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                      1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                        1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                          1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                            1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                              1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                                1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                                  1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                                    1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                                      1   ??? (React + 1666940) [0x10740ef7c]
+                                                                                                                                                        1   ??? (React + 1666852) [0x10740ef24]
+                                                                                                                                                          1   ??? (React + 1747940) [0x107422be4]
+                                                                                                                                                            1   ??? (React + 1748824) [0x107422f58]
+                                                                                                                                                              1   ??? (React + 175200) [0x1072a2c60]
+                                                                                  1   ??? (React + 1721268) [0x10741c3b4]
+                                                                                    1   ??? (WCPOS + 3767136) [0x10449fb60]
+                                                                                      1   ??? (WCPOS + 3818148) [0x1044ac2a4]
+                                                                                        1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                          1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                            1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                              1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                  1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                    1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                      1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                        1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                          1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                            1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                              1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                  1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                    1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                      1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                        1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                          1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                            1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                              1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                  1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                    1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                      1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                        1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                          1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                            1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                              1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                  1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                    1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                      1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                        1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                          1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                            1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                              1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                  1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                    1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                      1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                        1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                          1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                            1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                              1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                                1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                                  1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                                    1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                                      1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                                        1   ??? (WCPOS + 3817320) [0x1044abf68]
+                                                                                                                                                                                          1   ??? (WCPOS + 3817424) [0x1044abfd0]
+                                                                                                                                                                                            1   ??? (WCPOS + 3816908) [0x1044abdcc]
+                                                                                                                                                                                              1   ??? (React + 2226028) [0x10749776c]
+                                                                                                                                                                                                1   ??? (React + 2227784) [0x107497e48]
+                                                                                                                                                                                                  1   ??? (React + 2227868) [0x107497e9c]
+                                                                                                                                                                                                    1   ??? (React + 2227956) [0x107497ef4]
+                                                                                                                                                                                                      1   ??? (React + 1552632) [0x1073f30f8]
+                                                                                                                                                                                                        1   ??? (React + 1430096) [0x1073d5250]
+                                                                                                                                                                                                          1   ??? (React + 1569352) [0x1073f7248]
+                                                                                                                                                                                                            1   ??? (React + 1574480) [0x1073f8650]
+                                                                                                                                                                                                              1   ??? (React + 1585916) [0x1073fb2fc]
+                1   ??? (CoreFoundation + 193696) [0x1943ea4a0]
+                  1   ??? (CoreFoundation + 412432) [0x19441fb10]
+                    1   ??? (CoreFoundation + 1332904) [0x1945006a8]
+                1   ??? (CoreFoundation + 193624) [0x1943ea458]
+                  1   ??? (libsystem_kernel.dylib + 3008) [0x2435e9bc0]
+                    1   <e-core>
+                1   ??? (CoreFoundation + 193032) [0x1943ea208]
+                  1   ??? (CoreFoundation + 412976) [0x19441fd30]
+                    1   ??? (CoreFoundation + 563412) [0x1944448d4]
+                      1   ??? (React + 157092) [0x10729e5a4]
+                        1   <e-core>
+
+  Binary Images:
+           0x104108000 -        0x105573fff  com.wcpos.main 1.10.8 (21)   <E5B02FD7-6B61-372C-A64A-CBBD68D1B1DE>  /private/var/containers/Bundle/Application/EA218BE8-BD45-4CB2-8C6B-18BBAD40B645/WCPOS.app/WCPOS
+           0x105d58000 -        0x105dc7fff  ExpoFileSystem               <FABF0616-F1A3-3260-BD21-94C676D42A79>  /private/var/containers/Bundle/Application/EA218BE8-BD45-4CB2-8C6B-18BBAD40B645/WCPOS.app/Frameworks/ExpoFileSystem.framework/ExpoFileSystem
+           0x1060a0000 -        0x10613bfff  ExpoModulesJSI               <A40FC1A4-51D1-3ED2-A930-AA13FA72B82A>  /private/var/containers/Bundle/Application/EA218BE8-BD45-4CB2-8C6B-18BBAD40B645/WCPOS.app/Frameworks/ExpoModulesJSI.framework/ExpoModulesJSI
+           0x1062f0000 -        0x106467fff  ExpoModulesCore              <C847D765-43CC-38F5-BFED-CF16908D6871>  /private/var/containers/Bundle/Application/EA218BE8-BD45-4CB2-8C6B-18BBAD40B645/WCPOS.app/Frameworks/ExpoModulesCore.framework/ExpoModulesCore
+           0x107278000 -        0x107743fff  React                        <9C5C8520-5E9F-39C9-AF92-C54F4C95004F>  /private/var/containers/Bundle/Application/EA218BE8-BD45-4CB2-8C6B-18BBAD40B645/WCPOS.app/Frameworks/React.framework/React
+           0x10833c000 -        0x108567fff  hermesvm                     <5BB8CBF9-6D73-38F8-9A79-CC520DCC736D>  /private/var/containers/Bundle/Application/EA218BE8-BD45-4CB2-8C6B-18BBAD40B645/WCPOS.app/Frameworks/hermesvm.framework/hermesvm
+           0x190f6c000 -        0x190fbd47f  libobjc.A.dylib              <794FD256-8A8D-3C8D-91AA-AAC27EF3512C>  /usr/lib/libobjc.A.dylib
+           0x190ff1000 -        0x19109647f  dyld                         <0F8D35B6-556F-3E34-8EAA-80AB54047DC5>  /usr/lib/dyld
+           0x19164c000 -        0x1924d5cbf  Foundation                   <73841AA3-BFDD-322D-8DC2-E5185A14DEE1>  /System/Library/Frameworks/Foundation.framework/Foundation
+           0x1943bb000 -        0x194957a3f  CoreFoundation               <101EB2F1-1915-34A0-8BC9-631D03753B84>  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation
+           0x194da7000 -        0x195197ebf  QuartzCore                   <8F1E0B3F-ADD6-3710-A790-009333597AB4>  /System/Library/Frameworks/QuartzCore.framework/QuartzCore
+           0x199ffc000 -        0x19c53f63f  UIKitCore                    <0D94422F-FE7C-302E-B896-3BC5873C0CFC>  /System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore
+           0x19fb47000 -        0x19fb8fd0f  libsystem_malloc.dylib       <8DD65565-6066-300E-AD0A-73118179EDB5>  /usr/lib/system/libsystem_malloc.dylib
+           0x19ff38000 -        0x19ffb75ff  libsystem_c.dylib            <FF429821-80DE-3A68-99CB-0B2E707E8D48>  /usr/lib/system/libsystem_c.dylib
+           0x1a3b29000 -        0x1a3bb9a7b  libc++.1.dylib               <BE42C221-2EB0-3636-AEF5-9CEDC8B1F656>  /usr/lib/libc++.1.dylib
+           0x1ac1c4000 -        0x1ac1c6e6f  libsystem_coreservices.dylib <3E268A32-8610-399F-878E-B14C5064979A>  /usr/lib/system/libsystem_coreservices.dylib
+           0x1f3cae000 -        0x1f3cba4ef  libsystem_pthread.dylib      <34B44744-BC64-386E-AB90-EEE86B23AC46>  /usr/lib/system/libsystem_pthread.dylib
+           0x239f78000 -        0x239f807bf  GraphicsServices             <411165E2-EE8E-380E-B254-9977273971E3>  /System/Library/PrivateFrameworks/GraphicsServices.framework/GraphicsServices
+           0x2435e9000 -        0x243624b1f  libsystem_kernel.dylib       <18665B3F-6D51-33AB-B9E9-63062200EC42>  /usr/lib/system/libsystem_kernel.dylib
+           0x2a9464000 -        0x2a94661bf  UpdateCycle                  <26FAB814-4C8F-3A06-B45E-CBA271020DC4>  /System/Library/PrivateFrameworks/UpdateCycle.framework/UpdateCycle
+           0x2b4a2b000 -        0x2b4a2db9f  libremovefile.dylib          <462D09E0-5824-32E5-A061-3F16636742DC>  /usr/lib/system/libremovefile.dylib
