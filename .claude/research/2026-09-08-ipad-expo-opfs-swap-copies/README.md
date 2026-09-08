@@ -125,6 +125,70 @@ on-device before/after on this iPad (probe rows only, no CDP sampler), and the a
 the April commits were about (rxdb#8290) is answered differently there: one long-lived positional
 handle per file, no delete/recreate window, crash consistency from the engine's changelog.
 
+## Part 2 (same evening): the #1885 A/B on the iPad, and what the heap said
+
+**Arms.** Baseline = `main` ff38d12417 dev client (expo-opfs), rows in
+`baseline-main-rows-table.txt` (sampler attached 18:31–18:46). Arm = #1885 (`next-worklet-storage`
+4a4e5106b1) **merged with `origin/main`** (measurement branch `measure/1885-plus-main`, local only —
+the PR branch alone lacks main's coverage batching and unchanged-skip fixes and did 593 one-row
+coverage round trips in its login minute), worklet host confirmed active (`.worklet-opfs` root),
+Hermes sampler off except one 60 s window at 19:38, rows in `arm-1885-plus-main-rows-table.txt`.
+
+| window | main baseline | #1885 + main |
+|---|---|---|
+| login minute 1 | 5.3 s max, 2 stalls ≥ 1 s | 7.6 s, 6 |
+| login minute 2 | 3.7 s, 23 (sampler) | 3.3 s, 1 |
+| cart edits, minute 3 | 2.5 s, 10 (sampler) | **38.9 s**, 5 |
+| idle minutes 4–14 | three episodes 2.6–5.2 s, 7–16 stalls each (sampler) | nothing ≥ 410 ms for ten minutes |
+| pick-up minute | 2.6–5.2 s | 6.6 s, 6 |
+
+**Reading.** The worklet host removes the periodic idle-time episodes (where the expo-opfs copies
+lived) and does nothing for the interaction minutes. The 38.9 s freeze happened during ~5 cart
+actions that produced 147 `orders` writes, 77 `recordMutations`, 57 `orders-search` FlexSearch
+writes and **153 `logs` writes** — the sync engine persists an info-level row for every
+`queue.write.enqueued` / `queue.write.coalesce` (`write-plane.ts:170`, `write-intents.ts:453`),
+so each cart write costs a second storage write for its own log line. Demoting those to `debug`
+is a free win on both lanes. The worklets scheduler (`WorkletRuntime::schedule` → mutex-guarded
+`AsyncQueueImpl::push`) cannot block the caller, so the freeze is JS work on the JS thread.
+
+**Instruments on the pick-up window (19:36–19:39, `instruments-tp6-thread-summary.txt`).** JS thread
+55 % of samples; its top leaf is `HadesGC::OldGen::search` (25 % of JS-thread samples) with card
+scanning and weak-root marking behind it, plus `hermes::Module::resetForMoreCompilation` /
+`VariableScope::assignIndexToVariables` (on-device compilation). `Runtime.getHeapUsage`: **393 MB used
+of 428 MB**, 5,491 GCs, 52 s GC CPU in 22 minutes, 18.5 GB allocated. The storage worklet thread was
+6 % (JSON string building); the main thread 27 % incl. `RCTRedBoxController` (the "lots of errors"
+Paul saw were RedBox screens — not persisted, and Metro in CI mode forwards nothing; the persisted
+error/warn rows were only the demo store's 403 `woocommerce_rest_cannot_delete`, a 404
+`/payment-methods` `rest_no_route` (released plugin lacks the `next` route) and one `SYNC321`
+"scope moved mid-query").
+
+**Heap snapshot (`heap-snapshot-summary-1885-arm.txt`, 448 MB, 3.08 M nodes).**
+- **219 MB is `CodeBlock` (47,443)** — Hermes-compiled function code. Expo's dev server passes
+  `bytecode: false` unconditionally (`MetroBundlerDevServer.js`), so Metro serves 34 MB of JS
+  *source* (`Content-Type: application/javascript`, starts `var __BUNDLE_START`) regardless of
+  `transform.bytecode=1` in the URL, and the dev client compiles it on the device. A release build
+  ships HBC and pays neither the 219 MB nor the compile time. **Every dev-client number in this
+  folder is inflated by this**; the production 1.10.8 `cpu_resource` report (JS thread saturated,
+  no profiler, no source compile) is the evidence that production is still slow, but the
+  magnitudes here overstate it and the day's crash/Jetsam pressure is partly the harness.
+- The other ~230 MB is the app's live graph and applies to production: 269 k `JSFunction` +
+  317 k `Environment` (closures, 39 MB), 275 k `JSArray` + 474 k `ArrayStorageSmall` (62 MB),
+  React: 42 k `FiberNode` + 95 k hook-state objects + 26 k elements; RxJS: 38.5 k
+  `OperatorSubscriber`, 20.7 k `AnonymousSubject`, 13.5 k `Observable`, 8.5 k `Subscription`
+  (~40 k live subscriptions); RxDB: 4.5 k `RxDocument`, 648 `RxQuery`, 1.7 k coverage-record
+  objects, 8.4 k `{lwt}`; 5.5 k `{id, searchable}` FlexSearch entries. A 42 k-fiber tree and
+  ~40 k live subscriptions are the next thing to look at for interaction-time cost.
+
+**Harness traps found on the way.** (1) #1885 loads its worklet host through
+`import('./worklet-host')`; under `--no-dev` Expo's async-require throws "Unable to determine the
+production URL…" for lazy chunks, the import rejects and the app **silently falls back to JS-thread
+storage** (it booted straight into the old `.expo-opfs` store; `LOCAL_DB_SETUP_FAILED` never reached
+the persisted logs). `EXPO_NO_METRO_LAZY=1` on `expo start` fixes it — the native E2E harness runs
+`--no-dev --minify` too, so it would test the fallback path unless it sets that. (2) A stale
+`xctrace record` holds the device and makes every later attach fail with "Cannot find process";
+`pkill -9 -f "xctrace record"` first. (3) `pull-rows-1885.sh` restricts itself to `.worklet-opfs`;
+the old `.expo-opfs` root survives an install-over and re-prints the baseline rows otherwise.
+
 ## Fix directions (not done here)
 
 1. Re-measure `getRxStorageExpoSync()` on this iPad with the same recipe — in-place positional
