@@ -170,9 +170,12 @@ describe('coverage record batch writes', () => {
 				],
 			})
 		);
-		await expect(repository.recordQueryResult({ ...PAGE, complete: true })).rejects.toThrow(
-			/422.*products::1/
-		);
+		// assertBulkSuccess carries the status and ids as fields, not message text.
+		await expect(repository.recordQueryResult({ ...PAGE, complete: true })).rejects.toMatchObject({
+			message: expect.stringMatching(/Coverage record batch write failed .*products::1/),
+			status: 422,
+			failedIds: ['products::1'],
+		});
 		expect(await db.coverageLanes.find().exec()).toEqual([]);
 	});
 
