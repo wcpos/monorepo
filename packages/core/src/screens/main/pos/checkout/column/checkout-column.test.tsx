@@ -22,6 +22,7 @@ const mockPickMethod = jest.fn();
 const mockBack = jest.fn();
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
+let mockNumber = '1187';
 const mockUseFlow = jest.fn(() => mockFlow);
 
 const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethodDescriptor => ({
@@ -65,7 +66,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 jest.mock('../../contexts/current-order/context', () => ({ useCurrentOrder: jest.fn() }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
-		select({ payload: { id: 1187, number: '1187', currency_symbol: '$', line_items: [] } }),
+		select({ payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: [] } }),
 }));
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
@@ -139,6 +140,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		entryChangeMinor: 0,
 		quickAmountsMinor: [],
 		busy: false,
+		saving: false,
 		pickMethod: mockPickMethod,
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
@@ -151,6 +153,7 @@ function mountColumn() {
 }
 beforeEach(() => {
 	jest.clearAllMocks();
+	mockNumber = '1187';
 	resetCheckoutMode();
 	enterCheckout('order-1');
 	mockFlow = makeFlow();
@@ -246,4 +249,14 @@ it('does not silently finish a receipt on Escape', () => {
 	renderHook(() => useCheckoutBack(finishSale, { escape: false }));
 	fireEvent.keyDown(document, { key: 'Escape' });
 	expect(finishSale).not.toHaveBeenCalled();
+});
+
+it('shows a title skeleton while saving an unnumbered order', () => {
+	mockNumber = '';
+	mockFlow = makeFlow({ saving: true });
+	const { rerender } = render(<CheckoutColumn order={order} />);
+	expect(screen.getByTestId('checkout-title-skeleton')).not.toBeNull();
+	mockFlow = makeFlow();
+	rerender(<CheckoutColumn order={order} />);
+	expect(screen.queryByTestId('checkout-title-skeleton')).toBeNull();
 });

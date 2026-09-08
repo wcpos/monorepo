@@ -20,6 +20,7 @@ let mockStage = 'checkout';
 let mockOnClose: (() => void) | undefined;
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
+let mockNumber = '1187';
 
 const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethodDescriptor => ({
 	schema: 1,
@@ -63,7 +64,7 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: str
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
-		select({ payload: { id: 1187, number: '1187', currency_symbol: '$', line_items: [] } }),
+		select({ payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: [] } }),
 }));
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
@@ -147,6 +148,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		entryChangeMinor: 0,
 		quickAmountsMinor: [],
 		busy: false,
+		saving: false,
 		pickMethod: mockPickMethod,
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
@@ -157,6 +159,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 describe('TenderCheckout', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockNumber = '1187';
 		mockScreenSize = 'lg';
 		mockStage = 'checkout';
 		mockOnClose = undefined;

@@ -10,7 +10,13 @@ import { useRecordField } from '@wcpos/query';
 
 import { useTheme } from '../../../../../contexts/theme';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
-import { enterCheckout } from '../../checkout/checkout-mode';
+import {
+	clearOrderSaving,
+	enterCheckout,
+	getCheckoutModeSnapshot,
+	leaveCheckout,
+	markOrderSaving,
+} from '../../checkout/checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
@@ -48,7 +54,30 @@ export function PayButton() {
 			return;
 		}
 
-		setLoading(true);
+		const uuid = currentOrderRecord.uuid;
+		if (getCheckoutModeSnapshot().savingOrders.has(uuid)) return;
+
+		const sheetRoute = {
+			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+			params: { orderId: uuid },
+		} as const;
+		// Optimistic only where the tender flow hosts the checkout: it reads the saving
+		// flag and keeps every tile inert until the server copy (and its id) exists. The
+		// legacy webview checkout has no such gate, so that lane still waits for the save.
+		const tenderFlow = loaded && !unsupportedSchema;
+		markOrderSaving(uuid);
+		if (tenderFlow && screenSize !== 'sm') {
+			enterCheckout(uuid);
+		} else if (tenderFlow) {
+			router.push(sheetRoute);
+		} else {
+			setLoading(true);
+		}
+		// A save that fails or is blocked puts the cashier back at the cart to retry.
+		const abandon = () => {
+			leaveCheckout(uuid);
+			if (tenderFlow && screenSize === 'sm') router.replace('/cart');
+		};
 		const orderLogger = checkoutLogger.with({
 			orderId: currentOrderRecord.uuid,
 			orderNumber: currentOrderRecord.payload.number,
@@ -58,9 +87,10 @@ export function PayButton() {
 			await pushDocument(currentOrderRecord).then((savedDoc) => {
 				if (savedDoc) {
 					// Re-checked after the await: the worker can die mid-push, and
-					// opening the payment modal then would let the cashier take money
+					// enabling tender then would let the cashier take money
 					// for an order this device can no longer record.
 					if (blockIfDegraded('checkout', { orderId: currentOrderRecord.uuid })) {
+						abandon();
 						return;
 					}
 
@@ -71,18 +101,13 @@ export function PayButton() {
 							lineItemCount: lineItems?.length ?? 0,
 						},
 					});
-
-					if (screenSize !== 'sm' && loaded && !unsupportedSchema) {
-						enterCheckout(currentOrderRecord.uuid);
-					} else {
-						router.push({
-							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
-							params: { orderId: currentOrderRecord.uuid },
-						});
-					}
+					if (!tenderFlow) router.push(sheetRoute);
+				} else {
+					abandon();
 				}
 			});
 		} catch (error) {
+			abandon();
 			const errorMessage = getErrorMessage(error);
 			orderLogger.error('Checkout failed', {
 				showToast: true,
@@ -93,6 +118,7 @@ export function PayButton() {
 				},
 			});
 		} finally {
+			clearOrderSaving(uuid);
 			setLoading(false);
 		}
 	}, [
