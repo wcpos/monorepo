@@ -27,5 +27,6 @@ function acceptsDuration(durationMs) {
 
 test('native cart-add timing keeps a two-second phone regression boundary', () => {
 	assert.equal(acceptsDuration(1_999.9), true);
+	assert.equal(acceptsDuration(2_000), true);
 	assert.equal(acceptsDuration(2_000.1), false);
 });

@@ -72,16 +72,19 @@ export async function expectCartAddMeasurement(
 			'DOM add intent → expected cart quantity in DOM'
 		).toBeLessThanOrEqual(budgetMs);
 	} finally {
+		const rawSample = await readSample().catch(() => null);
 		await testInfo.attach('cart-add-performance', {
 			body: JSON.stringify({
 				metric: 'dom-add-intent-to-cart-quantity',
 				platform: 'web',
 				project: testInfo.project.name,
 				budgetMs,
-				rawSamples: [await readSample()],
+				rawSamples: [rawSample],
 			}),
 			contentType: 'application/json',
 		});
-		await page.evaluate(() => (window as MeasurementWindow).__WCPOS_CART_MEASUREMENT__?.stop());
+		await page
+			.evaluate(() => (window as MeasurementWindow).__WCPOS_CART_MEASUREMENT__?.stop())
+			.catch(() => undefined);
 	}
 }
