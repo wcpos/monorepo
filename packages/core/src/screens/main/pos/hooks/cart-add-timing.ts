@@ -45,17 +45,23 @@ export function beginCartAddTiming(
 	productId: number,
 	quantity: number,
 	start: number
-): void {
+): number | undefined {
 	if (!isCartAddTimingEnabled()) return;
 	startedAt = start;
+	const sequence = snapshot.sequence + 1;
 	publish({
-		sequence: snapshot.sequence + 1,
-		status: snapshot.status === 'pending' ? 'overlap' : 'pending',
+		sequence,
+		status: snapshot.status === 'pending' || snapshot.status === 'overlap' ? 'overlap' : 'pending',
 		orderId,
 		productId,
 		quantity: quantity + 1,
 		durationMs: null,
 	});
+	return sequence;
+}
+export function cancelCartAddTiming(sequence: number | undefined): void {
+	if (sequence === undefined || snapshot.sequence !== sequence) return;
+	publish({ ...snapshot, status: 'idle', durationMs: null });
 }
 export function commitCartAddTiming(orderId: string, lines: readonly Line[]): void {
 	if (!isCartAddTimingEnabled() || snapshot.status !== 'pending' || snapshot.orderId !== orderId)

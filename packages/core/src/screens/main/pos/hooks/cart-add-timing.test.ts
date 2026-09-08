@@ -1,5 +1,6 @@
 import {
 	beginCartAddTiming,
+	cancelCartAddTiming,
 	commitCartAddTiming,
 	getCartAddTiming,
 	subscribeCartAddTiming,
@@ -53,11 +54,30 @@ describe('cart add handler-to-commit timing', () => {
 	});
 
 	it('keeps overlapping adds invalid rather than publishing a deceptively fast sample', () => {
-		beginCartAddTiming('overlap', 42, 0, 100);
+		const first = beginCartAddTiming('overlap', 42, 0, 100);
 		beginCartAddTiming('overlap', 42, 0, 110);
+		const third = beginCartAddTiming('overlap', 42, 0, 120);
 		commitCartAddTiming('overlap', [{ product_id: 42, quantity: 1 }]);
 		expect(getCartAddTiming().status).toBe('overlap');
 		expect(getCartAddTiming().durationMs).toBeNull();
+		cancelCartAddTiming(first);
+		expect(getCartAddTiming().status).toBe('overlap');
+		cancelCartAddTiming(third);
+		expect(getCartAddTiming().status).toBe('idle');
+	});
+
+	it('does not let a failed older add cancel a newer sample', () => {
+		const first = beginCartAddTiming('first', 42, 0, 100);
+		cancelCartAddTiming(first);
+		const second = beginCartAddTiming('second', 43, 0, 110);
+		cancelCartAddTiming(first);
+		expect(getCartAddTiming()).toMatchObject({
+			sequence: second,
+			status: 'pending',
+			orderId: 'second',
+		});
+		cancelCartAddTiming(second);
+		expect(getCartAddTiming().status).toBe('idle');
 	});
 
 	it('is inert outside explicitly instrumented runs', () => {

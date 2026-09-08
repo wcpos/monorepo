@@ -7,6 +7,7 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import {
 	beginCartAddTiming,
+	cancelCartAddTiming,
 	isCartAddTimingEnabled,
 	simpleProductQuantity,
 } from './cart-add-timing';
@@ -59,6 +60,7 @@ export const useAddProduct = () => {
 			options?: { silent?: boolean }
 		) => {
 			const timingStart = isCartAddTimingEnabled() ? performance.now() : 0;
+			let timingSequence: number | undefined;
 			let success;
 			let product: ProductDocument | { id: number; [key: string]: any };
 
@@ -107,7 +109,7 @@ export const useAddProduct = () => {
 			const lineItems = currentOrderRecord.getLatest().payload.line_items ?? [];
 
 			if (isCartAddTimingEnabled() && product.id) {
-				beginCartAddTiming(
+				timingSequence = beginCartAddTiming(
 					currentOrderRecord.uuid,
 					product.id,
 					simpleProductQuantity(lineItems, product.id),
@@ -121,8 +123,16 @@ export const useAddProduct = () => {
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await incrementLineItem(uuid, 1);
-						if (success === false) return false;
+						try {
+							success = await incrementLineItem(uuid, 1);
+						} catch (error) {
+							cancelCartAddTiming(timingSequence);
+							throw error;
+						}
+						if (success === false) {
+							cancelCartAddTiming(timingSequence);
+							return false;
+						}
 					}
 				}
 			}
@@ -141,8 +151,16 @@ export const useAddProduct = () => {
 					site: 'useAddProduct',
 				});
 				newLineItem = computed.line as typeof newLineItem;
-				success = await addItemToOrder('line_items', newLineItem);
-				if (success === false) return false;
+				try {
+					success = await addItemToOrder('line_items', newLineItem);
+				} catch (error) {
+					cancelCartAddTiming(timingSequence);
+					throw error;
+				}
+				if (success === false) {
+					cancelCartAddTiming(timingSequence);
+					return false;
+				}
 			}
 
 			// returned success should be the updated order
@@ -157,6 +175,7 @@ export const useAddProduct = () => {
 				});
 				return true;
 			} else {
+				cancelCartAddTiming(timingSequence);
 				reportCartFailure(orderLogger, 'Failed to add product to cart', {
 					toastTitle: t('pos.error_adding_to_cart', { name: product.name }),
 					context: {
