@@ -37,6 +37,7 @@ setPremiumFlag();
 addRxPlugin(RxDBMigrationSchemaPlugin);
 
 const CORRUPTION_REFUSALS = [
+	'multi-instance',
 	'unsorted-primary',
 	'duplicate-primary-id:categories::woo-category:16',
 	'id-set-mismatch:orders::woo-order:42',
@@ -79,17 +80,29 @@ const workerWrappedRefusalError = (reason: string) =>
 			)
 	);
 
+const workerWrappedTargetedRefusalError = () =>
+	new Error(
+		'could not requestRemote: ' +
+			JSON.stringify({
+				methodName: 'findDocumentsById',
+				params: [['orders::woo-order:1'], false],
+				error: {
+					name: 'SyntaxError',
+					message: `Unexpected token ' ', "[          "... is not valid JSON; targeted recovery refused: multi-instance`,
+					rxdb: true,
+					stack: 'SyntaxError: Unexpected token at JSON.parse (<anonymous>)',
+				},
+			})
+	);
+
 describe('isReconciliationRefusalError', () => {
 	it.each(CORRUPTION_REFUSALS)('classifies the corruption refusal %s', (reason) => {
 		expect(isReconciliationRefusalError(refusalError(reason))).toBe(true);
 	});
 
-	it.each(['no-divergence', 'multi-instance'])(
-		'does not classify the non-corruption refusal %s',
-		(reason) => {
-			expect(isReconciliationRefusalError(refusalError(reason))).toBe(false);
-		}
-	);
+	it.each(['no-divergence'])('does not classify the non-corruption refusal %s', (reason) => {
+		expect(isReconciliationRefusalError(refusalError(reason))).toBe(false);
+	});
 
 	it.each([
 		new SyntaxError('Unexpected token \'r\', "records" is not valid JSON'),
@@ -102,7 +115,11 @@ describe('isReconciliationRefusalError', () => {
 		expect(isReconciliationRefusalError(workerWrappedRefusalError(reason))).toBe(true);
 	});
 
-	it.each(['no-divergence', 'multi-instance'])(
+	it('classifies the worker-wrapped targeted multi-instance refusal', () => {
+		expect(isReconciliationRefusalError(workerWrappedTargetedRefusalError())).toBe(true);
+	});
+
+	it.each(['no-divergence'])(
 		'does not classify the worker-wrapped non-corruption refusal %s',
 		(reason) => {
 			expect(isReconciliationRefusalError(workerWrappedRefusalError(reason))).toBe(false);
@@ -324,6 +341,53 @@ describe('coverage ledger recovery', () => {
 		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
 	});
 
+	it('rebuilds once for a worker-wrapped targeted refusal and retries with a refreshed repository', async () => {
+		const db = await openLedgerDatabase();
+		const events: SyncEvent[] = [];
+		const coverage = createLocalCoverage({
+			database: db as never,
+			diagnostics: (event) => events.push(event),
+			now: () => 1_000,
+			freshForMs: 500,
+		});
+		await coverage.recordQueryResult({
+			collection: 'orders',
+			queryKey: 'orders:open',
+			records: [{ id: 'woo-order:1' }],
+			complete: true,
+		});
+		await db.collections.schedulerTaskStates.insert(schedulerTaskStateDocument('completed'));
+		await seedQueryTotalStores(db);
+		const originalCollections = new Map(
+			LEDGER_COLLECTIONS.map((name) => [name, db.collections[name]])
+		);
+		const read = vi
+			.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments')
+			.mockRejectedValueOnce(workerWrappedTargetedRefusalError());
+
+		await expect(coverage.readSnapshot()).resolves.toEqual({ records: [], lanes: [] });
+		expect(read).toHaveBeenCalledTimes(2);
+		expect(read.mock.contexts[1]).not.toBe(read.mock.contexts[0]);
+		for (const name of LEDGER_COLLECTIONS) {
+			expect(db.collections[name]).not.toBe(originalCollections.get(name));
+			await expect(db.collections[name].count().exec()).resolves.toBe(0);
+		}
+
+		const secondError = workerWrappedTargetedRefusalError();
+		read.mockRejectedValueOnce(secondError);
+		await expect(coverage.readSnapshot()).rejects.toBe(secondError);
+		expect(read).toHaveBeenCalledTimes(3);
+		expect(read.mock.contexts[2]).toBe(read.mock.contexts[1]);
+		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toEqual([
+			{
+				type: 'coverage.ledger-rebuilt',
+				level: 'warn',
+				fields: { reason: 'multi-instance', trigger: 'coverage' },
+			},
+		]);
+		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+	});
+
 	it('rebuilds all five stores from a query-total refusal, retries once, and surfaces a second refusal', async () => {
 		const db = await openLedgerDatabase();
 		const events: SyncEvent[] = [];
@@ -383,9 +447,7 @@ describe('coverage ledger recovery', () => {
 
 	it.each([
 		['no-divergence', refusalError('no-divergence')],
-		['multi-instance', refusalError('multi-instance')],
 		['worker-wrapped no-divergence', workerWrappedRefusalError('no-divergence')],
-		['worker-wrapped multi-instance', workerWrappedRefusalError('multi-instance')],
 	])('does not spend query-total recovery on %s', async (_label, nonCorruptionError) => {
 		const db = await openLedgerDatabase();
 		const events: SyncEvent[] = [];

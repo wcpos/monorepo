@@ -1,5 +1,12 @@
-const RECONCILIATION_REFUSAL_MARKER = 'index reconciliation refused:';
-const NON_CORRUPTION_REFUSALS = new Set(['no-divergence', 'multi-instance']);
+const RECONCILIATION_REFUSAL_MARKERS = [
+	'index reconciliation refused:',
+	'targeted recovery refused:',
+];
+// On web, multi-instance is configuration: the adapter omits the flag, so RxDB
+// defaults it to true and gates recovery (#1045). Both refusal paths run only
+// after a documents-file parse failure; Electron/native never emit this reason.
+// It is corruption nobody else will repair, not a safe skip (Sentry 2K0).
+const NON_CORRUPTION_REFUSALS = new Set(['no-divergence']);
 const ledgerReconciliationRefusals = new WeakSet<object>();
 
 /**
@@ -99,9 +106,10 @@ function errorMessage(error: unknown): string | undefined {
 
 function reconciliationRefusalReason(error: unknown): string | undefined {
 	const message = errorMessage(error);
-	const markerIndex = message?.indexOf(RECONCILIATION_REFUSAL_MARKER) ?? -1;
-	if (!message || markerIndex < 0) return undefined;
-	const raw = message.slice(markerIndex + RECONCILIATION_REFUSAL_MARKER.length).trim();
+	if (!message) return undefined;
+	const marker = RECONCILIATION_REFUSAL_MARKERS.find((candidate) => message.includes(candidate));
+	if (!marker) return undefined;
+	const raw = message.slice(message.indexOf(marker) + marker.length).trim();
 	// On web the refusal crosses the storage worker boundary JSON-serialized:
 	// rx-storage-remote rethrows worker errors as
 	//   could not requestRemote: {..."message":"...; index reconciliation refused: X","stack":"..."}
