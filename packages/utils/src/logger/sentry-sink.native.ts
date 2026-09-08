@@ -48,10 +48,14 @@ function persistConsent(consent: TelemetryConsent): void {
 }
 
 function initialize(): void {
+	// No custom release/dist: the SDK derives `<applicationId>@<version>+<build>`
+	// natively, which is the key the Xcode and Gradle upload steps file source
+	// maps and debug symbols under. A `wcpos-app@` release here would never match
+	// an upload, so native frames would stay unsymbolicated. Native events are
+	// therefore filtered by `environment:ios|android`, not by the web/Electron
+	// `wcpos-app@` release namespace; grouping is unaffected (error-code fingerprint).
 	Sentry.init({
 		dsn: SENTRY_DSN,
-		release: `wcpos-app@${AppInfo.version}`,
-		dist: AppInfo.buildNumber,
 		environment: AppInfo.platform,
 		sendDefaultPii: false,
 		beforeSend: scrubEvent,
