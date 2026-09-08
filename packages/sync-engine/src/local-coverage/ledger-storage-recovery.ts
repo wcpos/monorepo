@@ -16,6 +16,7 @@ const ledgerReconciliationRefusals = new WeakSet<object>();
  * refusal first — the trigger rides the diagnostics event so the log says which.
  */
 export type LedgerRebuildTrigger = 'coverage' | 'scheduler' | 'query-total';
+type LedgerRecoveryKind = 'rebuild' | 'reattach';
 
 /**
  * Any database object. Kept as bare `object` because the callers hold different
@@ -23,12 +24,16 @@ export type LedgerRebuildTrigger = 'coverage' | 'scheduler' | 'query-total';
  * `SchedulerTaskStateDatabase`); the name and close hook are read defensively.
  */
 type LedgerRecoveryDatabase = object;
-type NamedDatabase = { name?: unknown; onClose?: unknown };
+type NamedDatabase = { name?: unknown; token?: unknown; onClose?: unknown };
 
 type LedgerRecoveryEntry = {
 	/** The database instance the registration was made for — re-registration identity. */
 	database: object;
-	rebuild: (reason: string, trigger: LedgerRebuildTrigger) => Promise<void>;
+	rebuild: (
+		reason: string,
+		trigger: LedgerRebuildTrigger,
+		kind: LedgerRecoveryKind
+	) => Promise<void>;
 	/**
 	 * The single in-flight rebuild. Startup, the maintenance lanes and the scheduler
 	 * drain run concurrently, so several callers catch the same refusal; they share
@@ -42,7 +47,7 @@ type LedgerRecoveryEntry = {
 };
 
 /**
- * Per-database ledger recovery, keyed by database name.
+ * Per-instance ledger recovery, keyed by database name and RxDB instance token.
  *
  * `createLocalCoverage` registers the rebuild closure (it owns the drop/recreate
  * recipe and the diagnostics observer); all repository families then trigger
@@ -50,7 +55,7 @@ type LedgerRecoveryEntry = {
  * `coverage.ledger-rebuilt` emission cover the whole ledger (#956).
  *
  * Lifecycle: the entry is removed when the database closes (`db.onClose`), and a
- * registration for a different instance of the same name replaces it. So the
+ * token keeps same-name RxDB peers independent within one JavaScript realm. So the
  * one-shot guard is scoped to a LIVE database, not to the process:
  *
  *  - it keeps #942's anti-loop property — within one open database the ledger is
@@ -75,7 +80,11 @@ let syntheticSequence = 0;
 function registryKey(database: LedgerRecoveryDatabase | undefined): string | undefined {
 	if (!database || typeof database !== 'object') return undefined;
 	const name = (database as NamedDatabase).name;
-	if (typeof name === 'string' && name.length > 0) return name;
+	if (typeof name === 'string' && name.length > 0) {
+		// Separate live RxDB instances sharing storage (including peers in one realm).
+		const token = (database as NamedDatabase).token;
+		return typeof token === 'string' ? `${name}:${token}` : name;
+	}
 	let synthetic = syntheticKeys.get(database);
 	if (synthetic === undefined) {
 		synthetic = `ledger-recovery-anonymous:${(syntheticSequence += 1)}`;
@@ -128,6 +137,16 @@ function corruptionRefusalReason(error: unknown): string | undefined {
 	return reason;
 }
 
+export function classifyLedgerRecoveryError(
+	error: unknown
+): { kind: LedgerRecoveryKind; reason: string } | undefined {
+	if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'COL21') {
+		return { kind: 'reattach', reason: 'COL21' };
+	}
+	const reason = corruptionRefusalReason(error);
+	return reason === undefined ? undefined : { kind: 'rebuild', reason };
+}
+
 export function isReconciliationRefusalError(error: unknown): boolean {
 	return corruptionRefusalReason(error) !== undefined;
 }
@@ -151,7 +170,7 @@ export function isLedgerReconciliationRefusalError(error: unknown): boolean {
  */
 export function registerLedgerRecovery(input: {
 	database: LedgerRecoveryDatabase;
-	rebuild: (reason: string, trigger: LedgerRebuildTrigger) => Promise<void>;
+	rebuild: LedgerRecoveryEntry['rebuild'];
 }): void {
 	const key = registryKey(input.database);
 	if (key === undefined) return;
@@ -181,11 +200,12 @@ export function registerLedgerRecovery(input: {
 function rebuildLedgerOnce(
 	entry: LedgerRecoveryEntry,
 	reason: string,
-	trigger: LedgerRebuildTrigger
+	trigger: LedgerRebuildTrigger,
+	kind: LedgerRecoveryKind
 ): Promise<void> {
 	if (!entry.pendingRebuild) {
 		entry.pendingRebuild = entry
-			.rebuild(reason, trigger)
+			.rebuild(reason, trigger, kind)
 			.then(() => {
 				entry.generation += 1;
 			})
@@ -206,6 +226,7 @@ async function awaitLedgerRebuild(input: {
 	database: LedgerRecoveryDatabase | undefined;
 	error: unknown;
 	reason: string;
+	kind: LedgerRecoveryKind;
 	entryAtStart: LedgerRecoveryEntry | undefined;
 	generationAtStart: number;
 	trigger: LedgerRebuildTrigger;
@@ -228,9 +249,11 @@ async function awaitLedgerRebuild(input: {
 		return;
 	}
 
-	if (entry.rebuilt) throw input.error;
-	entry.rebuilt = true;
-	await rebuildLedgerOnce(entry, input.reason, input.trigger);
+	if (input.kind === 'rebuild') {
+		if (entry.rebuilt) throw input.error;
+		entry.rebuilt = true;
+	}
+	await rebuildLedgerOnce(entry, input.reason, input.trigger, input.kind);
 }
 
 /**
@@ -274,12 +297,12 @@ export function withLedgerRecovery<T extends object>(input: {
 		try {
 			return await invoke(property, args);
 		} catch (error) {
-			const reason = corruptionRefusalReason(error);
-			if (reason === undefined) throw error;
+			const recovery = classifyLedgerRecoveryError(error);
+			if (recovery === undefined) throw error;
 			await awaitLedgerRebuild({
 				database: input.database,
 				error,
-				reason,
+				...recovery,
 				entryAtStart,
 				generationAtStart,
 				trigger: input.trigger,
@@ -319,12 +342,12 @@ export async function withSchedulerSeedLedgerRecovery<T>(input: {
 	try {
 		return await input.run();
 	} catch (error) {
-		const reason = corruptionRefusalReason(error);
-		if (reason === undefined) throw error;
+		const recovery = classifyLedgerRecoveryError(error);
+		if (recovery === undefined) throw error;
 		await awaitLedgerRebuild({
 			database: input.database,
 			error,
-			reason,
+			...recovery,
 			entryAtStart,
 			generationAtStart,
 			trigger: 'scheduler',
@@ -359,12 +382,12 @@ export async function withSchedulerDrainLedgerRecovery<T>(input: {
 	try {
 		return await input.run();
 	} catch (error) {
-		const reason = corruptionRefusalReason(error);
-		if (reason === undefined) throw error;
+		const recovery = classifyLedgerRecoveryError(error);
+		if (recovery === undefined) throw error;
 		await awaitLedgerRebuild({
 			database: input.database,
 			error,
-			reason,
+			...recovery,
 			entryAtStart,
 			generationAtStart,
 			trigger: 'scheduler',

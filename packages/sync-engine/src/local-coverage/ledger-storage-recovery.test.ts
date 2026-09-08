@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addRxPlugin, createRxDatabase, type RxDatabase } from 'rxdb';
+import { addRxPlugin, createRxDatabase, newRxError, overwritable, type RxDatabase } from 'rxdb';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
@@ -27,7 +27,13 @@ import { RxSchedulerTaskStateRepository } from '../scheduler/rx-scheduler-task-s
 import { schedulerTaskStateKey } from '../scheduler/scheduler-task-state-schema';
 import { createLocalCoverage } from './local-coverage';
 import { RxCoverageRepository } from './persistence';
-import { isReconciliationRefusalError, withLedgerRecovery } from './ledger-storage-recovery';
+import {
+	classifyLedgerRecoveryError,
+	isReconciliationRefusalError,
+	withLedgerRecovery,
+	withSchedulerDrainLedgerRecovery,
+	withSchedulerSeedLedgerRecovery,
+} from './ledger-storage-recovery';
 
 import type { FetchTask } from '../scheduler/replication-policy';
 
@@ -96,6 +102,17 @@ const workerWrappedTargetedRefusalError = () =>
 	);
 
 describe('isReconciliationRefusalError', () => {
+	it('routes closed collections to re-attach and corruption refusals to rebuild', () => {
+		expect(
+			classifyLedgerRecoveryError(newRxError('COL21', { collection: 'coverageRecords' }))
+		).toEqual({ kind: 'reattach', reason: 'COL21' });
+		expect(classifyLedgerRecoveryError(refusalError('multi-instance'))).toEqual({
+			kind: 'rebuild',
+			reason: 'multi-instance',
+		});
+		expect(classifyLedgerRecoveryError(new Error('unrelated'))).toBeUndefined();
+	});
+
 	it.each(CORRUPTION_REFUSALS)('classifies the corruption refusal %s', (reason) => {
 		expect(isReconciliationRefusalError(refusalError(reason))).toBe(true);
 	});
@@ -137,20 +154,28 @@ const LEDGER_COLLECTIONS = [
 
 let databaseSequence = 0;
 let openDatabase: RxDatabase | undefined;
+let peerDatabase: RxDatabase | undefined;
 
 afterEach(async () => {
 	vi.restoreAllMocks();
+	await peerDatabase?.close();
+	peerDatabase = undefined;
 	await openDatabase?.close();
 	openDatabase = undefined;
 });
 
-async function openLedgerDatabase(): Promise<RxDatabase> {
+async function openLedgerDatabase(peerOf?: RxDatabase, multiInstance = false): Promise<RxDatabase> {
+	// RxDB permits duplicate names in one JS realm only in test/dev mode.
+	const devMode = peerOf ? vi.spyOn(overwritable, 'isDevMode').mockReturnValue(true) : undefined;
 	const db = await createRxDatabase({
-		name: `ledgerrecovery${(databaseSequence += 1)}`,
-		storage: getRxStorageMemory(),
-		multiInstance: false,
+		name: peerOf?.name ?? `ledgerrecovery${(databaseSequence += 1)}`,
+		storage: peerOf?.storage ?? getRxStorageMemory(),
+		multiInstance,
+		ignoreDuplicate: !!peerOf,
 	});
-	openDatabase = db;
+	devMode?.mockRestore();
+	if (peerOf) peerDatabase = db;
+	else openDatabase = db;
 	const creators = engineCollectionCreators();
 	await db.addCollections(
 		Object.fromEntries(LEDGER_COLLECTIONS.map((name) => [name, creators[name]])) as never
@@ -265,6 +290,115 @@ async function openEngineDatabase(): Promise<RxDatabase> {
 }
 
 describe('coverage ledger recovery', () => {
+	it('re-attaches a peer without dropping storage or spending its rebuild guard', async () => {
+		const a = await openLedgerDatabase(undefined, true);
+		const b = await openLedgerDatabase(a, true);
+		const eventsA: SyncEvent[] = [];
+		const eventsB: SyncEvent[] = [];
+		const coverageA = createLocalCoverage({
+			database: a as never,
+			freshForMs: 500,
+			diagnostics: (event) => eventsA.push(event),
+		});
+		const coverageB = createLocalCoverage({
+			database: b as never,
+			freshForMs: 500,
+			diagnostics: (event) => eventsB.push(event),
+		});
+		const oldB = LEDGER_COLLECTIONS.map((name) => b.collections[name]);
+		const removedB = Promise.all(
+			oldB.map(
+				(collection) =>
+					new Promise<void>((resolve) => {
+						collection.onRemove.push(resolve);
+					})
+			)
+		);
+		const read = vi
+			.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments')
+			.mockRejectedValueOnce(refusalError('multi-instance'));
+		await coverageA.readSnapshot();
+		await removedB;
+		for (const collection of oldB) {
+			expect(collection.closed).toBe(true);
+			expect(b.collections[collection.name]).toBeUndefined();
+		}
+		expect(() => oldB[0].find()).toThrow(expect.objectContaining({ code: 'COL21' }));
+		await coverageA.recordQueryResult({
+			collection: 'orders',
+			queryKey: 'orders:open',
+			records: [{ id: 'woo-order:1' }],
+			complete: true,
+		});
+		const snapshot = await coverageA.readSnapshot();
+		const add = vi.spyOn(b, 'addCollections');
+		const remove = oldB.map((collection) => vi.spyOn(collection, 'remove'));
+		await expect(
+			Promise.all([coverageB.readSnapshot(), coverageB.readSnapshot()])
+		).resolves.toEqual([snapshot, snapshot]);
+		expect(add).toHaveBeenCalledTimes(1);
+		for (const spy of remove) expect(spy).not.toHaveBeenCalled();
+		for (const name of LEDGER_COLLECTIONS) {
+			expect(b.collections[name].closed).toBe(false);
+			expect(a.collections[name].closed).toBe(false);
+		}
+		expect(eventsA).toEqual([
+			{
+				type: 'coverage.ledger-rebuilt',
+				level: 'warn',
+				fields: { reason: 'multi-instance', trigger: 'coverage' },
+			},
+		]);
+		expect(eventsB).toEqual([
+			{
+				type: 'coverage.ledger-reattached',
+				level: 'info',
+				fields: { reason: 'COL21', trigger: 'coverage' },
+			},
+		]);
+		await expect(coverageA.readSnapshot()).resolves.toEqual(snapshot);
+
+		// B can still perform its own one-shot rebuild after re-attaching.
+		read.mockRejectedValueOnce(refusalError('multi-instance'));
+		await expect(coverageB.readSnapshot()).resolves.toEqual({ records: [], lanes: [] });
+		expect(eventsB.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+	});
+
+	it('allows repeated re-attachments through seed and drain after its rebuild guard is spent', async () => {
+		const db = await openLedgerDatabase();
+		const events: SyncEvent[] = [];
+		const coverage = createLocalCoverage({
+			database: db as never,
+			freshForMs: 500,
+			diagnostics: (event) => events.push(event),
+		});
+		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
+			refusalError('multi-instance')
+		);
+		await coverage.readSnapshot();
+		for (const mode of ['seed', 'drain'] as const) {
+			const stale = db.collections.schedulerTaskStates;
+			await Promise.all(LEDGER_COLLECTIONS.map((name) => db.collections[name].close()));
+			let calls = 0;
+			const run = async () => {
+				calls += 1;
+				return (calls === 1 ? stale : db.collections.schedulerTaskStates).find().exec();
+			};
+			if (mode === 'seed') {
+				await expect(withSchedulerSeedLedgerRecovery({ database: db, run })).resolves.toEqual([]);
+				expect(calls).toBe(2);
+			} else {
+				await expect(
+					withSchedulerDrainLedgerRecovery({ database: db, run, aborted: () => [] })
+				).resolves.toEqual([]);
+				expect(calls).toBe(1);
+			}
+			await expect(coverage.readSnapshot()).resolves.toEqual({ records: [], lanes: [] });
+		}
+		expect(events.filter((event) => event.type === 'coverage.ledger-reattached')).toHaveLength(2);
+		expect(events.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+	});
+
 	it('rebuilds the whole ledger once, refreshes the repository, observes it, and retries once', async () => {
 		const db = await openLedgerDatabase();
 		const events: SyncEvent[] = [];
