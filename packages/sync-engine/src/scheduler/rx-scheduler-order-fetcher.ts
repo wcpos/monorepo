@@ -37,6 +37,7 @@ import { assertReturnedRequestedIds, chunk, httpGet } from './rx-scheduler-colle
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
+import type { IncomingOrderSettlement } from '../write-path/order-pull-guard';
 import type { RangedLaneResumeState } from './persisted-coverage-schema';
 import type {
 	BuildCoverageDocumentsFromQueryResultInput,
@@ -129,6 +130,11 @@ export type OrdersSchedulerFetcherInput = {
 	 * set are skipped so scheduled pulls never overwrite queued local work.
 	 */
 	pendingMutationOrderIds?: () => Promise<ReadonlySet<string>>;
+	/** Retires held open-cart rows for a record the store just settled; see order-pull-guard.ts. */
+	discardHeldOpenCartRows?: (
+		recordId: string,
+		incoming: IncomingOrderSettlement
+	) => Promise<number>;
 	/**
 	 * The ONE browse-window lane key an explicitly user-driven sync is refreshing. Only
 	 * THAT window re-walks from page 1 instead of resuming from its covered prefix; every
@@ -313,12 +319,47 @@ function orderCoverageRecordId(document: OrderDocument): string {
  * The pending set is keyed by record UUID (the stable storage key) — `pendingRecordIds` returns
  * `mutation.recordId` — and a materialized order carries that same uuid, so uuid membership is
  * the whole test (ADR 0029 decision 6). Mirrors sync-core's shouldApplyPulledDocument.
+ *
+ * One exception: a document that says the store SETTLED the sale (a paid status, or
+ * `pos-partial`) first offers the record to `discardHeldOpenCartRows`, which retires the
+ * record's held open-cart rows when — and only when — the till still holds it as an unpaid
+ * open cart (the rule lives in order-pull-guard.ts). The pending set is then re-read whenever a
+ * discard was attempted, not only when THIS call removed rows: two lanes adopt the same paid
+ * snapshot (the checkout postMessage and the server-truth poll), and the loser must see the
+ * rows the winner already retired rather than report a stale `protected`.
+ *
+ * The materialized document carries status only under `payload` (the promoted top-level
+ * `status` is added by the collection descriptor at write time), so read it there.
  */
-function shouldApplyStoredOrder(
-	document: OrderDocument,
-	pendingMutationOrderIds: ReadonlySet<string>
-): boolean {
-	return !pendingMutationOrderIds.has(document.uuid);
+async function retireSettledHoldsThenFilter(
+	input: Pick<OrdersSchedulerFetcherInput, 'pendingMutationOrderIds' | 'discardHeldOpenCartRows'>,
+	documents: OrderDocument[]
+): Promise<OrderDocument[]> {
+	const initial = await input.pendingMutationOrderIds?.();
+	if (!initial || !input.discardHeldOpenCartRows) {
+		return initial ? documents.filter((document) => !initial.has(document.uuid)) : documents;
+	}
+	let attempted = false;
+	for (const document of documents) {
+		if (!initial.has(document.uuid)) continue;
+		const payload = document.payload as
+			| {
+					status?: unknown;
+					date_paid?: unknown;
+					date_paid_gmt?: unknown;
+					date_modified_gmt?: unknown;
+			  }
+			| undefined;
+		if (payload?.status === 'pos-open') continue;
+		await input.discardHeldOpenCartRows(document.uuid, {
+			status: payload?.status,
+			datePaid: payload?.date_paid_gmt ?? payload?.date_paid,
+			dateModified: payload?.date_modified_gmt,
+		});
+		attempted = true;
+	}
+	const pending = attempted ? ((await input.pendingMutationOrderIds?.()) ?? initial) : initial;
+	return documents.filter((document) => !pending.has(document.uuid));
 }
 
 /**
@@ -331,7 +372,10 @@ function shouldApplyStoredOrder(
  * resident wins, exactly as it would against a pull.
  */
 export async function applyOrderSnapshot(
-	input: Pick<OrdersSchedulerFetcherInput, 'repository' | 'pendingMutationOrderIds'>,
+	input: Pick<
+		OrdersSchedulerFetcherInput,
+		'repository' | 'pendingMutationOrderIds' | 'discardHeldOpenCartRows'
+	>,
 	payload: unknown
 ): Promise<'applied' | 'protected' | 'invalid'> {
 	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return 'invalid';
@@ -364,8 +408,7 @@ export async function applyOrderSnapshot(
 	delete storedCandidate._embedded;
 	const materialized = materializedOrderFromWooPayload(storedCandidate as WooOrderPayload);
 	const document = materialized.storedDocument;
-	const pending = input.pendingMutationOrderIds ? await input.pendingMutationOrderIds() : undefined;
-	if (pending && !shouldApplyStoredOrder(document, pending)) return 'protected';
+	if (!(await retireSettledHoldsThenFilter(input, [document])).length) return 'protected';
 	const applied = (await input.repository.upsertMany([document])) ?? [document];
 	await recordOrderManifestRows(input, [materialized], applied);
 	return applied.length === 0 ? 'protected' : 'applied';
@@ -865,12 +908,7 @@ async function fetchBrowserOrderQuery(
 		// page — is still honored. Skip the upsert for those (the local dirty copy
 		// stays resident) but still count them as covered so the window isn't
 		// reported incomplete and endlessly re-pulled.
-		const pending = input.pendingMutationOrderIds
-			? await input.pendingMutationOrderIds()
-			: undefined;
-		const applicable = pending
-			? documents.filter((document) => shouldApplyStoredOrder(document, pending))
-			: documents;
+		const applicable = await retireSettledHoldsThenFilter(input, documents);
 		// The repository's storage guard may skip further documents (a dirty resident outside the
 		// pending set); manifest rows follow what it APPLIED, not what this lane offered.
 		const applied = (await input.repository.upsertMany(applicable)) ?? applicable;
@@ -1046,12 +1084,7 @@ async function fetchTargetedOrders(
 		// Offline-first: re-read the pending set per batch (not once up front) so a
 		// mutation queued mid-pull is honored; skip overwriting orders with queued
 		// local mutations (their dirty local copy wins), but keep them in coverage.
-		const pending = input.pendingMutationOrderIds
-			? await input.pendingMutationOrderIds()
-			: undefined;
-		const applicable = pending
-			? documents.filter((document) => shouldApplyStoredOrder(document, pending))
-			: documents;
+		const applicable = await retireSettledHoldsThenFilter(input, documents);
 		// The repository's storage guard may skip further documents (a dirty resident outside the
 		// pending set); manifest rows follow what it APPLIED, not what this lane offered.
 		const applied = (await input.repository.upsertMany(applicable)) ?? applicable;

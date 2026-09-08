@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { withoutLocallyProtected } from './local-work-guard';
+import { withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
 
 function collectionWith(stored: Record<string, unknown>) {
 	return {
@@ -47,5 +47,52 @@ describe('withoutLocallyProtected', () => {
 			[incoming]
 		);
 		expect(result).toEqual([]);
+	});
+});
+
+describe('withoutUnchanged', () => {
+	it.each([
+		[{ uuid: 'a', payload: { a: 1, b: [2, 3] } }, false],
+		[
+			{
+				uuid: 'a',
+				payload: { b: [2, 3], a: 1 },
+				_rev: '2-x',
+				_meta: {},
+				_attachments: {},
+				_deleted: false,
+			},
+			false,
+		],
+		[{ uuid: 'a', payload: { a: 1, b: [2, 3] }, _deleted: true }, true],
+		[{ uuid: 'a', payload: { a: 1, b: [3, 2] } }, true],
+		[{ uuid: 'a', payload: { a: 1, b: [2, 3] }, extra: null }, true],
+		[{ uuid: 'a', payload: { a: 1, b: [2, 3], extra: null } }, true],
+		[undefined, true],
+	])('conservatively compares resident JSON %j', (resident, changed) => {
+		const incoming = { uuid: 'a', payload: { a: 1, b: [2, 3] } };
+		const stored = new Map([['a', { toJSON: () => resident }]]);
+		expect(withoutUnchanged(collectionWith({}), stored, [incoming])).toEqual(
+			changed ? [incoming] : []
+		);
+	});
+
+	it('applies schema fill methods and writes on uncertain comparisons', () => {
+		const incoming = { uuid: 'a' };
+		const stored = new Map([['a', { toJSON: () => ({ uuid: 'a', enabled: false }) }]]);
+		const collection = {
+			...collectionWith({}),
+			schema: {
+				fillObjectWithDefaults: (doc: Record<string, unknown>) =>
+					Object.assign(doc, { enabled: false }),
+			},
+		};
+		expect(withoutUnchanged(collection, stored, [incoming])).toEqual([]);
+		expect(incoming).toEqual({ uuid: 'a' });
+		collection.schema.fillObjectWithDefaults = () => {
+			throw new Error('cannot fill');
+		};
+		expect(withoutUnchanged(collection, stored, [incoming])).toEqual([incoming]);
+		expect(withoutUnchanged({ ...collection, schema: {} }, stored, [incoming])).toEqual([incoming]);
 	});
 });

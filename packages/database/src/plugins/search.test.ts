@@ -41,6 +41,8 @@ jest.mock(
 					destroy: jest.fn().mockResolvedValue(undefined),
 					remove: jest.fn().mockResolvedValue(undefined),
 					$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
+					// A healthy index: no appended entries, so the oversized-index check never rebuilds here.
+					find: jest.fn(() => ({ exec: jest.fn().mockResolvedValue([]) })),
 				},
 				search: jest.fn().mockResolvedValue(['uuid-1', 'uuid-2']),
 			};
@@ -283,6 +285,7 @@ describe('search plugin', () => {
 				options: {},
 				database: { collections: {} },
 				onClose: [],
+				count: () => ({ exec: async () => 0 }),
 			});
 			const documentSnapshot = (document: Record<string, unknown>) => ({
 				...(document.payload as Record<string, unknown>),
@@ -334,6 +337,7 @@ describe('search plugin', () => {
 				options: { searchFields: ['name'] },
 				database,
 				onClose: [],
+				count: () => ({ exec: async () => 0 }),
 			});
 			(removeCollectionStorages as jest.Mock).mockClear();
 
