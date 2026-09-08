@@ -1,11 +1,11 @@
 // Stream uncaught exceptions and console.error/warn from the dev client via Metro's inspector, symbolicated.
 import { createRequire } from 'node:module';
-const require = createRequire(process.env.WCPOS_WORKTREE_PKG || '/Users/kilbot/Projects/monorepo-v2/.claude/worktrees/fix+expo-opfs-swap-copies/package.json');
+const require = createRequire(import.meta.url);
 const WebSocket = require('ws');
-const METRO = 'http://127.0.0.1:8081';
+const METRO = process.env.WCPOS_METRO_URL || 'http://127.0.0.1:8081';
 const targets = await (await fetch(`${METRO}/json`)).json();
-const target = targets.find((t) => /com\.wcpos\.main\.dev/.test(t.title || '')) || targets[0];
-if (!target) { console.log('no inspector target'); process.exit(1); }
+const target = targets.find((t) => t.appId === 'com.wcpos.main.dev');
+if (!target) throw new Error('no inspector target for com.wcpos.main.dev');
 const ws = new WebSocket(target.webSocketDebuggerUrl, { headers: { Origin: METRO, 'User-Agent': 'Mozilla/5.0 Chrome/120.0.0.0' } });
 let id = 0;
 const send = (method, params = {}) => ws.send(JSON.stringify({ id: ++id, method, params }));
@@ -13,7 +13,7 @@ async function symbolicate(frames) {
   try {
     const stack = frames.slice(0, 8).map((f) => ({ file: f.url, lineNumber: f.lineNumber + 1, column: f.columnNumber + 1, methodName: f.functionName || '?' }));
     const r = await (await fetch(`${METRO}/symbolicate`, { method: 'POST', body: JSON.stringify({ stack }) })).json();
-    return (r.stack || []).map((s) => `${s.methodName || '?'} (${(s.file || '').replace(/^.*\/monorepo-v2\/[^/]*\/?/, '')}:${s.lineNumber})`).join(' < ');
+    return (r.stack || []).map((s) => `${s.methodName || '?'} (${(s.file || '').replace(`${process.cwd()}/`, '')}:${s.lineNumber})`).join(' < ');
   } catch (e) { return `symbolicate failed: ${e.message}`; }
 }
 ws.on('open', () => { send('Runtime.enable'); console.log(`listening on ${target.title}`); });

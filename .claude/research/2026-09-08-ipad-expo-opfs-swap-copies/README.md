@@ -18,11 +18,16 @@ warning for 18:29–18:32 and had crashed once already at ~18:25):
 | Hermes profile (`hermes-profile-183103-busy-minute.txt`) | JS thread 95 % busy |
 | iOS CPU report (`ios-cpu-report-183214-js-thread.ips`) | heaviest stack = `RCTJSThreadManager runRunLoop` (JS thread) |
 
-Inclusive time in that profile: **61 %** inside expo-opfs `FileSystemWritableFileStream`
-(`writeChunk` / `lazyInit` / `createWritable`), **18 %** under rxdb-premium
-`cleanupDocumentJsonFile` (compaction), **7 %** building file paths through `whatwg-url` parsing
-(`new File(path + '.swap.' + …)`), **5 %** in `" ".repeat()` padding. Native self time:
-`create` 13.7 s, `writeBytes` 9.8 s, `delete` 5.0 s, `exists` 4.0 s, `open` 3.5 s in one minute.
+The retained profile report shows time in expo-opfs `FileSystemWritableFileStream`
+(`writeChunk` / `lazyInit` / `createWritable`), rxdb-premium `cleanupDocumentJsonFile`,
+`whatwg-url` path construction (`new File(path + '.swap.' + …)`), and `" ".repeat()` padding.
+
+**Inclusive-percentage correction.** The original report generator took the maximum duration of
+duplicate call-frame nodes instead of adding each frame once per sample. That can make inclusive
+time smaller than self time, so the former 61 % / 18 % / 7 % / 5 % attribution is retracted. The
+raw CDP trace was not retained and those figures cannot be recalculated. The corrected generator
+sums a frame once per sample (deduplicating recursive occurrences); future reports should retain
+the raw trace alongside the generated report.
 
 **Mechanism.** The app uses `getRxStorageExpoAsync()` (`packages/database/src/adapters/storage/index.ts`),
 whose writable is expo-opfs's `createWritable({ keepExistingData: true })`. In expo-opfs 1.0.9
@@ -85,7 +90,8 @@ the same read-and-rewrite sequence with an extra copy added on open.
 - Install / launch: `xcrun devicectl device install app --device <coredevice id> <WCPOS.app>`;
   `xcrun devicectl device process launch --device <id> --payload-url "wcpos-dev://expo-development-client/?url=http%3A%2F%2F<mac lan ip>%3A8081" com.wcpos.main.dev`.
   The iPad reaches Metro over Wi-Fi; the first bundle is ~15 s.
-- Pull the store off the device (`pull-rows.sh`): `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier com.wcpos.main.dev --source Documents/.expo-opfs …`;
+- Pull the store off the device (`pull-rows.sh <device-id> [output-directory]`):
+  `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier com.wcpos.main.dev --source Documents/.expo-opfs …`;
   parse with `read-timing-rows.py`. The `rxdb-store_v7_<id>-logs-3` directory is per site: a
   different login is a different id.
 - Hermes CPU profile (`cdp-profile.mjs <seconds> <prefix>`; `node cdp-profile.mjs report <prefix>`
@@ -101,16 +107,14 @@ the same read-and-rewrite sequence with an extra copy added on open.
 
 ## Caveat: the Hermes sampling profiler is not free
 
-The Instruments capture that finally attached (18:39–18:41, `timeprofile-3.trace`, 18,023 samples)
-was taken while the CDP profile loop was still running, and it mostly measured the profiler: three
-`hermes-sampling-profiler` threads held 42 % of samples, the JS thread's leaf frames were
-`_sigtramp` / `sem_post` (the sampler interrupting it), and the main thread's app frames were
-`jsinspector_modern` trace serialisation. So: (a) the CPU warning at 18:29–18:32 and the earlier
-crash happened with the CDP profiler attached and are partly its doing; (b) the *proportions* inside
-the Hermes profile (which JS functions own the time) stand, and the code path is deterministic, but
-the *magnitude* on this iPad without a profiler is not measured here — the uncontaminated evidence
-that the production JS thread saturates is the 11:54 production CPU report; (c) never run the CDP
-sampler and Instruments at the same time, and take probe-row-only arms for before/after numbers.
+The Instruments capture was taken while the CDP profile loop was still running and mostly measured
+the profiler. Its raw trace was not retained, so the exact profiler-thread shares and sample count
+are not reproducible evidence. The CPU warning and earlier crash happened with the CDP profiler
+attached and are partly its doing. The retained Hermes report still identifies the qualitative code
+paths, but its historical inclusive percentages are invalid for the reason above and its absolute
+magnitude without a profiler was not measured. The uncontaminated evidence that the production JS
+thread saturates is the 11:54 production CPU report. Never run the CDP sampler and Instruments at
+the same time, take probe-row-only arms for before/after numbers, and retain raw traces.
 
 ## How #1885 (worklet storage host, `next`) relates
 
@@ -151,16 +155,10 @@ so each cart write costs a second storage write for its own log line. Demoting t
 is a free win on both lanes. The worklets scheduler (`WorkletRuntime::schedule` → mutex-guarded
 `AsyncQueueImpl::push`) cannot block the caller, so the freeze is JS work on the JS thread.
 
-**Instruments on the pick-up window (19:36–19:39, `instruments-tp6-thread-summary.txt`).** JS thread
-55 % of samples; its top leaf is `HadesGC::OldGen::search` (25 % of JS-thread samples) with card
-scanning and weak-root marking behind it, plus `hermes::Module::resetForMoreCompilation` /
-`VariableScope::assignIndexToVariables` (on-device compilation). `Runtime.getHeapUsage`: **393 MB used
-of 428 MB**, 5,491 GCs, 52 s GC CPU in 22 minutes, 18.5 GB allocated. The storage worklet thread was
-6 % (JSON string building); the main thread 27 % incl. `RCTRedBoxController` (the "lots of errors"
-Paul saw were RedBox screens — not persisted, and Metro in CI mode forwards nothing; the persisted
-error/warn rows were only the demo store's 403 `woocommerce_rest_cannot_delete`, a 404
-`/payment-methods` `rest_no_route` (released plugin lacks the `next` route) and one `SYNC321`
-"scope moved mid-query").
+**Unretained Instruments observation.** The raw pick-up-window trace and its generated text output
+were not retained; the summary file was accidentally committed empty. Its exact thread shares and
+leaf-frame attribution are therefore excluded rather than presented as auditable evidence. The
+retained heap snapshot below is the reproducible evidence for memory composition.
 
 **Heap snapshot (`heap-snapshot-summary-1885-arm.txt`, 448 MB, 3.08 M nodes).**
 - **219 MB is `CodeBlock` (47,443)** — Hermes-compiled function code. Expo's dev server passes

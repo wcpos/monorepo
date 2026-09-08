@@ -1,11 +1,12 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
-const require = createRequire('/Users/kilbot/Projects/monorepo-v2/.claude/worktrees/ios-device-profile/package.json');
+const require = createRequire(import.meta.url);
 const WebSocket = require('ws');
-const METRO = 'http://127.0.0.1:8081';
+const METRO = process.env.WCPOS_METRO_URL || 'http://127.0.0.1:8081';
 const out = process.argv[2] || 'heap.heapsnapshot';
 const targets = await (await fetch(`${METRO}/json`)).json();
-const target = targets.find((t) => /com\.wcpos\.main\.dev/.test(t.title || '')) || targets[0];
+const target = targets.find((t) => t.appId === 'com.wcpos.main.dev');
+if (!target) throw new Error('no inspector target for com.wcpos.main.dev');
 const ws = new WebSocket(target.webSocketDebuggerUrl, { headers: { Origin: METRO, 'User-Agent': 'Mozilla/5.0 Chrome/120.0.0.0' }, maxPayload: 1024 * 1024 * 1024 });
 await new Promise((r) => ws.on('open', r));
 const fd = fs.openSync(out, 'w'); let bytes = 0; let done;

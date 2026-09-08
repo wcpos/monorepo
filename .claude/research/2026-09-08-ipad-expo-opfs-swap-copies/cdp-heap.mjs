@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
-const require = createRequire(process.env.WCPOS_WORKTREE_PKG || '/Users/kilbot/Projects/monorepo-v2/.claude/worktrees/fix+expo-opfs-swap-copies/package.json');
+const require = createRequire(import.meta.url);
 const WebSocket = require('ws');
-const METRO = 'http://127.0.0.1:8081';
+const METRO = process.env.WCPOS_METRO_URL || 'http://127.0.0.1:8081';
 const targets = await (await fetch(`${METRO}/json`)).json();
 for (const target of targets) {
   const ws = new WebSocket(target.webSocketDebuggerUrl, { headers: { Origin: METRO, 'User-Agent': 'Mozilla/5.0 Chrome/120.0.0.0' } });

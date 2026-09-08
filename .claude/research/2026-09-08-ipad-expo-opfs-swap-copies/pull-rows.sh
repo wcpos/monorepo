@@ -1,13 +1,15 @@
 #!/bin/bash
 # Pull the dev client's .expo-opfs directory off the iPad and print the timing rows.
-set -u
-OUT=${PULL_DIR:-/tmp/ipad-pulls}/pull-$(date +%H%M%S)
+set -euo pipefail
+DEVICE_ID=${1:?usage: pull-rows.sh <device-id> [output-directory]}
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+OUT=${2:-$(mktemp -d "${TMPDIR:-/tmp}/wcpos-ipad-pull.XXXXXX")}
 mkdir -p "$OUT"
-xcrun devicectl device copy from --device 96D11509-CE68-5507-9AA5-713657C0B14A \
+xcrun devicectl device copy from --device "$DEVICE_ID" \
   --domain-type appDataContainer --domain-identifier com.wcpos.main.dev \
   --source Documents/.expo-opfs --destination "$OUT/expo-opfs" 2>&1 | tail -3
 echo "pulled to $OUT"
 for f in "$OUT"/expo-opfs/*logs*/documents.json; do
-  [ -f "$f" ] && echo "== $f" && python3 "$(dirname "$0")/read-timing-rows.py" "$f"
+  [ -f "$f" ] && echo "== $f" && python3 "$SCRIPT_DIR/read-timing-rows.py" "$f"
 done
-du -sh "$OUT"/expo-opfs/* 2>/dev/null | sort -h | tail -8
+find "$OUT/expo-opfs" -mindepth 1 -maxdepth 1 -exec du -sh {} + 2>/dev/null | sort -h | tail -8
