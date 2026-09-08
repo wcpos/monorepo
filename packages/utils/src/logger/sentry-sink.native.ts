@@ -68,7 +68,7 @@ function initialize(): void {
 }
 
 export function setTelemetryConsent(consent: TelemetryConsent): void {
-	if (consent === telemetryConsent) return;
+	if (consent === telemetryConsent && (consent !== 'allowed' || isInitialized)) return;
 	telemetryConsent = consent;
 	persistConsent(consent);
 	if (consent === 'allowed') {

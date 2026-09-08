@@ -103,6 +103,22 @@ describe('sentry-sink.native', () => {
 		});
 	});
 
+	it('retries after persisted-consent initialization fails during startup', () => {
+		files.set(consentMarkerPath, 'allowed');
+		jest.mocked(Sentry.init).mockImplementationOnce(() => {
+			throw new Error('native initialization failed');
+		});
+
+		jest.isolateModules(() => {
+			const isolated =
+				jest.requireActual<typeof import('./sentry-sink.native')>('./sentry-sink.native');
+			expect(Sentry.init).toHaveBeenCalledTimes(1);
+
+			isolated.setTelemetryConsent('allowed');
+			expect(Sentry.init).toHaveBeenCalledTimes(2);
+		});
+	});
+
 	it.each(['denied', 'undecided'] as const)('closes and stops captures on %s', (consent) => {
 		setTelemetryConsent('allowed');
 		setTelemetryConsent(consent);
