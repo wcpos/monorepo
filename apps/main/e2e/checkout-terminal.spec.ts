@@ -41,8 +41,16 @@ function terminalRoute(request: Request, orderId: number, action: string): boole
 }
 
 function terminalResponse(page: Page, orderId: number, action: 'intent' | 'status' | 'void') {
+	// Like createPaymentResponseMatcher: the app's HTTP layer takes ONE 401 on an
+	// expired token, refreshes and retries, so the first 401 is not the answer.
+	let sawUnauthorized = false;
 	const pending = page.waitForResponse(
-		(response) => terminalRoute(response.request(), orderId, action),
+		(response) => {
+			if (!terminalRoute(response.request(), orderId, action)) return false;
+			if (response.status() !== 401 || sawUnauthorized) return true;
+			sawUnauthorized = true;
+			return false;
+		},
 		{ timeout: 90_000 }
 	);
 	// Match the existing write helper: a UI failure must not leave an unhandled rejection.

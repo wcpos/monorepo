@@ -59,14 +59,20 @@ export function leaveCheckout(uuid: string) {
 	checkoutOrders.delete(uuid);
 	publish({ ...snapshot, checkoutOrders });
 }
-export function enterReceipt(uuid: string) {
+/**
+ * Move an order to its receipt stage. Selecting it brings the receipt on screen,
+ * which is right when the cashier just took the final payment here — and wrong
+ * when a terminal leg completes in the background for an order they are not
+ * serving: that order keeps its tab ("Paid · receipt") and waits to be tapped.
+ */
+export function enterReceipt(uuid: string, { select = true }: { select?: boolean } = {}) {
 	const checkoutOrders = new Set(snapshot.checkoutOrders);
 	checkoutOrders.delete(uuid);
 	publish({
 		...snapshot,
 		checkoutOrders,
 		receiptOrders: new Set([...snapshot.receiptOrders, uuid]),
-		selectedReceiptOrder: uuid,
+		selectedReceiptOrder: select ? uuid : snapshot.selectedReceiptOrder,
 	});
 }
 export function finishReceipt(uuid: string) {

@@ -161,12 +161,29 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		}
 		if (!state.captureFailed) schedule(route === 'intent' ? 0 : POLL_CADENCE_MS);
 	};
+	// A cancel pressed while the intent is still out waits here: a void that raced
+	// the intent could win on the server, be answered "not found", and leave the
+	// intent to create a live reader action nobody polls — a customer charged
+	// after the till said "cancelled". The void goes out once the intent settles.
+	let pendingCancel: string | null = null;
+	let intentInFlight = false;
+	const voidAfterIntent = async () => {
+		const reason = pendingCancel;
+		pendingCancel = null;
+		if (reason === null || !active()) return false;
+		sequence++;
+		clearTimer();
+		setState({ phase: 'cancelling', capturing: false });
+		await request('void', reason);
+		return true;
+	};
 	async function request(route: Route, reason?: string) {
 		if (!active()) return;
 		clearTimer();
 		const seq = ++sequence;
 		const url = `orders/${input.orderId}/payments/${input.row.id}/${route}`;
 		let data: ServerLegResponse;
+		if (route === 'intent') intentInFlight = true;
 		try {
 			const response =
 				route === 'status'
@@ -181,9 +198,11 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 						);
 			data = response.data as ServerLegResponse;
 		} catch (error) {
+			intentInFlight = false;
 			if (current(seq)) await handleError(error, route, seq);
 			return;
 		}
+		intentInFlight = false;
 		if (!current(seq)) return;
 		if (!(await applyResponse(data, seq, { consecutiveErrors: 0, unstable: false }))) return;
 		setState({
@@ -194,6 +213,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			...(route === 'intent' ? { deadlineAt: deadline(data.payment, deps.now()) } : {}),
 			...(route === 'void' ? { releaseAvailable: true } : {}),
 		});
+		if (route === 'intent' && (await voidAfterIntent())) return;
 		await afterResponse(route);
 	}
 	async function handleError(error: unknown, route: Route, seq: number) {
@@ -254,6 +274,9 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			await applyResponse({ payment: row, order: body?.data.order }, seq);
 			return;
 		}
+		// An intent the cashier already cancelled is not retried: the server may or may
+		// not hold the row, and the void answers that either way (200, or "not found").
+		if (route === 'intent' && (await voidAfterIntent())) return;
 		const count = state.consecutiveErrors + 1;
 		// A capture that never reached the server is not an attempt: the next status
 		// read that still shows `authorized` issues it again (under the same backoff).
@@ -296,6 +319,18 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			(state.phase !== 'polling' && state.phase !== 'creating')
 		)
 			return;
+		if (reason === 'cashier') event('Cancel requested by cashier');
+		if (intentInFlight) {
+			// The intent has not answered yet: remember the cancel, void when it does.
+			pendingCancel = reason;
+			setState({
+				phase: 'cancelling',
+				capturing: false,
+				captureFailed: false,
+				cancelRequested: true,
+			});
+			return;
+		}
 		sequence++;
 		clearTimer();
 		setState({
@@ -304,7 +339,6 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			captureFailed: false,
 			cancelRequested: true,
 		});
-		if (reason === 'cashier') event('Cancel requested by cashier');
 		await request('void', reason);
 	}
 	async function capture() {

@@ -94,7 +94,9 @@ it.each(['0.00', '4.00'])(
 		expect(changes.status).toBe('completed');
 		expect(changes.meta_data[0]).toEqual({ key: 'other', value: 7 });
 		expect(readLedger(changes.meta_data)).toEqual([{ ...row, status: 'captured' }]);
-		expect(mockReceipt.mock.calls).toEqual(balance === '0.00' ? [['order']] : []);
+		expect(mockReceipt.mock.calls).toEqual(
+			balance === '0.00' ? [['order', { select: false }]] : []
+		);
 		view.unmount();
 		expect(getTerminalPaymentsService()).toBeNull();
 	}

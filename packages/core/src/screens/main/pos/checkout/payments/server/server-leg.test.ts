@@ -402,6 +402,36 @@ it.each(['wcpos_payment_not_found', 'wcpos_unknown_refusal'])(
 		});
 	}
 );
+it('a cancel during an in-flight intent voids only once the intent has answered', async () => {
+	const c = setup();
+	const intent = deferred<{ data: unknown }>();
+	c.queue('intent', () => intent.promise);
+	c.answer('void', response({ status: 'voided' }));
+	void c.leg.start();
+	await tick();
+	await c.leg.cancel();
+	expect(c.count('void')).toBe(0);
+	expect(c.leg.getState()).toMatchObject({ phase: 'cancelling', cancelRequested: true });
+	intent.resolve({ data: response({ status: 'pending' }) });
+	await tick();
+	expect(c.count('void')).toBe(1);
+	expect(c.count('status')).toBe(0);
+	expect(c.leg.getState().outcome).toBe('voided');
+});
+it('a cancel during an intent that then fails in transit voids instead of retrying the intent', async () => {
+	const c = setup();
+	const intent = deferred<{ data: unknown }>();
+	c.queue('intent', () => intent.promise);
+	c.fail('void', refusal(404, 'wcpos_payment_not_found'));
+	void c.leg.start();
+	await tick();
+	await c.leg.cancel();
+	intent.reject(new Error('offline'));
+	await tick();
+	expect(c.count('intent')).toBe(1);
+	expect(c.count('void')).toBe(1);
+	expect(c.leg.getState().outcome).toBe('voided');
+});
 it('a capture lost in transit is issued again on the next authorized read', async () => {
 	const c = setup(true, { status: 'authorized' });
 	c.fail('capture');

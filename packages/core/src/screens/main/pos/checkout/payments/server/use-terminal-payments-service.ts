@@ -70,7 +70,11 @@ export function useTerminalPaymentsService(): void {
 				});
 			},
 			onCaptured: (orderUuid, order) => {
-				if (!stopped && order && Number(order.balance) === 0) enterReceipt(orderUuid);
+				// Never select: the order the cashier is serving stays on screen. When
+				// the captured order IS the current one, the tender flow's own outcome
+				// handler runs the complete-order flow, which selects the receipt.
+				if (!stopped && order && Number(order.balance) === 0)
+					enterReceipt(orderUuid, { select: false });
 			},
 		});
 		return () => {
