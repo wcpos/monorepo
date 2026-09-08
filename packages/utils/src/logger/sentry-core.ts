@@ -84,7 +84,11 @@ export function messageTemplate(message: string): string {
  * the `*999` catch-alls add the message template so unrelated failures do not
  * share an issue; an HTTP failure (the client stamps `context.endpoint`) adds
  * method + endpoint template so a 503 on `/products` and one on `/orders` are
- * two issues, whatever the code.
+ * two issues, whatever the code. A push rejection (the engine stamps
+ * `context.type: 'push.error'` with the server's `reason`) adds collection +
+ * status + reason: `registration-error-email-exists` on a customer create and
+ * `woocommerce_rest_invalid_coupon` on an order update are different bugs, and
+ * one Sentry issue for both (2HT) hid six of them behind whichever came first.
  */
 function fingerprintFor(message: string, code: string, context: unknown) {
 	const fields =
@@ -93,6 +97,10 @@ function fingerprintFor(message: string, code: string, context: unknown) {
 	if (typeof endpoint === 'string' && endpoint.length > 0) {
 		const method = typeof fields.method === 'string' ? fields.method : '';
 		return [code, method, messageTemplate(endpoint)];
+	}
+	if (fields.type === 'push.error') {
+		const part = (value: unknown) => (value === undefined || value === null ? '' : String(value));
+		return [code, part(fields.collection), part(fields.status), part(fields.reason)];
 	}
 	return code.endsWith('999') ? [code, messageTemplate(message)] : [code];
 }
