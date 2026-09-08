@@ -205,6 +205,23 @@ describe('sentry-sink.web', () => {
 		expect(orders).toEqual(orders2);
 	});
 
+	it('groups push rejections by collection, status and server reason, not by record', () => {
+		const push = (collection: string, recordId: string, status: number, reason?: string) =>
+			buildCaptureOptions({
+				message: `${collection} ${recordId} — push failed (HTTP ${status}${reason ? `: ${reason}` : ''})`,
+				code: 'SYNC201',
+				context: { type: 'push.error', collection, op: 'create', recordId, status, reason },
+			}).fingerprint;
+		const emailA = push('customers', 'ef72631f', 400, 'registration-error-email-exists');
+		const emailB = push('customers', '0b85f3f8', 400, 'registration-error-email-exists');
+		const coupon = push('orders', '3599cd24', 400, 'woocommerce_rest_invalid_coupon');
+		expect(emailA).toEqual(['SYNC201', 'customers', '400', 'registration-error-email-exists']);
+		expect(emailA).toEqual(emailB);
+		expect(emailA).not.toEqual(coupon);
+		// A bare 5xx with no server reason still groups by collection + status.
+		expect(push('orders', '3599cd24', 503)).toEqual(['SYNC201', 'orders', '503', '']);
+	});
+
 	it('captures Error context as an exception', () => {
 		setTelemetryConsent('allowed');
 		const error = new Error('Checkout failed');
