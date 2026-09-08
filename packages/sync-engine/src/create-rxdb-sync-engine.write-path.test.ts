@@ -1861,6 +1861,20 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(second.mutationId).not.toBe(first.mutationId); // a coalesced entry NEVER reuses a mutationId with a different payload
 			expect(engine.status().queueDepth).toBe(1); // coalesced, not stacked
 			expect(events.some((event) => event.type === 'queue.write.coalesce')).toBe(true);
+			// The orphaned id is announced (and replayable) so a waiter can follow the replacement.
+			const superseded = {
+				type: 'write-superseded',
+				collection: 'orders',
+				recordId: UUID_A,
+				mutationId: first.mutationId,
+				replacedBy: second.mutationId,
+			};
+			expect(second.supersededMutationId).toBe(first.mutationId);
+			const replayed: EngineEvent[] = [];
+			engine.events((event) => replayed.push(event), {
+				replayWriteOutcomeFor: first.mutationId,
+			})();
+			expect(replayed).toEqual([superseded]);
 
 			connectivity.set('online');
 			expect(await engine.sync('write-drain')).toMatchObject({

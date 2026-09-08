@@ -6,6 +6,9 @@ import { useCheckoutUrlSeed } from './use-checkout-url-seed';
 
 let mockSize = 'lg';
 const mockReplace = jest.fn();
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
 jest.mock('@wcpos/query', () => ({ useRecordField: jest.fn() }));

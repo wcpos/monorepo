@@ -29,6 +29,39 @@ function isWriteableCollection(name: string): name is WriteableCollection {
 	return Object.prototype.hasOwnProperty.call(REMOTE_ID_FIELD, name);
 }
 
+export async function enqueueDocumentWrite(
+	runtime: ReturnType<typeof useQueryRuntime>,
+	document: AnyRxDocument
+) {
+	const latest = document.getLatest();
+	const collectionName = latest.collection.name;
+	if (!isWriteableCollection(collectionName))
+		throw new Error(`Collection "${collectionName}" is not engine-writeable`);
+	const recordId = documentRecordId(latest);
+	if (!recordId) throw new Error(`Missing uuid for ${collectionName} push`);
+	const resident = await findEngineResident(runtime, collectionName, recordId);
+	if (!resident) {
+		throw new Error(`Engine resident "${recordId}" is missing from "${collectionName}"`);
+	}
+	const remoteId =
+		typeof resident.get === 'function'
+			? resident.get(REMOTE_ID_FIELD[collectionName])
+			: (resident as unknown as Record<string, unknown>)[REMOTE_ID_FIELD[collectionName]];
+	const payload = (
+		typeof resident.toMutableJSON === 'function'
+			? (resident.toMutableJSON().payload ?? {})
+			: cloneDeep((resident as unknown as Record<string, unknown>).payload ?? {})
+	) as Record<string, unknown>;
+	const receipt = await runtime.engine.write({
+		collection: collectionName,
+		operation: remoteId == null ? 'create' : 'update',
+		recordId,
+		payload,
+		...(collectionName === 'orders' ? { explicit: true } : {}),
+	});
+	return { collectionName, recordId, receipt, resident };
+}
+
 /**
  * Enqueue the current engine resident through the write plane. The passed legacy document is used
  * only for identity: its fields may be stale after an optimistic resident patch. Order pushes wait
@@ -49,26 +82,7 @@ export const usePushDocument = () => {
 			if (!recordId) throw new Error(`Missing uuid for ${collectionName} push`);
 
 			try {
-				const resident = await findEngineResident(runtime, collectionName, recordId);
-				if (!resident) {
-					throw new Error(`Engine resident "${recordId}" is missing from "${collectionName}"`);
-				}
-				const remoteId =
-					typeof resident.get === 'function'
-						? resident.get(REMOTE_ID_FIELD[collectionName])
-						: (resident as unknown as Record<string, unknown>)[REMOTE_ID_FIELD[collectionName]];
-				const payload = (
-					typeof resident.toMutableJSON === 'function'
-						? (resident.toMutableJSON().payload ?? {})
-						: cloneDeep((resident as unknown as Record<string, unknown>).payload ?? {})
-				) as Record<string, unknown>;
-				const receipt = await runtime.engine.write({
-					collection: collectionName,
-					operation: remoteId == null ? 'create' : 'update',
-					recordId,
-					payload,
-					...(collectionName === 'orders' ? { explicit: true } : {}),
-				});
+				const { receipt, resident } = await enqueueDocumentWrite(runtime, document);
 
 				let currentResident = resident;
 				if (collectionName === 'orders') {

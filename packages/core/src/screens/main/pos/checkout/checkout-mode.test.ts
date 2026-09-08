@@ -5,12 +5,16 @@ import type { EngineRecord } from '@wcpos/query';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import {
+	clearOrderSaveIfMutation,
 	clearOrderSaving,
 	enterCheckout,
 	enterReceipt,
 	finishReceipt,
 	getCheckoutModeSnapshot,
+	getOrderSaveState,
 	leaveCheckout,
+	markOrderQueuedOffline,
+	markOrderSaveRejected,
 	markOrderSaving,
 	resetCheckoutMode,
 	resolveStage,
@@ -18,8 +22,8 @@ import {
 	setTenderMethod,
 	subscribeCheckoutMode,
 	useOrderCheckoutStage,
-	useOrderSaving,
 } from './checkout-mode';
+import { useOrderSaveState, useOrderSaving } from './use-order-save-state';
 
 let mockDraft = false;
 const mockRecord = { uuid: 'a', payload: { meta_data: [] } };
@@ -28,7 +32,14 @@ jest.mock('@wcpos/query', () => ({
 		record ? select(record) : undefined,
 }));
 
-beforeEach(resetCheckoutMode);
+let mockStatus = 'online-website-available';
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockStatus }),
+}));
+beforeEach(() => {
+	resetCheckoutMode();
+	mockStatus = 'online-website-available';
+});
 
 it('defaults to cart and ignores ended legs', () => {
 	expect(resolveStage('a', getCheckoutModeSnapshot(), [])).toBe('cart');
@@ -117,19 +128,19 @@ it('publishes saving changes idempotently, preserves saving on leave, and resets
 	const saving = getCheckoutModeSnapshot();
 	markOrderSaving('a');
 	expect(getCheckoutModeSnapshot()).toBe(saving);
-	expect(before.savingOrders.size).toBe(0);
+	expect(before.saveStates.size).toBe(0);
 	enterCheckout('a');
 	leaveCheckout('a');
-	expect(getCheckoutModeSnapshot().savingOrders.has('a')).toBe(true);
+	expect(getCheckoutModeSnapshot().saveStates.has('a')).toBe(true);
 	clearOrderSaving('a');
 	const cleared = getCheckoutModeSnapshot();
 	clearOrderSaving('a');
 	expect(getCheckoutModeSnapshot()).toBe(cleared);
-	expect(cleared.savingOrders.size).toBe(0);
-	expect(saving.savingOrders.has('a')).toBe(true);
+	expect(cleared.saveStates.size).toBe(0);
+	expect(saving.saveStates.has('a')).toBe(true);
 	markOrderSaving('b');
 	resetCheckoutMode();
-	expect(getCheckoutModeSnapshot().savingOrders.size).toBe(0);
+	expect(getCheckoutModeSnapshot().saveStates.size).toBe(0);
 });
 it('subscribes to saving for only the requested order', () => {
 	const { result } = renderHook(() => [useOrderSaving('a'), useOrderSaving(undefined)]);
@@ -168,3 +179,51 @@ it.each([leaveCheckout, enterReceipt, finishReceipt, resetCheckoutMode])(
 		expect(getCheckoutModeSnapshot().tenderMethods.has('a')).toBe(false);
 	}
 );
+
+it('queues only an active save and ignores a different mutation', () => {
+	markOrderQueuedOffline('a', 'm');
+	expect(getOrderSaveState('a')).toBeNull();
+	markOrderSaving('a');
+	markOrderQueuedOffline('a', 'm');
+	const queued = getCheckoutModeSnapshot();
+	markOrderQueuedOffline('a', 'm');
+	markOrderQueuedOffline('a', 'other');
+	expect(getCheckoutModeSnapshot()).toBe(queued);
+	expect(getOrderSaveState('a')).toEqual({ kind: 'queued-offline', mutationId: 'm' });
+	clearOrderSaveIfMutation('a', 'other');
+	expect(getCheckoutModeSnapshot()).toBe(queued);
+	clearOrderSaveIfMutation('a', 'm');
+	expect(getOrderSaveState('a')).toBeNull();
+});
+it('a new save replaces queued state and survives a stale acknowledgement', () => {
+	markOrderSaving('a');
+	markOrderQueuedOffline('a', 'm');
+	markOrderSaving('a');
+	clearOrderSaveIfMutation('a', 'm');
+	expect(getOrderSaveState('a')).toEqual({ kind: 'saving' });
+});
+it('rejection is final, idempotent by fields, and can be cleared', () => {
+	const rejection = { status: 403, reason: 'refused', message: 'No permission' };
+	markOrderSaveRejected('a', rejection);
+	const held = getCheckoutModeSnapshot();
+	markOrderSaveRejected('a', { ...rejection });
+	markOrderSaving('a');
+	markOrderQueuedOffline('a', 'm');
+	clearOrderSaveIfMutation('a', 'm');
+	expect(getCheckoutModeSnapshot()).toBe(held);
+	markOrderSaveRejected('a', { ...rejection, message: 'Changed' });
+	expect(getOrderSaveState('a')).toEqual({ kind: 'rejected', ...rejection, message: 'Changed' });
+	clearOrderSaving('a');
+	expect(getOrderSaveState('a')).toBeNull();
+});
+it('derives offline immediately without changing the stored saving state', () => {
+	markOrderSaving('a');
+	const { result, rerender } = renderHook(() => [useOrderSaveState('a'), useOrderSaving('a')]);
+	mockStatus = 'online-website-unavailable';
+	rerender();
+	expect(result.current).toEqual([{ kind: 'saving' }, true]);
+	mockStatus = 'offline';
+	rerender();
+	expect(result.current).toEqual([{ kind: 'queued-offline', mutationId: '' }, false]);
+	expect(getOrderSaveState('a')).toEqual({ kind: 'saving' });
+});

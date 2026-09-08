@@ -14,6 +14,9 @@ const mockOrder = {
 	uuid: 'paid',
 	payload: { total: '92.95', currency_symbol: '$', meta_data: [] },
 };
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));

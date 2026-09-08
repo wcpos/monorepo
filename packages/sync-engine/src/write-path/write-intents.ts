@@ -201,7 +201,13 @@ export async function enqueueWriteIntent(input: {
 	/** False for a web follower whose cross-tab `_rev` cache cannot safely CAS an
 	 * existing queue row. It may only append a fresh mutation. Default true. */
 	canCoalesce?: boolean;
-}): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }> {
+}): Promise<{
+	mutationId: string;
+	recordId: string;
+	annihilated?: boolean;
+	/** The pending row this enqueue coalesced INTO and replaced — its id is now orphaned. */
+	supersededMutationId?: string;
+}> {
 	const intent =
 		input.intent.operation !== 'delete'
 			? {
@@ -516,7 +522,11 @@ export async function enqueueWriteIntent(input: {
 			}
 		}
 
-		return { mutationId: mutation.mutationId, recordId: mutation.recordId };
+		return {
+			mutationId: mutation.mutationId,
+			recordId: mutation.recordId,
+			...(prior ? { supersededMutationId: prior.mutationId } : {}),
+		};
 	}
 	throw new Error(
 		`write(${intent.operation}): the mutation queue kept changing under "${intent.recordId}" — retry the intent`

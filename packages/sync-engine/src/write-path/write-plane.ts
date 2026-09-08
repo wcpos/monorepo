@@ -13,6 +13,7 @@ import {
 	type WriteAnnihilatedEvent,
 	type WriteDrainReport,
 	type WriteOutcomeEvent,
+	type WriteSupersededEvent,
 } from './write-drain-lane';
 import { queueFor as defaultQueueFor, enqueueWriteIntent, type WriteIntent } from './write-intents';
 
@@ -21,7 +22,12 @@ import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { RxDatabase } from 'rxdb';
 
 export type { ConflictResolutionChoice, WriteIntent };
-export type WriteReceipt = { mutationId: string; recordId: string; annihilated?: boolean };
+export type WriteReceipt = {
+	mutationId: string;
+	recordId: string;
+	annihilated?: boolean;
+	supersededMutationId?: string;
+};
 export type WritePlane = {
 	write(intent: WriteIntent): Promise<WriteReceipt>;
 	conflicts(): Promise<QueuedMutation[]>;
@@ -43,7 +49,7 @@ type WritePlaneDeps = {
 	onStatusChanged: () => void;
 	connectivity: () => 'online' | 'offline' | 'degraded';
 	isWritePlaneOwner: () => boolean;
-	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent) => void;
+	emitWriteEvent: (event: WriteOutcomeEvent | WriteAnnihilatedEvent | WriteSupersededEvent) => void;
 	onActivityChange?: (collection: SyncCollectionName, delta: 1 | -1) => void;
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
 	persistOrderRepull: (input: {
@@ -176,6 +182,18 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 						queueDepth,
 					},
 				});
+				// The coalesce orphaned the prior row's id: tell its waiter which id to
+				// follow now. AFTER the enqueue diagnostics, so the replacement is already
+				// durably queued when a re-bound waiter asks for its replay.
+				if (receipt.supersededMutationId !== undefined) {
+					deps.emitWriteEvent({
+						type: 'write-superseded',
+						collection: intent.collection,
+						recordId: receipt.recordId,
+						mutationId: receipt.supersededMutationId,
+						replacedBy: receipt.mutationId,
+					});
+				}
 				return receipt;
 			});
 		},

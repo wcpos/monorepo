@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useRouter } from 'expo-router';
+
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
@@ -13,9 +15,28 @@ import { TerminalLegView } from './terminal-leg-view';
 import { disabledReasonKey, kindLabelKey } from './labels';
 import { useT } from '../../../../../contexts/translations';
 
+import type { OrderSaveState } from '../checkout-mode';
 import type { TenderKey } from './tender-state';
 import type { TenderTile } from './tiles';
 import type { TenderFlow } from './use-tender-flow';
+
+// Long enough that a normal save never shows it, short enough that a cashier is not left guessing.
+const SLOW_SAVE_NOTICE_MS = 4_000;
+function useElapsed(active: boolean, ms: number): boolean {
+	const [elapsed, setElapsed] = React.useState(false);
+	// A timer is an external system; this effect only arms and releases that timer.
+	React.useEffect(() => {
+		if (!active) return;
+		const timer = setTimeout(() => setElapsed(true), ms);
+		return () => clearTimeout(timer);
+	}, [active, ms]);
+	const [wasActive, setWasActive] = React.useState(active);
+	if (wasActive !== active) {
+		setWasActive(active);
+		setElapsed(false);
+	}
+	return active && elapsed;
+}
 
 interface Props {
 	flow: TenderFlow;
@@ -32,9 +53,16 @@ interface Props {
 export function TenderPane({ flow, format, compact }: Props) {
 	const t = useT();
 
+	const slow = useElapsed(flow.saveState?.kind === 'saving', SLOW_SAVE_NOTICE_MS);
+
 	if (flow.terminalLeg) return <TerminalLegView flow={flow} format={format} />;
 
-	if (flow.saving) {
+	// Tiles are never shown for a save that is unresolved or refused; only a save queued
+	// offline lets the capability rule on each tile decide.
+	if (flow.saveState?.kind === 'rejected') {
+		return <RefusedPane rejection={flow.saveState} />;
+	}
+	if (flow.saveState?.kind === 'saving') {
 		return (
 			<VStack space="md" className="flex-1">
 				<View className="flex-row flex-wrap gap-2">
@@ -49,6 +77,11 @@ export function TenderPane({ flow, format, compact }: Props) {
 					))}
 				</View>
 				<Text className="text-muted-foreground text-sm">{t('pos_checkout.saving_order')}</Text>
+				{slow ? (
+					<Text testID="checkout-save-slow" className="text-warning text-sm">
+						{t('pos_checkout.store_not_answering')}
+					</Text>
+				) : null}
 			</VStack>
 		);
 	}
@@ -85,6 +118,33 @@ export function TenderPane({ flow, format, compact }: Props) {
 							})}
 				</Text>
 			)}
+		</VStack>
+	);
+}
+
+/**
+ * A refused save that is still on screen: the durable dead letter hydrated after a cold
+ * restore, or a late rejection on a phone whose modal is still open. Pay's own path leaves
+ * checkout before this can render; here the pane says so itself and points at Store health.
+ */
+function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind: 'rejected' }> }) {
+	const t = useT();
+	const router = useRouter();
+	return (
+		<VStack space="sm" className="flex-1" testID="checkout-refused">
+			<Text className="text-destructive font-semibold">{t('pos_checkout.order_refused')}</Text>
+			<Text className="text-muted-foreground text-sm">
+				{rejection.message ?? rejection.reason ?? t('pos_checkout.order_refused_no_reason')}
+			</Text>
+			<Button
+				variant="outline"
+				size="sm"
+				className="self-start"
+				testID="checkout-refused-store-health"
+				onPress={() => router.push('/health/database')}
+			>
+				<ButtonText>{t('pos_checkout.open_store_health')}</ButtonText>
+			</Button>
 		</VStack>
 	);
 }

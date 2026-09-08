@@ -21,6 +21,9 @@ const mockResolveStockOwnerId = jest.fn((productId: number, variationId: number)
 	Promise.resolve(variationId || productId)
 );
 
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace }),

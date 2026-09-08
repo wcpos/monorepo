@@ -1,13 +1,20 @@
 import * as React from 'react';
 
+import isEqual from 'lodash/isEqual';
+
 import { type PaymentRow, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 
+export type OrderSaveState =
+	| { kind: 'saving' }
+	| { kind: 'queued-offline'; mutationId: string }
+	| { kind: 'rejected'; status: number | null; reason: string | null; message: string | null };
+
 export interface CheckoutModeSnapshot {
 	readonly tenderMethods: ReadonlyMap<string, string>;
-	readonly savingOrders: ReadonlySet<string>;
+	readonly saveStates: ReadonlyMap<string, OrderSaveState>;
 	readonly checkoutOrders: ReadonlySet<string>;
 	readonly receiptOrders: ReadonlySet<string>;
 	readonly selectedReceiptOrder: string | null;
@@ -15,7 +22,7 @@ export interface CheckoutModeSnapshot {
 
 let snapshot: CheckoutModeSnapshot = {
 	tenderMethods: new Map(),
-	savingOrders: new Set(),
+	saveStates: new Map(),
 	checkoutOrders: new Set(),
 	receiptOrders: new Set(),
 	selectedReceiptOrder: null,
@@ -41,15 +48,42 @@ export function subscribeCheckoutMode(listener: () => void) {
 		listeners.delete(listener);
 	};
 }
+export function getOrderSaveState(uuid: string): OrderSaveState | null {
+	return snapshot.saveStates.get(uuid) ?? null;
+}
+function setOrderSaveState(uuid: string, state: OrderSaveState) {
+	const current = getOrderSaveState(uuid);
+	if (isEqual(current, state)) return;
+	publish({ ...snapshot, saveStates: new Map(snapshot.saveStates).set(uuid, state) });
+}
 export function markOrderSaving(uuid: string) {
-	if (snapshot.savingOrders.has(uuid)) return;
-	publish({ ...snapshot, savingOrders: new Set([...snapshot.savingOrders, uuid]) });
+	if (getOrderSaveState(uuid)?.kind === 'rejected') return;
+	setOrderSaveState(uuid, { kind: 'saving' });
+}
+export function markOrderQueuedOffline(uuid: string, mutationId: string) {
+	const current = getOrderSaveState(uuid);
+	if (
+		current?.kind === 'saving' ||
+		(current?.kind === 'queued-offline' && current.mutationId === mutationId)
+	)
+		setOrderSaveState(uuid, { kind: 'queued-offline', mutationId });
+}
+export function markOrderSaveRejected(
+	uuid: string,
+	rejection: Omit<Extract<OrderSaveState, { kind: 'rejected' }>, 'kind'>
+) {
+	setOrderSaveState(uuid, { kind: 'rejected', ...rejection });
 }
 export function clearOrderSaving(uuid: string) {
-	if (!snapshot.savingOrders.has(uuid)) return;
-	const savingOrders = new Set(snapshot.savingOrders);
-	savingOrders.delete(uuid);
-	publish({ ...snapshot, savingOrders });
+	if (!snapshot.saveStates.has(uuid)) return;
+	const saveStates = new Map(snapshot.saveStates);
+	saveStates.delete(uuid);
+	publish({ ...snapshot, saveStates });
+}
+export function clearOrderSaveIfMutation(uuid: string, mutationId: string) {
+	const current = getOrderSaveState(uuid);
+	if (current?.kind === 'queued-offline' && current.mutationId === mutationId)
+		clearOrderSaving(uuid);
 }
 export function enterCheckout(uuid: string) {
 	if (snapshot.checkoutOrders.has(uuid)) return;
@@ -109,7 +143,7 @@ export function resetCheckoutMode() {
 	receiptPrintAttempts.clear();
 	publish({
 		tenderMethods: new Map(),
-		savingOrders: new Set(),
+		saveStates: new Map(),
 		checkoutOrders: new Set(),
 		receiptOrders: new Set(),
 		selectedReceiptOrder: null,
@@ -155,10 +189,6 @@ export function useCheckoutMode() {
 		getCheckoutModeSnapshot,
 		getCheckoutModeSnapshot
 	);
-}
-export function useOrderSaving(uuid: string | undefined): boolean {
-	const mode = useCheckoutMode();
-	return uuid !== undefined && mode.savingOrders.has(uuid);
 }
 export function useOrderCheckoutStage(
 	record: CurrentOrderRecord | EngineRecord<'orders'> | undefined

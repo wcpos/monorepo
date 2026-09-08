@@ -13,7 +13,7 @@ import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import {
 	clearOrderSaving,
 	enterCheckout,
-	getCheckoutModeSnapshot,
+	getOrderSaveState,
 	leaveCheckout,
 	markOrderSaving,
 } from '../../checkout/checkout-mode';
@@ -22,6 +22,8 @@ import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
+import { type CheckoutRejection, useCheckoutSave } from '../../checkout/hooks/use-checkout-save';
+import { showOrderRefusedToast } from '../../checkout/refusal-toast';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -39,6 +41,7 @@ export function PayButton() {
 	const { loaded, unsupportedSchema } = usePaymentMethods();
 	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
+	const save = useCheckoutSave();
 	const t = useT();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 
@@ -55,8 +58,17 @@ export function PayButton() {
 		}
 
 		const uuid = currentOrderRecord.uuid;
-		if (getCheckoutModeSnapshot().savingOrders.has(uuid)) return;
-
+		const orderLogger = checkoutLogger.with({
+			orderId: uuid,
+			orderNumber: currentOrderRecord.payload.number,
+		});
+		const showRefusal = (rejection: CheckoutRejection) => {
+			showOrderRefusedToast({ t, router, rejection });
+			orderLogger.error('Checkout refused', {
+				code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+				context: { ...rejection },
+			});
+		};
 		const sheetRoute = {
 			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
 			params: { orderId: uuid },
@@ -65,6 +77,18 @@ export function PayButton() {
 		// flag and keeps every tile inert until the server copy (and its id) exists. The
 		// legacy webview checkout has no such gate, so that lane still waits for the save.
 		const tenderFlow = loaded && !unsupportedSchema;
+		const state = getOrderSaveState(uuid);
+		if (state?.kind === 'rejected') {
+			showRefusal(state);
+			return;
+		}
+		if (state?.kind === 'saving') {
+			// The earlier press is still waiting on the store. Show that wait again
+			// rather than enqueue a second write; the pane flips on the same events.
+			if (tenderFlow && screenSize !== 'sm') enterCheckout(uuid);
+			else if (tenderFlow) router.push(sheetRoute);
+			return;
+		}
 		markOrderSaving(uuid);
 		if (tenderFlow && screenSize !== 'sm') {
 			enterCheckout(uuid);
@@ -78,36 +102,50 @@ export function PayButton() {
 			leaveCheckout(uuid);
 			if (tenderFlow && screenSize === 'sm') router.replace('/cart');
 		};
-		const orderLogger = checkoutLogger.with({
-			orderId: currentOrderRecord.uuid,
-			orderNumber: currentOrderRecord.payload.number,
-		});
 
 		try {
-			await pushDocument(currentOrderRecord).then((savedDoc) => {
-				if (savedDoc) {
-					// Re-checked after the await: the worker can die mid-push, and
-					// enabling tender then would let the cashier take money
-					// for an order this device can no longer record.
-					if (blockIfDegraded('checkout', { orderId: currentOrderRecord.uuid })) {
-						abandon();
-						return;
-					}
-
-					// Log checkout started
-					orderLogger.info(t('pos_cart.checkout_started'), {
-						context: {
-							total,
-							lineItemCount: lineItems?.length ?? 0,
+			const result = tenderFlow
+				? await save(currentOrderRecord, {
+						// Late, so the cashier may be on another order by now: release this
+						// one's checkout and say why, but never navigate — on a phone the
+						// modal for THIS order renders the refusal itself if it is still open.
+						onLateRejected: (rejection) => {
+							leaveCheckout(uuid);
+							showRefusal(rejection);
 						},
-					});
-					if (!tenderFlow) router.push(sheetRoute);
-				} else {
+					})
+				: null;
+			if (result?.outcome === 'queued-offline') return;
+			if (result?.outcome === 'rejected') {
+				abandon();
+				showRefusal(result.rejection);
+				return;
+			}
+			const savedDoc =
+				result?.outcome === 'saved' ? result.resident : await pushDocument(currentOrderRecord);
+			if (savedDoc) {
+				// Re-checked after the await: the worker can die mid-push, and
+				// enabling tender then would let the cashier take money
+				// for an order this device can no longer record.
+				if (blockIfDegraded('checkout', { orderId: currentOrderRecord.uuid })) {
 					abandon();
+					return;
 				}
-			});
+
+				// Log checkout started
+				orderLogger.info(t('pos_cart.checkout_started'), {
+					context: {
+						total,
+						lineItemCount: lineItems?.length ?? 0,
+					},
+				});
+				if (!tenderFlow) router.push(sheetRoute);
+			} else {
+				abandon();
+			}
 		} catch (error) {
 			abandon();
+			if (tenderFlow) return;
 			const errorMessage = getErrorMessage(error);
 			orderLogger.error('Checkout failed', {
 				showToast: true,
@@ -118,12 +156,13 @@ export function PayButton() {
 				},
 			});
 		} finally {
-			clearOrderSaving(uuid);
+			if (!tenderFlow) clearOrderSaving(uuid);
 			setLoading(false);
 		}
 	}, [
 		blockIfDegraded,
 		pushDocument,
+		save,
 		currentOrderRecord,
 		lineItems,
 		router,

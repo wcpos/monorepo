@@ -12,6 +12,7 @@ import {
 	enterCheckout,
 	enterReceipt,
 	getCheckoutModeSnapshot,
+	markOrderQueuedOffline,
 	markOrderSaving,
 	resetCheckoutMode,
 	setTenderMethod,
@@ -61,6 +62,7 @@ jest.mock('../payments/server/use-resume-terminal-legs', () => ({
 let mockUuid = 0;
 jest.mock('uuid', () => ({ v4: () => `payment-${++mockUuid}` }));
 const mockRecordManualPayment = jest.fn();
+const mockRecordOptions = jest.fn();
 const mockVoidPayments = jest.fn();
 const mockCompleteOrderFlow = jest.fn();
 const mockLocalPatch = jest.fn();
@@ -118,7 +120,10 @@ let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
 
 jest.mock('../payments', () => ({
-	useRecordManualPayment: () => mockRecordManualPayment,
+	useRecordManualPayment: (options: unknown) => {
+		mockRecordOptions(options);
+		return mockRecordManualPayment;
+	},
 	useVoidPayments: () => mockVoidPayments,
 }));
 jest.mock('../hooks/use-complete-order-flow', () => ({
@@ -259,7 +264,7 @@ describe('useTenderFlow', () => {
 	it('blocks method selection and recording while saving', async () => {
 		markOrderSaving(order.uuid);
 		const { result } = renderHook(() => useTenderFlow(order));
-		expect(result.current.saving).toBe(true);
+		expect(result.current.saveState).toEqual({ kind: 'saving' });
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.state.view).toBe('select');
 		// Exercise takeTender with a selected method so its guard is tested independently.
@@ -273,6 +278,31 @@ describe('useTenderFlow', () => {
 		);
 		await act(async () => result.current.takeTender());
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	});
+
+	it('treats a save queued offline as offline for tender, even once connectivity is back', async () => {
+		const onlineOnly = {
+			...card,
+			id: 'pos_online',
+			title: 'Online only',
+			order: 4,
+			capabilities: { ...card.capabilities, offline: 'none' as const },
+		};
+		mockMethods = [cash, onlineOnly];
+		markOrderSaving(order.uuid);
+		markOrderQueuedOffline(order.uuid, 'm');
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.saveState).toEqual({ kind: 'queued-offline', mutationId: 'm' });
+		expect(result.current.online).toBe(true);
+		expect(result.current.tiles.find((tile) => tile.method.id === 'pos_online')).toMatchObject({
+			disabled: true,
+			reason: 'offline',
+		});
+		expect(mockRecordOptions).toHaveBeenLastCalledWith({ offline: true });
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.state.view).toBe('amount');
+		await act(async () => result.current.takeTender());
+		expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
 	});
 
 	it.each(['online-website-available', 'offline'])(

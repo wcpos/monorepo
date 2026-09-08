@@ -7,7 +7,14 @@ import { type PaymentRow, withLedger } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { TabChip } from './tab-chip';
-import { enterCheckout, enterReceipt, resetCheckoutMode } from '../checkout/checkout-mode';
+import {
+	enterCheckout,
+	enterReceipt,
+	markOrderQueuedOffline,
+	markOrderSaveRejected,
+	markOrderSaving,
+	resetCheckoutMode,
+} from '../checkout/checkout-mode';
 
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
@@ -31,6 +38,9 @@ jest.mock('@wcpos/components/status-badge', () => ({
 			{label}
 		</span>
 	),
+}));
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 beforeEach(resetCheckoutMode);
 it.each([
@@ -68,6 +78,27 @@ it.each([
 	}
 });
 
+it.each([
+	['saving', 'Saving order…', 'info'],
+	['queued-offline', 'In checkout · offline', 'info'],
+	['rejected', 'Save refused', 'error'],
+])('labels a %s order', (kind, label, variant) => {
+	enterCheckout('a');
+	markOrderSaving('a');
+	if (kind === 'queued-offline') markOrderQueuedOffline('a', 'm');
+	if (kind === 'rejected') {
+		enterReceipt('a');
+		markOrderSaveRejected('a', { status: null, reason: null, message: null });
+	}
+	const order = {
+		uuid: 'a',
+		payload: { total: '10.00', meta_data: [] },
+	} as unknown as EngineRecord<'orders'>;
+	render(<TabChip order={order} />);
+	const chip = screen.getByTestId('open-order-chip-a');
+	expect(chip.textContent).toBe(label);
+	expect(chip.dataset.variant).toBe(variant);
+});
 it.each(['pending', 'authorized'] as const)(
 	'server %s takes precedence over checkout and partly paid',
 	(status) => {
