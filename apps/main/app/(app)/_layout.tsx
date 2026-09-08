@@ -19,6 +19,7 @@ import { VariationParentBridge } from '@wcpos/core/screens/main/components/varia
 import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
+import { TerminalPaymentsBridge } from '@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge';
 import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
 import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
@@ -188,6 +189,10 @@ function AppStack() {
 			    screens, because the promise made at the Send button has to be kept
 			    whether or not the receipt modal is still open. */}
 				<ReceiptEmailQueueBridge />
+				{/* Terminal payment legs poll from here, not from the checkout screen, so
+				    a tab chip can say "Waiting for terminal" while another order is on
+				    screen and a finished leg reaches its receipt unattended (#154). */}
+				<TerminalPaymentsBridge />
 				{/* A variable product's price range is recomputed from its children on
 				    every read, so an acknowledged variation write leaves the parent's row
 				    stale with nothing to pull it (#1495). Here, not on the Products

@@ -6,6 +6,7 @@ export interface TenderState {
 	view: TenderView;
 	/** Method id being tendered; null in the 'select' and 'cancel' views. */
 	methodId: string | null;
+	readerId: string | null;
 	/** Keypad entry in minor units. */
 	entryMinor: number;
 	/** False until the cashier has touched the keypad since the entry was pre-filled. */
@@ -21,7 +22,9 @@ export type TenderKey =
 
 export type TenderAction =
 	| { type: 'set-tab'; tab: TenderTab }
-	| { type: 'pick-method'; methodId: string; prefillMinor: number }
+	| { type: 'pick-method'; methodId: string; prefillMinor: number; readerId: string | null }
+	| { type: 'pick-reader'; readerId: string | null }
+	| { type: 'tender-started' }
 	| { type: 'key'; key: TenderKey }
 	| { type: 'set-entry'; minor: number }
 	| { type: 'back' }
@@ -37,6 +40,7 @@ export const initialTenderState: TenderState = {
 	tab: 'payments',
 	view: 'select',
 	methodId: null,
+	readerId: null,
 	entryMinor: 0,
 	entryDirty: false,
 	splitShareMinor: null,
@@ -68,11 +72,14 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				...state,
 				view: 'amount',
 				methodId: action.methodId,
+				readerId: action.readerId,
 				entryMinor: action.prefillMinor,
 				entryDirty: false,
 				splitShareMinor: null,
 				splitMenuOpen: false,
 			};
+		case 'pick-reader':
+			return { ...state, readerId: action.readerId };
 		case 'key': {
 			if (state.view !== 'amount') {
 				return state;
@@ -96,11 +103,13 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				entryMinor: Math.max(0, Math.min(action.minor, MAX_TENDER_MINOR)),
 				entryDirty: true,
 			};
+		case 'tender-started':
 		case 'back':
 			return {
 				...state,
 				view: 'select',
 				methodId: null,
+				readerId: null,
 				entryMinor: 0,
 				entryDirty: false,
 			};
@@ -109,6 +118,7 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				...state,
 				view: 'select',
 				methodId: null,
+				readerId: null,
 				entryMinor: 0,
 				entryDirty: false,
 				splitShareMinor: null,

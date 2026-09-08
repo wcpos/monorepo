@@ -18,6 +18,8 @@ jest.mock('@wcpos/components/button', () => ({
 	ButtonText: 'span',
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+// The leg view has its own suite; here it only needs to stay out of the saving skeleton's way.
+jest.mock('./terminal-leg-view', () => ({ TerminalLegView: () => null }));
 jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -62,6 +64,16 @@ function makeFlow(count = 1): TenderFlow {
 		rows: [],
 		liveRows: [],
 		hasLiveLeg: false,
+		terminalLeg: null,
+		hasLiveTerminalLeg: false,
+		readers: [],
+		lockToDefault: false,
+		pickReader: jest.fn(),
+		cancelTerminalLeg: jest.fn(),
+		releaseTerminalLeg: jest.fn(),
+		retryTerminalCapture: jest.fn(),
+		dismissTerminalLeg: jest.fn(),
+		retryTerminalLeg: jest.fn(),
 		online: true,
 		tiles: Array.from({ length: count }, () => ({
 			method,

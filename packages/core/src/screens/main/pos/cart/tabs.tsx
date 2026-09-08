@@ -8,6 +8,7 @@ import { ScrollableTabsList, Tabs, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
+import { useResumeTerminalLegsForOrders } from '../checkout/payments/server/use-resume-terminal-legs';
 import { useEngineRecord } from '../../hooks/use-engine-document';
 import { finishReceipt, selectReceipt, useCheckoutMode } from '../checkout/checkout-mode';
 import { TabChip } from './tab-chip';
@@ -20,6 +21,7 @@ import { useCurrentOrder } from '../contexts/current-order';
  */
 export function OpenOrderTabs() {
 	const { currentOrderRecord, openOrders, setCurrentOrderID } = useCurrentOrder();
+	useResumeTerminalLegsForOrders(openOrders.map(({ record }) => record));
 
 	const t = useT();
 	const { receiptOrders, selectedReceiptOrder } = useCheckoutMode();

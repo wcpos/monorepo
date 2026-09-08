@@ -67,6 +67,14 @@ it.each(['pending', 'authorized', 'captured'])(
 		);
 	}
 );
+it('a background capture enters the receipt without selecting it', () => {
+	enterCheckout('a');
+	enterReceipt('b');
+	enterReceipt('a', { select: false });
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(false);
+	expect(getCheckoutModeSnapshot().receiptOrders.has('a')).toBe(true);
+	expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('b');
+});
 it('receipt wins over checkout and live rows, and can be selected and finished', () => {
 	enterCheckout('a');
 	enterReceipt('a');

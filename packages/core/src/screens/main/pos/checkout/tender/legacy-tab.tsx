@@ -75,8 +75,10 @@ export function LegacyTab({ flow, order }: Props) {
 	}
 
 	// Link or no link: a frame for the previous server copy could take payment
-	// against stale totals while the edited order is still saving.
-	if (flow.saveState?.kind === 'saving') {
+	// against stale totals while the edited order is still saving — and a save
+	// queued offline is the same stale copy waiting on reconnect, so the webview
+	// stays blocked until the write actually lands (it needs the server anyway).
+	if (flow.saveState) {
 		return <View className="bg-muted m-4 flex-1 rounded-md" testID="checkout-legacy-skeleton" />;
 	}
 	if (!paymentURL) {

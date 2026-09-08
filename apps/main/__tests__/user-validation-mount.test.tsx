@@ -36,6 +36,9 @@ jest.mock('@wcpos/core/hooks/use-site-info', () => ({ useSiteInfo: jest.fn() }))
 jest.mock('@wcpos/core/screens/main/receipt/email-queue/bridge', () => ({
 	ReceiptEmailQueueBridge: () => null,
 }));
+jest.mock('@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge', () => ({
+	TerminalPaymentsBridge: () => null,
+}));
 jest.mock('@wcpos/core/screens/main/contexts/ui-settings', () => ({
 	UISettingsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
