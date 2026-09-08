@@ -15,7 +15,7 @@ import {
 
 import { getStoreUrl, getStoreVariant, listStoreIds, storeRequestOptions } from './fixtures';
 import {
-	isPushOrdersResponse,
+	createPushOrdersResponseMatcher,
 	liveOrderTest as liveTest,
 	newRunLabel,
 	type OrderPayload,
@@ -202,7 +202,9 @@ for (const targetStoreId of storeTargets) {
 						const cart = await readCartMoney(page, { discounted: true });
 						expect(Number(cart.discountTotal)).toBeGreaterThan(0);
 
-						const saved = page.waitForResponse(isPushOrdersResponse, { timeout: 90_000 });
+						const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
+							timeout: 90_000,
+						});
 						saved.catch(() => {}); // Await below still fails; avoid an orphan rejection if click fails.
 						await page.getByTestId('checkout-button').click();
 						const response = await saved;
