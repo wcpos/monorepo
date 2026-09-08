@@ -100,6 +100,18 @@ describe('sentry-sink.web', () => {
 		expect(event.request?.url).toBe('/checkout?access_token=[REDACTED]&order=42');
 	});
 
+	it('redacts credentials from the message and exception values that become the title', () => {
+		const event = scrubEvent({
+			message: 'Login failed: Bearer abc.def.ghi for https://user:pw@merchant.example/wp-json',
+			exception: { values: [{ value: 'token=abcdef123456 rejected' }] },
+		});
+
+		expect(event.message).toBe(
+			'Login failed: Bearer [REDACTED] for https://[REDACTED]@merchant.example/wp-json'
+		);
+		expect(event.exception?.values?.[0].value).toBe('token=[REDACTED] rejected');
+	});
+
 	it('removes store origins from nested extra context urls', () => {
 		const event = scrubEvent({
 			extra: {
