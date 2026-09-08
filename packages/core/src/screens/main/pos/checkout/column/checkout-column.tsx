@@ -78,11 +78,17 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				>
 					<ButtonText>{t('pos_checkout.back_to_cart')}</ButtonText>
 				</Button>
-				<Text className="text-foreground flex-1 text-lg font-semibold">
-					{payload.number
-						? t('pos_checkout.checkout_order', { orderNumber: payload.number })
-						: t('pos_checkout.checkout')}
-				</Text>
+				{flow.saving && !payload.number ? (
+					<View className="flex-1">
+						<View className="bg-muted h-5 w-40 rounded" testID="checkout-title-skeleton" />
+					</View>
+				) : (
+					<Text className="text-foreground flex-1 text-lg font-semibold">
+						{payload.number
+							? t('pos_checkout.checkout_order', { orderNumber: payload.number })
+							: t('pos_checkout.checkout')}
+					</Text>
+				)}
 				<Tabs
 					value={flow.state.tab}
 					onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}

@@ -25,7 +25,7 @@ import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
-import { leaveCheckout } from '../checkout-mode';
+import { leaveCheckout, useOrderSaving } from '../checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -97,6 +97,7 @@ export interface TenderFlow {
 
 	/** A record or a void is in flight; every action must be inert while true. */
 	busy: boolean;
+	saving: boolean;
 	pickMethod: (methodId: string) => void;
 	takeTender: () => Promise<void>;
 	cancelPayment: () => Promise<void>;
@@ -104,6 +105,7 @@ export interface TenderFlow {
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialTenderState);
+	const saving = useOrderSaving(order.uuid);
 	const [busy, setBusy] = React.useState(false);
 	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
 	const busyRef = React.useRef(false);
@@ -166,7 +168,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 
 	const pickMethod = React.useCallback(
 		(methodId: string) => {
-			if (busyRef.current) return;
+			if (busyRef.current || saving) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile || tile.disabled) return;
 			const prefillMinor =
@@ -181,11 +183,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				readerId: readers.find((reader) => reader.isDefault && reader.inUseBy === null)?.id ?? null,
 			});
 		},
-		[balanceMinor, state.splitShareMinor, tiles, service, order.uuid]
+		[balanceMinor, saving, state.splitShareMinor, tiles, service, order.uuid]
 	);
 
 	const takeTender = React.useCallback(async () => {
-		if (busyRef.current || service?.get(order.uuid)) return;
+		if (busyRef.current || saving || service?.get(order.uuid)) return;
 		busyRef.current = true;
 		setBusy(true);
 		try {
@@ -302,6 +304,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		localPatch,
 		order,
 		recordManualPayment,
+		saving,
 		state.entryMinor,
 		state.readerId,
 		payload.id,
@@ -441,6 +444,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			entryChangeMinor,
 			quickAmountsMinor,
 			busy,
+			saving,
 			pickMethod,
 			takeTender,
 			cancelPayment,
@@ -473,6 +477,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			entryChangeMinor,
 			quickAmountsMinor,
 			busy,
+			saving,
 			pickMethod,
 			takeTender,
 			cancelPayment,

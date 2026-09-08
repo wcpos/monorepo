@@ -9,10 +9,12 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { useOrderSaving } from '../checkout/checkout-mode';
 import { useLedgerView } from '../checkout/tender/use-ledger-view';
 import { LedgerLegs, LedgerLines } from '../checkout/tender/ledger-pane';
 
 export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
+	const saving = useOrderSaving(order.uuid);
 	const view = useLedgerView(order);
 	const { format } = view;
 	const payload = useRecordField(order, (record) => record.payload);
@@ -34,7 +36,11 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 				{/* Same height as the cart header it replaces, so the strip and totals below
 				    do not move when the column swaps. */}
 				<HStack className="min-h-8 items-center gap-2">
-					<Text className="font-bold">{`#${payload.number ?? ''}`}</Text>
+					{saving && !payload.number ? (
+						<View className="bg-muted h-4 w-12 rounded" testID="checkout-ledger-number-skeleton" />
+					) : (
+						<Text className="font-bold">{`#${payload.number ?? ''}`}</Text>
+					)}
 					<Text className="text-muted-foreground flex-1" numberOfLines={1}>
 						{formatName({ ...payload.billing, customer_id: 0 })}
 					</Text>

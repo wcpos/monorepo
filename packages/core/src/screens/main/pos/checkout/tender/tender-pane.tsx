@@ -34,6 +34,25 @@ export function TenderPane({ flow, format, compact }: Props) {
 
 	if (flow.terminalLeg) return <TerminalLegView flow={flow} format={format} />;
 
+	if (flow.saving) {
+		return (
+			<VStack space="md" className="flex-1">
+				<View className="flex-row flex-wrap gap-2">
+					{Array.from({ length: flow.tiles.length || 4 }, (_, index) => (
+						<View
+							key={index}
+							testID="checkout-tile-skeleton"
+							className={`bg-muted h-[4.25rem] rounded-md ${
+								compact ? 'min-w-[45%] flex-1' : 'min-w-[9.5rem]'
+							}`}
+						/>
+					))}
+				</View>
+				<Text className="text-muted-foreground text-sm">{t('pos_checkout.saving_order')}</Text>
+			</VStack>
+		);
+	}
+
 	if (flow.tiles.length === 0) {
 		return (
 			<Text className="text-muted-foreground text-sm">{t('pos_checkout.no_payment_methods')}</Text>
