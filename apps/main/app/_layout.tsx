@@ -14,6 +14,7 @@ import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
+import { useTerminalPaymentsService } from '@wcpos/core/screens/main/pos/checkout/payments/server/use-terminal-payments-service';
 import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
 import { setToast } from '@wcpos/utils/logger';
 
@@ -112,6 +113,9 @@ function RootStack() {
 
 function CustomerDisplayServiceController(): null {
 	useCustomerDisplayService();
+	// Terminal legs poll from here, not from the checkout screen, so a tab chip can
+	// report "Waiting for terminal" while another order is on screen.
+	useTerminalPaymentsService();
 	return null;
 }
 
