@@ -183,6 +183,16 @@ describe('useTenderFlow', () => {
 		expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
 		expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
 	});
+	it('keeps the keypad closed for a stored method the till does not offer', async () => {
+		setTenderMethod(order.uuid, 'not_offered');
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state.methodId).toBe('not_offered');
+		expect(result.current.method).toBeNull();
+		await act(async () => {
+			await result.current.takeTender();
+		});
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	});
 	it('clears the published method once a leg is recorded', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('pos_cash'));

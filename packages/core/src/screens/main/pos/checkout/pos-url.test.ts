@@ -15,7 +15,13 @@ it.each<[string | string[] | undefined, ReturnType<typeof readCheckoutSeed>]>([
 	[['u', 'checkout', 'cash'], { orderId: 'u', checkout: true, methodId: 'cash' }],
 	[['u', 'other', 'x'], { orderId: 'u', checkout: false }],
 	[undefined, { checkout: false }],
+	[['u', 'checkout', 'cash', 'extra'], { orderId: 'u', checkout: false, methodId: undefined }],
 ])('reads %j', (param, seed) => expect(readCheckoutSeed(param)).toEqual(seed));
+it('encodes the method as one path segment', () => {
+	expect(posPathFor({ orderId: 'u', stage: 'checkout', methodId: 'a/b?c' })).toBe(
+		'/cart/u/checkout/a%2Fb%3Fc'
+	);
+});
 
 it('uses the homepage pathname without its trailing slash', () => {
 	const host = globalThis as typeof globalThis & { initialProps?: { homepage?: string } };

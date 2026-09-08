@@ -122,7 +122,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	);
 	const tiles = React.useMemo(() => buildTenderTiles(methods, { online }), [methods, online]);
 	const legacyMethods = React.useMemo(() => legacyPaymentMethods(methods), [methods]);
-	const method = state.methodId ? (byId.get(state.methodId) ?? null) : null;
+	// A method the store or a URL names but the till does not offer (not POS-enabled, webview
+	// mode) must not open a keypad: `takeTender` can only refuse tiles it can see.
+	const method =
+		state.methodId && tiles.some(({ method: tile }) => tile.id === state.methodId)
+			? (byId.get(state.methodId) ?? null)
+			: null;
 	const entryAppliedMinor = appliedMinor(state.entryMinor, balanceMinor);
 	const entryChangeMinor = changeMinor(
 		state.entryMinor,

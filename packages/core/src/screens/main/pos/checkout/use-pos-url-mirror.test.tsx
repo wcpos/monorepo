@@ -13,7 +13,8 @@ import { usePosUrlMirror } from './use-pos-url-mirror';
 let mockSize = 'lg';
 const mockRecord = { uuid: 'u', isNew: false, payload: { meta_data: [] } };
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: true } }));
-jest.mock('expo-router', () => ({ useRouter: () => ({}) }));
+let mockSegments: string[] = ['(app)', '(drawer)', '(pos)', '(columns)', 'cart', '[...orderId]'];
+jest.mock('expo-router', () => ({ useRouter: () => ({}), useSegments: () => mockSegments }));
 jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockSize }) }));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockRecord }),
@@ -25,6 +26,7 @@ jest.mock('@wcpos/query', () => ({
 beforeEach(() => {
 	resetCheckoutMode();
 	mockSize = 'lg';
+	mockSegments = ['(app)', '(drawer)', '(pos)', '(columns)', 'cart', '[...orderId]'];
 	mockRecord.isNew = false;
 	window.history.replaceState(null, '', '/');
 	jest.useFakeTimers();
@@ -57,12 +59,22 @@ it('mirrors cart, checkout, method, leave, and receipt state', () => {
 	flush();
 	expect(window.history.replaceState).toHaveBeenLastCalledWith(null, '', '/cart/receipt/r');
 });
-it('does not write while the phone checkout route owns the URL', () => {
-	mockSize = 'sm';
-	enterCheckout('u');
+it.each([
+	[
+		'phone checkout sheet',
+		['(app)', '(drawer)', '(pos)', '(modals)', 'cart', '[orderId]', 'checkout'],
+	],
+	[
+		'cold receipt modal',
+		['(app)', '(drawer)', '(pos)', '(modals)', 'cart', 'receipt', '[orderId]'],
+	],
+])('does not write while a routed modal owns the URL (%s)', (_label, segments) => {
+	mockSegments = segments;
+	window.history.replaceState(null, '', '/cart/receipt/u');
 	renderHook(usePosUrlMirror);
 	flush();
-	expect(window.history.replaceState).not.toHaveBeenCalled();
+	expect(window.history.replaceState).toHaveBeenCalledTimes(1);
+	expect(window.location.pathname).toBe('/cart/receipt/u');
 });
 it('omits draft ids and cancels a stale frame', () => {
 	const { rerender } = renderHook(usePosUrlMirror);

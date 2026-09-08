@@ -1,8 +1,9 @@
 import * as React from 'react';
 
+import { useSegments } from 'expo-router';
+
 import { Platform } from '@wcpos/utils/platform';
 
-import { useTheme } from '../../../../contexts/theme';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useCheckoutMode, useOrderCheckoutStage, useTenderMethod } from './checkout-mode';
 import { posBasePath, posPathFor } from './pos-url';
@@ -12,7 +13,10 @@ export function usePosUrlMirror() {
 	const { selectedReceiptOrder } = useCheckoutMode();
 	const stage = useOrderCheckoutStage(record);
 	const methodId = useTenderMethod(record.uuid);
-	const { screenSize } = useTheme();
+	const segments: string[] = useSegments();
+	// The phone checkout sheet and the receipt modal are routes of their own: while one is up
+	// it owns the address bar, and a cold load of it must not be rewritten to the cart underneath.
+	const routedModal = segments.includes('(modals)');
 	const path =
 		posBasePath() +
 		posPathFor({
@@ -23,7 +27,7 @@ export function usePosUrlMirror() {
 		});
 	// The browser URL mirrors external POS state after router.setParams has settled.
 	React.useEffect(() => {
-		if (!Platform.isWeb || (screenSize === 'sm' && stage === 'checkout')) return;
+		if (!Platform.isWeb || routedModal) return;
 		const frame = requestAnimationFrame(() => {
 			// Compare path AND query: expo-router's own write may leave `?orderId=` behind.
 			if (window.location.pathname + window.location.search !== path) {
@@ -31,7 +35,7 @@ export function usePosUrlMirror() {
 			}
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [path, screenSize, stage]);
+	}, [path, routedModal]);
 }
 
 export function PosUrlMirror() {

@@ -8,7 +8,9 @@ export interface PosUrlState {
 export function posPathFor({ orderId, stage, methodId, receiptOrderId }: PosUrlState): string {
 	if (receiptOrderId) return `/cart/receipt/${receiptOrderId}`;
 	if (!orderId) return '/cart';
-	if (stage === 'checkout') return `/cart/${orderId}/checkout${methodId ? `/${methodId}` : ''}`;
+	if (stage === 'checkout') {
+		return `/cart/${orderId}/checkout${methodId ? `/${encodeURIComponent(methodId)}` : ''}`;
+	}
 	return `/cart/${orderId}`;
 }
 
@@ -17,8 +19,10 @@ export function readCheckoutSeed(orderIdParam: string | string[] | undefined): {
 	checkout: boolean;
 	methodId?: string;
 } {
-	const [orderId, suffix, methodId] = Array.isArray(orderIdParam) ? orderIdParam : [orderIdParam];
-	const checkout = suffix === 'checkout';
+	const parts = Array.isArray(orderIdParam) ? orderIdParam : [orderIdParam];
+	const [orderId, suffix, methodId] = parts;
+	// `/cart/<uuid>/checkout[/<method>]` and nothing longer; the router hands us decoded segments.
+	const checkout = suffix === 'checkout' && parts.length <= 3;
 	return { orderId, checkout, methodId: checkout ? methodId : undefined };
 }
 
