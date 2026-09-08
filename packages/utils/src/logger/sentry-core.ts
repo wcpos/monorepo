@@ -1,0 +1,96 @@
+import { redactSensitiveText } from './redact';
+
+export type SentryCaptureInput = {
+	message: string;
+	code?: number | string;
+	context?: unknown;
+};
+
+export type TelemetryConsent = 'undecided' | 'allowed' | 'denied';
+
+// Public DSN for the same Sentry project used by the desktop main process.
+export const SENTRY_DSN =
+	'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733';
+
+type SentryEventLike = {
+	request?: { url?: string };
+	breadcrumbs?: { data?: Record<string, unknown> }[];
+	extra?: Record<string, unknown>;
+};
+
+function stripOrigin(url: string): string {
+	try {
+		const parsedUrl = new URL(url);
+		return redactSensitiveText(`${parsedUrl.pathname}${parsedUrl.search}`);
+	} catch {
+		return redactSensitiveText(url);
+	}
+}
+
+function scrubUrlValues(value: unknown): unknown {
+	if (typeof value === 'string') return stripOrigin(value);
+	if (Array.isArray(value)) return value.map(scrubUrlValues);
+	if (value === null || typeof value !== 'object' || value instanceof Error) return value;
+	return Object.fromEntries(
+		Object.entries(value).map(([key, nestedValue]) => [key, scrubUrlValues(nestedValue)])
+	);
+}
+
+export function scrubEvent<T extends SentryEventLike>(event: T): T {
+	if (event.request?.url) {
+		event.request.url = stripOrigin(event.request.url);
+	}
+	for (const breadcrumb of event.breadcrumbs ?? []) {
+		if (typeof breadcrumb.data?.url === 'string') {
+			breadcrumb.data.url = stripOrigin(breadcrumb.data.url);
+		}
+	}
+	if (event.extra) {
+		event.extra = Object.fromEntries(
+			Object.entries(event.extra).map(([key, value]) => [key, scrubUrlValues(value)])
+		);
+	}
+	return event;
+}
+
+/**
+ * The message with everything per-store or per-record replaced by `{}`: URL
+ * origins (a merchant's hostname must not make one failure class into one
+ * issue per store), UUIDs, quoted strings and integers.
+ */
+export function messageTemplate(message: string): string {
+	return message
+		.replace(/\bhttps?:\/\/[^\s"'/]+/gi, '{}')
+		.replace(/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/gi, '{}')
+		.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '{}')
+		.replace(/\b\d+\b/g, '{}');
+}
+
+/**
+ * Sentry grouping key. A registry code names one condition, so it groups alone;
+ * the `*999` catch-alls add the message template so unrelated failures do not
+ * share an issue; an HTTP failure (the client stamps `context.endpoint`) adds
+ * method + endpoint template so a 503 on `/products` and one on `/orders` are
+ * two issues, whatever the code.
+ */
+function fingerprintFor(message: string, code: string, context: unknown) {
+	const fields =
+		context !== null && typeof context === 'object' ? (context as Record<string, unknown>) : {};
+	const endpoint = fields.endpoint;
+	if (typeof endpoint === 'string' && endpoint.length > 0) {
+		const method = typeof fields.method === 'string' ? fields.method : '';
+		return [code, method, messageTemplate(endpoint)];
+	}
+	return code.endsWith('999') ? [code, messageTemplate(message)] : [code];
+}
+
+export function buildCaptureOptions({ message, code, context }: SentryCaptureInput) {
+	return {
+		level: 'error' as const,
+		...(code !== undefined && {
+			tags: { errorCode: String(code) },
+			fingerprint: fingerprintFor(message, String(code), context),
+		}),
+		extra: { message, context },
+	};
+}
