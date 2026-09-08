@@ -16,6 +16,24 @@ import type { TenderKey } from './tender-state';
 import type { TenderTile } from './tiles';
 import type { TenderFlow } from './use-tender-flow';
 
+// Long enough that a normal save never shows it, short enough that a cashier is not left guessing.
+const SLOW_SAVE_NOTICE_MS = 4_000;
+function useElapsed(active: boolean, ms: number): boolean {
+	const [elapsed, setElapsed] = React.useState(false);
+	// A timer is an external system; this effect only arms and releases that timer.
+	React.useEffect(() => {
+		if (!active) return;
+		const timer = setTimeout(() => setElapsed(true), ms);
+		return () => clearTimeout(timer);
+	}, [active, ms]);
+	const [wasActive, setWasActive] = React.useState(active);
+	if (wasActive !== active) {
+		setWasActive(active);
+		setElapsed(false);
+	}
+	return active && elapsed;
+}
+
 interface Props {
 	flow: TenderFlow;
 	format: (minor: number) => string;
@@ -31,7 +49,11 @@ interface Props {
 export function TenderPane({ flow, format, compact }: Props) {
 	const t = useT();
 
-	if (flow.saving) {
+	const slow = useElapsed(flow.saveState?.kind === 'saving', SLOW_SAVE_NOTICE_MS);
+
+	// Tiles are never shown for a save that is unresolved or refused; only a save queued
+	// offline lets the capability rule on each tile decide.
+	if (flow.saveState && flow.saveState.kind !== 'queued-offline') {
 		return (
 			<VStack space="md" className="flex-1">
 				<View className="flex-row flex-wrap gap-2">
@@ -46,6 +68,11 @@ export function TenderPane({ flow, format, compact }: Props) {
 					))}
 				</View>
 				<Text className="text-muted-foreground text-sm">{t('pos_checkout.saving_order')}</Text>
+				{slow ? (
+					<Text testID="checkout-save-slow" className="text-warning text-sm">
+						{t('pos_checkout.store_not_answering')}
+					</Text>
+				) : null}
 			</VStack>
 		);
 	}

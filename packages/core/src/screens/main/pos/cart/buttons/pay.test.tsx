@@ -11,7 +11,9 @@ let mockUnsupported = false;
 const mockPush = jest.fn();
 const mockEnter = jest.fn();
 const mockSave = jest.fn();
-const mockSavingOrders = new Set<string>();
+let mockSaveState: { kind: string } | null = null;
+const mockLegacySave = jest.fn();
+const mockRefusal = jest.fn();
 const mockLeave = jest.fn();
 const mockMarkSaving = jest.fn();
 const mockClearSaving = jest.fn();
@@ -27,7 +29,8 @@ jest.mock('../../checkout/checkout-mode', () => ({
 	leaveCheckout: (id: string) => mockLeave(id),
 	markOrderSaving: (id: string) => mockMarkSaving(id),
 	clearOrderSaving: (id: string) => mockClearSaving(id),
-	getCheckoutModeSnapshot: () => ({ savingOrders: mockSavingOrders }),
+	getOrderSaveState: () => mockSaveState,
+	useOrderSaveState: () => mockSaveState,
 }));
 jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: mockOrder }),
@@ -35,7 +38,7 @@ jest.mock('../../contexts/current-order', () => ({
 jest.mock('@wcpos/query', () => ({
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 }));
-jest.mock('../../../contexts/use-push-document', () => ({ usePushDocument: () => mockSave }));
+jest.mock('../../../contexts/use-push-document', () => ({ usePushDocument: () => mockLegacySave }));
 jest.mock('../../../hooks/use-current-order-currency-format', () => ({
 	useCurrentOrderCurrencyFormat: () => ({ format: String }),
 }));
@@ -58,18 +61,23 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
+jest.mock('../../checkout/hooks/use-checkout-save', () => ({ useCheckoutSave: () => mockSave }));
+jest.mock('../../checkout/refusal-toast', () => ({
+	showOrderRefusedToast: (...args: unknown[]) => mockRefusal(...args),
+}));
 beforeEach(() => {
 	jest.clearAllMocks();
-	mockSavingOrders.clear();
+	mockSaveState = null;
 	mockOrder.isNew = false;
 	mockSize = 'lg';
 	mockLoaded = true;
 	mockUnsupported = false;
-	mockSave.mockResolvedValue(mockOrder);
+	mockSave.mockResolvedValue({ outcome: 'saved', resident: mockOrder });
+	mockLegacySave.mockResolvedValue(mockOrder);
 });
 it.each([false, true])('enters wide checkout immediately (draft: %s)', async (isNew) => {
 	mockOrder.isNew = isNew;
-	mockSave.mockResolvedValue({ ...mockOrder, isNew: false });
+	mockSave.mockResolvedValue({ outcome: 'saved', resident: { ...mockOrder, isNew: false } });
 	render(<PayButton />);
 	fireEvent.click(screen.getByTestId('checkout-button'));
 	await waitFor(() => expect(mockEnter).toHaveBeenCalledWith('order-1'));
@@ -90,7 +98,8 @@ it.each(['phone', 'legacy', 'unsupported'])('retains the modal for %s', async (l
 	expect(mockEnter).not.toHaveBeenCalled();
 });
 it('leaves checkout on an unsuccessful push', async () => {
-	mockSave.mockResolvedValue(null);
+	mockLoaded = false;
+	mockLegacySave.mockResolvedValue(null);
 	render(<PayButton />);
 	fireEvent.click(screen.getByTestId('checkout-button'));
 	await waitFor(() => expect(mockLeave).toHaveBeenCalledWith('order-1'));
@@ -106,22 +115,62 @@ it('enters checkout before the push resolves', () => {
 	expect(mockEnter).toHaveBeenCalledWith('order-1');
 	expect(mockClearSaving).not.toHaveBeenCalled();
 });
-it.each(['lg', 'sm'])('a failed push leaves checkout and clears saving (%s)', async (size) => {
-	mockSize = size;
-	mockSave.mockRejectedValue(new Error('save failed'));
-	render(<PayButton />);
-	fireEvent.click(screen.getByTestId('checkout-button'));
-	await waitFor(() => expect(mockLeave).toHaveBeenCalledWith('order-1'));
-	expect(mockClearSaving).toHaveBeenCalledWith('order-1');
-	if (size === 'sm') expect(mockReplace).toHaveBeenCalledWith('/cart');
-	else expect(mockReplace).not.toHaveBeenCalled();
-});
+it.each(['lg', 'sm'])(
+	'a failed save leaves checkout (the save hook owns clearing) (%s)',
+	async (size) => {
+		mockSize = size;
+		mockSave.mockRejectedValue(new Error('save failed'));
+		render(<PayButton />);
+		fireEvent.click(screen.getByTestId('checkout-button'));
+		await waitFor(() => expect(mockLeave).toHaveBeenCalledWith('order-1'));
+		expect(mockClearSaving).not.toHaveBeenCalled();
+		if (size === 'sm') expect(mockReplace).toHaveBeenCalledWith('/cart');
+		else expect(mockReplace).not.toHaveBeenCalled();
+	}
+);
 
 it('ignores Pay when this order is already saving', () => {
-	mockSavingOrders.add('order-1');
+	mockSaveState = { kind: 'saving' };
 	render(<PayButton />);
 	fireEvent.click(screen.getByTestId('checkout-button'));
 	expect(mockSave).not.toHaveBeenCalled();
 	expect(mockEnter).not.toHaveBeenCalled();
 	expect(mockMarkSaving).not.toHaveBeenCalled();
+});
+
+const rejection = { status: 403, reason: 'refused', message: 'No permission' };
+it('leaves checkout and shows the refusal once', async () => {
+	mockSave.mockResolvedValue({ outcome: 'rejected', rejection });
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() => expect(mockRefusal).toHaveBeenCalledTimes(1));
+	expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection }));
+	expect(mockLeave).toHaveBeenCalledWith('order-1');
+});
+it('keeps queued-offline checkout open without clearing the save entry', async () => {
+	mockSave.mockResolvedValue({ outcome: 'queued-offline' });
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() => expect(mockSave).toHaveBeenCalled());
+	expect(mockLeave).not.toHaveBeenCalled();
+	expect(mockClearSaving).not.toHaveBeenCalled();
+});
+it('refuses a held order without enqueueing', () => {
+	mockSaveState = { kind: 'rejected', ...rejection };
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	expect(mockSave).not.toHaveBeenCalled();
+	expect(mockLegacySave).not.toHaveBeenCalled();
+	expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection: mockSaveState }));
+});
+it.each(['lg', 'sm'])('abandons and toasts a late refusal (%s)', async (size) => {
+	mockSize = size;
+	mockSave.mockResolvedValue({ outcome: 'queued-offline' });
+	render(<PayButton />);
+	fireEvent.click(screen.getByTestId('checkout-button'));
+	await waitFor(() => expect(mockSave).toHaveBeenCalled());
+	mockSave.mock.calls[0][1].onLateRejected(rejection);
+	expect(mockLeave).toHaveBeenCalledWith('order-1');
+	expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection }));
+	if (size === 'sm') expect(mockReplace).toHaveBeenCalledWith('/cart');
 });

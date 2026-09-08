@@ -6,7 +6,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../hooks/use-payment-methods';
-import { resolveStage, useCheckoutMode } from '../checkout/checkout-mode';
+import { resolveStage, useCheckoutMode, useOrderSaveState } from '../checkout/checkout-mode';
 
 /**
  * The chip tells the cashier about an order they are NOT looking at. On the active tab the
@@ -22,6 +22,7 @@ export function TabChip({
 }) {
 	const payload = useRecordField(order, (record) => record.payload);
 	const mode = useCheckoutMode();
+	const saveState = useOrderSaveState(order.uuid);
 	const { methods } = usePaymentMethods();
 	const { store } = useStoreSession();
 	const { format } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
@@ -32,18 +33,26 @@ export function TabChip({
 	// Same approved set `derive` counts as paid: an authorized card leg is money already taken.
 	const captured = rows.some((row) => row.status === 'captured' || row.status === 'authorized');
 	const label =
-		stage === 'receipt'
-			? t('pos_checkout.chip_paid_receipt')
-			: captured && Number(balance) > 0
-				? t('pos_checkout.chip_partly_paid', { due: format(Number(balance)) })
-				: stage === 'checkout' && !captured
-					? t('pos_checkout.chip_in_checkout')
-					: null;
+		saveState?.kind === 'rejected'
+			? t('pos_checkout.chip_save_refused')
+			: stage === 'receipt'
+				? t('pos_checkout.chip_paid_receipt')
+				: captured && Number(balance) > 0
+					? t('pos_checkout.chip_partly_paid', { due: format(Number(balance)) })
+					: stage === 'checkout' && !captured
+						? t(
+								saveState?.kind === 'saving'
+									? 'pos_checkout.saving_order'
+									: saveState?.kind === 'queued-offline'
+										? 'pos_checkout.chip_in_checkout_offline'
+										: 'pos_checkout.chip_in_checkout'
+							)
+						: null;
 	return label && !active ? (
 		<StatusBadge
 			testID={`open-order-chip-${order.uuid}`}
 			label={label}
-			variant={stage === 'receipt' ? 'success' : 'info'}
+			variant={saveState?.kind === 'rejected' ? 'error' : stage === 'receipt' ? 'success' : 'info'}
 		/>
 	) : null;
 }

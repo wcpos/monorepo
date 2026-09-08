@@ -40,6 +40,11 @@ const mockLogger = getLogger(['test']) as unknown as {
 	success: jest.Mock;
 };
 
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('../../checkout/refusal-toast', () => ({ showOrderRefusedToast: jest.fn() }));
+
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ push: mockPush, replace: mockReplace, setParams: mockSetParams }),
 }));

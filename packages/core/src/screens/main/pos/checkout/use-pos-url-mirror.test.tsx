@@ -12,6 +12,9 @@ import { usePosUrlMirror } from './use-pos-url-mirror';
 
 let mockSize = 'lg';
 const mockRecord = { uuid: 'u', isNew: false, payload: { meta_data: [] } };
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isWeb: true } }));
 let mockSegments: string[] = ['(app)', '(drawer)', '(pos)', '(columns)', 'cart', '[...orderId]'];
 jest.mock('expo-router', () => ({ useRouter: () => ({}), useSegments: () => mockSegments }));

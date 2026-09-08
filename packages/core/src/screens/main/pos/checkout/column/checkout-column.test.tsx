@@ -46,6 +46,9 @@ const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethod
 	...overrides,
 });
 
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('../tender/use-ledger-view', () => ({
 	useLedgerView: () => ({ ...mockFlow, format: (minor: number) => `$${(minor / 100).toFixed(2)}` }),
 }));
@@ -140,7 +143,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		entryChangeMinor: 0,
 		quickAmountsMinor: [],
 		busy: false,
-		saving: false,
+		saveState: null,
 		pickMethod: mockPickMethod,
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
@@ -253,7 +256,7 @@ it('does not silently finish a receipt on Escape', () => {
 
 it('shows a title skeleton while saving an unnumbered order', () => {
 	mockNumber = '';
-	mockFlow = makeFlow({ saving: true });
+	mockFlow = makeFlow({ saveState: { kind: 'saving' } });
 	const { rerender } = render(<CheckoutColumn order={order} />);
 	expect(screen.getByTestId('checkout-title-skeleton')).not.toBeNull();
 	mockFlow = makeFlow();

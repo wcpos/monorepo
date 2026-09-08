@@ -10,6 +10,9 @@ let mockSize = 'lg';
 let mockLoaded = true;
 let mockUnsupported = false;
 let mockHref: unknown;
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => ({ orderId: 'a' }),
 	Redirect: ({ href }: { href: unknown }) => {

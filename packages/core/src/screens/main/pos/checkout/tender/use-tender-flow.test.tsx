@@ -207,7 +207,7 @@ describe('useTenderFlow', () => {
 	it('blocks method selection and recording while saving', async () => {
 		markOrderSaving(order.uuid);
 		const { result } = renderHook(() => useTenderFlow(order));
-		expect(result.current.saving).toBe(true);
+		expect(result.current.saveState).toEqual({ kind: 'saving' });
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.state.view).toBe('select');
 		// Exercise takeTender with a selected method so its guard is tested independently.

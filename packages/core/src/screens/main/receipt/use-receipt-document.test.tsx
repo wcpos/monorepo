@@ -8,6 +8,9 @@ const mockPrint = jest.fn<Promise<void>, []>();
 let mockFinal = true;
 let mockAutoPrint = true;
 const order = { uuid: 'paid', payload: { id: 42 } } as never;
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
 	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),

@@ -17,7 +17,13 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
-import { leaveCheckout, setTenderMethod, useOrderSaving, useTenderMethod } from '../checkout-mode';
+import {
+	leaveCheckout,
+	type OrderSaveState,
+	setTenderMethod,
+	useOrderSaveState,
+	useTenderMethod,
+} from '../checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -74,7 +80,7 @@ export interface TenderFlow {
 
 	/** A record or a void is in flight; every action must be inert while true. */
 	busy: boolean;
-	saving: boolean;
+	saveState: OrderSaveState | null;
 	pickMethod: (methodId: string) => void;
 	takeTender: () => Promise<void>;
 	cancelPayment: () => Promise<void>;
@@ -82,7 +88,7 @@ export interface TenderFlow {
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const storedMethodId = useTenderMethod(order.uuid);
-	const saving = useOrderSaving(order.uuid);
+	const saveState = useOrderSaveState(order.uuid);
 	const [busy, setBusy] = React.useState(false);
 	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
 	const busyRef = React.useRef(false);
@@ -157,7 +163,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 
 	const pickMethod = React.useCallback(
 		(methodId: string) => {
-			if (busyRef.current || saving) return;
+			if (busyRef.current || (saveState && saveState.kind !== 'queued-offline')) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile || tile.disabled) return;
 			const prefillMinor =
@@ -167,12 +173,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			reducerDispatch({ type: 'pick-method', methodId, prefillMinor });
 			setTenderMethod(order.uuid, methodId);
 		},
-		[balanceMinor, order.uuid, saving, state.splitShareMinor, tiles]
+		[balanceMinor, order.uuid, saveState, state.splitShareMinor, tiles]
 	);
 
 	const takeTender = React.useCallback(async () => {
 		if (busyRef.current) return;
-		if (saving) return;
+		if (saveState && saveState.kind !== 'queued-offline') return;
 		busyRef.current = true;
 		setBusy(true);
 		try {
@@ -243,7 +249,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		localPatch,
 		order,
 		recordManualPayment,
-		saving,
+		saveState,
 		state.entryMinor,
 		t,
 		tiles,
@@ -299,7 +305,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			entryChangeMinor,
 			quickAmountsMinor,
 			busy,
-			saving,
+			saveState,
 			pickMethod,
 			takeTender,
 			cancelPayment,
@@ -323,7 +329,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			entryChangeMinor,
 			quickAmountsMinor,
 			busy,
-			saving,
+			saveState,
 			pickMethod,
 			takeTender,
 			cancelPayment,

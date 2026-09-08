@@ -76,7 +76,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				>
 					<ButtonText>{t('pos_checkout.back_to_cart')}</ButtonText>
 				</Button>
-				{flow.saving && !payload.number ? (
+				{flow.saveState?.kind === 'saving' && !payload.number ? (
 					<View className="flex-1">
 						<View className="bg-muted h-5 w-40 rounded" testID="checkout-title-skeleton" />
 					</View>

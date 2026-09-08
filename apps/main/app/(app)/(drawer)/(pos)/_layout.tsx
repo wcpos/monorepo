@@ -11,6 +11,7 @@ import { useStoreSession } from '@wcpos/core/contexts/app-state';
 import { PosUrlMirror } from '@wcpos/core/screens/main/pos/checkout/use-pos-url-mirror';
 import { useCheckoutUrlSeed } from '@wcpos/core/screens/main/pos/checkout/use-checkout-url-seed';
 import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
+import { useRejectedOrderSavesSync } from '@wcpos/core/screens/main/pos/checkout/use-rejected-order-saves';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
 import { useDefaultCustomer } from '@wcpos/core/screens/main/hooks/use-default-customer';
 import {
@@ -33,6 +34,7 @@ export default function POSLayout() {
 	const cashierID = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeID = useDocField(store, (value) => value.id) as number | undefined;
 	useResetCheckoutModeOnStoreChange(storeID);
+	useRejectedOrderSavesSync();
 	const segments: string[] = useSegments();
 	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();

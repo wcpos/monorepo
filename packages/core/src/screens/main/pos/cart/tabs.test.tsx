@@ -21,6 +21,9 @@ const mockReceipts = {
 const mockPending = new Promise(() => {});
 let mockSuspended: string | null = null;
 let mockSelect: (id: string) => void;
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
 		currentOrderRecord: mockOpen[0].record,

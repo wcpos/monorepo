@@ -148,7 +148,7 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		entryChangeMinor: 0,
 		quickAmountsMinor: [],
 		busy: false,
-		saving: false,
+		saveState: null,
 		pickMethod: mockPickMethod,
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
