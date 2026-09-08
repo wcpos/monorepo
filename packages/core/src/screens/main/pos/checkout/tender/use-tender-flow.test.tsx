@@ -11,6 +11,8 @@ import {
 	getCheckoutModeSnapshot,
 	markOrderSaving,
 	resetCheckoutMode,
+	seedCheckoutFromUrl,
+	takeMethodSeed,
 } from '../checkout-mode';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
@@ -63,6 +65,7 @@ const noDriver = {
 
 const methods: PaymentMethodDescriptor[] = [cash, card, noDriver];
 let mockPayload = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
+let mockMethodsLoaded = true;
 let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
 
@@ -81,7 +84,7 @@ jest.mock('../../../hooks/use-payment-methods', () => ({
 		methods: mockMethods,
 		byId: new Map(mockMethods.map((method) => [method.id, method])),
 		contract: 'payments-v1',
-		loaded: true,
+		loaded: mockMethodsLoaded,
 		unsupportedSchema: false,
 	}),
 }));
@@ -155,12 +158,40 @@ describe('useTenderFlow', () => {
 		jest.clearAllMocks();
 		mockPayload = { total: '92.95', meta_data: [] };
 		mockMethods = methods;
+		mockMethodsLoaded = true;
 		mockOnlineStatus = 'online-website-available';
 		mockBlockIfDegraded.mockReturnValue(false);
 		mockRecordManualPayment.mockResolvedValue(recorded);
 		mockVoidPayments.mockResolvedValue({ failed: [] });
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockLocalPatch.mockResolvedValue({ document: order });
+	});
+
+	it('publishes a picked method to the URL store', () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(getCheckoutModeSnapshot().tenderMethods.get(order.uuid)).toBe('pos_cash');
+	});
+	it('consumes a method seed and selects it only after methods load', () => {
+		seedCheckoutFromUrl(order.uuid, 'pos_cash');
+		mockMethodsLoaded = false;
+		mockMethods = [];
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state.view).toBe('select');
+		expect(takeMethodSeed(order.uuid)).toBeUndefined();
+		mockMethodsLoaded = true;
+		mockMethods = methods;
+		rerender();
+		expect(result.current.state).toMatchObject({ view: 'amount', methodId: 'pos_cash' });
+		act(() => result.current.dispatch({ type: 'back' }));
+		rerender();
+		expect(result.current.state.view).toBe('select');
+	});
+	it.each(['device_card', 'unknown'])('drops unavailable method seed %s', (methodId) => {
+		seedCheckoutFromUrl(order.uuid, methodId);
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
+		expect(takeMethodSeed(order.uuid)).toBeUndefined();
 	});
 
 	it('blocks method selection and recording while saving', async () => {

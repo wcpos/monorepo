@@ -17,7 +17,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
-import { leaveCheckout, useOrderSaving } from '../checkout-mode';
+import { leaveCheckout, setTenderMethod, takeMethodSeed, useOrderSaving } from '../checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -82,6 +82,15 @@ export interface TenderFlow {
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialTenderState);
+	// Publish reducer state to the external URL mirror store.
+	React.useEffect(() => {
+		setTenderMethod(order.uuid, state.methodId);
+	}, [order.uuid, state.methodId]);
+	const seedRef = React.useRef<string | undefined | null>(null);
+	// Consume the transient external seed once for this order's keyed flow mount.
+	React.useEffect(() => {
+		if (seedRef.current === null) seedRef.current = takeMethodSeed(order.uuid);
+	}, [order.uuid]);
 	const saving = useOrderSaving(order.uuid);
 	const [busy, setBusy] = React.useState(false);
 	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
@@ -149,6 +158,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		},
 		[balanceMinor, saving, state.splitShareMinor, tiles]
 	);
+
+	// Wait for external payment descriptors before applying the URL's method seed.
+	React.useEffect(() => {
+		const seed = seedRef.current;
+		if (!seed || !methodsLoaded) return;
+		const tile = tiles.find(({ method }) => method.id === seed);
+		if (tile && !tile.disabled && state.methodId === null) pickMethod(seed);
+		seedRef.current = undefined;
+	}, [methodsLoaded, tiles, state.methodId, pickMethod]);
 
 	const takeTender = React.useCallback(async () => {
 		if (busyRef.current) return;
