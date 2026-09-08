@@ -766,6 +766,56 @@ describe('createOrdersSchedulerFetcher', () => {
 		expect(repository.upsertMany).not.toHaveBeenCalled();
 	});
 
+	it('applies a completed targeted order after discarding its held rows', async () => {
+		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const pending = new Set([uuidFor(123)]);
+		const discardHeldOpenCartRows = vi.fn(async () => {
+			pending.clear();
+			return 1;
+		});
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore: {
+				readCustomPullCheckpoint: async () => checkpoint,
+				writeCustomPullCheckpoint: async () => undefined,
+			},
+			pendingMutationOrderIds: async () => pending,
+			discardHeldOpenCartRows,
+			fetcher: async () =>
+				response([
+					{
+						id: 123,
+						status: 'completed',
+						date_paid_gmt: '2026-09-01T10:02:00',
+						date_modified_gmt: '2026-09-01T10:02:30',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
+					},
+				]),
+		});
+		await schedulerFetcher(
+			orderTask({
+				queryKey: 'orders:ids:123',
+				documentIds: [uuidFor(123)],
+				remoteIds: [remoteId(123)],
+				mode: 'on-demand',
+			})
+		);
+		expect(discardHeldOpenCartRows).toHaveBeenCalledExactlyOnceWith(uuidFor(123), {
+			status: 'completed',
+			datePaid: '2026-09-01T10:02:00',
+			dateModified: '2026-09-01T10:02:30',
+		});
+		// The materialized document carries status under `payload`; the promoted
+		// top-level `status` is added by the collection descriptor at write time.
+		expect(repository.upsertMany).toHaveBeenCalledWith([
+			expect.objectContaining({
+				uuid: uuidFor(123),
+				payload: expect.objectContaining({ status: 'completed' }),
+			}),
+		]);
+	});
+
 	it('does NOT overwrite a targeted order that has queued local mutations, but keeps it covered', async () => {
 		const repository = { upsertMany: vi.fn(async () => undefined) };
 		const coverageRepository = {

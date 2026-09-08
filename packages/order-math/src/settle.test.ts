@@ -478,6 +478,55 @@ describe('settleCart', () => {
 			fee_lines: [makePercentFee(10)],
 		};
 
+		it.each([0, 0.01])(
+			'ignores six-decimal ack formatting, but detects a %s coupon difference',
+			(difference) => {
+				const first = settleCart(snapshot, config, { coupons: context });
+				expect(first.ok).toBe(true);
+				if (!first.ok) return;
+				const moneyKeys = new Set([
+					'discount_total',
+					'discount_tax',
+					'shipping_total',
+					'shipping_tax',
+					'cart_tax',
+					'total',
+					'total_tax',
+					'subtotal',
+					'subtotal_tax',
+					'price',
+					'discount',
+					'amount',
+					'tax_total',
+					'shipping_tax_total',
+				]);
+				const applied: CartSnapshot = JSON.parse(
+					JSON.stringify({ ...snapshot, ...first.patch }, (key, value) =>
+						moneyKeys.has(key) && typeof value === 'string' && Number.isFinite(Number(value))
+							? Number(value).toFixed(6)
+							: value
+					)
+				);
+				applied.coupon_lines![0].discount = (
+					Number(applied.coupon_lines![0].discount) + difference
+				).toFixed(6);
+				const before = JSON.stringify(applied);
+				expect(settleCart(applied, config, { coupons: context })).toMatchObject({
+					ok: true,
+					changed: difference !== 0,
+				});
+				expect(JSON.stringify(applied)).toBe(before);
+			}
+		);
+
+		it.each(['46.750000', '46.76'])('compares aggregate total %s numerically', (total) => {
+			const first = settleCart({ line_items: [makePosLineItem(1, 46.75)] }, config);
+			expect(first.ok).toBe(true);
+			if (!first.ok) return;
+			const applied = { line_items: [makePosLineItem(1, 46.75)], ...first.patch, total };
+			expect(settleCart(applied, config)).toMatchObject({ ok: true, changed: total === '46.76' });
+		});
+
 		it('first settle on a totals-less snapshot reports changed: true', () => {
 			const result = settleCart(snapshot, config, { coupons: context });
 			expect(result.ok).toBe(true);
