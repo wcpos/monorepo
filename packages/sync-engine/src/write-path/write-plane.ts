@@ -168,7 +168,7 @@ export function createWritePlane(deps: WritePlaneDeps): WritePlane {
 				}
 				deps.diagnostics({
 					type: 'queue.write.enqueued',
-					level: 'info',
+					level: 'debug',
 					collection: intent.collection,
 					fields: {
 						mutationId: receipt.mutationId,

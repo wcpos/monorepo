@@ -1,0 +1,105 @@
+diff --git a/dist/src/index.js b/dist/src/index.js
+index 778c106639596557a5457085eeaa97cdade6673a..4a95037db12d0927a1b05d1115713decd2c5183d 100644
+--- a/dist/src/index.js
++++ b/dist/src/index.js
+@@ -309,18 +309,15 @@ class FileSystemWritableFileStream {
+             if (this.swapNode.exists) {
+                 this.swapNode.delete();
+             }
+-            this.swapNode.create();
++            // wcpos patch: expo-file-system 57 has synchronous copySync/moveSync, so the
++            // swap file is a native copy instead of readBytes()+writeBytes() of the whole
++            // file through the JS thread (rxdb-premium opens a writable per write).
+             if (this.keepExistingData && this.fileNode.exists) {
+-                // Copy existing data into the swap file if we are keeping it
+-                const existingHandle = this.fileNode.open();
+-                const swapHandle = this.swapNode.open();
+-                this._cachedSize = existingHandle.size ?? 0;
+-                const data = existingHandle.readBytes(this._cachedSize);
+-                swapHandle.writeBytes(data);
+-                existingHandle.close();
+-                swapHandle.close();
++                this.fileNode.copySync(this.swapNode);
++                this._cachedSize = this.swapNode.size ?? 0;
+             }
+             else {
++                this.swapNode.create();
+                 this._cachedSize = 0;
+             }
+             this.fileHandle = this.swapNode.open();
+@@ -483,16 +480,9 @@ class FileSystemWritableFileStream {
+                     if (this.fileNode.exists) {
+                         this.fileNode.delete();
+                     }
+-                    // Workaround for expo-file-system lack of synchronous move:
+-                    // Read swap file completely and write to the target natively
+-                    const swapHandle = this.swapNode.open();
+-                    const finalData = swapHandle.readBytes(this._cachedSize);
+-                    swapHandle.close();
+-                    this.fileNode.create();
+-                    const finalHandle = this.fileNode.open();
+-                    finalHandle.writeBytes(finalData);
+-                    finalHandle.close();
+-                    this.swapNode.delete();
++                    // wcpos patch: atomic rename (moveSync) instead of reading the whole swap
++                    // back into JS and rewriting it; restores the April 2026 fix (rxdb#8290).
++                    this.swapNode.moveSync(this.fileNode);
+                 }
+                 else {
+                     // Zero-byte file that was created and immediately closed
+diff --git a/src/index.ts b/src/index.ts
+index b9bc04d986d58509480b5b0b7e55ec5587161ec7..91735d0113aa25fdcd0a2942d1049b3548f172cf 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -355,21 +355,17 @@ export class FileSystemWritableFileStream {
+             if (this.swapNode.exists) {
+                 this.swapNode.delete();
+             }
+-            this.swapNode.create();
+-
++            // wcpos patch: expo-file-system 57 has synchronous copySync/moveSync, so the
++            // swap file is a native copy instead of readBytes()+writeBytes() of the whole
++            // file through the JS thread (rxdb-premium opens a writable per write).
+             if (this.keepExistingData && this.fileNode.exists) {
+-                // Copy existing data into the swap file if we are keeping it
+-                const existingHandle = this.fileNode.open();
+-                const swapHandle = this.swapNode.open();
+-                this._cachedSize = existingHandle.size ?? 0;
+-                const data = existingHandle.readBytes(this._cachedSize);
+-                swapHandle.writeBytes(data);
+-                existingHandle.close();
+-                swapHandle.close();
+-            } else {
++                this.fileNode.copySync(this.swapNode);
++                this._cachedSize = this.swapNode.size ?? 0;
++            }
++            else {
++                this.swapNode.create();
+                 this._cachedSize = 0;
+             }
+-
+             this.fileHandle = this.swapNode.open();
+         }
+     }
+@@ -527,18 +523,11 @@ export class FileSystemWritableFileStream {
+                         this.fileNode.delete();
+                     }
+ 
+-                    // Workaround for expo-file-system lack of synchronous move:
+-                    // Read swap file completely and write to the target natively
+-                    const swapHandle = this.swapNode.open();
+-                    const finalData = swapHandle.readBytes(this._cachedSize);
+-                    swapHandle.close();
++                    // wcpos patch: atomic rename (moveSync) instead of reading the whole swap
+ 
+-                    this.fileNode.create();
+-                    const finalHandle = this.fileNode.open();
+-                    finalHandle.writeBytes(finalData);
+-                    finalHandle.close();
++                    // back into JS and rewriting it; restores the April 2026 fix (rxdb#8290).
+ 
+-                    this.swapNode.delete();
++                    this.swapNode.moveSync(this.fileNode);
+                 } else {
+                     // Zero-byte file that was created and immediately closed
+                     if (!this.fileNode.exists) {
