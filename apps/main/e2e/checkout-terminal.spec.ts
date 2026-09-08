@@ -237,7 +237,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			const voided = terminalResponse(page, orderId, 'void');
 			await takeTerminal(page, orderId, 'sim-expire');
 			await expect(page.getByTestId('checkout-terminal-status')).toHaveText(
-				copy['pos_checkout.payment_cancelled_on_terminal'],
+				copy['pos_checkout.payment_timed_out'],
 				{ timeout: 90_000 }
 			);
 			expect((await voided).status(), 'deadline void POST must succeed').toBeLessThan(400);
@@ -294,8 +294,9 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			await expect(page.getByTestId(`open-order-chip-${uuid}`)).toHaveText(
 				copy['pos_checkout.chip_waiting_for_terminal'].replace('{amount}', amount)
 			);
+			// The column is still that order's stage (its row is live), so there is no
+			// checkout button to press: the tab itself brings the leg view back.
 			await page.getByTestId(`open-order-tab-${uuid}`).click();
-			await page.getByTestId('checkout-button').click();
 			await expect(page.getByTestId('checkout-terminal-leg')).toBeVisible({ timeout: 30_000 });
 			await expect(page.getByTestId('checkout-terminal-cancel')).toBeVisible();
 			expect(intents.filter((sent) => terminalRoute(sent, orderId, 'intent'))).toHaveLength(1);
