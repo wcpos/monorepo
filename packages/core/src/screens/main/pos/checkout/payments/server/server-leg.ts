@@ -52,12 +52,16 @@ function errorResponse(error: unknown) {
 		? (response as { status?: number; data?: PaymentRefusalBody })
 		: undefined;
 }
+// A date the provider or an old row wrote badly must not switch the deadline off:
+// NaN compares false against everything, so it is ignored rather than trusted.
 function deadline(row: PaymentRow, base: number) {
-	return Math.min(base + DEADLINE_MS, row.expires_at ? Date.parse(row.expires_at) : Infinity);
+	const expires = row.expires_at ? Date.parse(row.expires_at) : NaN;
+	return Math.min(base + DEADLINE_MS, Number.isNaN(expires) ? Infinity : expires);
 }
 export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
-	const created = input.row.created_at_gmt;
-	const createdAt = Date.parse(/(?:Z|[+-]\d\d:\d\d)$/i.test(created) ? created : `${created}Z`);
+	const created = input.row.created_at_gmt ?? '';
+	const parsedCreated = Date.parse(/(?:Z|[+-]\d\d:\d\d)$/i.test(created) ? created : `${created}Z`);
+	const createdAt = Number.isNaN(parsedCreated) ? deps.now() : parsedCreated;
 	let state: ServerLegState = {
 		phase: input.resume ? 'polling' : 'idle',
 		row: input.row,
@@ -251,6 +255,9 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 			return;
 		}
 		const count = state.consecutiveErrors + 1;
+		// A capture that never reached the server is not an attempt: the next status
+		// read that still shows `authorized` issues it again (under the same backoff).
+		if (route === 'capture') captureAttempted = false;
 		setState({
 			capturing: false,
 			consecutiveErrors: count,

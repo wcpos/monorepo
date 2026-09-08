@@ -402,6 +402,26 @@ it.each(['wcpos_payment_not_found', 'wcpos_unknown_refusal'])(
 		});
 	}
 );
+it('a capture lost in transit is issued again on the next authorized read', async () => {
+	const c = setup(true, { status: 'authorized' });
+	c.fail('capture');
+	c.answer('status', response({ status: 'authorized' }));
+	c.answer('status', response({ status: 'authorized' }));
+	c.answer('capture', response({ status: 'captured' }));
+	await tick();
+	expect(c.count('capture')).toBe(1);
+	expect(c.leg.getState()).toMatchObject({ phase: 'polling', captureFailed: false, outcome: null });
+	await tick(2000);
+	expect(c.count('capture')).toBe(2);
+	expect(c.leg.getState().outcome).toBe('captured');
+});
+it('an unparseable expiry or creation date falls back to the five-minute deadline', async () => {
+	const c = setup(true, { created_at_gmt: 'not a date', expires_at: 'never' });
+	expect(c.leg.getState().deadlineAt).toBe(epoch + 300_000);
+	c.answer('status', response({ status: 'pending', expires_at: 'soon' }));
+	await tick();
+	expect(Number.isNaN(c.leg.getState().deadlineAt)).toBe(false);
+});
 it('a 4xx that is not a contract code is retried like a dropped connection', async () => {
 	const c = setup(true);
 	c.fail('status', refusal(403, 'rest_forbidden'));
