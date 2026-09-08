@@ -11,8 +11,7 @@ import {
 	getCheckoutModeSnapshot,
 	markOrderSaving,
 	resetCheckoutMode,
-	seedCheckoutFromUrl,
-	takeMethodSeed,
+	setTenderMethod,
 } from '../checkout-mode';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
@@ -172,26 +171,27 @@ describe('useTenderFlow', () => {
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(getCheckoutModeSnapshot().tenderMethods.get(order.uuid)).toBe('pos_cash');
 	});
-	it('consumes a method seed and selects it only after methods load', () => {
-		seedCheckoutFromUrl(order.uuid, 'pos_cash');
-		mockMethodsLoaded = false;
-		mockMethods = [];
-		const { result, rerender } = renderHook(() => useTenderFlow(order));
-		expect(result.current.state.view).toBe('select');
-		expect(takeMethodSeed(order.uuid)).toBeUndefined();
-		mockMethodsLoaded = true;
-		mockMethods = methods;
-		rerender();
-		expect(result.current.state).toMatchObject({ view: 'amount', methodId: 'pos_cash' });
-		act(() => result.current.dispatch({ type: 'back' }));
-		rerender();
-		expect(result.current.state.view).toBe('select');
-	});
-	it.each(['device_card', 'unknown'])('drops unavailable method seed %s', (methodId) => {
-		seedCheckoutFromUrl(order.uuid, methodId);
+	it('reopens the keypad for the method the store holds, prefilled with the balance', () => {
+		setTenderMethod(order.uuid, 'pos_cash');
 		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state).toMatchObject({
+			view: 'amount',
+			methodId: 'pos_cash',
+			entryMinor: result.current.balanceMinor,
+		});
+		act(() => result.current.dispatch({ type: 'back' }));
 		expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
-		expect(takeMethodSeed(order.uuid)).toBeUndefined();
+		expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
+	});
+	it('clears the published method once a leg is recorded', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
+		await act(async () => {
+			await result.current.takeTender();
+		});
+		expect(result.current.state.methodId).toBeNull();
+		expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
 	});
 
 	it('blocks method selection and recording while saving', async () => {

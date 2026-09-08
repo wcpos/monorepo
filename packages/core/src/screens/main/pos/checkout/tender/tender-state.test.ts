@@ -3,6 +3,7 @@ import {
 	changeMinor,
 	evenSplitShareMinor,
 	initialTenderState,
+	initTenderState,
 	MAX_TENDER_MINOR,
 	quickTenderedAmounts,
 	tenderReducer,
@@ -126,6 +127,20 @@ describe('tenderReducer', () => {
 			splitShareMinor: null,
 		});
 		expect(tenderReducer(state, { type: 'reset' })).toBe(initialTenderState);
+	});
+});
+
+describe('initTenderState', () => {
+	it('starts from scratch without a stored method', () => {
+		expect(initTenderState({ methodId: null, balanceMinor: 1234 })).toBe(initialTenderState);
+	});
+	it('reopens the keypad for a stored method with the balance prefilled', () => {
+		expect(initTenderState({ methodId: 'pos_cash', balanceMinor: 1234 })).toEqual({
+			...initialTenderState,
+			view: 'amount',
+			methodId: 'pos_cash',
+			entryMinor: 1234,
+		});
 	});
 });
 

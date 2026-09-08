@@ -17,7 +17,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
-import { leaveCheckout, setTenderMethod, takeMethodSeed, useOrderSaving } from '../checkout-mode';
+import { leaveCheckout, setTenderMethod, useOrderSaving, useTenderMethod } from '../checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -28,7 +28,7 @@ import { disabledReasonKey } from './labels';
 import {
 	appliedMinor,
 	changeMinor,
-	initialTenderState,
+	initTenderState,
 	quickTenderedAmounts,
 	type TenderAction,
 	tenderReducer,
@@ -81,16 +81,7 @@ export interface TenderFlow {
 }
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
-	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialTenderState);
-	// Publish reducer state to the external URL mirror store.
-	React.useEffect(() => {
-		setTenderMethod(order.uuid, state.methodId);
-	}, [order.uuid, state.methodId]);
-	const seedRef = React.useRef<string | undefined | null>(null);
-	// Consume the transient external seed once for this order's keyed flow mount.
-	React.useEffect(() => {
-		if (seedRef.current === null) seedRef.current = takeMethodSeed(order.uuid);
-	}, [order.uuid]);
+	const storedMethodId = useTenderMethod(order.uuid);
 	const saving = useOrderSaving(order.uuid);
 	const [busy, setBusy] = React.useState(false);
 	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
@@ -117,6 +108,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const totalMinor = toMinor(payload.total, dp);
 	const paidMinor = toMinor(derived.paid, dp);
 	const balanceMinor = toMinor(derived.balance, dp);
+	// Initialised from the checkout store rather than always from scratch: the store carries
+	// the method the URL seeded or the cashier picked before switching tabs, so the keypad
+	// comes back the way it was left. The reducer stays the truth for the entry itself, and
+	// every action that opens or closes the keypad publishes the method back to the store.
+	const [initialState] = React.useState(() =>
+		initTenderState({ methodId: storedMethodId, balanceMinor })
+	);
+	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
 	const liveRows = React.useMemo(
 		() => rows.filter(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
 		[rows]
@@ -141,9 +140,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		[balanceMinor, dp, method]
 	);
 
-	const dispatch = React.useCallback<React.Dispatch<TenderAction>>((action) => {
-		if (!busyRef.current) reducerDispatch(action);
-	}, []);
+	const dispatch = React.useCallback<React.Dispatch<TenderAction>>(
+		(action) => {
+			if (busyRef.current) return;
+			reducerDispatch(action);
+			// These are the actions that close the keypad; the store mirrors which method holds it.
+			if (action.type === 'back' || action.type === 'reset') setTenderMethod(order.uuid, null);
+		},
+		[order.uuid]
+	);
 
 	const pickMethod = React.useCallback(
 		(methodId: string) => {
@@ -155,18 +160,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					? balanceMinor
 					: Math.min(state.splitShareMinor, balanceMinor);
 			reducerDispatch({ type: 'pick-method', methodId, prefillMinor });
+			setTenderMethod(order.uuid, methodId);
 		},
-		[balanceMinor, saving, state.splitShareMinor, tiles]
+		[balanceMinor, order.uuid, saving, state.splitShareMinor, tiles]
 	);
-
-	// Wait for external payment descriptors before applying the URL's method seed.
-	React.useEffect(() => {
-		const seed = seedRef.current;
-		if (!seed || !methodsLoaded) return;
-		const tile = tiles.find(({ method }) => method.id === seed);
-		if (tile && !tile.disabled && state.methodId === null) pickMethod(seed);
-		seedRef.current = undefined;
-	}, [methodsLoaded, tiles, state.methodId, pickMethod]);
 
 	const takeTender = React.useCallback(async () => {
 		if (busyRef.current) return;
@@ -206,6 +203,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			});
 			if (outcome.kind === 'recorded') {
 				reducerDispatch({ type: 'tender-recorded' });
+				setTenderMethod(order.uuid, null);
 				if (balanceMinor - entryAppliedMinor === 0) {
 					await completeOrderFlow({ refresh: outcome.via === 'online' });
 				}
@@ -213,6 +211,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (outcome.kind === 'refused') {
 				reducerDispatch({ type: 'tender-recorded' });
+				setTenderMethod(order.uuid, null);
 				return;
 			}
 			logger.error(t('pos_checkout.payment_not_recorded'), {
@@ -259,6 +258,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 			reducerDispatch({ type: 'reset' });
+			setTenderMethod(order.uuid, null);
 			leaveCheckout(order.uuid);
 			if (screenSize === 'sm') router.replace({ pathname: '/cart' });
 		} catch (error) {

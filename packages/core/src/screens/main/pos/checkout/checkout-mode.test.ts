@@ -14,11 +14,9 @@ import {
 	markOrderSaving,
 	resetCheckoutMode,
 	resolveStage,
-	seedCheckoutFromUrl,
 	selectReceipt,
 	setTenderMethod,
 	subscribeCheckoutMode,
-	takeMethodSeed,
 	useOrderCheckoutStage,
 	useOrderSaving,
 } from './checkout-mode';
@@ -162,12 +160,3 @@ it.each([leaveCheckout, enterReceipt, finishReceipt, resetCheckoutMode])(
 		expect(getCheckoutModeSnapshot().tenderMethods.has('a')).toBe(false);
 	}
 );
-it('seeds checkout and consumes the method once; reset drops pending seeds', () => {
-	seedCheckoutFromUrl('a', 'cash');
-	expect(getCheckoutModeSnapshot().checkoutOrders.has('a')).toBe(true);
-	expect(takeMethodSeed('a')).toBe('cash');
-	expect(takeMethodSeed('a')).toBeUndefined();
-	seedCheckoutFromUrl('b', 'card');
-	resetCheckoutMode();
-	expect(takeMethodSeed('b')).toBeUndefined();
-});

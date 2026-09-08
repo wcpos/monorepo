@@ -1,12 +1,7 @@
 /** @jest-environment jsdom */
 import { renderHook } from '@testing-library/react';
 
-import {
-	getCheckoutModeSnapshot,
-	leaveCheckout,
-	resetCheckoutMode,
-	takeMethodSeed,
-} from './checkout-mode';
+import { getCheckoutModeSnapshot, leaveCheckout, resetCheckoutMode } from './checkout-mode';
 import { useCheckoutUrlSeed } from './use-checkout-url-seed';
 
 let mockSize = 'lg';
@@ -24,13 +19,13 @@ it('seeds wide checkout once per distinct seed, including across tab switches', 
 		initialProps: { param: ['u', 'checkout', 'cash'] },
 	});
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('u')).toBe(true);
-	expect(takeMethodSeed('u')).toBe('cash');
+	expect(getCheckoutModeSnapshot().tenderMethods.get('u')).toBe('cash');
 	leaveCheckout('u');
 	rerender({ param: ['u', 'checkout', 'cash'] });
 	rerender({ param: [] });
 	rerender({ param: ['u', 'checkout', 'cash'] });
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('u')).toBe(false);
-	expect(takeMethodSeed('u')).toBeUndefined();
+	expect(getCheckoutModeSnapshot().tenderMethods.has('u')).toBe(false);
 	rerender({ param: ['v', 'checkout'] });
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('v')).toBe(true);
 });
