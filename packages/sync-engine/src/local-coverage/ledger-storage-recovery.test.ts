@@ -7,6 +7,7 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import type { SyncEvent } from '@wcpos/sync-core';
 
+import * as engineCollections from '../collections/engine-collections';
 import { engineCollectionCreators } from '../collections/engine-collections';
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
@@ -30,6 +31,7 @@ import { RxCoverageRepository } from './persistence';
 import {
 	classifyLedgerRecoveryError,
 	isReconciliationRefusalError,
+	registerLedgerRecovery,
 	withLedgerRecovery,
 	withSchedulerDrainLedgerRecovery,
 	withSchedulerSeedLedgerRecovery,
@@ -290,6 +292,113 @@ async function openEngineDatabase(): Promise<RxDatabase> {
 }
 
 describe('coverage ledger recovery', () => {
+	it('finishes a peer ledger read interleaved with all five rebuild removals', async () => {
+		const a = await openLedgerDatabase(undefined, true);
+		const b = await openLedgerDatabase(a, true);
+		const eventsB: SyncEvent[] = [];
+		const coverageA = createLocalCoverage({ database: a as never, freshForMs: 500 });
+		const coverageB = createLocalCoverage({
+			database: b as never,
+			freshForMs: 500,
+			diagnostics: (event) => eventsB.push(event),
+		});
+		const gates = LEDGER_COLLECTIONS.map(() => {
+			let release!: () => void;
+			const promise = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return { promise, release };
+		});
+		const removed = LEDGER_COLLECTIONS.map(
+			(name) =>
+				new Promise<void>((resolve) => {
+					b.collections[name].onRemove.push(resolve);
+				})
+		);
+		const reset = engineCollections.resetDerivableMetadataCollection;
+		vi.spyOn(engineCollections, 'resetDerivableMetadataCollection').mockImplementation(
+			async (db, name) => {
+				await reset(db, name);
+				if (db === a)
+					await gates[LEDGER_COLLECTIONS.indexOf(name as (typeof LEDGER_COLLECTIONS)[number])]
+						.promise;
+			}
+		);
+		let reads = 0;
+		// Capture each repository generation's handles, as the production repositories do.
+		const peer = withLedgerRecovery({
+			database: b,
+			trigger: 'coverage',
+			create: () => {
+				const collections = LEDGER_COLLECTIONS.map((name) => b.collections[name]);
+				return {
+					read: async () => {
+						const retry = reads++;
+						if (retry > 0) {
+							gates[retry - 1].release();
+							if (retry < removed.length) await removed[retry];
+						}
+						return Promise.all(collections.map((collection) => collection.find().exec()));
+					},
+				};
+			},
+		});
+		const read = vi
+			.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments')
+			.mockRejectedValueOnce(refusalError('multi-instance'));
+		const rebuilding = coverageA.readSnapshot();
+		try {
+			await removed[0];
+			await expect(peer.read()).resolves.toEqual([[], [], [], [], []]);
+			expect(eventsB.filter((event) => event.type === 'coverage.ledger-reattached')).toHaveLength(
+				5
+			);
+		} finally {
+			for (const gate of gates) gate.release();
+			await rebuilding;
+		}
+		read.mockRejectedValueOnce(refusalError('multi-instance'));
+		await expect(coverageB.readSnapshot()).resolves.toEqual({ records: [], lanes: [] });
+		expect(eventsB.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
+	});
+
+	it.each(['repository', 'seed'] as const)('bounds permanent COL21 in %s', async (mode) => {
+		const database = {};
+		const rebuild = vi.fn(async () => {});
+		registerLedgerRecovery({ database, rebuild });
+		const error = newRxError('COL21', { collection: 'coverageRecords' });
+		const run = vi.fn(async () => {
+			throw error;
+		});
+		const result =
+			mode === 'repository'
+				? withLedgerRecovery({ database, trigger: 'coverage', create: () => ({ run }) }).run()
+				: withSchedulerSeedLedgerRecovery({ database, run });
+		await expect(result).rejects.toBe(error);
+		expect(rebuild).toHaveBeenCalledTimes(LEDGER_COLLECTIONS.length + 1);
+		expect(run).toHaveBeenCalledTimes(LEDGER_COLLECTIONS.length + 2);
+	});
+
+	// A drain tick holds claims a peer's rebuild dropped, exactly as a local rebuild
+	// would: it re-attaches once so the collections are usable again, then aborts
+	// cleanly and lets the next cadence re-claim. It never retries the tick.
+	it('re-attaches once and aborts a drain tick on COL21', async () => {
+		const database = {};
+		const rebuild = vi.fn(async () => {});
+		registerLedgerRecovery({ database, rebuild });
+		const run = vi.fn(async () => {
+			throw newRxError('COL21', { collection: 'coverageRecords' });
+		});
+		const aborted = vi.fn(() => 'aborted' as const);
+		await expect(withSchedulerDrainLedgerRecovery({ database, run, aborted })).resolves.toBe(
+			'aborted'
+		);
+		expect(rebuild).toHaveBeenCalledTimes(1);
+		expect(rebuild).toHaveBeenCalledWith('COL21', 'scheduler', 'reattach');
+		expect(run).toHaveBeenCalledTimes(1);
+		expect(aborted).toHaveBeenCalledTimes(1);
+	});
+
 	it('re-attaches a peer without dropping storage or spending its rebuild guard', async () => {
 		const a = await openLedgerDatabase(undefined, true);
 		const b = await openLedgerDatabase(a, true);
@@ -482,6 +591,8 @@ describe('coverage ledger recovery', () => {
 				await expect(withSchedulerSeedLedgerRecovery({ database: db, run })).resolves.toEqual([]);
 				expect(calls).toBe(2);
 			} else {
+				// A drain re-attaches so the next tick can run, then aborts this one:
+				// `calls` stays at 1 — the tick is never retried.
 				await expect(
 					withSchedulerDrainLedgerRecovery({ database: db, run, aborted: () => [] })
 				).resolves.toEqual([]);

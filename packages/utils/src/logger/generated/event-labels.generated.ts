@@ -31,6 +31,7 @@ export const SYNC_EVENT_TYPES = [
 	'coverage.existence-reconcile',
 	'coverage.gate.hit',
 	'coverage.gate.miss',
+	'coverage.ledger-reattached',
 	'coverage.ledger-rebuilt',
 	'coverage.require.error',
 	'coverage.require.log',
@@ -305,6 +306,13 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'SYNC',
 		key: 'health.logs.event.coverage_gate_miss',
 		label: 'Fetched a search from your store',
+		introducedIn: '1.10.0',
+	},
+	'coverage.ledger-reattached': {
+		type: 'coverage.ledger-reattached',
+		domain: 'SYNC',
+		key: 'health.logs.event.coverage_ledger_reattached',
+		label: 'Reconnected to local sync bookkeeping',
 		introducedIn: '1.10.0',
 	},
 	'coverage.ledger-rebuilt': {

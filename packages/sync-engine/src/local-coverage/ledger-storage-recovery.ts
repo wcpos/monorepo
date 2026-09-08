@@ -1,3 +1,9 @@
+import { DERIVABLE_METADATA_COLLECTIONS } from '../collections/engine-collections';
+
+// Each peer removal can close one more collection: five removals need at most five
+// re-attaches; the +1 is the retry that lands after the last removal.
+export const LEDGER_REATTACH_ATTEMPTS = DERIVABLE_METADATA_COLLECTIONS.length + 1;
+
 const RECONCILIATION_REFUSAL_MARKERS = [
 	'index reconciliation refused:',
 	'targeted recovery refused:',
@@ -7,8 +13,6 @@ const RECONCILIATION_REFUSAL_MARKERS = [
 // after a documents-file parse failure; Electron/native never emit this reason.
 // It is corruption nobody else will repair, not a safe skip (Sentry 2K0).
 const NON_CORRUPTION_REFUSALS = new Set(['no-divergence']);
-// One peer rebuild can close each of the five derivable ledger collections once.
-const MAX_CONSECUTIVE_REATTACHMENTS = 5;
 const ledgerReconciliationRefusals = new WeakSet<object>();
 
 /**
@@ -258,6 +262,31 @@ async function awaitLedgerRebuild(input: {
 	await rebuildLedgerOnce(entry, input.reason, input.trigger, input.kind);
 }
 
+async function retryLedgerReattachment<T>(
+	input: { database: LedgerRecoveryDatabase | undefined; trigger?: LedgerRebuildTrigger },
+	run: () => T | Promise<T>
+): Promise<T> {
+	// The caller already performed the first re-attach.
+	for (let attempts = 1; ; attempts += 1) {
+		const entryAtStart = lookupEntry(input.database);
+		const generationAtStart = entryAtStart?.generation ?? 0;
+		try {
+			return await run();
+		} catch (error) {
+			const recovery = classifyLedgerRecoveryError(error);
+			if (recovery?.kind !== 'reattach' || attempts >= LEDGER_REATTACH_ATTEMPTS) throw error;
+			await awaitLedgerRebuild({
+				database: input.database,
+				error,
+				...recovery,
+				entryAtStart,
+				generationAtStart,
+				trigger: input.trigger ?? 'scheduler',
+			});
+		}
+	}
+}
+
 /**
  * Proxies a repository whose refusals are RECOVERABLE by retry: the ledger is
  * rebuilt (once), the repository is rebuilt against the recreated collections, and
@@ -294,29 +323,25 @@ export function withLedgerRecovery<T extends object>(input: {
 	};
 
 	const run = async (property: string | symbol, args: unknown[]): Promise<unknown> => {
-		let reattachments = 0;
-		while (true) {
-			const entryAtStart = lookupEntry(input.database);
-			const generationAtStart = entryAtStart?.generation ?? 0;
-			try {
-				return await invoke(property, args);
-			} catch (error) {
-				const recovery = classifyLedgerRecoveryError(error);
-				if (recovery === undefined) throw error;
-				await awaitLedgerRebuild({
-					database: input.database,
-					error,
-					...recovery,
-					entryAtStart,
-					generationAtStart,
-					trigger: input.trigger,
-				});
-				if (recovery.kind === 'rebuild') return invoke(property, args);
-				reattachments += 1;
-				if (reattachments === MAX_CONSECUTIVE_REATTACHMENTS) {
-					return invoke(property, args);
-				}
+		const entryAtStart = lookupEntry(input.database);
+		const generationAtStart = entryAtStart?.generation ?? 0;
+		try {
+			return await invoke(property, args);
+		} catch (error) {
+			const recovery = classifyLedgerRecoveryError(error);
+			if (recovery === undefined) throw error;
+			await awaitLedgerRebuild({
+				database: input.database,
+				error,
+				...recovery,
+				entryAtStart,
+				generationAtStart,
+				trigger: input.trigger,
+			});
+			if (recovery.kind === 'reattach') {
+				return retryLedgerReattachment(input, () => invoke(property, args));
 			}
+			return invoke(property, args);
 		}
 	};
 
@@ -361,6 +386,9 @@ export async function withSchedulerSeedLedgerRecovery<T>(input: {
 			generationAtStart,
 			trigger: 'scheduler',
 		});
+		if (recovery.kind === 'reattach') {
+			return retryLedgerReattachment(input, input.run);
+		}
 		// Exactly one retry: a refusal that survives the rebuild surfaces.
 		return input.run();
 	}
@@ -401,6 +429,9 @@ export async function withSchedulerDrainLedgerRecovery<T>(input: {
 			generationAtStart,
 			trigger: 'scheduler',
 		});
+		// A peer's rebuild dropped this tick's claims exactly as a local rebuild would,
+		// so a re-attach aborts cleanly too: the collections are usable again and the
+		// next cadence re-claims against the fresh store.
 		return input.aborted();
 	}
 }
