@@ -118,13 +118,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			// checks in package.json): only 8.25.0 carries the fix for
 			// getsentry/sentry-react-native#6630 — on Expo 57 / RN 0.86 iOS, envelopes
 			// report HTTP 200 but never ingest. The 7.x line ended 2026-02-12.
-			// disableAutoUpload: no Sentry upload token exists yet (no secret on this
-			// repo), and sentry-xcode.sh FAILS a Release build when an upload fails.
-			// Flip it once a token is minted; until then native frames are unsymbolicated.
-			[
-				'@sentry/react-native/expo',
-				{ organization: 'wcpos', project: 'woocommerce-pos', disableAutoUpload: true },
-			],
+			// Source maps and debug symbols upload during the native Release build,
+			// authenticated by the SENTRY_AUTH_TOKEN EAS environment variable (an
+			// organization token, `org:ci`). sentry-xcode.sh FAILS a Release build
+			// when that upload fails, so a missing or revoked token is a red build,
+			// not a silent gap — set `disableAutoUpload: true` here to build without it.
+			['@sentry/react-native/expo', { organization: 'wcpos', project: 'woocommerce-pos' }],
 			'./plugins/with-printer-support',
 			'./plugins/with-wedge-key-events',
 			// Android trusts user-installed CAs on dev/adhoc builds ONLY (ruling
