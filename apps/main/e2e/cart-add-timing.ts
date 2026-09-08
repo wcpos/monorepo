@@ -1,56 +1,87 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
 
-import type { CartAddTiming } from '../../../packages/core/src/screens/main/pos/hooks/cart-add-timing';
+type Sample = { status: 'armed' | 'pending' | 'complete' | 'overlap'; durationMs: number | null };
+type MeasurementWindow = Window & {
+	__WCPOS_CART_MEASUREMENT__?: { sample: Sample; stop: () => void };
+};
 
-const readout = (page: Page) => page.getByTestId('e2e-cart-add-timing');
-async function readSample(page: Page): Promise<CartAddTiming> {
-	return JSON.parse((await readout(page).textContent()) ?? 'null');
-}
-
-export async function beginCartAddMeasurement(page: Page): Promise<number> {
-	// Opt in on the deployed web bundle too; do not change production logging/build flags.
+export async function beginCartAddMeasurement(page: Page): Promise<void> {
+	// This case owns an empty cart. Do not mistake a pre-existing quantity for this add.
+	await expect(page.getByTestId('cart-quantity-input')).toHaveCount(0);
 	await page.evaluate(() => {
-		(
-			globalThis as typeof globalThis & { __WCPOS_E2E_CART_TIMING__?: boolean }
-		).__WCPOS_E2E_CART_TIMING__ = true;
+		const runtime = window as MeasurementWindow;
+		runtime.__WCPOS_CART_MEASUREMENT__?.stop();
+		const sample: Sample = { status: 'armed', durationMs: null };
+		let startedAt = 0;
+		const observer = new MutationObserver(() => {
+			if (sample.status !== 'pending') return;
+			const quantity = document.querySelector('[data-testid="cart-quantity-input"]');
+			if (quantity?.textContent?.trim() !== '1') return;
+			sample.durationMs = performance.now() - startedAt;
+			sample.status = 'complete';
+			stop();
+		});
+		const onIntent = (event: Event) => {
+			if (!(event.target instanceof Element)) return;
+			const isClick =
+				event.type === 'click' &&
+				event.target.closest(
+					'[data-testid="product-tile"], [data-testid^="product-tile-"], [data-testid="add-to-cart-button"]'
+				);
+			const isSubmit =
+				event instanceof KeyboardEvent &&
+				event.key === 'Enter' &&
+				event.target.matches('[data-testid="search-products"]');
+			if (!isClick && !isSubmit) return;
+			if (sample.status !== 'armed') {
+				sample.status = 'overlap';
+				stop();
+				return;
+			}
+			startedAt = performance.now();
+			sample.status = 'pending';
+		};
+		function stop() {
+			observer.disconnect();
+			document.removeEventListener('click', onIntent, true);
+			document.removeEventListener('keydown', onIntent, true);
+		}
+		runtime.__WCPOS_CART_MEASUREMENT__ = { sample, stop };
+		observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+		document.addEventListener('click', onIntent, true);
+		document.addEventListener('keydown', onIntent, true);
 	});
-	// There is no readout before the first instrumented add causes a render.
-	return (await readout(page).count()) ? (await readSample(page)).sequence : 0;
 }
 
 export async function expectCartAddMeasurement(
 	page: Page,
-	before: number,
 	testInfo: TestInfo,
 	budgetMs: number
 ): Promise<void> {
+	const readSample = () =>
+		page.evaluate(() => (window as MeasurementWindow).__WCPOS_CART_MEASUREMENT__?.sample);
 	try {
 		await expect
-			.poll(
-				async () => {
-					const sample = await readSample(page);
-					return { sequence: sample.sequence, status: sample.status };
-				},
-				{ timeout: 15_000 }
-			)
-			.toEqual({ sequence: before + 1, status: 'complete' });
-		const sample = await readSample(page);
-		expect(Number.isFinite(sample.durationMs)).toBe(true);
-		expect(sample.durationMs).toBeGreaterThanOrEqual(0);
+			.poll(async () => (await readSample())?.status, { timeout: 15_000 })
+			.toBe('complete');
+		const sample = await readSample();
+		expect(Number.isFinite(sample?.durationMs)).toBe(true);
+		expect(sample?.durationMs).toBeGreaterThanOrEqual(0);
 		expect(
-			sample.durationMs,
-			'add handler → expected quantity committed (not touch-to-paint)'
+			sample?.durationMs,
+			'DOM add intent → expected cart quantity in DOM'
 		).toBeLessThanOrEqual(budgetMs);
 	} finally {
 		await testInfo.attach('cart-add-performance', {
 			body: JSON.stringify({
-				metric: 'add-handler-to-cart-commit',
+				metric: 'dom-add-intent-to-cart-quantity',
 				platform: 'web',
 				project: testInfo.project.name,
 				budgetMs,
-				rawSamples: await readout(page).allTextContents(),
+				rawSamples: [await readSample()],
 			}),
 			contentType: 'application/json',
 		});
+		await page.evaluate(() => (window as MeasurementWindow).__WCPOS_CART_MEASUREMENT__?.stop());
 	}
 }

@@ -26,30 +26,26 @@ jest.mock('rxdb', () => ({
 	removeCollectionStorages: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock(
-	'rxdb-premium/plugins/flexsearch',
-	() => ({
-		addFulltextSearch: jest.fn().mockImplementation(async (config) => {
-			if (shouldFailOnCreate) {
-				shouldFailOnCreate = false; // Only fail once for recovery tests
-				throw new Error('FlexSearch schema mismatch');
-			}
+jest.mock('rxdb-premium/plugins/flexsearch', () => ({
+	addFulltextSearch: jest.fn().mockImplementation(async (config) => {
+		if (shouldFailOnCreate) {
+			shouldFailOnCreate = false; // Only fail once for recovery tests
+			throw new Error('FlexSearch schema mismatch');
+		}
 
-			// Return a mock search instance
-			return {
-				collection: {
-					destroy: jest.fn().mockResolvedValue(undefined),
-					remove: jest.fn().mockResolvedValue(undefined),
-					$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
-					// A healthy index: no appended entries, so the oversized-index check never rebuilds here.
-					find: jest.fn(() => ({ exec: jest.fn().mockResolvedValue([]) })),
-				},
-				search: jest.fn().mockResolvedValue(['uuid-1', 'uuid-2']),
-			};
-		}),
+		// Return a mock search instance
+		return {
+			collection: {
+				destroy: jest.fn().mockResolvedValue(undefined),
+				remove: jest.fn().mockResolvedValue(undefined),
+				$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
+				// A healthy index: no appended entries, so the oversized-index check never rebuilds here.
+				find: jest.fn(() => ({ exec: jest.fn().mockResolvedValue([]) })),
+			},
+			search: jest.fn().mockResolvedValue(['uuid-1', 'uuid-2']),
+		};
 	}),
-	{ virtual: true }
-);
+}));
 
 // Mock the logger
 jest.mock('@wcpos/utils/logger', () => ({

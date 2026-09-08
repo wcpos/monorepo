@@ -44,10 +44,10 @@ test.describe('POS Cart', () => {
 	test('should add a product to the cart and show checkout button', async ({
 		posPage: page,
 	}, testInfo) => {
-		const before = await beginCartAddMeasurement(page);
+		await beginCartAddMeasurement(page);
 		await addFirstProductToCart(page);
 		await expect(page.getByTestId('cart-quantity-input').first()).toHaveText('1');
-		await expectCartAddMeasurement(page, before, testInfo, 300);
+		await expectCartAddMeasurement(page, testInfo, 300);
 	});
 
 	test('should update quantity in cart', async ({ posPage: page }) => {

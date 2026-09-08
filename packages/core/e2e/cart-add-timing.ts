@@ -1,6 +1,5 @@
 // E2E-only, serial simple-product adds. Not native touch-to-paint or server acknowledgement.
 type Line = { product_id?: number | null; variation_id?: number; quantity?: number };
-type TimingGlobal = typeof globalThis & { __WCPOS_E2E_CART_TIMING__?: boolean };
 export interface CartAddTiming {
 	sequence: number;
 	status: 'idle' | 'pending' | 'complete' | 'overlap';
@@ -19,9 +18,7 @@ let snapshot: CartAddTiming = {
 };
 let startedAt = 0;
 const listeners = new Set<() => void>();
-export const isCartAddTimingEnabled = () =>
-	process.env.EXPO_PUBLIC_WCPOS_E2E === '1' ||
-	(globalThis as TimingGlobal).__WCPOS_E2E_CART_TIMING__ === true;
+export const isCartAddTimingEnabled = () => process.env.EXPO_PUBLIC_WCPOS_E2E === '1';
 export const getCartAddTiming = () => snapshot;
 export function subscribeCartAddTiming(listener: () => void) {
 	listeners.add(listener);
@@ -68,4 +65,15 @@ export function commitCartAddTiming(orderId: string, lines: readonly Line[]): vo
 		return;
 	if (simpleProductQuantity(lines, snapshot.productId) !== snapshot.quantity) return;
 	publish({ ...snapshot, status: 'complete', durationMs: performance.now() - startedAt });
+}
+
+export async function observeCartAddWrite<T>(sequence: number | undefined, write: Promise<T>) {
+	let failed = true;
+	try {
+		const result = await write;
+		failed = result === false;
+		return result;
+	} finally {
+		if (failed) cancelCartAddTiming(sequence);
+	}
 }

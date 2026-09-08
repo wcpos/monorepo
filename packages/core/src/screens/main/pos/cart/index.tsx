@@ -13,7 +13,6 @@ import { OrderMetaButton } from './buttons/order-meta';
 import { PayButton } from './buttons/pay';
 import { SaveButton } from './buttons/save-order';
 import { VoidButton } from './buttons/void';
-import { CartAddTimingReadout } from './cart-add-timing';
 import { CartHeader } from './cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { CartTable } from './table';
@@ -59,7 +58,12 @@ export function OpenOrders({ isColumn = false }) {
 	 */
 	return (
 		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
-			<CartAddTimingReadout />
+			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
+				React.createElement(
+					(
+						require('../../../../../e2e/cart-add-timing-readout') as typeof import('../../../../../e2e/cart-add-timing-readout')
+					).CartAddTimingReadout
+				)}
 			<ErrorBoundary>
 				{isNewOrder ? (
 					<Card className="flex-1">

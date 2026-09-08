@@ -4,7 +4,7 @@ import {
 	commitCartAddTiming,
 	getCartAddTiming,
 	subscribeCartAddTiming,
-} from './cart-add-timing';
+} from '../../../../../e2e/cart-add-timing';
 
 // A premature completion, stale/wrong cart match, or restarted timer would hide a slow add.
 describe('cart add handler-to-commit timing', () => {
@@ -86,6 +86,22 @@ describe('cart add handler-to-commit timing', () => {
 		beginCartAddTiming('not-instrumented', 99, 0, 100);
 		commitCartAddTiming('not-instrumented', [{ product_id: 99, quantity: 1 }]);
 		expect(getCartAddTiming()).toBe(previous);
+	});
+
+	it('cannot be enabled in a normal build by a runtime global', () => {
+		delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+		const runtime = globalThis as typeof globalThis & { __WCPOS_E2E_CART_TIMING__?: boolean };
+		const original = runtime.__WCPOS_E2E_CART_TIMING__;
+		try {
+			runtime.__WCPOS_E2E_CART_TIMING__ = true;
+			const previous = getCartAddTiming();
+			beginCartAddTiming('production', 99, 0, 100);
+			commitCartAddTiming('production', [{ product_id: 99, quantity: 1 }]);
+			expect(getCartAddTiming()).toBe(previous);
+		} finally {
+			if (original === undefined) delete runtime.__WCPOS_E2E_CART_TIMING__;
+			else runtime.__WCPOS_E2E_CART_TIMING__ = original;
+		}
 	});
 
 	it('notifies subscribers about new samples and stops after unsubscribe', () => {

@@ -5,12 +5,6 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 import { MISC_PRODUCT_ID, wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
-import {
-	beginCartAddTiming,
-	cancelCartAddTiming,
-	isCartAddTimingEnabled,
-	simpleProductQuantity,
-} from './cart-add-timing';
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
@@ -59,7 +53,11 @@ export const useAddProduct = () => {
 			data: EngineRecord<'products'> | { id: number; [key: string]: any },
 			options?: { silent?: boolean }
 		) => {
-			const timingStart = isCartAddTimingEnabled() ? performance.now() : 0;
+			const timingStart = process.env.EXPO_PUBLIC_WCPOS_E2E === '1' ? performance.now() : 0;
+			const timing =
+				process.env.EXPO_PUBLIC_WCPOS_E2E === '1'
+					? (require('../../../../../e2e/cart-add-timing') as typeof import('../../../../../e2e/cart-add-timing'))
+					: undefined;
 			let timingSequence: number | undefined;
 			let success;
 			let product: ProductDocument | { id: number; [key: string]: any };
@@ -108,11 +106,11 @@ export const useAddProduct = () => {
 
 			const lineItems = currentOrderRecord.getLatest().payload.line_items ?? [];
 
-			if (isCartAddTimingEnabled() && product.id) {
-				timingSequence = beginCartAddTiming(
+			if (timing && product.id) {
+				timingSequence = timing.beginCartAddTiming(
 					currentOrderRecord.uuid,
 					product.id,
-					simpleProductQuantity(lineItems, product.id),
+					timing.simpleProductQuantity(lineItems, product.id),
 					timingStart
 				);
 			}
@@ -123,16 +121,9 @@ export const useAddProduct = () => {
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						try {
-							success = await incrementLineItem(uuid, 1);
-						} catch (error) {
-							cancelCartAddTiming(timingSequence);
-							throw error;
-						}
-						if (success === false) {
-							cancelCartAddTiming(timingSequence);
-							return false;
-						}
+						const write = incrementLineItem(uuid, 1);
+						success = await (timing ? timing.observeCartAddWrite(timingSequence, write) : write);
+						if (success === false) return false;
 					}
 				}
 			}
@@ -151,16 +142,9 @@ export const useAddProduct = () => {
 					site: 'useAddProduct',
 				});
 				newLineItem = computed.line as typeof newLineItem;
-				try {
-					success = await addItemToOrder('line_items', newLineItem);
-				} catch (error) {
-					cancelCartAddTiming(timingSequence);
-					throw error;
-				}
-				if (success === false) {
-					cancelCartAddTiming(timingSequence);
-					return false;
-				}
+				const write = addItemToOrder('line_items', newLineItem);
+				success = await (timing ? timing.observeCartAddWrite(timingSequence, write) : write);
+				if (success === false) return false;
 			}
 
 			// returned success should be the updated order
@@ -175,7 +159,7 @@ export const useAddProduct = () => {
 				});
 				return true;
 			} else {
-				cancelCartAddTiming(timingSequence);
+				if (process.env.EXPO_PUBLIC_WCPOS_E2E === '1') timing?.cancelCartAddTiming(timingSequence);
 				reportCartFailure(orderLogger, 'Failed to add product to cart', {
 					toastTitle: t('pos.error_adding_to_cart', { name: product.name }),
 					context: {

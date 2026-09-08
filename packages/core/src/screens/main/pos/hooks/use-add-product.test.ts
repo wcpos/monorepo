@@ -3,7 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
-import { getCartAddTiming } from './cart-add-timing';
+import { getCartAddTiming } from '../../../../../e2e/cart-add-timing';
 import { useAddProduct } from './use-add-product';
 
 const mockAddItemToOrder = jest.fn();
@@ -214,7 +214,8 @@ describe('useAddProduct', () => {
 });
 
 it('starts the E2E timing at handler entry and waits for the cart commit', async () => {
-	const { getCartAddTiming, commitCartAddTiming } = await import('./cart-add-timing');
+	const { getCartAddTiming, commitCartAddTiming } =
+		await import('../../../../../e2e/cart-add-timing');
 	const oldFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
 	process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
 	const clock = jest.spyOn(performance, 'now').mockReturnValue(100);
