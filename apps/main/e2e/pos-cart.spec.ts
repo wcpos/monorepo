@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
+import { beginCartAddMeasurement, expectCartAddMeasurement } from './cart-add-timing';
 import {
 	addCheckoutProbeProduct,
 	isolatedProductTest as test,
@@ -40,8 +41,13 @@ test.describe('POS Cart', () => {
 		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
 	});
 
-	test('should add a product to the cart and show checkout button', async ({ posPage: page }) => {
+	test('should add a product to the cart and show checkout button', async ({
+		posPage: page,
+	}, testInfo) => {
+		const before = await beginCartAddMeasurement(page);
 		await addFirstProductToCart(page);
+		await expect(page.getByTestId('cart-quantity-input').first()).toHaveText('1');
+		await expectCartAddMeasurement(page, before, testInfo, 300);
 	});
 
 	test('should update quantity in cart', async ({ posPage: page }) => {

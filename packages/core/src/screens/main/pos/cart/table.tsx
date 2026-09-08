@@ -40,6 +40,7 @@ import { ShippingTitle } from './cells/shipping-title';
 import { Subtotal } from './cells/subtotal';
 import { useUISettings } from '../../contexts/ui-settings';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
+import { commitCartAddTiming } from '../hooks/cart-add-timing';
 import { useCartLines } from '../hooks/use-cart-lines';
 import { CartLine, detectNewCartLines, getUuidFromLineItem } from '../hooks/utils';
 import { SKU } from './cells/sku';
@@ -136,6 +137,11 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	const rowLayouts = React.useRef<Map<string, { y: number; height: number }>>(new Map());
 	const scrollViewRef = React.useRef<ScrollView>(null);
 	const { currentOrderRecord } = useCurrentOrder();
+
+	React.useLayoutEffect(() => {
+		// Observe the commit containing the expected quantity, not mutation promise resolution.
+		commitCartAddTiming(currentOrderRecord.uuid, line_items);
+	}, [currentOrderRecord.uuid, line_items]);
 
 	// Track previous cart data
 	const prevDataRef = React.useRef<CartTableLine[]>([]);

@@ -181,6 +181,43 @@ app's code.
     the native-config rule in `scripts/ci-plan.mjs`. The warning in the resolve
     job names this case.
 
+## Add-to-cart performance in the ordinary flows
+
+Flows 04 and 06 check the add's performance alongside the cart outcome; the web
+counterpart is the existing add-product case in `e2e/pos-cart.spec.ts`. There is
+no separate performance suite. For local native runs, start Metro with
+`EXPO_NO_METRO_LAZY=1 EXPO_PUBLIC_WCPOS_E2E=1 npx expo start --no-dev --minify`
+in `apps/main` before running the local script. CI already sets the E2E flag.
+The web test opts in at runtime, including on preview deployments; normal
+sessions do not display the timing readout.
+
+The shared metric is **add-handler entry → React cart-table commit containing
+the expected simple-product quantity**. It includes local processing and the
+React commit, but excludes input delivery/JS event-queue delay before the
+handler, native paint, server acknowledgement, and later settlement work.
+It is not Maestro/Playwright command time or a complete responsiveness score.
+The ordinary UI assertions still run. This first slice covers serial simple
+adds, not rapid-tap bursts, variation adds, startup, or idle stalls.
+
+`e2e-cart-add-timing` exposes the app-clock sample. Tests capture its sequence
+before the action and require exactly the next completed sample: a stale row,
+missing measurement, or re-add recovery cannot turn a bad attempt green.
+Web results attach `cart-add-performance` JSON; native command logs emit
+`WCPOS_E2E_CART_ADD` JSON. Budgets are explicit in the web assertion call and
+`subflows/assert-cart-add-timing.yml`; changing them requires measured evidence,
+not raising them until CI passes. Validate the gate by temporarily slowing the
+actual add handler, observing a performance failure despite correct quantity,
+then removing the slowdown and re-running the same test.
+
+For web/native or PR #1885 comparisons, retain the revision, native build,
+device, actual storage host, store/cashier scope, product/catalogue size, and
+cold/warm state with the raw samples. Compare equivalent inputs and report
+first adds separately from increments. #1885 targets `next`, can fall back to
+the JS-thread host, and uses separate database roots: do not compare a fresh
+re-sync on one host with a warmed database on the other, or treat a fallback
+run as worklet evidence. These cart timings alone do not establish whether
+#1885 improves startup, idle behaviour, memory use, or overall performance.
+
 ## 4. Reading a red run
 
 Reading order:

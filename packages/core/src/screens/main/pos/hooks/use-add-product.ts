@@ -5,6 +5,11 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 import { MISC_PRODUCT_ID, wooIdOf } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
+import {
+	beginCartAddTiming,
+	isCartAddTimingEnabled,
+	simpleProductQuantity,
+} from './cart-add-timing';
 import { reportCartFailure } from './cart-failure';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCartConfig } from './use-cart-config';
@@ -53,6 +58,7 @@ export const useAddProduct = () => {
 			data: EngineRecord<'products'> | { id: number; [key: string]: any },
 			options?: { silent?: boolean }
 		) => {
+			const timingStart = isCartAddTimingEnabled() ? performance.now() : 0;
 			let success;
 			let product: ProductDocument | { id: number; [key: string]: any };
 
@@ -99,6 +105,15 @@ export const useAddProduct = () => {
 			}
 
 			const lineItems = currentOrderRecord.getLatest().payload.line_items ?? [];
+
+			if (isCartAddTimingEnabled() && product.id) {
+				beginCartAddTiming(
+					currentOrderRecord.uuid,
+					product.id,
+					simpleProductQuantity(lineItems, product.id),
+					timingStart
+				);
+			}
 
 			// check if product is already in order, if so increment quantity
 			if (!(currentOrderRecord as { isNew?: boolean }).isNew && product.id !== 0) {

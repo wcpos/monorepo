@@ -211,3 +211,38 @@ describe('useAddProduct', () => {
 		);
 	});
 });
+
+it('starts the E2E timing at handler entry and waits for the cart commit', async () => {
+	const { getCartAddTiming, commitCartAddTiming } = await import('./cart-add-timing');
+	const oldFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
+	process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+	const clock = jest.spyOn(performance, 'now').mockReturnValue(100);
+	mockCurrentOrder = makeOrder(81, []);
+	mockFindByProductVariationID.mockReturnValue(null);
+	mockConvertProductToLineItemWithoutTax.mockReturnValue({ product_id: 101, quantity: 1 });
+	mockAddItemToOrder.mockImplementation(async () => {
+		clock.mockReturnValue(400);
+		return true;
+	});
+	try {
+		const { result } = renderHook(() => useAddProduct());
+		await act(async () => {
+			await result.current.addProduct(
+				engineDocument({ name: 'Timed', type: 'simple' }, '101') as never
+			);
+		});
+		expect(getCartAddTiming()).toMatchObject({
+			status: 'pending',
+			orderId: 'order-81',
+			productId: 101,
+			quantity: 1,
+		});
+		clock.mockReturnValue(650);
+		commitCartAddTiming('order-81', [{ product_id: 101, quantity: 1 }]);
+		expect(getCartAddTiming().durationMs).toBe(550);
+	} finally {
+		clock.mockRestore();
+		if (oldFlag === undefined) delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+		else process.env.EXPO_PUBLIC_WCPOS_E2E = oldFlag;
+	}
+});

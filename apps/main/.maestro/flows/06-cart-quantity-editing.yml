@@ -8,6 +8,8 @@ env:
 # does not exist on native — number-input.tsx is a plain TextInput).
 - runFlow:
     file: ../subflows/ensure-pos-ready.yml
+- runFlow:
+    file: ../subflows/capture-cart-add-sequence.yml
 # Typing retried, search speed NOT — see flow 04 for the ruling and both
 # mechanisms. The single 60s tile wait reports a slow demand path as a
 # failure instead of absorbing it.
@@ -83,6 +85,7 @@ env:
               id: "cart-quantity-input"
           commands:
             - evalScript: "${console.log('WCPOS_E2E cart has no line after the tile tap, re-adding once')}"
+            - evalScript: ${output.cartAddRetried = true}
             - runFlow:
                 when:
                   visible:
@@ -120,6 +123,8 @@ env:
     visible:
       id: "cart-quantity-input"
     timeout: 30000
+- runFlow:
+    file: ../subflows/assert-cart-add-timing.yml
 - tapOn:
     id: "cart-quantity-input"
 - eraseText
