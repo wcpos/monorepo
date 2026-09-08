@@ -121,17 +121,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			// Source maps and debug symbols upload during the STORE build's native
 			// Release step, authenticated by the SENTRY_AUTH_TOKEN EAS environment
 			// variable (an organization token, `org:ci`, on `production` only).
-			// sentry-xcode.sh FAILS a Release build when that upload fails, so the
-			// dev client and ad-hoc builds — which the sink never lets report — never
-			// attempt it; a missing or revoked token on the store build is a red
-			// build, not a silent gap. Uploads are keyed <applicationId>@<version>+<build>,
-			// which is why sentry-sink.native.ts lets the SDK derive release/dist.
+			// sentry-xcode.sh FAILS a Release build when that upload fails, so every
+			// other profile — dev client, ad-hoc, the reusable `monorepo` base — never
+			// attempts it. No profile means production (`easProfile` above), so a local
+			// Release build of the store binary uploads too and needs the token in its
+			// shell; a missing or revoked token there is a red build, not a silent gap.
+			// Uploads are keyed <applicationId>@<version>+<build>, which is why
+			// sentry-sink.native.ts lets the SDK derive release/dist.
 			[
 				'@sentry/react-native/expo',
 				{
 					organization: 'wcpos',
 					project: 'woocommerce-pos',
-					disableAutoUpload: isDev || isAdhoc,
+					disableAutoUpload: easProfile !== 'production',
 				},
 			],
 			'./plugins/with-printer-support',
