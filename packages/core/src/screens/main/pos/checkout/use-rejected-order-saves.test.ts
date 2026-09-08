@@ -28,7 +28,7 @@ beforeEach(() => {
 it('holds durable rows, clears disappeared rows, and leaves unseen rejections alone', () => {
 	const rejection = { status: 403, reason: 'refused', message: 'No permission' };
 	markOrderSaveRejected('unseen', rejection);
-	const { unmount } = renderHook(useRejectedOrderSavesSync);
+	const { unmount } = renderHook(() => useRejectedOrderSavesSync(1));
 	expect(mockFind).toHaveBeenCalledWith({
 		selector: {
 			status: { $in: ['rejected', 'conflicted', 'needs-revision'] },
@@ -63,4 +63,19 @@ it('holds durable rows, clears disappeared rows, and leaves unseen rejections al
 	unmount();
 	expect(mockDbUnsubscribe).toHaveBeenCalledTimes(1);
 	expect(mockRows.observed).toBe(false);
+});
+
+it('re-reads the durable rows when the store id changes after a checkout reset', () => {
+	mockRows.next([{ recordId: 'a', rejectedStatus: 400, rejectedReason: 'refused' }]);
+	const { rerender } = renderHook(({ storeId }) => useRejectedOrderSavesSync(storeId), {
+		initialProps: { storeId: 1 as number | string | undefined },
+	});
+	expect(getOrderSaveState('a')?.kind).toBe('rejected');
+	// The store-change reset wipes the hold; the same engine (no re-subscribe on it alone)
+	// must still restore the dead letter's hold for the new store id.
+	act(() => resetCheckoutMode());
+	expect(getOrderSaveState('a')).toBeNull();
+	rerender({ storeId: 2 });
+	expect(mockFind).toHaveBeenCalledTimes(2);
+	expect(getOrderSaveState('a')?.kind).toBe('rejected');
 });

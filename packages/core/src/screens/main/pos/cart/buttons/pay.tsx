@@ -16,7 +16,6 @@ import {
 	getOrderSaveState,
 	leaveCheckout,
 	markOrderSaving,
-	useOrderSaveState,
 } from '../../checkout/checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
@@ -43,7 +42,6 @@ export function PayButton() {
 	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const save = useCheckoutSave();
-	const saveState = useOrderSaveState(currentOrderRecord.uuid);
 	const t = useT();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 
@@ -71,13 +69,6 @@ export function PayButton() {
 				context: { ...rejection },
 			});
 		};
-		const state = getOrderSaveState(uuid);
-		if (state?.kind === 'saving') return;
-		if (state?.kind === 'rejected') {
-			showRefusal(state);
-			return;
-		}
-
 		const sheetRoute = {
 			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
 			params: { orderId: uuid },
@@ -86,6 +77,18 @@ export function PayButton() {
 		// flag and keeps every tile inert until the server copy (and its id) exists. The
 		// legacy webview checkout has no such gate, so that lane still waits for the save.
 		const tenderFlow = loaded && !unsupportedSchema;
+		const state = getOrderSaveState(uuid);
+		if (state?.kind === 'rejected') {
+			showRefusal(state);
+			return;
+		}
+		if (state?.kind === 'saving') {
+			// The earlier press is still waiting on the store. Show that wait again
+			// rather than enqueue a second write; the pane flips on the same events.
+			if (tenderFlow && screenSize !== 'sm') enterCheckout(uuid);
+			else if (tenderFlow) router.push(sheetRoute);
+			return;
+		}
 		markOrderSaving(uuid);
 		if (tenderFlow && screenSize !== 'sm') {
 			enterCheckout(uuid);
@@ -103,8 +106,11 @@ export function PayButton() {
 		try {
 			const result = tenderFlow
 				? await save(currentOrderRecord, {
+						// Late, so the cashier may be on another order by now: release this
+						// one's checkout and say why, but never navigate — on a phone the
+						// modal for THIS order renders the refusal itself if it is still open.
 						onLateRejected: (rejection) => {
-							abandon();
+							leaveCheckout(uuid);
 							showRefusal(rejection);
 						},
 					})
@@ -178,7 +184,7 @@ export function PayButton() {
 			variant="success"
 			className="flex-3 rounded-t-none rounded-bl-none"
 			loading={loading}
-			disabled={storageDegraded || saveState?.kind === 'saving'}
+			disabled={storageDegraded}
 		>
 			{t('pos_cart.checkout', {
 				order_total: format(displayTotal || 0),

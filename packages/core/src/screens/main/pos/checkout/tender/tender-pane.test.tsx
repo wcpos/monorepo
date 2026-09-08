@@ -10,6 +10,8 @@ import { TenderPane } from './tender-pane';
 
 import type { TenderFlow } from './use-tender-flow';
 
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -120,6 +122,21 @@ it('shows one slow notice after four seconds without settling the save', () => {
 	} finally {
 		jest.useRealTimers();
 	}
+});
+it('renders the refusal, not a skeleton, for a rejected save', () => {
+	render(
+		<TenderPane
+			flow={{
+				...makeFlow(),
+				saveState: { kind: 'rejected', status: 400, reason: 'rest_invalid_param', message: null },
+			}}
+			format={String}
+		/>
+	);
+	expect(screen.queryByTestId('checkout-tile-skeleton')).toBeNull();
+	expect(screen.queryByTestId('checkout-tile-pos_cash')).toBeNull();
+	expect(screen.getByTestId('checkout-refused').textContent).toContain('rest_invalid_param');
+	expect(screen.getByTestId('checkout-refused-store-health')).toBeTruthy();
 });
 it('renders tiles instead of skeletons when queued offline', () => {
 	render(

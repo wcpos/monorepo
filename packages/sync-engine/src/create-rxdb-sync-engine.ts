@@ -433,6 +433,18 @@ export type EngineEvent =
 			recordId: string;
 			mutationId: string;
 	  }
+	// A pending mutation REPLACED at enqueue by a same-record coalesce: its row is
+	// gone under `replacedBy`, and no terminal event will ever name the old id.
+	// NOT terminal — a waiter re-binds and keeps waiting. Replayable like the
+	// terminal outcomes, so a waiter that subscribes after the coalesce still learns
+	// which id to follow.
+	| {
+			type: 'write-superseded';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			replacedBy: string;
+	  }
 	// Fresh query totals persisted by the retry lane — the host
 	// hydrates its UI caches from these.
 	| QueryTotalCacheEvent
@@ -583,9 +595,15 @@ export type RxdbSyncEngine = {
 	 * (#1209): the LEADER drains, and every peer re-emits what it publishes, so an
 	 * `awaitWriteOutcome` caller in a follower tab settles with the leader's real
 	 * verdict instead of timing out. */
-	write(
-		intent: WriteIntent
-	): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }>;
+	write(intent: WriteIntent): Promise<{
+		mutationId: string;
+		recordId: string;
+		annihilated?: boolean;
+		/** Set when this enqueue coalesced into and replaced a pending row; a
+		 * `write-superseded` event names that row's id with this receipt's as
+		 * `replacedBy`, so a waiter on the old id can re-bind. */
+		supersededMutationId?: string;
+	}>;
 	/**
 	 * The terminal write entries awaiting an explicit caller decision — there
 	 * is NO auto-resolution, with ONE ruled exception.
@@ -1304,7 +1322,10 @@ export function createRxdbSyncEngine(
 	const emitEngineEvent = (event: EngineEvent): void => {
 		// Recorded at the fan-out, so a BRIDGED peer outcome (which enters here, not
 		// at emitWriteEvent — see below) is replayable in the follower too.
-		if (TERMINAL_WRITE_EVENT_TYPES.has(event.type) && 'mutationId' in event) {
+		if (
+			(TERMINAL_WRITE_EVENT_TYPES.has(event.type) || event.type === 'write-superseded') &&
+			'mutationId' in event
+		) {
 			const { mutationId } = event;
 			// Re-insert to move it to the back of the insertion order, so eviction
 			// drops the genuinely oldest outcome.

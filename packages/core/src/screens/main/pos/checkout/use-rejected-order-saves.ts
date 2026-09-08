@@ -18,7 +18,14 @@ type MutationCollection = {
 	};
 };
 
-export function useRejectedOrderSavesSync(): void {
+/**
+ * Mirrors the durable dead letters for orders into the checkout store. Keyed on the store
+ * id as well as the engine: a same-site store switch moves the reused engine to the new
+ * scope BEFORE the session commits the new store id, and `useResetCheckoutModeOnStoreChange`
+ * then clears every entry — so this effect must run again after that reset, or the new
+ * store's existing dead letters would lose their hold until the next queue change.
+ */
+export function useRejectedOrderSavesSync(storeId: number | string | undefined): void {
 	const { engine } = useQueryRuntime();
 	// Synchronise the checkout hold with the external, durable RxDB dead-letter query.
 	React.useEffect(() => {
@@ -55,5 +62,5 @@ export function useRejectedOrderSavesSync(): void {
 				previous = current;
 			});
 		return () => subscription.unsubscribe();
-	}, [engine]);
+	}, [engine, storeId]);
 }

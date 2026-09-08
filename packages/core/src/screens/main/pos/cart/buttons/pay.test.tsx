@@ -129,13 +129,18 @@ it.each(['lg', 'sm'])(
 	}
 );
 
-it('ignores Pay when this order is already saving', () => {
+it.each(['lg', 'sm'])('re-enters checkout without a second save while saving (%s)', (size) => {
+	mockSize = size;
 	mockSaveState = { kind: 'saving' };
 	render(<PayButton />);
 	fireEvent.click(screen.getByTestId('checkout-button'));
 	expect(mockSave).not.toHaveBeenCalled();
-	expect(mockEnter).not.toHaveBeenCalled();
 	expect(mockMarkSaving).not.toHaveBeenCalled();
+	if (size === 'lg') expect(mockEnter).toHaveBeenCalledWith('order-1');
+	else
+		expect(mockPush).toHaveBeenCalledWith(
+			expect.objectContaining({ params: { orderId: 'order-1' } })
+		);
 });
 
 const rejection = { status: 403, reason: 'refused', message: 'No permission' };
@@ -163,14 +168,18 @@ it('refuses a held order without enqueueing', () => {
 	expect(mockLegacySave).not.toHaveBeenCalled();
 	expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection: mockSaveState }));
 });
-it.each(['lg', 'sm'])('abandons and toasts a late refusal (%s)', async (size) => {
-	mockSize = size;
-	mockSave.mockResolvedValue({ outcome: 'queued-offline' });
-	render(<PayButton />);
-	fireEvent.click(screen.getByTestId('checkout-button'));
-	await waitFor(() => expect(mockSave).toHaveBeenCalled());
-	mockSave.mock.calls[0][1].onLateRejected(rejection);
-	expect(mockLeave).toHaveBeenCalledWith('order-1');
-	expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection }));
-	if (size === 'sm') expect(mockReplace).toHaveBeenCalledWith('/cart');
-});
+it.each(['lg', 'sm'])(
+	'releases checkout and toasts a late refusal without navigating (%s)',
+	async (size) => {
+		mockSize = size;
+		mockSave.mockResolvedValue({ outcome: 'queued-offline' });
+		render(<PayButton />);
+		fireEvent.click(screen.getByTestId('checkout-button'));
+		await waitFor(() => expect(mockSave).toHaveBeenCalled());
+		mockSave.mock.calls[0][1].onLateRejected(rejection);
+		expect(mockLeave).toHaveBeenCalledWith('order-1');
+		expect(mockRefusal).toHaveBeenCalledWith(expect.objectContaining({ rejection }));
+		// The cashier may be on another order by now: a late outcome never moves the screen.
+		expect(mockReplace).not.toHaveBeenCalled();
+	}
+);

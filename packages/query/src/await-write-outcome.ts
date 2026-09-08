@@ -25,46 +25,66 @@ export class WriteOutcomeError extends Error {
 	}
 }
 
+/**
+ * Follow one mutation to its terminal event. A same-record coalesce replaces a
+ * pending row under a fresh id and announces it as `write-superseded`; the
+ * subscription re-binds to `replacedBy` (with its own replay, in case that one
+ * has already settled) so the caller keeps waiting on the write that will
+ * actually land instead of an id nothing will ever name again.
+ */
 function subscribeTerminal(
 	engine: Pick<RxdbSyncEngine, 'events'>,
 	mutationId: string,
 	resolve: (outcome: AwaitedWriteOutcome) => void,
 	reject: (error: unknown) => void
 ) {
-	return engine.events(
-		(event) => {
-			if (
-				!TERMINAL_WRITE_EVENT_TYPES.has(event.type) ||
-				!('mutationId' in event) ||
-				event.mutationId !== mutationId
+	const subscriptions: (() => void)[] = [];
+	let boundId = mutationId;
+	const follow = (id: string) => {
+		boundId = id;
+		subscriptions.push(
+			engine.events(
+				(event) => {
+					if (!('mutationId' in event) || event.mutationId !== boundId) return;
+					if (event.type === 'write-superseded') {
+						follow(event.replacedBy);
+						return;
+					}
+					if (!TERMINAL_WRITE_EVENT_TYPES.has(event.type)) return;
+					switch (event.type) {
+						case 'write-acknowledged':
+						case 'write-ack-rematerialized':
+							resolve('success');
+							break;
+						case 'write-annihilated':
+							resolve('success-local');
+							break;
+						case 'write-conflict':
+						case 'write-rejected': {
+							const detail = event as { status?: number; reason?: string; serverMessage?: string };
+							reject(
+								new WriteOutcomeError(
+									event.type,
+									boundId,
+									detail.status,
+									detail.reason,
+									detail.serverMessage
+								)
+							);
+							break;
+						}
+					}
+				},
+				{ replayWriteOutcomeFor: id }
 			)
-				return;
-			switch (event.type) {
-				case 'write-acknowledged':
-				case 'write-ack-rematerialized':
-					resolve('success');
-					break;
-				case 'write-annihilated':
-					resolve('success-local');
-					break;
-				case 'write-conflict':
-				case 'write-rejected': {
-					const detail = event as { status?: number; reason?: string; serverMessage?: string };
-					reject(
-						new WriteOutcomeError(
-							event.type,
-							mutationId,
-							detail.status,
-							detail.reason,
-							detail.serverMessage
-						)
-					);
-					break;
-				}
-			}
-		},
-		{ replayWriteOutcomeFor: mutationId }
-	);
+		);
+	};
+	follow(mutationId);
+	// A superseded subscription stays registered but inert (it filters on the
+	// current id); every one is released together when the caller settles.
+	return () => {
+		for (const unsubscribe of subscriptions) unsubscribe();
+	};
 }
 
 export function awaitWriteOutcome(

@@ -126,7 +126,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
 	const { localPatch } = useLocalMutation();
-	const recordManualPayment = useRecordManualPayment();
+	// A save queued offline is an order the server does not have yet (or has stale): even
+	// once connectivity is back and before the ack lands, tender must behave as offline —
+	// online-only tiles stay disabled and a works-offline tile records its local leg.
+	const queuedOffline = saveState?.kind === 'queued-offline';
+	const recordManualPayment = useRecordManualPayment({ offline: queuedOffline });
 	const voidPayments = useVoidPayments();
 	const completeOrderFlow = useCompleteOrderFlow(order);
 	const router = useRouter();
@@ -155,7 +159,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	);
 	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
 	const readersInUse = service?.readersInUse();
-	const tiles = buildTenderTiles(methods, { online, readersInUse, currentOrderUuid: order.uuid });
+	const tiles = buildTenderTiles(methods, {
+		online: online && !queuedOffline,
+		readersInUse,
+		currentOrderUuid: order.uuid,
+	});
 	const legacyMethods = React.useMemo(() => legacyPaymentMethods(methods), [methods]);
 	// A method the store or a URL names but the till does not offer (not POS-enabled, webview
 	// mode) must not open a keypad: `takeTender` can only refuse tiles it can see.

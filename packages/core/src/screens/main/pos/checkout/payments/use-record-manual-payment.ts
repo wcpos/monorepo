@@ -29,13 +29,23 @@ const logger = getLogger(['wcpos', 'payments']);
  * (`logs-logic.ts` `deriveStuckRecords`), and shows `context.reason` as its line —
  * so the cashier-readable sentence goes there, the machine reason beside it.
  */
-export function useRecordManualPayment(): (
+export function useRecordManualPayment(
+	options: {
+		/**
+		 * Record the local leg even while the till is online: the order's own save is still
+		 * queued (roadmap#171 rule 2), so the server copy — if there is one — is stale and a
+		 * payment posted against it would settle the wrong totals.
+		 */
+		offline?: boolean;
+	} = {}
+): (
 	order: EngineRecord<'orders'>,
 	method: PaymentMethodDescriptor,
 	input: RecordManualPaymentInput
 ) => Promise<RecordManualPaymentOutcome> {
 	const http = useRestHttpClient();
 	const onlineStatus = useOnlineStatus();
+	const forceOffline = options.offline === true;
 	const { wpCredentials, store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
 	const manager = useQueryRuntime();
@@ -54,7 +64,7 @@ export function useRecordManualPayment(): (
 			};
 			return recordManualPayment(paymentOrder, method, input, {
 				post: (url, body) => http.post(url, body),
-				isOnline: () => onlineStatus.status === 'online-website-available',
+				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
 				currency: store.currency ?? '',
@@ -111,6 +121,6 @@ export function useRecordManualPayment(): (
 				},
 			});
 		},
-		[http, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
+		[http, forceOffline, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
 	);
 }

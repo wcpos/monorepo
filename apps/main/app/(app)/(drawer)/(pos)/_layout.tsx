@@ -34,7 +34,7 @@ export default function POSLayout() {
 	const cashierID = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeID = useDocField(store, (value) => value.id) as number | undefined;
 	useResetCheckoutModeOnStoreChange(storeID);
-	useRejectedOrderSavesSync();
+	useRejectedOrderSavesSync(storeID);
 	const segments: string[] = useSegments();
 	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();

@@ -245,6 +245,22 @@ export type WriteAnnihilatedEvent = {
 	mutationId: string;
 };
 
+/**
+ * A pending mutation was REPLACED at enqueue by a same-record coalesce
+ * (`write-intents`): its queue row is gone under a FRESH mutationId, so no
+ * terminal event will ever name the old id. NOT terminal — a waiter re-binds
+ * to `replacedBy` and keeps waiting. Without it a checkout that waits on
+ * events rather than a clock (roadmap#171) would wedge on the first cart edit
+ * made while its save was still queued.
+ */
+export type WriteSupersededEvent = {
+	type: 'write-superseded';
+	collection: string;
+	recordId: string;
+	mutationId: string;
+	replacedBy: string;
+};
+
 export type WriteDrainReport = {
 	lane: 'write-drain';
 	status: 'ran' | 'skipped' | 'error';

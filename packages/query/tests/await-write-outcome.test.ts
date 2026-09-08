@@ -34,6 +34,71 @@ function createEngine() {
 	};
 }
 
+describe('write-superseded re-binding', () => {
+	it('follows a coalesced replacement and settles on the new id', async () => {
+		const { engine, emit, events } = createEngine();
+		const outcome = awaitTerminalWriteOutcome(engine, 'mutation-1');
+		emit({
+			type: 'write-superseded',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			replacedBy: 'mutation-2',
+		});
+		// The old id is orphaned: an event naming it must not settle anything.
+		emit({
+			type: 'write-acknowledged',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-1',
+			currentRevision: 'rev-2',
+		});
+		expect(events).toHaveBeenLastCalledWith(expect.any(Function), {
+			replayWriteOutcomeFor: 'mutation-2',
+		});
+		emit({
+			type: 'write-rejected',
+			collection: 'orders',
+			recordId: 'order-1',
+			mutationId: 'mutation-2',
+			status: 400,
+			reason: 'rest_invalid_param',
+		});
+		await expect(outcome).rejects.toMatchObject({ status: 400, reason: 'rest_invalid_param' });
+	});
+
+	it('re-binds on a replayed supersede and resolves on the replacement replay', async () => {
+		const unsubscribe = jest.fn();
+		const replays: Record<string, EngineEvent> = {
+			'mutation-1': {
+				type: 'write-superseded',
+				collection: 'orders',
+				recordId: 'order-1',
+				mutationId: 'mutation-1',
+				replacedBy: 'mutation-2',
+			},
+			'mutation-2': {
+				type: 'write-acknowledged',
+				collection: 'orders',
+				recordId: 'order-1',
+				mutationId: 'mutation-2',
+				currentRevision: 'rev-3',
+			},
+		};
+		const events = jest.fn(
+			(callback: (event: EngineEvent) => void, options?: { replayWriteOutcomeFor?: string }) => {
+				const replay = options?.replayWriteOutcomeFor && replays[options.replayWriteOutcomeFor];
+				if (replay) callback(replay);
+				return unsubscribe;
+			}
+		);
+		const engine = { events } as unknown as RxdbSyncEngine;
+		await expect(awaitTerminalWriteOutcome(engine, 'mutation-1')).resolves.toBe('success');
+		expect(events).toHaveBeenCalledTimes(2);
+		expect(unsubscribe).toHaveBeenCalledTimes(2);
+	});
+});
+
 describe('awaitWriteOutcome', () => {
 	it.each(['write-acknowledged', 'write-ack-rematerialized'] as const)(
 		'resolves success for a matching %s event',
