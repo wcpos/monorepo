@@ -2,7 +2,7 @@
 // usage: node cdp-profile.mjs <seconds> <outPrefix>
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
-const require = createRequire('/Users/kilbot/Projects/monorepo-v2/.claude/worktrees/ios-device-profile/package.json');
+const require = createRequire(process.env.WCPOS_WORKTREE_PKG || '/Users/kilbot/Projects/monorepo-v2/.claude/worktrees/fix+expo-opfs-swap-copies/package.json');
 const WebSocket = require('ws');
 const METRO = 'http://127.0.0.1:8081';
 const reportOnly = process.argv[2] === 'report';
