@@ -364,6 +364,100 @@ describe('coverage ledger recovery', () => {
 		expect(eventsB.filter((event) => event.type === 'coverage.ledger-rebuilt')).toHaveLength(1);
 	});
 
+	it('re-attaches again when another peer collection closes before the retry', async () => {
+		const a = await openLedgerDatabase(undefined, true);
+		const b = await openLedgerDatabase(a, true);
+		const eventsB: SyncEvent[] = [];
+		const coverageA = createLocalCoverage({ database: a as never, freshForMs: 500 });
+		createLocalCoverage({
+			database: b as never,
+			freshForMs: 500,
+			diagnostics: (event) => eventsB.push(event),
+		});
+		const repositoryB = withLedgerRecovery({
+			database: b,
+			trigger: 'coverage',
+			create: () => new RxCoverageRepository(b as never),
+		});
+		const oldRecords = b.collections.coverageRecords;
+		const oldLanes = b.collections.coverageLanes;
+		let releaseFirstReset = () => {};
+		const firstResetCanContinue = new Promise<void>((resolve) => {
+			releaseFirstReset = resolve;
+		});
+		let signalFirstResetAdded = () => {};
+		const firstResetAdded = new Promise<void>((resolve) => {
+			signalFirstResetAdded = resolve;
+		});
+		const addCollections = a.addCollections.bind(a);
+		vi.spyOn(a, 'addCollections').mockImplementationOnce(async (creators) => {
+			const added = await addCollections(creators);
+			signalFirstResetAdded();
+			await firstResetCanContinue;
+			return added;
+		});
+		const recordsRemoved = new Promise<void>((resolve) => oldRecords.onRemove.push(resolve));
+		const lanesRemoved = new Promise<void>((resolve) => oldLanes.onRemove.push(resolve));
+		const addPeerCollections = b.addCollections.bind(b);
+		let releaseRetry = () => {};
+		const retryCanContinue = new Promise<void>((resolve) => {
+			releaseRetry = resolve;
+		});
+		let signalRetryStarted = () => {};
+		const retryStarted = new Promise<void>((resolve) => {
+			signalRetryStarted = resolve;
+		});
+		vi.spyOn(b, 'addCollections').mockImplementationOnce(async (creators) => {
+			const added = await addPeerCollections(creators);
+			const records = b.collections.coverageRecords;
+			const bulkUpsert = records.bulkUpsert.bind(records);
+			vi.spyOn(records, 'bulkUpsert').mockImplementationOnce(async (documents) => {
+				const result = await bulkUpsert(documents);
+				signalRetryStarted();
+				await retryCanContinue;
+				return result;
+			});
+			return added;
+		});
+		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
+			refusalError('multi-instance')
+		);
+
+		const rebuild = coverageA.readSnapshot();
+		await Promise.all([firstResetAdded, recordsRemoved]);
+		const peerWrite = repositoryB.upsertCoverageDocuments({
+			records: [
+				{
+					collection: 'orders',
+					documentId: 'woo-order:1',
+					coveredQueryKeys: ['orders:open'],
+					freshUntilMs: 500,
+					updatedAtMs: 1,
+				},
+			],
+			lanes: [
+				{
+					collection: 'orders',
+					queryKey: 'orders:open',
+					complete: true,
+					expectedRecordIds: ['woo-order:1'],
+					freshUntilMs: 500,
+					updatedAtMs: 1,
+				},
+			],
+		});
+		await retryStarted;
+		releaseFirstReset();
+		await lanesRemoved;
+		releaseRetry();
+
+		const [, peerWriteResult] = await Promise.all([rebuild, peerWrite]);
+		expect(peerWriteResult).toBeUndefined();
+		expect(eventsB.filter((event) => event.type === 'coverage.ledger-reattached')).toHaveLength(2);
+		expect(b.collections.coverageRecords.closed).toBe(false);
+		expect(b.collections.coverageLanes.closed).toBe(false);
+	});
+
 	it('allows repeated re-attachments through seed and drain after its rebuild guard is spent', async () => {
 		const db = await openLedgerDatabase();
 		const events: SyncEvent[] = [];

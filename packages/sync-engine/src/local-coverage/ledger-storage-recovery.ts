@@ -7,6 +7,8 @@ const RECONCILIATION_REFUSAL_MARKERS = [
 // after a documents-file parse failure; Electron/native never emit this reason.
 // It is corruption nobody else will repair, not a safe skip (Sentry 2K0).
 const NON_CORRUPTION_REFUSALS = new Set(['no-divergence']);
+// One peer rebuild can close each of the five derivable ledger collections once.
+const MAX_CONSECUTIVE_REATTACHMENTS = 5;
 const ledgerReconciliationRefusals = new WeakSet<object>();
 
 /**
@@ -292,22 +294,29 @@ export function withLedgerRecovery<T extends object>(input: {
 	};
 
 	const run = async (property: string | symbol, args: unknown[]): Promise<unknown> => {
-		const entryAtStart = lookupEntry(input.database);
-		const generationAtStart = entryAtStart?.generation ?? 0;
-		try {
-			return await invoke(property, args);
-		} catch (error) {
-			const recovery = classifyLedgerRecoveryError(error);
-			if (recovery === undefined) throw error;
-			await awaitLedgerRebuild({
-				database: input.database,
-				error,
-				...recovery,
-				entryAtStart,
-				generationAtStart,
-				trigger: input.trigger,
-			});
-			return invoke(property, args);
+		let reattachments = 0;
+		while (true) {
+			const entryAtStart = lookupEntry(input.database);
+			const generationAtStart = entryAtStart?.generation ?? 0;
+			try {
+				return await invoke(property, args);
+			} catch (error) {
+				const recovery = classifyLedgerRecoveryError(error);
+				if (recovery === undefined) throw error;
+				await awaitLedgerRebuild({
+					database: input.database,
+					error,
+					...recovery,
+					entryAtStart,
+					generationAtStart,
+					trigger: input.trigger,
+				});
+				if (recovery.kind === 'rebuild') return invoke(property, args);
+				reattachments += 1;
+				if (reattachments === MAX_CONSECUTIVE_REATTACHMENTS) {
+					return invoke(property, args);
+				}
+			}
 		}
 	};
 
