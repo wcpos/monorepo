@@ -28,6 +28,7 @@ import {
 import { registerLedgerRecovery, withLedgerRecovery } from './ledger-storage-recovery';
 import {
 	DERIVABLE_METADATA_COLLECTIONS,
+	engineCollectionCreators,
 	resetDerivableMetadataCollection,
 } from '../collections/engine-collections';
 
@@ -305,13 +306,25 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 	// intentionally drops the query-total bookkeeping along with coverage/scheduler state.
 	registerLedgerRecovery({
 		database,
-		rebuild: async (reason, trigger) => {
-			for (const name of DERIVABLE_METADATA_COLLECTIONS) {
-				await resetDerivableMetadataCollection(database, name);
+		rebuild: async (reason, trigger, kind) => {
+			if (kind === 'reattach') {
+				// Never remove: doing so would close the peer that just rebuilt the ledger.
+				const creators = engineCollectionCreators();
+				await database.addCollections(
+					Object.fromEntries(
+						DERIVABLE_METADATA_COLLECTIONS.filter((name) => !database.collections[name]).map(
+							(name) => [name, creators[name]]
+						)
+					) as never
+				);
+			} else {
+				for (const name of DERIVABLE_METADATA_COLLECTIONS) {
+					await resetDerivableMetadataCollection(database, name);
+				}
 			}
 			observe({
-				type: 'coverage.ledger-rebuilt',
-				level: 'warn',
+				type: kind === 'reattach' ? 'coverage.ledger-reattached' : 'coverage.ledger-rebuilt',
+				level: kind === 'reattach' ? 'info' : 'warn',
 				fields: { reason, trigger },
 			});
 		},

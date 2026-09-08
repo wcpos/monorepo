@@ -65,6 +65,7 @@ export type SyncEventType =
 	| 'coverage.existence-reconcile'
 	| 'coverage.gate.hit'
 	| 'coverage.gate.miss'
+	| 'coverage.ledger-reattached'
 	| 'coverage.ledger-rebuilt'
 	| 'coverage.require.error'
 	| 'coverage.require.log'

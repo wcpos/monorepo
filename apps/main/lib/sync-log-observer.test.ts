@@ -523,6 +523,27 @@ describe('createSyncLogObserver', () => {
 		]);
 	});
 
+	it('persists a re-attached coverage ledger as a recovered info event', () => {
+		observer.observe(
+			event({
+				type: 'coverage.ledger-reattached',
+				level: 'info',
+				fields: { reason: 'collection-closed:coverageRecords' },
+			})
+		);
+
+		expect(rows).toEqual([
+			expect.objectContaining({
+				level: 'info',
+				context: expect.objectContaining({ type: 'coverage.ledger-reattached' }),
+				terminal: expect.objectContaining({
+					operationType: 'sync.coverage',
+					outcome: 'recovered',
+				}),
+			}),
+		]);
+	});
+
 	it('persists a targeted shortfall prune as recovered sync application work', () => {
 		observer.observe(
 			event({
