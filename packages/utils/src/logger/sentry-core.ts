@@ -13,6 +13,8 @@ export const SENTRY_DSN =
 	'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733';
 
 type SentryEventLike = {
+	message?: string;
+	exception?: { values?: { value?: string }[] };
 	request?: { url?: string };
 	breadcrumbs?: { data?: Record<string, unknown> }[];
 	extra?: Record<string, unknown>;
@@ -37,6 +39,17 @@ function scrubUrlValues(value: unknown): unknown {
 }
 
 export function scrubEvent<T extends SentryEventLike>(event: T): T {
+	// The title Sentry shows is the message or the exception value; a log line can
+	// embed a Bearer token or a `user:pass@host` URL, and `extra` being scrubbed
+	// does nothing for the copy in the title.
+	if (typeof event.message === 'string') {
+		event.message = redactSensitiveText(event.message);
+	}
+	for (const exception of event.exception?.values ?? []) {
+		if (typeof exception.value === 'string') {
+			exception.value = redactSensitiveText(exception.value);
+		}
+	}
 	if (event.request?.url) {
 		event.request.url = stripOrigin(event.request.url);
 	}

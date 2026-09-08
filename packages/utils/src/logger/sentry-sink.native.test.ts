@@ -9,7 +9,7 @@ jest.mock('@sentry/react-native', () => ({
 	captureMessage: jest.fn(),
 }));
 jest.mock('../app-info', () => ({
-	AppInfo: { version: '1.10.3', buildNumber: '42', platform: 'ios' },
+	AppInfo: { version: '1.10.3', buildNumber: '42', platform: 'ios', scheme: 'wcpos' },
 }));
 const files = new Map<string, string>();
 jest.mock('expo-file-system', () => ({
@@ -36,6 +36,7 @@ const { setTelemetryConsent, captureLoggedError, capturePrinterOutcome } =
 	jest.requireActual<typeof import('./sentry-sink.native')>('./sentry-sink.native');
 const initCallsOnImport = jest.mocked(Sentry.init).mock.calls.length;
 const installIdPath = 'file:///documents/wcpos_install_id';
+const consentMarkerPath = 'file:///documents/wcpos_telemetry_consent';
 
 describe('sentry-sink.native', () => {
 	beforeEach(() => {
@@ -79,6 +80,27 @@ describe('sentry-sink.native', () => {
 		files.set(installIdPath, 'existing-install-id');
 		setTelemetryConsent('allowed');
 		expect(Sentry.setUser).toHaveBeenCalledWith({ id: 'existing-install-id' });
+	});
+
+	it('persists allowed consent and forgets it on anything else', () => {
+		setTelemetryConsent('allowed');
+		expect(files.get(consentMarkerPath)).toBe('allowed');
+		setTelemetryConsent('denied');
+		expect(files.has(consentMarkerPath)).toBe(false);
+		setTelemetryConsent('allowed');
+		setTelemetryConsent('undecided');
+		expect(files.has(consentMarkerPath)).toBe(false);
+	});
+
+	it('initializes at import for an install that already allowed reporting', () => {
+		files.set(consentMarkerPath, 'allowed');
+		files.set(installIdPath, 'existing-install-id');
+		jest.isolateModules(() => {
+			jest.requireActual<typeof import('./sentry-sink.native')>('./sentry-sink.native');
+			const isolated = jest.requireMock('@sentry/react-native');
+			expect(isolated.init).toHaveBeenCalledTimes(1);
+			expect(isolated.setUser).toHaveBeenCalledWith({ id: 'existing-install-id' });
+		});
 	});
 
 	it.each(['denied', 'undecided'] as const)('closes and stops captures on %s', (consent) => {
@@ -152,4 +174,19 @@ describe('sentry-sink.native', () => {
 		});
 		testGlobal.__DEV__ = false;
 	});
+
+	it.each(['wcpos-dev', 'wcpos-adhoc'])(
+		'does not report from the %s binary even with consent',
+		(scheme) => {
+			jest.requireMock('../app-info').AppInfo.scheme = scheme;
+			files.set(consentMarkerPath, 'allowed');
+			jest.isolateModules(() => {
+				jest
+					.requireActual<typeof import('./sentry-sink.native')>('./sentry-sink.native')
+					.setTelemetryConsent('allowed');
+				expect(jest.requireMock('@sentry/react-native').init).not.toHaveBeenCalled();
+			});
+			jest.requireMock('../app-info').AppInfo.scheme = 'wcpos';
+		}
+	);
 });

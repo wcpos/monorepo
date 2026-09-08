@@ -40,6 +40,7 @@
   "peerDependencies": {
     "expo-application": "~57.0.2",
     "expo-constants": "~57.0.12",
+    "expo-file-system": "~57.0.4",
     "react-native": "*"
   },
   "peerDependenciesMeta": {
@@ -47,6 +48,9 @@
       "optional": true
     },
     "expo-constants": {
+      "optional": true
+    },
+    "expo-file-system": {
       "optional": true
     }
   },

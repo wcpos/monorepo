@@ -2,38 +2,79 @@ import * as Sentry from '@sentry/react-native';
 import { File, Paths } from 'expo-file-system';
 
 import { AppInfo } from '../app-info';
+import { DEFAULT_APP_SCHEME } from '../app-info/scheme';
 import { buildCaptureOptions, scrubEvent, SENTRY_DSN } from './sentry-core';
 
 import type { SentryCaptureInput, TelemetryConsent } from './sentry-core';
 
 let telemetryConsent: TelemetryConsent = 'undecided';
 let isInitialized = false;
+
+// Development builds never report, whatever the merchant chose: dev noise would
+// drown the production signal. `__DEV__` alone is not enough on native — the E2E
+// suite runs the development client with `expo start --no-dev`, a production-mode
+// bundle inside a development binary. The application id is compiled into the
+// binary, so only the store build (`wcpos`) reports; the dev client (`wcpos-dev`)
+// and ad-hoc builds (`wcpos-adhoc`) stay silent.
 const isDevelopment = typeof __DEV__ !== 'undefined' && __DEV__;
+function isReportingBuild(): boolean {
+	return !isDevelopment && AppInfo.scheme === DEFAULT_APP_SCHEME;
+}
 
 function installIdFile() {
 	return new File(Paths.document, 'wcpos_install_id');
 }
 
+// The last consent the store handed us. A returning install that already allowed
+// reporting initialises at import — before hydration, where startup crashes
+// happen — instead of waiting for the root layout to mount and re-send it. Only
+// `allowed` is ever persisted; anything else removes the marker, so a fresh or
+// denied install defaults to silence.
+function consentMarkerFile() {
+	return new File(Paths.document, 'wcpos_telemetry_consent');
+}
+
+function persistConsent(consent: TelemetryConsent): void {
+	try {
+		const marker = consentMarkerFile();
+		if (consent === 'allowed') {
+			marker.write('allowed');
+		} else if (marker.exists) {
+			marker.delete();
+		}
+	} catch {
+		// Storage may be unavailable; the store re-sends consent on every launch.
+	}
+}
+
+function initialize(): void {
+	Sentry.init({
+		dsn: SENTRY_DSN,
+		release: `wcpos-app@${AppInfo.version}`,
+		dist: AppInfo.buildNumber,
+		environment: AppInfo.platform,
+		sendDefaultPii: false,
+		beforeSend: scrubEvent,
+		enableWatchdogTerminationTracking: true,
+	});
+	isInitialized = true;
+	const file = installIdFile();
+	let id = file.exists ? file.textSync() : '';
+	if (!id) {
+		id = globalThis.crypto.randomUUID();
+		file.write(id);
+	}
+	Sentry.setUser({ id });
+}
+
 export function setTelemetryConsent(consent: TelemetryConsent): void {
 	if (consent === telemetryConsent) return;
 	telemetryConsent = consent;
+	persistConsent(consent);
 	if (consent === 'allowed') {
-		if (isDevelopment) return;
+		if (!isReportingBuild()) return;
 		try {
-			Sentry.init({
-				dsn: SENTRY_DSN,
-				release: `wcpos-app@${AppInfo.version}`,
-				dist: AppInfo.buildNumber,
-				environment: AppInfo.platform,
-				sendDefaultPii: false,
-				beforeSend: scrubEvent,
-				enableWatchdogTerminationTracking: true,
-			});
-			isInitialized = true;
-			const file = installIdFile();
-			const id = file.exists ? file.textSync() : globalThis.crypto.randomUUID();
-			if (!file.exists) file.write(id);
-			Sentry.setUser({ id });
+			initialize();
 		} catch {
 			// Diagnostics (including unavailable storage) must never interrupt the app.
 		}
@@ -55,6 +96,18 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 			// Storage may be unavailable.
 		}
 	}
+}
+
+try {
+	if (isReportingBuild()) {
+		const marker = consentMarkerFile();
+		if (marker.exists && marker.textSync() === 'allowed') {
+			telemetryConsent = 'allowed';
+			initialize();
+		}
+	}
+} catch {
+	// Diagnostics must never interrupt startup.
 }
 
 export function captureLoggedError(input: SentryCaptureInput): void {
