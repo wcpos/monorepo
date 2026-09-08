@@ -718,17 +718,16 @@ export class RxCoverageRepository {
 				};
 			});
 			// CAS keeps the prune tied to the revision written; only conflicts take the old path.
-			const result = await this.coverageRecords.storageInstance.bulkWrite(
-				rows,
-				'coverage-record-batch'
+			// A 409 (another writer moved the revision) is expected and merges below; any other
+			// row failure is fatal, so only the non-conflict remainder reaches the assert.
+			const storage = this.coverageRecords.storageInstance;
+			const result = await storage.bulkWrite(rows, 'coverage-record-batch');
+			assertBulkSuccess(
+				{ error: result.error.filter((error) => error.status !== 409) },
+				'Coverage record batch write'
 			);
-			for (const error of result.error) {
-				if (error.status !== 409) {
-					throw new Error(
-						`Coverage record batch write failed: ${error.status} ${error.documentId}`
-					);
-				}
-				await this.insertOrMergeRecord(recordsByKey.get(error.documentId)!, liveLaneKeys);
+			for (const conflict of result.error) {
+				await this.insertOrMergeRecord(recordsByKey.get(conflict.documentId)!, liveLaneKeys);
 			}
 		}
 
