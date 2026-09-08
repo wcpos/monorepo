@@ -25,15 +25,6 @@
 		"lint": "eslint app components --ext .js,.jsx,.ts,.tsx",
 		"lint:fix": "eslint app components --ext .js,.jsx,.ts,.tsx --fix"
 	},
-	"jest": {
-		"preset": "jest-expo",
-		"testPathIgnorePatterns": [
-			"/node_modules/",
-			"<rootDir>/e2e/",
-			"<rootDir>/plugins/",
-			"<rootDir>/metro/"
-		]
-	},
 	"expo": {
 		"install": {
 			"exclude": [
