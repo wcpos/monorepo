@@ -2,7 +2,13 @@
  * Ledger tests protect typed-meta preservation and deterministic manual payment rows.
  */
 
-import { mintManualPayment, readLedger, upsertPaymentRow, withLedger } from './ledger';
+import {
+	mintManualPayment,
+	mintServerPayment,
+	readLedger,
+	upsertPaymentRow,
+	withLedger,
+} from './ledger';
 
 import type { MetaDataEntry, MintManualPaymentInput } from './ledger';
 import type { CaptureMode, PaymentKind, PaymentMethodDescriptor, PaymentRow } from './types';
@@ -132,5 +138,56 @@ describe('mintManualPayment', () => {
 		['device method', { method: method('card', 'device'), tendered: null }, 'not_manual'],
 	] as const)('rejects %s', (_name, overrides, reason) => {
 		expect(mintManualPayment(input(overrides))).toEqual({ ok: false, reason });
+	});
+});
+
+describe('mintServerPayment', () => {
+	const input = {
+		method: method('card', 'server'),
+		amount: '12.345',
+		currency: 'USD',
+		orderId: 42,
+		cashierId: 9,
+		storeId: 4,
+		now: () => '2026-01-01T00:00:00Z',
+		uuid: () => 'ABC',
+	};
+	it('mints an online pending row with server fields and formatted amounts', () => {
+		const result = mintServerPayment({ ...input, dp: 3 });
+		expect(result).toEqual({
+			ok: true,
+			row: {
+				...row(),
+				id: 'abc',
+				order_id: 42,
+				method_id: 'pos_card',
+				provider: 'provider',
+				kind: 'card',
+				capture_mode: 'server',
+				amount: '12.345',
+				status: 'pending',
+				refunded_amount: '0.000',
+				cashier_id: 9,
+				store_id: 4,
+				captured_at_gmt: null,
+				expires_at: null,
+				events: [],
+				void_requested_at: null,
+			},
+		});
+	});
+	it.each([
+		[{ method: method('cash', 'manual') }, 'not_server'],
+		[{ amount: 0 }, 'amount_not_positive'],
+		[{ amount: -1 }, 'amount_not_positive'],
+		[{ orderId: null }, 'no_order_id'],
+		[{ orderId: 0 }, 'no_order_id'],
+		[{ orderId: 1.5 }, 'no_order_id'],
+	] as const)('rejects invalid server input %o', (override, reason) => {
+		expect(mintServerPayment({ ...input, ...override })).toEqual({ ok: false, reason });
+	});
+	it('defaults to two decimals and old rows remain readable without new fields', () => {
+		expect(mintServerPayment(input)).toMatchObject({ row: { amount: '12.35' } });
+		expect(readLedger(withLedger([], [row()]))).toEqual([row()]);
 	});
 });

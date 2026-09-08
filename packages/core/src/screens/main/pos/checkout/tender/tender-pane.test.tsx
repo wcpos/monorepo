@@ -18,6 +18,8 @@ jest.mock('@wcpos/components/button', () => ({
 	ButtonText: 'span',
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+// The leg view has its own suite; here it only needs to stay out of the saving skeleton's way.
+jest.mock('./terminal-leg-view', () => ({ TerminalLegView: () => null }));
 jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }));
 jest.mock('@wcpos/components/text', () => ({ Text: 'span' }));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: 'div' }));
@@ -58,6 +60,16 @@ it.each([0, 2])('shows inert skeletons without a keypad while saving (%s tiles)'
 		rows: [],
 		liveRows: [],
 		hasLiveLeg: false,
+		terminalLeg: null,
+		hasLiveTerminalLeg: false,
+		readers: [],
+		lockToDefault: false,
+		pickReader: jest.fn(),
+		cancelTerminalLeg: jest.fn(),
+		releaseTerminalLeg: jest.fn(),
+		retryTerminalCapture: jest.fn(),
+		dismissTerminalLeg: jest.fn(),
+		retryTerminalLeg: jest.fn(),
 		online: true,
 		tiles: Array.from({ length: count }, () => ({
 			method,

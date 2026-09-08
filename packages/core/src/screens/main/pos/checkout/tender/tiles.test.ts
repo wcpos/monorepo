@@ -1,6 +1,6 @@
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
-import { buildTenderTiles, legacyPaymentMethods } from './tiles';
+import { buildTenderTiles, legacyPaymentMethods, selectableReaders } from './tiles';
 
 type MethodPartial = Omit<Partial<PaymentMethodDescriptor>, 'capture' | 'capabilities'> & {
 	capture?: Partial<PaymentMethodDescriptor['capture']>;
@@ -78,7 +78,7 @@ describe('buildTenderTiles', () => {
 		expect(tile).toMatchObject({ disabled: true, reason: 'unsupported_mode' });
 	});
 
-	it.each(['device', 'server', 'stored_value'] as const)(
+	it.each(['device', 'stored_value'] as const)(
 		'disables the known %s mode because its driver has not shipped',
 		(mode) => {
 			const [tile] = buildTenderTiles(
@@ -128,4 +128,56 @@ describe('legacyPaymentMethods', () => {
 			'fallback-zulu',
 		]);
 	});
+});
+
+const server = makeMethod({
+	capture: {
+		mode: 'server',
+		hardware: {
+			discovery: 'server',
+			readers: [
+				{ id: 'a', label: 'Front', status: 'online', default: true },
+				{ id: 'b', label: 'Back', status: 'offline', default: false },
+			],
+			default_reader: 'a',
+			lock_to_default: false,
+		},
+	},
+});
+const held = new Map([['a', { orderUuid: 'other', orderNumber: '123' }]]);
+it.each([
+	[false, new Map(), 'offline'],
+	[true, held, { type: 'reader_in_use', number: '123' }],
+	[true, new Map(), null],
+])('server availability (%s)', (online, readersInUse, reason) => {
+	expect(
+		buildTenderTiles([server], { online, readersInUse, currentOrderUuid: 'mine' })[0].reason
+	).toEqual(reason);
+});
+it('has no readers when the locked default is offline', () => {
+	const method = makeMethod({
+		capture: {
+			mode: 'server',
+			hardware: {
+				discovery: 'server',
+				readers: [{ id: 'a', label: 'Front', status: 'online', default: false }],
+				default_reader: 'b',
+				lock_to_default: true,
+			},
+		},
+	});
+	expect(buildTenderTiles([method], { online: true })[0].reason).toBe('no_readers');
+	expect(selectableReaders(method)).toEqual({ readers: [], lockToDefault: true });
+});
+it('drops offline readers and marks only other orders as busy', () => {
+	expect(selectableReaders(server, held, 'mine')).toEqual({
+		lockToDefault: false,
+		readers: [{ id: 'a', label: 'Front', isDefault: true, inUseBy: '123' }],
+	});
+	expect(selectableReaders(server, held, 'other').readers[0].inUseBy).toBeNull();
+	expect(
+		buildTenderTiles([server], { online: true, readersInUse: held, currentOrderUuid: 'other' })[0]
+			.disabled
+	).toBe(false);
+	expect(selectableReaders(makeMethod()).readers).toEqual([]);
 });

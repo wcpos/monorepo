@@ -132,3 +132,51 @@ export function mintManualPayment(input: MintManualPaymentInput): MintManualPaym
 		},
 	};
 }
+
+export type MintServerPaymentInput = Omit<MintManualPaymentInput, 'tendered' | 'recordedOffline'>;
+export type MintServerPaymentResult =
+	| { ok: true; row: PaymentRow }
+	| { ok: false; reason: 'not_server' | 'amount_not_positive' | 'no_order_id' };
+
+export function mintServerPayment(input: MintServerPaymentInput): MintServerPaymentResult {
+	if (input.method.capture.mode !== 'server') return { ok: false, reason: 'not_server' };
+	const dp = input.dp ?? 2;
+	const amount = toMinor(input.amount, dp);
+	if (amount <= 0) return { ok: false, reason: 'amount_not_positive' };
+	if (!Number.isInteger(input.orderId) || !input.orderId || input.orderId <= 0)
+		return { ok: false, reason: 'no_order_id' };
+	const timestamp = input.now();
+	return {
+		ok: true,
+		row: {
+			id: input.uuid().toLowerCase(),
+			source: 'app',
+			order_id: input.orderId,
+			method_id: input.method.id,
+			provider: input.method.capture.provider,
+			kind: input.method.kind,
+			capture_mode: 'server',
+			transport: null,
+			recorded_offline: false,
+			amount: fromMinor(amount, dp),
+			currency: input.currency,
+			tendered: null,
+			change: null,
+			tip: null,
+			status: 'pending',
+			failure_reason: null,
+			refunded_amount: fromMinor(0, dp),
+			refunds: [],
+			provider_refs: {},
+			receipt: {},
+			cashier_id: input.cashierId,
+			store_id: input.storeId,
+			created_at_gmt: timestamp,
+			captured_at_gmt: null,
+			updated_at_gmt: timestamp,
+			events: [],
+			expires_at: null,
+			void_requested_at: null,
+		},
+	};
+}

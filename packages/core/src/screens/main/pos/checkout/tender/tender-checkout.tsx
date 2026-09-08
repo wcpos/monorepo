@@ -66,7 +66,7 @@ export function TenderCheckout({ order }: Props) {
 			finishSale();
 			return;
 		}
-		if (flow.hasLiveLeg) {
+		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) {
 			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;
 		}
@@ -84,7 +84,9 @@ export function TenderCheckout({ order }: Props) {
 	);
 
 	const body = (() => {
-		if (flow.state.view === 'cancel') {
+		// A live terminal leg is never hidden behind another view: the pane below
+		// shows it (with its own Cancel) until the server says the leg is over.
+		if (flow.state.view === 'cancel' && !flow.hasLiveTerminalLeg) {
 			return <CancelPaymentView flow={flow} format={format} />;
 		}
 		if (flow.state.tab === 'legacy') {
@@ -166,7 +168,7 @@ export function TenderCheckout({ order }: Props) {
 								</TabsTrigger>
 							</TabsList>
 						</Tabs>
-						{flow.hasLiveLeg && flow.state.view !== 'cancel' ? (
+						{flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
 							<Button
 								variant="ghost-destructive"
 								size="sm"

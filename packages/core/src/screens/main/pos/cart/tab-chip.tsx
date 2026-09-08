@@ -31,14 +31,20 @@ export function TabChip({
 	const { balance } = derive(payload.total, rows, methods, { dp: store.price_num_decimals ?? 2 });
 	// Same approved set `derive` counts as paid: an authorized card leg is money already taken.
 	const captured = rows.some((row) => row.status === 'captured' || row.status === 'authorized');
+	const waiting = rows.find(
+		(row) =>
+			row.capture_mode === 'server' && (row.status === 'pending' || row.status === 'authorized')
+	);
 	const label =
 		stage === 'receipt'
 			? t('pos_checkout.chip_paid_receipt')
-			: captured && Number(balance) > 0
-				? t('pos_checkout.chip_partly_paid', { due: format(Number(balance)) })
-				: stage === 'checkout' && !captured
-					? t('pos_checkout.chip_in_checkout')
-					: null;
+			: waiting
+				? t('pos_checkout.chip_waiting_for_terminal', { amount: format(Number(waiting.amount)) })
+				: captured && Number(balance) > 0
+					? t('pos_checkout.chip_partly_paid', { due: format(Number(balance)) })
+					: stage === 'checkout' && !captured
+						? t('pos_checkout.chip_in_checkout')
+						: null;
 	return label && !active ? (
 		<StatusBadge
 			testID={`open-order-chip-${order.uuid}`}

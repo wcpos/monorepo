@@ -94,6 +94,7 @@ jest.mock('@wcpos/components/collapsible', () => ({
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -101,7 +102,9 @@ jest.mock('@wcpos/components/text', () => ({
 	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	VStack: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -148,6 +151,11 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		entryChangeMinor: 0,
 		quickAmountsMinor: [],
 		busy: false,
+		terminalLeg: null,
+		hasLiveTerminalLeg: false,
+		readers: [],
+		lockToDefault: false,
+		pickReader: jest.fn(),
 		saving: false,
 		pickMethod: mockPickMethod,
 		takeTender: jest.fn(),
@@ -252,4 +260,45 @@ describe('TenderCheckout', () => {
 
 		expect(takeTender).toHaveBeenCalledTimes(1);
 	});
+});
+
+it('closing a live terminal leg leaves without a whole-order cancel prompt', () => {
+	mockFlow = makeFlow({ hasLiveLeg: true, hasLiveTerminalLeg: true });
+	render(<TenderCheckout order={order} />);
+	mockOnClose?.();
+	expect(mockBack).toHaveBeenCalledTimes(1);
+	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('checkout-cancel-payment')).toBeNull();
+});
+it('reader chips require an explicit choice when there is no default', () => {
+	const server = method({
+		capture: { mode: 'server', provider: null, hardware: null, webview_available: false },
+	});
+	mockFlow = makeFlow({
+		method: server,
+		entryAppliedMinor: 500,
+		readers: [
+			{ id: 'free', label: 'Front', isDefault: false, inUseBy: null },
+			{ id: 'busy', label: 'Back', isDefault: false, inUseBy: '123' },
+		],
+	});
+	render(<TenderCheckout order={order} />);
+	expect((screen.getByTestId('checkout-take-payment') as HTMLButtonElement).disabled).toBe(true);
+	expect((screen.getByTestId('checkout-reader-busy') as HTMLButtonElement).disabled).toBe(true);
+	expect(screen.getByTestId('checkout-keypad').textContent).toContain(
+		'pos_checkout.choose_a_terminal'
+	);
+	fireEvent.click(screen.getByTestId('checkout-reader-free'));
+	expect(mockFlow.pickReader).toHaveBeenCalledWith('free');
+});
+it('the single default reader is a locked line, not a chip', () => {
+	mockFlow = makeFlow({
+		method: method({
+			capture: { mode: 'server', provider: null, hardware: null, webview_available: false },
+		}),
+		readers: [{ id: 'reader', label: 'Front', isDefault: true, inUseBy: null }],
+	});
+	render(<TenderCheckout order={order} />);
+	expect(screen.getByTestId('checkout-reader-locked').textContent).toBe('pos_checkout.reader_line');
+	expect(screen.queryByTestId('checkout-reader-reader')).toBeNull();
 });
