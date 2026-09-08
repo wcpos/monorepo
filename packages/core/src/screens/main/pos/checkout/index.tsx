@@ -25,7 +25,7 @@ export function CheckoutScreen() {
 			<Redirect
 				href={{
 					pathname: '/(app)/(drawer)/(pos)/(columns)/cart/[...orderId]',
-					params: { orderId: [orderId] },
+					params: { orderId: [orderId, 'checkout'] },
 				}}
 			/>
 		);

@@ -78,7 +78,7 @@ function CheckoutDocument({ order }: { order: EngineRecord<'orders'> }) {
 	const [useTenderFlow] = React.useState(() => loaded && !unsupportedSchema);
 
 	if (useTenderFlow) {
-		return <TenderCheckout order={order} />;
+		return <TenderCheckout key={order.uuid} order={order} />;
 	}
 
 	return <LegacyCheckoutDocument order={order} />;

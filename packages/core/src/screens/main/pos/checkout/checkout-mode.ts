@@ -6,6 +6,7 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 
 export interface CheckoutModeSnapshot {
+	readonly tenderMethods: ReadonlyMap<string, string>;
 	readonly savingOrders: ReadonlySet<string>;
 	readonly checkoutOrders: ReadonlySet<string>;
 	readonly receiptOrders: ReadonlySet<string>;
@@ -13,6 +14,7 @@ export interface CheckoutModeSnapshot {
 }
 
 let snapshot: CheckoutModeSnapshot = {
+	tenderMethods: new Map(),
 	savingOrders: new Set(),
 	checkoutOrders: new Set(),
 	receiptOrders: new Set(),
@@ -53,13 +55,25 @@ export function enterCheckout(uuid: string) {
 	if (snapshot.checkoutOrders.has(uuid)) return;
 	publish({ ...snapshot, checkoutOrders: new Set([...snapshot.checkoutOrders, uuid]) });
 }
+export function setTenderMethod(uuid: string, methodId: string | null) {
+	if ((snapshot.tenderMethods.get(uuid) ?? null) === methodId) return;
+	const tenderMethods = new Map(snapshot.tenderMethods);
+	if (methodId === null) tenderMethods.delete(uuid);
+	else tenderMethods.set(uuid, methodId);
+	publish({ ...snapshot, tenderMethods });
+}
+export function useTenderMethod(uuid: string) {
+	return useCheckoutMode().tenderMethods.get(uuid) ?? null;
+}
 export function leaveCheckout(uuid: string) {
+	setTenderMethod(uuid, null);
 	if (!snapshot.checkoutOrders.has(uuid)) return;
 	const checkoutOrders = new Set(snapshot.checkoutOrders);
 	checkoutOrders.delete(uuid);
 	publish({ ...snapshot, checkoutOrders });
 }
 export function enterReceipt(uuid: string) {
+	setTenderMethod(uuid, null);
 	const checkoutOrders = new Set(snapshot.checkoutOrders);
 	checkoutOrders.delete(uuid);
 	publish({
@@ -70,6 +84,7 @@ export function enterReceipt(uuid: string) {
 	});
 }
 export function finishReceipt(uuid: string) {
+	setTenderMethod(uuid, null);
 	receiptPrintAttempts.delete(uuid);
 	const receiptOrders = new Set(snapshot.receiptOrders);
 	receiptOrders.delete(uuid);
@@ -87,6 +102,7 @@ export function selectReceipt(uuid: string | null) {
 export function resetCheckoutMode() {
 	receiptPrintAttempts.clear();
 	publish({
+		tenderMethods: new Map(),
 		savingOrders: new Set(),
 		checkoutOrders: new Set(),
 		receiptOrders: new Set(),

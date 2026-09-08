@@ -43,6 +43,22 @@ export const initialTenderState: TenderState = {
 	splitMenuOpen: false,
 };
 
+/**
+ * Reducer init. An order whose method the checkout store already holds — a URL seed, or a
+ * tab the cashier is coming back to — reopens its keypad prefilled with the balance, exactly
+ * as a tap on that tile would. Everything else starts from scratch.
+ */
+export function initTenderState({
+	methodId,
+	balanceMinor,
+}: {
+	methodId: string | null;
+	balanceMinor: number;
+}): TenderState {
+	if (!methodId) return initialTenderState;
+	return { ...initialTenderState, view: 'amount', methodId, entryMinor: balanceMinor };
+}
+
 export function tenderReducer(state: TenderState, action: TenderAction): TenderState {
 	switch (action.type) {
 		case 'set-tab':
