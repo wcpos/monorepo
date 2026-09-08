@@ -6,12 +6,14 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
 
 export interface CheckoutModeSnapshot {
+	readonly savingOrders: ReadonlySet<string>;
 	readonly checkoutOrders: ReadonlySet<string>;
 	readonly receiptOrders: ReadonlySet<string>;
 	readonly selectedReceiptOrder: string | null;
 }
 
 let snapshot: CheckoutModeSnapshot = {
+	savingOrders: new Set(),
 	checkoutOrders: new Set(),
 	receiptOrders: new Set(),
 	selectedReceiptOrder: null,
@@ -37,6 +39,16 @@ export function subscribeCheckoutMode(listener: () => void) {
 		listeners.delete(listener);
 	};
 }
+export function markOrderSaving(uuid: string) {
+	if (snapshot.savingOrders.has(uuid)) return;
+	publish({ ...snapshot, savingOrders: new Set([...snapshot.savingOrders, uuid]) });
+}
+export function clearOrderSaving(uuid: string) {
+	if (!snapshot.savingOrders.has(uuid)) return;
+	const savingOrders = new Set(snapshot.savingOrders);
+	savingOrders.delete(uuid);
+	publish({ ...snapshot, savingOrders });
+}
 export function enterCheckout(uuid: string) {
 	if (snapshot.checkoutOrders.has(uuid)) return;
 	publish({ ...snapshot, checkoutOrders: new Set([...snapshot.checkoutOrders, uuid]) });
@@ -51,6 +63,7 @@ export function enterReceipt(uuid: string) {
 	const checkoutOrders = new Set(snapshot.checkoutOrders);
 	checkoutOrders.delete(uuid);
 	publish({
+		...snapshot,
 		checkoutOrders,
 		receiptOrders: new Set([...snapshot.receiptOrders, uuid]),
 		selectedReceiptOrder: uuid,
@@ -73,7 +86,12 @@ export function selectReceipt(uuid: string | null) {
 }
 export function resetCheckoutMode() {
 	receiptPrintAttempts.clear();
-	publish({ checkoutOrders: new Set(), receiptOrders: new Set(), selectedReceiptOrder: null });
+	publish({
+		savingOrders: new Set(),
+		checkoutOrders: new Set(),
+		receiptOrders: new Set(),
+		selectedReceiptOrder: null,
+	});
 }
 
 export function resolveStage(
@@ -115,6 +133,10 @@ export function useCheckoutMode() {
 		getCheckoutModeSnapshot,
 		getCheckoutModeSnapshot
 	);
+}
+export function useOrderSaving(uuid: string | undefined): boolean {
+	const mode = useCheckoutMode();
+	return uuid !== undefined && mode.savingOrders.has(uuid);
 }
 export function useOrderCheckoutStage(
 	record: CurrentOrderRecord | EngineRecord<'orders'> | undefined

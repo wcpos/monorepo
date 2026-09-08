@@ -10,7 +10,13 @@ import { useRecordField } from '@wcpos/query';
 
 import { useTheme } from '../../../../../contexts/theme';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
-import { enterCheckout } from '../../checkout/checkout-mode';
+import {
+	clearOrderSaving,
+	enterCheckout,
+	getCheckoutModeSnapshot,
+	leaveCheckout,
+	markOrderSaving,
+} from '../../checkout/checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
@@ -31,7 +37,6 @@ export function PayButton() {
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const { loaded, unsupportedSchema } = usePaymentMethods();
-	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const t = useT();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
@@ -48,7 +53,25 @@ export function PayButton() {
 			return;
 		}
 
-		setLoading(true);
+		const uuid = currentOrderRecord.uuid;
+		if (getCheckoutModeSnapshot().savingOrders.has(uuid)) return;
+
+		// Optimistic: the tender pane opens now and shows skeletons while the order
+		// saves; the tiles stay inert until the server copy (and its id) exists.
+		markOrderSaving(uuid);
+		if (screenSize !== 'sm' && loaded && !unsupportedSchema) {
+			enterCheckout(uuid);
+		} else {
+			router.push({
+				pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+				params: { orderId: uuid },
+			});
+		}
+		// A save that fails or is blocked puts the cashier back at the cart to retry.
+		const abandon = () => {
+			leaveCheckout(uuid);
+			if (screenSize === 'sm') router.replace('/cart');
+		};
 		const orderLogger = checkoutLogger.with({
 			orderId: currentOrderRecord.uuid,
 			orderNumber: currentOrderRecord.payload.number,
@@ -58,9 +81,10 @@ export function PayButton() {
 			await pushDocument(currentOrderRecord).then((savedDoc) => {
 				if (savedDoc) {
 					// Re-checked after the await: the worker can die mid-push, and
-					// opening the payment modal then would let the cashier take money
+					// enabling tender then would let the cashier take money
 					// for an order this device can no longer record.
 					if (blockIfDegraded('checkout', { orderId: currentOrderRecord.uuid })) {
+						abandon();
 						return;
 					}
 
@@ -71,18 +95,12 @@ export function PayButton() {
 							lineItemCount: lineItems?.length ?? 0,
 						},
 					});
-
-					if (screenSize !== 'sm' && loaded && !unsupportedSchema) {
-						enterCheckout(currentOrderRecord.uuid);
-					} else {
-						router.push({
-							pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
-							params: { orderId: currentOrderRecord.uuid },
-						});
-					}
+				} else {
+					abandon();
 				}
 			});
 		} catch (error) {
+			abandon();
 			const errorMessage = getErrorMessage(error);
 			orderLogger.error('Checkout failed', {
 				showToast: true,
@@ -93,7 +111,7 @@ export function PayButton() {
 				},
 			});
 		} finally {
-			setLoading(false);
+			clearOrderSaving(uuid);
 		}
 	}, [
 		blockIfDegraded,
@@ -118,7 +136,6 @@ export function PayButton() {
 			onPress={handlePay}
 			variant="success"
 			className="flex-3 rounded-t-none rounded-bl-none"
-			loading={loading}
 			disabled={storageDegraded}
 		>
 			{t('pos_cart.checkout', {

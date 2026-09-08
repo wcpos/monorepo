@@ -74,6 +74,9 @@ export function LegacyTab({ flow, order }: Props) {
 		);
 	}
 
+	if (!paymentURL && flow.saving) {
+		return <View className="bg-muted m-4 flex-1 rounded-md" testID="checkout-legacy-skeleton" />;
+	}
 	if (!paymentURL) {
 		return (
 			<View className="border-destructive bg-destructive/10 m-4 rounded-md border p-3">

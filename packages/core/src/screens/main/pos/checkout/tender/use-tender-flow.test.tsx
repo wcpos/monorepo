@@ -6,7 +6,12 @@ import { act, renderHook } from '@testing-library/react';
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
-import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
+import {
+	enterCheckout,
+	getCheckoutModeSnapshot,
+	markOrderSaving,
+	resetCheckoutMode,
+} from '../checkout-mode';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
 
@@ -156,6 +161,20 @@ describe('useTenderFlow', () => {
 		mockVoidPayments.mockResolvedValue({ failed: [] });
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockLocalPatch.mockResolvedValue({ document: order });
+	});
+
+	it('blocks method selection and recording while saving', async () => {
+		markOrderSaving(order.uuid);
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.saving).toBe(true);
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.state.view).toBe('select');
+		// Exercise takeTender with a selected method so its guard is tested independently.
+		act(() =>
+			result.current.dispatch({ type: 'pick-method', methodId: 'pos_cash', prefillMinor: 9295 })
+		);
+		await act(async () => result.current.takeTender());
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
 
 	it.each(['online-website-available', 'offline'])(

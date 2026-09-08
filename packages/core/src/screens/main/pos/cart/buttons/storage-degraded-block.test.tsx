@@ -28,6 +28,7 @@ import { VoidButton } from './void';
  * `useStorageDegraded` — the seam that failed on March 6 is the one under test.
  */
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockPushDocument = jest.fn();
 const mockEngineWrite = jest.fn(async () => ({
@@ -40,7 +41,7 @@ const mockLogger = getLogger(['test']) as unknown as {
 };
 
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
+	useRouter: () => ({ push: mockPush, replace: mockReplace, setParams: mockSetParams }),
 }));
 
 jest.mock('rxdb', () => ({ isRxDocument: () => true }));
@@ -272,9 +273,9 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 	 * The window the ruling is really about: the cashier pressed Checkout while
 	 * storage was healthy and the worker died mid-push. The rendered `disabled`
 	 * state cannot help here — the guard has to re-read the latch after the await
-	 * or the cashier lands in the payment modal for an order that never persisted.
+	 * or the cashier can tender against an order that never persisted.
 	 */
-	it('does not open the payment modal when the worker dies mid-checkout', async () => {
+	it('returns to the cart when the worker dies mid-checkout', async () => {
 		let resolvePush: (value: unknown) => void = () => undefined;
 		mockPushDocument.mockImplementation(
 			() =>
@@ -293,7 +294,8 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 		});
 
 		await waitFor(() => expectBlockedLog());
-		expect(mockPush).not.toHaveBeenCalled();
+		expect(mockPush).toHaveBeenCalledTimes(1);
+		expect(mockReplace).toHaveBeenCalledWith('/cart');
 	});
 });
 

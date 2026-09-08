@@ -5,16 +5,19 @@ import type { EngineRecord } from '@wcpos/query';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import {
+	clearOrderSaving,
 	enterCheckout,
 	enterReceipt,
 	finishReceipt,
 	getCheckoutModeSnapshot,
 	leaveCheckout,
+	markOrderSaving,
 	resetCheckoutMode,
 	resolveStage,
 	selectReceipt,
 	subscribeCheckoutMode,
 	useOrderCheckoutStage,
+	useOrderSaving,
 } from './checkout-mode';
 
 let mockDraft = false;
@@ -95,4 +98,33 @@ it('subscribes the current order stage but never checks out a draft', () => {
 it('accepts an absent record', () => {
 	const { result } = renderHook(() => useOrderCheckoutStage(undefined));
 	expect(result.current).toBe('cart');
+});
+
+it('publishes saving changes idempotently, preserves saving on leave, and resets it', () => {
+	const before = getCheckoutModeSnapshot();
+	markOrderSaving('a');
+	const saving = getCheckoutModeSnapshot();
+	markOrderSaving('a');
+	expect(getCheckoutModeSnapshot()).toBe(saving);
+	expect(before.savingOrders.size).toBe(0);
+	enterCheckout('a');
+	leaveCheckout('a');
+	expect(getCheckoutModeSnapshot().savingOrders.has('a')).toBe(true);
+	clearOrderSaving('a');
+	const cleared = getCheckoutModeSnapshot();
+	clearOrderSaving('a');
+	expect(getCheckoutModeSnapshot()).toBe(cleared);
+	expect(cleared.savingOrders.size).toBe(0);
+	expect(saving.savingOrders.has('a')).toBe(true);
+	markOrderSaving('b');
+	resetCheckoutMode();
+	expect(getCheckoutModeSnapshot().savingOrders.size).toBe(0);
+});
+it('subscribes to saving for only the requested order', () => {
+	const { result } = renderHook(() => [useOrderSaving('a'), useOrderSaving(undefined)]);
+	expect(result.current).toEqual([false, false]);
+	act(() => markOrderSaving('a'));
+	expect(result.current).toEqual([true, false]);
+	act(() => clearOrderSaving('a'));
+	expect(result.current).toEqual([false, false]);
 });
