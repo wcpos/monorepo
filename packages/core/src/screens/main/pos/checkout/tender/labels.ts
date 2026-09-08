@@ -44,12 +44,37 @@ export function statusVariant(status: PaymentRow['status']) {
  * are conditions of the till, so they read as statements about the tile.
  */
 export function disabledReasonKey(reason: TileDisabledReason): string {
+	if (typeof reason === 'object') return 'pos_checkout.reader_in_use';
 	switch (reason) {
 		case 'unsupported_mode':
 			return 'pos_checkout.update_app_to_use';
 		case 'no_driver':
 			return 'pos_checkout.coming_in_a_later_build';
+		case 'no_readers':
+			return 'pos_checkout.no_readers_set_up';
 		case 'offline':
 			return 'pos_checkout.needs_a_connection';
 	}
+}
+
+const FAILURE_KEYS: Record<string, string> = {
+	card_declined: 'pos_checkout.reason_card_declined',
+	expired: 'pos_checkout.reason_expired',
+	cancelled: 'pos_checkout.reason_cancelled',
+	not_found: 'pos_checkout.reason_not_found',
+	amount_mismatch: 'pos_checkout.reason_amount_mismatch',
+};
+export function failureReasonLabel(reason: string | null, t: (key: string) => string): string {
+	return reason && FAILURE_KEYS[reason] ? t(FAILURE_KEYS[reason]) : (reason ?? '');
+}
+
+/** The leg normalizes provider errors to their detail code; other errors retain wcpos_* or mirror_failed. */
+export function providerErrorMessage(
+	error: { code: string; message: string } | null
+): string | null {
+	return error &&
+		(error.code === 'wcpos_provider_error' ||
+			(!error.code.startsWith('wcpos_') && error.code !== 'mirror_failed'))
+		? error.message
+		: null;
 }

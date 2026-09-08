@@ -1,15 +1,63 @@
 /**
  * @jest-environment jsdom
  */
-import { act, renderHook } from '@testing-library/react';
+import * as React from 'react';
+
+import { act, fireEvent, render, renderHook } from '@testing-library/react';
 
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
-import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
+import {
+	enterCheckout,
+	enterReceipt,
+	getCheckoutModeSnapshot,
+	resetCheckoutMode,
+	useCheckoutMode,
+} from '../checkout-mode';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
 
+import type {
+	TerminalLegState,
+	TerminalPaymentsService,
+} from '../../../../../services/terminal-payments';
+
+let mockRealService: TerminalPaymentsService | null = null;
+let mockLeg: TerminalLegState | null = null;
+const mockBegin = jest.fn();
+const mockDismiss = jest.fn(() => {
+	mockLeg = null;
+});
+const mockCancel = jest.fn();
+const mockCapture = jest.fn();
+const mockRelease = jest.fn();
+jest.mock('../../../../../services/terminal-payments', () => ({
+	getTerminalPaymentsService: () =>
+		mockRealService ?? {
+			subscribe: () => () => {},
+			begin: mockBegin,
+			dismiss: mockDismiss,
+			get: () => mockLeg,
+			readersInUse: () => new Map(),
+			leg: () => ({ cancel: mockCancel, capture: mockCapture, release: mockRelease }),
+		},
+}));
+jest.mock('../payments/server/use-terminal-leg', () => ({
+	useTerminalLeg: () => {
+		const React = jest.requireActual<typeof import('react')>('react');
+		return React.useSyncExternalStore(
+			mockRealService?.subscribe ?? (() => () => {}),
+			() => mockRealService?.get('order-1') ?? mockLeg
+		);
+	},
+}));
+jest.mock('../payments/server/use-resume-terminal-legs', () => ({
+	useResumeTerminalLegs: jest.fn(),
+}));
+
+let mockUuid = 0;
+jest.mock('uuid', () => ({ v4: () => `payment-${++mockUuid}` }));
 const mockRecordManualPayment = jest.fn();
 const mockVoidPayments = jest.fn();
 const mockCompleteOrderFlow = jest.fn();
@@ -57,7 +105,12 @@ const noDriver = {
 } satisfies PaymentMethodDescriptor;
 
 const methods: PaymentMethodDescriptor[] = [cash, card, noDriver];
-let mockPayload = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
+let mockPayload: {
+	id?: number;
+	number?: string;
+	total: string;
+	meta_data: { key: string; value: unknown }[];
+} = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
 let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
 
@@ -90,7 +143,10 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store: { price_num_decimals: 2 } }),
+	useStoreSession: () => ({
+		store: { price_num_decimals: 2, currency: 'EUR', id: 9 },
+		wpCredentials: { id: 7 },
+	}),
 }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
@@ -370,4 +426,238 @@ it('leaves wide checkout mode without navigating after cancellation', async () =
 	await act(async () => result.current.cancelPayment());
 	expect(getCheckoutModeSnapshot().checkoutOrders.has(order.uuid)).toBe(false);
 	expect(mockReplace).not.toHaveBeenCalled();
+});
+
+const terminal = {
+	...card,
+	id: 'terminal',
+	capture: {
+		...card.capture,
+		mode: 'server',
+		hardware: {
+			discovery: 'server',
+			readers: [{ id: 'reader', label: 'Front', status: 'online', default: true }],
+			default_reader: 'reader',
+			lock_to_default: false,
+		},
+	},
+} satisfies PaymentMethodDescriptor;
+function terminalState(changes: Partial<TerminalLegState> = {}): TerminalLegState {
+	return {
+		phase: 'polling',
+		row: payment({ method_id: 'terminal', capture_mode: 'server', status: 'pending' }),
+		outcome: null,
+		cancelRequested: false,
+		releaseAvailable: false,
+		unstable: false,
+		consecutiveErrors: 0,
+		deadlineAt: 0,
+		deadlineHandled: false,
+		capturing: false,
+		captureFailed: false,
+		error: null,
+		clientEvents: [],
+		orderNumber: '42',
+		reader: 'reader',
+		...changes,
+	};
+}
+describe('server tender', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockLeg = null;
+		mockRealService = null;
+		mockMethods = [terminal];
+		mockOnlineStatus = 'online-website-available';
+		mockPayload = { id: 42, number: '42', total: '92.95', meta_data: [] };
+		mockBlockIfDegraded.mockReturnValue(false);
+		mockBegin.mockImplementation(({ row }) => {
+			mockLeg = terminalState({ row, phase: 'creating' });
+		});
+	});
+	it('mints once, begins on the selected reader, and never records manually', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		expect(result.current.state.readerId).toBe('reader');
+		await act(async () => {
+			await result.current.takeTender();
+			await result.current.takeTender();
+		});
+		expect(mockBegin).toHaveBeenCalledTimes(1);
+		expect(mockBegin).toHaveBeenCalledWith(
+			expect.objectContaining({
+				orderUuid: 'order-1',
+				orderId: 42,
+				orderNumber: '42',
+				reader: 'reader',
+				row: expect.objectContaining({
+					amount: '92.95',
+					status: 'pending',
+					capture_mode: 'server',
+					cashier_id: 7,
+					store_id: 9,
+				}),
+			})
+		);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(result.current.state.view).toBe('select');
+	});
+	it.each(['reader', 'order'] as const)('refuses Take without %s', async (missing) => {
+		if (missing === 'order') delete mockPayload.id;
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		if (missing === 'reader')
+			act(() => result.current.dispatch({ type: 'pick-reader', readerId: null }));
+		await act(async () => result.current.takeTender());
+		expect(mockBegin).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			missing === 'reader'
+				? 'pos_checkout.choose_a_terminal'
+				: 'pos_checkout.order_not_on_store_yet',
+			{ showToast: true }
+		);
+	});
+	it('never preselects the first reader without a default', () => {
+		mockMethods = [
+			{
+				...terminal,
+				capture: {
+					...terminal.capture,
+					hardware: {
+						...terminal.capture.hardware,
+						default_reader: null,
+						readers: [{ id: 'reader', label: 'Front', status: 'online', default: false }],
+					},
+				},
+			},
+		];
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		expect(result.current.state.readerId).toBeNull();
+		act(() => result.current.pickReader('reader'));
+		expect(result.current.state.readerId).toBe('reader');
+	});
+	it.each(['0.00', '42.95'])('dismisses captured and completes only at zero (%s)', (balance) => {
+		mockLeg = terminalState({
+			phase: 'final',
+			outcome: 'captured',
+			order: {
+				status: 'completed',
+				total: '92.95',
+				paid: '92.95',
+				balance,
+				payment_method: 'terminal',
+				payment_method_title: 'Card',
+			},
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(mockDismiss).toHaveBeenCalledWith('order-1');
+		expect(result.current.state.view).toBe('select');
+		expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(balance === '0.00' ? 1 : 0);
+		if (balance === '0.00') expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: true });
+	});
+	it('retry preserves amount and reader but the next Take mints a new row', async () => {
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
+		await act(async () => result.current.takeTender());
+		const first = mockBegin.mock.calls[0][0].row;
+		act(() => result.current.dispatch({ type: 'set-tab', tab: 'legacy' }));
+		mockLeg = terminalState({ row: first, phase: 'final', outcome: 'failed' });
+		rerender();
+		act(() => result.current.retryTerminalLeg());
+		expect(result.current.state).toMatchObject({
+			tab: 'payments',
+			entryMinor: 5000,
+			readerId: 'reader',
+			methodId: 'terminal',
+		});
+		await act(async () => result.current.takeTender());
+		expect(mockBegin).toHaveBeenCalledTimes(2);
+		expect(mockBegin.mock.calls[1][0].row.id).not.toBe(first.id);
+	});
+
+	it.each([
+		['provider_declined', 'Bank says no', 'Bank says no', false],
+		['wcpos_amount_exceeds_balance', 'Too much', 'pos_checkout.payment_not_recorded', false],
+		['provider_declined', 'Bank says no', null, true],
+	] as const)(
+		'toasts only initial Take refusals (%s, polling=%s)',
+		async (code, message, expected, polling) => {
+			const { result, rerender } = renderHook(() => useTenderFlow(order));
+			act(() => result.current.pickMethod('terminal'));
+			await act(async () => result.current.takeTender());
+			if (polling) {
+				mockLeg = { ...mockLeg!, phase: 'polling' };
+				rerender();
+			}
+			mockLeg = { ...mockLeg!, phase: 'final', outcome: 'failed', error: { code, message } };
+			rerender();
+			if (expected)
+				expect(mockError).toHaveBeenCalledWith(
+					expected,
+					expect.objectContaining({ showToast: true })
+				);
+			else expect(mockError).not.toHaveBeenCalled();
+		}
+	);
+	it('routes actions to the existing leg', async () => {
+		mockLeg = terminalState();
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => {
+			result.current.cancelTerminalLeg();
+			result.current.releaseTerminalLeg();
+			result.current.retryTerminalCapture();
+		});
+		expect(mockCancel).toHaveBeenCalledWith('cashier');
+		expect(mockRelease).toHaveBeenCalledTimes(1);
+		expect(mockCapture).toHaveBeenCalledTimes(1);
+	});
+	it('consumes full capture before the receipt host unmounts checkout', async () => {
+		const { TerminalPaymentsService } = jest.requireActual<
+			typeof import('../../../../../services/terminal-payments/service')
+		>('../../../../../services/terminal-payments/service');
+		resetCheckoutMode();
+		mockRealService = new TerminalPaymentsService({
+			http: {
+				get: jest.fn(),
+				post: async () => ({
+					data: {
+						payment: payment({ status: 'captured', capture_mode: 'server', method_id: 'terminal' }),
+						order: {
+							status: 'completed',
+							total: '92.95',
+							paid: '92.95',
+							balance: '0.00',
+							payment_method: 'terminal',
+							payment_method_title: 'Card',
+						},
+					},
+				}),
+			},
+			mirror: async () => {},
+			onCaptured: () => enterReceipt('order-1'),
+		});
+		function Checkout() {
+			const flow = useTenderFlow(order);
+			return (
+				<>
+					<button onClick={() => flow.pickMethod('terminal')}>Pick</button>
+					<button onClick={() => void flow.takeTender()}>Take</button>
+				</>
+			);
+		}
+		function Host() {
+			return useCheckoutMode().receiptOrders.has('order-1') ? <span>Receipt</span> : <Checkout />;
+		}
+		const host = render(<Host />);
+		fireEvent.click(host.getByRole('button', { name: 'Pick' }));
+		await act(async () => fireEvent.click(host.getByRole('button', { name: 'Take' })));
+
+		expect(getCheckoutModeSnapshot().receiptOrders.has('order-1')).toBe(true);
+		expect(mockRealService.get('order-1')).toBeNull();
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: true });
+		mockRealService.stop();
+		mockRealService = null;
+	});
 });

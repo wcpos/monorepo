@@ -1,11 +1,13 @@
 import * as React from 'react';
 
+import { v4 as uuidv4 } from 'uuid';
 import { useRouter } from 'expo-router';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	derive,
 	fromMinor,
+	mintServerPayment,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
 	readLedger,
@@ -15,6 +17,12 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import {
+	getTerminalPaymentsService,
+	type TerminalLegState,
+} from '../../../../../services/terminal-payments';
+import { useTerminalLeg } from '../payments/server/use-terminal-leg';
+import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
 import { leaveCheckout } from '../checkout-mode';
@@ -24,7 +32,7 @@ import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { useRecordManualPayment, useVoidPayments } from '../payments';
-import { disabledReasonKey } from './labels';
+import { disabledReasonKey, providerErrorMessage } from './labels';
 import {
 	appliedMinor,
 	changeMinor,
@@ -34,7 +42,12 @@ import {
 	tenderReducer,
 	type TenderState,
 } from './tender-state';
-import { buildTenderTiles, legacyPaymentMethods, type TenderTile } from './tiles';
+import {
+	buildTenderTiles,
+	legacyPaymentMethods,
+	selectableReaders,
+	type TenderTile,
+} from './tiles';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 
@@ -42,6 +55,16 @@ const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 
 export interface TenderFlow {
+	terminalLeg: TerminalLegState | null;
+	hasLiveTerminalLeg: boolean;
+	readers: ReturnType<typeof selectableReaders>['readers'];
+	lockToDefault: boolean;
+	pickReader: (id: string) => void;
+	cancelTerminalLeg: () => void;
+	releaseTerminalLeg: () => void;
+	retryTerminalCapture: () => void;
+	dismissTerminalLeg: () => void;
+	retryTerminalLeg: () => void;
 	state: TenderState;
 	dispatch: React.Dispatch<TenderAction>;
 
@@ -85,7 +108,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
 	const busyRef = React.useRef(false);
 	const payload = useRecordField(order, (record) => record.payload);
-	const { store } = useStoreSession();
+	const { store, wpCredentials } = useStoreSession();
+	useResumeTerminalLegs(order);
+	const terminalLeg = useTerminalLeg(order.uuid);
+	const service = getTerminalPaymentsService();
+	const intentRow = React.useRef<string | null>(null);
 	const dp = store.price_num_decimals ?? 2;
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -110,9 +137,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		() => rows.filter(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
 		[rows]
 	);
-	const tiles = React.useMemo(() => buildTenderTiles(methods, { online }), [methods, online]);
+	// useTerminalLeg subscribes to the whole service snapshot, including other readers' holders.
+	const readersInUse = service?.readersInUse();
+	const tiles = buildTenderTiles(methods, { online, readersInUse, currentOrderUuid: order.uuid });
 	const legacyMethods = React.useMemo(() => legacyPaymentMethods(methods), [methods]);
 	const method = state.methodId ? (byId.get(state.methodId) ?? null) : null;
+	const { readers, lockToDefault } = selectableReaders(method, readersInUse, order.uuid);
 	const entryAppliedMinor = appliedMinor(state.entryMinor, balanceMinor);
 	const entryChangeMinor = changeMinor(
 		state.entryMinor,
@@ -143,13 +173,19 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				state.splitShareMinor === null
 					? balanceMinor
 					: Math.min(state.splitShareMinor, balanceMinor);
-			reducerDispatch({ type: 'pick-method', methodId, prefillMinor });
+			const { readers } = selectableReaders(tile.method, service?.readersInUse(), order.uuid);
+			reducerDispatch({
+				type: 'pick-method',
+				methodId,
+				prefillMinor,
+				readerId: readers.find((reader) => reader.isDefault && reader.inUseBy === null)?.id ?? null,
+			});
 		},
-		[balanceMinor, state.splitShareMinor, tiles]
+		[balanceMinor, state.splitShareMinor, tiles, service, order.uuid]
 	);
 
 	const takeTender = React.useCallback(async () => {
-		if (busyRef.current) return;
+		if (busyRef.current || service?.get(order.uuid)) return;
 		busyRef.current = true;
 		setBusy(true);
 		try {
@@ -172,9 +208,57 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			// dead button, so the cashier gets the same line the tile is showing.
 			const selectedTile = tiles.find(({ method: candidate }) => candidate.id === method.id);
 			if (selectedTile?.disabled && selectedTile.reason) {
-				logger.info(t(disabledReasonKey(selectedTile.reason), { title: method.title }), {
-					showToast: true,
+				logger.info(
+					t(disabledReasonKey(selectedTile.reason), {
+						title: method.title,
+						...(typeof selectedTile.reason === 'object' ? selectedTile.reason : {}),
+					}),
+					{
+						showToast: true,
+					}
+				);
+				return;
+			}
+
+			if (method.capture.mode === 'server') {
+				if (!payload.id) {
+					logger.info(t('pos_checkout.order_not_on_store_yet'), { showToast: true });
+					return;
+				}
+				const reader = selectableReaders(method, service?.readersInUse(), order.uuid).readers.find(
+					(reader) => reader.id === state.readerId
+				);
+				if (!reader || reader.inUseBy !== null) {
+					logger.info(
+						reader?.inUseBy
+							? t('pos_checkout.reader_in_use', { number: reader.inUseBy })
+							: t('pos_checkout.choose_a_terminal'),
+						{ showToast: true }
+					);
+					return;
+				}
+				if (!service) throw new Error('terminal_service_unavailable');
+				const minted = mintServerPayment({
+					method,
+					orderId: payload.id,
+					amount: fromMinor(entryAppliedMinor, dp),
+					currency: store.currency ?? '',
+					cashierId: wpCredentials.id ?? 0,
+					storeId: store.id || null,
+					dp,
+					now: () => new Date().toISOString(),
+					uuid: uuidv4,
 				});
+				if (!minted.ok) throw new Error(minted.reason);
+				intentRow.current = minted.row.id;
+				service.begin({
+					orderUuid: order.uuid,
+					orderId: payload.id,
+					orderNumber: payload.number ?? String(payload.id),
+					row: minted.row,
+					reader: reader.id,
+				});
+				reducerDispatch({ type: 'tender-started' });
 				return;
 			}
 
@@ -219,12 +303,87 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		order,
 		recordManualPayment,
 		state.entryMinor,
+		state.readerId,
+		payload.id,
+		payload.number,
+		service,
+		store,
+		wpCredentials,
 		t,
 		tiles,
 	]);
 
+	// Subscribe before receipt routing can unmount checkout; also consume a final leg on remount.
+	React.useEffect(() => {
+		const consumeOutcome = () => {
+			const leg = service?.get(order.uuid);
+			if (!leg) return;
+			if (intentRow.current === leg.row.id && !['idle', 'creating'].includes(leg.phase)) {
+				intentRow.current = null;
+				if (leg.outcome === 'failed' && leg.error)
+					logger.error(providerErrorMessage(leg.error) ?? t('pos_checkout.payment_not_recorded'), {
+						code: ERROR_CODES.PAYMENT_UNEXPECTED,
+						showToast: true,
+					});
+			}
+			if (leg.outcome !== 'captured') return;
+			service?.dismiss(order.uuid);
+			reducerDispatch({ type: 'tender-recorded' });
+			if (toMinor(leg.order?.balance ?? derived.balance, dp) === 0) {
+				void completeOrderFlow({ refresh: true }).catch(() =>
+					logger.error(t('pos_checkout.payment_not_recorded'), {
+						code: ERROR_CODES.PAYMENT_UNEXPECTED,
+						showToast: true,
+					})
+				);
+			}
+		};
+		const unsubscribe = service?.subscribe(consumeOutcome);
+		consumeOutcome();
+		return unsubscribe;
+	}, [terminalLeg?.outcome, service, order.uuid, derived.balance, dp, completeOrderFlow, t]);
+
+	const pickReader = React.useCallback(
+		(id: string) => {
+			if (
+				selectableReaders(method, service?.readersInUse(), order.uuid).readers.some(
+					(reader) => reader.id === id && reader.inUseBy === null
+				)
+			)
+				dispatch({ type: 'pick-reader', readerId: id });
+		},
+		[method, service, order.uuid, dispatch]
+	);
+	const cancelTerminalLeg = React.useCallback(() => {
+		void service?.leg(order.uuid)?.cancel('cashier');
+	}, [service, order.uuid]);
+	const releaseTerminalLeg = React.useCallback(() => {
+		void service?.leg(order.uuid)?.release();
+	}, [service, order.uuid]);
+	const retryTerminalCapture = React.useCallback(() => {
+		void service?.leg(order.uuid)?.capture();
+	}, [service, order.uuid]);
+	const dismissTerminalLeg = React.useCallback(() => {
+		service?.dismiss(order.uuid);
+		dispatch({ type: 'set-tab', tab: 'payments' });
+		dispatch({ type: 'back' });
+	}, [service, order.uuid, dispatch]);
+	const retryTerminalLeg = React.useCallback(() => {
+		const leg = service?.get(order.uuid);
+		if (!leg || leg.phase !== 'final') return;
+		service?.dismiss(order.uuid);
+		dispatch({ type: 'set-tab', tab: 'payments' });
+		dispatch({
+			type: 'pick-method',
+			methodId: leg.row.method_id,
+			prefillMinor: toMinor(leg.row.amount, dp),
+			readerId: leg.row.provider_refs.reader ?? leg.reader,
+		});
+	}, [service, order.uuid, dp, dispatch]);
+
 	const cancelPayment = React.useCallback(async () => {
-		if (busyRef.current) return;
+		if (busyRef.current || (service?.get(order.uuid) && service.get(order.uuid)?.phase !== 'final'))
+			return;
 		busyRef.current = true;
 		setBusy(true);
 		try {
@@ -249,10 +408,19 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [order, router, screenSize, t, voidPayments]);
+	}, [order, router, screenSize, t, voidPayments, service]);
 
 	return React.useMemo(
 		() => ({
+			terminalLeg,
+			readers,
+			lockToDefault,
+			pickReader,
+			cancelTerminalLeg,
+			releaseTerminalLeg,
+			retryTerminalCapture,
+			dismissTerminalLeg,
+			retryTerminalLeg,
 			state,
 			dispatch,
 			dp,
@@ -261,6 +429,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			balanceMinor,
 			rows,
 			liveRows,
+			hasLiveTerminalLeg: Boolean(terminalLeg && terminalLeg.phase !== 'final'),
 			hasLiveLeg: liveRows.length > 0,
 			online,
 			tiles,
@@ -277,6 +446,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			cancelPayment,
 		}),
 		[
+			terminalLeg,
+			readers,
+			lockToDefault,
+			pickReader,
+			cancelTerminalLeg,
+			releaseTerminalLeg,
+			retryTerminalCapture,
+			dismissTerminalLeg,
+			retryTerminalLeg,
 			state,
 			dispatch,
 			dp,

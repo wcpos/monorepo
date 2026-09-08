@@ -85,6 +85,7 @@ jest.mock('@wcpos/components/collapsible', () => ({
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -246,4 +247,34 @@ it('does not silently finish a receipt on Escape', () => {
 	renderHook(() => useCheckoutBack(finishSale, { escape: false }));
 	fireEvent.keyDown(document, { key: 'Escape' });
 	expect(finishSale).not.toHaveBeenCalled();
+});
+
+it('leaves a live terminal leg without whole-order cancellation', () => {
+	mockFlow = makeFlow({ hasLiveLeg: true, hasLiveTerminalLeg: true });
+	mountColumn();
+	fireEvent.click(screen.getByTestId('checkout-back-to-cart'));
+	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(false);
+	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('checkout-cancel-payment')).toBeNull();
+});
+it('offers whole-order cancellation after a final terminal result, not while live', () => {
+	mockFlow = makeFlow({
+		state: { ...initialTenderState, view: 'cancel' },
+		terminalLeg: {
+			phase: 'final',
+			outcome: 'failed',
+			row: { method_id: 'card', amount: '5.00', provider_refs: {} },
+			clientEvents: [],
+		} as unknown as NonNullable<TenderFlow['terminalLeg']>,
+	});
+	const { rerender } = mountColumn();
+	expect(screen.getByTestId('checkout-cancel-confirm')).not.toBeNull();
+	mockFlow = {
+		...mockFlow,
+		terminalLeg: { ...mockFlow.terminalLeg!, phase: 'polling', outcome: null },
+		hasLiveTerminalLeg: true,
+	};
+	rerender(<CheckoutColumn order={order} />);
+	expect(screen.queryByTestId('checkout-cancel-confirm')).toBeNull();
+	expect(screen.getByTestId('checkout-terminal-cancel')).not.toBeNull();
 });

@@ -49,8 +49,11 @@ export class TerminalPaymentsService {
 			{
 				...this.options.http,
 				now: this.options.now ?? Date.now,
-				setTimeout: this.options.setTimeout ?? setTimeout,
-				clearTimeout: this.options.clearTimeout ?? clearTimeout,
+				// Wrapped, not passed: the leg calls `deps.setTimeout(...)`, and a browser's
+				// window.setTimeout invoked with another `this` throws "Illegal invocation"
+				// — the first status read after a successful intent never fired (found live).
+				setTimeout: this.options.setTimeout ?? ((callback, ms) => setTimeout(callback, ms)),
+				clearTimeout: this.options.clearTimeout ?? ((timer) => clearTimeout(timer)),
 				mirror: (response) => this.options.mirror(input.orderUuid, response),
 				onFinal: (state) => {
 					if (state.outcome === 'captured') this.options.onCaptured?.(input.orderUuid, state.order);
@@ -66,6 +69,9 @@ export class TerminalPaymentsService {
 	}
 	get(orderUuid: string): TerminalLegState | null {
 		return this.snapshot.get(orderUuid) ?? null;
+	}
+	leg(orderUuid: string): ServerLeg | undefined {
+		return this.legs.get(orderUuid)?.leg;
 	}
 	dismiss(orderUuid: string): void {
 		const entry = this.legs.get(orderUuid);

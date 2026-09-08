@@ -12,6 +12,7 @@ describe('tenderReducer', () => {
 	it('replaces the pre-fill on the first digit, then shifts later digits in from the right', () => {
 		const picked = tenderReducer(initialTenderState, {
 			type: 'pick-method',
+			readerId: null,
 			methodId: 'cash',
 			prefillMinor: 4295,
 		});
@@ -74,6 +75,7 @@ describe('tenderReducer', () => {
 		});
 		const picked = tenderReducer(split, {
 			type: 'pick-method',
+			readerId: null,
 			methodId: 'cash',
 			prefillMinor: 2148,
 		});
@@ -158,4 +160,27 @@ describe('tender money helpers', () => {
 		expect(evenSplitShareMinor(0, 3)).toBe(0);
 		expect(evenSplitShareMinor(4295, 1)).toBe(4295);
 	});
+});
+
+it('carries and changes the reader; starting clears entry but preserves the split share', () => {
+	const picked = tenderReducer(initialTenderState, {
+		type: 'pick-method',
+		methodId: 'terminal',
+		prefillMinor: 500,
+		readerId: 'a',
+	});
+	expect(picked.readerId).toBe('a');
+	const changed = tenderReducer(picked, { type: 'pick-reader', readerId: 'b' });
+	expect(changed.readerId).toBe('b');
+	const started = tenderReducer({ ...changed, splitShareMinor: 500 }, { type: 'tender-started' });
+	expect(started).toMatchObject({
+		view: 'select',
+		methodId: null,
+		readerId: null,
+		entryMinor: 0,
+		splitShareMinor: 500,
+	});
+	for (const type of ['back', 'tender-recorded', 'reset'] as const) {
+		expect(tenderReducer(changed, { type }).readerId).toBeNull();
+	}
 });

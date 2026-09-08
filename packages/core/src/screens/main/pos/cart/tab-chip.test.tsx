@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 import { type PaymentRow, withLedger } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
@@ -67,3 +67,27 @@ it.each([
 		expect(chip?.dataset.variant).toBe(variant);
 	}
 });
+
+it.each(['pending', 'authorized'] as const)(
+	'server %s takes precedence over checkout and partly paid',
+	(status) => {
+		enterCheckout('a');
+		const order = {
+			uuid: 'a',
+			payload: {
+				total: '10.00',
+				meta_data: withLedger([], [
+					{ id: 'cash', status: 'captured', amount: '2.00', tendered: null },
+					{ id: 'terminal', status, amount: '8.00', capture_mode: 'server', tendered: null },
+				] as PaymentRow[]),
+			},
+		} as EngineRecord<'orders'>;
+		const { rerender } = render(<TabChip order={order} />);
+		expect(screen.getByTestId('open-order-chip-a').textContent).toBe(
+			'Waiting for terminal · $8.00'
+		);
+		act(() => enterReceipt('a'));
+		rerender(<TabChip order={order} />);
+		expect(screen.getByTestId('open-order-chip-a').textContent).toBe('Paid · receipt');
+	}
+);

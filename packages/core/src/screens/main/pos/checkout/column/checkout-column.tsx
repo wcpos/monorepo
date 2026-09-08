@@ -31,12 +31,14 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 	const { storageDegraded } = useStorageMoneyPathGuard();
 	const t = useT();
 	const back = React.useCallback(() => {
-		if (flow.hasLiveLeg) flow.dispatch({ type: 'request-cancel' });
+		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
 		else leaveCheckout(order.uuid);
 	}, [flow, order.uuid]);
 	useCheckoutBack(back);
 	const body = (() => {
-		if (flow.state.view === 'cancel') {
+		// A live terminal leg is never hidden behind another view: the pane below
+		// shows it (with its own Cancel) until the server says the leg is over.
+		if (flow.state.view === 'cancel' && !flow.hasLiveTerminalLeg) {
 			return <CancelPaymentView flow={flow} format={format} />;
 		}
 		if (flow.state.tab === 'legacy') {
@@ -96,7 +98,7 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 						</TabsTrigger>
 					</TabsList>
 				</Tabs>
-				{flow.hasLiveLeg && flow.state.view !== 'cancel' ? (
+				{flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
 					<Button
 						variant="ghost-destructive"
 						size="sm"

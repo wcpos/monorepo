@@ -9,6 +9,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
 
+import { TerminalLegView } from './terminal-leg-view';
 import { disabledReasonKey, kindLabelKey } from './labels';
 import { useT } from '../../../../../contexts/translations';
 
@@ -30,6 +31,8 @@ interface Props {
  */
 export function TenderPane({ flow, format, compact }: Props) {
 	const t = useT();
+
+	if (flow.terminalLeg) return <TerminalLegView flow={flow} format={format} />;
 
 	if (flow.tiles.length === 0) {
 		return (
@@ -109,7 +112,10 @@ function PaymentTile({
 				</Text>
 				{tile.reason ? (
 					<Text className="text-warning text-xs">
-						{t(disabledReasonKey(tile.reason), { title: tile.method.title })}
+						{t(disabledReasonKey(tile.reason), {
+							title: tile.method.title,
+							...(typeof tile.reason === 'object' ? tile.reason : {}),
+						})}
 					</Text>
 				) : null}
 			</VStack>
@@ -132,6 +138,11 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 	const t = useT();
 	const method = flow.method!;
 	const givesChange = method.capabilities.change === true;
+	const server = method.capture.mode === 'server';
+	const locked = flow.lockToDefault || (flow.readers.length === 1 && flow.readers[0].isDefault);
+	const selectedReader = flow.readers.find(({ id }) => id === flow.state.readerId);
+	const needsReader = server && (!selectedReader || selectedReader.inUseBy !== null);
+	const reason = flow.tiles.find((tile) => tile.method.id === method.id)?.reason;
 
 	return (
 		<VStack space="sm" testID="checkout-keypad" className="max-w-sm">
@@ -148,6 +159,44 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 					</Text>
 				) : null}
 			</VStack>
+
+			{/* The terminal choice sits with the amount, above the keypad: for a card
+			    leg the amount is already right and WHICH reader is the decision. */}
+			{server ? (
+				<VStack space="xs">
+					{locked ? (
+						<Text testID="checkout-reader-locked" className="text-muted-foreground text-sm">
+							{t('pos_checkout.reader_line', { label: flow.readers[0]?.label ?? '' })}
+						</Text>
+					) : (
+						<View className="flex-row flex-wrap gap-2">
+							{flow.readers.map((reader) => (
+								<VStack key={reader.id} space="xs">
+									<Button
+										size="sm"
+										variant={flow.state.readerId === reader.id ? 'default' : 'secondary'}
+										testID={`checkout-reader-${reader.id}`}
+										disabled={flow.busy || reader.inUseBy !== null}
+										onPress={() => flow.pickReader(reader.id)}
+									>
+										<ButtonText>{reader.label}</ButtonText>
+									</Button>
+									{reader.inUseBy !== null ? (
+										<Text className="text-muted-foreground text-xs">
+											{t('pos_checkout.reader_in_use', { number: reader.inUseBy })}
+										</Text>
+									) : null}
+								</VStack>
+							))}
+						</View>
+					)}
+					{needsReader ? (
+						<Text className="text-muted-foreground text-sm">
+							{t('pos_checkout.choose_a_terminal')}
+						</Text>
+					) : null}
+				</VStack>
+			) : null}
 
 			<View className="flex-row flex-wrap gap-2">
 				{givesChange ? (
@@ -196,6 +245,15 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 				</HStack>
 			</VStack>
 
+			{reason ? (
+				<Text className="text-warning text-sm">
+					{t(disabledReasonKey(reason), {
+						title: method.title,
+						...(typeof reason === 'object' ? reason : {}),
+					})}
+				</Text>
+			) : null}
+
 			<HStack className="gap-2">
 				<Button
 					variant="success"
@@ -203,7 +261,7 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 					className="flex-1"
 					testID="checkout-take-payment"
 					loading={flow.busy}
-					disabled={flow.busy || flow.entryAppliedMinor <= 0}
+					disabled={flow.busy || flow.entryAppliedMinor <= 0 || needsReader || Boolean(reason)}
 					onPress={() => void flow.takeTender()}
 				>
 					<ButtonText>
@@ -245,7 +303,7 @@ function KeypadKey({
 			testID={testID ?? `checkout-key-${value}`}
 			onPress={() => flow.dispatch({ type: 'key', key: value })}
 		>
-			{icon ? <Icon name={icon} /> : <ButtonText className="text-lg">{label}</ButtonText>}
+			{icon ? <Icon name={icon} /> : <ButtonText>{label}</ButtonText>}
 		</Button>
 	);
 }
