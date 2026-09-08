@@ -31,7 +31,7 @@ export function TerminalLegView({
 	const final = leg.phase === 'final';
 	const method = flow.tiles.find(({ method }) => method.id === row.method_id)?.method;
 	const hardware = method?.capture.hardware;
-	const readerId = row.provider_refs.reader ?? leg.reader ?? '';
+	const readerId = row.provider_refs?.reader ?? leg.reader ?? '';
 	const readerLabel =
 		hardware && 'readers' in hardware
 			? (hardware.readers.find(({ id }) => id === readerId)?.label ?? readerId)

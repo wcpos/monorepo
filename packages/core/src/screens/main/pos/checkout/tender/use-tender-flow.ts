@@ -404,7 +404,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			type: 'pick-method',
 			methodId: leg.row.method_id,
 			prefillMinor: toMinor(leg.row.amount, dp),
-			readerId: leg.row.provider_refs.reader ?? leg.reader,
+			readerId: leg.row.provider_refs?.reader ?? leg.reader,
 		});
 		setTenderMethod(order.uuid, leg.row.method_id);
 	}, [service, order.uuid, dp, dispatch]);

@@ -222,7 +222,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		const code = body?.code;
 		const changes: Partial<ServerLegState> = {};
 		if (code && code !== 'wcpos_payment_locked' && code !== 'wcpos_invalid_transition') {
-			const detail = body?.data.detail as { code?: string; message?: string } | undefined;
+			const detail = body?.data?.detail as { code?: string; message?: string } | undefined;
 			changes.error = {
 				code: code === 'wcpos_provider_error' ? (detail?.code ?? code) : code,
 				message:
@@ -238,7 +238,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (!current(seq)) return;
 		if (code === 'wcpos_payment_locked') {
 			setState({ capturing: false, phase: 'polling' });
-			schedule((body?.data.retry_after ?? POLL_CADENCE_MS / 1000) * 1000);
+			schedule((body?.data?.retry_after ?? POLL_CADENCE_MS / 1000) * 1000);
 			return;
 		}
 		if (code === 'wcpos_invalid_transition' && (route === 'capture' || route === 'void')) {
@@ -271,7 +271,7 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 							status: 'failed' as const,
 							failure_reason: code === 'wcpos_payment_not_found' ? 'not_found' : code,
 						};
-			await applyResponse({ payment: row, order: body?.data.order }, seq);
+			await applyResponse({ payment: row, order: body?.data?.order }, seq);
 			return;
 		}
 		// An intent the cashier already cancelled is not retried: the server may or may
@@ -364,10 +364,29 @@ export function createServerLeg(deps: ServerLegDeps, input: ServerLegInput) {
 		if (!active() || !state.releaseAvailable) return;
 		sequence++;
 		clearTimer();
-		event('Leg released', 'warning');
+		const seq = sequence;
+		// The local void is written BEFORE the leg is final: a final leg can be
+		// dismissed, and a dismissed leg whose ledger row is still live would only be
+		// resumed by the next render. A failed write leaves the leg live, with the
+		// release still on offer and the reason in `error`.
 		const row = { ...state.row, status: 'voided' as const, failure_reason: 'released' };
+		try {
+			await deps.mirror({ payment: row, order: state.order });
+		} catch (error) {
+			if (!current(seq)) return;
+			setState({
+				error: {
+					code: 'mirror_failed',
+					message: error instanceof Error ? error.message : 'mirror_failed',
+				},
+			});
+			schedule(POLL_CADENCE_MS);
+			return;
+		}
+		if (!current(seq)) return;
+		event('Leg released', 'warning');
+		setState({ row });
 		finish('released');
-		await mirror({ payment: row, order: state.order }, sequence);
 	}
 	function stop() {
 		stopped = true;

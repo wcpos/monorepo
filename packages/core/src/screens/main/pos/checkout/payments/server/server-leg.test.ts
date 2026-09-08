@@ -282,6 +282,22 @@ it.each(['pending', 'authorized', 'captured'] as const)(
 		).toHaveLength(1);
 	}
 );
+it('a release whose local write fails stays live with the release still on offer', async () => {
+	const c = setup(true, { void_requested_at: '2026-01-01T00:00:00Z' });
+	c.mirror.mockRejectedValueOnce(new Error('disk full'));
+	await c.leg.release();
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'polling',
+		outcome: null,
+		releaseAvailable: true,
+		error: { code: 'mirror_failed', message: 'disk full' },
+	});
+	await c.leg.release();
+	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'released' });
+	expect(c.mirror).toHaveBeenLastCalledWith(
+		expect.objectContaining({ payment: expect.objectContaining({ status: 'voided' }) })
+	);
+});
 it('resume uses creation time, never intents, and restores cancellation flags', async () => {
 	jest.setSystemTime(epoch + 120000);
 	const c = setup(true, { void_requested_at: new Date(epoch).toISOString() });
