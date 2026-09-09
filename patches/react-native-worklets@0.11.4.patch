@@ -1,0 +1,88 @@
+diff --git a/bundleMode/index.js b/bundleMode/index.js
+index 9a1b692f81b0c61c3fef22ef756c5392b483846c..bb413a2ca05a28aefb66377cd120605493e61003 100644
+--- a/bundleMode/index.js
++++ b/bundleMode/index.js
+@@ -37,17 +37,26 @@ const workletsLibEntryPath = path.posix.join(
+   'module',
+   'index.js'
+ );
++const realReactNativeModuleName = path.posix.join(
++  workletsPackageName,
++  'bundleMode',
++  'realReactNative'
++);
+ 
+ function bundleModeResolveRequest(
+   /** @type {any} */ context,
+   /** @type {string} */ moduleName,
+   /** @type {any} */ platform,
+-  /** @type {any} */ userConfigResolveRequest
++  /** @type {any} */ userConfigResolveRequest,
++  /** @type {string} */ realReactNativePath
+ ) {
+   if (moduleName.startsWith(workletsDirPath)) {
+     const fullModuleName = path.join(workletsPackageParentDir, moduleName);
+     return { type: 'sourceFile', filePath: fullModuleName };
+   }
++  if (moduleName === realReactNativeModuleName) {
++    return { type: 'sourceFile', filePath: realReactNativePath };
++  }
+   if (
+     moduleName === 'react-native' &&
+     context.originModulePath !== reactNativeShimPath
+@@ -75,6 +84,10 @@ function bundleModeResolveRequest(
+ }
+ 
+ /** Use in React Native Community projects. */
++const projectRoot = process.cwd();
++const bundleModeRealReactNativePath = require.resolve('react-native', {
++  paths: [projectRoot],
++});
+ const bundleModeMetroConfig = {
+   serializer: {
+     createModuleIdFactory: bundleModeCreateModuleIdFactory,
+@@ -89,6 +102,12 @@ const bundleModeMetroConfig = {
+         const fullModuleName = path.join(workletsPackageParentDir, moduleName);
+         return { type: 'sourceFile', filePath: fullModuleName };
+       }
++      if (moduleName === realReactNativeModuleName) {
++        return {
++          type: 'sourceFile',
++          filePath: bundleModeRealReactNativePath,
++        };
++      }
+       if (
+         moduleName === 'react-native' &&
+         context.originModulePath !== reactNativeShimPath
+@@ -118,6 +137,11 @@ const bundleModeMetroConfig = {
+ function getBundleModeMetroConfig(/** @type {any} */ config) {
+   config.serializer.createModuleIdFactory = bundleModeCreateModuleIdFactory;
+ 
++  const projectRoot = config.projectRoot || process.cwd();
++  const realReactNativePath = require.resolve('react-native', {
++    paths: [projectRoot],
++  });
++
+   const currentResolveRequest = config?.resolver?.resolveRequest;
+   config.resolver.resolveRequest = (
+     /** @type {any} */ context,
+@@ -128,7 +152,8 @@ function getBundleModeMetroConfig(/** @type {any} */ config) {
+       context,
+       moduleName,
+       platform,
+-      currentResolveRequest
++      currentResolveRequest,
++      realReactNativePath
+     );
+ 
+   const currentGetTransformOptions = config?.transformer?.getTransformOptions;
+diff --git a/bundleMode/shims/reactNativeShim.js b/bundleMode/shims/reactNativeShim.js
+index c711083ce54249f48e60f392ddd832a856eba039..217ec1cc91b0b0898ef28973fd9ec9aa24a977e0 100644
+--- a/bundleMode/shims/reactNativeShim.js
++++ b/bundleMode/shims/reactNativeShim.js
+@@ -18,4 +18,4 @@ if (
+   );
+ }
+ 
+-module.exports = require('react-native');
++module.exports = require('react-native-worklets/bundleMode/realReactNative');
