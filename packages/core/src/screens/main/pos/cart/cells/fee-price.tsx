@@ -26,20 +26,22 @@ export function FeePrice({ row }: CellContext<Props, 'price'>) {
 	const { percent, amount } = getFeeLineData(item);
 
 	/**
-	 *
+	 * The till no longer accepts a NEW negative fee, but historical orders still carry
+	 * them and this cell renders them. A negative value is therefore IGNORED rather than
+	 * clamped: the input re-emits its current value on blur, and clamping would have
+	 * turned "focus and leave" on a legacy discount fee into a silent rewrite to zero.
 	 */
+	const onAmount = (next: number) => {
+		if (next < 0) return;
+		void updateFeeLine(uuid, { amount: String(next) });
+	};
+
 	return (
 		<HStack space="xs" className="justify-center">
 			{percent ? (
-				<NumberInput
-					value={String(amount)}
-					onChangeText={(amount) => updateFeeLine(uuid, { amount: String(Math.max(0, amount)) })}
-				/>
+				<NumberInput value={String(amount)} onChangeText={onAmount} />
 			) : (
-				<CurrencyInput
-					value={String(amount)}
-					onChangeText={(amount) => updateFeeLine(uuid, { amount: String(Math.max(0, amount)) })}
-				/>
+				<CurrencyInput value={String(amount)} onChangeText={onAmount} />
 			)}
 			{percent && <Icon name="percent" size="sm" />}
 		</HStack>

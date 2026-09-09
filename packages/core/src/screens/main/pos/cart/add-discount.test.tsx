@@ -212,15 +212,21 @@ it.each(['add', 'edit'])('rejects negative fees in the %s form', async (mode) =>
 	expect(mockFee).not.toHaveBeenCalled();
 	expect(mockUpdate).not.toHaveBeenCalled();
 });
-it.each([false, true])('clamps a typed negative fee price, percent=%p', (percent) => {
-	mockPercent = percent;
-	mockFeeAmount = '-10';
-	const props = { row: { original: { item: {}, uuid: 'fee' } } } as React.ComponentProps<
-		typeof FeePrice
-	>;
-	render(<FeePrice {...props} />);
-	expect((screen.getByTestId('price') as HTMLInputElement).value).toBe('-10');
-	expect(mockUpdate).not.toHaveBeenCalled();
-	fireEvent.change(screen.getByTestId('price'), { target: { value: '-5' } });
-	expect(mockUpdate).toHaveBeenCalledWith('fee', { amount: '0' });
-});
+it.each([false, true])(
+	'ignores a negative fee price so a legacy discount fee is never rewritten, percent=%p',
+	(percent) => {
+		mockPercent = percent;
+		mockFeeAmount = '-10';
+		const props = { row: { original: { item: {}, uuid: 'fee' } } } as React.ComponentProps<
+			typeof FeePrice
+		>;
+		render(<FeePrice {...props} />);
+		expect((screen.getByTestId('price') as HTMLInputElement).value).toBe('-10');
+		// The input re-emits its own value on blur: a legacy negative fee must survive that.
+		fireEvent.change(screen.getByTestId('price'), { target: { value: '-10' } });
+		fireEvent.change(screen.getByTestId('price'), { target: { value: '-5' } });
+		expect(mockUpdate).not.toHaveBeenCalled();
+		fireEvent.change(screen.getByTestId('price'), { target: { value: '5' } });
+		expect(mockUpdate).toHaveBeenCalledWith('fee', { amount: '5' });
+	}
+);
