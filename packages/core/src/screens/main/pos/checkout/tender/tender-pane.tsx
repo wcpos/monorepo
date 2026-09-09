@@ -57,8 +57,7 @@ export function TenderPane({ flow, format, compact }: Props) {
 
 	if (flow.terminalLeg) return <TerminalLegView flow={flow} format={format} />;
 
-	// Tiles are never shown for a save that is unresolved or refused; only a save queued
-	// offline lets the capability rule on each tile decide.
+	// A refused save offers no tiles; a queued offline save uses each tile’s capability rule.
 	if (flow.saveState?.kind === 'rejected') {
 		return <RefusedPane rejection={flow.saveState} />;
 	}
@@ -66,17 +65,31 @@ export function TenderPane({ flow, format, compact }: Props) {
 		return (
 			<VStack space="md" className="flex-1">
 				<View className="flex-row flex-wrap gap-2">
-					{Array.from({ length: flow.tiles.length || 4 }, (_, index) => (
-						<View
-							key={index}
-							testID="checkout-tile-skeleton"
-							className={`bg-muted h-[4.25rem] rounded-md ${
-								compact ? 'min-w-[45%] flex-1' : 'min-w-[9.5rem]'
-							}`}
-						/>
-					))}
+					{flow.tiles.length > 0
+						? flow.tiles.map((tile) => (
+								<PaymentTile
+									key={tile.method.id}
+									tile={tile}
+									selected={flow.state.methodId === tile.method.id}
+									compact={compact}
+									saving
+									onPress={() => flow.pickMethod(tile.method.id)}
+								/>
+							))
+						: Array.from({ length: 4 }, (_, index) => (
+								<View
+									key={index}
+									testID="checkout-tile-skeleton"
+									className={`bg-muted h-[4.25rem] rounded-md ${
+										compact ? 'min-w-[45%] flex-1' : 'min-w-[9.5rem]'
+									}`}
+								/>
+							))}
 				</View>
-				<Text className="text-muted-foreground text-sm">{t('pos_checkout.saving_order')}</Text>
+				{/* Each real tile already says it; the line below is for the skeleton fallback only. */}
+				{flow.tiles.length === 0 ? (
+					<Text className="text-muted-foreground text-sm">{t('pos_checkout.saving_order')}</Text>
+				) : null}
 				{slow ? (
 					<Text testID="checkout-save-slow" className="text-warning text-sm">
 						{t('pos_checkout.store_not_answering')}
@@ -111,11 +124,17 @@ export function TenderPane({ flow, format, compact }: Props) {
 				<TenderKeypad flow={flow} format={format} />
 			) : (
 				<Text className="text-muted-foreground text-sm">
-					{flow.state.splitShareMinor === null
-						? t('pos_checkout.choose_a_payment_type')
-						: t('pos_checkout.choose_payment_for_amount', {
-								amount: format(flow.state.splitShareMinor),
-							})}
+					{flow.state.splitPlan
+						? t('pos_checkout.choose_payment_for_leg', {
+								n: flow.state.splitPlan.taken + 1,
+								ways: flow.state.splitPlan.ways,
+								amount: format(flow.thisPaymentMinor),
+							})
+						: t(
+								flow.state.customAmount
+									? 'pos_checkout.choose_payment_then_amount'
+									: 'pos_checkout.choose_a_payment_type'
+							)}
 				</Text>
 			)}
 		</VStack>
@@ -157,11 +176,13 @@ function RefusedPane({ rejection }: { rejection: Extract<OrderSaveState, { kind:
 function PaymentTile({
 	tile,
 	selected,
+	saving,
 	compact,
 	onPress,
 }: {
 	tile: TenderTile;
 	selected: boolean;
+	saving?: boolean;
 	compact?: boolean;
 	onPress: () => void;
 }) {
@@ -171,7 +192,7 @@ function PaymentTile({
 		<Button
 			testID={`checkout-tile-${tile.method.id}`}
 			variant={selected ? 'outline-primary' : 'outline'}
-			disabled={tile.disabled}
+			disabled={saving || tile.disabled}
 			onPress={onPress}
 			className={`h-auto items-stretch justify-start px-3 py-3 ${
 				compact ? 'min-w-[45%] flex-1' : 'min-w-[9.5rem]'
@@ -189,7 +210,11 @@ function PaymentTile({
 				<Text className="text-base font-semibold" decodeHtml>
 					{tile.method.title}
 				</Text>
-				{tile.reason ? (
+				{saving ? (
+					<Text testID="checkout-tile-saving" className="text-muted-foreground text-xs">
+						{t('pos_checkout.saving_order')}
+					</Text>
+				) : tile.reason ? (
 					<Text className="text-warning text-xs">
 						{t(disabledReasonKey(tile.reason), {
 							title: tile.method.title,
@@ -228,6 +253,9 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 			<VStack space="xs">
 				<Text className="text-muted-foreground text-xs tracking-wider uppercase">
 					{givesChange ? t('pos_checkout.tendered') : method.title}
+					{flow.state.splitPlan ? (
+						<Text testID="checkout-keypad-leg">{` · ${t('pos_checkout.payment_n_of', { n: flow.state.splitPlan.taken + 1, ways: flow.state.splitPlan.ways })}`}</Text>
+					) : null}
 				</Text>
 				<Text testID="checkout-entry" className="text-4xl font-bold tabular-nums">
 					{format(flow.state.entryMinor)}
@@ -343,8 +371,11 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 					disabled={flow.busy || flow.entryAppliedMinor <= 0 || needsReader || Boolean(reason)}
 					onPress={() => void flow.takeTender()}
 				>
-					<ButtonText>
-						{t('pos_checkout.take_amount', { amount: format(flow.entryAppliedMinor) })}
+					<ButtonText decodeHtml>
+						{t('pos_checkout.take_amount_in', {
+							amount: format(flow.entryAppliedMinor),
+							method: method.title,
+						})}
 					</ButtonText>
 				</Button>
 				<Button

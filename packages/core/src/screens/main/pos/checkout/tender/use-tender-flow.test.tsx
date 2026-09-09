@@ -327,6 +327,30 @@ describe('useTenderFlow', () => {
 		}
 	);
 
+	it('treats cash above a planned share as change, not a bigger leg', () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
+		expect(result.current.entryAppliedMinor).toBe(4648);
+		expect(result.current.entryChangeMinor).toBe(352);
+	});
+	it('lets the last planned cash leg take the whole remaining balance', () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'pick-method',
+				methodId: 'pos_cash',
+				prefillMinor: 4648,
+				readerId: null,
+			})
+		);
+		act(() => result.current.dispatch({ type: 'tender-recorded' }));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.state.splitPlan).toMatchObject({ taken: 1 });
+		expect(result.current.entryAppliedMinor).toBe(result.current.balanceMinor);
+	});
 	it('pre-fills a picked method with the ledger-derived balance', () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 
@@ -433,11 +457,55 @@ describe('useTenderFlow', () => {
 
 	it('uses a split share as the next tender pre-fill', () => {
 		const { result } = renderHook(() => useTenderFlow(order));
-		act(() => result.current.dispatch({ type: 'set-split-share', minor: 4648 }));
+		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
 
 		act(() => result.current.pickMethod('pos_cash'));
 
 		expect(result.current.state.entryMinor).toBe(4648);
+	});
+
+	it('derives this payment, custom prefill, and quick amounts from the entry', () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.thisPaymentMinor).toBe(9295);
+		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		expect(result.current.thisPaymentMinor).toBe(4648);
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.thisPaymentMinor).toBe(4648);
+		expect(result.current.quickAmountsMinor).toEqual([4648, 5000]);
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 1200 }));
+		expect(result.current.thisPaymentMinor).toBe(1200);
+		expect(result.current.afterThisPaymentMinor).toBe(8095);
+		expect(result.current.quickAmountsMinor).toEqual([1200, 1500, 2000, 5000]);
+		act(() => result.current.dispatch({ type: 'back' }));
+		act(() => result.current.dispatch({ type: 'arm-custom-amount' }));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.state.entryMinor).toBe(0);
+		expect(result.current.thisPaymentMinor).toBe(0);
+	});
+	it('advances the plan only for a recorded leg and shows its actual ledger amount', async () => {
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() => result.current.pickMethod('pos_cash'));
+		mockRecordManualPayment.mockResolvedValueOnce({ kind: 'refused' });
+		await act(async () => result.current.takeTender());
+		expect(result.current.state.splitPlan?.taken).toBe(0);
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
+		mockPayload.meta_data = [
+			{
+				key: '_wcpos_payments',
+				value: { schema: 1, payments: [payment(), payment({ id: 'void', status: 'voided' })] },
+			},
+		];
+		await act(async () => result.current.takeTender());
+		rerender();
+		expect(result.current.state.splitPlan?.taken).toBe(1);
+		expect(result.current.splitLegs).toEqual([
+			{ minor: 5000, state: 'done' },
+			{ minor: 4295, state: 'now' },
+		]);
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.state.entryMinor).toBe(4295);
 	});
 
 	it('does not pick a disabled tile', () => {
