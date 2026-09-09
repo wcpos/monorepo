@@ -12,6 +12,7 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
+import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
 import type {
 	PrinterProfileDocument,
 	TemplateDocument,
@@ -199,7 +200,8 @@ export function PrintingSettings() {
 	}, []);
 
 	const nonBuiltInCount = printers.filter((p) => !p.isBuiltIn).length;
-	const hasVisiblePrinterTargets = printers.some((p) => p.connectionType !== 'system');
+	// A Windows winspool queue is also `connectionType: 'system'`; only the Print Dialog is invisible.
+	const hasVisiblePrinterTargets = printers.some((p) => !usesSystemPrintDialog(p));
 
 	return (
 		<VStack className="gap-5">

@@ -15,6 +15,7 @@ import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { PrinterProfile } from '@wcpos/printer';
+import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
 
 import { printerIconName } from './utils';
 import { useCopySetupReport } from '../printer/copy-setup-report';
@@ -45,7 +46,7 @@ export function PrinterRow({
 	const t = useT();
 
 	let connectionLabel: string;
-	if (profile.connectionType === 'system') {
+	if (usesSystemPrintDialog(profile)) {
 		connectionLabel = `${t('settings.connection_print_dialog')} · ${t(
 			'settings.connection_built_in'
 		)}`;
@@ -61,7 +62,14 @@ export function PrinterRow({
 		connectionLabel = `${provider} · ${t('settings.managed_by_wcpos')}`;
 	} else {
 		const host = profile.address || '?';
-		const base = profile.port ? `${host}:${profile.port}` : host;
+		// A 'system' profile that is not the Print Dialog is a Windows installed queue; its address is
+		// the queue key, not something a cashier recognises.
+		const base =
+			profile.connectionType === 'system'
+				? t('settings.setup_source_system')
+				: profile.port
+					? `${host}:${profile.port}`
+					: host;
 		if (profile.vendor === 'epson') {
 			connectionLabel = `${base} · Epson`;
 		} else if (profile.vendor === 'star') {

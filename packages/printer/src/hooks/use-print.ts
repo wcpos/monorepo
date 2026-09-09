@@ -7,6 +7,7 @@ import { prepareSystemPrintHtml } from '../print-html';
 import { PrinterService } from '../printer-service';
 import { useOptionalRasterize } from '../raster/rasterize-provider';
 import { isOrderBasedCloudProfile } from '../transport/cloud-adapter';
+import { usesSystemPrintDialog } from '../transport/device-key';
 import { printFromUrl } from './print-from-url';
 
 import type { ReceiptData } from '../encoder/types';
@@ -148,7 +149,7 @@ export function usePrint(options: UsePrintOptions) {
 					throw new Error('Order-based cloud printing requires a template id');
 				}
 				await service.printOrderViaCloud(printerProfile, orderId, templateId);
-			} else if (printerProfile && printerProfile.connectionType !== 'system' && receiptData) {
+			} else if (printerProfile && !usesSystemPrintDialog(printerProfile) && receiptData) {
 				const normalised = mapReceiptData(receiptData as Record<string, any>);
 
 				if (printerProfile.fullReceiptRaster) {

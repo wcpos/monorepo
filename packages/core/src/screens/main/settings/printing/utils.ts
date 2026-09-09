@@ -1,5 +1,6 @@
 import type { IconName } from '@wcpos/components/icon';
 import type { PrinterProfile } from '@wcpos/printer';
+import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
 
 /** Sentinel value for the "Auto" routing option in the template printer Select. */
 export const AUTO_VALUE = '__auto__';
@@ -8,8 +9,10 @@ export const AUTO_VALUE = '__auto__';
  * Icon for a printer profile row — `desktop` for the built-in System Print Dialog,
  * `printer` for every hardware connection type (network / bluetooth / usb).
  */
-export function printerIconName(profile: { connectionType: string }): IconName {
-	return profile.connectionType === 'system' ? 'desktop' : 'printer';
+export function printerIconName(
+	profile: Pick<PrinterProfile, 'connectionType'> & { address?: string }
+): IconName {
+	return usesSystemPrintDialog(profile) ? 'desktop' : 'printer';
 }
 
 /**
