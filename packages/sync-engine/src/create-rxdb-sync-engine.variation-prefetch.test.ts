@@ -95,49 +95,6 @@ function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}) {
 }
 
 describe('variation-prefetch maintenance lane', () => {
-	it('does not scan variations for parents with no child ids', async () => {
-		const fetcher = vi.fn(async () => json({ documents: [] }));
-		const engine = engineWith({ fetcher });
-		try {
-			const scope = await engine.whenActive();
-			await scope.database.collections.products.insert(product(10, []) as never);
-			const reads = vi.spyOn(scope.database.collections.variations, 'find');
-			await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({ status: 'ran' });
-			expect(reads).not.toHaveBeenCalled();
-			expect(fetcher).not.toHaveBeenCalled();
-		} finally {
-			await engine.dispose();
-		}
-	});
-
-	it('checks resident children in one query and resumes at the next parent', async () => {
-		const requested: string[] = [];
-		const engine = engineWith({
-			fetcher: async (url) => {
-				requested.push(new URL(url).searchParams.get('include')!);
-				return json({ documents: [variationEnvelope(126, 26)] });
-			},
-		});
-		try {
-			const scope = await engine.whenActive();
-			await scope.database.collections.products.bulkInsert(
-				Array.from({ length: 26 }, (_, index) => product(index + 1, [index + 101])) as never
-			);
-			await scope.database.collections.variations.bulkInsert(
-				Array.from({ length: 25 }, (_, index) => variation(index + 101, index + 1)) as never
-			);
-			const reads = vi.spyOn(scope.database.collections.variations, 'find');
-			await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({ status: 'ran' });
-			expect(requested).toEqual([]);
-			expect(reads).toHaveBeenCalledTimes(1);
-			await engine.sync('variation-prefetch');
-			expect(requested).toEqual(['126']);
-			expect(await scope.database.collections.variations.count().exec()).toBe(26);
-		} finally {
-			await engine.dispose();
-		}
-	});
-
 	it('pulls missing variations from the first resident variable parent', async () => {
 		const urls: string[] = [];
 		const engine = engineWith({

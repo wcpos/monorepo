@@ -50,6 +50,44 @@ test.describe('POS Cart', () => {
 		await expectCartAddMeasurement(page, testInfo, 300);
 	});
 
+	test('should absorb twenty rapid adds and paint the exact quantity', async ({
+		posPage: page,
+	}, testInfo) => {
+		await addFirstProductToCart(page);
+		// The helper can add via search-and-Enter on secretless forks; the burst
+		// still clicks the filtered product tile, matching the measurement helper's IDs.
+		const tile = page.getByTestId(/^product-tile(?:-.*)?$/).first();
+		// Provisional: after two green four-device runs, tighten to observed CI
+		// maximum plus ~30%, as with assert-cart-add-timing.yml.
+		const budgetMs = 8_000;
+		const burstStartedAt = await page.evaluate(() => performance.now());
+		let settledMs: number | null = null;
+		try {
+			for (let index = 0; index < 19; index += 1) {
+				await tile.click();
+				if (index < 18) await page.waitForTimeout(200);
+			}
+			await expect(page.getByTestId('cart-quantity-input').first()).toHaveText('20', {
+				timeout: 20_000,
+			});
+			settledMs = await page.evaluate((start) => performance.now() - start, burstStartedAt);
+			expect(settledMs, 'First burst click → quantity 20 in the DOM').toBeLessThanOrEqual(budgetMs);
+		} finally {
+			await testInfo.attach('cart-add-burst', {
+				body: JSON.stringify({
+					metric: 'first-burst-click-to-quantity-20-in-dom',
+					platform: 'web',
+					project: testInfo.project.name,
+					adds: 20,
+					paceMs: 200,
+					budgetMs,
+					settledMs,
+				}),
+				contentType: 'application/json',
+			});
+		}
+	});
+
 	test('should update quantity in cart', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 

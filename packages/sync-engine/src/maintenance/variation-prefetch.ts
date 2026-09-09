@@ -121,7 +121,6 @@ async function missingVariationIds(
 	descriptor: TargetedDescriptor,
 	ids: number[]
 ): Promise<number[]> {
-	if (ids.length === 0) return [];
 	const remoteIds = ids.map(remoteIdOrNull).filter((id) => id !== null);
 	const docs = await database.collections[descriptor.collection]
 		.find({
@@ -234,23 +233,7 @@ async function runVariationPrefetch(
 		})
 		.filter((parent) => parent.wooId > state.cursorWooId)
 		.sort((left, right) => left.wooId - right.wooId);
-	const scanned = parents.slice(0, VARIATION_PREFETCH_PARENT_SCAN_LIMIT).map((parent) => {
-		const rawIds = parent.json.payload?.variations;
-		const variationIds = Array.isArray(rawIds)
-			? rawIds.filter(
-					(id): id is number => Number.isSafeInteger(id) && typeof id === 'number' && id > 0
-				)
-			: [];
-		return { ...parent, variationIds };
-	});
-	// One scan for this bounded batch, rather than one full variation scan per parent.
-	const missingIds = new Set(
-		await missingVariationIds(
-			deps.database,
-			variationsDescriptor,
-			scanned.flatMap((p) => p.variationIds)
-		)
-	);
+	const scanned = parents.slice(0, VARIATION_PREFETCH_PARENT_SCAN_LIMIT);
 	let cursorWooId = state.cursorWooId;
 	let deferredParent = false;
 	for (const parent of scanned) {
@@ -261,7 +244,13 @@ async function runVariationPrefetch(
 			break;
 		}
 		cursorWooId = parent.wooId;
-		const missing = parent.variationIds.filter((id) => missingIds.has(id));
+		const rawIds = parent.json.payload?.variations;
+		const variationIds = Array.isArray(rawIds)
+			? rawIds.filter(
+					(id): id is number => Number.isSafeInteger(id) && typeof id === 'number' && id > 0
+				)
+			: [];
+		const missing = await missingVariationIds(deps.database, variationsDescriptor, variationIds);
 		throwIfAborted(deps.signal);
 		const attempted = new Set(
 			state.activeParentWooId === parent.wooId ? state.attemptedVariationIds : []

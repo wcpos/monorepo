@@ -195,13 +195,33 @@ Native measures **add-handler entry → expected quantity's React cart-table com
 web measures **DOM click/submit intent → expected cart quantity in the DOM**.
 Neither includes paint or server acknowledgement; native also excludes input
 queueing before the handler. These are not a shared web/native metric.
-Coverage is serial simple adds, not rapid bursts, variations, startup or idle stalls.
+These serial checks exclude rapid bursts, variations, startup and idle stalls.
 
 Native requires the next completed `e2e-cart-add-timing` sequence and emits
 `WCPOS_E2E_CART_ADD` JSON; web attaches `cart-add-performance` JSON.
 Budgets live in the web assertion and `subflows/assert-cart-add-timing.yml`.
 Change budgets only with evidence. Validate a gate by temporarily slowing the
 actual handler: correct quantity must still fail performance; remove and rerun.
+
+Flow 10 and the web test `should absorb twenty rapid adds and paint the exact
+quantity` cover the burst case: one verified setup add, then nineteen taps at
+200 ms with nothing between them, then the quantity field must read exactly
+`20`. Flow 10 needs the empty cart flow 08's void leaves; selecting the
+new-order tab is not a substitute on a phone (the Products -> Cart round trip
+re-delivered the previous order's id and the setup add landed there, local run
+2026-09-09). Native logs `WCPOS_E2E_CART_BURST` with `tapSpanMs` (driver
+pacing, logged only), `settleAfterLastTapMs` (gated, provisional 15000 ms;
+local iPhone 16 Pro simulator measured 7454 / 5261 on 2026-09-09) and
+`totalMs`; web attaches `cart-add-burst` JSON and gates first burst click ->
+quantity 20 in the DOM at a provisional 8000 ms. After two green four-device
+runs, tighten both ceilings to the observed CI maximum plus ~30%.
+
+Known blind spot: Maestro asserts the accessibility value. Twice on
+2026-09-09 the field's native text was `20` while its glyph box still fitted
+the previous value and painted `2` (Fabric TextInput props/state desync under
+rapid controlled updates; the lab's 46-vs-47 is the same family). The flow
+passes on that state. Catching it needs a screenshot comparison, which the
+suite does not have.
 
 ## 4. Reading a red run
 
