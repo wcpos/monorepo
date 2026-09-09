@@ -216,7 +216,8 @@ export function splitPlanLegs(
 	const done = recentLegMinors.slice(-taken);
 	let remaining = balanceMinor;
 	return Array.from({ length: plan.ways }, (_, index) => {
-		if (index < taken) return { minor: done[index], state: 'done' };
+		// A captured leg whose status mirror failed is still a taken leg; show its planned share.
+		if (index < taken) return { minor: done[index] ?? plan.shareMinor, state: 'done' };
 		const minor = index === plan.ways - 1 ? remaining : Math.min(plan.shareMinor, remaining);
 		remaining -= minor;
 		return { minor, state: index === taken ? 'now' : 'todo' };

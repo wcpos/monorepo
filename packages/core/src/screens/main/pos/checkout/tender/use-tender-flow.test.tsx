@@ -335,6 +335,22 @@ describe('useTenderFlow', () => {
 		expect(result.current.entryAppliedMinor).toBe(4648);
 		expect(result.current.entryChangeMinor).toBe(352);
 	});
+	it('lets the last planned cash leg take the whole remaining balance', () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'pick-method',
+				methodId: 'pos_cash',
+				prefillMinor: 4648,
+				readerId: null,
+			})
+		);
+		act(() => result.current.dispatch({ type: 'tender-recorded' }));
+		act(() => result.current.pickMethod('pos_cash'));
+		expect(result.current.state.splitPlan).toMatchObject({ taken: 1 });
+		expect(result.current.entryAppliedMinor).toBe(result.current.balanceMinor);
+	});
 	it('pre-fills a picked method with the ledger-derived balance', () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 

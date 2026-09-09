@@ -152,6 +152,16 @@ describe('initTenderState', () => {
 	});
 });
 
+describe('splitPlanLegs fallback', () => {
+	it('shows the planned share for a taken leg whose row is not captured yet', () => {
+		expect(splitPlanLegs({ ways: 3, shareMinor: 1000, taken: 1 }, [], 2000)).toEqual([
+			{ minor: 1000, state: 'done' },
+			{ minor: 1000, state: 'now' },
+			{ minor: 1000, state: 'todo' },
+		]);
+	});
+});
+
 describe('tender money helpers', () => {
 	it('caps a cash overtender at the balance and returns the excess as change', () => {
 		const applied = appliedMinor(5000, 4295);

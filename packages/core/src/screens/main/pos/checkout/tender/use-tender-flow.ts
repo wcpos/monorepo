@@ -179,22 +179,20 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// With a plan, a cash leg is the planned share: notes handed over above it are change,
 	// not a bigger leg (the "50" chip for a 46,48 leg). A method that gives no change takes
 	// what was typed, capped at the balance — typing a different amount IS changing the leg.
-	const legCapMinor =
-		method?.capabilities.change && state.splitPlan
-			? Math.min(state.splitPlan.shareMinor, balanceMinor)
-			: balanceMinor;
+	// The last leg is whatever balance remains (rounding, or a short earlier leg), never the share.
+	const plannedLegMinor = state.splitPlan
+		? state.splitPlan.taken >= state.splitPlan.ways - 1
+			? balanceMinor
+			: Math.min(state.splitPlan.shareMinor, balanceMinor)
+		: balanceMinor;
+	const legCapMinor = method?.capabilities.change ? plannedLegMinor : balanceMinor;
 	const entryAppliedMinor = appliedMinor(state.entryMinor, legCapMinor);
 	const entryChangeMinor = changeMinor(
 		state.entryMinor,
 		entryAppliedMinor,
 		method?.capabilities.change ?? false
 	);
-	const thisPaymentMinor =
-		state.view === 'amount'
-			? entryAppliedMinor
-			: state.splitPlan
-				? Math.min(state.splitPlan.shareMinor, balanceMinor)
-				: balanceMinor;
+	const thisPaymentMinor = state.view === 'amount' ? entryAppliedMinor : plannedLegMinor;
 	const afterThisPaymentMinor = balanceMinor - thisPaymentMinor;
 
 	const quickAmountsMinor = React.useMemo(
@@ -223,11 +221,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			if (busyRef.current || (saveState && saveState.kind !== 'queued-offline')) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile || tile.disabled) return;
-			const prefillMinor = state.customAmount
-				? 0
-				: state.splitPlan
-					? Math.min(state.splitPlan.shareMinor, balanceMinor)
-					: balanceMinor;
+			const prefillMinor = state.customAmount ? 0 : plannedLegMinor;
 			const { readers } = selectableReaders(tile.method, service?.readersInUse(), order.uuid);
 			reducerDispatch({
 				type: 'pick-method',
@@ -237,16 +231,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			});
 			setTenderMethod(order.uuid, methodId);
 		},
-		[
-			balanceMinor,
-			order.uuid,
-			saveState,
-			state.splitPlan,
-			state.customAmount,
-			tiles,
-			service,
-			reducerDispatch,
-		]
+		[plannedLegMinor, order.uuid, saveState, state.customAmount, tiles, service, reducerDispatch]
 	);
 
 	const takeTender = React.useCallback(async () => {
