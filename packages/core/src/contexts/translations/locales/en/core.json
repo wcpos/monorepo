@@ -630,7 +630,7 @@
 	"pos_cart.discount": "Discount",
 	"pos_cart.discount_amount_invalid": "Enter an amount greater than zero",
 	"pos_cart.discount_percent": "Discount ({percent}%)",
-	"pos_cart.discount_percent_invalid": "Enter a percentage between 0 and 100",
+	"pos_cart.discount_percent_invalid": "Enter a percentage above 0 and up to 100",
 	"pos_cart.discount_removed": "Discount removed",
 	"pos_cart.edit_customer_address": "Edit Customer Address",
 	"pos_cart.engine_warning_malformed_pos_data": "A line's saved price details couldn't be read, so its amount came from the totals already stored on it. Remove that line and add it again.",

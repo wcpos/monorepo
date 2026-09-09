@@ -162,9 +162,9 @@ beforeEach(() => {
 it.each([
 	[false, '0', 'Enter an amount greater than zero'],
 	[false, '-5', 'Enter an amount greater than zero'],
-	[true, '0', 'Enter a percentage between 0 and 100'],
-	[true, '-5', 'Enter a percentage between 0 and 100'],
-	[true, '101', 'Enter a percentage between 0 and 100'],
+	[true, '0', 'Enter a percentage above 0 and up to 100'],
+	[true, '-5', 'Enter a percentage above 0 and up to 100'],
+	[true, '101', 'Enter a percentage above 0 and up to 100'],
 ])('rejects percent=%p amount=%s', async (percent, amount, message) => {
 	render(<AddDiscount />);
 	if (percent) fireEvent.click(screen.getByTestId('discount-percent-switch'));
