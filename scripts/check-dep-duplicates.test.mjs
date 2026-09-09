@@ -180,3 +180,10 @@ test('@wcpos/utils declares its native file-system runtime', () => {
 	assert.equal(utils.peerDependencies['expo-file-system'], main.dependencies['expo-file-system']);
 	assert.equal(utils.peerDependenciesMeta['expo-file-system'].optional, true);
 });
+
+test('root lockfile excludes the independently installed Electron submodule', () => {
+	const lockfile = readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8');
+	const importers = parseImporters(lockfile);
+
+	assert.equal(importers['apps/electron'], undefined);
+});
