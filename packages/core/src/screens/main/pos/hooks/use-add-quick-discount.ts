@@ -65,8 +65,11 @@ export const useAddQuickDiscount = () => {
 				if (catalogCodes.length > 0) {
 					await whenCouponReferencesSettled();
 					const coupons = await readEngineCoupons(runtime);
+					// Codes compare case-insensitively everywhere else in the cart; match that.
 					const records = catalogCodes.map((catalogCode) =>
-						coupons.find((record) => record.payload.code === catalogCode)
+						coupons.find(
+							(record) => record.payload.code?.toLowerCase() === catalogCode.toLowerCase()
+						)
 					);
 					// Still not resident after the wait: we cannot tell whether it is exclusive, and
 					// settlement could not replay it either. Refuse rather than guess.

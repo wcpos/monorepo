@@ -177,8 +177,8 @@ it('refuses when an applied catalog coupon is still not resident after the refer
 	expect(whenSettled).toHaveBeenCalledTimes(1);
 	expect(recalculate).not.toHaveBeenCalled();
 });
-it('stacks onto a resident, non-exclusive catalog coupon', async () => {
-	couponLines = [{ code: 'plain' }];
+it('stacks onto a resident, non-exclusive catalog coupon, matching the code case-insensitively', async () => {
+	couponLines = [{ code: 'PLAIN' }];
 	readEngineCoupons.mockResolvedValueOnce([{ payload: { code: 'plain', individual_use: false } }]);
 	const { result } = renderHook(() => useAddQuickDiscount());
 	await expect(
