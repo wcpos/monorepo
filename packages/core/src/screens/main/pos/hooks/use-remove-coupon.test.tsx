@@ -89,6 +89,29 @@ describe('useRemoveCoupon', () => {
 		};
 	});
 
+	it.each([undefined, 12])(
+		'removes a virtual line with id %p without a catalog lookup',
+		async (id) => {
+			const virtual = {
+				...couponLine('pos-discount', id),
+				meta_data: [
+					{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+				],
+			};
+			orderSnapshot.coupon_lines = [virtual];
+			const remaining = id ? [{ ...virtual, code: null }] : [];
+			recalculate.mockResolvedValue({ couponLines: remaining, lineItems });
+			localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+			const { result } = renderHook(() => useRemoveCoupon());
+			await result.current.removeCoupon('pos-discount');
+			expect(recalculate).toHaveBeenCalledWith(lineItems, remaining);
+			expect(localPatch).toHaveBeenCalledWith({
+				document: currentOrderRecord,
+				data: { coupon_lines: remaining, line_items: lineItems },
+			});
+		}
+	);
+
 	it('matches coupon codes case-insensitively after trimming the requested code', async () => {
 		recalculate.mockResolvedValue({ couponLines: [], lineItems });
 		localPatch.mockResolvedValue({ uuid: 'order-uuid' });

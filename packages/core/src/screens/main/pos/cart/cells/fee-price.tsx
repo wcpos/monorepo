@@ -33,12 +33,12 @@ export function FeePrice({ row }: CellContext<Props, 'price'>) {
 			{percent ? (
 				<NumberInput
 					value={String(amount)}
-					onChangeText={(amount) => updateFeeLine(uuid, { amount: String(amount) })}
+					onChangeText={(amount) => updateFeeLine(uuid, { amount: String(Math.max(0, amount)) })}
 				/>
 			) : (
 				<CurrencyInput
 					value={String(amount)}
-					onChangeText={(amount) => updateFeeLine(uuid, { amount: String(amount) })}
+					onChangeText={(amount) => updateFeeLine(uuid, { amount: String(Math.max(0, amount)) })}
 				/>
 			)}
 			{percent && <Icon name="percent" size="sm" />}

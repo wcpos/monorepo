@@ -101,7 +101,14 @@ const baseOrderSnapshot = {
 			],
 		},
 	],
-	coupon_lines: [{ code: 'solo', discount: '0', discount_tax: '0', meta_data: [] }],
+	coupon_lines: [
+		{
+			code: 'solo',
+			discount: '0',
+			discount_tax: '0',
+			meta_data: [] as { key: string; value: unknown }[],
+		},
+	],
 	billing: { email: 'shopper@example.com' },
 	customer_id: 7,
 };
@@ -189,6 +196,27 @@ describe('useAddCoupon engine reads', () => {
 			}),
 			engineDocument({ uuid: 'coupon-solo', remoteId: '2', payload: couponPayload('solo', true) }),
 		]);
+	});
+
+	it('does not inherit individual_use from a catalog collision with a virtual line', async () => {
+		orderSnapshot = {
+			...baseOrderSnapshot,
+			coupon_lines: [
+				{
+					code: 'solo',
+					discount: '0',
+					discount_tax: '0',
+					meta_data: [
+						{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+					],
+				},
+			],
+		};
+		recalculate.mockResolvedValue({ couponLines: [], lineItems: orderSnapshot.line_items });
+		localPatch.mockResolvedValue({ uuid: 'order-uuid' });
+		const { result } = renderHook(() => useAddCoupon());
+		await expect(result.current.addCoupon('bonus')).resolves.toEqual({ success: true });
+		expect(localPatch).toHaveBeenCalledTimes(1);
 	});
 
 	it('preserves trimmed lowercase lookup and rejects against an applied individual-use coupon', async () => {

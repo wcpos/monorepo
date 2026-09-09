@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { readQuickDiscountIntent } from './quick-discount';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -39,10 +40,12 @@ export const useRemoveCoupon = () => {
 			const normalizedCode = couponCode.toLowerCase().trim();
 
 			let removed = false;
+			let removedIntent: ReturnType<typeof readQuickDiscountIntent> = null;
 			const updatedCouponLines = couponLines
 				.map((cl: any) => {
 					if ((cl.code ?? '').toLowerCase() === normalizedCode) {
 						removed = true;
+						removedIntent = readQuickDiscountIntent(cl);
 						// If synced (has id), null the code to signal deletion
 						if (cl.id) {
 							return { ...cl, code: null };
@@ -70,7 +73,7 @@ export const useRemoveCoupon = () => {
 				return;
 			}
 
-			orderLogger.info(t('pos_cart.coupon_removed'), {
+			orderLogger.info(t(removedIntent ? 'pos_cart.discount_removed' : 'pos_cart.coupon_removed'), {
 				showToast: true,
 				context: { couponCode },
 			});

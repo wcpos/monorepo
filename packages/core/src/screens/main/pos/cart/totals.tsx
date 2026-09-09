@@ -16,6 +16,7 @@ import { useTaxInclOrExcl } from '../../hooks/use-tax-incl-or-excl';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
 import { useOrderTotals } from '../hooks/use-order-totals';
+import { quickDiscountLabel, readQuickDiscountIntent } from '../hooks/quick-discount';
 import { useRemoveCoupon } from '../hooks/use-remove-coupon';
 
 /**
@@ -91,6 +92,7 @@ export function Totals() {
 						// Coupon pills
 						coupon_lines.map((coupon) => {
 							const code = coupon.code;
+							const intent = readQuickDiscountIntent(coupon);
 							if (!code) return null;
 							const couponDiscount = toNumber(coupon.discount);
 							const couponDiscountTax = toNumber(coupon.discount_tax);
@@ -107,7 +109,7 @@ export function Totals() {
 										removeAccessibilityLabel={`Remove coupon ${code}`}
 										className="grow-0"
 									>
-										<ButtonText>{code}</ButtonText>
+										<ButtonText>{intent ? quickDiscountLabel(intent, t) : code}</ButtonText>
 									</ButtonPill>
 									<Text className="grow" />
 									<Text>{format(-1 * displayCouponDiscount)}</Text>

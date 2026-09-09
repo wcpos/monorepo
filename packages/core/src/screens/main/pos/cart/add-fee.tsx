@@ -53,7 +53,14 @@ export function AddFee() {
 	 *
 	 */
 	const form = useForm<FormValues, unknown, FormValues>({
-		resolver: zodResolver(formSchema as never) as never,
+		resolver: zodResolver(
+			formSchema.extend({
+				amount: z
+					.string()
+					.refine((value) => Number(value) >= 0, { message: t('pos_cart.fee_amount_negative') })
+					.optional(),
+			}) as never
+		) as never,
 		defaultValues: {
 			name: '',
 			amount: '0',

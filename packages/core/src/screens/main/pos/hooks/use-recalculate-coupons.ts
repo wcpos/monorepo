@@ -7,6 +7,7 @@ import {
 	enrichCategoriesWithAncestors,
 } from '@wcpos/order-math/internal';
 
+import { quickDiscountCouponConfig, readQuickDiscountIntent } from './quick-discount';
 import { buildCategoryParents } from './coupon-helpers-engine';
 import {
 	recalculateCoupons,
@@ -51,9 +52,18 @@ export const useRecalculateCoupons = () => {
 				.map((cl) => cl.code.toLowerCase());
 
 			// Tier-0 coupons are resident in the engine; payload.code remains an exact scan.
-			const coupons = await readEngineCoupons(runtime);
 			const couponConfigs = new Map<string, CouponDiscountConfig>();
+			for (const line of couponLines) {
+				const intent = readQuickDiscountIntent(line);
+				if (line.code != null && intent) {
+					couponConfigs.set(line.code.toLowerCase(), quickDiscountCouponConfig(intent));
+				}
+			}
+			const coupons = activeCodes.some((code) => !couponConfigs.has(code))
+				? await readEngineCoupons(runtime)
+				: [];
 			for (const code of activeCodes) {
+				if (couponConfigs.has(code)) continue;
 				const coupon = coupons.find((record) => record.payload.code === code);
 				if (!coupon) {
 					// Fail the recalculation when an active coupon is missing locally.

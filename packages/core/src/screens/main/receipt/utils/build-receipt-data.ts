@@ -6,8 +6,12 @@
  * See field-picker.tsx for the full field reference.
  */
 
+import { getI18n } from 'react-i18next';
+
 import { POS_META_KEYS } from '@wcpos/sync-core';
 import type { TaxId } from '@wcpos/database';
+
+import { quickDiscountLabel, readQuickDiscountIntent } from '../../pos/hooks/quick-discount';
 
 interface ReceiptOrder {
 	id: number;
@@ -742,14 +746,16 @@ export function buildReceiptData(
 			)
 	);
 	const mappedDiscounts: ReceiptAdjustment[] = (order.coupon_lines || []).map(
-		(line: Record<string, any>) =>
-			mapAdjustment(
-				String(line.code || ''),
+		(line: Record<string, any>) => {
+			const intent = readQuickDiscountIntent(line);
+			return mapAdjustment(
+				intent ? quickDiscountLabel(intent, getI18n().t) : String(line.code || ''),
 				toNum(line.discount),
 				toNum(line.discount_tax),
 				displayTax,
 				dp
-			)
+			);
+		}
 	);
 
 	const taxSummary = buildTaxSummary(order);

@@ -19,7 +19,12 @@ import { Totals } from './totals';
  * total yet" from "a total of zero".
  */
 let orderPayload: Record<string, unknown> = {};
-let couponLines: { code?: string; discount?: string; discount_tax?: string }[] = [];
+let couponLines: {
+	code?: string;
+	discount?: string;
+	discount_tax?: string;
+	meta_data?: { key: string; value: unknown }[];
+}[] = [];
 
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (order: unknown) => unknown) => select(record),
@@ -48,7 +53,21 @@ jest.mock('@wcpos/components/button', () => {
 jest.mock('./totals/customer-note', () => ({ CustomerNote: () => null }));
 jest.mock('./totals/taxes', () => ({ Taxes: () => null }));
 
-jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('../../../../contexts/translations', () => {
+	const i18n = jest.requireActual('i18next').createInstance();
+	i18n.init({
+		lng: 'en',
+		initImmediate: false,
+		keySeparator: false,
+		resources: {
+			en: {
+				translation: jest.requireActual('../../../../contexts/translations/locales/en/core.json'),
+			},
+		},
+		interpolation: { prefix: '{', suffix: '}', escapeValue: false },
+	});
+	return { useT: () => i18n.t };
+});
 jest.mock('../../hooks/use-current-order-currency-format', () => ({
 	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
 }));
@@ -117,4 +136,22 @@ describe('the cart money markers', () => {
 		expect(screen.getByTestId('cart-order-total')).toBeTruthy();
 		expect(screen.getByTestId('cart-discount-total')).toBeTruthy();
 	});
+});
+
+it.each([
+	['fixed_cart', 'Discount'],
+	['percent', 'Discount (10%)'],
+])('labels %s pills and keeps plain coupon codes', (discount_type, label) => {
+	couponLines = [
+		{
+			code: 'pos-discount',
+			discount: '10',
+			meta_data: [{ key: '_wcpos_quick_discount', value: { discount_type, amount: '10.00' } }],
+		},
+		{ code: 'SAVE10', discount: '1' },
+	];
+	render(<Totals />);
+	expect(screen.getByText(label)).toBeTruthy();
+	expect(screen.getByText('SAVE10')).toBeTruthy();
+	expect(screen.queryByText('pos-discount')).toBeNull();
 });

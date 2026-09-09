@@ -62,7 +62,11 @@ export function EditFeeLineForm({ uuid, item }: Props) {
 	type FormValues = z.infer<typeof formSchema>;
 
 	const form = useForm<FormValues, unknown, FormValues>({
-		resolver: zodResolver(formSchema as never) as never,
+		resolver: zodResolver(
+			formSchema.extend({
+				amount: z.number().min(0, t('pos_cart.fee_amount_negative')).optional(),
+			}) as never
+		) as never,
 		defaultValues: {
 			name: item.name ?? undefined,
 			amount: toNumber(amount),
