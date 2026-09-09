@@ -46,8 +46,19 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: React.PropsWithChildren) => children,
 }));
 jest.mock('@wcpos/components/button', () => {
-	const { Text, View } = jest.requireActual('react-native');
-	return { ButtonPill: View, ButtonText: Text };
+	const React = jest.requireActual('react');
+	const { Text } = jest.requireActual('react-native');
+	// Expose the remove control's accessible name so the label assertions can see it.
+	function ButtonPill({
+		removeAccessibilityLabel,
+		children,
+	}: {
+		removeAccessibilityLabel?: string;
+		children?: React.ReactNode;
+	}) {
+		return React.createElement('div', { 'aria-label': removeAccessibilityLabel }, children);
+	}
+	return { ButtonPill, ButtonText: Text };
 });
 
 jest.mock('./totals/customer-note', () => ({ CustomerNote: () => null }));
@@ -70,6 +81,10 @@ jest.mock('../../../../contexts/translations', () => {
 });
 jest.mock('../../hooks/use-current-order-currency-format', () => ({
 	useCurrentOrderCurrencyFormat: () => ({ format: (value: number) => `$${value.toFixed(2)}` }),
+}));
+// A comma-locale store: the percent inside the discount label must follow it.
+jest.mock('../../hooks/use-number-format', () => ({
+	useNumberFormat: () => ({ format: (value: number) => String(value).replace('.', ',') }),
 }));
 jest.mock('../../hooks/use-tax-incl-or-excl', () => ({
 	useTaxInclOrExcl: () => ({ inclOrExcl: 'excl' }),
@@ -139,19 +154,22 @@ describe('the cart money markers', () => {
 });
 
 it.each([
-	['fixed_cart', 'Discount'],
-	['percent', 'Discount (10%)'],
-])('labels %s pills and keeps plain coupon codes', (discount_type, label) => {
+	['fixed_cart', '10.00', 'Discount'],
+	['percent', '10.00', 'Discount (10%)'],
+	// The store formats numbers with a comma; the label follows the store, not the wire.
+	['percent', '12.5', 'Discount (12,5%)'],
+])('labels %s %s pills and keeps plain coupon codes', (discount_type, amount, label) => {
 	couponLines = [
 		{
 			code: 'pos-discount',
 			discount: '10',
-			meta_data: [{ key: '_wcpos_quick_discount', value: { discount_type, amount: '10.00' } }],
+			meta_data: [{ key: '_wcpos_quick_discount', value: { discount_type, amount } }],
 		},
 		{ code: 'SAVE10', discount: '1' },
 	];
 	render(<Totals />);
 	expect(screen.getByText(label)).toBeTruthy();
+	expect(screen.getByLabelText(`Remove ${label}`)).toBeTruthy();
 	expect(screen.getByText('SAVE10')).toBeTruthy();
 	expect(screen.queryByText('pos-discount')).toBeNull();
 });

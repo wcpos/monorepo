@@ -30,10 +30,22 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 }));
 jest.mock('./use-recalculate-coupons', () => ({ useRecalculateCoupons: () => ({ recalculate }) }));
 jest.mock('../contexts/current-order', () => ({ useCurrentOrder: () => ({ currentOrderRecord }) }));
+const readEngineCoupons = jest.fn();
+jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({}) }));
+jest.mock('./engine-coupon-data', () => ({
+	readEngineCoupons: (...args: unknown[]) => readEngineCoupons(...args),
+}));
+jest.mock('./coupon-rejection-message', () => ({
+	useCouponRejectionMessage:
+		() =>
+		(rejection: { code: string; params?: { code: string } }): string =>
+			`${rejection.code}:${rejection.params?.code}`,
+}));
 
 beforeEach(() => {
 	jest.clearAllMocks();
 	couponLines = [];
+	readEngineCoupons.mockResolvedValue([]);
 	currentOrderRecord.getLatest.mockImplementation(() => ({ payload: currentOrderRecord.payload }));
 	localPatch.mockResolvedValue({ uuid: 'order' });
 	recalculate.mockImplementation(async (_lines, coupons) => ({
@@ -120,5 +132,36 @@ it('reports failures and does not log success for a rejected write', async () =>
 		expect.anything(),
 		'Local mutation failed',
 		expect.objectContaining({ error: expect.any(Error) })
+	);
+});
+it('refuses to stack onto an applied individual-use catalog coupon, like useAddCoupon', async () => {
+	couponLines = [{ code: 'exclusive' }];
+	readEngineCoupons.mockResolvedValueOnce([
+		{ payload: { code: 'exclusive', individual_use: true } },
+	]);
+	const { result } = renderHook(() => useAddQuickDiscount());
+	await expect(
+		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
+	).resolves.toEqual({ success: false, error: 'individual_use_conflict:exclusive' });
+	expect(recalculate).not.toHaveBeenCalled();
+	expect(localPatch).not.toHaveBeenCalled();
+});
+it('does not read the catalog when the only applied coupons are quick discounts', async () => {
+	couponLines = [
+		{
+			code: 'pos-discount',
+			meta_data: [
+				{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '5' } },
+			],
+		} as never,
+	];
+	const { result } = renderHook(() => useAddQuickDiscount());
+	await expect(
+		result.current.addQuickDiscount({ discount_type: 'fixed_cart', amount: '2' })
+	).resolves.toEqual({ success: true });
+	expect(readEngineCoupons).not.toHaveBeenCalled();
+	expect(recalculate).toHaveBeenCalledWith(
+		lineItems,
+		expect.arrayContaining([expect.objectContaining({ code: 'pos-discount-2' })])
 	);
 });

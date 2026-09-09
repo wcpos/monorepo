@@ -3,14 +3,18 @@ import * as React from 'react';
 import isEqual from 'lodash/isEqual';
 import { v4 as uuidv4 } from 'uuid';
 
+import { useQueryRuntime } from '@wcpos/query';
 import { wooMetaCarrier } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { reportCartFailure } from './cart-failure';
+import { useCouponRejectionMessage } from './coupon-rejection-message';
+import { readEngineCoupons } from './engine-coupon-data';
 import {
 	mintQuickDiscountCode,
 	QUICK_DISCOUNT_META_KEY,
 	quickDiscountCouponConfig,
+	readQuickDiscountIntent,
 } from './quick-discount';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
@@ -23,6 +27,8 @@ export const useAddQuickDiscount = () => {
 	const { localPatch } = useLocalMutation();
 	const { currentOrderRecord } = useCurrentOrder();
 	const { recalculate } = useRecalculateCoupons();
+	const runtime = useQueryRuntime();
+	const couponRejectionMessage = useCouponRejectionMessage();
 	const t = useT();
 	const orderLogger = React.useMemo(
 		() =>
@@ -39,6 +45,30 @@ export const useAddQuickDiscount = () => {
 			try {
 				const order = currentOrderRecord.getLatest();
 				const couponLines = order.payload.coupon_lines || [];
+
+				// An applied catalog coupon marked individual-use forbids any other coupon, and
+				// a quick discount IS a coupon line — the same rule useAddCoupon enforces.
+				const catalogCodes = couponLines
+					.filter((line) => line.code != null && !readQuickDiscountIntent(line))
+					.map((line) => line.code as string);
+				if (catalogCodes.length > 0) {
+					const coupons = await readEngineCoupons(runtime);
+					const exclusive = catalogCodes.find((catalogCode) =>
+						coupons.some(
+							(record) => record.payload.code === catalogCode && record.payload.individual_use
+						)
+					);
+					if (exclusive) {
+						return {
+							success: false,
+							error: couponRejectionMessage({
+								code: 'individual_use_conflict',
+								params: { code: exclusive },
+							}),
+						};
+					}
+				}
+
 				const code = mintQuickDiscountCode(
 					couponLines.flatMap((line) => (line.code == null ? [] : [line.code]))
 				);
@@ -91,7 +121,7 @@ export const useAddQuickDiscount = () => {
 				return { success: false, error: message };
 			}
 		},
-		[currentOrderRecord, localPatch, recalculate, t, orderLogger]
+		[currentOrderRecord, localPatch, recalculate, runtime, couponRejectionMessage, t, orderLogger]
 	);
 	return { addQuickDiscount };
 };

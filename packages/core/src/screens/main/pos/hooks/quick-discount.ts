@@ -72,11 +72,22 @@ export function mintQuickDiscountCode(existingCodes: readonly string[]): string 
 	return code;
 }
 
+/**
+ * The cashier-facing label. `formatNumber` renders the percentage with the store's
+ * decimal separator (a comma-locale till shows "Discount (12,5%)"); without it the
+ * canonical "12.5" is used.
+ */
 export function quickDiscountLabel(
 	intent: QuickDiscountIntent,
-	t: (key: string, options?: Record<string, unknown>) => string
+	t: (key: string, options?: Record<string, unknown>) => string,
+	formatNumber: (value: number) => string = (value) => String(value)
 ): string {
 	return intent.discount_type === 'percent'
-		? t('pos_cart.discount_percent', { percent: String(Number(intent.amount)) })
+		? t('pos_cart.discount_percent', { percent: formatNumber(Number(intent.amount)) })
 		: t('pos_cart.discount');
+}
+
+/** A minimal number formatter for contexts without the store hooks (receipt builder). */
+export function decimalSeparatorFormatter(separator: string | undefined) {
+	return (value: number) => String(value).replace('.', separator || '.');
 }

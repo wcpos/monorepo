@@ -646,6 +646,7 @@
 	"pos_cart.fixed_product_discount": "Fixed product discount",
 	"pos_cart.instance_id": "Instance ID",
 	"pos_cart.no_coupons_found": "No coupons found",
+	"pos_cart.remove_discount_label": "Remove {label}",
 	"pos_cart.remove_line_not_found": "That item is no longer in the cart.",
 	"pos_cart.only_n_available": "Only {quantity} available for {name}",
 	"pos_cart.n_available": "{quantity} available",
