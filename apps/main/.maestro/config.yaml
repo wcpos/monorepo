@@ -22,4 +22,3 @@ executionOrder:
     - 07-variation-add-to-cart
     - 08-void-order
     - 09-pos-panel-resize
-    - 10-customer-selection

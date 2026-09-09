@@ -71,7 +71,6 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 	return (
 		<>
 			<ComboboxInput
-				testID="customer-select-search"
 				placeholder={t('common.search_customers')}
 				value={binding.search}
 				onChangeText={onSearch}

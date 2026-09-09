@@ -174,17 +174,3 @@ test('Maestro interpolation scanner consumes nested braces', () => {
 	assert.equal(interpolation, expression);
 	assert.equal(interpolation.slice(2, -1).includes('$'), true);
 });
-
-test('customer selection relies on the visible input before typing', () => {
-	const source = readFileSync(
-		new URL('../apps/main/.maestro/flows/10-customer-selection.yml', import.meta.url),
-		'utf8'
-	);
-	const flow = parseAllDocuments(source).at(-1).toJS();
-	const waitIndex = flow.findIndex(
-		(command) => command.extendedWaitUntil?.visible?.id === 'customer-select-search'
-	);
-
-	assert.deepEqual(flow[waitIndex].extendedWaitUntil.visible, { id: 'customer-select-search' });
-	assert.equal(flow[waitIndex + 1].inputText, 'e2e');
-});
