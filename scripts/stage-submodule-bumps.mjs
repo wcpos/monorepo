@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
  * The pre-commit hook used to run `git submodule update --remote` + a blind
  * `git add`, which staged whatever the submodule checkout happened to be —
  * including checkouts *behind* or *sideways of* the committed gitlink. That
- * silently reverted a deliberate apps/electron pin (see monorepo PR #772).
+ * silently reverted a submodule pin (see monorepo PR #772).
  *
  * Rules per submodule:
  * - checkout is a descendant of the committed pointer  -> auto-stage
@@ -20,7 +20,7 @@ import { pathToFileURL } from 'node:url';
  * - submodule not initialized                          -> skip
  */
 
-export const SUBMODULE_PATHS = ['apps/electron', 'apps/web'];
+export const SUBMODULE_PATHS = ['apps/web'];
 
 function git(args, { cwd, allowFailure = false } = {}) {
 	try {

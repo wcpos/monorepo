@@ -18,7 +18,7 @@ declare global {
 interface AppInfo {
 	/** Cross-platform JS bundle version from Expo config (e.g., '1.8.1') */
 	version: string;
-	/** Electron app version from apps/electron/package.json */
+	/** Electron app version from the wcpos/electron package.json */
 	platformVersion: string;
 	/** Build number - alias for platformVersion */
 	buildNumber: string;

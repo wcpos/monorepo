@@ -37,7 +37,7 @@
  * catch handlers run, causing Redbox errors. We use queueMicrotask() to defer
  * rejections until the promise chain is fully established.
  *
- * @see apps/electron/src/main/http-bridge.ts - Main process handler ('http-request' channel over net.fetch)
+ * @see wcpos/electron/src/main/http-bridge.ts - Main process handler ('http-request' channel over net.fetch)
  * @see README.md - Full architecture documentation
  */
 

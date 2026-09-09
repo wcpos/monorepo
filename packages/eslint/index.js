@@ -385,7 +385,6 @@ export const config = [
 	{
 		ignores: [
 			// Git submodules manage their own linting.
-			'apps/electron/**',
 			'apps/web/**',
 			// Targeted recovery is vendored three ways, and the electron copy lives in
 			// another repository. Never let eslint --fix break their byte identity.
