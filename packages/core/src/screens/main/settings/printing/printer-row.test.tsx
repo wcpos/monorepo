@@ -78,3 +78,24 @@ it('renders a saved printer without the wizard entry, even when the wizard is av
 	expect(screen.getByTestId('printer-row-p1-test')).toBeInTheDocument();
 	expect(screen.queryByText('settings.having_trouble')).toBeNull();
 });
+
+it.each(['generic', 'epson', 'star'] as const)(
+	'labels a %s winspool queue as installed',
+	(vendor) => {
+		render(
+			<PrinterRow
+				profile={{ ...profile, connectionType: 'system', address: 'winspool:POS-80', vendor }}
+				isTesting={false}
+				onTest={jest.fn()}
+				onEdit={jest.fn()}
+				onSetDefault={jest.fn()}
+				onDelete={jest.fn()}
+			/>
+		);
+		const row = screen.getByTestId('printer-row-p1');
+		expect(row).toHaveTextContent(
+			`settings.setup_source_system${vendor === 'generic' ? '' : vendor === 'epson' ? ' · Epson' : ' · Star'}`
+		);
+		expect(row).not.toHaveTextContent('settings.connection_print_dialog');
+	}
+);

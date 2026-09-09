@@ -5,7 +5,13 @@ import { printerIconName, templateTypeLabel } from './utils';
 
 describe('printerIconName', () => {
 	it('returns "desktop" for the built-in system dialog profile', () => {
-		expect(printerIconName({ connectionType: 'system' })).toBe('desktop');
+		expect(printerIconName({ connectionType: 'system', address: '' })).toBe('desktop');
+	});
+
+	it('returns "printer" for a winspool queue', () => {
+		expect(printerIconName({ connectionType: 'system', address: 'winspool:POS-80' })).toBe(
+			'printer'
+		);
 	});
 
 	it('returns "printer" for a network profile', () => {

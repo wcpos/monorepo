@@ -158,6 +158,17 @@ patchedDependencies:
   # for a dropped index; the render path skips that key and `validateItemSize` drops the
   # stale measurement, exactly as the upstream PR does. Drop with the upgrade above.
   "@shopify/flash-list@2.0.2": "patches/@shopify__flash-list@2.0.2.patch"
+  # expo-opfs 1.0.9's FileSystemWritableFileStream copies the WHOLE file through the JS
+  # thread on every writable: readBytes()+writeBytes() into a swap on the first write,
+  # then on close() delete the original, read the whole swap back and rewrite it. The
+  # rxdb filesystem engine opens a writable for nearly every write (two per compacted
+  # document), so a 700 KB documents file cost hundreds of MB of byte copies per
+  # compaction pass and 61% of the JS thread in the busy minute after login on an iPad
+  # (.claude/research/2026-09-08-ipad-expo-opfs-swap-copies). expo-file-system 57 has
+  # synchronous copySync()/moveSync(), so the swap is a native copy and the commit an
+  # atomic rename — the April 2026 fix (5e691a9df4, rxdb#8290) that the July engine
+  # migration dropped. Drop this patch when expo-opfs does the same upstream.
+  expo-opfs@1.0.9: patches/expo-opfs@1.0.9.patch
   # A closed drawer is only translated off-screen. Reanimated < 4.5.3 could revert that
   # transform to a stale value after a JS-thread stall (reanimated#9965, fixed by #9527 —
   # the drawer reappearing at the OPEN position over the routed screen, #1691/#1797), and the
