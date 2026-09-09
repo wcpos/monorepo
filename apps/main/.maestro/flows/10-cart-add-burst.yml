@@ -8,11 +8,12 @@ env:
 # paced taps with nothing between them. The quantity field must report exactly
 # "20" and the settle after the last tap is the number CI reports per device.
 #
-# Maestro reads the accessibility value. A 2026-09-09 local run showed the
-# field's native text at "20" while its glyph box still fitted the previous
-# value and painted "2" (Fabric TextInput props/state desync under rapid
-# controlled updates; the lab's 46-vs-47 is the same family). This flow cannot
-# see that class; a screenshot comparison would.
+# Maestro reads the accessibility value, not the pixels. On 2026-09-09 the
+# field's value was "20" while it painted "2": the shared input's horizontal
+# padding left ~17 points for digits inside the 56-wide column, so wider
+# values clipped (fixed in the cart quantity cell). A clipped or stale paint
+# with a correct value passes this flow; only a screenshot comparison would
+# catch it, and the lab's persisted-47-painted-46 stays unreproduced.
 - runFlow:
     file: ../subflows/ensure-pos-ready.yml
 # Precondition: an empty cart, which is what flow 08's void leaves for 09 and

@@ -216,12 +216,13 @@ local iPhone 16 Pro simulator measured 7454 / 5261 on 2026-09-09) and
 quantity 20 in the DOM at a provisional 8000 ms. After two green four-device
 runs, tighten both ceilings to the observed CI maximum plus ~30%.
 
-Known blind spot: Maestro asserts the accessibility value. Twice on
-2026-09-09 the field's native text was `20` while its glyph box still fitted
-the previous value and painted `2` (Fabric TextInput props/state desync under
-rapid controlled updates; the lab's 46-vs-47 is the same family). The flow
-passes on that state. Catching it needs a screenshot comparison, which the
-suite does not have.
+Known blind spot: Maestro asserts the accessibility value, not the pixels.
+On 2026-09-09 the field's value was `20` while it painted `2`: the shared
+input's 12-point horizontal padding left ~17 points for digits inside the
+56-wide quantity column, so wider values clipped (fixed in the cart quantity
+cell). The flow passes on a clipped or stale paint with a correct value; only
+a screenshot comparison would catch it, and the lab's persisted-47-painted-46
+remains unreproduced.
 
 ## 4. Reading a red run
 
