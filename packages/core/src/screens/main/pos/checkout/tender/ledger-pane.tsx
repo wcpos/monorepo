@@ -234,7 +234,8 @@ export function ThisPaymentLine({
 	const { splitPlan: plan, customAmount, splitMenuOpen } = flow.state;
 
 	const row =
-		flow.balanceMinor === 0 || flow.state.view === 'cancel' ? null : (
+		// While a terminal leg is live its view carries the amount; two figures would compete.
+		flow.balanceMinor === 0 || flow.state.view === 'cancel' || flow.terminalLeg ? null : (
 			<HStack className="flex-wrap items-center gap-2">
 				<VStack space="xs">
 					<Text className="text-muted-foreground text-xs">{t('pos_checkout.this_payment')}</Text>
@@ -271,28 +272,31 @@ export function ThisPaymentLine({
 					{t('pos_checkout.split_the_balance', { amount: format(flow.balanceMinor) })}
 				</Text>
 				<View className="flex-row flex-wrap gap-2">
-					{splitWays.map((ways) => (
-						<Button
-							key={ways}
-							variant="outline"
-							size="sm"
-							testID={`checkout-split-${ways}`}
-							onPress={() =>
-								flow.dispatch({
-									type: 'set-split-plan',
-									ways,
-									shareMinor: evenSplitShareMinor(flow.balanceMinor, ways),
-								})
-							}
-						>
-							<ButtonText>
-								{t('pos_checkout.split_n_ways', {
-									ways,
-									amount: format(evenSplitShareMinor(flow.balanceMinor, ways)),
-								})}
-							</ButtonText>
-						</Button>
-					))}
+					{splitWays
+						// A balance too small to split N ways offers no N: a zero share cannot be taken.
+						.filter((ways) => evenSplitShareMinor(flow.balanceMinor, ways) > 0)
+						.map((ways) => (
+							<Button
+								key={ways}
+								variant="outline"
+								size="sm"
+								testID={`checkout-split-${ways}`}
+								onPress={() =>
+									flow.dispatch({
+										type: 'set-split-plan',
+										ways,
+										shareMinor: evenSplitShareMinor(flow.balanceMinor, ways),
+									})
+								}
+							>
+								<ButtonText>
+									{t('pos_checkout.split_n_ways', {
+										ways,
+										amount: format(evenSplitShareMinor(flow.balanceMinor, ways)),
+									})}
+								</ButtonText>
+							</Button>
+						))}
 					<Button
 						variant="outline"
 						size="sm"

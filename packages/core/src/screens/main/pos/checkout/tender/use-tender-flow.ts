@@ -176,7 +176,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			? (byId.get(state.methodId) ?? null)
 			: null;
 	const { readers, lockToDefault } = selectableReaders(method, readersInUse, order.uuid);
-	const entryAppliedMinor = appliedMinor(state.entryMinor, balanceMinor);
+	// With a plan, a cash leg is the planned share: notes handed over above it are change,
+	// not a bigger leg (the "50" chip for a 46,48 leg). A method that gives no change takes
+	// what was typed, capped at the balance — typing a different amount IS changing the leg.
+	const legCapMinor =
+		method?.capabilities.change && state.splitPlan
+			? Math.min(state.splitPlan.shareMinor, balanceMinor)
+			: balanceMinor;
+	const entryAppliedMinor = appliedMinor(state.entryMinor, legCapMinor);
 	const entryChangeMinor = changeMinor(
 		state.entryMinor,
 		entryAppliedMinor,
@@ -503,7 +510,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				? splitPlanLegs(
 						state.splitPlan,
 						state.splitPlan.taken
-							? liveRows.slice(-state.splitPlan.taken).map((row) => toMinor(row.amount, dp))
+							? liveRows
+									.filter((row) => row.status === 'captured')
+									.slice(-state.splitPlan.taken)
+									.map((row) => toMinor(row.amount, dp))
 							: [],
 						balanceMinor
 					)

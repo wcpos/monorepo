@@ -327,6 +327,14 @@ describe('useTenderFlow', () => {
 		}
 	);
 
+	it('treats cash above a planned share as change, not a bigger leg', () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
+		expect(result.current.entryAppliedMinor).toBe(4648);
+		expect(result.current.entryChangeMinor).toBe(352);
+	});
 	it('pre-fills a picked method with the ledger-derived balance', () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 

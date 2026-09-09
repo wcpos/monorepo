@@ -371,7 +371,7 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 					disabled={flow.busy || flow.entryAppliedMinor <= 0 || needsReader || Boolean(reason)}
 					onPress={() => void flow.takeTender()}
 				>
-					<ButtonText>
+					<ButtonText decodeHtml>
 						{t('pos_checkout.take_amount_in', {
 							amount: format(flow.entryAppliedMinor),
 							method: method.title,
