@@ -60,19 +60,20 @@ export async function expectCartAddMeasurement(
 ): Promise<void> {
 	const readSample = () =>
 		page.evaluate(() => (window as MeasurementWindow).__WCPOS_CART_MEASUREMENT__?.sample);
+	let rawSample: Sample | null | undefined;
 	try {
 		await expect
 			.poll(async () => (await readSample())?.status, { timeout: 15_000 })
 			.toBe('complete');
-		const sample = await readSample();
-		expect(Number.isFinite(sample?.durationMs)).toBe(true);
-		expect(sample?.durationMs).toBeGreaterThanOrEqual(0);
+		rawSample = await readSample();
+		expect(Number.isFinite(rawSample?.durationMs)).toBe(true);
+		expect(rawSample?.durationMs).toBeGreaterThanOrEqual(0);
 		expect(
-			sample?.durationMs,
+			rawSample?.durationMs,
 			'DOM add intent → expected cart quantity in DOM'
 		).toBeLessThanOrEqual(budgetMs);
 	} finally {
-		const rawSample = await readSample().catch(() => null);
+		rawSample = (await readSample().catch(() => null)) ?? rawSample ?? null;
 		await testInfo.attach('cart-add-performance', {
 			body: JSON.stringify({
 				metric: 'dom-add-intent-to-cart-quantity',

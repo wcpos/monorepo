@@ -14,7 +14,6 @@ appId: com.wcpos.main.dev
 - extendedWaitUntil:
     visible:
       id: "customer-select-search"
-      focused: true
     timeout: 10000
 - inputText: "e2e"
 # Guest is always available, independently of the store's customer records.

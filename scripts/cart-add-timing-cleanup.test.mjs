@@ -33,7 +33,7 @@ test('page loss during sample cleanup preserves the timing assertion and diagnos
 
 	await assert.rejects(expectCartAddMeasurement(page, testInfo(attachments), 300), /Expected: <= 300/);
 
-	assert.deepEqual(JSON.parse(attachments[0].body).rawSamples, [null]);
+	assert.deepEqual(JSON.parse(attachments[0].body).rawSamples, [sample]);
 	assert.equal(page.calls, 4);
 });
 
