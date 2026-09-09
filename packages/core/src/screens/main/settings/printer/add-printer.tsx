@@ -19,6 +19,7 @@ import { TestPrintError } from './dialog/test-print-error';
 import { usePrinterDialogForm, type VendorDefaults } from './dialog/use-printer-dialog-form';
 import {
 	DEFAULT_FORM_VALUES,
+	genericVendorAllowed,
 	nativePrinterSchema,
 	type PrinterFormValues,
 	type VendorOption,
@@ -93,25 +94,31 @@ function EditPrinterDialog({
 		name: 'connectionType',
 		defaultValue: DEFAULT_FORM_VALUES.connectionType,
 	});
+	const address = useWatch({
+		control: form.control,
+		name: 'address',
+		defaultValue: DEFAULT_FORM_VALUES.address,
+	});
 
-	// Bluetooth/USB transport supports Epson + Star only (getTransport throws on generic).
+	// SDK Bluetooth/USB transports support Epson + Star only; a generic BLE/SPP lane keeps 'generic'.
+	const genericAllowed = genericVendorAllowed(connectionType, address);
 	const vendorOptions: VendorOption[] = React.useMemo(() => {
 		const base: VendorOption[] = [
 			{ value: 'epson', label: 'Epson' },
 			{ value: 'star', label: 'Star Micronics' },
 		];
-		if (connectionType === 'network') {
+		if (genericAllowed) {
 			base.push({ value: 'generic', label: t('settings.printer_vendor_generic') });
 		}
 		return base;
-	}, [connectionType, t]);
+	}, [genericAllowed, t]);
 
-	// When switching to BT/USB while vendor is 'generic', move it to a supported vendor.
+	// When switching to an SDK lane while vendor is 'generic', move it to a supported vendor.
 	React.useEffect(() => {
-		if (connectionType !== 'network' && form.getValues('vendor') === 'generic') {
+		if (!genericAllowed && form.getValues('vendor') === 'generic') {
 			form.setValue('vendor', 'epson');
 		}
-	}, [connectionType, form]);
+	}, [genericAllowed, form]);
 
 	let connectionSection: React.ReactNode;
 	if (connectionType === 'bluetooth') {

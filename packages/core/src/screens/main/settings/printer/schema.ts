@@ -83,10 +83,20 @@ export const electronPrinterSchema = z.object({
 });
 
 /**
- * Native: all vendors, all connection types. SDK Bluetooth and USB rows print through the Epson or
- * Star SDK, so they need one of those vendors; a `ble:` (generic GATT) or `spp:` (Bluetooth Classic)
- * row is plain ESC/POS and keeps `generic` — the same rule the setup flow applies when it selects.
+ * Whether a native profile may keep vendor `generic`. SDK Bluetooth and USB rows print through the
+ * Epson or Star SDK, so they need one of those vendors; a `ble:` (generic GATT) or `spp:` (Bluetooth
+ * Classic) row is plain ESC/POS. The setup flow, the schema and both dialogs' vendor lists share this
+ * one rule so a profile that saves can also be reopened without its vendor being rewritten.
  */
+export function genericVendorAllowed(
+	connectionType: PrinterFormValues['connectionType'],
+	address: string
+): boolean {
+	if (connectionType === 'network') return true;
+	return connectionType === 'bluetooth' && /^(ble|spp):.+/i.test(address);
+}
+
+/** Native: all vendors, all connection types. `generic` only where `genericVendorAllowed` says so. */
 export const nativePrinterSchema = z
 	.object({
 		...baseShape,
@@ -94,11 +104,7 @@ export const nativePrinterSchema = z
 		vendor: z.enum(['epson', 'star', 'generic']).default('generic'),
 		address: z.string().min(1, 'A printer address or device is required'),
 	})
-	.refine(
-		(v) =>
-			v.connectionType === 'network' || v.vendor !== 'generic' || /^(ble|spp):/i.test(v.address),
-		{
-			path: ['vendor'],
-			message: 'Bluetooth and USB printers must be Epson or Star, except generic BLE/SPP lanes',
-		}
-	);
+	.refine((v) => v.vendor !== 'generic' || genericVendorAllowed(v.connectionType, v.address), {
+		path: ['vendor'],
+		message: 'Bluetooth and USB printers must be Epson or Star, except generic BLE/SPP lanes',
+	});

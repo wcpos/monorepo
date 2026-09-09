@@ -38,6 +38,7 @@ import { CopySetupReport } from '../copy-setup-report';
 import { PRINTER_DOCS_URL } from '../printer-docs';
 import {
 	electronPrinterSchema,
+	genericVendorAllowed,
 	nativePrinterSchema,
 	type PrinterFormValues,
 	webPrinterSchema,
@@ -161,8 +162,8 @@ export function PrinterSetupDialog({
 	const vendors = [
 		{ value: 'epson' as const, label: 'Epson' },
 		{ value: 'star' as const, label: 'Star Micronics' },
-		// Native Bluetooth and USB go through the Epson and Star SDKs; generic has no device transport.
-		...(native && draft.connectionType !== 'network'
+		// Native SDK Bluetooth and USB have no generic transport; BLE/SPP lanes are plain ESC/POS.
+		...(native && !genericVendorAllowed(draft.connectionType, draft.address)
 			? []
 			: [{ value: 'generic' as const, label: t('settings.printer_vendor_generic') }]),
 	];
