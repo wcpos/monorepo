@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { persistPrinterProfile } from '../persist-printer-profile';
 import { PrinterSetupDialog } from './printer-setup-dialog';
 import { createTestT } from '../../../../../../jest/translate';
 
@@ -43,6 +44,7 @@ jest.mock('../../../../../contexts/app-state', () => ({
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 let mockWebScanning = false;
+let mockHideNetwork = false;
 const mockConnectUsb = jest.fn();
 const mockStopScan = jest.fn();
 const mockTestPrint = jest.fn(async () => ({ status: null }));
@@ -78,18 +80,22 @@ jest.mock('@wcpos/printer', () => ({
 				...mockUsbPrinters,
 				...mockExtraPrinters,
 				...ble,
-				{
-					id: 'epson',
-					name: 'Counter',
-					address: '192.168.1.10',
-					connectionType: 'network',
-					identity: {
-						vendor: 'epson',
-						columns: 48,
-						lane: { port: 443, protocol: 'epos-print' },
-						ports: [],
-					},
-				},
+				...(mockHideNetwork
+					? []
+					: [
+							{
+								id: 'epson',
+								name: 'Counter',
+								address: '192.168.1.10',
+								connectionType: 'network',
+								identity: {
+									vendor: 'epson',
+									columns: 48,
+									lane: { port: 443, protocol: 'epos-print' },
+									ports: [],
+								},
+							},
+						]),
 			],
 			isScanning: mockWebScanning,
 			error: null,
@@ -310,4 +316,40 @@ it('offers the receipt language under More options for ESC/POS and hides it for 
 	expect(renderer.root.findAllByProps({ name: 'codePage' })).toHaveLength(0);
 	act(() => renderer.unmount());
 	mockExtraPrinters.length = 0;
+});
+
+it('saves a generic native BLE printer after the cashier confirms the test page', async () => {
+	mockHideNetwork = true;
+	jest.mocked(persistPrinterProfile).mockClear();
+	mockExtraPrinters.push({
+		id: 'ble-1',
+		name: 'BLE printer',
+		address: 'ble:ABC',
+		connectionType: 'bluetooth',
+		vendor: 'generic',
+	});
+	let renderer!: ReactTestRenderer;
+	try {
+		await act(async () => {
+			renderer = create(
+				<PrinterSetupDialog open platform="native" onOpenChange={jest.fn()} onSave={jest.fn()} />
+			);
+		});
+		for (const action of ['setup_print_test', 'setup_ok']) {
+			await act(async () => {
+				renderer.root.findByProps({ testID: `printer-setup-${action}` }).props.onPress();
+			});
+		}
+		expect(persistPrinterProfile).toHaveBeenCalledWith(
+			{},
+			expect.objectContaining({
+				vendor: 'generic',
+				address: 'ble:ABC',
+			})
+		);
+	} finally {
+		act(() => renderer.unmount());
+		mockExtraPrinters.length = 0;
+		mockHideNetwork = false;
+	}
 });

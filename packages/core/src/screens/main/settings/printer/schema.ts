@@ -82,7 +82,11 @@ export const electronPrinterSchema = z.object({
 	address: z.string().min(1, 'A printer address or device is required'),
 });
 
-/** Native: all vendors, all connection types. BT/USB require Epson/Star + an address. */
+/**
+ * Native: all vendors, all connection types. SDK Bluetooth and USB rows print through the Epson or
+ * Star SDK, so they need one of those vendors; a `ble:` (generic GATT) or `spp:` (Bluetooth Classic)
+ * row is plain ESC/POS and keeps `generic` — the same rule the setup flow applies when it selects.
+ */
 export const nativePrinterSchema = z
 	.object({
 		...baseShape,
@@ -90,7 +94,11 @@ export const nativePrinterSchema = z
 		vendor: z.enum(['epson', 'star', 'generic']).default('generic'),
 		address: z.string().min(1, 'A printer address or device is required'),
 	})
-	.refine((v) => v.connectionType === 'network' || v.vendor === 'epson' || v.vendor === 'star', {
-		path: ['vendor'],
-		message: 'Bluetooth and USB printers must be Epson or Star',
-	});
+	.refine(
+		(v) =>
+			v.connectionType === 'network' || v.vendor !== 'generic' || /^(ble|spp):/i.test(v.address),
+		{
+			path: ['vendor'],
+			message: 'Bluetooth and USB printers must be Epson or Star, except generic BLE/SPP lanes',
+		}
+	);

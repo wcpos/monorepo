@@ -13,6 +13,7 @@ import {
 import { isVerboseDiagnostics, printerLogger } from './logger';
 import { encodeThermalTemplate } from './renderer';
 import { CloudAdapter } from './transport/cloud-adapter';
+import { usesSystemPrintDialog } from './transport/device-key';
 import { describeStatus } from './transport/escpos-status';
 import { PRINT_JOB_SLOW_MS } from './transport/print-timeouts';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
@@ -242,9 +243,7 @@ export class PrinterService {
 	): Promise<void> {
 		// Anything that ends in the OS print dialog shares one queue, so two dialogs never open at once;
 		// winspool queues are raw jobs and keep their own.
-		const usesSystemDialog =
-			!profile ||
-			(profile.connectionType === 'system' && !profile.address?.startsWith('winspool:'));
+		const usesSystemDialog = !profile || usesSystemPrintDialog(profile);
 		return this.enqueue('receipt', usesSystemDialog ? SYSTEM_QUEUE_ID : profile.id, async () => {
 			if (usesSystemDialog) {
 				// Fallback: system print dialog with HTML
@@ -534,7 +533,7 @@ export class PrinterService {
 		profile: PrinterProfile,
 		options: TestPrintOptions = {}
 	): Promise<TestPrintResult> {
-		if (profile.connectionType === 'system' && !profile.address?.startsWith('winspool:')) {
+		if (usesSystemPrintDialog(profile)) {
 			const html = `<html><body style="font-family:monospace;text-align:center;padding:2em">
         <h2>WCPOS</h2><p>Test Print</p>
         <p>Printer: ${profile.name}</p>
