@@ -375,3 +375,32 @@ it('does not render help on a saved local printer row', () => {
 	);
 	expect(screen.queryByText('Having trouble?')).toBeNull();
 });
+
+it('shows a saved winspool queue alongside Print Dialog instead of the empty state', () => {
+	const winspool: PrinterProfile = {
+		id: 'pos80',
+		name: 'POS-80',
+		connectionType: 'system',
+		address: 'winspool:POS-80',
+		vendor: 'generic',
+		port: 9100,
+		language: 'esc-pos',
+		columns: 48,
+		fullReceiptRaster: false,
+		autoCut: true,
+		autoOpenDrawer: false,
+		drawerConnector: 'pin2',
+		isDefault: false,
+		isBuiltIn: false,
+	};
+	mockAvailableProfiles = {
+		isLoading: false,
+		printers: [
+			{ ...winspool, id: 'system', name: 'Print Dialog', address: '', isBuiltIn: true },
+			winspool,
+		],
+	};
+	render(<PrintingSettings />);
+	expect(screen.getByTestId('printer-row-pos80')).toBeInTheDocument();
+	expect(screen.queryByTestId('printers-empty-state')).not.toBeInTheDocument();
+});

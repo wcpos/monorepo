@@ -151,6 +151,21 @@ describe('resolvePrinter', () => {
 	});
 
 	describe('Layer 3: auto-match', () => {
+		it('auto-matches a 48-column winspool queue to an 80mm ESC/POS template', () => {
+			const winspool: PrinterProfile = {
+				...epsonPrinter,
+				connectionType: 'system',
+				address: 'winspool:POS-80',
+			};
+			expect(
+				resolvePrinter({
+					template: thermal80mm,
+					overrides: new Map(),
+					profiles: [systemPrinter, winspool],
+				})
+			).toBe(winspool);
+		});
+
 		it('matches escpos/80mm to a 48-column non-system printer', () => {
 			const result = resolvePrinter({
 				template: thermal80mm,
