@@ -6,7 +6,6 @@
 		"paths": {
 			"@wcpos/printer/ipc-channels": ["packages/printer/src/ipc/channels.cts"],
 			"@wcpos/main/*": ["apps/main/*"],
-			"@wcpos/electron/*": ["apps/electron/*"],
 			"@wcpos/order-math": ["packages/order-math/src/index"],
 			"react-native-resizable-panels": ["packages/resizable-panels/src/index"],
 			"react-native-resizable-panels/*": ["packages/resizable-panels/src/*"],

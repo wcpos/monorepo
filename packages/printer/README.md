@@ -2,7 +2,7 @@
 
 This is the living doctrine for everything under `packages/printer`, the printer settings UI in
 `packages/core/src/screens/main/settings/printer/`, and the Electron printer handlers in
-`apps/electron/src/main/print*`. Read it before writing a printer spec, before a live session with a
+`wcpos/electron` `src/main/print*`. Read it before writing a printer spec, before a live session with a
 device, and before triaging a merchant's printer ticket. The glossary is in `CONTEXT.md`; the gotcha
 catalogue with live evidence is wcpos/roadmap#136; specs are on wcpos/monorepo#1597.
 
@@ -38,7 +38,7 @@ No lane, adapter, or wizard step gets a spec until its first section links, with
 ### 2. Observability is a feature
 
 Missing logging in the printer path is a defect. Every main-process handler logs inputs, outcome and
-elapsed time (`apps/electron/src/main/print-epos-http.ts`, `print-raw-tcp.ts`,
+elapsed time (wcpos/electron `src/main/print-epos-http.ts`, `print-raw-tcp.ts`,
 `printer-discovery.ts`); every probe logs what it sent and what came back (`src/transport/
 epos-endpoint.ts`, `src/discovery/identify.ts`) through `printerLogger` (`src/logger.ts`), which is
 forwarded into Electron's `main.log` — the package-side half lands with wcpos/monorepo#1828; until

@@ -1,7 +1,7 @@
 ---
 name: electron-dev
 user-invocable: true
-description: Use when the user wants to spin up Electron dev from a worktree with logs visible in a Terminal window. Requires macOS.
+description: Use when the user wants to spin up Electron dev from a worktree with logs visible in a Terminal window. Requires macOS and a standalone wcpos/electron clone.
 allowed-tools:
   - Bash
   - Read
@@ -9,94 +9,88 @@ allowed-tools:
 
 # Electron Dev Worktree
 
-Spins up the Electron app from an isolated worktree with logs in a visible Terminal window.
+Spins up the desktop app from two isolated worktrees — one in this monorepo (the renderer) and one in the standalone `wcpos/electron` clone (the shell) — with logs in two visible Terminal windows.
 
-**Announce at start:** "Setting up Electron dev worktree."
+The desktop app is no longer a submodule of this repo. The renderer (`@wcpos/main`) is served from here on port 8088 with `ELECTRON=true`; Electron loads `http://localhost:8088`.
+
+**Announce at start:** "Setting up Electron dev worktrees."
 
 ## Steps
 
 Run each step sequentially. Do NOT skip steps. Do NOT use `run_in_background`.
 
-### 1. Fetch latest from the target lane
+### 1. Fetch latest from the target lane in BOTH repos
 
-Lane: `next` = in-development electron work (default); `main` = stable / 1.9.x electron fixes. If unsure which lane the task is, ask the user first, then use it as `<lane>` below.
+Lane: `next` = in-development electron work (default); `main` = stable fixes. If unsure which lane the task is, ask the user first, then use it as `<lane>` below. The electron clone lives at `~/Projects/electron`; if it is missing, `git clone https://github.com/wcpos/electron.git ~/Projects/electron` first.
 
 Fetch only — do NOT pull or merge into the current branch:
 
 ```bash
 git fetch origin <lane>
+git -C ~/Projects/electron fetch origin <lane>
 ```
 
-### 2. Create worktree
+### 2. Create the two worktrees
 
 ```bash
 git worktree add .worktrees/electron-dev origin/<lane> -b electron-dev-session
+git -C ~/Projects/electron worktree add ~/Projects/electron-worktrees/electron-dev origin/<lane> -b electron-dev-session
 ```
 
-If the branch already exists, check for uncommitted work before removing:
+If either branch already exists, check for uncommitted work before removing (run the same checks against each repo):
 
 ```bash
-# Check if the existing worktree has uncommitted changes
-if git -C .worktrees/electron-dev status --porcelain 2>/dev/null | grep -q .; then
-  echo "ERROR: .worktrees/electron-dev has uncommitted changes. Stash or commit them first." && exit 1
+if git -C <worktree> status --porcelain 2>/dev/null | grep -q .; then
+  echo "ERROR: <worktree> has uncommitted changes. Stash or commit them first." && exit 1
 fi
-# Check if the branch has commits not merged into main
-if git log origin/<lane>..electron-dev-session --oneline 2>/dev/null | grep -q .; then
+if git -C <repo> log origin/<lane>..electron-dev-session --oneline 2>/dev/null | grep -q .; then
   echo "ERROR: electron-dev-session has unmerged commits. Merge or back them up first." && exit 1
 fi
-git worktree remove .worktrees/electron-dev 2>/dev/null
-git branch -d electron-dev-session 2>/dev/null
-git worktree add .worktrees/electron-dev origin/<lane> -b electron-dev-session
+git -C <repo> worktree remove <worktree> 2>/dev/null
+git -C <repo> branch -d electron-dev-session 2>/dev/null
 ```
 
-### 3. Init electron submodule and pull latest
+### 3. Install dependencies
 
-First init the submodule (checks out whatever commit the monorepo pointer references), then pull latest from electron's main. The monorepo submodule pointer is often behind — skipping the pull means you get stale electron code.
+Monorepo worktree (the one install; `--frozen-lockfile` is the contract):
 
 ```bash
-cd <worktree-path> && git submodule update --init apps/electron
-cd <worktree-path>/apps/electron && git checkout <lane> && git pull origin <lane>
+cd <monorepo-worktree> && pnpm install --frozen-lockfile
 ```
 
-### 4. Install dependencies
+Electron worktree (its lockfile is gitignored, so a plain install):
 
 ```bash
-cd <worktree-path> && pnpm install --no-frozen-lockfile
+cd <electron-worktree> && pnpm install
 ```
 
-### 5. Rebuild native modules
+### 4. Rebuild native modules in the electron worktree
 
 ```bash
-cd <worktree-path> && CXXFLAGS="-std=c++17" pnpm electron rebuild:all
+cd <electron-worktree> && CXXFLAGS="-std=c++17" pnpm rebuild:all
 ```
 
-This is required — Electron needs native modules rebuilt for its Node version.
+Required — Electron needs `usb` rebuilt for its Node ABI. `CXXFLAGS="-std=c++17"` is required since 2026-08-14: `usb`'s `node-addon-api` ≥ 8.9 needs C++17 (`std::void_t`, `is_null_pointer_v` errors in napi.h) while the `usb` gyp file still compiles at C++14.
 
-`CXXFLAGS="-std=c++17"` is required since 2026-08-14: the fresh `--no-frozen-lockfile` install resolves `usb`'s `node-addon-api` to ≥8.9, which needs C++17 (`std::void_t`, `is_null_pointer_v` errors in napi.h), while the `usb` gyp file still compiles at C++14.
-
-### 6. Kill conflicting ports
-
-Kill any existing processes on ports 8088 (Expo/Metro) and 9000 (Electron Forge logger):
+### 5. Kill conflicting ports
 
 ```bash
 lsof -ti :8088 | xargs kill 2>/dev/null; lsof -ti :9000 | xargs kill 2>/dev/null; echo "Ports cleared"
 ```
 
-### 7. Launch in TWO visible Terminal windows
-
-**Do NOT use `pnpm --filter @wcpos/app-electron dev`.** On electron `next`, the packaged `dev` script is broken in monorepo context (electron#321): its `dev:expo` half silently no-ops because electron's own nested `pnpm-workspace.yaml` (added in electron#279) re-roots pnpm at `apps/electron`, so `--filter @wcpos/main` matches nothing and Electron opens against a dev server that never started. Launch the two halves separately from the **worktree root**.
+### 6. Launch in TWO visible Terminal windows
 
 **CRITICAL: Write each launch script to a temp file, then execute it.** Inline osascript drops the `cd` from the command string.
 
-First window — Expo dev server:
+First window — the renderer, from the monorepo worktree root:
 
 ```bash
-WORKTREE_PATH="<absolute-worktree-path>"
+WORKTREE_PATH="<absolute-monorepo-worktree-path>"
 cat > /tmp/launch-expo-dev.sh << SCRIPT
 #!/usr/bin/env bash
 osascript <<'APPLESCRIPT'
 tell application "Terminal"
-  do script "cd \"$WORKTREE_PATH\" && ELECTRON=true EXPO_NO_METRO_LAZY=true BROWSER=none pnpm --filter @wcpos/main dev --web --port 8088 --clear"
+  do script "cd \"$WORKTREE_PATH\" && pnpm dev:electron-renderer"
   activate
 end tell
 APPLESCRIPT
@@ -104,15 +98,15 @@ SCRIPT
 bash /tmp/launch-expo-dev.sh
 ```
 
-Poll until the server responds (`curl -s -o /dev/null http://localhost:8088`), then launch the second window — Electron Forge, also from the worktree ROOT (running `pnpm run dev:electron` with cwd `apps/electron` fails with `electron-forge: command not found` — the bin is hoisted to the monorepo root):
+Poll until the server responds (`curl -s -o /dev/null http://localhost:8088`), then launch the second window — Electron Forge, from the electron worktree root:
 
 ```bash
-WORKTREE_PATH="<absolute-worktree-path>"
+ELECTRON_PATH="<absolute-electron-worktree-path>"
 cat > /tmp/launch-forge-dev.sh << SCRIPT
 #!/usr/bin/env bash
 osascript <<'APPLESCRIPT'
 tell application "Terminal"
-  do script "cd \"$WORKTREE_PATH\" && pnpm --filter @wcpos/app-electron dev:electron"
+  do script "cd \"$ELECTRON_PATH\" && pnpm dev"
   activate
 end tell
 APPLESCRIPT
@@ -120,7 +114,7 @@ SCRIPT
 bash /tmp/launch-forge-dev.sh
 ```
 
-Verify launch: within ~90s an Electron process matching the worktree path should appear (`pgrep -f "electron-dev.*Electron.app"`). If not, read the Forge window's output via `osascript` (`history of selected tab`) — a preload/webpack compile error kills Forge before any window opens.
+Verify launch: within ~90s an Electron process matching the electron worktree path should appear (`pgrep -f "electron-dev.*Electron.app"`). If not, read the Forge window's output via `osascript` (`history of selected tab`) — a preload/webpack compile error kills Forge before any window opens.
 
 Report: "Electron dev launched in Terminal windows. Logs are visible there."
 
@@ -128,20 +122,17 @@ Report: "Electron dev launched in Terminal windows. Logs are visible there."
 
 | Mistake | Result |
 |---------|--------|
-| Skip submodule init | Electron app directory is empty, nothing runs |
-| Skip `git pull` in submodule after init | Monorepo pointer is often stale — you get old electron code missing recent fixes |
-| Skip `pnpm electron rebuild:all` | Native module crashes at runtime |
+| Skip `pnpm rebuild:all` in the electron worktree | Native module crashes at runtime |
+| Start Electron before the renderer answers on 8088 | Electron opens a white screen against a server that is not up yet |
 | Don't kill port 8088 | Expo can't bind, white screen |
 | Don't kill port 9000 | Electron Forge logger crashes |
 | Use `run_in_background` | User can't see logs |
-| Use inline osascript | `cd` gets dropped, runs from `~`, pnpm can't find workspace |
-| Use `EXPO_PORT` env var | Not supported in current electron submodule, does nothing |
-| Use the packaged `pnpm dev` script (next lane) | `dev:expo` no-ops (nested workspace re-roots pnpm, electron#321) — Electron opens with no dev server |
-| Run `pnpm run dev:electron` with cwd `apps/electron` | `electron-forge: command not found` — bin hoisted to monorepo root; use the root filter |
+| Use inline osascript | `cd` gets dropped, runs from `~`, pnpm can't find the package |
+| Run the renderer with plain `expo start` | Metro resolves `.web.ts` instead of `.electron.ts`; use `dev:electron-renderer` |
+| Use a different port without `EXPO_PORT` | Electron loads 8088 regardless; set `EXPO_PORT` for the electron half and `--port` for the renderer half together |
 
 ## Never
 
-- Use `run_in_background` for the dev server
+- Use `run_in_background` for either dev server
 - Use inline `osascript` — always write to a temp file first
-- Set `EXPO_PORT` — not supported in the current electron submodule
-- Checkout branches in the main working tree
+- Checkout branches in either main working tree

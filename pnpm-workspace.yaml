@@ -73,7 +73,7 @@ overrides:
   # force them to 30 so the jest-30 workspace packages get a consistent test environment.
   "jest-environment-jsdom": "^30.4.1"
   "jest-environment-node": "^30.4.1"
-  # concurrently@9.2.1 (apps/electron devDep) pins shell-quote 1.8.3 exactly — force the
+  # react-devtools-core resolves shell-quote in this workspace — keep the
   # patched release (GHSA-w7jw-789q-3m8p, critical, fixed 1.8.4). Floor then raised to
   # 1.9.0 for GHSA-395f-4hp3-45gv (high, quadratic-complexity DoS in parse(), fixed
   # 1.9.0 per OSV — there is no 1.8.5 release). ">=1.8.4" had gone stale: it resolved to
@@ -114,23 +114,15 @@ overrides:
   "@svgr/plugin-svgo>svgo": ">=3.3.4 <4"
 allowBuilds:
   "@firebase/util": false
-  # sentry-cli's postinstall downloads the platform binary @sentry/webpack-plugin
-  # (apps/electron sourcemap upload) shells out to; without it the strict install
+  # sentry-cli's postinstall downloads its platform binary; without approval the strict install
   # fails outright (ERR_PNPM_IGNORED_BUILDS broke the 1.10.5 Publish Web Bundle run).
   "@sentry/cli": true
-  "@serialport/bindings-cpp": true
   "@shopify/react-native-skia": true
   "@tailwindcss/oxide": true
-  "@zowe/secrets-for-zowe-sdk": true
-  "better-sqlite3": true
   "core-js": true
   "eccrypto": false
-  "electron": true
-  "electron-winstaller": false
   "esbuild": true
-  "fs-xattr": true
   "keccak": true
-  "macos-alias": true
   "msgpackr-extract": false
   "protobufjs": true
   "react-native-esc-pos-printer": true
@@ -139,7 +131,6 @@ allowBuilds:
   "secp256k1": true
   "uniwind": true
   "unrs-resolver": true
-  usb: true
 patchedDependencies:
   # Backport of flash-list 2.2.2's guard in RVLayoutManager.modifyLayout: when the data
   # array shrinks, `layoutInfo` still carries the indices of ViewHolders measured before

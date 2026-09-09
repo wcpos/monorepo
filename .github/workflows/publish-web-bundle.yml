@@ -108,11 +108,7 @@ jobs:
         # The repo preinstall hook's own `git submodule update --init` runs too
         # late (after workspace discovery), so it can't be relied on here.
         #
-        # apps/web ONLY. apps/electron is not a lockfile importer (the electron
-        # repo installs on its own), so populating it makes `apps/*` pick up a
-        # 20th project and the setup action's `pnpm install --frozen-lockfile`
-        # fails with ERR_PNPM_OUTDATED_LOCKFILE (run 33784231072, 2026-09-03).
-        # The web build never needs it.
+        # apps/web is the only submodule and must be populated before the workspace scan.
         run: git submodule update --init apps/web
 
       - name: 🏗 Setup monorepo

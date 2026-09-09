@@ -193,7 +193,7 @@ type _OnChannelsCoverRegistry = AssertExactChannelKeys<
 /** Dynamic channels NOT enumerable as literal keys. */
 export const DYNAMIC_ON_PATTERNS = [/^onBeforePrint-/, /^onAfterPrint-/, /^onPrintError-/] as const;
 
-/** Must equal IPC_RENDERER_KEY_PREFIX from rxdb/plugins/electron used in apps/electron/src/main/rxdb-storage.ts. */
+/** Must equal IPC_RENDERER_KEY_PREFIX from rxdb/plugins/electron used in wcpos/electron src/main/rxdb-storage.ts. */
 export const RXDB_IPC_CHANNEL_PREFIX = 'rxdb-ipc-renderer-storage|';
 
 export interface TypedIpcRenderer {

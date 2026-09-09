@@ -342,11 +342,10 @@ test('reads submodule paths from .gitmodules', (t) => {
 });
 
 test('the repo declares its submodules, so their tests never read as dark', () => {
-	// apps/web and apps/electron appear or vanish depending on whether the
-	// checkout initialized them; the survey must not depend on that.
+	// apps/web appears or vanishes depending on whether the
+	// checkout initialized it; the survey must not depend on that.
 	const submodules = readSubmodulePaths();
 	assert.ok(submodules.has('apps/web'));
-	assert.ok(submodules.has('apps/electron'));
 });
 
 /* ------------------------------------------------------------ live invariants */

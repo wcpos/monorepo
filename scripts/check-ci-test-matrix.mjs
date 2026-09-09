@@ -68,8 +68,8 @@ export const OTHER_LANES = [
  * will remove it. An empty list is the goal state.
  *
  * Submodules are not listed here — they are detected from .gitmodules, because
- * whether apps/web and apps/electron are even present depends on whether the
- * checkout initialized them, and a check that reports different packages
+ * whether apps/web is even present depends on whether the
+ * checkout initialized it, and a check that reports different packages
  * depending on that is a check nobody can trust.
  */
 export const ALLOWLIST = [
