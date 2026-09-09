@@ -231,3 +231,30 @@ describe('useRecalculateCoupons engine reads', () => {
 		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
 	});
 });
+
+it.each(['missing', 'mixed', 'collision'])('resolves virtual coupons: %s', async (mode) => {
+	const reads = installEngineFixture({
+		code: mode === 'collision' ? 'pos-discount' : 'real',
+		...couponConfig({ amount: '1' }),
+	});
+	if (mode === 'missing') reads.couponFind.mockReturnValue({ exec: async () => [] });
+	const virtual = {
+		code: 'pos-discount',
+		discount: '0',
+		discount_tax: '0',
+		meta_data: [
+			{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+		],
+	};
+	const coupons = mode === 'mixed' ? [virtual, { code: 'real', meta_data: [] }] : [virtual];
+	const { result } = renderHook(() => useRecalculateCoupons());
+	const recalculated = await result.current.recalculate(lineItems, coupons);
+	expect(recalculated.couponLines[0]).toEqual(
+		expect.objectContaining({ discount: '3.6', meta_data: virtual.meta_data })
+	);
+	expect(recalculated.lineItems.map((line) => line.total)).toEqual(
+		mode === 'mixed' ? ['15.2', '15.2'] : ['16.2', '16.2']
+	);
+	if (mode === 'mixed') expect(recalculated.couponLines[1].discount).toBe('2');
+	else expect(reads.couponFind).not.toHaveBeenCalled();
+});

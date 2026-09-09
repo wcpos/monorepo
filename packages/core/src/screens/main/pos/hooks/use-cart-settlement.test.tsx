@@ -129,7 +129,7 @@ jest.mock('../../../../query', () => ({
 	},
 }));
 
-type CouponLine = { code: string | null };
+type CouponLine = { code: string | null; meta_data?: { key: string; value: unknown }[] };
 type LineItem = { total: string; total_tax: string; product_id: number };
 
 const lineItems$ = new BehaviorSubject<LineItem[]>([]);
@@ -670,6 +670,27 @@ describe('useCartSettlement reference demand (#952)', () => {
 		expect(localPatch.mock.calls[0][0].data).toEqual(
 			expect.objectContaining({ fee_lines: [{ name: '10% service', total: '0.50' }] })
 		);
+	});
+
+	it('replays quick discounts without declaring or waiting on coupon references', async () => {
+		applyCoupon([
+			{
+				code: 'pos-discount',
+				meta_data: [
+					{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+				],
+			},
+		]);
+		await renderAfterMountSettle();
+		await act(async () => {
+			editCart([{ total: '100', total_tax: '0', product_id: 1 }]);
+		});
+		expect(appliedCouponReferenceDemand).toHaveBeenCalledWith(false);
+		expect(appliedCouponReferenceDemand).not.toHaveBeenCalledWith(true);
+		expect(whenSettled).not.toHaveBeenCalled();
+		expect(whenSettledInBackground).not.toHaveBeenCalled();
+		expect(getCouponContext).toHaveBeenCalledWith(lineItems$.value, couponLines$.value);
+		expect(settleCart).toHaveBeenCalled();
 	});
 
 	it('declares coupon reference demand once the cart carries an applied coupon line', async () => {

@@ -1,5 +1,9 @@
+import { createInstance } from 'i18next';
+import { setI18n } from 'react-i18next';
+
 import { mapReceiptData, ReceiptDataSchema } from '@wcpos/printer/encoder';
 
+import en from '../../../../contexts/translations/locales/en/core.json';
 import { buildReceiptData } from './build-receipt-data';
 
 const mockOrder = {
@@ -990,3 +994,59 @@ describe('buildReceiptData', () => {
 		});
 	});
 });
+
+it.each([
+	['fixed_cart', 'Discount'],
+	['percent', 'Discount (10%)'],
+])('labels quick %s discounts for receipts and printers', async (discount_type, label) => {
+	const i18n = createInstance();
+	await i18n.init({
+		lng: 'en',
+		keySeparator: false,
+		resources: { en: { translation: en } },
+		interpolation: { prefix: '{', suffix: '}', escapeValue: false },
+	});
+	setI18n(i18n);
+	const receipt = buildReceiptData(
+		{
+			...mockOrder,
+			coupon_lines: [
+				{
+					code: 'pos-discount',
+					discount: '10',
+					discount_tax: '0',
+					meta_data: [
+						{
+							key: '_wcpos_quick_discount',
+							value: JSON.stringify({ discount_type, amount: '10.00' }),
+						},
+					],
+				},
+				{ code: 'SAVE10', discount: '1', discount_tax: '0' },
+			],
+		},
+		mockStore
+	);
+	expect(receipt.discounts.map((line) => line.label)).toEqual([label, 'SAVE10']);
+	expect(mapReceiptData(receipt as unknown as Record<string, unknown>).discounts[0].label).toBe(
+		label
+	);
+});
+
+it.each(['incl', 'excl'])(
+	'prints historical negative fees with signed totals (%s)',
+	(tax_display_cart) => {
+		const receipt = buildReceiptData(
+			{ ...mockOrder, fee_lines: [{ name: 'Legacy discount', total: '-5', total_tax: '-1' }] },
+			{ ...mockStore, tax_display_cart }
+		);
+		expect(receipt.fees).toEqual([
+			{
+				label: 'Legacy discount',
+				total_excl: '-5.00',
+				total_incl: '-6.00',
+				total: tax_display_cart === 'incl' ? '-6.00' : '-5.00',
+			},
+		]);
+	}
+);

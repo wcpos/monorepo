@@ -12,10 +12,12 @@ import { CustomerNote } from './totals/customer-note';
 import { Taxes } from './totals/taxes';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
+import { useNumberFormat } from '../../hooks/use-number-format';
 import { useTaxInclOrExcl } from '../../hooks/use-tax-incl-or-excl';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
 import { useOrderTotals } from '../hooks/use-order-totals';
+import { quickDiscountLabel, readQuickDiscountIntent } from '../hooks/quick-discount';
 import { useRemoveCoupon } from '../hooks/use-remove-coupon';
 
 /**
@@ -24,6 +26,7 @@ import { useRemoveCoupon } from '../hooks/use-remove-coupon';
 export function Totals() {
 	const t = useT();
 	const { format } = useCurrentOrderCurrencyFormat();
+	const { format: formatNumber } = useNumberFormat();
 	const { inclOrExcl } = useTaxInclOrExcl({ context: 'cart' });
 
 	const {
@@ -91,7 +94,9 @@ export function Totals() {
 						// Coupon pills
 						coupon_lines.map((coupon) => {
 							const code = coupon.code;
+							const intent = readQuickDiscountIntent(coupon);
 							if (!code) return null;
+							const label = intent ? quickDiscountLabel(intent, t, formatNumber) : code;
 							const couponDiscount = toNumber(coupon.discount);
 							const couponDiscountTax = toNumber(coupon.discount_tax);
 							const displayCouponDiscount =
@@ -104,10 +109,14 @@ export function Totals() {
 										leftIcon="badgePercent"
 										removable
 										onRemove={() => removeCoupon(code)}
-										removeAccessibilityLabel={`Remove coupon ${code}`}
+										removeAccessibilityLabel={
+											intent
+												? t('pos_cart.remove_discount_label', { label })
+												: `Remove coupon ${code}`
+										}
 										className="grow-0"
 									>
-										<ButtonText>{code}</ButtonText>
+										<ButtonText>{label}</ButtonText>
 									</ButtonPill>
 									<Text className="grow" />
 									<Text>{format(-1 * displayCouponDiscount)}</Text>
