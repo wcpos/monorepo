@@ -225,7 +225,7 @@ In Electron, HTTP requests are made in the **main process** (Node.js) and result
 ┌─────────────────────────────▼───────────────────────────────────┐
 │  MAIN PROCESS (Node.js)                                         │
 │                                                                 │
-│  wcpos/electron src/main/http-bridge.ts                          │
+│  wcpos/electron/src/main/http-bridge.ts                          │
 │  ┌───────────────────────────────────────────────────────────┐ │
 │  │  ipcMain.handle('http-request', async (event, data) => {   │ │
 │  │    if (data.type === 'request') {                          │ │

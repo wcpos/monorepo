@@ -50,6 +50,8 @@ git -C <repo> worktree remove <worktree> 2>/dev/null
 git -C <repo> branch -d electron-dev-session 2>/dev/null
 ```
 
+Then recreate both worktrees with the two `git worktree add` commands above.
+
 ### 3. Install dependencies
 
 Monorepo worktree (the one install; `--frozen-lockfile` is the contract):

@@ -1,5 +1,10 @@
 packages:
   - "apps/*"
+  # apps/electron stopped being a submodule on 2026-09-09 (#1933). A clone that had it
+  # initialised keeps the checkout as an untracked directory, and the `apps/*` glob would
+  # pick its package.json up as a workspace project the lockfile has no importer for, failing
+  # the frozen install. Drop this once every long-lived clone has been cleaned.
+  - "!apps/electron"
   - "packages/*"
 # Never let `pnpm run` / `pnpm exec` install on their own. pnpm 11's default is
 # `install`: before every script it re-checks node_modules and, if it judges it
