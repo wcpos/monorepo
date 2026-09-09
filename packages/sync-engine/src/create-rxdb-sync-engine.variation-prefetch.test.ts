@@ -110,6 +110,24 @@ describe('variation-prefetch maintenance lane', () => {
 		}
 	});
 
+	it('does not scan variations while the first scanned parent has pending local work', async () => {
+		const fetcher = vi.fn(async () => json({ documents: [] }));
+		const engine = engineWith({ fetcher });
+		try {
+			const scope = await engine.whenActive();
+			await scope.database.collections.products.bulkInsert([
+				{ ...product(10, [101]), local: { dirty: true, pendingMutationIds: ['pending-10'] } },
+				product(20, [201]),
+			] as never);
+			const reads = vi.spyOn(scope.database.collections.variations, 'find');
+			await expect(engine.sync('variation-prefetch')).resolves.toMatchObject({ status: 'ran' });
+			expect(reads).not.toHaveBeenCalled();
+			expect(fetcher).not.toHaveBeenCalled();
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('checks resident children in one query and resumes at the next parent', async () => {
 		const requested: string[] = [];
 		const engine = engineWith({

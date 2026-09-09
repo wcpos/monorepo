@@ -244,11 +244,16 @@ async function runVariationPrefetch(
 		return { ...parent, variationIds };
 	});
 	// One scan for this bounded batch, rather than one full variation scan per parent.
+	// Only the parents the loop below will reach: it stops at the first parent with
+	// pending local work, and a parent stuck dirty (an offline edit) would otherwise
+	// cost this scan on every tick while the cursor waits behind it.
+	const firstDeferredIndex = scanned.findIndex((parent) => hasPendingLocalWork(parent.json));
+	const reachable = firstDeferredIndex === -1 ? scanned : scanned.slice(0, firstDeferredIndex);
 	const missingIds = new Set(
 		await missingVariationIds(
 			deps.database,
 			variationsDescriptor,
-			scanned.flatMap((p) => p.variationIds)
+			reachable.flatMap((p) => p.variationIds)
 		)
 	);
 	let cursorWooId = state.cursorWooId;
