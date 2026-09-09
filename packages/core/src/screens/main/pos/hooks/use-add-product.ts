@@ -53,6 +53,12 @@ export const useAddProduct = () => {
 			data: EngineRecord<'products'> | { id: number; [key: string]: any },
 			options?: { silent?: boolean }
 		) => {
+			const timingStart = process.env.EXPO_PUBLIC_WCPOS_E2E === '1' ? performance.now() : 0;
+			const timing =
+				process.env.EXPO_PUBLIC_WCPOS_E2E === '1'
+					? (require('../../../../../e2e/cart-add-timing') as typeof import('../../../../../e2e/cart-add-timing'))
+					: undefined;
+			let timingSequence: number | undefined;
 			let success;
 			let product: ProductDocument | { id: number; [key: string]: any };
 
@@ -100,13 +106,23 @@ export const useAddProduct = () => {
 
 			const lineItems = currentOrderRecord.getLatest().payload.line_items ?? [];
 
+			if (timing && product.id) {
+				timingSequence = timing.beginCartAddTiming(
+					currentOrderRecord.uuid,
+					product.id,
+					timing.simpleProductQuantity(lineItems, product.id),
+					timingStart
+				);
+			}
+
 			// check if product is already in order, if so increment quantity
 			if (!(currentOrderRecord as { isNew?: boolean }).isNew && product.id !== 0) {
 				const matches = findByProductVariationID(lineItems, product.id ?? 0);
 				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await incrementLineItem(uuid, 1);
+						const write = incrementLineItem(uuid, 1);
+						success = await (timing ? timing.observeCartAddWrite(timingSequence, write) : write);
 						if (success === false) return false;
 					}
 				}
@@ -126,7 +142,8 @@ export const useAddProduct = () => {
 					site: 'useAddProduct',
 				});
 				newLineItem = computed.line as typeof newLineItem;
-				success = await addItemToOrder('line_items', newLineItem);
+				const write = addItemToOrder('line_items', newLineItem);
+				success = await (timing ? timing.observeCartAddWrite(timingSequence, write) : write);
 				if (success === false) return false;
 			}
 
@@ -142,6 +159,7 @@ export const useAddProduct = () => {
 				});
 				return true;
 			} else {
+				if (process.env.EXPO_PUBLIC_WCPOS_E2E === '1') timing?.cancelCartAddTiming(timingSequence);
 				reportCartFailure(orderLogger, 'Failed to add product to cart', {
 					toastTitle: t('pos.error_adding_to_cart', { name: product.name }),
 					context: {

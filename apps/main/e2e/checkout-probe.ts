@@ -317,6 +317,21 @@ export async function addCheckoutProbeProduct(page: Page): Promise<void> {
 }
 
 /**
+ * The add control of the run-private simple product after its first add: the same
+ * tile (or table row button) `tryAddRunPrivateSimpleProduct` clicked, so a burst of
+ * repeat clicks keeps one product identity. `null` on secretless forks, where the
+ * shared-catalog fallback cannot guarantee which product a page-wide `.first()` hits.
+ */
+export function checkoutProbeAddControl(page: Page): Locator | null {
+	const probe = simpleProbesByPage.get(page)?.[0] ?? null;
+	if (!probe?.rowTestId) return null;
+	const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
+	const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
+	const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
+	return tile.or(tableButton).first();
+}
+
+/**
  * Add a product a SECOND time in the same session, without any server wait.
  *
  * `addCheckoutProbeProduct` cannot be called twice: its writer path re-searches the same

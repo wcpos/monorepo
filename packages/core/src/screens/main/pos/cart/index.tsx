@@ -58,6 +58,12 @@ export function OpenOrders({ isColumn = false }) {
 	 */
 	return (
 		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
+			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
+				React.createElement(
+					(
+						require('../../../../../e2e/cart-add-timing-readout') as typeof import('../../../../../e2e/cart-add-timing-readout')
+					).CartAddTimingReadout
+				)}
 			<ErrorBoundary>
 				{isNewOrder ? (
 					<Card className="flex-1">

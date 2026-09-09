@@ -63,7 +63,7 @@ METRO_STATUS=$(curl -fsS http://localhost:8081/status 2>/dev/null || true)
 case "$METRO_STATUS" in
 	*packager-status:running*) ;;
 	*)
-		die "Metro is not running at http://localhost:8081/status. Run 'npx expo start --no-dev --minify' in apps/main, then retry."
+		die "Metro is not running at http://localhost:8081/status. Run 'EXPO_NO_METRO_LAZY=1 EXPO_PUBLIC_WCPOS_E2E=1 npx expo start --no-dev --minify' in apps/main, then retry."
 		;;
 esac
 

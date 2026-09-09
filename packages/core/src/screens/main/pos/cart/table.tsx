@@ -278,6 +278,13 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	 */
 	return (
 		<Table aria-labelledby="cart-table" className="h-full">
+			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
+				React.createElement(
+					(
+						require('../../../../../e2e/cart-add-timing-readout') as typeof import('../../../../../e2e/cart-add-timing-readout')
+					).CartAddTimingCommit,
+					{ orderId: currentOrderRecord.uuid, lines: line_items }
+				)}
 			<TableHeader>
 				{table.getHeaderGroups().map((headerGroup) => {
 					return (

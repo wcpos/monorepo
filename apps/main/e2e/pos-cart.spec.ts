@@ -1,7 +1,9 @@
 import { expect, type Page } from '@playwright/test';
 
+import { beginCartAddMeasurement, expectCartAddMeasurement } from './cart-add-timing';
 import {
 	addCheckoutProbeProduct,
+	checkoutProbeAddControl,
 	isolatedProductTest as test,
 	tryAddRunPrivateSimpleProduct,
 } from './checkout-probe';
@@ -40,8 +42,57 @@ test.describe('POS Cart', () => {
 		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
 	});
 
-	test('should add a product to the cart and show checkout button', async ({ posPage: page }) => {
+	test('should add a product to the cart and show checkout button', async ({
+		posPage: page,
+	}, testInfo) => {
+		await beginCartAddMeasurement(page);
 		await addFirstProductToCart(page);
+		await expect(page.getByTestId('cart-quantity-input').first()).toHaveText('1');
+		await expectCartAddMeasurement(page, testInfo, 300);
+	});
+
+	test('should absorb twenty rapid adds and paint the exact quantity', async ({
+		posPage: page,
+	}, testInfo) => {
+		// One product identity for all twenty adds: the run-private probe's own add
+		// control. Secretless forks fall back to a page-wide first tile, which cannot
+		// promise the same product after the setup add, so they skip (declared-missing
+		// capability, not a failure).
+		const tile = checkoutProbeAddControl(page);
+		test.skip(
+			tile === null,
+			'twenty-add burst needs the run-private simple product (E2E_PRODUCT_WRITER credentials)'
+		);
+		await addFirstProductToCart(page);
+		// Provisional: after two green four-device runs, tighten to observed CI
+		// maximum plus ~30%, as with assert-cart-add-timing.yml.
+		const budgetMs = 8_000;
+		const burstStartedAt = await page.evaluate(() => performance.now());
+		let settledMs: number | null = null;
+		try {
+			for (let index = 0; index < 19; index += 1) {
+				await tile!.click();
+				if (index < 18) await page.waitForTimeout(200);
+			}
+			await expect(page.getByTestId('cart-quantity-input').first()).toHaveText('20', {
+				timeout: 20_000,
+			});
+			settledMs = await page.evaluate((start) => performance.now() - start, burstStartedAt);
+			expect(settledMs, 'First burst click → quantity 20 in the DOM').toBeLessThanOrEqual(budgetMs);
+		} finally {
+			await testInfo.attach('cart-add-burst', {
+				body: JSON.stringify({
+					metric: 'first-burst-click-to-quantity-20-in-dom',
+					platform: 'web',
+					project: testInfo.project.name,
+					adds: 20,
+					paceMs: 200,
+					budgetMs,
+					settledMs,
+				}),
+				contentType: 'application/json',
+			});
+		}
 	});
 
 	test('should update quantity in cart', async ({ posPage: page }) => {
