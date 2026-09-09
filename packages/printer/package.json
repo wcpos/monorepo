@@ -45,7 +45,7 @@
 		"@types/upng-js": "2.1.5",
 		"jsdom": "^30.0.1",
 		"react-dom": "19.2.7",
-		"vitest": "^4.1.10"
+		"vitest": "^4.1.11"
 	},
 	"peerDependencies": {
 		"expo-modules-core": ">=55.0.0",
