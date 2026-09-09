@@ -31,7 +31,19 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 jest.mock('./use-recalculate-coupons', () => ({ useRecalculateCoupons: () => ({ recalculate }) }));
 jest.mock('../contexts/current-order', () => ({ useCurrentOrder: () => ({ currentOrderRecord }) }));
 const readEngineCoupons = jest.fn();
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => ({}) }));
+const whenSettled = jest.fn(async () => true);
+const demandDeclared = jest.fn();
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({}),
+	useRecordField: (record: { payload: unknown }, select: (r: { payload: unknown }) => unknown) =>
+		select(record),
+}));
+jest.mock('../../../../query', () => ({
+	useAppliedCouponReferenceDemand: (enabled: boolean) => {
+		demandDeclared(enabled);
+		return { whenSettled };
+	},
+}));
 jest.mock('./engine-coupon-data', () => ({
 	readEngineCoupons: (...args: unknown[]) => readEngineCoupons(...args),
 }));
@@ -88,7 +100,14 @@ it.each(['percent', 'fixed_cart'] as const)(
 	}
 );
 it('appends a second discount without replacing the first', async () => {
-	couponLines = [{ code: 'pos-discount' }];
+	couponLines = [
+		{
+			code: 'pos-discount',
+			meta_data: [
+				{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+			],
+		} as never,
+	];
 	const { result } = renderHook(() => useAddQuickDiscount());
 	await result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' });
 	expect(recalculate.mock.calls[0][1].map((line: { code: string }) => line.code)).toEqual([
@@ -143,8 +162,28 @@ it('refuses to stack onto an applied individual-use catalog coupon, like useAddC
 	await expect(
 		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
 	).resolves.toEqual({ success: false, error: 'individual_use_conflict:exclusive' });
+	expect(demandDeclared).toHaveBeenLastCalledWith(true);
+	expect(whenSettled).toHaveBeenCalledTimes(1);
 	expect(recalculate).not.toHaveBeenCalled();
 	expect(localPatch).not.toHaveBeenCalled();
+});
+it('refuses when an applied catalog coupon is still not resident after the reference wait', async () => {
+	couponLines = [{ code: 'not-yet-pulled' }];
+	readEngineCoupons.mockResolvedValueOnce([]);
+	const { result } = renderHook(() => useAddQuickDiscount());
+	await expect(
+		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
+	).resolves.toEqual({ success: false, error: 'pos_cart.coupon_not_found' });
+	expect(whenSettled).toHaveBeenCalledTimes(1);
+	expect(recalculate).not.toHaveBeenCalled();
+});
+it('stacks onto a resident, non-exclusive catalog coupon', async () => {
+	couponLines = [{ code: 'plain' }];
+	readEngineCoupons.mockResolvedValueOnce([{ payload: { code: 'plain', individual_use: false } }]);
+	const { result } = renderHook(() => useAddQuickDiscount());
+	await expect(
+		result.current.addQuickDiscount({ discount_type: 'percent', amount: '10' })
+	).resolves.toEqual({ success: true });
 });
 it('does not read the catalog when the only applied coupons are quick discounts', async () => {
 	couponLines = [
@@ -160,6 +199,8 @@ it('does not read the catalog when the only applied coupons are quick discounts'
 		result.current.addQuickDiscount({ discount_type: 'fixed_cart', amount: '2' })
 	).resolves.toEqual({ success: true });
 	expect(readEngineCoupons).not.toHaveBeenCalled();
+	expect(whenSettled).not.toHaveBeenCalled();
+	expect(demandDeclared).toHaveBeenLastCalledWith(false);
 	expect(recalculate).toHaveBeenCalledWith(
 		lineItems,
 		expect.arrayContaining([expect.objectContaining({ code: 'pos-discount-2' })])
