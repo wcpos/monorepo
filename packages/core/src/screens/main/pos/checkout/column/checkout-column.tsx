@@ -14,7 +14,7 @@ import { useCheckoutBack } from './use-checkout-back';
 import { leaveCheckout } from '../checkout-mode';
 import { CancelPaymentView } from '../tender/cancel-payment-view';
 import { LegacyTab } from '../tender/legacy-tab';
-import { BalanceHeadline, SplitControl } from '../tender/ledger-pane';
+import { BalanceHeadline, ThisPaymentLine } from '../tender/ledger-pane';
 import { TenderPane } from '../tender/tender-pane';
 import { useT } from '../../../../../contexts/translations';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
@@ -126,8 +126,16 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 				) : null}
 			</View>
 			<View className="gap-2 p-4">
-				<BalanceHeadline flow={flow} format={format} />
-				<SplitControl flow={flow} format={format} />
+				<ThisPaymentLine
+					flow={flow}
+					format={format}
+					renderRow={(row) => (
+						<HStack className="items-end justify-between gap-2">
+							<BalanceHeadline flow={flow} format={format} />
+							{row}
+						</HStack>
+					)}
+				/>
 			</View>
 			<View className="flex-1 p-4">{body}</View>
 		</View>

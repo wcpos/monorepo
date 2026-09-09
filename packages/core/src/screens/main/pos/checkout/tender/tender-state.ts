@@ -11,8 +11,10 @@ export interface TenderState {
 	entryMinor: number;
 	/** False until the cashier has touched the keypad since the entry was pre-filled. */
 	entryDirty: boolean;
-	/** Pre-fill, in minor units, for the NEXT tender, set from the split menu. */
-	splitShareMinor: number | null;
+	/** An even split the cashier chose. `taken` counts legs recorded since; the last leg absorbs the rounding. */
+	splitPlan: { ways: number; shareMinor: number; taken: number } | null;
+	/** "Enter amount…": the next keypad opens empty instead of prefilled. */
+	customAmount: boolean;
 	splitMenuOpen: boolean;
 }
 
@@ -31,7 +33,9 @@ export type TenderAction =
 	| { type: 'tender-recorded' }
 	| { type: 'open-split-menu' }
 	| { type: 'close-split-menu' }
-	| { type: 'set-split-share'; minor: number | null }
+	| { type: 'set-split-plan'; ways: number; shareMinor: number }
+	| { type: 'arm-custom-amount' }
+	| { type: 'clear-split'; balanceMinor: number }
 	| { type: 'request-cancel' }
 	| { type: 'reset' };
 /** $9,999,999.99 at two decimals — a till will never legitimately take more, and it stops a stuck key running the display off the screen. */
@@ -43,7 +47,8 @@ export const initialTenderState: TenderState = {
 	readerId: null,
 	entryMinor: 0,
 	entryDirty: false,
-	splitShareMinor: null,
+	splitPlan: null,
+	customAmount: false,
 	splitMenuOpen: false,
 };
 
@@ -75,8 +80,6 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				readerId: action.readerId,
 				entryMinor: action.prefillMinor,
 				entryDirty: false,
-				splitShareMinor: null,
-				splitMenuOpen: false,
 			};
 		case 'pick-reader':
 			return { ...state, readerId: action.readerId };
@@ -121,14 +124,33 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				readerId: null,
 				entryMinor: 0,
 				entryDirty: false,
-				splitShareMinor: null,
+				splitPlan:
+					state.splitPlan && state.splitPlan.taken + 1 < state.splitPlan.ways
+						? { ...state.splitPlan, taken: state.splitPlan.taken + 1 }
+						: null,
+				customAmount: false,
 			};
 		case 'open-split-menu':
 			return { ...state, splitMenuOpen: true };
 		case 'close-split-menu':
 			return { ...state, splitMenuOpen: false };
-		case 'set-split-share':
-			return { ...state, splitShareMinor: action.minor, splitMenuOpen: false };
+		case 'set-split-plan':
+		case 'arm-custom-amount':
+		case 'clear-split': {
+			const splitPlan =
+				action.type === 'set-split-plan'
+					? { ways: action.ways, shareMinor: action.shareMinor, taken: 0 }
+					: null;
+			const minor =
+				action.type === 'clear-split' ? action.balanceMinor : (splitPlan?.shareMinor ?? 0);
+			return {
+				...state,
+				splitPlan,
+				customAmount: action.type === 'arm-custom-amount',
+				splitMenuOpen: false,
+				...(state.view === 'amount' ? { entryMinor: minor, entryDirty: false } : {}),
+			};
+		}
 		case 'request-cancel':
 			return { ...state, view: 'cancel', splitMenuOpen: false };
 		case 'reset':
@@ -182,4 +204,21 @@ export function evenSplitShareMinor(balanceMinor: number, ways: number): number 
 	const wholeShare = Math.floor(balanceMinor / ways);
 	const remainder = balanceMinor % ways;
 	return wholeShare + (remainder * 2 >= ways ? 1 : 0);
+}
+
+/** Chips: recent recorded legs first, then shares still to take; the final leg absorbs the balance. */
+export function splitPlanLegs(
+	plan: NonNullable<TenderState['splitPlan']>,
+	recentLegMinors: number[],
+	balanceMinor: number
+): { minor: number; state: 'done' | 'now' | 'todo' }[] {
+	const taken = Math.min(plan.taken, plan.ways);
+	const done = recentLegMinors.slice(-taken);
+	let remaining = balanceMinor;
+	return Array.from({ length: plan.ways }, (_, index) => {
+		if (index < taken) return { minor: done[index], state: 'done' };
+		const minor = index === plan.ways - 1 ? remaining : Math.min(plan.shareMinor, remaining);
+		remaining -= minor;
+		return { minor, state: index === taken ? 'now' : 'todo' };
+	});
 }

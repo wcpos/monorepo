@@ -6,6 +6,7 @@ import {
 	initTenderState,
 	MAX_TENDER_MINOR,
 	quickTenderedAmounts,
+	splitPlanLegs,
 	tenderReducer,
 } from './tender-state';
 
@@ -71,8 +72,9 @@ describe('tenderReducer', () => {
 
 	it('moves between tabs, tender selection, split menu, and cancellation', () => {
 		const split = tenderReducer(tenderReducer(initialTenderState, { type: 'open-split-menu' }), {
-			type: 'set-split-share',
-			minor: 2148,
+			type: 'set-split-plan',
+			ways: 2,
+			shareMinor: 2148,
 		});
 		const picked = tenderReducer(split, {
 			type: 'pick-method',
@@ -88,13 +90,16 @@ describe('tenderReducer', () => {
 			...initialTenderState,
 			tab: 'legacy',
 		});
-		expect(split).toMatchObject({ splitShareMinor: 2148, splitMenuOpen: false });
+		expect(split).toMatchObject({
+			splitPlan: { ways: 2, shareMinor: 2148, taken: 0 },
+			splitMenuOpen: false,
+		});
 		expect(picked).toMatchObject({
 			view: 'amount',
 			methodId: 'cash',
 			entryMinor: 2148,
 			entryDirty: false,
-			splitShareMinor: null,
+			splitPlan: { ways: 2, shareMinor: 2148, taken: 0 },
 			splitMenuOpen: false,
 		});
 		expect(cancel).toMatchObject({
@@ -111,14 +116,14 @@ describe('tenderReducer', () => {
 		});
 	});
 
-	it('clears a split share after recording a tender and resets to the initial state', () => {
+	it('advances a split plan after recording a tender and resets to the initial state', () => {
 		const state = {
 			...initialTenderState,
 			view: 'amount' as const,
 			methodId: 'cash',
 			entryMinor: 2148,
 			entryDirty: true,
-			splitShareMinor: 2148,
+			splitPlan: { ways: 2, shareMinor: 2148, taken: 0 },
 		};
 
 		expect(tenderReducer(state, { type: 'tender-recorded' })).toMatchObject({
@@ -126,7 +131,8 @@ describe('tenderReducer', () => {
 			methodId: null,
 			entryMinor: 0,
 			entryDirty: false,
-			splitShareMinor: null,
+			splitPlan: { ways: 2, shareMinor: 2148, taken: 1 },
+			customAmount: false,
 		});
 		expect(tenderReducer(state, { type: 'reset' })).toBe(initialTenderState);
 	});
@@ -177,7 +183,7 @@ describe('tender money helpers', () => {
 	});
 });
 
-it('carries and changes the reader; starting clears entry but preserves the split share', () => {
+it('carries and changes the reader; starting clears entry but preserves the split plan', () => {
 	const picked = tenderReducer(initialTenderState, {
 		type: 'pick-method',
 		methodId: 'terminal',
@@ -187,15 +193,81 @@ it('carries and changes the reader; starting clears entry but preserves the spli
 	expect(picked.readerId).toBe('a');
 	const changed = tenderReducer(picked, { type: 'pick-reader', readerId: 'b' });
 	expect(changed.readerId).toBe('b');
-	const started = tenderReducer({ ...changed, splitShareMinor: 500 }, { type: 'tender-started' });
+	const started = tenderReducer(
+		{ ...changed, splitPlan: { ways: 2, shareMinor: 500, taken: 0 } },
+		{ type: 'tender-started' }
+	);
 	expect(started).toMatchObject({
 		view: 'select',
 		methodId: null,
 		readerId: null,
 		entryMinor: 0,
-		splitShareMinor: 500,
+		splitPlan: { ways: 2, shareMinor: 500, taken: 0 },
 	});
 	for (const type of ['back', 'tender-recorded', 'reset'] as const) {
 		expect(tenderReducer(changed, { type }).readerId).toBeNull();
 	}
+});
+
+it.each(['select', 'amount'] as const)('sets, arms and clears a split in %s', (view) => {
+	const state = {
+		...initialTenderState,
+		view,
+		entryMinor: 999,
+		entryDirty: true,
+		splitMenuOpen: true,
+	};
+	const plan = tenderReducer(state, { type: 'set-split-plan', ways: 3, shareMinor: 333 });
+	expect(plan).toMatchObject({
+		splitPlan: { ways: 3, shareMinor: 333, taken: 0 },
+		customAmount: false,
+		splitMenuOpen: false,
+		entryMinor: view === 'amount' ? 333 : 999,
+		entryDirty: view !== 'amount',
+	});
+	const custom = tenderReducer(plan, { type: 'arm-custom-amount' });
+	expect(custom).toMatchObject({
+		splitPlan: null,
+		customAmount: true,
+		splitMenuOpen: false,
+		entryMinor: view === 'amount' ? 0 : 999,
+		entryDirty: view !== 'amount',
+	});
+	expect(tenderReducer(custom, { type: 'clear-split', balanceMinor: 1000 })).toMatchObject({
+		splitPlan: null,
+		customAmount: false,
+		splitMenuOpen: false,
+		entryMinor: view === 'amount' ? 1000 : 999,
+		entryDirty: view !== 'amount',
+	});
+	expect(tenderReducer(custom, { type: 'tender-recorded' }).customAmount).toBe(false);
+	for (const type of ['back', 'tender-started'] as const) {
+		expect(tenderReducer(plan, { type }).splitPlan).toEqual(plan.splitPlan);
+		expect(tenderReducer(custom, { type }).customAmount).toBe(true);
+	}
+	expect(
+		tenderReducer(
+			{ ...plan, splitPlan: { ways: 3, shareMinor: 333, taken: 2 } },
+			{ type: 'tender-recorded' }
+		).splitPlan
+	).toBeNull();
+});
+it('builds plan legs from actual recorded amounts and leaves rounding to the last leg', () => {
+	expect(splitPlanLegs({ ways: 2, shareMinor: 500, taken: 0 }, [], 1000)).toEqual([
+		{ minor: 500, state: 'now' },
+		{ minor: 500, state: 'todo' },
+	]);
+	expect(splitPlanLegs({ ways: 3, shareMinor: 333, taken: 1 }, [330], 670)).toEqual([
+		{ minor: 330, state: 'done' },
+		{ minor: 333, state: 'now' },
+		{ minor: 337, state: 'todo' },
+	]);
+	expect(splitPlanLegs({ ways: 2, shareMinor: 500, taken: 2 }, [500, 501], 0)).toEqual([
+		{ minor: 500, state: 'done' },
+		{ minor: 501, state: 'done' },
+	]);
+	expect(splitPlanLegs({ ways: 2, shareMinor: 500, taken: 3 }, [400, 500, 501], 0)).toEqual([
+		{ minor: 500, state: 'done' },
+		{ minor: 501, state: 'done' },
+	]);
 });

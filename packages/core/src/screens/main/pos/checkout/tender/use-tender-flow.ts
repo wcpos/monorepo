@@ -44,6 +44,7 @@ import {
 	changeMinor,
 	initTenderState,
 	quickTenderedAmounts,
+	splitPlanLegs,
 	type TenderAction,
 	tenderReducer,
 	type TenderState,
@@ -79,6 +80,9 @@ export interface TenderFlow {
 	totalMinor: number;
 	paidMinor: number;
 	balanceMinor: number;
+	thisPaymentMinor: number;
+	afterThisPaymentMinor: number;
+	splitLegs: ReturnType<typeof splitPlanLegs>;
 
 	/** The order's ledger rows, in ledger order. */
 	rows: PaymentRow[];
@@ -178,15 +182,23 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		entryAppliedMinor,
 		method?.capabilities.change ?? false
 	);
+	const thisPaymentMinor =
+		state.view === 'amount'
+			? entryAppliedMinor
+			: state.splitPlan
+				? Math.min(state.splitPlan.shareMinor, balanceMinor)
+				: balanceMinor;
+	const afterThisPaymentMinor = balanceMinor - thisPaymentMinor;
+
 	const quickAmountsMinor = React.useMemo(
 		() =>
 			method?.capabilities.change
 				? quickTenderedAmounts(
-						balanceMinor,
+						thisPaymentMinor,
 						QUICK_TENDER_STEPS.map((step) => step * 10 ** dp)
 					)
 				: [],
-		[balanceMinor, dp, method]
+		[thisPaymentMinor, dp, method]
 	);
 
 	const dispatch = React.useCallback<React.Dispatch<TenderAction>>(
@@ -204,10 +216,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			if (busyRef.current || (saveState && saveState.kind !== 'queued-offline')) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile || tile.disabled) return;
-			const prefillMinor =
-				state.splitShareMinor === null
-					? balanceMinor
-					: Math.min(state.splitShareMinor, balanceMinor);
+			const prefillMinor = state.customAmount
+				? 0
+				: state.splitPlan
+					? Math.min(state.splitPlan.shareMinor, balanceMinor)
+					: balanceMinor;
 			const { readers } = selectableReaders(tile.method, service?.readersInUse(), order.uuid);
 			reducerDispatch({
 				type: 'pick-method',
@@ -217,7 +230,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			});
 			setTenderMethod(order.uuid, methodId);
 		},
-		[balanceMinor, order.uuid, saveState, state.splitShareMinor, tiles, service, reducerDispatch]
+		[
+			balanceMinor,
+			order.uuid,
+			saveState,
+			state.splitPlan,
+			state.customAmount,
+			tiles,
+			service,
+			reducerDispatch,
+		]
 	);
 
 	const takeTender = React.useCallback(async () => {
@@ -318,7 +340,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 			if (outcome.kind === 'refused') {
-				reducerDispatch({ type: 'tender-recorded' });
+				reducerDispatch({ type: 'back' });
 				setTenderMethod(order.uuid, null);
 				return;
 			}
@@ -475,6 +497,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			totalMinor,
 			paidMinor,
 			balanceMinor,
+			thisPaymentMinor,
+			afterThisPaymentMinor,
+			splitLegs: state.splitPlan
+				? splitPlanLegs(
+						state.splitPlan,
+						state.splitPlan.taken
+							? liveRows.slice(-state.splitPlan.taken).map((row) => toMinor(row.amount, dp))
+							: [],
+						balanceMinor
+					)
+				: [],
 			rows,
 			liveRows,
 			hasLiveTerminalLeg: Boolean(terminalLeg && terminalLeg.phase !== 'final'),
@@ -510,6 +543,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			totalMinor,
 			paidMinor,
 			balanceMinor,
+			thisPaymentMinor,
+			afterThisPaymentMinor,
 			rows,
 			liveRows,
 			online,

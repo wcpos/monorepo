@@ -42,7 +42,7 @@ export function LedgerPane({ flow, lines, format, splitWays = SPLIT_WAYS }: Prop
 	return (
 		<VStack space="md" className="flex-1">
 			<BalanceHeadline flow={flow} format={format} />
-			<SplitControl flow={flow} format={format} splitWays={splitWays} />
+			<ThisPaymentLine flow={flow} format={format} splitWays={splitWays} />
 			<LedgerLines lines={lines} totalMinor={flow.totalMinor} format={format} />
 			<LedgerLegs view={flow} format={format} />
 		</VStack>
@@ -108,7 +108,7 @@ export function BalanceBar({
 					<LedgerLegs view={flow} format={format} />
 				</VStack>
 			</CollapsibleContent>
-			<SplitControl flow={flow} format={format} splitWays={splitWays} />
+			<ThisPaymentLine flow={flow} format={format} splitWays={splitWays} compact />
 		</Collapsible>
 	);
 }
@@ -216,92 +216,155 @@ function LedgerLeg({
  * for them — so the even shares sit next to the balance and pre-fill the next
  * tender rather than starting a separate mode.
  */
-export function SplitControl({
+export function ThisPaymentLine({
 	flow,
 	format,
+	compact,
+	renderRow,
 	splitWays = SPLIT_WAYS,
 }: {
 	flow: TenderFlow;
 	format: (minor: number) => string;
 	splitWays?: readonly number[];
+	compact?: boolean;
+	renderRow?: (row: React.ReactNode) => React.ReactNode;
 }) {
 	const t = useT();
 
-	if (flow.balanceMinor === 0 || flow.state.view !== 'select') return null;
+	const { splitPlan: plan, customAmount, splitMenuOpen } = flow.state;
 
-	if (!flow.state.splitMenuOpen) {
-		return (
+	const row =
+		flow.balanceMinor === 0 || flow.state.view === 'cancel' ? null : (
 			<HStack className="flex-wrap items-center gap-2">
+				<VStack space="xs">
+					<Text className="text-muted-foreground text-xs">{t('pos_checkout.this_payment')}</Text>
+					<Text
+						testID="checkout-this-payment"
+						className={
+							compact ? 'text-lg font-semibold tabular-nums' : 'text-2xl font-semibold tabular-nums'
+						}
+					>
+						{format(flow.thisPaymentMinor)}
+					</Text>
+				</VStack>
 				<Button
 					variant="ghost-primary"
 					size="sm"
 					testID="checkout-split-payment"
-					onPress={() => flow.dispatch({ type: 'open-split-menu' })}
+					onPress={() =>
+						flow.dispatch({ type: splitMenuOpen ? 'close-split-menu' : 'open-split-menu' })
+					}
 				>
-					<ButtonText>{t('pos_checkout.split_payment')}</ButtonText>
+					<ButtonText>
+						{plan
+							? t('pos_checkout.split_ways_label', { ways: plan.ways })
+							: t(customAmount ? 'pos_checkout.custom_amount' : 'pos_checkout.split')}
+					</ButtonText>
 				</Button>
-				{flow.state.splitShareMinor !== null ? (
-					<Text className="text-muted-foreground text-xs">
-						{t('pos_checkout.next_payment_amount', {
-							amount: format(flow.state.splitShareMinor),
-						})}
-					</Text>
-				) : null}
 			</HStack>
 		);
-	}
 
+	const menu =
+		row && splitMenuOpen ? (
+			<VStack space="xs" className="border-border rounded-md border p-2">
+				<Text className="text-muted-foreground text-xs">
+					{t('pos_checkout.split_the_balance', { amount: format(flow.balanceMinor) })}
+				</Text>
+				<View className="flex-row flex-wrap gap-2">
+					{splitWays.map((ways) => (
+						<Button
+							key={ways}
+							variant="outline"
+							size="sm"
+							testID={`checkout-split-${ways}`}
+							onPress={() =>
+								flow.dispatch({
+									type: 'set-split-plan',
+									ways,
+									shareMinor: evenSplitShareMinor(flow.balanceMinor, ways),
+								})
+							}
+						>
+							<ButtonText>
+								{t('pos_checkout.split_n_ways', {
+									ways,
+									amount: format(evenSplitShareMinor(flow.balanceMinor, ways)),
+								})}
+							</ButtonText>
+						</Button>
+					))}
+					<Button
+						variant="outline"
+						size="sm"
+						testID="checkout-split-custom"
+						onPress={() => flow.dispatch({ type: 'arm-custom-amount' })}
+					>
+						<ButtonText>{t('pos_checkout.enter_amount')}</ButtonText>
+					</Button>
+					{plan || customAmount ? (
+						<Button
+							variant="outline"
+							size="sm"
+							testID="checkout-split-clear"
+							onPress={() =>
+								flow.dispatch({ type: 'clear-split', balanceMinor: flow.balanceMinor })
+							}
+						>
+							<ButtonText>
+								{t('pos_checkout.no_split', { amount: format(flow.balanceMinor) })}
+							</ButtonText>
+						</Button>
+					) : null}
+					<Button
+						variant="ghost-muted"
+						size="sm"
+						testID="checkout-split-close"
+						onPress={() => flow.dispatch({ type: 'close-split-menu' })}
+					>
+						<ButtonText>{t('common.cancel')}</ButtonText>
+					</Button>
+				</View>
+			</VStack>
+		) : null;
+	return (
+		<>
+			{renderRow ? renderRow(row) : row}
+			{menu}
+			{row && plan ? <PlanStrip flow={flow} format={format} /> : null}
+			{row && customAmount && flow.state.view === 'amount' && flow.state.entryMinor > 0 ? (
+				<Text testID="checkout-split-after" className="text-muted-foreground text-xs">
+					{t('pos_checkout.after_this_payment', { amount: format(flow.afterThisPaymentMinor) })}
+				</Text>
+			) : null}
+		</>
+	);
+}
+
+function PlanStrip({ flow, format }: Pick<Props, 'flow' | 'format'>) {
+	const t = useT();
+	const plan = flow.state.splitPlan!;
 	return (
 		<VStack space="xs">
 			<Text className="text-muted-foreground text-xs">
-				{t('pos_checkout.split_the_balance', { amount: format(flow.balanceMinor) })}
+				{t('pos_checkout.payment_n_of', { n: plan.taken + 1, ways: plan.ways })}
 			</Text>
-			<View className="flex-row flex-wrap gap-2">
-				{splitWays.map((ways) => (
-					<Button
-						key={ways}
-						variant="outline"
-						size="sm"
-						testID={`checkout-split-${ways}`}
-						onPress={() =>
-							flow.dispatch({
-								type: 'set-split-share',
-								minor: evenSplitShareMinor(flow.balanceMinor, ways),
-							})
+			<HStack className="flex-wrap gap-2">
+				{flow.splitLegs.map(({ minor, state }, index) => (
+					<StatusBadge
+						key={index}
+						testID={`checkout-split-leg-${index}`}
+						label={`${format(minor)}${state === 'done' ? ' ✓' : ''}`}
+						variant={state === 'done' ? 'success' : state === 'now' ? 'default' : 'muted'}
+						className={
+							state === 'done'
+								? 'border-success border'
+								: state === 'now'
+									? 'border-primary border'
+									: 'border-border border border-dashed'
 						}
-					>
-						<ButtonText>
-							{t('pos_checkout.split_n_ways', {
-								ways,
-								amount: format(evenSplitShareMinor(flow.balanceMinor, ways)),
-							})}
-						</ButtonText>
-					</Button>
+					/>
 				))}
-				{/* "Custom" is half the balance as a starting point: the cashier is going
-				    to the keypad next, and any amount under the balance is a valid split. */}
-				<Button
-					variant="outline"
-					size="sm"
-					testID="checkout-split-custom"
-					onPress={() =>
-						flow.dispatch({
-							type: 'set-split-share',
-							minor: evenSplitShareMinor(flow.balanceMinor, 2),
-						})
-					}
-				>
-					<ButtonText>{t('pos_checkout.split_custom')}</ButtonText>
-				</Button>
-				<Button
-					variant="ghost-muted"
-					size="sm"
-					testID="checkout-split-close"
-					onPress={() => flow.dispatch({ type: 'close-split-menu' })}
-				>
-					<ButtonText>{t('common.cancel')}</ButtonText>
-				</Button>
-			</View>
+			</HStack>
 		</VStack>
 	);
 }
