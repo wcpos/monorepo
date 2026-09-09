@@ -11,7 +11,7 @@ env:
 # Maestro reads the accessibility value, not the pixels. On 2026-09-09 the
 # field's value was "20" while it painted "2": the shared input's horizontal
 # padding left ~17 points for digits inside the 56-wide column, so wider
-# values clipped (fixed in the cart quantity cell). A clipped or stale paint
+# values clipped (fixed separately in PR 1923). A clipped or stale paint
 # with a correct value passes this flow; only a screenshot comparison would
 # catch it, and the lab's persisted-47-painted-46 stays unreproduced.
 - runFlow:
@@ -84,9 +84,16 @@ env:
 # Setup add. When hideKeyboard did not land, the first tile tap only dismisses
 # the keyboard (#1614 defect 2; 19/20 on the local simulator, 2026-09-09). The
 # retry leg re-taps once, so the burst below never starts on a swallowed tap.
+- evalScript: ${output.setupAddAttempt = 0}
 - retry:
     maxRetries: 1
     commands:
+      - evalScript: ${output.setupAddAttempt = output.setupAddAttempt + 1}
+      - runFlow:
+          when:
+            true: ${output.setupAddAttempt > 1}
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E setup add did not reach the cart within 8 s (first tap dismissed the keyboard, #1614 defect 2); re-tapping the tile once')}"
       - runFlow:
           when:
             visible:

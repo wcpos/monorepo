@@ -219,8 +219,8 @@ runs, tighten both ceilings to the observed CI maximum plus ~30%.
 Known blind spot: Maestro asserts the accessibility value, not the pixels.
 On 2026-09-09 the field's value was `20` while it painted `2`: the shared
 input's 12-point horizontal padding left ~17 points for digits inside the
-56-wide quantity column, so wider values clipped (fixed in the cart quantity
-cell). The flow passes on a clipped or stale paint with a correct value; only
+56-wide quantity column, so wider values clipped (fixed separately in PR
+1923). The flow passes on a clipped or stale paint with a correct value; only
 a screenshot comparison would catch it, and the lab's persisted-47-painted-46
 remains unreproduced.
 
