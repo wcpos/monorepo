@@ -1,3 +1,5 @@
+import type { PrinterProfile } from '../types';
+
 export const SERIAL_PREFIX = 'serial:';
 export const BLE_PREFIX = 'ble:';
 /** Bluetooth Classic (SPP) printers paired with an Android phone; the value is the MAC. */
@@ -6,6 +8,17 @@ export const USB_PREFIX = 'usb:';
 export const WINSPOOL_PREFIX = 'winspool:';
 export const CLOUD_PREFIX = 'cloud:';
 export const SYSTEM_TARGET = 'system';
+
+/**
+ * True for the OS print dialog profile. A Windows winspool queue shares `connectionType: 'system'`
+ * (it is keyed by the spooler) but prints raw bytes, so every "is this the Print Dialog?" branch
+ * must go through here rather than testing the connection type.
+ */
+export function usesSystemPrintDialog(
+	profile: Pick<PrinterProfile, 'connectionType'> & { address?: string }
+): boolean {
+	return profile.connectionType === 'system' && !profile.address?.startsWith(WINSPOOL_PREFIX);
+}
 
 export type ParsedTarget =
 	| { kind: 'serial'; path: string; raw: string }

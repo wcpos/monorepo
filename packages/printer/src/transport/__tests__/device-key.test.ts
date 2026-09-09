@@ -9,6 +9,7 @@ import {
 	connectionTypeForTarget,
 	parseTarget,
 	SYSTEM_TARGET,
+	usesSystemPrintDialog,
 } from '../device-key';
 
 describe('device-key target codec', () => {
@@ -97,4 +98,12 @@ describe('device-key target codec', () => {
 		});
 		expect(connectionTypeForTarget('550e8400-e29b-41d4-a716-446655440000')).toBeUndefined();
 	});
+});
+
+it.each([
+	[{ connectionType: 'system', address: '' }, true],
+	[{ connectionType: 'system', address: 'winspool:POS-80' }, false],
+	[{ connectionType: 'network', address: '192.168.1.10' }, false],
+] as const)('classifies Print Dialog for %j as %s', (profile, expected) => {
+	expect(usesSystemPrintDialog(profile)).toBe(expected);
 });

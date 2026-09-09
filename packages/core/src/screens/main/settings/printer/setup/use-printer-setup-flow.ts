@@ -21,7 +21,7 @@ import { capturePrinterOutcome, getErrorMessage, getLogger } from '@wcpos/utils/
 import { hasTargetKind, isUsbLikeDevice } from '../dialog/connection/discovered-printer-filters';
 import { isWindowsPlatform } from '../dialog/connection/is-windows';
 import { buildPrinterProfileFields } from '../profile-config';
-import { DEFAULT_FORM_VALUES, type PrinterFormValues } from '../schema';
+import { DEFAULT_FORM_VALUES, genericVendorAllowed, type PrinterFormValues } from '../schema';
 import { deriveWebVendorDefaults, resolveWebPort } from '../web-network-defaults';
 
 import type { TestPrintFailure } from '../dialog/use-printer-dialog-form';
@@ -246,14 +246,12 @@ export function usePrinterSetupFlow(
 		// A chooser-picked device on Electron carries no identity; plain ESC/POS is the safe profile.
 		else if (/^web(usb|bluetooth):/.test(selected.address) && !selected.identity?.vendor)
 			vendor = 'generic';
-		// Bluetooth and USB run through the Epson and Star SDKs; native has no generic device transport.
 		// SDK Bluetooth/USB rows print through the Epson or Star SDK; a `ble:` row is the generic GATT
-		// lane and an `spp:` row the paired Bluetooth Classic lane, both plain ESC/POS.
+		// lane and an `spp:` row the paired Bluetooth Classic lane, both plain ESC/POS (schema rule).
 		if (
 			native &&
-			selected.connectionType !== 'network' &&
 			vendor === 'generic' &&
-			!/^(ble|spp):/i.test(selected.address)
+			!genericVendorAllowed(selected.connectionType, selected.address)
 		)
 			vendor = 'epson';
 		const secureTarget = native ? secureTargetFor(selected) : undefined;
