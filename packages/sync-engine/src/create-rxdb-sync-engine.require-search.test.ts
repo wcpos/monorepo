@@ -272,6 +272,132 @@ describe('require() for search — the public search-demand verb', () => {
 		await engine.dispose();
 	});
 
+	it.each([
+		{ limit: 28, action: 'serve-local', requests: 0, covered: 50 },
+		{ limit: 100, action: 'fetched', requests: 1, covered: 100 },
+	])(
+		'uses a fresh incomplete 50-id search lane at limit $limit',
+		async ({ limit, action, requests, covered }) => {
+			const products = Array.from({ length: 150 }, (_, index) =>
+				productPayload(index + 1, 'Keyboard')
+			);
+			const urls: string[] = [];
+			const harness = createEngineHarness({
+				site: SITE,
+				identity: freshIdentity(),
+				awaitReady: false,
+				fetch: async (url) => {
+					const params = new URL(url).searchParams;
+					if (!params.has('sku') && !params.has('search')) return json([]);
+					urls.push(url);
+					const size = Number(params.get('per_page'));
+					const offset = (Number(params.get('page')) - 1) * size;
+					return json(params.has('sku') ? [] : products.slice(offset, offset + size));
+				},
+			});
+			const { engine } = harness;
+			await engine.ready;
+			engine.reconfigure({ pullBatchSize: 50 });
+			const first = engine.require({
+				id: 'prefix',
+				collection: 'products',
+				kind: 'search',
+				term: 'keyboard',
+				limit: 50,
+			});
+			await expect(first.ready).resolves.toMatchObject({
+				action: 'fetched',
+				documents: 50,
+				requests: 2,
+			});
+			expect(urls.map((url) => new URL(url).search)).toEqual([
+				'?sku=keyboard&per_page=50&page=1&orderby=id&order=desc&status=publish',
+				'?search=keyboard&per_page=50&page=1&orderby=id&order=desc&status=publish',
+			]);
+			first.release();
+			urls.length = 0;
+
+			await expect(
+				engine.require({
+					id: 'extension',
+					collection: 'products',
+					kind: 'search',
+					term: 'keyboard',
+					limit,
+				}).ready
+			).resolves.toMatchObject({ action, requests });
+			expect(urls.map((url) => new URL(url).search)).toEqual(
+				requests === 0
+					? []
+					: ['?search=keyboard&per_page=50&page=2&orderby=id&order=desc&status=publish']
+			);
+			const lane = await harness
+				.collection('coverageLanes')
+				.findOne({ selector: { queryKey: 'products:search:keyboard' } })
+				.exec();
+			expect(lane?.toJSON()).toMatchObject({
+				complete: false,
+				expectedRecordIds: Array.from(
+					{ length: covered },
+					(_, index) => `woo-product:${index + 1}`
+				),
+			});
+			expect(await harness.collection('products').count().exec()).toBe(covered);
+			await engine.dispose();
+		}
+	);
+
+	it('a forced refresh walks from page 1 instead of resuming the covered prefix', async () => {
+		const products = Array.from({ length: 150 }, (_, index) =>
+			productPayload(index + 1, 'Keyboard')
+		);
+		const urls: string[] = [];
+		const harness = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			awaitReady: false,
+			fetch: async (url) => {
+				const params = new URL(url).searchParams;
+				if (!params.has('sku') && !params.has('search')) return json([]);
+				urls.push(url);
+				const size = Number(params.get('per_page'));
+				const offset = (Number(params.get('page')) - 1) * size;
+				return json(params.has('sku') ? [] : products.slice(offset, offset + size));
+			},
+		});
+		const { engine } = harness;
+		await engine.ready;
+		engine.reconfigure({ pullBatchSize: 50 });
+		const first = engine.require({
+			id: 'prefix',
+			collection: 'products',
+			kind: 'search',
+			term: 'keyboard',
+			limit: 50,
+		});
+		await expect(first.ready).resolves.toMatchObject({ action: 'fetched', requests: 2 });
+		first.release();
+		urls.length = 0;
+
+		await expect(
+			engine.require({
+				id: 'forced',
+				collection: 'products',
+				kind: 'search',
+				term: 'keyboard',
+				limit: 100,
+				forceRefresh: true,
+			}).ready
+		).resolves.toMatchObject({ action: 'fetched', requests: 3 });
+		// The cashier asked for fresh rows: the sku leg runs again and the walk restarts at page 1.
+		expect(urls.map((url) => new URL(url).search)).toEqual([
+			'?sku=keyboard&per_page=50&page=1&orderby=id&order=desc&status=publish',
+			'?search=keyboard&per_page=50&page=1&orderby=id&order=desc&status=publish',
+			'?search=keyboard&per_page=50&page=2&orderby=id&order=desc&status=publish',
+		]);
+		await engine.dispose();
+	});
+
 	it('serves a product search locally when a fresh census is fully resident', async () => {
 		const server = scriptedProductSearchProxy([]);
 		const engine = engineWith(server.fetch);
@@ -1264,6 +1390,9 @@ describe('require() for search — the public search-demand verb', () => {
 			if (parsed.pathname.endsWith('/customers')) return customerGate.promise;
 			if (parsed.pathname.endsWith('/products') && !parsed.searchParams.has('sku')) {
 				productPerPage.push(parsed.searchParams.get('per_page') ?? '');
+				return json(
+					Array.from({ length: 60 }, (_, index) => productPayload(index + 1, 'Keyboard'))
+				);
 			}
 			return json([]);
 		});
@@ -1293,11 +1422,11 @@ describe('require() for search — the public search-demand verb', () => {
 
 		await expect(customers.ready).resolves.toMatchObject({ action: 'fetched' });
 		await expect(Promise.all([narrow.ready, wide.ready])).resolves.toEqual([
-			expect.objectContaining({ action: 'fetched' }),
-			expect.objectContaining({ action: 'fetched' }),
+			expect.objectContaining({ action: 'fetched', documents: 60, requests: 2 }),
+			expect.objectContaining({ action: 'fetched', documents: 60, requests: 2 }),
 		]);
-		// One walk, sized to the widest declarer.
-		expect(productPerPage).toEqual(['40']);
+		// #908 reversal — the wire page is the dial even for a small window, so the next grid extensions serve local: the widest window uses a dial-sized page.
+		expect(productPerPage).toEqual(['100']);
 		await engine.dispose();
 	});
 
