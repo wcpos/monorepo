@@ -1,4 +1,4 @@
-import { createDeviceLeg } from './device-leg';
+import { createDeviceLeg, type DeviceLegState } from './device-leg';
 import { method, row } from './fixtures.test-utils';
 
 import type {
@@ -43,13 +43,16 @@ function setup(offline = false, resume = false, missing?: 'driver' | 'method') {
 			handoff: { token: 'opaque' },
 		},
 	}));
+	const get = jest.fn(async (_url: string): Promise<{ data: unknown }> => ({
+		data: { payment: row },
+	}));
 	const mirror = jest.fn(async (_value: unknown) => {});
 	const patchAndEnqueue = jest.fn(async (_row: unknown): Promise<void> => {});
 	const onFinal = jest.fn();
 	const leg = createDeviceLeg(
 		{
 			post,
-			get: (url) => post(url, undefined),
+			get,
 			driver: missing === 'driver' ? undefined : driver,
 			mirror,
 			patchAndEnqueue,
@@ -68,7 +71,7 @@ function setup(offline = false, resume = false, missing?: 'driver' | 'method') {
 			resume,
 		}
 	);
-	return { leg, driver, post, mirror, patchAndEnqueue, onFinal, collection };
+	return { leg, driver, post, get, mirror, patchAndEnqueue, onFinal, collection };
 }
 beforeEach(() => {
 	jest.useFakeTimers();
@@ -109,6 +112,81 @@ it('mirrors intent before collect and sends exactly the driver context for serve
 	expect(c.leg.getState()).toMatchObject({ phase: 'final', outcome: 'captured' });
 	expect(c.onFinal).toHaveBeenCalledTimes(1);
 });
+it('publishes the captured row and outcome together before checkout can unmount', async () => {
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	const summary = {
+		status: 'completed',
+		total: '11.00',
+		paid: '11.00',
+		balance: '0.00',
+		payment_method: 'device',
+		payment_method_title: 'Reader',
+	};
+	c.post.mockResolvedValueOnce({
+		data: { payment: { ...row, status: 'captured', tip: '1.00' }, order: summary },
+	});
+	const captured: DeviceLegState[] = [];
+	c.leg.subscribe(() => {
+		const state = c.leg.getState();
+		if (state.row.status === 'captured') captured.push(state);
+	});
+	c.collection.resolve(approved);
+	await start;
+	expect(captured).toHaveLength(1);
+	expect(captured[0]).toMatchObject({
+		phase: 'final',
+		outcome: 'captured',
+		row: { tip: '1.00' },
+		order: summary,
+	});
+	expect(c.mirror).toHaveBeenLastCalledWith({ payment: captured[0].row, order: summary });
+	expect(c.onFinal).toHaveBeenCalledTimes(1);
+});
+it('reconciles a reported decline through status without voiding a failed row', async () => {
+	const c = setup();
+	const start = c.leg.start();
+	await tick();
+	c.get.mockResolvedValueOnce({
+		data: { payment: { ...row, status: 'failed', failure_reason: 'card_declined' } },
+	});
+	c.collection.resolve({ ...approved, outcome: 'declined', failure_reason: 'card_declined' });
+	await start;
+	expect(c.get).toHaveBeenCalledWith('orders/42/payments/leg/status');
+	expect(c.post).toHaveBeenCalledTimes(1);
+	expect(c.leg.getState()).toMatchObject({
+		phase: 'final',
+		outcome: 'failed',
+		failureReason: 'card_declined',
+		row: { status: 'failed', failure_reason: 'card_declined' },
+	});
+});
+it.each(['pending', 'authorized'] as const)(
+	'voids a declined row only after status is still %s',
+	async (status) => {
+		const c = setup();
+		const start = c.leg.start();
+		await tick();
+		const statusRead = deferred<{ data: unknown }>();
+		c.get.mockReturnValueOnce(statusRead.promise);
+		c.collection.resolve({ ...approved, outcome: 'declined', failure_reason: 'card_declined' });
+		await tick();
+		expect(c.get).toHaveBeenCalledWith('orders/42/payments/leg/status');
+		expect(c.post).toHaveBeenCalledTimes(1);
+		statusRead.resolve({ data: { payment: { ...row, status } } });
+		await start;
+		expect(c.post).toHaveBeenLastCalledWith('orders/42/payments/leg/void', {
+			reason: 'card_declined',
+		});
+		expect(c.leg.getState()).toMatchObject({
+			phase: 'final',
+			outcome: 'failed',
+			failureReason: 'card_declined',
+			row: { status: 'voided' },
+		});
+	}
+);
 it.each(['declined', 'cancelled'] as const)(
 	'voids %s without asserting a capture',
 	async (outcome) => {
@@ -121,6 +199,7 @@ it.each(['declined', 'cancelled'] as const)(
 			reason: outcome === 'declined' ? 'card_declined' : 'cashier',
 		});
 		expect(c.leg.getState().outcome).toBe(outcome === 'declined' ? 'failed' : 'voided');
+		if (outcome === 'cancelled') expect(c.get).not.toHaveBeenCalled();
 	}
 );
 it('does not report paid from a successful HTTP response with a pending row', async () => {

@@ -24,8 +24,8 @@ export function driverReady(
 	return Boolean(
 		transport &&
 		driver?.availability().available &&
-		(driver.capabilities.discovery === 'sdk_ui' ||
-			(status?.connection === 'connected' && status.reader?.transport === transport))
+		status?.connection === 'connected' &&
+		status.reader?.transport === transport
 	);
 }
 

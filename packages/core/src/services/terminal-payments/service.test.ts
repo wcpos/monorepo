@@ -203,6 +203,54 @@ it('selects the device factory and reserves its method, not a server reader', as
 	expect(c.http.post).not.toHaveBeenCalled();
 	expect(service.readersInUse().size).toBe(0);
 });
+it('online device capture notifies once without tracking or writing an offline settlement', async () => {
+	const c = setup();
+	registerDriver({
+		...createSimulatedDriver(),
+		collect: async () => ({
+			outcome: 'captured',
+			provider_refs: { payment_intent: 'pi' },
+			receipt: {},
+			amount: '10.00',
+			transport: 'bluetooth',
+		}),
+	});
+	const patchAndEnqueue = jest.fn();
+	const service = new TerminalPaymentsService({
+		...c.options,
+		patchAndEnqueue,
+		isOnline: () => true,
+	});
+	const trackOffline = jest.spyOn(service, 'trackOffline');
+	c.http.post.mockImplementation(async (url) => ({
+		data: {
+			payment: { ...deviceRow, status: url.endsWith('/capture') ? 'captured' : 'pending' },
+			order: c.summary,
+		},
+	}));
+	service.subscribe(() => {
+		if (service.get('order')?.outcome === 'captured') service.dismiss('order');
+	});
+	service.begin({
+		...input,
+		row: deviceRow,
+		method: deviceMethod,
+		transport: 'bluetooth',
+		offline: false,
+	});
+	await jest.advanceTimersByTimeAsync(0);
+	await service.flushOffline();
+	expect(service.get('order')).toBeNull();
+	expect(c.onCaptured).toHaveBeenCalledTimes(1);
+	expect(c.onCaptured).toHaveBeenCalledWith('order', c.summary);
+	expect(trackOffline).not.toHaveBeenCalled();
+	expect(patchAndEnqueue).not.toHaveBeenCalled();
+	expect(c.http.post.mock.calls.map(([url]) => url)).toEqual([
+		'orders/42/payments/leg/intent',
+		'orders/42/payments/leg/capture',
+	]);
+	service.stop();
+});
 it('tracks offline settlement after dismissal and only sends it while online', async () => {
 	let online = false;
 	const driver = createSimulatedDriver();

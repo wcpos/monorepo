@@ -992,6 +992,58 @@ describe('device tender', () => {
 		);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 	});
+	it.each(['harness', 'sdk_ui'] as const)(
+		'refuses a stale Take during connection and uses the live reader once connected (%s)',
+		async (discovery) => {
+			const driver = createSimulatedDriver();
+			driver.capabilities.discovery = discovery;
+			registerDriver(driver);
+			const readers = await driver.discoverReaders!('bluetooth');
+			await driver.connect!(readers[1], null);
+			const { result } = renderHook(() => useTenderFlow(order));
+			await act(async () => result.current.pickMethod(deviceMethod.id));
+			const take = result.current.takeTender;
+			let connecting!: Promise<void>;
+			act(() => {
+				connecting = driver.connect!(readers[0], null);
+			});
+			expect(result.current.deviceReady).toBe(false);
+			await act(async () => take());
+			expect(mockBegin).not.toHaveBeenCalled();
+			expect(mockInfo).toHaveBeenCalledWith('pos_checkout.reader_connecting', { showToast: true });
+			await act(async () => connecting);
+			expect(result.current.deviceReady).toBe(true);
+			await act(async () => take());
+			expect(mockBegin).toHaveBeenCalledTimes(1);
+			expect(mockBegin).toHaveBeenCalledWith(
+				expect.objectContaining({
+					reader: 'sim-approve',
+					row: expect.objectContaining({ capture_mode: 'device', status: 'pending' }),
+				})
+			);
+		}
+	);
+	it.each(['disconnected', 'discovering', 'updating', 'wrong-transport', 'no-reader'] as const)(
+		'keeps Take unavailable and refuses minting with %s',
+		async (state) => {
+			const driver = createSimulatedDriver();
+			driver.capabilities.discovery = 'sdk_ui';
+			registerDriver(driver);
+			const reader = (await driver.discoverReaders!('tap_to_pay'))[0];
+			jest.spyOn(driver.status$, 'get').mockReturnValue({
+				connection: state === 'wrong-transport' || state === 'no-reader' ? 'connected' : state,
+				reader: state === 'no-reader' ? null : reader,
+			});
+			const { result } = renderHook(() => useTenderFlow(order));
+			await act(async () => result.current.pickMethod(deviceMethod.id));
+			expect(result.current.deviceReady).toBe(false);
+			await act(async () => result.current.takeTender());
+			expect(mockBegin).not.toHaveBeenCalled();
+			expect(mockInfo).toHaveBeenCalledWith('pos_checkout.reader_disconnected', {
+				showToast: true,
+			});
+		}
+	);
 	it('does not locally void an offline device authorization when abandoning a split sale', async () => {
 		mockPayload = {
 			...mockPayload,

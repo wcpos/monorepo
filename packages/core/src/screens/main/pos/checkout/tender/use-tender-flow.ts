@@ -201,8 +201,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		[method]
 	);
 	const driver = method?.capture.mode === 'device' ? getDriver(method.capture.provider) : undefined;
-	const deviceStatus = useDriverStatus(driver);
-	const deviceReaderId = deviceStatus.reader?.id ?? null;
+	useDriverStatus(driver);
 	const deviceTransport = method
 		? (state.transport ?? deviceTransports(method)[0]?.transport ?? null)
 		: null;
@@ -338,7 +337,24 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 
 			if (method.capture.mode === 'device') {
-				if (!deviceTransport || !driverReady(method, deviceTransport)) return;
+				const liveDriver = getDriver(method.capture.provider);
+				const status = liveDriver?.status$.get();
+				if (
+					!deviceTransport ||
+					!liveDriver?.availability().available ||
+					status?.connection !== 'connected' ||
+					status.reader?.transport !== deviceTransport
+				) {
+					logger.info(
+						t(
+							status?.connection === 'connecting'
+								? 'pos_checkout.reader_connecting'
+								: 'pos_checkout.reader_disconnected'
+						),
+						{ showToast: true }
+					);
+					return;
+				}
 				if (!service) throw new Error('terminal_service_unavailable');
 				const offline = !online || queuedOffline || !payload.id;
 				const minted = mintDevicePayment({
@@ -361,7 +377,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					orderId: payload.id ?? 0,
 					orderNumber: payload.number ?? '',
 					row: minted.row,
-					reader: deviceReaderId,
+					reader: status.reader.id,
 					method,
 					transport: deviceTransport,
 					offline,
@@ -455,7 +471,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	}, [
 		balanceMinor,
 		deviceTransport,
-		deviceReaderId,
 		online,
 		queuedOffline,
 		blockIfDegraded,
