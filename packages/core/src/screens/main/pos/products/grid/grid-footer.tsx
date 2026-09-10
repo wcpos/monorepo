@@ -36,34 +36,19 @@ export function ProductGridFooter({ binding, count }: ProductGridFooterProps) {
 	const pending = useObservableState(pending$, false);
 	const exhausted = useObservableState(exhausted$, null);
 
-	// The rendered-row count as its own referent, the grid's twin of the data-table footer's
-	// `data-table-loaded-count`: the grid virtualizes its tiles, so counting tiles in a test reads
-	// the viewport, not the result. Its own testID, because the E2E catalogue-readiness check
-	// locates the table's in strict mode. Hidden, like the table's; E2E reads its text.
-	const loadedCount = (
-		<Text testID="pos-products-grid-loaded-count" className="hidden">
-			{count}
-		</Text>
-	);
-	if (count === 0) return loadedCount;
+	if (count === 0) return null;
 	if (pending) {
 		return (
-			<>
-				{loadedCount}
-				<View className="items-center justify-center p-3" testID="pos-products-grid-loading">
-					<Loader />
-				</View>
-			</>
+			<View className="items-center justify-center p-3" testID="pos-products-grid-loading">
+				<Loader />
+			</View>
 		);
 	}
 	const atEnd = exhausted === true || (exhausted === null && count < limit);
-	if (!atEnd) return loadedCount;
+	if (!atEnd) return null;
 	return (
-		<>
-			{loadedCount}
-			<View className="items-center justify-center p-3" testID="pos-products-grid-end">
-				<Text className="text-muted-foreground text-sm">{t('pos_products.no_more_products')}</Text>
-			</View>
-		</>
+		<View className="items-center justify-center p-3" testID="pos-products-grid-end">
+			<Text className="text-muted-foreground text-sm">{t('pos_products.no_more_products')}</Text>
+		</View>
 	);
 }

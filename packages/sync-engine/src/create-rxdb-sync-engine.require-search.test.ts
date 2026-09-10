@@ -1598,9 +1598,10 @@ describe('search walk politeness against the fixture (spec Phase 2)', () => {
 			await handle.ready;
 			handle.release();
 		}
-		const searches = urls.map((u) => new URL(u).search);
-		expect(new Set(searches).size).toBe(searches.length);
-		expect(searches.filter((s) => s.includes('search='))).toEqual([
+		// The COMPLETE sequence, so an extra request of any shape fails this: one exact-sku leg,
+		// then one page per 50 hits, each fetched exactly once.
+		expect(urls.map((u) => new URL(u).search)).toEqual([
+			'?sku=widget&per_page=50&page=1&orderby=id&order=desc&status=publish',
 			'?search=widget&per_page=50&page=1&orderby=id&order=desc&status=publish',
 			'?search=widget&per_page=50&page=2&orderby=id&order=desc&status=publish',
 			'?search=widget&per_page=50&page=3&orderby=id&order=desc&status=publish',

@@ -2,10 +2,12 @@
 import { expect } from '@playwright/test';
 
 import {
+	fakeUuid,
 	searchFixtureExpectedIds,
 	searchFixturePayload,
 	searchFixtureProduct,
 } from '@wcpos/sync-core/testing';
+import { log } from '@wcpos/utils/logger';
 
 import { authenticatedTest as test, wcposRestRoute } from './fixtures';
 
@@ -23,6 +25,21 @@ const FULL_PAGE_TARGET_MS = 3_000;
 const FIRST_ROW_CEILING_MS = 3_000;
 const FULL_PAGE_CEILING_MS = 4_000;
 const GRID_ROWS = 48;
+// Per-run identities: the fixture's ids (1000-1129) are ordinary Woo ids that a store may hold,
+// and a resident row matching the term would render from the local index before the stubbed
+// response lands — a falsely fast first row. Every id and uuid this stub serves is minted per run.
+const RUN_ID_OFFSET = 900_000_000 + Math.floor(Math.random() * 90_000_000);
+const runId = (fixtureId: number) => fixtureId + RUN_ID_OFFSET;
+function runPayload(fixtureId: number): Record<string, unknown> {
+	const id = runId(fixtureId);
+	return {
+		...searchFixturePayload(searchFixtureProduct(fixtureId)),
+		id,
+		slug: `fixture-${id}`,
+		sku: `SKU-${id}`,
+		meta_data: [{ id: 5_000_000 + id, key: '_woocommerce_pos_uuid', value: fakeUuid(id) }],
+	};
+}
 
 test('a single-word search meets the latency budgets on a slow host', async ({
 	posPage: page,
@@ -40,9 +57,7 @@ test('a single-word search meets the latency budgets on a slow host', async ({
 			const ids = sku ? [] : searchFixtureExpectedIds(search ?? '');
 			const size = Number(url.searchParams.get('per_page') ?? 10);
 			const pageNo = Number(url.searchParams.get('page') ?? 1);
-			const rows = ids
-				.slice((pageNo - 1) * size, pageNo * size)
-				.map((id) => searchFixturePayload(searchFixtureProduct(id)));
+			const rows = ids.slice((pageNo - 1) * size, pageNo * size).map(runPayload);
 			await new Promise((r) => setTimeout(r, ROUND_TRIP_MS));
 			await route.fulfill({
 				status: 200,
@@ -63,13 +78,12 @@ test('a single-word search meets the latency budgets on a slow host', async ({
 	// The FIRST CORRECT row: any fixture hit by its id-bearing testID in either layout (the grid
 	// virtualizes and sorts by name, so which hit renders first is the layout's business). A
 	// plain tile locator would match the browse rows already on screen and read 2 ms.
-	const hitIds = searchFixtureExpectedIds(TERM).join('|');
+	const hitIds = searchFixtureExpectedIds(TERM).map(runId).join('|');
 	const rows = page.getByTestId(new RegExp(`^(product-tile|data-table-row-fixture)-(${hitIds})$`));
 	// The rendered-row count as its own referent (both layouts virtualize, so counting rows
-	// would read the viewport): the hidden loaded-count text each layout's footer carries.
-	const loadedCount = page
-		.getByTestId(/^(pos-products-grid-loaded-count|data-table-loaded-count)$/)
-		.first();
+	// would read the viewport): the hidden loaded-count the products footer carries in both
+	// layouts (#1345).
+	const loadedCount = page.getByTestId('data-table-loaded-count').first();
 	await input.fill(TERM);
 	const typedAt = Date.now();
 	await expect(rows.first()).toBeVisible({ timeout: 10_000 });
@@ -88,7 +102,7 @@ test('a single-word search meets the latency budgets on a slow host', async ({
 	const fullPageMs = Date.now() - typedAt;
 
 	// Printed on every run so a CI log carries the measured numbers, not only pass/fail.
-	console.log(
+	log.info(
 		`[search-latency] firstRowMs=${firstRowMs} fullPageMs=${fullPageMs} requests=${requests}`
 	);
 	// The 250 ms debounce is part of what the cashier waits for, so it is inside the budget.
