@@ -331,8 +331,9 @@ _Avoid_: drop, pickup (as types), adjustment
 A zero-amount, permissioned movement that opens the drawer without a sale.
 
 **Expected**:
-The cash the drawer should hold: opening float + cash sales − cash refunds + paid in − paid
-out.
+The cash the drawer should hold: the *counted* opening float + cash sales − cash refunds +
+paid in − paid out. The opening variance is recorded on its own and never carries into the
+closing variance — each compares a count against what was expected at that moment.
 
 **Counted**:
 The cash the closer declares, entered as one total; a denomination helper is a calculator
@@ -350,4 +351,7 @@ _Avoid_: end of day, Z-report (for the record — that is its print)
 
 **X-report / Z-report**:
 The two printed renderings: an X-report reads an open session without closing it; a
-Z-report is the print of a closure.
+Z-report is the print of a closure. Today's Reports screen prints a date-range sales
+summary under the name "Z-report"; that is a **range report**, not a Z-report, and it is
+renamed when closures land.
+_Avoid_: Z-report (for any date-range summary)
