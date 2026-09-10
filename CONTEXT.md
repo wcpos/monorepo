@@ -381,9 +381,12 @@ _Avoid_: Z-report (for any date-range summary)
 **Session on the sale**:
 Which session a sale's money belongs to. Each payment row binds to the session open on the
 register when it was tendered, so a deposit taken yesterday counts in yesterday's drawer
-and the balance paid today in today's. The sale itself records the session it completed
-in. Membership is only ever by the stamped session, never inferred from a time window or
-from whichever session is open when the sale reaches the server.
+and the balance paid today in today's. Expected and every closure figure are summed from
+payment and refund rows by that tender-time session, never from the sale's completing
+session or its order total. The sale itself records the session it completed in, a key
+for reports and receipts only. Membership is only ever by the stamped session, never
+inferred from a time window or from whichever session is open when the sale reaches the
+server. The range report stays an order-level, date-range report outside this rule.
 _Avoid_: shift on the order, current session (for a late-arriving sale)
 
 **Unsynced**:
