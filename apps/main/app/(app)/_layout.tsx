@@ -1,3 +1,5 @@
+import '../../lib/payment-drivers';
+
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 

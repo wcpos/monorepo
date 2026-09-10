@@ -1,3 +1,5 @@
+import type { PaymentTransport } from '@wcpos/order-math';
+
 export type TenderTab = 'payments' | 'legacy';
 export type TenderView = 'select' | 'amount' | 'cancel';
 
@@ -7,6 +9,7 @@ export interface TenderState {
 	/** Method id being tendered; null in the 'select' and 'cancel' views. */
 	methodId: string | null;
 	readerId: string | null;
+	transport: PaymentTransport | null;
 	/** Keypad entry in minor units. */
 	entryMinor: number;
 	/** False until the cashier has touched the keypad since the entry was pre-filled. */
@@ -24,7 +27,14 @@ export type TenderKey =
 
 export type TenderAction =
 	| { type: 'set-tab'; tab: TenderTab }
-	| { type: 'pick-method'; methodId: string; prefillMinor: number; readerId: string | null }
+	| {
+			type: 'pick-method';
+			methodId: string;
+			prefillMinor: number;
+			readerId: string | null;
+			transport?: PaymentTransport | null;
+	  }
+	| { type: 'pick-transport'; transport: PaymentTransport }
 	| { type: 'pick-reader'; readerId: string | null }
 	| { type: 'tender-started' }
 	| { type: 'key'; key: TenderKey }
@@ -45,6 +55,7 @@ export const initialTenderState: TenderState = {
 	view: 'select',
 	methodId: null,
 	readerId: null,
+	transport: null,
 	entryMinor: 0,
 	entryDirty: false,
 	splitPlan: null,
@@ -78,9 +89,12 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				view: 'amount',
 				methodId: action.methodId,
 				readerId: action.readerId,
+				transport: action.transport ?? null,
 				entryMinor: action.prefillMinor,
 				entryDirty: false,
 			};
+		case 'pick-transport':
+			return { ...state, transport: action.transport };
 		case 'pick-reader':
 			return { ...state, readerId: action.readerId };
 		case 'key': {
@@ -113,6 +127,7 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				view: 'select',
 				methodId: null,
 				readerId: null,
+				transport: null,
 				entryMinor: 0,
 				entryDirty: false,
 			};
@@ -122,6 +137,7 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				view: 'select',
 				methodId: null,
 				readerId: null,
+				transport: null,
 				entryMinor: 0,
 				entryDirty: false,
 				splitPlan:

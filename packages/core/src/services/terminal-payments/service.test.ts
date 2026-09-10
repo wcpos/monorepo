@@ -1,5 +1,12 @@
 import type { PaymentRow } from '@wcpos/order-math';
 
+import { createDeviceLeg } from '../../screens/main/pos/checkout/payments/device/device-leg';
+import {
+	method as deviceMethod,
+	row as deviceRow,
+} from '../../screens/main/pos/checkout/payments/device/fixtures.test-utils';
+import { registerDriver } from '../payment-drivers/registry';
+import { createSimulatedDriver } from '../payment-drivers/simulated-driver';
 import { TerminalPaymentsService } from './service';
 import {
 	getTerminalPaymentsService,
@@ -88,7 +95,7 @@ it('begin starts one intent and refuses another live leg for the order', async (
 });
 it('resume is idempotent for the row, polls without intent and leaves unknown reader unclaimed', async () => {
 	const c = setup();
-	const leg = c.service.resume(input);
+	const leg = c.service.resume(input)!;
 	expect(c.service.resume(input)).toBe(leg);
 	await jest.advanceTimersByTimeAsync(0);
 	expect(c.http.post).not.toHaveBeenCalled();
@@ -144,7 +151,7 @@ it('captured callback fires once with authoritative summary and a final leg can 
 	c.http.get.mockResolvedValue({
 		data: { payment: { ...row, status: 'captured' }, order: c.summary },
 	});
-	const leg = c.service.resume(input);
+	const leg = c.service.resume(input)!;
 	await jest.advanceTimersByTimeAsync(0);
 	await leg.checkNow();
 	expect(c.onCaptured).toHaveBeenCalledTimes(1);
@@ -178,4 +185,76 @@ it('singleton start/replacement/stop all notify, with a monotonic version', () =
 	expect(getTerminalPaymentsServiceStartVersion()).toBe(version + 3);
 	expect(listener).toHaveBeenCalledTimes(3);
 	unsubscribe();
+});
+
+it('selects the device factory and reserves its method, not a server reader', async () => {
+	const c = setup();
+	registerDriver(createSimulatedDriver());
+	const factory = jest.fn(createDeviceLeg);
+	const service = new TerminalPaymentsService({ ...c.options, factories: { device: factory } });
+	service.resume({ ...input, row: deviceRow });
+	await jest.advanceTimersByTimeAsync(0);
+	expect(factory).toHaveBeenCalledTimes(1);
+	expect(service.get('order')).toMatchObject({
+		outcome: 'failed',
+		row: { failure_reason: 'reader_session_lost' },
+	});
+	expect(c.http.post).not.toHaveBeenCalled();
+	expect(service.readersInUse().size).toBe(0);
+});
+it('tracks offline settlement after dismissal and only sends it while online', async () => {
+	let online = false;
+	const driver = createSimulatedDriver();
+	registerDriver(driver);
+	const c = setup();
+	const patchAndEnqueue = jest.fn(async (_uuid: string, _row: PaymentRow) => {});
+	const service = new TerminalPaymentsService({
+		...c.options,
+		patchAndEnqueue,
+		isOnline: () => online,
+		resolveOrderId: async () => 42,
+	});
+	const connected = driver.connect!(
+		(await driver.discoverReaders!('bluetooth')).find((r) => r.id === 'sim-offline')!,
+		null
+	);
+	await jest.advanceTimersByTimeAsync(300);
+	await connected;
+	service.begin({
+		...input,
+		row: { ...deviceRow, recorded_offline: true },
+		method: deviceMethod,
+		transport: 'bluetooth',
+		offline: true,
+	});
+	await jest.advanceTimersByTimeAsync(500);
+	expect(service.get('order')).toMatchObject({
+		outcome: 'captured',
+		row: { status: 'authorized' },
+	});
+	service.dismiss('order');
+	expect(service.get('order')).toBeNull();
+	await jest.advanceTimersByTimeAsync(3000);
+	expect(c.http.post).not.toHaveBeenCalled();
+	online = true;
+	c.http.post.mockResolvedValue({ data: { payment: { ...deviceRow, status: 'captured' } } });
+	await service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledWith('orders/42/payments/leg/capture', {
+		context: { provider_refs: { payment_intent: 'sim_pi_leg' } },
+	});
+	expect(c.mirror).toHaveBeenLastCalledWith('order', {
+		payment: { ...deviceRow, status: 'captured' },
+	});
+	service.stop();
+});
+it('authorized offline rows never occupy a live leg on resume', async () => {
+	const c = setup();
+	expect(
+		c.service.resume({
+			...input,
+			row: { ...deviceRow, status: 'authorized', recorded_offline: true },
+		})
+	).toBeUndefined();
+	expect(c.service.get('order')).toBeNull();
+	expect(c.service.readersInUse().size).toBe(0);
 });

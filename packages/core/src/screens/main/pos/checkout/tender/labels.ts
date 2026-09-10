@@ -49,7 +49,12 @@ export function disabledReasonKey(reason: TileDisabledReason): string {
 		case 'unsupported_mode':
 			return 'pos_checkout.update_app_to_use';
 		case 'no_driver':
-			return 'pos_checkout.coming_in_a_later_build';
+			return 'pos_checkout.update_app_to_use';
+		case 'driver_web':
+		case 'driver_permission':
+		case 'driver_bluetooth_off':
+		case 'driver_not_logged_in':
+			return `pos_checkout.${reason}`;
 		case 'no_readers':
 			return 'pos_checkout.no_readers_set_up';
 		case 'offline':
@@ -58,6 +63,7 @@ export function disabledReasonKey(reason: TileDisabledReason): string {
 }
 
 const FAILURE_KEYS: Record<string, string> = {
+	reader_session_lost: 'pos_checkout.reader_session_lost',
 	card_declined: 'pos_checkout.reason_card_declined',
 	expired: 'pos_checkout.reason_expired',
 	cancelled: 'pos_checkout.reason_cancelled',

@@ -14,13 +14,20 @@ import { useTerminalPaymentsService } from './use-terminal-payments-service';
 import { useTerminalLeg } from './use-terminal-leg';
 import { useResumeTerminalLegs, useResumeTerminalLegsForOrders } from './use-resume-terminal-legs';
 
-const mockManager = {};
+const mockManager = { engine: { db$: () => () => {} } };
 let mockSession = { store: { id: 1 }, site: { id: 1 } };
 const mockFind = jest.fn();
 const mockPatch = jest.fn();
 const mockReceipt = jest.fn();
 let mockHttp = { get: jest.fn(), post: jest.fn() };
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('../../../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ methods: [] }),
+}));
 jest.mock('@wcpos/query', () => ({
+	engineCollection: () => null,
 	useQueryRuntime: () => mockManager,
 	useRecordField: (
 		record: EngineRecord<'orders'> | undefined,
@@ -30,10 +37,13 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('../../../../../../contexts/app-state', () => ({ useStoreSession: () => mockSession }));
 jest.mock('../../../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
 jest.mock('../../../../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: mockPatch }),
 	findEngineResident: (...args: unknown[]) => mockFind(...args),
 	patchEngineResident: (...args: unknown[]) => mockPatch(...args),
 }));
 jest.mock('../../checkout-mode', () => ({
+	subscribeCheckoutMode: () => () => {},
+	getOrderSaveState: () => null,
 	enterReceipt: (...args: unknown[]) => mockReceipt(...args),
 }));
 // The hooks only inspect ledger identity/status, not monetary row fields.

@@ -4,7 +4,7 @@
 
 import { fromMinor, toMinor } from './money';
 
-import type { PaymentMethodDescriptor, PaymentRow } from './types';
+import type { PaymentMethodDescriptor, PaymentRow, PaymentTransport } from './types';
 
 export const LEDGER_META_KEY = '_wcpos_payments';
 export const LEDGER_SCHEMA = 1;
@@ -140,10 +140,28 @@ export type MintServerPaymentResult =
 
 export function mintServerPayment(input: MintServerPaymentInput): MintServerPaymentResult {
 	if (input.method.capture.mode !== 'server') return { ok: false, reason: 'not_server' };
+	return mintTerminalPayment(input, 'server', null, false);
+}
+
+export type MintDevicePaymentInput = MintServerPaymentInput & {
+	transport: PaymentTransport;
+	recordedOffline: boolean;
+};
+export function mintDevicePayment(input: MintDevicePaymentInput) {
+	if (input.method.capture.mode !== 'device') return { ok: false, reason: 'not_device' } as const;
+	return mintTerminalPayment(input, 'device', input.transport, input.recordedOffline);
+}
+
+function mintTerminalPayment(
+	input: MintServerPaymentInput,
+	mode: 'server' | 'device',
+	transport: PaymentTransport | null,
+	offline: boolean
+): MintServerPaymentResult {
 	const dp = input.dp ?? 2;
 	const amount = toMinor(input.amount, dp);
 	if (amount <= 0) return { ok: false, reason: 'amount_not_positive' };
-	if (!Number.isInteger(input.orderId) || !input.orderId || input.orderId <= 0)
+	if (!offline && (!Number.isInteger(input.orderId) || !input.orderId || input.orderId <= 0))
 		return { ok: false, reason: 'no_order_id' };
 	const timestamp = input.now();
 	return {
@@ -151,13 +169,13 @@ export function mintServerPayment(input: MintServerPaymentInput): MintServerPaym
 		row: {
 			id: input.uuid().toLowerCase(),
 			source: 'app',
-			order_id: input.orderId,
+			order_id: input.orderId ?? 0,
 			method_id: input.method.id,
 			provider: input.method.capture.provider,
 			kind: input.method.kind,
-			capture_mode: 'server',
-			transport: null,
-			recorded_offline: false,
+			capture_mode: mode,
+			transport,
+			recorded_offline: offline,
 			amount: fromMinor(amount, dp),
 			currency: input.currency,
 			tendered: null,

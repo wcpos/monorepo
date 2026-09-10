@@ -37,7 +37,12 @@ export function TerminalLegView({
 			? (hardware.readers.find(({ id }) => id === readerId)?.label ?? readerId)
 			: readerId;
 	const failed = final && leg.outcome === 'failed';
-	const reason = providerErrorMessage(leg.error) ?? failureReasonLabel(row.failure_reason, t);
+	const reason =
+		providerErrorMessage(leg.error) ??
+		failureReasonLabel(
+			row.failure_reason ?? ('failureReason' in leg ? leg.failureReason : null),
+			t
+		);
 	let status = t('pos_checkout.waiting_for_terminal');
 	let action: 'cancel' | 'capture' | 'cancelling' | 'release' | 'final' | 'none' = 'cancel';
 	if (final && ['failed', 'voided', 'released'].includes(leg.outcome ?? '')) {
@@ -56,10 +61,29 @@ export function TerminalLegView({
 		status = t('pos_checkout.terminal_cancel_waiting');
 		action = leg.releaseAvailable ? 'release' : 'none';
 	} else if (leg.captureFailed) {
-		status = t('pos_checkout.capture_failed', { reason: leg.error?.message ?? reason });
+		status = t(
+			row.capture_mode === 'device'
+				? 'pos_checkout.device_confirmation_failed'
+				: 'pos_checkout.capture_failed',
+			{ reason: leg.error?.message ?? reason }
+		);
 		action = 'capture';
 	} else if (leg.phase === 'polling' && leg.capturing) {
 		status = t('pos_checkout.terminal_capturing');
+		action = 'none';
+	} else if (
+		row.capture_mode === 'device' &&
+		leg.cancelRequested &&
+		(leg.phase === 'collecting' || leg.phase === 'creating')
+	) {
+		const cancelOnDevice = 'cancelOnDevice' in leg && leg.cancelOnDevice;
+		status = t(
+			cancelOnDevice ? 'pos_checkout.cancel_on_reader' : 'pos_checkout.terminal_cancelling'
+		);
+		action = 'none';
+	} else if (leg.phase === 'collecting') status = t('pos_checkout.present_card');
+	else if (leg.phase === 'confirming' || leg.phase === 'capturing') {
+		status = t('pos_checkout.device_confirming');
 		action = 'none';
 	} else if (leg.phase === 'creating') status = t('pos_checkout.terminal_starting');
 	const events = [...(row.events ?? []), ...leg.clientEvents].sort(
@@ -116,10 +140,19 @@ export function TerminalLegView({
 						testID="checkout-terminal-capture-retry"
 						onPress={flow.retryTerminalCapture}
 					>
-						<ButtonText>{t('pos_checkout.try_capture_again')}</ButtonText>
+						<ButtonText>
+							{t(
+								row.capture_mode === 'device'
+									? 'pos_checkout.retry_confirmation'
+									: 'pos_checkout.try_capture_again'
+							)}
+						</ButtonText>
 					</Button>
 				) : null}
-				{['cancel', 'capture', 'cancelling'].includes(action) ? (
+				{['cancel', 'cancelling'].includes(action) ||
+				(action === 'capture' &&
+					(row.capture_mode !== 'device' ||
+						('resumed' in leg && leg.resumed && row.status === 'authorized'))) ? (
 					<Button
 						variant="secondary"
 						testID="checkout-terminal-cancel"

@@ -198,13 +198,24 @@ function LedgerLeg({
 				<Text className="text-sm tabular-nums">{format(toMinor(row.amount, view.dp))}</Text>
 				<StatusBadge label={t(statusLabelKey(row.status))} variant={statusVariant(row.status)} />
 			</HStack>
+			{row.tip && toMinor(row.tip, view.dp) > 0 ? (
+				<Text testID={`checkout-leg-tip-${row.id}`} className="text-muted-foreground text-xs">
+					{t('pos_checkout.leg_tip', { amount: format(toMinor(row.tip, view.dp)) })}
+				</Text>
+			) : null}
 			{tendered ? (
 				<Text className="text-muted-foreground text-xs">
 					{t('pos_checkout.leg_tendered_change', tendered)}
 				</Text>
 			) : null}
 			{row.recorded_offline ? (
-				<Text className="text-muted-foreground text-xs">{t('pos_checkout.recorded_offline')}</Text>
+				<Text className="text-muted-foreground text-xs">
+					{t(
+						row.capture_mode === 'device' && row.status === 'authorized'
+							? 'pos_checkout.settles_later'
+							: 'pos_checkout.recorded_offline'
+					)}
+				</Text>
 			) : null}
 		</VStack>
 	);

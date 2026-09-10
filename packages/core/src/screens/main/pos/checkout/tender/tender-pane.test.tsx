@@ -5,6 +5,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
+import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
+import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
+import { registerDriver } from '../../../../../services/payment-drivers/registry';
 import { initialTenderState } from './tender-state';
 import { TenderPane } from './tender-pane';
 import { ThisPaymentLine } from './ledger-pane';
@@ -12,6 +15,15 @@ import { ThisPaymentLine } from './ledger-pane';
 import type { TenderFlow } from './use-tender-flow';
 
 const mockPush = jest.fn();
+const mockBootstrap = jest.fn(async () => ({ data: { handoff: { token: 'reader-token' } } }));
+const mockReaderHttp = { post: mockBootstrap };
+const mockReaderDB = { addState: async () => ({ get: () => null, set: async () => {} }) };
+jest.mock('../../../hooks/use-rest-http-client', () => ({
+	useRestHttpClient: () => mockReaderHttp,
+}));
+jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ storeDB: mockReaderDB }),
+}));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
@@ -342,4 +354,38 @@ it.each([1, 2])('collapses a preselected reader (%s readers)', (count) => {
 		rerender(<TenderPane flow={flow} format={String} />);
 		expect(screen.getByTestId('checkout-reader-change')).toBeTruthy();
 	}
+});
+it('device status, discovery, bootstrap and transport choice drive payment readiness', async () => {
+	const driver = createSimulatedDriver();
+	registerDriver(driver);
+	const transportChanges = jest.fn();
+	const flow = {
+		...makeFlow(),
+		saveState: null,
+		method: deviceMethod,
+		tiles: [{ method: deviceMethod, disabled: false, reason: null, worksOffline: false }],
+		deviceTransport: 'bluetooth' as const,
+		pickTransport: transportChanges,
+		deviceReady: false,
+		entryAppliedMinor: 1000,
+	};
+	const rendered = render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('No reader connected');
+	expect(screen.getByTestId('checkout-take-payment').hasAttribute('disabled')).toBe(true);
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('checkout-reader-connect'));
+	});
+	expect(screen.getByTestId('checkout-reader-list')).not.toBeNull();
+	await act(async () => {
+		fireEvent.click(screen.getByTestId('checkout-reader-option-sim-approve'));
+		await new Promise((resolve) => setTimeout(resolve, 350));
+	});
+	expect(mockBootstrap).toHaveBeenCalledWith('payment-methods/device/bootstrap', {
+		context: { transport: 'bluetooth' },
+	});
+	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('Connected');
+	rendered.rerender(<TenderPane flow={{ ...flow, deviceReady: true }} format={String} />);
+	expect(screen.getByTestId('checkout-take-payment').hasAttribute('disabled')).toBe(false);
+	fireEvent.click(screen.getByTestId('checkout-transport-tap_to_pay'));
+	expect(transportChanges).toHaveBeenCalledWith('tap_to_pay');
 });

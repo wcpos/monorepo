@@ -11,7 +11,9 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
 
+import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
+import { deviceTransports } from './tiles';
 import { disabledReasonKey, kindLabelKey } from './labels';
 import { useT } from '../../../../../contexts/translations';
 
@@ -187,12 +189,16 @@ function PaymentTile({
 	onPress: () => void;
 }) {
 	const t = useT();
+	const canChooseOffline =
+		tile.reason === 'offline' &&
+		tile.method.capture.mode === 'device' &&
+		deviceTransports(tile.method).some((item) => item.offline === 'queue');
 
 	return (
 		<Button
 			testID={`checkout-tile-${tile.method.id}`}
 			variant={selected ? 'outline-primary' : 'outline'}
-			disabled={saving || tile.disabled}
+			disabled={saving || (tile.disabled && !canChooseOffline)}
 			onPress={onPress}
 			className={`h-auto items-stretch justify-start px-3 py-3 ${
 				compact ? 'min-w-[45%] flex-1' : 'min-w-[9.5rem]'
@@ -203,6 +209,9 @@ function PaymentTile({
 					<Text className="text-muted-foreground text-[10px] tracking-wider uppercase">
 						{t(kindLabelKey(tile.method.kind))}
 					</Text>
+					{tile.settlesLater ? (
+						<StatusBadge label={t('pos_checkout.settles_later')} variant="muted" />
+					) : null}
 					{tile.worksOffline ? (
 						<StatusBadge label={t('pos_checkout.works_offline')} variant="muted" />
 					) : null}
@@ -216,10 +225,15 @@ function PaymentTile({
 					</Text>
 				) : tile.reason ? (
 					<Text className="text-warning text-xs">
-						{t(disabledReasonKey(tile.reason), {
-							title: tile.method.title,
-							...(typeof tile.reason === 'object' ? tile.reason : {}),
-						})}
+						{t(
+							canChooseOffline
+								? 'pos_checkout.choose_offline_transport'
+								: disabledReasonKey(tile.reason),
+							{
+								title: tile.method.title,
+								...(typeof tile.reason === 'object' ? tile.reason : {}),
+							}
+						)}
 					</Text>
 				) : null}
 			</VStack>
@@ -246,7 +260,9 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 	const server = method.capture.mode === 'server';
 	const locked = flow.lockToDefault || (flow.readers.length === 1 && flow.readers[0].isDefault);
 	const selectedReader = flow.readers.find(({ id }) => id === flow.state.readerId);
-	const needsReader = server && (!selectedReader || selectedReader.inUseBy !== null);
+	const needsReader =
+		(server && (!selectedReader || selectedReader.inUseBy !== null)) ||
+		(method.capture.mode === 'device' && !flow.deviceReady);
 	const reason = flow.tiles.find((tile) => tile.method.id === method.id)?.reason;
 
 	return (
@@ -270,6 +286,15 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 
 			{/* The terminal choice sits with the amount, above the keypad: for a card
 			    leg the amount is already right and WHICH reader is the decision. */}
+			{method.capture.mode === 'device' && flow.pickTransport ? (
+				<ReaderConnection
+					method={method}
+					transport={flow.deviceTransport ?? null}
+					pickTransport={flow.pickTransport}
+					online={flow.online}
+					disabled={flow.busy || (Boolean(reason) && reason !== 'offline')}
+				/>
+			) : null}
 			{server ? (
 				<VStack space="xs">
 					{locked || (!needsReader && (!choosingReader || flow.readers.length === 1)) ? (
