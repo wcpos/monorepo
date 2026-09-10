@@ -297,7 +297,7 @@ carried by the merchant's WordPress site as a mailbox; not the data path.
 ## Language — Cashiers & till
 
 Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, tickets #207, #208,
-#210 and #209).
+#210, #209 and #211).
 
 **Cashier**:
 A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
@@ -377,6 +377,33 @@ Z-report is the print of a closure. Today's Reports screen prints a date-range s
 summary under the name "Z-report"; that is a **range report**, not a Z-report, and it is
 renamed when closures land.
 _Avoid_: Z-report (for any date-range summary)
+
+**Session on the sale**:
+Which session a sale's money belongs to. Each payment row binds to the session open on the
+register when it was tendered, so a deposit taken yesterday counts in yesterday's drawer
+and the balance paid today in today's. The sale itself records the session it completed
+in. Membership is only ever by the stamped session, never inferred from a time window or
+from whichever session is open when the sale reaches the server.
+_Avoid_: shift on the order, current session (for a late-arriving sale)
+
+**Unsynced**:
+A closure whose session still has sales or movements the server has not acknowledged —
+the till was offline or a row is stuck. The close is never blocked by it: the closure
+records how many and how much were unsynced, and shows as unsynced until every named row
+has landed.
+_Avoid_: pending, incomplete, provisional (as the state name)
+
+**Late sale**:
+A sale (or cash movement) that reaches the server after its session's closure has been
+written. It stays in the session it was rung in and the closure is never edited: a
+correction row against the closure carries the change, and the closure reads as recorded
+plus its corrections.
+_Avoid_: orphan sale, moved sale, re-closing
+
+**Settled**:
+A closure's figure after its corrections are applied, shown beside the figure as recorded.
+The recorded figure never changes; the settled one is what the drawer finally held.
+_Avoid_: adjusted, corrected (as the figure's name), final
 
 **Cashier on the sale**:
 The one cashier a sale is credited to — the person whose token the server authenticated at
