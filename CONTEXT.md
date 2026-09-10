@@ -297,7 +297,7 @@ carried by the merchant's WordPress site as a mailbox; not the data path.
 ## Language — Cashiers & till
 
 Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, tickets #207, #208,
-#210, #209, #211 and #212).
+#210, #209, #211, #212 and #213).
 
 **Cashier**:
 A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
@@ -313,14 +313,17 @@ orders and closures point at them.
 
 **Cashier record**:
 One cashier's full record — names, roles, effective POS capabilities, allowed stores and
-registers, last access — readable by that cashier and by managers. The signed-in cashier's
-own record is what the app gates its UI from.
+allowed registers, last access — readable by that cashier and by managers. The signed-in
+cashier's own record is what the app gates its UI from: every gate reads a capability the
+record serves, never a role name.
 _Avoid_: profile, account (for this concept)
 
 **Register**:
 The identity of one installed till — the workstation a session is opened on. The
 left-hand menu item is "Register": it is keyed on this device's register, and the cashier
-signs in inside it.
+signs in inside it. A register belongs to exactly one store: bound to the store chosen at
+its first sign-in, moved to another only by an administrator while it has no open session,
+its numbering unbroken by the move. A store has any number of registers.
 _Avoid_: till (prose synonym only, never in UI or code), station, device, terminal (that is
 a card reader)
 
@@ -370,6 +373,23 @@ _Avoid_: actual
 Counted minus expected — over or short — for each payment method counted, recorded at open
 (cash only) and at close. A method that was not counted has no variance, not a zero one.
 _Avoid_: discrepancy, difference
+
+**Blind count**:
+A count entered by a cashier who cannot see the expected figure. Not a mode a merchant
+switches on: it is the absence of the permission to view reports, so the same cashier also
+cannot read the X-report or other registers' closures.
+_Avoid_: hidden count, blind close
+
+**Variance threshold**:
+A store setting: the variance above which a close needs an override. Blank means no
+threshold, and every variance closes without one. Never per role and never per register.
+_Avoid_: tolerance, max difference
+
+**Override**:
+A manager approving, by entering their own credential on the cashier's till, an action the
+cashier may not take alone: a close above the variance threshold, a recount, closing a
+forgotten session from another register. Both people are recorded on the row.
+_Avoid_: manager PIN, approval code, supervisor unlock
 
 **Closure**:
 The immutable, numbered document written when a session closes. One per session, not per
