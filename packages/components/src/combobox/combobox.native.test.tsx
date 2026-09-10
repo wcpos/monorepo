@@ -23,6 +23,12 @@ jest.mock(
 	{ virtual: true }
 );
 
+// These existing tests exercise the anchored popover, not the phone sheet.
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
+}));
+
 jest.mock('react-native-gesture-handler', () => ({
 	ScrollView: mockGestureHandlerScrollView,
 }));
