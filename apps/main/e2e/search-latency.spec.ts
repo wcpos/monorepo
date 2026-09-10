@@ -9,6 +9,8 @@ import {
 
 import { authenticatedTest as test, wcposRestRoute } from './fixtures';
 
+// The stub is self-contained: fixture payloads carry every field materialization needs (the
+// server-stamped uuid meta included), so no live request is made inside the measured window.
 const ROUND_TRIP_MS = 800; // a slow shared host, not a stubbed instant one
 const TERM = 'widget'; // 130 fixture hits; one dial page (50) covers the first 48 rows
 // Owner-approved TARGETS (2026-09-10) for an 800 ms slow-host round trip. Measured on the
@@ -26,7 +28,6 @@ test('a single-word search meets the latency budgets on a slow host', async ({
 	posPage: page,
 }, testInfo) => {
 	test.setTimeout(120_000);
-	let template: Record<string, unknown> | null = null;
 	let requests = 0;
 	await page.route(
 		(url) => /^\/wcpos\/v2\/products\/?$/.test(wcposRestRoute(url.toString()) ?? ''),
@@ -35,24 +36,13 @@ test('a single-word search meets the latency budgets on a slow host', async ({
 			const search = url.searchParams.get('search');
 			const sku = url.searchParams.get('sku');
 			if (!search && !sku) return route.fallback();
-			if (!template) {
-				const t = new URL(url.toString());
-				t.searchParams.delete('search');
-				t.searchParams.delete('sku');
-				t.searchParams.set('per_page', '1');
-				t.searchParams.set('page', '1');
-				template =
-					(
-						(await (await route.fetch({ url: t.toString() })).json()) as Record<string, unknown>[]
-					)[0] ?? {};
-			}
 			requests += 1;
 			const ids = sku ? [] : searchFixtureExpectedIds(search ?? '');
 			const size = Number(url.searchParams.get('per_page') ?? 10);
 			const pageNo = Number(url.searchParams.get('page') ?? 1);
 			const rows = ids
 				.slice((pageNo - 1) * size, pageNo * size)
-				.map((id) => ({ ...template, ...searchFixturePayload(searchFixtureProduct(id)) }));
+				.map((id) => searchFixturePayload(searchFixtureProduct(id)));
 			await new Promise((r) => setTimeout(r, ROUND_TRIP_MS));
 			await route.fulfill({
 				status: 200,
