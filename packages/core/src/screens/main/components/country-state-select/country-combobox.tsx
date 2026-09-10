@@ -50,7 +50,7 @@ function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootPr
 	 */
 	return (
 		<Combobox value={{ value: value?.value ?? '', label: label ?? '' }} {...props}>
-			<ComboboxTrigger disabled={disabled}>
+			<ComboboxTrigger disabled={disabled} testID="country-combobox-trigger">
 				<ComboboxValue placeholder={t('common.select_country')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
