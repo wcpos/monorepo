@@ -299,15 +299,16 @@ carried by the merchant's WordPress site as a mailbox; not the data path.
 Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, ticket #207).
 
 **Cashier**:
-A WordPress user with POS access, seen through the cashier resource. Distinct from a
-Customer: the same person may also be a customer, and a cashier may be chosen as a sale's
-customer.
+A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
+user whose access is revoked stays a cashier — inactive — because past sales and closures
+name them. Distinct from a Customer: the same person may also be a customer, and a cashier
+may be chosen as a sale's customer.
 _Avoid_: staff, team member, employee, operator, user (for this concept)
 
 **Cashier directory**:
-The list of every cashier any POS user may read: id, display name, avatar, active. Nobody is
-ever removed from it — a user who loses POS access stays resolvable, because orders and
-closures point at them.
+The list of every current and former cashier that any POS user may read: id, display name,
+avatar, active. Nobody is ever removed from it — a former cashier stays resolvable, because
+orders and closures point at them.
 
 **Cashier record**:
 One cashier's full record — names, roles, effective POS capabilities, allowed stores and
