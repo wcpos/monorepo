@@ -1,6 +1,11 @@
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
-import { buildTenderTiles, legacyPaymentMethods, selectableReaders } from './tiles';
+import {
+	buildTenderTiles,
+	initialReaderId,
+	legacyPaymentMethods,
+	selectableReaders,
+} from './tiles';
 
 type MethodPartial = Omit<Partial<PaymentMethodDescriptor>, 'capture' | 'capabilities'> & {
 	capture?: Partial<PaymentMethodDescriptor['capture']>;
@@ -180,4 +185,21 @@ it('drops offline readers and marks only other orders as busy', () => {
 			.disabled
 	).toBe(false);
 	expect(selectableReaders(makeMethod()).readers).toEqual([]);
+});
+
+describe('initialReaderId', () => {
+	const a = { id: 'a', label: 'Front', isDefault: true, inUseBy: null };
+	const b = { id: 'b', label: 'Back', isDefault: false, inUseBy: null };
+	it.each([
+		['lock wins', [a, b], true, 'b', 'a'],
+		['remembered beats default', [a, b], false, 'b', 'b'],
+		['absent remembered', [a, b], false, 'gone', 'a'],
+		['busy remembered', [a, { ...b, inUseBy: '42' }], false, 'b', 'a'],
+		['default only', [a, b], false, null, 'a'],
+		['no default', [b], false, null, null],
+		['busy default', [{ ...a, inUseBy: '42' }, b], false, null, null],
+		['no readers', [], false, 'b', null],
+	] as const)('%s', (_label, readers, locked, remembered, expected) => {
+		expect(initialReaderId(readers, locked, remembered)).toBe(expected);
+	});
 });

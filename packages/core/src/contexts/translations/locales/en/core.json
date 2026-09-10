@@ -1,6 +1,7 @@
 {
 	"pos_checkout.no_readers_set_up": "No terminals set up for {title}",
 	"pos_checkout.reader_in_use": "In use by order #{number}",
+	"pos_checkout.change_reader": "Change",
 	"pos_checkout.reader_line": "Terminal: {label}",
 	"pos_checkout.choose_a_terminal": "Choose a terminal",
 	"pos_checkout.order_not_on_store_yet": "The order hasn't reached the store yet. Try again in a moment.",

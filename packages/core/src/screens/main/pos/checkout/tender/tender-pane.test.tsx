@@ -316,3 +316,30 @@ it('explains the next step for a plan, a custom amount, and ordinary payment', (
 		)
 	).toBeTruthy();
 });
+
+it.each([1, 2])('collapses a preselected reader (%s readers)', (count) => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		method: { ...method, capture: { ...method.capture, mode: 'server' } },
+		state: { ...initialTenderState, methodId: method.id, readerId: 'b' },
+		readers: [
+			{ id: 'b', label: 'Back', isDefault: false, inUseBy: null },
+			{ id: 'a', label: 'Front', isDefault: true, inUseBy: null },
+		].slice(0, count),
+	};
+	const { rerender } = render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-reader-selected').textContent).toBe('Terminal: Back');
+	expect(screen.queryByTestId('checkout-reader-b')).toBeNull();
+	expect(screen.queryByTestId('checkout-reader-a')).toBeNull();
+	if (count === 1) expect(screen.queryByTestId('checkout-reader-change')).toBeNull();
+	else {
+		expect(screen.getByTestId('checkout-reader-change').textContent).toBe('Change');
+		fireEvent.click(screen.getByTestId('checkout-reader-change'));
+		expect(screen.getByTestId('checkout-reader-b')).toBeTruthy();
+		expect(screen.getByTestId('checkout-reader-a')).toBeTruthy();
+		rerender(<TenderPane flow={{ ...flow, method: null }} format={String} />);
+		rerender(<TenderPane flow={flow} format={String} />);
+		expect(screen.getByTestId('checkout-reader-change')).toBeTruthy();
+	}
+});
