@@ -91,17 +91,15 @@ function variationEnvelopeDocument(
 	return {
 		id,
 		parent_id: parentId,
-		payload: {
-			id,
-			name,
-			sku: `VAR-${id}`,
-			date_modified_gmt: '2026-07-10T00:00:00',
-			price: '5.00',
-			stock_status: 'instock',
-			attributes: [],
-			stock_quantity: null,
-			meta_data: posMeta(variationUuid(id)),
-		},
+		_rxdb_revision: 'r',
+		name,
+		sku: `VAR-${id}`,
+		date_modified_gmt: '2026-07-10T00:00:00',
+		price: '5.00',
+		stock_status: 'instock',
+		attributes: [],
+		stock_quantity: null,
+		meta_data: posMeta(variationUuid(id)),
 	};
 }
 
@@ -131,14 +129,7 @@ function scriptedVariationSearchProxy(documents: Record<string, unknown>[]) {
 		if (!parsed.pathname.endsWith('/variations')) return json([]);
 		state.urls.push(url);
 		const hits = parsed.searchParams.has('search') ? documents : [];
-		return json({
-			documents: hits,
-			meta: {
-				total: hits.length,
-				page: Number(parsed.searchParams.get('page')),
-				per_page: Number(parsed.searchParams.get('per_page')),
-			},
-		});
+		return json(hits);
 	};
 	return { state, fetch };
 }

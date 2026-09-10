@@ -1478,16 +1478,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			fetch: async (url) => {
 				const parsed = new URL(url);
 				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
-				// The REAL wire shape (Write_Controller::document_for): the variation
-				// ack document is the pull-envelope WRAPPER — identity and REST
-				// fields nested under `payload`, id/parent_id on the wrapper.
 				const flat: Record<string, unknown> = {
 					...variationPayload(0),
 					stock_status: 'outofstock',
 				};
-				const { id, parent_id, ...inner } = flat;
 				return Response.json({
-					document: { id, parent_id, payload: inner },
+					document: flat,
 					currentRevision: 'sha256:variation-after-stock-edit',
 				});
 			},

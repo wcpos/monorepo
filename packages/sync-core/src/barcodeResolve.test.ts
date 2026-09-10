@@ -42,7 +42,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), { status });
 }
 
-function resolveResponse(partial: Partial<ResolveBarcodeResponse> = {}): ResolveBarcodeResponse {
+function resolveResponse(
+	partial: Partial<
+		Omit<ResolveBarcodeResponse, 'match'> & { match: Record<string, unknown> | null }
+	> = {}
+) {
 	return {
 		code: 'x',
 		found: false,
@@ -344,7 +348,7 @@ describe('resolveScan miss ordering (the contract)', () => {
 });
 
 describe('resolveScan online outcomes', () => {
-	it('preserves the current wrapped match and ambiguous shapes', async () => {
+	it('does not unwrap a legacy match', async () => {
 		const match = { id: 7, type: 'variation' as const, parent_id: 3, payload: { name: 'Blue' } };
 		const ambiguous = [{ id: 8, type: 'product' as const }];
 		const result = await resolveScan(
@@ -354,14 +358,18 @@ describe('resolveScan online outcomes', () => {
 			})
 		);
 
-		expect(result).toMatchObject({ outcome: 'online', match, ambiguous });
+		expect(result).toMatchObject({
+			outcome: 'online',
+			match: { ...match, payload: match },
+			ambiguous,
+		});
 	});
 
-	it('normalizes a future bare variation match and bare ambiguous entries', async () => {
+	it('normalizes a bare variation match and bare ambiguous entries', async () => {
 		const bare = { id: 7, parent_id: 3, name: 'Blue' };
 		const result = await resolveScan(
 			scanInput({
-				code: 'FUTURE',
+				code: 'BARE',
 				fetcher: async () =>
 					jsonResponse({
 						...resolveResponse(),
@@ -400,8 +408,8 @@ describe('resolveScan online outcomes', () => {
 		});
 	});
 
-	it('uses payload and explicit ambiguous type first in mixed entries', async () => {
-		const match = { id: 7, parent_id: 0, type: 'product' as const, payload: { id: 70 } };
+	it('preserves an explicit ambiguous type with a bare match', async () => {
+		const match = { id: 7, parent_id: 0, type: 'product' as const };
 		const result = await resolveScan(
 			scanInput({
 				code: 'MIXED',
@@ -417,7 +425,7 @@ describe('resolveScan online outcomes', () => {
 
 		expect(result).toMatchObject({
 			outcome: 'online',
-			match,
+			match: { ...match, payload: match },
 			ambiguous: [{ id: 8, type: 'product' }],
 		});
 	});
@@ -427,7 +435,7 @@ describe('resolveScan online outcomes', () => {
 			id: 11,
 			type: 'product' as const,
 			parent_id: 0,
-			payload: { id: 11, sku: 'P-11' },
+			sku: 'P-11',
 		};
 		const fetcher = vi.fn<BarcodeResolveFetcher>(async () =>
 			jsonResponse(
@@ -442,7 +450,11 @@ describe('resolveScan online outcomes', () => {
 		const result = await resolveScan(
 			scanInput({ code: 'P-11', fetcher, onEvent: (event) => events.push(event) })
 		);
-		expect(result).toMatchObject({ outcome: 'online', match, ambiguous: [] });
+		expect(result).toMatchObject({
+			outcome: 'online',
+			match: { id: 11, parent_id: 0, type: 'product', payload: match },
+			ambiguous: [],
+		});
 		if (result.outcome === 'online') {
 			expect(result.serverMeta).toEqual({
 				duration_ms: 8,
@@ -454,7 +466,7 @@ describe('resolveScan online outcomes', () => {
 	});
 
 	it('resolves a variation match with parent_id', async () => {
-		const match = { id: 23, type: 'variation' as const, parent_id: 12, payload: { id: 23 } };
+		const match = { id: 23, type: 'variation' as const, parent_id: 12 };
 		const fetcher = vi.fn<BarcodeResolveFetcher>(async () =>
 			jsonResponse(resolveResponse({ found: true, match }))
 		);
@@ -467,7 +479,7 @@ describe('resolveScan online outcomes', () => {
 	});
 
 	it('surfaces ambiguous matches beyond the first', async () => {
-		const match = { id: 5, type: 'product' as const, parent_id: 0, payload: { id: 5 } };
+		const match = { id: 5, type: 'product' as const, parent_id: 0 };
 		const ambiguous = [
 			{ id: 6, type: 'product' as const },
 			{ id: 7, type: 'variation' as const },
@@ -562,7 +574,7 @@ describe('resolveScan UPC-A/EAN-13 equivalence (#740)', () => {
 			id: 41,
 			type: 'product' as const,
 			parent_id: 0,
-			payload: { name: 'Hand Lotion' },
+			name: 'Hand Lotion',
 		};
 		const fetcher = vi.fn<BarcodeResolveFetcher>(async (url) =>
 			jsonResponse(
@@ -576,7 +588,11 @@ describe('resolveScan UPC-A/EAN-13 equivalence (#740)', () => {
 			scanInput({ code: EAN_13, fetcher, onEvent: (event) => events.push(event) })
 		);
 
-		expect(result).toMatchObject({ outcome: 'online', code: EAN_13, match });
+		expect(result).toMatchObject({
+			outcome: 'online',
+			code: EAN_13,
+			match: { id: 41, parent_id: 0, type: 'product', payload: match },
+		});
 		expect(fetcher).toHaveBeenCalledTimes(2);
 		expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('code')).toBe(EAN_13);
 		expect(new URL(fetcher.mock.calls[1][0]).searchParams.get('code')).toBe(UPC_A);
@@ -676,7 +692,7 @@ describe('resolveScan timings (injected clock)', () => {
 			return jsonResponse(
 				resolveResponse({
 					found: true,
-					match: { id: 1, type: 'product', parent_id: 0, payload: {} },
+					match: { id: 1, type: 'product', parent_id: 0 },
 				})
 			);
 		};

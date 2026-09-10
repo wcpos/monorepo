@@ -151,7 +151,7 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 					},
 				],
 				checkpoint,
-				hasMore: state.pulls < batchCount,
+				complete: state.pulls >= batchCount,
 			}),
 			{ status: 200, headers: { 'content-type': 'application/json' } }
 		);
