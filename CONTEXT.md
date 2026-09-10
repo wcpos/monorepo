@@ -293,3 +293,61 @@ The state machine a display page exposes to templates: `idle`, `cart`, `payment`
 **Signaling**:
 The one-time exchange that lets two WebRTC peers (POS and display) find each other,
 carried by the merchant's WordPress site as a mailbox; not the data path.
+
+## Language — Cashiers & till
+
+Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, ticket #207).
+
+**Cashier**:
+A WordPress user with POS access, seen through the cashier resource. Distinct from a
+Customer: the same person may also be a customer, and a cashier may be chosen as a sale's
+customer.
+_Avoid_: staff, team member, employee, operator, user (for this concept)
+
+**Register**:
+The identity of one installed till — the workstation a session is opened on. The
+left-hand menu item is "Register": it is keyed on this device's register, and the cashier
+signs in inside it.
+_Avoid_: till (prose synonym only, never in UI or code), station, device, terminal (that is
+a card reader)
+
+**Session**:
+One register's opened-to-closed period: opened with a float, closed with a count. Keyed on
+the register, never the cashier; several cashiers may ring on one session and every row
+records who acted. UI verbs: "Open register" / "Close register".
+_Avoid_: shift (the time clock — clock in/out for payroll), cash tracking session, drawer shift
+
+**Opening float**:
+The cash placed in the drawer when a session opens. Carries an expected value (suggested
+from the previous close) and a counted value, so an opening variance exists.
+_Avoid_: starting cash, opening balance
+
+**Cash movement**:
+A cash event inside a session that is not a sale: `paid_in` or `paid_out`, each a positive
+amount with the direction in its type, plus a reason.
+_Avoid_: drop, pickup (as types), adjustment
+
+**No sale**:
+A zero-amount, permissioned movement that opens the drawer without a sale.
+
+**Expected**:
+The cash the drawer should hold: opening float + cash sales − cash refunds + paid in − paid
+out.
+
+**Counted**:
+The cash the closer declares, entered as one total; a denomination helper is a calculator
+and its breakdown is never stored.
+_Avoid_: actual
+
+**Variance**:
+Counted minus expected — over or short — recorded at open and at close.
+_Avoid_: discrepancy, difference
+
+**Closure**:
+The immutable, numbered document written when a session closes. One per session, not per
+day: a closure may span or subdivide a calendar day.
+_Avoid_: end of day, Z-report (for the record — that is its print)
+
+**X-report / Z-report**:
+The two printed renderings: an X-report reads an open session without closing it; a
+Z-report is the print of a closure.
