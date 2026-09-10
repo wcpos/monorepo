@@ -100,6 +100,18 @@ describe('sentry-sink.web', () => {
 		expect(event.request?.url).toBe('/checkout?access_token=[REDACTED]&order=42');
 	});
 
+	it('redacts credentials from the message and exception values that become the title', () => {
+		const event = scrubEvent({
+			message: 'Login failed: Bearer abc.def.ghi for https://user:pw@merchant.example/wp-json',
+			exception: { values: [{ value: 'token=abcdef123456 rejected' }] },
+		});
+
+		expect(event.message).toBe(
+			'Login failed: Bearer [REDACTED] for https://[REDACTED]@merchant.example/wp-json'
+		);
+		expect(event.exception?.values?.[0].value).toBe('token=[REDACTED] rejected');
+	});
+
 	it('removes store origins from nested extra context urls', () => {
 		const event = scrubEvent({
 			extra: {
@@ -191,6 +203,23 @@ describe('sentry-sink.web', () => {
 		expect(products).toEqual(['SYNC131', 'GET', '/wp-json/wcpos/v2/products']);
 		expect(products).not.toEqual(orders);
 		expect(orders).toEqual(orders2);
+	});
+
+	it('groups push rejections by collection, status and server reason, not by record', () => {
+		const push = (collection: string, recordId: string, status: number, reason?: string) =>
+			buildCaptureOptions({
+				message: `${collection} ${recordId} — push failed (HTTP ${status}${reason ? `: ${reason}` : ''})`,
+				code: 'SYNC201',
+				context: { type: 'push.error', collection, op: 'create', recordId, status, reason },
+			}).fingerprint;
+		const emailA = push('customers', 'ef72631f', 400, 'registration-error-email-exists');
+		const emailB = push('customers', '0b85f3f8', 400, 'registration-error-email-exists');
+		const coupon = push('orders', '3599cd24', 400, 'woocommerce_rest_invalid_coupon');
+		expect(emailA).toEqual(['SYNC201', 'customers', '400', 'registration-error-email-exists']);
+		expect(emailA).toEqual(emailB);
+		expect(emailA).not.toEqual(coupon);
+		// A bare 5xx with no server reason still groups by collection + status.
+		expect(push('orders', '3599cd24', 503)).toEqual(['SYNC201', 'orders', '503', '']);
 	});
 
 	it('captures Error context as an exception', () => {

@@ -158,6 +158,12 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "coverage.ledger-reattached",
+		"domain": "SYNC",
+		"label": "Reconnected to local sync bookkeeping",
+		"introducedIn": "1.10.0"
+	},
+	{
 		"type": "coverage.ledger-rebuilt",
 		"domain": "SYNC",
 		"label": "Rebuilt local sync bookkeeping",

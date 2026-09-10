@@ -18,6 +18,9 @@ const sourceDirs = ['packages/core/src', 'packages/components/src', 'apps/main/a
 	path.join(repoRoot, p)
 );
 
+// E2E-build-only UI is deliberately kept outside production source.
+sourceDirs.push(path.join(repoRoot, 'packages/core/e2e'));
+
 function walk(dir, exts, files = []) {
 	for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
 		if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;

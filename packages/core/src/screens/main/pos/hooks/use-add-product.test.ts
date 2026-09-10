@@ -3,6 +3,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { getCartAddTiming } from '../../../../../e2e/cart-add-timing';
 import { useAddProduct } from './use-add-product';
 
 const mockAddItemToOrder = jest.fn();
@@ -210,4 +211,80 @@ describe('useAddProduct', () => {
 			})
 		);
 	});
+});
+
+it('starts the E2E timing at handler entry and waits for the cart commit', async () => {
+	const { getCartAddTiming, commitCartAddTiming } =
+		await import('../../../../../e2e/cart-add-timing');
+	const oldFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
+	process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+	const clock = jest.spyOn(performance, 'now').mockReturnValue(100);
+	mockCurrentOrder = makeOrder(81, []);
+	mockFindByProductVariationID.mockReturnValue(null);
+	mockConvertProductToLineItemWithoutTax.mockReturnValue({ product_id: 101, quantity: 1 });
+	mockAddItemToOrder.mockImplementation(async () => {
+		clock.mockReturnValue(400);
+		return true;
+	});
+	try {
+		const { result } = renderHook(() => useAddProduct());
+		await act(async () => {
+			await result.current.addProduct(
+				engineDocument({ name: 'Timed', type: 'simple' }, '101') as never
+			);
+		});
+		expect(getCartAddTiming()).toMatchObject({
+			status: 'pending',
+			orderId: 'order-81',
+			productId: 101,
+			quantity: 1,
+		});
+		clock.mockReturnValue(650);
+		commitCartAddTiming('order-81', [{ product_id: 101, quantity: 1 }]);
+		expect(getCartAddTiming().durationMs).toBe(550);
+	} finally {
+		clock.mockRestore();
+		if (oldFlag === undefined) delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+		else process.env.EXPO_PUBLIC_WCPOS_E2E = oldFlag;
+	}
+});
+
+it.each([
+	['add returns false', 'add', false],
+	['add rejects', 'add', new Error('add failed')],
+	['increment returns false', 'increment', false],
+	['increment rejects', 'increment', new Error('increment failed')],
+] as const)('cancels E2E timing when %s', async (_name, write, failure) => {
+	const oldFlag = process.env.EXPO_PUBLIC_WCPOS_E2E;
+	process.env.EXPO_PUBLIC_WCPOS_E2E = '1';
+	jest.clearAllMocks();
+	const lineItems = write === 'increment' ? [{ product_id: 101, quantity: 1 }] : [];
+	mockCurrentOrder = makeOrder(82, lineItems);
+	mockConvertProductToLineItemWithoutTax.mockReturnValue({ product_id: 101, quantity: 1 });
+	mockFindByProductVariationID.mockReturnValue(write === 'increment' ? lineItems : null);
+	mockGetUuidFromLineItem.mockReturnValue('line-101');
+	mockAddItemToOrder.mockResolvedValue(true);
+	mockIncrementLineItem.mockResolvedValue(true);
+	const writer = write === 'increment' ? mockIncrementLineItem : mockAddItemToOrder;
+	if (failure === false) writer.mockResolvedValue(false);
+	else writer.mockRejectedValue(failure);
+
+	try {
+		const { result } = renderHook(() => useAddProduct());
+		let outcome: boolean | Error | undefined;
+		await act(async () => {
+			try {
+				outcome = await result.current.addProduct(
+					engineDocument({ name: 'Timed failure', type: 'simple' }, '101') as never
+				);
+			} catch (error) {
+				outcome = error as Error;
+			}
+		});
+		expect(outcome).toBe(failure);
+		expect(getCartAddTiming().status).toBe('idle');
+	} finally {
+		if (oldFlag === undefined) delete process.env.EXPO_PUBLIC_WCPOS_E2E;
+		else process.env.EXPO_PUBLIC_WCPOS_E2E = oldFlag;
+	}
 });

@@ -950,6 +950,44 @@ describe('createEngineFetcher', () => {
 		expect(networkWarn).not.toHaveBeenCalled();
 	});
 
+	it('passes a browser DOMException abort through untouched (Sentry 2HK)', async () => {
+		// Firefox and Safari reject an aborted fetch with a DOMException whose
+		// message ("The operation was aborted.") matches the native-cancel
+		// normalisation above, and whose `name` is a getter-only prototype
+		// accessor. Assigning it threw `TypeError: setting getter-only property
+		// "name"` (Firefox) / `Attempted to assign to readonly property.`
+		// (Safari) — so a cashier typing the next search character was reported
+		// as a SYNC321 requirement failure instead of a quiet cancel.
+		//
+		// A real jsdom DOMException cannot stand in here: jest's babel transform
+		// runs this module in sloppy mode, where the same assignment is silently
+		// ignored, so it passed before the fix. The web bundle is strict (the
+		// Sentry message is Firefox's strict-mode wording), and a setter that
+		// throws is what strict mode does at that exact point.
+		class StrictModeDOMException extends Error {
+			get name() {
+				return 'AbortError';
+			}
+			set name(_value: string) {
+				throw new TypeError('setting getter-only property "name"');
+			}
+		}
+		const controller = new AbortController();
+		const abort = new StrictModeDOMException('The operation was aborted.');
+		expect(abort).toBeInstanceOf(Error);
+		const fetch = jest.fn().mockRejectedValue(abort);
+		const { fetcher, recordTransport, networkWarn } = createFetcherHarness({ fetch });
+		controller.abort();
+
+		await expect(
+			fetcher('https://store.example.test/wp-json/wcpos/v2/products', {
+				signal: controller.signal,
+			})
+		).rejects.toBe(abort);
+		expect(recordTransport).toHaveBeenCalledWith(expect.objectContaining({ failed: false }));
+		expect(networkWarn).not.toHaveBeenCalled();
+	});
+
 	it('does not persist a row for a successful request, and never logs query credentials', async () => {
 		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 		const { fetcher, networkInfo, appMetricsObserver } = createFetcherHarness({

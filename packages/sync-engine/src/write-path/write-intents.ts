@@ -457,7 +457,7 @@ export async function enqueueWriteIntent(input: {
 			if (!(await queue.coalesceInto(prior.mutationId, replacement))) continue;
 			input.observe?.({
 				type: 'queue.write.coalesce',
-				level: 'info',
+				level: 'debug',
 				collection: mutation.collectionName,
 				fields: { recordId: mutation.recordId, removed: 1, added: 1 },
 			});

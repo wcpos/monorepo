@@ -5,7 +5,7 @@
     "start": "node scripts/start-dev.mjs",
     "dev": "turbo dev",
     "dev:main": "turbo dev --filter=\"{./apps/main}...\"",
-    "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
+    "dev:electron-renderer": "ELECTRON=true EXPO_NO_METRO_LAZY=true BROWSER=none pnpm --filter @wcpos/main dev --web --port 8088 --clear",
     "build": "turbo build",
     "build:opfs-worker": "node scripts/build-opfs-worker.mjs",
     "generate:error-codes": "node scripts/generate-error-codes.mjs",
@@ -14,13 +14,12 @@
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "test": "turbo run test --filter='{./packages/*}' --filter='{./apps/main}'",
     "test:ci": "pnpm jest --ci --passWithNoTests && cd packages/query && npx jest --config jest.config.cjs --ci",
-    "test:scripts": "pnpm --filter @wcpos/virtual-printer test && pnpm --filter @wcpos/eslint-config test && node --test scripts/*.test.mjs && node scripts/check-dep-duplicates.mjs && node scripts/check-expo-alignment.mjs && node scripts/check-android-aar-compile-sdk.mjs && node scripts/check-event-labels.mjs && node scripts/check-sync-event-types.mjs && node scripts/check-bump-submodules-workflow.mjs && node scripts/check-ci-test-matrix.mjs && node scripts/check-test-removal.mjs && node scripts/check-workspace-tasks.mjs && node scripts/check-react-compiler-smells.mjs",
+    "test:scripts": "pnpm --filter @wcpos/virtual-printer test && pnpm --filter @wcpos/eslint-config test && node --test scripts/*.test.mjs && node scripts/check-dep-duplicates.mjs && node scripts/check-expo-alignment.mjs && node scripts/check-android-aar-compile-sdk.mjs && node scripts/check-event-labels.mjs && node scripts/check-sync-event-types.mjs && node scripts/check-ci-test-matrix.mjs && node scripts/check-test-removal.mjs && node scripts/check-workspace-tasks.mjs && node scripts/check-react-compiler-smells.mjs",
     "lint": "turbo lint --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
     "lint:fix": "turbo lint:fix --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
     "typecheck": "turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}' --filter='{./apps/template-studio}'",
     "main:expo": "pnpm --filter @wcpos/main exec expo",
     "clean": "node scripts/clean-node-modules",
-    "electron": "pnpm --filter @wcpos/app-electron",
     "main": "pnpm --filter @wcpos/main",
     "web": "pnpm --filter @wcpos/web-bundle",
     "components": "pnpm --filter @wcpos/components",
@@ -38,7 +37,7 @@
     "prepare": "git config core.hooksPath .githooks",
     "virtual-printer": "pnpm --filter @wcpos/virtual-printer start",
 		"virtual-printer:secure": "pnpm --filter @wcpos/virtual-printer start -- --scenario secure-printing",
-    "submodules:update": "git submodule update --init --remote apps/electron apps/web && node ./scripts/stage-submodule-bumps.mjs"
+    "submodules:update": "git submodule update --init --remote apps/web && node ./scripts/stage-submodule-bumps.mjs"
   },
   "packageManager": "pnpm@11.1.1",
   "lint-staged": {

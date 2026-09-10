@@ -1,12 +1,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import {
 	checkGateCoverage,
 	checkWorkspaceTasks,
 	isCoveredByFilters,
 	parseTurboFilters,
+	readWorkspacePackages,
 } from './check-workspace-tasks.mjs';
+
+test('workspace discovery honours exclusions from pnpm-workspace.yaml', (t) => {
+	const root = mkdtempSync(path.join(tmpdir(), 'workspace-tasks-'));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	writeFileSync(
+		path.join(root, 'pnpm-workspace.yaml'),
+		'packages:\n  - "apps/*"\n  - "!apps/electron"\n'
+	);
+	mkdirSync(path.join(root, 'packages'));
+	for (const name of ['main', 'electron']) {
+		mkdirSync(path.join(root, 'apps', name), { recursive: true });
+		writeFileSync(path.join(root, 'apps', name, 'package.json'), JSON.stringify({ name }));
+	}
+
+	assert.deepEqual(
+		readWorkspacePackages(root).map(({ dir }) => dir),
+		['apps/main']
+	);
+});
 
 const packageWithoutTypecheck = {
 	dir: 'packages/example',

@@ -287,7 +287,13 @@ export function createEngineFetcher(input: {
 					/FetchRequestCanceledException|Fetch request has been canceled|UnexpectedException: cancelled|The operation was aborted/i.test(
 						error.message
 					);
-				if (isNativeCancel) error.name = 'AbortError';
+				// Only rename what is not already an abort. A browser abort is a
+				// DOMException whose message ALSO matches the pattern above and whose
+				// `name` is a getter-only prototype accessor — assigning it throws on
+				// Firefox ("setting getter-only property") and Safari ("Attempted to
+				// assign to readonly property"), turning a cancelled search into a
+				// SYNC321 failure (Sentry 2HK, 1.10.6–1.10.9).
+				if (isNativeCancel && error.name !== 'AbortError') error.name = 'AbortError';
 				const aborted = (error as { name?: unknown } | null)?.name === 'AbortError';
 				input.emitTransport(
 					{

@@ -172,3 +172,11 @@ test('workspace resolves one react-native-reanimated version', () => {
 	assert.match(pinned, /^\d+\.\d+\.\d+$/, 'apps/main must pin an exact reanimated version');
 	assert.deepEqual([...versions], [pinned]);
 });
+
+test('@wcpos/utils declares its native file-system runtime', () => {
+	const main = JSON.parse(readFileSync(new URL('../apps/main/package.json', import.meta.url)));
+	const utils = JSON.parse(readFileSync(new URL('../packages/utils/package.json', import.meta.url)));
+
+	assert.equal(utils.peerDependencies['expo-file-system'], main.dependencies['expo-file-system']);
+	assert.equal(utils.peerDependenciesMeta['expo-file-system'].optional, true);
+});

@@ -28,6 +28,13 @@ export const ALLOWED_EXPO_MISMATCHES = new Map([
 			'class, #1691/#1797/#1802. Same 4.5 line and worklets 0.10.x peer. Drop when the SDK ' +
 			'prescribes >= 4.5.3.',
 	],
+	[
+		'@sentry/react-native',
+		'8.25.0: SDK 57 prescribes ~7.11.0; only 8.25.0 carries getsentry/sentry-react-native#6630 ' +
+			'(Expo 57 / RN 0.86 iOS: envelopes report HTTP 200 but never ingest). The 7.x line ended ' +
+			'2026-02-12. Also listed in apps/main `expo.install.exclude`. Drop when the SDK prescribes ' +
+			'>= 8.25.0.',
+	],
 ]);
 
 /**

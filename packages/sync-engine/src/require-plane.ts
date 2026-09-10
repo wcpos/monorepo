@@ -1126,7 +1126,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 								)
 							: [];
 					if (
-						(lane?.complete && lane.fresh) ||
+						(lane?.fresh && (lane.complete || lane.expectedRecordIds.length >= limit)) ||
 						equivalentCustomerLanes.some((candidate) => candidate?.complete && candidate.fresh)
 					) {
 						return {
@@ -1175,6 +1175,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					limit,
 					priority: item.priority,
 					mode: 'windowed',
+					...(item.requirement.forceRefresh ? { forceRefresh: true } : {}),
 				};
 				let result: Awaited<ReturnType<typeof runEngineSchedulerTask>> | undefined;
 				const applied = await bound.guardWrite(async () => {
