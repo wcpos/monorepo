@@ -145,25 +145,24 @@ function scriptedServer() {
 		if (path.endsWith('/variations')) {
 			state.variationPulls += 1;
 			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
-			return json({
-				documents: include
+			return json(
+				include
 					.filter((id) => !state.elidedVariationIds.has(id))
 					.map((id) => ({
 						id,
 						parent_id: 9,
-						payload: {
-							meta_data: [
-								{
-									key: '_woocommerce_pos_uuid',
-									value: variationUuid(id),
-								},
-							],
-							price: '4.00',
-							stock_status: 'instock',
-							attributes: [],
-						},
-					})),
-			});
+						_rxdb_revision: 'r',
+						meta_data: [
+							{
+								key: '_woocommerce_pos_uuid',
+								value: variationUuid(id),
+							},
+						],
+						price: '4.00',
+						stock_status: 'instock',
+						attributes: [],
+					}))
+			);
 		}
 		if (path.endsWith('/customers')) {
 			state.customerPulls += 1;

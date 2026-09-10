@@ -124,6 +124,9 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 			orderId: id,
 			revision: `revision-${id}`,
 			sequence: id,
+			epoch: 'scripted-epoch',
+			head: batchCount,
+			horizon: 0,
 		};
 		return new Response(
 			JSON.stringify({
@@ -151,7 +154,7 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 					},
 				],
 				checkpoint,
-				hasMore: state.pulls < batchCount,
+				complete: state.pulls >= batchCount,
 			}),
 			{ status: 200, headers: { 'content-type': 'application/json' } }
 		);

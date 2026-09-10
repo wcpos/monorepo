@@ -529,7 +529,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			const engine = engineWith({
 				fetcher: async (url) => {
 					urls.push(url);
-					return new Response(JSON.stringify({ documents: [], checkpoint, hasMore: false }), {
+					return new Response(JSON.stringify({ documents: [], checkpoint, complete: true }), {
 						status: 200,
 						headers: { 'content-type': 'application/json' },
 					});

@@ -127,49 +127,13 @@ function parseBareArray(body: unknown): WooPayload[] {
 	return body as WooPayload[];
 }
 
-/**
- * The lab /variations include envelope: `{ documents: [...] }`. Each wrapper
- * is flattened into the payload the projection consumes — `parent_id` rides
- * the wrapper (not the inner payload), and the wrapper-level `_rxdb_digest`
- * (a transport-only Leg-3 digest) is carried through onto the flattened row
- * for the existence manifest.
- */
+// The plugin has emitted bare variation arrays since 1.11.0.
+// Each record carries its own identity and revision stamp.
 export function parseVariationsEnvelope(body: unknown): WooPayload[] {
-	/**
-	 * A BARE wc/v3 array is accepted as well as the `{ documents: [...] }` wrapper.
-	 *
-	 * `/variations` is the only targeted lane that wraps; `/products` and `/customers` answer with a
-	 * bare array and carry their stamps on the record. The wrapper exists to supply `id` and
-	 * `parent_id`, and WooCommerce has carried BOTH in the variation payload itself since WC 8.3
-	 * (the plugin backfills them below that), so it adds nothing the payload does not already have.
-	 *
-	 * Tolerance ships FIRST and on its own. The server cannot drop the wrapper until every deployed
-	 * client can read both shapes — this function used to throw on anything else, so a plugin that
-	 * changed the envelope would have broken variation sync on every till the moment a merchant
-	 * updated. That is the standing rule for this seam: the client tolerates both shapes, the server
-	 * emits exactly one, and the tolerance is removed only once the plugin's minimum supported
-	 * version is past the release that changed it.
-	 */
-	if (Array.isArray(body)) {
-		return body as WooPayload[];
+	if (!Array.isArray(body)) {
+		throw new Error('variations pull returned a non-array body');
 	}
-	const documents = (body as { documents?: unknown })?.documents;
-	if (!Array.isArray(documents)) {
-		throw new Error('variations pull returned neither a documents array nor a bare array');
-	}
-	return (
-		documents as {
-			id: number;
-			parent_id: number;
-			payload: Record<string, unknown>;
-			_rxdb_digest?: string;
-		}[]
-	).map((wrapper) => ({
-		...wrapper.payload,
-		id: wrapper.id,
-		parent_id: wrapper.parent_id,
-		...(wrapper._rxdb_digest !== undefined ? { _rxdb_digest: wrapper._rxdb_digest } : {}),
-	}));
+	return body as WooPayload[];
 }
 
 /** shape: 'greedy-prunable' — one re-pull upserts AND prunes; no per-id arms. */
@@ -588,24 +552,9 @@ const variationsWriteFacet = createWriteFacet({
 	parse: parseVariationsEnvelope,
 	project: variationDocument,
 	documentPatchFromAckDocument: (document, barcodeSelectors) =>
-		catalogAckPatch(variationDocument, flattenVariationAckDocument(document), barcodeSelectors),
+		catalogAckPatch(variationDocument, document, barcodeSelectors),
 });
 
-/**
- * The variation push ack `document` is the SAME wrapper shape the pull
- * envelope carries — `{ id, parent_id, payload, _rxdb_digest? }` with identity
- * and the REST fields inside `payload` (Write_Controller::document_for) — so
- * it must be flattened exactly like parseVariationsEnvelope flattens a pull
- * row before the flat-payload projection can key it. Passing the wrapper
- * straight through leaves no top-level meta_data, identifyRecord throws, and
- * adoption silently degrades to the bookkeeping-only ack. A document that is
- * already flat (defensive: no nested payload object) passes through untouched.
- */
-function flattenVariationAckDocument(document: Record<string, unknown>): Record<string, unknown> {
-	if (typeof document.payload !== 'object' || document.payload === null) return document;
-	const [flattened] = parseVariationsEnvelope({ documents: [document] });
-	return flattened ?? document;
-}
 const customersWriteFacet = createWriteFacet({
 	collection: 'customers',
 	remoteIdField: 'remoteId',

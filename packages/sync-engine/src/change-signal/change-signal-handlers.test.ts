@@ -134,7 +134,7 @@ describe('pullTargetedByIds product publication filter', () => {
 	});
 
 	it.each([
-		['variations', { documents: [] }],
+		['variations', []],
 		['customers', []],
 	] as const)('prunes a short %s pull without sending status', async (collection, body) => {
 		const urls: string[] = [];
@@ -156,7 +156,7 @@ describe('pullTargetedByIds product publication filter', () => {
 		const removed: string[] = [];
 		const ctx = context(
 			'variations',
-			{ documents: [] },
+			[],
 			[],
 			[{ primary: 'uuid-resident', json: { wooId: 1 } }],
 			removed
