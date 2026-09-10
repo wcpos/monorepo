@@ -22,7 +22,11 @@ async function connect(page: Page, reader: string) {
 	await expect(page.getByTestId('checkout-reader-connect')).toBeEnabled();
 	await page.getByTestId('checkout-reader-connect').click();
 	await expect(page.getByTestId('checkout-reader-list')).toBeVisible();
-	await page.getByTestId(`checkout-reader-option-${reader}`).click();
+	const option = page.getByTestId(`checkout-reader-option-${reader}`);
+	const readerName = (await option.innerText()).trim();
+	await option.click();
+	// The reader name in this composite status identifies the completed switch.
+	await expect(page.getByTestId('checkout-reader-status')).toContainText(readerName);
 	await expect(page.getByTestId('checkout-take-payment')).toBeEnabled();
 }
 function paymentResponse(page: Page, orderId: number, action: string) {
@@ -98,14 +102,24 @@ liveTest.describe('POS device capture with the simulated driver (live store)', (
 						authorization,
 						orderId,
 						(order) =>
-							ledgerRows(order).some(
-								(row) => row.status === (scenario === 'decline' ? 'failed' : 'voided')
+							ledgerRows(order).some((row) =>
+								scenario === 'decline'
+									? row.status === 'failed' || row.status === 'voided'
+									: row.status === 'voided'
 							),
 						'reader rejection must not mark the sale paid'
 					);
 					expect(ledgerRows(failedOrder)).toHaveLength(1);
 					expect(failedOrder.date_paid ?? failedOrder.date_paid_gmt).toBeFalsy();
 					if (scenario === 'cancel') return;
+					const declined = ledgerRows(failedOrder)[0] as {
+						failure_reason?: string | null;
+						events?: unknown[];
+					};
+					expect(
+						declined.failure_reason === 'card_declined' ||
+							JSON.stringify(declined.events ?? []).includes('card_declined')
+					).toBe(true);
 					await page.getByTestId('checkout-terminal-retry').click();
 					await connect(page, 'sim-approve');
 					await take(page, orderId);

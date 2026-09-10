@@ -121,7 +121,7 @@ export function ReaderConnection({
 	else if (status.connection === 'connected')
 		line = [
 			t('pos_checkout.reader_connected'),
-			status.reader?.model ?? status.reader?.label,
+			status.reader?.label ?? status.reader?.model,
 			status.reader?.battery == null ? null : `${status.reader.battery}%`,
 		]
 			.filter(Boolean)

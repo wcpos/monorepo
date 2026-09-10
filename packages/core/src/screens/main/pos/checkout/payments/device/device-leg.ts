@@ -64,10 +64,10 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		state = { ...state, ...changes };
 		listeners.forEach((fn) => fn());
 	};
-	const finish = (outcome: DeviceLegState['outcome']) => {
+	const finish = (outcome: DeviceLegState['outcome'], changes: Partial<DeviceLegState> = {}) => {
 		if (!active()) return;
 		deps.clearTimeout(timer!);
-		set({ phase: 'final', outcome, capturing: false });
+		set({ ...changes, phase: 'final', outcome, capturing: false });
 		deps.onFinal?.(state);
 	};
 	const errorState = (error: unknown) => {
@@ -93,7 +93,13 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			if (active()) errorState(error);
 		}
 		if (!active()) return;
-		set({ row: response.payment, ...(response.order ? { order: response.order } : {}) });
+		const changes = { row: response.payment, ...(response.order ? { order: response.order } : {}) };
+		const status = response.payment.status;
+		// Publish finality with the mirrored row, not after returning through another await:
+		// checkout can unmount when the paid row lands, before it consumes the outcome.
+		if (status === 'captured' || status === 'failed' || status === 'voided') {
+			finish(status === 'voided' && result?.outcome === 'declined' ? 'failed' : status, changes);
+		} else set(changes);
 	};
 	const url = (route: string) => `orders/${input.orderId}/payments/${input.row.id}/${route}`;
 	async function confirm() {
@@ -113,9 +119,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 					: await deps.get(url('status'));
 				await apply(response.data as ServerLegResponse);
 				if (!active()) return;
-				const status = state.row.status;
-				if (status === 'captured' || status === 'failed' || status === 'voided') finish(status);
-				else throw new Error('Payment is not final on the store');
+				throw new Error('Payment is not final on the store');
 			} else if (input.resume) {
 				const lost = {
 					t: new Date(deps.now()).toISOString(),
@@ -162,6 +166,12 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 					finish(authorized ? 'captured' : (row.status as 'failed' | 'voided'));
 				}
 			} else {
+				if (result?.outcome === 'declined') {
+					// Let the provider report its failure before voiding a still-live intent.
+					const response = await deps.get(url('status'));
+					await apply(response.data as ServerLegResponse);
+					if (!active()) return;
+				}
 				const success = result?.outcome === 'captured' || result?.outcome === 'authorized';
 				set({ phase: success ? 'capturing' : 'confirming' });
 				const response = await deps.post(
@@ -184,10 +194,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				);
 				await apply(response.data as ServerLegResponse);
 				if (!active()) return;
-				const status = state.row.status;
-				if (status === 'captured' || status === 'failed' || status === 'voided') {
-					finish(status === 'voided' && result?.outcome === 'declined' ? 'failed' : status);
-				} else throw new Error('Payment is not final on the store');
+				throw new Error('Payment is not final on the store');
 			}
 		} catch (error) {
 			if (!active()) return;
@@ -195,11 +202,6 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			if (body?.data?.payment) {
 				await apply({ payment: body.data.payment, order: body.data.order });
 				if (!active()) return;
-				const status = state.row.status;
-				if (status === 'captured' || status === 'failed' || status === 'voided') {
-					finish(status);
-					return;
-				}
 			}
 			set({ captureFailed: true, capturing: false });
 		} finally {
@@ -234,10 +236,6 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				const data = response.data as ServerLegResponse & { handoff?: CollectInput['handoff'] };
 				await apply(data);
 				if (!active()) return;
-				if (['captured', 'failed', 'voided'].includes(state.row.status)) {
-					finish(state.row.status as 'captured' | 'failed' | 'voided');
-					return;
-				}
 				handoff = data.handoff ?? null;
 			} catch (error) {
 				if (!active()) return;

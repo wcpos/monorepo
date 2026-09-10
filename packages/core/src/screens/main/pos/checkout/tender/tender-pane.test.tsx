@@ -376,7 +376,7 @@ it('device status, discovery, bootstrap and transport choice drive payment readi
 		await new Promise((resolve) => setTimeout(resolve, 350));
 	});
 	expect(mockBootstrap).toHaveBeenCalledWith('bluetooth');
-	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('Connected');
+	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('Simulated approve');
 	rendered.rerender(<TenderPane flow={{ ...flow, deviceReady: true }} format={String} />);
 	expect(screen.getByTestId('checkout-take-payment').hasAttribute('disabled')).toBe(false);
 	fireEvent.click(screen.getByTestId('checkout-transport-tap_to_pay'));
