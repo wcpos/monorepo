@@ -2448,7 +2448,8 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(fetcher.mock.calls.map(([url]) => new URL(url).search)).toEqual([
 			'?search=keyboard&per_page=50&page=3&orderby=id&order=desc&status=publish',
 		]);
-		expect(result).toMatchObject({ documentCount: 0, requestCount: 0, completed: true });
+		// The terminal 400 was still a request the host answered — it counts.
+		expect(result).toMatchObject({ documentCount: 0, requestCount: 1, completed: true });
 		expect(recordCumulativeQueryResult).toHaveBeenCalledWith(
 			expect.objectContaining({ complete: true, records: [] })
 		);

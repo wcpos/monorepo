@@ -335,6 +335,7 @@ async function fetchProductSearchLeg(
 				/_invalid_page_number$/.test(error.code) &&
 				nextPage > 1
 			) {
+				requestCount += 1; // the request was made; the merchant's host paid for it
 				exhausted = true;
 				break;
 			}
