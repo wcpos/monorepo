@@ -1559,6 +1559,7 @@ describe('require() for search — the public search-demand verb', () => {
 });
 
 describe('search walk politeness against the fixture (spec Phase 2)', () => {
+	/** Serves the product search and SKU legs from the shared fixture catalogue. */
 	function fixtureServer(urls: string[]) {
 		return async (url: string) => {
 			const params = new URL(url).searchParams;
