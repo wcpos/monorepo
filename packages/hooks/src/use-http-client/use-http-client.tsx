@@ -125,6 +125,10 @@ const processErrorHandlers = async (
 				httpLogger.debug(`Error handler ${handler.name} passed through the original error`, {
 					context: { handlerName: handler.name, status: error.response?.status },
 				});
+			} else if (http.isCancel(handlerError)) {
+				httpLogger.debug(`Error handler ${handler.name} substituted a CanceledError`, {
+					context: { handlerName: handler.name, status: error.response?.status },
+				});
 			} else {
 				httpLogger.error(`Error handler ${handler.name} threw an error`, {
 					code: 'CLIENT999',
