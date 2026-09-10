@@ -1,5 +1,11 @@
+# `!apps/electron`: it stopped being a submodule on 2026-09-09 (#1933). A clone that had it
+# initialised keeps the checkout as an untracked directory, and the `apps/*` glob would pick
+# its package.json up as a workspace project the lockfile has no importer for, failing the
+# frozen install. Drop the entry once every long-lived clone has been cleaned. Keep this
+# block free of comment lines: scripts/ci-plan.mjs and check-workspace-tasks.mjs parse it.
 packages:
   - "apps/*"
+  - "!apps/electron"
   - "packages/*"
 # Never let `pnpm run` / `pnpm exec` install on their own. pnpm 11's default is
 # `install`: before every script it re-checks node_modules and, if it judges it
@@ -73,7 +79,7 @@ overrides:
   # force them to 30 so the jest-30 workspace packages get a consistent test environment.
   "jest-environment-jsdom": "^30.4.1"
   "jest-environment-node": "^30.4.1"
-  # concurrently@9.2.1 (apps/electron devDep) pins shell-quote 1.8.3 exactly — force the
+  # react-devtools-core resolves shell-quote in this workspace — keep the
   # patched release (GHSA-w7jw-789q-3m8p, critical, fixed 1.8.4). Floor then raised to
   # 1.9.0 for GHSA-395f-4hp3-45gv (high, quadratic-complexity DoS in parse(), fixed
   # 1.9.0 per OSV — there is no 1.8.5 release). ">=1.8.4" had gone stale: it resolved to
@@ -114,23 +120,15 @@ overrides:
   "@svgr/plugin-svgo>svgo": ">=3.3.4 <4"
 allowBuilds:
   "@firebase/util": false
-  # sentry-cli's postinstall downloads the platform binary @sentry/webpack-plugin
-  # (apps/electron sourcemap upload) shells out to; without it the strict install
+  # sentry-cli's postinstall downloads its platform binary; without approval the strict install
   # fails outright (ERR_PNPM_IGNORED_BUILDS broke the 1.10.5 Publish Web Bundle run).
   "@sentry/cli": true
-  "@serialport/bindings-cpp": true
   "@shopify/react-native-skia": true
   "@tailwindcss/oxide": true
-  "@zowe/secrets-for-zowe-sdk": true
-  "better-sqlite3": true
   "core-js": true
   "eccrypto": false
-  "electron": true
-  "electron-winstaller": false
   "esbuild": true
-  "fs-xattr": true
   "keccak": true
-  "macos-alias": true
   "msgpackr-extract": false
   "protobufjs": true
   "react-native-esc-pos-printer": true
@@ -139,7 +137,6 @@ allowBuilds:
   "secp256k1": true
   "uniwind": true
   "unrs-resolver": true
-  usb: true
 patchedDependencies:
   # Backport of flash-list 2.2.2's guard in RVLayoutManager.modifyLayout: when the data
   # array shrinks, `layoutInfo` still carries the indices of ViewHolders measured before
@@ -158,6 +155,17 @@ patchedDependencies:
   # for a dropped index; the render path skips that key and `validateItemSize` drops the
   # stale measurement, exactly as the upstream PR does. Drop with the upgrade above.
   "@shopify/flash-list@2.0.2": "patches/@shopify__flash-list@2.0.2.patch"
+  # expo-opfs 1.0.9's FileSystemWritableFileStream copies the WHOLE file through the JS
+  # thread on every writable: readBytes()+writeBytes() into a swap on the first write,
+  # then on close() delete the original, read the whole swap back and rewrite it. The
+  # rxdb filesystem engine opens a writable for nearly every write (two per compacted
+  # document), so a 700 KB documents file cost hundreds of MB of byte copies per
+  # compaction pass and 61% of the JS thread in the busy minute after login on an iPad
+  # (.claude/research/2026-09-08-ipad-expo-opfs-swap-copies). expo-file-system 57 has
+  # synchronous copySync()/moveSync(), so the swap is a native copy and the commit an
+  # atomic rename — the April 2026 fix (5e691a9df4, rxdb#8290) that the July engine
+  # migration dropped. Drop this patch when expo-opfs does the same upstream.
+  expo-opfs@1.0.9: patches/expo-opfs@1.0.9.patch
   # A closed drawer is only translated off-screen. Reanimated < 4.5.3 could revert that
   # transform to a stale value after a JS-thread stall (reanimated#9965, fixed by #9527 —
   # the drawer reappearing at the OPEN position over the routed screen, #1691/#1797), and the

@@ -40,7 +40,12 @@ test('reads the package globs out of pnpm-workspace.yaml', () => {
 		'overrides:',
 		'  expo: "~57.0.8"',
 	].join('\n');
-	assert.deepEqual(parseWorkspaceGlobs(yaml), ['apps/*', 'packages/*', 'tools/one']);
+	assert.deepEqual(parseWorkspaceGlobs(yaml), [
+		'apps/*',
+		'packages/*',
+		'tools/one',
+		'!packages/excluded',
+	]);
 });
 
 test('the real workspace file still parses', () => {
@@ -66,15 +71,16 @@ test('resolves globs to directories that actually hold a package.json', (t) => {
 	const tree = makeTree();
 	t.after(() => rmSync(tree.root, { recursive: true, force: true }));
 	tree.pkg('packages/alpha', '@wcpos/alpha');
+	tree.pkg('packages/excluded', '@wcpos/excluded');
 	tree.pkg('apps/beta', '@wcpos/beta');
 	mkdirSync(path.join(tree.root, 'packages/not-a-package'), {
 		recursive: true,
 	});
 
-	assert.deepEqual(resolveWorkspacePackages(['apps/*', 'packages/*'], tree.root), [
-		'apps/beta',
-		'packages/alpha',
-	]);
+	assert.deepEqual(
+		resolveWorkspacePackages(['apps/*', 'packages/*', '!packages/excluded'], tree.root),
+		['apps/beta', 'packages/alpha']
+	);
 });
 
 test('rejects workspace glob shapes the resolver does not support', (t) => {
@@ -342,11 +348,10 @@ test('reads submodule paths from .gitmodules', (t) => {
 });
 
 test('the repo declares its submodules, so their tests never read as dark', () => {
-	// apps/web and apps/electron appear or vanish depending on whether the
-	// checkout initialized them; the survey must not depend on that.
+	// apps/web appears or vanishes depending on whether the
+	// checkout initialized it; the survey must not depend on that.
 	const submodules = readSubmodulePaths();
 	assert.ok(submodules.has('apps/web'));
-	assert.ok(submodules.has('apps/electron'));
 });
 
 /* ------------------------------------------------------------ live invariants */

@@ -66,6 +66,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.coverage_gate_hit');
 		case 'coverage.gate.miss':
 			return t('health.logs.event.coverage_gate_miss');
+		case 'coverage.ledger-reattached':
+			return t('health.logs.event.coverage_ledger_reattached');
 		case 'coverage.ledger-rebuilt':
 			return t('health.logs.event.coverage_ledger_rebuilt');
 		case 'coverage.require.error':

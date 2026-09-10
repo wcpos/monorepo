@@ -98,7 +98,7 @@ export function classify(file) {
 	if (file.startsWith('.github/actions/') || file.startsWith('.github/scripts/'))
 		return 'github-shared';
 	if (file.startsWith('scripts/')) return 'scripts';
-	if (file === 'apps/web' || file === 'apps/electron') return 'submodule';
+	if (file === 'apps/web') return 'submodule';
 	return 'fallback';
 }
 

@@ -8,6 +8,8 @@ env:
 # Session comes from 02-auth-setup; do NOT clear state.
 - runFlow:
     file: ../subflows/ensure-pos-ready.yml
+- runFlow:
+    file: ../subflows/capture-cart-add-sequence.yml
 # Typing is retried; SEARCH SPEED IS NOT (owner ruling 2026-08-28: "if it
 # takes 60 seconds to return a search, that is a bug or a mis-configured
 # test"). Two separate concerns:
@@ -94,6 +96,7 @@ env:
               id: 'cart-subtotal'
           commands:
             - evalScript: "${console.log('WCPOS_E2E cart has no line after the tile tap, re-adding once')}"
+            - evalScript: ${output.cartAddRetried = true}
             - runFlow:
                 when:
                   visible:
@@ -131,6 +134,8 @@ env:
     visible:
       id: 'cart-subtotal'
     timeout: 30000
+- runFlow:
+    file: ../subflows/assert-cart-add-timing.yml
 - assertVisible:
     id: 'checkout-button'
 - tapOn:

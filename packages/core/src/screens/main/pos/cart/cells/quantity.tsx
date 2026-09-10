@@ -30,6 +30,16 @@ export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 		<VStack className="items-center justify-center gap-1">
 			<NumberInput
 				testID="cart-quantity-input"
+				// The column is 56 wide and the input box 41; the shared input's 12-point
+				// horizontal padding left ~17 points for the digits, so "19" fit and "20"
+				// painted as "2" (iPhone 16 Pro simulator, 2026-09-09). Native only; the
+				// web NumberInput renders a button and ignores this.
+				inputClassName="px-1 text-center"
+				// A tap on the field lands the caret wherever the finger was, often before
+				// the digits, so typing appends instead of replacing ("1" → "31"). A
+				// cashier tapping the quantity means to replace it, as the web numpad
+				// does; selecting on focus makes the next keystroke do exactly that.
+				selectTextOnFocus
 				value={item.quantity}
 				onChangeText={(quantity) => updateLineItem(uuid, { quantity })}
 			/>

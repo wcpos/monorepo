@@ -84,6 +84,10 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 		}
 		return { rows: chunked, skippedStaleHits: deferredResult.hits.length - products.length };
 	}, [deferredResult.hits, gridColumns]);
+	// What the footers report as "loaded": the rows the grid actually built, not the hits it
+	// was handed — replication churn can hand over stale hits that are skipped above, and the
+	// loaded-count is a referent E2E reads (#1345), so it must count rendered rows.
+	const renderedCount = deferredResult.hits.length - skippedStaleHits;
 
 	// Products vanishing from the grid during sync churn must be visible in the log
 	// pipeline (cashier-full-information ruling), even though the grid self-heals
@@ -127,9 +131,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 					estimatedItemSize={200}
 					onEndReachedThreshold={0.1}
 					onEndReached={handleEndReached}
-					ListFooterComponent={
-						<ProductGridFooter binding={binding} count={deferredResult.hits.length} />
-					}
+					ListFooterComponent={<ProductGridFooter binding={binding} count={renderedCount} />}
 					ListEmptyComponent={() => (
 						<View className="items-center justify-center p-4">
 							{/* "No products found" may only ever mean the search ANSWERED with
@@ -150,7 +152,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 						active$={binding.active$}
 						total$={binding.total$}
 						sync={binding.sync}
-						count={deferredResult.hits.length}
+						count={renderedCount}
 					>
 						<TaxBasedOn />
 					</DataTableFooter>
@@ -160,7 +162,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 						active$={binding.active$}
 						total$={binding.total$}
 						sync={binding.sync}
-						count={deferredResult.hits.length}
+						count={renderedCount}
 					/>
 				)}
 			</View>

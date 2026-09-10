@@ -18,6 +18,8 @@ export type FetchTask = {
 	limit: number;
 	priority: number;
 	mode: ReplicationMode;
+	/** A cashier-forced refresh: walk from page 1 even when a fresh prefix could be resumed. */
+	forceRefresh?: boolean;
 };
 
 /** Preserve the task's total/window limit while capping each transport request. */

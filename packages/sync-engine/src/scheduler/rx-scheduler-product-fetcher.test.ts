@@ -167,6 +167,7 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('runs both legs for a two-character search', async () => {
+		// #908 reversal — the wire page is the dial even for a small window, so the next grid extensions serve local: per_page is the dial, not limit=25.
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -186,13 +187,14 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=42&per_page=25&page=1&orderby=id&order=desc&status=publish',
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=42&per_page=100&page=1&orderby=id&order=desc&status=publish',
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=42&per_page=100&page=1&orderby=id&order=desc&status=publish',
 		]);
 		expect(result).toMatchObject({ requestCount: 2, completed: true });
 	});
 
 	it('uses only search= when the exact SKU leg is disabled', async () => {
+		// #908 reversal — the wire page is the dial even for a small window, so the next grid extensions serve local: per_page is the dial, not limit=25.
 		const fetcher = vi.fn(async (_url: string) => response([]));
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -207,7 +209,7 @@ describe('createProductsSchedulerFetcher', () => {
 		const result = await schedulerFetcher(productTask());
 
 		expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=25&page=1&orderby=id&order=desc&status=publish',
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=100&page=1&orderby=id&order=desc&status=publish',
 		]);
 		expect(result.requestCount).toBe(1);
 	});
@@ -381,7 +383,8 @@ describe('createProductsSchedulerFetcher', () => {
 		const result = await schedulerFetcher(productTask());
 
 		// limit=25 at dial=10: three FULL pages (per_page=10 on every request,
-		// including the last), trimmed to 25 locally — never a shrunk page 3.
+		// including the last) — never a shrunk page 3. All 30 rows persist: the window
+		// bounds the walk, not the persisted set.
 		const searchCalls = fetcher.mock.calls
 			.map(([url]) => url)
 			.filter((url: string) => url.includes('search='));
@@ -392,7 +395,7 @@ describe('createProductsSchedulerFetcher', () => {
 		]);
 		// The tail is the true tail (ids 1000-976, in order), not a re-read of page 2's rows.
 		expect(repository.upsertMany).toHaveBeenCalledWith(
-			Array.from({ length: 25 }, (_, i) =>
+			Array.from({ length: 30 }, (_, i) =>
 				expect.objectContaining({ remoteId: remoteId(1000 - i) })
 			)
 		);
@@ -400,7 +403,7 @@ describe('createProductsSchedulerFetcher', () => {
 		// matches, so the search coverage is honestly incomplete.
 		expect(result).toEqual({
 			taskId: 'products:search:keyboard:windowed',
-			documentCount: 25,
+			documentCount: 30,
 			requestCount: 4,
 			completed: false,
 		});
@@ -2186,13 +2189,14 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
+		// #908 reversal — the wire page is the dial even for a small window, so the next grid extensions serve local: per_page stays at the dial, not limit=25.
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=KEY-101&per_page=100&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=KEY-101&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=KEY-101&per_page=100&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({
@@ -2209,7 +2213,7 @@ describe('createProductsSchedulerFetcher', () => {
 		});
 	});
 
-	it('preserves exact SKU matches when search results fill the task limit', async () => {
+	it('persists exact SKU matches ahead of search rows, dropping neither past the window', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -2258,19 +2262,22 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(repository.upsertMany).toHaveBeenCalledWith([
 			expect.objectContaining({ uuid: uuidFor(101), remoteId: remoteId(101) }),
 			expect.objectContaining({ uuid: uuidFor(201), remoteId: remoteId(201) }),
+			expect.objectContaining({ uuid: uuidFor(202), remoteId: remoteId(202) }),
 		]);
 	});
 
-	it('withholds lane completion when cross-leg dedupe overflows the persisted window', async () => {
+	it('records a complete lane of search rows and covers a sku-only hit as a record, not a lane member', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
 		const coverageRepository = {
 			recordQueryResult: vi.fn(async () => undefined),
+			recordRecords: vi.fn(async () => undefined),
 		};
-		// Both legs exhaust (short pages), but their union (3) exceeds limit (2): the
-		// persisted set is truncated, so the lane must not read back as complete.
+		// Both legs exhaust (short pages) and their union (3) exceeds limit (2). Nothing is
+		// trimmed to the window any more, so every row is recorded and the lane IS complete —
+		// a truncated-but-complete lane was the old bug this test guarded against.
 		const fetcher = vi.fn(async (url: string) => {
 			if (url.includes('sku=KEY-101')) {
 				return response([
@@ -2315,11 +2322,274 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
+		// The lane's id count is the search walk's page cursor, so the sku-only row 101 must
+		// not join it — it is covered as a record and still persisted (and rendered) first.
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
-			expect.objectContaining({ complete: false })
+			expect.objectContaining({
+				complete: true,
+				records: [{ id: 'woo-product:201' }, { id: 'woo-product:202' }],
+			})
 		);
-		expect(result.completed).toBe(false);
+		expect(coverageRepository.recordRecords).toHaveBeenCalledWith(
+			expect.objectContaining({ records: [{ id: 'woo-product:101' }] })
+		);
+		expect(result.completed).toBe(true);
 	});
+
+	it('normalizes response id types before splitting search rows from sku-only rows', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+			recordRecords: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async (url: string) =>
+			response([
+				{
+					id: url.includes('sku=KEY-101') ? 101 : '101',
+					sku: 'KEY-101',
+					name: 'Keyboard Stand',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(101),
+				},
+			])
+		);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+		});
+
+		await schedulerFetcher(
+			productTask({
+				id: 'products:search:KEY-101:windowed',
+				queryKey: 'products:search:KEY-101',
+				limit: 2,
+			})
+		);
+
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ records: [{ id: 'woo-product:101' }] })
+		);
+		expect(coverageRepository.recordRecords).not.toHaveBeenCalled();
+	});
+
+	it('ends on the advertised last page when the hit count is an exact page multiple', async () => {
+		const products = Array.from({ length: 100 }, (_, index) => ({
+			id: index + 1,
+			date_modified_gmt: '2026-05-20T10:10:00',
+			meta_data: posMeta(index + 1),
+		}));
+		const recordQueryResult = vi.fn(async () => undefined);
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (params.has('sku')) return response([]);
+			const size = Number(params.get('per_page'));
+			const offset = (Number(params.get('page')) - 1) * size;
+			return response(products.slice(offset, offset + size), 2, '100');
+		});
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			coverageRepository: { recordQueryResult },
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		const result = await run(productTask({ limit: 120 }));
+
+		// Two FULL pages and X-WP-TotalPages: 2 — never a request for page 3.
+		expect(fetcher.mock.calls.map(([url]) => new URL(url).searchParams.get('page'))).toEqual([
+			'1',
+			'1',
+			'2',
+		]);
+		expect(result).toMatchObject({ documentCount: 100, requestCount: 3, completed: true });
+		expect(recordQueryResult).toHaveBeenCalledWith(expect.objectContaining({ complete: true }));
+	});
+
+	it.each([
+		'woocommerce_rest_product_invalid_page_number', // Woo's CRUD controller (wc/v3/products)
+		'rest_post_invalid_page_number', // WP core's posts controller
+	])('treats a %s 400 on a resumed page past the last as the end of the set', async (code) => {
+		// A header-stripping proxy hid X-WP-TotalPages, so the first walk recorded 100 ids
+		// incomplete; the resume asks for page 3 and WP answers 400. That is the end.
+		const recordCumulativeQueryResult = vi.fn(async () => undefined);
+		const fetcher = vi.fn(
+			async (_url: string) => new Response(JSON.stringify({ code }), { status: 400 })
+		);
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			coverageRepository: {
+				recordQueryResult: vi.fn(async () => undefined),
+				recordCumulativeQueryResult,
+				readLocalLaneCoverage: vi.fn(async () => ({
+					complete: false,
+					fresh: true,
+					expectedRecordIds: Array.from({ length: 100 }, (_, index) => `woo-product:${index + 1}`),
+				})),
+			},
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		const result = await run(productTask({ limit: 150 }));
+
+		expect(fetcher.mock.calls.map(([url]) => new URL(url).search)).toEqual([
+			'?search=keyboard&per_page=50&page=3&orderby=id&order=desc&status=publish',
+		]);
+		// The terminal 400 was still a request the host answered — it counts.
+		expect(result).toMatchObject({ documentCount: 0, requestCount: 1, completed: true });
+		expect(recordCumulativeQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ complete: true, records: [] })
+		);
+	});
+
+	it('still fails a non-pagination 400 on a resumed page', async () => {
+		const recordCumulativeQueryResult = vi.fn(async () => undefined);
+		const fetcher = vi.fn(
+			async (_url: string) => new Response('{"code":"rest_invalid_param"}', { status: 400 })
+		);
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			coverageRepository: {
+				recordQueryResult: vi.fn(async () => undefined),
+				recordCumulativeQueryResult,
+				readLocalLaneCoverage: vi.fn(async () => ({
+					complete: false,
+					fresh: true,
+					expectedRecordIds: Array.from({ length: 100 }, (_, index) => `woo-product:${index + 1}`),
+				})),
+			},
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		await expect(run(productTask({ limit: 150 }))).rejects.toThrow('400');
+		expect(recordCumulativeQueryResult).not.toHaveBeenCalled();
+	});
+
+	it('still fails a 400 on page 1 — that is a bad request, not the end of a set', async () => {
+		const fetcher = vi.fn(
+			async (_url: string) =>
+				new Response('{"code":"rest_post_invalid_page_number"}', { status: 400 })
+		);
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		await expect(run(productTask({ limit: 10 }))).rejects.toThrow('400');
+	});
+
+	it('walks at most the page budget in one pass and leaves the lane incomplete for the next', async () => {
+		const products = Array.from({ length: 5_000 }, (_, index) => ({
+			id: index + 1,
+			date_modified_gmt: '2026-05-20T10:10:00',
+			meta_data: posMeta(index + 1),
+		}));
+		const recordQueryResult = vi.fn(async () => undefined);
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (params.has('sku')) return response([]);
+			const size = Number(params.get('per_page'));
+			const offset = (Number(params.get('page')) - 1) * size;
+			return response(products.slice(offset, offset + size));
+		});
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			coverageRepository: { recordQueryResult },
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		const result = await run(productTask({ limit: 5_000 }));
+
+		// sku leg + BROWSE_WINDOW_MAX_PAGES_PER_DRAIN (50) search pages, then stop — incomplete.
+		expect(result).toMatchObject({ documentCount: 2_500, requestCount: 51, completed: false });
+		expect(recordQueryResult).toHaveBeenCalledWith(expect.objectContaining({ complete: false }));
+	});
+
+	it.each([
+		// The window governs how far to walk; every fetched row is persisted and recorded.
+		{ hits: 130, limit: 100, count: 100, complete: false, pages: [1, 2] },
+		{ hits: 130, limit: 120, count: 130, complete: true, pages: [1, 2, 3] },
+		{ hits: 110, limit: 120, count: 110, complete: true, pages: [1, 2, 3] },
+		{ hits: 70, limit: 56, count: 70, complete: true, pages: [1, 2] },
+	])(
+		'walks $hits hits at limit $limit without capping the window or dropping a fetched row',
+		async ({ hits, limit, count, complete, pages }) => {
+			const products = Array.from({ length: hits }, (_, index) => ({
+				id: index + 1,
+				date_modified_gmt: '2026-05-20T10:10:00',
+				meta_data: posMeta(index + 1),
+			}));
+			const upsertMany = vi.fn(async (_documents: StoredProductDocument[]) => undefined);
+			const recordQueryResult = vi.fn(async () => undefined);
+			const fetcher = vi.fn(async (url: string) => {
+				const params = new URL(url).searchParams;
+				const size = Number(params.get('per_page'));
+				const offset = (Number(params.get('page')) - 1) * size;
+				return response(params.has('sku') ? [] : products.slice(offset, offset + size));
+			});
+			const run = createProductsSchedulerFetcher({
+				baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+				repository: { upsertMany, removeMany: vi.fn(async () => undefined) },
+				coverageRepository: { recordQueryResult },
+				pullBatchSize: () => 50,
+				fetcher,
+			});
+
+			const result = await run(productTask({ limit }));
+
+			expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+				'http://wcpos.local/wp-json/wcpos/v2/products?sku=keyboard&per_page=50&page=1&orderby=id&order=desc&status=publish',
+				...pages.map(
+					(page) =>
+						`http://wcpos.local/wp-json/wcpos/v2/products?search=keyboard&per_page=50&page=${page}&orderby=id&order=desc&status=publish`
+				),
+			]);
+			expect(upsertMany.mock.calls[0][0].map((doc) => doc.uuid)).toEqual(
+				Array.from({ length: count }, (_, index) => uuidFor(index + 1))
+			);
+			expect(recordQueryResult).toHaveBeenCalledWith(
+				expect.objectContaining({
+					complete,
+					records: Array.from({ length: count }, (_, index) => ({
+						id: `woo-product:${index + 1}`,
+					})),
+				})
+			);
+			expect(result).toMatchObject({
+				documentCount: count,
+				requestCount: pages.length + 1,
+				completed: complete,
+			});
+		}
+	);
 
 	it('records incomplete product search coverage when the first page is full', async () => {
 		const repository = {
@@ -2329,12 +2599,13 @@ describe('createProductsSchedulerFetcher', () => {
 		const coverageRepository = {
 			recordQueryResult: vi.fn(async () => undefined),
 		};
-		const products = Array.from({ length: 2 }, (_, index) => ({
+		// #908 reversal — the wire page is the dial even for a small window, so the next grid extensions serve local: even limit=2 requests a full dial page.
+		const products = Array.from({ length: 100 }, (_, index) => ({
 			id: index + 1,
 			date_modified_gmt: '2026-05-20T10:10:00',
 			meta_data: posMeta(index + 1),
 		}));
-		const fetcher = vi.fn(async () => response(products));
+		const fetcher = vi.fn(async (_url: string) => response(products));
 		const schedulerFetcher = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
@@ -2346,10 +2617,16 @@ describe('createProductsSchedulerFetcher', () => {
 
 		const result = await schedulerFetcher(productTask({ limit: 2 }));
 
+		expect(fetcher.mock.calls.map(([url]) => new URL(url).search)).toEqual([
+			'?sku=keyboard&per_page=100&page=1&orderby=id&order=desc&status=publish',
+			'?search=keyboard&per_page=100&page=1&orderby=id&order=desc&status=publish',
+		]);
+		// The whole page is recorded, not the two-row window: the lane now covers 100 ids, so
+		// the grid's next extensions serve local and a later walk resumes at page 2.
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith({
 			collection: 'products',
 			queryKey: 'products:search:keyboard',
-			records: [{ id: 'woo-product:1' }, { id: 'woo-product:2' }],
+			records: Array.from({ length: 100 }, (_, index) => ({ id: `woo-product:${index + 1}` })),
 			complete: false,
 			nowMs: 5_000,
 			freshForMs: 60_000,
@@ -2358,6 +2635,7 @@ describe('createProductsSchedulerFetcher', () => {
 	});
 
 	it('passes raw percent signs in product search terms through URLSearchParams', async () => {
+		// #908 reversal — the wire page is the dial even for a small window, so the next grid extensions serve local: per_page is the dial, not limit=25.
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
@@ -2378,11 +2656,11 @@ describe('createProductsSchedulerFetcher', () => {
 
 		expect(fetcher).toHaveBeenNthCalledWith(
 			1,
-			'http://wcpos.local/wp-json/wcpos/v2/products?sku=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?sku=100%25+cotton&per_page=100&page=1&orderby=id&order=desc&status=publish'
 		);
 		expect(fetcher).toHaveBeenNthCalledWith(
 			2,
-			'http://wcpos.local/wp-json/wcpos/v2/products?search=100%25+cotton&per_page=25&page=1&orderby=id&order=desc&status=publish'
+			'http://wcpos.local/wp-json/wcpos/v2/products?search=100%25+cotton&per_page=100&page=1&orderby=id&order=desc&status=publish'
 		);
 	});
 

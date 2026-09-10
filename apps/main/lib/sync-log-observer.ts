@@ -346,6 +346,12 @@ export const CONFORMANCE_TABLE = {
 		code: null,
 		didWork: (f) => num(f.removed) > 0,
 	},
+	'coverage.ledger-reattached': {
+		operationType: 'sync.coverage',
+		outcome: 'recovered',
+		code: null,
+		level: 'info',
+	},
 	'coverage.ledger-rebuilt': { operationType: 'sync.coverage', outcome: 'recovered', code: null },
 	'transport.request': {
 		operationType: 'sync.http',

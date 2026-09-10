@@ -22,7 +22,7 @@ import {
 } from 'rxjs/operators';
 import get from 'lodash/get';
 
-import { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH, foldSearchText } from '@wcpos/sync-core';
+import { FLEXSEARCH_MIN_TERM_LENGTH, foldSearchText } from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -39,6 +39,12 @@ import {
 } from './engine-adapter/execute-query';
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
+import {
+	fieldsMatchShortPrefix,
+	fieldsMatchTokens,
+	fieldsMissAnyOfTokens,
+	searchTokens,
+} from './search-match';
 import {
 	rebuiltSearchIndexes,
 	type SearchableCollection,
@@ -154,17 +160,15 @@ async function scanDocumentsForSearch(
 	searchFields: string[],
 	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>
 ): Promise<EngineRxDocument[]> {
-	const tokens = encodeSearchText(search).filter(
-		(token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH
-	);
-	if (tokens.length === 0 || searchFields.length === 0) return [];
+	const tokens = searchTokens(search);
+	if (searchFields.length === 0 || tokens.length === 0) return [];
 	const documents = await collection.find().exec();
 	return documents.filter((document) => {
 		const snapshot = documentSnapshot(document);
-		const blob = foldSearchText(
-			searchFields.map((field) => String(get(snapshot, field) ?? '')).join(' ')
+		return fieldsMatchTokens(
+			searchFields.map((field) => String(get(snapshot, field) ?? '')),
+			tokens
 		);
-		return tokens.every((token) => blob.includes(token));
 	});
 }
 function matchingSelectors$(
@@ -208,10 +212,9 @@ function matchingSelectors$(
 					documents
 						.filter((document) => {
 							const snapshot = documentSnapshot(document);
-							return searchFields.some((field) =>
-								String(get(snapshot, field) ?? '')
-									.split(/\s+/)
-									.some((token) => foldSearchText(token).startsWith(prefix))
+							return fieldsMatchShortPrefix(
+								searchFields.map((field) => String(get(snapshot, field) ?? '')),
+								prefix
 							);
 						})
 						.map((document) => document.primary)
@@ -222,14 +225,12 @@ function matchingSelectors$(
 	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
 	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
 	const findFalseHits = (documents: EngineRxDocument[]) => {
-		const tokens = encodeSearchText(search).filter(
-			(token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH
-		);
+		const tokens = searchTokens(search);
 		if (searchFields.length === 0 || tokens.length === 0) return [];
 		return documents.flatMap((document) => {
 			const snapshot = documentSnapshot(document);
 			const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-			return tokens.some((token) => fields.every((field) => !foldSearchText(field).includes(token)))
+			return fieldsMissAnyOfTokens(fields, tokens)
 				? [{ document, uuid: document.primary, fields: fields.join(' ').slice(0, 120) }]
 				: [];
 		});

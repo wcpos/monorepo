@@ -114,6 +114,28 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		},
 
 		plugins: [
+			// Pinned to 8.25.0 over Expo SDK 57's ~7.11.0 (excluded from `expo install`
+			// checks in package.json): only 8.25.0 carries the fix for
+			// getsentry/sentry-react-native#6630 — on Expo 57 / RN 0.86 iOS, envelopes
+			// report HTTP 200 but never ingest. The 7.x line ended 2026-02-12.
+			// Source maps and debug symbols upload during the STORE build's native
+			// Release step, authenticated by the SENTRY_AUTH_TOKEN EAS environment
+			// variable (an organization token, `org:ci`, on `production` only).
+			// sentry-xcode.sh FAILS a Release build when that upload fails, so every
+			// other profile — dev client, ad-hoc, the reusable `monorepo` base — never
+			// attempts it. No profile means production (`easProfile` above), so a local
+			// Release build of the store binary uploads too and needs the token in its
+			// shell; a missing or revoked token there is a red build, not a silent gap.
+			// Uploads are keyed <applicationId>@<version>+<build>, which is why
+			// sentry-sink.native.ts lets the SDK derive release/dist.
+			[
+				'@sentry/react-native/expo',
+				{
+					organization: 'wcpos',
+					project: 'woocommerce-pos',
+					disableAutoUpload: easProfile !== 'production',
+				},
+			],
 			'./plugins/with-printer-support',
 			'./plugins/with-wedge-key-events',
 			[
