@@ -297,7 +297,7 @@ carried by the merchant's WordPress site as a mailbox; not the data path.
 ## Language — Cashiers & till
 
 Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, tickets #207, #208,
-#210, #209 and #211).
+#210, #209, #211 and #212).
 
 **Cashier**:
 A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
@@ -353,27 +353,65 @@ _Avoid_: drop, pickup (as types), adjustment, edit/delete (of a movement)
 The zero-amount, permissioned cash movement that opens the drawer without a sale.
 
 **Expected**:
-The cash the drawer should hold: the *counted* opening float + cash sales − cash refunds +
-paid in − paid out. The opening variance is recorded on its own and never carries into the
+What a payment method should have taken over the session, per method. For cash it is the
+drawer: the *counted* opening float + cash sales − cash refunds + paid in − paid out. For
+any other payment method it is the sum of that method's payment rows bound to the session,
+less its refunds. The opening variance is recorded on its own and never carries into the
 closing variance — each compares a count against what was expected at that moment.
 
 **Counted**:
-The cash the closer declares, entered as one total; a denomination helper is a calculator
-and its breakdown is never stored.
+What the closer declares was taken, entered as one total per payment method counted. Cash
+is always counted; other payment methods may be, so a terminal batch that disagrees with
+the till is caught. A denomination helper is a calculator and its breakdown is never
+stored.
 _Avoid_: actual
 
 **Variance**:
-Counted minus expected — over or short — recorded at open and at close.
+Counted minus expected — over or short — for each payment method counted, recorded at open
+(cash only) and at close. A method that was not counted has no variance, not a zero one.
 _Avoid_: discrepancy, difference
 
 **Closure**:
 The immutable, numbered document written when a session closes. One per session, not per
-day: a closure may span or subdivide a calendar day.
-_Avoid_: end of day, Z-report (for the record — that is its print)
+day: a closure may span or subdivide a calendar day. It stores its breakdowns as recorded —
+per payment method, per tax rate, counted against expected for each payment method that
+was counted, the cash movements — so reading it next year gives the figures printed on
+the night. It carries two kinds of money figure and keeps them apart: payment figures,
+summed from the payment rows bound to the session, and the grand total, a sales figure. Corrections are separate
+records that point at it; the closure itself never changes.
+_Avoid_: end of day, Z-report (for the record — that is its print), shift report
+
+**Closure number**:
+The closure's place in its register's sequence: ascending, gap-free, never reset, one
+sequence per register. The register assigns it at close, so the print carries it even
+offline; the server checks it on arrival and treats a gap or a duplicate as a fault, never
+renumbering. Read with the register's name: "Closure 12 · Front counter".
+_Avoid_: Z number, report id, global sequence
+
+**Grand total**:
+The tax-inclusive value of the sales that completed in a closure's session, with refunds
+kept as a separate total rather than netted off. It is a sales figure keyed on completion,
+deliberately not a payment figure: a deposit taken yesterday for a sale completed today is
+in yesterday's payment figures and today's grand total, and the closure shows both, as a
+layby always did. The pair is stored on every closure.
+_Avoid_: net sales (for this concept), turnover (in UI), payments total (for this concept)
+
+**Perpetual grand total**:
+The running sum of a register's grand totals since its counters began — sales and refunds
+as two counters — carried from each closure to the next, never decreasing and never reset,
+including across upgrades. A store-wide figure is the sum across registers.
+_Avoid_: lifetime sales, cumulative total, reset
+
+**Recount**:
+A correction that supplies a new counted figure for a closure after it was written,
+with its actor and reason. The closure keeps the figure as recorded; the recount gives the
+settled one.
+_Avoid_: edit count, reopen, amend
 
 **X-report / Z-report**:
-The two printed renderings: an X-report reads an open session without closing it; a
-Z-report is the print of a closure. Today's Reports screen prints a date-range sales
+The two printed renderings: an X-report reads an open session without closing it and is
+never stored; a Z-report is the print of a closure, printed once at close, every later
+print being a marked copy. Today's Reports screen prints a date-range sales
 summary under the name "Z-report"; that is a **range report**, not a Z-report, and it is
 renamed when closures land.
 _Avoid_: Z-report (for any date-range summary)
@@ -381,10 +419,11 @@ _Avoid_: Z-report (for any date-range summary)
 **Session on the sale**:
 Which session a sale's money belongs to. Each payment row binds to the session open on the
 register when it was tendered, so a deposit taken yesterday counts in yesterday's drawer
-and the balance paid today in today's. Expected and every closure figure are summed from
-payment and refund rows by that tender-time session, never from the sale's completing
-session or its order total. The sale itself records the session it completed in, a key
-for reports and receipts only. Membership is only ever by the stamped session, never
+and the balance paid today in today's. Expected and every payment figure on a closure are
+summed from payment and refund rows by that tender-time session, never from the sale's
+completing session or its order total. The sale itself records the session it completed
+in; that key drives reports and receipts and the closure's grand total, which is a sales
+figure and the one deliberate exception to the tender-time rule. Membership is only ever by the stamped session, never
 inferred from a time window or from whichever session is open when the sale reaches the
 server. The range report stays an order-level, date-range report outside this rule.
 _Avoid_: shift on the order, current session (for a late-arriving sale)
