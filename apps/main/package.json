@@ -55,6 +55,7 @@
 		"@wcpos/core": "workspace:*",
 		"@wcpos/database": "workspace:*",
 		"@wcpos/hooks": "workspace:*",
+		"@wcpos/order-math": "workspace:*",
 		"@wcpos/printer": "workspace:*",
 		"@wcpos/query": "workspace:*",
 		"@wcpos/sync-core": "workspace:*",

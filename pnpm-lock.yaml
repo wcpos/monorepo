@@ -121,6 +121,9 @@ importers:
       '@wcpos/hooks':
         specifier: workspace:*
         version: link:../../packages/hooks
+      '@wcpos/order-math':
+        specifier: workspace:*
+        version: link:../../packages/order-math
       '@wcpos/printer':
         specifier: workspace:*
         version: link:../../packages/printer
