@@ -48,6 +48,18 @@ describe('pullCustomBatch', () => {
 		});
 	});
 
+	it('rejects a response without a boolean complete instead of looping on it', async () => {
+		await expect(
+			pullCustomBatch({
+				baseUrl: BASE_URL,
+				checkpoint: null,
+				limit: 50,
+				fetcher: async () =>
+					response({ documents: [], checkpoint: normalizeCheckpoint(null), hasMore: false }),
+			})
+		).rejects.toThrow('no boolean `complete`');
+	});
+
 	it('accepts complete and journal fields nested in the checkpoint', async () => {
 		const checkpoint = {
 			...normalizeCheckpoint({ sequence: 12 }),
