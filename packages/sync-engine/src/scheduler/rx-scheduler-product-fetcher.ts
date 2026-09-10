@@ -237,9 +237,12 @@ async function fetchTargetedProducts(
 	return { taskId: task.id, documentCount, requestCount, completed: true };
 }
 
-/** A non-2xx answer to a product query; the status decides whether a walk may end on it. */
+/** A non-2xx answer to a product query; its status and Woo code decide whether a walk may end. */
 class ProductQueryHttpError extends Error {
-	constructor(readonly status: number) {
+	constructor(
+		readonly status: number,
+		readonly code: unknown
+	) {
 		super(`Woo REST product search request failed: ${status}`);
 	}
 }
@@ -256,7 +259,8 @@ async function fetchProductQuery(
 	const url = `${input.baseUrl}/products?${query.toString()}`;
 	const response = await httpGet(input, url, context);
 	if (!response.ok) {
-		throw new ProductQueryHttpError(response.status);
+		const error = (await response.json().catch(() => null)) as { code?: unknown } | null;
+		throw new ProductQueryHttpError(response.status, error?.code);
 	}
 	return {
 		payloads: (await response.json()) as WooProductPayload[],
@@ -320,9 +324,14 @@ async function fetchProductSearchLeg(
 			// A result set that is an exact multiple of pageSize never yields a short page, so
 			// the page after its last is asked for — on a resume, or when a proxy stripped the
 			// X-WP-TotalPages header that would have said so. WP answers that with a 400
-			// (`rest_..._invalid_page_number`): past page 1 that IS the end of the set, not a
+			// (`rest_post_invalid_page_number`): past page 1 that IS the end of the set, not a
 			// failure to retry forever (PR #1935 review). A 400 on page 1 is a bad request.
-			if (error instanceof ProductQueryHttpError && error.status === 400 && nextPage > 1) {
+			if (
+				error instanceof ProductQueryHttpError &&
+				error.status === 400 &&
+				error.code === 'rest_post_invalid_page_number' &&
+				nextPage > 1
+			) {
 				exhausted = true;
 				break;
 			}

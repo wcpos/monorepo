@@ -2411,6 +2411,34 @@ describe('createProductsSchedulerFetcher', () => {
 		);
 	});
 
+	it('still fails a non-pagination 400 on a resumed page', async () => {
+		const recordCumulativeQueryResult = vi.fn(async () => undefined);
+		const fetcher = vi.fn(
+			async (_url: string) => new Response('{"code":"rest_invalid_param"}', { status: 400 })
+		);
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			coverageRepository: {
+				recordQueryResult: vi.fn(async () => undefined),
+				recordCumulativeQueryResult,
+				readLocalLaneCoverage: vi.fn(async () => ({
+					complete: false,
+					fresh: true,
+					expectedRecordIds: Array.from({ length: 100 }, (_, index) => `woo-product:${index + 1}`),
+				})),
+			},
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		await expect(run(productTask({ limit: 150 }))).rejects.toThrow('400');
+		expect(recordCumulativeQueryResult).not.toHaveBeenCalled();
+	});
+
 	it('still fails a 400 on page 1 — that is a bad request, not the end of a set', async () => {
 		const fetcher = vi.fn(
 			async (_url: string) => new Response('{"code":"rest_invalid_param"}', { status: 400 })
