@@ -127,6 +127,89 @@ it('HTTP refresh keeps a leg alive; store change replaces the singleton and stop
 	expect(mockHttp.get).toHaveBeenCalledTimes(1);
 	view.unmount();
 });
+
+describe('background capture reconciliation', () => {
+	const requireRefresh = jest.fn();
+	const resident = {
+		...record('background-order'),
+		getLatest: () => ({ payload: { id: 42, line_items: [] } }),
+	};
+
+	beforeEach(() => {
+		Object.assign(mockManager, { engine: { ...mockManager.engine, require: requireRefresh } });
+		requireRefresh.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+	});
+
+	it('refreshes a captured resident without selecting it', async () => {
+		mockFind.mockResolvedValue(resident);
+		const view = renderHook(() => useTerminalPaymentsService());
+		getTerminalPaymentsService()!.resume({
+			orderUuid: 'background-order',
+			orderId: 42,
+			orderNumber: '42',
+			row,
+		});
+		await act(() => jest.advanceTimersByTimeAsync(0));
+
+		expect(mockReceipt).toHaveBeenCalledWith('background-order', { select: false });
+		expect(requireRefresh).toHaveBeenCalledWith({
+			id: 'checkout:order-refresh:42',
+			collection: 'orders',
+			kind: 'targeted-records',
+			remoteIds: ['42'],
+			forceRefresh: true,
+		});
+		expect(mockReceipt.mock.invocationCallOrder[0]).toBeLessThan(
+			requireRefresh.mock.invocationCallOrder[0]
+		);
+		expect(requireRefresh.mock.results[0].value.release).toHaveBeenCalledTimes(1);
+		view.unmount();
+	});
+
+	it.each(['missing resident', 'remaining balance'])(
+		'does not reconcile with %s',
+		async (scenario) => {
+			mockFind.mockResolvedValueOnce(resident).mockResolvedValue(null);
+			if (scenario === 'remaining balance') {
+				mockHttp.get.mockResolvedValue({
+					data: { payment: { ...row, status: 'captured' }, order: { ...summary, balance: '4' } },
+				});
+			}
+			const view = renderHook(() => useTerminalPaymentsService());
+			getTerminalPaymentsService()!.resume({
+				orderUuid: 'background-order',
+				orderId: 42,
+				orderNumber: '42',
+				row,
+			});
+			await act(() => jest.advanceTimersByTimeAsync(0));
+			expect(requireRefresh).not.toHaveBeenCalled();
+			expect(mockFind).toHaveBeenCalledTimes(scenario === 'missing resident' ? 2 : 1);
+			view.unmount();
+		}
+	);
+
+	it('catches and warns when reconciliation rejects', async () => {
+		mockFind.mockResolvedValue(resident);
+		requireRefresh.mockImplementationOnce(() => {
+			throw new Error('engine unavailable');
+		});
+		const view = renderHook(() => useTerminalPaymentsService());
+		getTerminalPaymentsService()!.resume({
+			orderUuid: 'background-order',
+			orderId: 42,
+			orderNumber: '42',
+			row,
+		});
+		await act(() => jest.advanceTimersByTimeAsync(0));
+		expect(requireRefresh).toHaveBeenCalledTimes(1);
+		expect(jest.requireActual('@wcpos/utils/logger').warn).toHaveBeenCalledWith(
+			expect.any(String),
+			{ context: { orderId: 'background-order', error: 'engine unavailable' } }
+		);
+		view.unmount();
+	});
+});
 it('cold subscribers see service start, changes and stop; both resume hooks track only live server rows', async () => {
 	const orders = [
 		record('one'),

@@ -29,20 +29,15 @@ function wrapper(id: number, parentId = 10, payload: Record<string, unknown> = {
 	return {
 		id,
 		parent_id: parentId,
-		payload: {
-			id,
-			date_modified_gmt: '2026-08-01T10:00:00',
-			meta_data: posMeta(id),
-			...payload,
-		},
+		date_modified_gmt: '2026-08-01T10:00:00',
+		_rxdb_revision: `revision-${id}`,
+		meta_data: posMeta(id),
+		...payload,
 	};
 }
 
-function response(documents: unknown[], meta: Record<string, unknown> = {}): Response {
-	return Response.json({
-		documents,
-		meta: { total: documents.length, page: 1, per_page: 10, ...meta },
-	});
+function response(documents: unknown[]): Response {
+	return Response.json(documents);
 }
 
 function repository() {
@@ -260,23 +255,20 @@ describe('createVariationsSchedulerFetcher', () => {
 		expect(result.completed).toBe(false);
 	});
 
-	it('tolerates envelope metadata and projects wrapper identity, parent, and digest like targeted pulls', async () => {
+	it('projects bare identity, parent, and digest like targeted pulls', async () => {
 		const repo = {
 			upsertMany: vi.fn(async (documents: StoredVariationDocument[]) => documents.slice(0, 1)),
 		};
 		const manifestSink = vi.fn(async () => undefined);
 		const fetcher = vi.fn(async (url: string) => {
 			if (url.includes('sku=')) return response([]);
-			return response(
-				[
-					{
-						...wrapper(7, 3, { id: 999, parent_id: 999, price: '12.50' }),
-						_rxdb_digest: 'digest-7',
-					},
-					{ ...wrapper(8, 3), _rxdb_digest: 'digest-8' },
-				],
-				{ total: 2, extra: 'ignored' }
-			);
+			return response([
+				{
+					...wrapper(7, 3, { price: '12.50' }),
+					_rxdb_digest: 'digest-7',
+				},
+				{ ...wrapper(8, 3), _rxdb_digest: 'digest-8' },
+			]);
 		});
 		const schedulerFetcher = createVariationsSchedulerFetcher({
 			baseUrl: BASE_URL,

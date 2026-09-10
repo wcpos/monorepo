@@ -94,11 +94,9 @@ export function materializeTargeted(
 							''
 					)
 			: () =>
-					typeof raw.date_modified_gmt === 'string'
+					collection !== 'variations' && typeof raw.date_modified_gmt === 'string'
 						? raw.date_modified_gmt
-						: collection === 'variations'
-							? remoteId
-							: '';
+						: '';
 	const adopted = adoptStampedRevision(raw, legacy);
 	const manifestRow = digest(adopted.payload, remoteId, label);
 	const barcode =

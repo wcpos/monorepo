@@ -6,7 +6,7 @@ import { derive, readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-m
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { engineCollection, type EngineRecord, useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useStoreSession } from '../../../../../../contexts/app-state';
@@ -23,6 +23,9 @@ import {
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import { enterReceipt, getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
+import { reconcileCompletedOrder } from '../../hooks/reconcile-completed-order';
+
+const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export function useTerminalPaymentsService(): void {
 	const { store, site } = useStoreSession();
@@ -118,8 +121,22 @@ export function useTerminalPaymentsService(): void {
 				// Never select: the order the cashier is serving stays on screen. When
 				// the captured order IS the current one, the tender flow's own outcome
 				// handler runs the complete-order flow, which selects the receipt.
-				if (!stopped && order && Number(order.balance) === 0)
+				if (!stopped && order && Number(order.balance) === 0) {
 					enterReceipt(orderUuid, { select: false });
+					void findEngineResident(manager, 'orders', orderUuid)
+						.then((resident) => {
+							if (!stopped && resident)
+								return reconcileCompletedOrder(
+									manager,
+									resident as unknown as EngineRecord<'orders'>
+								);
+						})
+						.catch((error) => {
+							logger.warn('Background post-payment reconciliation failed', {
+								context: { orderId: orderUuid, error: getErrorMessage(error) },
+							});
+						});
+				}
 			},
 		});
 		// Offline-paid orders can be completed and absent from open tabs. Recover their

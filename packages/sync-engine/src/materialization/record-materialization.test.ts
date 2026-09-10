@@ -95,6 +95,15 @@ describe('record materialization seam', () => {
 		expect(stored.sync).toMatchObject({ revision });
 	});
 
+	it.each([undefined, '2026-08-26T10:00:00'])(
+		'does not synthesize variation revisions from %s',
+		(date_modified_gmt) => {
+			expect(
+				materializeTargeted('variations', { id: 7, date_modified_gmt, meta_data }).storedDocument
+			).toMatchObject({ sync: { revision: '' } });
+		}
+	);
+
 	it('projects every descriptor shape without minting a missing uuid', () => {
 		expect(() => materializeTargeted('customers', { id: 7 })).toThrow();
 		expect(

@@ -134,21 +134,7 @@ function storedDocument(input: {
 	return common;
 }
 
-function pullResponse(spec: FacetSpec, document: Record<string, unknown> | null): Response {
-	if (spec.collection === 'variations') {
-		const body = document
-			? {
-					documents: [
-						{
-							id: document.id,
-							parent_id: document.parent_id,
-							payload: document,
-						},
-					],
-				}
-			: { documents: [] };
-		return Response.json(body);
-	}
+function pullResponse(_spec: FacetSpec, document: Record<string, unknown> | null): Response {
 	return Response.json(document ? [document] : []);
 }
 

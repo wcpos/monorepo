@@ -67,14 +67,12 @@ function variationEnvelope(id: number, parentId: number): Record<string, unknown
 	return {
 		id,
 		parent_id: parentId,
-		payload: {
-			id,
-			price: '5.00',
-			stock_status: 'instock',
-			attributes: [],
-			stock_quantity: null,
-			meta_data: [{ key: '_woocommerce_pos_uuid', value: uuid('variation', id) }],
-		},
+		_rxdb_revision: 'r',
+		price: '5.00',
+		stock_status: 'instock',
+		attributes: [],
+		stock_quantity: null,
+		meta_data: [{ key: '_woocommerce_pos_uuid', value: uuid('variation', id) }],
 	};
 }
 
@@ -84,7 +82,7 @@ function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}) {
 		site: SITE,
 		identity: identity(),
 		mode: 'manual',
-		fetch: fetcher ?? (async () => json({ documents: [] })),
+		fetch: fetcher ?? (async () => json([])),
 		now,
 		diagnostics,
 		connectivitySignal: connectivity,
@@ -96,7 +94,7 @@ function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}) {
 
 describe('variation-prefetch maintenance lane', () => {
 	it('does not scan variations for parents with no child ids', async () => {
-		const fetcher = vi.fn(async () => json({ documents: [] }));
+		const fetcher = vi.fn(async () => json([]));
 		const engine = engineWith({ fetcher });
 		try {
 			const scope = await engine.whenActive();
@@ -111,7 +109,7 @@ describe('variation-prefetch maintenance lane', () => {
 	});
 
 	it('does not scan variations while the first scanned parent has pending local work', async () => {
-		const fetcher = vi.fn(async () => json({ documents: [] }));
+		const fetcher = vi.fn(async () => json([]));
 		const engine = engineWith({ fetcher });
 		try {
 			const scope = await engine.whenActive();
@@ -133,7 +131,7 @@ describe('variation-prefetch maintenance lane', () => {
 		const engine = engineWith({
 			fetcher: async (url) => {
 				requested.push(new URL(url).searchParams.get('include')!);
-				return json({ documents: [variationEnvelope(126, 26)] });
+				return json([variationEnvelope(126, 26)]);
 			},
 		});
 		try {
@@ -161,9 +159,7 @@ describe('variation-prefetch maintenance lane', () => {
 		const engine = engineWith({
 			fetcher: async (url) => {
 				urls.push(url);
-				return json({
-					documents: [variationEnvelope(101, 10), variationEnvelope(102, 10)],
-				});
+				return json([variationEnvelope(101, 10), variationEnvelope(102, 10)]);
 			},
 		});
 		const scope = await engine.whenActive();
@@ -182,7 +178,7 @@ describe('variation-prefetch maintenance lane', () => {
 	});
 
 	it('skips for recent activity and pending interactive demand without fetching', async () => {
-		const activeFetch = vi.fn(async () => json({ documents: [] }));
+		const activeFetch = vi.fn(async () => json([]));
 		const active = engineWith({
 			now: () => 100_000,
 			lastUserActivityMs: () => 100_000,
@@ -212,7 +208,7 @@ describe('variation-prefetch maintenance lane', () => {
 					});
 				}
 				variationFetches += 1;
-				return json({ documents: [] });
+				return json([]);
 			},
 		});
 		const pendingScope = await pending.whenActive();
@@ -236,7 +232,7 @@ describe('variation-prefetch maintenance lane', () => {
 
 	it('rechecks user activity immediately before fetching', async () => {
 		let activityChecks = 0;
-		const fetcher = vi.fn(async () => json({ documents: [] }));
+		const fetcher = vi.fn(async () => json([]));
 		const engine = engineWith({
 			now: () => 1_000_000,
 			lastUserActivityMs: () => (activityChecks++ === 0 ? 0 : 1_000_000),
@@ -257,7 +253,7 @@ describe('variation-prefetch maintenance lane', () => {
 		const stateRead = Promise.withResolvers<void>();
 		const releaseStateRead = Promise.withResolvers<void>();
 		const values = new Map<string, string>();
-		const fetcher = vi.fn(async () => json({ documents: [] }));
+		const fetcher = vi.fn(async () => json([]));
 		const engine = engineWith({
 			fetcher,
 			checkpoints: {
@@ -302,7 +298,7 @@ describe('variation-prefetch maintenance lane', () => {
 			writePlaneOwner: () => isLeader,
 			fetcher: async (url) => {
 				if (new URL(url).searchParams.has('include')) variationFetches += 1;
-				return json({ documents: [variationEnvelope(101, 10)] });
+				return json([variationEnvelope(101, 10)]);
 			},
 		});
 		const scope = await engine.whenActive();
@@ -320,7 +316,7 @@ describe('variation-prefetch maintenance lane', () => {
 	});
 
 	it('skips resident variations, completes the walk, then stays idle', async () => {
-		const fetcher = vi.fn(async () => json({ documents: [] }));
+		const fetcher = vi.fn(async () => json([]));
 		const engine = engineWith({ fetcher });
 		const scope = await engine.whenActive();
 		await scope.database.collections.products.bulkInsert([
@@ -349,7 +345,7 @@ describe('variation-prefetch maintenance lane', () => {
 			now: () => 1_000_000,
 			fetcher: async () => {
 				requests += 1;
-				return json({ documents: [variationEnvelope(201, 20)] });
+				return json([variationEnvelope(201, 20)]);
 			},
 		});
 		const scope = await engine.whenActive();
@@ -390,7 +386,7 @@ describe('variation-prefetch maintenance lane', () => {
 			fetcher: async (url) => {
 				const include = new URL(url).searchParams.get('include')!;
 				requested.push(include);
-				return json({ documents: [variationEnvelope(Number(include), 20)] });
+				return json([variationEnvelope(Number(include), 20)]);
 			},
 		});
 		const scope = await engine.whenActive();
@@ -425,7 +421,7 @@ describe('variation-prefetch maintenance lane', () => {
 			fetcher: async (url) => {
 				const include = new URL(url).searchParams.get('include')!;
 				requested.push(include);
-				return json({ documents: [variationEnvelope(Number(include), 10)] });
+				return json([variationEnvelope(Number(include), 10)]);
 			},
 		});
 		const scope = await engine.whenActive();
@@ -499,10 +495,9 @@ describe('variation-prefetch maintenance lane', () => {
 				fetcher: async (url) => {
 					const include = new URL(url).searchParams.get('include')!;
 					requested.push(include);
-					return json({
-						documents:
-							include === '102' ? [variationEnvelope(102, 10)] : [variationEnvelope(101, 10)],
-					});
+					return json(
+						include === '102' ? [variationEnvelope(102, 10)] : [variationEnvelope(101, 10)]
+					);
 				},
 			});
 			const scope = await engine.whenActive();
@@ -528,9 +523,7 @@ describe('variation-prefetch maintenance lane', () => {
 			fetcher: async (url) => {
 				const include = new URL(url).searchParams.get('include')!;
 				requested.push(include);
-				return json({
-					documents: include === '201' ? [variationEnvelope(201, 20)] : [],
-				});
+				return json(include === '201' ? [variationEnvelope(201, 20)] : []);
 			},
 		});
 		const scope = await engine.whenActive();
@@ -551,9 +544,7 @@ describe('variation-prefetch maintenance lane', () => {
 			fetcher: async (url) => {
 				const include = new URL(url).searchParams.get('include')!;
 				requested.push(include);
-				return json({
-					documents: include === '201' ? [variationEnvelope(201, 20)] : [],
-				});
+				return json(include === '201' ? [variationEnvelope(201, 20)] : []);
 			},
 		});
 		const scope = await engine.whenActive();
@@ -578,9 +569,7 @@ describe('variation-prefetch maintenance lane', () => {
 			fetcher: async (url) => {
 				const include = new URL(url).searchParams.get('include')!;
 				requested.push(include);
-				return json({
-					documents: [variationEnvelope(Number(include), include === '101' ? 10 : 20)],
-				});
+				return json([variationEnvelope(Number(include), include === '101' ? 10 : 20)]);
 			},
 		});
 		const scope = await engine.whenActive();
@@ -609,7 +598,7 @@ describe('variation-prefetch maintenance lane', () => {
 			fetcher: async (url) => {
 				const include = new URL(url).searchParams.get('include');
 				if (include !== null) requested.push(include);
-				return json({ documents: [variationEnvelope(101, 10)] });
+				return json([variationEnvelope(101, 10)]);
 			},
 		});
 		const scope = await engine.whenActive();
@@ -636,7 +625,7 @@ describe('variation-prefetch maintenance lane', () => {
 			fetcher: async (url) => {
 				const isVariation = new URL(url).pathname.endsWith('/variations');
 				if (isVariation) variationRequests.push(url);
-				return json(isVariation ? { documents: [] } : []);
+				return json([]);
 			},
 		});
 		const scope = await engine.whenActive();
