@@ -779,12 +779,13 @@ async function fetchProductSearch(
 	// page cursor (a whole number of pages ⇒ resume at the next page), and one sku-only row
 	// would put it off by one forever (PR #1935 review). They still lead the persisted set so
 	// the exact match renders first.
-	const searchLegIds = new Set(searchLeg.payloads.map((payload) => payload.id));
+	// Ids are compared as numbers on both sides, the way uniqueProductPayloads keys them.
+	const searchLegIds = new Set(searchLeg.payloads.map((payload) => Number(payload.id)));
 	const merged = uniqueProductPayloads([...skuLeg.payloads, ...searchLeg.payloads]).filter(
 		(payload) => payload.type !== 'variation'
 	);
-	const searchRows = merged.filter((payload) => searchLegIds.has(payload.id));
-	const skuOnlyRows = merged.filter((payload) => !searchLegIds.has(payload.id));
+	const searchRows = merged.filter((payload) => searchLegIds.has(Number(payload.id)));
+	const skuOnlyRows = merged.filter((payload) => !searchLegIds.has(Number(payload.id)));
 	const notCovered = ({ storedDocument }: Materialized<Record<string, unknown>>) =>
 		!coveredIds.has(coverageRecordId(storedDocument as ProductDocument));
 	const skuOnlyDocuments = skuOnlyRows
