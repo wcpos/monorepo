@@ -39,11 +39,11 @@
         Hint: Error messages are not included in RxDB core to reduce build size.
         To show the full error messages and to ensure that you do not make any mistakes when using RxDB,
         use the dev-mode plugin when you are in development mode: https://rxdb.info/dev-mode.html?console=error
-        `}};function ea(e){var t="";return Object.keys(e).length===0||(t+="-".repeat(20)+`
+        `}};function ra(e){var t="";return Object.keys(e).length===0||(t+="-".repeat(20)+`
 `,t+=`Parameters:
 `,t+=Object.keys(e).map(r=>{var n="[object Object]";try{r==="errors"?n=e[r].map(o=>JSON.stringify(o,Object.getOwnPropertyNames(o))):n=JSON.stringify(e[r],function(o,i){return i===void 0?null:i},2)}catch{}return r+": "+n}).join(`
 `),t+=`
-`),t}function ta(e,t,r){return`
+`),t}function na(e,t,r){return`
 `+e+`
 `+ea(r)}var ra=(function(e){function t(n,o,i={}){var a,s=ta(o,n,i);return a=e.call(this,s)||this,a.code=n,a.message=s,a.url=On(n),a.parameters=i,a.rxdb=!0,a}bn(t,e);var r=t.prototype;return r.toString=function(){return this.message},xn(t,[{key:"name",get:function(){return"RxError ("+this.code+")"}},{key:"typeError",get:function(){return!1}}])})(Mt(Error));function On(e){return"https://rxdb.info/errors.html?console=errors#"+e}function na(e){return`
 Find out more about this error here: `+On(e)+`
