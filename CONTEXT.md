@@ -296,7 +296,8 @@ carried by the merchant's WordPress site as a mailbox; not the data path.
 
 ## Language — Cashiers & till
 
-Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, ticket #207).
+Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, tickets #207, #208,
+#210 and #209).
 
 **Cashier**:
 A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
@@ -326,8 +327,15 @@ a card reader)
 **Session**:
 One register's opened-to-closed period: opened with a float, closed with a count. Keyed on
 the register, never the cashier; several cashiers may ring on one session and every row
-records who acted. UI verbs: "Open register" / "Close register".
+records who acted. States: `open` → `counting` → `closed`. UI verbs: "Open register" /
+"Close register".
 _Avoid_: shift (the time clock — clock in/out for payroll), cash tracking session, drawer shift
+
+**Counting**:
+The session state between "Close register" being pressed and the closure being written: no
+sale may be tendered, the closer enters the counted totals, and the register may return to
+`open` if the close is abandoned. A session is never `closed` without passing through it.
+_Avoid_: closing (as a state name), pending close
 
 **Opening float**:
 The cash placed in the drawer when a session opens. Carries an expected value (suggested
@@ -337,8 +345,9 @@ _Avoid_: starting cash, opening balance
 **Cash movement**:
 A cash event inside a session that is not a sale, typed `paid_in`, `paid_out` or `no_sale`,
 each with a reason. `paid_in` and `paid_out` carry a positive amount with the direction in
-the type; `no_sale` carries a zero amount.
-_Avoid_: drop, pickup (as types), adjustment
+the type; `no_sale` carries a zero amount. A movement is never edited or deleted: a mistaken
+one is **voided** by a new row that names it in `voided_by`, so the ledger only ever grows.
+_Avoid_: drop, pickup (as types), adjustment, edit/delete (of a movement)
 
 **No sale**:
 The zero-amount, permissioned cash movement that opens the drawer without a sale.
@@ -368,3 +377,23 @@ Z-report is the print of a closure. Today's Reports screen prints a date-range s
 summary under the name "Z-report"; that is a **range report**, not a Z-report, and it is
 renamed when closures land.
 _Avoid_: Z-report (for any date-range summary)
+
+**Cashier on the sale**:
+The one cashier a sale is credited to — the person whose token the server authenticated at
+the sale, stamped server-side as `_pos_user`. There is one identity on a sale: the token
+always follows the person, so this is never "the account the till was logged in as" with
+a separate person behind it.
+_Avoid_: sold by, salesperson, operator, staff member
+
+**Rung up by**:
+The cashier who created the sale, stamped write-once as `_pos_user_created`. It never
+changes, so a reassigned sale still shows who took it.
+_Avoid_: created by (for this concept), original cashier
+
+**Reassignment**:
+Changing the cashier on the sale (and, by the same rule, its store) after the fact, to any
+active cashier. Gated by the single capability `reassign_woocommerce_pos_sales` — held by
+administrators and shop managers by default, not by cashiers — covering the self-claim as
+well. Audited by "rung up by" and an order note. A reassignment **never reopens or amends a
+closure**: the closure reads as at close; live reports read the current cashier on the sale.
+_Avoid_: transfer, change server, edit cashier
