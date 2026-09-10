@@ -324,12 +324,15 @@ async function fetchProductSearchLeg(
 			// A result set that is an exact multiple of pageSize never yields a short page, so
 			// the page after its last is asked for — on a resume, or when a proxy stripped the
 			// X-WP-TotalPages header that would have said so. WP answers that with a 400
-			// (`rest_post_invalid_page_number`): past page 1 that IS the end of the set, not a
-			// failure to retry forever (PR #1935 review). A 400 on page 1 is a bad request.
+			// (`woocommerce_rest_product_invalid_page_number` from Woo's CRUD controller, or WP
+			// core's `rest_post_invalid_page_number`): past page 1 that IS the end of the set,
+			// not a failure to retry forever (PR #1935 review). Any other 400, and a 400 on
+			// page 1, is a bad request — recording the prefix as complete would hide the rest.
 			if (
 				error instanceof ProductQueryHttpError &&
 				error.status === 400 &&
-				error.code === 'rest_post_invalid_page_number' &&
+				typeof error.code === 'string' &&
+				/_invalid_page_number$/.test(error.code) &&
 				nextPage > 1
 			) {
 				exhausted = true;

@@ -2373,13 +2373,15 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(recordQueryResult).toHaveBeenCalledWith(expect.objectContaining({ complete: true }));
 	});
 
-	it('treats a 400 on a resumed page past the last as the end of the set', async () => {
+	it.each([
+		'woocommerce_rest_product_invalid_page_number', // Woo's CRUD controller (wc/v3/products)
+		'rest_post_invalid_page_number', // WP core's posts controller
+	])('treats a %s 400 on a resumed page past the last as the end of the set', async (code) => {
 		// A header-stripping proxy hid X-WP-TotalPages, so the first walk recorded 100 ids
 		// incomplete; the resume asks for page 3 and WP answers 400. That is the end.
 		const recordCumulativeQueryResult = vi.fn(async () => undefined);
 		const fetcher = vi.fn(
-			async (_url: string) =>
-				new Response('{"code":"rest_post_invalid_page_number"}', { status: 400 })
+			async (_url: string) => new Response(JSON.stringify({ code }), { status: 400 })
 		);
 		const run = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
