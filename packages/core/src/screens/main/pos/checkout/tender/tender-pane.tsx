@@ -121,7 +121,7 @@ export function TenderPane({ flow, format, compact }: Props) {
 				))}
 			</View>
 			{flow.method ? (
-				<TenderKeypad flow={flow} format={format} />
+				<TenderKeypad key={flow.method.id} flow={flow} format={format} />
 			) : (
 				<Text className="text-muted-foreground text-sm">
 					{flow.state.splitPlan
@@ -240,6 +240,7 @@ const KEYPAD_ROWS = [
  */
 function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: number) => string }) {
 	const t = useT();
+	const [choosingReader, setChoosingReader] = React.useState(false);
 	const method = flow.method!;
 	const givesChange = method.capabilities.change === true;
 	const server = method.capture.mode === 'server';
@@ -271,10 +272,28 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 			    leg the amount is already right and WHICH reader is the decision. */}
 			{server ? (
 				<VStack space="xs">
-					{locked ? (
-						<Text testID="checkout-reader-locked" className="text-muted-foreground text-sm">
-							{t('pos_checkout.reader_line', { label: flow.readers[0]?.label ?? '' })}
-						</Text>
+					{locked || (!needsReader && (!choosingReader || flow.readers.length === 1)) ? (
+						<HStack className="items-center gap-2">
+							<Text
+								testID={locked ? 'checkout-reader-locked' : 'checkout-reader-selected'}
+								className="text-muted-foreground text-sm"
+							>
+								{t('pos_checkout.reader_line', {
+									label: (locked ? flow.readers[0] : selectedReader)?.label ?? '',
+								})}
+							</Text>
+							{!locked && flow.readers.length > 1 ? (
+								<Button
+									variant="secondary"
+									size="sm"
+									testID="checkout-reader-change"
+									disabled={flow.busy}
+									onPress={() => setChoosingReader(true)}
+								>
+									<ButtonText>{t('pos_checkout.change_reader')}</ButtonText>
+								</Button>
+							) : null}
+						</HStack>
 					) : (
 						<View className="flex-row flex-wrap gap-2">
 							{flow.readers.map((reader) => (

@@ -58,6 +58,16 @@ function terminalResponse(page: Page, orderId: number, action: 'intent' | 'statu
 	return pending;
 }
 
+/**
+ * A preselected reader (the store default, or the one this till confirmed last) collapses
+ * the chip row to "Terminal: X · Change" (roadmap#228); open the row before touching a chip.
+ */
+async function showReaderChips(page: Page): Promise<void> {
+	await expect(page.getByTestId('checkout-keypad')).toBeVisible({ timeout: 15_000 });
+	const change = page.getByTestId('checkout-reader-change');
+	if (await change.isVisible().catch(() => false)) await change.click();
+}
+
 async function takeTerminal(page: Page, orderId: number, reader: string): Promise<void> {
 	const intent = terminalResponse(page, orderId, 'intent');
 	await page.getByTestId('checkout-take-payment').click();
@@ -94,6 +104,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
 			await expect(page.getByTestId('checkout-keypad')).toBeVisible({ timeout: 15_000 });
+			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toBeVisible();
 			// Reader selection is rendered by Button's default (primary) variant, not aria-selected.
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toHaveClass(/\bbg-primary\b/);
@@ -145,6 +156,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			liveTest.skip(!terminal, 'store has no simulated terminal provider');
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-decline').click();
 			await takeTerminal(page, orderId, 'sim-decline');
 			await expect(page.getByTestId('checkout-terminal-status')).toContainText(
@@ -158,6 +170,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance);
+			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-decline')).toHaveClass(/\bbg-primary\b/);
 			await page.getByTestId('checkout-reader-sim-approve').click();
 			await takeTerminal(page, orderId, 'sim-approve');
@@ -202,6 +215,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			const terminal = simulatedTerminal(descriptors);
 			liveTest.skip(!terminal, 'store has no simulated terminal provider');
 			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-late-capture').click();
 			await takeTerminal(page, orderId, 'sim-late-capture');
 			await clickAndExpectPaymentWrite(page, 'checkout-terminal-cancel', orderId, 'void');
@@ -241,6 +255,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			liveTest.skip(!terminal, 'store has no simulated terminal provider');
 			const balance = await readAmountMinor(page, 'checkout-balance');
 			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-expire').click();
 			const voided = terminalResponse(page, orderId, 'void');
 			await takeTerminal(page, orderId, 'sim-expire');
@@ -292,6 +307,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			liveTest.skip(!terminal, 'store has no simulated terminal provider');
 			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
 			const amount = (await page.getByTestId('checkout-entry').textContent())!;
+			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-slow').click();
 			await takeTerminal(page, orderId, 'sim-slow');
 			// Leaving mid-leg on the wide layout is switching tabs: the checkout column
@@ -349,6 +365,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 				'use the store-assigned order number in the reader reason'
 			).toBeTruthy();
 			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-stuck').click();
 			await takeTerminal(page, orderA.orderId, 'sim-stuck');
 			await page.getByTestId('new-order-tab').click();
@@ -360,11 +377,13 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			expect(orderB.mode).toBe('tender');
 			expect(orderB.uuid).not.toBe(orderA.uuid);
 			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-stuck')).toBeDisabled();
 			// The reason is a sibling of the reader button; the keypad owns the complete sentence.
 			await expect(page.getByTestId('checkout-keypad')).toContainText(
 				copy['pos_checkout.reader_in_use'].replace('{number}', String(serverA.number))
 			);
+			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toBeEnabled();
 			await page.getByTestId(`open-order-tab-${orderA.uuid}`).click();
 			await expect(page.getByTestId('checkout-server-order-id')).toHaveText(String(orderA.orderId));

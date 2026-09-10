@@ -44,6 +44,20 @@ export function selectableReaders(
 	return { readers, lockToDefault };
 }
 
+/** The till's last confirmed choice wins unless the store has locked its default. */
+export function initialReaderId(
+	readers: readonly ReturnType<typeof selectableReaders>['readers'][number][],
+	lockToDefault: boolean,
+	remembered: string | null
+): string | null {
+	if (lockToDefault) return readers.find((reader) => reader.isDefault)?.id ?? null;
+	return (
+		readers.find((reader) => reader.id === remembered && reader.inUseBy === null)?.id ??
+		readers.find((reader) => reader.isDefault && reader.inUseBy === null)?.id ??
+		null
+	);
+}
+
 export interface TenderTile {
 	method: PaymentMethodDescriptor;
 	disabled: boolean;

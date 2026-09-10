@@ -38,6 +38,7 @@ import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { useRecordManualPayment, useVoidPayments } from '../payments';
+import { useRememberedReader } from './remembered-readers';
 import { disabledReasonKey, providerErrorMessage } from './labels';
 import {
 	appliedMinor,
@@ -51,6 +52,7 @@ import {
 } from './tender-state';
 import {
 	buildTenderTiles,
+	initialReaderId,
 	legacyPaymentMethods,
 	selectableReaders,
 	type TenderTile,
@@ -157,6 +159,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		initTenderState({ methodId: storedMethodId, balanceMinor })
 	);
 	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
+	const { readerId: remembered, getLoaded, remember } = useRememberedReader(state.methodId);
 	const liveRows = React.useMemo(
 		() => rows.filter(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
 		[rows]
@@ -216,22 +219,42 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		[order.uuid, reducerDispatch]
 	);
 
+	// A local preference can arrive after the tile tap; leave a cashier's choice alone.
+	React.useEffect(() => {
+		if (method?.capture.mode !== 'server' || state.readerId !== null || remembered === null) return;
+		const readerId = initialReaderId(readers, lockToDefault, remembered);
+		if (readerId !== null) dispatch({ type: 'pick-reader', readerId });
+	}, [method, state.readerId, readers, lockToDefault, remembered, dispatch]);
+
 	const pickMethod = React.useCallback(
 		(methodId: string) => {
 			if (busyRef.current || (saveState && saveState.kind !== 'queued-offline')) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
 			if (!tile || tile.disabled) return;
 			const prefillMinor = state.customAmount ? 0 : plannedLegMinor;
-			const { readers } = selectableReaders(tile.method, service?.readersInUse(), order.uuid);
+			const { readers, lockToDefault } = selectableReaders(
+				tile.method,
+				service?.readersInUse(),
+				order.uuid
+			);
 			reducerDispatch({
 				type: 'pick-method',
 				methodId,
 				prefillMinor,
-				readerId: readers.find((reader) => reader.isDefault && reader.inUseBy === null)?.id ?? null,
+				readerId: initialReaderId(readers, lockToDefault, getLoaded(methodId)),
 			});
 			setTenderMethod(order.uuid, methodId);
 		},
-		[plannedLegMinor, order.uuid, saveState, state.customAmount, tiles, service, reducerDispatch]
+		[
+			plannedLegMinor,
+			order.uuid,
+			saveState,
+			state.customAmount,
+			tiles,
+			service,
+			reducerDispatch,
+			getLoaded,
+		]
 	);
 
 	const takeTender = React.useCallback(async () => {
@@ -313,6 +336,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					row: minted.row,
 					reader: reader.id,
 				});
+				void remember(reader.id);
 				reducerDispatch({ type: 'tender-started' });
 				setTenderMethod(order.uuid, null);
 				return;
@@ -360,6 +384,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		localPatch,
 		order,
 		recordManualPayment,
+		remember,
 		saveState,
 		state.entryMinor,
 		state.readerId,
