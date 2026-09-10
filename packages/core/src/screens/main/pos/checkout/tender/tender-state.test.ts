@@ -281,3 +281,11 @@ it('builds plan legs from actual recorded amounts and leaves rounding to the las
 		{ minor: 501, state: 'done' },
 	]);
 });
+it('keeps the chosen transport with the keypad and clears it when going back', () => {
+	const chosen = tenderReducer(initialTenderState, {
+		type: 'pick-transport',
+		transport: 'tap_to_pay',
+	});
+	expect(chosen.transport).toBe('tap_to_pay');
+	expect(tenderReducer(chosen, { type: 'back' }).transport).toBeNull();
+});

@@ -2,10 +2,12 @@ import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
 
-import { readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-math';
+import { derive, readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-math';
 import type { MetaDataEntry } from '@wcpos/order-math';
-import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { engineCollection, type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
@@ -16,9 +18,11 @@ import {
 import {
 	findEngineResident,
 	patchEngineResident,
+	useLocalMutation,
 } from '../../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
-import { enterReceipt } from '../../checkout-mode';
+import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
+import { enterReceipt, getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
 import { reconcileCompletedOrder } from '../../hooks/reconcile-completed-order';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
@@ -27,6 +31,17 @@ export function useTerminalPaymentsService(): void {
 	const { store, site } = useStoreSession();
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
+	const { localPatch } = useLocalMutation();
+	const { methods } = usePaymentMethods();
+	const online = useOnlineStatus().status === 'online-website-available';
+	const latest = React.useRef({ localPatch, methods, online });
+	React.useLayoutEffect(() => {
+		latest.current = { localPatch, methods, online };
+	}, [localPatch, methods, online]);
+	// Connectivity changes are external events; they resume deferred settlements.
+	React.useEffect(() => {
+		if (online) void getTerminalPaymentsService()?.flushOffline();
+	}, [online]);
 	const latestHttp = React.useRef(http);
 	const bindingRef = React.useRef<{
 		store: typeof store;
@@ -49,11 +64,39 @@ export function useTerminalPaymentsService(): void {
 				get: (url) => binding.client.get(url),
 				post: (url, body) => binding.client.post(url, body),
 			},
+			isOnline: () => latest.current.online,
+			resolveOrderId: async (orderUuid) => {
+				if (getOrderSaveState(orderUuid)) return null;
+				const resident = await findEngineResident(manager, 'orders', orderUuid);
+				return (resident?.payload as EngineRecord<'orders'>['payload'] | undefined)?.id ?? null;
+			},
+			patchAndEnqueue: async (orderUuid, payment) => {
+				const resident = await findEngineResident(manager, 'orders', orderUuid);
+				if (stopped || !resident) throw new Error('Offline payment order is not resident');
+				const payload = (resident.getLatest?.().payload ??
+					resident.payload) as EngineRecord<'orders'>['payload'];
+				const meta = cloneDeep(payload.meta_data ?? []);
+				const rows = upsertPaymentRow(readLedger(meta), payment);
+				const summary = derive(payload.total, rows, latest.current.methods, {
+					dp: store.price_num_decimals ?? 2,
+				});
+				const written = await latest.current.localPatch({
+					document: resident,
+					data: { meta_data: withLedger(meta, rows), status: summary.status },
+				});
+				if (!written) throw new Error('Offline payment could not be saved');
+				return {
+					...summary,
+					total: String(payload.total ?? '0'),
+					payment_method: summary.payment_method ?? '',
+				};
+			},
 			mirror: async (orderUuid, { payment, order }) => {
 				const resident = await findEngineResident(manager, 'orders', orderUuid);
 				if (stopped) return;
 				if (!resident) throw new Error('Terminal payment order is not resident');
-				const payload = resident.getLatest?.().payload ?? resident.payload;
+				const payload = (resident.getLatest?.().payload ??
+					resident.payload) as EngineRecord<'orders'>['payload'];
 				const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
 				await patchEngineResident({
 					manager,
@@ -65,6 +108,7 @@ export function useTerminalPaymentsService(): void {
 						...(order
 							? {
 									status: order.status,
+									...(payment.capture_mode === 'device' ? { total: order.total } : {}),
 									payment_method: order.payment_method,
 									payment_method_title: order.payment_method_title,
 								}
@@ -95,8 +139,65 @@ export function useTerminalPaymentsService(): void {
 				}
 			},
 		});
+		// Offline-paid orders can be completed and absent from open tabs. Recover their
+		// locally queued, typed ledgers directly; no remote order-history demand is added.
+		let ledgerSubscription: { unsubscribe(): void } | undefined;
+		const stopWatching = manager.engine.db$((database) => {
+			ledgerSubscription?.unsubscribe();
+			const collection = engineCollection(database, 'orders');
+			if (stopped || !collection) return;
+			ledgerSubscription = collection
+				.find({
+					selector: {
+						'payload.meta_data': {
+							$elemMatch: {
+								key: '_wcpos_payments',
+								'value.payments': {
+									$elemMatch: {
+										capture_mode: 'device',
+										recorded_offline: true,
+										status: 'authorized',
+									},
+								},
+							},
+						},
+					},
+				})
+				.$.subscribe({
+					next: (documents) => {
+						if (stopped) return;
+						for (const document of documents)
+							for (const row of readLedger(document.payload.meta_data)) {
+								if (
+									row.capture_mode === 'device' &&
+									row.recorded_offline &&
+									row.status === 'authorized'
+								)
+									service.trackOffline({
+										orderUuid: document.uuid,
+										orderId: document.payload.id ?? 0,
+										orderNumber: document.payload.number ?? '',
+										row,
+									});
+							}
+						void service.flushOffline();
+					},
+					error: (error) => {
+						getLogger(['wcpos', 'payments']).error('Offline reader settlement recovery failed', {
+							code: ERROR_CODES.PAYMENT_UNEXPECTED,
+							context: { error: String(error) },
+						});
+					},
+				});
+		});
+		const unsubscribe = subscribeCheckoutMode(() => {
+			void service.flushOffline();
+		});
 		return () => {
+			unsubscribe();
 			stopped = true;
+			stopWatching();
+			ledgerSubscription?.unsubscribe();
 			if (bindingRef.current === binding) bindingRef.current = null;
 			if (getTerminalPaymentsService() === service) stopTerminalPaymentsService();
 		};

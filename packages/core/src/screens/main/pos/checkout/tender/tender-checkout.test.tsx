@@ -48,6 +48,7 @@ jest.mock('../receipt-stage/receipt-stage', () => ({
 	ReceiptStage: () => <div data-testid="checkout-receipt-stage" />,
 }));
 jest.mock('../receipt-stage/use-finish-sale', () => ({ useFinishSale: () => mockFinishSale }));
+jest.mock('./reader-connection', () => ({ ReaderConnection: () => null }));
 jest.mock('./use-tender-flow', () => ({ useTenderFlow: () => mockFlow }));
 jest.mock('./legacy-tab', () => ({ LegacyTab: () => <div data-testid="legacy-tab" /> }));
 jest.mock('../../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));

@@ -54,6 +54,22 @@ export async function voidPayments(
 
 	const now = deps.now ?? (() => new Date().toISOString());
 	const online = deps.isOnline() && Number.isInteger(order.id) && Number(order.id) > 0;
+	const deviceHeld = liveRows.filter(
+		(row) =>
+			row.capture_mode === 'device' &&
+			(!online || (row.recorded_offline && row.status === 'authorized'))
+	);
+	if (deviceHeld.length)
+		return {
+			kind: 'voided',
+			via: online ? 'online' : 'offline',
+			rows: [],
+			failed: deviceHeld.map((row) => ({
+				paymentId: row.id,
+				message: 'Device payment must settle before cancellation',
+			})),
+			order: null,
+		};
 	if (!online) {
 		const rows = liveRows.map((row) => ({
 			...row,

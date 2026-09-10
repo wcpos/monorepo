@@ -5,10 +5,14 @@ import * as React from 'react';
 
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 
+import { withLedger } from '@wcpos/order-math';
 import type { StoreDatabase } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
+import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
+import { registerDriver } from '../../../../../services/payment-drivers/registry';
+import { method as deviceMethod, row as deviceRow } from '../payments/device/fixtures.test-utils';
 import {
 	enterCheckout,
 	enterReceipt,
@@ -139,12 +143,15 @@ let mockPayload: {
 	id?: number;
 	number?: string;
 	total: string;
-	meta_data: { key: string; value: unknown }[];
+	meta_data: import('@wcpos/order-math').MetaDataEntry[];
 } = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
 let mockMethodsLoaded = true;
 let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
 
+jest.mock('../../../hooks/use-rest-http-client', () => ({
+	useRestHttpClient: () => ({ post: jest.fn() }),
+}));
 jest.mock('../payments', () => ({
 	useRecordManualPayment: (options: unknown) => {
 		mockRecordOptions(options);
@@ -638,7 +645,14 @@ const terminal = {
 		},
 	},
 } satisfies PaymentMethodDescriptor;
-function terminalState(changes: Partial<TerminalLegState> = {}): TerminalLegState {
+function terminalState(
+	changes: Partial<
+		import('../payments/server/server-leg').ServerLegState & {
+			orderNumber: string;
+			reader: string | null;
+		}
+	> = {}
+): TerminalLegState {
 	return {
 		phase: 'polling',
 		row: payment({ method_id: 'terminal', capture_mode: 'server', status: 'pending' }),
@@ -916,4 +930,100 @@ describe('server tender', () => {
 		mockRealService.stop();
 		mockRealService = null;
 	});
+});
+
+describe('device tender', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockLeg = null;
+		mockRealService = null;
+		mockMethods = [deviceMethod];
+		mockOnlineStatus = 'online-website-available';
+		mockPayload = { id: 42, number: '42', total: '92.95', meta_data: [] };
+		mockBlockIfDegraded.mockReturnValue(false);
+		resetCheckoutMode();
+		mockBegin.mockImplementation(() => {});
+	});
+	it('provides bootstrap and remembered-reader operations from the flow', async () => {
+		const { TerminalPaymentsService } = jest.requireActual<
+			typeof import('../../../../../services/terminal-payments/service')
+		>('../../../../../services/terminal-payments/service');
+		const post = jest.fn(async () => ({ data: { handoff: { token: 'connection' } } }));
+		mockRealService = new TerminalPaymentsService({
+			http: { post, get: jest.fn() },
+			mirror: async () => {},
+		});
+		registerDriver(createSimulatedDriver());
+		mockReaderPreferences.device = 'remembered';
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.pickMethod('device'));
+		expect(result.current.rememberedReaderId).toBe('remembered');
+		await expect(result.current.bootstrapReader('bluetooth')).resolves.toEqual({
+			token: 'connection',
+			method_id: 'device',
+		});
+		expect(post).toHaveBeenCalledWith('payment-methods/device/bootstrap', {
+			context: { transport: 'bluetooth' },
+		});
+		await act(async () => result.current.rememberReader('replacement'));
+		expect(mockReaderPreferences.device).toBe('replacement');
+		mockRealService.stop();
+		mockRealService = null;
+	});
+	it('requires connection and routes device tender to the terminal service, not manual recording', async () => {
+		const driver = createSimulatedDriver();
+		registerDriver(driver);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod(deviceMethod.id));
+		await act(async () => result.current.takeTender());
+		expect(mockBegin).not.toHaveBeenCalled();
+		await act(async () => {
+			await driver.connect!((await driver.discoverReaders!('bluetooth'))[0], null);
+		});
+		expect(result.current.deviceReady).toBe(true);
+		await act(async () => result.current.takeTender());
+		expect(mockBegin).toHaveBeenCalledWith(
+			expect.objectContaining({
+				method: deviceMethod,
+				transport: 'bluetooth',
+				offline: false,
+				row: expect.objectContaining({ capture_mode: 'device', status: 'pending' }),
+			})
+		);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	});
+	it('does not locally void an offline device authorization when abandoning a split sale', async () => {
+		mockPayload = {
+			...mockPayload,
+			meta_data: withLedger([], [{ ...deviceRow, status: 'authorized', recorded_offline: true }]),
+		};
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.cancelPayment());
+		expect(mockVoidPayments).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalled();
+	});
+});
+it('reopens a device tile via its queued transport when the selected transport needs a connection', async () => {
+	jest.clearAllMocks();
+	mockLeg = null;
+	mockRealService = null;
+	mockMethods = [deviceMethod];
+	mockOnlineStatus = 'online-website-available';
+	mockPayload = { id: 42, number: '42', total: '92.95', meta_data: [] };
+	resetCheckoutMode();
+	registerDriver(createSimulatedDriver());
+	const { result, rerender } = renderHook(() => useTenderFlow(order));
+	act(() => {
+		result.current.pickMethod(deviceMethod.id);
+	});
+	act(() => {
+		result.current.pickTransport!('tap_to_pay');
+	});
+	mockOnlineStatus = 'offline';
+	rerender();
+	expect(result.current.tiles[0].reason).toBe('offline');
+	act(() => result.current.dispatch({ type: 'back' }));
+	act(() => result.current.pickMethod(deviceMethod.id));
+	expect(result.current.deviceTransport).toBe('bluetooth');
+	expect(result.current.tiles[0].disabled).toBe(false);
 });

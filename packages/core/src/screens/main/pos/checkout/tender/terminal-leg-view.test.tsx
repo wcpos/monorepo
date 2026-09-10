@@ -146,3 +146,26 @@ it('merges logs oldest first and copies the displayed lines', async () => {
 	fireEvent.click(screen.getByTestId('checkout-terminal-cancel'));
 	expect(flow.cancelTerminalLeg).toHaveBeenCalledTimes(1);
 });
+
+it.each([
+	['collecting', false, 'Present card on the reader'],
+	['confirming', false, 'Confirming…'],
+	['collecting', true, 'Cancel on the reader'],
+] as const)('renders device %s cancel=%s', (phase, cancelRequested, text) => {
+	const leg: TerminalLegState = {
+		...base,
+		row: { ...row, capture_mode: 'device' },
+		phase,
+		cancelRequested,
+		cancelOnDevice: true,
+		resumed: false,
+		failureReason: null,
+	};
+	render(
+		<TerminalLegView
+			flow={{ terminalLeg: leg, tiles: [], dp: 2 } as unknown as TenderFlow}
+			format={String}
+		/>
+	);
+	expect(screen.getByTestId('checkout-terminal-status').textContent).toBe(text);
+});

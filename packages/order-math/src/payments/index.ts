@@ -9,6 +9,7 @@ export {
 	upsertPaymentRow,
 	mintManualPayment,
 	mintServerPayment,
+	mintDevicePayment,
 	LEDGER_META_KEY,
 	LEDGER_SCHEMA,
 } from './ledger';
@@ -17,6 +18,7 @@ export type {
 	MintManualPaymentInput,
 	MintManualPaymentResult,
 	MintServerPaymentInput,
+	MintDevicePaymentInput,
 	MintServerPaymentResult,
 } from './ledger';
 export { toMinor, fromMinor } from './money';

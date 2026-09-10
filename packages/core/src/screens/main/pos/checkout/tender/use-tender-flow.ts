@@ -7,9 +7,11 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	derive,
 	fromMinor,
+	mintDevicePayment,
 	mintServerPayment,
 	type PaymentMethodDescriptor,
 	type PaymentRow,
+	type PaymentTransport,
 	readLedger,
 	toMinor,
 } from '@wcpos/order-math';
@@ -38,6 +40,8 @@ import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { useRecordManualPayment, useVoidPayments } from '../payments';
+import { getDriver } from '../../../../../services/payment-drivers/registry';
+import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
 import { useRememberedReader } from './remembered-readers';
 import { disabledReasonKey, providerErrorMessage } from './labels';
 import {
@@ -52,6 +56,7 @@ import {
 } from './tender-state';
 import {
 	buildTenderTiles,
+	deviceTransports,
 	initialReaderId,
 	legacyPaymentMethods,
 	selectableReaders,
@@ -64,6 +69,12 @@ const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 
 export interface TenderFlow {
+	rememberedReaderId: string | null;
+	rememberReader: (readerId: string) => Promise<void>;
+	bootstrapReader: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
+	deviceTransport?: PaymentTransport | null;
+	pickTransport?: (transport: PaymentTransport) => void;
+	deviceReady?: boolean;
 	terminalLeg: TerminalLegState | null;
 	hasLiveTerminalLeg: boolean;
 	readers: ReturnType<typeof selectableReaders>['readers'];
@@ -116,6 +127,7 @@ export interface TenderFlow {
 }
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
+	useDriverChanges();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const [busy, setBusy] = React.useState(false);
@@ -170,6 +182,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		online: online && !queuedOffline,
 		readersInUse,
 		currentOrderUuid: order.uuid,
+		transports:
+			state.methodId && state.transport ? { [state.methodId]: state.transport } : undefined,
 	});
 	const legacyMethods = React.useMemo(() => legacyPaymentMethods(methods), [methods]);
 	// A method the store or a URL names but the till does not offer (not POS-enabled, webview
@@ -178,6 +192,25 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		state.methodId && tiles.some(({ method: tile }) => tile.id === state.methodId)
 			? (byId.get(state.methodId) ?? null)
 			: null;
+	const bootstrapReader = React.useCallback(
+		async (transport: PaymentTransport) => {
+			const currentService = getTerminalPaymentsService();
+			if (!currentService || !method) throw new Error('Device payment service or method missing');
+			return currentService.bootstrap(method.id, { transport });
+		},
+		[method]
+	);
+	const driver = method?.capture.mode === 'device' ? getDriver(method.capture.provider) : undefined;
+	const deviceStatus = useDriverStatus(driver);
+	const deviceReaderId = deviceStatus.reader?.id ?? null;
+	const deviceTransport = method
+		? (state.transport ?? deviceTransports(method)[0]?.transport ?? null)
+		: null;
+	const deviceReady = driverReady(method, deviceTransport);
+	const pickTransport = React.useCallback(
+		(transport: PaymentTransport) => reducerDispatch({ type: 'pick-transport', transport }),
+		[reducerDispatch]
+	);
 	const { readers, lockToDefault } = selectableReaders(method, readersInUse, order.uuid);
 	// With a plan, a cash leg is the planned share: notes handed over above it are change,
 	// not a bigger leg (the "50" chip for a 46,48 leg). A method that gives no change takes
@@ -230,7 +263,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		(methodId: string) => {
 			if (busyRef.current || (saveState && saveState.kind !== 'queued-offline')) return;
 			const tile = tiles.find(({ method: candidate }) => candidate.id === methodId);
-			if (!tile || tile.disabled) return;
+			if (!tile) return;
+			const offlineTransport =
+				tile.method.capture.mode === 'device' && tile.reason === 'offline'
+					? deviceTransports(tile.method).find((item) => item.offline === 'queue')
+					: undefined;
+			if (tile.disabled && !offlineTransport) return;
 			const prefillMinor = state.customAmount ? 0 : plannedLegMinor;
 			const { readers, lockToDefault } = selectableReaders(
 				tile.method,
@@ -239,6 +277,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			);
 			reducerDispatch({
 				type: 'pick-method',
+				transport: offlineTransport?.transport,
 				methodId,
 				prefillMinor,
 				readerId: initialReaderId(readers, lockToDefault, getLoaded(methodId)),
@@ -298,6 +337,45 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 
+			if (method.capture.mode === 'device') {
+				if (!deviceTransport || !driverReady(method, deviceTransport)) return;
+				if (!service) throw new Error('terminal_service_unavailable');
+				const offline = !online || queuedOffline || !payload.id;
+				const minted = mintDevicePayment({
+					method,
+					transport: deviceTransport,
+					recordedOffline: offline,
+					orderId: payload.id ?? null,
+					amount: fromMinor(entryAppliedMinor, dp),
+					currency: store.currency ?? '',
+					cashierId: wpCredentials.id ?? 0,
+					storeId: store.id || null,
+					dp,
+					now: () => new Date().toISOString(),
+					uuid: uuidv4,
+				});
+				if (!minted.ok) throw new Error(minted.reason);
+				intentRow.current = minted.row.id;
+				service.begin({
+					orderUuid: order.uuid,
+					orderId: payload.id ?? 0,
+					orderNumber: payload.number ?? '',
+					row: minted.row,
+					reader: deviceReaderId,
+					method,
+					transport: deviceTransport,
+					offline,
+					tipEligibleMinor:
+						method.capabilities.tips === 'on_reader' &&
+						deviceTransports(method).find((item) => item.transport === deviceTransport)?.tips ===
+							'on_reader'
+							? entryAppliedMinor
+							: null,
+				});
+				reducerDispatch({ type: 'tender-started' });
+				setTenderMethod(order.uuid, null);
+				return;
+			}
 			if (method.capture.mode === 'server') {
 				if (!payload.id) {
 					logger.info(t('pos_checkout.order_not_on_store_yet'), { showToast: true });
@@ -376,6 +454,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		}
 	}, [
 		balanceMinor,
+		deviceTransport,
+		deviceReaderId,
+		online,
+		queuedOffline,
 		blockIfDegraded,
 		completeOrderFlow,
 		dp,
@@ -415,7 +497,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			service?.dismiss(order.uuid);
 			reducerDispatch({ type: 'tender-recorded' });
 			if (toMinor(leg.order?.balance ?? derived.balance, dp) === 0) {
-				void completeOrderFlow({ refresh: true }).catch(() =>
+				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch(() =>
 					logger.error(t('pos_checkout.payment_not_recorded'), {
 						code: ERROR_CODES.PAYMENT_UNEXPECTED,
 						showToast: true,
@@ -473,6 +555,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		busyRef.current = true;
 		setBusy(true);
 		try {
+			if (
+				rows.some(
+					(row) =>
+						row.capture_mode === 'device' &&
+						((row.recorded_offline && row.status === 'authorized') ||
+							(!online && ['pending', 'authorized', 'captured'].includes(row.status)))
+				)
+			) {
+				logger.info(t('pos_checkout.device_void_needs_settlement'), { showToast: true });
+				return;
+			}
 			const outcome = await voidPayments(order);
 			if (outcome.failed.length > 0) {
 				logger.error(t('pos_checkout.void_failed'), {
@@ -495,11 +588,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [order, router, screenSize, t, voidPayments, service, reducerDispatch]);
+	}, [order, router, screenSize, t, voidPayments, service, reducerDispatch, rows, online]);
 
 	return React.useMemo(
 		() => ({
+			rememberedReaderId: remembered,
+			rememberReader: remember,
 			terminalLeg,
+			bootstrapReader,
+			deviceTransport,
+			pickTransport,
+			deviceReady,
 			readers,
 			lockToDefault,
 			pickReader,
@@ -548,7 +647,13 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			cancelPayment,
 		}),
 		[
+			remembered,
+			remember,
 			terminalLeg,
+			bootstrapReader,
+			deviceTransport,
+			pickTransport,
+			deviceReady,
 			readers,
 			lockToDefault,
 			pickReader,

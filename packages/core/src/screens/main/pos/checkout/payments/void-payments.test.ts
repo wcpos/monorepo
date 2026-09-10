@@ -208,3 +208,12 @@ describe('voidPayments', () => {
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
 });
+it('cannot void device money through the manual offline write seam', async () => {
+	const deps = createDeps(false);
+	const result = await voidPayments(
+		order([{ ...payment('device', 'authorized'), capture_mode: 'device', recorded_offline: true }]),
+		deps
+	);
+	expect(result.failed).toHaveLength(1);
+	expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
+});

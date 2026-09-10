@@ -1,5 +1,13 @@
+import { getLogger } from '@wcpos/utils/logger';
 import type { PaymentRow } from '@wcpos/order-math';
 
+import { createDeviceLeg } from '../../screens/main/pos/checkout/payments/device/device-leg';
+import {
+	method as deviceMethod,
+	row as deviceRow,
+} from '../../screens/main/pos/checkout/payments/device/fixtures.test-utils';
+import { registerDriver } from '../payment-drivers/registry';
+import { createSimulatedDriver } from '../payment-drivers/simulated-driver';
 import { TerminalPaymentsService } from './service';
 import {
 	getTerminalPaymentsService,
@@ -88,7 +96,7 @@ it('begin starts one intent and refuses another live leg for the order', async (
 });
 it('resume is idempotent for the row, polls without intent and leaves unknown reader unclaimed', async () => {
 	const c = setup();
-	const leg = c.service.resume(input);
+	const leg = c.service.resume(input)!;
 	expect(c.service.resume(input)).toBe(leg);
 	await jest.advanceTimersByTimeAsync(0);
 	expect(c.http.post).not.toHaveBeenCalled();
@@ -144,7 +152,7 @@ it('captured callback fires once with authoritative summary and a final leg can 
 	c.http.get.mockResolvedValue({
 		data: { payment: { ...row, status: 'captured' }, order: c.summary },
 	});
-	const leg = c.service.resume(input);
+	const leg = c.service.resume(input)!;
 	await jest.advanceTimersByTimeAsync(0);
 	await leg.checkNow();
 	expect(c.onCaptured).toHaveBeenCalledTimes(1);
@@ -178,4 +186,232 @@ it('singleton start/replacement/stop all notify, with a monotonic version', () =
 	expect(getTerminalPaymentsServiceStartVersion()).toBe(version + 3);
 	expect(listener).toHaveBeenCalledTimes(3);
 	unsubscribe();
+});
+
+it('selects the device factory and reserves its method, not a server reader', async () => {
+	const c = setup();
+	registerDriver(createSimulatedDriver());
+	const factory = jest.fn(createDeviceLeg);
+	const service = new TerminalPaymentsService({ ...c.options, factories: { device: factory } });
+	service.resume({ ...input, row: deviceRow });
+	await jest.advanceTimersByTimeAsync(0);
+	expect(factory).toHaveBeenCalledTimes(1);
+	expect(service.get('order')).toMatchObject({
+		outcome: 'failed',
+		row: { failure_reason: 'reader_session_lost' },
+	});
+	expect(c.http.post).not.toHaveBeenCalled();
+	expect(service.readersInUse().size).toBe(0);
+});
+it('tracks offline settlement after dismissal and only sends it while online', async () => {
+	let online = false;
+	const driver = createSimulatedDriver();
+	registerDriver(driver);
+	const c = setup();
+	const patchAndEnqueue = jest.fn(async (_uuid: string, _row: PaymentRow) => {});
+	const service = new TerminalPaymentsService({
+		...c.options,
+		patchAndEnqueue,
+		isOnline: () => online,
+		resolveOrderId: async () => 42,
+	});
+	const connected = driver.connect!(
+		(await driver.discoverReaders!('bluetooth')).find((r) => r.id === 'sim-offline')!,
+		null
+	);
+	await jest.advanceTimersByTimeAsync(300);
+	await connected;
+	service.begin({
+		...input,
+		row: { ...deviceRow, recorded_offline: true },
+		method: deviceMethod,
+		transport: 'bluetooth',
+		offline: true,
+	});
+	await jest.advanceTimersByTimeAsync(500);
+	expect(service.get('order')).toMatchObject({
+		outcome: 'captured',
+		row: { status: 'authorized' },
+	});
+	service.dismiss('order');
+	expect(service.get('order')).toBeNull();
+	await jest.advanceTimersByTimeAsync(3000);
+	expect(c.http.post).not.toHaveBeenCalled();
+	online = true;
+	c.http.post.mockResolvedValue({ data: { payment: { ...deviceRow, status: 'captured' } } });
+	await service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledWith('orders/42/payments/leg/capture', {
+		context: { provider_refs: { payment_intent: 'sim_pi_leg' } },
+	});
+	expect(c.mirror).toHaveBeenLastCalledWith('order', {
+		payment: { ...deviceRow, status: 'captured' },
+	});
+	service.stop();
+});
+it('authorized offline rows never occupy a live leg on resume', async () => {
+	const c = setup();
+	expect(
+		c.service.resume({
+			...input,
+			row: { ...deviceRow, status: 'authorized', recorded_offline: true },
+		})
+	).toBeUndefined();
+	expect(c.service.get('order')).toBeNull();
+	expect(c.service.readersInUse().size).toBe(0);
+});
+
+function offlineSetup(refs: PaymentRow['provider_refs'] = { payment_intent: 'pi' }) {
+	const c = setup();
+	let emit!: (event: { rowId: string; provider_refs: Record<string, unknown> }) => void;
+	registerDriver({
+		...createSimulatedDriver(),
+		settleOffline$: {
+			subscribe: (listener) => {
+				emit = listener;
+				return () => {};
+			},
+		},
+	});
+	const schedule = jest.fn((callback: () => void, ms: number) => setTimeout(callback, ms));
+	const clear = jest.fn((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer));
+	const patch = jest.fn(async (_uuid: string, _row: PaymentRow) => {});
+	const service = new TerminalPaymentsService({
+		...c.options,
+		isOnline: () => true,
+		setTimeout: schedule,
+		clearTimeout: clear,
+		patchAndEnqueue: patch,
+	});
+	service.trackOffline({
+		...input,
+		row: { ...deviceRow, status: 'authorized', recorded_offline: true, provider_refs: refs },
+	});
+	return { ...c, service, emit, schedule, clear, patch };
+}
+it('recovers transaction-id-only settlement and ignores all-null references', async () => {
+	const c = offlineSetup({ transaction_id: 'txn' });
+	await c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledWith('orders/42/payments/leg/capture', {
+		context: { provider_refs: { transaction_id: 'txn' } },
+	});
+	const empty = offlineSetup({ transaction_id: null });
+	await empty.service.flushOffline();
+	empty.emit({ rowId: 'leg', provider_refs: { transaction_id: null } });
+	await jest.advanceTimersByTimeAsync(0);
+	expect(empty.http.post).not.toHaveBeenCalled();
+	c.service.stop();
+	empty.service.stop();
+});
+it('retries failed settlement at 5, 30 and 120 seconds then waits for another trigger', async () => {
+	const c = offlineSetup();
+	c.http.post.mockRejectedValue(new Error('capture unavailable'));
+	await c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledTimes(1);
+	for (const [index, delay] of [5000, 30000, 120000].entries()) {
+		expect(c.schedule).toHaveBeenLastCalledWith(expect.any(Function), delay);
+		expect(jest.getTimerCount()).toBe(1);
+		await jest.advanceTimersByTimeAsync(delay - 1);
+		expect(c.http.post).toHaveBeenCalledTimes(index + 1);
+		await jest.advanceTimersByTimeAsync(1);
+		expect(c.http.post).toHaveBeenCalledTimes(index + 2);
+	}
+	await jest.advanceTimersByTimeAsync(600000);
+	expect(c.http.post).toHaveBeenCalledTimes(4);
+	expect(jest.getTimerCount()).toBe(0);
+	expect(getLogger([]).warn).toHaveBeenCalledWith('Offline payment settlement failed', {
+		context: { paymentId: 'leg', error: 'capture unavailable' },
+	});
+	await c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledTimes(5);
+	expect(c.schedule).toHaveBeenLastCalledWith(expect.any(Function), 5000);
+	c.service.stop();
+});
+it('stop clears the one pending settlement retry', async () => {
+	const c = offlineSetup();
+	c.http.post.mockRejectedValue(new Error('capture unavailable'));
+	await c.service.flushOffline();
+	await c.service.flushOffline();
+	expect(jest.getTimerCount()).toBe(1);
+	c.service.stop();
+	expect(c.clear).toHaveBeenCalled();
+	expect(jest.getTimerCount()).toBe(0);
+	await jest.advanceTimersByTimeAsync(600000);
+	expect(c.http.post).toHaveBeenCalledTimes(2);
+});
+it('coalesces concurrent flushes and drains one follow-up using updated refs', async () => {
+	const c = offlineSetup();
+	let reject!: (error: Error) => void;
+	c.http.post.mockImplementationOnce(
+		() =>
+			new Promise((_resolve, no) => {
+				reject = no;
+			})
+	);
+	const first = c.service.flushOffline();
+	await jest.advanceTimersByTimeAsync(0);
+	c.emit({ rowId: 'leg', provider_refs: { transaction_id: 'updated' } });
+	const second = c.service.flushOffline();
+	const third = c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledTimes(1);
+	reject(new Error('stale refs'));
+	await Promise.all([first, second, third]);
+	expect(c.http.post).toHaveBeenCalledTimes(2);
+	expect(c.http.post).toHaveBeenLastCalledWith('orders/42/payments/leg/capture', {
+		context: { provider_refs: { transaction_id: 'updated' } },
+	});
+	expect(c.patch).toHaveBeenCalledWith(
+		'order',
+		expect.objectContaining({ provider_refs: { transaction_id: 'updated' } })
+	);
+	c.service.stop();
+});
+it('reserves one driver across two different methods', async () => {
+	const c = setup();
+	registerDriver({ ...createSimulatedDriver(), collect: () => new Promise(() => {}) });
+	c.service.begin({ ...input, row: deviceRow, method: deviceMethod });
+	expect(c.service.readersInUse().has('device:simulated')).toBe(true);
+	expect(() =>
+		c.service.begin({
+			...input,
+			orderUuid: 'other',
+			row: { ...deviceRow, id: 'other-leg', method_id: 'other-method' },
+			method: { ...deviceMethod, id: 'other-method' },
+		})
+	).toThrow();
+	c.service.stop();
+});
+it.each([{ token: 'reader-token', method_id: 'wrong' }, null, undefined])(
+	'bootstraps connection material with the requested method identity',
+	async (handoff) => {
+		const post = jest.fn(async () => ({ data: { handoff } }));
+		const service = new TerminalPaymentsService({
+			http: { post, get: jest.fn() },
+			mirror: async () => {},
+		});
+		expect(await service.bootstrap('device', { transport: 'bluetooth' })).toEqual(
+			handoff ? { token: 'reader-token', method_id: 'device' } : null
+		);
+		expect(post).toHaveBeenCalledWith('payment-methods/device/bootstrap', {
+			context: { transport: 'bluetooth' },
+		});
+		service.stop();
+	}
+);
+
+it('restores transaction references when an already tracked row hydrates', async () => {
+	const c = offlineSetup({ transaction_id: null });
+	c.service.trackOffline({
+		...input,
+		row: {
+			...deviceRow,
+			status: 'authorized',
+			recorded_offline: true,
+			provider_refs: { transaction_id: 'hydrated' },
+		},
+	});
+	await c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledWith('orders/42/payments/leg/capture', {
+		context: { provider_refs: { transaction_id: 'hydrated' } },
+	});
+	c.service.stop();
 });

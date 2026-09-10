@@ -1,5 +1,8 @@
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
+import { registerDriver } from '../../../../../services/payment-drivers/registry';
+import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
+import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import {
 	buildTenderTiles,
 	initialReaderId,
@@ -201,5 +204,47 @@ describe('initialReaderId', () => {
 		['no readers', [], false, 'b', null],
 	] as const)('%s', (_label, readers, locked, remembered, expected) => {
 		expect(initialReaderId(readers, locked, remembered)).toBe(expected);
+	});
+});
+
+describe('device tiles', () => {
+	const driver = createSimulatedDriver();
+	const device = deviceMethod;
+	beforeEach(() => registerDriver(driver));
+	it('enables a registered available driver and queues only on the chosen transport', () => {
+		expect(buildTenderTiles([device], { online: true })[0]).toMatchObject({
+			disabled: false,
+			settlesLater: false,
+		});
+		expect(buildTenderTiles([device], { online: false })[0]).toMatchObject({
+			disabled: false,
+			settlesLater: true,
+		});
+		expect(
+			buildTenderTiles([device], { online: false, transports: { [device.id]: 'tap_to_pay' } })[0]
+		).toMatchObject({ disabled: true, reason: 'offline', settlesLater: false });
+	});
+	it.each(['web', 'permission', 'bluetooth_off', 'not_logged_in', 'unsupported'] as const)(
+		'explains unavailable %s',
+		(reason) => {
+			registerDriver({ ...driver, availability: () => ({ available: false, reason }) });
+			expect(buildTenderTiles([device], { online: true })[0].reason).toBe(
+				reason === 'unsupported' ? 'no_driver' : `driver_${reason}`
+			);
+		}
+	);
+	it('reserves the driver across methods and orders', () => {
+		const readersInUse = new Map([['device:simulated', { orderUuid: 'other', orderNumber: '99' }]]);
+		expect(
+			buildTenderTiles([{ ...device, id: 'second-method' }], {
+				online: true,
+				readersInUse,
+				currentOrderUuid: 'mine',
+			})[0].reason
+		).toEqual({ type: 'reader_in_use', number: '99' });
+		expect(
+			buildTenderTiles([device], { online: true, readersInUse, currentOrderUuid: 'other' })[0]
+				.disabled
+		).toBe(false);
 	});
 });
