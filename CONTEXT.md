@@ -304,6 +304,17 @@ Customer: the same person may also be a customer, and a cashier may be chosen as
 customer.
 _Avoid_: staff, team member, employee, operator, user (for this concept)
 
+**Cashier directory**:
+The list of every cashier any POS user may read: id, display name, avatar, active. Nobody is
+ever removed from it — a user who loses POS access stays resolvable, because orders and
+closures point at them.
+
+**Cashier record**:
+One cashier's full record — names, roles, effective POS capabilities, allowed stores and
+registers, last access — readable by that cashier and by managers. The signed-in cashier's
+own record is what the app gates its UI from.
+_Avoid_: profile, account (for this concept)
+
 **Register**:
 The identity of one installed till — the workstation a session is opened on. The
 left-hand menu item is "Register": it is keyed on this device's register, and the cashier
