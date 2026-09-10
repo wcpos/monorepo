@@ -9,6 +9,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import {
+	searchFixtureExpectedIds,
+	searchFixturePayload,
+	searchFixtureProduct,
+} from '@wcpos/sync-core/testing';
+
 import { createEngineHarness, remoteId } from './testing';
 import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
 
@@ -1548,6 +1554,63 @@ describe('require() for search — the public search-demand verb', () => {
 				term: '   ',
 			}).ready
 		).rejects.toThrow(/'search' needs a non-empty term/i);
+		await engine.dispose();
+	});
+});
+
+describe('search walk politeness against the fixture (spec Phase 2)', () => {
+	function fixtureServer(urls: string[]) {
+		return async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (!params.has('sku') && !params.has('search')) return json([]);
+			urls.push(url);
+			if (params.has('sku')) return json([]);
+			const ids = searchFixtureExpectedIds(params.get('search') ?? '');
+			const size = Number(params.get('per_page'));
+			const offset = (Number(params.get('page')) - 1) * size;
+			return json(
+				ids.slice(offset, offset + size).map((id) => searchFixturePayload(searchFixtureProduct(id)))
+			);
+		};
+	}
+
+	it('the grid extension sequence costs one request per page and never repeats a URL', async () => {
+		const urls: string[] = [];
+		const harness = createEngineHarness({
+			site: SITE,
+			identity: freshIdentity(),
+			awaitReady: false,
+			fetch: fixtureServer(urls),
+		});
+		const { engine } = harness;
+		await engine.ready;
+		engine.reconfigure({ pullBatchSize: 50 });
+		// 130 hits at a 12-row grid: 12, 24, 36, 48 serve local after the first page;
+		// 60 fetches page 2; 72..96 serve local; 108 fetches page 3 (short: 30 rows) and completes.
+		for (const limit of [12, 24, 36, 48, 60, 72, 84, 96, 108, 120, 132]) {
+			const handle = engine.require({
+				id: `limit-${limit}`,
+				collection: 'products',
+				kind: 'search',
+				term: 'widget',
+				limit,
+			});
+			await handle.ready;
+			handle.release();
+		}
+		const searches = urls.map((u) => new URL(u).search);
+		expect(new Set(searches).size).toBe(searches.length);
+		expect(searches.filter((s) => s.includes('search='))).toEqual([
+			'?search=widget&per_page=50&page=1&orderby=id&order=desc&status=publish',
+			'?search=widget&per_page=50&page=2&orderby=id&order=desc&status=publish',
+			'?search=widget&per_page=50&page=3&orderby=id&order=desc&status=publish',
+		]);
+		expect(await harness.collection('products').count().exec()).toBe(130);
+		const lane = await harness
+			.collection('coverageLanes')
+			.findOne({ selector: { queryKey: 'products:search:widget' } })
+			.exec();
+		expect(lane?.toJSON()).toMatchObject({ complete: true });
 		await engine.dispose();
 	});
 });

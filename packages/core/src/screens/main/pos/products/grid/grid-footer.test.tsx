@@ -14,7 +14,9 @@ jest.mock('@wcpos/components/loader', () => ({
 	Loader: () => <span data-testid="loader" />,
 }));
 jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
 }));
 jest.mock('react-native', () => ({
 	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -49,6 +51,18 @@ describe('ProductGridFooter', () => {
 		renderFooter(0, binding);
 		expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
 		expect(screen.queryByTestId('pos-products-grid-end')).toBeNull();
+	});
+
+	it('always carries the rendered-row count under its own hidden testID', () => {
+		// The grid virtualizes tiles, so E2E reads this hidden count instead of counting tiles.
+		const binding = settled();
+		renderFooter(0, binding);
+		expect(screen.getByTestId('pos-products-grid-loaded-count').textContent).toBe('0');
+		binding.pending$.next(true);
+		renderFooter(37, binding);
+		expect(
+			screen.getAllByTestId('pos-products-grid-loaded-count').map((n) => n.textContent)
+		).toContain('37');
 	});
 
 	it('shows the spinner while an extension is outstanding, and swaps it for the end row', () => {
