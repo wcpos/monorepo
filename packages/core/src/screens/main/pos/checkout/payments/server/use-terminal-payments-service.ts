@@ -2,13 +2,21 @@ import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
 
-import { derive, readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-math';
+import {
+	derive,
+	hasSaleProvenance,
+	isCompletingStatus,
+	readLedger,
+	upsertPaymentRow,
+	withLedger,
+} from '@wcpos/order-math';
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { engineCollection, type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { completionMeta } from '../../provenance/stamp-completion';
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
 	getTerminalPaymentsService,
@@ -28,7 +36,7 @@ import { reconcileCompletedOrder } from '../../hooks/reconcile-completed-order';
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export function useTerminalPaymentsService(): void {
-	const { store, site } = useStoreSession();
+	const { store, site, userDB } = useStoreSession();
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
@@ -80,9 +88,15 @@ export function useTerminalPaymentsService(): void {
 				const summary = derive(payload.total, rows, latest.current.methods, {
 					dp: store.price_num_decimals ?? 2,
 				});
+				const meta_data = withLedger(meta, rows);
 				const written = await latest.current.localPatch({
 					document: resident,
-					data: { meta_data: withLedger(meta, rows), status: summary.status },
+					data: {
+						meta_data: isCompletingStatus(summary.status)
+							? await completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! })
+							: meta_data,
+						status: summary.status,
+					},
 				});
 				if (!written) throw new Error('Offline payment could not be saved');
 				return {
@@ -98,6 +112,7 @@ export function useTerminalPaymentsService(): void {
 				const payload = (resident.getLatest?.().payload ??
 					resident.payload) as EngineRecord<'orders'>['payload'];
 				const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
+				const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
 				await patchEngineResident({
 					manager,
 					collection: 'orders',
@@ -113,9 +128,17 @@ export function useTerminalPaymentsService(): void {
 									payment_method_title: order.payment_method_title,
 								}
 							: {}),
-						meta_data: withLedger(meta, upsertPaymentRow(readLedger(meta), payment)),
+						meta_data,
 					},
 				});
+				if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
+					await latest.current.localPatch({
+						document: resident,
+						data: {
+							meta_data: await completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! }),
+						},
+					});
+				}
 			},
 			onCaptured: (orderUuid, order) => {
 				// Never select: the order the cashier is serving stays on screen. When
@@ -201,5 +224,5 @@ export function useTerminalPaymentsService(): void {
 			if (bindingRef.current === binding) bindingRef.current = null;
 			if (getTerminalPaymentsService() === service) stopTerminalPaymentsService();
 		};
-	}, [store, site, manager]);
+	}, [store, site, manager, userDB]);
 }

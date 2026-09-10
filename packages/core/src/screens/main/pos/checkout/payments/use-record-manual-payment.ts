@@ -6,9 +6,15 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+import {
+	hasSaleProvenance,
+	isCompletingStatus,
+	type PaymentMethodDescriptor,
+} from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
+import { readRegister } from '../../../../../services/register/register-document';
+import { completionMeta } from '../provenance/stamp-completion';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -46,7 +52,7 @@ export function useRecordManualPayment(
 	const http = useRestHttpClient();
 	const onlineStatus = useOnlineStatus();
 	const forceOffline = options.offline === true;
-	const { wpCredentials, store } = useStoreSession();
+	const { wpCredentials, store, userDB, site } = useStoreSession();
 	const { localPatch } = useLocalMutation();
 	const manager = useQueryRuntime();
 	const t = useT();
@@ -67,6 +73,9 @@ export function useRecordManualPayment(
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
+				registerId: (await readRegister(userDB))?.id ?? null,
+				completionMeta: (meta_data) =>
+					completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! }),
 				currency: store.currency ?? '',
 				dp: store.price_num_decimals ?? 2,
 				patchAndEnqueue: async (changes) => {
@@ -85,6 +94,16 @@ export function useRecordManualPayment(
 						recordId: order.uuid,
 						changes,
 					});
+					if (
+						changes.status &&
+						isCompletingStatus(changes.status) &&
+						!hasSaleProvenance(changes.meta_data)
+					) {
+						await localPatch({
+							document: order,
+							data: { meta_data: await completionMeta(changes, { userDB, siteUuid: site.uuid! }) },
+						});
+					}
 				},
 				raiseAttention: ({ row, order: summary, reason }) => {
 					const number = paymentOrder.number || paymentOrder.uuid.slice(0, 8);
@@ -121,6 +140,17 @@ export function useRecordManualPayment(
 				},
 			});
 		},
-		[http, forceOffline, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
+		[
+			userDB,
+			site.uuid,
+			http,
+			forceOffline,
+			onlineStatus.status,
+			wpCredentials.id,
+			store,
+			localPatch,
+			manager,
+			t,
+		]
 	);
 }

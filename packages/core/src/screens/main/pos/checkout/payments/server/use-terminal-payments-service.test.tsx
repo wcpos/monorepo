@@ -26,7 +26,7 @@ const mockResident = {
 		number: '42',
 		total: '10.00',
 		status: 'completed',
-		meta_data: withLedger([], [mockRow]),
+		meta_data: withLedger([{ key: '_wcpos_sale_counter', value: '1' }], [mockRow]),
 	},
 };
 const mockDocuments = new BehaviorSubject([mockResident]);
@@ -105,4 +105,55 @@ it('recovers a completed resident offline authorization without any open checkou
 	);
 	expect(mockPatch).not.toHaveBeenCalled(); // Already-persisted refs are not re-enqueued.
 	hook.unmount();
+});
+
+jest.mock('../../provenance/stamp-completion', () => ({
+	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
+		...meta_data,
+		{ key: '_wcpos_sale_counter', value: '2' },
+	],
+}));
+it('offline settlement puts the tuple and ledger in the same completing patch', async () => {
+	const original = mockResident.payload.meta_data;
+	mockResident.payload.meta_data = withLedger([], []);
+	const start = jest.spyOn(
+		await import('../../../../../../services/terminal-payments'),
+		'startTerminalPaymentsService'
+	);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	const options = start.mock.calls[0][0];
+	await options.patchAndEnqueue!('completed-order', { ...mockRow, status: 'captured' });
+	expect(mockPatch).toHaveBeenCalledWith(
+		expect.objectContaining({
+			data: {
+				status: 'completed',
+				meta_data: expect.arrayContaining([
+					{ key: '_wcpos_sale_counter', value: '2' },
+					expect.objectContaining({ key: '_wcpos_payments' }),
+				]),
+			},
+		})
+	);
+	hook.unmount();
+	start.mockRestore();
+	mockResident.payload.meta_data = original;
+});
+
+it('background terminal settlement enqueues one provenance-only patch after mirroring', async () => {
+	const original = mockResident.payload.meta_data;
+	mockResident.payload.meta_data = withLedger([], [mockRow]);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		await waitFor(() => expect(mockPatch).toHaveBeenCalledTimes(1));
+		expect(mockMirror).toHaveBeenCalledTimes(1);
+		expect(mockPatch).toHaveBeenCalledWith({
+			document: mockResident,
+			data: {
+				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '2' }]),
+			},
+		});
+	} finally {
+		hook.unmount();
+		mockResident.payload.meta_data = original;
+	}
 });

@@ -24,6 +24,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
+		site: { uuid: 'site' },
 		wpCredentials: { id: 7 },
 		store: { id: 9, currency: 'EUR', price_num_decimals: 2 },
 	}),
@@ -208,4 +209,30 @@ it('localizes an amount-exceeds-balance refusal with the server balance', async 
 		'Order #1042 only had 15.00 outstanding; 40.00 Cash was taken at the till — refund the difference.',
 		expect.any(Object)
 	);
+});
+
+jest.mock('../../../../../services/register/register-document', () => ({
+	readRegister: async () => ({ id: 'register' }),
+}));
+jest.mock('../provenance/stamp-completion', () => ({
+	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
+		...meta_data,
+		{ key: '_wcpos_sale_counter', value: '1' },
+	],
+}));
+it('queues exactly one provenance-only patch after a full online manual payment mirror', async () => {
+	onlineStatus = 'online-website-available';
+	mockPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
+	const { result } = renderHook(() => useRecordManualPayment());
+	await act(() => result.current(order, method, { amount: 100 }));
+	expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch).toHaveBeenCalledWith({
+		document: order,
+		data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
+	});
+	expect(mockPost.mock.calls[0][1].payment).toMatchObject({
+		register_id: 'register',
+		session_id: null,
+	});
 });

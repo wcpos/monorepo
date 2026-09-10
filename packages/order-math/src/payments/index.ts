@@ -2,7 +2,8 @@
  * One payments entry point keeps the contract consumable without exposing implementation paths.
  */
 
-export { derive } from './derive';
+export { saleProvenanceMeta, hasSaleProvenance, withSaleProvenance } from './provenance';
+export { derive, isCompletingStatus } from './derive';
 export {
 	readLedger,
 	withLedger,

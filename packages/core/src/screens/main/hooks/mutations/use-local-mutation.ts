@@ -23,6 +23,7 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { useRegister } from '../../../../services/register/use-register';
 import { useT } from '../../../../contexts/translations';
 import {
 	getTemporaryOrder,
@@ -280,6 +281,7 @@ export async function patchAndEnqueueEngineResident(input: {
 	recordId: string;
 	changes: Record<string, unknown>;
 	initial?: ScopedEngineResident;
+	registerId?: string;
 }): Promise<EngineResident> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		// The rollback guard's baseline is the CAPTURED scope's own id, not a
@@ -297,6 +299,19 @@ export async function patchAndEnqueueEngineResident(input: {
 			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 		}
 		const previousResident = cloneDeep(resident.toJSON());
+		const meta = (residentPayload(resident).meta_data ?? []) as { key?: string; value?: unknown }[];
+		if (
+			input.collection === 'orders' &&
+			input.registerId &&
+			!meta.some(({ key }) => key === '_wcpos_register')
+		) {
+			const incoming = (input.changes.meta_data ?? []) as typeof meta;
+			const merged = meta.map((entry) => incoming.find(({ key }) => key === entry.key) ?? entry);
+			merged.push(...incoming.filter((entry) => !meta.some(({ key }) => key === entry.key)));
+			if (!merged.some(({ key }) => key === '_wcpos_register'))
+				merged.push({ key: '_wcpos_register', value: input.registerId });
+			input = { ...input, changes: { ...input.changes, meta_data: merged } };
+		}
 		await applyEngineResidentChanges(
 			resident,
 			input.collection,
@@ -390,6 +405,7 @@ async function patchLocalResident<T extends EngineResident>(
  *   `patchLocalResident` and never enter the sync queue.
  */
 export const useLocalMutation = () => {
+	const registerId = useRegister()?.id;
 	const t = useT();
 	const manager = useQueryRuntime();
 
@@ -487,6 +503,7 @@ export const useLocalMutation = () => {
 							recordId: recordId!,
 							changes: syncChanges,
 							initial: scopedEngineResident!,
+							registerId,
 						});
 					} else {
 						patched = await applyEngineResidentChanges(
@@ -528,7 +545,7 @@ export const useLocalMutation = () => {
 				}
 			}
 		},
-		[manager, t]
+		[manager, t, registerId]
 	);
 
 	return { localPatch };

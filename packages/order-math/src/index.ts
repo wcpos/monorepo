@@ -58,6 +58,10 @@ export type {
 // ===== Payments contract v1 (wcpos/roadmap#97) =====
 export {
 	derive,
+	isCompletingStatus,
+	hasSaleProvenance,
+	saleProvenanceMeta,
+	withSaleProvenance,
 	readLedger,
 	withLedger,
 	upsertPaymentRow,

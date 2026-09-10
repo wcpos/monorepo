@@ -238,3 +238,10 @@ it('cold subscribers see service start, changes and stop; both resume hooks trac
 	expect(view.result.current).toBeNull();
 	view.unmount();
 });
+
+jest.mock('../../provenance/stamp-completion', () => ({
+	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
+		...meta_data,
+		{ key: '_wcpos_sale_counter', value: '1' },
+	],
+}));

@@ -123,6 +123,8 @@ export interface PaymentRow {
 	receipt: Record<string, string>;
 	cashier_id: number;
 	store_id: number | null;
+	register_id?: string | null;
+	session_id?: string | null;
 	created_at_gmt: string;
 	captured_at_gmt: string | null;
 	updated_at_gmt: string;

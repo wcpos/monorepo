@@ -1,3 +1,4 @@
+import { useRegisterWithServer } from '../../../../../../services/register/use-register-with-server';
 import { useTerminalPaymentsService } from './use-terminal-payments-service';
 
 /**
@@ -8,5 +9,6 @@ import { useTerminalPaymentsService } from './use-terminal-payments-service';
  */
 export function TerminalPaymentsBridge(): null {
 	useTerminalPaymentsService();
+	useRegisterWithServer();
 	return null;
 }

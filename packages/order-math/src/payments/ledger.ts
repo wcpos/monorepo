@@ -72,6 +72,8 @@ export interface MintManualPaymentInput {
 	orderId: number | null;
 	cashierId: number;
 	storeId: number | null;
+	registerId: string | null;
+	sessionId?: string | null;
 	recordedOffline: boolean;
 	now: () => string;
 	uuid: () => string;
@@ -126,6 +128,8 @@ export function mintManualPayment(input: MintManualPaymentInput): MintManualPaym
 			receipt: {},
 			cashier_id: input.cashierId,
 			store_id: input.storeId,
+			register_id: input.registerId,
+			session_id: input.sessionId ?? null,
 			created_at_gmt: timestamp,
 			captured_at_gmt: timestamp,
 			updated_at_gmt: timestamp,
@@ -189,6 +193,8 @@ function mintTerminalPayment(
 			receipt: {},
 			cashier_id: input.cashierId,
 			store_id: input.storeId,
+			register_id: input.registerId,
+			session_id: input.sessionId ?? null,
 			created_at_gmt: timestamp,
 			captured_at_gmt: null,
 			updated_at_gmt: timestamp,

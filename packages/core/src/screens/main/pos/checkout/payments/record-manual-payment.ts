@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import {
 	derive,
+	isCompletingStatus,
 	mintManualPayment,
 	readLedger,
 	upsertPaymentRow,
@@ -38,6 +39,8 @@ export interface RecordManualPaymentDeps {
 	isOnline: () => boolean;
 	cashierId: number;
 	storeId: number | null;
+	registerId: string | null;
+	completionMeta?: (meta: MetaDataEntry[]) => Promise<MetaDataEntry[]>;
 	currency: string;
 	dp: number;
 	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
@@ -128,6 +131,7 @@ export async function recordManualPayment(
 		orderId: order.id,
 		cashierId: deps.cashierId,
 		storeId: deps.storeId,
+		registerId: deps.registerId,
 		recordedOffline: !online,
 		now: deps.now ?? (() => new Date().toISOString()),
 		uuid: deps.uuid ?? uuidv4,
@@ -140,9 +144,12 @@ export async function recordManualPayment(
 	const writeOffline = async (row: PaymentRow): Promise<RecordManualPaymentOutcome> => {
 		const offlineRow = row.recorded_offline ? row : { ...row, recorded_offline: true };
 		const ledger = upsertPaymentRow(readLedger(order.meta_data), offlineRow);
+		const status = derive(order.total, ledger, [method], { dp: deps.dp }).status;
+		const meta = withLedger(order.meta_data, ledger);
 		await deps.patchAndEnqueue({
-			meta_data: withLedger(order.meta_data, ledger),
-			status: derive(order.total, ledger, [method], { dp: deps.dp }).status,
+			meta_data:
+				isCompletingStatus(status) && deps.completionMeta ? await deps.completionMeta(meta) : meta,
+			status,
 		});
 		return { kind: 'recorded', via: 'offline', row: offlineRow, order: null };
 	};

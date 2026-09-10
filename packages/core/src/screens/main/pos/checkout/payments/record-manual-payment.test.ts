@@ -68,6 +68,8 @@ const mintedCard: PaymentRow = {
 	receipt: {},
 	cashier_id: 7,
 	store_id: 9,
+	register_id: null,
+	session_id: null,
 	created_at_gmt: NOW,
 	captured_at_gmt: NOW,
 	updated_at_gmt: NOW,
@@ -85,6 +87,7 @@ function createDeps(online = true): RecordManualPaymentDeps & {
 		isOnline: () => online,
 		cashierId: 7,
 		storeId: 9,
+		registerId: null,
 		currency: 'EUR',
 		dp: 2,
 		patchAndEnqueue: jest.fn(async () => undefined),
@@ -359,4 +362,19 @@ describe('recordManualPayment', () => {
 		expect(deps.mirror).not.toHaveBeenCalled();
 		expect(deps.raiseAttention).not.toHaveBeenCalled();
 	});
+});
+
+it.each([
+	['100.00', true],
+	['42.50', false],
+] as const)('completion provenance with offline amount %s', async (amount, completes) => {
+	const deps = createDeps(false);
+	const tuple = { key: '_wcpos_sale_counter', value: '1' };
+	const completion = jest.fn(async (meta) => [...meta, tuple]);
+	deps.completionMeta = completion;
+	await recordManualPayment(order, cash, { amount }, deps);
+	expect(completion).toHaveBeenCalledTimes(completes ? 1 : 0);
+	const meta = deps.patchAndEnqueue.mock.calls[0][0].meta_data;
+	expect(meta.some((entry: { key: string }) => entry.key === '_wcpos_payments')).toBe(true);
+	expect(meta.includes(tuple)).toBe(completes);
 });

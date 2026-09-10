@@ -165,3 +165,21 @@ it('uses initial fake state without requiring Woo metadata fixtures', () => {
 	expect(carrier.lineUuid(line)).toBe('new-line');
 	expect(carrier.state.lineUuids).toEqual(['existing-line', 'new-line']);
 });
+
+it('stamps and reads the register without losing existing metadata', () => {
+	const meta = [
+		{ key: 'custom', value: 'keep' },
+		{ id: 8, key: '_wcpos_register', value: 'old' },
+	];
+	const stamped = wooMetaCarrier.stampIdentity(meta, { userId: 1, storeId: 2, registerId: 'new' });
+	expect(wooMetaCarrier.readIdentity(stamped).registerId).toBe('new');
+	expect(stamped).toContainEqual(meta[0]);
+	expect(stamped).toContainEqual({ ...meta[1], value: 'new' });
+	for (const registerId of [undefined, '']) {
+		expect(
+			wooMetaCarrier
+				.stampIdentity([], { userId: 1, storeId: 2, registerId })
+				.some(({ key }) => key === '_wcpos_register')
+		).toBe(false);
+	}
+});
