@@ -63,6 +63,7 @@ export const SEARCH_FIXTURE_PRODUCTS: readonly SearchFixtureProduct[] = [
 	product(3008, 'K2 Skis'),
 	product(3009, 'Plain Mug', { description: 'A phantom word lives only in the description.' }),
 	product(3010, 'Ghost Pepper Sauce', { stockStatus: 'outofstock' }),
+	product(3011, 'Cobalt Lamp', { sku: 'ZINC-77' }), // one term in the name, the other in the sku
 ];
 
 const byId = new Map(SEARCH_FIXTURE_PRODUCTS.map((p) => [p.id, p]));
@@ -84,6 +85,9 @@ export function searchFixtureMatches(p: SearchFixtureProduct, query: string): bo
 		return fields(p).some((field) => field.split(/\s+/).some((token) => token.startsWith(folded)));
 	}
 	const tokens = encodeSearchText(query).filter((t) => t.length >= FLEXSEARCH_MIN_TERM_LENGTH);
+	// `a b` folds past the index minimum as a whole but has no indexable token; the index and
+	// the scan answer nothing, and `every()` on an empty list must not answer everything.
+	if (tokens.length === 0) return false;
 	const blob = fields(p).join(' ');
 	return tokens.every((token) => blob.includes(token));
 }
@@ -114,6 +118,8 @@ export const SEARCH_FIXTURE_TRAPS: readonly SearchFixtureTrap[] = [
 	{ name: 'short-term-prefix', query: 'k2', expectedIds: [3008], why: 'under the index minimum: token-prefix locally, still sent to the server (#1681)' },
 	{ name: 'description-never-matches', query: 'phantom', expectedIds: [], why: 'v2 matched descriptions in 1.10.0-1.10.5 (#1777)' },
 	{ name: 'stock-status-is-not-search', query: 'ghost', expectedIds: [3010], why: 'search ignores stock; the grid filter is a separate concern' },
+	{ name: 'and-across-fields', query: 'cobalt zinc', expectedIds: [3011], why: 'terms may be satisfied by different fields — OR across fields, AND across terms' },
+	{ name: 'no-indexable-tokens', query: 'a b', expectedIds: [], why: 'past the index minimum as a whole, but no token reaches it: nothing matches, never everything' },
 	{ name: 'no-match', query: 'zzqx', expectedIds: [], why: 'the only honest "no products found"' },
 ];
 
