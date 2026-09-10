@@ -2336,6 +2336,47 @@ describe('createProductsSchedulerFetcher', () => {
 		expect(result.completed).toBe(true);
 	});
 
+	it('normalizes response id types before splitting search rows from sku-only rows', async () => {
+		const repository = {
+			upsertMany: vi.fn(async () => undefined),
+			removeMany: vi.fn(async () => undefined),
+		};
+		const coverageRepository = {
+			recordQueryResult: vi.fn(async () => undefined),
+			recordRecords: vi.fn(async () => undefined),
+		};
+		const fetcher = vi.fn(async (url: string) =>
+			response([
+				{
+					id: url.includes('sku=KEY-101') ? 101 : '101',
+					sku: 'KEY-101',
+					name: 'Keyboard Stand',
+					date_modified_gmt: '2026-05-20T10:10:00',
+					meta_data: posMeta(101),
+				},
+			])
+		);
+		const schedulerFetcher = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			coverageRepository,
+			fetcher,
+		});
+
+		await schedulerFetcher(
+			productTask({
+				id: 'products:search:KEY-101:windowed',
+				queryKey: 'products:search:KEY-101',
+				limit: 2,
+			})
+		);
+
+		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ records: [{ id: 'woo-product:101' }] })
+		);
+		expect(coverageRepository.recordRecords).not.toHaveBeenCalled();
+	});
+
 	it('ends on the advertised last page when the hit count is an exact page multiple', async () => {
 		const products = Array.from({ length: 100 }, (_, index) => ({
 			id: index + 1,
@@ -2443,7 +2484,8 @@ describe('createProductsSchedulerFetcher', () => {
 
 	it('still fails a 400 on page 1 — that is a bad request, not the end of a set', async () => {
 		const fetcher = vi.fn(
-			async (_url: string) => new Response('{"code":"rest_invalid_param"}', { status: 400 })
+			async (_url: string) =>
+				new Response('{"code":"rest_post_invalid_page_number"}', { status: 400 })
 		);
 		const run = createProductsSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
