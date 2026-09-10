@@ -2,18 +2,14 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 
 import { useTheme } from '../../../../../contexts/theme';
 import { enterReceipt, leaveCheckout } from '../checkout-mode';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
-
-const ORDER_REFRESH_TIMEOUT_MS = 10_000;
-const logger = getLogger(['wcpos', 'pos', 'checkout']);
+import { reconcileCompletedOrder } from './reconcile-completed-order';
 
 export interface CompleteOrderFlowOptions {
 	/**
@@ -35,7 +31,6 @@ export function useCompleteOrderFlow(
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const { setCurrentOrderID } = useCurrentOrderActions();
-	const orderId = useRecordField(order, (record) => record.payload.id);
 
 	return React.useCallback(
 		async ({ refresh = true }: CompleteOrderFlowOptions = {}) => {
@@ -47,48 +42,7 @@ export function useCompleteOrderFlow(
 			if (receiptHost === 'stage' && uiSettings.autoShowReceipt) {
 				enterReceipt(order.uuid);
 			}
-			if (refresh) {
-				if (!orderId) {
-					throw new Error('checkout_refresh_requires_persisted_order');
-				}
-				const handle = runtime.engine.require({
-					id: `checkout:order-refresh:${orderId}`,
-					collection: 'orders',
-					kind: 'targeted-records',
-					remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-					forceRefresh: true,
-				});
-				let timer: ReturnType<typeof setTimeout> | undefined;
-				try {
-					await Promise.race([
-						handle.ready,
-						new Promise<void>((resolve) => {
-							timer = setTimeout(resolve, ORDER_REFRESH_TIMEOUT_MS);
-						}),
-					]);
-				} catch (error) {
-					// The payment is already recorded and the receipt stage already shown; a
-					// refresh that fails must degrade to the local record, not surface as a
-					// payment error and skip the stock reconciliation below.
-					logger.warn('Post-payment order refresh failed; completing from the local record', {
-						context: {
-							orderId: order.uuid,
-							error: error instanceof Error ? error.message : String(error),
-						},
-					});
-				} finally {
-					if (timer) clearTimeout(timer);
-					handle.release();
-				}
-			}
-
-			const latest = order.getLatest().payload;
-			const reducedStockItems = (latest.line_items || []).filter((item) =>
-				(item.meta_data as { key: string }[] | undefined)?.some(
-					(meta) => meta.key === '_reduced_stock'
-				)
-			);
-			stockAdjustment(reducedStockItems);
+			await reconcileCompletedOrder(runtime, order, refresh, stockAdjustment);
 
 			// The pre-tender contract checkout still hosts receipts in a routed modal.
 			if (receiptHost === 'modal') {
@@ -114,7 +68,6 @@ export function useCompleteOrderFlow(
 			receiptHost,
 			runtime,
 			order,
-			orderId,
 			router,
 			screenSize,
 			setCurrentOrderID,
