@@ -323,7 +323,9 @@ The identity of one installed till — the workstation a session is opened on. T
 left-hand menu item is "Register": it is keyed on this device's register, and the cashier
 signs in inside it. A register belongs to exactly one store: bound to the store chosen at
 its first sign-in, moved to another only by an administrator while it has no open session,
-its numbering unbroken by the move. A store has any number of registers.
+its numbering unbroken by the move. Every closure records the store the register belonged
+to when it was written, and a store's figures are summed from those closures, so moving a
+register moves no history. A store has any number of registers.
 _Avoid_: till (prose synonym only, never in UI or code), station, device, terminal (that is
 a card reader)
 
@@ -381,14 +383,19 @@ cannot read the X-report or other registers' closures.
 _Avoid_: hidden count, blind close
 
 **Variance threshold**:
-A store setting: the variance above which a close needs an override. Blank means no
-threshold, and every variance closes without one. Never per role and never per register.
+A store setting: the size of variance, over or short alike, beyond which a close needs an
+override — the comparison ignores the sign. Blank means no threshold, and every variance
+closes without one. Never per role and never per register.
 _Avoid_: tolerance, max difference
 
 **Override**:
-A manager approving, by entering their own credential on the cashier's till, an action the
-cashier may not take alone: a close above the variance threshold, a recount, closing a
-forgotten session from another register. Both people are recorded on the row.
+A holder of `manage_woocommerce_pos_closures` (managers by default) approving, by entering
+their own credential on the cashier's till, an action the cashier may not take alone: a
+close beyond the variance threshold, a recount, closing a forgotten session from another
+register. The record the action writes — the closure or the correction — names the cashier
+as its actor and the manager as its approver, two identities, never one. A session closed
+from another register is numbered on the forgotten register's behalf, so the sequence
+stays gap-free.
 _Avoid_: manager PIN, approval code, supervisor unlock
 
 **Closure**:
