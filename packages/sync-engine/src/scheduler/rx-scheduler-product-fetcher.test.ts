@@ -2266,13 +2266,14 @@ describe('createProductsSchedulerFetcher', () => {
 		]);
 	});
 
-	it('records a complete lane with every cross-leg row when both legs exhaust past the window', async () => {
+	it('records a complete lane of search rows and covers a sku-only hit as a record, not a lane member', async () => {
 		const repository = {
 			upsertMany: vi.fn(async () => undefined),
 			removeMany: vi.fn(async () => undefined),
 		};
 		const coverageRepository = {
 			recordQueryResult: vi.fn(async () => undefined),
+			recordRecords: vi.fn(async () => undefined),
 		};
 		// Both legs exhaust (short pages) and their union (3) exceeds limit (2). Nothing is
 		// trimmed to the window any more, so every row is recorded and the lane IS complete —
@@ -2321,13 +2322,142 @@ describe('createProductsSchedulerFetcher', () => {
 			})
 		);
 
+		// The lane's id count is the search walk's page cursor, so the sku-only row 101 must
+		// not join it — it is covered as a record and still persisted (and rendered) first.
 		expect(coverageRepository.recordQueryResult).toHaveBeenCalledWith(
 			expect.objectContaining({
 				complete: true,
-				records: [{ id: 'woo-product:101' }, { id: 'woo-product:201' }, { id: 'woo-product:202' }],
+				records: [{ id: 'woo-product:201' }, { id: 'woo-product:202' }],
 			})
 		);
+		expect(coverageRepository.recordRecords).toHaveBeenCalledWith(
+			expect.objectContaining({ records: [{ id: 'woo-product:101' }] })
+		);
 		expect(result.completed).toBe(true);
+	});
+
+	it('ends on the advertised last page when the hit count is an exact page multiple', async () => {
+		const products = Array.from({ length: 100 }, (_, index) => ({
+			id: index + 1,
+			date_modified_gmt: '2026-05-20T10:10:00',
+			meta_data: posMeta(index + 1),
+		}));
+		const recordQueryResult = vi.fn(async () => undefined);
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (params.has('sku')) return response([]);
+			const size = Number(params.get('per_page'));
+			const offset = (Number(params.get('page')) - 1) * size;
+			return response(products.slice(offset, offset + size), 2, '100');
+		});
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			coverageRepository: { recordQueryResult },
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		const result = await run(productTask({ limit: 120 }));
+
+		// Two FULL pages and X-WP-TotalPages: 2 — never a request for page 3.
+		expect(fetcher.mock.calls.map(([url]) => new URL(url).searchParams.get('page'))).toEqual([
+			'1',
+			'1',
+			'2',
+		]);
+		expect(result).toMatchObject({ documentCount: 100, requestCount: 3, completed: true });
+		expect(recordQueryResult).toHaveBeenCalledWith(expect.objectContaining({ complete: true }));
+	});
+
+	it('treats a 400 on a resumed page past the last as the end of the set', async () => {
+		// A header-stripping proxy hid X-WP-TotalPages, so the first walk recorded 100 ids
+		// incomplete; the resume asks for page 3 and WP answers 400. That is the end.
+		const recordCumulativeQueryResult = vi.fn(async () => undefined);
+		const fetcher = vi.fn(
+			async (_url: string) =>
+				new Response('{"code":"rest_post_invalid_page_number"}', { status: 400 })
+		);
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			coverageRepository: {
+				recordQueryResult: vi.fn(async () => undefined),
+				recordCumulativeQueryResult,
+				readLocalLaneCoverage: vi.fn(async () => ({
+					complete: false,
+					fresh: true,
+					expectedRecordIds: Array.from({ length: 100 }, (_, index) => `woo-product:${index + 1}`),
+				})),
+			},
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		const result = await run(productTask({ limit: 150 }));
+
+		expect(fetcher.mock.calls.map(([url]) => new URL(url).search)).toEqual([
+			'?search=keyboard&per_page=50&page=3&orderby=id&order=desc&status=publish',
+		]);
+		expect(result).toMatchObject({ documentCount: 0, requestCount: 0, completed: true });
+		expect(recordCumulativeQueryResult).toHaveBeenCalledWith(
+			expect.objectContaining({ complete: true, records: [] })
+		);
+	});
+
+	it('still fails a 400 on page 1 — that is a bad request, not the end of a set', async () => {
+		const fetcher = vi.fn(
+			async (_url: string) => new Response('{"code":"rest_invalid_param"}', { status: 400 })
+		);
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		await expect(run(productTask({ limit: 10 }))).rejects.toThrow('400');
+	});
+
+	it('walks at most the page budget in one pass and leaves the lane incomplete for the next', async () => {
+		const products = Array.from({ length: 5_000 }, (_, index) => ({
+			id: index + 1,
+			date_modified_gmt: '2026-05-20T10:10:00',
+			meta_data: posMeta(index + 1),
+		}));
+		const recordQueryResult = vi.fn(async () => undefined);
+		const fetcher = vi.fn(async (url: string) => {
+			const params = new URL(url).searchParams;
+			if (params.has('sku')) return response([]);
+			const size = Number(params.get('per_page'));
+			const offset = (Number(params.get('page')) - 1) * size;
+			return response(products.slice(offset, offset + size));
+		});
+		const run = createProductsSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: {
+				upsertMany: vi.fn(async () => undefined),
+				removeMany: vi.fn(async () => undefined),
+			},
+			coverageRepository: { recordQueryResult },
+			pullBatchSize: () => 50,
+			fetcher,
+		});
+
+		const result = await run(productTask({ limit: 5_000 }));
+
+		// sku leg + BROWSE_WINDOW_MAX_PAGES_PER_DRAIN (50) search pages, then stop — incomplete.
+		expect(result).toMatchObject({ documentCount: 2_500, requestCount: 51, completed: false });
+		expect(recordQueryResult).toHaveBeenCalledWith(expect.objectContaining({ complete: false }));
 	});
 
 	it.each([
