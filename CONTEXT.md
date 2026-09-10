@@ -358,8 +358,10 @@ paid in − paid out. The opening variance is recorded on its own and never carr
 closing variance — each compares a count against what was expected at that moment.
 
 **Counted**:
-The cash the closer declares, entered as one total; a denomination helper is a calculator
-and its breakdown is never stored.
+What the closer declares was taken, entered as one total per payment method counted. Cash
+is always counted; other payment methods may be, so a terminal batch that disagrees with
+the till is caught. A denomination helper is a calculator and its breakdown is never
+stored.
 _Avoid_: actual
 
 **Variance**:
@@ -369,8 +371,10 @@ _Avoid_: discrepancy, difference
 **Closure**:
 The immutable, numbered document written when a session closes. One per session, not per
 day: a closure may span or subdivide a calendar day. It stores its breakdowns as recorded —
-per payment method, per tax rate, counted against expected per tender, the cash movements
-— so reading it next year gives the figures printed on the night. Corrections are separate
+per payment method, per tax rate, counted against expected for each payment method that
+was counted, the cash movements — so reading it next year gives the figures printed on
+the night. It carries two kinds of money figure and keeps them apart: payment figures,
+summed from the payment rows bound to the session, and the grand total, a sales figure. Corrections are separate
 records that point at it; the closure itself never changes.
 _Avoid_: end of day, Z-report (for the record — that is its print), shift report
 
@@ -382,9 +386,12 @@ renumbering. Read with the register's name: "Closure 12 · Front counter".
 _Avoid_: Z number, report id, global sequence
 
 **Grand total**:
-The value of sales completed in a closure's session, tax inclusive, with refunds kept as a
-separate total rather than netted off. The pair is stored on every closure.
-_Avoid_: net sales (for this concept), turnover (in UI)
+The tax-inclusive value of the sales that completed in a closure's session, with refunds
+kept as a separate total rather than netted off. It is a sales figure keyed on completion,
+deliberately not a payment figure: a deposit taken yesterday for a sale completed today is
+in yesterday's payment figures and today's grand total, and the closure shows both, as a
+layby always did. The pair is stored on every closure.
+_Avoid_: net sales (for this concept), turnover (in UI), payments total (for this concept)
 
 **Perpetual grand total**:
 The running sum of a register's grand totals since its counters began — sales and refunds
@@ -409,10 +416,11 @@ _Avoid_: Z-report (for any date-range summary)
 **Session on the sale**:
 Which session a sale's money belongs to. Each payment row binds to the session open on the
 register when it was tendered, so a deposit taken yesterday counts in yesterday's drawer
-and the balance paid today in today's. Expected and every closure figure are summed from
-payment and refund rows by that tender-time session, never from the sale's completing
-session or its order total. The sale itself records the session it completed in, a key
-for reports and receipts only. Membership is only ever by the stamped session, never
+and the balance paid today in today's. Expected and every payment figure on a closure are
+summed from payment and refund rows by that tender-time session, never from the sale's
+completing session or its order total. The sale itself records the session it completed
+in; that key drives reports and receipts and the closure's grand total, which is a sales
+figure and the one deliberate exception to the tender-time rule. Membership is only ever by the stamped session, never
 inferred from a time window or from whichever session is open when the sale reaches the
 server. The range report stays an order-level, date-range report outside this rule.
 _Avoid_: shift on the order, current session (for a late-arriving sale)
