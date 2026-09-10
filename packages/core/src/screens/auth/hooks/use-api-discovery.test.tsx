@@ -120,6 +120,24 @@ describe('useApiDiscovery', () => {
 		}
 	);
 
+	it('reports a bot challenge blocking the API', async () => {
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 403'), {
+				response: {
+					status: 403,
+					headers: { 'cf-mitigated': 'challenge', 'content-type': 'text/html; charset=UTF-8' },
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({ errorCode: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API });
+		});
+	});
+
 	it('reports the existing WooCommerce error for a light response missing wc/v3', async () => {
 		mockGet.mockResolvedValue({
 			data: { ...siteData, namespaces: ['wcpos/v2'] },
