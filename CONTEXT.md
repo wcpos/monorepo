@@ -323,12 +323,13 @@ from the previous close) and a counted value, so an opening variance exists.
 _Avoid_: starting cash, opening balance
 
 **Cash movement**:
-A cash event inside a session that is not a sale: `paid_in` or `paid_out`, each a positive
-amount with the direction in its type, plus a reason.
+A cash event inside a session that is not a sale, typed `paid_in`, `paid_out` or `no_sale`,
+each with a reason. `paid_in` and `paid_out` carry a positive amount with the direction in
+the type; `no_sale` carries a zero amount.
 _Avoid_: drop, pickup (as types), adjustment
 
 **No sale**:
-A zero-amount, permissioned movement that opens the drawer without a sale.
+The zero-amount, permissioned cash movement that opens the drawer without a sale.
 
 **Expected**:
 The cash the drawer should hold: the *counted* opening float + cash sales − cash refunds +
