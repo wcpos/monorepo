@@ -353,8 +353,10 @@ _Avoid_: drop, pickup (as types), adjustment, edit/delete (of a movement)
 The zero-amount, permissioned cash movement that opens the drawer without a sale.
 
 **Expected**:
-The cash the drawer should hold: the *counted* opening float + cash sales − cash refunds +
-paid in − paid out. The opening variance is recorded on its own and never carries into the
+What a payment method should have taken over the session, per method. For cash it is the
+drawer: the *counted* opening float + cash sales − cash refunds + paid in − paid out. For
+any other payment method it is the sum of that method's payment rows bound to the session,
+less its refunds. The opening variance is recorded on its own and never carries into the
 closing variance — each compares a count against what was expected at that moment.
 
 **Counted**:
@@ -365,7 +367,8 @@ stored.
 _Avoid_: actual
 
 **Variance**:
-Counted minus expected — over or short — recorded at open and at close.
+Counted minus expected — over or short — for each payment method counted, recorded at open
+(cash only) and at close. A method that was not counted has no variance, not a zero one.
 _Avoid_: discrepancy, difference
 
 **Closure**:
