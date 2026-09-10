@@ -297,7 +297,7 @@ carried by the merchant's WordPress site as a mailbox; not the data path.
 ## Language — Cashiers & till
 
 Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, tickets #207, #208,
-#210, #209 and #211).
+#210, #209, #211 and #212).
 
 **Cashier**:
 A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
@@ -368,12 +368,40 @@ _Avoid_: discrepancy, difference
 
 **Closure**:
 The immutable, numbered document written when a session closes. One per session, not per
-day: a closure may span or subdivide a calendar day.
-_Avoid_: end of day, Z-report (for the record — that is its print)
+day: a closure may span or subdivide a calendar day. It stores its breakdowns as recorded —
+per payment method, per tax rate, counted against expected per tender, the cash movements
+— so reading it next year gives the figures printed on the night. Corrections are separate
+records that point at it; the closure itself never changes.
+_Avoid_: end of day, Z-report (for the record — that is its print), shift report
+
+**Closure number**:
+The closure's place in its register's sequence: ascending, gap-free, never reset, one
+sequence per register. The register assigns it at close, so the print carries it even
+offline; the server checks it on arrival and treats a gap or a duplicate as a fault, never
+renumbering. Read with the register's name: "Closure 12 · Front counter".
+_Avoid_: Z number, report id, global sequence
+
+**Grand total**:
+The value of sales completed in a closure's session, tax inclusive, with refunds kept as a
+separate total rather than netted off. The pair is stored on every closure.
+_Avoid_: net sales (for this concept), turnover (in UI)
+
+**Perpetual grand total**:
+The running sum of a register's grand totals since its counters began — sales and refunds
+as two counters — carried from each closure to the next, never decreasing and never reset,
+including across upgrades. A store-wide figure is the sum across registers.
+_Avoid_: lifetime sales, cumulative total, reset
+
+**Recount**:
+A correction that supplies a new counted figure for a closure after it was written,
+with its actor and reason. The closure keeps the figure as recorded; the recount gives the
+settled one.
+_Avoid_: edit count, reopen, amend
 
 **X-report / Z-report**:
-The two printed renderings: an X-report reads an open session without closing it; a
-Z-report is the print of a closure. Today's Reports screen prints a date-range sales
+The two printed renderings: an X-report reads an open session without closing it and is
+never stored; a Z-report is the print of a closure, printed once at close, every later
+print being a marked copy. Today's Reports screen prints a date-range sales
 summary under the name "Z-report"; that is a **range report**, not a Z-report, and it is
 renamed when closures land.
 _Avoid_: Z-report (for any date-range summary)
