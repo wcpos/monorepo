@@ -17,6 +17,9 @@ if (transformIgnorePatterns.join('\n') === expoPreset.transformIgnorePatterns.jo
 
 module.exports = {
 	preset: 'jest-expo',
+	moduleNameMapper: {
+		'^@wcpos/order-math$': '<rootDir>/../../packages/order-math/src',
+	},
 	testPathIgnorePatterns: [
 		'/node_modules/',
 		'<rootDir>/e2e/',

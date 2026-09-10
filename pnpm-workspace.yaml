@@ -124,6 +124,9 @@ allowBuilds:
   # fails outright (ERR_PNPM_IGNORED_BUILDS broke the 1.10.5 Publish Web Bundle run).
   "@sentry/cli": true
   "@shopify/react-native-skia": true
+  # Its postinstall only prunes a stray @types/minimatch inside its own folder; nothing we
+  # consume depends on it, so it stays unapproved like @firebase/util.
+  "@stripe/stripe-terminal-react-native": false
   "@tailwindcss/oxide": true
   "core-js": true
   "eccrypto": false

@@ -46,14 +46,14 @@ export function ReaderConnection({
 			if (!driver?.connect) return;
 			const handoff = online ? await bootstrap(reader.transport) : null;
 			if (!active()) return;
-			await driver.connect(reader, handoff);
+			await driver.connect(reader, handoff ? { ...handoff, method_id: method.id } : null);
 			if (!active()) return;
 			pickTransport(reader.transport);
 			await remember(reader.id);
 			if (!active()) return;
 			setReaders(null);
 		},
-		[driver, online, bootstrap, pickTransport, remember]
+		[driver, online, bootstrap, pickTransport, remember, method.id]
 	);
 	const run = async (operation: () => Promise<void>) => {
 		if (working || disabled) return;

@@ -9,7 +9,7 @@ import packageJson from './package.json';
  * $1 Android) for a client whose JS comes from Metro anyway. Move it only when
  * a native change forces a new dev-client build regardless.
  */
-const DEV_CLIENT_NATIVE_VERSION = '1.10.3';
+const DEV_CLIENT_NATIVE_VERSION = '1.10.4';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
 	const easProfile = process.env.EAS_BUILD_PROFILE ?? 'production';
@@ -67,14 +67,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				ITSAppUsesNonExemptEncryption: false,
 				// Keep in step with the react-native-ble-plx plugin entry below — the
 				// plugin's withInfoPlist mod runs after this static merge, so both must
-				// carry the same combined printers+scanners wording.
+				// carry the same combined readers+printers+scanners wording.
 				NSBluetoothAlwaysUsageDescription:
 					iosInfoPlist.NSBluetoothAlwaysUsageDescription ??
-					'WCPOS uses Bluetooth to connect supported barcode scanners and receipt printers.',
+					'WCPOS uses Bluetooth to connect card readers, supported barcode scanners and receipt printers.',
 				// Local network access for printer discovery
 				NSLocalNetworkUsageDescription:
 					iosInfoPlist.NSLocalNetworkUsageDescription ??
-					'WCPOS needs local network access to discover and connect to receipt printers.',
+					'WCPOS uses the local network to connect card readers and receipt printers.',
 				// Bonjour services for printer discovery
 				NSBonjourServices: Array.from(
 					new Set([...bonjourServices, '_ipp._tcp', '_ipps._tcp', '_pdl-datastream._tcp'])
@@ -136,6 +136,21 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 					disableAutoUpload: easProfile !== 'production',
 				},
 			],
+			// Expo 57 already supplies compile/target SDK >= 35; only the minimum must move.
+			['expo-build-properties', { android: { minSdkVersion: 26 } }],
+			[
+				'@stripe/stripe-terminal-react-native',
+				{
+					bluetoothBackgroundMode: true,
+					locationWhenInUsePermission:
+						'WCPOS uses your location to connect card readers and accept payments.',
+					bluetoothPeripheralPermission: 'WCPOS uses Bluetooth to connect card readers.',
+					bluetoothAlwaysUsagePermission:
+						'WCPOS uses Bluetooth to connect card readers, supported barcode scanners and receipt printers.',
+					localNetworkUsagePermission:
+						'WCPOS uses the local network to connect card readers and receipt printers.',
+				},
+			],
 			'./plugins/with-printer-support',
 			'./plugins/with-wedge-key-events',
 			[
@@ -167,11 +182,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				'react-native-ble-plx',
 				{
 					// iOS app-mode scanning for supported BLE barcode scanners (#1461).
-					// Foreground only — no background modes requested. This overwrites the
+					// Scanner discovery is foreground-only; Stripe enables background Bluetooth.
+					// This overwrites the
 					// static infoPlist NSBluetoothAlwaysUsageDescription above at prebuild;
-					// both carry the same combined printers+scanners wording.
+					// both carry the same combined readers+printers+scanners wording.
 					bluetoothAlwaysPermission:
-						'WCPOS uses Bluetooth to connect supported barcode scanners and receipt printers.',
+						'WCPOS uses Bluetooth to connect card readers, supported barcode scanners and receipt printers.',
 				},
 			],
 			[
