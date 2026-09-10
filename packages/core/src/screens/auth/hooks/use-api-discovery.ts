@@ -14,6 +14,7 @@ import {
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 
+import { isBotChallengeError } from './bot-challenge';
 import { useT } from '../../../contexts/translations';
 import {
 	isWcposPluginCompatible,
@@ -112,6 +113,17 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 	const handleApiError = React.useCallback(
 		(error: unknown, wpApiUrl: string): never => {
+			if (isBotChallengeError(error)) {
+				const message = t('auth.host_compatibility_problem');
+				discoveryLogger.error(message, {
+					showToast: true,
+					toast: { title: message },
+					code: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API,
+					context: { wpApiUrl },
+				});
+				throw errorWithCode(message, ERROR_CODES.BOT_CHALLENGE_BLOCKING_API);
+			}
+
 			// If it's already one of our logged errors, re-throw
 			if (error instanceof ApiDiscoveryError) {
 				throw error;
