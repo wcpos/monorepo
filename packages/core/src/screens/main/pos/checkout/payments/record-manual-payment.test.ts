@@ -378,3 +378,68 @@ it.each([
 	expect(meta.some((entry: { key: string }) => entry.key === '_wcpos_payments')).toBe(true);
 	expect(meta.includes(tuple)).toBe(completes);
 });
+
+it.each(['0.00', '42.50'])(
+	'persists provenance before posting the full online balance after %s paid',
+	async (paid) => {
+		const calls: string[] = [];
+		const deps = {
+			...createDeps(),
+			persistProvenance: jest.fn(async () => {
+				await Promise.resolve();
+				calls.push('persisted');
+			}),
+		};
+		deps.post.mockImplementation(async () => {
+			calls.push('post');
+			return { data: {} };
+		});
+		const paymentOrder = {
+			...order,
+			meta_data: [
+				...order.meta_data,
+				{
+					key: '_wcpos_payments',
+					value: { schema: 1, payments: [{ ...mintedCard, amount: paid }] },
+				},
+			],
+		};
+
+		const result = await recordManualPayment(
+			paymentOrder,
+			cash,
+			{ amount: paid === '0.00' ? '100.00' : '57.50' },
+			deps
+		);
+
+		expect(result).toMatchObject({ kind: 'recorded', via: 'online' });
+		expect(calls).toEqual(['persisted', 'post']);
+	}
+);
+
+it('does not persist provenance for a partial online leg', async () => {
+	const deps = { ...createDeps(), persistProvenance: jest.fn(async () => undefined) };
+	deps.post.mockResolvedValue({ data: {} });
+
+	await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+
+	expect(deps.persistProvenance).not.toHaveBeenCalled();
+	expect(deps.post).toHaveBeenCalledTimes(1);
+});
+
+it('returns a failed outcome without posting or enqueueing when provenance persistence throws', async () => {
+	const deps = {
+		...createDeps(),
+		persistProvenance: jest.fn(async () => {
+			throw new Error('save failed');
+		}),
+	};
+	deps.post.mockResolvedValue({ data: {} });
+
+	const result = await recordManualPayment(order, cash, { amount: '100.00' }, deps);
+
+	expect(result).toEqual({ kind: 'failed', reason: 'provenance_save_failed' });
+	expect(deps.post).not.toHaveBeenCalled();
+	expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
+	expect(deps.mirror).not.toHaveBeenCalled();
+});

@@ -5,6 +5,7 @@ import {
 	isCompletingStatus,
 	mintManualPayment,
 	readLedger,
+	toMinor,
 	upsertPaymentRow,
 	withLedger,
 } from '@wcpos/order-math';
@@ -41,6 +42,7 @@ export interface RecordManualPaymentDeps {
 	storeId: number | null;
 	registerId: string | null;
 	completionMeta?: (meta: MetaDataEntry[]) => Promise<MetaDataEntry[]>;
+	persistProvenance?: () => Promise<void>;
 	currency: string;
 	dp: number;
 	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
@@ -70,6 +72,7 @@ export type RecordManualPaymentOutcome =
 			order: OrderPaymentSummary | null;
 	  }
 	| { kind: 'refused'; reason: RefusalReason; row: PaymentRow; order: OrderPaymentSummary | null }
+	| { kind: 'failed'; reason: 'provenance_save_failed' }
 	| { kind: 'invalid'; reason: InvalidReason };
 
 export class RecordManualPaymentError extends Error {
@@ -155,6 +158,15 @@ export async function recordManualPayment(
 	};
 
 	if (!online) return writeOffline(minted.row);
+
+	const { balance } = derive(order.total, readLedger(order.meta_data), [method], { dp: deps.dp });
+	if (toMinor(minted.row.amount, deps.dp) === toMinor(balance, deps.dp)) {
+		try {
+			await deps.persistProvenance?.();
+		} catch {
+			return { kind: 'failed', reason: 'provenance_save_failed' };
+		}
+	}
 
 	// Only the request is inside the try: once the server has answered 2xx the row is
 	// recorded, and a failure while mirroring it locally must surface as that failure —
