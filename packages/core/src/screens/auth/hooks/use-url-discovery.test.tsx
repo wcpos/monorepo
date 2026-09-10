@@ -97,6 +97,22 @@ describe('useUrlDiscovery', () => {
 		});
 	});
 
+	it('recognises a challenge whose header name is not lower-cased', async () => {
+		mockHead.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 403'), {
+				response: {
+					status: 403,
+					headers: { 'CF-Mitigated': 'Challenge', 'Content-Type': 'text/html' },
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toMatchObject({
+			errorCode: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API,
+		});
+	});
+
 	it('discovers the fallback URL when only the Link-header probe is challenged', async () => {
 		mockHead.mockRejectedValueOnce(
 			Object.assign(new Error('Request failed with status code 403'), {
