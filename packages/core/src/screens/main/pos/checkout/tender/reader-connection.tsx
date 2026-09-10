@@ -8,8 +8,6 @@ import type { PaymentMethodDescriptor, PaymentTransport } from '@wcpos/order-mat
 
 import { useT } from '../../../../../contexts/translations';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
-import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
-import { useRememberedReader } from './remembered-readers';
 import { deviceTransports } from './tiles';
 import { useDriverStatus } from './use-driver-status';
 
@@ -17,46 +15,45 @@ import type { ReaderInfo } from '../../../../../services/payment-drivers/types';
 
 export function ReaderConnection({
 	method,
+	bootstrap,
+	remembered,
+	remember,
 	transport,
 	pickTransport,
 	online,
 	disabled,
 }: {
 	method: PaymentMethodDescriptor;
+	remembered: string | null;
+	remember: (readerId: string) => Promise<void>;
+	bootstrap: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
 	transport: PaymentTransport | null;
 	pickTransport: (transport: PaymentTransport) => void;
 	online: boolean;
 	disabled: boolean;
 }) {
 	const t = useT();
-	const http = useRestHttpClient();
 	const driver = getDriver(method.capture.provider);
 	const status = useDriverStatus(driver);
-	const { readerId: remembered, remember } = useRememberedReader(method.id);
 	const [readers, setReaders] = React.useState<ReaderInfo[] | null>(null);
 	const [error, setError] = React.useState<string | null>(null);
 	const [working, setWorking] = React.useState(false);
 	const attempted = React.useRef(false);
+	const reconnect = React.useRef<{ cancelled: boolean } | null>(null);
 	const transports = deviceTransports(method);
 	const connect = React.useCallback(
 		async (reader: ReaderInfo, active: () => boolean = () => true) => {
 			if (!driver?.connect) return;
-			const response = online
-				? await http.post(`payment-methods/${method.id}/bootstrap`, {
-						context: { transport: reader.transport },
-					})
-				: null;
+			const handoff = online ? await bootstrap(reader.transport) : null;
 			if (!active()) return;
-			const handoff =
-				(response?.data as { handoff?: Record<string, unknown> | null } | undefined)?.handoff ??
-				null;
 			await driver.connect(reader, handoff);
 			if (!active()) return;
 			pickTransport(reader.transport);
 			await remember(reader.id);
+			if (!active()) return;
 			setReaders(null);
 		},
-		[driver, online, http, method.id, pickTransport, remember]
+		[driver, online, bootstrap, pickTransport, remember]
 	);
 	const run = async (operation: () => Promise<void>) => {
 		if (working || disabled) return;
@@ -73,10 +70,17 @@ export function ReaderConnection({
 	};
 	// Reconnect an externally loaded preference once when this method's keypad mounts.
 	React.useEffect(() => {
+		if (reconnect.current?.cancelled) {
+			reconnect.current = null;
+			// eslint-disable-next-line react-you-might-not-need-an-effect/no-adjust-state-on-prop-change, react-you-might-not-need-an-effect/no-external-store-subscription -- Release the cancelled run only while mounted.
+			setWorking(false);
+		}
 		if (!remembered || attempted.current || !driver?.discoverReaders || disabled) return;
 		attempted.current = true;
 		let active = true;
-		// eslint-disable-next-line react-you-might-not-need-an-effect/no-adjust-state-on-prop-change -- Reconnect an externally loaded preference; this begins async driver work.
+		const operation = { cancelled: false };
+		reconnect.current = operation;
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-adjust-state-on-prop-change, react-you-might-not-need-an-effect/no-external-store-subscription -- Reconnect an externally loaded preference; this begins async driver work.
 		setWorking(true);
 		void (async () => {
 			for (const item of deviceTransports(method)) {
@@ -99,10 +103,17 @@ export function ReaderConnection({
 				if (active) setError(error instanceof Error ? error.message : String(error));
 			})
 			.finally(() => {
-				if (active) setWorking(false);
+				if (active && reconnect.current === operation) {
+					reconnect.current = null;
+					setWorking(false);
+				}
 			});
 		return () => {
 			active = false;
+			if (reconnect.current === operation) {
+				operation.cancelled = true;
+				attempted.current = false;
+			}
 		};
 	}, [remembered, driver, method, disabled, connect, pickTransport]);
 	let line = t('pos_checkout.reader_disconnected');

@@ -1,3 +1,4 @@
+import { getLogger } from '@wcpos/utils/logger';
 import type { PaymentRow } from '@wcpos/order-math';
 
 import { createDeviceLeg } from '../../screens/main/pos/checkout/payments/device/device-leg';
@@ -257,4 +258,160 @@ it('authorized offline rows never occupy a live leg on resume', async () => {
 	).toBeUndefined();
 	expect(c.service.get('order')).toBeNull();
 	expect(c.service.readersInUse().size).toBe(0);
+});
+
+function offlineSetup(refs: PaymentRow['provider_refs'] = { payment_intent: 'pi' }) {
+	const c = setup();
+	let emit!: (event: { rowId: string; provider_refs: Record<string, unknown> }) => void;
+	registerDriver({
+		...createSimulatedDriver(),
+		settleOffline$: {
+			subscribe: (listener) => {
+				emit = listener;
+				return () => {};
+			},
+		},
+	});
+	const schedule = jest.fn((callback: () => void, ms: number) => setTimeout(callback, ms));
+	const clear = jest.fn((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer));
+	const patch = jest.fn(async (_uuid: string, _row: PaymentRow) => {});
+	const service = new TerminalPaymentsService({
+		...c.options,
+		isOnline: () => true,
+		setTimeout: schedule,
+		clearTimeout: clear,
+		patchAndEnqueue: patch,
+	});
+	service.trackOffline({
+		...input,
+		row: { ...deviceRow, status: 'authorized', recorded_offline: true, provider_refs: refs },
+	});
+	return { ...c, service, emit, schedule, clear, patch };
+}
+it('recovers transaction-id-only settlement and ignores all-null references', async () => {
+	const c = offlineSetup({ transaction_id: 'txn' });
+	await c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledWith('orders/42/payments/leg/capture', {
+		context: { provider_refs: { transaction_id: 'txn' } },
+	});
+	const empty = offlineSetup({ transaction_id: null });
+	await empty.service.flushOffline();
+	empty.emit({ rowId: 'leg', provider_refs: { transaction_id: null } });
+	await jest.advanceTimersByTimeAsync(0);
+	expect(empty.http.post).not.toHaveBeenCalled();
+	c.service.stop();
+	empty.service.stop();
+});
+it('retries failed settlement at 5, 30 and 120 seconds then waits for another trigger', async () => {
+	const c = offlineSetup();
+	c.http.post.mockRejectedValue(new Error('capture unavailable'));
+	await c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledTimes(1);
+	for (const [index, delay] of [5000, 30000, 120000].entries()) {
+		expect(c.schedule).toHaveBeenLastCalledWith(expect.any(Function), delay);
+		expect(jest.getTimerCount()).toBe(1);
+		await jest.advanceTimersByTimeAsync(delay - 1);
+		expect(c.http.post).toHaveBeenCalledTimes(index + 1);
+		await jest.advanceTimersByTimeAsync(1);
+		expect(c.http.post).toHaveBeenCalledTimes(index + 2);
+	}
+	await jest.advanceTimersByTimeAsync(600000);
+	expect(c.http.post).toHaveBeenCalledTimes(4);
+	expect(jest.getTimerCount()).toBe(0);
+	expect(getLogger([]).warn).toHaveBeenCalledWith('Offline payment settlement failed', {
+		context: { paymentId: 'leg', error: 'capture unavailable' },
+	});
+	await c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledTimes(5);
+	expect(c.schedule).toHaveBeenLastCalledWith(expect.any(Function), 5000);
+	c.service.stop();
+});
+it('stop clears the one pending settlement retry', async () => {
+	const c = offlineSetup();
+	c.http.post.mockRejectedValue(new Error('capture unavailable'));
+	await c.service.flushOffline();
+	await c.service.flushOffline();
+	expect(jest.getTimerCount()).toBe(1);
+	c.service.stop();
+	expect(c.clear).toHaveBeenCalled();
+	expect(jest.getTimerCount()).toBe(0);
+	await jest.advanceTimersByTimeAsync(600000);
+	expect(c.http.post).toHaveBeenCalledTimes(2);
+});
+it('coalesces concurrent flushes and drains one follow-up using updated refs', async () => {
+	const c = offlineSetup();
+	let reject!: (error: Error) => void;
+	c.http.post.mockImplementationOnce(
+		() =>
+			new Promise((_resolve, no) => {
+				reject = no;
+			})
+	);
+	const first = c.service.flushOffline();
+	await jest.advanceTimersByTimeAsync(0);
+	c.emit({ rowId: 'leg', provider_refs: { transaction_id: 'updated' } });
+	const second = c.service.flushOffline();
+	const third = c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledTimes(1);
+	reject(new Error('stale refs'));
+	await Promise.all([first, second, third]);
+	expect(c.http.post).toHaveBeenCalledTimes(2);
+	expect(c.http.post).toHaveBeenLastCalledWith('orders/42/payments/leg/capture', {
+		context: { provider_refs: { transaction_id: 'updated' } },
+	});
+	expect(c.patch).toHaveBeenCalledWith(
+		'order',
+		expect.objectContaining({ provider_refs: { transaction_id: 'updated' } })
+	);
+	c.service.stop();
+});
+it('reserves one driver across two different methods', async () => {
+	const c = setup();
+	registerDriver({ ...createSimulatedDriver(), collect: () => new Promise(() => {}) });
+	c.service.begin({ ...input, row: deviceRow, method: deviceMethod });
+	expect(c.service.readersInUse().has('device:simulated')).toBe(true);
+	expect(() =>
+		c.service.begin({
+			...input,
+			orderUuid: 'other',
+			row: { ...deviceRow, id: 'other-leg', method_id: 'other-method' },
+			method: { ...deviceMethod, id: 'other-method' },
+		})
+	).toThrow();
+	c.service.stop();
+});
+it.each([{ token: 'reader-token', method_id: 'wrong' }, null, undefined])(
+	'bootstraps connection material with the requested method identity',
+	async (handoff) => {
+		const post = jest.fn(async () => ({ data: { handoff } }));
+		const service = new TerminalPaymentsService({
+			http: { post, get: jest.fn() },
+			mirror: async () => {},
+		});
+		expect(await service.bootstrap('device', { transport: 'bluetooth' })).toEqual(
+			handoff ? { token: 'reader-token', method_id: 'device' } : null
+		);
+		expect(post).toHaveBeenCalledWith('payment-methods/device/bootstrap', {
+			context: { transport: 'bluetooth' },
+		});
+		service.stop();
+	}
+);
+
+it('restores transaction references when an already tracked row hydrates', async () => {
+	const c = offlineSetup({ transaction_id: null });
+	c.service.trackOffline({
+		...input,
+		row: {
+			...deviceRow,
+			status: 'authorized',
+			recorded_offline: true,
+			provider_refs: { transaction_id: 'hydrated' },
+		},
+	});
+	await c.service.flushOffline();
+	expect(c.http.post).toHaveBeenCalledWith('orders/42/payments/leg/capture', {
+		context: { provider_refs: { transaction_id: 'hydrated' } },
+	});
+	c.service.stop();
 });

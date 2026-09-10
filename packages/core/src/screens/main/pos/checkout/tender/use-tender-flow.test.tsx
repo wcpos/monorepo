@@ -944,6 +944,32 @@ describe('device tender', () => {
 		resetCheckoutMode();
 		mockBegin.mockImplementation(() => {});
 	});
+	it('provides bootstrap and remembered-reader operations from the flow', async () => {
+		const { TerminalPaymentsService } = jest.requireActual<
+			typeof import('../../../../../services/terminal-payments/service')
+		>('../../../../../services/terminal-payments/service');
+		const post = jest.fn(async () => ({ data: { handoff: { token: 'connection' } } }));
+		mockRealService = new TerminalPaymentsService({
+			http: { post, get: jest.fn() },
+			mirror: async () => {},
+		});
+		registerDriver(createSimulatedDriver());
+		mockReaderPreferences.device = 'remembered';
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.pickMethod('device'));
+		expect(result.current.rememberedReaderId).toBe('remembered');
+		await expect(result.current.bootstrapReader('bluetooth')).resolves.toEqual({
+			token: 'connection',
+			method_id: 'device',
+		});
+		expect(post).toHaveBeenCalledWith('payment-methods/device/bootstrap', {
+			context: { transport: 'bluetooth' },
+		});
+		await act(async () => result.current.rememberReader('replacement'));
+		expect(mockReaderPreferences.device).toBe('replacement');
+		mockRealService.stop();
+		mockRealService = null;
+	});
 	it('requires connection and routes device tender to the terminal service, not manual recording', async () => {
 		const driver = createSimulatedDriver();
 		registerDriver(driver);

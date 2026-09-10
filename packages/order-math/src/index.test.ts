@@ -15,6 +15,7 @@ test('public value surface is exactly the spec', () => {
 		'isActiveFeeLine',
 		'isActiveLineItem',
 		'isActiveShippingLine',
+		'mintDevicePayment',
 		'mintManualPayment',
 		'mintServerPayment',
 		'readLedger',

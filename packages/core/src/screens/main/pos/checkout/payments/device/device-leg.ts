@@ -212,7 +212,11 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			await confirm();
 			return;
 		}
-		if (!deps.driver || !input.method) throw new Error('Device driver or method missing');
+		if (!deps.driver || !input.method) {
+			set({ error: { code: 'device_driver_missing', message: 'Device driver or method missing' } });
+			finish('failed');
+			return;
+		}
 		set({ phase: 'creating', deadlineAt: deps.now() + 300000 });
 		timer = deps.setTimeout(() => {
 			if (active()) {

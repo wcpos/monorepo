@@ -288,6 +288,9 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 			    leg the amount is already right and WHICH reader is the decision. */}
 			{method.capture.mode === 'device' && flow.pickTransport ? (
 				<ReaderConnection
+					bootstrap={flow.bootstrapReader}
+					remembered={flow.rememberedReaderId}
+					remember={flow.rememberReader}
 					method={method}
 					transport={flow.deviceTransport ?? null}
 					pickTransport={flow.pickTransport}

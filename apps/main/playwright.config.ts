@@ -163,6 +163,7 @@ export default defineConfig<WcposTestOptions>({
 							// for three skips, run 33617749219). Exclude at collection instead.
 							/server-created-visibility\.spec\.ts/,
 							/checkout-tender\.spec\.ts/,
+							/checkout-device\.spec\.ts/,
 							COLD_SPEC,
 							LIVE_SPEC,
 						],

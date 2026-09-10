@@ -20,7 +20,7 @@ function deferred<T>() {
 	});
 	return { promise, resolve };
 }
-function setup(offline = false, resume = false) {
+function setup(offline = false, resume = false, missing?: 'driver' | 'method') {
 	const collection = deferred<CollectResult>();
 	const driver: PaymentDriver = {
 		provider: 'simulated',
@@ -50,7 +50,7 @@ function setup(offline = false, resume = false) {
 		{
 			post,
 			get: (url) => post(url, undefined),
-			driver,
+			driver: missing === 'driver' ? undefined : driver,
 			mirror,
 			patchAndEnqueue,
 			now: Date.now,
@@ -58,7 +58,15 @@ function setup(offline = false, resume = false) {
 			clearTimeout,
 			onFinal,
 		},
-		{ orderId: 42, row, method, transport: 'bluetooth', offline, tipEligibleMinor: 1000, resume }
+		{
+			orderId: 42,
+			row,
+			method: missing === 'method' ? undefined : method,
+			transport: 'bluetooth',
+			offline,
+			tipEligibleMinor: 1000,
+			resume,
+		}
 	);
 	return { leg, driver, post, mirror, patchAndEnqueue, onFinal, collection };
 }
@@ -327,3 +335,18 @@ it('resumes an online authorization by checking the server, never recollecting o
 	expect(c.post).toHaveBeenLastCalledWith('orders/42/payments/leg/void', { reason: 'cashier' });
 	expect(leg.getState().outcome).toBe('voided');
 });
+
+it.each(['driver', 'method'] as const)(
+	'finalizes instead of rejecting when %s is missing',
+	async (missing) => {
+		const c = setup(false, false, missing);
+		await expect(c.leg.start()).resolves.toBeUndefined();
+		expect(c.leg.getState()).toMatchObject({
+			phase: 'final',
+			outcome: 'failed',
+			error: { code: 'device_driver_missing' },
+		});
+		expect(c.onFinal).toHaveBeenCalledTimes(1);
+		expect(c.post).not.toHaveBeenCalled();
+	}
+);

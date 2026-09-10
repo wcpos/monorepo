@@ -69,6 +69,9 @@ const logger = getLogger(['wcpos', 'pos', 'checkout', 'tender']);
 const QUICK_TENDER_STEPS = [5, 10, 50] as const;
 
 export interface TenderFlow {
+	rememberedReaderId: string | null;
+	rememberReader: (readerId: string) => Promise<void>;
+	bootstrapReader: (transport: PaymentTransport) => Promise<Record<string, unknown> | null>;
 	deviceTransport?: PaymentTransport | null;
 	pickTransport?: (transport: PaymentTransport) => void;
 	deviceReady?: boolean;
@@ -189,6 +192,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		state.methodId && tiles.some(({ method: tile }) => tile.id === state.methodId)
 			? (byId.get(state.methodId) ?? null)
 			: null;
+	const bootstrapReader = React.useCallback(
+		async (transport: PaymentTransport) => {
+			const currentService = getTerminalPaymentsService();
+			if (!currentService || !method) throw new Error('Device payment service or method missing');
+			return currentService.bootstrap(method.id, { transport });
+		},
+		[method]
+	);
 	const driver = method?.capture.mode === 'device' ? getDriver(method.capture.provider) : undefined;
 	const deviceStatus = useDriverStatus(driver);
 	const deviceReaderId = deviceStatus.reader?.id ?? null;
@@ -581,7 +592,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 
 	return React.useMemo(
 		() => ({
+			rememberedReaderId: remembered,
+			rememberReader: remember,
 			terminalLeg,
+			bootstrapReader,
 			deviceTransport,
 			pickTransport,
 			deviceReady,
@@ -633,7 +647,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			cancelPayment,
 		}),
 		[
+			remembered,
+			remember,
 			terminalLeg,
+			bootstrapReader,
 			deviceTransport,
 			pickTransport,
 			deviceReady,

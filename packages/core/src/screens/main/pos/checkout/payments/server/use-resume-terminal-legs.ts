@@ -23,7 +23,11 @@ function resumeOrder(order: EngineRecord<'orders'>) {
 	if (!service) return;
 	const rows = readLedger(payload.meta_data);
 	for (const row of rows) {
-		if (row.capture_mode === 'device' && row.recorded_offline)
+		if (
+			row.capture_mode === 'device' &&
+			row.recorded_offline &&
+			(payload.id || row.status === 'authorized')
+		)
 			service.trackOffline({
 				orderUuid: order.uuid,
 				orderId: payload.id ?? 0,
@@ -35,7 +39,7 @@ function resumeOrder(order: EngineRecord<'orders'>) {
 	const row = rows.find(resumableTerminalRow);
 	const tracked = service.get(order.uuid);
 	if (tracked && (tracked.phase !== 'final' || tracked.row.id === row?.id)) return;
-	if (row && (payload.id || row.capture_mode === 'device'))
+	if (row && payload.id)
 		service.resume({
 			orderUuid: order.uuid,
 			orderId: payload.id ?? 0,

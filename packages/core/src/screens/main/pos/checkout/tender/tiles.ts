@@ -116,7 +116,7 @@ export function buildTenderTiles(
 			} else if (method.capture.mode === 'device') {
 				const driver = getDriver(method.capture.provider);
 				const availability = driver?.availability();
-				const holder = options.readersInUse?.get(`device:${method.id}`);
+				const holder = options.readersInUse?.get(`device:${method.capture.provider}`);
 				if (
 					!driver ||
 					!transport ||
@@ -147,7 +147,7 @@ export function buildTenderTiles(
 				method,
 				disabled: reason !== null,
 				reason,
-				settlesLater,
+				settlesLater: !options.online && settlesLater,
 				worksOffline: method.capture.mode === 'manual' && method.capabilities.offline === 'record',
 			};
 		});

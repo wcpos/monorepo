@@ -1,3 +1,4 @@
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import type {
 	OrderPaymentSummary,
 	PaymentMethodDescriptor,
@@ -21,6 +22,11 @@ import type {
 	ServerLegResponse,
 	ServerLegState,
 } from '../../screens/main/pos/checkout/payments/server/server-leg';
+
+const logger = getLogger(['wcpos', 'terminal-payments']);
+const SETTLEMENT_RETRY_DELAYS = [5000, 30000, 120000];
+const hasProviderRefs = (refs: Record<string, unknown>) =>
+	Object.values(refs).some((value) => value !== null && value !== undefined);
 
 export interface TerminalPaymentsServiceOptions {
 	factories?: { server?: typeof createServerLeg; device?: typeof createDeviceLeg };
@@ -61,10 +67,18 @@ export class TerminalPaymentsService {
 	private snapshot: ReadonlyMap<string, TerminalLegState> = new Map();
 	private offline = new Map<
 		string,
-		{ input: ResumeInput; refs?: Record<string, unknown>; busy: boolean; persisted: boolean }
+		{
+			input: ResumeInput;
+			refs?: Record<string, unknown>;
+			persisted: boolean;
+			retries: number;
+			timer?: ReturnType<typeof setTimeout>;
+		}
 	>();
 	private unsubscribers: (() => void)[] = [];
 	private stopped = false;
+	private flushing: Promise<void> | null = null;
+	private pendingFlush = false;
 	constructor(private options: TerminalPaymentsServiceOptions) {
 		for (const driver of listDrivers()) {
 			const unsubscribe = driver.settleOffline$?.subscribe((event) => {
@@ -74,21 +88,35 @@ export class TerminalPaymentsService {
 			if (unsubscribe) this.unsubscribers.push(unsubscribe);
 		}
 	}
+	async bootstrap(
+		methodId: string,
+		context: Record<string, unknown>
+	): Promise<Record<string, unknown> | null> {
+		const response = await this.options.http.post(`payment-methods/${methodId}/bootstrap`, {
+			context,
+		});
+		const handoff = (response.data as { handoff?: Record<string, unknown> | null }).handoff;
+		return handoff ? { ...handoff, method_id: methodId } : null;
+	}
 	trackOffline(input: ResumeInput): void {
 		const existing = this.offline.get(input.row.id);
 		if (['captured', 'failed', 'voided'].includes(input.row.status)) {
+			if (existing?.timer !== undefined)
+				(this.options.clearTimeout ?? clearTimeout)(existing.timer);
 			this.offline.delete(input.row.id);
 			return;
 		}
 		if (existing) {
 			existing.input = input;
+			if (existing.persisted && hasProviderRefs(input.row.provider_refs))
+				existing.refs = input.row.provider_refs;
 			return;
 		}
 		this.offline.set(input.row.id, {
 			input,
-			busy: false,
+			retries: 0,
 			persisted: true,
-			refs: input.row.provider_refs.payment_intent ? input.row.provider_refs : undefined,
+			refs: hasProviderRefs(input.row.provider_refs) ? input.row.provider_refs : undefined,
 		});
 	}
 	private async settleOffline(event: OfflineSettlement): Promise<void> {
@@ -98,18 +126,47 @@ export class TerminalPaymentsService {
 		entry.persisted = false;
 		await this.flushOffline();
 	}
-	async flushOffline(): Promise<void> {
+	flushOffline(): Promise<void> {
+		// An external trigger starts a fresh bounded retry budget, without adding a second timer.
 		for (const entry of this.offline.values()) {
-			if (this.stopped || entry.busy || !entry.refs || entry.input.row.status !== 'authorized')
+			if (entry.timer === undefined) entry.retries = 0;
+		}
+		return this.requestOfflineFlush();
+	}
+	private requestOfflineFlush(): Promise<void> {
+		if (this.flushing) {
+			this.pendingFlush = true;
+			return this.flushing;
+		}
+		this.flushing = (async () => {
+			try {
+				do {
+					this.pendingFlush = false;
+					await this.flushOfflinePass();
+				} while (this.pendingFlush && !this.stopped);
+			} finally {
+				this.flushing = null;
+			}
+		})();
+		return this.flushing;
+	}
+	private async flushOfflinePass(): Promise<void> {
+		for (const entry of this.offline.values()) {
+			if (
+				this.stopped ||
+				!entry.refs ||
+				!hasProviderRefs(entry.refs) ||
+				entry.input.row.status !== 'authorized'
+			)
 				continue;
-			entry.busy = true;
+			const refs = entry.refs;
 			try {
 				const { orderUuid, row } = entry.input;
 				// Persist the settlement reference before a request so a reload can reconcile it.
-				const settled = { ...row, provider_refs: offlineProviderRefs(entry.refs) };
+				const settled = { ...row, provider_refs: offlineProviderRefs(refs) };
 				if (!entry.persisted) {
 					await this.options.patchAndEnqueue?.(orderUuid, settled);
-					entry.persisted = true;
+					entry.persisted = entry.refs === refs;
 				}
 				if (this.stopped || !this.options.isOnline?.()) continue;
 				const id = this.options.resolveOrderId
@@ -117,7 +174,7 @@ export class TerminalPaymentsService {
 					: entry.input.orderId;
 				if (this.stopped || !id) continue;
 				const response = await this.options.http.post(`orders/${id}/payments/${row.id}/capture`, {
-					context: { provider_refs: entry.refs },
+					context: { provider_refs: refs },
 				});
 				if (this.stopped) return;
 				const data = response.data as ServerLegResponse;
@@ -126,12 +183,27 @@ export class TerminalPaymentsService {
 					data.payment.status === 'captured' ||
 					data.payment.status === 'failed' ||
 					data.payment.status === 'voided'
-				)
+				) {
+					if (entry.timer !== undefined) (this.options.clearTimeout ?? clearTimeout)(entry.timer);
 					this.offline.delete(row.id);
-			} catch {
-				// Keep the authorized row and references; a later online/hydration event can reconcile it.
-			} finally {
-				entry.busy = false;
+				}
+			} catch (error) {
+				logger.warn('Offline payment settlement failed', {
+					context: { paymentId: entry.input.row.id, error: getErrorMessage(error) },
+				});
+				if (
+					!this.stopped &&
+					entry.timer === undefined &&
+					entry.retries < SETTLEMENT_RETRY_DELAYS.length
+				) {
+					entry.timer = (
+						this.options.setTimeout ??
+						((callback: () => void, ms: number) => setTimeout(callback, ms))
+					)(() => {
+						entry.timer = undefined;
+						void this.requestOfflineFlush();
+					}, SETTLEMENT_RETRY_DELAYS[entry.retries++]);
+				}
 			}
 		}
 	}
@@ -178,7 +250,7 @@ export class TerminalPaymentsService {
 			},
 		};
 		const device = input.row.capture_mode === 'device';
-		if (device && !resume && this.readersInUse().has(`device:${input.row.method_id}`))
+		if (device && !resume && this.readersInUse().has(`device:${input.row.provider}`))
 			throw new Error('Device method already in use');
 		if (input.offline) this.trackOffline(input);
 		const leg = device
@@ -234,7 +306,7 @@ export class TerminalPaymentsService {
 			// began on another till or before a reload) still names the reader it holds.
 			const reader =
 				state.row.capture_mode === 'device'
-					? `device:${state.row.method_id}`
+					? `device:${state.row.provider}`
 					: (state.row.provider_refs?.reader ?? state.reader);
 			if (state.phase !== 'final' && reader)
 				readers.set(reader, { orderUuid, orderNumber: state.orderNumber });
@@ -259,6 +331,9 @@ export class TerminalPaymentsService {
 	}
 	stop(): void {
 		this.stopped = true;
+		this.offline.forEach((entry) => {
+			if (entry.timer !== undefined) (this.options.clearTimeout ?? clearTimeout)(entry.timer);
+		});
 		this.unsubscribers.forEach((fn) => fn());
 		this.legs.forEach(({ leg }) => leg.stop());
 	}

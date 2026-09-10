@@ -15,15 +15,7 @@ import { ThisPaymentLine } from './ledger-pane';
 import type { TenderFlow } from './use-tender-flow';
 
 const mockPush = jest.fn();
-const mockBootstrap = jest.fn(async () => ({ data: { handoff: { token: 'reader-token' } } }));
-const mockReaderHttp = { post: mockBootstrap };
-const mockReaderDB = { addState: async () => ({ get: () => null, set: async () => {} }) };
-jest.mock('../../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => mockReaderHttp,
-}));
-jest.mock('../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ storeDB: mockReaderDB }),
-}));
+const mockBootstrap = jest.fn(async () => ({ token: 'reader-token', method_id: 'device' }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
@@ -103,6 +95,9 @@ const method: PaymentMethodDescriptor = {
 
 function makeFlow(count = 1): TenderFlow {
 	return {
+		bootstrapReader: mockBootstrap,
+		rememberedReaderId: null,
+		rememberReader: jest.fn(async () => {}),
 		state: initialTenderState,
 		dispatch: jest.fn(),
 		dp: 2,
@@ -380,12 +375,60 @@ it('device status, discovery, bootstrap and transport choice drive payment readi
 		fireEvent.click(screen.getByTestId('checkout-reader-option-sim-approve'));
 		await new Promise((resolve) => setTimeout(resolve, 350));
 	});
-	expect(mockBootstrap).toHaveBeenCalledWith('payment-methods/device/bootstrap', {
-		context: { transport: 'bluetooth' },
-	});
+	expect(mockBootstrap).toHaveBeenCalledWith('bluetooth');
 	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('Connected');
 	rendered.rerender(<TenderPane flow={{ ...flow, deviceReady: true }} format={String} />);
 	expect(screen.getByTestId('checkout-take-payment').hasAttribute('disabled')).toBe(false);
 	fireEvent.click(screen.getByTestId('checkout-transport-tap_to_pay'));
 	expect(transportChanges).toHaveBeenCalledWith('tap_to_pay');
 });
+
+it.each(['discovery', 'bootstrap'] as const)(
+	'restarts superseded %s without leaving controls disabled',
+	async (stage) => {
+		const reader = { id: 'remembered', label: 'Remembered', transport: 'bluetooth' as const };
+		let resolve!: () => void;
+		const pending = new Promise<void>((yes) => {
+			resolve = yes;
+		});
+		const discoverReaders = jest.fn(async () => [reader]);
+		const bootstrapReader = jest.fn(async () => ({ token: 'new' }));
+		if (stage === 'discovery')
+			discoverReaders.mockImplementationOnce(async () => {
+				await pending;
+				return [reader];
+			});
+		else
+			bootstrapReader.mockImplementationOnce(async () => {
+				await pending;
+				return { token: 'old' };
+			});
+		const connect = jest.fn(async () => {});
+		registerDriver({ ...createSimulatedDriver(), discoverReaders, connect });
+		const flow = {
+			...makeFlow(),
+			saveState: null,
+			method: deviceMethod,
+			rememberedReaderId: 'remembered',
+			pickTransport: jest.fn(),
+			bootstrapReader,
+			deviceTransport: 'bluetooth' as const,
+		};
+		const rendered = render(<TenderPane flow={flow} format={String} />);
+		await act(async () => {});
+		expect(screen.getByTestId('checkout-reader-connect').hasAttribute('disabled')).toBe(true);
+		await act(async () => {
+			rendered.rerender(<TenderPane flow={{ ...flow, online: false }} format={String} />);
+		});
+		expect(screen.getByTestId('checkout-reader-connect').hasAttribute('disabled')).toBe(false);
+		expect(connect).toHaveBeenCalledTimes(1);
+		expect(connect).toHaveBeenLastCalledWith(reader, null);
+		await act(async () => {
+			resolve();
+			await pending;
+		});
+		expect(connect).toHaveBeenCalledTimes(1);
+		expect(screen.getByTestId('checkout-reader-connect').hasAttribute('disabled')).toBe(false);
+		rendered.unmount();
+	}
+);
