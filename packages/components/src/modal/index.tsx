@@ -203,11 +203,9 @@ const modalContentVariants = cva(
 			},
 			side: {
 				center: '',
-				right:
-					'web:slide-in-from-right h-full max-h-full max-w-full rounded-none rounded-l-lg rounded-r-none border-r-0',
-				left: 'web:slide-in-from-left h-full max-h-full max-w-full rounded-none rounded-l-none rounded-r-lg border-l-0',
-				bottom:
-					'web:slide-in-from-bottom max-h-[85%] w-full max-w-full rounded-none rounded-t-lg rounded-b-none border-b-0',
+				right: 'web:slide-in-from-right h-full max-h-full max-w-full rounded-none border-r-0',
+				left: 'web:slide-in-from-left h-full max-h-full max-w-full rounded-none border-l-0',
+				bottom: 'web:slide-in-from-bottom max-h-[85%] w-full max-w-full rounded-none border-b-0',
 			},
 		},
 		defaultVariants: {
