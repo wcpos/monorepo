@@ -21,6 +21,7 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
 import { OVERLAY_FADE_MS, PANEL_SLIDE_MS, PANEL_SLIDE_OUT_MS } from '../lib/overlay-motion';
+import { usePortalContainer } from '../lib/portal-container';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -82,9 +83,57 @@ function DialogOverlayWeb({
 				side !== 'center' && '[&>[role=dialog]]:contents',
 				className
 			)}
+			// The scrim is a Pressable, so RN-web would give it tabIndex=0 and the click that
+			// opened the dialog can land on it and focus it. A focus during a side panel's
+			// enter animation scrolls the nearest scrollable ancestor (see focusAfterSlideIn).
+			focusable={false}
 			{...props}
 		/>
 	);
+}
+
+const TEXT_FIELD =
+	'input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled])';
+const TABBABLE = `a[href],button:not([disabled]),${TEXT_FIELD},[tabindex]:not([tabindex="-1"])`;
+
+/**
+ * Web only, side panels only. Radix focuses the first tabbable the moment the content
+ * mounts, while `slide-in-from-*` still has the panel translated a full width off-screen.
+ * The browser then scrolls the nearest scrollable ancestor (in the POS that is a
+ * react-native-screens wrapper) to reveal the focused element, and the whole screen
+ * lurches sideways as the animation brings the panel back. So: cancel the mount-time
+ * autofocus and focus the first field — without scrolling — once the animation ends.
+ *
+ * Takes the node as STATE, not a ref: a trigger-opened dialog's content mounts one
+ * render after `open` flips (Radix Presence), so a ref is still null when an effect
+ * keyed on `open` runs, and that effect would never re-run.
+ */
+function useFocusAfterSlideIn(node: HTMLElement | null, open: boolean, side: DialogSide) {
+	React.useEffect(() => {
+		if (Platform.OS !== 'web' || side === 'center' || !open || !node) return;
+		let done = false;
+		const focusFirst = () => {
+			if (done) return;
+			done = true;
+			if (node.contains(document.activeElement)) return;
+			const target =
+				node.querySelector<HTMLElement>(TEXT_FIELD) ??
+				node.querySelector<HTMLElement>(TABBABLE) ??
+				node;
+			target.focus({ preventScroll: true });
+		};
+		const onAnimationEnd = (event: AnimationEvent) => {
+			if (event.target === node) focusFirst();
+		};
+		node.addEventListener('animationend', onAnimationEnd);
+		// Reduced-motion or a missing keyframe never fires animationend; the timer covers it.
+		const timer = setTimeout(focusFirst, PANEL_SLIDE_MS + 50);
+		return () => {
+			done = true;
+			clearTimeout(timer);
+			node.removeEventListener('animationend', onAnimationEnd);
+		};
+	}, [node, open, side]);
 }
 
 function DialogOverlayNative({
@@ -169,6 +218,7 @@ function DialogContent({
 	side = 'center',
 	children,
 	portalHost,
+	onOpenAutoFocus,
 	...props
 }: DialogPrimitive.ContentProps &
 	Omit<VariantProps<typeof dialogContentVariants>, 'side'> & {
@@ -176,10 +226,27 @@ function DialogContent({
 		portalHost?: string;
 	}) {
 	const { open } = DialogPrimitive.useRootContext();
+	const container = usePortalContainer(portalHost);
+	const deferAutoFocus = Platform.OS === 'web' && side !== 'center';
+	const [contentNode, setContentNode] = React.useState<HTMLElement | null>(null);
+	useFocusAfterSlideIn(contentNode, open, side);
 	return (
-		<DialogPortal hostName={portalHost}>
+		<DialogPortal hostName={portalHost} container={container}>
 			<DialogOverlay side={side}>
 				<DialogPrimitive.Content
+					ref={
+						deferAutoFocus
+							? (setContentNode as unknown as React.Ref<DialogPrimitive.ContentRef>)
+							: undefined
+					}
+					onOpenAutoFocus={
+						deferAutoFocus
+							? (event) => {
+									event.preventDefault();
+									onOpenAutoFocus?.(event);
+								}
+							: onOpenAutoFocus
+					}
 					className={cn(
 						dialogContentVariants({ size, side }),
 						open

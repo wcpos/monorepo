@@ -27,6 +27,7 @@ import { CameraScannerPanel } from './camera-scanner-panel';
 import { StorageOutageBanner } from './storage-outage-banner';
 import { ProductGrid } from './grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
+import { oppositeOverlaySide, usePOSOverlaySide } from '../contexts/overlay-side';
 import { UISettingsForm } from './ui-settings-form';
 import { POSFilterBar } from './filter-bar/pos-filter-bar';
 import { getPOSProductSort } from './pos-product-sort';
@@ -147,6 +148,7 @@ function POSProductsContent({
 	isColumn?: boolean;
 	showOutOfStock: boolean;
 }) {
+	const side = usePOSOverlaySide();
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
@@ -299,7 +301,11 @@ function POSProductsContent({
 									onToggle={() => setScannerOpen((open) => !open)}
 								/>
 								<ViewModeToggle />
-								<UISettingsDialog title={t('common.product_settings')}>
+								<UISettingsDialog
+									side={oppositeOverlaySide(side)}
+									portalHost="pos"
+									title={t('common.product_settings')}
+								>
 									<UISettingsForm />
 								</UISettingsDialog>
 							</HStack>

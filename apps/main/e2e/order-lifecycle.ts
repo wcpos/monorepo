@@ -177,16 +177,16 @@ export function newRunLabel(): string {
 }
 
 /**
- * Stamp the run label onto the order via the cart's order-note UI, so the
+ * Stamp the run label onto the order via the cart's Order Meta UI, so the
  * created order is identifiable in the shared store.
  */
 export async function stampRunLabel(page: Page, label: string): Promise<void> {
-	await page.getByTestId('order-note-button').click();
+	await page.getByTestId('order-meta-button').click();
 	const input = page.getByTestId('order-note-input');
 	await expect(input).toBeVisible({ timeout: 15_000 });
 	await input.fill(label);
-	await page.getByTestId('add-note-button').click();
-	await expect(page.getByTestId('order-note-dialog')).toBeHidden({ timeout: 15_000 });
+	await page.getByTestId('order-meta-save').click();
+	await expect(page.getByTestId('order-meta-dialog')).toBeHidden({ timeout: 15_000 });
 }
 
 /**

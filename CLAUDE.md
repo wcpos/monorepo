@@ -86,6 +86,10 @@ E2E specs must pass against **any** store — never against one store's remember
 - **Infra identities are keyed by well-known username, never server-specific ids.** The `e2e-product-writer` (shop_manager) identity exists on every dev server with one shared credential pair (`E2E_PRODUCT_WRITER_USER/_PASS` Actions secrets); a new or moved server needs exactly one `wp user create` line and the specs skip-with-reason until it's run.
 - **Leftover probe records on dev stores are acceptable** (owner ruling, 2026-08-07): unique per-run tokens make past probes invisible to future runs; delete in teardown only best-effort, never letting teardown fail a test.
 
+## Standing rulings
+
+- **Web `multiInstance` is `true`. Do not flip it.** Multi-tab of one store is first-class (#1057, closes #1045/#1055). `false` on web is a proven data-loss path (#1049). If Sentry shows `targeted recovery refused: multi-instance` on web, the defect is the gate in `opfs-targeted-recovery.mjs`, not the flag. Read the Decision section of `packages/database/src/adapters/default/README.md` before touching either.
+
 ## Branch lanes
 
 This repo has two permanent trunks:

@@ -13,8 +13,7 @@ import { type EngineRecord, useDocField } from '@wcpos/query';
 import './register-cart-bar-entries';
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
-import { AddNoteButton } from './buttons/add-note';
-import { OrderMetaButton } from './buttons/order-meta';
+import { OrderMetaButton, OrderMetaDialog } from './buttons/order-meta';
 import { PayButton } from './buttons/pay';
 import { SaveButton } from './buttons/save-order';
 import { VoidButton } from './buttons/void';
@@ -26,7 +25,7 @@ import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { CartTable } from './table';
 import { Totals } from './totals';
 import { CartTotalsChangedBanner } from './totals-changed-banner';
-import { useCurrentOrder } from '../contexts/current-order';
+import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 
 const NO_API: SlotContracts['pos.cart.bar']['api'] = {};
 const NEVER_CHANGES = () => () => {};
@@ -45,6 +44,8 @@ export function OpenOrders({
 	useCartSettlement();
 
 	const { currentOrderRecord } = useCurrentOrder();
+	// Keep the dialog mounted on its original order while a send changes the open-order list.
+	const [editingOrder, setEditingOrder] = React.useState<CurrentOrderRecord | null>(null);
 	const stage = useOrderCheckoutStage(currentOrderRecord);
 	const { uiSettings } = useUISettings('pos-cart');
 	const position = useDocField(uiSettings, (value) => value.openOrdersPosition);
@@ -126,10 +127,7 @@ export function OpenOrders({
 							</ErrorBoundary>
 							<HStack className="bg-footer p-2">
 								<View className="flex-1">
-									<AddNoteButton />
-								</View>
-								<View className="flex-1">
-									<OrderMetaButton />
+									<OrderMetaButton onPress={() => setEditingOrder(currentOrderRecord)} />
 								</View>
 								<View className="flex-1">
 									<SaveButton />
@@ -146,6 +144,12 @@ export function OpenOrders({
 					</Card>
 				)}
 			</ErrorBoundary>
+			<OrderMetaDialog
+				order={editingOrder}
+				onOpenChange={(open) => {
+					if (!open) setEditingOrder(null);
+				}}
+			/>
 			{position !== 'top' && cartBar}
 		</VStack>
 	);

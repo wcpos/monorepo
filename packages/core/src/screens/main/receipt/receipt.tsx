@@ -19,6 +19,7 @@ import { ReceiptBody } from './receipt-body';
 import { ReceiptActions } from './receipt-actions';
 import { useReceiptDocument } from './use-receipt-document';
 import { useT } from '../../../contexts/translations';
+import { usePOSOverlaySide } from '../pos/contexts/overlay-side';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'orders'> | null>;
@@ -29,13 +30,14 @@ interface Props {
  *
  */
 export function Receipt({ resource, document }: Props) {
+	const side = usePOSOverlaySide();
 	const order = useObservableSuspense(resource);
 	const t = useT();
 
 	if (!order) {
 		return (
 			<Modal>
-				<ModalContent side="right" size="xl">
+				<ModalContent side={side} size="xl">
 					<ModalHeader>
 						<ModalTitle>
 							<Text>{t('common.no_order_found')}</Text>
@@ -59,10 +61,11 @@ function ReceiptDocument({
 	document?: string;
 }) {
 	const t = useT();
+	const side = usePOSOverlaySide();
 	const doc = useReceiptDocument({ order, autoPrintAllowed: false, document });
 	return (
 		<Modal>
-			<ModalContent side="right" size="xl">
+			<ModalContent side={side} size="xl">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t(document ? 'receipt.refund_receipt' : 'common.receipt')}</Text>
