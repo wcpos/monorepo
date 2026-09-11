@@ -162,4 +162,5 @@ test('shipped OPFS worker contains changelog identity protection exactly once', 
 	const source = readFileSync(shippedWorker, 'utf8');
 	assert.equal(source.match(/WCPOS_CHANGELOG_IDENTITY_PATCH/g)?.length, 1);
 	assert.equal(source.match(/WCPOS_CHANGELOG_INDEX_STATES_PATCH/g)?.length, 1);
+	assert.equal(source.match(/\bPs\(/g)?.length, 2);
 });
