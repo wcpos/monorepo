@@ -803,6 +803,7 @@
 	"receipt.print_receipt": "Print Receipt",
 	"receipt.preview_unavailable": "This template can’t be previewed for this order. Choose another template, or sync the order and try again.",
 	"receipt.receipt_templates": "Receipt Templates",
+	"receipt.refund_receipt": "Refund receipt",
 	"receipt.save_email_to_billing_address": "Save email to Billing Address",
 	"receipt.select_printer": "Select printer",
 	"receipt.select_template": "Select template",

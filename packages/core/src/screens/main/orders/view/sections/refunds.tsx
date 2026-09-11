@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useRouter } from 'expo-router';
 import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
@@ -19,9 +20,18 @@ import { WCRefund } from '../use-order-refunds';
 type OrderPayload = EngineRecord<'orders'>['payload'];
 type LocalRefund = NonNullable<OrderPayload['refunds']>[number];
 
-function RefundCard({ refund, currencySymbol }: { refund: WCRefund; currencySymbol?: string }) {
+function RefundCard({
+	refund,
+	currencySymbol,
+	orderUuid,
+}: {
+	refund: WCRefund;
+	currencySymbol?: string;
+	orderUuid: string;
+}) {
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol });
+	const router = useRouter();
 	const date = useDateFormat(refund.date_created);
 	const lineItems = refund.line_items || [];
 	const reason = refund.reason || '';
@@ -46,6 +56,21 @@ function RefundCard({ refund, currencySymbol }: { refund: WCRefund; currencySymb
 							{t('orders.refunded_by')} {refund.refunded_by}
 						</Text>
 					) : null}
+					{refund.id != null && (
+						<Button
+							variant="ghost"
+							size="sm"
+							testID="refund-receipt-button"
+							onPress={() =>
+								router.push({
+									pathname: '/orders/receipt/[orderId]',
+									params: { orderId: orderUuid, document: `refund:${refund.id}` },
+								})
+							}
+						>
+							<ButtonText>{t('common.receipt')}</ButtonText>
+						</Button>
+					)}
 				</View>
 			</View>
 
@@ -168,9 +193,11 @@ export function RefundsFallback({
 
 function RefundsDetail({
 	order,
+	orderUuid,
 	resource,
 }: {
 	order: OrderPayload;
+	orderUuid: string;
 	resource: ObservableResource<WCRefund[]>;
 }) {
 	const t = useT();
@@ -195,6 +222,7 @@ function RefundsDetail({
 					<RefundCard
 						key={`${refund.id || index}`}
 						refund={refund}
+						orderUuid={orderUuid}
 						currencySymbol={order.currency_symbol}
 					/>
 				))}
@@ -205,13 +233,15 @@ function RefundsDetail({
 
 export function RefundsSection({
 	order,
+	orderUuid,
 	resource,
 }: {
 	order: OrderPayload;
+	orderUuid: string;
 	resource?: ObservableResource<WCRefund[]>;
 }) {
 	if (!order.id || !resource) {
 		return null;
 	}
-	return <RefundsDetail order={order} resource={resource} />;
+	return <RefundsDetail order={order} orderUuid={orderUuid} resource={resource} />;
 }

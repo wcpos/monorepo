@@ -110,3 +110,27 @@ it('accepts the backward-compatible intent option', async () => {
 		params: { mode: 'live', intent: 'print' },
 	});
 });
+
+it('forces fiscal mode and preserves the refund selector for preview, print, and refetch', async () => {
+	mockGet.mockResolvedValue({ data: { data: { fiscal: { document_type: 'refund' } } } });
+	const { result, rerender } = renderHook(
+		({ document }) => useReceiptData({ orderId: 42, mode: 'live', document }),
+		{ initialProps: { document: 'refund:12' } }
+	);
+	await waitFor(() => expect(result.current.hasResponded).toBe(true));
+	expect(mockGet).toHaveBeenLastCalledWith('/receipts/42', {
+		params: { mode: 'fiscal', document: 'refund:12' },
+	});
+	await act(async () => {
+		await result.current.fetchForPrint();
+	});
+	expect(mockGet).toHaveBeenLastCalledWith('/receipts/42', {
+		params: { mode: 'fiscal', document: 'refund:12', intent: 'print' },
+	});
+	mockGet.mockReturnValueOnce(new Promise(() => {}));
+	rerender({ document: 'refund:13' });
+	expect(result.current.data).toBeNull();
+	expect(mockGet).toHaveBeenLastCalledWith('/receipts/42', {
+		params: { mode: 'fiscal', document: 'refund:13' },
+	});
+});

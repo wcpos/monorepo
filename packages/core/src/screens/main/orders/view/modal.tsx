@@ -70,6 +70,7 @@ export function ViewOrderModal({ resource }: Props) {
 							<TotalsSection order={payload} />
 							<RefundsBoundary
 								key={refundsRetryKey}
+								orderUuid={order.uuid}
 								order={payload}
 								onRetry={() => setRefundsRetryKey((key) => key + 1)}
 							/>
@@ -104,20 +105,37 @@ export function ViewOrderModal({ resource }: Props) {
 	);
 }
 
-function RefundsBoundary({ order, onRetry }: { order: OrderPayload; onRetry: () => void }) {
+function RefundsBoundary({
+	order,
+	orderUuid,
+	onRetry,
+}: {
+	order: OrderPayload;
+	orderUuid: string;
+	onRetry: () => void;
+}) {
 	if (!order.id) {
 		return null;
 	}
 
-	return <RefundsResourceBoundary order={order} orderId={order.id} onRetry={onRetry} />;
+	return (
+		<RefundsResourceBoundary
+			order={order}
+			orderUuid={orderUuid}
+			orderId={order.id}
+			onRetry={onRetry}
+		/>
+	);
 }
 
 function RefundsResourceBoundary({
 	order,
+	orderUuid,
 	orderId,
 	onRetry,
 }: {
 	order: OrderPayload;
+	orderUuid: string;
 	orderId: number;
 	onRetry: () => void;
 }) {
@@ -139,7 +157,7 @@ function RefundsResourceBoundary({
 	return (
 		<ErrorBoundary FallbackComponent={RefundsErrorFallback}>
 			<React.Suspense fallback={<RefundsSkeleton />}>
-				<RefundsSection order={order} resource={resource} />
+				<RefundsSection order={order} orderUuid={orderUuid} resource={resource} />
 			</React.Suspense>
 		</ErrorBoundary>
 	);

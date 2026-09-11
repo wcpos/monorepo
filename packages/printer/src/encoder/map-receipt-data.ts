@@ -716,6 +716,8 @@ function mapFiscal(src: Record<string, any>): ReceiptFiscal {
 							Object.keys(emptyReceiptDate()).map((field) => [field, toStr(src[key][field])])
 						) as ReceiptFiscal['sale_time']);
 	}
+	fiscal.is_refund_document =
+		src.is_refund_document == null ? src.document_type === 'refund' : !!src.is_refund_document;
 	if ('document_type' in src) fiscal.document_type = src.document_type || 'sale';
 	if ('sale_tz' in src) fiscal.sale_tz = toStr(src.sale_tz);
 	if ('sale_counter' in src) fiscal.sale_counter = toNullableNum(src.sale_counter);

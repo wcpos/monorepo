@@ -21,9 +21,11 @@ import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num
 export function useReceiptDocument({
 	order,
 	autoPrintAllowed,
+	document,
 }: {
 	order: EngineRecord<'orders'>;
 	autoPrintAllowed: boolean;
+	document?: string;
 }) {
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
@@ -65,6 +67,7 @@ export function useReceiptDocument({
 		orderId,
 		baseReceiptURL,
 		mode: 'live',
+		document,
 		order: orderData,
 	});
 
@@ -80,7 +83,8 @@ export function useReceiptDocument({
 	}, [selectedTemplate]);
 
 	const { download, isDownloading: isDownloadingPdf } = useDownloadReceiptPdf();
-	const downloadReceiptPdf = () => download({ orderId, templateId: templateInfo?.id });
+	const downloadReceiptPdf = () =>
+		download({ orderId, templateId: templateInfo?.id, ...(document ? { document } : {}) });
 	const canDownloadPdf = !isOffline && !isSyncing && Boolean(orderId && templateInfo?.id);
 
 	const previewPaperWidth = React.useMemo(
@@ -164,7 +168,7 @@ export function useReceiptDocument({
 		},
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
-		receiptUrl: templateReceiptUrl || baseReceiptURL,
+		receiptUrl: templateReceiptUrl || (document ? undefined : baseReceiptURL),
 		printerProfile: useSystemDialog ? undefined : (resolvedPrinter ?? undefined),
 		paperWidth: selectedTemplate?.paper_width ?? undefined,
 		decimals: dp,
@@ -176,8 +180,8 @@ export function useReceiptDocument({
 		// Order-based cloud providers (Epson/PrintNode) send these instead of bytes;
 		// the server renders + delivers. templateInfo.id is the server template id
 		// (the same `wcpos_template` id the receipt URL uses as `?template=`).
-		orderId,
-		templateId: templateInfo?.id,
+		orderId: document ? undefined : orderId,
+		templateId: document ? undefined : templateInfo?.id,
 		onBeforePrint: () =>
 			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
 				context: { event: 'receipt.print_attempted', orderId: order.uuid ?? orderId },
@@ -278,6 +282,7 @@ export function useReceiptDocument({
 		(isSyncing || (hasDocument && frameState !== 'loaded'));
 
 	return {
+		...(document ? { document } : {}),
 		autoPrintPending,
 		templates,
 		selectedTemplateId,
@@ -303,7 +308,7 @@ export function useReceiptDocument({
 			contentSize,
 			renderedHtml,
 			receiptUrl: templateReceiptUrl,
-			baseReceiptURL,
+			baseReceiptURL: document ? undefined : baseReceiptURL,
 			iframeRef,
 			handleLoad,
 			handleError,

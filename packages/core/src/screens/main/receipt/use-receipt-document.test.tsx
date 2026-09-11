@@ -453,3 +453,30 @@ describe('print intent through checkout and reprint receipt documents', () => {
 });
 // The service boundary is mocked above; no physical encoder is needed in jsdom.
 jest.mock('@point-of-sale/receipt-printer-encoder', () => jest.fn());
+
+it('withholds sale cloud identifiers and the raw sale preview URL for a refund', () => {
+	const printer = jest.spyOn(
+		jest.requireMock<typeof import('@wcpos/printer')>('@wcpos/printer'),
+		'usePrint'
+	);
+	printer.mockReturnValue({ print: mockPrint, isPrinting: false });
+	try {
+		const refundOrder = {
+			uuid: 'paid',
+			payload: { id: 42, links: { receipt: [{ href: 'https://store.test/sale' }] } },
+		};
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				order: refundOrder as never,
+				autoPrintAllowed: false,
+				document: 'refund:12',
+			})
+		);
+		expect(printer).toHaveBeenLastCalledWith(
+			expect.objectContaining({ orderId: undefined, templateId: undefined })
+		);
+		expect(result.current.previewProps.baseReceiptURL).toBeUndefined();
+	} finally {
+		printer.mockRestore();
+	}
+});

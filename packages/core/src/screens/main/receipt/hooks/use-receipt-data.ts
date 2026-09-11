@@ -38,10 +38,12 @@ interface UseReceiptDataOptions {
 	orderId: number | undefined;
 	mode?: ReceiptMode;
 	intent?: 'print';
+	document?: string;
 }
 
 type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint'> & {
 	orderId: number | undefined;
+	document?: string;
 };
 
 /**
@@ -53,18 +55,24 @@ type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint'> 
  */
 export function useReceiptData({
 	orderId,
-	mode = 'live',
+	mode: requestedMode = 'live',
 	intent,
+	document,
 }: UseReceiptDataOptions): UseReceiptDataResult {
 	const http = useRestHttpClient();
+	const mode = document ? 'fiscal' : requestedMode;
 	const fetchData = React.useCallback(
 		async (requestIntent = intent) => {
 			const response = await http.get(`/receipts/${orderId}`, {
-				params: { mode, ...(requestIntent ? { intent: requestIntent } : {}) },
+				params: {
+					mode,
+					...(document ? { document } : {}),
+					...(requestIntent ? { intent: requestIntent } : {}),
+				},
 			});
 			return response?.data as ReceiptApiResponse;
 		},
-		[http, orderId, mode, intent]
+		[http, orderId, mode, intent, document]
 	);
 	const fetchForPrint = React.useCallback(async () => {
 		if (!orderId) return null;
@@ -73,6 +81,7 @@ export function useReceiptData({
 	const [fetchKey, setFetchKey] = React.useState(0);
 	const [state, setState] = React.useState<ReceiptDataState>({
 		orderId,
+		document,
 		data: null,
 		mode,
 		hasSnapshot: false,
@@ -98,6 +107,7 @@ export function useReceiptData({
 		async function fetchReceipt() {
 			setState({
 				orderId,
+				document,
 				data: null,
 				mode,
 				hasSnapshot: false,
@@ -114,6 +124,7 @@ export function useReceiptData({
 
 				setState({
 					orderId,
+					document,
 					data: res.data ?? null,
 					mode: res.mode ?? mode,
 					hasSnapshot: res.has_snapshot ?? false,
@@ -147,11 +158,11 @@ export function useReceiptData({
 		return () => {
 			cancelled = true;
 		};
-	}, [fetchData, orderId, mode, fetchKey]);
+	}, [fetchData, orderId, mode, fetchKey, document]);
 
 	// When there's no order the result is the empty state regardless of any
 	// previously-fetched data (derived rather than reset via setState).
-	if (!orderId || state.orderId !== orderId) {
+	if (!orderId || state.orderId !== orderId || state.document !== document) {
 		return {
 			data: null,
 			mode,
@@ -165,6 +176,6 @@ export function useReceiptData({
 		};
 	}
 
-	const { orderId: _requestOrderId, ...currentState } = state;
+	const { orderId: _requestOrderId, document: _requestDocument, ...currentState } = state;
 	return { ...currentState, refetch, fetchForPrint };
 }

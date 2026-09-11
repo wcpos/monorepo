@@ -402,3 +402,28 @@ describe('Receipt email action', () => {
 		);
 	});
 });
+
+it('shows the refund title without email and keeps sale actions unchanged', () => {
+	const translations = jest.requireMock('../../../contexts/translations');
+	const { createTestT } = jest.requireActual('../../../../jest/translate');
+	const translation = jest.spyOn(translations, 'useT').mockReturnValue(createTestT());
+	mockSuspenseValue = mockOrder;
+	mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
+	try {
+		const { rerender } = render(<Receipt resource={{} as never} document="refund:12" />);
+		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Refund receipt');
+		expect(screen.queryByTestId('receipt-email-button')).toBeNull();
+		expect(screen.getByTestId('receipt-print-button')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('receipt-download-pdf-button'));
+		expect(mockDownload).toHaveBeenLastCalledWith({
+			orderId: 42,
+			templateId: '7',
+			document: 'refund:12',
+		});
+		rerender(<Receipt resource={{} as never} />);
+		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Receipt');
+		expect(screen.getByTestId('receipt-email-button')).toBeTruthy();
+	} finally {
+		translation.mockRestore();
+	}
+});

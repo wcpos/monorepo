@@ -1100,3 +1100,15 @@ describe('schema 1.4 receipt identity', () => {
 		});
 	});
 });
+
+it.each([undefined, false, true])(
+	'derives a missing refund flag, preserving explicit %s',
+	(flag) => {
+		const mapped = mapReceiptData({
+			...sampleReceiptData,
+			fiscal: { document_type: 'refund', is_refund_document: flag },
+		});
+		expect(mapped.fiscal.is_refund_document).toBe(flag ?? true);
+		expect(ReceiptDataSchema.parse(mapped).fiscal.is_refund_document).toBe(flag ?? true);
+	}
+);
