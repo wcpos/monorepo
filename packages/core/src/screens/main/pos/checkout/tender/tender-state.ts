@@ -2,11 +2,12 @@ import type { PaymentTransport } from '@wcpos/order-math';
 
 export type TenderTab = 'payments' | 'legacy';
 export type TenderView = 'select' | 'amount' | 'cancel';
+export type TenderLineId = string | number;
 
 export type TenderPlan =
 	| { kind: 'even'; ways: number; from: number }
 	| { kind: 'fixed'; firstMinor: number; title: string | null; from: number }
-	| { kind: 'items'; lineIds: number[]; firstMinor: number; ways: number; from: number };
+	| { kind: 'items'; lineIds: TenderLineId[]; firstMinor: number; ways: number; from: number };
 export type SplitTab = 'even' | 'amount' | 'percent' | 'item';
 
 export interface TenderState {
@@ -23,8 +24,8 @@ export interface TenderState {
 	plan: TenderPlan | null;
 	splitView: boolean;
 	splitTab: SplitTab;
-	pickedLineIds: number[];
-	linesPaidBy: Record<number, string[]>;
+	pickedLineIds: TenderLineId[];
+	linesPaidBy: Record<TenderLineId, string[]>;
 }
 
 /** '0'..'9' plus the two edit keys. There is deliberately no decimal key: digits shift in from the right. */
@@ -55,7 +56,7 @@ export type TenderAction =
 	| { type: 'open-split' }
 	| { type: 'close-split' }
 	| { type: 'set-split-tab'; tab: SplitTab }
-	| { type: 'toggle-split-line'; lineId: number }
+	| { type: 'toggle-split-line'; lineId: TenderLineId }
 	| { type: 'set-plan'; plan: TenderPlan; balanceMinor: number }
 	| { type: 'clear-plan'; balanceMinor: number }
 	| { type: 'arm-custom' }
@@ -97,7 +98,7 @@ export function initTenderState({
 export function tenderReducer(state: TenderState, action: TenderAction): TenderState {
 	switch (action.type) {
 		case 'set-tab':
-			return { ...state, tab: action.tab };
+			return { ...state, tab: action.tab, splitView: action.tab === 'payments' && state.splitView };
 		case 'pick-method':
 			return {
 				...state,

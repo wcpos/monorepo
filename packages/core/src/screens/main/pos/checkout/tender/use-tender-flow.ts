@@ -36,6 +36,7 @@ import {
 	type OrderSaveState,
 	setLinesPaidBy,
 	setTenderMethod,
+	setTenderPlan,
 	useTenderMethod,
 } from '../checkout-mode';
 import { usePushDocument } from '../../../contexts/use-push-document';
@@ -45,6 +46,7 @@ import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
+import { getUuidFromLineItem } from '../../hooks/utils';
 import { useRecordManualPayment, useVoidPayments } from '../payments';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
@@ -58,6 +60,7 @@ import {
 	planLegs,
 	quickTenderedAmounts,
 	type TenderAction,
+	type TenderLineId,
 	tenderReducer,
 	type TenderState,
 } from './tender-state';
@@ -106,7 +109,7 @@ export interface TenderFlow {
 	planLegs: ReturnType<typeof planLegs>['legs'];
 	planLabel: string | null;
 	planMore: boolean;
-	lines: { id: number; name: string; quantity: number; totalMinor: number }[];
+	lines: { id: TenderLineId; name: string; quantity: number; totalMinor: number }[];
 	linesPaidBy: TenderState['linesPaidBy'];
 
 	/** The order's ledger rows, in ledger order. */
@@ -190,6 +193,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
 		const methodId = stored?.id ?? first?.id ?? null;
 		const initial = initTenderState({ methodId, balanceMinor });
+		const storedPlan = getCheckoutModeSnapshot().tenderPlans.get(order.uuid) ?? null;
+		const planRows = rows
+			.slice(storedPlan?.from ?? rows.length)
+			.filter(
+				(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
+			)
+			.map((row) => ({
+				minor: toMinor(row.amount, dp),
+				title: byId.get(row.method_id)?.title ?? row.method_id,
+			}));
+		const plan = activePlan(storedPlan, planRows.length, balanceMinor);
 		const { readers, lockToDefault } = selectableReaders(
 			byId.get(methodId ?? '') ?? null,
 			service?.readersInUse(),
@@ -197,6 +211,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		);
 		return {
 			...initial,
+			plan,
+			entryMinor: plan
+				? planLegs(plan, planRows, balanceMinor).thisPaymentMinor
+				: initial.entryMinor,
 			linesPaidBy: getCheckoutModeSnapshot().linesPaidBy.get(order.uuid) ?? {},
 			readerId: initialReaderId(readers, lockToDefault, null),
 		};
@@ -258,18 +276,21 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		}));
 	const plan = activePlan(state.plan, rowsSinceFrom.length, balanceMinor);
 	const figures = plan ? planLegs(plan, rowsSinceFrom, balanceMinor) : null;
-	const lines = (payload.line_items ?? []).flatMap((line) =>
-		line.id === undefined
+	const lines = (payload.line_items ?? []).flatMap((line) => {
+		const id = getUuidFromLineItem(line) ?? line.id;
+		return id === undefined
 			? []
 			: [
 					{
-						id: line.id,
+						id,
 						name: line.name ?? '',
 						quantity: line.quantity ?? 1,
-						totalMinor: toMinor(line.total ?? '0', dp),
+						totalMinor:
+							toMinor(line.total ?? '0', dp) +
+							(store.tax_display_cart === 'incl' ? toMinor(line.total_tax ?? '0', dp) : 0),
 					},
-				]
-	);
+				];
+	});
 	const itemTitle =
 		plan?.kind === 'items'
 			? lines
@@ -321,6 +342,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		(action) => {
 			if (busyRef.current) return;
 			reducerDispatch(action);
+			if (action.type === 'set-plan') setTenderPlan(order.uuid, action.plan);
+			if (action.type === 'clear-plan' || action.type === 'arm-custom' || action.type === 'reset')
+				setTenderPlan(order.uuid, null);
 			// These are the actions that close the keypad; the store mirrors which method holds it.
 			if (action.type === 'back' || action.type === 'reset') setTenderMethod(order.uuid, null);
 		},
@@ -405,6 +429,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			};
 			const next = tenderReducer(state, action);
 			reducerDispatch(action);
+			setTenderPlan(
+				order.uuid,
+				activePlan(state.plan, action.rowsSinceFrom.length, action.balanceMinor)
+			);
 			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
 		},
 		[order, state, dp, byId, totalMinor]

@@ -21,6 +21,7 @@ let mockOnClose: (() => void) | undefined;
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
 let mockNumber = '1187';
+let mockLineItems: NonNullable<import('@wcpos/database').OrderDocument['line_items']> = [];
 
 const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethodDescriptor => ({
 	schema: 1,
@@ -65,7 +66,9 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: str
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
-		select({ payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: [] } }),
+		select({
+			payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: mockLineItems },
+		}),
 }));
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
@@ -180,6 +183,7 @@ describe('TenderCheckout', () => {
 		mockScreenSize = 'lg';
 		mockStage = 'checkout';
 		mockOnClose = undefined;
+		mockLineItems = [];
 		mockFlow = makeFlow();
 	});
 
@@ -202,6 +206,23 @@ describe('TenderCheckout', () => {
 		expect(screen.getByTestId('checkout-server-order-id').textContent).toBe('1187');
 		expect(screen.getByTestId('checkout-order-total').textContent).toBe('$92.95');
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
+	});
+
+	it('keeps an offline line payment badge after the server assigns a numeric ID', () => {
+		mockLineItems = [
+			{
+				id: 123,
+				name: 'Coffee',
+				quantity: 1,
+				total: '10.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
+			},
+		];
+		mockFlow = makeFlow({ linesPaidBy: { 'line-local': ['Cash'] } });
+
+		render(<TenderCheckout order={order} />);
+
+		expect(document.body.textContent).toContain('pos_checkout.line_paid_by');
 	});
 
 	it("drops the ledger on a phone; the pane's own label row carries the balance", () => {

@@ -25,6 +25,7 @@ import { useTheme } from '../../../../../contexts/theme';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
+import { getUuidFromLineItem } from '../../hooks/utils';
 
 interface Props {
 	order: EngineRecord<'orders'>;
@@ -80,7 +81,7 @@ export function TenderCheckout({ order }: Props) {
 	const lines = React.useMemo(
 		() =>
 			(payload.line_items ?? []).map((item) => ({
-				id: item.id,
+				id: getUuidFromLineItem(item) ?? item.id,
 				name: item.name,
 				quantity: item.quantity,
 				total: formatCurrency(Number(item.total ?? 0)),

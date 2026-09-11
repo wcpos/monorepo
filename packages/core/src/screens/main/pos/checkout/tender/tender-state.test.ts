@@ -163,6 +163,10 @@ it('opens tabs, toggles unpaid lines, sets, clears and arms plans', () => {
 	const state = { ...initialTenderState, view: 'amount' as const, linesPaidBy: { 1: ['Cash'] } };
 	const open = tenderReducer(state, { type: 'open-split' });
 	expect(open.splitView).toBe(true);
+	expect(tenderReducer(open, { type: 'set-tab', tab: 'legacy' })).toMatchObject({
+		tab: 'legacy',
+		splitView: false,
+	});
 	const tab = tenderReducer(open, { type: 'set-split-tab', tab: 'item' });
 	expect(tab.splitTab).toBe('item');
 	expect(tenderReducer(tab, { type: 'toggle-split-line', lineId: 1 })).toBe(tab);
