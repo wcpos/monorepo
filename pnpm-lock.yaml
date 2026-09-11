@@ -678,6 +678,9 @@ importers:
       expo-crypto:
         specifier: ~57.0.1
         version: 57.0.1(expo@57.0.14)
+      expo-haptics:
+        specifier: ~57.0.1
+        version: 57.0.1(expo@57.0.14)
       expo-localization:
         specifier: ~57.0.1
         version: 57.0.1(expo@57.0.14)(react@19.2.3)
