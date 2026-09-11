@@ -53,6 +53,8 @@ export function classify(file) {
 		file.startsWith('apps/main/scripts/')
 	)
 		return 'web-helper';
+	// A package manifest keeps the dependency plan even in a leaf package (#1986 review).
+	if (/^packages\/[^/]+\/package\.json$/.test(file)) return 'package-deps';
 	// Leaf packages have no unit lane (their node:test files run as script tests in
 	// Lint), so their test files must not schedule the unit job: a narrowed run that
 	// selects nothing fails the "prove narrowed unit tests ran" guard (#1984).
@@ -67,7 +69,6 @@ export function classify(file) {
 		(/\.test\.(ts|tsx|js|mjs|cjs)$/.test(file) || file.includes('/__tests__/'))
 	)
 		return 'unit-test-file';
-	if (/^packages\/[^/]+\/package\.json$/.test(file)) return 'package-deps';
 	const source = /^(.*)\.(ts|tsx|js|jsx|mjs|cjs)$/.exec(file);
 	if (
 		/^(apps\/main|packages\/[^/]+)\//.test(file) &&
