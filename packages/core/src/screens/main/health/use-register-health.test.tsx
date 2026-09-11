@@ -8,11 +8,14 @@ let mockClient = { get: mockGet };
 jest.mock('../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockClient,
 }));
+let mockSession = { site: { uuid: 'site-a' }, store: { id: 1 } };
+jest.mock('../../../contexts/app-state', () => ({ useStoreSession: () => mockSession }));
 const data = { window_days: 30, skew_seconds: 600, registers: [], unregistered: [] };
 
 beforeEach(() => {
 	mockGet.mockReset();
 	mockClient = { get: mockGet };
+	mockSession = { site: { uuid: 'site-a' }, store: { id: 1 } };
 });
 
 it('fetches health once on mount and exposes the resolved data', async () => {
@@ -81,9 +84,23 @@ it('a store switch (new client) clears the previous findings and fetches again',
 	const other = { ...data, window_days: 7 };
 	mockGet.mockResolvedValueOnce({ data: other });
 	mockClient = { get: mockGet };
+	mockSession = { site: { uuid: 'site-a' }, store: { id: 2 } };
 	rerender();
 	expect(result.current.data).toBeNull();
 	expect(result.current.loading).toBe(true);
 	await waitFor(() => expect(result.current.data).toEqual(other));
+	expect(mockGet).toHaveBeenCalledTimes(2);
+});
+
+it('a same-store client change (connectivity) re-fetches but keeps the loaded findings', async () => {
+	mockGet.mockResolvedValueOnce({ data });
+	const { result, rerender } = renderHook(() => useRegisterHealth());
+	await waitFor(() => expect(result.current.data).toEqual(data));
+	mockGet.mockRejectedValueOnce(new Error('Offline'));
+	mockClient = { get: mockGet };
+	rerender();
+	expect(result.current.data).toEqual(data);
+	await waitFor(() => expect(result.current.error).toBe('Offline'));
+	expect(result.current.data).toEqual(data);
 	expect(mockGet).toHaveBeenCalledTimes(2);
 });

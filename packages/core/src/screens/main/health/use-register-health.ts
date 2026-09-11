@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { getErrorMessage } from '@wcpos/utils/logger';
 
+import { useStoreSession } from '../../../contexts/app-state';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 export type RegisterHealth = {
@@ -56,14 +57,19 @@ export function useRegisterHealth() {
 		},
 		[http]
 	);
-	// One fetch per store client (an external system): a store switch swaps the client,
-	// clears the previous store's findings and fetches the new store's.
+	// The client object also changes with connectivity; only a real store switch clears
+	// the findings. A same-store client change re-fetches but keeps what is loaded.
+	const { site, store } = useStoreSession();
+	const sessionKey = `${site.uuid}:${store.id}`;
+	const previousKey = React.useRef(sessionKey);
 	React.useEffect(() => {
-		void load(true);
+		const switched = previousKey.current !== sessionKey;
+		previousKey.current = sessionKey;
+		void load(switched);
 		return () => {
 			token.current += 1;
 		};
-	}, [load]);
+	}, [load, sessionKey]);
 	const refresh = React.useCallback(() => load(false), [load]);
 	return { ...state, refresh };
 }
