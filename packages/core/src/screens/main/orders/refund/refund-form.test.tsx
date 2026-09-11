@@ -67,6 +67,7 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,
 }));
 jest.mock('@wcpos/components/modal', () => ({
+	ModalBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	ModalAction: ({ children, onPress, loading, disabled, ...props }: any) => (
 		<button
 			type="button"
@@ -78,7 +79,7 @@ jest.mock('@wcpos/components/modal', () => ({
 		</button>
 	),
 	ModalClose: ({ children }: any) => <button>{children}</button>,
-	ModalFooter: ({ children }: any) => <div>{children}</div>,
+	ModalFooter: ({ children }: any) => <div data-testid="modal-footer">{children}</div>,
 }));
 jest.mock('@wcpos/components/table', () => ({
 	Table: ({ children }: any) => <table>{children}</table>,
@@ -406,7 +407,7 @@ describe('RefundOrderForm', () => {
 		);
 	});
 
-	it('renders refund actions in a right-aligned HStack row', async () => {
+	it('renders refund actions in the modal footer, outside the scrolling body', async () => {
 		mockGet.mockResolvedValue({
 			data: order.refunds,
 			headers: { 'x-wp-totalpages': '1' },
@@ -415,7 +416,7 @@ describe('RefundOrderForm', () => {
 		render(<RefundOrderForm order={order} />);
 
 		const processButton = await screen.findByTestId('process-refund-button');
-		expect(processButton.parentElement).toHaveClass('justify-end');
+		expect(processButton.parentElement).toBe(screen.getByTestId('modal-footer'));
 	});
 });
 

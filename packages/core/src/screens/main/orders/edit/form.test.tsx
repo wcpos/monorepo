@@ -100,6 +100,7 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/modal', () => ({
+	ModalBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	ModalAction: ({
 		children,
 		onPress,

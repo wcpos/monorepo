@@ -7,6 +7,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { Form, FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
+import { ModalBody, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -42,9 +43,11 @@ interface CustomerFormProps {
 	onClose: () => void;
 	onSubmit: (data: z.infer<typeof customerFormSchema>) => void;
 	loading: boolean;
+	renderLayout?: (body: React.ReactNode, footer: React.ReactNode) => React.ReactNode;
 }
 
-export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormProps) {
+export function CustomerForm(props: CustomerFormProps) {
+	const { form, onClose, onSubmit, loading, renderLayout } = props;
 	const t = useT();
 
 	/**
@@ -86,7 +89,7 @@ export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormP
 	/**
 	 *
 	 */
-	return (
+	const body = (
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
@@ -195,16 +198,25 @@ export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormP
 				</Collapsible>
 				<TaxIdsForm />
 				<MetaDataForm />
-				{/** TODO: move the buttons to the parent component */}
-				<HStack className="justify-end">
-					<Button testID="customer-form-close" variant="outline" onPress={onClose}>
-						<ButtonText>{t('common.close')}</ButtonText>
-					</Button>
-					<Button testID="customer-form-save" loading={loading} onPress={onSave}>
-						<ButtonText>{t('common.save')}</ButtonText>
-					</Button>
-				</HStack>
 			</VStack>
 		</Form>
+	);
+	const footer = (
+		<HStack className="justify-end">
+			<Button testID="customer-form-close" variant="outline" onPress={onClose}>
+				<ButtonText>{t('common.close')}</ButtonText>
+			</Button>
+			<Button testID="customer-form-save" loading={loading} onPress={onSave}>
+				<ButtonText>{t('common.save')}</ButtonText>
+			</Button>
+		</HStack>
+	);
+
+	if (renderLayout) return renderLayout(body, footer);
+	return (
+		<>
+			<ModalBody>{body}</ModalBody>
+			<ModalFooter>{footer}</ModalFooter>
+		</>
 	);
 }

@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import { Modal, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -84,16 +84,14 @@ export function AddCustomerScreen() {
 						<Text>{t('customers.add_customer')}</Text>
 					</ModalTitle>
 				</ModalHeader>
-				<ModalBody>
-					<ErrorBoundary>
-						<CustomerForm
-							form={form}
-							onSubmit={handleSave}
-							onClose={() => router.back()}
-							loading={loading}
-						/>
-					</ErrorBoundary>
-				</ModalBody>
+				<ErrorBoundary>
+					<CustomerForm
+						form={form}
+						onSubmit={handleSave}
+						onClose={() => router.back()}
+						loading={loading}
+					/>
+				</ErrorBoundary>
 			</ModalContent>
 		</Modal>
 	);
