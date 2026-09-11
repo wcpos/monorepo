@@ -92,7 +92,8 @@ function DialogOverlayWeb({
 	);
 }
 
-const TEXT_FIELD = 'input:not([disabled]),textarea:not([disabled]),select:not([disabled])';
+const TEXT_FIELD =
+	'input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled])';
 const TABBABLE = `a[href],button:not([disabled]),${TEXT_FIELD},[tabindex]:not([tabindex="-1"])`;
 
 /**
@@ -217,6 +218,7 @@ function DialogContent({
 	side = 'center',
 	children,
 	portalHost,
+	onOpenAutoFocus,
 	...props
 }: DialogPrimitive.ContentProps &
 	Omit<VariantProps<typeof dialogContentVariants>, 'side'> & {
@@ -237,7 +239,14 @@ function DialogContent({
 							? (setContentNode as unknown as React.Ref<DialogPrimitive.ContentRef>)
 							: undefined
 					}
-					onOpenAutoFocus={deferAutoFocus ? (event) => event.preventDefault() : undefined}
+					onOpenAutoFocus={
+						deferAutoFocus
+							? (event) => {
+									event.preventDefault();
+									onOpenAutoFocus?.(event);
+								}
+							: onOpenAutoFocus
+					}
 					className={cn(
 						dialogContentVariants({ size, side }),
 						open
