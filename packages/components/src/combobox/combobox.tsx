@@ -220,10 +220,7 @@ function ComboboxContent({
 						{isPhone ? (
 							<View
 								testID={props.testID}
-								className={cn(
-									'bg-popover border-border w-full rounded-t-lg border-x border-t p-2 shadow-md',
-									className
-								)}
+								className={cn('bg-popover border-border w-full border-t p-2 shadow-md', className)}
 								style={[
 									{ maxHeight: sheet.maxHeight, paddingBottom: Math.max(sheet.bottomInset, 8) },
 									style,
