@@ -180,13 +180,20 @@ function ModalOverlayNative({
 			collapsable={false}
 			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
 			className={cn(
-				'flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
+				// last-child: the content wrapper; the first child is the scrim Pressable.
+				'flex items-center justify-center bg-black/70 p-2 [&>*:last-child]:max-h-full [&>*:last-child]:max-w-full',
 				overlayAlignment[side],
 				className
 			)}
 			{...props}
 		>
-			<Pressable style={StyleSheet.absoluteFill} onPress={() => onClose(false)} />
+			<Pressable
+				style={StyleSheet.absoluteFill}
+				onPress={() => onClose(false)}
+				accessible={false}
+				importantForAccessibility="no"
+				accessibilityElementsHidden
+			/>
 			<KeyboardAvoidingView
 				behavior="padding"
 				keyboardVerticalOffset={insets.bottom}
@@ -306,10 +313,16 @@ function ModalFooter({ className, ...props }: React.ComponentPropsWithoutRef<typ
 
 function ModalTitle({ className, asChild, ...props }: SlottableTextProps) {
 	const Component = asChild ? Slot : Text;
+	const title = <Component {...props} />;
 
 	return (
 		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
-			<Component {...props} />
+			{/* On web the panel is a Radix dialog; slotting the title gives it aria-labelledby. */}
+			{Platform.OS === 'web' ? (
+				<DialogPrimitive.Title asChild>{title}</DialogPrimitive.Title>
+			) : (
+				title
+			)}
 		</TextClassContext.Provider>
 	);
 }
