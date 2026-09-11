@@ -1,6 +1,14 @@
 import * as React from 'react';
-import { type GestureResponderEvent, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import {
+	type GestureResponderEvent,
+	Platform,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	View,
+} from 'react-native';
 
+import * as DialogPrimitive from '@rn-primitives/dialog';
 import { Slot } from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { router } from 'expo-router';
@@ -20,6 +28,7 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 
 import { Button, type ButtonProps } from '../button';
 import { IconButton } from '../icon-button';
+import { OVERLAY_FADE_MS, PANEL_SLIDE_MS, PANEL_SLIDE_OUT_MS } from '../lib/overlay-motion';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -38,16 +47,16 @@ const overlayAlignment = {
 	bottom: 'flex-col justify-end items-stretch p-0',
 };
 const entering = {
-	center: FadeIn.duration(150),
-	right: SlideInRight.duration(250),
-	left: SlideInLeft.duration(250),
-	bottom: SlideInDown.duration(250),
+	center: FadeIn.duration(OVERLAY_FADE_MS),
+	right: SlideInRight.duration(PANEL_SLIDE_MS),
+	left: SlideInLeft.duration(PANEL_SLIDE_MS),
+	bottom: SlideInDown.duration(PANEL_SLIDE_MS),
 };
 const exiting = {
-	center: FadeOut.duration(150),
-	right: SlideOutRight.duration(250),
-	left: SlideOutLeft.duration(250),
-	bottom: SlideOutDown.duration(250),
+	center: FadeOut.duration(OVERLAY_FADE_MS),
+	right: SlideOutRight.duration(PANEL_SLIDE_OUT_MS),
+	left: SlideOutLeft.duration(PANEL_SLIDE_OUT_MS),
+	bottom: SlideOutDown.duration(PANEL_SLIDE_OUT_MS),
 };
 
 const Context = React.createContext<ModalContextProps | undefined>(undefined);
@@ -121,15 +130,25 @@ function ModalOverlayWeb({
 	side = 'center',
 	...props
 }: React.ComponentPropsWithoutRef<typeof View> & { side?: ModalSide }) {
+	const { onClose } = useRootContext();
+	// Radix adds a content wrapper; display: contents preserves the panel's flex sizing.
 	return (
-		<View
-			className={cn(
-				'web:animate-in web:fade-in-0 absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
-				overlayAlignment[side],
-				className
-			)}
-			{...props}
-		/>
+		<DialogPrimitive.Root
+			asChild
+			open
+			onOpenChange={(open) => {
+				if (!open) onClose(false);
+			}}
+		>
+			<DialogPrimitive.Overlay
+				className={cn(
+					'web:animate-in web:fade-in-0 absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full [&>[role=dialog]]:contents',
+					overlayAlignment[side],
+					className
+				)}
+				{...props}
+			/>
+		</DialogPrimitive.Root>
 	);
 }
 
@@ -139,6 +158,7 @@ function ModalOverlayNative({
 	side = 'center',
 	...props
 }: React.ComponentPropsWithoutRef<typeof View> & { side?: ModalSide }) {
+	const { onClose } = useRootContext();
 	const fullHeight = side === 'left' || side === 'right';
 	const insets = useSafeAreaInsets();
 
@@ -166,6 +186,7 @@ function ModalOverlayNative({
 			)}
 			{...props}
 		>
+			<Pressable style={StyleSheet.absoluteFill} onPress={() => onClose(false)} />
 			<KeyboardAvoidingView
 				behavior="padding"
 				keyboardVerticalOffset={insets.bottom}
@@ -222,9 +243,10 @@ function ModalContent({
 	...props
 }: React.ComponentPropsWithoutRef<typeof View> &
 	Omit<VariantProps<typeof modalContentVariants>, 'side'> & { side?: ModalSide }) {
+	const Content = Platform.OS === 'web' ? DialogPrimitive.Content : View;
 	return (
 		<ModalOverlay side={side}>
-			<View
+			<Content
 				className={cn(
 					modalContentVariants({ size, side }),
 					side === 'center'
@@ -240,7 +262,7 @@ function ModalContent({
 						<IconButton name="xmark" />
 					</ModalClose>
 				</View>
-			</View>
+			</Content>
 		</ModalOverlay>
 	);
 }
@@ -269,9 +291,14 @@ function ModalBody({ className, ...props }: React.ComponentPropsWithoutRef<typeo
 }
 
 function ModalFooter({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) {
+	const side = React.useContext(SideContext);
 	return (
 		<View
-			className={cn('flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end', className)}
+			className={cn(
+				'flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end',
+				side !== 'center' && 'border-border border-t pt-4',
+				className
+			)}
 			{...props}
 		/>
 	);
@@ -298,4 +325,13 @@ export {
 	ModalClose,
 	ModalAction,
 	useModal,
+	Modal as Panel,
+	ModalContent as PanelContent,
+	ModalHeader as PanelHeader,
+	ModalBody as PanelBody,
+	ModalFooter as PanelFooter,
+	ModalTitle as PanelTitle,
+	ModalClose as PanelClose,
+	ModalAction as PanelAction,
+	useModal as usePanel,
 };

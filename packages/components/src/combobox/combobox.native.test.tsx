@@ -45,7 +45,7 @@ jest.mock('react-native-reanimated', () => ({
 		View: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 	},
 	FadeIn: { duration: () => ({}) },
-	FadeOut: {},
+	FadeOut: { duration: () => ({}) },
 }));
 
 jest.mock('@rn-primitives/slot', () => ({
