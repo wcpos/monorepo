@@ -147,7 +147,7 @@ export function UserSheet({
 					<DialogTitle>{displayName}</DialogTitle>
 				</DialogHeader>
 				{open && (
-					<ScrollView>
+					<ScrollView contentContainerClassName="gap-1 px-4 pb-4">
 						<SalesToday />
 						<View testID="user-sheet-switch-user">
 							<Text className="h-11 py-3">{t('register.switch_user')}</Text>

@@ -80,7 +80,7 @@ export function RegisterPanel({
 						</React.Suspense>
 					</Text>
 				)}
-				<View className="flex-row gap-2">
+				<View className="flex-row gap-2 px-4">
 					{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (
 						<Button
 							key={type}
@@ -94,7 +94,7 @@ export function RegisterPanel({
 						</Button>
 					))}
 				</View>
-				<ScrollView>
+				<ScrollView contentContainerClassName="gap-1 px-4 py-2">
 					{Object.entries({ cash: '0', card: '0', ...expected }).map(([method, amount]) => (
 						<View key={method} className="min-h-11 flex-row items-center justify-between">
 							<Text>

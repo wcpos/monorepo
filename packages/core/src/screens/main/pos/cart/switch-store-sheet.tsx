@@ -44,7 +44,7 @@ function StoreRows({ onSwitched }: { onSwitched: () => void }) {
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	const t = useT();
 	return (
-		<ScrollView>
+		<ScrollView contentContainerClassName="gap-1 px-4 pb-4">
 			{stores.map((next) => (
 				<Button
 					key={next.localID}

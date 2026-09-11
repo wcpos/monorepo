@@ -12,9 +12,12 @@ export default function POSProductsTab() {
 		<ErrorBoundary>
 			<Suspense>
 				{/* Phone: the bar (hamburger, place, avatar) lives on both tabs; Switch register is the cart tab's. */}
-				<View className="flex-1">
+				<View className="h-full" testID="pos-products-tab">
 					<RegisterBar panelOpen={panelOpen} onPanelOpenChange={setPanelOpen} />
-					<POSProducts />
+					{/* POSProducts sizes itself h-full; give it a flex child to measure against so the bar keeps its row. */}
+					<View className="min-h-0 flex-1">
+						<POSProducts />
+					</View>
 				</View>
 			</Suspense>
 		</ErrorBoundary>
