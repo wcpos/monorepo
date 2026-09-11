@@ -1,9 +1,37 @@
 const {
 	createRunOncePlugin,
 	withAndroidManifest,
+	withAppBuildGradle,
 	withInfoPlist,
 	withProjectBuildGradle,
 } = require('@expo/config-plugins');
+
+// Every com.sumup:* 7.1 artifact is compiled against java.time and friends, so the app
+// module must enable core library desugaring or `checkDebugAarMetadata` refuses the build
+// (51 "requires core library desugaring" errors on the first EAS run).
+const DESUGAR_ARTIFACT = 'com.android.tools:desugar_jdk_libs:2.1.5';
+function enableCoreLibraryDesugaring(contents) {
+	let next = contents;
+	if (!/coreLibraryDesugaringEnabled\s+true/.test(next)) {
+		const android = /(\n\s*)android\s*{/.exec(next);
+		if (!android) throw new Error('Could not find the android block in android/app/build.gradle');
+		const insertAt = android.index + android[0].length;
+		next =
+			next.slice(0, insertAt) +
+			`\n    compileOptions {\n        coreLibraryDesugaringEnabled true\n    }` +
+			next.slice(insertAt);
+	}
+	if (!next.includes('coreLibraryDesugaring ')) {
+		const deps = /(\n\s*)dependencies\s*{/.exec(next);
+		if (!deps) throw new Error('Could not find the dependencies block in android/app/build.gradle');
+		const insertAt = deps.index + deps[0].length;
+		next =
+			next.slice(0, insertAt) +
+			`\n    coreLibraryDesugaring "${DESUGAR_ARTIFACT}"` +
+			next.slice(insertAt);
+	}
+	return next;
+}
 
 function mergePermissions(manifest) {
 	const permissions = (manifest.manifest['uses-permission'] ??= []);
@@ -61,10 +89,16 @@ function withSumUpReader(config) {
 		mergeInfoPlist(mod.modResults);
 		return mod;
 	});
-	return withProjectBuildGradle(config, (mod) => {
+	config = withProjectBuildGradle(config, (mod) => {
 		if (mod.modResults.language !== 'groovy')
 			throw new Error('with-sumup-reader requires a Groovy android/build.gradle');
 		mod.modResults.contents = addMavenRepository(mod.modResults.contents);
+		return mod;
+	});
+	return withAppBuildGradle(config, (mod) => {
+		if (mod.modResults.language !== 'groovy')
+			throw new Error('with-sumup-reader requires a Groovy android/app/build.gradle');
+		mod.modResults.contents = enableCoreLibraryDesugaring(mod.modResults.contents);
 		return mod;
 	});
 }
@@ -72,3 +106,4 @@ module.exports = createRunOncePlugin(withSumUpReader, 'with-sumup-reader', '0.1.
 module.exports.mergePermissions = mergePermissions;
 module.exports.addMavenRepository = addMavenRepository;
 module.exports.mergeInfoPlist = mergeInfoPlist;
+module.exports.enableCoreLibraryDesugaring = enableCoreLibraryDesugaring;

@@ -65,3 +65,32 @@ test('does not mistake a buildscript repository for allprojects dependency resol
 	assert.match(once, /allprojects\s*{\s*repositories\s*{\s*maven/);
 	assert.equal(addMavenRepository(once), once);
 });
+
+test('enables core library desugaring in the app module once', () => {
+	const { enableCoreLibraryDesugaring } = require('./with-sumup-reader');
+	const gradle = `apply plugin: "com.android.application"
+
+android {
+    namespace 'com.wcpos.main'
+    defaultConfig {
+        applicationId 'com.wcpos.main'
+    }
+}
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+}
+`;
+	const once = enableCoreLibraryDesugaring(gradle);
+	assert.match(
+		once,
+		/android {\n    compileOptions {\n        coreLibraryDesugaringEnabled true\n    }/
+	);
+	assert.match(
+		once,
+		/dependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2\.1\.5"/
+	);
+	assert.equal(enableCoreLibraryDesugaring(once), once);
+	assert.equal((once.match(/coreLibraryDesugaringEnabled/g) || []).length, 1);
+	assert.throws(() => enableCoreLibraryDesugaring('nothing here'), /android block/);
+});
