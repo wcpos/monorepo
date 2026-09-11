@@ -1,10 +1,11 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Slot } from '@rn-primitives/slot';
 
 import { Platform } from '@wcpos/utils/platform';
@@ -14,9 +15,10 @@ import * as VirtualizedListPrimitive from '../virtualized-list';
 import { getDisplayLabel, isSelectedIn, toggleMultiValue } from '../lib/multi-select';
 import {
 	getNativeListHeight,
+	getPhoneSheetListMaxHeight,
+	getPhoneSheetMaxHeight,
 	NATIVE_LIST_MAX_HEIGHT,
 	NATIVE_POPOVER_MAX_HEIGHT,
-	PHONE_SHEET_LIST_MAX_HEIGHT,
 } from '../lib/native-popover-sizing';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
@@ -155,6 +157,22 @@ function ComboboxValue({
 	);
 }
 
+/**
+ * Phone bottom-sheet geometry. The insets context is read directly (not via
+ * `useSafeAreaInsets`) so the component still renders where no SafeAreaProvider
+ * is mounted, such as component tests and web.
+ */
+function usePhoneSheetMetrics() {
+	const { height } = useWindowDimensions();
+	const insets = React.useContext(SafeAreaInsetsContext);
+	const bottomInset = insets?.bottom ?? 0;
+	return {
+		maxHeight: getPhoneSheetMaxHeight(height),
+		bottomInset,
+		listMaxHeight: getPhoneSheetListMaxHeight(height, bottomInset),
+	};
+}
+
 function ComboboxContent({
 	className,
 	align = 'center',
@@ -167,6 +185,7 @@ function ComboboxContent({
 	const context = useComboboxRootContext();
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
 	const isPhone = useIsPhone();
+	const sheet = usePhoneSheetMetrics();
 	const isNative = Platform.OS !== 'web';
 	const contentStyle = React.useMemo(() => {
 		if (!isNative) return style;
@@ -199,7 +218,17 @@ function ComboboxContent({
 				>
 					<TextClassContext.Provider value="text-popover-foreground">
 						{isPhone ? (
-							<View className="bg-popover border-border max-h-[70%] w-full rounded-t-lg border-x border-t p-2 shadow-md">
+							<View
+								testID={props.testID}
+								className={cn(
+									'bg-popover border-border w-full rounded-t-lg border-x border-t p-2 shadow-md',
+									className
+								)}
+								style={[
+									{ maxHeight: sheet.maxHeight, paddingBottom: Math.max(sheet.bottomInset, 8) },
+									style,
+								]}
+							>
 								<ComboboxRootContext.Provider value={context}>
 									{children}
 								</ComboboxRootContext.Provider>
@@ -291,6 +320,7 @@ function ComboboxList({
 }: ComboboxListProps<Option>) {
 	const { filterValue } = useComboboxRootContext();
 	const isPhone = useIsPhone();
+	const sheet = usePhoneSheetMetrics();
 	const isNative = Platform.OS !== 'web';
 	const isAndroid = Platform.OS === 'android';
 
@@ -306,7 +336,7 @@ function ComboboxList({
 		const itemCountForHeight =
 			filteredData.length === 0 && ListEmptyComponent ? 1 : filteredData.length;
 		if (itemCountForHeight === 0) return null;
-		const maxHeight = isPhone ? PHONE_SHEET_LIST_MAX_HEIGHT : NATIVE_LIST_MAX_HEIGHT;
+		const maxHeight = isPhone ? sheet.listMaxHeight : NATIVE_LIST_MAX_HEIGHT;
 		const listHeight = getNativeListHeight(itemCountForHeight, estimatedItemSize, maxHeight);
 		return (
 			<View

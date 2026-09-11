@@ -33,6 +33,12 @@ jest.mock('react-native-gesture-handler', () => ({
 	ScrollView: mockGestureHandlerScrollView,
 }));
 
+// Native-only package with untransformed Flow syntax; the combobox reads the insets
+// context and tolerates a null value (no provider).
+jest.mock('react-native-safe-area-context', () => ({
+	SafeAreaInsetsContext: require('react').createContext(null),
+}));
+
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {

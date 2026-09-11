@@ -7,8 +7,24 @@ const NATIVE_LIST_MAX_HEIGHT =
 	NATIVE_POPOVER_VERTICAL_PADDING -
 	NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN;
 
-// Sheet is max-h-[70%] of a ~700–900px phone viewport minus input and padding.
+// A phone bottom sheet takes at most this fraction of the viewport; the list inside it
+// gets what is left after the search input, sheet padding and the bottom safe-area inset,
+// capped so a tall phone does not turn the sheet into a full-screen list.
+const PHONE_SHEET_VIEWPORT_FRACTION = 0.7;
 const PHONE_SHEET_LIST_MAX_HEIGHT = 420;
+
+function getPhoneSheetMaxHeight(viewportHeight: number) {
+	return Math.round(viewportHeight * PHONE_SHEET_VIEWPORT_FRACTION);
+}
+
+function getPhoneSheetListMaxHeight(viewportHeight: number, bottomInset: number) {
+	const available =
+		getPhoneSheetMaxHeight(viewportHeight) -
+		NATIVE_POPOVER_VERTICAL_PADDING -
+		NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN -
+		bottomInset;
+	return Math.max(NATIVE_LIST_MIN_ITEM_HEIGHT, Math.min(PHONE_SHEET_LIST_MAX_HEIGHT, available));
+}
 
 function getNativeListHeight(
 	itemCount: number,
@@ -20,6 +36,8 @@ function getNativeListHeight(
 }
 
 export {
+	getPhoneSheetListMaxHeight,
+	getPhoneSheetMaxHeight,
 	PHONE_SHEET_LIST_MAX_HEIGHT,
 	NATIVE_LIST_MAX_HEIGHT,
 	NATIVE_LIST_MIN_ITEM_HEIGHT,
