@@ -21,6 +21,7 @@ let mockOnClose: (() => void) | undefined;
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
 let mockNumber = '1187';
+let mockLineItems: NonNullable<import('@wcpos/database').OrderDocument['line_items']> = [];
 
 const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethodDescriptor => ({
 	schema: 1,
@@ -65,7 +66,9 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: str
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
-		select({ payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: [] } }),
+		select({
+			payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: mockLineItems },
+		}),
 }));
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
@@ -95,8 +98,10 @@ jest.mock('@wcpos/components/collapsible', () => ({
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
-// Terminal rendering/animations have their own suite; these cases never mount a terminal leg.
-jest.mock('./terminal-leg-view', () => ({ TerminalLegView: () => null }));
+// Terminal rendering/animations have their own suite; this marker only verifies pane ownership.
+jest.mock('./terminal-leg-view', () => ({
+	TerminalLegView: () => <div data-testid="terminal-leg-view" />,
+}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
@@ -182,6 +187,7 @@ describe('TenderCheckout', () => {
 		mockScreenSize = 'lg';
 		mockStage = 'checkout';
 		mockOnClose = undefined;
+		mockLineItems = [];
 		mockFlow = makeFlow();
 	});
 
@@ -204,6 +210,23 @@ describe('TenderCheckout', () => {
 		expect(screen.getByTestId('checkout-server-order-id').textContent).toBe('1187');
 		expect(screen.getByTestId('checkout-order-total').textContent).toBe('$92.95');
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
+	});
+
+	it('keeps an offline line payment badge after the server assigns a numeric ID', () => {
+		mockLineItems = [
+			{
+				id: 123,
+				name: 'Coffee',
+				quantity: 1,
+				total: '10.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
+			},
+		];
+		mockFlow = makeFlow({ linesPaidBy: { 'line-local': ['Cash'] } });
+
+		render(<TenderCheckout order={order} />);
+
+		expect(document.body.textContent).toContain('pos_checkout.line_paid_by');
 	});
 
 	it("drops the ledger on a phone; the pane's own label row carries the balance", () => {
@@ -260,6 +283,18 @@ describe('TenderCheckout', () => {
 		mockOnClose?.();
 
 		expect(mockBack).not.toHaveBeenCalled();
+	});
+
+	it('keeps the terminal pane mounted when the leg finishes on the Legacy tab', () => {
+		mockFlow = makeFlow({
+			state: { ...initialTenderState, tab: 'legacy' },
+			terminalLeg: { phase: 'final' } as TenderFlow['terminalLeg'],
+		});
+
+		render(<TenderCheckout order={order} />);
+
+		expect(screen.getByTestId('terminal-leg-view')).not.toBeNull();
+		expect(screen.queryByTestId('legacy-tab')).toBeNull();
 	});
 
 	it('offers a completion action for a zero-total order', () => {

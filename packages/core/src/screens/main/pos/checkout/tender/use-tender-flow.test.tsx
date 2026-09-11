@@ -151,11 +151,19 @@ let mockPayload: {
 	number?: string;
 	total: string;
 	meta_data: import('@wcpos/order-math').MetaDataEntry[];
-	line_items?: { id?: number; name: string; quantity: number; total: string }[];
+	line_items?: {
+		id?: number;
+		name: string;
+		quantity: number;
+		total: string;
+		total_tax?: string;
+		meta_data?: { key: string; value: unknown }[];
+	}[];
 } = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
 let mockMethodsLoaded = true;
 let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
+let mockTaxDisplayCart: 'incl' | 'excl' = 'excl';
 
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockManualPost }),
@@ -200,7 +208,12 @@ jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		storeDB: mockStoreDB,
 		site: { uuid: 'site' },
-		store: { price_num_decimals: 2, currency: 'EUR', id: 9 },
+		store: {
+			price_num_decimals: 2,
+			currency: 'EUR',
+			id: 9,
+			tax_display_cart: mockTaxDisplayCart,
+		},
 		wpCredentials: { id: 7 },
 	}),
 }));
@@ -268,6 +281,7 @@ describe('useTenderFlow', () => {
 		mockMethods = methods;
 		mockMethodsLoaded = true;
 		mockOnlineStatus = 'online-website-available';
+		mockTaxDisplayCart = 'excl';
 		mockBlockIfDegraded.mockReturnValue(false);
 		mockRecordManualPayment.mockResolvedValue(recorded);
 		mockVoidPayments.mockResolvedValue({ failed: [] });
@@ -664,6 +678,45 @@ describe('useTenderFlow', () => {
 		expect(getCheckoutModeSnapshot().linesPaidBy.get(order.uuid)).toEqual(
 			result.current.linesPaidBy
 		);
+	});
+	it('uses the tax-inclusive cart amount for item splits when configured', async () => {
+		mockTaxDisplayCart = 'incl';
+		mockPayload.line_items = [
+			{ id: 1, name: 'Scarf', quantity: 1, total: '10.00', total_tax: '2.00' },
+		];
+
+		const { result } = renderHook(() => useTenderFlow(order));
+
+		expect(result.current.lines[0]?.totalMinor).toBe(1200);
+		await act(async () => {});
+	});
+	it('keeps the POS line UUID stable when an offline item receives its server ID', async () => {
+		const line = {
+			name: 'Scarf',
+			quantity: 1,
+			total: '10.00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
+		};
+		mockPayload.line_items = [line];
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		expect(result.current.lines[0]?.id).toBe('line-local');
+
+		mockPayload.line_items = [{ ...line, id: 123 }];
+		rerender();
+
+		expect(result.current.lines[0]?.id).toBe('line-local');
+		await act(async () => {});
+	});
+	it('restores an active split plan after an order-switch remount', async () => {
+		const plan = { kind: 'even' as const, ways: 2, from: 0 };
+		const first = renderHook(() => useTenderFlow(order));
+		act(() => first.result.current.dispatch({ type: 'set-plan', plan, balanceMinor: 9295 }));
+		first.unmount();
+
+		const second = renderHook(() => useTenderFlow(order));
+
+		expect(second.result.current.state).toMatchObject({ plan, entryMinor: 4648 });
+		second.unmount();
 	});
 	it('does not pick a disabled tile', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
