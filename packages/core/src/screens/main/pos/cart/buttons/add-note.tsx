@@ -81,7 +81,6 @@ export function AddNoteButton() {
 				<DialogBody>
 					<Textarea
 						testID="order-note-input"
-						autoFocus
 						value={text}
 						minHeight={80}
 						onChangeText={onChangeText}
