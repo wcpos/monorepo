@@ -1,3 +1,8 @@
+import * as React from 'react';
+import { useWindowDimensions } from 'react-native';
+
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+
 const NATIVE_POPOVER_MAX_HEIGHT = 300;
 const NATIVE_POPOVER_VERTICAL_PADDING = 16;
 const NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN = 48;
@@ -26,6 +31,22 @@ function getPhoneSheetListMaxHeight(viewportHeight: number, bottomInset: number)
 	return Math.max(NATIVE_LIST_MIN_ITEM_HEIGHT, Math.min(PHONE_SHEET_LIST_MAX_HEIGHT, available));
 }
 
+/**
+ * Phone bottom-sheet geometry. The insets context is read directly (not via
+ * `useSafeAreaInsets`) so the component still renders where no SafeAreaProvider
+ * is mounted, such as component tests and web.
+ */
+function usePhoneSheetMetrics() {
+	const { height } = useWindowDimensions();
+	const insets = React.useContext(SafeAreaInsetsContext);
+	const bottomInset = insets?.bottom ?? 0;
+	return {
+		maxHeight: getPhoneSheetMaxHeight(height),
+		bottomInset,
+		listMaxHeight: getPhoneSheetListMaxHeight(height, bottomInset),
+	};
+}
+
 function getNativeListHeight(
 	itemCount: number,
 	estimatedItemSize: number,
@@ -36,6 +57,7 @@ function getNativeListHeight(
 }
 
 export {
+	usePhoneSheetMetrics,
 	getPhoneSheetListMaxHeight,
 	getPhoneSheetMaxHeight,
 	PHONE_SHEET_LIST_MAX_HEIGHT,

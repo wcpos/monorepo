@@ -11,6 +11,7 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
+import { OVERLAY_FADE_MS } from '../lib/overlay-motion';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -54,7 +55,10 @@ function DialogOverlayNative({ className, children, ...props }: DialogPrimitive.
 			{...props}
 		>
 			<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={insets.bottom}>
-				<Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
+				<Animated.View
+					entering={FadeIn.duration(OVERLAY_FADE_MS)}
+					exiting={FadeOut.duration(OVERLAY_FADE_MS)}
+				>
 					<>{children}</>
 				</Animated.View>
 			</KeyboardAvoidingView>

@@ -2,9 +2,11 @@ import * as React from 'react';
 import { Platform, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { DropdownMenuItem } from './item';
 import { Icon } from '../icon';
+import { OVERLAY_FADE_MS } from '../lib/overlay-motion';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
@@ -98,16 +100,25 @@ function DropdownMenuContent({
 				}
 				className={overlayClassName}
 			>
-				<DropdownMenuPrimitive.Content
-					className={cn(
-						'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 border-border bg-popover z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
-						open
-							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
-							: 'web:animate-out web:fade-out-0 web:zoom-out-95',
-						className
-					)}
-					{...props}
-				/>
+				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
+				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
+				<Animated.View
+					entering={Platform.OS !== 'web' ? FadeIn.duration(OVERLAY_FADE_MS) : undefined}
+					exiting={Platform.OS !== 'web' ? FadeOut.duration(OVERLAY_FADE_MS) : undefined}
+					pointerEvents="box-none"
+					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
+				>
+					<DropdownMenuPrimitive.Content
+						className={cn(
+							'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 border-border bg-popover z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
+							open
+								? 'web:animate-in web:fade-in-0 web:zoom-in-95'
+								: 'web:animate-out web:fade-out-0 web:zoom-out-95',
+							className
+						)}
+						{...props}
+					/>
+				</Animated.View>
 			</DropdownMenuPrimitive.Overlay>
 		</DropdownMenuPrimitive.Portal>
 	);

@@ -7,6 +7,7 @@ import { Slot } from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Button, type ButtonProps } from '../button';
+import { OVERLAY_FADE_MS } from '../lib/overlay-motion';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -21,7 +22,7 @@ function AlertDialogOverlayWeb({ className, ...props }: AlertDialogPrimitive.Ove
 	return (
 		<AlertDialogPrimitive.Overlay
 			className={cn(
-				'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/80 p-2',
+				'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2',
 				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
 				className
 			)}
@@ -38,11 +39,14 @@ function AlertDialogOverlayNative({
 	return (
 		<AlertDialogPrimitive.Overlay
 			style={StyleSheet.absoluteFill}
-			className={cn('z-50 flex items-center justify-center bg-black/80 p-2', className)}
+			className={cn('z-50 flex items-center justify-center bg-black/70 p-2', className)}
 			{...props}
 			asChild
 		>
-			<Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
+			<Animated.View
+				entering={FadeIn.duration(OVERLAY_FADE_MS)}
+				exiting={FadeOut.duration(OVERLAY_FADE_MS)}
+			>
 				{children}
 			</Animated.View>
 		</AlertDialogPrimitive.Overlay>

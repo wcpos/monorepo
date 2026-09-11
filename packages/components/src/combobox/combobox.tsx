@@ -1,11 +1,10 @@
 import React from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
-import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
-import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Slot } from '@rn-primitives/slot';
 
 import { Platform } from '@wcpos/utils/platform';
@@ -15,12 +14,13 @@ import * as VirtualizedListPrimitive from '../virtualized-list';
 import { getDisplayLabel, isSelectedIn, toggleMultiValue } from '../lib/multi-select';
 import {
 	getNativeListHeight,
-	getPhoneSheetListMaxHeight,
-	getPhoneSheetMaxHeight,
 	NATIVE_LIST_MAX_HEIGHT,
 	NATIVE_POPOVER_MAX_HEIGHT,
+	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
 import { defaultFilter } from './utils/filter';
+import { POPOVER_FADE_MS } from '../lib/overlay-motion';
+import { PhoneSheetShell } from '../lib/phone-sheet';
 import { cn } from '../lib/utils';
 import { useIsPhone } from '../lib/use-is-phone';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -157,22 +157,6 @@ function ComboboxValue({
 	);
 }
 
-/**
- * Phone bottom-sheet geometry. The insets context is read directly (not via
- * `useSafeAreaInsets`) so the component still renders where no SafeAreaProvider
- * is mounted, such as component tests and web.
- */
-function usePhoneSheetMetrics() {
-	const { height } = useWindowDimensions();
-	const insets = React.useContext(SafeAreaInsetsContext);
-	const bottomInset = insets?.bottom ?? 0;
-	return {
-		maxHeight: getPhoneSheetMaxHeight(height),
-		bottomInset,
-		listMaxHeight: getPhoneSheetListMaxHeight(height, bottomInset),
-	};
-}
-
 function ComboboxContent({
 	className,
 	align = 'center',
@@ -185,7 +169,6 @@ function ComboboxContent({
 	const context = useComboboxRootContext();
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
 	const isPhone = useIsPhone();
-	const sheet = usePhoneSheetMetrics();
 	const isNative = Platform.OS !== 'web';
 	const contentStyle = React.useMemo(() => {
 		if (!isNative) return style;
@@ -204,33 +187,29 @@ function ComboboxContent({
 				style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
 				className={isPhone ? (isNative ? 'bg-black/50' : 'web:fixed inset-0 z-50') : undefined}
 			>
-				{isPhone && !isNative && (
-					<Pressable className="absolute inset-0 bg-black/50" onPress={() => onOpenChange(false)} />
-				)}
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={isPhone ? SlideInDown.duration(250) : FadeIn.duration(200)}
-					exiting={isPhone ? SlideOutDown.duration(200) : FadeOut}
-					className={isPhone ? 'justify-end' : undefined}
-					pointerEvents="box-none"
-					style={isPhone || isNative ? StyleSheet.absoluteFill : undefined}
-				>
-					<TextClassContext.Provider value="text-popover-foreground">
-						{isPhone ? (
-							<View
-								testID={props.testID}
-								className={cn('bg-popover border-border w-full border-t p-2 shadow-md', className)}
-								style={[
-									{ maxHeight: sheet.maxHeight, paddingBottom: Math.max(sheet.bottomInset, 8) },
-									style,
-								]}
-							>
-								<ComboboxRootContext.Provider value={context}>
-									{children}
-								</ComboboxRootContext.Provider>
-							</View>
-						) : (
+				{isPhone ? (
+					<PhoneSheetShell
+						onDismiss={() => onOpenChange(false)}
+						className={className}
+						style={style}
+						testID={props.testID}
+					>
+						<TextClassContext.Provider value="text-popover-foreground">
+							<ComboboxRootContext.Provider value={context}>
+								{children}
+							</ComboboxRootContext.Provider>
+						</TextClassContext.Provider>
+					</PhoneSheetShell>
+				) : (
+					/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
+					   a11y prunes out-of-bounds children — see popover/index.tsx. */
+					<Animated.View
+						entering={FadeIn.duration(POPOVER_FADE_MS)}
+						exiting={FadeOut.duration(POPOVER_FADE_MS)}
+						pointerEvents="box-none"
+						style={isNative ? StyleSheet.absoluteFill : undefined}
+					>
+						<TextClassContext.Provider value="text-popover-foreground">
 							<PopoverPrimitive.Content
 								align={align}
 								sideOffset={sideOffset}
@@ -246,9 +225,9 @@ function ComboboxContent({
 								</ComboboxRootContext.Provider>
 								{/* <Arrow className={cn('fill-white')} /> */}
 							</PopoverPrimitive.Content>
-						)}
-					</TextClassContext.Provider>
-				</Animated.View>
+						</TextClassContext.Provider>
+					</Animated.View>
+				)}
 			</PopoverPrimitive.Overlay>
 		</PopoverPrimitive.Portal>
 	);

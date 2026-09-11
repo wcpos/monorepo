@@ -27,13 +27,18 @@ jest.mock('react-native-gesture-handler', () => ({
 	ScrollView: mockGestureHandlerScrollView,
 }));
 
+// The shared sizing module now imports the optional safe-area context.
+jest.mock('react-native-safe-area-context', () => ({
+	SafeAreaInsetsContext: require('react').createContext(null),
+}));
+
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
 		View: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 	},
 	FadeIn: { duration: () => ({}) },
-	FadeOut: {},
+	FadeOut: { duration: () => ({}) },
 }));
 
 jest.mock('@rn-primitives/popover', () => {

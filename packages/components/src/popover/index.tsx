@@ -5,6 +5,7 @@ import { Platform, StyleSheet } from 'react-native';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { POPOVER_FADE_MS } from '../lib/overlay-motion';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
@@ -39,8 +40,8 @@ function PopoverContent({
 				    falling through to the Overlay's dismiss. Same class fixed in
 				    tooltip, hover-card, select, combobox, tree-combobox, select-multi. */}
 				<Animated.View
-					entering={FadeIn.duration(200)}
-					exiting={FadeOut}
+					entering={FadeIn.duration(POPOVER_FADE_MS)}
+					exiting={FadeOut.duration(POPOVER_FADE_MS)}
 					pointerEvents="box-none"
 					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
 				>
