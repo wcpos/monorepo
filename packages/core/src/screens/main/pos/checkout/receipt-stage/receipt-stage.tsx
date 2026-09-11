@@ -42,7 +42,8 @@ function StageAction(props: React.ComponentProps<typeof Button>) {
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 function PaidMoment({ children }: { children: React.ReactNode }) {
-	const success = useCSSVariable('--color-success');
+	// useCSSVariable may yield a number for unitless variables; a stroke needs a colour string.
+	const success = String(useCSSVariable('--color-success') ?? '');
 	const [reduceMotion, setReduceMotion] = React.useState(true);
 	const pop = useSharedValue(0);
 	const tick = useSharedValue(30);
