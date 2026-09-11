@@ -63,3 +63,40 @@ it('continues queued printing after preparation fails', async () => {
 	expect(printHtml.mock.calls[0][0]).toContain('Next receipt');
 	expect(result.current.isPrinting).toBe(false);
 });
+
+it('does not commit the local count when dispatch throws', async () => {
+	const error = new Error('Printer disconnected');
+	const commit = vi.fn().mockResolvedValue(undefined);
+	printHtml.mockRejectedValueOnce(error);
+	const { result } = renderHook(() =>
+		usePrint({ preparePrint: async () => ({ html: '<p>Receipt</p>', commit }) })
+	);
+	await act(async () => {
+		await expect(result.current.print()).rejects.toBe(error);
+	});
+	expect(printHtml).toHaveBeenCalledTimes(1);
+	expect(commit).not.toHaveBeenCalled();
+});
+
+it('awaits successful dispatch before committing the local count once', async () => {
+	let finishDispatch!: () => void;
+	const dispatched = new Promise<void>((resolve) => {
+		finishDispatch = resolve;
+	});
+	printHtml.mockReturnValueOnce(dispatched);
+	const commit = vi.fn().mockResolvedValue(undefined);
+	const { result } = renderHook(() =>
+		usePrint({ preparePrint: async () => ({ html: '<p>Receipt</p>', commit }) })
+	);
+	let job!: Promise<void>;
+	await act(async () => {
+		job = result.current.print();
+	});
+	expect(printHtml).toHaveBeenCalledTimes(1);
+	expect(commit).not.toHaveBeenCalled();
+	await act(async () => {
+		finishDispatch();
+		await job;
+	});
+	expect(commit).toHaveBeenCalledTimes(1);
+});

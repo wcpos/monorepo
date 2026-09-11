@@ -135,25 +135,33 @@ export function useReceiptDocument({
 	} = useResolvedPrinter({ template: templateInfo });
 
 	const { print: printReceipt, isPrinting } = usePrint({
-		preparePrint: () =>
-			preparePrintContent(async () => {
-				let count = 0;
+		preparePrint: async () => {
+			let commit: (() => Promise<void>) | undefined;
+			const prepared = await preparePrintContent(async () => {
+				const local = order.getLatest().local as typeof order.local & {
+					receiptPrintCount?: number;
+				};
+				const count = (local?.receiptPrintCount ?? 0) + 1;
 				// Server and local counts are not reconciled: each counts what that party saw.
-				await order.incrementalModify((data) => {
-					const local = data.local as typeof data.local & { receiptPrintCount?: number };
-					count = (local?.receiptPrintCount ?? 0) + 1;
-					return {
-						...data,
-						local: {
-							...local,
-							dirty: local?.dirty ?? false,
-							pendingMutationIds: local?.pendingMutationIds ?? [],
-							receiptPrintCount: count,
-						},
-					};
-				});
+				commit = async () => {
+					await order.incrementalModify((data) => {
+						const local = data.local as typeof data.local & { receiptPrintCount?: number };
+						if ((local?.receiptPrintCount ?? 0) >= count) return data;
+						return {
+							...data,
+							local: {
+								...local,
+								dirty: local?.dirty ?? false,
+								pendingMutationIds: local?.pendingMutationIds ?? [],
+								receiptPrintCount: count,
+							},
+						};
+					});
+				};
 				return count;
-			}),
+			});
+			return { ...prepared, ...(commit ? { commit } : {}) };
+		},
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || baseReceiptURL,

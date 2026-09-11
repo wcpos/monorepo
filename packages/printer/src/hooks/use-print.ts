@@ -41,7 +41,9 @@ interface UsePrintOptions {
 	/** Server template id — required for order-based cloud providers (Epson/PrintNode). */
 	templateId?: string;
 	/** Fetch/build the counted receipt at print time, never from preview state. */
-	preparePrint?: () => Promise<Pick<UsePrintOptions, 'receiptData' | 'html'>>;
+	preparePrint?: () => Promise<
+		Pick<UsePrintOptions, 'receiptData' | 'html'> & { commit?: () => Promise<void> }
+	>;
 	/** Callbacks */
 	onBeforePrint?: () => void | Promise<void>;
 	onAfterPrint?: () => void;
@@ -233,6 +235,7 @@ export function usePrint(options: UsePrintOptions) {
 				}
 			}
 
+			await prepared?.commit?.();
 			onAfterPrint?.();
 		} catch (error) {
 			onPrintError?.(error as Error);

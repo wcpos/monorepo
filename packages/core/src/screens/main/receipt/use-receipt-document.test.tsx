@@ -339,6 +339,7 @@ describe('print intent through checkout and reprint receipt documents', () => {
 			};
 			const localOrder = {
 				...data,
+				getLatest: () => data,
 				incrementalModify: async (modify: (value: typeof data) => typeof data) => {
 					data = modify(data);
 					return data;
@@ -376,6 +377,79 @@ describe('print intent through checkout and reprint receipt documents', () => {
 			);
 		}
 	);
+
+	it.each([
+		[undefined, 1],
+		[3, 4],
+	] as const)(
+		'prepares offline count %s without writing, then commits the exact count',
+		async (initialCount, prospective) => {
+			mockOnline = false;
+			let data = {
+				uuid: 'offline-prepare',
+				payload: { currency: 'USD' },
+				local: {
+					dirty: true,
+					pendingMutationIds: ['pending'],
+					receiptPrintCount: initialCount as number | undefined,
+				},
+			};
+			const incrementalModify = jest.fn(async (modify: (value: typeof data) => typeof data) => {
+				data = modify(data);
+				return data;
+			});
+			const localOrder = { ...data, getLatest: () => data, incrementalModify };
+			let prepare!: NonNullable<
+				Parameters<typeof import('@wcpos/printer').usePrint>[0]['preparePrint']
+			>;
+			jest
+				.spyOn(jest.requireMock<typeof import('@wcpos/printer')>('@wcpos/printer'), 'usePrint')
+				.mockImplementation((options: Parameters<typeof import('@wcpos/printer').usePrint>[0]) => {
+					prepare = options.preparePrint!;
+					return { print: mockPrint, isPrinting: false };
+				});
+			renderHook(() => useReceiptDocument({ order: localOrder as never, autoPrintAllowed: false }));
+			const first = await prepare();
+			const second = await prepare();
+			expect(incrementalModify).not.toHaveBeenCalled();
+			expect(data.local.receiptPrintCount).toBe(initialCount);
+			expect(first.receiptData?.fiscal).toMatchObject({ reprint_count: prospective - 1 });
+			expect(second.receiptData).toEqual(first.receiptData);
+			expect(second.html).toBe(first.html);
+			await first.commit!();
+			await first.commit!();
+			expect(data.local).toEqual({
+				dirty: true,
+				pendingMutationIds: ['pending'],
+				receiptPrintCount: prospective,
+			});
+			const next = await prepare();
+			expect(next.receiptData?.fiscal).toMatchObject({
+				is_reprint: true,
+				reprint_count: prospective,
+			});
+			await next.commit!();
+			await second.commit!();
+			expect(data.local.receiptPrintCount).toBe(prospective + 1);
+		}
+	);
+
+	it('does not attach a local commit to server-counted preparation', async () => {
+		let prepare!: NonNullable<
+			Parameters<typeof import('@wcpos/printer').usePrint>[0]['preparePrint']
+		>;
+		jest
+			.spyOn(jest.requireMock<typeof import('@wcpos/printer')>('@wcpos/printer'), 'usePrint')
+			.mockImplementation((options: Parameters<typeof import('@wcpos/printer').usePrint>[0]) => {
+				prepare = options.preparePrint!;
+				return { print: mockPrint, isPrinting: false };
+			});
+		const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
+		await waitFor(() => expect(result.current.hasFinalData).toBe(true));
+		const prepared = await prepare();
+		expect(prepared.commit).toBeUndefined();
+		expect(prepared.receiptData?.fiscal).toMatchObject({ is_reprint: true, reprint_count: 1 });
+	});
 });
 // The service boundary is mocked above; no physical encoder is needed in jsdom.
 jest.mock('@point-of-sale/receipt-printer-encoder', () => jest.fn());
