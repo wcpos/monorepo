@@ -211,9 +211,15 @@ it.each([
 		...(outcome === 'failed' ? { failure_reason: 'SDK message' } : {}),
 	});
 });
-it.each([9, 53])('rejects duplicate foreign id %s', async (resultCode) => {
+it.each([9, 53])('authorizes duplicate foreign id %s for server lookup', async (resultCode) => {
 	sdk.checkout.mockResolvedValue({ outcome: 'failed', resultCode });
-	await expect(driver.collect(input)).rejects.toThrow(/already used|duplicate/i);
+	await expect(driver.collect(input)).resolves.toEqual({
+		outcome: 'authorized',
+		provider_refs: { foreign_transaction_id: 'leg' },
+		receipt: {},
+		amount: null,
+		transport: 'bluetooth',
+	});
 });
 it('does not replace absent SDK amount with the requested amount', async () => {
 	sdk.checkout.mockResolvedValue({ outcome: 'success', transactionCode: 'TX1' });
@@ -361,3 +367,113 @@ it('rejects a different merchant before charging and allows account selection fr
 	expect(sdk.login).toHaveBeenCalledTimes(1);
 	await expect(driver.collect(input)).resolves.toMatchObject({ outcome: 'captured' });
 });
+
+it('refreshes bootstrap and setup for changed provider data, not object identity or key order', async () => {
+	resolveMethod.mockReturnValue({
+		...descriptor,
+		provider_data: { merchant_code: 'M1', affiliate_app_id: 'app1' },
+	});
+	await driver.initialize();
+	resolveMethod.mockReturnValue({
+		...descriptor,
+		provider_data: { affiliate_app_id: 'app1', merchant_code: 'M1' },
+	});
+	await driver.initialize();
+	expect(bootstrap).toHaveBeenCalledTimes(1);
+	bootstrap.mockResolvedValue({ affiliate_key: 'changed-key', merchant_code: 'M2' });
+	resolveMethod.mockReturnValue({
+		...descriptor,
+		provider_data: { merchant_code: 'M2', affiliate_app_id: 'app1' },
+	});
+	await driver.initialize();
+	expect(bootstrap).toHaveBeenCalledTimes(2);
+	expect(bootstrap).toHaveBeenLastCalledWith('device');
+	expect(sdk.setup).toHaveBeenCalledTimes(2);
+	expect(sdk.setup).toHaveBeenLastCalledWith('changed-key');
+	await expect(driver.collect(input)).rejects.toThrow(/account.*store/i);
+	expect(sdk.checkout).not.toHaveBeenCalled();
+});
+it.each(['settings', 'foreground'])(
+	'rechecks denied Android permissions on %s without clearing login or saved reader',
+	async (retry) => {
+		Platform.OS = 'android';
+		let granted = false;
+		const request = jest
+			.spyOn(PermissionsAndroid, 'requestMultiple')
+			.mockImplementation(
+				async (permissions) =>
+					Object.fromEntries(
+						permissions.map((p) => [p, granted ? 'granted' : 'denied'])
+					) as Awaited<ReturnType<typeof PermissionsAndroid.requestMultiple>>
+			);
+		let foreground!: (state: AppStateStatus) => void;
+		jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+			foreground = listener;
+			return { remove: jest.fn() };
+		});
+		let tree!: ReactTestRenderer;
+		await act(async () => {
+			tree = create(<SumUpDriverBridge driver={driver} methods={[descriptor]} />);
+		});
+		try {
+			const status = driver.status$.get();
+			await expect(driver.openReaderSettings()).rejects.toThrow(/permissions/i);
+			expect(driver.availability()).toEqual({ available: false, reason: 'permission' });
+			expect(driver.status$.get()).toEqual(status);
+			// useSyncExternalStore needs a new snapshot to display changed availability.
+			expect(driver.status$.get()).not.toBe(status);
+			expect(sdk.openReaderSettings).not.toHaveBeenCalled();
+			granted = true;
+			if (retry === 'settings') await driver.openReaderSettings();
+			else await act(async () => foreground('active'));
+			expect(request).toHaveBeenCalledTimes(2);
+			expect(driver.availability()).toEqual({ available: true });
+			expect(driver.status$.get()).toEqual(status);
+			expect(sdk.login).not.toHaveBeenCalled();
+			expect(sdk.logout).not.toHaveBeenCalled();
+		} finally {
+			await act(async () => tree.unmount());
+		}
+	}
+);
+it.each([
+	'openReaderSettings',
+	'prepareForCheckout',
+	'checkout',
+	'readerStatus',
+	'merchant',
+	'isTipOnReaderAvailable',
+] as const)(
+	'reports native %s permission denial without forgetting the saved reader',
+	async (operation) => {
+		Platform.OS = 'android';
+		jest
+			.spyOn(PermissionsAndroid, 'requestMultiple')
+			.mockImplementation(
+				async (permissions) =>
+					Object.fromEntries(permissions.map((p) => [p, 'granted'])) as Awaited<
+						ReturnType<typeof PermissionsAndroid.requestMultiple>
+					>
+			);
+		await driver.initialize();
+		const status = driver.status$.get();
+		const error = Object.assign(new Error('Bluetooth permission denied'), {
+			code: 'ERR_SUMUP_PERMISSION',
+		});
+		sdk[operation].mockRejectedValueOnce(error);
+		const attempt =
+			operation === 'openReaderSettings'
+				? driver.openReaderSettings()
+				: operation === 'readerStatus'
+					? driver.refreshStatus()
+					: driver.collect(input);
+		await expect(attempt).rejects.toBe(error);
+		expect(driver.availability()).toEqual({ available: false, reason: 'permission' });
+		expect(driver.status$.get()).toEqual(status);
+		await driver.openReaderSettings();
+		expect(driver.availability()).toEqual({ available: true });
+		expect(driver.status$.get()).toEqual(status);
+		expect(sdk.login).not.toHaveBeenCalled();
+		expect(sdk.logout).not.toHaveBeenCalled();
+	}
+);

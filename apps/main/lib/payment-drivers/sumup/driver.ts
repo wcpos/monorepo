@@ -15,21 +15,38 @@ export type Options = {
 };
 export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 	let configuredMethod: string | null = null;
+	let configuredDescriptor: string | null = null;
 	let merchantCode: string | null = null;
 	let initialization: Promise<void> | null = null;
 	let loggedIn = false;
+	let permissionDenied = false;
 	let status: DriverStatus = { connection: 'disconnected', reader: null };
 	const listeners = new Set<(status: DriverStatus) => void>();
 	const publish = (next: DriverStatus) => {
 		status = next;
 		listeners.forEach((listener) => listener(status));
 	};
+	const isPermissionError = (error: unknown) =>
+		Platform.OS === 'android' &&
+		typeof error === 'object' &&
+		error !== null &&
+		'code' in error &&
+		error.code === 'ERR_SUMUP_PERMISSION';
 	const reportError = (error: unknown) => {
+		if (isPermissionError(error)) {
+			permissionDenied = true;
+			publish({ ...status });
+			return;
+		}
 		publish({
 			connection: 'disconnected',
 			reader: null,
 			message: error instanceof Error ? error.message : String(error),
 		});
+	};
+	const rethrowPermissionError = (error: unknown): never => {
+		if (isPermissionError(error)) reportError(error);
+		throw error;
 	};
 	const enabledMethod = () => {
 		const method = resolveMethod();
@@ -46,11 +63,13 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 	};
 	const refreshStatus = async () => {
 		try {
-			loggedIn =
+			if (permissionDenied) await permissions();
+			const sessionLoggedIn =
 				configuredMethod !== null &&
 				enabledMethod()?.id === configuredMethod &&
 				(await native().isLoggedIn());
-			const saved = loggedIn ? await native().readerStatus() : null;
+			const saved = sessionLoggedIn ? await native().readerStatus() : null;
+			loggedIn = sessionLoggedIn;
 			// SumUp reconnects a saved (possibly sleeping) reader inside its checkout UI.
 			publish(
 				saved?.serial
@@ -68,7 +87,7 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 					: { connection: 'disconnected', reader: null }
 			);
 		} catch (error) {
-			loggedIn = false;
+			if (!isPermissionError(error)) loggedIn = false;
 			reportError(error);
 			throw error;
 		}
@@ -77,7 +96,11 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 		const method = enabledMethod();
 		if (!method || Platform.OS === 'web' || !getSumUpReader()) return;
 		if (initialization) return initialization;
-		if (configuredMethod === method.id) return;
+		const fingerprint = JSON.stringify([
+			method.id,
+			Object.entries(method.provider_data).sort(([a], [b]) => a.localeCompare(b)),
+		]);
+		if (configuredMethod === method.id && configuredDescriptor === fingerprint) return;
 		initialization = (async () => {
 			const handoff = await bootstrap(method.id);
 			if (typeof handoff.affiliate_key !== 'string' || !handoff.affiliate_key)
@@ -87,10 +110,11 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 			await native().setup(handoff.affiliate_key);
 			merchantCode = handoff.merchant_code;
 			configuredMethod = method.id;
+			configuredDescriptor = fingerprint;
 			await refreshStatus();
 		})()
 			.catch((error: unknown) => {
-				configuredMethod = null;
+				if (!isPermissionError(error)) configuredMethod = null;
 				reportError(error);
 				throw error;
 			})
@@ -111,8 +135,17 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 				PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT
 			);
 		const granted = await PermissionsAndroid.requestMultiple(needed);
-		if (!needed.every((name) => granted[name] === PermissionsAndroid.RESULTS.GRANTED))
-			throw new Error('Allow location and Bluetooth permissions to use the SumUp reader');
+		permissionDenied = !needed.every(
+			(name) => granted[name] === PermissionsAndroid.RESULTS.GRANTED
+		);
+		publish({ ...status });
+		if (permissionDenied)
+			rethrowPermissionError(
+				Object.assign(
+					new Error('Allow location and Bluetooth permissions to use the SumUp reader'),
+					{ code: 'ERR_SUMUP_PERMISSION' }
+				)
+			);
 	};
 	const ready = async () => {
 		await initialize();
@@ -129,6 +162,7 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 		availability(): ReturnType<PaymentDriver['availability']> {
 			if (Platform.OS === 'web') return { available: false, reason: 'web' };
 			if (!getSumUpReader()) return { available: false, reason: 'unsupported' };
+			if (permissionDenied) return { available: false, reason: 'permission' };
 			return configuredMethod !== null && configuredMethod === enabledMethod()?.id && loggedIn
 				? { available: true }
 				: { available: false, reason: 'not_logged_in' };
@@ -153,25 +187,31 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 			if (input.offline) throw new Error('SumUp offline payments are not supported');
 			if (input.transport !== 'bluetooth') throw new Error('SumUp requires a Bluetooth reader');
 			const sdk = await ready();
-			if ((await sdk.merchant())?.merchantCode !== merchantCode)
+			if ((await sdk.merchant().catch(rethrowPermissionError))?.merchantCode !== merchantCode)
 				throw new Error(
 					'SumUp account does not match this store. Use Connect Reader to log in again.'
 				);
 			await permissions();
-			await sdk.prepareForCheckout();
-			const result = await sdk.checkout({
+			await sdk.prepareForCheckout().catch(rethrowPermissionError);
+			const checkout = sdk.checkout({
 				amount: input.row.amount,
 				currency: input.row.currency,
 				title: input.row.order_id == null ? 'Order' : `Order ${input.row.order_id}`,
 				foreignTransactionId: input.row.id,
-				tipOnReader: input.tipEligibleMinor != null && (await sdk.isTipOnReaderAvailable()),
+				tipOnReader:
+					input.tipEligibleMinor != null &&
+					(await sdk.isTipOnReaderAvailable().catch(rethrowPermissionError)),
 				skipSuccessScreen: true,
 			});
-			if (result.resultCode === 9 || result.resultCode === 53)
-				throw new Error(
-					'SumUp foreign transaction ID was already used. Check the existing payment before trying again.'
-				);
+			const result = await checkout.catch(rethrowPermissionError);
 			const base = { amount: null, receipt: {}, provider_refs: {}, transport: input.transport };
+			// A previous attempt may have charged: Pro must verify this row by lookup.
+			if (result.resultCode === 9 || result.resultCode === 53)
+				return {
+					...base,
+					outcome: 'authorized',
+					provider_refs: { foreign_transaction_id: input.row.id },
+				};
 			switch (result.outcome) {
 				case 'success':
 					return {

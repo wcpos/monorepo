@@ -19,14 +19,16 @@ class SumUpReaderModule : Module() {
   companion object {
     private var initialized = false
     private var affiliateKey: String? = null
-    // Process-wide screen ownership prevents another JS runtime from starting a charge.
+    // Process-wide screen ownership prevents another JS runtime from starting a charge; the
+    // pending promise lives here too, so a module instance recreated while a SumUp activity is
+    // open (JS reload) can still settle the result that comes back to onActivityResult.
     private var busy = false
+    private var pending: Promise? = null
+    private var pendingCode: Int? = null
     private const val LOGIN = 48201
     private const val SETTINGS = 48202
     private const val CHECKOUT = 48203
   }
-  private var pending: Promise? = null
-  private var pendingCode: Int? = null
   private fun requireSetup() {
     if (!initialized || affiliateKey == null) throw CodedException("ERR_SUMUP_SETUP", "Set up SumUp first", null)
   }
