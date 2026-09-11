@@ -183,3 +183,25 @@ it('stamps and reads the register without losing existing metadata', () => {
 		).toBe(false);
 	}
 });
+
+it('stamps and reads distinct till and bound register identities', () => {
+	const meta = wooMetaCarrier.stampIdentity([], {
+		userId: 7,
+		storeId: 2,
+		tillId: 'installation',
+		registerId: 'server-register',
+	});
+	expect(meta).toContainEqual({ key: '_wcpos_till', value: 'installation' });
+	expect(meta).toContainEqual({ key: '_wcpos_register', value: 'server-register' });
+	expect(wooMetaCarrier.readIdentity(meta)).toMatchObject({
+		tillId: 'installation',
+		registerId: 'server-register',
+	});
+	const unbound = wooMetaCarrier.stampIdentity([], {
+		userId: 7,
+		storeId: 2,
+		tillId: 'installation',
+	});
+	expect(unbound.some(({ key }) => key === '_wcpos_register')).toBe(false);
+	expect(wooMetaCarrier.readIdentity(unbound).tillId).toBe('installation');
+});

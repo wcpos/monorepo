@@ -300,7 +300,11 @@ describe('VoidButton', () => {
 	});
 });
 
-it('stamps the register on the refused-void pending fallback through the real writer', async () => {
+jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ site: { uuid: 'site' } }),
+}));
+
+it('stamps distinct register and till ids on the refused-void pending fallback through the real writer', async () => {
 	const query = jest.requireMock('@wcpos/query');
 	const realQuery = jest.requireActual('@wcpos/query');
 	for (const key of [
@@ -314,7 +318,11 @@ it('stamps the register on the refused-void pending fallback through the real wr
 		'../../../hooks/mutations/use-local-mutation'
 	);
 	const { readRegister } = jest.requireActual('../../../../../services/register/register-document');
-	await readRegister({ getLocal: async () => ({ toJSON: () => ({ data: { id: 'register' } }) }) });
+	await readRegister({
+		getLocal: async () => ({
+			toJSON: () => ({ data: { id: 'till', sites: { site: { register_id: 'register' } } } }),
+		}),
+	});
 	const stored = { payload: { status: 'pos-open' } };
 	const resident = {
 		toJSON: () => stored,
@@ -344,7 +352,13 @@ it('stamps the register on the refused-void pending fallback through the real wr
 	await waitFor(() =>
 		expect(mockEngine.write).toHaveBeenCalledWith(
 			expect.objectContaining({
-				payload: { status: 'pending', meta_data: [{ key: '_wcpos_register', value: 'register' }] },
+				payload: {
+					status: 'pending',
+					meta_data: [
+						{ key: '_wcpos_register', value: 'register' },
+						{ key: '_wcpos_till', value: 'till' },
+					],
+				},
 			})
 		)
 	);

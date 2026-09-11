@@ -23,7 +23,7 @@ import {
 	getTerminalPaymentsService,
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
-import { readRegister } from '../../../../../services/register/register-document';
+import { readBoundRegister } from '../../../../../services/register/register-document';
 import { persistProvenance } from '../provenance/persist-provenance';
 import { completionMeta } from '../provenance/stamp-completion';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
@@ -517,7 +517,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (!service) throw new Error('terminal_service_unavailable');
 				const offline = !online || queuedOffline || !payload.id;
 				const minted = mintDevicePayment({
-					registerId: (await readRegister(userDB))?.id ?? null,
+					registerId: (await readBoundRegister(userDB, site.uuid!))?.id ?? null,
 					method,
 					transport: deviceTransport,
 					recordedOffline: offline,
@@ -572,7 +572,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				}
 				if (!service) throw new Error('terminal_service_unavailable');
 				const minted = mintServerPayment({
-					registerId: (await readRegister(userDB))?.id ?? null,
+					registerId: (await readBoundRegister(userDB, site.uuid!))?.id ?? null,
 					method,
 					orderId: payload.id,
 					amount: fromMinor(entryAppliedMinor, dp),

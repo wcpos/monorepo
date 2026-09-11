@@ -9,8 +9,9 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField } from '@wcpos/query';
-
 import './register-cart-bar-entries';
+import { Text } from '@wcpos/components/text';
+
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
 import { OrderMetaButton, OrderMetaDialog } from './buttons/order-meta';
@@ -24,6 +25,10 @@ import { CartHeader } from './cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { CartTable } from './table';
 import { Totals } from './totals';
+import { useT } from '../../../../contexts/translations';
+import { useRegisterBinding } from '../../../../services/register/use-register-binding';
+import { RegisterBar } from './register-bar';
+import { RegisterPicker } from './register-picker';
 import { CartTotalsChangedBanner } from './totals-changed-banner';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 
@@ -42,6 +47,9 @@ export function OpenOrders({
 	// duplicated across them. Keep it mounted in checkout too: swapping the cart
 	// for the ledger must not remove its single settlement writer. See use-cart-settlement.ts.
 	useCartSettlement();
+	const { status: bindingStatus } = useRegisterBinding();
+	const [pickingRegister, setPickingRegister] = React.useState(false);
+	const t = useT();
 
 	const { currentOrderRecord } = useCurrentOrder();
 	// Keep the dialog mounted on its original order while a send changes the open-order list.
@@ -83,6 +91,7 @@ export function OpenOrders({
 	 */
 	return (
 		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
+			<RegisterBar onSwitchRegister={() => setPickingRegister(true)} />
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(
 					(
@@ -90,8 +99,11 @@ export function OpenOrders({
 					).CartAddTimingReadout
 				)}
 			{position === 'top' && cartBar}
+			{bindingStatus === 'none' && <Text>{t('register.no_register_for_store')}</Text>}
 			<ErrorBoundary>
-				{isColumn && receiptOrderUuid ? (
+				{bindingStatus === 'choose' || pickingRegister ? (
+					<RegisterPicker onBound={() => setPickingRegister(false)} />
+				) : isColumn && receiptOrderUuid ? (
 					<React.Suspense fallback={null}>
 						<ReceiptLedger uuid={receiptOrderUuid} />
 					</React.Suspense>

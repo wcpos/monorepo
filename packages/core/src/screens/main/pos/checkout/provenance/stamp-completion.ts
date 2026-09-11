@@ -20,13 +20,13 @@ export async function completionMeta(
 	return withSaleProvenance(
 		order.meta_data,
 		saleProvenanceMeta({
-			registerId: register.id,
+			registerId: register.sites[siteUuid]?.register_id ?? '',
 			saleCounter: counter,
 			now: new Date(),
 			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
 			appVersion: AppInfo.version,
 			appBuild: AppInfo.buildNumber,
 			sessionId: null,
-		})
+		}).filter(({ key, value }) => key !== '_wcpos_register' || !!value)
 	);
 }

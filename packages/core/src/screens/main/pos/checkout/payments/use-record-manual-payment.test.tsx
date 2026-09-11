@@ -211,8 +211,13 @@ it('localizes an amount-exceeds-balance refusal with the server balance', async 
 	);
 });
 
+let mockBoundRegisterId: string | null = 'register';
+beforeEach(() => {
+	mockBoundRegisterId = 'register';
+});
 jest.mock('../../../../../services/register/register-document', () => ({
-	readRegister: async () => ({ id: 'register' }),
+	readRegister: async () => ({ id: 'till' }),
+	readBoundRegister: async () => (mockBoundRegisterId ? { id: mockBoundRegisterId } : null),
 }));
 jest.mock('../provenance/stamp-completion', () => ({
 	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
@@ -220,22 +225,26 @@ jest.mock('../provenance/stamp-completion', () => ({
 		{ key: '_wcpos_sale_counter', value: '1' },
 	],
 }));
-it('queues exactly one provenance-only patch after a full online manual payment mirror', async () => {
-	onlineStatus = 'online-website-available';
-	mockPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
-	const { result } = renderHook(() => useRecordManualPayment());
-	await act(() => result.current(order, method, { amount: 100 }));
-	expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
-	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-	expect(mockLocalPatch).toHaveBeenCalledWith({
-		document: order,
-		data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
-	});
-	expect(mockPost.mock.calls[0][1].payment).toMatchObject({
-		register_id: 'register',
-		session_id: null,
-	});
-});
+it.each([null, 'register'])(
+	'queues one provenance patch and stamps only the bound register (%s)',
+	async (registerId) => {
+		mockBoundRegisterId = registerId;
+		onlineStatus = 'online-website-available';
+		mockPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
+		const { result } = renderHook(() => useRecordManualPayment());
+		await act(() => result.current(order, method, { amount: 100 }));
+		expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
+		});
+		expect(mockPost.mock.calls[0][1].payment).toMatchObject({
+			register_id: registerId,
+			session_id: null,
+		});
+	}
+);
 
 const mockPushDocument = jest.fn(async () => undefined);
 jest.mock('../../../contexts/use-push-document', () => ({

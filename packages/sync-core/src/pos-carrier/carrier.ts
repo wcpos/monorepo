@@ -1,13 +1,23 @@
 import { RECORD_UUID_META_KEY } from '../recordIdentity';
 
-export type PosIdentity = { cashierId: string | null; storeId: string | null; registerId?: string };
+export type PosIdentity = {
+	cashierId: string | null;
+	storeId: string | null;
+	registerId?: string;
+	tillId?: string;
+};
 export type MetaDataEntry = { id?: number; key?: string; value?: unknown };
 
 export interface PosCarrier {
 	readIdentity(meta: MetaDataEntry[] | undefined): PosIdentity;
 	stampIdentity(
 		meta: MetaDataEntry[] | undefined,
-		identity: { userId: string | number; storeId: string | number; registerId?: string }
+		identity: {
+			userId: string | number;
+			storeId: string | number;
+			registerId?: string;
+			tillId?: string;
+		}
 	): MetaDataEntry[];
 	taxBasedOnOverride(meta: MetaDataEntry[] | undefined): string | null;
 	lineUuid(line: { meta_data?: MetaDataEntry[] }): string | null;
@@ -29,6 +39,7 @@ export const POS_META_KEYS = {
 	user: '_pos_user',
 	store: '_pos_store',
 	register: '_wcpos_register',
+	till: '_wcpos_till',
 	taxBasedOn: '_woocommerce_pos_tax_based_on',
 	lineUuid: RECORD_UUID_META_KEY,
 	posData: '_woocommerce_pos_data',
@@ -70,6 +81,7 @@ export const wooMetaCarrier: PosCarrier = {
 			cashierId: scalarMetaValue(meta, POS_META_KEYS.user),
 			storeId: scalarMetaValue(meta, POS_META_KEYS.store),
 			registerId: scalarMetaValue(meta, POS_META_KEYS.register) ?? undefined,
+			tillId: scalarMetaValue(meta, POS_META_KEYS.till) ?? undefined,
 		};
 	},
 
@@ -80,6 +92,7 @@ export const wooMetaCarrier: PosCarrier = {
 		]);
 		if (typeof identity.registerId === 'string' && identity.registerId)
 			values.set(POS_META_KEYS.register, identity.registerId);
+		if (identity.tillId) values.set(POS_META_KEYS.till, identity.tillId);
 		const stamped: MetaDataEntry[] = [];
 		const replaced = new Set<string>();
 		for (const entry of Array.isArray(meta) ? meta : []) {

@@ -13,7 +13,7 @@ import {
 } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
-import { readRegister } from '../../../../../services/register/register-document';
+import { readBoundRegister } from '../../../../../services/register/register-document';
 import { completionMeta } from '../provenance/stamp-completion';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
@@ -75,7 +75,7 @@ export function useRecordManualPayment(
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
-				registerId: (await readRegister(userDB))?.id ?? null,
+				registerId: (await readBoundRegister(userDB, site.uuid!))?.id ?? null,
 				completionMeta: (meta_data) =>
 					completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! }),
 				persistProvenance: async () => {

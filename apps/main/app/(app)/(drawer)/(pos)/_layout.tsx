@@ -2,7 +2,12 @@ import React from 'react';
 import { Platform, View } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
+import { SystemBars } from 'react-native-edge-to-edge';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUniwind } from 'uniwind';
 
+import { UpgradeNotice } from '@wcpos/core/screens/main/components/header/upgrade-notice';
+import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
@@ -135,6 +140,9 @@ export default function POSLayout() {
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
+	const insets = useSafeAreaInsets();
+	const { theme } = useUniwind();
+	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	const registerPOSContainer = React.useCallback((node: View | null) => {
 		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
 	}, []);
@@ -144,7 +152,13 @@ function POSStack() {
 			<CustomerDisplaySnapshotSource />
 			<PosUrlMirror />
 			<POSOverlaySideProvider>
-				<View ref={registerPOSContainer} className="bg-background flex-1">
+				<View
+					ref={registerPOSContainer}
+					className="bg-background flex-1"
+					style={{ paddingTop: insets.top }}
+				>
+					<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
+					{showUpgrade && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 					<Stack
 						screenOptions={{
 							animation: 'none',

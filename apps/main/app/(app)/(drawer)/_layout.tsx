@@ -15,6 +15,7 @@ import {
 	useDrawerPanelHidden,
 } from '@wcpos/core/screens/main/components/drawer-content/panel-visibility';
 import { Header } from '@wcpos/core/screens/main/components/header';
+import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
 
 import { UnreadLogsProvider, useUnreadLogsCount } from '../../../components/unread-logs';
 import { useNavigationBackground } from '../../../components/use-navigation-background';
@@ -94,6 +95,7 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="(pos)"
 				options={{
+					headerShown: false,
 					title: t('common.pos'),
 					drawerLabel: t('common.pos'),
 					drawerIcon: ({ focused }) => (
@@ -244,15 +246,17 @@ function DrawerLayoutContent() {
 	const unreadErrorCount = useUnreadLogsCount();
 
 	return (
-		<View className="bg-background flex-1">
-			<ThemedDrawer
-				screenSize={screenSize}
-				t={t}
-				showUpgrade={showUpgrade}
-				setShowUpgrade={() => setShowUpgrade(false)}
-				unreadErrorCount={unreadErrorCount}
-			/>
-		</View>
+		<UpgradeNoticeContext.Provider value={{ showUpgrade, setShowUpgrade }}>
+			<View className="bg-background flex-1">
+				<ThemedDrawer
+					screenSize={screenSize}
+					t={t}
+					showUpgrade={showUpgrade}
+					setShowUpgrade={() => setShowUpgrade(false)}
+					unreadErrorCount={unreadErrorCount}
+				/>
+			</View>
+		</UpgradeNoticeContext.Provider>
 	);
 }
 

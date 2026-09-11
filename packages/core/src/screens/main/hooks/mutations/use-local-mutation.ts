@@ -23,7 +23,8 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { getRegisterId } from '../../../../services/register/register-document';
+import { getBoundRegisterId, getRegisterId } from '../../../../services/register/register-document';
+import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import {
 	getTemporaryOrder,
@@ -282,6 +283,7 @@ export async function patchAndEnqueueEngineResident(input: {
 	changes: Record<string, unknown>;
 	initial?: ScopedEngineResident;
 	registerId?: string;
+	tillId?: string;
 }): Promise<EngineResident> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		// The rollback guard's baseline is the CAPTURED scope's own id, not a
@@ -300,26 +302,22 @@ export async function patchAndEnqueueEngineResident(input: {
 		}
 		const previousResident = cloneDeep(resident.toJSON());
 		let changes = input.changes;
-		const registerId = input.registerId ?? getRegisterId();
+		const identities = [
+			['_wcpos_register', input.registerId],
+			['_wcpos_till', input.tillId ?? getRegisterId()],
+		] as const;
 		const meta = (residentPayload(resident).meta_data ?? []) as { key?: string; value?: unknown }[];
-		const residentRegister = meta.find(({ key }) => key === '_wcpos_register');
-		if (
-			input.collection === 'orders' &&
-			residentRegister &&
-			Array.isArray(changes.meta_data) &&
-			!changes.meta_data.some(({ key }) => key === '_wcpos_register')
-		) {
-			changes = { ...changes, meta_data: [...changes.meta_data, residentRegister] };
-		}
-		if (
-			input.collection === 'orders' &&
-			registerId &&
-			!meta.some(({ key }) => key === '_wcpos_register')
-		) {
-			const incoming = changes.meta_data === undefined ? meta : changes.meta_data;
-			if (Array.isArray(incoming) && !incoming.some(({ key }) => key === '_wcpos_register')) {
-				const meta_data = [...incoming, { key: '_wcpos_register', value: registerId }];
-				changes = { ...changes, meta_data };
+		if (input.collection === 'orders') {
+			for (const [key, value] of identities) {
+				const existing = meta.find((entry) => entry.key === key);
+				const incoming = changes.meta_data === undefined ? meta : changes.meta_data;
+				if (
+					Array.isArray(incoming) &&
+					!incoming.some((entry) => entry.key === key) &&
+					(existing || value)
+				) {
+					changes = { ...changes, meta_data: [...incoming, existing ?? { key, value }] };
+				}
 			}
 		}
 		await applyEngineResidentChanges(
@@ -417,6 +415,7 @@ async function patchLocalResident<T extends EngineResident>(
 export const useLocalMutation = () => {
 	const t = useT();
 	const manager = useQueryRuntime();
+	const { site } = useAppState();
 
 	const localPatch = React.useCallback(
 		async <TDocument extends MutationDocument, TData extends object>({
@@ -512,6 +511,7 @@ export const useLocalMutation = () => {
 							recordId: recordId!,
 							changes: syncChanges,
 							initial: scopedEngineResident!,
+							registerId: site?.uuid ? (getBoundRegisterId(site.uuid) ?? undefined) : undefined,
 						});
 					} else {
 						patched = await applyEngineResidentChanges(
@@ -553,7 +553,7 @@ export const useLocalMutation = () => {
 				}
 			}
 		},
-		[manager, t]
+		[manager, t, site]
 	);
 
 	return { localPatch };

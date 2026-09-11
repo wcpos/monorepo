@@ -853,6 +853,18 @@ describe('server tender', () => {
 			mockLeg = terminalState({ row, phase: 'creating' });
 		});
 	});
+	it.each([null, 'register'])(
+		'stamps the bound register, never the till, on server tenders (%s)',
+		async (registerId) => {
+			mockBoundRegisterId = registerId;
+			const { result } = renderHook(() => useTenderFlow(order));
+			act(() => result.current.pickMethod('terminal'));
+			await act(async () => result.current.takeTender());
+			expect(mockBegin).toHaveBeenCalledWith(
+				expect.objectContaining({ row: expect.objectContaining({ register_id: registerId }) })
+			);
+		}
+	);
 	it.each([false, true])('remembers a confirmed reader, unless now busy (%s)', async (busy) => {
 		mockMethods = [
 			{
@@ -1269,8 +1281,13 @@ it('reopens a device tile via its queued transport when the selected transport n
 	expect(result.current.tiles[0].disabled).toBe(false);
 });
 
+let mockBoundRegisterId: string | null = 'register';
+beforeEach(() => {
+	mockBoundRegisterId = 'register';
+});
 jest.mock('../../../../../services/register/register-document', () => ({
-	readRegister: async () => ({ id: 'register' }),
+	readRegister: async () => ({ id: 'till' }),
+	readBoundRegister: async () => (mockBoundRegisterId ? { id: mockBoundRegisterId } : null),
 }));
 jest.mock('../provenance/stamp-completion', () => ({
 	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
