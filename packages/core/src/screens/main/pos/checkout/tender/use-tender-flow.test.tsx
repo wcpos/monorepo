@@ -273,6 +273,20 @@ describe('useTenderFlow', () => {
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockLocalPatch.mockResolvedValue({ document: order });
 	});
+	it('preselects the first available method once, without recording', async () => {
+		mockMethods = [noDriver, card];
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state).toMatchObject({
+			methodId: 'pos_card',
+			entryMinor: 9295,
+			entryDirty: false,
+		});
+		act(() => result.current.dispatch({ type: 'key', key: '2' }));
+		rerender();
+		expect(result.current.state.entryMinor).toBe(2);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		await act(async () => {});
+	});
 
 	it('publishes a picked method to the URL store', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
@@ -318,8 +332,8 @@ describe('useTenderFlow', () => {
 		markOrderSaving(order.uuid);
 		const { result } = renderHook(() => useTenderFlow(order));
 		expect(result.current.saveState).toEqual({ kind: 'saving' });
-		act(() => result.current.pickMethod('pos_cash'));
-		expect(result.current.state.view).toBe('select');
+		act(() => result.current.pickMethod('pos_card'));
+		expect(result.current.state.methodId).toBe('pos_cash');
 		// Exercise takeTender with a selected method so its guard is tested independently.
 		act(() =>
 			result.current.dispatch({
@@ -575,7 +589,7 @@ describe('useTenderFlow', () => {
 
 		act(() => result.current.pickMethod('device_card'));
 
-		expect(result.current.state.view).toBe('select');
+		expect(result.current.state.methodId).toBe('pos_cash');
 		await act(async () => {});
 	});
 

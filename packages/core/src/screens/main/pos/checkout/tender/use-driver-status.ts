@@ -11,12 +11,43 @@ import {
 import type { DriverStatus, PaymentDriver } from '../../../../../services/payment-drivers/types';
 
 const disconnected: DriverStatus = { connection: 'disconnected', reader: null };
+
+function shallowEqual(a: Record<string, unknown> | null, b: Record<string, unknown> | null) {
+	if (a === b) return true;
+	if (!a || !b) return false;
+	const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+	for (const key of keys) if (a[key] !== b[key]) return false;
+	return true;
+}
+
+function sameStatus(a: DriverStatus, b: DriverStatus): boolean {
+	if (a === b) return true;
+	const { reader: readerA, ...restA } = a;
+	const { reader: readerB, ...restB } = b;
+	return (
+		shallowEqual(restA, restB) &&
+		shallowEqual(
+			readerA as Record<string, unknown> | null,
+			readerB as Record<string, unknown> | null
+		)
+	);
+}
+
 export function useDriverStatus(driver: PaymentDriver | undefined) {
 	const subscribe = React.useCallback(
 		(listener: () => void) => driver?.status$.subscribe(listener) ?? (() => {}),
 		[driver]
 	);
-	const get = React.useCallback(() => driver?.status$.get() ?? disconnected, [driver]);
+	// useSyncExternalStore re-renders forever when getSnapshot returns a fresh object each
+	// call. A driver that builds its status on every get() (an extension's, not ours) must
+	// still yield a stable snapshot, so the last equal value is returned instead.
+	const last = React.useRef<DriverStatus>(disconnected);
+	const get = React.useCallback(() => {
+		const next = driver?.status$.get() ?? disconnected;
+		if (sameStatus(last.current, next)) return last.current;
+		last.current = next;
+		return next;
+	}, [driver]);
 	return React.useSyncExternalStore(subscribe, get, get);
 }
 export function driverReady(

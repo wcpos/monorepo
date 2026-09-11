@@ -95,6 +95,18 @@ const buttonVariants = cva(
 					'web:hover:bg-sidebar-foreground/10 active:bg-sidebar-foreground/10 rounded-none bg-transparent',
 
 				/**
+				 * The pay surface (checkout tender pane) is the sidebar colour too, but its
+				 * buttons are rounded and stand on their own: `sidebar-solid` is the one
+				 * white commit / selected pill, `sidebar-quiet` the translucent chips and
+				 * unselected pills, `sidebar-key` a boxless keypad key.
+				 */
+				'sidebar-solid': 'bg-sidebar-foreground web:hover:opacity-90 active:opacity-90',
+				'sidebar-quiet':
+					'bg-sidebar-foreground/10 web:hover:bg-sidebar-foreground/20 active:bg-sidebar-foreground/20',
+				'sidebar-key':
+					'web:hover:bg-sidebar-foreground/10 active:bg-sidebar-foreground/15 bg-transparent',
+
+				/**
 				 * Reads as a link, behaves as a button — no surface at all. For
 				 * in-flow navigation (a back affordance, an "open docs" jump), where a
 				 * ghost's hover surface would be too much furniture.
@@ -108,6 +120,8 @@ const buttonVariants = cva(
 				sm: 'h-9 px-3',
 				lg: 'h-11 px-8',
 				xl: 'h-14 px-10',
+				/** A keypad key: tall, no side padding, the digit carries the size. */
+				key: 'h-14 px-0',
 			},
 		},
 		defaultVariants: {
@@ -175,6 +189,9 @@ const buttonTextVariants = cva(
 				'ghost-quiet':
 					'text-muted-foreground web:group-hover:text-accent-foreground group-active:text-accent-foreground',
 				sidebar: 'text-sidebar-foreground',
+				'sidebar-solid': 'text-sidebar',
+				'sidebar-quiet': 'text-sidebar-foreground',
+				'sidebar-key': 'text-sidebar-foreground',
 				link: 'text-primary web:hover:underline',
 			},
 			size: {
@@ -184,6 +201,7 @@ const buttonTextVariants = cva(
 				sm: 'text-sm',
 				lg: 'text-lg',
 				xl: 'text-xl',
+				key: 'text-3xl font-medium',
 			},
 		},
 		defaultVariants: {

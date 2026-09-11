@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Icon } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
 import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
@@ -14,7 +15,6 @@ import { useCheckoutBack } from './use-checkout-back';
 import { leaveCheckout } from '../checkout-mode';
 import { CancelPaymentView } from '../tender/cancel-payment-view';
 import { LegacyTab } from '../tender/legacy-tab';
-import { BalanceHeadline, ThisPaymentLine } from '../tender/ledger-pane';
 import { TenderPane } from '../tender/tender-pane';
 import { useT } from '../../../../../contexts/translations';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
@@ -64,26 +64,27 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 	})();
 
 	return (
-		<View testID="checkout-tender-pane" className="flex-1">
+		<View testID="checkout-tender-pane" className="bg-sidebar text-sidebar-foreground flex-1">
 			<Text testID="checkout-server-order-id" className="hidden">
 				{payload.id}
 			</Text>
 			<HStack className="items-center gap-3 p-2">
 				<Button
 					variant="ghost"
-					size="sm"
-					leftIcon="arrowLeft"
-					testID="checkout-back-to-cart"
+					size="lg"
+					className="h-[44px] w-[44px] p-0"
+					accessibilityLabel={t('common.close')}
+					testID="checkout-close"
 					onPress={back}
 				>
-					<ButtonText>{t('pos_checkout.back_to_cart')}</ButtonText>
+					<Icon name="xmark" className="text-sidebar-foreground" />
 				</Button>
 				{flow.saveState?.kind === 'saving' && !payload.number ? (
 					<View className="flex-1">
 						<View className="bg-muted h-5 w-40 rounded" testID="checkout-title-skeleton" />
 					</View>
 				) : (
-					<Text className="text-foreground flex-1 text-lg font-semibold">
+					<Text className="text-sidebar-foreground flex-1 text-lg font-semibold">
 						{payload.number
 							? t('pos_checkout.checkout_order', { orderNumber: payload.number })
 							: t('pos_checkout.checkout')}
@@ -124,18 +125,6 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 						</Text>
 					</View>
 				) : null}
-			</View>
-			<View className="gap-2 p-4">
-				<ThisPaymentLine
-					flow={flow}
-					format={format}
-					renderRow={(row) => (
-						<HStack className="items-end justify-between gap-2">
-							<BalanceHeadline flow={flow} format={format} />
-							{row}
-						</HStack>
-					)}
-				/>
 			</View>
 			<View className="flex-1 p-4">{body}</View>
 		</View>

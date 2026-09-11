@@ -172,9 +172,21 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// the method the URL seeded or the cashier picked before switching tabs, so the keypad
 	// comes back the way it was left. The reducer stays the truth for the entry itself, and
 	// every action that opens or closes the keypad publishes the method back to the store.
-	const [initialState] = React.useState(() =>
-		initTenderState({ methodId: storedMethodId, balanceMinor })
-	);
+	const [initialState] = React.useState(() => {
+		const first = buildTenderTiles(methods, {
+			online: online && !queuedOffline,
+			readersInUse: service?.readersInUse(),
+			currentOrderUuid: order.uuid,
+		}).find((tile) => !tile.disabled)?.method;
+		const methodId = storedMethodId ?? first?.id ?? null;
+		const initial = initTenderState({ methodId, balanceMinor });
+		const { readers, lockToDefault } = selectableReaders(
+			byId.get(methodId ?? '') ?? null,
+			service?.readersInUse(),
+			order.uuid
+		);
+		return { ...initial, readerId: initialReaderId(readers, lockToDefault, null) };
+	});
 	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
 	const { readerId: remembered, getLoaded, remember } = useRememberedReader(state.methodId);
 	const liveRows = React.useMemo(

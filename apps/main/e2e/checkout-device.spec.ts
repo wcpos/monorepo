@@ -80,7 +80,7 @@ liveTest.describe('POS device capture with the simulated driver (live store)', (
 				const device = simulatedDevice(descriptors);
 				liveTest.skip(!device, 'store has no simulated device capture descriptor');
 				expect(device!.id).toBe('wcpos_simulated_device');
-				await page.getByTestId(`checkout-tile-${device!.id}`).click();
+				await page.getByTestId(`checkout-method-${device!.id}`).click();
 				const amount = await readAmountMinor(page, 'checkout-entry');
 				await connect(page, `sim-${scenario}`);
 				const capture =

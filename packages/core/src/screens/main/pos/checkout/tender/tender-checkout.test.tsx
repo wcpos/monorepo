@@ -199,15 +199,14 @@ describe('TenderCheckout', () => {
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 	});
 
-	it('collapses the ledger to a balance bar on a phone', () => {
+	it("drops the ledger on a phone; the pane's own label row carries the balance", () => {
 		mockScreenSize = 'sm';
 
 		render(<TenderCheckout order={order} />);
 
-		expect(screen.getByTestId('checkout-balance-bar')).not.toBeNull();
-		// The order lines and the order total are what the bar drops; the balance stays.
+		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 		expect(screen.queryByTestId('checkout-order-total')).toBeNull();
-		expect(screen.getByTestId('checkout-balance').textContent).toBe('$92.95');
+		expect(screen.getByTestId('checkout-label').textContent).toContain('$92.95');
 	});
 
 	it('renders an undrivable method disabled, with the reason, rather than hiding it', () => {
@@ -224,11 +223,12 @@ describe('TenderCheckout', () => {
 
 		render(<TenderCheckout order={order} />);
 
-		const tile = screen.getByTestId('checkout-tile-square_terminal') as HTMLButtonElement;
-		expect(tile.disabled).toBe(true);
-		expect(tile.textContent).toContain('pos_checkout.update_app_to_use');
-
-		fireEvent.click(tile);
+		// Undrivable methods are not pills: they sit in the folded "not available" list.
+		expect(screen.queryByTestId('checkout-method-square_terminal')).toBeNull();
+		fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+		const row = screen.getByTestId('checkout-unavailable-square_terminal');
+		expect(row.textContent).toContain('Square Terminal');
+		expect(row.textContent).toContain('pos_checkout.update_app_to_use');
 		expect(mockPickMethod).not.toHaveBeenCalled();
 	});
 
@@ -287,11 +287,10 @@ it('reader chips require an explicit choice when there is no default', () => {
 		],
 	});
 	render(<TenderCheckout order={order} />);
-	expect((screen.getByTestId('checkout-take-payment') as HTMLButtonElement).disabled).toBe(true);
+	expect((screen.getByTestId('checkout-commit') as HTMLButtonElement).disabled).toBe(true);
 	expect((screen.getByTestId('checkout-reader-busy') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('checkout-keypad').textContent).toContain(
-		'pos_checkout.choose_a_terminal'
-	);
+	// The reader chooser sits above the keys now, not inside them.
+	expect(document.body.textContent).toContain('pos_checkout.choose_a_terminal');
 	fireEvent.click(screen.getByTestId('checkout-reader-free'));
 	expect(mockFlow.pickReader).toHaveBeenCalledWith('free');
 });

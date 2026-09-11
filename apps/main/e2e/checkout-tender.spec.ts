@@ -45,7 +45,7 @@ function manualMethods(descriptors: Descriptor[]): Descriptor[] {
 
 /** Tap a tile, then key in an exact minor-unit amount (digits shift in from the right). */
 async function enterAmount(page: Page, methodId: string, amountMinor: number): Promise<void> {
-	await page.getByTestId(`checkout-tile-${methodId}`).click();
+	await page.getByTestId(`checkout-method-${methodId}`).click();
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible({ timeout: 15_000 });
 	await page.getByTestId('checkout-key-clear').click();
 	for (const digit of String(amountMinor)) {
@@ -105,7 +105,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			liveTest.skip(!cash, 'store declares no manual cash method');
 
 			const balance = await readAmountMinor(page, 'checkout-balance');
-			await page.getByTestId(`checkout-tile-${cash!.id}`).click();
+			await page.getByTestId(`checkout-method-${cash!.id}`).click();
 			// The keypad opens pre-filled with the balance — the cashier confirms, never retypes.
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
@@ -171,7 +171,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				.toBe(balance - part);
 			await expect(page.locator('[data-testid^="checkout-leg-"]')).toHaveCount(1);
 
-			await page.getByTestId(`checkout-tile-${second!.id}`).click();
+			await page.getByTestId(`checkout-method-${second!.id}`).click();
 			// Pre-filled with the REMAINING balance, so the second leg closes the order.
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
