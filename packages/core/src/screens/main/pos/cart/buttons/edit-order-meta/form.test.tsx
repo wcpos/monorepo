@@ -178,6 +178,15 @@ it('restores status and metadata after a rejected push, pushes the revert, keeps
 	expect(mockMove).not.toHaveBeenCalled();
 	expect(mockClose).not.toHaveBeenCalled();
 });
+it('does not re-send the hand-off when the revert patch itself fails', async () => {
+	mockPush.mockRejectedValueOnce(new Error('offline'));
+	mockPatch.mockResolvedValueOnce({ document: order }).mockResolvedValueOnce(undefined);
+	await save('completed');
+	await confirm();
+	expect(mockPatch).toHaveBeenCalledTimes(2);
+	expect(mockPush).toHaveBeenCalledTimes(1);
+	expect(mockMove).not.toHaveBeenCalled();
+});
 it('does not write or push when storage is degraded', async () => {
 	mockGuard.mockReturnValue(true);
 	await save('completed');
