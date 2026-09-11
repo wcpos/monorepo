@@ -1047,3 +1047,56 @@ describe('mapReceiptData', () => {
 		});
 	});
 });
+
+describe('schema 1.4 receipt identity', () => {
+	it.each([sampleReceiptData, offlineReceiptData])(
+		'round-trips identity through the allowlist',
+		(base) => {
+			const identity = {
+				software: {
+					name: 'WCPOS',
+					plugin_version: 'plugin',
+					app_version: 'app',
+					app_build: 'build',
+				},
+				register: { id: 'register-1', name: 'Front till' },
+				fiscal: {
+					document_type: 'refund',
+					sale_time: { ...sampleReceiptData.order.printed, datetime: 'Sale time' },
+					sale_tz: 'Europe/Madrid',
+					sale_counter: 42,
+					received_at: sampleReceiptData.order.printed,
+					corrects: 'original-1',
+					is_reprint: true,
+					reprint_count: 1,
+				},
+			};
+			const mapped = mapReceiptData({ ...base, ...identity });
+			expect(mapped).toMatchObject(identity);
+			expect(ReceiptDataSchema.parse(mapped)).toMatchObject(identity);
+		}
+	);
+
+	it('defaults partial new blocks without inventing identity on a 1.3 mapping', () => {
+		const legacy = mapReceiptData(sampleReceiptData);
+		expect(legacy).not.toHaveProperty('software');
+		expect(legacy).not.toHaveProperty('register');
+		expect(legacy.fiscal).not.toHaveProperty('document_type');
+		const parsed = ReceiptDataSchema.parse({ ...legacy, software: {}, register: {} });
+		expect(parsed.software).toEqual({
+			name: 'WCPOS',
+			plugin_version: '',
+			app_version: '',
+			app_build: '',
+		});
+		expect(parsed.register).toEqual({ id: '', name: '' });
+		expect(parsed.fiscal).toMatchObject({
+			document_type: 'sale',
+			sale_time: null,
+			sale_tz: '',
+			sale_counter: null,
+			received_at: null,
+			corrects: '',
+		});
+	});
+});

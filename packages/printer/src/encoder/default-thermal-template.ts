@@ -125,6 +125,20 @@ export const DEFAULT_THERMAL_TEMPLATE = `<receipt paper-width="{{columns}}">
   <align mode="center">
     <text>Thank you for your purchase!</text>
   </align>
+  {{#fiscal.qr_payload}}
+  <align mode="center"><qrcode size="4">{{fiscal.qr_payload}}</qrcode></align>
+  {{/fiscal.qr_payload}}
+  {{#fiscal.is_reprint}}
+  <align mode="center"><bold><text>{{i18n.copy}} {{fiscal.reprint_count}} · {{order.printed.datetime}}</text></bold></align>
+  {{/fiscal.is_reprint}}
+  {{#software}}
+  <align mode="center"><size width="1" height="1">
+    {{#register.name}}<text>{{register.name}}</text>{{/register.name}}
+    {{#fiscal.receipt_number}}<text>#{{fiscal.receipt_number}}</text>{{/fiscal.receipt_number}}
+    {{#fiscal.sale_time.datetime}}<text>{{fiscal.sale_time.datetime}}</text>{{/fiscal.sale_time.datetime}}
+    {{#software.name}}<text>{{software.name}}{{#software.plugin_version}} {{software.plugin_version}}{{/software.plugin_version}}{{#software.app_version}} · {{software.app_version}}{{/software.app_version}}</text>{{/software.name}}
+  </size></align>
+  {{/software}}
   <feed lines="3" />
   {{#openDrawer}}
   <drawer />

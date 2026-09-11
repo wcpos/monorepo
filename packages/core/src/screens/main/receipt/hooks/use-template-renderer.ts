@@ -5,6 +5,7 @@ import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encode
 import type { TemplateDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
+import { useRegister } from '../../../../services/register/use-register';
 import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
 import { buildReceiptData } from '../utils/build-receipt-data';
@@ -67,6 +68,10 @@ interface TemplateRendererResult {
 	isOffline: boolean;
 	isSyncing: boolean;
 	hasFinalData: boolean;
+	preparePrintContent: (nextLocalPrintCount: () => Promise<number>) => Promise<{
+		receiptData: ReceiptData | Record<string, unknown>;
+		html?: string;
+	}>;
 }
 
 export function useTemplateRenderer({
@@ -76,7 +81,9 @@ export function useTemplateRenderer({
 	order,
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const templates = useActiveTemplates();
-	const { store } = useAppState();
+	const { store, site } = useAppState();
+	const register = useRegister();
+	const pluginVersion = useDocField(site, (value) => value.wcpos_version);
 	const taxRates = useTaxSettingsOptional();
 	const storeDp = useDocField(store, (value) => value.wc_price_decimals) as number | undefined;
 	const dp = resolvePriceNumDecimals({
@@ -92,7 +99,12 @@ export function useTemplateRenderer({
 	const { getLabel: getStatusLabel } = useOrderStatusLabel();
 
 	// Fetch receipt data from API (when online)
-	const { data: apiReceiptData, hasResponded, isLoading } = useReceiptData({ orderId, mode });
+	const {
+		data: apiReceiptData,
+		hasResponded,
+		isLoading,
+		fetchForPrint,
+	} = useReceiptData({ orderId: isOffline ? undefined : orderId, mode });
 	// The deadline record is kept together with the order it was armed for; a
 	// stale record from a previous order derives to "not passed" without any
 	// synchronous reset in the effect (same pattern as the template pick below).
@@ -112,12 +124,27 @@ export function useTemplateRenderer({
 
 	// Fall back to locally-built receipt data when the API response is unavailable
 	const receiptData = React.useMemo(() => {
-		if (apiReceiptData) return apiReceiptData;
+		if (!isOffline && apiReceiptData) return apiReceiptData;
 		if (order && store) {
-			return buildReceiptData(order, store, dp, { getStatusLabel, receiptI18n });
+			return buildReceiptData(order, store, dp, {
+				getStatusLabel,
+				receiptI18n,
+				register,
+				pluginVersion,
+			});
 		}
 		return null;
-	}, [apiReceiptData, order, store, dp, getStatusLabel, receiptI18n]);
+	}, [
+		apiReceiptData,
+		isOffline,
+		order,
+		store,
+		dp,
+		getStatusLabel,
+		receiptI18n,
+		register,
+		pluginVersion,
+	]);
 
 	// Syncing: API fetch is in flight and we're still showing local data
 	const isSyncing = isLoading && !apiReceiptData && !deadlinePassed;
@@ -213,7 +240,35 @@ export function useTemplateRenderer({
 		}
 	}
 
+	const preparePrintContent = async (nextLocalPrintCount: () => Promise<number>) => {
+		const data =
+			!isOffline && orderId && apiReceiptData
+				? await fetchForPrint()
+				: order && store
+					? buildReceiptData(order, store, dp, {
+							getStatusLabel,
+							receiptI18n,
+							register,
+							pluginVersion,
+							printCount: await nextLocalPrintCount(),
+						})
+					: null;
+		if (!data) throw new Error('No receipt data available for printing');
+		return {
+			receiptData: data,
+			html:
+				selectedTemplate?.offline_capable && selectedTemplate.content
+					? renderOfflineTemplatePreview({
+							engine: selectedTemplate.engine,
+							content: selectedTemplate.content,
+							receiptData: data as Record<string, unknown>,
+						})
+					: undefined,
+		};
+	};
+
 	return {
+		preparePrintContent,
 		templates,
 		selectedTemplateId,
 		setSelectedTemplateId,

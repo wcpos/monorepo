@@ -60,6 +60,7 @@ export function useReceiptDocument({
 		isOffline,
 		isSyncing,
 		hasFinalData,
+		preparePrintContent,
 	} = useTemplateRenderer({
 		orderId,
 		baseReceiptURL,
@@ -134,6 +135,25 @@ export function useReceiptDocument({
 	} = useResolvedPrinter({ template: templateInfo });
 
 	const { print: printReceipt, isPrinting } = usePrint({
+		preparePrint: () =>
+			preparePrintContent(async () => {
+				let count = 0;
+				// Server and local counts are not reconciled: each counts what that party saw.
+				await order.incrementalModify((data) => {
+					const local = data.local as typeof data.local & { receiptPrintCount?: number };
+					count = (local?.receiptPrintCount ?? 0) + 1;
+					return {
+						...data,
+						local: {
+							...local,
+							dirty: local?.dirty ?? false,
+							pendingMutationIds: local?.pendingMutationIds ?? [],
+							receiptPrintCount: count,
+						},
+					};
+				});
+				return count;
+			}),
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || baseReceiptURL,

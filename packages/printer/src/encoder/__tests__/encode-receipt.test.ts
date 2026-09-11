@@ -180,3 +180,16 @@ describe('encodeReceipt', () => {
 		});
 	});
 });
+
+it.each([undefined, { copy: '' }, { copy: '   ' }, { copy: 'COPIA' }])(
+	'labels built-in thermal copies even without a usable store dictionary (%j)',
+	(i18n) => {
+		const receipt = {
+			...sampleReceiptData,
+			i18n,
+			fiscal: { ...sampleReceiptData.fiscal, is_reprint: true, reprint_count: 1 },
+		};
+		const text = new TextDecoder().decode(encodeReceipt(receipt));
+		expect(text).toContain(i18n?.copy === 'COPIA' ? 'COPIA 1' : 'COPY 1');
+	}
+);

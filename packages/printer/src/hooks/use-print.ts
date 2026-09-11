@@ -40,6 +40,8 @@ interface UsePrintOptions {
 	orderId?: number;
 	/** Server template id — required for order-based cloud providers (Epson/PrintNode). */
 	templateId?: string;
+	/** Fetch/build the counted receipt at print time, never from preview state. */
+	preparePrint?: () => Promise<Pick<UsePrintOptions, 'receiptData' | 'html'>>;
 	/** Callbacks */
 	onBeforePrint?: () => void | Promise<void>;
 	onAfterPrint?: () => void;
@@ -108,6 +110,7 @@ export function usePrint(options: UsePrintOptions) {
 		cloudEnqueueFactory,
 		orderId,
 		templateId,
+		preparePrint,
 		onBeforePrint,
 		onAfterPrint,
 		onPrintError,
@@ -129,6 +132,16 @@ export function usePrint(options: UsePrintOptions) {
 				await onBeforePrint();
 			}
 
+			// Cloud jobs count on the server. Legacy URL/iframe receipts cannot consume
+			// marked JSON, so preserve their uncounted system-print behavior.
+			const serverRendered =
+				isOrderBasedCloudProfile(printerProfile) ||
+				((!printerProfile || usesSystemPrintDialog(printerProfile)) &&
+					!html &&
+					Boolean(receiptUrl));
+			const prepared = serverRendered ? undefined : await preparePrint?.();
+			const printData = prepared?.receiptData ?? receiptData;
+			const printHtml = prepared?.html ?? html;
 			const service = getService();
 			service.setCloudEnqueueFactory(cloudEnqueueFactory);
 
@@ -149,8 +162,8 @@ export function usePrint(options: UsePrintOptions) {
 					throw new Error('Order-based cloud printing requires a template id');
 				}
 				await service.printOrderViaCloud(printerProfile, orderId, templateId);
-			} else if (printerProfile && !usesSystemPrintDialog(printerProfile) && receiptData) {
-				const normalised = mapReceiptData(receiptData as Record<string, any>);
+			} else if (printerProfile && !usesSystemPrintDialog(printerProfile) && printData) {
+				const normalised = mapReceiptData(printData as Record<string, any>);
 
 				if (printerProfile.fullReceiptRaster) {
 					if (!rasterize) {
@@ -190,7 +203,7 @@ export function usePrint(options: UsePrintOptions) {
 				}
 			} else {
 				// System print fallback — need HTML content
-				let htmlContent = html;
+				let htmlContent = printHtml;
 
 				// Try extracting from the visible iframe (works for same-origin / srcDoc)
 				if (!htmlContent) {
@@ -238,6 +251,7 @@ export function usePrint(options: UsePrintOptions) {
 		html,
 		iframeRef,
 		onAfterPrint,
+		preparePrint,
 		onBeforePrint,
 		onPrintError,
 		orderId,

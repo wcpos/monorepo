@@ -8,7 +8,8 @@
 
 import { getI18n } from 'react-i18next';
 
-import { POS_META_KEYS } from '@wcpos/sync-core';
+import { POS_META_KEYS, wooMetaCarrier } from '@wcpos/sync-core';
+import { AppInfo } from '@wcpos/utils/app-info';
 import type { TaxId } from '@wcpos/database';
 
 import {
@@ -16,6 +17,8 @@ import {
 	quickDiscountLabel,
 	readQuickDiscountIntent,
 } from '../../pos/hooks/quick-discount';
+
+import type { RegisterDocument } from '../../../../services/register/register-document';
 
 interface ReceiptOrder {
 	id: number;
@@ -142,6 +145,14 @@ interface ReceiptPayment {
 }
 
 interface ReceiptFiscal {
+	document_type: 'sale';
+	sale_time: ReceiptOrder['printed'] | null;
+	sale_tz: string;
+	sale_counter: number | null;
+	received_at: null;
+	corrects: string;
+	is_reprint: boolean;
+	reprint_count: number;
 	submission_status: string;
 	fiscal_id: string;
 }
@@ -174,6 +185,8 @@ interface ReceiptTaxSection {
 }
 
 export interface ReceiptData {
+	software: { name: string; plugin_version: string; app_version: string; app_build: string };
+	register: Pick<RegisterDocument, 'id' | 'name'>;
 	i18n?: Record<string, string>;
 	order: ReceiptOrder;
 	store: ReceiptStore;
@@ -571,6 +584,9 @@ function capitalizeStatus(status: string): string {
 }
 
 export interface BuildReceiptDataOptions {
+	register?: Pick<RegisterDocument, 'id' | 'name'> | null;
+	pluginVersion?: string;
+	printCount?: number;
 	/**
 	 * Resolves a raw WooCommerce order status (e.g. "completed") to its
 	 * localized display label ("Completed", "Terminé", …). Pass the
@@ -594,6 +610,12 @@ export function buildReceiptData(
 	dp: number = 2,
 	options: BuildReceiptDataOptions = {}
 ): ReceiptData {
+	const provenance = new Map<string, unknown>(
+		(order.meta_data ?? []).map((row: { key: string; value: unknown }) => [row.key, row.value])
+	);
+	const saleTime = provenance.get('_wcpos_sale_time');
+	const saleTz = String(provenance.get('_wcpos_sale_tz') ?? '');
+	const registerId = wooMetaCarrier.readIdentity(order.meta_data).registerId;
 	const billing = order.billing || {};
 	const shipping = order.shipping || {};
 	const lineItems = order.line_items || [];
@@ -923,7 +945,36 @@ export function buildReceiptData(
 				transaction_id: order.transaction_id || '',
 			},
 		],
+		software: {
+			name: 'WCPOS',
+			plugin_version: options.pluginVersion ?? '',
+			app_version: AppInfo.version,
+			app_build: AppInfo.buildNumber,
+		},
+		register: {
+			id: registerId ?? options.register?.id ?? '',
+			name:
+				!registerId || registerId === options.register?.id ? (options.register?.name ?? '') : '',
+		},
 		fiscal: {
+			document_type: 'sale',
+			sale_time:
+				typeof saleTime === 'string' && saleTime
+					? {
+							datetime: new Intl.DateTimeFormat('en-US', {
+								...printedFormatOptions,
+								timeZone: saleTz || storeTimezone,
+							}).format(new Date(saleTime)),
+						}
+					: null,
+			sale_tz: saleTz,
+			sale_counter: provenance.has('_wcpos_sale_counter')
+				? toNum(provenance.get('_wcpos_sale_counter'))
+				: null,
+			received_at: null,
+			corrects: '',
+			is_reprint: (options.printCount ?? 0) > 1,
+			reprint_count: Math.max(0, (options.printCount ?? 0) - 1),
 			submission_status: '',
 			fiscal_id: '',
 		},

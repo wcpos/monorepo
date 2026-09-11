@@ -1050,3 +1050,45 @@ it.each(['incl', 'excl'])(
 		]);
 	}
 );
+
+it('builds completed local sale identity and copy marking', () => {
+	const { AppInfo } = jest.requireActual('@wcpos/utils/app-info');
+	const receipt = buildReceiptData(
+		{
+			...mockOrder,
+			meta_data: [
+				{ key: '_wcpos_sale_time', value: '2026-09-11T10:30:00+02:00' },
+				{ key: '_wcpos_sale_tz', value: 'Europe/Madrid' },
+				{ key: '_wcpos_sale_counter', value: '42' },
+				{ key: '_wcpos_register', value: 'register-1' },
+			],
+		},
+		mockStore,
+		2,
+		{
+			register: { id: 'register-1', name: 'Front till' },
+			pluginVersion: 'plugin',
+			printCount: 2,
+		}
+	);
+	expect(receipt.software).toEqual({
+		name: 'WCPOS',
+		plugin_version: 'plugin',
+		app_version: AppInfo.version,
+		app_build: AppInfo.buildNumber,
+	});
+	expect(receipt.register).toEqual({ id: 'register-1', name: 'Front till' });
+	expect(receipt.fiscal).toMatchObject({
+		document_type: 'sale',
+		sale_tz: 'Europe/Madrid',
+		sale_counter: 42,
+		is_reprint: true,
+		reprint_count: 1,
+	});
+	expect(receipt.fiscal.sale_time?.datetime).toBe('Sep 11, 2026, 10:30 AM');
+	expect(ReceiptDataSchema.parse(mapReceiptData(receipt))).toMatchObject({
+		software: receipt.software,
+		register: receipt.register,
+		fiscal: receipt.fiscal.sale_time ? { sale_time: receipt.fiscal.sale_time } : {},
+	});
+});

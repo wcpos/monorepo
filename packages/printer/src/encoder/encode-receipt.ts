@@ -4,6 +4,7 @@ import { encodeThermalTemplate } from '../renderer';
 import { DEFAULT_THERMAL_TEMPLATE } from './default-thermal-template';
 import { createEncodabilityGate, withEscposFontA } from './escpos-text';
 import { formatMoney } from './format-money';
+import { DEFAULT_I18N } from './format-receipt-data';
 
 import type { ReceiptData } from './types';
 import type { DrawerConnector } from '../types';
@@ -72,6 +73,7 @@ export function buildReceiptMarkupJob(
 	// Build template data with pre-formatted money values
 	const templateData: Record<string, any> = {
 		...data,
+		i18n: { ...data.i18n, copy: data.i18n?.copy?.trim() || DEFAULT_I18N.copy },
 		columns,
 		cut,
 		openDrawer,

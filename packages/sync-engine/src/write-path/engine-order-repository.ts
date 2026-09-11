@@ -88,7 +88,15 @@ export class EngineOrderRepository {
 		}));
 		for (const entry of materialized) {
 			const resident = residents.get(entry.storedDocument.uuid)?.toJSON() as
-				{ payload?: Record<string, unknown> } | undefined;
+				{ payload?: Record<string, unknown>; local?: { receiptPrintCount?: number } } | undefined;
+			// Pulls replace sync bookkeeping, but must not reset prints observed by this till.
+			if (resident?.local?.receiptPrintCount !== undefined) {
+				const local = {
+					...entry.storedDocument.local,
+					receiptPrintCount: resident.local.receiptPrintCount,
+				};
+				entry.storedDocument = { ...entry.storedDocument, local };
+			}
 			const localMeta = Array.isArray(resident?.payload?.meta_data)
 				? resident.payload.meta_data
 				: [];

@@ -94,3 +94,19 @@ describe('EngineOrderRepository — the manifest boundary after the Symbol', () 
 		]);
 	});
 });
+
+it('retains the till receipt count when a clean order is refreshed from the server', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const resident = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 2 } };
+	db.orders.findByIds = () => ({
+		exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+	});
+	await new EngineOrderRepository(db).upsertMany([
+		{ ...storedDocument, payload: { ...storedDocument.payload, status: 'completed' } },
+	]);
+	expect(orderUpserts[0][0]).toMatchObject({
+		payload: { status: 'completed' },
+		local: { receiptPrintCount: 2, dirty: false, pendingMutationIds: [] },
+	});
+});
