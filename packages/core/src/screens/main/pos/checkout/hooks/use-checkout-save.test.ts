@@ -1,6 +1,10 @@
 /** @jest-environment jsdom */
 import { renderHook } from '@testing-library/react';
 
+import {
+	noteStorageWriteDeadlinePassed,
+	STORAGE_WRITE_DEADLINE_MS,
+} from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { WriteOutcomeError } from '@wcpos/query';
 
 import {
@@ -11,6 +15,11 @@ import {
 	resetCheckoutMode,
 } from '../checkout-mode';
 import { useCheckoutSave } from './use-checkout-save';
+
+jest.mock('@wcpos/database/plugins/wrapped-error-handler-storage', () => ({
+	...jest.requireActual('@wcpos/database/plugins/wrapped-error-handler-storage'),
+	noteStorageWriteDeadlinePassed: jest.fn(),
+}));
 
 const mockSettlement = jest.fn();
 const mockTerminal = jest.fn();
@@ -119,4 +128,36 @@ it('clears, toasts once and rethrows a non-terminal failure', async () => {
 		expect.objectContaining({ showToast: true })
 	);
 	clearOrderSaving('a');
+});
+
+describe('local enqueue deadline', () => {
+	beforeEach(() => jest.useFakeTimers());
+	afterEach(() => jest.useRealTimers());
+
+	it('signals once for a pending enqueue without settling or retrying it', async () => {
+		mockEnqueue.mockReturnValue(new Promise(() => {}));
+		const { result } = renderHook(useCheckoutSave);
+		const settled = jest.fn();
+		void result.current(record, { onLateRejected: jest.fn() }).then(settled, settled);
+		await jest.advanceTimersByTimeAsync(STORAGE_WRITE_DEADLINE_MS - 1);
+		expect(noteStorageWriteDeadlinePassed).not.toHaveBeenCalled();
+		await jest.advanceTimersByTimeAsync(1);
+		expect(noteStorageWriteDeadlinePassed).toHaveBeenCalledWith({
+			waitedMs: STORAGE_WRITE_DEADLINE_MS,
+			orderId: 'a',
+		});
+		await jest.advanceTimersByTimeAsync(STORAGE_WRITE_DEADLINE_MS);
+		expect(noteStorageWriteDeadlinePassed).toHaveBeenCalledTimes(1);
+		expect(settled).not.toHaveBeenCalled();
+		expect(mockEnqueue).toHaveBeenCalledTimes(1);
+	});
+
+	it('disarms when enqueue resolves even if server settlement stays pending', async () => {
+		mockSettlement.mockReturnValue(new Promise(() => {}));
+		const { result } = renderHook(useCheckoutSave);
+		void result.current(record, { onLateRejected: jest.fn() });
+		await jest.advanceTimersByTimeAsync(STORAGE_WRITE_DEADLINE_MS * 2);
+		expect(mockSettlement).toHaveBeenCalledTimes(1);
+		expect(noteStorageWriteDeadlinePassed).not.toHaveBeenCalled();
+	});
 });

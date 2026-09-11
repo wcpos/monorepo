@@ -1,4 +1,8 @@
 import {
+	noteStorageWriteDeadlinePassed,
+	STORAGE_WRITE_DEADLINE_MS,
+} from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import {
 	awaitTerminalWriteOutcome,
 	awaitWriteSettlement,
 	useQueryRuntime,
@@ -45,11 +49,15 @@ export function useCheckoutSave() {
 	): Promise<CheckoutSaveResult> => {
 		const uuid = record.uuid!;
 		try {
+			const deadline = setTimeout(() => {
+				noteStorageWriteDeadlinePassed({ waitedMs: STORAGE_WRITE_DEADLINE_MS, orderId: uuid });
+			}, STORAGE_WRITE_DEADLINE_MS);
+			(deadline as unknown as { unref?: () => void }).unref?.();
 			const {
 				collectionName,
 				recordId,
 				receipt: { mutationId },
-			} = await enqueueDocumentWrite(runtime, record);
+			} = await enqueueDocumentWrite(runtime, record).finally(() => clearTimeout(deadline));
 			const settlement = await awaitWriteSettlement(runtime.engine, mutationId);
 			if (settlement === 'queued-offline') {
 				markOrderQueuedOffline(uuid, mutationId);
