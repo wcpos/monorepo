@@ -3,6 +3,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
+import { driverReady } from './use-driver-status';
 import {
 	buildTenderTiles,
 	initialReaderId,
@@ -247,4 +248,19 @@ describe('device tiles', () => {
 				.disabled
 		).toBe(false);
 	});
+});
+it('allows SDK login setup without making a logged-out reader ready for payment', () => {
+	const driver = createSimulatedDriver();
+	registerDriver({
+		...driver,
+		capabilities: { ...driver.capabilities, discovery: 'sdk_ui' },
+		availability: () => ({ available: false, reason: 'not_logged_in' }),
+	});
+	expect(buildTenderTiles([deviceMethod], { online: true })[0].disabled).toBe(false);
+	expect(driverReady(deviceMethod, 'bluetooth')).toBe(false);
+	const readersInUse = new Map([['device:simulated', { orderUuid: 'other', orderNumber: '99' }]]);
+	expect(
+		buildTenderTiles([deviceMethod], { online: true, readersInUse, currentOrderUuid: 'mine' })[0]
+			.reason
+	).toEqual({ type: 'reader_in_use', number: '99' });
 });

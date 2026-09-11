@@ -153,6 +153,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			],
 			'./plugins/with-printer-support',
 			'./plugins/with-wedge-key-events',
+			'./plugins/with-sumup-reader',
 			[
 				'@config-plugins/react-native-webrtc',
 				{

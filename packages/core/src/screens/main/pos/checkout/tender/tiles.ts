@@ -123,7 +123,12 @@ export function buildTenderTiles(
 					(!availability?.available && availability?.reason === 'unsupported')
 				)
 					reason = 'no_driver';
-				else if (availability && !availability.available)
+				// SDK-owned login is reached through Connect Reader inside the selected tile.
+				else if (
+					availability &&
+					!availability.available &&
+					!(availability.reason === 'not_logged_in' && driver?.capabilities.discovery === 'sdk_ui')
+				)
 					reason = `driver_${availability.reason}` as TileDisabledReason;
 				else if (!options.online && !settlesLater) reason = 'offline';
 				else if (holder && holder.orderUuid !== options.currentOrderUuid)
