@@ -157,3 +157,27 @@ it('background terminal settlement enqueues one provenance-only patch after mirr
 		mockResident.payload.meta_data = original;
 	}
 });
+
+const mockMirrorError = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({ error: (...args: unknown[]) => mockMirrorError(...args), warn: jest.fn() }),
+	getErrorMessage: String,
+}));
+it('reports a falsy terminal provenance patch without rejecting the recorded payment', async () => {
+	const original = mockResident.payload.meta_data;
+	mockResident.payload.meta_data = withLedger([], [mockRow]);
+	mockPatch.mockResolvedValueOnce(undefined as never);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		await waitFor(() =>
+			expect(mockMirrorError).toHaveBeenCalledWith(
+				'Checkout failed',
+				expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+			)
+		);
+		expect(getTerminalPaymentsService()?.get('completed-order')).toBeNull();
+	} finally {
+		hook.unmount();
+		mockResident.payload.meta_data = original;
+	}
+});

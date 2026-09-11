@@ -46,7 +46,10 @@ export interface RecordManualPaymentDeps {
 	currency: string;
 	dp: number;
 	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
-	mirror: (changes: { meta_data: MetaDataEntry[]; status?: string }) => Promise<void>;
+	mirror: (
+		changes: { meta_data: MetaDataEntry[]; status?: string },
+		options: { accepted: boolean }
+	) => Promise<void>;
 	/**
 	 * The order's status as the server holds it, for a refusal whose body omits the
 	 * summary. `null` when the server cannot be asked — the mirror then leaves the
@@ -204,10 +207,11 @@ export async function recordManualPayment(
 			}
 			const outcome = { kind: 'refused', reason, row: failedRow, order: serverOrder } as const;
 			try {
-				await deps.mirror({
+				const changes = {
 					meta_data: metaDataWith(failedRow),
 					...(authoritativeStatus ? { status: authoritativeStatus } : {}),
-				});
+				};
+				await deps.mirror(changes, { accepted: false });
 			} catch (mirrorError) {
 				throw new RecordManualPaymentMirrorError(outcome, mirrorError);
 			}
@@ -232,10 +236,11 @@ export async function recordManualPayment(
 	const serverOrder = accepted.order ?? null;
 	const outcome = { kind: 'recorded', via: 'online', row: serverRow, order: serverOrder } as const;
 	try {
-		await deps.mirror({
+		const changes = {
 			meta_data: metaDataWith(serverRow),
 			...(serverOrder ? { status: serverOrder.status } : {}),
-		});
+		};
+		await deps.mirror(changes, { accepted: true });
 	} catch (mirrorError) {
 		throw new RecordManualPaymentMirrorError(outcome, mirrorError);
 	}

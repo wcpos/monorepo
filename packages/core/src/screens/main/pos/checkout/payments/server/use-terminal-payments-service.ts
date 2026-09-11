@@ -106,37 +106,45 @@ export function useTerminalPaymentsService(): void {
 				};
 			},
 			mirror: async (orderUuid, { payment, order }) => {
-				const resident = await findEngineResident(manager, 'orders', orderUuid);
-				if (stopped) return;
-				if (!resident) throw new Error('Terminal payment order is not resident');
-				const payload = (resident.getLatest?.().payload ??
-					resident.payload) as EngineRecord<'orders'>['payload'];
-				const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
-				const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
-				await patchEngineResident({
-					manager,
-					collection: 'orders',
-					recordId: orderUuid,
-					// Only the summary fields that are order fields: `paid` and `balance` are
-					// derived from the ledger on read, and an unknown key fails the schema.
-					changes: {
-						...(order
-							? {
-									status: order.status,
-									...(payment.capture_mode === 'device' ? { total: order.total } : {}),
-									payment_method: order.payment_method,
-									payment_method_title: order.payment_method_title,
-								}
-							: {}),
-						meta_data,
-					},
-				});
-				if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
-					await latest.current.localPatch({
-						document: resident,
-						data: {
-							meta_data: await completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! }),
+				try {
+					const resident = await findEngineResident(manager, 'orders', orderUuid);
+					if (stopped) return;
+					if (!resident) throw new Error('Terminal payment order is not resident');
+					const payload = (resident.getLatest?.().payload ??
+						resident.payload) as EngineRecord<'orders'>['payload'];
+					const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
+					const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
+					await patchEngineResident({
+						manager,
+						collection: 'orders',
+						recordId: orderUuid,
+						// Only the summary fields that are order fields: `paid` and `balance` are
+						// derived from the ledger on read, and an unknown key fails the schema.
+						changes: {
+							...(order
+								? {
+										status: order.status,
+										...(payment.capture_mode === 'device' ? { total: order.total } : {}),
+										payment_method: order.payment_method,
+										payment_method_title: order.payment_method_title,
+									}
+								: {}),
+							meta_data,
 						},
+					});
+					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
+						const patched = await latest.current.localPatch({
+							document: resident,
+							data: {
+								meta_data: await completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! }),
+							},
+						});
+						if (!patched) throw new Error('provenance_save_failed');
+					}
+				} catch {
+					logger.error('Checkout failed', {
+						code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+						showToast: true,
 					});
 				}
 			},

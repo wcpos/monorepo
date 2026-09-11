@@ -24,6 +24,7 @@ import {
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
 import { readRegister } from '../../../../../services/register/register-document';
+import { persistProvenance } from '../provenance/persist-provenance';
 import { completionMeta } from '../provenance/stamp-completion';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
@@ -313,17 +314,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const saveProvenance = async () => {
 			if (!online || queuedOffline || !payload.id || entryAppliedMinor !== balanceMinor) return;
 			savingProvenance = true;
-			const patched = await localPatch({
-				document: order,
-				data: {
-					meta_data: await completionMeta(order.getLatest().payload, {
-						userDB,
-						siteUuid: site.uuid!,
-					}),
-				},
-			});
-			if (!patched) throw new Error('provenance_save_failed');
-			await pushDocument(order);
+			await persistProvenance({ order, localPatch, pushDocument, userDB, siteUuid: site.uuid! });
 			savingProvenance = false;
 		};
 		try {

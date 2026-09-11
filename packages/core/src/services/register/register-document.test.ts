@@ -96,3 +96,21 @@ it('counts sites independently without changing the global identity', async () =
 		sites: { site: { sale_counter: 3 }, other: { sale_counter: 3 } },
 	});
 });
+
+beforeEach(() => {
+	jest
+		.spyOn(globalThis.crypto, 'randomUUID')
+		.mockReturnValue('abcdef00-0000-4000-8000-00000000abcd');
+});
+afterEach(() => jest.restoreAllMocks());
+it('caches the register identity and mints v4 with random bytes when randomUUID is absent', async () => {
+	const { getRegisterId } = await import('./register-document');
+	jest.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(undefined as never);
+	const register = await ensureRegister(db);
+	expect(register.id).toMatch(
+		/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+	);
+	expect(getRegisterId()).toBe(register.id);
+	expect(await readRegister(db)).toEqual(register);
+	expect(getRegisterId()).toBe(register.id);
+});

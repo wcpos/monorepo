@@ -100,21 +100,27 @@ export function useRecordManualPayment(
 					const status = (response?.data as { status?: unknown } | undefined)?.status;
 					return typeof status === 'string' ? status : null;
 				},
-				mirror: async (changes) => {
-					await patchEngineResident({
-						manager,
-						collection: 'orders',
-						recordId: order.uuid,
-						changes,
-					});
-					if (
-						changes.status &&
-						isCompletingStatus(changes.status) &&
-						!hasSaleProvenance(changes.meta_data)
-					) {
-						await localPatch({
-							document: order,
-							data: { meta_data: await completionMeta(changes, { userDB, siteUuid: site.uuid! }) },
+				mirror: async (changes, { accepted }) => {
+					try {
+						await patchEngineResident({
+							manager,
+							collection: 'orders',
+							recordId: order.uuid,
+							changes,
+						});
+						if (
+							accepted &&
+							isCompletingStatus(changes.status ?? '') &&
+							!hasSaleProvenance(changes.meta_data)
+						) {
+							const meta_data = await completionMeta(changes, { userDB, siteUuid: site.uuid! });
+							const patched = await localPatch({ document: order, data: { meta_data } });
+							if (!patched) throw new Error('provenance_save_failed');
+						}
+					} catch {
+						logger.error(t('pos_cart.checkout_failed'), {
+							code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+							showToast: true,
 						});
 					}
 				},

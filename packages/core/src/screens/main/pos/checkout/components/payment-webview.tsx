@@ -12,7 +12,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
-import { completionMeta } from '../provenance/stamp-completion';
+import { persistProvenance } from '../provenance/persist-provenance';
 import { useAppState, useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrderActions } from '../../contexts/current-order';
@@ -136,6 +136,7 @@ export function PaymentWebview({
 	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { userDB, site } = useStoreSession();
+	const siteUuid = site.uuid!;
 	const pushDocument = usePushDocument();
 	const { localPatch } = useLocalMutation();
 	const [preparation, setPreparation] = React.useState<{
@@ -212,17 +213,13 @@ export function PaymentWebview({
 		let active = true;
 		void (async () => {
 			try {
-				const patched = await localPatch({
-					document: currentOrder,
-					data: {
-						meta_data: await completionMeta(currentOrder.getLatest().payload, {
-							userDB,
-							siteUuid: site.uuid!,
-						}),
-					},
+				await persistProvenance({
+					order: currentOrder,
+					localPatch,
+					pushDocument,
+					userDB,
+					siteUuid,
 				});
-				if (!patched) throw new Error('provenance_save_failed');
-				await pushDocument(currentOrder);
 				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready' });
 			} catch (error) {
 				if (!active) return;
@@ -239,7 +236,7 @@ export function PaymentWebview({
 		return () => {
 			active = false;
 		};
-	}, [order.uuid, userDB, site.uuid, online, rawPaymentURL, retryToken]);
+	}, [order.uuid, userDB, siteUuid, online, rawPaymentURL, retryToken]);
 
 	/**
 	 *

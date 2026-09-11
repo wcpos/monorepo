@@ -185,15 +185,18 @@ describe('recordManualPayment', () => {
 
 		expect(deps.post).toHaveBeenCalledWith('orders/1042/payments', { payment: mintedCard });
 		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
-		expect(deps.mirror).toHaveBeenCalledWith({
-			meta_data: expect.arrayContaining([
-				expect.objectContaining({
-					key: '_wcpos_payments',
-					value: { schema: 1, payments: [serverRow] },
-				}),
-			]),
-			status: 'completed',
-		});
+		expect(deps.mirror).toHaveBeenCalledWith(
+			{
+				meta_data: expect.arrayContaining([
+					expect.objectContaining({
+						key: '_wcpos_payments',
+						value: { schema: 1, payments: [serverRow] },
+					}),
+				]),
+				status: 'completed',
+			},
+			{ accepted: true }
+		);
 		expect(result).toEqual({ kind: 'recorded', via: 'online', row: serverRow, order: summary });
 	});
 

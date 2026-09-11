@@ -40,3 +40,40 @@ it('defers an offline cold start until online, attempts once, and remounts for a
 	expect(mockRegister).toHaveBeenLastCalledWith(expect.objectContaining({ siteUuid: 'other' }));
 	next.unmount();
 });
+
+let mockName = 'Till';
+jest.mock('./use-register', () => ({ useRegister: () => ({ name: mockName }) }));
+
+it('re-arms a failed registration after an offline rename and online transition', async () => {
+	const { act } = await import('@testing-library/react');
+	const post = jest
+		.fn()
+		.mockRejectedValueOnce(new Error('offline'))
+		.mockResolvedValue({ status: 201 });
+	const client = jest
+		.spyOn(jest.requireMock('../../screens/main/hooks/use-rest-http-client'), 'useRestHttpClient')
+		.mockReturnValue({ post });
+	const data = { id: 'register', name: 'Till', platform: 'web', sites: {} };
+	const doc = { toJSON: () => ({ data }), incrementalModify: jest.fn() };
+	mockSession.userDB = { getLocal: async () => doc };
+	mockRegister
+		.mockClear()
+		.mockImplementation(jest.requireActual('./register-with-server').registerWithServer);
+	mockStatus = 'online-website-available';
+	const view = renderHook(() => useRegisterWithServer());
+	await act(() => mockRegister.mock.results[0].value);
+	expect(post).toHaveBeenCalledTimes(1);
+	expect(doc.incrementalModify).not.toHaveBeenCalled();
+	mockStatus = 'offline';
+	mockName = data.name = 'Front';
+	view.rerender();
+	expect(post).toHaveBeenCalledTimes(1);
+	mockStatus = 'online-website-available';
+	view.rerender();
+	await act(() => mockRegister.mock.results[1].value);
+	expect(post).toHaveBeenCalledTimes(2);
+	expect(post).toHaveBeenLastCalledWith('registers', expect.objectContaining({ name: 'Front' }));
+	expect(doc.incrementalModify).toHaveBeenCalledTimes(1);
+	view.unmount();
+	client.mockRestore();
+});

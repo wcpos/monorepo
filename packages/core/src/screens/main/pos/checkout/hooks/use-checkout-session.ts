@@ -1,11 +1,16 @@
 import * as React from 'react';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { useStoreSession } from '../../../../../contexts/app-state';
+import { usePushDocument } from '../../../contexts/use-push-document';
+import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { persistProvenance } from '../provenance/persist-provenance';
 import { useT } from '../../../../../contexts/translations';
 import {
 	PaymentGatewayContract,
@@ -56,6 +61,11 @@ export function createCheckoutIdempotencyKey(
 
 export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const http = useRestHttpClient();
+	const { userDB, site } = useStoreSession();
+	const siteUuid = site.uuid!;
+	const { localPatch } = useLocalMutation();
+	const pushDocument = usePushDocument();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const { resolveStockOwnerId } = useCartStockGuard();
@@ -162,6 +172,19 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		}
 
 		try {
+			if (online) {
+				try {
+					await persistProvenance({ order, localPatch, pushDocument, userDB, siteUuid });
+				} catch {
+					const message = t('pos_cart.checkout_failed');
+					setError(message);
+					checkoutLogger.error(message, {
+						code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+						showToast: true,
+					});
+					return;
+				}
+			}
 			if (!checkoutAttemptIdRef.current) {
 				checkoutAttemptIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 			}
@@ -252,6 +275,12 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			setLoading(false);
 		}
 	}, [
+		order,
+		localPatch,
+		pushDocument,
+		userDB,
+		siteUuid,
+		online,
 		blockIfDegraded,
 		completeOrderFlow,
 		gateway,

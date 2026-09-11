@@ -323,3 +323,42 @@ it('does not post or enqueue a payment when the provenance push rejects', async 
 		})
 	);
 });
+
+it('mirrors a refused server status without allocating or patching provenance', async () => {
+	const stamp = jest.requireMock('../provenance/stamp-completion');
+	const completion = jest.spyOn(stamp, 'completionMeta');
+	onlineStatus = 'online-website-available';
+	mockPost.mockRejectedValueOnce({
+		response: {
+			data: { code: 'wcpos_order_already_paid', data: { order: { status: 'completed' } } },
+		},
+	});
+	const { result } = renderHook(() => useRecordManualPayment());
+	await expect(result.current(order, method, { amount: 40 })).resolves.toMatchObject({
+		kind: 'refused',
+	});
+	expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({ changes: expect.objectContaining({ status: 'completed' }) })
+	);
+	expect(completion).not.toHaveBeenCalled();
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+	completion.mockRestore();
+});
+
+it.each([false, true])(
+	'logs a failed accepted mirror without throwing (throws=%s)',
+	async (throws) => {
+		onlineStatus = 'online-website-available';
+		mockPost.mockResolvedValueOnce({ data: { order: { status: 'completed' } } });
+		if (throws) mockLocalPatch.mockRejectedValueOnce(new Error('storage failed'));
+		else mockLocalPatch.mockResolvedValueOnce(undefined);
+		const { result } = renderHook(() => useRecordManualPayment());
+		await expect(result.current(order, method, { amount: 40 })).resolves.toMatchObject({
+			kind: 'recorded',
+		});
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+		);
+	}
+);
