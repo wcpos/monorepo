@@ -162,6 +162,11 @@ export function EditOrderMetaForm({
 					document: order,
 					data: { status: previous.status, meta_data: previous.meta_data },
 				});
+				// The failed send may still land: a timed-out outcome is unknown and a queued
+				// mutation is retried. Open orders only reach the server on an explicit push,
+				// so the revert is pushed too — the last write wins and the server ends up
+				// where the cart is. pushDocument toasts its own failure.
+				void pushDocument(order).catch(() => undefined);
 			}
 			cartLogger.error('Failed to save order', {
 				showToast: true,

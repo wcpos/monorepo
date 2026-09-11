@@ -163,7 +163,7 @@ it('confirms before writing, keeps values on cancel, then patches, pushes and le
 	expect(mockPatch.mock.invocationCallOrder[0]).toBeLessThan(mockPush.mock.invocationCallOrder[0]);
 	expect(mockPush.mock.invocationCallOrder[0]).toBeLessThan(mockMove.mock.invocationCallOrder[0]);
 });
-it('restores only status and metadata after a rejected push, keeping the cart selected', async () => {
+it('restores status and metadata after a rejected push, pushes the revert, keeps the cart', async () => {
 	mockPush.mockRejectedValueOnce(new Error('offline'));
 	await save('completed');
 	await confirm();
@@ -171,6 +171,10 @@ it('restores only status and metadata after a rejected push, keeping the cart se
 		document: order,
 		data: { status: 'pos-open', meta_data: meta },
 	});
+	// The revert goes to the server too, after the revert patch, so a send that lands
+	// late is overwritten rather than left owning the order.
+	expect(mockPush).toHaveBeenCalledTimes(2);
+	expect(mockPatch.mock.invocationCallOrder[1]).toBeLessThan(mockPush.mock.invocationCallOrder[1]);
 	expect(mockMove).not.toHaveBeenCalled();
 	expect(mockClose).not.toHaveBeenCalled();
 });
