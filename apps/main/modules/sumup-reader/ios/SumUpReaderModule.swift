@@ -81,10 +81,15 @@ public class SumUpReaderModule: Module {
       try self.begin()
       SumUpSDK.logout { success, error in self.complete(promise, success, error) }
     }.runOnQueue(.main)
-    AsyncFunction("merchant") { () -> [String: String]? in
+    AsyncFunction("merchant") { () -> [String: Any]? in
       try self.requireSetup()
       guard let merchant = SumUpSDK.currentMerchant else { return nil }
-      return ["merchantCode": merchant.merchantCode, "currencyCode": merchant.currencyCode]
+      // Both fields are optional on the SDK's merchant object; the driver treats a missing
+      // code as "not logged in" rather than a crash.
+      return [
+        "merchantCode": merchant.merchantCode ?? NSNull(),
+        "currencyCode": merchant.currencyCode ?? NSNull(),
+      ]
     }.runOnQueue(.main)
     AsyncFunction("openReaderSettings") { (promise: Promise) in
       let controller = try self.controller()
