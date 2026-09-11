@@ -9,6 +9,7 @@ This repository keeps project-specific agent configuration local to the repo:
 - `CLAUDE.md` — project overview and shared local agent policy.
 - `AGENTS.md` — Codex/agent entrypoint and local discovery instructions.
 - `.claude/rules/*.mdc` — local project rules.
+- `.claude/rules/design.mdc` — **must-read before any UI work** (screens, components, `global.css`, mockups, UI review).
 - `.claude/skills/*/SKILL.md` — local project skills.
 
 Do not move these local rules or skills to global `~/.claude`, `~/.codex`, or other global agent configuration without explicit user approval.

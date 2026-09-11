@@ -1,0 +1,123 @@
+---
+description: WCPOS UI design rules — must-read before drawing, building or reviewing any screen or component
+globs:
+  - packages/components/**
+  - packages/core/src/screens/**
+  - packages/core/src/components/**
+  - apps/main/**/*.tsx
+  - apps/main/global.css
+alwaysApply: false
+---
+
+# WCPOS UI design rules
+
+Read this before you draw a mockup, build a screen, touch a component, or review a UI diff.
+The long form with sources and rationale is `docs/design/ui-design-guidelines.md` in
+`wcpos/roadmap`. These rules are the owner's design position; a PR that breaks one needs a
+stated reason in its body, not a quiet exception.
+
+## The two sentences everything else serves
+
+1. **As simple as possible on the surface, with deep complexity a few taps away.** The default
+   screen shows only what the common case needs. Everything else exists, is reachable in one or
+   two taps, and is never deleted to make the screen look clean.
+2. **Clean and modern, following Apple's touch-screen guidance, and it should spark small moments
+   of joy for the cashier.** Joy here means speed, precision and a quiet acknowledgement when
+   something completes. It never means decoration.
+
+## Who is standing in front of it
+
+A cashier at a counter, standing, arm's length from a shared tablet, under shop lighting, with a
+customer waiting. Sometimes a stall-holder who last opened the app four months ago. Judge every
+screen at 5 pm with a queue: can the next action be found in under a second without reading?
+
+## Rules
+
+### 1. One number, one action
+Each screen has one figure that leads and one primary action. Nothing else competes with them
+in size, weight or colour. A second amount (a split leg, a custom amount) appears only when it
+differs from the first, and then as a plan (*Payment 1 of 2*), not a second total.
+
+### 2. Touch first
+- Minimum tap target 44 × 44 pt (Apple HIG); 48 pt preferred (Material, about 9 mm). Gaps of at
+  least 8 pt between adjacent targets, about 12 pt of padding around a bordered control.
+- Keys and tiles the cashier hits every sale (tender keypad, payment tiles, product grid, Pay) are
+  at least 56 pt tall on a tablet. Kiosk research keeps finding fewer touch errors up to about
+  20 mm, so a bigger key is never wasted space.
+- The same CSS size is smaller in millimetres on a phone than on a 24" counter screen; check the
+  physical size on the device class, not the number in the stylesheet.
+- Destructive actions (void, cancel payment, delete) sit apart from constructive ones, never in
+  the same row at the same weight.
+- No hover-only affordances. Hover and keyboard are desktop extras layered on a touch design.
+- A press shows a visible pressed state within 100 ms. Silence after a tap is a bug.
+
+### 3. Apple's grammar, our accent
+- Navigation, modality, sheets, popovers, safe areas and typography follow the Human Interface
+  Guidelines. Full-screen for multi-step tasks; sheets for short, dismissable ones; popovers for
+  small choices; never an enlarged centred modal for a task that grew.
+- **Back points where the content goes.** A back arrow on a pane that sits to the left of what it
+  returns to is wrong; use a close (×) or a labelled action instead.
+- System fonts. Tabular numerals for every amount. Base size 14 px web, 16 px native; nothing
+  below 12 px, and never below 14 px for anything the cashier reads at arm's length.
+
+### 4. Layout is a grid, not a wrap
+Tiles are equal width in fixed columns and keep their order. Width never follows label length.
+Five or six payment gateways is normal for a WooCommerce store: design the grid for that, not for
+two. Phones stack to one or two columns; tablets and desktop use the space they have.
+
+### 5. State is visible, not explained
+- Offline, saving, refused, disabled: one badge in one place, at the top of the pane.
+- A disabled control says why in a few words beside it. Unavailable options are folded or dimmed
+  so they never compete with live ones at full size.
+- No walls of text. An error, empty or trouble state is one line, the actions, and a link to
+  docs.wcpos.com. Explanations live in the docs, not the app.
+- Never rely on colour alone; pair it with an icon or a word.
+
+### 6. Motion means something
+- Durations 150–250 ms for most transitions, ease-out; nothing over 400 ms on a path the cashier
+  is waiting on. Animations are interruptible and never block the next tap.
+- Every completion gets a beat: the change-due line appears as the amount is typed, the total
+  settles, the *Paid* stamp lands, a capture gets a short haptic on native. That is the joy.
+- Respect reduce-motion. No confetti, no mascots, no emoji in the UI, no animation for its own
+  sake.
+
+### 7. Calm colour, semantic tokens
+- Use the semantic tokens in `apps/main/global.css` (`bg-background`, `bg-card`, `text-muted-foreground`,
+  `bg-primary`, `text-destructive`, `bg-success`, …). Never a hex or an `oklch()` in a component.
+- One accent colour for the primary action per screen. Semantic colours (success, warning,
+  destructive, info) only carry meaning, never decoration.
+- Text contrast 4.5:1, UI and icon contrast 3:1 (WCAG). Light and dark are both first-class; check
+  every new surface in both.
+- Flat surfaces, hairline borders, one radius. No gradients, glass or drop shadows to make a card
+  look "premium"; hierarchy comes from spacing, weight and colour, in that order.
+
+### 8. Words the cashier uses
+- Buttons are verbs with the object on them: *Take 18,00 £ in Cash*, *Close register*, *Reprint copy*.
+- A label that repeats what is already on the element is noise: no *OTHER* above *SumUp Terminal*,
+  no *Cash* kind above *Cash*. Kinds are icons.
+- Plain words: products, not SKUs; sync, not replication. Every string is translated; it must
+  survive German length and Spanish plurals without wrapping the layout.
+- Brand voice: direct, not blunt; calm, not cute. Error copy says what happened and what to do next.
+
+### 9. Before you draw, open the real screen
+- Inventory what the existing screen does (every state, every string) and rehost it. A mockup that
+  invents a simplified version of an existing surface evaluates a straw man.
+- Then look at what Square, Shopify POS, Lightspeed, Toast, Zettle and SumUp do for the same task.
+  The cashier's expectation is the tie-breaker; deviate only with a stated reason.
+- Take zero leads from WordPress or WooCommerce admin idioms for app UI.
+
+### 10. Definition of done for a UI change
+- Walked every state as a cashier: empty, loading, saving, error, offline, disabled, long text,
+  part-paid, phone width, dark mode.
+- Screenshots of the states that changed are in the PR body, tablet and phone.
+- No new explanatory paragraph in the app. No new hex colour. No new `useEffect` for layout.
+- Touch targets and contrast checked, not assumed.
+- Every interactive element carries a stable `testID`.
+
+## Anti-patterns that have already been rejected
+- The centred modal that grew: enlarging it is the one fix the design systems forbid.
+- A paragraph under the tiles telling the cashier how the screen works.
+- Full-size dead tiles for gateways that are not set up.
+- A kind label on every tile when only the title differs.
+- A back arrow pointing away from where the content is.
+- Hosted-artifact-only mockups; write the HTML to disk and open it.
