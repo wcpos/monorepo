@@ -296,8 +296,8 @@ carried by the merchant's WordPress site as a mailbox; not the data path.
 
 ## Language — Cashiers & till
 
-Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, tickets #207, #208,
-#210, #209, #211, #212 and #213).
+Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202,
+tickets #207, #208, #210, #209, #211, #212 and #213); the Register entry amended 2026-09-11 on #214.
 
 **Cashier**:
 A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
@@ -319,10 +319,20 @@ record serves, never a role name.
 _Avoid_: profile, account (for this concept)
 
 **Register**:
-The identity of one installed till — the workstation a session is opened on. The
-left-hand menu item is "Register": it is keyed on this device's register, and the cashier
-signs in inside it. A register belongs to exactly one store: bound to the store chosen at
-its first sign-in, moved to another only by an administrator while it has no open session,
+The identity of one cash drawer — the server record a session is opened on. The
+register is not a page and has no menu item (ruled 2026-09-11 on wcpos/roadmap#214,
+superseding the menu-item sentence of #207): it is a state of the POS screen — the cart
+column is the "Open register" card while closed and the count while counting — plus one
+Register panel opened from a bar at the top of the cart while open. The cashier is whoever
+the app is signed in as; there is no register-level sign-in. A register is a server record:
+every store has one by default, created with the store, and more are created in the plugin's
+admin, never in the POS. A device holds only a pointer to its register — bound silently at
+first sign-in when the store has one register, chosen once from a picker when it has more,
+changed under the avatar — so a wiped device re-binds and loses no numbering. The register
+is named on screen only when its store has more than one. A register is the drawer, not the
+device: several devices may point at one register (two cashiers with their own tablets sharing
+one cash drawer ring on the same session, each row stamped with its actor). A register belongs
+to exactly one store, moved to another only by an administrator while it has no open session,
 its numbering unbroken by the move. Every closure records the store the register belonged
 to when it was written, and a store's figures are summed from those closures, so moving a
 register moves no history. A store has any number of registers.
