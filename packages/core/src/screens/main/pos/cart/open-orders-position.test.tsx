@@ -25,8 +25,10 @@ jest.mock('./table', () => ({ CartTable: () => <div data-testid="cart-table" /> 
 jest.mock('./totals', () => ({ Totals: () => <div /> }));
 jest.mock('./totals-changed-banner', () => ({ CartTotalsChangedBanner: () => <div /> }));
 jest.mock('./cart-header', () => ({ CartHeader: () => <div /> }));
-jest.mock('./buttons/add-note', () => ({ AddNoteButton: () => <div /> }));
-jest.mock('./buttons/order-meta', () => ({ OrderMetaButton: () => <div /> }));
+jest.mock('./buttons/order-meta', () => ({
+	OrderMetaButton: () => <div />,
+	OrderMetaDialog: () => null,
+}));
 jest.mock('./buttons/pay', () => ({ PayButton: () => <div data-testid="checkout-button" /> }));
 jest.mock('./buttons/save-order', () => ({ SaveButton: () => <div /> }));
 jest.mock('./buttons/void', () => ({ VoidButton: () => <div /> }));

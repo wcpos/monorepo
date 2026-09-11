@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import { renderHook } from '@testing-library/react';
 
-import { POSOverlaySideProvider, usePOSOverlaySide } from './index';
+import { oppositeOverlaySide, POSOverlaySideProvider, usePOSOverlaySide } from './index';
 
 let mockPosition: string | undefined = 'left';
 let mockScreenSize = 'md';
@@ -46,3 +46,10 @@ it('keeps non-POS panels on the right', () => {
 	const { result } = renderHook(usePOSOverlaySide);
 	expect(result.current).toBe('right');
 });
+
+it('opens settings opposite their panel', () =>
+	expect(
+		['left', 'right', 'bottom'].map((side) =>
+			oppositeOverlaySide(side as 'left' | 'right' | 'bottom')
+		)
+	).toEqual(['right', 'left', 'bottom']));
