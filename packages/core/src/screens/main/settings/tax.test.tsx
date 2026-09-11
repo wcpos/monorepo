@@ -9,12 +9,13 @@ import { SettingsDangerZone } from './components/settings-danger-zone';
 const mockLocalPatch = jest.fn().mockResolvedValue(undefined);
 const mockUseForm = jest.fn((_options: unknown) => ({ control: {} }));
 const mockUseFormChangeHandler = jest.fn();
-const extraData = {
+const extraData: { taxClasses: { slug: string; name: string }[] } = {
 	taxClasses: [
 		{ slug: 'standard', name: 'Standard rate' },
 		{ slug: 'reduced-rate', name: 'Reduced rate' },
 	],
 };
+const site: { url?: string } = { url: 'https://example.test/' };
 
 const store = {
 	id: 1,
@@ -62,7 +63,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ error: jest.fn() }),
 }));
 jest.mock('../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store, site: { url: 'https://example.test/' } }),
+	useStoreSession: () => ({ store, site }),
 }));
 jest.mock('../contexts/extra-data', () => ({ useExtraData: () => ({ extraData }) }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -173,5 +174,32 @@ describe('TaxSettings tax class persistence', () => {
 	it('does not render Restore server settings', () => {
 		render(<TaxSettings />);
 		expect(SettingsDangerZone).not.toHaveBeenCalled();
+	});
+
+	it('renders no link, and no crash, for a site document without a url', () => {
+		const url = site.url;
+		delete site.url;
+		try {
+			const { queryByRole, getByTestId } = render(<TaxSettings />);
+			expect(queryByRole('link')).toBeNull();
+			expect(getByTestId('settings-tax-locked-calc_taxes').textContent).toBe('common.yes');
+		} finally {
+			site.url = url;
+		}
+	});
+
+	it('falls back to the stored slug while the tax classes are unavailable', () => {
+		const classes = extraData.taxClasses;
+		extraData.taxClasses = [];
+		store.shipping_tax_class = 'reduced-rate';
+		try {
+			const { getByTestId } = render(<TaxSettings />);
+			expect(getByTestId('settings-tax-locked-shipping_tax_class').textContent).toBe(
+				'reduced-rate'
+			);
+		} finally {
+			extraData.taxClasses = classes;
+			store.shipping_tax_class = '';
+		}
 	});
 });

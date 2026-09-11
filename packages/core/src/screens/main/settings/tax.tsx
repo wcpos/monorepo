@@ -59,12 +59,18 @@ export function TaxSettings() {
 		shipping_tax_class: latest.shipping_tax_class,
 		tax_round_at_subtotal: latest.tax_round_at_subtotal,
 	}));
+	// Falls back to the slug while the class list is loading or lacks the stored
+	// class: this row is read-only now, so it must never read blank.
+	const shippingTaxClassSlug = taxClassFromWire(lockedSettings.shipping_tax_class);
 	const shippingTaxClassName =
 		lockedSettings.shipping_tax_class === INHERIT_TAX_CLASS
 			? t('common.tax_class_based_on_cart_items')
-			: taxClasses?.find(
-					(taxClass) => taxClass.slug === taxClassFromWire(lockedSettings.shipping_tax_class)
-				)?.name;
+			: (taxClasses?.find((taxClass) => taxClass.slug === shippingTaxClassSlug)?.name ??
+				shippingTaxClassSlug);
+	const yesNo = (value: unknown) => (value === 'yes' ? t('common.yes') : t('common.no'));
+	// `url` is optional on the site schema; a site without one gets no link, not a crash.
+	const siteUrl = typeof site.url === 'string' ? site.url.replace(/\/+$/, '') : '';
+	const wooTaxSettingsUrl = siteUrl ? `${siteUrl}/wp-admin/admin.php?page=wc-settings&tab=tax` : '';
 
 	/**
 	 *
@@ -121,16 +127,14 @@ export function TaxSettings() {
 						label={t('settings.enable_taxes')}
 						testID="settings-tax-locked-calc_taxes"
 					>
-						<Text>{t(lockedSettings.calc_taxes === 'yes' ? 'common.yes' : 'common.no')}</Text>
+						<Text>{yesNo(lockedSettings.calc_taxes)}</Text>
 					</SettingsRow>
 					<SettingsRow
 						inline
 						label={t('settings.prices_entered_with_tax')}
 						testID="settings-tax-locked-prices_include_tax"
 					>
-						<Text>
-							{t(lockedSettings.prices_include_tax === 'yes' ? 'common.yes' : 'common.no')}
-						</Text>
+						<Text>{yesNo(lockedSettings.prices_include_tax)}</Text>
 					</SettingsRow>
 					<FormField
 						control={form.control}
@@ -158,16 +162,12 @@ export function TaxSettings() {
 						label={t('settings.round_tax_at_subtotal_level')}
 						testID="settings-tax-locked-tax_round_at_subtotal"
 					>
-						<Text>
-							{t(lockedSettings.tax_round_at_subtotal === 'yes' ? 'common.yes' : 'common.no')}
-						</Text>
+						<Text>{yesNo(lockedSettings.tax_round_at_subtotal)}</Text>
 					</SettingsRow>
 					<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
-					<DocsLink
-						href={`${site.url!.replace(/\/+$/, '')}/wp-admin/admin.php?page=wc-settings&tab=tax`}
-					>
-						{t('settings.tax_locked_link')}
-					</DocsLink>
+					{wooTaxSettingsUrl ? (
+						<DocsLink href={wooTaxSettingsUrl}>{t('settings.tax_locked_link')}</DocsLink>
+					) : null}
 				</SettingsSection>
 
 				<SettingsSection title={t('settings.tax_display')}>
