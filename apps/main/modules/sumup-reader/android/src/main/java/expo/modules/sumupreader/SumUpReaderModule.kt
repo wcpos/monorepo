@@ -7,7 +7,7 @@ import com.sumup.merchant.reader.api.SumUpLogin
 import com.sumup.merchant.reader.api.SumUpPayment
 import com.sumup.reader.sdk.api.SumUpState
 import com.sumup.merchant.reader.models.SavedCardReaderDetailsResult
-import com.sumup.merchant.Models.TransactionInfo
+import com.sumup.checkout.core.models.TransactionInfo
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Queues
@@ -57,7 +57,7 @@ class SumUpReaderModule : Module() {
       code == 15 -> "unknown"
       code == 1 -> "success"
       code == 2 -> "failed"
-      info?.paymentStatus?.toString() == "CANCELLED" -> "cancelled"
+      info?.status == "CANCELLED" -> "cancelled"
       code != null -> "failed"
       resultCode == Activity.RESULT_CANCELED -> "cancelled"
       else -> "unknown"
@@ -65,8 +65,8 @@ class SumUpReaderModule : Module() {
     return mapOf("outcome" to outcome, "resultCode" to code,
       "transactionCode" to data?.getStringExtra(SumUpAPI.Response.TX_CODE),
       "amount" to info?.amount?.toString(), "tipAmount" to info?.tipAmount?.toString(),
-      "currency" to info?.currency?.toString(), "cardType" to info?.cardType?.toString(),
-      "last4" to info?.last4Digits, "message" to data?.getStringExtra(SumUpAPI.Response.MESSAGE))
+      "currency" to info?.currency, "cardType" to info?.card?.type,
+      "last4" to info?.card?.last4Digits, "message" to data?.getStringExtra(SumUpAPI.Response.MESSAGE))
   }
   override fun definition() = ModuleDefinition {
     Name("SumUpReader")
@@ -99,7 +99,7 @@ class SumUpReaderModule : Module() {
     AsyncFunction("merchant") {
       requireSetup()
       val merchant = SumUpAPI.getCurrentMerchant()
-      merchant?.let { mapOf("merchantCode" to it.merchantCode, "currencyCode" to it.currencyCode) }
+      merchant?.let { mapOf("merchantCode" to it.merchantCode, "currencyCode" to it.currency?.name) }
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("openReaderSettings") { promise: Promise ->
       launch(SETTINGS, promise) { SumUpAPI.openCardReaderPage(it, SETTINGS) }
