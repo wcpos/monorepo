@@ -15,7 +15,7 @@ import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
 import { deviceTransports, selectableReaders } from './tiles';
 import { disabledReasonKey, kindLabelKey } from './labels';
-import { ThisPaymentLine } from './ledger-pane';
+import { SplitView } from './split-view';
 import { useDriverStatus } from './use-driver-status';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { useT } from '../../../../../contexts/translations';
@@ -105,7 +105,11 @@ export function TenderPane({ flow, format, compact }: Props) {
 		);
 	}
 
-	return <TenderKeypad flow={flow} format={format} compact={compact} />;
+	return flow.state.splitView ? (
+		<SplitView flow={flow} format={format} compact={compact} />
+	) : (
+		<TenderKeypad flow={flow} format={format} compact={compact} />
+	);
 }
 
 /**
@@ -233,13 +237,14 @@ function TenderKeypad({ flow, format, compact }: Props) {
 		(method?.capture.mode === 'device' && !flow.deviceReady);
 	const reason = flow.tiles.find((tile) => tile.method.id === method?.id)?.reason;
 
-	// thisPaymentMinor follows the entry; helpers and warnings need the planned due instead.
-	const plan = flow.state.splitPlan;
-	const due =
-		plan && plan.taken < plan.ways - 1
-			? Math.min(plan.shareMinor, flow.balanceMinor)
-			: flow.balanceMinor;
-	const noChange = Boolean(method && !givesChange && flow.state.entryMinor > flow.thisPaymentMinor);
+	const plan = flow.plan;
+	const done = flow.planLegs.filter((leg) => leg.state === 'done');
+	const n = done.length + 1;
+	const ways = plan?.kind === 'fixed' ? 2 : Math.max(plan?.ways ?? 1, n);
+	const groupDone =
+		plan?.kind === 'items' && done.reduce((sum, leg) => sum + leg.minor, 0) >= plan.firstMinor;
+	const due = flow.thisPaymentMinor;
+	const noChange = Boolean(method && !givesChange && flow.state.entryMinor > flow.balanceMinor);
 	const left = flow.balanceMinor - flow.entryAppliedMinor;
 	const canChoose = (tile: TenderTile) =>
 		!tile.disabled ||
@@ -269,24 +274,28 @@ function TenderKeypad({ flow, format, compact }: Props) {
 	});
 	const hint = noChange
 		? t('pos_checkout.no_change_for_method', {
-				amount: format(flow.thisPaymentMinor),
+				amount: format(flow.balanceMinor),
 				method: method?.title,
 			})
 		: flow.entryChangeMinor > 0
 			? t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })
 			: flow.entryAppliedMinor < due && flow.state.entryMinor > 0
-				? t('pos_checkout.part_payment_left', { left: format(left) })
+				? plan
+					? t('pos_checkout.less_than_planned', { amount: format(due - flow.entryAppliedMinor) })
+					: t('pos_checkout.part_payment_left', { left: format(left) })
 				: '';
 	const commit = method
 		? t(remote ? 'pos_checkout.send_amount_to' : 'pos_checkout.take_amount_in', {
 				amount: format(flow.entryAppliedMinor),
 				method: method.title,
 			}) +
-			(left > 0
-				? ` · ${t('pos_checkout.amount_left', { amount: format(left) })}`
-				: flow.rows.length > 0 || flow.balanceMinor < flow.totalMinor
-					? ` · ${t('pos_checkout.pays_it_off')}`
-					: '')
+			(plan && !groupDone
+				? ` · ${t('pos_checkout.n_of_ways', { n, ways })}`
+				: left > 0
+					? ` · ${t('pos_checkout.amount_left', { amount: format(left) })}`
+					: flow.rows.length > 0 || flow.balanceMinor < flow.totalMinor
+						? ` · ${t('pos_checkout.pays_it_off')}`
+						: '')
 		: t('pos_checkout.choose_how_paying');
 
 	return (
@@ -295,51 +304,50 @@ function TenderKeypad({ flow, format, compact }: Props) {
 			contentContainerClassName="items-center gap-2 pb-4"
 			showsVerticalScrollIndicator={false}
 		>
-			<ThisPaymentLine
-				flow={flow}
-				format={format}
-				renderRow={() => (
-					<HStack className="flex-wrap items-center justify-center gap-2">
-						<Text
-							testID="checkout-label"
-							className="text-sidebar-foreground/70 text-xs font-semibold tracking-wider uppercase"
-						>
-							{t(
+			<HStack className="flex-wrap items-center justify-center gap-2">
+				<Text
+					testID="checkout-label"
+					decodeHtml
+					className="text-sidebar-foreground/70 text-xs font-semibold tracking-wider uppercase"
+				>
+					{plan
+						? `${flow.planLabel} · ${t('pos_checkout.amount_left', { amount: format(flow.balanceMinor) })}`
+						: t(
 								flow.balanceMinor < flow.totalMinor
 									? 'pos_checkout.remaining'
 									: 'pos_checkout.to_pay'
 							)}{' '}
-							<Text testID="checkout-balance">{format(flow.balanceMinor)}</Text>
-						</Text>
-						{flow.balanceMinor > 0 ? (
-							<Button
-								variant="sidebar-quiet"
-								size="sm"
-								className="rounded-full"
-								testID="checkout-split-chip"
-								disabled={flow.busy}
-								onPress={() =>
-									flow.dispatch({
-										type: flow.state.splitMenuOpen ? 'close-split-menu' : 'open-split-menu',
-									})
-								}
-							>
-								<ButtonText>{t('pos_checkout.split')}</ButtonText>
-							</Button>
-						) : null}
-						{!flow.online ? (
-							<Text testID="checkout-offline" className="text-warning text-xs">
-								{t('pos_checkout.offline')}
-							</Text>
-						) : null}
-					</HStack>
-				)}
-			/>
+					<Text testID="checkout-balance" className={plan ? 'hidden' : undefined}>
+						{format(flow.balanceMinor)}
+					</Text>
+				</Text>
+				{flow.balanceMinor > 0 ? (
+					<Button
+						variant="sidebar-quiet"
+						size="sm"
+						className="rounded-full"
+						testID="checkout-split-chip"
+						disabled={flow.busy}
+						onPress={() =>
+							flow.dispatch({
+								type: 'open-split',
+							})
+						}
+					>
+						<ButtonText>{t('pos_checkout.split')}</ButtonText>
+					</Button>
+				) : null}
+				{!flow.online ? (
+					<Text testID="checkout-offline" className="text-warning text-xs">
+						{t('pos_checkout.offline')}
+					</Text>
+				) : null}
+			</HStack>
 			<Text
 				testID="checkout-entry"
 				className={`text-sidebar-foreground font-bold tabular-nums ${compact ? 'text-6xl' : 'text-8xl'} ${flow.state.entryDirty ? 'opacity-100' : 'opacity-70'}`}
 			>
-				{format(flow.state.entryMinor)}
+				{format(flow.state.view === 'select' ? due : flow.state.entryMinor)}
 			</Text>
 			<Text
 				testID="checkout-entry-hint"
@@ -348,6 +356,56 @@ function TenderKeypad({ flow, format, compact }: Props) {
 			>
 				{hint}
 			</Text>
+			{plan ? (
+				<View
+					testID="checkout-plan"
+					className="flex-row flex-wrap items-center justify-center gap-2"
+				>
+					{flow.planLegs.map((leg, index) => (
+						<View
+							key={index}
+							testID={`checkout-plan-leg-${index}`}
+							className={`flex-row items-center gap-1 rounded-full border px-3 py-2 ${leg.state === 'done' ? 'bg-success/20 border-success/30' : leg.state === 'now' ? 'border-sidebar-foreground' : 'border-sidebar-border opacity-60'} ${leg.state === 'rest' ? 'border-dashed' : ''}`}
+						>
+							{leg.state === 'done' ? (
+								<Icon name="check" size="xs" className="text-success" />
+							) : null}
+							<Text
+								className={
+									leg.state === 'done' ? 'text-success text-xs' : 'text-sidebar-foreground text-xs'
+								}
+								decodeHtml
+							>
+								{leg.state === 'rest'
+									? t('pos_checkout.then_amount', { amount: format(leg.minor) })
+									: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
+							</Text>
+						</View>
+					))}
+					{flow.planMore ? (
+						<Button
+							variant="sidebar"
+							size="sm"
+							testID="checkout-plan-pick-items"
+							onPress={() => {
+								flow.dispatch({ type: 'set-split-tab', tab: 'item' });
+								flow.dispatch({ type: 'open-split' });
+							}}
+						>
+							<ButtonText className="underline">{t('pos_checkout.pick_next_items')}</ButtonText>
+						</Button>
+					) : null}
+					<Button
+						variant="sidebar"
+						size="sm"
+						testID="checkout-plan-change"
+						onPress={() => flow.dispatch({ type: 'open-split' })}
+					>
+						<ButtonText className="underline">{t('pos_checkout.change_split')}</ButtonText>
+					</Button>
+				</View>
+			) : null}
+
 			{compact ? (
 				<ScrollView horizontal className="w-full grow-0" showsHorizontalScrollIndicator={false}>
 					<HStack className="gap-2">{pills}</HStack>

@@ -31,8 +31,10 @@ import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-le
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
 import {
+	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
+	setLinesPaidBy,
 	setTenderMethod,
 	useTenderMethod,
 } from '../checkout-mode';
@@ -49,11 +51,12 @@ import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-sta
 import { useRememberedReader } from './remembered-readers';
 import { disabledReasonKey, providerErrorMessage } from './labels';
 import {
+	activePlan,
 	appliedMinor,
 	changeMinor,
 	initTenderState,
+	planLegs,
 	quickTenderedAmounts,
-	splitPlanLegs,
 	type TenderAction,
 	tenderReducer,
 	type TenderState,
@@ -99,7 +102,12 @@ export interface TenderFlow {
 	balanceMinor: number;
 	thisPaymentMinor: number;
 	afterThisPaymentMinor: number;
-	splitLegs: ReturnType<typeof splitPlanLegs>;
+	plan: TenderState['plan'];
+	planLegs: ReturnType<typeof planLegs>['legs'];
+	planLabel: string | null;
+	planMore: boolean;
+	lines: { id: number; name: string; quantity: number; totalMinor: number }[];
+	linesPaidBy: TenderState['linesPaidBy'];
 
 	/** The order's ledger rows, in ledger order. */
 	rows: PaymentRow[];
@@ -187,7 +195,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			service?.readersInUse(),
 			order.uuid
 		);
-		return { ...initial, readerId: initialReaderId(readers, lockToDefault, null) };
+		return {
+			...initial,
+			linesPaidBy: getCheckoutModeSnapshot().linesPaidBy.get(order.uuid) ?? {},
+			readerId: initialReaderId(readers, lockToDefault, null),
+		};
 	});
 	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
 	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
@@ -235,11 +247,54 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// not a bigger leg (the "50" chip for a 46,48 leg). A method that gives no change takes
 	// what was typed, capped at the balance — typing a different amount IS changing the leg.
 	// The last leg is whatever balance remains (rounding, or a short earlier leg), never the share.
-	const plannedLegMinor = state.splitPlan
-		? state.splitPlan.taken >= state.splitPlan.ways - 1
-			? balanceMinor
-			: Math.min(state.splitPlan.shareMinor, balanceMinor)
-		: balanceMinor;
+	const rowsSinceFrom = rows
+		.slice(state.plan?.from ?? rows.length)
+		.filter(
+			(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
+		)
+		.map((row) => ({
+			minor: toMinor(row.amount, dp),
+			title: byId.get(row.method_id)?.title ?? row.method_id,
+		}));
+	const plan = activePlan(state.plan, rowsSinceFrom.length, balanceMinor);
+	const figures = plan ? planLegs(plan, rowsSinceFrom, balanceMinor) : null;
+	const lines = (payload.line_items ?? []).flatMap((line) =>
+		line.id === undefined
+			? []
+			: [
+					{
+						id: line.id,
+						name: line.name ?? '',
+						quantity: line.quantity ?? 1,
+						totalMinor: toMinor(line.total ?? '0', dp),
+					},
+				]
+	);
+	const itemTitle =
+		plan?.kind === 'items'
+			? lines
+					.filter((line) => plan.lineIds.includes(line.id))
+					.map((line) => line.name)
+					.join(' + ')
+			: null;
+	const label = figures?.label;
+	const planLabel = !label
+		? null
+		: label.rest
+			? t('pos_checkout.rest_of_the_order')
+			: itemTitle
+				? label.ways > 1
+					? t('pos_checkout.item_payment_n_of', { title: itemTitle, n: label.n, ways: label.ways })
+					: itemTitle
+				: label.title
+					? t('pos_checkout.titled_payment_n_of', {
+							title: label.title,
+							n: label.n,
+							ways: label.ways,
+						})
+					: t('pos_checkout.payment_n_of', { n: label.n, ways: label.ways });
+	const planMore = Boolean(label?.rest && lines.some((line) => !state.linesPaidBy[line.id]));
+	const plannedLegMinor = figures?.thisPaymentMinor ?? balanceMinor;
 	const legCapMinor = method?.capabilities.change ? plannedLegMinor : balanceMinor;
 	const entryAppliedMinor = appliedMinor(state.entryMinor, legCapMinor);
 	const entryChangeMinor = changeMinor(
@@ -247,18 +302,19 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		entryAppliedMinor,
 		method?.capabilities.change ?? false
 	);
-	const thisPaymentMinor = state.view === 'amount' ? entryAppliedMinor : plannedLegMinor;
-	const afterThisPaymentMinor = balanceMinor - thisPaymentMinor;
+	const thisPaymentMinor = plannedLegMinor;
+	const afterThisPaymentMinor =
+		balanceMinor - (state.view === 'amount' ? entryAppliedMinor : thisPaymentMinor);
 
 	const quickAmountsMinor = React.useMemo(
 		() =>
 			method?.capabilities.change
 				? quickTenderedAmounts(
-						thisPaymentMinor,
+						state.view === 'amount' ? entryAppliedMinor : thisPaymentMinor,
 						QUICK_TENDER_STEPS.map((step) => step * 10 ** dp)
 					)
 				: [],
-		[thisPaymentMinor, dp, method]
+		[thisPaymentMinor, dp, method, state.view, entryAppliedMinor]
 	);
 
 	const dispatch = React.useCallback<React.Dispatch<TenderAction>>(
@@ -294,7 +350,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					? deviceTransports(tile.method).find((item) => item.offline === 'queue')
 					: undefined;
 			if (tile.disabled && !offlineTransport) return;
-			const prefillMinor = state.customAmount ? 0 : plannedLegMinor;
+			const prefillMinor = state.view === 'amount' ? state.entryMinor : plannedLegMinor;
 			const { readers, lockToDefault } = selectableReaders(
 				tile.method,
 				service?.readersInUse(),
@@ -313,12 +369,45 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			plannedLegMinor,
 			order.uuid,
 			saveState,
-			state.customAmount,
+			state.view,
+			state.entryMinor,
 			tiles,
 			service,
 			reducerDispatch,
 			getLoaded,
 		]
+	);
+
+	const tenderRecorded = React.useCallback(
+		(row: PaymentRow) => {
+			const latest = readLedger(order.getLatest().payload.meta_data);
+			const index = latest.findIndex((candidate) => candidate.id === row.id);
+			if (index < 0) latest.push(row);
+			else latest[index] = row;
+			const counts = (candidate: PaymentRow) =>
+				candidate.status === 'captured' ||
+				(candidate.status === 'authorized' && candidate.recorded_offline);
+			const paidAfter = latest.filter(counts).reduce((sum, r) => sum + toMinor(r.amount, dp), 0);
+			const action: TenderAction = {
+				type: 'tender-recorded',
+				balanceMinor: Math.max(0, totalMinor - paidAfter),
+				rowsSinceFrom: latest
+					.slice(state.plan?.from ?? latest.length)
+					.filter(
+						(candidate) =>
+							candidate.status === 'captured' ||
+							(candidate.status === 'authorized' && candidate.recorded_offline)
+					)
+					.map((candidate) => ({
+						amountMinor: toMinor(candidate.amount, dp),
+						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
+					})),
+			};
+			const next = tenderReducer(state, action);
+			reducerDispatch(action);
+			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
+		},
+		[order, state, dp, byId, totalMinor]
 	);
 
 	const takeTender = React.useCallback(async () => {
@@ -434,7 +523,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							: null,
 				});
 				reducerDispatch({ type: 'tender-started' });
-				setTenderMethod(order.uuid, null);
 				return;
 			}
 			if (method.capture.mode === 'server') {
@@ -480,7 +568,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				});
 				void remember(reader.id);
 				reducerDispatch({ type: 'tender-started' });
-				setTenderMethod(order.uuid, null);
 				return;
 			}
 
@@ -490,8 +577,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				tendered,
 			});
 			if (outcome.kind === 'recorded') {
-				reducerDispatch({ type: 'tender-recorded' });
-				setTenderMethod(order.uuid, null);
+				tenderRecorded(outcome.row);
 				if (balanceMinor - entryAppliedMinor === 0) {
 					await completeOrderFlow({ refresh: outcome.via === 'online' });
 				}
@@ -546,6 +632,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		localPatch,
 		order,
 		recordManualPayment,
+		tenderRecorded,
 		remember,
 		saveState,
 		state.entryMinor,
@@ -575,7 +662,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (leg.outcome !== 'captured') return;
 			service?.dismiss(order.uuid);
-			reducerDispatch({ type: 'tender-recorded' });
+			tenderRecorded(leg.row);
 			if (toMinor(leg.order?.balance ?? derived.balance, dp) === 0) {
 				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch(() =>
 					logger.error(t('pos_checkout.payment_not_recorded'), {
@@ -588,7 +675,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const unsubscribe = service?.subscribe(consumeOutcome);
 		consumeOutcome();
 		return unsubscribe;
-	}, [terminalLeg?.outcome, service, order.uuid, derived.balance, dp, completeOrderFlow, t]);
+	}, [
+		terminalLeg?.outcome,
+		service,
+		order.uuid,
+		derived.balance,
+		dp,
+		completeOrderFlow,
+		t,
+		tenderRecorded,
+	]);
 
 	const pickReader = React.useCallback(
 		(id: string) => {
@@ -697,18 +793,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			balanceMinor,
 			thisPaymentMinor,
 			afterThisPaymentMinor,
-			splitLegs: state.splitPlan
-				? splitPlanLegs(
-						state.splitPlan,
-						state.splitPlan.taken
-							? liveRows
-									.filter((row) => row.status === 'captured')
-									.slice(-state.splitPlan.taken)
-									.map((row) => toMinor(row.amount, dp))
-							: [],
-						balanceMinor
-					)
-				: [],
+			plan,
+			planLegs: figures?.legs ?? [],
+			planLabel,
+			planMore,
+			lines,
+			linesPaidBy: state.linesPaidBy,
 			rows,
 			liveRows,
 			hasLiveTerminalLeg: Boolean(terminalLeg && terminalLeg.phase !== 'final'),
@@ -729,6 +819,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			cancelPayment,
 		}),
 		[
+			plan,
+			figures,
+			planLabel,
+			planMore,
+			lines,
 			remembered,
 			remember,
 			terminalLeg,

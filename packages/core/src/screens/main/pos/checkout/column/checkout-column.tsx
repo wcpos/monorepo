@@ -31,7 +31,8 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 	const { storageDegraded } = useStorageMoneyPathGuard();
 	const t = useT();
 	const back = React.useCallback(() => {
-		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
+		if (flow.state.splitView) flow.dispatch({ type: 'close-split' });
+		else if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) flow.dispatch({ type: 'request-cancel' });
 		else leaveCheckout(order.uuid);
 	}, [flow, order.uuid]);
 	useCheckoutBack(back);

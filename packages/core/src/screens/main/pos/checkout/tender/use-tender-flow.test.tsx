@@ -151,6 +151,7 @@ let mockPayload: {
 	number?: string;
 	total: string;
 	meta_data: import('@wcpos/order-math').MetaDataEntry[];
+	line_items?: { id?: number; name: string; quantity: number; total: string }[];
 } = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
 let mockMethodsLoaded = true;
 let mockMethods: PaymentMethodDescriptor[] = methods;
@@ -225,7 +226,7 @@ const order = {
 	uuid: 'order-1',
 	getLatest: () => ({ payload: mockPayload }),
 } as EngineRecord<'orders'>;
-const recorded = { kind: 'recorded', via: 'online' } as const;
+const recorded = { kind: 'recorded', via: 'online', row: payment() } as const;
 
 function payment(overrides: Partial<PaymentRow> = {}): PaymentRow {
 	return {
@@ -318,15 +319,17 @@ describe('useTenderFlow', () => {
 		expect(result.current.method?.id).toBe('pos_cash');
 		await act(async () => {});
 	});
-	it('clears the published method once a leg is recorded', async () => {
+	it('keeps the chosen method for the next leg once one is recorded', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
 		await act(async () => {
 			await result.current.takeTender();
 		});
-		expect(result.current.state.methodId).toBeNull();
-		expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
+		// The selector is always on screen now, so a leg never sends the cashier back to a menu.
+		expect(result.current.state.methodId).toBe('pos_cash');
+		expect(result.current.state.view).toBe('amount');
+		expect(getCheckoutModeSnapshot().tenderMethods.get(order.uuid)).toBe('pos_cash');
 	});
 
 	it('blocks method selection and recording while saving', async () => {
@@ -398,7 +401,13 @@ describe('useTenderFlow', () => {
 
 	it('treats cash above a planned share as change, not a bigger leg', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
 		expect(result.current.entryAppliedMinor).toBe(4648);
@@ -406,8 +415,14 @@ describe('useTenderFlow', () => {
 		await act(async () => {});
 	});
 	it('lets the last planned cash leg take the whole remaining balance', async () => {
-		const { result } = renderHook(() => useTenderFlow(order));
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 		act(() =>
 			result.current.dispatch({
 				type: 'pick-method',
@@ -416,9 +431,16 @@ describe('useTenderFlow', () => {
 				readerId: null,
 			})
 		);
-		act(() => result.current.dispatch({ type: 'tender-recorded' }));
-		act(() => result.current.pickMethod('pos_cash'));
-		expect(result.current.state.splitPlan).toMatchObject({ taken: 1 });
+		mockPayload.meta_data = withLedger([], [payment({ amount: '10.00' })]);
+		rerender();
+		act(() =>
+			result.current.dispatch({
+				type: 'tender-recorded',
+				rowsSinceFrom: [{ title: 'Cash', amountMinor: 1000 }],
+				balanceMinor: result.current.balanceMinor,
+			})
+		);
+		expect(result.current.planLabel).toBe('pos_checkout.payment_n_of');
 		expect(result.current.entryAppliedMinor).toBe(result.current.balanceMinor);
 		await act(async () => {});
 	});
@@ -514,7 +536,7 @@ describe('useTenderFlow', () => {
 			tendered: '50.00',
 		});
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
-		expect(result.current.state.view).toBe('select');
+		expect(result.current.state.view).toBe('amount');
 	});
 
 	it('never records a card amount above the balance', async () => {
@@ -532,7 +554,13 @@ describe('useTenderFlow', () => {
 
 	it('uses a split share as the next tender pre-fill', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 
 		act(() => result.current.pickMethod('pos_cash'));
 
@@ -543,29 +571,41 @@ describe('useTenderFlow', () => {
 	it('derives this payment, custom prefill, and quick amounts from the entry', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 		expect(result.current.thisPaymentMinor).toBe(9295);
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 		expect(result.current.thisPaymentMinor).toBe(4648);
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.thisPaymentMinor).toBe(4648);
 		expect(result.current.quickAmountsMinor).toEqual([4648, 5000]);
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 1200 }));
-		expect(result.current.thisPaymentMinor).toBe(1200);
+		expect(result.current.thisPaymentMinor).toBe(4648);
 		expect(result.current.afterThisPaymentMinor).toBe(8095);
 		expect(result.current.quickAmountsMinor).toEqual([1200, 1500, 2000, 5000]);
 		act(() => result.current.dispatch({ type: 'back' }));
-		act(() => result.current.dispatch({ type: 'arm-custom-amount' }));
+		act(() => result.current.dispatch({ type: 'arm-custom' }));
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(0);
-		expect(result.current.thisPaymentMinor).toBe(0);
+		expect(result.current.thisPaymentMinor).toBe(9295);
 		await act(async () => {});
 	});
 	it('advances the plan only for a recorded leg and shows its actual ledger amount', async () => {
 		const { result, rerender } = renderHook(() => useTenderFlow(order));
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 		act(() => result.current.pickMethod('pos_cash'));
 		mockRecordManualPayment.mockResolvedValueOnce({ kind: 'refused' });
 		await act(async () => result.current.takeTender());
-		expect(result.current.state.splitPlan?.taken).toBe(0);
+		expect(result.current.planLegs.filter((leg) => leg.state === 'done')).toHaveLength(0);
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
 		mockPayload.meta_data = [
@@ -576,15 +616,55 @@ describe('useTenderFlow', () => {
 		];
 		await act(async () => result.current.takeTender());
 		rerender();
-		expect(result.current.state.splitPlan?.taken).toBe(1);
-		expect(result.current.splitLegs).toEqual([
-			{ minor: 5000, state: 'done' },
+		expect(result.current.planLabel).toBe('pos_checkout.payment_n_of');
+		expect(result.current.planLegs).toEqual([
+			{ minor: 5000, state: 'done', title: 'Cash' },
 			{ minor: 4295, state: 'now' },
 		]);
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(4295);
 	});
 
+	it('exposes item lines, derives their shared group and publishes completed badges for the ledger', async () => {
+		mockPayload.total = '46.00';
+		mockPayload.line_items = [
+			{ id: 1, name: 'Scarf', quantity: 1, total: '22.00' },
+			{ id: 2, name: 'Socks', quantity: 2, total: '6.00' },
+		];
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		expect(result.current.lines[1]).toEqual({ id: 2, name: 'Socks', quantity: 2, totalMinor: 600 });
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'items', lineIds: [1], ways: 2, firstMinor: 2200, from: 0 },
+				balanceMinor: 4600,
+			})
+		);
+		expect(result.current.planLabel).toBe('pos_checkout.item_payment_n_of');
+		const first = payment({ id: 'first', amount: '11.00', method_id: 'pos_card' });
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger([], [first]);
+			return { ...recorded, row: first };
+		});
+		act(() => result.current.pickMethod('pos_card'));
+		await act(async () => result.current.takeTender());
+		expect(result.current.linesPaidBy).toEqual({});
+		const second = payment({ id: 'second', amount: '11.00' });
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger([], [first, second]);
+			return { ...recorded, row: second };
+		});
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		rerender();
+		expect(result.current.planLabel).toBe('pos_checkout.rest_of_the_order');
+		expect(result.current.thisPaymentMinor).toBe(2400);
+		expect(result.current.planMore).toBe(true);
+		expect(result.current.linesPaidBy).toEqual({ 1: ['Card', 'Cash'] });
+		expect(getCheckoutModeSnapshot().linesPaidBy.get(order.uuid)).toEqual(
+			result.current.linesPaidBy
+		);
+	});
 	it('does not pick a disabled tile', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 
@@ -821,7 +901,7 @@ describe('server tender', () => {
 			})
 		);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
-		expect(result.current.state.view).toBe('select');
+		expect(result.current.state.view).toBe('amount');
 	});
 	it.each(['reader', 'order'] as const)('refuses Take without %s', async (missing) => {
 		if (missing === 'order') delete mockPayload.id;
@@ -876,7 +956,7 @@ describe('server tender', () => {
 			});
 			const { result } = renderHook(() => useTenderFlow(order));
 			expect(mockDismiss).toHaveBeenCalledWith('order-1');
-			expect(result.current.state.view).toBe('select');
+			expect(result.current.state.view).toBe('amount');
 			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(balance === '0.00' ? 1 : 0);
 			if (balance === '0.00') expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: true });
 			await act(async () => {});
