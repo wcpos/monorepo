@@ -87,8 +87,11 @@ two. Phones stack to one or two columns; tablets and desktop use the space they 
   `bg-primary`, `text-destructive`, `bg-success`, …). Never a hex or an `oklch()` in a component.
 - One accent colour for the primary action per screen. Semantic colours (success, warning,
   destructive, info) only carry meaning, never decoration.
-- **Primary is blue; brand red is destructive only** (owner ruling, 2026-09-11). The marketing
-  site's red-as-action does not carry into the app: red on a till means void, cancel, refund.
+- **Primary is the theme's accent, never red; brand red is destructive only** (owner ruling,
+  2026-09-11). `bg-primary` is blue in the default light and dark themes and varies by theme
+  (Ocean teal, Sunset orange, Monochrome grey): use the token and let it vary. The marketing site's
+  red-as-action does not carry into the app: red on a till means void, cancel, refund, and Pay
+  never shares a colour with Void.
 - Text contrast 4.5:1, UI and icon contrast 3:1 (WCAG). Light and dark are both first-class; check
   every new surface in both.
 - Flat surfaces, hairline borders, one radius. No gradients, glass or drop shadows to make a card
