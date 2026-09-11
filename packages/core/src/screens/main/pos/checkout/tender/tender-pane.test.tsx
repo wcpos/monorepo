@@ -235,6 +235,25 @@ it('selects methods without committing and folds unavailable reasons', () => {
 	expect(screen.queryByTestId('checkout-unavailable-terminal')).toBeNull();
 });
 
+it('keeps an offline queue-capable device method selectable', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		tiles: [
+			{
+				method: deviceMethod,
+				disabled: true,
+				reason: 'offline',
+				worksOffline: false,
+			},
+		],
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	fireEvent.click(screen.getByTestId('checkout-method-device'));
+	expect(flow.pickMethod).toHaveBeenCalledWith('device');
+	expect(screen.queryByTestId('checkout-unavailable-toggle')).toBeNull();
+});
+
 it.each([
 	[9295, 9295, 9295, false, 'Take 9295 in Cash'],
 	[2000, 2000, 9295, false, 'Take 2000 in Cash · 7295 left'],

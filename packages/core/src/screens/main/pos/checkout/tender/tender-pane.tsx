@@ -241,29 +241,32 @@ function TenderKeypad({ flow, format, compact }: Props) {
 			: flow.balanceMinor;
 	const noChange = Boolean(method && !givesChange && flow.state.entryMinor > flow.thisPaymentMinor);
 	const left = flow.balanceMinor - flow.entryAppliedMinor;
-	const unavailable = flow.tiles.filter((tile) => tile.disabled);
-	const pills = flow.tiles
-		.filter((tile) => !tile.disabled)
-		.map((tile) => {
-			const selected = flow.state.methodId === tile.method.id;
-			return (
-				<Button
-					key={tile.method.id}
-					variant={selected ? 'sidebar-solid' : 'sidebar-quiet'}
-					className="h-12 shrink-0 flex-row gap-2 rounded-xl"
-					testID={`checkout-method-${tile.method.id}`}
-					disabled={flow.busy}
-					onPress={() => {
-						setChoosingReader(null);
-						flow.pickMethod(tile.method.id);
-					}}
-				>
-					<Icon name={methodIcon(tile.method)} />
-					<ButtonText decodeHtml>{tile.method.title}</ButtonText>
-					<MethodStatus tile={tile} selected={selected} />
-				</Button>
-			);
-		});
+	const canChoose = (tile: TenderTile) =>
+		!tile.disabled ||
+		(tile.reason === 'offline' &&
+			tile.method.capture.mode === 'device' &&
+			deviceTransports(tile.method).some((transport) => transport.offline === 'queue'));
+	const unavailable = flow.tiles.filter((tile) => !canChoose(tile));
+	const pills = flow.tiles.filter(canChoose).map((tile) => {
+		const selected = flow.state.methodId === tile.method.id;
+		return (
+			<Button
+				key={tile.method.id}
+				variant={selected ? 'sidebar-solid' : 'sidebar-quiet'}
+				className="h-12 shrink-0 flex-row gap-2 rounded-xl"
+				testID={`checkout-method-${tile.method.id}`}
+				disabled={flow.busy}
+				onPress={() => {
+					setChoosingReader(null);
+					flow.pickMethod(tile.method.id);
+				}}
+			>
+				<Icon name={methodIcon(tile.method)} />
+				<ButtonText decodeHtml>{tile.method.title}</ButtonText>
+				<MethodStatus tile={tile} selected={selected} />
+			</Button>
+		);
+	});
 	const hint = noChange
 		? t('pos_checkout.no_change_for_method', {
 				amount: format(flow.thisPaymentMinor),
