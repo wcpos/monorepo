@@ -324,9 +324,13 @@ register is not a page and has no menu item (ruled 2026-09-11 on wcpos/roadmap#2
 superseding the menu-item sentence of #207): it is a state of the POS screen — the cart
 column is the "Open register" card while closed and the count while counting — plus one
 Register panel opened from a bar at the top of the cart while open. The cashier is whoever
-the app is signed in as; there is no register-level sign-in. A register belongs to exactly
-one store: bound to the store chosen at its first sign-in, when the POS screen asks for its
-name, moved to another only by an administrator while it has no open session,
+the app is signed in as; there is no register-level sign-in. A register is a server record:
+every store has one by default, created with the store, and more are created in the plugin's
+admin, never in the POS. A device holds only a pointer to its register — bound silently at
+first sign-in when the store has one register, chosen once from a picker when it has more,
+changed under the avatar — so a wiped device re-binds and loses no numbering. The register
+is named on screen only when its store has more than one. A register belongs to exactly one
+store, moved to another only by an administrator while it has no open session,
 its numbering unbroken by the move. Every closure records the store the register belonged
 to when it was written, and a store's figures are summed from those closures, so moving a
 register moves no history. A store has any number of registers.
