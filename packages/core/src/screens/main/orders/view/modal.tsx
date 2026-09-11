@@ -38,7 +38,7 @@ export function ViewOrderModal({ resource }: Props) {
 	if (!order || !payload) {
 		return (
 			<Modal>
-				<ModalContent size="xl" className="gap-0 py-0">
+				<ModalContent side="right" size="2xl" className="gap-0 py-0">
 					<View className="px-5 py-6">
 						<Text className="text-foreground text-base font-semibold">
 							{t('common.no_order_found')}
@@ -60,7 +60,7 @@ export function ViewOrderModal({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent size="2xl" className="gap-0">
+			<ModalContent side="right" size="2xl" className="gap-0">
 				<HeaderSection order={payload} />
 				<ModalBody className="p-0">
 					<View className="w-full flex-col sm:flex-row">

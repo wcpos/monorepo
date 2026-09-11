@@ -35,7 +35,7 @@ export function Receipt({ resource, document }: Props) {
 	if (!order) {
 		return (
 			<Modal>
-				<ModalContent size="lg">
+				<ModalContent side="right" size="xl">
 					<ModalHeader>
 						<ModalTitle>
 							<Text>{t('common.no_order_found')}</Text>
@@ -62,7 +62,7 @@ function ReceiptDocument({
 	const doc = useReceiptDocument({ order, autoPrintAllowed: false, document });
 	return (
 		<Modal>
-			<ModalContent size="xl" className="h-full">
+			<ModalContent side="right" size="xl">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t(document ? 'receipt.refund_receipt' : 'common.receipt')}</Text>
