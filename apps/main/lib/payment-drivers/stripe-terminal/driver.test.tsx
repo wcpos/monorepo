@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
+import { AppState, type AppStateStatus, PermissionsAndroid, Platform } from 'react-native';
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import {
@@ -19,7 +19,7 @@ import type { CollectInput } from '@wcpos/core/services/payment-drivers/types';
 
 import { StripeTerminalDriverRegistration } from '../../payment-drivers';
 import { StripeTerminalDriverBridge } from './bridge';
-import { createStripeTerminalDriver, type Sdk, tokenProvider } from './driver.native';
+import { createStripeTerminalDriver, type Sdk, tokenProvider } from './driver';
 import { createStripeTerminalDriver as createWebDriver } from './driver.web';
 
 // Match the app's Jest setup: clear Expo winter-runtime lazy globals at module scope.
@@ -49,7 +49,7 @@ const info = {
 	label: 'stripeM2 R1',
 	model: 'stripeM2',
 	serial: 'R1',
-	battery: 0.8,
+	battery: 80,
 	transport: 'bluetooth' as const,
 };
 const pi = {
@@ -68,6 +68,7 @@ const pi = {
 	offlineDetails: { id: 'offline_1' },
 };
 const input: CollectInput = {
+	dp: 2,
 	row,
 	method,
 	transport: 'bluetooth',
@@ -112,6 +113,7 @@ const rawPi = pi as unknown as Parameters<typeof driver.callbacks.onDidForwardPa
 beforeEach(() => {
 	jest.useFakeTimers();
 	jest.clearAllMocks();
+	jest.spyOn(console, 'log').mockImplementation(() => {});
 	api = sdkMock();
 	bootstrap = jest.fn().mockResolvedValue({ connection_token: 'fresh' });
 	resolveMethod = jest.fn().mockReturnValue({ ...method, id: 'resolved_method' });
@@ -119,6 +121,7 @@ beforeEach(() => {
 	driver.bindSdk(api as unknown as Sdk);
 });
 afterEach(() => {
+	jest.restoreAllMocks();
 	jest.clearAllTimers();
 	jest.useRealTimers();
 });
@@ -168,6 +171,61 @@ it('maps discovery callbacks and cancels before discovering and connecting', asy
 	expect(api.cancelDiscovering).toHaveBeenCalledTimes(2);
 	expect(driver.status$.get()).toMatchObject({ connection: 'connected', reader: info });
 });
+it.each([
+	{ batteryLevel: 0.85, battery: 85 },
+	{ batteryLevel: 0.856, battery: 86 },
+	{ batteryLevel: null, battery: null },
+])('maps SDK battery $batteryLevel to percentage $battery', async ({ batteryLevel, battery }) => {
+	const pending = driver.discoverReaders('bluetooth');
+	await jest.advanceTimersByTimeAsync(0);
+	// Exercise runtime null handling even though the SDK type only allows number | undefined.
+	const sdkReader = { ...rawReader, batteryLevel } as unknown as typeof rawReader;
+	driver.callbacks.onUpdateDiscoveredReaders([sdkReader]);
+	driver.callbacks.onFinishDiscoveringReaders();
+	await expect(pending).resolves.toEqual([{ ...info, battery }]);
+});
+it.each([true, false])(
+	'disconnects before scanning only when connected (connected=%s)',
+	async (connected) => {
+		if (connected) {
+			await discover();
+			await driver.connect(info, handoff);
+		}
+		api.discoverReaders.mockClear();
+		const listener = jest.fn();
+		const unsubscribe = driver.status$.subscribe(listener);
+		try {
+			let finishDisconnect!: (result: object) => void;
+			api.disconnectReader.mockImplementationOnce(
+				() => new Promise((resolve) => (finishDisconnect = resolve))
+			);
+			const pending = driver.discoverReaders('bluetooth');
+			await jest.advanceTimersByTimeAsync(0);
+			if (connected) {
+				expect(api.disconnectReader).toHaveBeenCalledTimes(1);
+				expect(api.discoverReaders).not.toHaveBeenCalled();
+				expect(driver.status$.get().connection).toBe('connected');
+				finishDisconnect({});
+				await jest.advanceTimersByTimeAsync(0);
+				expect(listener).toHaveBeenNthCalledWith(
+					1,
+					expect.objectContaining({ connection: 'disconnected', reader: null })
+				);
+				expect(listener.mock.invocationCallOrder[0]).toBeLessThan(
+					api.discoverReaders.mock.invocationCallOrder[0]
+				);
+			} else {
+				expect(api.disconnectReader).not.toHaveBeenCalled();
+			}
+			expect(api.discoverReaders).toHaveBeenCalledTimes(1);
+			expect(driver.status$.get()).toMatchObject({ connection: 'discovering', reader: null });
+			driver.callbacks.onFinishDiscoveringReaders();
+			await expect(pending).resolves.toEqual([]);
+		} finally {
+			unsubscribe();
+		}
+	}
+);
 it('returns the latest discovered readers after ten seconds without a finish callback', async () => {
 	const pending = driver.discoverReaders('tap_to_pay');
 	await jest.advanceTimersByTimeAsync(0);
@@ -213,7 +271,7 @@ it('publishes update, battery, input, reconnect, disconnect and pairing status',
 		batteryStatus: 'nominal',
 		isCharging: false,
 	});
-	expect(driver.status$.get()).toMatchObject({ connection: 'connected', reader: { battery: 0.5 } });
+	expect(driver.status$.get()).toMatchObject({ connection: 'connected', reader: { battery: 50 } });
 	driver.callbacks.onDidRequestReaderDisplayMessage('insertCard');
 	expect(driver.status$.get().message).toBe('insertCard');
 	driver.callbacks.onDidRequestReaderInput(['tapCard']);
@@ -247,13 +305,31 @@ it('returns only the confirmed online intent, charge, receipt and amount', async
 	expect(api.retrievePaymentIntent).toHaveBeenCalledWith('secret');
 	expect(api.collectPaymentMethod).toHaveBeenCalledWith({
 		paymentIntent: { ...pi, id: 'pi_retrieved' },
-		tipEligibleAmount: 1000,
-		skipTipping: false,
+		tipEligibleAmount: undefined,
+		skipTipping: true,
 	});
 	expect(api.confirmPaymentIntent).toHaveBeenCalledWith({
 		paymentIntent: { ...pi, id: 'pi_collected' },
 	});
 });
+it.each([
+	{ deviceType: 'wisePad3', tipEligibleAmount: 1000, skipTipping: false },
+	{ deviceType: 'chipper2X', tipEligibleAmount: undefined, skipTipping: true },
+])(
+	'configures on-reader tipping for $deviceType',
+	async ({ deviceType, tipEligibleAmount, skipTipping }) => {
+		await discover();
+		api.connectReader.mockResolvedValueOnce({ reader: { ...reader, deviceType } });
+		await driver.connect(info, handoff);
+		expect(driver.status$.get().reader?.model).toBe(deviceType);
+		await driver.collect(input);
+		expect(api.collectPaymentMethod).toHaveBeenCalledWith({
+			paymentIntent: { ...pi, id: 'pi_retrieved' },
+			tipEligibleAmount,
+			skipTipping,
+		});
+	}
+);
 it.each(['retrievePaymentIntent', 'collectPaymentMethod', 'confirmPaymentIntent'] as const)(
 	'maps Canceled from %s',
 	async (operation) => {
@@ -294,7 +370,10 @@ it('forces offline authorization and settles only a successfully forwarded row',
 	).resolves.toMatchObject({
 		outcome: 'authorized',
 		amount: '10.00',
-		provider_refs: { payment_intent: null, offline_id: 'offline_1' },
+		provider_refs: { payment_intent: null },
+	});
+	expect((await driver.collect({ ...input, offline: true })).provider_refs).toEqual({
+		payment_intent: null,
 	});
 	expect(api.createPaymentIntent).toHaveBeenCalledWith({
 		amount: 1000,
@@ -369,6 +448,7 @@ it.each([true, false])(
 	async (granted) => {
 		const os = Platform.OS;
 		Platform.OS = 'android';
+		jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(false);
 		jest.mocked(requestNeededAndroidPermissions).mockResolvedValue({
 			error: granted ? null : { 'android.permission.ACCESS_FINE_LOCATION': 'denied' },
 		});
@@ -442,6 +522,16 @@ it('defers initialization until a Stripe device descriptor exists and bootstraps
 		]);
 		await act(async () => tree.update(<StripeTerminalDriverRegistration />));
 		expect(api.initialize).not.toHaveBeenCalled();
+		descriptors([
+			{
+				...method,
+				pos_enabled: false,
+				capture: { ...method.capture, mode: 'device', provider: 'stripe' },
+			},
+		]);
+		await act(async () => tree.update(<StripeTerminalDriverRegistration />));
+		expect(api.initialize).not.toHaveBeenCalled();
+		await expect(tokenProvider()).rejects.toThrow('not enabled');
 		descriptors([
 			{
 				...method,
@@ -602,4 +692,178 @@ it('prefers the current resolved descriptor over previously collected test mode'
 		discoveryMethod: 'tapToPay',
 		simulated: true,
 	});
+});
+
+it.each(['10', '10.5'])('uses configured precision for %s online and offline', async (amount) => {
+	const value = { ...input, row: { ...row, amount } };
+	await expect(driver.collect(value)).resolves.toMatchObject({ amount: '11.25' });
+	await driver.collect({ ...value, offline: true });
+	expect(api.createPaymentIntent).toHaveBeenCalledWith(
+		expect.objectContaining({ amount: amount === '10' ? 1000 : 1050 })
+	);
+});
+it.each([
+	['poweredOff', 'Reader powered off'],
+	['bluetoothDisabled', 'Bluetooth is off'],
+	['bluetoothSignalLost', 'Reader out of range'],
+	['unknown', 'Reader disconnected'],
+	[undefined, 'Reader disconnected'],
+] as const)('shows a friendly disconnect reason for %s', (reason, message) => {
+	driver.callbacks.onDidDisconnect(reason);
+	expect(driver.status$.get().message).toBe(message);
+});
+it('rejects offline reconnection before waiting for the SDK or requesting a token', async () => {
+	await discover();
+	await driver.connect(info, handoff);
+	driver.callbacks.onDidDisconnect('bluetoothSignalLost');
+	driver.bindSdk(null);
+	await expect(driver.connect(info, null)).rejects.toThrow(
+		'Reconnecting needs a connection to the store'
+	);
+	expect(driver.status$.get().message).toBe('Reconnecting needs a connection to the store');
+	expect(bootstrap).not.toHaveBeenCalled();
+	expect(api.connectReader).toHaveBeenCalledTimes(1);
+});
+it.each(['operation', 'foreground', 'descriptors'])(
+	'retries failed init on %s, with a single flight and 15s bound',
+	async (trigger) => {
+		const os = Platform.OS;
+		Platform.OS = 'ios';
+		let foreground!: (state: AppStateStatus) => void;
+		jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+			foreground = listener;
+			return { remove: jest.fn() };
+		});
+		jest.mocked(useStripeTerminal).mockReturnValue(api as unknown as Sdk);
+		driver.bindSdk(null);
+		if (trigger === 'descriptors')
+			api.initialize.mockResolvedValueOnce({
+				error: { code: 'InitializationError', message: 'Store bootstrap unavailable' },
+			});
+		else api.initialize.mockRejectedValueOnce(new Error('Store bootstrap unavailable'));
+		let tree!: ReactTestRenderer;
+		try {
+			await act(async () => {
+				tree = create(<StripeTerminalDriverBridge driver={driver} />);
+			});
+			expect(driver.status$.get().message).toBe('Store bootstrap unavailable');
+			await act(async () => {
+				foreground('active');
+			});
+			expect(api.initialize).toHaveBeenCalledTimes(1);
+			await jest.advanceTimersByTimeAsync(14999);
+			await act(async () => {
+				foreground('active');
+			});
+			expect(api.initialize).toHaveBeenCalledTimes(1);
+			await jest.advanceTimersByTimeAsync(1);
+			let finish!: (value: object) => void;
+			api.initialize.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finish = resolve;
+					})
+			);
+			let operation: Promise<void> | undefined;
+			await act(async () => {
+				if (trigger === 'operation') operation = driver.cancel();
+				else if (trigger === 'foreground') foreground('active');
+				else tree.update(<StripeTerminalDriverBridge driver={driver} methods={[method]} />);
+			});
+			expect(api.initialize).toHaveBeenCalledTimes(2);
+			await act(async () => {
+				foreground('active');
+			});
+			expect(api.initialize).toHaveBeenCalledTimes(2);
+			await act(async () => {
+				finish({});
+			});
+			await operation;
+			await driver.cancel();
+			expect(api.cancelCollectPaymentMethod).toHaveBeenCalled();
+			expect(driver.status$.get().message).toBeNull();
+		} finally {
+			await act(async () => tree?.unmount());
+			Platform.OS = os;
+		}
+	}
+);
+it.each(['foreground', 'discover'])(
+	'rechecks denied Android permissions on %s',
+	async (trigger) => {
+		const os = Platform.OS;
+		Platform.OS = 'android';
+		let foreground!: (state: AppStateStatus) => void;
+		jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
+			foreground = listener;
+			return { remove: jest.fn() };
+		});
+		const check = jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(false);
+		jest
+			.mocked(requestNeededAndroidPermissions)
+			.mockResolvedValueOnce({ error: { location: 'denied' } })
+			.mockResolvedValue({ error: null });
+		jest.mocked(useStripeTerminal).mockReturnValue(api as unknown as Sdk);
+		driver.bindSdk(null);
+		let tree!: ReactTestRenderer;
+		try {
+			await act(async () => {
+				tree = create(<StripeTerminalDriverBridge driver={driver} />);
+			});
+			expect(driver.availability()).toEqual({ available: false, reason: 'permission' });
+			await jest.advanceTimersByTimeAsync(15000);
+			check.mockClear();
+			if (trigger === 'foreground') {
+				check.mockResolvedValue(true);
+				await act(async () => {
+					foreground('active');
+				});
+				expect(requestNeededAndroidPermissions).toHaveBeenCalledTimes(1);
+			} else {
+				await act(async () => {
+					await discover();
+				});
+				expect(requestNeededAndroidPermissions).toHaveBeenCalledTimes(2);
+			}
+			expect(check).toHaveBeenCalled();
+			expect(api.initialize).toHaveBeenCalledTimes(1);
+			expect(driver.availability()).toEqual({ available: true });
+		} finally {
+			await act(async () => tree?.unmount());
+			Platform.OS = os;
+		}
+	}
+);
+
+it('keeps one initialization in flight through StrictMode effect replay', async () => {
+	const os = Platform.OS;
+	Platform.OS = 'ios';
+	jest.mocked(useStripeTerminal).mockReturnValue(api as unknown as Sdk);
+	driver.bindSdk(null);
+	let finish!: (value: object) => void;
+	api.initialize.mockImplementation(
+		() =>
+			new Promise((resolve) => {
+				finish = resolve;
+			})
+	);
+	let tree!: ReactTestRenderer;
+	try {
+		await act(async () => {
+			tree = create(
+				<React.StrictMode>
+					<StripeTerminalDriverBridge driver={driver} />
+				</React.StrictMode>
+			);
+		});
+		expect(api.initialize).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			finish({});
+		});
+		await driver.cancel();
+		expect(api.cancelCollectPaymentMethod).toHaveBeenCalledTimes(1);
+	} finally {
+		await act(async () => tree?.unmount());
+		Platform.OS = os;
+	}
 });

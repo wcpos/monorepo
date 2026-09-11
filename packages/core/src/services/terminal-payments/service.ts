@@ -41,6 +41,7 @@ export interface TerminalPaymentsServiceOptions {
 	clearTimeout?: ServerLegDeps['clearTimeout'];
 }
 interface ResumeInput {
+	dp: number;
 	orderUuid: string;
 	orderId: number;
 	orderNumber: string;
@@ -265,6 +266,7 @@ export class TerminalPaymentsService {
 						},
 					},
 					{
+						dp: input.dp,
 						orderId: input.orderId,
 						row: input.row,
 						resume,

@@ -52,7 +52,7 @@ export function createSimulatedDriver({
 			const outcomeUrl =
 				typeof input.handoff?.outcome_url === 'string' ? input.handoff.outcome_url : null;
 			if (!input.offline && outcomeUrl !== null) outcomeUrls.set(input.row.id, outcomeUrl);
-			const dp = input.row.amount.split('.')[1]?.length ?? 0;
+			const dp = input.dp ?? input.row.amount.split('.')[1]?.length ?? 0;
 			const amount =
 				id === 'sim-tip' && input.tipEligibleMinor !== null
 					? fromMinor(toMinor(input.row.amount, dp) + Math.round(input.tipEligibleMinor / 10), dp)

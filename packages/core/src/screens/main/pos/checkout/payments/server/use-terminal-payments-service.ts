@@ -174,6 +174,7 @@ export function useTerminalPaymentsService(): void {
 									row.status === 'authorized'
 								)
 									service.trackOffline({
+										dp: store.price_num_decimals ?? 2,
 										orderUuid: document.uuid,
 										orderId: document.payload.id ?? 0,
 										orderNumber: document.payload.number ?? '',

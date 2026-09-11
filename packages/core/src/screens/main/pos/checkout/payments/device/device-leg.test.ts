@@ -40,6 +40,7 @@ function setup(offline = false, resume = false, missing?: 'driver' | 'method') {
 						? 'voided'
 						: 'pending',
 			},
+			dp: 3,
 			handoff: { token: 'opaque' },
 		},
 	}));
@@ -62,6 +63,7 @@ function setup(offline = false, resume = false, missing?: 'driver' | 'method') {
 			onFinal,
 		},
 		{
+			dp: 3,
 			orderId: 42,
 			row,
 			method: missing === 'method' ? undefined : method,
@@ -95,6 +97,7 @@ it('mirrors intent before collect and sends exactly the driver context for serve
 		row,
 		method,
 		transport: 'bluetooth',
+		dp: 3,
 		handoff: { token: 'opaque' },
 		offline: false,
 		tipEligibleMinor: 1000,
@@ -398,6 +401,7 @@ it('resumes an online authorization by checking the server, never recollecting o
 			clearTimeout,
 		},
 		{
+			dp: 3,
 			orderId: 42,
 			row: { ...row, status: 'authorized' },
 			resume: true,

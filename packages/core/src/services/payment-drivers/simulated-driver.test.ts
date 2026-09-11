@@ -4,6 +4,7 @@ import { method, row } from '../../screens/main/pos/checkout/payments/device/fix
 import type { CollectInput } from './types';
 
 const input: CollectInput = {
+	dp: 2,
 	row,
 	method,
 	transport: 'bluetooth',
@@ -43,6 +44,7 @@ it('posts approval to the handoff URL using global fetch by default', async () =
 	await jest.advanceTimersByTimeAsync(300);
 	await connected;
 	const collecting = driver.collect({
+		dp: 2,
 		row,
 		method,
 		transport: 'bluetooth',
@@ -83,6 +85,7 @@ it.each(['sim-approve', 'sim-decline', 'sim-cancel', 'sim-tip', 'sim-offline', '
 		const settled = jest.fn();
 		driver.settleOffline$!.subscribe(settled);
 		const collecting = driver.collect({
+			dp: 2,
 			row,
 			method,
 			transport,
@@ -220,3 +223,11 @@ it.each([true, false])(
 		});
 	}
 );
+
+it('uses configured precision for a whole-number tip amount', async () => {
+	const driver = createSimulatedDriver();
+	await connectReader(driver, 'sim-tip');
+	const collecting = driver.collect({ ...input, row: { ...row, amount: '10' }, handoff: null });
+	await jest.advanceTimersByTimeAsync(500);
+	await expect(collecting).resolves.toMatchObject({ amount: '11.00' });
+});

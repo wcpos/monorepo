@@ -40,7 +40,8 @@ const readerInfo = (reader: Reader.Type, transport: PaymentTransport): ReaderInf
 	label: `${reader.deviceType} ${reader.serialNumber}`,
 	model: reader.deviceType,
 	serial: reader.serialNumber,
-	battery: reader.batteryLevel ?? null,
+	// The SDK reports the level as a 0–1 fraction; the status line shows a percentage.
+	battery: reader.batteryLevel == null ? null : Math.round(reader.batteryLevel * 100),
 	transport,
 });
 
@@ -52,6 +53,8 @@ export function createStripeTerminalDriver({
 	resolveMethod: () => PaymentMethodDescriptor | null;
 }) {
 	let sdk: Sdk | null = null;
+	let initialize: (() => Promise<void>) | null = null;
+	const offlineIds = new Map<string, string>();
 	let status: DriverStatus = { connection: 'disconnected', reader: null };
 	let permissionDenied = false;
 	let bluetoothOff = false;
@@ -76,8 +79,9 @@ export function createStripeTerminalDriver({
 		if (!result) throw new Error('Stripe Terminal returned no result');
 		if (result.error) throw reportError(result.error);
 	};
-	const ready = (): Promise<Sdk> =>
-		sdk
+	const ready = async (): Promise<Sdk> => {
+		if (!sdk) await initialize?.();
+		return sdk
 			? Promise.resolve(sdk)
 			: new Promise((resolve, reject) => {
 					const bind = (api: Sdk) => {
@@ -91,6 +95,7 @@ export function createStripeTerminalDriver({
 					}, 10000);
 					bindings.add(bind);
 				});
+	};
 	const cancelDiscovery = async (api: Sdk) => {
 		const active = Boolean(finishDiscovery);
 		finishDiscovery?.();
@@ -158,11 +163,27 @@ export function createStripeTerminalDriver({
 		// Reserved for SDKs/readers that surface a pairing code; beta.32 has no such callback.
 		onDidRequestReaderPairingCode: (pairingCode: string) => publish({ pairingCode }),
 		onDidUpdateBatteryLevel: ({ batteryLevel }: Reader.BatteryLevel) => {
-			if (status.reader) publish({ reader: { ...status.reader, battery: batteryLevel } });
+			if (status.reader)
+				publish({
+					reader: {
+						...status.reader,
+						battery: batteryLevel == null ? null : Math.round(batteryLevel * 100),
+					},
+				});
 		},
 		onDidDisconnect: (reason?: Reader.DisconnectReason) => {
 			if (reason === 'bluetoothDisabled') bluetoothOff = true;
-			disconnected(reason ?? null);
+			const messages: Partial<Record<Reader.DisconnectReason, string>> = {
+				poweredOff: 'Reader powered off',
+				idlePowerDown: 'Reader powered off',
+				bluetoothDisabled: 'Bluetooth is off',
+				bluetoothSignalLost: 'Reader out of range',
+				criticallyLowBattery: 'Reader battery is empty',
+				rebootRequested: 'Reader restarting',
+				securityReboot: 'Reader restarting',
+				usbDisconnected: 'Reader unplugged',
+			};
+			disconnected(messages[reason ?? 'unknown'] ?? 'Reader disconnected');
 		},
 		onDidStartReaderReconnect: (reader: Reader.Type) =>
 			publish({
@@ -188,6 +209,7 @@ export function createStripeTerminalDriver({
 			}
 			const rowId = pi.metadata?.wcpos_payment_id;
 			if (!rowId || !pi.id) return;
+			offlineIds.delete(rowId);
 			settlements.forEach((listener) =>
 				listener({
 					rowId,
@@ -209,10 +231,16 @@ export function createStripeTerminalDriver({
 					: { available: true },
 		callbacks,
 		reportError,
+		requestInitialization: () => initialize?.() ?? Promise.resolve(),
+		setInitializationHandler: (handler: (() => Promise<void>) | null) => {
+			initialize = handler;
+		},
 		setPermissionDenied: (denied: boolean) => {
 			permissionDenied = denied;
+			publish({});
 		},
 		bindSdk: (api: Sdk | null) => {
+			if (api && !sdk) publish({ message: null });
 			sdk = api;
 			if (api) {
 				bindings.forEach((bind) => bind(api));
@@ -221,6 +249,12 @@ export function createStripeTerminalDriver({
 		async discoverReaders(nextTransport: PaymentTransport): Promise<ReaderInfo[]> {
 			const api = await ready();
 			await cancelDiscovery(api);
+			// The SDK refuses to scan while a reader is connected ("Already connected to a
+			// reader"); a new search is the cashier changing readers, so let go of the current one.
+			if (status.connection === 'connected') {
+				check(await api.disconnectReader());
+				disconnected();
+			}
 			transport = nextTransport;
 			readers = [];
 			bluetoothOff = false;
@@ -273,6 +307,11 @@ export function createStripeTerminalDriver({
 			});
 		},
 		async connect(reader: ReaderInfo, handoff: Record<string, unknown> | null): Promise<void> {
+			if (handoff === null)
+				throw reportError({
+					code: 'StoreOffline',
+					message: 'Reconnecting needs a connection to the store',
+				});
 			if (typeof handoff?.location_id !== 'string' || !handoff.location_id)
 				throw new Error('This gateway has no Terminal location');
 			lastMethodId = typeof handoff.method_id === 'string' ? handoff.method_id : undefined;
@@ -307,7 +346,7 @@ export function createStripeTerminalDriver({
 		async collect(input: Parameters<PaymentDriver['collect']>[0]): Promise<CollectResult> {
 			lastProviderData = input.method.provider_data;
 			const api = await ready();
-			const dp = input.row.amount.split('.')[1]?.length ?? 0;
+			const dp = input.dp;
 			const failed = (
 				outcome: 'cancelled' | 'declined',
 				failure_reason?: string
@@ -340,11 +379,16 @@ export function createStripeTerminalDriver({
 							})
 						: await api.retrievePaymentIntent(secret as string)
 				);
+				// Only readers with a screen take a tip on the reader (WisePad 3, WisePOS E, S700/S710);
+				// the M2 and Chipper refuse a tipping configuration outright
+				// (UNSUPPORTED_OPERATION "Tipping configuration provided with incompatible reader").
+				const tipCapable = /wisePad3|wisePosE|stripeS7/i.test(status.reader?.model ?? '');
+				const tipEligibleAmount = tipCapable ? (input.tipEligibleMinor ?? undefined) : undefined;
 				const collected = paymentIntent(
 					await api.collectPaymentMethod({
 						paymentIntent: initial,
-						tipEligibleAmount: input.tipEligibleMinor ?? undefined,
-						skipTipping: input.tipEligibleMinor == null,
+						tipEligibleAmount,
+						skipTipping: tipEligibleAmount == null,
 					})
 				);
 				confirming = true;
@@ -355,6 +399,7 @@ export function createStripeTerminalDriver({
 				const offlineDetails = confirmed.offlineDetails as typeof confirmed.offlineDetails & {
 					id?: string;
 				};
+				if (input.offline && offlineDetails?.id) offlineIds.set(input.row.id, offlineDetails.id);
 				// beta.32 uses cardPresentDetails; also accept the handoff contract's cardPresent spelling.
 				const details = charge?.paymentMethodDetails;
 				const card =
@@ -376,7 +421,7 @@ export function createStripeTerminalDriver({
 				return {
 					outcome: input.offline ? 'authorized' : 'captured',
 					provider_refs: input.offline
-						? { payment_intent: null, offline_id: offlineDetails?.id ?? null }
+						? { payment_intent: null }
 						: { payment_intent: confirmed.id, charge: charge?.id ?? null },
 					receipt,
 					amount: input.offline ? input.row.amount : fromMinor(confirmed.amount, dp),
@@ -384,6 +429,14 @@ export function createStripeTerminalDriver({
 				};
 			} catch (error) {
 				const failure = error as SdkError;
+				if (__DEV__)
+					console.log('[stripe-driver] collect failed', {
+						code: failure.code,
+						message: failure.message,
+						declineCode: failure.declineCode ?? failure.apiError?.declineCode ?? null,
+						confirming,
+						handoffKeys: Object.keys(input.handoff ?? {}),
+					});
 				if (failure.code === 'Canceled') return failed('cancelled');
 				const decline = failure.declineCode ?? failure.apiError?.declineCode;
 				if (confirming && (decline || failure.code === 'DeclinedByStripeAPI'))

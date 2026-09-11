@@ -373,6 +373,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (!minted.ok) throw new Error(minted.reason);
 				intentRow.current = minted.row.id;
 				service.begin({
+					dp,
 					orderUuid: order.uuid,
 					orderId: payload.id ?? 0,
 					orderNumber: payload.number ?? '',
@@ -424,6 +425,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (!minted.ok) throw new Error(minted.reason);
 				intentRow.current = minted.row.id;
 				service.begin({
+					dp,
 					orderUuid: order.uuid,
 					orderId: payload.id,
 					orderNumber: payload.number ?? String(payload.id),

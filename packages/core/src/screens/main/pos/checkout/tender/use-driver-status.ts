@@ -2,7 +2,11 @@ import * as React from 'react';
 
 import type { PaymentMethodDescriptor, PaymentTransport } from '@wcpos/order-math';
 
-import { getDriver, listDrivers } from '../../../../../services/payment-drivers/registry';
+import {
+	getDriver,
+	listDrivers,
+	subscribeRegistry,
+} from '../../../../../services/payment-drivers/registry';
 
 import type { DriverStatus, PaymentDriver } from '../../../../../services/payment-drivers/types';
 
@@ -32,9 +36,19 @@ export function driverReady(
 /** Availability can change while no keypad is selected (permission/Bluetooth/login). */
 export function useDriverChanges() {
 	const [, changed] = React.useReducer((value) => value + 1, 0);
-	// Drivers register at app startup; their external status streams invalidate tile availability.
+	// Registry changes can arrive after mount; rebind external status streams as drivers change.
 	React.useEffect(() => {
-		const unsubscribers = listDrivers().map((driver) => driver.status$.subscribe(changed));
-		return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+		let unsubscribers: (() => void)[] = [];
+		const update = () => {
+			unsubscribers.forEach((unsubscribe) => unsubscribe());
+			unsubscribers = listDrivers().map((driver) => driver.status$.subscribe(changed));
+			changed();
+		};
+		const unsubscribeRegistry = subscribeRegistry(update);
+		update();
+		return () => {
+			unsubscribeRegistry();
+			unsubscribers.forEach((unsubscribe) => unsubscribe());
+		};
 	}, []);
 }

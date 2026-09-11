@@ -1,1 +1,2 @@
-export { createStripeTerminalDriver } from './driver.native';
+export { createStripeTerminalDriver } from './driver';
+export { StripeTerminalDriverBridge } from './bridge';

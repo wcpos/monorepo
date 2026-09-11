@@ -93,6 +93,7 @@ it.each(['0.00', '4.00'])(
 			data: { payment: { ...row, status: 'captured' }, order: { ...summary, balance } },
 		});
 		getTerminalPaymentsService()!.resume({
+			dp: 2,
 			orderUuid: 'order',
 			orderId: 42,
 			orderNumber: '42',
@@ -114,7 +115,7 @@ it.each(['0.00', '4.00'])(
 it('HTTP refresh keeps a leg alive; store change replaces the singleton and stops old timers', async () => {
 	const view = renderHook(() => useTerminalPaymentsService());
 	const first = getTerminalPaymentsService()!;
-	first.resume({ orderUuid: 'order', orderId: 42, orderNumber: '42', row });
+	first.resume({ dp: 2, orderUuid: 'order', orderId: 42, orderNumber: '42', row });
 	mockHttp = { get: jest.fn(async () => ({ data: { payment: row } })), post: jest.fn() };
 	view.rerender();
 	expect(getTerminalPaymentsService()).toBe(first);
@@ -144,6 +145,7 @@ describe('background capture reconciliation', () => {
 		mockFind.mockResolvedValue(resident);
 		const view = renderHook(() => useTerminalPaymentsService());
 		getTerminalPaymentsService()!.resume({
+			dp: 2,
 			orderUuid: 'background-order',
 			orderId: 42,
 			orderNumber: '42',
@@ -177,6 +179,7 @@ describe('background capture reconciliation', () => {
 			}
 			const view = renderHook(() => useTerminalPaymentsService());
 			getTerminalPaymentsService()!.resume({
+				dp: 2,
 				orderUuid: 'background-order',
 				orderId: 42,
 				orderNumber: '42',
@@ -196,6 +199,7 @@ describe('background capture reconciliation', () => {
 		});
 		const view = renderHook(() => useTerminalPaymentsService());
 		getTerminalPaymentsService()!.resume({
+			dp: 2,
 			orderUuid: 'background-order',
 			orderId: 42,
 			orderNumber: '42',

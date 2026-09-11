@@ -141,7 +141,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			} else if (input.offline) {
 				if (!result) return;
 				const authorized = result.outcome === 'authorized';
-				const dp = input.row.amount.split('.')[1]?.length ?? 0;
+				const dp = input.dp;
 				if (
 					authorized &&
 					result.amount !== null &&
@@ -263,6 +263,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		set({ phase: 'collecting' });
 		try {
 			result = await deps.driver.collect({
+				dp: input.dp,
 				row: state.row,
 				method: input.method,
 				transport: input.transport,

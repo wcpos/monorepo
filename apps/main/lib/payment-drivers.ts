@@ -8,8 +8,10 @@ import { createSimulatedDriver } from '@wcpos/core/services/payment-drivers/simu
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
 // Platform entrypoints keep the native SDK out of the web bundle.
-import { createStripeTerminalDriver } from './payment-drivers/stripe-terminal';
-import { StripeTerminalDriverBridge } from './payment-drivers/stripe-terminal/bridge';
+import {
+	createStripeTerminalDriver,
+	StripeTerminalDriverBridge,
+} from './payment-drivers/stripe-terminal';
 
 if (__DEV__ || Platform.OS === 'web') registerDriver(createSimulatedDriver());
 
@@ -27,7 +29,10 @@ function stripeDeviceMethod(
 ): PaymentMethodDescriptor | null {
 	return (
 		methods.find(
-			(method) => method.capture.mode === 'device' && method.capture.provider === 'stripe'
+			(method) =>
+				method.pos_enabled === true &&
+				method.capture.mode === 'device' &&
+				method.capture.provider === 'stripe'
 		) ?? null
 	);
 }
@@ -65,5 +70,5 @@ export function StripeTerminalDriverRegistration() {
 	const enabled = stripeDeviceMethod(methods) !== null;
 	return Platform.OS === 'web' || !enabled
 		? null
-		: React.createElement(StripeTerminalDriverBridge, { driver });
+		: React.createElement(StripeTerminalDriverBridge, { driver, methods });
 }
