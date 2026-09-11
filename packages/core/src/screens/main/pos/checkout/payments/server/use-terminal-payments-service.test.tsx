@@ -121,22 +121,25 @@ it('offline settlement puts the tuple and ledger in the same completing patch', 
 		'startTerminalPaymentsService'
 	);
 	const hook = renderHook(() => useTerminalPaymentsService());
-	const options = start.mock.calls[0][0];
-	await options.patchAndEnqueue!('completed-order', { ...mockRow, status: 'captured' });
-	expect(mockPatch).toHaveBeenCalledWith(
-		expect.objectContaining({
-			data: {
-				status: 'completed',
-				meta_data: expect.arrayContaining([
-					{ key: '_wcpos_sale_counter', value: '2' },
-					expect.objectContaining({ key: '_wcpos_payments' }),
-				]),
-			},
-		})
-	);
-	hook.unmount();
-	start.mockRestore();
-	mockResident.payload.meta_data = original;
+	try {
+		const options = start.mock.calls[0][0];
+		await options.patchAndEnqueue!('completed-order', { ...mockRow, status: 'captured' });
+		expect(mockPatch).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: {
+					status: 'completed',
+					meta_data: expect.arrayContaining([
+						{ key: '_wcpos_sale_counter', value: '2' },
+						expect.objectContaining({ key: '_wcpos_payments' }),
+					]),
+				},
+			})
+		);
+	} finally {
+		hook.unmount();
+		start.mockRestore();
+		mockResident.payload.meta_data = original;
+	}
 });
 
 it('background terminal settlement enqueues one provenance-only patch after mirroring', async () => {

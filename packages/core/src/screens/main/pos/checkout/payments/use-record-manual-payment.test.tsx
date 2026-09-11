@@ -36,6 +36,7 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => manager }));
 jest.mock('@wcpos/utils/logger', () => ({
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
 	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
 }));
 jest.mock('../../../../../contexts/translations', () => {
@@ -358,7 +359,31 @@ it.each([false, true])(
 		});
 		expect(mockLoggerError).toHaveBeenCalledWith(
 			expect.any(String),
-			expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+			expect.objectContaining({
+				code: 'CHECKOUT101',
+				showToast: true,
+				context: expect.objectContaining({
+					step: 'provenance',
+					error: throws ? 'storage failed' : 'provenance_save_failed',
+				}),
+			})
 		);
 	}
 );
+
+it('identifies a failed payment mirror in the diagnostic context', async () => {
+	onlineStatus = 'online-website-available';
+	mockPost.mockResolvedValueOnce({ data: { order: { status: 'completed' } } });
+	mockPatchEngineResident.mockRejectedValueOnce(new Error('mirror failed'));
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await expect(result.current(order, method, { amount: 40 })).resolves.toMatchObject({
+		kind: 'recorded',
+	});
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({ step: 'payment_mirror', error: 'mirror failed' }),
+		})
+	);
+});

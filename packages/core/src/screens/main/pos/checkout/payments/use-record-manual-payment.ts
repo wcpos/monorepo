@@ -4,7 +4,7 @@ import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	hasSaleProvenance,
@@ -101,6 +101,7 @@ export function useRecordManualPayment(
 					return typeof status === 'string' ? status : null;
 				},
 				mirror: async (changes, { accepted }) => {
+					let step = 'payment_mirror';
 					try {
 						await patchEngineResident({
 							manager,
@@ -108,6 +109,7 @@ export function useRecordManualPayment(
 							recordId: order.uuid,
 							changes,
 						});
+						step = 'provenance';
 						if (
 							accepted &&
 							isCompletingStatus(changes.status ?? '') &&
@@ -117,10 +119,17 @@ export function useRecordManualPayment(
 							const patched = await localPatch({ document: order, data: { meta_data } });
 							if (!patched) throw new Error('provenance_save_failed');
 						}
-					} catch {
+					} catch (error) {
 						logger.error(t('pos_cart.checkout_failed'), {
 							code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 							showToast: true,
+							context: {
+								recordId: order.uuid,
+								orderId: paymentOrder.id,
+								accepted,
+								step,
+								error: getErrorMessage(error),
+							},
 						});
 					}
 				},

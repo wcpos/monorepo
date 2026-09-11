@@ -4,7 +4,7 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -175,12 +175,13 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			if (online) {
 				try {
 					await persistProvenance({ order, localPatch, pushDocument, userDB, siteUuid });
-				} catch {
+				} catch (error) {
 					const message = t('pos_cart.checkout_failed');
 					setError(message);
 					checkoutLogger.error(message, {
 						code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 						showToast: true,
+						context: { orderId, error: getErrorMessage(error) },
 					});
 					return;
 				}

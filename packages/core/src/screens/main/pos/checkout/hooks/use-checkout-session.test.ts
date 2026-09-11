@@ -17,6 +17,7 @@ const mockHttp = { get: mockGet, post: mockPost };
 const mockStockAdjustment = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 const mockEngineRequire = jest.fn();
+const mockLoggerError = jest.fn();
 const mockResolveStockOwnerId = jest.fn((productId: number, variationId: number) =>
 	Promise.resolve(variationId || productId)
 );
@@ -51,7 +52,11 @@ jest.mock('../../hooks/use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({ resolveStockOwnerId: mockResolveStockOwnerId }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ success: jest.fn(), error: jest.fn() }),
+	getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+	getLogger: () => ({
+		success: jest.fn(),
+		error: (...args: unknown[]) => mockLoggerError(...args),
+	}),
 }));
 
 const makeOrder = (paymentMethod = 'stripe_terminal_for_woocommerce') => {
@@ -444,5 +449,14 @@ describe('contract provenance preparation', () => {
 		await act(() => result.current.startCheckout());
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(result.current.error).toBe('pos_cart.checkout_failed');
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			'pos_cart.checkout_failed',
+			expect.objectContaining({
+				context: {
+					orderId: 42,
+					error: failure === 'patch' ? 'provenance_save_failed' : 'push failed',
+				},
+			})
+		);
 	});
 });
