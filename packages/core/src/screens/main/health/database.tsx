@@ -67,6 +67,7 @@ import {
 	totalLocalRecords,
 } from './database-logic';
 import { QueuedEmailsPanel } from './queued-emails';
+import { RegistersPanel } from './registers-panel';
 import { RejectedMutationsPanel } from './rejected-mutations';
 import { useCollectionSizes } from './use-collection-sizes';
 import { useNowMs, useRelativeTime } from './use-relative-time';
@@ -828,6 +829,7 @@ export function DatabaseScreen() {
 					</Button>
 				</HStack>
 
+				<RegistersPanel />
 				<View className="h-4" />
 			</VStack>
 		</ScrollView>

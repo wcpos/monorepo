@@ -4,11 +4,12 @@ import { View } from 'react-native';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 
-export type PillTone = 'destructive' | 'warning' | 'muted';
+export type PillTone = 'destructive' | 'warning' | 'muted' | 'success';
 
 const TONE_CLASS: Record<PillTone, { pill: string; text: string }> = {
 	destructive: { pill: 'bg-destructive/10', text: 'text-destructive' },
 	warning: { pill: 'bg-warning/10', text: 'text-warning' },
+	success: { pill: 'bg-success/10', text: 'text-success' },
 	muted: { pill: 'bg-muted', text: 'text-muted-foreground' },
 };
 
