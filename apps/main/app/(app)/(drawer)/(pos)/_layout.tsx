@@ -1,10 +1,11 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
@@ -20,6 +21,7 @@ import {
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
+import { POSOverlaySideProvider } from '@wcpos/core/screens/main/pos/contexts/overlay-side';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
@@ -133,45 +135,50 @@ export default function POSLayout() {
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
+	const registerPOSContainer = React.useCallback((node: View | null) => {
+		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
+	}, []);
 
 	return (
 		<TaxRatesProvider>
 			<CustomerDisplaySnapshotSource />
 			<PosUrlMirror />
-			<View className="bg-background flex-1">
-				<Stack
-					screenOptions={{
-						animation: 'none',
-						headerShown: false,
-						contentStyle: { backgroundColor: screenBackgroundColor },
-					}}
-				>
-					<Stack.Screen name="index" />
-					<Stack.Screen
-						name="(modals)/cart/[orderId]/checkout"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
+			<POSOverlaySideProvider>
+				<View ref={registerPOSContainer} className="bg-background flex-1">
+					<Stack
+						screenOptions={{
+							animation: 'none',
+							headerShown: false,
+							contentStyle: { backgroundColor: screenBackgroundColor },
 						}}
-					/>
-					<Stack.Screen
-						name="(modals)/cart/receipt/[orderId]"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
-						}}
-					/>
-				</Stack>
-			</View>
-			{/**
-			 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
-			 * so that dialogs like add/edit product etc can access the context
-			 */}
-			<ErrorBoundary>
-				<PortalHost name="pos" />
-			</ErrorBoundary>
+					>
+						<Stack.Screen name="index" />
+						<Stack.Screen
+							name="(modals)/cart/[orderId]/checkout"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/>
+						<Stack.Screen
+							name="(modals)/cart/receipt/[orderId]"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/>
+					</Stack>
+				</View>
+				{/**
+				 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
+				 * so that dialogs like add/edit product etc can access the context
+				 */}
+				<ErrorBoundary>
+					<PortalHost name="pos" />
+				</ErrorBoundary>
+			</POSOverlaySideProvider>
 		</TaxRatesProvider>
 	);
 }

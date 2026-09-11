@@ -25,6 +25,7 @@ import { useDocField } from '@wcpos/query';
 import { columnsFormSchema, UISettingsColumnsForm } from './columns-form';
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
+import { usePOSOverlaySide } from '../../pos/contexts/overlay-side';
 
 type ColumnsOnlySettingsID = 'coupons' | 'customers' | 'orders' | 'reports-orders';
 
@@ -81,12 +82,14 @@ interface Props {
 	title: string;
 	children: React.ReactNode;
 	triggerTestID?: string;
+	portalHost?: string;
 }
 
 /**
  *
  */
-function UISettingsDialog({ title, children, triggerTestID }: Props) {
+function UISettingsDialog({ title, children, triggerTestID, portalHost }: Props) {
+	const side = usePOSOverlaySide();
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
 	const buttonPressHandlerRef = React.useRef<(() => void) | null>(null);
@@ -114,7 +117,7 @@ function UISettingsDialog({ title, children, triggerTestID }: Props) {
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent side="right" size="lg">
+				<DialogContent side={side} size="lg" portalHost={portalHost}>
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>

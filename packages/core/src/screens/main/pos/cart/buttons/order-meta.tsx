@@ -3,7 +3,6 @@ import * as React from 'react';
 import { Button } from '@wcpos/components/button';
 import {
 	Dialog,
-	DialogBody,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
@@ -13,11 +12,13 @@ import {
 import { EditOrderMeta } from './edit-order-meta';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrderRecord } from '../../contexts/current-order';
+import { usePOSOverlaySide } from '../../contexts/overlay-side';
 
 /**
  *
  */
 export function OrderMetaButton() {
+	const side = usePOSOverlaySide();
 	const currentOrder = useCurrentOrderRecord();
 	const t = useT();
 
@@ -28,13 +29,11 @@ export function OrderMetaButton() {
 					{t('pos_cart.order_meta')}
 				</Button>
 			</DialogTrigger>
-			<DialogContent testID="order-meta-dialog" size="lg" portalHost="pos">
+			<DialogContent side={side} testID="order-meta-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.order_meta')}</DialogTitle>
 				</DialogHeader>
-				<DialogBody>
-					<EditOrderMeta order={currentOrder} />
-				</DialogBody>
+				<EditOrderMeta order={currentOrder} />
 			</DialogContent>
 		</Dialog>
 	);

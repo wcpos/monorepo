@@ -299,7 +299,7 @@ function POSProductsContent({
 									onToggle={() => setScannerOpen((open) => !open)}
 								/>
 								<ViewModeToggle />
-								<UISettingsDialog title={t('common.product_settings')}>
+								<UISettingsDialog portalHost="pos" title={t('common.product_settings')}>
 									<UISettingsForm />
 								</UISettingsDialog>
 							</HStack>

@@ -19,6 +19,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useT } from '../../../../../contexts/translations';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../../contexts/current-order';
+import { usePOSOverlaySide } from '../../contexts/overlay-side';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -26,6 +27,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  *
  */
 export function AddNoteButton() {
+	const side = usePOSOverlaySide();
 	const { currentOrderRecord } = useCurrentOrder();
 	const note = useRecordField(currentOrderRecord, (order) => order.payload.customer_note);
 	const t = useT();
@@ -72,7 +74,7 @@ export function AddNoteButton() {
 					{t('pos_cart.order_note')}
 				</Button>
 			</DialogTrigger>
-			<DialogContent testID="order-note-dialog" portalHost="pos">
+			<DialogContent side={side} testID="order-note-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.order_note')}</DialogTitle>
 				</DialogHeader>

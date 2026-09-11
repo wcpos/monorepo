@@ -5,10 +5,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import {
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/dialog';
 import { Form, FormCombobox, FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
 import type { OrderDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -79,7 +84,7 @@ export function EditOrderMetaForm({
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<HStack className="gap-4">
 					<FormField
@@ -113,11 +118,11 @@ export function EditOrderMetaForm({
 					/>
 				</HStack>
 				<MetaDataForm />
-				<DialogFooter className="px-0">
-					<DialogClose>{t('common.cancel')}</DialogClose>
-					<DialogAction onPress={onSave}>{t('common.save')}</DialogAction>
-				</DialogFooter>
-			</VStack>
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.cancel')}</DialogClose>
+				<DialogAction onPress={onSave}>{t('common.save')}</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }
