@@ -98,8 +98,10 @@ jest.mock('@wcpos/components/collapsible', () => ({
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
-// Terminal rendering/animations have their own suite; these cases never mount a terminal leg.
-jest.mock('./terminal-leg-view', () => ({ TerminalLegView: () => null }));
+// Terminal rendering/animations have their own suite; this marker only verifies pane ownership.
+jest.mock('./terminal-leg-view', () => ({
+	TerminalLegView: () => <div data-testid="terminal-leg-view" />,
+}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
@@ -281,6 +283,18 @@ describe('TenderCheckout', () => {
 		mockOnClose?.();
 
 		expect(mockBack).not.toHaveBeenCalled();
+	});
+
+	it('keeps the terminal pane mounted when the leg finishes on the Legacy tab', () => {
+		mockFlow = makeFlow({
+			state: { ...initialTenderState, tab: 'legacy' },
+			terminalLeg: { phase: 'final' } as TenderFlow['terminalLeg'],
+		});
+
+		render(<TenderCheckout order={order} />);
+
+		expect(screen.getByTestId('terminal-leg-view')).not.toBeNull();
+		expect(screen.queryByTestId('legacy-tab')).toBeNull();
 	});
 
 	it('offers a completion action for a zero-total order', () => {

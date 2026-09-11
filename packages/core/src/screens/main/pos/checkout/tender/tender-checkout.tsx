@@ -95,7 +95,7 @@ export function TenderCheckout({ order }: Props) {
 		if (flow.state.view === 'cancel' && !flow.hasLiveTerminalLeg) {
 			return <CancelPaymentView flow={flow} format={format} />;
 		}
-		if (flow.state.tab === 'legacy') {
+		if (flow.state.tab === 'legacy' && !flow.terminalLeg) {
 			return <LegacyTab flow={flow} order={order} />;
 		}
 		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
