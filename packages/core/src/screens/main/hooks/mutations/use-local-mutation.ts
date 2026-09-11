@@ -302,6 +302,15 @@ export async function patchAndEnqueueEngineResident(input: {
 		let changes = input.changes;
 		const registerId = input.registerId ?? getRegisterId();
 		const meta = (residentPayload(resident).meta_data ?? []) as { key?: string; value?: unknown }[];
+		const residentRegister = meta.find(({ key }) => key === '_wcpos_register');
+		if (
+			input.collection === 'orders' &&
+			residentRegister &&
+			Array.isArray(changes.meta_data) &&
+			!changes.meta_data.some(({ key }) => key === '_wcpos_register')
+		) {
+			changes = { ...changes, meta_data: [...changes.meta_data, residentRegister] };
+		}
 		if (
 			input.collection === 'orders' &&
 			registerId &&

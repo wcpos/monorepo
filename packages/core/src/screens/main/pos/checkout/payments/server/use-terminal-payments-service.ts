@@ -106,6 +106,7 @@ export function useTerminalPaymentsService(): void {
 				};
 			},
 			mirror: async (orderUuid, { payment, order }) => {
+				let mirrored = false;
 				try {
 					const resident = await findEngineResident(manager, 'orders', orderUuid);
 					if (stopped) return;
@@ -132,6 +133,7 @@ export function useTerminalPaymentsService(): void {
 							meta_data,
 						},
 					});
+					mirrored = true;
 					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
 						const patched = await latest.current.localPatch({
 							document: resident,
@@ -141,10 +143,13 @@ export function useTerminalPaymentsService(): void {
 						});
 						if (!patched) throw new Error('provenance_save_failed');
 					}
-				} catch {
+				} catch (error) {
+					// Ledger failures must reach the leg so it resumes polling instead of finalising.
+					if (!mirrored) throw error;
 					logger.error('Checkout failed', {
 						code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 						showToast: true,
+						context: { error: getErrorMessage(error) },
 					});
 				}
 			},

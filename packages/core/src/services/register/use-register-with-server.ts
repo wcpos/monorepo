@@ -9,16 +9,18 @@ import { registerWithServer } from './register-with-server';
 
 export function useRegisterWithServer(): void {
 	const { userDB, site, store, wpCredentials } = useStoreSession();
-	const name = useRegister()?.name;
+	const register = useRegister();
+	const name = register?.name;
 	const http = useRestHttpClient();
 	const { status } = useOnlineStatus();
 	const attempted = React.useRef<string | null>(null);
 	// External session/connectivity subscription: one attempt, deferred until online.
 	// useOnlineStatus owns the subscription and React cleans it up on unmount.
 	React.useEffect(() => {
+		if (!register) return;
 		const session = `${site.uuid}:${store.id}:${wpCredentials.uuid}:${name}`;
 		if (status !== 'online-website-available' || attempted.current === session) return;
 		attempted.current = session;
 		void registerWithServer({ userDB, http, siteUuid: site.uuid! });
-	}, [userDB, http, site.uuid, store.id, wpCredentials.uuid, status, name]);
+	}, [userDB, http, site.uuid, store.id, wpCredentials.uuid, status, name, register]);
 }

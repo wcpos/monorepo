@@ -1162,3 +1162,21 @@ describe('provider completion provenance before intent', () => {
 		expect(mockPushDocument).not.toHaveBeenCalled();
 	});
 });
+
+it('resets a failed manual tender without logging a second error or toast', async () => {
+	jest.clearAllMocks();
+	resetCheckoutMode();
+	mockLeg = null;
+	mockMethods = methods;
+	mockPayload = { id: 42, total: '10.00', meta_data: [] };
+	mockRecordManualPayment.mockResolvedValueOnce({ kind: 'failed' });
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	await act(async () => result.current.takeTender());
+	expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+	expect(mockError).not.toHaveBeenCalled();
+	expect(mockInfo).not.toHaveBeenCalled();
+	expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
+	expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
+	expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+});

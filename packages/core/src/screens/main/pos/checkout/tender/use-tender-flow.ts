@@ -463,6 +463,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				setTenderMethod(order.uuid, null);
 				return;
 			}
+			if (outcome.kind === 'failed') {
+				reducerDispatch({ type: 'back' });
+				setTenderMethod(order.uuid, null);
+				return;
+			}
 			logger.error(t('pos_checkout.payment_not_recorded'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,

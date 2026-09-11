@@ -77,3 +77,46 @@ it('re-arms a failed registration after an offline rename and online transition'
 	view.unmount();
 	client.mockRestore();
 });
+
+it('waits for the initial register emission and sends one POST while it is pending', async () => {
+	const { act } = await import('@testing-library/react');
+	const data = { id: 'register', name: 'Till', platform: 'web', sites: {} };
+	const doc = { toJSON: () => ({ data }), incrementalModify: jest.fn() };
+	mockSession.userDB = { getLocal: async () => doc };
+	mockStatus = 'online-website-available';
+	mockRegister
+		.mockClear()
+		.mockImplementation(jest.requireActual('./register-with-server').registerWithServer);
+	let finish!: (response: { status: number }) => void;
+	const post = jest.fn(
+		() =>
+			new Promise<{ status: number }>((resolve) => {
+				finish = resolve;
+			})
+	);
+	const client = jest
+		.spyOn(jest.requireMock('../../screens/main/hooks/use-rest-http-client'), 'useRestHttpClient')
+		.mockReturnValue({ post });
+	const register = jest
+		.spyOn(jest.requireMock('./use-register'), 'useRegister')
+		.mockReturnValue(null);
+	const view = renderHook(() => useRegisterWithServer());
+	try {
+		await act(async () => {});
+		expect(post).not.toHaveBeenCalled();
+		register.mockReturnValue(data);
+		await act(async () => view.rerender());
+		expect(post).toHaveBeenCalledTimes(1);
+		register.mockReturnValue({ ...data });
+		await act(async () => view.rerender());
+		expect(post).toHaveBeenCalledTimes(1);
+	} finally {
+		await act(async () => {
+			finish({ status: 201 });
+			await Promise.resolve();
+		});
+		view.unmount();
+		register.mockRestore();
+		client.mockRestore();
+	}
+});

@@ -181,3 +181,48 @@ it('reports a falsy terminal provenance patch without rejecting the recorded pay
 		mockResident.payload.meta_data = original;
 	}
 });
+
+it.each(['ledger', 'provenance'] as const)(
+	'preserves the rejection contract for a failed %s patch',
+	async (failure) => {
+		const original = mockResident.payload.meta_data;
+		mockResident.payload.meta_data = [];
+		const start = jest.spyOn(
+			await import('../../../../../../services/terminal-payments'),
+			'startTerminalPaymentsService'
+		);
+		const error = new Error(`${failure} write failed`);
+		if (failure === 'ledger') mockMirror.mockRejectedValueOnce(error);
+		else mockPatch.mockRejectedValueOnce(error);
+		const hook = renderHook(() => useTerminalPaymentsService());
+		try {
+			const result = start.mock.calls[0][0].mirror('completed-order', {
+				payment: { ...mockRow, status: 'captured' },
+				order: {
+					status: 'completed',
+					total: '10.00',
+					paid: '10.00',
+					balance: '0.00',
+					payment_method: 'device',
+					payment_method_title: 'Reader',
+				},
+			});
+			if (failure === 'ledger') {
+				await expect(result).rejects.toBe(error);
+				expect(mockPatch).not.toHaveBeenCalled();
+			} else {
+				await expect(result).resolves.toBeUndefined();
+				expect(mockMirrorError).toHaveBeenCalledWith(
+					'Checkout failed',
+					expect.objectContaining({
+						context: { error: String(error) },
+					})
+				);
+			}
+		} finally {
+			hook.unmount();
+			start.mockRestore();
+			mockResident.payload.meta_data = original;
+		}
+	}
+);
