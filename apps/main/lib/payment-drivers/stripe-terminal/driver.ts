@@ -255,10 +255,12 @@ export function createStripeTerminalDriver({
 					label,
 					active: simulatedCard === number,
 					run: async () => {
+						// A success clears the message a failed attempt left — but only that one: a
+						// newer status published while the SDK call ran must stay on the line.
+						const before = status.message;
 						check(await (await ready()).setSimulatedCard(number));
 						simulatedCard = number;
-						// A success clears the message a failed attempt may have left on the status line.
-						publish({ message: null });
+						if (before && status.message === before) publish({ message: null });
 					},
 				})),
 				{
@@ -267,9 +269,10 @@ export function createStripeTerminalDriver({
 					active: simulatedOffline,
 					run: async () => {
 						const next = !simulatedOffline;
+						const before = status.message;
 						check(await (await ready()).setSimulatedOfflineMode(next));
 						simulatedOffline = next;
-						publish({ message: null });
+						if (before && status.message === before) publish({ message: null });
 					},
 				},
 			];
