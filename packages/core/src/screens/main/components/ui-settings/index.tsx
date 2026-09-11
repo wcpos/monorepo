@@ -25,7 +25,7 @@ import { useDocField } from '@wcpos/query';
 import { columnsFormSchema, UISettingsColumnsForm } from './columns-form';
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
-import { usePOSOverlaySide } from '../../pos/contexts/overlay-side';
+import { type POSOverlaySide, usePOSOverlaySide } from '../../pos/contexts/overlay-side';
 
 type ColumnsOnlySettingsID = 'coupons' | 'customers' | 'orders' | 'reports-orders';
 
@@ -83,13 +83,14 @@ interface Props {
 	children: React.ReactNode;
 	triggerTestID?: string;
 	portalHost?: string;
+	side?: POSOverlaySide;
 }
 
 /**
  *
  */
-function UISettingsDialog({ title, children, triggerTestID, portalHost }: Props) {
-	const side = usePOSOverlaySide();
+function UISettingsDialog({ title, children, triggerTestID, portalHost, side }: Props) {
+	const defaultSide = usePOSOverlaySide();
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
 	const buttonPressHandlerRef = React.useRef<(() => void) | null>(null);
@@ -117,7 +118,7 @@ function UISettingsDialog({ title, children, triggerTestID, portalHost }: Props)
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent side={side} size="lg" portalHost={portalHost}>
+				<DialogContent side={side ?? defaultSide} size="lg" portalHost={portalHost}>
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>

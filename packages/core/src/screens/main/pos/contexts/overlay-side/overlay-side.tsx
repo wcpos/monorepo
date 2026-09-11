@@ -7,6 +7,10 @@ import { useUISettings } from '../../../contexts/ui-settings';
 
 export type POSOverlaySide = 'left' | 'right' | 'bottom';
 
+export function oppositeOverlaySide(side: POSOverlaySide): POSOverlaySide {
+	return side === 'bottom' ? 'bottom' : side === 'left' ? 'right' : 'left';
+}
+
 const POSOverlaySideContext = React.createContext<POSOverlaySide>('right');
 
 export function POSOverlaySideProvider({ children }: { children: React.ReactNode }) {

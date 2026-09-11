@@ -22,7 +22,9 @@ function AlertDialogOverlayWeb({ className, ...props }: AlertDialogPrimitive.Ove
 	return (
 		<AlertDialogPrimitive.Overlay
 			className={cn(
-				'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2',
+				// z-70: a confirmation must paint above a side panel (DialogContent is z-60) even when both
+				// portal into the same host, e.g. the order-meta "send order?" confirm on the POS.
+				'absolute top-0 right-0 bottom-0 left-0 z-70 flex items-center justify-center bg-black/70 p-2',
 				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
 				className
 			)}
@@ -39,7 +41,7 @@ function AlertDialogOverlayNative({
 	return (
 		<AlertDialogPrimitive.Overlay
 			style={StyleSheet.absoluteFill}
-			className={cn('z-50 flex items-center justify-center bg-black/70 p-2', className)}
+			className={cn('z-70 flex items-center justify-center bg-black/70 p-2', className)}
 			{...props}
 			asChild
 		>
@@ -70,7 +72,7 @@ function AlertDialogContent({
 			<AlertDialogOverlay>
 				<AlertDialogPrimitive.Content
 					className={cn(
-						'web:duration-200 border-border bg-background z-50 max-w-lg gap-4 rounded-lg border py-4 shadow-lg',
+						'web:duration-200 border-border bg-background z-70 max-w-lg gap-4 rounded-lg border py-4 shadow-lg',
 						open
 							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 							: 'web:animate-out web:fade-out-0 web:zoom-out-95',
