@@ -36,12 +36,14 @@ export interface TerminalPaymentsServiceOptions {
 	http: Pick<ServerLegDeps, 'get' | 'post'>;
 	mirror: (orderUuid: string, response: ServerLegResponse) => Promise<void>;
 	onCaptured?: (orderUuid: string, order: OrderPaymentSummary | undefined) => void;
+	/** The store's price decimals; resumed legs use it when the caller has no store at hand. */
+	dp?: number;
 	now?: ServerLegDeps['now'];
 	setTimeout?: ServerLegDeps['setTimeout'];
 	clearTimeout?: ServerLegDeps['clearTimeout'];
 }
 interface ResumeInput {
-	dp: number;
+	dp?: number;
 	orderUuid: string;
 	orderId: number;
 	orderNumber: string;
@@ -266,7 +268,7 @@ export class TerminalPaymentsService {
 						},
 					},
 					{
-						dp: input.dp,
+						dp: input.dp ?? this.options.dp ?? 2,
 						orderId: input.orderId,
 						row: input.row,
 						resume,

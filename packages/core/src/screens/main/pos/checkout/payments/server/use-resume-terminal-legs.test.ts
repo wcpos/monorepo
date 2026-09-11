@@ -6,9 +6,6 @@ import type { EngineRecord } from '@wcpos/query';
 
 import { resumableTerminalRow, useResumeTerminalLegsForOrders } from './use-resume-terminal-legs';
 import { row } from '../device/fixtures.test-utils';
-jest.mock('../../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store: { price_num_decimals: 3 } }),
-}));
 jest.mock('@wcpos/query', () => ({ useRecordField: jest.fn() }));
 it.each([
 	['server', 'pending', false, true],
@@ -58,7 +55,7 @@ it.each([
 		rendered.rerender({ orders: [{ ...order, payload: { ...order.payload, id: 42 } }] });
 		if (!recorded_offline)
 			expect(mockService.resume).toHaveBeenCalledWith(
-				expect.objectContaining({ orderId: 42, row: payment, dp: 3 })
+				expect.objectContaining({ orderId: 42, row: payment })
 			);
 	}
 );

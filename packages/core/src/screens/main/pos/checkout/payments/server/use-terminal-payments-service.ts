@@ -60,6 +60,7 @@ export function useTerminalPaymentsService(): void {
 		bindingRef.current = binding;
 		let stopped = false;
 		const service = startTerminalPaymentsService({
+			dp: store.price_num_decimals ?? 2,
 			http: {
 				get: (url) => binding.client.get(url),
 				post: (url, body) => binding.client.post(url, body),

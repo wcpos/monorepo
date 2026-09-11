@@ -3,7 +3,6 @@ import * as React from 'react';
 import { type PaymentRow, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
-import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
 	getTerminalPaymentsService,
 	getTerminalPaymentsServiceStartVersion,
@@ -18,7 +17,7 @@ export function resumableTerminalRow(row: PaymentRow): boolean {
 	);
 }
 
-function resumeOrder(order: EngineRecord<'orders'>, dp: number) {
+function resumeOrder(order: EngineRecord<'orders'>) {
 	const service = getTerminalPaymentsService();
 	const payload = order.getLatest?.().payload ?? order.payload;
 	if (!service) return;
@@ -30,7 +29,6 @@ function resumeOrder(order: EngineRecord<'orders'>, dp: number) {
 			(payload.id || row.status === 'authorized')
 		)
 			service.trackOffline({
-				dp,
 				orderUuid: order.uuid,
 				orderId: payload.id ?? 0,
 				orderNumber: payload.number ?? String(payload.id),
@@ -43,7 +41,6 @@ function resumeOrder(order: EngineRecord<'orders'>, dp: number) {
 	if (tracked && (tracked.phase !== 'final' || tracked.row.id === row?.id)) return;
 	if (row && payload.id)
 		service.resume({
-			dp,
 			orderUuid: order.uuid,
 			orderId: payload.id ?? 0,
 			orderNumber: payload.number ?? String(payload.id),
@@ -53,7 +50,6 @@ function resumeOrder(order: EngineRecord<'orders'>, dp: number) {
 export function useResumeTerminalLegs(order: EngineRecord<'orders'> | undefined): void {
 	const id = useRecordField(order, (record) => record.payload.id);
 	const meta = useRecordField(order, (record) => record.payload.meta_data);
-	const dp = useStoreSession().store.price_num_decimals ?? 2;
 	const version = React.useSyncExternalStore(
 		subscribeTerminalPaymentsServiceStart,
 		getTerminalPaymentsServiceStartVersion,
@@ -62,11 +58,10 @@ export function useResumeTerminalLegs(order: EngineRecord<'orders'> | undefined)
 	// Reconcile an externally hydrated ledger when its metadata or service lifetime changes.
 	React.useEffect(() => {
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- Hydrated server state, not a UI event.
-		if (order) resumeOrder(order, dp);
-	}, [order, meta, id, version, dp]);
+		if (order) resumeOrder(order);
+	}, [order, meta, id, version]);
 }
 export function useResumeTerminalLegsForOrders(orders: readonly EngineRecord<'orders'>[]): void {
-	const dp = useStoreSession().store.price_num_decimals ?? 2;
 	const version = React.useSyncExternalStore(
 		subscribeTerminalPaymentsServiceStart,
 		getTerminalPaymentsServiceStartVersion,
@@ -75,6 +70,6 @@ export function useResumeTerminalLegsForOrders(orders: readonly EngineRecord<'or
 	// The open-order query publishes a new result when rows hydrate or their ledgers change.
 	React.useEffect(() => {
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-pass-data-to-parent -- Reconcile an external service, not parent React state.
-		orders.forEach((order) => resumeOrder(order, dp));
-	}, [orders, version, dp]);
+		orders.forEach((order) => resumeOrder(order));
+	}, [orders, version]);
 }
