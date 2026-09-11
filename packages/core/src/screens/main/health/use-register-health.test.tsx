@@ -4,12 +4,16 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { useRegisterHealth } from './use-register-health';
 
 const mockGet = jest.fn();
+let mockClient = { get: mockGet };
 jest.mock('../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({ get: mockGet }),
+	useRestHttpClient: () => mockClient,
 }));
 const data = { window_days: 30, skew_seconds: 600, registers: [], unregistered: [] };
 
-beforeEach(() => mockGet.mockReset());
+beforeEach(() => {
+	mockGet.mockReset();
+	mockClient = { get: mockGet };
+});
 
 it('fetches health once on mount and exposes the resolved data', async () => {
 	mockGet.mockResolvedValue({ data });
@@ -68,4 +72,18 @@ it('keeps the loaded results visible when a refresh fails', async () => {
 	expect(result.current.data).toEqual(data);
 	expect(result.current.error).toBe('Store unavailable');
 	expect(result.current.loading).toBe(false);
+});
+
+it('a store switch (new client) clears the previous findings and fetches again', async () => {
+	mockGet.mockResolvedValueOnce({ data });
+	const { result, rerender } = renderHook(() => useRegisterHealth());
+	await waitFor(() => expect(result.current.data).toEqual(data));
+	const other = { ...data, window_days: 7 };
+	mockGet.mockResolvedValueOnce({ data: other });
+	mockClient = { get: mockGet };
+	rerender();
+	expect(result.current.data).toBeNull();
+	expect(result.current.loading).toBe(true);
+	await waitFor(() => expect(result.current.data).toEqual(other));
+	expect(mockGet).toHaveBeenCalledTimes(2);
 });

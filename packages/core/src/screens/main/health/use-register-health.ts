@@ -32,27 +32,38 @@ export type RegisterHealth = {
 	}[];
 };
 
+type State = { data: RegisterHealth | null; loading: boolean; error: string | null };
+
 export function useRegisterHealth() {
 	const http = useRestHttpClient();
-	const [data, setData] = React.useState<RegisterHealth | null>(null);
-	const [loading, setLoading] = React.useState(true);
-	const [error, setError] = React.useState<string | null>(null);
-	const refresh = React.useCallback(async () => {
-		setLoading(true);
-		setError(null);
-		try {
-			const response = await http.get('registers/health');
-			setData(response.data as RegisterHealth);
-		} catch (error) {
-			setError(getErrorMessage(error));
-		} finally {
-			setLoading(false);
-		}
-	}, [http]);
-	const initialRefresh = React.useRef(refresh);
-	// Fetch the external server on mount; subsequent fetches are explicit refreshes.
+	const [state, setState] = React.useState<State>({ data: null, loading: true, error: null });
+	// The latest request wins: a response from a previous store's client is dropped.
+	const token = React.useRef(0);
+	const load = React.useCallback(
+		async (reset: boolean) => {
+			const mine = ++token.current;
+			setState((prev) => ({ data: reset ? null : prev.data, loading: true, error: null }));
+			try {
+				const response = await http.get('registers/health');
+				if (mine === token.current) {
+					setState({ data: response.data as RegisterHealth, loading: false, error: null });
+				}
+			} catch (error) {
+				if (mine === token.current) {
+					setState((prev) => ({ data: prev.data, loading: false, error: getErrorMessage(error) }));
+				}
+			}
+		},
+		[http]
+	);
+	// One fetch per store client (an external system): a store switch swaps the client,
+	// clears the previous store's findings and fetches the new store's.
 	React.useEffect(() => {
-		void initialRefresh.current();
-	}, []);
-	return { data, loading, error, refresh };
+		void load(true);
+		return () => {
+			token.current += 1;
+		};
+	}, [load]);
+	const refresh = React.useCallback(() => load(false), [load]);
+	return { ...state, refresh };
 }
