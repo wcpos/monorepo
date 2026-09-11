@@ -105,7 +105,10 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 			loading={loading}
 			renderLayout={(body, footer) => (
 				<>
-					<DialogBody>{body}</DialogBody>
+					{/* The dialog is height-capped, not fixed-height, so the body must be allowed to
+					    shrink (not flex-1, which collapses in an auto-height parent) or the footer is
+					    pushed below the fold on short screens / with the keyboard up. */}
+					<DialogBody className="min-h-0 shrink">{body}</DialogBody>
 					<DialogFooter>{footer}</DialogFooter>
 				</>
 			)}

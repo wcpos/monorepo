@@ -201,15 +201,16 @@ export function CustomerForm(props: CustomerFormProps) {
 			</VStack>
 		</Form>
 	);
+	// Siblings, not an HStack: the footer owns the row/column direction per breakpoint.
 	const footer = (
-		<HStack className="justify-end">
+		<>
 			<Button testID="customer-form-close" variant="outline" onPress={onClose}>
 				<ButtonText>{t('common.close')}</ButtonText>
 			</Button>
 			<Button testID="customer-form-save" loading={loading} onPress={onSave}>
 				<ButtonText>{t('common.save')}</ButtonText>
 			</Button>
-		</HStack>
+		</>
 	);
 
 	if (renderLayout) return renderLayout(body, footer);
