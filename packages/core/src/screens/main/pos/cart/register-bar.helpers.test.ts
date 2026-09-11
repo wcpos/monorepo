@@ -39,3 +39,9 @@ it.each([
 ] as const)('session pill priority %j', (state, pill) => {
 	expect(describeRegisterBar({ ...base, ...state }).pill).toBe(pill);
 });
+
+it('shows approval needed on a refused counting session', () => {
+	expect(
+		describeRegisterBar({ ...base, sessionStatus: 'counting', approvalRequired: true }).pill
+	).toBe('register.approval_needed');
+});

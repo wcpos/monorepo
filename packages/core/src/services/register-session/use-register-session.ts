@@ -22,6 +22,7 @@ export function useRegisterSession() {
 	const sessions = useRegisterSessionCollection();
 	const movements = useCashMovementCollection();
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
+	const varianceThreshold = useDocField(store, (value) => value.variance_threshold);
 	const closeTime = useDocField(store, (value) => value.expected_close_time);
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const source = React.useMemo(() => {
@@ -99,6 +100,11 @@ export function useRegisterSession() {
 		session,
 		movements: entries,
 		expected,
+		varianceThreshold,
+		unsyncedCount:
+			orders.filter(({ record }) => record.local.dirty).length +
+			entries.filter((row) => row.sync_status === 'pending').length +
+			(session?.sync_status === 'pending' ? 1 : 0),
 		sessionsOn,
 		overdue,
 		binding,
@@ -121,7 +127,7 @@ export function useRegisterSession() {
 				}),
 			startCounting: () => actions.startCounting(sessions!, session!.id),
 			backToSelling: () => actions.backToSelling(sessions!, session!.id),
-			closeSession: (input: { counted: Record<string, string>; approverToken?: string }) =>
+			closeSession: (input: { counted: Record<string, string> }) =>
 				actions.closeSession(sessions!, session!.id, input),
 			recordMovement: async (input: {
 				type: 'paid_in' | 'paid_out' | 'no_sale';

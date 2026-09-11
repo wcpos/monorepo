@@ -8,7 +8,7 @@ import { Toast } from '@wcpos/components/toast';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { RegisterAmount, useSessionReport } from './movement-sheet';
+import { RegisterAmount } from './movement-sheet';
 
 export function OpenRegisterCard() {
 	const { binding, lastClosed, actions } = useRegisterSession();
@@ -89,48 +89,6 @@ export function OpenRegisterCard() {
 				onPress={() => input.current?.focus()}
 			>
 				{t('register.open_register')}
-			</Button>
-		</View>
-	);
-}
-export function RegisterCount() {
-	const { actions, expected, blind } = useRegisterSession();
-	const [amount, setAmount] = React.useState('');
-	const [error, setError] = React.useState('');
-	const { print } = useSessionReport();
-	const { format } = useCurrencyFormat();
-	const t = useT();
-	return (
-		<View className="bg-card flex-1 gap-3 p-4">
-			<Text>{t('register.cash_counted')}</Text>
-			<RegisterAmount testID="count-amount" value={amount} onChangeText={setAmount} />
-			{!blind && (
-				<Text>
-					{t('register.expected', { amount: format(Number(expected.cash ?? 0)) })} ·{' '}
-					{format(Number(amount) - Number(expected.cash ?? 0))}
-				</Text>
-			)}
-			{!!error && <Text>{error}</Text>}
-			<Button
-				testID="count-back"
-				variant="outline"
-				onPress={() => actions.backToSelling().catch((e: unknown) => setError(String(e)))}
-			>
-				{t('register.back_to_selling')}
-			</Button>
-			<Button
-				testID="count-close"
-				disabled={!amount || !Number.isFinite(Number(amount)) || Number(amount) < 0}
-				onPress={async () => {
-					try {
-						// The Z print belongs to the closure landing (#251); this close only records the count.
-						await actions.closeSession({ counted: { cash: amount } });
-					} catch (e) {
-						setError(String(e));
-					}
-				}}
-			>
-				{t('register.close_and_print')}
 			</Button>
 		</View>
 	);

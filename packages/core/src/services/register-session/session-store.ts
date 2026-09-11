@@ -87,11 +87,10 @@ export const backToSelling = (sessions: RegisterSessionCollection, id: string) =
 export const closeSession = (
 	sessions: RegisterSessionCollection,
 	id: string,
-	input: { counted: Record<string, string>; approverToken?: string }
+	input: { counted: Record<string, string> }
 ) =>
 	transition(sessions, id, 'closed', {
 		counted: input.counted,
-		approver_token: input.approverToken ?? null,
 	});
 export function recordMovement(
 	movements: CashMovementCollection,

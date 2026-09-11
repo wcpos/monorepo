@@ -52,6 +52,7 @@ export function RegisterBar({
 		online,
 		sessionsOn,
 		sessionStatus: session?.status,
+		approvalRequired: session?.approval_required,
 		overdue,
 	});
 	// Rehost the Add user consumer after a full-page OAuth return, as Connect does.

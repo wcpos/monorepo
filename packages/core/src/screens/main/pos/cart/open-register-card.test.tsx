@@ -3,22 +3,18 @@ import * as React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import { OpenRegisterCard, RegisterCount } from './open-register-card';
+import { OpenRegisterCard } from './open-register-card';
 
 let defaultFloat: string | undefined = '200';
 let lastCount: string | undefined = '570.10';
 const open = jest.fn(async () => undefined);
-const close = jest.fn(async () => undefined);
-const back = jest.fn(async () => undefined);
 const print = jest.fn(async () => undefined);
-let blind = false;
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		binding: { registerId: 'r', registers: [{ id: 'r', default_float: defaultFloat }] },
 		lastClosed: { counted: { cash: lastCount } },
-		actions: { openSession: open, closeSession: close, backToSelling: back },
+		actions: { openSession: open },
 		expected: { cash: '155' },
-		blind,
 	}),
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
@@ -97,21 +93,4 @@ it('uses a last count that arrives after the local query, without replacing type
 	defaultFloat = '200';
 	view.rerender(<OpenRegisterCard />);
 	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('600');
-});
-
-it('counts cash, goes back, and closes with the entered cash', async () => {
-	render(<RegisterCount />);
-	fireEvent.click(screen.getByTestId('count-back'));
-	expect(back).toHaveBeenCalled();
-	fireEvent.change(screen.getByTestId('count-amount'), { target: { value: '160' } });
-	fireEvent.click(screen.getByTestId('count-close'));
-	await waitFor(() => expect(close).toHaveBeenCalledWith({ counted: { cash: '160' } }));
-	// The Z print belongs to #251; this close records the count only.
-	expect(print).not.toHaveBeenCalled();
-});
-it('does not disclose expected cash while a blind cashier counts', () => {
-	blind = true;
-	const view = render(<RegisterCount />);
-	expect(view.container.textContent).not.toContain('register.expected');
-	blind = false;
 });

@@ -27,7 +27,9 @@ import { CartTable } from './table';
 import { Totals } from './totals';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
-import { OpenRegisterCard, RegisterCount } from './open-register-card';
+import { OpenRegisterCard } from './open-register-card';
+import { RegisterCount } from './register-count';
+import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
 import { RegisterPicker } from './register-picker';
@@ -51,6 +53,7 @@ export function OpenOrders({
 	useCartSettlement();
 	const { status: bindingStatus } = useRegisterBinding();
 	const { sessionsOn, session, overdue } = useRegisterSession();
+	const [closure, setClosure] = React.useState<ClosureCount | null>(null);
 	const [panelOpen, setPanelOpen] = React.useState(false);
 	const [pickingRegister, setPickingRegister] = React.useState(false);
 	const t = useT();
@@ -114,7 +117,7 @@ export function OpenOrders({
 				) : sessionsOn && !session && bindingStatus === 'bound' ? (
 					<OpenRegisterCard />
 				) : session?.status === 'counting' ? (
-					<RegisterCount />
+					<RegisterCount key={session.id} onClosed={setClosure} />
 				) : isColumn && receiptOrderUuid ? (
 					<React.Suspense fallback={null}>
 						<ReceiptLedger uuid={receiptOrderUuid} />
@@ -195,6 +198,7 @@ export function OpenOrders({
 					</Card>
 				)}
 			</ErrorBoundary>
+			{closure && !session && <ClosureSheet {...closure} onDone={() => setClosure(null)} />}
 			<OrderMetaDialog
 				order={editingOrder}
 				onOpenChange={(open) => {

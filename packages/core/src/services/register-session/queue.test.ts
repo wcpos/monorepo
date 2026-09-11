@@ -5,7 +5,7 @@ import type { StoreDatabase } from '@wcpos/database';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
 
-import { openSession, recordMovement, startCounting } from './session-store';
+import { closeSession, openSession, recordMovement, startCounting } from './session-store';
 import { drainRegisterSessionQueue } from './queue';
 
 jest.mock('uuid', () => ({ v4: () => globalThis.crypto.randomUUID() }));
@@ -102,7 +102,10 @@ it('sends movements after create but before a deferred counting transition', asy
 	}));
 	await drain();
 	expect(http.post.mock.calls.map(([url]) => url)).toEqual(['sessions', 'movements']);
-	expect(row.getLatest()).toMatchObject({ status: 'counting', pending_status: 'counting' });
+	expect(row.getLatest().toJSON()).toMatchObject({
+		status: 'counting',
+		pending_status: 'counting',
+	});
 	await drain();
 	expect(http.post.mock.calls[2][0]).toBe(`sessions/${row.id}/status`);
 	expect(row.getLatest()).toMatchObject({ sync_status: 'synced', pending_status: null });
@@ -119,4 +122,45 @@ it('retries HTTP 429 with backoff instead of failing', async () => {
 	await drain();
 	expect(row.getLatest().sync_status).toBe('pending');
 	expect(row.getLatest().sync_next_at).toBeGreaterThan(Date.now());
+});
+
+it('recovers a refused close to counting, preserving counts and machine-readable error', async () => {
+	const row = await open();
+	await row.incrementalPatch({
+		server_status: 'counting',
+		sync_status: 'synced',
+		status: 'counting',
+	});
+	await closeSession(db.register_sessions, row.id, { counted: { cash: '80', card: '10' } });
+	http.post.mockRejectedValue({
+		response: {
+			status: 403,
+			data: { code: 'wcpos_override_refused', message: 'Manager required' },
+		},
+	});
+	await drain();
+	expect(row.getLatest().toJSON()).toMatchObject({
+		status: 'counting',
+		pending_status: null,
+		sync_status: 'synced',
+		approval_required: true,
+		sync_error: 'wcpos_override_refused',
+		counted: { cash: '80', card: '10' },
+	});
+	expect(http.post).toHaveBeenCalledWith(`sessions/${row.id}/status`, {
+		status: 'closed',
+		at: expect.any(String),
+		counted: { cash: '80', card: '10' },
+	});
+});
+it('does not apply refused-close recovery to a create', async () => {
+	const row = await open();
+	http.post.mockRejectedValue({
+		response: { status: 403, data: { code: 'wcpos_override_refused', message: 'Refused' } },
+	});
+	await drain();
+	expect(row.getLatest().toJSON()).toMatchObject({
+		sync_status: 'failed',
+		sync_error: 'wcpos_override_refused',
+	});
 });

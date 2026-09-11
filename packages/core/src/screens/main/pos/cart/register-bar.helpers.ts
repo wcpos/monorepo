@@ -7,6 +7,7 @@ export function describeRegisterBar({
 	sessionsOn = false,
 	sessionStatus = null,
 	overdue = false,
+	approvalRequired = false,
 }: {
 	registerName: string | null;
 	registerCount: number;
@@ -16,6 +17,7 @@ export function describeRegisterBar({
 	sessionsOn?: boolean;
 	sessionStatus?: string | null;
 	overdue?: boolean;
+	approvalRequired?: boolean;
 }) {
 	return {
 		place: registerCount > 1 && registerName ? `${registerName} · ${storeName}` : storeName,
@@ -24,12 +26,14 @@ export function describeRegisterBar({
 				? ('register.choose_register' as const)
 				: !online
 					? ('register.offline' as const)
-					: sessionStatus === 'counting'
+					: sessionStatus === 'counting' && !approvalRequired
 						? ('register.counting' as const)
-						: sessionStatus === 'open' && overdue
-							? ('register.overdue' as const)
-							: sessionsOn && !sessionStatus
-								? ('register.closed' as const)
-								: null,
+						: approvalRequired
+							? ('register.approval_needed' as const)
+							: sessionStatus === 'open' && overdue
+								? ('register.overdue' as const)
+								: sessionsOn && !sessionStatus
+									? ('register.closed' as const)
+									: null,
 	};
 }

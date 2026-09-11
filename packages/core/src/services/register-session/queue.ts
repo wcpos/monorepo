@@ -69,7 +69,8 @@ export function drainRegisterSessionQueue(deps: Deps): Promise<void> {
 async function drain({ sessions, movements, http, logger }: Deps) {
 	async function send(
 		doc: RegisterSessionDocument | CashMovementDocument,
-		task: () => Promise<void>
+		task: () => Promise<void>,
+		statusTransition = false
 	) {
 		try {
 			await task();
@@ -83,6 +84,17 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 			};
 			const status = failure.response?.status;
 			const body = failure.response?.data;
+			if (statusTransition && body?.code === 'wcpos_override_refused') {
+				await (doc as RegisterSessionDocument).incrementalPatch({
+					status: 'counting',
+					pending_status: null,
+					...synced,
+					approval_required: true,
+					sync_error: 'wcpos_override_refused',
+					closed_at_gmt: null,
+				});
+				return;
+			}
 			// 4xx is permanent except the two throttle codes, which the server asks us to retry.
 			const retry = !status || status >= 500 || status === 408 || status === 429;
 			const attempts = doc.getLatest().sync_attempts + 1;
@@ -90,7 +102,7 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 				sync_status: retry ? 'pending' : 'failed',
 				sync_attempts: attempts,
 				sync_next_at: retry ? Date.now() + backoffMs(attempts) : null,
-				sync_error: body?.message ?? body?.code ?? failure.message ?? String(status),
+				sync_error: body?.code ?? body?.message ?? failure.message ?? String(status),
 			});
 			logger.warn('Register session outbox request failed');
 			if (status === 409 && body?.code === 'wcpos_session_already_open' && body.data?.session_id) {
@@ -125,26 +137,29 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 			await movements.findOne({ selector: { session_id: row.id, sync_status: 'pending' } }).exec()
 		)
 			continue;
-		await send(row, async () => {
-			if (row.pending_status === 'closed' && row.server_status === 'open') {
-				await http.post(`sessions/${row.id}/status`, {
-					status: 'counting',
-					at: row.counting_started_at_gmt,
+		await send(
+			row,
+			async () => {
+				if (row.pending_status === 'closed' && row.server_status === 'open') {
+					await http.post(`sessions/${row.id}/status`, {
+						status: 'counting',
+						at: row.counting_started_at_gmt,
+					});
+					await row.incrementalPatch({ server_status: 'counting' });
+				}
+				const response = await http.post(`sessions/${row.id}/status`, {
+					status: row.pending_status,
+					at: row.status_at,
+					...(row.pending_status === 'closed'
+						? {
+								counted: row.counted,
+							}
+						: {}),
 				});
-				await row.incrementalPatch({ server_status: 'counting' });
-			}
-			const response = await http.post(`sessions/${row.id}/status`, {
-				status: row.pending_status,
-				at: row.status_at,
-				...(row.pending_status === 'closed'
-					? {
-							counted: row.counted,
-							...(row.approver_token ? { approver_token: row.approver_token } : {}),
-						}
-					: {}),
-			});
-			await acknowledge(row, response.data as RegisterSessionRow, row.status_at);
-		});
+				await acknowledge(row, response.data as RegisterSessionRow, row.status_at);
+			},
+			true
+		);
 	}
 	const ledger = (await movements.find({ selector: { sync_status: 'pending' } }).exec()).sort(
 		(a, b) => a.created_at_gmt.localeCompare(b.created_at_gmt)

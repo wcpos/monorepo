@@ -27,12 +27,12 @@ export function RegisterAmount(props: {
 	const { currencySymbol } = useCurrencyFormat();
 	return (
 		<View className="flex-row items-center self-start">
-			<Text className="text-3xl tabular-nums">{currencySymbol}</Text>
+			<Text className="text-[32px] tabular-nums">{currencySymbol}</Text>
 			<Input
 				{...props}
 				type="decimal"
 				className="h-14 w-40"
-				inputClassName="text-3xl tabular-nums"
+				inputClassName="text-[32px] tabular-nums"
 			/>
 		</View>
 	);

@@ -23,6 +23,7 @@ export const registerSessionsLiteral = {
 		counting_started_at_gmt: { type: ['string', 'null'] },
 		closed_at_gmt: { type: ['string', 'null'] },
 		closed_by: { type: ['number', 'null'] },
+		approval_required: { type: 'boolean', default: false },
 		approved_by: { type: ['number', 'null'] },
 		counted: { type: ['object', 'null'], additionalProperties: { type: 'string' } },
 		closure_id: { type: ['string', 'null'] },
