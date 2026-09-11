@@ -11,6 +11,8 @@ import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
 
+import { RegisterPanel } from './register-panel';
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
@@ -21,7 +23,16 @@ import { describeRegisterBar } from './register-bar.helpers';
 import { SwitchStoreSheet } from './switch-store-sheet';
 import { UserSheet } from './user-sheet';
 
-export function RegisterBar({ onSwitchRegister }: { onSwitchRegister?: () => void }) {
+export function RegisterBar({
+	onSwitchRegister,
+	panelOpen,
+	onPanelOpenChange,
+}: {
+	onSwitchRegister?: () => void;
+	panelOpen: boolean;
+	onPanelOpenChange: (open: boolean) => void;
+}) {
+	const { session, sessionsOn, overdue } = useRegisterSession();
 	const { wpCredentials, store, site } = useStoreSession();
 	const { screenSize } = useTheme();
 	const navigation = useNavigation();
@@ -39,6 +50,9 @@ export function RegisterBar({ onSwitchRegister }: { onSwitchRegister?: () => voi
 		storeName,
 		bindingStatus: binding.status,
 		online,
+		sessionsOn,
+		sessionStatus: session?.status,
+		overdue,
 	});
 	// Rehost the Add user consumer after a full-page OAuth return, as Connect does.
 	const [userOpen, setUserOpen] = React.useState(
@@ -77,6 +91,17 @@ export function RegisterBar({ onSwitchRegister }: { onSwitchRegister?: () => voi
 			</View>
 			{pill && <StatusBadge testID="register-bar-pill" label={t(pill)} variant="warning" />}
 			<View className="flex-1" />
+			{session && (
+				<Button
+					variant="ghost"
+					className="h-11 w-11 p-0"
+					testID="register-bar-drawer"
+					onPress={() => onPanelOpenChange(true)}
+				>
+					<Icon name="cashRegister" className={overdue ? 'text-warning' : 'text-foreground'} />
+				</Button>
+			)}
+			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
 			<Button
 				variant="ghost"
 				className="h-11 w-11 p-0"

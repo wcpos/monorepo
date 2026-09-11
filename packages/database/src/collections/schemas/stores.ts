@@ -1,10 +1,13 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 16,
+	version: 17,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
 	properties: {
+		register_sessions: { type: 'boolean', default: false },
+		variance_threshold: { type: 'string', default: '' },
+		expected_close_time: { type: 'string', default: '' },
 		localID: {
 			description: 'Unique local identifier for the resource. Not a UUID.',
 			type: 'string',
@@ -654,6 +657,9 @@ export const storesLiteral = {
  * `wc_price_decimals` is derived from the server's `price_num_decimals` value at ingest.
  */
 export const SERVER_OWNED_STORE_FIELDS = [
+	'register_sessions',
+	'variance_threshold',
+	'expected_close_time',
 	'id',
 	'name',
 	'locale',

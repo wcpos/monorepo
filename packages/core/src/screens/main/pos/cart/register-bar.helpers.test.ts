@@ -26,3 +26,16 @@ it('prioritises choosing over offline', () => {
 		'register.choose_register'
 	);
 });
+it.each([
+	[{ sessionsOn: true, sessionStatus: null }, 'register.closed'],
+	[{ sessionsOn: true, sessionStatus: 'open', overdue: true }, 'register.overdue'],
+	[{ sessionsOn: true, sessionStatus: 'counting', overdue: true }, 'register.counting'],
+	[{ sessionsOn: true, sessionStatus: 'counting', online: false }, 'register.offline'],
+	[
+		{ sessionsOn: true, sessionStatus: 'counting', online: false, bindingStatus: 'choose' },
+		'register.choose_register',
+	],
+	[{ sessionsOn: false, sessionStatus: null }, null],
+] as const)('session pill priority %j', (state, pill) => {
+	expect(describeRegisterBar({ ...base, ...state }).pill).toBe(pill);
+});

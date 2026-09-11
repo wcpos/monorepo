@@ -63,7 +63,9 @@ beforeEach(() => {
 	mockRedirectUrl = null;
 });
 it('opens the user sheet from the bar avatar', () => {
-	render(<RegisterBar onSwitchRegister={jest.fn()} />);
+	render(
+		<RegisterBar onSwitchRegister={jest.fn()} panelOpen={false} onPanelOpenChange={jest.fn()} />
+	);
 	expect(screen.queryByTestId('user-sheet')).toBeNull();
 	expect(screen.getByTestId('register-bar-place').textContent).toBe('Shop');
 	fireEvent.click(screen.getByTestId('register-bar-avatar'));
@@ -71,6 +73,24 @@ it('opens the user sheet from the bar avatar', () => {
 });
 it('reopens the Add user consumer after this site returns from OAuth', () => {
 	mockRedirectUrl = 'https://shop.test/login';
-	render(<RegisterBar onSwitchRegister={jest.fn()} />);
+	render(
+		<RegisterBar onSwitchRegister={jest.fn()} panelOpen={false} onPanelOpenChange={jest.fn()} />
+	);
 	expect(screen.getByTestId('user-sheet')).toBeTruthy();
+});
+
+let mockSession: { status: string } | null = null;
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ session: mockSession, sessionsOn: true, overdue: false }),
+}));
+jest.mock('./register-panel', () => ({ RegisterPanel: () => null }));
+it('shows the drawer only with a session and opens its panel', () => {
+	const onPanelOpenChange = jest.fn();
+	const view = render(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+	expect(screen.queryByTestId('register-bar-drawer')).toBeNull();
+	mockSession = { status: 'open' };
+	view.rerender(<RegisterBar panelOpen={false} onPanelOpenChange={onPanelOpenChange} />);
+	fireEvent.click(screen.getByTestId('register-bar-drawer'));
+	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
+	mockSession = null;
 });

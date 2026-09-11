@@ -11,7 +11,13 @@ import {
 	unbindRegister,
 } from './register-document';
 
-type Register = { id: string; name: string; status: string };
+type Register = {
+	id: string;
+	name: string;
+	status: string;
+	default_float?: string | null;
+	counters?: Record<string, number>;
+};
 type Binding = {
 	status: 'bound' | 'choose' | 'none' | 'unknown';
 	registerId: string | null;

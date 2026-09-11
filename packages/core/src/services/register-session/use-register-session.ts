@@ -1,0 +1,144 @@
+import * as React from 'react';
+
+import { useObservableState } from 'observable-hooks';
+import { combineLatest, map, of, switchMap, timer } from 'rxjs';
+
+import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
+import { readLedger } from '@wcpos/order-math';
+
+import { useStoreSession } from '../../contexts/app-state';
+import { useRegisterBinding } from '../register/use-register-binding';
+import { deriveExpected } from './expected';
+import * as actions from './session-store';
+import {
+	useCashMovementCollection,
+	useRegisterSessionCollection,
+} from './use-register-session-collections';
+
+export function useRegisterSession() {
+	const { store, wpCredentials } = useStoreSession();
+	const { engine, locale } = useQueryRuntime();
+	const binding = useRegisterBinding();
+	const sessions = useRegisterSessionCollection();
+	const movements = useCashMovementCollection();
+	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
+	const closeTime = useDocField(store, (value) => value.expected_close_time);
+	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
+	const source = React.useMemo(() => {
+		if (!sessions || !movements || !binding.registerId || !sessionsOn) return of(null);
+		const active$ = sessions.find({
+			selector: { register_id: binding.registerId, status: { $in: ['open', 'counting'] } },
+		}).$;
+		// Only the orders born since the session opened can carry its rows; observing every
+		// order in the store would re-run the ledger scan on each unrelated order write.
+		const orders$ = active$.pipe(
+			switchMap((active) => {
+				const current = active.find((row) => row.sync_status !== 'failed');
+				if (!current) return of({ hits: [] as never[] });
+				return observeEngineQuery(engine, locale, {
+					collection: 'orders',
+					selector: { date_created_gmt: { $gte: current.opened_at_gmt } },
+					limit: Number.MAX_SAFE_INTEGER,
+				});
+			})
+		);
+		return combineLatest([
+			active$,
+			sessions.find({ selector: { register_id: binding.registerId, status: 'closed' } }).$,
+			movements.find().$,
+			orders$,
+			timer(0, 60_000),
+		]).pipe(
+			map(([active, closed, entries, orders]) => ({
+				sessions,
+				registerId: binding.registerId,
+				active,
+				closed,
+				entries,
+				orders,
+			}))
+		);
+	}, [sessions, movements, binding.registerId, sessionsOn, engine, locale]);
+	const observed = useObservableState(source, null);
+	const data =
+		observed?.sessions === sessions && observed?.registerId === binding.registerId && sessionsOn
+			? observed
+			: null;
+	const session = data?.active.find((row) => row.sync_status !== 'failed') ?? null;
+	const entries = data?.entries.filter((row) => row.session_id === session?.id) ?? [];
+	const orders =
+		data?.orders.hits.filter(({ record }) =>
+			readLedger(record.payload.meta_data).some(
+				(row) => row.session_id === session?.id && row.status === 'captured'
+			)
+		) ?? [];
+	const localPending =
+		session?.sync_status !== 'synced' ||
+		entries.some((row) => row.sync_status === 'pending') ||
+		orders.some(({ record }) => record.local.dirty);
+	const expected = session
+		? !localPending && session.server_expected
+			? session.server_expected
+			: deriveExpected({
+					session,
+					movements: entries,
+					ledgerRowsBySession: orders.flatMap(({ record }) => readLedger(record.payload.meta_data)),
+				})
+		: {};
+	const now = new Date();
+	const [hour, minute] = String(closeTime ?? '')
+		.split(':')
+		.map(Number);
+	const overdue =
+		!!session &&
+		session.status === 'open' &&
+		!!closeTime &&
+		now.getTime() >
+			new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute).getTime();
+	return {
+		session,
+		movements: entries,
+		expected,
+		sessionsOn,
+		overdue,
+		binding,
+		blind: !capabilities?.includes('view_woocommerce_pos_reports'),
+		salesCount:
+			!localPending && session?.server_sales_count != null
+				? session.server_sales_count
+				: orders.length,
+		lastClosed:
+			data?.closed.sort((a, b) =>
+				(b.closed_at_gmt ?? '').localeCompare(a.closed_at_gmt ?? '')
+			)[0] ?? null,
+		actions: {
+			openSession: (input: { expectedFloat: string | null; countedFloat: string }) =>
+				actions.openSession(sessions!, {
+					...input,
+					registerId: binding.registerId!,
+					openedBy: wpCredentials.id ?? 0,
+					storeId: store.id,
+				}),
+			startCounting: () => actions.startCounting(sessions!, session!.id),
+			backToSelling: () => actions.backToSelling(sessions!, session!.id),
+			closeSession: (input: { counted: Record<string, string>; approverToken?: string }) =>
+				actions.closeSession(sessions!, session!.id, input),
+			recordMovement: async (input: {
+				type: 'paid_in' | 'paid_out' | 'no_sale';
+				amount: string;
+				reason: string;
+			}) => {
+				const id = await actions.requireOpenSession(sessions, binding.registerId, true);
+				return actions.recordMovement(movements!, {
+					...input,
+					sessionId: id!,
+					actor: wpCredentials.id ?? 0,
+				});
+			},
+			voidMovement: async (id: string) => {
+				await actions.requireOpenSession(sessions, binding.registerId, true);
+				return actions.voidMovement(movements!, id, wpCredentials.id ?? 0);
+			},
+		},
+	};
+}

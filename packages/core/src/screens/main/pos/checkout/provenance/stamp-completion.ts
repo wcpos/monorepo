@@ -2,6 +2,7 @@ import type { UserDatabase } from '@wcpos/database';
 import {
 	hasSaleProvenance,
 	type MetaDataEntry,
+	readLedger,
 	saleProvenanceMeta,
 	withSaleProvenance,
 } from '@wcpos/order-math';
@@ -11,7 +12,11 @@ import { nextSaleCounter, readRegister } from '../../../../../services/register/
 
 export async function completionMeta(
 	order: { meta_data?: MetaDataEntry[] },
-	{ userDB, siteUuid }: { userDB: UserDatabase; siteUuid: string }
+	{
+		userDB,
+		siteUuid,
+		sessionId,
+	}: { userDB: UserDatabase; siteUuid: string; sessionId?: string | null }
 ): Promise<MetaDataEntry[]> {
 	if (hasSaleProvenance(order.meta_data)) return order.meta_data!;
 	const register = await readRegister(userDB);
@@ -26,7 +31,11 @@ export async function completionMeta(
 			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
 			appVersion: AppInfo.version,
 			appBuild: AppInfo.buildNumber,
-			sessionId: null,
+			sessionId:
+				sessionId ??
+				readLedger(order.meta_data).findLast((row) => row.status === 'captured' && row.session_id)
+					?.session_id ??
+				null,
 		}).filter(({ key, value }) => key !== '_wcpos_register' || !!value)
 	);
 }

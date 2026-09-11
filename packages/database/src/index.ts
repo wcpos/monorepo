@@ -72,3 +72,12 @@ export type {
 	TemplatePrinterOverrideDocument,
 	ReceiptEmailQueueCollection,
 } from './collections';
+
+export type {
+	RegisterSessionRow,
+	RegisterSessionDocument,
+	RegisterSessionCollection,
+	CashMovementRow,
+	CashMovementDocument,
+	CashMovementCollection,
+} from './collections';

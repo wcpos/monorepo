@@ -12,9 +12,10 @@ export async function persistProvenance(input: {
 	pushDocument: ReturnType<typeof usePushDocument>;
 	userDB: UserDatabase;
 	siteUuid: string;
+	sessionId?: string | null;
 }): Promise<void> {
-	const { order, localPatch, pushDocument, userDB, siteUuid } = input;
-	const meta = await completionMeta(order.getLatest().payload, { userDB, siteUuid });
+	const { order, localPatch, pushDocument, userDB, siteUuid, sessionId } = input;
+	const meta = await completionMeta(order.getLatest().payload, { userDB, siteUuid, sessionId });
 	const patched = await localPatch({ document: order, data: { meta_data: meta } });
 	if (!patched) throw new Error('provenance_save_failed');
 	await pushDocument(order);

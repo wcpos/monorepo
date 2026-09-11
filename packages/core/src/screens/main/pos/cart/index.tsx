@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { ButtonGroupSeparator } from '@wcpos/components/button';
+import { Button, ButtonGroupSeparator } from '@wcpos/components/button';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
@@ -27,6 +27,8 @@ import { CartTable } from './table';
 import { Totals } from './totals';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
+import { OpenRegisterCard, RegisterCount } from './open-register-card';
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
 import { RegisterPicker } from './register-picker';
 import { CartTotalsChangedBanner } from './totals-changed-banner';
@@ -48,6 +50,8 @@ export function OpenOrders({
 	// for the ledger must not remove its single settlement writer. See use-cart-settlement.ts.
 	useCartSettlement();
 	const { status: bindingStatus } = useRegisterBinding();
+	const { sessionsOn, session, overdue } = useRegisterSession();
+	const [panelOpen, setPanelOpen] = React.useState(false);
 	const [pickingRegister, setPickingRegister] = React.useState(false);
 	const t = useT();
 
@@ -91,7 +95,11 @@ export function OpenOrders({
 	 */
 	return (
 		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
-			<RegisterBar onSwitchRegister={() => setPickingRegister(true)} />
+			<RegisterBar
+				onSwitchRegister={() => setPickingRegister(true)}
+				panelOpen={panelOpen}
+				onPanelOpenChange={setPanelOpen}
+			/>
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(
 					(
@@ -103,6 +111,10 @@ export function OpenOrders({
 			<ErrorBoundary>
 				{bindingStatus === 'choose' || pickingRegister ? (
 					<RegisterPicker onBound={() => setPickingRegister(false)} />
+				) : sessionsOn && !session && bindingStatus === 'bound' ? (
+					<OpenRegisterCard />
+				) : session?.status === 'counting' ? (
+					<RegisterCount />
 				) : isColumn && receiptOrderUuid ? (
 					<React.Suspense fallback={null}>
 						<ReceiptLedger uuid={receiptOrderUuid} />
@@ -117,6 +129,15 @@ export function OpenOrders({
 							</ErrorBoundary>
 						</CardHeader>
 						<CardContent className="flex-1 p-0" />
+						{overdue && (
+							<Button
+								testID="checkout-close-register"
+								className="min-h-14"
+								onPress={() => setPanelOpen(true)}
+							>
+								{t('register.close_register')}
+							</Button>
+						)}
 					</Card>
 				) : (
 					<Card className="flex-1">
@@ -149,7 +170,25 @@ export function OpenOrders({
 								<ErrorBoundary>
 									<VoidButton />
 									<ButtonGroupSeparator className="bg-card-header" />
-									<PayButton />
+									{sessionsOn && !session ? (
+										<Button
+											testID="checkout-open-register"
+											className="min-h-14 flex-1"
+											onPress={() => setPickingRegister(true)}
+										>
+											{t('register.open_register')}
+										</Button>
+									) : overdue && !currentOrderRecord.payload.line_items?.length ? (
+										<Button
+											testID="checkout-close-register"
+											className="min-h-14 flex-1"
+											onPress={() => setPanelOpen(true)}
+										>
+											{t('register.close_register')}
+										</Button>
+									) : (
+										<PayButton />
+									)}
 								</ErrorBoundary>
 							</HStack>
 						</CardContent>

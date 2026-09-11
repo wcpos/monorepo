@@ -3,7 +3,7 @@ import * as React from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { useQueryRuntime } from '@wcpos/query';
+import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
@@ -13,6 +13,8 @@ import {
 } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
+import { useRegisterSessionCollection } from '../../../../../services/register-session/use-register-session-collections';
+import { requireOpenSession } from '../../../../../services/register-session/session-store';
 import { readBoundRegister } from '../../../../../services/register/register-document';
 import { completionMeta } from '../provenance/stamp-completion';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -51,9 +53,11 @@ export function useRecordManualPayment(
 	input: RecordManualPaymentInput
 ) => Promise<RecordManualPaymentOutcome> {
 	const http = useRestHttpClient();
+	const sessions = useRegisterSessionCollection();
 	const onlineStatus = useOnlineStatus();
 	const forceOffline = options.offline === true;
 	const { wpCredentials, store, userDB, site } = useStoreSession();
+	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
 	const manager = useQueryRuntime();
@@ -61,6 +65,8 @@ export function useRecordManualPayment(
 
 	return React.useCallback(
 		async (order, method, input) => {
+			const registerId = (await readBoundRegister(userDB, site.uuid!))?.id ?? null;
+			const sessionId = await requireOpenSession(sessions, registerId, sessionsOn);
 			const payload = order.getLatest?.().payload ?? order.payload;
 			const paymentOrder = {
 				uuid: order.uuid,
@@ -75,13 +81,15 @@ export function useRecordManualPayment(
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
-				registerId: (await readBoundRegister(userDB, site.uuid!))?.id ?? null,
+				registerId,
+				sessionId,
 				completionMeta: (meta_data) =>
-					completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! }),
+					completionMeta({ meta_data }, { userDB, siteUuid: site.uuid!, sessionId }),
 				persistProvenance: async () => {
 					const meta_data = await completionMeta(order.getLatest().payload, {
 						userDB,
 						siteUuid: site.uuid!,
+						sessionId,
 					});
 					const patched = await localPatch({ document: order, data: { meta_data } });
 					if (!patched) throw new Error('provenance_save_failed');
@@ -113,7 +121,11 @@ export function useRecordManualPayment(
 							isCompletingStatus(changes.status ?? '') &&
 							!hasSaleProvenance(changes.meta_data)
 						) {
-							const meta_data = await completionMeta(changes, { userDB, siteUuid: site.uuid! });
+							const meta_data = await completionMeta(changes, {
+								userDB,
+								siteUuid: site.uuid!,
+								sessionId,
+							});
 							const patched = await localPatch({ document: order, data: { meta_data } });
 							if (!patched) throw new Error('provenance_save_failed');
 						}
@@ -169,6 +181,8 @@ export function useRecordManualPayment(
 			return outcome;
 		},
 		[
+			sessions,
+			sessionsOn,
 			userDB,
 			site.uuid,
 			http,

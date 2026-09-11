@@ -14,6 +14,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { Actions } from './cells/actions';
 import { Name } from './cells/name';
 import { Price } from './cells/price';
@@ -149,6 +150,7 @@ function POSProductsContent({
 	showOutOfStock: boolean;
 }) {
 	const side = usePOSOverlaySide();
+	const { session } = useRegisterSession();
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
@@ -327,7 +329,11 @@ function POSProductsContent({
 					</ErrorBoundary>
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
-					<View className="flex-1" onLayout={handleProductsLayout}>
+					<View
+						className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}
+						testID="register-products"
+						onLayout={handleProductsLayout}
+					>
 						<ErrorBoundary>
 							<Suspense>
 								{viewMode === 'grid' ? (

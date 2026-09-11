@@ -26,14 +26,17 @@ jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		site: { uuid: 'site' },
 		wpCredentials: { id: 7 },
-		store: { id: 9, currency: 'EUR', price_num_decimals: 2 },
+		store: { register_sessions: mockSessionsOn, id: 9, currency: 'EUR', price_num_decimals: 2 },
 	}),
 }));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 	patchEngineResident: (input: unknown) => mockPatchEngineResident(input),
 }));
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => manager }));
+jest.mock('@wcpos/query', () => ({
+	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
+	useQueryRuntime: () => manager,
+}));
 jest.mock('@wcpos/utils/logger', () => ({
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
 	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
@@ -371,3 +374,46 @@ it.each([false, true])(
 		);
 	}
 );
+
+let mockSessionsOn = false;
+let mockSessionId: string | null = 'session';
+jest.mock('../../../../../services/register-session/use-register-session-collections', () => ({
+	useRegisterSessionCollection: () => ({
+		findOne: () => ({
+			exec: async () =>
+				mockSessionId ? { id: mockSessionId, incrementalPatch: async () => undefined } : null,
+		}),
+	}),
+}));
+beforeEach(() => {
+	mockSessionsOn = false;
+	mockSessionId = 'session';
+});
+
+it.each(['offline', 'online-website-available'])(
+	'stamps the session on manual payments (%s)',
+	async (status) => {
+		mockSessionsOn = true;
+		onlineStatus = status;
+		mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
+		const { result } = renderHook(() => useRecordManualPayment());
+		await act(() => result.current(order, method, { amount: 40 }));
+		if (status === 'offline') {
+			const { readLedger } =
+				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+			expect(readLedger(mockLocalPatch.mock.calls[0][0].data.meta_data)[0].session_id).toBe(
+				'session'
+			);
+		} else expect(mockPost.mock.calls[0][1].payment.session_id).toBe('session');
+	}
+);
+it('refuses manual payment without an open session', async () => {
+	mockSessionsOn = true;
+	mockSessionId = null;
+	const { result } = renderHook(() => useRecordManualPayment());
+	await expect(result.current(order, method, { amount: 40 })).rejects.toMatchObject({
+		name: 'RegisterSessionRequiredError',
+	});
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+});
