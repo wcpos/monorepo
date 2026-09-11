@@ -40,6 +40,13 @@ const overlayAlignment = {
 	left: 'flex-row justify-start items-stretch p-0',
 	bottom: 'flex-col justify-end items-stretch p-0',
 };
+// Web close animation per side (the enter twin lives in the cva `side` variant).
+const exitSlide = {
+	center: '',
+	right: 'web:slide-out-to-right',
+	left: 'web:slide-out-to-left',
+	bottom: 'web:slide-out-to-bottom',
+};
 const entering = {
 	center: FadeIn.duration(OVERLAY_FADE_MS),
 	right: SlideInRight.duration(PANEL_SLIDE_MS),
@@ -70,6 +77,9 @@ function DialogOverlayWeb({
 				'absolute top-0 right-0 bottom-0 left-0 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
 				overlayAlignment[side],
+				// Radix inserts an auto-height [role=dialog] wrapper; flatten it so the panel's
+				// h-full / max-h-[85%] resolve against the overlay (same as ModalOverlayWeb).
+				side !== 'center' && '[&>[role=dialog]]:contents',
 				className
 			)}
 			{...props}
@@ -178,7 +188,7 @@ function DialogContent({
 								: 'web:animate-in'
 							: side === 'center'
 								? 'web:animate-out web:fade-out-0 web:zoom-out-95'
-								: 'web:animate-out web:fade-out-0',
+								: cn('web:animate-out web:fade-out-0', exitSlide[side]),
 						className
 					)}
 					{...props}
