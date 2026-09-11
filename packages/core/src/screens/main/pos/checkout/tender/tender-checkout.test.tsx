@@ -95,6 +95,8 @@ jest.mock('@wcpos/components/collapsible', () => ({
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
+// Terminal rendering/animations have their own suite; these cases never mount a terminal leg.
+jest.mock('./terminal-leg-view', () => ({ TerminalLegView: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
