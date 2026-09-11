@@ -51,7 +51,8 @@ it('registers each site snapshot once and retries failures only when called agai
 	const input = { userDB: db, http, siteUuid: 'site' };
 	await registerWithServer(input);
 	await registerWithServer(input);
-	expect(http.post).toHaveBeenCalledTimes(1);
+	// Each sign-in registers again (per-session dedupe lives in the hook).
+	expect(http.post).toHaveBeenCalledTimes(2);
 	expect(http.post).toHaveBeenCalledWith(
 		'registers',
 		expect.objectContaining({ id: register.id, name: register.name, platform: register.platform })
