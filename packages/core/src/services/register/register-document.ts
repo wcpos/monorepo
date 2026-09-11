@@ -12,6 +12,7 @@ export interface RegisterDocument {
 		string,
 		{
 			sale_counter: number;
+			store_id?: number | null;
 			registration?: { at: string; name: string; app_version: string };
 		}
 	>;
@@ -82,7 +83,7 @@ export async function nextSaleCounter(userDB: UserDatabase, siteUuid: string): P
 	let counter = 0;
 	// RxDB can batch modifiers and return the same final document to each caller.
 	await doc.incrementalModify((data) => {
-		const site = data.sites[siteUuid] ?? { sale_counter: 0 };
+		const site = data.sites[siteUuid] ?? { sale_counter: 0, store_id: null };
 		counter = site.sale_counter + 1;
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...site, sale_counter: counter } } };
 	});
