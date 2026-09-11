@@ -157,3 +157,8 @@ test('shipped OPFS worker contains targeted record recovery exactly once', () =>
 	const source = readFileSync(shippedWorker, 'utf8');
 	assert.equal(source.match(/WCPOS_OPFS_TARGETED_RECOVERY/g)?.length, 1);
 });
+
+test('shipped OPFS worker contains changelog identity protection exactly once', () => {
+	const source = readFileSync(shippedWorker, 'utf8');
+	assert.equal(source.match(/WCPOS_CHANGELOG_IDENTITY_PATCH/g)?.length, 1);
+});
