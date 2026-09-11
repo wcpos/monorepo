@@ -3,7 +3,6 @@ import * as React from 'react';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Dialog,
-	DialogBody,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
@@ -50,13 +49,11 @@ export function Customer({
 					<ButtonText>{name}</ButtonText>
 				</ButtonPill>
 			</DialogTrigger>
-			<DialogContent testID="customer-address-dialog" size="xl" portalHost="pos">
+			<DialogContent side="right" testID="customer-address-dialog" size="xl" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.edit_customer_address')}</DialogTitle>
 				</DialogHeader>
-				<DialogBody>
-					<EditCartCustomerForm />
-				</DialogBody>
+				<EditCartCustomerForm />
 			</DialogContent>
 		</Dialog>
 	);

@@ -114,7 +114,7 @@ function UISettingsDialog({ title, children, triggerTestID }: Props) {
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent size="lg">
+				<DialogContent side="right" size="lg">
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>

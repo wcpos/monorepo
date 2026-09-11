@@ -105,9 +105,6 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 			loading={loading}
 			renderLayout={(body, footer) => (
 				<>
-					{/* The dialog is height-capped, not fixed-height, so the body must be allowed to
-					    shrink (not flex-1, which collapses in an auto-height parent) or the footer is
-					    pushed below the fold on short screens / with the keyboard up. */}
 					<DialogBody className="min-h-0 shrink">{body}</DialogBody>
 					<DialogFooter>{footer}</DialogFooter>
 				</>
@@ -135,7 +132,7 @@ export function AddNewCustomer() {
 						<Text>{t('common.add_new_customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent testID="add-new-customer-dialog" size="xl" portalHost="pos">
+				<DialogContent side="right" testID="add-new-customer-dialog" size="xl" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
@@ -161,7 +158,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange} style={{ display: 'none' }}>
-			<DialogContent testID="add-customer-dialog" size="xl" portalHost="pos">
+			<DialogContent side="right" testID="add-customer-dialog" size="xl" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>
