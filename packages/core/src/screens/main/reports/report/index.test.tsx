@@ -55,6 +55,7 @@ jest.mock('./utils', () => ({
 		totalTax: 2,
 		discountTotal: 0,
 		userStoreArray: [],
+		registerArray: [],
 		totalItemsSold: 1,
 		shippingTotalsArray: [],
 		averageOrderValue: 10,
@@ -122,3 +123,7 @@ describe('Report query-state dates', () => {
 		);
 	});
 });
+
+jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({}),
+}));

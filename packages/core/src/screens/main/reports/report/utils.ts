@@ -17,6 +17,8 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 	const shippingTotals: Record<string, { total: number; total_tax: number }> = {};
 	const userStoreTotals: Record<string, { totalOrders: number; totalAmount: number }> = {};
 
+	const registerTotals: Record<string, { totalOrders: number; totalAmount: number }> = {};
+
 	let total = 0;
 	let discountTotal = 0;
 	let totalTax = 0;
@@ -110,6 +112,11 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 
 		// Cashier and store totals
 		const identity = wooMetaCarrier.readIdentity(order.meta_data);
+		if (identity.registerId) {
+			const totals = (registerTotals[identity.registerId] ??= { totalOrders: 0, totalAmount: 0 });
+			totals.totalOrders += 1;
+			totals.totalAmount += toNumber(order.total || '0');
+		}
 		const cashierId = identity.cashierId ?? '';
 		const storeId = identity.storeId ?? '';
 		const key = `${cashierId}-${storeId}`;
@@ -165,6 +172,10 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 	}
 
 	return {
+		registerArray: Object.entries(registerTotals).map(([registerId, totals]) => ({
+			registerId,
+			...totals,
+		})),
 		total,
 		refundTotal,
 		paymentMethodsArray,
