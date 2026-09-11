@@ -12,6 +12,7 @@ import {
 	createStripeTerminalDriver,
 	StripeTerminalDriverBridge,
 } from './payment-drivers/stripe-terminal';
+import { createSumUpDriver, SumUpDriverBridge } from './payment-drivers/sumup';
 
 if (__DEV__ || Platform.OS === 'web') registerDriver(createSimulatedDriver());
 
@@ -24,22 +25,23 @@ type StripeDriver = ReturnType<typeof createStripeTerminalDriver>;
 let currentMethods: readonly PaymentMethodDescriptor[] = [];
 let currentHttp: Http | null = null;
 
-function stripeDeviceMethod(
-	methods: readonly PaymentMethodDescriptor[]
+function deviceMethod(
+	methods: readonly PaymentMethodDescriptor[],
+	provider: string
 ): PaymentMethodDescriptor | null {
 	return (
 		methods.find(
 			(method) =>
 				method.pos_enabled === true &&
 				method.capture.mode === 'device' &&
-				method.capture.provider === 'stripe'
+				method.capture.provider === provider
 		) ?? null
 	);
 }
 
 function createDriver(): StripeDriver {
 	return createStripeTerminalDriver({
-		resolveMethod: () => stripeDeviceMethod(currentMethods),
+		resolveMethod: () => deviceMethod(currentMethods, 'stripe'),
 		bootstrap: async (methodId) => {
 			if (!currentHttp) throw new Error('Stripe Terminal has no store connection');
 			const response = await currentHttp.post(`payment-methods/${methodId}/bootstrap`, {});
@@ -48,12 +50,25 @@ function createDriver(): StripeDriver {
 	});
 }
 
+function createSumUp(): ReturnType<typeof createSumUpDriver> {
+	return createSumUpDriver({
+		resolveMethod: () => deviceMethod(currentMethods, 'sumup'),
+		bootstrap: async (methodId) => {
+			if (!currentHttp) throw new Error('SumUp has no store connection');
+			const response = await currentHttp.post(`payment-methods/${methodId}/bootstrap`, {});
+			return (response.data as { handoff: Record<string, unknown> }).handoff;
+		},
+	});
+}
+
+// Retain the mounted entrypoint used by the app; it now registers both reader providers.
 export function StripeTerminalDriverRegistration() {
 	const http = useRestHttpClient();
 	const { methods } = usePaymentMethods();
 	// One driver per mounted app. The initializer reads no React state or refs: the driver
 	// resolves the store through the module holders above at call time.
 	const [driver] = React.useState<StripeDriver>(createDriver);
+	const [sumup] = React.useState(createSumUp);
 	// Update before the SDK's passive init effect; stop resolving this store after unmount.
 	React.useLayoutEffect(() => {
 		currentMethods = methods;
@@ -66,9 +81,16 @@ export function StripeTerminalDriverRegistration() {
 	// Driver registration is owned by the mounted app, below the REST client's providers.
 	React.useEffect(() => {
 		registerDriver(driver);
-	}, [driver]);
-	const enabled = stripeDeviceMethod(methods) !== null;
-	return Platform.OS === 'web' || !enabled
-		? null
-		: React.createElement(StripeTerminalDriverBridge, { driver, methods });
+		registerDriver(sumup);
+	}, [driver, sumup]);
+	const enabled = deviceMethod(methods, 'stripe') !== null;
+	if (Platform.OS === 'web') return null;
+	return React.createElement(
+		React.Fragment,
+		null,
+		enabled ? React.createElement(StripeTerminalDriverBridge, { driver, methods }) : null,
+		deviceMethod(methods, 'sumup')
+			? React.createElement(SumUpDriverBridge, { driver: sumup, methods })
+			: null
+	);
 }
