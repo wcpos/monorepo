@@ -329,8 +329,10 @@ every store has one by default, created with the store, and more are created in 
 admin, never in the POS. A device holds only a pointer to its register — bound silently at
 first sign-in when the store has one register, chosen once from a picker when it has more,
 changed under the avatar — so a wiped device re-binds and loses no numbering. The register
-is named on screen only when its store has more than one. A register belongs to exactly one
-store, moved to another only by an administrator while it has no open session,
+is named on screen only when its store has more than one. A register is the drawer, not the
+device: several devices may point at one register (two cashiers with their own tablets sharing
+one cash drawer ring on the same session, each row stamped with its actor). A register belongs
+to exactly one store, moved to another only by an administrator while it has no open session,
 its numbering unbroken by the move. Every closure records the store the register belonged
 to when it was written, and a store's figures are summed from those closures, so moving a
 register moves no history. A store has any number of registers.
