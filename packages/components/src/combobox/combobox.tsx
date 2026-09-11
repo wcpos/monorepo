@@ -219,7 +219,6 @@ function ComboboxContent({
 					<TextClassContext.Provider value="text-popover-foreground">
 						{isPhone ? (
 							<View
-								testID={props.testID}
 								className={cn(
 									'bg-popover border-border w-full rounded-t-lg border-x border-t p-2 shadow-md',
 									className
@@ -228,6 +227,7 @@ function ComboboxContent({
 									{ maxHeight: sheet.maxHeight, paddingBottom: Math.max(sheet.bottomInset, 8) },
 									style,
 								]}
+								{...props}
 							>
 								<ComboboxRootContext.Provider value={context}>
 									{children}

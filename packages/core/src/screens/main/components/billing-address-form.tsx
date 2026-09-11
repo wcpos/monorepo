@@ -135,6 +135,7 @@ export function BillingAddressForm() {
 						<View className="flex-1">
 							<FormCombobox
 								customComponent={CountryCombobox}
+								triggerTestID="billing-country-combobox-trigger"
 								label={t('common.country')}
 								{...field}
 							/>

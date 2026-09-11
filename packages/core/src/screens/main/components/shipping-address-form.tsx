@@ -127,6 +127,7 @@ export function ShippingAddressForm() {
 						<View className="flex-1">
 							<FormCombobox
 								customComponent={CountryCombobox}
+								triggerTestID="shipping-country-combobox-trigger"
 								label={t('common.country')}
 								{...field}
 							/>

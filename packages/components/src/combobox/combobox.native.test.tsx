@@ -3,6 +3,7 @@ import * as React from 'react';
 
 const mockPlatform = { OS: 'ios' };
 const mockGestureHandlerScrollView = jest.fn();
+let mockWindowDimensions = { width: 1024, height: 768, scale: 1, fontScale: 1 };
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
@@ -23,20 +24,19 @@ jest.mock(
 	{ virtual: true }
 );
 
-// These existing tests exercise the anchored popover, not the phone sheet.
 jest.mock('react-native', () => ({
 	...jest.requireActual('react-native'),
-	useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
+	useWindowDimensions: () => mockWindowDimensions,
 }));
 
 jest.mock('react-native-gesture-handler', () => ({
 	ScrollView: mockGestureHandlerScrollView,
 }));
 
-// Native-only package with untransformed Flow syntax; the combobox reads the insets
-// context and tolerates a null value (no provider).
+// Native-only package with untransformed Flow syntax; use a nonzero inset so the
+// phone-sheet test exercises both sheet padding and list sizing.
 jest.mock('react-native-safe-area-context', () => ({
-	SafeAreaInsetsContext: require('react').createContext(null),
+	SafeAreaInsetsContext: require('react').createContext({ top: 0, right: 0, bottom: 24, left: 0 }),
 }));
 
 jest.mock('react-native-reanimated', () => ({
@@ -46,6 +46,8 @@ jest.mock('react-native-reanimated', () => ({
 	},
 	FadeIn: { duration: () => ({}) },
 	FadeOut: {},
+	SlideInDown: { duration: () => ({}) },
+	SlideOutDown: { duration: () => ({}) },
 }));
 
 jest.mock('@rn-primitives/slot', () => ({
@@ -131,6 +133,41 @@ jest.mock('../lib/use-arrow-key-navigation', () => ({
 describe('Combobox native content', () => {
 	beforeEach(() => {
 		mockPlatform.OS = 'ios';
+		mockWindowDimensions = { width: 1024, height: 768, scale: 1, fontScale: 1 };
+	});
+
+	it('keeps phone content props and the list inside the available sheet height', () => {
+		mockWindowDimensions = { width: 390, height: 667, scale: 1, fontScale: 1 };
+		const options = Array.from({ length: 20 }, (_, index) => ({
+			value: String(index),
+			label: `Option ${index}`,
+		}));
+
+		render(
+			<Combobox>
+				<ComboboxTrigger>Open</ComboboxTrigger>
+				<ComboboxContent
+					testID="phone-combobox-content"
+					accessibilityLabel="Phone options"
+					className="phone-content-class"
+					style={{ opacity: 0.5 }}
+				>
+					<ComboboxInput placeholder="Search options" />
+					<ComboboxList
+						data={options}
+						estimatedItemSize={36}
+						renderItem={({ item }) => <span>{item.label}</span>}
+					/>
+				</ComboboxContent>
+			</Combobox>
+		);
+
+		const content = screen.getByTestId('phone-combobox-content');
+		const listRoot = screen.getByTestId('combobox-list-root');
+
+		expect(content).toHaveAttribute('aria-label', 'Phone options');
+		expect(content).toHaveStyle({ maxHeight: '467px', opacity: '0.5', paddingBottom: '24px' });
+		expect(listRoot.parentElement).toHaveStyle({ height: '379px', maxHeight: '379px' });
 	});
 
 	it('caps the native virtualized list height for long lists', () => {

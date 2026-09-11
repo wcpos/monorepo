@@ -18,10 +18,19 @@ import {
 import { CountriesProvider, useCountries } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
 
+type CountryComboboxProps = ComboboxSingleRootProps & {
+	triggerTestID?: string;
+};
+
 /**
  *
  */
-function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootProps) {
+function CountryComboboxBase({
+	value,
+	disabled,
+	triggerTestID = 'country-combobox-trigger',
+	...props
+}: CountryComboboxProps) {
 	const allCountries = useCountries();
 	const t = useT();
 
@@ -50,7 +59,7 @@ function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootPr
 	 */
 	return (
 		<Combobox value={{ value: value?.value ?? '', label: label ?? '' }} {...props}>
-			<ComboboxTrigger disabled={disabled} testID="country-combobox-trigger">
+			<ComboboxTrigger disabled={disabled} testID={triggerTestID}>
 				<ComboboxValue placeholder={t('common.select_country')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
@@ -72,7 +81,7 @@ function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootPr
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export function CountryCombobox(props: ComboboxSingleRootProps) {
+export function CountryCombobox(props: CountryComboboxProps) {
 	return (
 		<CountriesProvider>
 			<CountryComboboxBase {...props} />
