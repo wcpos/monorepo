@@ -11,6 +11,9 @@ jest.mock('../../screens/main/hooks/use-rest-http-client', () => ({
 }));
 jest.mock('./use-register', () => ({ useRegister: () => null }));
 jest.mock('./register-document', () => ({ getRegisterSnapshot: () => null }));
+jest.mock('../../contexts/app-state', () => ({
+	useStoreSession: () => ({ site: { uuid: 'site-a' }, store: { id: 1 } }),
+}));
 
 it('settles failures to an empty directory and does not retry on remount', async () => {
 	const first = renderHook(() => useRegisterNames());
