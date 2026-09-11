@@ -465,3 +465,67 @@ test("drops every index row sharing one whitespace range, not just the first", a
     globalThis.__wcposOnStorageRecovery = previousHook;
   }
 });
+
+for (const owner of [false, true]) {
+	test(`hollow-row read drops and broadcasts only for sole repair owner: ${owner}`, async () => {
+		const { instance, indexStates, changelogOperations } = createFakeOpfsInstance({
+			documents: DOCUMENTS,
+			corruptId: 'bbb',
+			gapBefore: 'bbb',
+		});
+		const state = await instance.internals.statePromise;
+		const firstIdx = indexStates[0];
+		firstIdx.primaryKeyLength = 4;
+		firstIdx.metaIdMap = new Map([['bbb', firstIdx.rows[1]]]);
+		state.firstIdx = firstIdx;
+		state.params = { databaseName: 'scope-db', collectionName: 'orders' };
+		const broadcastMessages = [];
+		state.broadcastChannel = { postMessage: (message) => broadcastMessages.push(message) };
+		const recovering = await withTargetedOpfsRecovery(
+			{ createStorageInstance: async () => instance },
+			{ ownsRepairs: () => owner }
+		).createStorageInstance({ ...state.params, multiInstance: true });
+		await recovering.findDocumentsById(['bbb'], true);
+		for (const indexState of indexStates) {
+			assert.equal(indexState.rows.length, owner ? 2 : 3);
+		}
+		assert.equal(changelogOperations.length, owner ? 3 : 0);
+		assert.deepEqual(
+			broadcastMessages.map((message) => message.changelogOperations[0]),
+			changelogOperations
+		);
+		if (owner) assert.deepEqual(broadcastMessages[0].info, { db: 'scope-db', col: 'orders' });
+	});
+}
+
+test('recovers and broadcasts whitespace-row drops in multi-instance mode as sole repair owner', async () => {
+	const { instance, indexStates, changelogOperations } = createFakeOpfsInstance({
+		documents: DOCUMENTS,
+		corruptId: 'bbb',
+		gapBefore: 'bbb',
+	});
+	const broadcastMessages = [];
+	const state = await instance.internals.statePromise;
+	state.params = { databaseName: 'scope-db', collectionName: 'orders' };
+	state.broadcastChannel = {
+		postMessage: (message) => broadcastMessages.push(message),
+	};
+	const recovering = await withTargetedOpfsRecovery(
+		{ createStorageInstance: async () => instance },
+		{ ownsRepairs: () => true }
+	).createStorageInstance({ multiInstance: true });
+
+	assert.equal(await recovering.cleanup(0), false);
+	for (const indexState of indexStates) {
+		assert.equal(indexState.rows.length, 2);
+	}
+	assert.equal(broadcastMessages.length, changelogOperations.length);
+	assert.deepEqual(
+		broadcastMessages.map((message) => message.changelogOperations[0]),
+		changelogOperations
+	);
+	assert.deepEqual(broadcastMessages[0].info, {
+		db: 'scope-db',
+		col: 'orders',
+	});
+});
