@@ -24,6 +24,7 @@ import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from '
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
+const RESYNC_RECEIPT_PRINT_COUNTS_ID = 'resync-receipt-print-counts';
 
 /** POS identity metadata whose resident values must survive server adoption. */
 export const POS_ORDER_IDENTITY_META_KEYS = [
@@ -35,6 +36,11 @@ export const POS_ORDER_IDENTITY_META_KEYS = [
 type StoredOrderDoc = { toJSON(): unknown };
 
 type OrdersCollection = {
+	getLocal(id: string): Promise<{
+		get(key: 'counts'): Record<string, number>;
+		remove(): Promise<unknown>;
+	} | null>;
+	upsertLocal(id: string, data: { counts: Record<string, number> }): Promise<unknown>;
 	bulkUpsert(docs: unknown[]): Promise<unknown>;
 	bulkRemove(ids: string[]): Promise<unknown>;
 	findByIds(ids: string[]): { exec(): Promise<Map<string, StoredOrderDoc>> };
@@ -61,8 +67,6 @@ export type OrderRepositoryDatabase = {
 };
 
 export class EngineOrderRepository {
-	private readonly resyncReceiptPrintCounts = new Map<string, number>();
-
 	constructor(private readonly db: OrderRepositoryDatabase) {}
 
 	/** Returns the subset the storage guard actually applied, so the ingest site can
@@ -82,6 +86,8 @@ export class EngineOrderRepository {
 			.exec();
 		const applicable = await withoutLocallyProtected(this.db.orders, documents, residents);
 		if (applicable.length === 0) return [];
+		const stash = await this.db.orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+		const counts = { ...stash?.get('counts') };
 		// Leg-3 (ADR 0015): the order existence manifest is seeded by the INGEST SITE, which holds the
 		// `Materialized` envelope and knows which documents it applied (ADR 0028 rider) — see
 		// `upsertManifestRows` below. This boundary only guarantees no `_rxdb_digest` reaches storage.
@@ -94,7 +100,7 @@ export class EngineOrderRepository {
 			// Pulls replace sync bookkeeping, but must not reset prints observed by this till.
 			const receiptPrintCount = resident
 				? resident.local?.receiptPrintCount
-				: this.resyncReceiptPrintCounts.get(entry.storedDocument.uuid);
+				: counts[entry.storedDocument.uuid];
 			if (receiptPrintCount !== undefined) {
 				const local = {
 					...entry.storedDocument.local,
@@ -131,7 +137,11 @@ export class EngineOrderRepository {
 		);
 		if (changed.length > 0)
 			assertBulkSuccess(await this.db.orders.bulkUpsert(changed), 'engine-order-repository upsert');
-		for (const document of changed) this.resyncReceiptPrintCounts.delete(document.uuid);
+		if (stash && changed.some((document) => counts[document.uuid] !== undefined)) {
+			for (const document of changed) delete counts[document.uuid];
+			if (Object.keys(counts).length === 0) await stash.remove();
+			else await this.db.orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
+		}
 		return applicable;
 	}
 
@@ -191,11 +201,15 @@ export class EngineOrderRepository {
 	 */
 	async resetForResync(pendingMutationOrderIds?: ReadonlySet<string>): Promise<void> {
 		const removable = await this.unprotectedOrders(pendingMutationOrderIds);
+		const stash = await this.db.orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+		const counts = { ...stash?.get('counts') };
 		for (const document of removable) {
 			const local = document.local as typeof document.local & { receiptPrintCount?: number };
-			if (local?.receiptPrintCount !== undefined)
-				this.resyncReceiptPrintCounts.set(document.uuid, local.receiptPrintCount);
+			if (local?.receiptPrintCount !== undefined) counts[document.uuid] = local.receiptPrintCount;
 		}
+		// Persist before deleting orders: the next pull batch uses a new repository.
+		if (Object.keys(counts).length > 0)
+			await this.db.orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
 		if (removable.length > 0)
 			assertBulkSuccess(
 				await this.db.orders.bulkRemove(removable.map((doc) => doc.uuid)),
