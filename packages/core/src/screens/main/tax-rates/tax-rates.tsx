@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
@@ -84,15 +85,20 @@ function TaxRatesContent({ binding }: { binding: TaxRatesBinding }) {
 	 */
 	return (
 		<Modal>
-			<ModalContent size="2xl">
+			<ModalContent side="right" size="2xl">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t('tax_rates.tax_rates')}</Text>
 					</ModalTitle>
 				</ModalHeader>
-				<ModalBody>
-					<Tabs value={value} onValueChange={setValue} orientation="horizontal">
-						<ScrollableTabsList>
+				<View className="min-h-0 flex-1">
+					<Tabs
+						className="min-h-0 flex-1"
+						value={value}
+						onValueChange={setValue}
+						orientation="horizontal"
+					>
+						<ScrollableTabsList className="mx-4 flex-row">
 							{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
 								<TabsTrigger key={group.slug} value={group.slug}>
 									<Text>{group.name}</Text>
@@ -100,8 +106,10 @@ function TaxRatesContent({ binding }: { binding: TaxRatesBinding }) {
 							))}
 						</ScrollableTabsList>
 						{grouped.map((group: { slug: string; name: string; rates: TaxRateData[] }) => (
-							<TabsContent key={group.slug} value={group.slug}>
-								<TaxRateTable rates={group.rates} />
+							<TabsContent key={group.slug} value={group.slug} className="min-h-0 flex-1">
+								<ModalBody>
+									<TaxRateTable rates={group.rates} />
+								</ModalBody>
 							</TabsContent>
 						))}
 					</Tabs>
@@ -111,7 +119,7 @@ function TaxRatesContent({ binding }: { binding: TaxRatesBinding }) {
 						total$={binding.total$}
 						sync={binding.sync}
 					/>
-				</ModalBody>
+				</View>
 				<ModalFooter>
 					<ModalClose>{t('common.close')}</ModalClose>
 				</ModalFooter>
