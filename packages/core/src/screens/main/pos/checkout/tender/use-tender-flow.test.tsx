@@ -774,6 +774,27 @@ describe('server tender', () => {
 		expect(result.current.state.readerId).toBeNull();
 		await waitFor(() => expect(result.current.state.readerId).toBe('reader'));
 	});
+	it('lets a remembered reader override the initially preselected default', async () => {
+		mockReaderPreferences.terminal = 'b';
+		mockMethods = [
+			{
+				...terminal,
+				capture: {
+					...terminal.capture,
+					hardware: {
+						...terminal.capture.hardware,
+						readers: [
+							...terminal.capture.hardware.readers,
+							{ id: 'b', label: 'Back', status: 'online', default: false },
+						],
+					},
+				},
+			},
+		];
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state.readerId).toBe('reader');
+		await waitFor(() => expect(result.current.state.readerId).toBe('b'));
+	});
 	it('mints once, begins on the selected reader, and never records manually', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('terminal'));

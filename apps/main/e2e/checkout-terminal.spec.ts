@@ -70,7 +70,7 @@ async function showReaderChips(page: Page): Promise<void> {
 
 async function takeTerminal(page: Page, orderId: number, reader: string): Promise<void> {
 	const intent = terminalResponse(page, orderId, 'intent');
-	await page.getByTestId('checkout-take-payment').click();
+	await page.getByTestId('checkout-commit').click();
 	const response = await intent;
 	expect(response.status(), 'intent payment POST must succeed').toBeLessThan(400);
 	expect(response.request().postDataJSON()).toMatchObject({ context: { reader } });
@@ -108,7 +108,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toBeVisible();
 			// Reader selection is rendered by Button's default (primary) variant, not aria-selected.
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toHaveClass(/\bbg-primary\b/);
-			await expect(page.getByTestId('checkout-take-payment')).toBeEnabled();
+			await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance);

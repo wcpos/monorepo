@@ -301,7 +301,12 @@ function TenderKeypad({ flow, format, compact }: Props) {
 							testID="checkout-label"
 							className="text-sidebar-foreground/70 text-xs font-semibold tracking-wider uppercase"
 						>
-							{`${t(flow.balanceMinor < flow.totalMinor ? 'pos_checkout.remaining' : 'pos_checkout.to_pay')} ${format(flow.balanceMinor)}`}
+							{t(
+								flow.balanceMinor < flow.totalMinor
+									? 'pos_checkout.remaining'
+									: 'pos_checkout.to_pay'
+							)}{' '}
+							<Text testID="checkout-balance">{format(flow.balanceMinor)}</Text>
 						</Text>
 						{flow.balanceMinor > 0 ? (
 							<Button
@@ -321,7 +326,7 @@ function TenderKeypad({ flow, format, compact }: Props) {
 						) : null}
 						{!flow.online ? (
 							<Text testID="checkout-offline" className="text-warning text-xs">
-								{t('pos_checkout.offline_cash_card_only')}
+								{t('pos_checkout.offline')}
 							</Text>
 						) : null}
 					</HStack>
@@ -480,7 +485,9 @@ function TenderKeypad({ flow, format, compact }: Props) {
 					>
 						<ButtonText>
 							{t(
-								givesChange && !remote ? 'pos_checkout.exact_amount' : 'pos_checkout.full_balance',
+								(givesChange && !remote) || plan
+									? 'pos_checkout.exact_amount'
+									: 'pos_checkout.full_balance',
 								{ amount: format(due) }
 							)}
 						</ButtonText>

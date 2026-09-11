@@ -1849,7 +1849,7 @@
 	"pos_checkout.no_change_for_method": "Only {amount} is due — {method} can't give change",
 	"pos_checkout.choose_how_paying": "Choose how the customer is paying",
 	"pos_checkout.not_available_right_now_n": "{n} not available right now",
-	"pos_checkout.offline_cash_card_only": "Offline · cash and card only",
+	"pos_checkout.offline": "Offline",
 	"pos_checkout.full_balance": "Full balance {amount}",
 	"pos_checkout.clear_amount": "Clear",
 	"pos_checkout.delete_digit": "Delete",

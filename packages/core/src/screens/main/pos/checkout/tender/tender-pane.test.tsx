@@ -403,7 +403,7 @@ it('keeps the keypad visible without a method and disables commit', () => {
 		'Choose how the customer is paying'
 	);
 	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
-	expect(screen.getByTestId('checkout-offline').textContent).toBe('Offline · cash and card only');
+	expect(screen.getByTestId('checkout-offline').textContent).toBe('Offline');
 });
 
 it.each([1, 2])('collapses a preselected reader (%s readers)', (count) => {
@@ -639,4 +639,5 @@ it('does not cap manual card at the planned split share', () => {
 	render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
 	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
+	expect(screen.getByTestId('checkout-quick-balance').textContent).toBe('Exact 1000');
 });

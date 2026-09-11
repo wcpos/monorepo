@@ -188,6 +188,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		return { ...initial, readerId: initialReaderId(readers, lockToDefault, null) };
 	});
 	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
+	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
 	const { readerId: remembered, getLoaded, remember } = useRememberedReader(state.methodId);
 	const liveRows = React.useMemo(
 		() => rows.filter(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
@@ -270,9 +271,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 
 	// A local preference can arrive after the tile tap; leave a cashier's choice alone.
 	React.useEffect(() => {
-		if (method?.capture.mode !== 'server' || state.readerId !== null || remembered === null) return;
+		if (
+			method?.capture.mode !== 'server' ||
+			manuallyPickedReaderMethod.current === method.id ||
+			remembered === null
+		)
+			return;
 		const readerId = initialReaderId(readers, lockToDefault, remembered);
-		if (readerId !== null) dispatch({ type: 'pick-reader', readerId });
+		if (readerId !== null && readerId !== state.readerId)
+			dispatch({ type: 'pick-reader', readerId });
 	}, [method, state.readerId, readers, lockToDefault, remembered, dispatch]);
 
 	const pickMethod = React.useCallback(
@@ -587,8 +594,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				selectableReaders(method, service?.readersInUse(), order.uuid).readers.some(
 					(reader) => reader.id === id && reader.inUseBy === null
 				)
-			)
+			) {
+				manuallyPickedReaderMethod.current = method?.id ?? null;
 				dispatch({ type: 'pick-reader', readerId: id });
+			}
 		},
 		[method, service, order.uuid, dispatch]
 	);

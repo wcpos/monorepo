@@ -111,7 +111,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance);
 
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 
 			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
 			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
@@ -163,7 +163,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(part, 'the probe order must be big enough to split').toBeGreaterThan(0);
 
 			await enterAmount(page, cash!.id, part);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 
 			// The balance falls by exactly what was taken, and the ledger shows the one leg.
 			await expect
@@ -176,7 +176,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance - part);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 
 			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
 			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
@@ -227,7 +227,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const part = Math.floor(balance / 2);
 			expect(part, 'the probe order must be big enough to part-pay').toBeGreaterThan(0);
 			await enterAmount(page, cash!.id, part);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderA.orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderA.orderId, 'record');
 			const ledgerRow = page.getByTestId('checkout-ledger').getByTestId(/^checkout-leg-/);
 			await expect(ledgerRow).toHaveCount(1);
 			const legTestId = await ledgerRow.getAttribute('data-testid');
@@ -249,7 +249,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const balanceB = await readAmountMinor(page, 'checkout-balance');
 			expect(balanceB).toBeGreaterThan(0);
 			await enterAmount(page, cash!.id, balanceB);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderB.orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderB.orderId, 'record');
 			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
 			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
 			await page.getByTestId('receipt-new-sale').click();
@@ -270,7 +270,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await expect.poll(() => readAmountMinor(page, 'checkout-ledger-remaining')).toBe(remaining);
 			await expect.poll(() => readAmountMinor(page, 'checkout-balance')).toBe(remaining);
 			await enterAmount(page, cash!.id, remaining);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderA.orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderA.orderId, 'record');
 			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
 			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
 			await page.getByTestId('receipt-new-sale').click();
@@ -301,7 +301,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(part, 'the probe order must be big enough to part-pay').toBeGreaterThan(0);
 
 			await enterAmount(page, cash!.id, part);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-balance'), { timeout: 60_000 })
 				.toBe(balance - part);

@@ -229,7 +229,8 @@ it('reads the ledger independently, with balance only in the tender header', () 
 		</>
 	);
 	expect(mockUseFlow).toHaveBeenCalledTimes(1);
-	expect(screen.queryAllByTestId('checkout-balance')).toHaveLength(0);
+	expect(screen.getAllByTestId('checkout-balance')).toHaveLength(1);
+	expect(screen.getByTestId('checkout-balance').textContent).toBe('$42.95');
 	expect(screen.getAllByTestId('checkout-label')).toHaveLength(1);
 	expect(screen.getByTestId('checkout-label').textContent).toContain('$42.95');
 	expect(screen.getByTestId('checkout-ledger-remaining').textContent).toBe('$42.95');
