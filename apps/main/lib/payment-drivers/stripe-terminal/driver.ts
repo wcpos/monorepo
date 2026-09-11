@@ -290,7 +290,8 @@ export function createStripeTerminalDriver({
 					console.log('[stripe-driver] discover', {
 						transport: nextTransport,
 						method: method?.id ?? null,
-						providerData: method?.provider_data ?? lastProviderData,
+						testMode: (method?.provider_data ?? lastProviderData).test_mode === true,
+						hasLocation: Boolean((method?.provider_data ?? lastProviderData).location_id),
 						simulated,
 					});
 				void api
