@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	__resetStorageLivenessForTests,
@@ -10,9 +11,11 @@ import {
 	degradedStorage$,
 	isStorageDegraded,
 	isStorageWorkerFailure,
+	noteStorageWriteDeadlinePassed,
 	resetReportedCleanupFailures,
 	STORAGE_RPC_STALL_REPORT_MS,
 	STORAGE_RPC_WATCHDOG_MS,
+	STORAGE_WRITE_DEADLINE_MS,
 	wrappedErrorHandlerStorage,
 } from './wrapped-error-handler-storage';
 
@@ -28,6 +31,7 @@ const terminalFailureApi = jest.requireActual<typeof import('./wrapped-error-han
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: jest.fn(() => ({
 		debug: jest.fn(),
+		info: jest.fn(),
 		warn: jest.fn(),
 		error: jest.fn(),
 	})),
@@ -40,6 +44,7 @@ jest.mock('@wcpos/utils/logger', () => ({
  */
 const mockLoggerInstance = (getLogger as jest.Mock).mock.results[0].value as {
 	debug: jest.Mock;
+	info: jest.Mock;
 	warn: jest.Mock;
 	error: jest.Mock;
 };
@@ -822,6 +827,100 @@ describe('wrappedErrorHandlerStorage', () => {
 		it('returns false for an unknown database name', () => {
 			expect(markTerminalFailure('unknown-database')).toBe(false);
 		});
+	});
+
+	describe('local write deadline', () => {
+		let resolveWrite: (value: { error: [] }) => void;
+		let instance: ReturnType<typeof createMockStorageInstance>;
+		let read: jest.Mock;
+		let emissions: (readonly StorageDegradation[])[];
+		let subscription: { unsubscribe(): void };
+
+		beforeEach(async () => {
+			clearStorageDegradation();
+			read = jest.fn().mockResolvedValue([]);
+			instance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(
+					createMockStorageInstance({
+						bulkWrite: jest.fn(
+							() =>
+								new Promise<{ error: [] }>((resolve) => {
+									resolveWrite = resolve;
+								})
+						),
+						findDocumentsById: read,
+						close: jest.fn().mockResolvedValue(undefined),
+					})
+				),
+			}).createStorageInstance({ databaseName: 'write-deadline-db' } as never);
+			emissions = [];
+			subscription = degradedStorage$.subscribe((next) => emissions.push(next));
+		});
+		afterEach(async () => {
+			subscription.unsubscribe();
+			await instance.close();
+			clearStorageDegradation();
+		});
+
+		it('marks a pending bulkWrite degraded, then clears when storage answers', async () => {
+			const write = instance.bulkWrite([], 'test');
+			const context = { waitedMs: STORAGE_WRITE_DEADLINE_MS, orderId: 'order-1' };
+			expect(noteStorageWriteDeadlinePassed(context)).toBe(true);
+			expect(isStorageDegraded()).toBe(true);
+			expect(isStorageDegraded('write-deadline-db')).toBe(true);
+			expect(emissions).toEqual([
+				[],
+				[
+					expect.objectContaining({
+						databaseName: 'write-deadline-db',
+						methodName: 'bulkWrite',
+						kind: 'write-stalled',
+					}),
+				],
+			]);
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({ code: ERROR_CODES.LOCAL_DB_STALLED, context })
+			);
+			await instance.findDocumentsById([], false);
+			expect(emissions[emissions.length - 1]).toEqual([]);
+			expect(isStorageDegraded()).toBe(false);
+			expect(mockLoggerInstance.info).toHaveBeenCalledTimes(1);
+			resolveWrite({ error: [] });
+			await expect(write).resolves.toEqual({ error: [] });
+		});
+
+		it('does nothing when no bulkWrite is in flight', () => {
+			expect(noteStorageWriteDeadlinePassed({ waitedMs: STORAGE_WRITE_DEADLINE_MS })).toBe(false);
+			expect(isStorageDegraded()).toBe(false);
+			expect(emissions).toEqual([[]]);
+			expect(mockLoggerInstance.error).not.toHaveBeenCalled();
+		});
+
+		it.each(['ordinary error', 'worker gone'])(
+			'does not clear on a rejected call: %s',
+			async (message) => {
+				const write = instance.bulkWrite([], 'test');
+				expect(noteStorageWriteDeadlinePassed({ waitedMs: STORAGE_WRITE_DEADLINE_MS })).toBe(true);
+				read.mockRejectedValueOnce(
+					new Error(`could not requestRemote: ${JSON.stringify({ error: { message } })}`)
+				);
+				await expect(instance.findDocumentsById([], false)).rejects.toThrow(message);
+				expect(isStorageDegraded()).toBe(true);
+				expect(emissions.slice(1).every((entries) => entries.length === 1)).toBe(true);
+				expect(mockLoggerInstance.info).not.toHaveBeenCalled();
+				resolveWrite({ error: [] });
+				await write;
+				// A later success clears only the stall, never the worker-lost latch.
+				expect(isStorageDegraded()).toBe(message === 'worker gone');
+				expect(emissions[emissions.length - 1]).toEqual(
+					message === 'worker gone'
+						? [expect.objectContaining({ databaseName: 'write-deadline-db', kind: 'worker-lost' })]
+						: []
+				);
+			}
+		);
 	});
 
 	describe('degraded storage signal (#163)', () => {

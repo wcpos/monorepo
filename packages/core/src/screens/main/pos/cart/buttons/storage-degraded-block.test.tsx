@@ -10,6 +10,8 @@ import { BehaviorSubject } from 'rxjs';
 
 import {
 	clearStorageDegradation,
+	noteStorageWriteDeadlinePassed,
+	STORAGE_WRITE_DEADLINE_MS,
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { getLogger } from '@wcpos/utils/logger';
@@ -238,6 +240,54 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 		expectBlockedLog();
 		expect(mockPushDocument).not.toHaveBeenCalled();
 		expect(mockPush).not.toHaveBeenCalled();
+	});
+
+	it('refuses Pay during a real write stall and proceeds after storage answers', async () => {
+		let resolveWrite!: (value: { error: [] }) => void;
+		const wrapped = await wrappedErrorHandlerStorage({
+			storage: {
+				name: 'mock-storage',
+				createStorageInstance: jest.fn().mockResolvedValue({
+					schema: { primaryKey: 'id' },
+					bulkWrite: () =>
+						new Promise<{ error: [] }>((resolve) => {
+							resolveWrite = resolve;
+						}),
+					findDocumentsById: jest.fn(),
+					query: jest.fn(),
+					count: jest.fn(),
+					getAttachmentData: jest.fn(),
+					cleanup: jest.fn(),
+					remove: jest.fn(),
+					close: jest.fn().mockResolvedValue(undefined),
+					collectionName: 'orders',
+				}),
+			} as never,
+		}).createStorageInstance({ databaseName: 'stalled-checkout' } as never);
+		const write = wrapped.bulkWrite([], 'test');
+		expect(noteStorageWriteDeadlinePassed({ waitedMs: STORAGE_WRITE_DEADLINE_MS })).toBe(true);
+		render(<PayButton />);
+		const button = screen.getByTestId('checkout-button');
+		expect(button).toBeDisabled();
+		await act(async () => {
+			await mockHandlers.get('checkout-button')!();
+		});
+		expectBlockedLog();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		expect(mockPush).not.toHaveBeenCalled();
+		await act(async () => {
+			resolveWrite({ error: [] });
+			await write;
+		});
+		expect(button).not.toBeDisabled();
+		mockLogger.error.mockClear();
+		await act(async () => {
+			fireEvent.click(button);
+		});
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(mockPush).toHaveBeenCalledTimes(1);
+		expect(mockLogger.error).not.toHaveBeenCalled();
+		await wrapped.close();
 	});
 
 	it('disables save to server and refuses to push the order', async () => {
