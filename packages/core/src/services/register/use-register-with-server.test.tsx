@@ -120,3 +120,42 @@ it('waits for the initial register emission and sends one POST while it is pendi
 		client.mockRestore();
 	}
 });
+
+it('persists the store binding returned by registration for the active site', async () => {
+	const { act } = await import('@testing-library/react');
+	const { createRxDatabase, addRxPlugin } = await import('rxdb');
+	const { RxDBLocalDocumentsPlugin } = await import('rxdb/plugins/local-documents');
+	const { getRxStorageMemory } = await import('rxdb/plugins/storage-memory');
+	const { ensureRegister, readRegister } = await import('./register-document');
+	addRxPlugin(RxDBLocalDocumentsPlugin);
+	const db: import('@wcpos/database').UserDatabase = await createRxDatabase({
+		name: `binding${Math.random().toString(36).slice(2)}`,
+		storage: getRxStorageMemory(),
+		localDocuments: true,
+		multiInstance: false,
+	});
+	const data = await ensureRegister(db);
+	mockSession.userDB = db;
+	mockSession.site.uuid = 'site';
+	mockStatus = 'online-website-available';
+	mockRegister
+		.mockClear()
+		.mockImplementation(jest.requireActual('./register-with-server').registerWithServer);
+	const post = jest.fn(async () => ({ status: 201, data: { store_id: 2 } }));
+	const client = jest
+		.spyOn(jest.requireMock('../../screens/main/hooks/use-rest-http-client'), 'useRestHttpClient')
+		.mockReturnValue({ post });
+	const register = jest
+		.spyOn(jest.requireMock('./use-register'), 'useRegister')
+		.mockReturnValue(data);
+	const view = renderHook(() => useRegisterWithServer());
+	try {
+		await act(() => mockRegister.mock.results[0].value);
+		expect(await readRegister(db)).toMatchObject({ sites: { site: { store_id: 2 } } });
+	} finally {
+		view.unmount();
+		register.mockRestore();
+		client.mockRestore();
+		await db.remove();
+	}
+});

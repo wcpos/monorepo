@@ -51,7 +51,8 @@ it('registers each site snapshot once and retries failures only when called agai
 	const input = { userDB: db, http, siteUuid: 'site' };
 	await registerWithServer(input);
 	await registerWithServer(input);
-	expect(http.post).toHaveBeenCalledTimes(1);
+	// Each sign-in registers again (per-session dedupe lives in the hook).
+	expect(http.post).toHaveBeenCalledTimes(2);
 	expect(http.post).toHaveBeenCalledWith(
 		'registers',
 		expect.objectContaining({ id: register.id, name: register.name, platform: register.platform })
@@ -114,3 +115,64 @@ it('caches the register identity and mints v4 with random bytes when randomUUID 
 	expect(await readRegister(db)).toEqual(register);
 	expect(getRegisterId()).toBe(register.id);
 });
+
+it('persists store bindings per site through counter writes and a collection reset', async () => {
+	const { registerWithServer } = await import('./register-with-server');
+	const collections = {
+		resettable: {
+			schema: {
+				version: 0,
+				primaryKey: 'id',
+				type: 'object',
+				properties: { id: { type: 'string', maxLength: 100 } },
+				required: ['id'],
+			},
+		},
+	};
+	const { resettable } = await db.addCollections(collections);
+	await resettable.insert({ id: 'discarded' });
+	const register = await ensureRegister(db);
+	await nextSaleCounter(db, 'site');
+	await registerWithServer({
+		userDB: db,
+		siteUuid: 'site',
+		http: { post: async () => ({ status: 201, data: { store_id: 2 } }) },
+	});
+	await registerWithServer({
+		userDB: db,
+		siteUuid: 'other',
+		http: { post: async () => ({ status: 201, data: { store_id: 3 } }) },
+	});
+	await nextSaleCounter(db, 'site');
+	await resettable.remove();
+	await db.addCollections(collections);
+	expect(await readRegister(db)).toMatchObject({
+		id: register.id,
+		sites: { site: { store_id: 2, sale_counter: 2 }, other: { store_id: 3, sale_counter: 0 } },
+	});
+});
+
+it.each([{}, { store_id: null }])(
+	'leaves a binding unset or unchanged for response %j',
+	async (data) => {
+		const { registerWithServer } = await import('./register-with-server');
+		await ensureRegister(db);
+		const input = {
+			userDB: db,
+			siteUuid: 'site',
+			http: { post: async () => ({ status: 201, data }) },
+		};
+		await registerWithServer(input);
+		expect((await readRegister(db))?.sites.site).not.toEqual(
+			expect.objectContaining({ store_id: expect.any(Number) })
+		);
+		await renameRegister(db, 'Bound');
+		await registerWithServer({
+			...input,
+			http: { post: async () => ({ status: 201, data: { store_id: 2 } }) },
+		});
+		await renameRegister(db, 'Renamed');
+		await registerWithServer(input);
+		expect(await readRegister(db)).toMatchObject({ sites: { site: { store_id: 2 } } });
+	}
+);

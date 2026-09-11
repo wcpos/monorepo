@@ -46,3 +46,30 @@ describe('storeListsEqual', () => {
 		expect(storeListsEqual([], [])).toBe(true);
 	});
 });
+
+describe('resolvePreselectedStore', () => {
+	const first = store({ localID: 'a', id: 1 });
+	const bound = store({ localID: 'b', id: 2 });
+	it('preselects an offered bound store by numeric id, not localID or position', async () => {
+		const { resolvePreselectedStore } = await import('./store-select.helpers');
+		expect(resolvePreselectedStore([first, bound], 2)).toBe(bound);
+	});
+	it('shows the picker when the binding is not offered', async () => {
+		const { resolvePreselectedStore } = await import('./store-select.helpers');
+		expect(resolvePreselectedStore([first, bound], 3)).toBeNull();
+		expect(resolvePreselectedStore([], 2)).toBeNull();
+	});
+	it.each([undefined, null])(
+		'preserves existing behavior without a binding (%s)',
+		async (binding) => {
+			const { resolvePreselectedStore } = await import('./store-select.helpers');
+			expect(resolvePreselectedStore([first, bound], binding)).toBeNull();
+			expect(resolvePreselectedStore([first], binding)).toBe(first);
+			expect(resolvePreselectedStore([], binding)).toBeNull();
+		}
+	);
+	it('preserves single-store behavior even when a saved binding is unavailable', async () => {
+		const { resolvePreselectedStore } = await import('./store-select.helpers');
+		expect(resolvePreselectedStore([first], 2)).toBe(first);
+	});
+});
