@@ -60,7 +60,7 @@ function RefundCard({
 						<Button
 							variant="ghost"
 							size="sm"
-							testID="refund-receipt-button"
+							testID={`refund-receipt-button-${refund.id}`}
 							onPress={() =>
 								router.push({
 									pathname: '/orders/receipt/[orderId]',
