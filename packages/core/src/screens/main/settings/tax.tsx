@@ -6,23 +6,20 @@ import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Button, ButtonText } from '@wcpos/components/button';
+import { DocsLink } from '@wcpos/components/docs-link';
 import {
 	Form,
 	FormField,
 	FormInput,
 	FormRadioGroup,
 	FormSelect,
-	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
+import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { useDocField } from '@wcpos/query';
 
-import { SettingsDangerZone } from './components/settings-danger-zone';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
@@ -30,20 +27,13 @@ import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
 import { InclExclRadioGroup } from '../components/incl-excl-tax-radio-group';
 import { TaxBasedOnSelect } from '../components/tax-based-on-select';
-import { TaxClassSelect } from '../components/tax-class-select';
 import { TaxDisplayRadioGroup } from '../components/tax-display-radio-group';
+import { useExtraData } from '../contexts/extra-data';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
-import { taxClassFromWire, taxClassToWire } from '../hooks/tax-class';
-import { useRestHttpClient } from '../hooks/use-rest-http-client';
-
-const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
+import { INHERIT_TAX_CLASS, taxClassFromWire } from '../hooks/tax-class';
 
 const formSchema = z.object({
-	calc_taxes: z.enum(['yes', 'no']),
-	prices_include_tax: z.enum(['yes', 'no']),
 	tax_based_on: z.enum(['shipping', 'billing', 'base']).default('base'),
-	shipping_tax_class: z.string(),
-	tax_round_at_subtotal: z.enum(['yes', 'no']),
 	tax_display_shop: z.enum(['incl', 'excl']).default('excl'),
 	tax_display_cart: z.enum(['incl', 'excl']).default('excl'),
 	price_display_suffix: z.string().optional(),
@@ -54,23 +44,34 @@ const formSchema = z.object({
  *
  */
 export function TaxSettings() {
-	const { store } = useStoreSession();
+	const { store, site } = useStoreSession();
 	const t = useT();
 	const router = useRouter();
 	const { localPatch } = useLocalMutation();
-	const http = useRestHttpClient();
-	const [loading, setLoading] = React.useState(false);
+	const { extraData } = useExtraData();
+	const taxClasses = useDocField(extraData, (value) => value.taxClasses) as {
+		name: string;
+		slug: string;
+	}[];
+	const lockedSettings = useDocField(store, (latest) => ({
+		calc_taxes: latest.calc_taxes,
+		prices_include_tax: latest.prices_include_tax,
+		shipping_tax_class: latest.shipping_tax_class,
+		tax_round_at_subtotal: latest.tax_round_at_subtotal,
+	}));
+	const shippingTaxClassName =
+		lockedSettings.shipping_tax_class === INHERIT_TAX_CLASS
+			? t('common.tax_class_based_on_cart_items')
+			: taxClasses?.find(
+					(taxClass) => taxClass.slug === taxClassFromWire(lockedSettings.shipping_tax_class)
+				)?.name;
 
 	/**
 	 *
 	 */
 	const formData = useDocField(store, (latest) => {
 		return {
-			calc_taxes: latest.calc_taxes,
-			prices_include_tax: latest.prices_include_tax,
 			tax_based_on: latest.tax_based_on,
-			shipping_tax_class: taxClassFromWire(latest.shipping_tax_class),
-			tax_round_at_subtotal: latest.tax_round_at_subtotal,
 			tax_display_shop: latest.tax_display_shop,
 			tax_display_cart: latest.tax_display_cart,
 			price_display_suffix: latest.price_display_suffix,
@@ -91,14 +92,12 @@ export function TaxSettings() {
 	 * Handle form changes and persist to store
 	 */
 	const handleChange = React.useCallback(
-		async (data: z.infer<typeof formSchema>) => {
-			const patch =
-				'shipping_tax_class' in data
-					? { ...data, shipping_tax_class: taxClassToWire(data.shipping_tax_class) }
-					: data;
+		async (data: Partial<z.infer<typeof formSchema>>) => {
 			await localPatch({
 				document: store,
-				data: patch,
+				data: Object.fromEntries(
+					Object.entries(data).filter(([key]) => Object.keys(formSchema.shape).includes(key))
+				),
 			});
 		},
 		[localPatch, store]
@@ -110,42 +109,6 @@ export function TaxSettings() {
 	});
 
 	/**
-	 * Restore server settings
-	 */
-	const handleRestoreServerSettings = React.useCallback(async () => {
-		setLoading(true);
-		try {
-			const response = await http.get(`stores/${store.id}`);
-			const data = response.data;
-			await localPatch({
-				document: store,
-				data: {
-					calc_taxes: data.calc_taxes,
-					prices_include_tax: data.prices_include_tax,
-					tax_based_on: data.tax_based_on,
-					// The HTTP response already uses the wire spelling ('' for standard).
-					shipping_tax_class: data.shipping_tax_class,
-					tax_round_at_subtotal: data.tax_round_at_subtotal,
-					tax_display_shop: data.tax_display_shop,
-					tax_display_cart: data.tax_display_cart,
-					price_display_suffix: data.price_display_suffix,
-					tax_total_display: data.tax_total_display,
-				},
-			});
-		} catch (error) {
-			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
-			uiLogger[logLevel]('Failed to restore server settings', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
-				context: {
-					error: getErrorMessage(error),
-				},
-			});
-		} finally {
-			setLoading(false);
-		}
-	}, [http, localPatch, store]);
-
-	/**
 	 *
 	 */
 	return (
@@ -153,32 +116,22 @@ export function TaxSettings() {
 			<VStack className="gap-5">
 				<FormErrors />
 				<SettingsSection first title={t('settings.tax_calculation')}>
-					<FormField
-						control={form.control}
-						name="calc_taxes"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow inline label={t('settings.enable_taxes')}>
-								<FormSwitch
-									value={value === 'yes'}
-									onChange={(checked: boolean) => onChange(checked ? 'yes' : 'no')}
-									{...rest}
-								/>
-							</SettingsRow>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="prices_include_tax"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow inline label={t('settings.prices_entered_with_tax')}>
-								<FormSwitch
-									value={value === 'yes'}
-									onChange={(checked: boolean) => onChange(checked ? 'yes' : 'no')}
-									{...rest}
-								/>
-							</SettingsRow>
-						)}
-					/>
+					<SettingsRow
+						inline
+						label={t('settings.enable_taxes')}
+						testID="settings-tax-locked-calc_taxes"
+					>
+						<Text>{t(lockedSettings.calc_taxes === 'yes' ? 'common.yes' : 'common.no')}</Text>
+					</SettingsRow>
+					<SettingsRow
+						inline
+						label={t('settings.prices_entered_with_tax')}
+						testID="settings-tax-locked-prices_include_tax"
+					>
+						<Text>
+							{t(lockedSettings.prices_include_tax === 'yes' ? 'common.yes' : 'common.no')}
+						</Text>
+					</SettingsRow>
 					<FormField
 						control={form.control}
 						name="tax_based_on"
@@ -193,34 +146,28 @@ export function TaxSettings() {
 							</SettingsRow>
 						)}
 					/>
-					<FormField
-						control={form.control}
-						name="shipping_tax_class"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('settings.shipping_tax_class')}>
-								<FormSelect
-									customComponent={TaxClassSelect}
-									includeInherit
-									value={value}
-									onChange={onChange}
-									{...rest}
-								/>
-							</SettingsRow>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_round_at_subtotal"
-						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow inline label={t('settings.round_tax_at_subtotal_level')}>
-								<FormSwitch
-									value={value === 'yes'}
-									onChange={(checked: boolean) => onChange(checked ? 'yes' : 'no')}
-									{...rest}
-								/>
-							</SettingsRow>
-						)}
-					/>
+					<SettingsRow
+						inline
+						label={t('settings.shipping_tax_class')}
+						testID="settings-tax-locked-shipping_tax_class"
+					>
+						<Text>{shippingTaxClassName}</Text>
+					</SettingsRow>
+					<SettingsRow
+						inline
+						label={t('settings.round_tax_at_subtotal_level')}
+						testID="settings-tax-locked-tax_round_at_subtotal"
+					>
+						<Text>
+							{t(lockedSettings.tax_round_at_subtotal === 'yes' ? 'common.yes' : 'common.no')}
+						</Text>
+					</SettingsRow>
+					<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
+					<DocsLink
+						href={`${site.url!.replace(/\/+$/, '')}/wp-admin/admin.php?page=wc-settings&tab=tax`}
+					>
+						{t('settings.tax_locked_link')}
+					</DocsLink>
 				</SettingsSection>
 
 				<SettingsSection title={t('settings.tax_display')}>
@@ -273,14 +220,6 @@ export function TaxSettings() {
 						</Button>
 					</View>
 				</SettingsSection>
-
-				<SettingsDangerZone
-					description={t('settings.restore_server_settings_description')}
-					buttonLabel={t('settings.restore_server_settings')}
-					onPress={handleRestoreServerSettings}
-					loading={loading}
-					testID="settings-tax-restore-server"
-				/>
 			</VStack>
 		</Form>
 	);
