@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { AccessibilityInfo, View } from 'react-native';
 
-import * as Haptics from 'expo-haptics';
 import { useObservableSuspense } from 'observable-hooks';
 import Animated, {
 	cancelAnimation,
@@ -65,6 +64,10 @@ function PaidMoment({ children }: { children: React.ReactNode }) {
 		if (Platform.isNative) {
 			void (async () => {
 				try {
+					// Pulled in lazily, as play-scan-sound does: a static import of expo-haptics
+					// is evaluated at app start and breaks the web build's connect screen.
+					// eslint-disable-next-line @typescript-eslint/no-require-imports
+					const Haptics = require('expo-haptics') as typeof import('expo-haptics');
 					await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 				} catch {
 					// Missing haptic feedback must not interrupt a recorded sale.
