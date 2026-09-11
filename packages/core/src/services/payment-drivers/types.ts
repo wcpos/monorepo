@@ -38,6 +38,12 @@ export type CollectResult = {
 	failure_reason?: string | null;
 };
 export type OfflineSettlement = { rowId: string; provider_refs: Record<string, unknown> };
+export type DevControl = {
+	id: string;
+	label: string;
+	active?: boolean;
+	run(): Promise<void>;
+};
 export interface PaymentDriver {
 	readonly provider: string;
 	readonly capabilities: DriverCapabilities;
@@ -51,6 +57,8 @@ export interface PaymentDriver {
 	connect?(reader: ReaderInfo, handoff: Record<string, unknown> | null): Promise<void>;
 	disconnect?(): Promise<void>;
 	openReaderSettings?(): Promise<void>;
+	/** Dev affordance: the harness only calls this when __DEV__ is true. */
+	devControls?(): DevControl[];
 	collect(input: CollectInput): Promise<CollectResult>;
 	cancel?(): Promise<void>;
 	status$: { subscribe(listener: (s: DriverStatus) => void): () => void; get(): DriverStatus };

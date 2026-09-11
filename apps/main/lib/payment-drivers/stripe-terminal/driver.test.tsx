@@ -93,8 +93,8 @@ function sdkMock() {
 			.mockResolvedValue({ paymentIntent: { ...pi, id: 'pi_collected' } }),
 		confirmPaymentIntent: jest.fn().mockResolvedValue({ paymentIntent: pi }),
 		cancelCollectPaymentMethod: jest.fn().mockResolvedValue({}),
-		setSimulatedCard: jest.fn(),
-		setSimulatedOfflineMode: jest.fn(),
+		setSimulatedCard: jest.fn().mockResolvedValue({}),
+		setSimulatedOfflineMode: jest.fn().mockResolvedValue({}),
 		getConnectionStatus: jest.fn(),
 		getConnectedReader: jest.fn(),
 		discoveredReaders: [],
@@ -866,4 +866,78 @@ it('keeps one initialization in flight through StrictMode effect replay', async 
 		await act(async () => tree?.unmount());
 		Platform.OS = os;
 	}
+});
+
+describe('simulated reader dev controls', () => {
+	async function connectSimulated() {
+		await discover();
+		driver.callbacks.onUpdateDiscoveredReaders([{ ...rawReader, simulated: true }]);
+		await driver.connect(info, handoff);
+	}
+	it('offers controls only for a connected simulated discovery reader', async () => {
+		expect(driver.devControls()).toEqual([]);
+		await discover();
+		await driver.connect(info, handoff);
+		expect(driver.devControls()).toEqual([]);
+		await connectSimulated();
+		expect(driver.devControls()).toHaveLength(5);
+		expect(
+			driver
+				.devControls()
+				.filter((control) => control.active)
+				.map((control) => control.id)
+		).toEqual(['card-approve']);
+		await driver.disconnect();
+		expect(driver.devControls()).toEqual([]);
+	});
+	it.each([
+		['card-approve', 'Card: approve (4242)', '4242424242424242'],
+		['card-declined', 'Card: declined (…0002)', '4000000000000002'],
+		['card-insufficient-funds', 'Card: insufficient funds (…9995)', '4000000000009995'],
+		['card-offline-pin', 'Card: offline PIN (…0002)', '4001007020000002'],
+	])('selects %s through the SDK and updates the selected card', async (id, label, number) => {
+		await connectSimulated();
+		await driver
+			.devControls()
+			.find((control) => control.id === 'card-declined')!
+			.run();
+		const control = driver.devControls().find((control) => control.id === id)!;
+		expect(control.label).toBe(label);
+		await control.run();
+		expect(api.setSimulatedCard).toHaveBeenLastCalledWith(number);
+		expect(
+			driver
+				.devControls()
+				.filter((control) => control.active)
+				.map((control) => control.id)
+		).toEqual([id]);
+	});
+	it('toggles simulated offline mode in both directions with matching label and active state', async () => {
+		await connectSimulated();
+		const offline = () => driver.devControls().find((control) => control.id === 'offline')!;
+		expect(offline()).toMatchObject({ label: 'Simulated offline: off', active: false });
+		await offline().run();
+		expect(api.setSimulatedOfflineMode).toHaveBeenLastCalledWith(true);
+		expect(offline()).toMatchObject({ label: 'Simulated offline: on', active: true });
+		await offline().run();
+		expect(api.setSimulatedOfflineMode).toHaveBeenLastCalledWith(false);
+		expect(offline()).toMatchObject({ label: 'Simulated offline: off', active: false });
+	});
+	it.each([
+		['card-declined', 'setSimulatedCard'],
+		['offline', 'setSimulatedOfflineMode'],
+	] as const)('rejects SDK errors from %s without updating active state', async (id, operation) => {
+		await connectSimulated();
+		api[operation].mockResolvedValueOnce({
+			error: { code: 'SimulationError', message: 'Cannot simulate' },
+		});
+		await expect(
+			driver
+				.devControls()
+				.find((control) => control.id === id)!
+				.run()
+		).rejects.toThrow('Cannot simulate');
+		expect(driver.status$.get().message).toBe('Cannot simulate');
+		expect(driver.devControls().find((control) => control.id === id)!.active).toBe(false);
+	});
 });

@@ -1,5 +1,6 @@
 import type {
 	CollectResult,
+	DevControl,
 	DriverStatus,
 	OfflineSettlement,
 	PaymentDriver,
@@ -62,6 +63,8 @@ export function createStripeTerminalDriver({
 	let lastProviderData: Record<string, unknown> = {};
 	let transport: PaymentTransport = 'bluetooth';
 	let readers: Reader.Type[] = [];
+	let simulatedCard = '4242424242424242';
+	let simulatedOffline = false;
 	let finishDiscovery: ((error?: SdkError) => void) | undefined;
 	const listeners = new Set<(s: DriverStatus) => void>();
 	const settlements = new Set<(e: OfflineSettlement) => void>();
@@ -230,6 +233,50 @@ export function createStripeTerminalDriver({
 					? { available: false, reason: 'bluetooth_off' }
 					: { available: true },
 		callbacks,
+		devControls(): DevControl[] {
+			const reader = readers.find((item) => item.serialNumber === status.reader?.id);
+			if (status.connection !== 'connected' || reader?.simulated !== true) return [];
+			return [
+				...[
+					{ id: 'card-approve', label: 'Card: approve (4242)', number: '4242424242424242' },
+					{ id: 'card-declined', label: 'Card: declined (…0002)', number: '4000000000000002' },
+					{
+						id: 'card-insufficient-funds',
+						label: 'Card: insufficient funds (…9995)',
+						number: '4000000000009995',
+					},
+					{
+						id: 'card-offline-pin',
+						label: 'Card: offline PIN (…0002)',
+						number: '4001007020000002',
+					},
+				].map(({ id, label, number }) => ({
+					id,
+					label,
+					active: simulatedCard === number,
+					run: async () => {
+						// A success clears the message a failed attempt left — but only that one: a
+						// newer status published while the SDK call ran must stay on the line.
+						const before = status.message;
+						check(await (await ready()).setSimulatedCard(number));
+						simulatedCard = number;
+						if (before && status.message === before) publish({ message: null });
+					},
+				})),
+				{
+					id: 'offline',
+					label: `Simulated offline: ${simulatedOffline ? 'on' : 'off'}`,
+					active: simulatedOffline,
+					run: async () => {
+						const next = !simulatedOffline;
+						const before = status.message;
+						check(await (await ready()).setSimulatedOfflineMode(next));
+						simulatedOffline = next;
+						if (before && status.message === before) publish({ message: null });
+					},
+				},
+			];
+		},
 		reportError,
 		requestInitialization: () => initialize?.() ?? Promise.resolve(),
 		setInitializationHandler: (handler: (() => Promise<void>) | null) => {
