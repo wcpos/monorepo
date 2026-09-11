@@ -564,7 +564,7 @@ export function PrinterSetupDialog({
 	);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent size="xl">
+			<DialogContent side="right" size="xl">
 				<DialogHeader>
 					<DialogTitle>{t('settings.add_printer')}</DialogTitle>
 				</DialogHeader>
