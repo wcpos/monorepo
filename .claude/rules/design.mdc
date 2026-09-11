@@ -4,6 +4,7 @@ globs:
   - packages/components/**
   - packages/core/src/screens/**
   - packages/core/src/components/**
+  - apps/main/components/**
   - apps/main/**/*.tsx
   - apps/main/global.css
 alwaysApply: false
