@@ -12,7 +12,15 @@ const len = (n) => {
 const tlv = (tag, body) => Buffer.concat([Buffer.from([tag]), len(body.length), body]);
 const seq = (...items) => tlv(0x30, Buffer.concat(items));
 const der = {
-	int: (buf) => tlv(0x02, buf[0] & 0x80 ? Buffer.concat([Buffer.from([0]), buf]) : buf),
+	// DER INTEGER is minimal: no leading 0x00 unless the next byte would read as negative. A random
+	// serial that happens to start 0x00 0x7f was emitted with a redundant zero and rejected by
+	// OpenSSL as "illegal padding" (one CI run in roughly five hundred).
+	int: (buf) => {
+		let start = 0;
+		while (start < buf.length - 1 && buf[start] === 0 && !(buf[start + 1] & 0x80)) start += 1;
+		const body = buf.subarray(start);
+		return tlv(0x02, body[0] & 0x80 ? Buffer.concat([Buffer.from([0]), body]) : body);
+	},
 	oid: (bytes) => tlv(0x06, Buffer.from(bytes)),
 	nul: () => tlv(0x05, Buffer.alloc(0)),
 	bits: (buf) => tlv(0x03, Buffer.concat([Buffer.from([0]), buf])),
