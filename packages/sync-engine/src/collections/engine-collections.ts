@@ -24,6 +24,9 @@
  * collections (the web app's createDatabase recipe) open identically.
  */
 
+import { addRxPlugin } from 'rxdb';
+import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
+
 import {
 	MUTATION_QUEUE_COLLECTION,
 	recordMutationQueueMigrationStrategies,
@@ -53,6 +56,8 @@ import { queryTotalRequestStateSchema } from '../scheduler/query-total-request-s
 import { changeSignalStateSchema } from '../change-signal/change-signal-state-schema';
 
 import type { RxDatabase } from 'rxdb';
+
+addRxPlugin(RxDBLocalDocumentsPlugin);
 
 /** The syncable collections a host can reset through the public handle. */
 export const SYNC_COLLECTION_NAMES = [
@@ -93,10 +98,14 @@ export const engineKvSchema = {
 	required: ['key', 'value'],
 } as const;
 
-export type CollectionCreator = { schema: unknown; migrationStrategies?: unknown };
+export type CollectionCreator = {
+	schema: unknown;
+	migrationStrategies?: unknown;
+	localDocuments?: boolean;
+};
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
-	orders: { schema: orderSchema },
+	orders: { schema: orderSchema, localDocuments: true },
 	products: { schema: productSchema },
 	variations: { schema: variationSchema },
 	customers: { schema: customerSchema },

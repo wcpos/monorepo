@@ -31,14 +31,16 @@ interface UseReceiptDataResult {
 	hasResponded: boolean;
 	error: Error | null;
 	refetch: () => void;
+	fetchForPrint: () => Promise<Record<string, unknown> | null>;
 }
 
 interface UseReceiptDataOptions {
 	orderId: number | undefined;
 	mode?: ReceiptMode;
+	intent?: 'print';
 }
 
-type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch'> & {
+type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint'> & {
 	orderId: number | undefined;
 };
 
@@ -52,8 +54,22 @@ type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch'> & {
 export function useReceiptData({
 	orderId,
 	mode = 'live',
+	intent,
 }: UseReceiptDataOptions): UseReceiptDataResult {
 	const http = useRestHttpClient();
+	const fetchData = React.useCallback(
+		async (requestIntent = intent) => {
+			const response = await http.get(`/receipts/${orderId}`, {
+				params: { mode, ...(requestIntent ? { intent: requestIntent } : {}) },
+			});
+			return response?.data as ReceiptApiResponse;
+		},
+		[http, orderId, mode, intent]
+	);
+	const fetchForPrint = React.useCallback(async () => {
+		if (!orderId) return null;
+		return (await fetchData('print')).data ?? null;
+	}, [orderId, fetchData]);
 	const [fetchKey, setFetchKey] = React.useState(0);
 	const [state, setState] = React.useState<ReceiptDataState>({
 		orderId,
@@ -92,13 +108,9 @@ export function useReceiptData({
 			});
 
 			try {
-				const response = await http.get(`/receipts/${orderId}`, {
-					params: { mode },
-				});
+				const res = await fetchData();
 
 				if (cancelled) return;
-
-				const res = response?.data as ReceiptApiResponse;
 
 				setState({
 					orderId,
@@ -135,7 +147,7 @@ export function useReceiptData({
 		return () => {
 			cancelled = true;
 		};
-	}, [http, orderId, mode, fetchKey]);
+	}, [fetchData, orderId, mode, fetchKey]);
 
 	// When there's no order the result is the empty state regardless of any
 	// previously-fetched data (derived rather than reset via setState).
@@ -149,9 +161,10 @@ export function useReceiptData({
 			hasResponded: false,
 			error: null,
 			refetch,
+			fetchForPrint,
 		};
 	}
 
 	const { orderId: _requestOrderId, ...currentState } = state;
-	return { ...currentState, refetch };
+	return { ...currentState, refetch, fetchForPrint };
 }

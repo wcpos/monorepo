@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import Mustache from 'mustache';
 
 import {
 	analyzeThermalTemplate,
@@ -12,6 +13,8 @@ import {
 	thermalImageAssetKey,
 } from '../index';
 import { normalizeThermalText } from '../render-escpos';
+import { DEFAULT_THERMAL_TEMPLATE } from '../../../printer/src/encoder/default-thermal-template';
+import { renderEposXml } from '../render-epos-xml';
 
 const THERMAL_TEMPLATE = `<receipt paper-width="32">
   <align mode="center"><bold>{{store.name}}</bold></align>
@@ -2166,5 +2169,62 @@ describe('@wcpos/receipt-renderer exports', () => {
 			globalThis.document = originalDocument;
 			globalThis.DOMParser = originalDOMParser;
 		}
+	});
+});
+
+describe('built-in receipt identity blocks', () => {
+	const legacy = {
+		columns: 48,
+		infoColLeft: 24,
+		infoColRight: 24,
+		nameColWidth: 36,
+		priceColWidth: 12,
+		store: { name: 'Shop' },
+		order: { printed: { datetime: 'Printed now' } },
+		fiscal: { receipt_number: 'old-number', is_reprint: false, reprint_count: 0 },
+		i18n: { copy: 'COPY' },
+	};
+	const render = (value: object, template = DEFAULT_THERMAL_TEMPLATE) => {
+		const ast = parseXml(Mustache.render(template, value));
+		return { html: renderHtml(ast), escpos: renderEscpos(ast), epos: renderEposXml(ast) };
+	};
+	it('renders the fiscal QR, copy and identity in all three outputs', () => {
+		const result = render({
+			...legacy,
+			software: { name: 'WCPOS', plugin_version: 'plugin', app_version: 'app' },
+			register: { name: 'Front till' },
+			fiscal: {
+				...legacy.fiscal,
+				qr_payload: 'https://example.test/fiscal/42',
+				is_reprint: true,
+				reprint_count: 1,
+				sale_time: { datetime: 'Sale time' },
+			},
+		});
+		expect(result.html).toContain('data-barcode-kind="qrcode"');
+		expect(result.epos).toContain(
+			'<symbol type="qrcode_model_2" level="level_m" width="4">https://example.test/fiscal/42</symbol>'
+		);
+		expect(includesSequence(result.escpos, [0x1d, 0x28, 0x6b])).toBe(true);
+		for (const output of [result.html, result.epos, new TextDecoder().decode(result.escpos)]) {
+			expect(output).toContain('COPY 1');
+			expect(output).toContain('Printed now');
+			expect(output).toContain('Front till');
+			expect(output).toContain('Sale time');
+			expect(output).toContain('WCPOS plugin');
+		}
+	});
+	it('leaves 1.3 output identical with all new blocks removed', () => {
+		const oldTemplate = DEFAULT_THERMAL_TEMPLATE.replace(
+			/  {{#fiscal.qr_payload}}[\s\S]*?{{\/fiscal.qr_payload}}\n/,
+			''
+		)
+			.replace(/  {{#fiscal.is_reprint}}[\s\S]*?{{\/fiscal.is_reprint}}\n/, '')
+			.replace(/  {{#software}}[\s\S]*?{{\/software}}\n/, '');
+		const result = render(legacy);
+		expect(result).toEqual(render(legacy, oldTemplate));
+		expect(result.html).not.toContain('data-barcode-kind="qrcode"');
+		expect(result.html).not.toContain('COPY');
+		expect(result.html).not.toContain('#old-number');
 	});
 });

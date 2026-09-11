@@ -575,7 +575,24 @@ export const ReceiptRefundSchema = z.object({
 		.describe('Shipping rows included in this refund'),
 });
 
+export const ReceiptSoftwareSchema = z.object({
+	name: z.string().default('WCPOS'),
+	plugin_version: z.string().default(''),
+	app_version: z.string().default(''),
+	app_build: z.string().default(''),
+});
+export const ReceiptRegisterSchema = z.object({
+	id: z.string().default(''),
+	name: z.string().default(''),
+});
+
 export const ReceiptFiscalSchema = z.object({
+	document_type: z.enum(['sale', 'refund', 'void', 'cancellation']).default('sale').optional(),
+	sale_time: ReceiptDateSchema.nullable().default(null).optional(),
+	sale_tz: z.string().default('').optional(),
+	sale_counter: z.number().int().nullable().default(null).optional(),
+	received_at: ReceiptDateSchema.nullable().default(null).optional(),
+	corrects: z.string().default('').optional(),
 	immutable_id: z.string().optional().describe('Fiscal immutable identifier'),
 	receipt_number: z.string().optional().describe('Fiscal receipt number'),
 	sequence: z.number().int().nullable().optional().describe('Fiscal sequence number'),
@@ -769,6 +786,13 @@ export const ReceiptI18nSchema = z
 		signed_name: z.string().optional(),
 		document_type: z.string().optional(),
 		copy: z.string().optional(),
+		reprint: z.string().optional(),
+		register: z.string().optional(),
+		sale_time: z.string().optional(),
+		document_refund: z.string().optional(),
+		document_void: z.string().optional(),
+		document_cancellation: z.string().optional(),
+		software: z.string().optional(),
 		copy_number: z.string().optional(),
 		status: z.string().optional(),
 		completed: z.string().optional(),
@@ -780,6 +804,8 @@ export const ReceiptI18nSchema = z
 /* ──────────────── Top-level schema ──────────────── */
 
 export const ReceiptDataSchema = z.object({
+	software: ReceiptSoftwareSchema.optional(),
+	register: ReceiptRegisterSchema.optional(),
 	order: ReceiptOrderSchema,
 	store: ReceiptStoreMetaSchema,
 	cashier: ReceiptCashierSchema,

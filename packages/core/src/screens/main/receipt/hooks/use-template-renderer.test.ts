@@ -471,3 +471,5 @@ describe('renderOfflineTemplatePreview', () => {
 		).toThrow('Unsupported template engine: unsupported');
 	});
 });
+
+jest.mock('../../../../services/register/use-register', () => ({ useRegister: () => null }));

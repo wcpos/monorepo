@@ -87,3 +87,26 @@ describe('useReceiptData', () => {
 		});
 	});
 });
+
+it('omits intent for previews and requests marked data explicitly for print', async () => {
+	mockGet.mockResolvedValue({ data: { data: { fiscal: { is_reprint: true, reprint_count: 1 } } } });
+	const { result } = renderHook(() => useReceiptData({ orderId: 42 }));
+	await waitFor(() => expect(result.current.hasResponded).toBe(true));
+	expect(mockGet).toHaveBeenLastCalledWith('/receipts/42', { params: { mode: 'live' } });
+	let printed;
+	await act(async () => {
+		printed = await result.current.fetchForPrint();
+	});
+	expect(mockGet).toHaveBeenLastCalledWith('/receipts/42', {
+		params: { mode: 'live', intent: 'print' },
+	});
+	expect(printed).toEqual({ fiscal: { is_reprint: true, reprint_count: 1 } });
+});
+it('accepts the backward-compatible intent option', async () => {
+	mockGet.mockResolvedValue({ data: { data: {} } });
+	const { result } = renderHook(() => useReceiptData({ orderId: 42, intent: 'print' }));
+	await waitFor(() => expect(result.current.hasResponded).toBe(true));
+	expect(mockGet).toHaveBeenLastCalledWith('/receipts/42', {
+		params: { mode: 'live', intent: 'print' },
+	});
+});

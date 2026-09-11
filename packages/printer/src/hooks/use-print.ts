@@ -7,7 +7,8 @@ import { prepareSystemPrintHtml } from '../print-html';
 import { PrinterService } from '../printer-service';
 import { useOptionalRasterize } from '../raster/rasterize-provider';
 import { isOrderBasedCloudProfile } from '../transport/cloud-adapter';
-import { usesSystemPrintDialog } from '../transport/device-key';
+import { SYSTEM_TARGET, usesSystemPrintDialog } from '../transport/device-key';
+import { printerLogger } from '../logger';
 import { printFromUrl } from './print-from-url';
 
 import type { ReceiptData } from '../encoder/types';
@@ -40,6 +41,10 @@ interface UsePrintOptions {
 	orderId?: number;
 	/** Server template id — required for order-based cloud providers (Epson/PrintNode). */
 	templateId?: string;
+	/** Fetch/build the counted receipt at print time, never from preview state. */
+	preparePrint?: () => Promise<
+		Pick<UsePrintOptions, 'receiptData' | 'html'> & { commit?: () => Promise<void> }
+	>;
 	/** Callbacks */
 	onBeforePrint?: () => void | Promise<void>;
 	onAfterPrint?: () => void;
@@ -48,6 +53,8 @@ interface UsePrintOptions {
 
 // Singleton service instance
 let printerService: PrinterService | null = null;
+// Include counted preparation in each printer's dispatch order, across hook instances.
+const printQueues = new Map<string, Promise<void>>();
 
 function getService(): PrinterService {
 	if (!printerService) {
@@ -108,6 +115,7 @@ export function usePrint(options: UsePrintOptions) {
 		cloudEnqueueFactory,
 		orderId,
 		templateId,
+		preparePrint,
 		onBeforePrint,
 		onAfterPrint,
 		onPrintError,
@@ -120,15 +128,22 @@ export function usePrint(options: UsePrintOptions) {
 
 	const rasterize = useOptionalRasterize();
 
-	const print = React.useCallback(async () => {
-		activePrintsRef.current += 1;
-		setIsPrinting(true);
-
+	const runPrint = React.useCallback(async () => {
 		try {
 			if (onBeforePrint) {
 				await onBeforePrint();
 			}
 
+			// Cloud jobs count on the server. Legacy URL/iframe receipts cannot consume
+			// marked JSON, so preserve their uncounted system-print behavior.
+			const serverRendered =
+				isOrderBasedCloudProfile(printerProfile) ||
+				((!printerProfile || usesSystemPrintDialog(printerProfile)) &&
+					!html &&
+					Boolean(receiptUrl));
+			const prepared = serverRendered ? undefined : await preparePrint?.();
+			const printData = prepared?.receiptData ?? receiptData;
+			const printHtml = prepared?.html ?? html;
 			const service = getService();
 			service.setCloudEnqueueFactory(cloudEnqueueFactory);
 
@@ -149,8 +164,8 @@ export function usePrint(options: UsePrintOptions) {
 					throw new Error('Order-based cloud printing requires a template id');
 				}
 				await service.printOrderViaCloud(printerProfile, orderId, templateId);
-			} else if (printerProfile && !usesSystemPrintDialog(printerProfile) && receiptData) {
-				const normalised = mapReceiptData(receiptData as Record<string, any>);
+			} else if (printerProfile && !usesSystemPrintDialog(printerProfile) && printData) {
+				const normalised = mapReceiptData(printData as Record<string, any>);
 
 				if (printerProfile.fullReceiptRaster) {
 					if (!rasterize) {
@@ -190,7 +205,7 @@ export function usePrint(options: UsePrintOptions) {
 				}
 			} else {
 				// System print fallback — need HTML content
-				let htmlContent = html;
+				let htmlContent = printHtml;
 
 				// Try extracting from the visible iframe (works for same-origin / srcDoc)
 				if (!htmlContent) {
@@ -221,16 +236,19 @@ export function usePrint(options: UsePrintOptions) {
 				}
 			}
 
+			// The paper is already out: a failed count commit must not fail the print (a
+			// retry would print the same copy again). Logged; the local count understates.
+			try {
+				await prepared?.commit?.();
+			} catch (error) {
+				printerLogger.warn('Local print count commit failed after dispatch', {
+					context: { error: String(error) },
+				});
+			}
 			onAfterPrint?.();
 		} catch (error) {
 			onPrintError?.(error as Error);
 			throw error;
-		} finally {
-			activePrintsRef.current -= 1;
-			if (activePrintsRef.current <= 0) {
-				activePrintsRef.current = 0;
-				setIsPrinting(false);
-			}
 		}
 	}, [
 		cloudEnqueueFactory,
@@ -238,6 +256,7 @@ export function usePrint(options: UsePrintOptions) {
 		html,
 		iframeRef,
 		onAfterPrint,
+		preparePrint,
 		onBeforePrint,
 		onPrintError,
 		orderId,
@@ -250,6 +269,26 @@ export function usePrint(options: UsePrintOptions) {
 		templateId,
 		templateXml,
 	]);
+
+	const print = React.useCallback(() => {
+		activePrintsRef.current += 1;
+		setIsPrinting(true);
+		const queueId =
+			!printerProfile || usesSystemPrintDialog(printerProfile) ? SYSTEM_TARGET : printerProfile.id;
+		const job = (printQueues.get(queueId) ?? Promise.resolve()).then(runPrint);
+		// Preserve rejection for the caller, but let subsequent print jobs proceed.
+		printQueues.set(
+			queueId,
+			job.catch(() => {})
+		);
+		return job.finally(() => {
+			activePrintsRef.current -= 1;
+			if (activePrintsRef.current <= 0) {
+				activePrintsRef.current = 0;
+				setIsPrinting(false);
+			}
+		});
+	}, [printerProfile, runPrint]);
 
 	return { print, isPrinting };
 }

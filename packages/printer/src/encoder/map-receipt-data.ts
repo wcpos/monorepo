@@ -679,6 +679,24 @@ function mapRefund(src: Record<string, any>): ReceiptRefund {
 	return refund;
 }
 
+function mapIdentityBlocks(src: Partial<ReceiptData>): Partial<ReceiptData> {
+	return {
+		...(src.software
+			? {
+					software: {
+						name: toStr(src.software.name ?? 'WCPOS'),
+						plugin_version: toStr(src.software.plugin_version),
+						app_version: toStr(src.software.app_version),
+						app_build: toStr(src.software.app_build),
+					},
+				}
+			: {}),
+		...(src.register
+			? { register: { id: toStr(src.register.id), name: toStr(src.register.name) } }
+			: {}),
+	};
+}
+
 function mapFiscal(src: Record<string, any>): ReceiptFiscal {
 	const fiscal: ReceiptFiscal = {
 		immutable_id: toStr(src.immutable_id ?? src.fiscal_id) || undefined,
@@ -689,6 +707,19 @@ function mapFiscal(src: Record<string, any>): ReceiptFiscal {
 		tax_agency_code: toStr(src.tax_agency_code) || undefined,
 		signed_at: toStr(src.signed_at) || undefined,
 	};
+	for (const key of ['sale_time', 'received_at'] as const) {
+		if (key in src)
+			fiscal[key] =
+				src[key] == null
+					? null
+					: (Object.fromEntries(
+							Object.keys(emptyReceiptDate()).map((field) => [field, toStr(src[key][field])])
+						) as ReceiptFiscal['sale_time']);
+	}
+	if ('document_type' in src) fiscal.document_type = src.document_type || 'sale';
+	if ('sale_tz' in src) fiscal.sale_tz = toStr(src.sale_tz);
+	if ('sale_counter' in src) fiscal.sale_counter = toNullableNum(src.sale_counter);
+	if ('corrects' in src) fiscal.corrects = toStr(src.corrects);
 	if ('signature_excerpt' in src && src.signature_excerpt != null) {
 		fiscal.signature_excerpt = toStr(src.signature_excerpt);
 	}
@@ -865,6 +896,7 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 	const canonicalTax = mapTaxSection((data as Record<string, any>).tax, displayTax);
 
 	const result: ReceiptData = {
+		...mapIdentityBlocks(data),
 		order: {
 			...base.order,
 			...order,
@@ -998,6 +1030,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	const offlineTax = mapTaxSection(data.tax, displayTax);
 
 	const result: ReceiptData = {
+		...mapIdentityBlocks(data),
 		order: {
 			id: 0,
 			number: toStr(data.order_number),

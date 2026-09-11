@@ -16,10 +16,21 @@ import { EngineOrderRepository, type OrderRepositoryDatabase } from './engine-or
  */
 
 function orderDatabase() {
+	const localDocs = new Map<string, { counts: Record<string, number> }>();
 	const orderUpserts: unknown[][] = [];
 	const manifestUpserts: unknown[][] = [];
 	const db = {
 		orders: {
+			getLocal: async (id: string) =>
+				localDocs.has(id)
+					? {
+							get: () => localDocs.get(id)!.counts,
+							remove: async () => localDocs.delete(id),
+						}
+					: null,
+			upsertLocal: async (id: string, data: { counts: Record<string, number> }) => {
+				localDocs.set(id, structuredClone(data));
+			},
 			bulkUpsert: async (documents: unknown[]) => {
 				orderUpserts.push(documents);
 				return [];
@@ -93,4 +104,74 @@ describe('EngineOrderRepository — the manifest boundary after the Symbol', () 
 			[{ remoteId: '77', wooId: 77, objectType: 'order', digest: 'd77' }],
 		]);
 	});
+});
+
+it('retains the till receipt count when a clean order is refreshed from the server', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const resident = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 2 } };
+	db.orders.findByIds = () => ({
+		exec: async () => new Map([[storedDocument.uuid, { toJSON: () => resident }]]),
+	});
+	await new EngineOrderRepository(db).upsertMany([
+		{ ...storedDocument, payload: { ...storedDocument.payload, status: 'completed' } },
+	]);
+	expect(orderUpserts[0][0]).toMatchObject({
+		payload: { status: 'completed' },
+		local: { receiptPrintCount: 2, dirty: false, pendingMutationIds: [] },
+	});
+});
+
+it('retains the till receipt count across reset-for-resync and repull', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const resident = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 2 } };
+	const rows = new Map([[storedDocument.uuid, { toJSON: () => resident }]]);
+	db.orders.find = () => ({ exec: async () => [...rows.values()] });
+	db.orders.findByIds = () => ({ exec: async () => new Map(rows) });
+	db.orders.bulkRemove = async (ids) => {
+		ids.forEach((id) => rows.delete(id));
+		return [];
+	};
+	const repository = new EngineOrderRepository(db);
+
+	await repository.resetForResync();
+	expect(rows.size).toBe(0);
+	await repository.upsertMany([storedDocument]);
+
+	expect(orderUpserts[0][0]).toMatchObject({ local: { receiptPrintCount: 2 } });
+	// Once restored, a later unrelated removal must not reuse the saved count.
+	await repository.upsertMany([storedDocument]);
+	expect(orderUpserts[1][0]).not.toMatchObject({ local: { receiptPrintCount: 2 } });
+});
+
+it('restores resync print counts in a new repository and consumes the stash', async () => {
+	const { createEngineHarness } = await import('../engine-harness');
+	const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+	setPremiumFlag();
+	const harness = await createEngineHarness({ captureTimers: true });
+	try {
+		const orders = harness.collection('orders');
+		const db = orders.database as unknown as OrderRepositoryDatabase;
+		const { storedDocument } = materializedOrder();
+		const printed = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 2 } };
+		await new EngineOrderRepository(db).upsertMany([printed]);
+		await new EngineOrderRepository(db).resetForResync();
+		expect(await orders.findOne(storedDocument.uuid).exec()).toBeNull();
+
+		const nextBatch = new EngineOrderRepository(db);
+		await nextBatch.upsertMany([storedDocument]);
+		expect((await orders.findOne(storedDocument.uuid).exec())?.toJSON()).toMatchObject({
+			local: { receiptPrintCount: 2 },
+		});
+		expect(await orders.getLocal('resync-receipt-print-counts')).toBeNull();
+		// An unrelated removal must not let a later repull reuse the consumed count.
+		await orders.bulkRemove([storedDocument.uuid]);
+		await nextBatch.upsertMany([storedDocument]);
+		expect((await orders.findOne(storedDocument.uuid).exec())?.toJSON()).not.toMatchObject({
+			local: { receiptPrintCount: 2 },
+		});
+	} finally {
+		await harness.dispose();
+	}
 });
