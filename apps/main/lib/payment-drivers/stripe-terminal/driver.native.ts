@@ -5,7 +5,12 @@ import type {
 	PaymentDriver,
 	ReaderInfo,
 } from '@wcpos/core/services/payment-drivers/types';
-import { fromMinor, type PaymentTransport, toMinor } from '@wcpos/order-math';
+import {
+	fromMinor,
+	type PaymentMethodDescriptor,
+	type PaymentTransport,
+	toMinor,
+} from '@wcpos/order-math';
 
 import type {
 	PaymentIntent,
@@ -41,10 +46,10 @@ const readerInfo = (reader: Reader.Type, transport: PaymentTransport): ReaderInf
 
 export function createStripeTerminalDriver({
 	bootstrap,
-	resolveMethodId,
+	resolveMethod,
 }: {
 	bootstrap: Bootstrap;
-	resolveMethodId: () => string | null;
+	resolveMethod: () => PaymentMethodDescriptor | null;
 }) {
 	let sdk: Sdk | null = null;
 	let status: DriverStatus = { connection: 'disconnected', reader: null };
@@ -97,7 +102,7 @@ export function createStripeTerminalDriver({
 		check(result);
 	};
 	const nextToken = async () => {
-		const id = lastMethodId ?? resolveMethodId();
+		const id = lastMethodId ?? resolveMethod()?.id;
 		if (!id) throw new Error('Stripe Terminal is not enabled on this store');
 		const fresh = (await bootstrap(id)).connection_token;
 		if (typeof fresh !== 'string' || !fresh) throw new Error('No Stripe Terminal connection token');
@@ -218,6 +223,7 @@ export function createStripeTerminalDriver({
 			await cancelDiscovery(api);
 			transport = nextTransport;
 			readers = [];
+			bluetoothOff = false;
 			publish({ connection: 'discovering', message: null });
 			return new Promise((resolve, reject) => {
 				const finish = (error?: SdkError) => {
@@ -239,7 +245,8 @@ export function createStripeTerminalDriver({
 				void api
 					.discoverReaders({
 						discoveryMethod: discoveryMethod(nextTransport),
-						simulated: __DEV__ && lastProviderData.test_mode === true,
+						simulated:
+							__DEV__ && (resolveMethod()?.provider_data ?? lastProviderData).test_mode === true,
 					})
 					.then(({ error }: { error?: SdkError }) => {
 						if (error) finish(error);

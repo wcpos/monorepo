@@ -1,10 +1,11 @@
 import type { PaymentDriver } from '@wcpos/core/services/payment-drivers/types';
+import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
 const unavailable = async (): Promise<never> => {
 	throw new Error('Stripe Terminal is unavailable on web');
 };
 export function createStripeTerminalDriver(_options: {
-	resolveMethodId: () => string | null;
+	resolveMethod: () => PaymentMethodDescriptor | null;
 	bootstrap: (methodId: string) => Promise<Record<string, unknown>>;
 }): PaymentDriver {
 	return {

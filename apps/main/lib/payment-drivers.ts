@@ -22,17 +22,19 @@ type StripeDriver = ReturnType<typeof createStripeTerminalDriver>;
 let currentMethods: readonly PaymentMethodDescriptor[] = [];
 let currentHttp: Http | null = null;
 
-function stripeDeviceMethodId(methods: readonly PaymentMethodDescriptor[]): string | null {
+function stripeDeviceMethod(
+	methods: readonly PaymentMethodDescriptor[]
+): PaymentMethodDescriptor | null {
 	return (
 		methods.find(
 			(method) => method.capture.mode === 'device' && method.capture.provider === 'stripe'
-		)?.id ?? null
+		) ?? null
 	);
 }
 
 function createDriver(): StripeDriver {
 	return createStripeTerminalDriver({
-		resolveMethodId: () => stripeDeviceMethodId(currentMethods),
+		resolveMethod: () => stripeDeviceMethod(currentMethods),
 		bootstrap: async (methodId) => {
 			if (!currentHttp) throw new Error('Stripe Terminal has no store connection');
 			const response = await currentHttp.post(`payment-methods/${methodId}/bootstrap`, {});
@@ -60,7 +62,7 @@ export function StripeTerminalDriverRegistration() {
 	React.useEffect(() => {
 		registerDriver(driver);
 	}, [driver]);
-	const enabled = stripeDeviceMethodId(methods) !== null;
+	const enabled = stripeDeviceMethod(methods) !== null;
 	return Platform.OS === 'web' || !enabled
 		? null
 		: React.createElement(StripeTerminalDriverBridge, { driver });

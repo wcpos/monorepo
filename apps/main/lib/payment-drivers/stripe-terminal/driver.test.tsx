@@ -104,7 +104,7 @@ function sdkMock() {
 let api: ReturnType<typeof sdkMock>;
 let driver: ReturnType<typeof createStripeTerminalDriver>;
 let bootstrap: jest.Mock;
-let resolveMethodId: jest.Mock<string | null, []>;
+let resolveMethod: jest.Mock<CollectInput['method'] | null, []>;
 const rawReader = reader as Parameters<
 	typeof driver.callbacks.onUpdateDiscoveredReaders
 >[0][number];
@@ -114,8 +114,8 @@ beforeEach(() => {
 	jest.clearAllMocks();
 	api = sdkMock();
 	bootstrap = jest.fn().mockResolvedValue({ connection_token: 'fresh' });
-	resolveMethodId = jest.fn().mockReturnValue('resolved_method');
-	driver = createStripeTerminalDriver({ bootstrap, resolveMethodId });
+	resolveMethod = jest.fn().mockReturnValue({ ...method, id: 'resolved_method' });
+	driver = createStripeTerminalDriver({ bootstrap, resolveMethod });
 	driver.bindSdk(api as unknown as Sdk);
 });
 afterEach(() => {
@@ -130,13 +130,13 @@ async function discover(transport: CollectInput['transport'] = 'bluetooth') {
 	return pending;
 }
 it('bootstraps before SDK binding and uses the current resolver on each token request', async () => {
-	driver = createStripeTerminalDriver({ bootstrap, resolveMethodId });
+	driver = createStripeTerminalDriver({ bootstrap, resolveMethod });
 	await expect(tokenProvider()).resolves.toBe('fresh');
 	expect(bootstrap).toHaveBeenLastCalledWith('resolved_method');
-	resolveMethodId.mockReturnValue('updated_method');
+	resolveMethod.mockReturnValue({ ...method, id: 'updated_method' });
 	await tokenProvider();
 	expect(bootstrap).toHaveBeenLastCalledWith('updated_method');
-	resolveMethodId.mockReturnValue(null);
+	resolveMethod.mockReturnValue(null);
 	await expect(tokenProvider()).rejects.toThrow('Stripe Terminal is not enabled on this store');
 	expect(bootstrap).toHaveBeenCalledTimes(2);
 });
@@ -323,7 +323,8 @@ it('forces offline authorization and settles only a successfully forwarded row',
 	expect(driver.status$.get().message).toBe('forward failed');
 	unsubscribe();
 });
-it('uses test mode from the method descriptor, not the connect handoff', async () => {
+it('falls back to the collected descriptor when unresolved, never the connect handoff', async () => {
+	resolveMethod.mockReturnValue(null);
 	await discover();
 	await driver.connect(info, { ...handoff, test_mode: true });
 	await discover('tap_to_pay');
@@ -355,7 +356,7 @@ it('reports Bluetooth errors and recovers availability on connection', async () 
 	expect(driver.availability()).toEqual({ available: true });
 });
 it('rejects all web driver operations', async () => {
-	const web = createWebDriver({ bootstrap, resolveMethodId });
+	const web = createWebDriver({ bootstrap, resolveMethod });
 	expect(web.availability()).toEqual({ available: false, reason: 'web' });
 	await expect(web.collect(input)).rejects.toThrow();
 	await expect(web.connect!(info, handoff)).rejects.toThrow();
@@ -456,6 +457,7 @@ it('defers initialization until a Stripe device descriptor exists and bootstraps
 			{
 				...method,
 				id: 'new_stripe',
+				provider_data: { test_mode: true },
 				capture: { ...method.capture, mode: 'device', provider: 'stripe' },
 			},
 		]);
@@ -466,6 +468,10 @@ it('defers initialization until a Stripe device descriptor exists and bootstraps
 		const callbacks = jest.mocked(useStripeTerminal).mock.calls.at(-1)![0]!;
 		const pending = registered.discoverReaders!('bluetooth');
 		await jest.advanceTimersByTimeAsync(0);
+		expect(api.discoverReaders).toHaveBeenLastCalledWith({
+			discoveryMethod: 'bluetoothScan',
+			simulated: true,
+		});
 		callbacks.onUpdateDiscoveredReaders!([rawReader]);
 		callbacks.onFinishDiscoveringReaders!();
 		await pending;
@@ -507,3 +513,93 @@ it.each(['CancelFailedAlreadyCompleted', 'CANCEL_FAILED'])(
 		expect(driver.availability()).toEqual({ available: false, reason: 'bluetooth_off' });
 	}
 );
+
+it.each(['success', 'generic', 'bluetooth'])(
+	'clears a previous Bluetooth discovery failure before a %s retry',
+	async (outcome) => {
+		api.discoverReaders.mockResolvedValueOnce({
+			error: { code: 'BluetoothDisabled', message: 'Bluetooth is off' },
+		});
+		await expect(driver.discoverReaders('bluetooth')).rejects.toThrow('Bluetooth is off');
+		expect(driver.availability()).toEqual({ available: false, reason: 'bluetooth_off' });
+		const pending = driver.discoverReaders('bluetooth');
+		await jest.advanceTimersByTimeAsync(0);
+		expect(driver.status$.get()).toMatchObject({ connection: 'discovering', message: null });
+		expect(driver.availability()).toEqual({ available: true });
+		if (outcome === 'success') {
+			driver.callbacks.onFinishDiscoveringReaders();
+			await expect(pending).resolves.toEqual([]);
+			expect(driver.availability()).toEqual({ available: true });
+		} else {
+			const rejected = expect(pending).rejects.toThrow('Scan failed');
+			driver.callbacks.onFinishDiscoveringReaders({
+				code: outcome === 'bluetooth' ? 'BluetoothError' : 'NetworkError',
+				message: 'Scan failed',
+			});
+			await rejected;
+			expect(driver.status$.get().message).toBe('Scan failed');
+			expect(driver.availability()).toEqual(
+				outcome === 'bluetooth'
+					? { available: false, reason: 'bluetooth_off' }
+					: { available: true }
+			);
+		}
+	}
+);
+
+it.each(['result', 'callback', 'rejection'])(
+	'publishes a generic discovery %s without disabling the tile',
+	async (source) => {
+		const error = { code: 'NetworkError', message: 'Cannot discover Bluetooth readers' };
+		const listener = jest.fn();
+		const unsubscribe = driver.status$.subscribe(listener);
+		if (source === 'result') api.discoverReaders.mockResolvedValueOnce({ error });
+		if (source === 'rejection') api.discoverReaders.mockRejectedValueOnce(new Error(error.message));
+		const rejected = expect(driver.discoverReaders('bluetooth')).rejects.toThrow(error.message);
+		await jest.advanceTimersByTimeAsync(0);
+		if (source === 'callback') driver.callbacks.onFinishDiscoveringReaders(error);
+		await rejected;
+		expect(driver.availability()).toEqual({ available: true });
+		expect(listener).toHaveBeenLastCalledWith(
+			expect.objectContaining({ connection: 'disconnected', message: error.message })
+		);
+		unsubscribe();
+	}
+);
+
+it.each([
+	{ dev: true, testMode: true, simulated: true },
+	{ dev: true, testMode: false, simulated: false },
+	{ dev: true, testMode: 'true', simulated: false },
+	{ dev: true, testMode: undefined, simulated: false },
+	{ dev: false, testMode: true, simulated: false },
+])('resolves discovery test mode before collect: %j', async ({ dev, testMode, simulated }) => {
+	const originalDev = __DEV__;
+	try {
+		Object.assign(global, { __DEV__: dev });
+		resolveMethod.mockReturnValue({ ...method, provider_data: { test_mode: testMode } });
+		await discover();
+		expect(api.discoverReaders).toHaveBeenLastCalledWith({
+			discoveryMethod: 'bluetoothScan',
+			simulated,
+		});
+	} finally {
+		Object.assign(global, { __DEV__: originalDev });
+	}
+});
+
+it('prefers the current resolved descriptor over previously collected test mode', async () => {
+	await driver.collect({ ...input, method: { ...method, provider_data: { test_mode: true } } });
+	resolveMethod.mockReturnValue({ ...method, provider_data: { test_mode: false } });
+	await discover();
+	expect(api.discoverReaders).toHaveBeenLastCalledWith({
+		discoveryMethod: 'bluetoothScan',
+		simulated: false,
+	});
+	resolveMethod.mockReturnValue({ ...method, provider_data: { test_mode: true } });
+	await discover('tap_to_pay');
+	expect(api.discoverReaders).toHaveBeenLastCalledWith({
+		discoveryMethod: 'tapToPay',
+		simulated: true,
+	});
+});
