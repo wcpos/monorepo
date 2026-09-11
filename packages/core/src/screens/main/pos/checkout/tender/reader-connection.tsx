@@ -38,6 +38,12 @@ export function ReaderConnection({
 	const [readers, setReaders] = React.useState<ReaderInfo[] | null>(null);
 	const [error, setError] = React.useState<string | null>(null);
 	const [working, setWorking] = React.useState(false);
+	const [devControlRevision, refreshDevControls] = React.useReducer((value) => value + 1, 0);
+	const devControls = React.useMemo(
+		() => (__DEV__ ? (driver?.devControls?.() ?? []) : []),
+		// The driver's mutable control snapshot changes on status events and completed actions.
+		[driver, status, devControlRevision]
+	);
 	const attempted = React.useRef(false);
 	const reconnect = React.useRef<{ cancelled: boolean } | null>(null);
 	const transports = deviceTransports(method);
@@ -158,6 +164,30 @@ export function ReaderConnection({
 					</ButtonText>
 				</Button>
 			</HStack>
+			{__DEV__ && devControls.length > 0 ? (
+				<HStack className="flex-wrap gap-2">
+					{devControls.map((control) => (
+						<Button
+							key={control.id}
+							testID={`checkout-dev-control-${control.id}`}
+							size="sm"
+							variant={control.active ? 'default' : 'secondary'}
+							disabled={disabled || working}
+							onPress={() =>
+								void run(async () => {
+									try {
+										await control.run();
+									} finally {
+										refreshDevControls();
+									}
+								})
+							}
+						>
+							<ButtonText>{control.label}</ButtonText>
+						</Button>
+					))}
+				</HStack>
+			) : null}
 			{status.message ? (
 				<Text className="text-muted-foreground text-xs">{status.message}</Text>
 			) : null}
