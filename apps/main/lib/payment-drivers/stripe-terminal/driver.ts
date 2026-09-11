@@ -257,6 +257,8 @@ export function createStripeTerminalDriver({
 					run: async () => {
 						check(await (await ready()).setSimulatedCard(number));
 						simulatedCard = number;
+						// A success clears the message a failed attempt may have left on the status line.
+						publish({ message: null });
 					},
 				})),
 				{
@@ -267,6 +269,7 @@ export function createStripeTerminalDriver({
 						const next = !simulatedOffline;
 						check(await (await ready()).setSimulatedOfflineMode(next));
 						simulatedOffline = next;
+						publish({ message: null });
 					},
 				},
 			];
