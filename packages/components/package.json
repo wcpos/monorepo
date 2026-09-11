@@ -29,6 +29,7 @@
     "./input": "./src/input/index.tsx",
     "./keyboard-controller": "./src/keyboard-controller/index.tsx",
     "./label": "./src/label/index.tsx",
+    "./lib/portal-container": "./src/lib/portal-container.ts",
     "./lib/set-ref-value": "./src/lib/set-ref-value.ts",
     "./lib/use-hierarchy": "./src/lib/use-hierarchy.ts",
     "./lib/utils": "./src/lib/utils.ts",

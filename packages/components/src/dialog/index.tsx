@@ -21,6 +21,7 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
 import { OVERLAY_FADE_MS, PANEL_SLIDE_MS, PANEL_SLIDE_OUT_MS } from '../lib/overlay-motion';
+import { usePortalContainer } from '../lib/portal-container';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -176,8 +177,9 @@ function DialogContent({
 		portalHost?: string;
 	}) {
 	const { open } = DialogPrimitive.useRootContext();
+	const container = usePortalContainer(portalHost);
 	return (
-		<DialogPortal hostName={portalHost}>
+		<DialogPortal hostName={portalHost} container={container}>
 			<DialogOverlay side={side}>
 				<DialogPrimitive.Content
 					className={cn(
