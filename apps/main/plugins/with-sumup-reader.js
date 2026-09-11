@@ -65,7 +65,13 @@ function addMavenRepository(contents) {
 		if (contents[end] === '}') depth--;
 		end++;
 	}
-	if (contents.slice(start, end).includes('https://maven.sumup.com/releases')) return contents;
+	// Match the whole repository declaration, not a substring of some other URL.
+	if (
+		/maven\s*{\s*url\s+['"]https:\/\/maven\.sumup\.com\/releases['"]\s*}/.test(
+			contents.slice(start, end)
+		)
+	)
+		return contents;
 	return contents.replace(
 		pattern,
 		(match) => `${match}\n    maven { url 'https://maven.sumup.com/releases' }`
