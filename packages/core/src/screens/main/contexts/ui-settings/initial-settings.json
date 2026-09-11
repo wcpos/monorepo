@@ -450,6 +450,11 @@
         "show": true
       },
       {
+        "key": "register",
+        "disableSort": true,
+        "show": false
+      },
+      {
         "key": "payment_method",
         "show": true
       },
@@ -665,6 +670,11 @@
       },
       {
         "key": "cashier",
+        "disableSort": true,
+        "show": false
+      },
+      {
+        "key": "register",
         "disableSort": true,
         "show": false
       },

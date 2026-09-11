@@ -22,3 +22,14 @@ export function storeListsEqual(a: StoreDocument[], b: StoreDocument[]): boolean
 		)
 	);
 }
+
+/** Keep single-store sign-in unchanged; only skip a multi-store choice for an offered binding. */
+export function resolvePreselectedStore(
+	stores: StoreDocument[],
+	boundStoreId?: number | null
+): StoreDocument | null {
+	if (stores.length === 1) return stores[0];
+	return (
+		stores.find((store) => typeof boundStoreId === 'number' && store.id === boundStoreId) ?? null
+	);
+}

@@ -12,12 +12,18 @@ export interface RegisterDocument {
 		string,
 		{
 			sale_counter: number;
+			store_id?: number | null;
 			registration?: { at: string; name: string; app_version: string };
 		}
 	>;
 }
 
 let currentRegisterId: string | null = null;
+let currentRegister: RegisterDocument | null = null;
+
+export function getRegisterSnapshot(): RegisterDocument | null {
+	return currentRegister;
+}
 
 export function getRegisterId(): string | null {
 	return currentRegisterId;
@@ -36,6 +42,7 @@ function mintUuid(): string {
 export async function readRegister(userDB: UserDatabase): Promise<RegisterDocument | null> {
 	const register = (await userDB.getLocal<RegisterDocument>('register'))?.toJSON().data ?? null;
 	currentRegisterId = register?.id ?? null;
+	currentRegister = register;
 	return register;
 }
 
@@ -53,6 +60,7 @@ export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocu
 	try {
 		await userDB.insertLocal('register', data);
 		currentRegisterId = data.id;
+		currentRegister = data;
 		return data;
 	} catch (error) {
 		const winner = await readRegister(userDB);
@@ -72,7 +80,8 @@ export async function renameRegister(userDB: UserDatabase, name: string): Promis
 	if (!name || name.length > 191) return false;
 	const doc = await userDB.getLocal<RegisterDocument>('register');
 	if (!doc || doc.get('name') === name) return false;
-	await doc.incrementalModify((data) => ({ ...data, name }));
+	const renamed = await doc.incrementalModify((data) => ({ ...data, name }));
+	currentRegister = renamed.toJSON().data;
 	return true;
 }
 
@@ -82,7 +91,7 @@ export async function nextSaleCounter(userDB: UserDatabase, siteUuid: string): P
 	let counter = 0;
 	// RxDB can batch modifiers and return the same final document to each caller.
 	await doc.incrementalModify((data) => {
-		const site = data.sites[siteUuid] ?? { sale_counter: 0 };
+		const site = data.sites[siteUuid] ?? { sale_counter: 0, store_id: null };
 		counter = site.sale_counter + 1;
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...site, sale_counter: counter } } };
 	});

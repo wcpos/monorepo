@@ -78,3 +78,5 @@ describe('orders FilterBar selected-label bindings', () => {
 		expect(mockForceRefresh).toHaveBeenNthCalledWith(2, mockManager, 7, 'cashier');
 	});
 });
+
+jest.mock('../components/order/filter-bar/register-pill', () => ({ RegisterPill: () => null }));

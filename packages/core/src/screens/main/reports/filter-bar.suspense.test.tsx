@@ -74,6 +74,7 @@ jest.mock('@wcpos/components/card', () => ({
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+jest.mock('../components/order/filter-bar/register-pill', () => ({ RegisterPill: () => null }));
 jest.mock('../components/order/filter-bar/status-pill', () => ({
 	StatusPill: () => <div data-testid="status-pill" />,
 }));

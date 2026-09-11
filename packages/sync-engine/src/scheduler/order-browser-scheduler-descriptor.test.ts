@@ -555,3 +555,24 @@ describe('parseOrderBrowserSchedulerDescriptor', () => {
 		).toBeNull();
 	});
 });
+
+describe('register browse dimension', () => {
+	const ids = ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
+	it('keeps register windows distinct and round-trips alongside free text', () => {
+		const keys = ids.map((registerId) =>
+			orderBrowserQueryKey({ registerId, search: 'note:register=other' })
+		);
+		expect(keys[0]).not.toBe(keys[1]);
+		keys.forEach((key, index) => {
+			expect(key).toContain(`:register=${ids[index]}:search=`);
+			expect(parseOrderBrowserSchedulerDescriptor(key)).toMatchObject({
+				descriptor: { registerId: ids[index], search: 'note:register=other' },
+			});
+		});
+	});
+	it('still parses keys without a register', () => {
+		expect(
+			parseOrderBrowserSchedulerDescriptor('orders:browser:status=all:cashier=7:search=:limit=10')
+		).toMatchObject({ descriptor: { cashierId: 7 } });
+	});
+});

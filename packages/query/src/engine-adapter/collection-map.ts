@@ -575,6 +575,23 @@ export const collectionMap = {
 				},
 				wireFace: 'dimension',
 			},
+			register: {
+				legacy: 'register',
+				kind: 'computed',
+				enginePath: 'payload.meta_data',
+				notes: 'Value of the _wcpos_register metadata entry.',
+				compute: (document) => {
+					const metadata = valueAtPath(document, 'payload.meta_data');
+					return (
+						wooMetaCarrier.readIdentity(
+							Array.isArray(metadata)
+								? (metadata as Parameters<typeof wooMetaCarrier.readIdentity>[0])
+								: undefined
+						).registerId ?? undefined
+					);
+				},
+				wireFace: 'dimension',
+			},
 			store: {
 				legacy: 'store',
 				kind: 'computed',
