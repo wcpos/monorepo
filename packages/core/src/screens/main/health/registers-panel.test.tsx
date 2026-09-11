@@ -59,8 +59,8 @@ const register: RegisterHealth['registers'][number] = {
 		{
 			order_id: 40,
 			order_number: '1040',
-			sale_time: '2026-09-11T00:42:00',
-			received_gmt: '2026-09-11T02:41:00',
+			sale_time: '2026-09-11T00:42:00+02:00',
+			received_gmt: '2026-09-10T22:42:00Z',
 			skew_seconds: 7140,
 			direction: 'behind',
 		},
@@ -89,7 +89,7 @@ it('renders each finding using counters, order numbers, and the shared skew magn
 		'#44 on orders 1023, 1031'
 	);
 	expect(screen.getByTestId('health-register-skew').textContent).toBe(
-		'Order 1040: device 2026-09-11 00:42, received 2026-09-11 02:41 — 119 min behind'
+		'Order 1040: device 2026-09-11 00:42 +02:00, received 2026-09-10 22:42 UTC — 119 min behind'
 	);
 	expect(screen.getByTestId('health-registers').textContent).toContain(
 		'usually an offline sale synced later'

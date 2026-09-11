@@ -10,6 +10,16 @@ import { Pill } from './components/pill';
 import { Section } from './components/section';
 import { useRegisterHealth } from './use-register-health';
 
+/**
+ * "2026-09-11 00:42 +02:00" from an ISO stamp; the device offset stays visible so a
+ * finding reads against the UTC received time without mental arithmetic.
+ */
+function formatStampedTime(iso: string): string {
+	const offset = /(?:Z|[+-]\d{2}:\d{2})$/.exec(iso)?.[0];
+	const local = iso.replace('T', ' ').slice(0, 16);
+	return offset && offset !== 'Z' ? `${local} ${offset}` : local;
+}
+
 export function RegistersPanel() {
 	const t = useT();
 	const { data, loading, error, refresh } = useRegisterHealth();
@@ -78,8 +88,8 @@ export function RegistersPanel() {
 								<Text key={skew.order_id} testID="health-register-skew" className="text-sm">
 									{t('health.registers.skew', {
 										order: skew.order_number,
-										device: skew.sale_time.replace('T', ' ').slice(0, 16),
-										received: skew.received_gmt.replace('T', ' ').slice(0, 16),
+										device: formatStampedTime(skew.sale_time),
+										received: `${formatStampedTime(skew.received_gmt)} UTC`,
 										magnitude: formatSkewMagnitude(skew.skew_seconds),
 										direction:
 											skew.direction === 'behind'

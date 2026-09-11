@@ -56,3 +56,16 @@ it('refresh can recover from an error', async () => {
 	expect(result.current.data).toEqual(data);
 	expect(result.current.error).toBeNull();
 });
+
+it('keeps the loaded results visible when a refresh fails', async () => {
+	mockGet.mockResolvedValueOnce({ data });
+	const { result } = renderHook(() => useRegisterHealth());
+	await waitFor(() => expect(result.current.data).toEqual(data));
+	mockGet.mockRejectedValueOnce(new Error('Store unavailable'));
+	await act(async () => {
+		await result.current.refresh();
+	});
+	expect(result.current.data).toEqual(data);
+	expect(result.current.error).toBe('Store unavailable');
+	expect(result.current.loading).toBe(false);
+});
