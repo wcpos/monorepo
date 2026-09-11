@@ -68,6 +68,8 @@ const mintedCard: PaymentRow = {
 	receipt: {},
 	cashier_id: 7,
 	store_id: 9,
+	register_id: null,
+	session_id: null,
 	created_at_gmt: NOW,
 	captured_at_gmt: NOW,
 	updated_at_gmt: NOW,
@@ -85,6 +87,7 @@ function createDeps(online = true): RecordManualPaymentDeps & {
 		isOnline: () => online,
 		cashierId: 7,
 		storeId: 9,
+		registerId: null,
 		currency: 'EUR',
 		dp: 2,
 		patchAndEnqueue: jest.fn(async () => undefined),
@@ -182,15 +185,18 @@ describe('recordManualPayment', () => {
 
 		expect(deps.post).toHaveBeenCalledWith('orders/1042/payments', { payment: mintedCard });
 		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
-		expect(deps.mirror).toHaveBeenCalledWith({
-			meta_data: expect.arrayContaining([
-				expect.objectContaining({
-					key: '_wcpos_payments',
-					value: { schema: 1, payments: [serverRow] },
-				}),
-			]),
-			status: 'completed',
-		});
+		expect(deps.mirror).toHaveBeenCalledWith(
+			{
+				meta_data: expect.arrayContaining([
+					expect.objectContaining({
+						key: '_wcpos_payments',
+						value: { schema: 1, payments: [serverRow] },
+					}),
+				]),
+				status: 'completed',
+			},
+			{ accepted: true }
+		);
 		expect(result).toEqual({ kind: 'recorded', via: 'online', row: serverRow, order: summary });
 	});
 
@@ -359,4 +365,84 @@ describe('recordManualPayment', () => {
 		expect(deps.mirror).not.toHaveBeenCalled();
 		expect(deps.raiseAttention).not.toHaveBeenCalled();
 	});
+});
+
+it.each([
+	['100.00', true],
+	['42.50', false],
+] as const)('completion provenance with offline amount %s', async (amount, completes) => {
+	const deps = createDeps(false);
+	const tuple = { key: '_wcpos_sale_counter', value: '1' };
+	const completion = jest.fn(async (meta) => [...meta, tuple]);
+	deps.completionMeta = completion;
+	await recordManualPayment(order, cash, { amount }, deps);
+	expect(completion).toHaveBeenCalledTimes(completes ? 1 : 0);
+	const meta = deps.patchAndEnqueue.mock.calls[0][0].meta_data;
+	expect(meta.some((entry: { key: string }) => entry.key === '_wcpos_payments')).toBe(true);
+	expect(meta.includes(tuple)).toBe(completes);
+});
+
+it.each(['0.00', '42.50'])(
+	'persists provenance before posting the full online balance after %s paid',
+	async (paid) => {
+		const calls: string[] = [];
+		const deps = {
+			...createDeps(),
+			persistProvenance: jest.fn(async () => {
+				await Promise.resolve();
+				calls.push('persisted');
+			}),
+		};
+		deps.post.mockImplementation(async () => {
+			calls.push('post');
+			return { data: {} };
+		});
+		const paymentOrder = {
+			...order,
+			meta_data: [
+				...order.meta_data,
+				{
+					key: '_wcpos_payments',
+					value: { schema: 1, payments: [{ ...mintedCard, amount: paid }] },
+				},
+			],
+		};
+
+		const result = await recordManualPayment(
+			paymentOrder,
+			cash,
+			{ amount: paid === '0.00' ? '100.00' : '57.50' },
+			deps
+		);
+
+		expect(result).toMatchObject({ kind: 'recorded', via: 'online' });
+		expect(calls).toEqual(['persisted', 'post']);
+	}
+);
+
+it('does not persist provenance for a partial online leg', async () => {
+	const deps = { ...createDeps(), persistProvenance: jest.fn(async () => undefined) };
+	deps.post.mockResolvedValue({ data: {} });
+
+	await recordManualPayment(order, cash, { amount: '42.50' }, deps);
+
+	expect(deps.persistProvenance).not.toHaveBeenCalled();
+	expect(deps.post).toHaveBeenCalledTimes(1);
+});
+
+it('returns a failed outcome without posting or enqueueing when provenance persistence throws', async () => {
+	const deps = {
+		...createDeps(),
+		persistProvenance: jest.fn(async () => {
+			throw new Error('save failed');
+		}),
+	};
+	deps.post.mockResolvedValue({ data: {} });
+
+	const result = await recordManualPayment(order, cash, { amount: '100.00' }, deps);
+
+	expect(result).toEqual({ kind: 'failed', reason: 'provenance_save_failed' });
+	expect(deps.post).not.toHaveBeenCalled();
+	expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
+	expect(deps.mirror).not.toHaveBeenCalled();
 });

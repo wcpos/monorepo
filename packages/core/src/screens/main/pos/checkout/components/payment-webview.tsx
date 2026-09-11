@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
 import { type EngineRecord, useDocField, useQueryRuntime, useRecordField } from '@wcpos/query';
@@ -9,7 +10,10 @@ import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useAppState } from '../../../../../contexts/app-state';
+import { usePushDocument } from '../../../contexts/use-push-document';
+import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+import { persistProvenance } from '../provenance/persist-provenance';
+import { useAppState, useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useUISettings } from '../../../contexts/ui-settings';
@@ -129,7 +133,22 @@ export function PaymentWebview({
 }: PaymentWebviewProps) {
 	const router = useRouter();
 	const orderData = useRecordField(order, (record) => record.payload);
-	const paymentURL = orderData.links?.payment?.[0]?.href;
+	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
+	const online = useOnlineStatus().status === 'online-website-available';
+	const { userDB, site } = useStoreSession();
+	const siteUuid = site.uuid!;
+	const pushDocument = usePushDocument();
+	const { localPatch } = useLocalMutation();
+	const [preparation, setPreparation] = React.useState<{
+		uuid: string;
+		status: 'ready' | 'failed';
+	} | null>(null);
+	// Online, the pay page is exposed only once this order's provenance is persisted
+	// (the effect below), and a failed save keeps it closed even if connectivity then
+	// drops; offline with no attempt made, the page cannot complete a sale anyway.
+	const prepared = preparation?.uuid === order.uuid ? preparation.status : null;
+	const paymentURL =
+		(online && prepared !== 'ready') || prepared === 'failed' ? undefined : rawPaymentURL;
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
 	const { wpCredentials } = useAppState();
@@ -164,6 +183,60 @@ export function PaymentWebview({
 			}),
 		[order.uuid, orderNumber]
 	);
+
+	// Latest collaborators for the preparation effect, refreshed after every render so
+	// the effect can key on order identity rather than on revisions our own write emits.
+	const collaborators = React.useRef({
+		order,
+		localPatch,
+		pushDocument,
+		setFrameStatus,
+		orderLogger,
+		t,
+	});
+	React.useEffect(() => {
+		collaborators.current = { order, localPatch, pushDocument, setFrameStatus, orderLogger, t };
+	});
+	// Mounting the external pay page can complete the sale: persist attribution before
+	// exposing its URL. Bind to order identity, not revisions emitted by our own write.
+	// Cleanup only suppresses an obsolete view's readiness update.
+	React.useEffect(() => {
+		if (!online || !rawPaymentURL) return;
+		const {
+			order: currentOrder,
+			localPatch,
+			pushDocument,
+			setFrameStatus,
+			orderLogger,
+			t,
+		} = collaborators.current;
+		let active = true;
+		void (async () => {
+			try {
+				await persistProvenance({
+					order: currentOrder,
+					localPatch,
+					pushDocument,
+					userDB,
+					siteUuid,
+				});
+				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready' });
+			} catch (error) {
+				if (!active) return;
+				setPreparation({ uuid: currentOrder.uuid, status: 'failed' });
+				setFrameStatus('stalled');
+				orderLogger.error('Checkout failed', {
+					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					showToast: true,
+					toast: { title: t('pos_cart.checkout_failed') },
+					context: { error: getErrorMessage(error) },
+				});
+			}
+		})();
+		return () => {
+			active = false;
+		};
+	}, [order.uuid, userDB, siteUuid, online, rawPaymentURL, retryToken]);
 
 	/**
 	 *

@@ -2,13 +2,21 @@ import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
 
-import { derive, readLedger, upsertPaymentRow, withLedger } from '@wcpos/order-math';
+import {
+	derive,
+	hasSaleProvenance,
+	isCompletingStatus,
+	readLedger,
+	upsertPaymentRow,
+	withLedger,
+} from '@wcpos/order-math';
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { engineCollection, type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { completionMeta } from '../../provenance/stamp-completion';
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
 	getTerminalPaymentsService,
@@ -28,7 +36,7 @@ import { reconcileCompletedOrder } from '../../hooks/reconcile-completed-order';
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export function useTerminalPaymentsService(): void {
-	const { store, site } = useStoreSession();
+	const { store, site, userDB } = useStoreSession();
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
@@ -81,9 +89,15 @@ export function useTerminalPaymentsService(): void {
 				const summary = derive(payload.total, rows, latest.current.methods, {
 					dp: store.price_num_decimals ?? 2,
 				});
+				const meta_data = withLedger(meta, rows);
 				const written = await latest.current.localPatch({
 					document: resident,
-					data: { meta_data: withLedger(meta, rows), status: summary.status },
+					data: {
+						meta_data: isCompletingStatus(summary.status)
+							? await completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! })
+							: meta_data,
+						status: summary.status,
+					},
 				});
 				if (!written) throw new Error('Offline payment could not be saved');
 				return {
@@ -93,30 +107,52 @@ export function useTerminalPaymentsService(): void {
 				};
 			},
 			mirror: async (orderUuid, { payment, order }) => {
-				const resident = await findEngineResident(manager, 'orders', orderUuid);
-				if (stopped) return;
-				if (!resident) throw new Error('Terminal payment order is not resident');
-				const payload = (resident.getLatest?.().payload ??
-					resident.payload) as EngineRecord<'orders'>['payload'];
-				const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
-				await patchEngineResident({
-					manager,
-					collection: 'orders',
-					recordId: orderUuid,
-					// Only the summary fields that are order fields: `paid` and `balance` are
-					// derived from the ledger on read, and an unknown key fails the schema.
-					changes: {
-						...(order
-							? {
-									status: order.status,
-									...(payment.capture_mode === 'device' ? { total: order.total } : {}),
-									payment_method: order.payment_method,
-									payment_method_title: order.payment_method_title,
-								}
-							: {}),
-						meta_data: withLedger(meta, upsertPaymentRow(readLedger(meta), payment)),
-					},
-				});
+				let mirrored = false;
+				try {
+					const resident = await findEngineResident(manager, 'orders', orderUuid);
+					if (stopped) return;
+					if (!resident) throw new Error('Terminal payment order is not resident');
+					const payload = (resident.getLatest?.().payload ??
+						resident.payload) as EngineRecord<'orders'>['payload'];
+					const meta = cloneDeep((payload as { meta_data?: MetaDataEntry[] }).meta_data ?? []);
+					const meta_data = withLedger(meta, upsertPaymentRow(readLedger(meta), payment));
+					await patchEngineResident({
+						manager,
+						collection: 'orders',
+						recordId: orderUuid,
+						// Only the summary fields that are order fields: `paid` and `balance` are
+						// derived from the ledger on read, and an unknown key fails the schema.
+						changes: {
+							...(order
+								? {
+										status: order.status,
+										...(payment.capture_mode === 'device' ? { total: order.total } : {}),
+										payment_method: order.payment_method,
+										payment_method_title: order.payment_method_title,
+									}
+								: {}),
+							meta_data,
+						},
+					});
+					mirrored = true;
+					if (order && isCompletingStatus(order.status) && !hasSaleProvenance(meta)) {
+						const patched = await latest.current.localPatch({
+							document: resident,
+							data: {
+								meta_data: await completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! }),
+							},
+						});
+						if (!patched) throw new Error('provenance_save_failed');
+					}
+				} catch (error) {
+					// Ledger failures must reach the leg so it resumes polling instead of finalising.
+					if (!mirrored) throw error;
+					logger.error('Checkout failed', {
+						code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+						showToast: true,
+						context: { error: getErrorMessage(error) },
+					});
+				}
 			},
 			onCaptured: (orderUuid, order) => {
 				// Never select: the order the cashier is serving stays on screen. When
@@ -203,5 +239,5 @@ export function useTerminalPaymentsService(): void {
 			if (bindingRef.current === binding) bindingRef.current = null;
 			if (getTerminalPaymentsService() === service) stopTerminalPaymentsService();
 		};
-	}, [store, site, manager]);
+	}, [store, site, manager, userDB]);
 }

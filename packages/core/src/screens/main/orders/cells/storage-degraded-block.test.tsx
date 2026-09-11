@@ -234,3 +234,5 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 		expect(mockPush).not.toHaveBeenCalled();
 	});
 });
+
+jest.mock('../../../../services/register/use-register', () => ({ useRegister: () => null }));

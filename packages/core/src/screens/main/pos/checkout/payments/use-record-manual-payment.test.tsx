@@ -24,6 +24,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
+		site: { uuid: 'site' },
 		wpCredentials: { id: 7 },
 		store: { id: 9, currency: 'EUR', price_num_decimals: 2 },
 	}),
@@ -209,3 +210,155 @@ it('localizes an amount-exceeds-balance refusal with the server balance', async 
 		expect.any(Object)
 	);
 });
+
+jest.mock('../../../../../services/register/register-document', () => ({
+	readRegister: async () => ({ id: 'register' }),
+}));
+jest.mock('../provenance/stamp-completion', () => ({
+	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
+		...meta_data,
+		{ key: '_wcpos_sale_counter', value: '1' },
+	],
+}));
+it('queues exactly one provenance-only patch after a full online manual payment mirror', async () => {
+	onlineStatus = 'online-website-available';
+	mockPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
+	const { result } = renderHook(() => useRecordManualPayment());
+	await act(() => result.current(order, method, { amount: 100 }));
+	expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch).toHaveBeenCalledWith({
+		document: order,
+		data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
+	});
+	expect(mockPost.mock.calls[0][1].payment).toMatchObject({
+		register_id: 'register',
+		session_id: null,
+	});
+});
+
+const mockPushDocument = jest.fn(async () => undefined);
+jest.mock('../../../contexts/use-push-document', () => ({
+	usePushDocument: () => mockPushDocument,
+}));
+
+it('logs the cart-safe error without enqueueing a payment when the provenance patch fails', async () => {
+	onlineStatus = 'online-website-available';
+	mockLocalPatch.mockResolvedValue(undefined);
+	const original = JSON.stringify(order.payload);
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await expect(result.current(order, method, { amount: 100 })).resolves.toEqual({
+		kind: 'failed',
+		reason: 'provenance_save_failed',
+	});
+
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		'Checkout failed',
+		expect.objectContaining({
+			code: 'CHECKOUT101',
+			showToast: true,
+			toast: { title: expect.any(String) },
+		})
+	);
+	expect(mockT).toHaveBeenCalledWith('pos_cart.checkout_failed', undefined);
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch.mock.calls[0][0].data).not.toHaveProperty('status');
+	expect(mockPushDocument).not.toHaveBeenCalled();
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockPatchEngineResident).not.toHaveBeenCalled();
+	expect(JSON.stringify(order.payload)).toBe(original);
+});
+
+it('awaits the provenance push before posting and preserves the tuple in the mirror', async () => {
+	onlineStatus = 'online-website-available';
+	const calls: string[] = [];
+	mockLocalPatch.mockImplementationOnce(async () => {
+		await Promise.resolve();
+		calls.push('patched');
+		return { document: order };
+	});
+	mockPushDocument.mockImplementationOnce(async () => {
+		await Promise.resolve();
+		calls.push('pushed');
+	});
+	mockPost.mockImplementationOnce(async () => {
+		calls.push('post');
+		return { data: { order: { status: 'completed', balance: '0.00' } } };
+	});
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await act(() => result.current(order, method, { amount: 100 }));
+
+	expect(calls).toEqual(['patched', 'pushed', 'post']);
+	expect(mockPushDocument).toHaveBeenCalledWith(order);
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({
+			changes: expect.objectContaining({
+				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
+			}),
+		})
+	);
+});
+
+it('does not post or enqueue a payment when the provenance push rejects', async () => {
+	onlineStatus = 'online-website-available';
+	mockPushDocument.mockRejectedValueOnce(new Error('push failed'));
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await expect(result.current(order, method, { amount: 100 })).resolves.toEqual({
+		kind: 'failed',
+		reason: 'provenance_save_failed',
+	});
+
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch.mock.calls[0][0].data).not.toHaveProperty('status');
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockPatchEngineResident).not.toHaveBeenCalled();
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		'Checkout failed',
+		expect.objectContaining({
+			code: 'CHECKOUT101',
+		})
+	);
+});
+
+it('mirrors a refused server status without allocating or patching provenance', async () => {
+	const stamp = jest.requireMock('../provenance/stamp-completion');
+	const completion = jest.spyOn(stamp, 'completionMeta');
+	onlineStatus = 'online-website-available';
+	mockPost.mockRejectedValueOnce({
+		response: {
+			data: { code: 'wcpos_order_already_paid', data: { order: { status: 'completed' } } },
+		},
+	});
+	const { result } = renderHook(() => useRecordManualPayment());
+	await expect(result.current(order, method, { amount: 40 })).resolves.toMatchObject({
+		kind: 'refused',
+	});
+	expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({ changes: expect.objectContaining({ status: 'completed' }) })
+	);
+	expect(completion).not.toHaveBeenCalled();
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+	completion.mockRestore();
+});
+
+it.each([false, true])(
+	'logs a failed accepted mirror without throwing (throws=%s)',
+	async (throws) => {
+		onlineStatus = 'online-website-available';
+		mockPost.mockResolvedValueOnce({ data: { order: { status: 'completed' } } });
+		if (throws) mockLocalPatch.mockRejectedValueOnce(new Error('storage failed'));
+		else mockLocalPatch.mockResolvedValueOnce(undefined);
+		const { result } = renderHook(() => useRecordManualPayment());
+		await expect(result.current(order, method, { amount: 40 })).resolves.toMatchObject({
+			kind: 'recorded',
+		});
+		expect(mockLoggerError).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+		);
+	}
+);

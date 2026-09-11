@@ -92,11 +92,12 @@ type OrderMetaData = NonNullable<import('@wcpos/database').OrderDocument['meta_d
  */
 export function ensurePosOrderIdentityMeta(
 	metaData: OrderMetaData | undefined,
-	identity: { userId: number | string; storeId: number; taxBasedOn?: string }
+	identity: { userId: number | string; storeId: number; taxBasedOn?: string; registerId?: string }
 ): OrderMetaData {
 	const existing = wooMetaCarrier.readIdentity(metaData);
 	let ensured = wooMetaCarrier.stampIdentity(metaData, {
 		userId: existing.cashierId ?? identity.userId,
+		registerId: existing.registerId ?? identity.registerId,
 		storeId: existing.storeId ?? identity.storeId,
 	}) as OrderMetaData;
 	if (identity.storeId === NO_STORE && existing.storeId === null) {

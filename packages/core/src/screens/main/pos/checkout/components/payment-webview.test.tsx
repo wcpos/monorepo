@@ -20,6 +20,23 @@ const mockSetCurrentOrderID = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockAdoptOrderSnapshot = jest.fn();
+const mockUserDB = {};
+const mockSite = { uuid: 'site' };
+let mockOnlineStatus = 'offline';
+const mockPushDocument = jest.fn();
+const mockLocalPatch = jest.fn();
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockOnlineStatus }),
+}));
+jest.mock('../../../contexts/use-push-document', () => ({
+	usePushDocument: () => mockPushDocument,
+}));
+jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+}));
+jest.mock('../provenance/stamp-completion', () => ({
+	completionMeta: async () => [{ key: '_wcpos_sale_counter', value: '1' }],
+}));
 let autoShowReceipt = false;
 const ORDER_UUID = '5b8e1a3c-2f4d-4a6b-9c8e-000000000042';
 
@@ -51,6 +68,7 @@ jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ userDB: mockUserDB, site: mockSite }),
 	useAppState: () => ({
 		wpCredentials: { access_token: 'jwt-token', access_token$: {} },
 	}),
@@ -993,3 +1011,56 @@ describe('PaymentWebview frame-status signal', () => {
 		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
 	});
 });
+
+it.each([false, true])(
+	'awaits provenance before opening online webview (save fails: %s)',
+	async (fails) => {
+		jest.clearAllMocks();
+		mockOnlineStatus = 'online-website-available';
+		webViewMounts = 0;
+		const order = makeOrder();
+		mockLocalPatch.mockResolvedValue(order);
+		let finish!: () => void;
+		mockPushDocument.mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve, reject) => {
+					finish = () => (fails ? reject(new Error('save failed')) : resolve());
+				})
+		);
+		const view = render(
+			<PaymentWebview
+				order={order}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		try {
+			await act(async () => {});
+			expect(mockLocalPatch).toHaveBeenLastCalledWith({
+				document: order,
+				data: { meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
+			});
+			expect(mockPushDocument).toHaveBeenLastCalledWith(order);
+			expect(webViewMounts).toBe(0);
+			await act(async () => finish());
+			expect(webViewMounts).toBe(fails ? 0 : 1);
+			expect(mockPushDocument).toHaveBeenCalledTimes(1);
+			if (fails) {
+				mockOnlineStatus = 'offline';
+				view.rerender(
+					<PaymentWebview
+						order={order}
+						setLoading={jest.fn()}
+						setFrameStatus={jest.fn()}
+						onStockRejection={() => false}
+					/>
+				);
+				expect(webViewMounts).toBe(0);
+			}
+		} finally {
+			view.unmount();
+			mockOnlineStatus = 'offline';
+		}
+	}
+);

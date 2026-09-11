@@ -93,3 +93,7 @@ export function derive(
 		method_ids: methodIds,
 	};
 }
+
+export function isCompletingStatus(status: string): boolean {
+	return !['pos-open', 'pos-partial', 'pending', 'failed', ''].includes(status);
+}

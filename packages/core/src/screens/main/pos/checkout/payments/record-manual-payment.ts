@@ -2,8 +2,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 import {
 	derive,
+	isCompletingStatus,
 	mintManualPayment,
 	readLedger,
+	toMinor,
 	upsertPaymentRow,
 	withLedger,
 } from '@wcpos/order-math';
@@ -38,10 +40,16 @@ export interface RecordManualPaymentDeps {
 	isOnline: () => boolean;
 	cashierId: number;
 	storeId: number | null;
+	registerId: string | null;
+	completionMeta?: (meta: MetaDataEntry[]) => Promise<MetaDataEntry[]>;
+	persistProvenance?: () => Promise<void>;
 	currency: string;
 	dp: number;
 	patchAndEnqueue: (changes: { meta_data: MetaDataEntry[]; status: string }) => Promise<void>;
-	mirror: (changes: { meta_data: MetaDataEntry[]; status?: string }) => Promise<void>;
+	mirror: (
+		changes: { meta_data: MetaDataEntry[]; status?: string },
+		options: { accepted: boolean }
+	) => Promise<void>;
 	/**
 	 * The order's status as the server holds it, for a refusal whose body omits the
 	 * summary. `null` when the server cannot be asked — the mirror then leaves the
@@ -67,6 +75,7 @@ export type RecordManualPaymentOutcome =
 			order: OrderPaymentSummary | null;
 	  }
 	| { kind: 'refused'; reason: RefusalReason; row: PaymentRow; order: OrderPaymentSummary | null }
+	| { kind: 'failed'; reason: 'provenance_save_failed' }
 	| { kind: 'invalid'; reason: InvalidReason };
 
 export class RecordManualPaymentError extends Error {
@@ -128,6 +137,7 @@ export async function recordManualPayment(
 		orderId: order.id,
 		cashierId: deps.cashierId,
 		storeId: deps.storeId,
+		registerId: deps.registerId,
 		recordedOffline: !online,
 		now: deps.now ?? (() => new Date().toISOString()),
 		uuid: deps.uuid ?? uuidv4,
@@ -140,14 +150,26 @@ export async function recordManualPayment(
 	const writeOffline = async (row: PaymentRow): Promise<RecordManualPaymentOutcome> => {
 		const offlineRow = row.recorded_offline ? row : { ...row, recorded_offline: true };
 		const ledger = upsertPaymentRow(readLedger(order.meta_data), offlineRow);
+		const status = derive(order.total, ledger, [method], { dp: deps.dp }).status;
+		const meta = withLedger(order.meta_data, ledger);
 		await deps.patchAndEnqueue({
-			meta_data: withLedger(order.meta_data, ledger),
-			status: derive(order.total, ledger, [method], { dp: deps.dp }).status,
+			meta_data:
+				isCompletingStatus(status) && deps.completionMeta ? await deps.completionMeta(meta) : meta,
+			status,
 		});
 		return { kind: 'recorded', via: 'offline', row: offlineRow, order: null };
 	};
 
 	if (!online) return writeOffline(minted.row);
+
+	const { balance } = derive(order.total, readLedger(order.meta_data), [method], { dp: deps.dp });
+	if (toMinor(minted.row.amount, deps.dp) === toMinor(balance, deps.dp)) {
+		try {
+			await deps.persistProvenance?.();
+		} catch {
+			return { kind: 'failed', reason: 'provenance_save_failed' };
+		}
+	}
 
 	// Only the request is inside the try: once the server has answered 2xx the row is
 	// recorded, and a failure while mirroring it locally must surface as that failure —
@@ -185,10 +207,11 @@ export async function recordManualPayment(
 			}
 			const outcome = { kind: 'refused', reason, row: failedRow, order: serverOrder } as const;
 			try {
-				await deps.mirror({
+				const changes = {
 					meta_data: metaDataWith(failedRow),
 					...(authoritativeStatus ? { status: authoritativeStatus } : {}),
-				});
+				};
+				await deps.mirror(changes, { accepted: false });
 			} catch (mirrorError) {
 				throw new RecordManualPaymentMirrorError(outcome, mirrorError);
 			}
@@ -213,10 +236,11 @@ export async function recordManualPayment(
 	const serverOrder = accepted.order ?? null;
 	const outcome = { kind: 'recorded', via: 'online', row: serverRow, order: serverOrder } as const;
 	try {
-		await deps.mirror({
+		const changes = {
 			meta_data: metaDataWith(serverRow),
 			...(serverOrder ? { status: serverOrder.status } : {}),
-		});
+		};
+		await deps.mirror(changes, { accepted: true });
 	} catch (mirrorError) {
 		throw new RecordManualPaymentMirrorError(outcome, mirrorError);
 	}

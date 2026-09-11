@@ -23,6 +23,7 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { getRegisterId } from '../../../../services/register/register-document';
 import { useT } from '../../../../contexts/translations';
 import {
 	getTemporaryOrder,
@@ -280,6 +281,7 @@ export async function patchAndEnqueueEngineResident(input: {
 	recordId: string;
 	changes: Record<string, unknown>;
 	initial?: ScopedEngineResident;
+	registerId?: string;
 }): Promise<EngineResident> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		// The rollback guard's baseline is the CAPTURED scope's own id, not a
@@ -297,10 +299,33 @@ export async function patchAndEnqueueEngineResident(input: {
 			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 		}
 		const previousResident = cloneDeep(resident.toJSON());
+		let changes = input.changes;
+		const registerId = input.registerId ?? getRegisterId();
+		const meta = (residentPayload(resident).meta_data ?? []) as { key?: string; value?: unknown }[];
+		const residentRegister = meta.find(({ key }) => key === '_wcpos_register');
+		if (
+			input.collection === 'orders' &&
+			residentRegister &&
+			Array.isArray(changes.meta_data) &&
+			!changes.meta_data.some(({ key }) => key === '_wcpos_register')
+		) {
+			changes = { ...changes, meta_data: [...changes.meta_data, residentRegister] };
+		}
+		if (
+			input.collection === 'orders' &&
+			registerId &&
+			!meta.some(({ key }) => key === '_wcpos_register')
+		) {
+			const incoming = changes.meta_data === undefined ? meta : changes.meta_data;
+			if (Array.isArray(incoming) && !incoming.some(({ key }) => key === '_wcpos_register')) {
+				const meta_data = [...incoming, { key: '_wcpos_register', value: registerId }];
+				changes = { ...changes, meta_data };
+			}
+		}
 		await applyEngineResidentChanges(
 			resident,
 			input.collection,
-			input.changes,
+			changes,
 			scopeBarcodeSelectors(scope, input.collection)
 		);
 
@@ -315,7 +340,7 @@ export async function patchAndEnqueueEngineResident(input: {
 				recordId: input.recordId,
 				payload: withoutEchoedBarcode(
 					input.collection,
-					input.changes,
+					changes,
 					(previousResident.payload ?? {}) as Record<string, unknown>
 				),
 			});

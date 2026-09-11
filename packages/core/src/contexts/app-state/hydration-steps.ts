@@ -31,6 +31,7 @@ import {
 	normalizeStorePayload,
 	type ServerStorePayload,
 } from '../../utils/merge-stores';
+import { ensureRegister } from '../../services/register/register-document';
 import { upsertSiteData } from '../../utils/site-writes';
 import { initialProps } from './initial-props';
 
@@ -876,6 +877,8 @@ const initializeUserDBStep: HydrationStep = {
 		if (!user) {
 			user = await userDB.users.insert({ first_name: 'Global', last_name: 'User' });
 		}
+
+		await ensureRegister(userDB);
 
 		const result = {
 			userDB,

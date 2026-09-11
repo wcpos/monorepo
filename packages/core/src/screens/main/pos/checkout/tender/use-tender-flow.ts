@@ -23,6 +23,9 @@ import {
 	getTerminalPaymentsService,
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
+import { readRegister } from '../../../../../services/register/register-document';
+import { persistProvenance } from '../provenance/persist-provenance';
+import { completionMeta } from '../provenance/stamp-completion';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -33,6 +36,7 @@ import {
 	setTenderMethod,
 	useTenderMethod,
 } from '../checkout-mode';
+import { usePushDocument } from '../../../contexts/use-push-document';
 import { useOrderSaveState } from '../use-order-save-state';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
@@ -134,7 +138,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
 	const busyRef = React.useRef(false);
 	const payload = useRecordField(order, (record) => record.payload);
-	const { store, wpCredentials } = useStoreSession();
+	const { store, wpCredentials, userDB, site } = useStoreSession();
 	useResumeTerminalLegs(order);
 	const terminalLeg = useTerminalLeg(order.uuid);
 	const service = getTerminalPaymentsService();
@@ -144,6 +148,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
 	const { localPatch } = useLocalMutation();
+	const pushDocument = usePushDocument();
 	// A save queued offline is an order the server does not have yet (or has stale): even
 	// once connectivity is back and before the ack lands, tender must behave as offline —
 	// online-only tiles stay disabled and a works-offline tile records its local leg.
@@ -304,10 +309,26 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			return;
 		busyRef.current = true;
 		setBusy(true);
+		let savingProvenance = false;
+		const saveProvenance = async () => {
+			if (!online || queuedOffline || !payload.id || entryAppliedMinor !== balanceMinor) return;
+			savingProvenance = true;
+			await persistProvenance({ order, localPatch, pushDocument, userDB, siteUuid: site.uuid! });
+			savingProvenance = false;
+		};
 		try {
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
-				const result = await localPatch({ document: order, data: { status: 'completed' } });
+				const result = await localPatch({
+					document: order,
+					data: {
+						status: 'completed',
+						meta_data: await completionMeta(order.getLatest().payload, {
+							userDB,
+							siteUuid: site.uuid!,
+						}),
+					},
+				});
 				if (!result) throw new Error('zero_balance_completion_failed');
 				await completeOrderFlow({ refresh: false });
 				return;
@@ -358,6 +379,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (!service) throw new Error('terminal_service_unavailable');
 				const offline = !online || queuedOffline || !payload.id;
 				const minted = mintDevicePayment({
+					registerId: (await readRegister(userDB))?.id ?? null,
 					method,
 					transport: deviceTransport,
 					recordedOffline: offline,
@@ -371,6 +393,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					uuid: uuidv4,
 				});
 				if (!minted.ok) throw new Error(minted.reason);
+				await saveProvenance();
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -412,6 +435,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				}
 				if (!service) throw new Error('terminal_service_unavailable');
 				const minted = mintServerPayment({
+					registerId: (await readRegister(userDB))?.id ?? null,
 					method,
 					orderId: payload.id,
 					amount: fromMinor(entryAppliedMinor, dp),
@@ -423,6 +447,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					uuid: uuidv4,
 				});
 				if (!minted.ok) throw new Error(minted.reason);
+				await saveProvenance();
 				intentRow.current = minted.row.id;
 				service.begin({
 					dp,
@@ -456,11 +481,25 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				setTenderMethod(order.uuid, null);
 				return;
 			}
+			if (outcome.kind === 'failed') {
+				reducerDispatch({ type: 'back' });
+				setTenderMethod(order.uuid, null);
+				return;
+			}
 			logger.error(t('pos_checkout.payment_not_recorded'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
 			});
 		} catch (error) {
+			if (savingProvenance) {
+				logger.error('Checkout failed', {
+					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					showToast: true,
+					toast: { title: t('pos_cart.checkout_failed') },
+					context: { error: error instanceof Error ? error.message : String(error) },
+				});
+				return;
+			}
 			logger.error(t('pos_checkout.payment_not_recorded'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
@@ -480,6 +519,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		dp,
 		entryAppliedMinor,
 		method,
+		userDB,
+		site.uuid,
+		pushDocument,
 		localPatch,
 		order,
 		recordManualPayment,

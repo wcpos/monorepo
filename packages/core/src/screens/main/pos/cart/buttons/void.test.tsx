@@ -299,3 +299,57 @@ describe('VoidButton', () => {
 		});
 	});
 });
+
+it('stamps the register on the refused-void pending fallback through the real writer', async () => {
+	const query = jest.requireMock('@wcpos/query');
+	const realQuery = jest.requireActual('@wcpos/query');
+	for (const key of [
+		'COLLECTION_VOCABULARY',
+		'adapterDerivedFieldsFor',
+		'promotedColumnsFor',
+		'engineCollection',
+	])
+		query[key] = realQuery[key];
+	const { patchAndEnqueueEngineResident } = jest.requireActual(
+		'../../../hooks/mutations/use-local-mutation'
+	);
+	const { readRegister } = jest.requireActual('../../../../../services/register/register-document');
+	await readRegister({ getLocal: async () => ({ toJSON: () => ({ data: { id: 'register' } }) }) });
+	const stored = { payload: { status: 'pos-open' } };
+	const resident = {
+		toJSON: () => stored,
+		incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+			Object.assign(stored, modify(stored)),
+	};
+	const manager = {
+		engine: {
+			whenActive: async () => ({
+				scopeId: 'scope',
+				barcodeSelectors: {},
+				database: { collections: { orders: { findOne: () => ({ exec: async () => resident }) } } },
+			}),
+			status: () => ({ activeScopeId: 'scope' }),
+			write: mockEngine.write,
+		},
+	};
+	jest.clearAllMocks();
+	mockOutcomes = ['rejected'];
+	mockConnectivity = 'online';
+	mockFindEngineResident.mockResolvedValue({});
+	mockPatchAndEnqueueEngineResident.mockImplementationOnce((input) =>
+		patchAndEnqueueEngineResident({ ...input, manager })
+	);
+	render(<VoidButton />);
+	fireEvent.click(screen.getByTestId('void-button'));
+	await waitFor(() =>
+		expect(mockEngine.write).toHaveBeenCalledWith(
+			expect.objectContaining({
+				payload: { status: 'pending', meta_data: [{ key: '_wcpos_register', value: 'register' }] },
+			})
+		)
+	);
+});
+
+jest.mock('../../contexts/current-order/temporary-order', () => ({}));
+
+jest.mock('../../../../../hooks/use-local-date', () => ({}));

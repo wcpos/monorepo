@@ -58,6 +58,10 @@ it('stores only the reader id, separately for each method', async () => {
 	expect(await preferences.get('terminal')).toBe('c');
 	expect(mockStoreDB.addState).toHaveBeenCalledWith('terminal-readers_v1');
 });
+const mockPushDocument = jest.fn(async () => order);
+jest.mock('../../../contexts/use-push-document', () => ({
+	usePushDocument: () => mockPushDocument,
+}));
 const mockBegin = jest.fn();
 const mockDismiss = jest.fn(() => {
 	mockLeg = null;
@@ -92,6 +96,9 @@ jest.mock('../payments/server/use-resume-terminal-legs', () => ({
 let mockUuid = 0;
 jest.mock('uuid', () => ({ v4: () => `payment-${++mockUuid}` }));
 const mockRecordManualPayment = jest.fn();
+let mockUseRealManual = false;
+const mockManualPost = jest.fn();
+const mockManualMirror = jest.fn();
 const mockRecordOptions = jest.fn();
 const mockVoidPayments = jest.fn();
 const mockCompleteOrderFlow = jest.fn();
@@ -150,11 +157,15 @@ let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
 
 jest.mock('../../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({ post: jest.fn() }),
+	useRestHttpClient: () => ({ post: mockManualPost }),
 }));
 jest.mock('../payments', () => ({
 	useRecordManualPayment: (options: unknown) => {
 		mockRecordOptions(options);
+		if (mockUseRealManual)
+			return jest
+				.requireActual('../payments/use-record-manual-payment')
+				.useRecordManualPayment(options);
 		return mockRecordManualPayment;
 	},
 	useVoidPayments: () => mockVoidPayments,
@@ -182,15 +193,18 @@ jest.mock('../../../hooks/use-storage-health', () => ({
 }));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+	patchEngineResident: (input: unknown) => mockManualMirror(input),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		storeDB: mockStoreDB,
+		site: { uuid: 'site' },
 		store: { price_num_decimals: 2, currency: 'EUR', id: 9 },
 		wpCredentials: { id: 7 },
 	}),
 }));
 jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({}),
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
 		select({ payload: mockPayload }),
 }));
@@ -207,7 +221,10 @@ jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 
-const order = { uuid: 'order-1' } as EngineRecord<'orders'>;
+const order = {
+	uuid: 'order-1',
+	getLatest: () => ({ payload: mockPayload }),
+} as EngineRecord<'orders'>;
 const recorded = { kind: 'recorded', via: 'online' } as const;
 
 function payment(overrides: Partial<PaymentRow> = {}): PaymentRow {
@@ -441,7 +458,10 @@ describe('useTenderFlow', () => {
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: order,
-			data: { status: 'completed' },
+			data: {
+				status: 'completed',
+				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
+			},
 		});
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: false });
 	});
@@ -1078,4 +1098,137 @@ it('reopens a device tile via its queued transport when the selected transport n
 	act(() => result.current.pickMethod(deviceMethod.id));
 	expect(result.current.deviceTransport).toBe('bluetooth');
 	expect(result.current.tiles[0].disabled).toBe(false);
+});
+
+jest.mock('../../../../../services/register/register-document', () => ({
+	readRegister: async () => ({ id: 'register' }),
+}));
+jest.mock('../provenance/stamp-completion', () => ({
+	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
+		...meta_data,
+		{ key: '_wcpos_sale_counter', value: '1' },
+	],
+}));
+it('zero balance writes completion and provenance together exactly once', async () => {
+	mockPayload = { total: '0.00', meta_data: [] };
+	mockLocalPatch.mockClear();
+	mockBlockIfDegraded.mockReturnValue(false);
+	const { result } = renderHook(() => useTenderFlow(order));
+	await act(async () => result.current.takeTender());
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch).toHaveBeenCalledWith({
+		document: order,
+		data: { status: 'completed', meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
+	});
+});
+
+it('full manual online tender enqueues one follow-up provenance patch after the mirror', async () => {
+	mockUseRealManual = true;
+	mockLocalPatch.mockClear();
+	mockManualMirror.mockClear();
+	mockPayload = { id: 42, total: '10.00', meta_data: [] };
+	mockMethods = methods;
+	mockOnlineStatus = 'online-website-available';
+	mockBlockIfDegraded.mockReturnValue(false);
+	mockManualPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
+	resetCheckoutMode();
+	const view = renderHook(() => useTenderFlow(order));
+	try {
+		act(() => view.result.current.pickMethod('pos_cash'));
+		await act(async () => view.result.current.takeTender());
+		expect(mockManualMirror).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
+		});
+	} finally {
+		view.unmount();
+		mockUseRealManual = false;
+	}
+});
+
+describe('provider completion provenance before intent', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		mockLeg = null;
+		mockRealService = null;
+		mockMethods = [terminal];
+		mockOnlineStatus = 'online-website-available';
+		mockPayload = { id: 42, total: '92.95', meta_data: [] };
+		mockLocalPatch.mockResolvedValue(order);
+		mockPushDocument.mockResolvedValue(order);
+		mockBlockIfDegraded.mockReturnValue(false);
+	});
+	it('awaits the explicit tuple write before beginning the server leg', async () => {
+		let finish!: (value: typeof order) => void;
+		mockPushDocument.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					finish = resolve;
+				})
+		);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		let take!: Promise<void>;
+		await act(async () => {
+			take = result.current.takeTender();
+		});
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
+		});
+		expect(mockPushDocument).toHaveBeenCalledWith(order);
+		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
+			mockPushDocument.mock.invocationCallOrder[0]
+		);
+		expect(mockBegin).not.toHaveBeenCalled();
+		await act(async () => {
+			finish(order);
+			await take;
+		});
+		expect(mockBegin).toHaveBeenCalledTimes(1);
+	});
+	it('does not begin a provider leg after a failed explicit save', async () => {
+		mockPushDocument.mockRejectedValueOnce(new Error('save failed'));
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		await act(async () => result.current.takeTender());
+		expect(mockBegin).not.toHaveBeenCalled();
+		expect(mockError).toHaveBeenCalledWith(
+			'Checkout failed',
+			expect.objectContaining({
+				showToast: true,
+				toast: { title: 'pos_cart.checkout_failed' },
+			})
+		);
+	});
+	it('does not stamp a partial server leg', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
+		await act(async () => result.current.takeTender());
+		expect(mockBegin).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+	});
+});
+
+it('resets a failed manual tender without logging a second error or toast', async () => {
+	jest.clearAllMocks();
+	resetCheckoutMode();
+	mockLeg = null;
+	mockMethods = methods;
+	mockPayload = { id: 42, total: '10.00', meta_data: [] };
+	mockRecordManualPayment.mockResolvedValueOnce({ kind: 'failed' });
+	const { result } = renderHook(() => useTenderFlow(order));
+	act(() => result.current.pickMethod('pos_cash'));
+	await act(async () => result.current.takeTender());
+	expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+	expect(mockError).not.toHaveBeenCalled();
+	expect(mockInfo).not.toHaveBeenCalled();
+	expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
+	expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
+	expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
 });

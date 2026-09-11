@@ -6,11 +6,18 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+import {
+	hasSaleProvenance,
+	isCompletingStatus,
+	type PaymentMethodDescriptor,
+} from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
+import { readRegister } from '../../../../../services/register/register-document';
+import { completionMeta } from '../provenance/stamp-completion';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { usePushDocument } from '../../../contexts/use-push-document';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { recordManualPayment } from './record-manual-payment';
@@ -46,8 +53,9 @@ export function useRecordManualPayment(
 	const http = useRestHttpClient();
 	const onlineStatus = useOnlineStatus();
 	const forceOffline = options.offline === true;
-	const { wpCredentials, store } = useStoreSession();
+	const { wpCredentials, store, userDB, site } = useStoreSession();
 	const { localPatch } = useLocalMutation();
+	const pushDocument = usePushDocument();
 	const manager = useQueryRuntime();
 	const t = useT();
 
@@ -62,11 +70,25 @@ export function useRecordManualPayment(
 				// RxDB serves object fields as Proxies; the ledger helpers need plain data.
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
-			return recordManualPayment(paymentOrder, method, input, {
+			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post: (url, body) => http.post(url, body),
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
+				registerId: (await readRegister(userDB))?.id ?? null,
+				completionMeta: (meta_data) =>
+					completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! }),
+				persistProvenance: async () => {
+					const meta_data = await completionMeta(order.getLatest().payload, {
+						userDB,
+						siteUuid: site.uuid!,
+					});
+					const patched = await localPatch({ document: order, data: { meta_data } });
+					if (!patched) throw new Error('provenance_save_failed');
+					await pushDocument(order);
+					// Preserve the pre-stamped tuple in the subsequent payment mirror.
+					paymentOrder.meta_data = meta_data;
+				},
 				currency: store.currency ?? '',
 				dp: store.price_num_decimals ?? 2,
 				patchAndEnqueue: async (changes) => {
@@ -78,13 +100,29 @@ export function useRecordManualPayment(
 					const status = (response?.data as { status?: unknown } | undefined)?.status;
 					return typeof status === 'string' ? status : null;
 				},
-				mirror: async (changes) => {
-					await patchEngineResident({
-						manager,
-						collection: 'orders',
-						recordId: order.uuid,
-						changes,
-					});
+				mirror: async (changes, { accepted }) => {
+					try {
+						await patchEngineResident({
+							manager,
+							collection: 'orders',
+							recordId: order.uuid,
+							changes,
+						});
+						if (
+							accepted &&
+							isCompletingStatus(changes.status ?? '') &&
+							!hasSaleProvenance(changes.meta_data)
+						) {
+							const meta_data = await completionMeta(changes, { userDB, siteUuid: site.uuid! });
+							const patched = await localPatch({ document: order, data: { meta_data } });
+							if (!patched) throw new Error('provenance_save_failed');
+						}
+					} catch {
+						logger.error(t('pos_cart.checkout_failed'), {
+							code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+							showToast: true,
+						});
+					}
 				},
 				raiseAttention: ({ row, order: summary, reason }) => {
 					const number = paymentOrder.number || paymentOrder.uuid.slice(0, 8);
@@ -120,7 +158,28 @@ export function useRecordManualPayment(
 					});
 				},
 			});
+			if (outcome.kind === 'failed') {
+				logger.error('Checkout failed', {
+					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					showToast: true,
+					toast: { title: t('pos_cart.checkout_failed') },
+					context: { error: outcome.reason },
+				});
+			}
+			return outcome;
 		},
-		[http, forceOffline, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
+		[
+			userDB,
+			site.uuid,
+			http,
+			forceOffline,
+			onlineStatus.status,
+			wpCredentials.id,
+			store,
+			localPatch,
+			pushDocument,
+			manager,
+			t,
+		]
 	);
 }

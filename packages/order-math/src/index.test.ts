@@ -11,10 +11,12 @@ test('public value surface is exactly the spec', () => {
 		'derive',
 		'fromMinor',
 		'getNetPaymentTotal',
+		'hasSaleProvenance',
 		'isActiveCouponLine',
 		'isActiveFeeLine',
 		'isActiveLineItem',
 		'isActiveShippingLine',
+		'isCompletingStatus',
 		'mintDevicePayment',
 		'mintManualPayment',
 		'mintServerPayment',
@@ -24,6 +26,7 @@ test('public value surface is exactly the spec', () => {
 		// rows and the deduction were computed differently and could disagree on
 		// screen. One exported function is the smallest fix; see net-payment.test.ts.
 		'refundValue',
+		'saleProvenanceMeta',
 		// Added 2026-08-23 (#1472): the cart's money write must not sit behind a
 		// coupon-reference fetch, and settleCart's missing-coupon gate makes it. The
 		// aggregate over the persisted lines needs no coupon data, so it gets its own
@@ -34,5 +37,6 @@ test('public value surface is exactly the spec', () => {
 		'toMinor',
 		'upsertPaymentRow',
 		'withLedger',
+		'withSaleProvenance',
 	]);
 });

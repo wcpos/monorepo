@@ -382,3 +382,67 @@ describe('useCheckoutSession', () => {
 		});
 	});
 });
+
+const mockProvenancePatch = jest.fn(async () => ({ document: order }));
+const mockProvenancePush = jest.fn(async (_order: unknown): Promise<void> => undefined);
+jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: mockProvenancePatch }),
+}));
+jest.mock('../../../contexts/use-push-document', () => ({
+	usePushDocument: () => mockProvenancePush,
+}));
+jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ userDB: {}, site: { uuid: 'site' } }),
+}));
+jest.mock('../provenance/stamp-completion', () => ({
+	completionMeta: async () => [{ key: '_wcpos_sale_counter', value: '1' }],
+}));
+
+describe('contract provenance preparation', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockGet.mockReset().mockResolvedValue({
+			data: [{ id: 'stripe_terminal_for_woocommerce', capabilities: { supports_checkout: true } }],
+		});
+		mockPost.mockReset().mockResolvedValue({ data: { status: 'awaiting_customer' } });
+	});
+	it('awaits the local patch and push before posting checkout', async () => {
+		let release!: () => void;
+		mockProvenancePush.mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				})
+		);
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		let pending!: Promise<void>;
+		act(() => {
+			pending = result.current.startCheckout();
+		});
+		await waitFor(() => expect(mockProvenancePush).toHaveBeenCalledWith(order));
+		expect(mockProvenancePatch).toHaveBeenCalledWith({
+			document: order,
+			data: { meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
+		});
+		expect(mockPost).not.toHaveBeenCalled();
+		await act(async () => {
+			release();
+			await pending;
+		});
+		expect(mockPost).toHaveBeenCalledWith(
+			'orders/42/checkout',
+			expect.anything(),
+			expect.anything()
+		);
+	});
+	it.each(['patch', 'push'])('posts nothing if the provenance %s fails', async (failure) => {
+		if (failure === 'patch') mockProvenancePatch.mockResolvedValueOnce(undefined as never);
+		else mockProvenancePush.mockRejectedValueOnce(new Error('push failed'));
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(() => result.current.startCheckout());
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(result.current.error).toBe('pos_cart.checkout_failed');
+	});
+});

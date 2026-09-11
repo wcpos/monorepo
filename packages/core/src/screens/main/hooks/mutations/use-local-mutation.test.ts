@@ -922,3 +922,157 @@ describe('useLocalMutation', () => {
 		expect(mockWrite).toHaveBeenCalledTimes(2);
 	});
 });
+
+jest.mock('../../../../services/register/use-register', () => ({ useRegister: () => null }));
+
+it('register attribution starts with resident metadata and retains a simultaneous ledger edit', async () => {
+	const { patchAndEnqueueEngineResident } = await import('./use-local-mutation');
+	activeScopeId = 'scope-1';
+	mockStatus.mockReturnValue({ activeScopeId });
+	mockWrite.mockResolvedValue({ mutationId: 'register-write' });
+	const meta = [
+		{ id: 1, key: 'custom', value: 'keep' },
+		{ key: '_pos_user', value: 'original' },
+		{ key: '_wcpos_payments', value: 'old' },
+	];
+	const stored = { payload: { meta_data: meta } };
+	const resident = {
+		toJSON: () => stored,
+		incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+			Object.assign(stored, modify(stored)),
+	};
+	mockFindOneExec.mockResolvedValue(resident);
+	const input = {
+		manager: jest.requireMock('@wcpos/query').useQueryRuntime(),
+		collection: 'orders' as const,
+		recordId: 'order',
+		registerId: 'register',
+		changes: { meta_data: [{ key: '_wcpos_payments', value: 'new' }] },
+	};
+	await patchAndEnqueueEngineResident(input);
+	expect(mockWrite).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			payload: {
+				// A caller-supplied array is taken as-is (never merged with resident
+				// entries, which could collapse repeated keys); only the register is appended.
+				meta_data: [
+					{ key: '_wcpos_payments', value: 'new' },
+					{ key: '_wcpos_register', value: 'register' },
+				],
+			},
+		})
+	);
+	await patchAndEnqueueEngineResident({
+		...input,
+		registerId: 'other',
+		changes: { status: 'processing' },
+	});
+	expect(stored.payload.meta_data).toContainEqual({ key: '_wcpos_register', value: 'register' });
+});
+
+describe('register metadata per attempt', () => {
+	it.each([false, true])(
+		'preserves duplicate entries with caller metadata=%s',
+		async (supplied) => {
+			const { patchAndEnqueueEngineResident } = await import('./use-local-mutation');
+			const meta = [
+				{ id: 1, key: 'same', value: 'a' },
+				{ id: 2, key: 'same', value: 'b' },
+			];
+			const incoming = [{ id: 3, key: 'caller', value: 'c' }];
+			const stored = { payload: { meta_data: meta } };
+			mockFindOneExec.mockResolvedValue({
+				toJSON: () => stored,
+				incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+					Object.assign(stored, modify(stored)),
+			});
+			activeScopeId = 'scope-1';
+			mockStatus.mockReturnValue({ activeScopeId });
+			mockWrite.mockResolvedValue({});
+			await patchAndEnqueueEngineResident({
+				manager: jest.requireMock('@wcpos/query').useQueryRuntime(),
+				collection: 'orders',
+				recordId: 'o',
+				registerId: 'r',
+				changes: supplied ? { meta_data: incoming } : { status: 'pending' },
+			});
+			expect(stored.payload.meta_data).toEqual([
+				...(supplied ? incoming : meta),
+				{ key: '_wcpos_register', value: 'r' },
+			]);
+		}
+	);
+
+	it('recomputes the retry from original changes rather than the first stamped array', async () => {
+		const { patchAndEnqueueEngineResident } = await import('./use-local-mutation');
+		const resident = (value: string) => {
+			const stored = { payload: { meta_data: [{ key: 'scope', value }] } };
+			return {
+				toJSON: () => stored,
+				incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+					Object.assign(stored, modify(stored)),
+			};
+		};
+		activeScopeId = 'scope-1';
+		mockFindOneExec
+			.mockResolvedValueOnce(resident('first'))
+			.mockResolvedValueOnce(resident('second'));
+		mockStatus.mockImplementation(() => ({ activeScopeId }));
+		mockWrite
+			.mockClear()
+			.mockImplementationOnce(async () => {
+				activeScopeId = 'scope-2';
+			})
+			.mockResolvedValueOnce({});
+		const changes = Object.freeze({ status: 'pending' });
+		await patchAndEnqueueEngineResident({
+			manager: jest.requireMock('@wcpos/query').useQueryRuntime(),
+			collection: 'orders',
+			recordId: 'o',
+			registerId: 'r',
+			changes,
+		});
+		const first = mockWrite.mock.calls[0][0].payload.meta_data;
+		const second = mockWrite.mock.calls[1][0].payload.meta_data;
+		expect(second).not.toBe(first);
+		expect(second).toEqual([
+			{ key: 'scope', value: 'second' },
+			{ key: '_wcpos_register', value: 'r' },
+		]);
+		expect(changes).toEqual({ status: 'pending' });
+	});
+});
+
+it.each([undefined, 17])(
+	'carries only the resident register into replacement metadata (id=%s)',
+	async (id) => {
+		const { patchAndEnqueueEngineResident } = await import('./use-local-mutation');
+		const register = {
+			...(id === undefined ? {} : { id }),
+			key: '_wcpos_register',
+			value: 'original',
+		};
+		const stored = { payload: { meta_data: [register, { key: 'resident-only', value: 'drop' }] } };
+		mockFindOneExec.mockResolvedValue({
+			toJSON: () => stored,
+			incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+				Object.assign(stored, modify(stored)),
+		});
+		activeScopeId = 'scope-1';
+		mockStatus.mockReturnValue({ activeScopeId });
+		mockWrite.mockResolvedValue({});
+		await patchAndEnqueueEngineResident({
+			manager: jest.requireMock('@wcpos/query').useQueryRuntime(),
+			collection: 'orders',
+			recordId: 'o',
+			registerId: 'different',
+			changes: { meta_data: [{ key: 'caller', value: 'keep' }] },
+		});
+		expect(stored.payload.meta_data).toEqual([{ key: 'caller', value: 'keep' }, register]);
+		expect(mockWrite).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				payload: { meta_data: [{ key: 'caller', value: 'keep' }, register] },
+			})
+		);
+	}
+);

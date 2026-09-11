@@ -874,3 +874,7 @@ describe('useAddItemToOrder', () => {
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 	});
 });
+
+jest.mock('../../../../services/register/use-register', () => ({
+	useRegister: () => ({ id: 'register' }),
+}));

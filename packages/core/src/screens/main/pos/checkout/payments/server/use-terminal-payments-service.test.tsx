@@ -26,7 +26,7 @@ const mockResident = {
 		number: '42',
 		total: '10.00',
 		status: 'completed',
-		meta_data: withLedger([], [mockRow]),
+		meta_data: withLedger([{ key: '_wcpos_sale_counter', value: '1' }], [mockRow]),
 	},
 };
 const mockDocuments = new BehaviorSubject([mockResident]);
@@ -106,3 +106,123 @@ it('recovers a completed resident offline authorization without any open checkou
 	expect(mockPatch).not.toHaveBeenCalled(); // Already-persisted refs are not re-enqueued.
 	hook.unmount();
 });
+
+jest.mock('../../provenance/stamp-completion', () => ({
+	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
+		...meta_data,
+		{ key: '_wcpos_sale_counter', value: '2' },
+	],
+}));
+it('offline settlement puts the tuple and ledger in the same completing patch', async () => {
+	const original = mockResident.payload.meta_data;
+	mockResident.payload.meta_data = withLedger([], []);
+	const start = jest.spyOn(
+		await import('../../../../../../services/terminal-payments'),
+		'startTerminalPaymentsService'
+	);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	const options = start.mock.calls[0][0];
+	await options.patchAndEnqueue!('completed-order', { ...mockRow, status: 'captured' });
+	expect(mockPatch).toHaveBeenCalledWith(
+		expect.objectContaining({
+			data: {
+				status: 'completed',
+				meta_data: expect.arrayContaining([
+					{ key: '_wcpos_sale_counter', value: '2' },
+					expect.objectContaining({ key: '_wcpos_payments' }),
+				]),
+			},
+		})
+	);
+	hook.unmount();
+	start.mockRestore();
+	mockResident.payload.meta_data = original;
+});
+
+it('background terminal settlement enqueues one provenance-only patch after mirroring', async () => {
+	const original = mockResident.payload.meta_data;
+	mockResident.payload.meta_data = withLedger([], [mockRow]);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		await waitFor(() => expect(mockPatch).toHaveBeenCalledTimes(1));
+		expect(mockMirror).toHaveBeenCalledTimes(1);
+		expect(mockPatch).toHaveBeenCalledWith({
+			document: mockResident,
+			data: {
+				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '2' }]),
+			},
+		});
+	} finally {
+		hook.unmount();
+		mockResident.payload.meta_data = original;
+	}
+});
+
+const mockMirrorError = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({ error: (...args: unknown[]) => mockMirrorError(...args), warn: jest.fn() }),
+	getErrorMessage: String,
+}));
+it('reports a falsy terminal provenance patch without rejecting the recorded payment', async () => {
+	const original = mockResident.payload.meta_data;
+	mockResident.payload.meta_data = withLedger([], [mockRow]);
+	mockPatch.mockResolvedValueOnce(undefined as never);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		await waitFor(() =>
+			expect(mockMirrorError).toHaveBeenCalledWith(
+				'Checkout failed',
+				expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+			)
+		);
+		expect(getTerminalPaymentsService()?.get('completed-order')).toBeNull();
+	} finally {
+		hook.unmount();
+		mockResident.payload.meta_data = original;
+	}
+});
+
+it.each(['ledger', 'provenance'] as const)(
+	'preserves the rejection contract for a failed %s patch',
+	async (failure) => {
+		const original = mockResident.payload.meta_data;
+		mockResident.payload.meta_data = [];
+		const start = jest.spyOn(
+			await import('../../../../../../services/terminal-payments'),
+			'startTerminalPaymentsService'
+		);
+		const error = new Error(`${failure} write failed`);
+		if (failure === 'ledger') mockMirror.mockRejectedValueOnce(error);
+		else mockPatch.mockRejectedValueOnce(error);
+		const hook = renderHook(() => useTerminalPaymentsService());
+		try {
+			const result = start.mock.calls[0][0].mirror('completed-order', {
+				payment: { ...mockRow, status: 'captured' },
+				order: {
+					status: 'completed',
+					total: '10.00',
+					paid: '10.00',
+					balance: '0.00',
+					payment_method: 'device',
+					payment_method_title: 'Reader',
+				},
+			});
+			if (failure === 'ledger') {
+				await expect(result).rejects.toBe(error);
+				expect(mockPatch).not.toHaveBeenCalled();
+			} else {
+				await expect(result).resolves.toBeUndefined();
+				expect(mockMirrorError).toHaveBeenCalledWith(
+					'Checkout failed',
+					expect.objectContaining({
+						context: { error: String(error) },
+					})
+				);
+			}
+		} finally {
+			hook.unmount();
+			start.mockRestore();
+			mockResident.payload.meta_data = original;
+		}
+	}
+);

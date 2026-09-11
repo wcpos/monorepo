@@ -107,7 +107,7 @@ describe('mintManualPayment', () => {
 		// prettier-ignore
 		return {
 			method: method('cash', 'manual', true), amount: '42.50', tendered: '50', currency: 'USD',
-			orderId: null, cashierId: 9, storeId: 4, recordedOffline: true,
+			orderId: null, cashierId: 9, storeId: 4, registerId: null, recordedOffline: true,
 			now: () => clock, uuid: () => 'ABC-DEF',
 			...overrides,
 		};
@@ -150,6 +150,7 @@ describe('mintServerPayment', () => {
 		orderId: 42,
 		cashierId: 9,
 		storeId: 4,
+		registerId: null,
 		now: () => '2026-01-01T00:00:00Z',
 		uuid: () => 'ABC',
 	};
@@ -170,6 +171,8 @@ describe('mintServerPayment', () => {
 				refunded_amount: '0.000',
 				cashier_id: 9,
 				store_id: 4,
+				register_id: null,
+				session_id: null,
 				captured_at_gmt: null,
 				expires_at: null,
 				events: [],
@@ -201,6 +204,7 @@ describe('mintDevicePayment', () => {
 		orderId: 42,
 		cashierId: 9,
 		storeId: 4,
+		registerId: null,
 		now: () => '2026-01-01T00:00:00Z',
 		uuid: () => 'ABC',
 		transport: 'bluetooth' as const,
@@ -240,5 +244,32 @@ describe('mintDevicePayment', () => {
 			ok: false,
 			reason: 'amount_not_positive',
 		});
+	});
+});
+
+it.each(['manual', 'server', 'device'] as const)('mints %s provenance fields', (mode) => {
+	const input = {
+		method: method('card', mode),
+		amount: 1,
+		currency: 'USD',
+		orderId: 42,
+		cashierId: 1,
+		storeId: null,
+		registerId: 'register',
+		sessionId: 'session',
+		recordedOffline: false,
+		transport: 'bluetooth' as const,
+		now: () => 'now',
+		uuid: () => 'id',
+	};
+	const mint =
+		mode === 'manual'
+			? mintManualPayment
+			: mode === 'server'
+				? mintServerPayment
+				: mintDevicePayment;
+	expect(mint(input)).toMatchObject({ row: { register_id: 'register', session_id: 'session' } });
+	expect(mint({ ...input, registerId: null, sessionId: undefined })).toMatchObject({
+		row: { register_id: null, session_id: null },
 	});
 });
