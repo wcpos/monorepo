@@ -545,6 +545,34 @@ function buildTaxSummary(order: Record<string, any>): ReceiptTaxSummaryItem[] {
 }
 
 /**
+ * The sale's own time in its zone, or null when the stamped value or zone cannot be
+ * formatted (a bad clock or a non-IANA zone must not abort a receipt render).
+ */
+function formatSaleTime(
+	saleTime: unknown,
+	timeZone: string | undefined,
+	options: Intl.DateTimeFormatOptions
+): { datetime: string } | null {
+	if (typeof saleTime !== 'string' || !saleTime) return null;
+	const date = new Date(saleTime);
+	if (Number.isNaN(date.getTime())) return null;
+	try {
+		return {
+			datetime: new Intl.DateTimeFormat(
+				'en-US',
+				timeZone ? { ...options, timeZone } : options
+			).format(date),
+		};
+	} catch {
+		try {
+			return { datetime: new Intl.DateTimeFormat('en-US', options).format(date) };
+		} catch {
+			return null;
+		}
+	}
+}
+
+/**
  * Build template-facing tax mode signals from store settings.
  * Mirrors `Receipt_Store_Resolver::build_tax_section()`.
  */
@@ -958,15 +986,7 @@ export function buildReceiptData(
 		},
 		fiscal: {
 			document_type: 'sale',
-			sale_time:
-				typeof saleTime === 'string' && saleTime
-					? {
-							datetime: new Intl.DateTimeFormat('en-US', {
-								...printedFormatOptions,
-								timeZone: saleTz || storeTimezone,
-							}).format(new Date(saleTime)),
-						}
-					: null,
+			sale_time: formatSaleTime(saleTime, saleTz || storeTimezone, printedFormatOptions),
 			sale_tz: saleTz,
 			sale_counter: provenance.has('_wcpos_sale_counter')
 				? toNum(provenance.get('_wcpos_sale_counter'))

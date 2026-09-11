@@ -241,18 +241,27 @@ export function useTemplateRenderer({
 	}
 
 	const preparePrintContent = async (nextLocalPrintCount: () => Promise<number>) => {
-		const data =
-			!isOffline && orderId && apiReceiptData
-				? await fetchForPrint()
-				: order && store
-					? buildReceiptData(order, store, dp, {
-							getStatusLabel,
-							receiptI18n,
-							register,
-							pluginVersion,
-							printCount: await nextLocalPrintCount(),
-						})
-					: null;
+		const buildLocal = async () =>
+			order && store
+				? buildReceiptData(order, store, dp, {
+						getStatusLabel,
+						receiptI18n,
+						register,
+						pluginVersion,
+						printCount: await nextLocalPrintCount(),
+					})
+				: null;
+		// Online: the server counts and marks (even if the preview fetch failed or timed
+		// out). Only when the print fetch itself fails does the local counter take over.
+		let data: ReceiptData | Record<string, unknown> | null = null;
+		if (!isOffline && orderId) {
+			try {
+				data = await fetchForPrint();
+			} catch {
+				data = null;
+			}
+		}
+		data ??= await buildLocal();
 		if (!data) throw new Error('No receipt data available for printing');
 		return {
 			receiptData: data,

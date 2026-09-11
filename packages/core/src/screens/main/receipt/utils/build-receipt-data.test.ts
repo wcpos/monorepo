@@ -1092,3 +1092,24 @@ it('builds completed local sale identity and copy marking', () => {
 		fiscal: receipt.fiscal.sale_time ? { sale_time: receipt.fiscal.sale_time } : {},
 	});
 });
+
+it('a bad stamped zone or time never aborts the render', () => {
+	const badZone = buildReceiptData(
+		{
+			...mockOrder,
+			meta_data: [
+				{ key: '_wcpos_sale_time', value: '2026-09-11T10:30:00+02:00' },
+				{ key: '_wcpos_sale_tz', value: 'Not/AZone' },
+			],
+		},
+		mockStore,
+		2
+	);
+	expect(badZone.fiscal.sale_time?.datetime).toEqual(expect.any(String));
+	const badTime = buildReceiptData(
+		{ ...mockOrder, meta_data: [{ key: '_wcpos_sale_time', value: 'yesterday-ish' }] },
+		mockStore,
+		2
+	);
+	expect(badTime.fiscal.sale_time).toBeNull();
+});
