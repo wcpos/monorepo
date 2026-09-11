@@ -297,7 +297,7 @@ carried by the merchant's WordPress site as a mailbox; not the data path.
 ## Language — Cashiers & till
 
 Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, tickets #207, #208,
-#210, #209, #211, #212 and #213).
+#210, #209, #211, #212 and #213); the Register entry amended 2026-09-11 on #214.
 
 **Cashier**:
 A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
@@ -320,9 +320,13 @@ _Avoid_: profile, account (for this concept)
 
 **Register**:
 The identity of one installed till — the workstation a session is opened on. The
-left-hand menu item is "Register": it is keyed on this device's register, and the cashier
-signs in inside it. A register belongs to exactly one store: bound to the store chosen at
-its first sign-in, moved to another only by an administrator while it has no open session,
+register is not a page and has no menu item (ruled 2026-09-11 on wcpos/roadmap#214,
+superseding the menu-item sentence of #207): it is a state of the POS screen — the cart
+column is the "Open register" card while closed and the count while counting — plus one
+Register panel opened from a bar at the top of the cart while open. The cashier is whoever
+the app is signed in as; there is no register-level sign-in. A register belongs to exactly
+one store: bound to the store chosen at its first sign-in, when the POS screen asks for its
+name, moved to another only by an administrator while it has no open session,
 its numbering unbroken by the move. Every closure records the store the register belonged
 to when it was written, and a store's figures are summed from those closures, so moving a
 register moves no history. A store has any number of registers.
