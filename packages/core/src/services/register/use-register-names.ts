@@ -1,22 +1,30 @@
 import * as React from 'react';
 
+import { useStoreSession } from '../../contexts/app-state';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import { getRegisterSnapshot } from './register-document';
 import { useRegister } from './use-register';
 
-let names: Record<string, string> = {};
-let request: Promise<void> | undefined;
-const listeners = new Set<() => void>();
-const getSnapshot = () => names;
+type Directory = {
+	names: Record<string, string>;
+	request?: Promise<void>;
+	listeners: Set<() => void>;
+};
+const directories = new Map<string, Directory>();
 
-/** One directory request per app session; local identity never waits for the network. */
+/** One directory request per (site, store) per app session; local identity never waits for the network. */
 export function useRegisterNames(): Record<string, string> {
 	const http = useRestHttpClient();
+	const { site, store } = useStoreSession();
+	const key = `${site.uuid}:${store.id}`;
+	if (!directories.has(key)) directories.set(key, { names: {}, listeners: new Set() });
+	const entry = directories.get(key)!;
+	const getSnapshot = React.useCallback(() => entry.names, [entry]);
 	const register = useRegister() ?? getRegisterSnapshot();
 	const subscribe = React.useCallback(
 		(listener: () => void) => {
-			listeners.add(listener);
-			request ??= Promise.resolve()
+			entry.listeners.add(listener);
+			entry.request ??= Promise.resolve()
 				.then(() => http.get('registers'))
 				.then((response) =>
 					Object.fromEntries(
@@ -25,14 +33,14 @@ export function useRegisterNames(): Record<string, string> {
 				)
 				.catch(() => ({}))
 				.then((value) => {
-					names = value;
-					listeners.forEach((notify) => notify());
+					entry.names = value;
+					entry.listeners.forEach((notify) => notify());
 				});
 			return () => {
-				listeners.delete(listener);
+				entry.listeners.delete(listener);
 			};
 		},
-		[http]
+		[http, entry]
 	);
 	const directory = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 	return React.useMemo(

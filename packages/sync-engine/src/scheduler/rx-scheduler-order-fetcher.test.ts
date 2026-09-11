@@ -2989,3 +2989,44 @@ it('sends the register dimension as pos_register', async () => {
 	);
 	expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('pos_register')).toBe(registerId);
 });
+
+it.each([
+	['BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB', false, []],
+	['AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA', true, ['woo-order:901', 'woo-order:902']],
+])(
+	'checks returned register %s before recording lane coverage',
+	async (returnedRegister, complete, documentIds) => {
+		const registerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+		const recordQueryResult = vi.fn(async () => undefined);
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: { upsertMany: vi.fn(async () => undefined) },
+			coverageRepository: { recordQueryResult },
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher: vi.fn(async () =>
+				response(
+					[registerId, returnedRegister].map((value, index) => ({
+						id: 901 + index,
+						status: 'processing',
+						date_modified_gmt: '2026-05-20T10:12:00',
+						meta_data: [
+							{ key: '_woocommerce_pos_uuid', value: uuidFor(901 + index) },
+							{ key: '_wcpos_register', value },
+						],
+					}))
+				)
+			),
+		});
+		await schedulerFetcher(
+			orderTask({
+				queryKey: `orders:browser:status=all:register=${registerId}:search=:limit=25`,
+			})
+		);
+		expect(recordQueryResult).toHaveBeenLastCalledWith(
+			expect.objectContaining({ complete, records: documentIds.map((id) => ({ id })) })
+		);
+	}
+);

@@ -14,13 +14,15 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('react-native', () => ({
-	View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	View: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
 }));
 jest.mock('expo-router', () => ({ useFocusEffect: () => undefined }));
 jest.mock('@wcpos/components/print', () => ({
 	Br: () => <br />,
 	Line: () => <hr />,
-	Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	Row: jest.requireActual('@wcpos/components/print/row').Row,
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('./utils', () => ({
@@ -93,6 +95,7 @@ describe('ZReport query-state dates', () => {
 			</QueryStateProvider>
 		);
 
+		// Print Text does not forward testID; these existing date lines remain text-selected.
 		expect(screen.getByText(/reports.report_period_start/).textContent).toContain(
 			'2026-07-01T08:00:00.000Z'
 		);
@@ -124,16 +127,20 @@ describe('native register totals block', () => {
 			</QueryStateProvider>
 		);
 		const { rerender } = render(report());
-		expect(screen.queryByText('reports.by_register')).toBeNull();
+		expect(screen.queryByTestId('report-by-register')).toBeNull();
 		mockRegisterTotals.push({
 			registerId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
 			totalOrders: 1,
 			totalAmount: 20,
 		});
 		rerender(report());
-		expect(screen.getByText('reports.by_register')).toBeTruthy();
-		expect(screen.getByText('Front desk')).toBeTruthy();
-		expect(screen.getByText('40')).toBeTruthy();
+		expect(screen.getByTestId('report-by-register')).toBeTruthy();
+		const row = screen.getByTestId('report-register-row-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+		expect(Array.from(row.querySelectorAll('span'), (cell) => cell.textContent)).toEqual([
+			'Front desk',
+			'2',
+			'40',
+		]);
 		mockRegisterTotals.length = 0;
 	});
 });

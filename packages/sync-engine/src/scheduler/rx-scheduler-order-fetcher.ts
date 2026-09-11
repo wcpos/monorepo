@@ -206,7 +206,7 @@ function payloadMetaValue(payload: WooOrderPayload, key: string): string | undef
 /**
  * Whether a returned order actually carries the POS dimensions the descriptor asked for.
  *
- * `pos_cashier`, `pos_store` and `created_via` are WCPOS proxy params
+ * `pos_cashier`, `pos_register`, `pos_store` and `created_via` are WCPOS proxy params
  * (wcpos/woocommerce-pos#1432), NOT wc/v3 core params: a store still running an older
  * plugin ignores them silently and answers with the unfiltered superset. Recording that
  * superset as a COMPLETE lane would make the grid's projected total — which is the lane's
@@ -219,11 +219,18 @@ function payloadMetaValue(payload: WooOrderPayload, key: string): string | undef
  */
 function honorsRequestedDimensions(
 	payload: WooOrderPayload,
-	descriptor: { cashierId?: number; store?: string }
+	descriptor: { cashierId?: number; registerId?: string; store?: string }
 ): boolean {
 	if (
 		descriptor.cashierId !== undefined &&
 		payloadMetaValue(payload, POS_META_KEYS.user) !== String(descriptor.cashierId)
+	) {
+		return false;
+	}
+	if (
+		descriptor.registerId !== undefined &&
+		payloadMetaValue(payload, POS_META_KEYS.register)?.toLowerCase() !==
+			descriptor.registerId.toLowerCase()
 	) {
 		return false;
 	}

@@ -190,21 +190,21 @@ export function ZReport() {
 			)}
 
 			{registerArray.length > 1 && (
-				<>
+				<View testID="report-by-register">
 					<Line />
 					<Text uppercase align="center">
 						{t('reports.by_register')}
 					</Text>
 					<Line />
 					{registerArray.map(({ registerId, totalOrders, totalAmount }) => (
-						<Row key={registerId}>
+						<Row key={registerId} testID={`report-register-row-${registerId}`}>
 							<Text className="flex-1">{registerNames[registerId] || registerId.slice(0, 8)}</Text>
 							<Text align="right">{totalOrders}</Text>
 							<Text align="right">{formatCurrency(totalAmount)}</Text>
 						</Row>
 					))}
 					<Br />
-				</>
+				</View>
 			)}
 
 			{userStoreArray.length > 1 && (
