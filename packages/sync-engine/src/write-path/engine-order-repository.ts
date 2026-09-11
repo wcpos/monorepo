@@ -61,6 +61,8 @@ export type OrderRepositoryDatabase = {
 };
 
 export class EngineOrderRepository {
+	private readonly resyncReceiptPrintCounts = new Map<string, number>();
+
 	constructor(private readonly db: OrderRepositoryDatabase) {}
 
 	/** Returns the subset the storage guard actually applied, so the ingest site can
@@ -90,10 +92,13 @@ export class EngineOrderRepository {
 			const resident = residents.get(entry.storedDocument.uuid)?.toJSON() as
 				{ payload?: Record<string, unknown>; local?: { receiptPrintCount?: number } } | undefined;
 			// Pulls replace sync bookkeeping, but must not reset prints observed by this till.
-			if (resident?.local?.receiptPrintCount !== undefined) {
+			const receiptPrintCount = resident
+				? resident.local?.receiptPrintCount
+				: this.resyncReceiptPrintCounts.get(entry.storedDocument.uuid);
+			if (receiptPrintCount !== undefined) {
 				const local = {
 					...entry.storedDocument.local,
-					receiptPrintCount: resident.local.receiptPrintCount,
+					receiptPrintCount,
 				};
 				entry.storedDocument = { ...entry.storedDocument, local };
 			}
@@ -126,6 +131,7 @@ export class EngineOrderRepository {
 		);
 		if (changed.length > 0)
 			assertBulkSuccess(await this.db.orders.bulkUpsert(changed), 'engine-order-repository upsert');
+		for (const document of changed) this.resyncReceiptPrintCounts.delete(document.uuid);
 		return applicable;
 	}
 
@@ -185,6 +191,11 @@ export class EngineOrderRepository {
 	 */
 	async resetForResync(pendingMutationOrderIds?: ReadonlySet<string>): Promise<void> {
 		const removable = await this.unprotectedOrders(pendingMutationOrderIds);
+		for (const document of removable) {
+			const local = document.local as typeof document.local & { receiptPrintCount?: number };
+			if (local?.receiptPrintCount !== undefined)
+				this.resyncReceiptPrintCounts.set(document.uuid, local.receiptPrintCount);
+		}
 		if (removable.length > 0)
 			assertBulkSuccess(
 				await this.db.orders.bulkRemove(removable.map((doc) => doc.uuid)),

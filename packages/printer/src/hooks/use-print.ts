@@ -7,7 +7,7 @@ import { prepareSystemPrintHtml } from '../print-html';
 import { PrinterService } from '../printer-service';
 import { useOptionalRasterize } from '../raster/rasterize-provider';
 import { isOrderBasedCloudProfile } from '../transport/cloud-adapter';
-import { usesSystemPrintDialog } from '../transport/device-key';
+import { SYSTEM_TARGET, usesSystemPrintDialog } from '../transport/device-key';
 import { printFromUrl } from './print-from-url';
 
 import type { ReceiptData } from '../encoder/types';
@@ -50,6 +50,8 @@ interface UsePrintOptions {
 
 // Singleton service instance
 let printerService: PrinterService | null = null;
+// Include counted preparation in each printer's dispatch order, across hook instances.
+const printQueues = new Map<string, Promise<void>>();
 
 function getService(): PrinterService {
 	if (!printerService) {
@@ -123,10 +125,7 @@ export function usePrint(options: UsePrintOptions) {
 
 	const rasterize = useOptionalRasterize();
 
-	const print = React.useCallback(async () => {
-		activePrintsRef.current += 1;
-		setIsPrinting(true);
-
+	const runPrint = React.useCallback(async () => {
 		try {
 			if (onBeforePrint) {
 				await onBeforePrint();
@@ -238,12 +237,6 @@ export function usePrint(options: UsePrintOptions) {
 		} catch (error) {
 			onPrintError?.(error as Error);
 			throw error;
-		} finally {
-			activePrintsRef.current -= 1;
-			if (activePrintsRef.current <= 0) {
-				activePrintsRef.current = 0;
-				setIsPrinting(false);
-			}
 		}
 	}, [
 		cloudEnqueueFactory,
@@ -264,6 +257,26 @@ export function usePrint(options: UsePrintOptions) {
 		templateId,
 		templateXml,
 	]);
+
+	const print = React.useCallback(() => {
+		activePrintsRef.current += 1;
+		setIsPrinting(true);
+		const queueId =
+			!printerProfile || usesSystemPrintDialog(printerProfile) ? SYSTEM_TARGET : printerProfile.id;
+		const job = (printQueues.get(queueId) ?? Promise.resolve()).then(runPrint);
+		// Preserve rejection for the caller, but let subsequent print jobs proceed.
+		printQueues.set(
+			queueId,
+			job.catch(() => {})
+		);
+		return job.finally(() => {
+			activePrintsRef.current -= 1;
+			if (activePrintsRef.current <= 0) {
+				activePrintsRef.current = 0;
+				setIsPrinting(false);
+			}
+		});
+	}, [printerProfile, runPrint]);
 
 	return { print, isPrinting };
 }

@@ -110,3 +110,26 @@ it('retains the till receipt count when a clean order is refreshed from the serv
 		local: { receiptPrintCount: 2, dirty: false, pendingMutationIds: [] },
 	});
 });
+
+it('retains the till receipt count across reset-for-resync and repull', async () => {
+	const { db, orderUpserts } = orderDatabase();
+	const { storedDocument } = materializedOrder();
+	const resident = { ...storedDocument, local: { ...storedDocument.local, receiptPrintCount: 2 } };
+	const rows = new Map([[storedDocument.uuid, { toJSON: () => resident }]]);
+	db.orders.find = () => ({ exec: async () => [...rows.values()] });
+	db.orders.findByIds = () => ({ exec: async () => new Map(rows) });
+	db.orders.bulkRemove = async (ids) => {
+		ids.forEach((id) => rows.delete(id));
+		return [];
+	};
+	const repository = new EngineOrderRepository(db);
+
+	await repository.resetForResync();
+	expect(rows.size).toBe(0);
+	await repository.upsertMany([storedDocument]);
+
+	expect(orderUpserts[0][0]).toMatchObject({ local: { receiptPrintCount: 2 } });
+	// Once restored, a later unrelated removal must not reuse the saved count.
+	await repository.upsertMany([storedDocument]);
+	expect(orderUpserts[1][0]).not.toMatchObject({ local: { receiptPrintCount: 2 } });
+});
