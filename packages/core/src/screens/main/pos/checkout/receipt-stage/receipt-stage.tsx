@@ -43,7 +43,7 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 function PaidMoment({ children }: { children: React.ReactNode }) {
 	// useCSSVariable may yield a number for unitless variables; a stroke needs a colour string.
 	const success = String(useCSSVariable('--color-success') ?? '');
-	const [reduceMotion, setReduceMotion] = React.useState(true);
+	const [reduceMotion, setReduceMotion] = React.useState<boolean | null>(null);
 	const pop = useSharedValue(0);
 	const tick = useSharedValue(30);
 	const animation = React.useRef({ pop, tick });
@@ -59,7 +59,7 @@ function PaidMoment({ children }: { children: React.ReactNode }) {
 					tick.value = withDelay(150, withTiming(0, { duration: 450 }));
 				}
 			},
-			() => {}
+			() => setReduceMotion(true)
 		);
 		if (Platform.isNative) {
 			void (async () => {
@@ -80,7 +80,7 @@ function PaidMoment({ children }: { children: React.ReactNode }) {
 		};
 	}, []);
 	const style = useAnimatedStyle(() => ({
-		opacity: reduceMotion ? 1 : pop.value,
+		opacity: reduceMotion === null ? 0 : reduceMotion ? 1 : pop.value,
 		transform: [{ scale: reduceMotion ? 1 : 0.92 + pop.value * 0.08 }],
 	}));
 	const animatedProps = useAnimatedProps(() => ({
@@ -140,10 +140,12 @@ function ReceiptStageDocument({
 	});
 	// A split sale names every method that took money, in ledger order; `derive` only
 	// reports the primary one.
-	const capturedRows = rows.filter((row) => row.status === 'captured');
+	const settledRows = rows.filter(
+		(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
+	);
 	const methodTitles = Array.from(
 		new Set(
-			capturedRows.map(
+			settledRows.map(
 				(row) => methods.find((method) => method.id === row.method_id)?.title ?? row.method_id
 			)
 		)
@@ -152,11 +154,16 @@ function ReceiptStageDocument({
 		methodTitles.length > 0 ? methodTitles.join(' + ') : derived.payment_method_title;
 	const change = Number(derived.change);
 	const paid = Number(derived.paid);
-	const cashChange = change > 0 && capturedRows.some((row) => row.method_id === 'pos_cash');
+	const cashRows = settledRows.filter((row) => row.kind === 'cash');
+	const cashTendered = cashRows.reduce(
+		(total, row) => total + Number(row.tendered ?? row.amount),
+		0
+	);
+	const cashChange = change > 0 && cashRows.length > 0;
 	const paidLine = cashChange
 		? t('pos_checkout.paid_tendered_in_cash', {
 				paid: format(paid),
-				tendered: format(paid + change),
+				tendered: format(cashTendered),
 			})
 		: paidWith;
 	const finishSale = useFinishSale(order.uuid, compact);
@@ -176,8 +183,8 @@ function ReceiptStageDocument({
 				</View>
 				<Text testID="receipt-paid-with" className="text-success-foreground text-center">
 					{paidLine}
-					{capturedRows.length > 1
-						? ` · ${t('pos_checkout.payments_taken', { count: capturedRows.length })}`
+					{settledRows.length > 1
+						? ` · ${t('pos_checkout.payments_taken', { count: settledRows.length })}`
 						: ''}
 				</Text>
 				{doc.printedTo ? (
