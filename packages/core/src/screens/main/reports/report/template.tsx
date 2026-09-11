@@ -7,6 +7,7 @@ import { Br, Line, Row, Text } from '@wcpos/components/print';
 import { useDocField } from '@wcpos/query';
 
 import { calculateTotals } from './utils';
+import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
@@ -21,6 +22,7 @@ import { useQueryState } from '../../../../query';
  */
 export function ZReport() {
 	const t = useT();
+	const registerNames = useRegisterNames();
 	const { store, wpCredentials } = useStoreSession();
 	const storeName = useDocField(store, (value) => value.name) as string;
 	const num_decimals = useDocField(store, (value) => value.price_num_decimals) as number;
@@ -36,6 +38,7 @@ export function ZReport() {
 		totalTax,
 		discountTotal,
 		userStoreArray,
+		registerArray,
 		totalItemsSold,
 		shippingTotalsArray,
 		averageOrderValue,
@@ -180,6 +183,24 @@ export function ZReport() {
 						<Row key={method_id}>
 							<Text>{method_id}:</Text>
 							<Text align="right">{formatCurrency(total)}</Text>
+						</Row>
+					))}
+					<Br />
+				</>
+			)}
+
+			{registerArray.length > 1 && (
+				<>
+					<Line />
+					<Text uppercase align="center">
+						{t('reports.by_register')}
+					</Text>
+					<Line />
+					{registerArray.map(({ registerId, totalOrders, totalAmount }) => (
+						<Row key={registerId}>
+							<Text className="flex-1">{registerNames[registerId] || registerId.slice(0, 8)}</Text>
+							<Text align="right">{totalOrders}</Text>
+							<Text align="right">{formatCurrency(totalAmount)}</Text>
 						</Row>
 					))}
 					<Br />

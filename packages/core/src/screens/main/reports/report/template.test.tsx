@@ -32,6 +32,7 @@ jest.mock('./utils', () => ({
 		totalTax: 2,
 		discountTotal: 0,
 		userStoreArray: [],
+		registerArray: mockRegisterTotals,
 		totalItemsSold: 1,
 		shippingTotalsArray: [],
 		averageOrderValue: 10,
@@ -98,5 +99,41 @@ describe('ZReport query-state dates', () => {
 		expect(screen.getByText(/reports.report_period_end/).textContent).toContain(
 			'2026-07-02T18:00:00.000Z'
 		);
+	});
+});
+
+jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': 'Front desk' }),
+}));
+
+const mockRegisterTotals: { registerId: string; totalOrders: number; totalAmount: number }[] = [];
+describe('native register totals block', () => {
+	it('renders only when more than one register appears', () => {
+		mockRegisterTotals.push({
+			registerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+			totalOrders: 2,
+			totalAmount: 40,
+		});
+		const report = () => (
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={10}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<ZReport />
+			</QueryStateProvider>
+		);
+		const { rerender } = render(report());
+		expect(screen.queryByText('reports.by_register')).toBeNull();
+		mockRegisterTotals.push({
+			registerId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+			totalOrders: 1,
+			totalAmount: 20,
+		});
+		rerender(report());
+		expect(screen.getByText('reports.by_register')).toBeTruthy();
+		expect(screen.getByText('Front desk')).toBeTruthy();
+		expect(screen.getByText('40')).toBeTruthy();
+		mockRegisterTotals.length = 0;
 	});
 });

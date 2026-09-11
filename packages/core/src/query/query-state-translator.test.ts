@@ -1011,3 +1011,21 @@ describe('logs preset filters', () => {
 		});
 	});
 });
+
+it('translates the register into both metadata reads and browse demand', () => {
+	const register = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+	const compiled = compileQuery(
+		'orders',
+		{
+			filters: { register },
+			search: '',
+			limit: 10,
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+		},
+		{ id: 'orders' }
+	);
+	expect(compiled.demand[0]).toMatchObject({ registerId: register });
+	expect(compiled.read.prefilter).toEqual({
+		'payload.meta_data': { $elemMatch: { key: '_wcpos_register', value: register } },
+	});
+});

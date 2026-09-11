@@ -171,6 +171,7 @@ export type OrderBrowseDimensions = {
 	limit?: number | 'all';
 	customerId?: number;
 	cashierId?: number;
+	registerId?: string;
 	/** Numeric store id or created_via slug (/^[a-z0-9_-]+$/). */
 	store?: string;
 	/** date_created_gmt range bounds, epoch seconds. */

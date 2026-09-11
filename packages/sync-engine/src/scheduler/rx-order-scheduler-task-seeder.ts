@@ -71,6 +71,7 @@ export type SeedOrderFilterSchedulerTaskInput = {
 	limit: number;
 	customerId?: number;
 	cashierId?: number;
+	registerId?: string;
 	store?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
@@ -141,6 +142,7 @@ function orderFilterWindow(input: SeedOrderFilterSchedulerTaskInput): {
 		limit: input.complete ? 'all' : input.limit,
 		customerId: input.customerId,
 		cashierId: input.cashierId,
+		registerId: input.registerId,
 		store: input.store,
 		afterSeconds: input.afterSeconds,
 		beforeSeconds: input.beforeSeconds,

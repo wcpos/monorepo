@@ -1,4 +1,7 @@
+import { encode } from 'html-entities';
+
 interface ReportData {
+	registerArray: { registerId: string; name: string; totalOrders: number; totalAmount: string }[];
 	storeName: string;
 	storeId: number;
 	reportGenerated: string;
@@ -55,6 +58,7 @@ interface ReportData {
 		taxes: string;
 		shipping: string;
 		cashierStoreTotals: string;
+		byRegister: string;
 		cashierId: string;
 		storeId: string;
 		additionalInfo: string;
@@ -133,6 +137,7 @@ export function generateZReportHTML(data: ReportData): string {
 		taxTotalsArray,
 		shippingTotalsArray,
 		userStoreArray,
+		registerArray,
 		totalItemsSold,
 		averageOrderValue,
 		t,
@@ -196,6 +201,23 @@ export function generateZReportHTML(data: ReportData): string {
 	`
 			: '';
 
+	const registerHTML =
+		registerArray.length > 1
+			? `
+  <div class="line"></div>
+  <div class="center uppercase">${t.byRegister}</div>
+  <div class="line"></div>
+  ${registerArray
+		.map(
+			({ name, totalOrders, totalAmount }) => `
+   <div class="row"><span>${encode(name)}</span><span>${totalOrders}</span><span>${totalAmount}</span></div>
+  `
+		)
+		.join('')}
+  <div class="br"></div>
+ `
+			: '';
+
 	return `
 		<!DOCTYPE html>
 		<html>
@@ -236,6 +258,8 @@ export function generateZReportHTML(data: ReportData): string {
 			<div class="br"></div>
 
 			${shippingHTML}
+
+			${registerHTML}
 
 			${userStoreHTML}
 

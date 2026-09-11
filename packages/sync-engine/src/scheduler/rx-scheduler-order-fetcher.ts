@@ -175,6 +175,7 @@ function browserOrderQueryDescriptor(task: FetchTask, pullBatchSize?: () => numb
 		search: decision.descriptor.search,
 		customerId: decision.descriptor.customerId,
 		cashierId: decision.descriptor.cashierId,
+		registerId: decision.descriptor.registerId,
 		store: decision.descriptor.store,
 		...(limit !== undefined ? { limit } : {}),
 		afterSeconds: decision.descriptor.afterSeconds,
@@ -800,6 +801,7 @@ async function fetchBrowserOrderQuery(
 		if (descriptor.search) query.set('search', descriptor.search);
 		if (descriptor.customerId !== undefined) query.set('customer', String(descriptor.customerId));
 		if (descriptor.cashierId !== undefined) query.set('pos_cashier', String(descriptor.cashierId));
+		if (descriptor.registerId !== undefined) query.set('pos_register', descriptor.registerId);
 		if (descriptor.store !== undefined) {
 			query.set(/^\d+$/.test(descriptor.store) ? 'pos_store' : 'created_via', descriptor.store);
 		}

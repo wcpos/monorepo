@@ -52,6 +52,7 @@ export const FILTER_TRANSLATORS = {
 		status: mappedEntry(collectionMap.orders.fields.status),
 		customer_id: mappedEntry(collectionMap.orders.fields.customer_id),
 		cashier: mappedEntry(collectionMap.orders.fields.cashier, 'metadata'),
+		register: mappedEntry(collectionMap.orders.fields.register, 'metadata'),
 		store: mappedEntry(collectionMap.orders.fields.store, 'store'),
 		dateRange: mappedEntry(collectionMap.orders.fields.date_created_gmt, 'date-range'),
 	},
@@ -222,6 +223,12 @@ function compileReadFilter(
 				}),
 		};
 	}
+	if (operator === 'metadata' && mapping.legacy === 'register') {
+		return {
+			prefilter: { [mapping.enginePath]: { $elemMatch: { key: '_wcpos_register', value } } },
+			matches: (document) => actual(document) === value,
+		};
+	}
 	if (operator === 'metadata') {
 		const id = parseRemoteId(value)!;
 		const identityFilter = wooMetaCarrier.identityFilter({
@@ -332,7 +339,12 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	const active = Object.entries(state.filters).flatMap(([field, value]) => {
 		if (value === undefined || (Array.isArray(value) && value.length === 0)) return [];
 		const translator = translators[field]!;
-		if (translator.operator === 'metadata' && parseRemoteId(value) === undefined) return [];
+		if (
+			translator.operator === 'metadata' &&
+			field !== 'register' &&
+			parseRemoteId(value) === undefined
+		)
+			return [];
 		if (translator.operator === 'numeric-range') {
 			const range = value as { min?: number; max?: number };
 			if (!Number.isFinite(range.min) && !Number.isFinite(range.max)) return [];
@@ -468,6 +480,9 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 				represented = false;
 			} else if (field === 'cashier') {
 				dimensions.cashierId = parseRemoteId(value);
+				scoped = true;
+			} else if (field === 'register') {
+				dimensions.registerId = String(value);
 				scoped = true;
 			} else if (field === 'store') {
 				const store = String(value);

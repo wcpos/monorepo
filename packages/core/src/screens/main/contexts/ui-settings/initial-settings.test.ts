@@ -149,3 +149,14 @@ describe('pos-cart initial settings', () => {
 		);
 	});
 });
+
+it.each(['orders', 'reports-orders'] as const)(
+	'%s offers an unsortable hidden register column',
+	(grid) => {
+		expect(initialSettings[grid].columns).toContainEqual({
+			key: 'register',
+			show: false,
+			disableSort: true,
+		});
+	}
+);

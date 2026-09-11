@@ -144,3 +144,5 @@ describe('reports FilterBar bindings', () => {
 		});
 	});
 });
+
+jest.mock('../components/order/filter-bar/register-pill', () => ({ RegisterPill: () => null }));

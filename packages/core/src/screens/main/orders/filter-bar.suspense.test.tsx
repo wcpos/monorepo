@@ -146,3 +146,5 @@ describe('orders filter bar', () => {
 		expect(screen.queryByTestId('order-filter-store')).toBeNull();
 	});
 });
+
+jest.mock('../components/order/filter-bar/register-pill', () => ({ RegisterPill: () => null }));

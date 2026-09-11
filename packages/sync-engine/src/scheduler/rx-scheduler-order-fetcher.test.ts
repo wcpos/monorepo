@@ -2971,3 +2971,21 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	});
 });
+
+it('sends the register dimension as pos_register', async () => {
+	const registerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+	const fetcher = vi.fn(async (_url: string) => response([]));
+	const schedulerFetcher = createOrdersSchedulerFetcher({
+		baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+		repository: { upsertMany: vi.fn(async () => undefined) },
+		checkpointStore: {
+			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+			writeCustomPullCheckpoint: vi.fn(async () => undefined),
+		},
+		fetcher,
+	});
+	await schedulerFetcher(
+		orderTask({ queryKey: `orders:browser:status=all:register=${registerId}:search=:limit=25` })
+	);
+	expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('pos_register')).toBe(registerId);
+});

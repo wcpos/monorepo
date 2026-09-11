@@ -366,6 +366,7 @@ describe('engine adapter collection map', () => {
 			'uuid',
 			'sortable_total',
 			'cashier',
+			'register',
 			'select',
 		]);
 		expect(adapterDerivedFieldsFor('customers')).toEqual(['uuid']);
@@ -415,4 +416,16 @@ describe('census routes stay on the POS lane (#1400)', () => {
 			expect([name, row.censusRoute.split('/')[0]]).toEqual([name, 'wcpos']);
 		}
 	});
+});
+
+it('reads the register dimension from order metadata', () => {
+	const register = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+	expect(
+		readLegacyField(
+			'orders',
+			{ uuid: 'order-1', payload: { meta_data: [{ key: '_wcpos_register', value: register }] } },
+			'register'
+		)
+	).toBe(register);
+	expect(readLegacyField('orders', { uuid: 'order-2', payload: {} }, 'register')).toBeUndefined();
 });
