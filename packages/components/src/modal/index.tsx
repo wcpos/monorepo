@@ -4,7 +4,16 @@ import { type GestureResponderEvent, Platform, ScrollView, StyleSheet, View } fr
 import { Slot } from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { router } from 'expo-router';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, {
+	FadeIn,
+	FadeOut,
+	SlideInDown,
+	SlideInLeft,
+	SlideInRight,
+	SlideOutDown,
+	SlideOutLeft,
+	SlideOutRight,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
@@ -19,6 +28,27 @@ import type { SlottablePressableProps, SlottableTextProps } from '@rn-primitives
 interface ModalContextProps {
 	onClose: (open: boolean) => void;
 }
+
+export type ModalSide = 'center' | 'left' | 'right' | 'bottom';
+const SideContext = React.createContext<ModalSide>('center');
+const overlayAlignment = {
+	center: '',
+	right: 'flex-row justify-end items-stretch p-0',
+	left: 'flex-row justify-start items-stretch p-0',
+	bottom: 'flex-col justify-end items-stretch p-0',
+};
+const entering = {
+	center: FadeIn.duration(150),
+	right: SlideInRight.duration(250),
+	left: SlideInLeft.duration(250),
+	bottom: SlideInDown.duration(250),
+};
+const exiting = {
+	center: FadeOut.duration(150),
+	right: SlideOutRight.duration(250),
+	left: SlideOutLeft.duration(250),
+	bottom: SlideOutDown.duration(250),
+};
 
 const Context = React.createContext<ModalContextProps | undefined>(undefined);
 
@@ -86,11 +116,16 @@ function ModalAction({
 	);
 }
 
-function ModalOverlayWeb({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) {
+function ModalOverlayWeb({
+	className,
+	side = 'center',
+	...props
+}: React.ComponentPropsWithoutRef<typeof View> & { side?: ModalSide }) {
 	return (
 		<View
 			className={cn(
 				'web:animate-in web:fade-in-0 absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
+				overlayAlignment[side],
 				className
 			)}
 			{...props}
@@ -101,8 +136,10 @@ function ModalOverlayWeb({ className, ...props }: React.ComponentPropsWithoutRef
 function ModalOverlayNative({
 	className,
 	children,
+	side = 'center',
 	...props
-}: React.ComponentPropsWithoutRef<typeof View>) {
+}: React.ComponentPropsWithoutRef<typeof View> & { side?: ModalSide }) {
+	const fullHeight = side === 'left' || side === 'right';
 	const insets = useSafeAreaInsets();
 
 	/**
@@ -124,12 +161,21 @@ function ModalOverlayNative({
 			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
 			className={cn(
 				'flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
+				overlayAlignment[side],
 				className
 			)}
 			{...props}
 		>
-			<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={insets.bottom}>
-				<Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
+			<KeyboardAvoidingView
+				behavior="padding"
+				keyboardVerticalOffset={insets.bottom}
+				className={fullHeight ? 'h-full' : undefined}
+			>
+				<Animated.View
+					entering={entering[side]}
+					exiting={exiting[side]}
+					className={fullHeight ? 'h-full' : undefined}
+				>
 					<>{children}</>
 				</Animated.View>
 			</KeyboardAvoidingView>
@@ -155,6 +201,14 @@ const modalContentVariants = cva(
 				'2xl': 'w-200',
 				full: 'w-full',
 			},
+			side: {
+				center: '',
+				right:
+					'web:slide-in-from-right h-full max-h-full max-w-full rounded-none rounded-l-lg rounded-r-none border-r-0',
+				left: 'web:slide-in-from-left h-full max-h-full max-w-full rounded-none rounded-l-none rounded-r-lg border-l-0',
+				bottom:
+					'web:slide-in-from-bottom max-h-[85%] w-full max-w-full rounded-none rounded-t-lg rounded-b-none border-b-0',
+			},
 		},
 		defaultVariants: {
 			size: 'default',
@@ -165,20 +219,24 @@ const modalContentVariants = cva(
 function ModalContent({
 	className,
 	size,
+	side = 'center',
 	children,
 	...props
-}: React.ComponentPropsWithoutRef<typeof View> & VariantProps<typeof modalContentVariants>) {
+}: React.ComponentPropsWithoutRef<typeof View> &
+	Omit<VariantProps<typeof modalContentVariants>, 'side'> & { side?: ModalSide }) {
 	return (
-		<ModalOverlay>
+		<ModalOverlay side={side}>
 			<View
 				className={cn(
-					modalContentVariants({ size }),
-					'web:animate-in web:fade-in-0 web:zoom-in-95 web:cursor-default web:duration-200 border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg',
+					modalContentVariants({ size, side }),
+					side === 'center'
+						? 'web:animate-in web:fade-in-0 web:zoom-in-95 web:cursor-default web:duration-200 border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg'
+						: 'web:animate-in z-50',
 					className
 				)}
 				{...props}
 			>
-				{children}
+				<SideContext.Provider value={side}>{children}</SideContext.Provider>
 				<View className="absolute top-2 right-2">
 					<ModalClose className="web:transition-opacity web:hover:opacity-100 opacity-70" asChild>
 						<IconButton name="xmark" />
@@ -202,10 +260,11 @@ function ModalHeader({ className, ...props }: React.ComponentPropsWithoutRef<typ
 }
 
 function ModalBody({ className, ...props }: React.ComponentPropsWithoutRef<typeof ScrollView>) {
+	const side = React.useContext(SideContext);
 	return (
 		<ScrollView
 			horizontal={false}
-			className={cn('flex flex-col gap-2 px-4 py-1', className)}
+			className={cn('flex flex-col gap-2 px-4 py-1', side !== 'center' && 'flex-1', className)}
 			{...props}
 		/>
 	);

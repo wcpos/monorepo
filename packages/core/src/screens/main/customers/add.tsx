@@ -78,7 +78,7 @@ export function AddCustomerScreen() {
 	 */
 	return (
 		<Modal>
-			<ModalContent size="xl">
+			<ModalContent side="right" size="xl">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t('customers.add_customer')}</Text>

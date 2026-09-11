@@ -23,8 +23,20 @@ jest.mock(
 	{ virtual: true }
 );
 
+// These existing tests exercise the anchored popover, not the phone sheet.
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
+}));
+
 jest.mock('react-native-gesture-handler', () => ({
 	ScrollView: mockGestureHandlerScrollView,
+}));
+
+// Native-only package with untransformed Flow syntax; the combobox reads the insets
+// context and tolerates a null value (no provider).
+jest.mock('react-native-safe-area-context', () => ({
+	SafeAreaInsetsContext: require('react').createContext(null),
 }));
 
 jest.mock('react-native-reanimated', () => ({
