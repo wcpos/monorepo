@@ -21,6 +21,7 @@ export type DriverStatus = {
 	message?: string | null;
 };
 export type CollectInput = {
+	dp: number;
 	row: PaymentRow;
 	method: PaymentMethodDescriptor;
 	transport: PaymentTransport;

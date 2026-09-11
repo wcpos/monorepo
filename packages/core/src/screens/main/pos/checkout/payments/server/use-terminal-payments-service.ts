@@ -60,6 +60,7 @@ export function useTerminalPaymentsService(): void {
 		bindingRef.current = binding;
 		let stopped = false;
 		const service = startTerminalPaymentsService({
+			dp: () => store.price_num_decimals ?? 2,
 			http: {
 				get: (url) => binding.client.get(url),
 				post: (url, body) => binding.client.post(url, body),
@@ -174,6 +175,7 @@ export function useTerminalPaymentsService(): void {
 									row.status === 'authorized'
 								)
 									service.trackOffline({
+										dp: store.price_num_decimals ?? 2,
 										orderUuid: document.uuid,
 										orderId: document.payload.id ?? 0,
 										orderNumber: document.payload.number ?? '',

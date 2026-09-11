@@ -39,6 +39,10 @@ jest.mock('@wcpos/core/screens/main/receipt/email-queue/bridge', () => ({
 jest.mock('@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge', () => ({
 	TerminalPaymentsBridge: () => null,
 }));
+// The card-reader driver registration mounts a native SDK bridge; not this test's concern.
+jest.mock('../lib/payment-drivers', () => ({
+	StripeTerminalDriverRegistration: () => null,
+}));
 jest.mock('@wcpos/core/screens/main/contexts/ui-settings', () => ({
 	UISettingsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));

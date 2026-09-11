@@ -1,5 +1,3 @@
-import '../../lib/payment-drivers';
-
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 
@@ -37,6 +35,7 @@ import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { markUserActivity } from '@wcpos/utils/user-activity';
 
+import { StripeTerminalDriverRegistration } from '../../lib/payment-drivers';
 import { SyncConfigBridge } from '../../components/sync-config-bridge';
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
@@ -194,6 +193,7 @@ function AppStack() {
 				{/* Terminal payment legs poll from here, not from the checkout screen, so
 				    a tab chip can say "Waiting for terminal" while another order is on
 				    screen and a finished leg reaches its receipt unattended (#154). */}
+				<StripeTerminalDriverRegistration key={`${wpApiUrl}:${storeID}:${cashierID}`} />
 				<TerminalPaymentsBridge />
 				{/* A variable product's price range is recomputed from its children on
 				    every read, so an acknowledged variation write leaves the parent's row

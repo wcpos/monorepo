@@ -36,11 +36,17 @@ export interface TerminalPaymentsServiceOptions {
 	http: Pick<ServerLegDeps, 'get' | 'post'>;
 	mirror: (orderUuid: string, response: ServerLegResponse) => Promise<void>;
 	onCaptured?: (orderUuid: string, order: OrderPaymentSummary | undefined) => void;
+	/**
+	 * The store's price decimals for resumed legs, read at resume time (a getter, so a
+	 * setting changed mid-session — the store document is patched in place — is honoured).
+	 */
+	dp?: number | (() => number);
 	now?: ServerLegDeps['now'];
 	setTimeout?: ServerLegDeps['setTimeout'];
 	clearTimeout?: ServerLegDeps['clearTimeout'];
 }
 interface ResumeInput {
+	dp?: number;
 	orderUuid: string;
 	orderId: number;
 	orderNumber: string;
@@ -265,6 +271,10 @@ export class TerminalPaymentsService {
 						},
 					},
 					{
+						dp:
+							input.dp ??
+							(typeof this.options.dp === 'function' ? this.options.dp() : this.options.dp) ??
+							2,
 						orderId: input.orderId,
 						row: input.row,
 						resume,

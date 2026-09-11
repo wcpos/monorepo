@@ -44,7 +44,7 @@ const row: PaymentRow = {
 	captured_at_gmt: null,
 	updated_at_gmt: '2026-01-01T00:00:00Z',
 };
-const input = { orderUuid: 'order', orderId: 42, orderNumber: '42', row, reader: 'reader' };
+const input = { dp: 3, orderUuid: 'order', orderId: 42, orderNumber: '42', row, reader: 'reader' };
 function setup() {
 	const summary = {
 		status: 'completed',
@@ -196,6 +196,7 @@ it('selects the device factory and reserves its method, not a server reader', as
 	service.resume({ ...input, row: deviceRow });
 	await jest.advanceTimersByTimeAsync(0);
 	expect(factory).toHaveBeenCalledTimes(1);
+	expect(factory.mock.calls[0][1]).toMatchObject({ dp: 3 });
 	expect(service.get('order')).toMatchObject({
 		outcome: 'failed',
 		row: { failure_reason: 'reader_session_lost' },

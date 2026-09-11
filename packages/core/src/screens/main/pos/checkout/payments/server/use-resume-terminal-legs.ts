@@ -70,6 +70,6 @@ export function useResumeTerminalLegsForOrders(orders: readonly EngineRecord<'or
 	// The open-order query publishes a new result when rows hydrate or their ledgers change.
 	React.useEffect(() => {
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-pass-data-to-parent -- Reconcile an external service, not parent React state.
-		orders.forEach(resumeOrder);
+		orders.forEach((order) => resumeOrder(order));
 	}, [orders, version]);
 }
