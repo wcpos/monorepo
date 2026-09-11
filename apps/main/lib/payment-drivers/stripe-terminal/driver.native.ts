@@ -232,7 +232,15 @@ export function createStripeTerminalDriver({
 					clearTimeout(timer);
 					publish({ connection: status.reader ? 'connected' : 'disconnected' });
 					if (error && error.code !== 'Canceled') reject(reportError(error));
-					else resolve(readers.map((reader) => readerInfo(reader, nextTransport)));
+					else {
+						const found = readers.map((reader) => readerInfo(reader, nextTransport));
+						if (__DEV__)
+							console.log(
+								'[stripe-driver] discovered',
+								found.map((item) => item.label)
+							);
+						resolve(found);
+					}
 				};
 				const timer = setTimeout(() => {
 					finish();
@@ -242,11 +250,19 @@ export function createStripeTerminalDriver({
 						.catch((error: Error) => publish({ message: error.message }));
 				}, 10000);
 				finishDiscovery = finish;
+				const method = resolveMethod();
+				const simulated = __DEV__ && (method?.provider_data ?? lastProviderData).test_mode === true;
+				if (__DEV__)
+					console.log('[stripe-driver] discover', {
+						transport: nextTransport,
+						method: method?.id ?? null,
+						providerData: method?.provider_data ?? lastProviderData,
+						simulated,
+					});
 				void api
 					.discoverReaders({
 						discoveryMethod: discoveryMethod(nextTransport),
-						simulated:
-							__DEV__ && (resolveMethod()?.provider_data ?? lastProviderData).test_mode === true,
+						simulated,
 					})
 					.then(({ error }: { error?: SdkError }) => {
 						if (error) finish(error);
