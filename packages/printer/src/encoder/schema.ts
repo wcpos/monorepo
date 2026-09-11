@@ -605,6 +605,7 @@ export const ReceiptFiscalSchema = z.object({
 		.optional()
 		.describe('Truncated signature for human-readable display'),
 	document_label: z.string().optional().describe('Document label (e.g. "Tax Invoice")'),
+	is_refund_document: z.boolean().optional(),
 	is_reprint: z.boolean().optional().describe('True if this is a reprint of an existing receipt'),
 	reprint_count: z
 		.number()
@@ -786,6 +787,8 @@ export const ReceiptI18nSchema = z
 		signed_name: z.string().optional(),
 		document_type: z.string().optional(),
 		copy: z.string().optional(),
+		corrects: z.string().optional(),
+		refunded_to: z.string().optional(),
 		reprint: z.string().optional(),
 		register: z.string().optional(),
 		sale_time: z.string().optional(),

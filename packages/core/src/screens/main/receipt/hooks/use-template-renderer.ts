@@ -52,6 +52,7 @@ interface UseTemplateRendererOptions {
 	orderId: number | undefined;
 	baseReceiptURL: string | undefined;
 	mode: ReceiptMode;
+	document?: string;
 	/** The RxDB order document — used to build local receipt data when offline */
 	order: Record<string, any> | undefined;
 }
@@ -77,10 +78,12 @@ interface TemplateRendererResult {
 export function useTemplateRenderer({
 	orderId,
 	baseReceiptURL,
-	mode,
+	mode: requestedMode,
+	document,
 	order,
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const templates = useActiveTemplates();
+	const mode = document ? 'fiscal' : requestedMode;
 	const { store, site } = useAppState();
 	const register = useRegister();
 	const pluginVersion = useDocField(site, (value) => value.wcpos_version);
@@ -104,7 +107,7 @@ export function useTemplateRenderer({
 		hasResponded,
 		isLoading,
 		fetchForPrint,
-	} = useReceiptData({ orderId: isOffline ? undefined : orderId, mode });
+	} = useReceiptData({ orderId: isOffline ? undefined : orderId, mode, document });
 	// The deadline record is kept together with the order it was armed for; a
 	// stale record from a previous order derives to "not passed" without any
 	// synchronous reset in the effect (same pattern as the template pick below).
@@ -125,6 +128,7 @@ export function useTemplateRenderer({
 	// Fall back to locally-built receipt data when the API response is unavailable
 	const receiptData = React.useMemo(() => {
 		if (!isOffline && apiReceiptData) return apiReceiptData;
+		if (document) return null;
 		if (order && store) {
 			return buildReceiptData(order, store, dp, {
 				getStatusLabel,
@@ -136,6 +140,7 @@ export function useTemplateRenderer({
 		return null;
 	}, [
 		apiReceiptData,
+		document,
 		isOffline,
 		order,
 		store,
@@ -223,18 +228,20 @@ export function useTemplateRenderer({
 				}
 			}
 		}
-	} else if (selectedTemplate && baseReceiptURL) {
+	} else if (baseReceiptURL && (selectedTemplate || document) && (!document || receiptData)) {
 		try {
 			const parsed = new URL(baseReceiptURL);
 			parsed.searchParams.set('mode', mode);
-			parsed.searchParams.set('template', String(selectedTemplate.id));
+			if (document) parsed.searchParams.set('document', document);
+			if (selectedTemplate) parsed.searchParams.set('template', String(selectedTemplate.id));
 			receiptUrl = parsed.toString();
 		} catch {
 			const [beforeHash, hash = ''] = baseReceiptURL.split('#');
 			const [pathname, query = ''] = beforeHash.split('?');
 			const params = new URLSearchParams(query);
 			params.set('mode', mode);
-			params.set('template', String(selectedTemplate.id));
+			if (document) params.set('document', document);
+			if (selectedTemplate) params.set('template', String(selectedTemplate.id));
 			const next = `${pathname}?${params.toString()}`;
 			receiptUrl = hash ? `${next}#${hash}` : next;
 		}
@@ -261,6 +268,7 @@ export function useTemplateRenderer({
 				data = null;
 			}
 		}
+		if (document && !data) throw new Error('receipt_document_requires_store');
 		data ??= await buildLocal();
 		if (!data) throw new Error('No receipt data available for printing');
 		return {

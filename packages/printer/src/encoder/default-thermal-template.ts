@@ -37,7 +37,7 @@ export const DEFAULT_THERMAL_TEMPLATE = `<receipt paper-width="{{columns}}">
   <feed lines="1" />
   <line />
   <align mode="center">
-    <bold><text>SALES RECEIPT</text></bold>
+    <bold><text>{{#fiscal.document_label}}{{fiscal.document_label}}{{/fiscal.document_label}}{{^fiscal.document_label}}SALES RECEIPT{{/fiscal.document_label}}</text></bold>
   </align>
   <row>
     <col width="{{infoColLeft}}">Receipt #</col>
@@ -105,6 +105,7 @@ export const DEFAULT_THERMAL_TEMPLATE = `<receipt paper-width="{{columns}}">
   </row>
   {{/has_total_saved}}
   <line />
+  {{#fiscal.is_refund_document}}<text>{{i18n.refunded_to}}</text>{{/fiscal.is_refund_document}}
   {{#payments}}
   <row>
     <col width="{{nameColWidth}}">{{method_title}}</col>
@@ -128,6 +129,7 @@ export const DEFAULT_THERMAL_TEMPLATE = `<receipt paper-width="{{columns}}">
   {{#fiscal.qr_payload}}
   <align mode="center"><qrcode size="4">{{fiscal.qr_payload}}</qrcode></align>
   {{/fiscal.qr_payload}}
+  {{#fiscal.corrects}}<align mode="center"><text>{{i18n.corrects}} {{fiscal.corrects}}</text></align>{{/fiscal.corrects}}
   {{#fiscal.is_reprint}}
   <align mode="center"><bold><text>{{i18n.copy}} {{fiscal.reprint_count}} · {{order.printed.datetime}}</text></bold></align>
   {{/fiscal.is_reprint}}

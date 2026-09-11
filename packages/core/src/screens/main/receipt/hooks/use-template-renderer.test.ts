@@ -473,3 +473,51 @@ describe('renderOfflineTemplatePreview', () => {
 });
 
 jest.mock('../../../../services/register/use-register', () => ({ useRegister: () => null }));
+
+it.each(['offline', 'online-website-available'])(
+	'never builds a refund locally when %s',
+	async (status) => {
+		jest.clearAllMocks();
+		mockUseOnlineStatus.mockReturnValue({ status });
+		mockUseReceiptData.mockReturnValue({
+			data: null,
+			fetchForPrint: jest.fn().mockRejectedValue(new Error('404')),
+		});
+		const { result } = renderHook(() =>
+			useTemplateRenderer({
+				...defaultOptions,
+				document: 'refund:12',
+				baseReceiptURL: 'https://store.test/receipt/42',
+			})
+		);
+		const count = jest.fn();
+		expect(result.current.receiptData).toBeNull();
+		expect(result.current.receiptUrl).toBeNull();
+		await expect(result.current.preparePrintContent(count)).rejects.toThrow(
+			'receipt_document_requires_store'
+		);
+		expect(mockBuildReceiptData).not.toHaveBeenCalled();
+		expect(count).not.toHaveBeenCalled();
+	}
+);
+
+it.each(['https://store.test/receipt/42?foo=bar#preview', '/receipt/42?foo=bar#preview'])(
+	'preserves the refund selector on legacy preview URL %s',
+	async (baseReceiptURL) => {
+		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+		const data = { fiscal: { document_type: 'refund' } };
+		mockUseReceiptData.mockReturnValue({ data, fetchForPrint: jest.fn().mockResolvedValue(data) });
+		mockUseActiveTemplates.mockReturnValue([]);
+		const { result } = renderHook(() =>
+			useTemplateRenderer({ ...defaultOptions, document: 'refund:12', baseReceiptURL })
+		);
+		const url = new URL(result.current.receiptUrl!, 'https://store.test');
+		expect(url.searchParams.get('document')).toBe('refund:12');
+		expect(url.searchParams.get('mode')).toBe('fiscal');
+		expect(url.searchParams.get('foo')).toBe('bar');
+		expect(url.hash).toBe('#preview');
+		const count = jest.fn();
+		expect((await result.current.preparePrintContent(count)).receiptData).toBe(data);
+		expect(count).not.toHaveBeenCalled();
+	}
+);

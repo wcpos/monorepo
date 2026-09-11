@@ -73,7 +73,7 @@ export function buildReceiptMarkupJob(
 	// Build template data with pre-formatted money values
 	const templateData: Record<string, any> = {
 		...data,
-		i18n: { ...data.i18n, copy: data.i18n?.copy?.trim() || DEFAULT_I18N.copy },
+		i18n: { ...DEFAULT_I18N, ...data.i18n, copy: data.i18n?.copy?.trim() || DEFAULT_I18N.copy },
 		columns,
 		cut,
 		openDrawer,

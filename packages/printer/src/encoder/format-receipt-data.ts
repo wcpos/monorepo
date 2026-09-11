@@ -14,6 +14,8 @@ function resolveDisplayValueSide(data: ReceiptData): 'incl' | 'excl' {
 
 export const DEFAULT_I18N = {
 	copy: 'COPY',
+	corrects: 'Corrects',
+	refunded_to: 'Refunded to',
 	reprint: 'Reprint',
 	register: 'Register',
 	sale_time: 'Sale time',

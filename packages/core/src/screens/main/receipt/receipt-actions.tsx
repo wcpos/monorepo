@@ -39,19 +39,21 @@ export function ReceiptActions({
 					    exists, so this is the one entry point that must NOT be gated on
 					    connectivity. The PDF download above still is: that one genuinely
 					    needs the server. */}
-			<Dialog>
-				<DialogTrigger asChild>
-					<Action testID="receipt-email-button">{t('receipt.email_receipt')}</Action>
-				</DialogTrigger>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
-					</DialogHeader>
-					<DialogBody>
-						<EmailForm order={order} />
-					</DialogBody>
-				</DialogContent>
-			</Dialog>
+			{!doc.document && (
+				<Dialog>
+					<DialogTrigger asChild>
+						<Action testID="receipt-email-button">{t('receipt.email_receipt')}</Action>
+					</DialogTrigger>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
+						</DialogHeader>
+						<DialogBody>
+							<EmailForm order={order} />
+						</DialogBody>
+					</DialogContent>
+				</Dialog>
+			)}
 			<Action
 				testID="receipt-download-pdf-button"
 				onPress={doc.downloadReceiptPdf}

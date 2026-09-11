@@ -22,12 +22,13 @@ import { useT } from '../../../contexts/translations';
 
 interface Props {
 	resource: ObservableResource<EngineRecord<'orders'> | null>;
+	document?: string;
 }
 
 /**
  *
  */
-export function Receipt({ resource }: Props) {
+export function Receipt({ resource, document }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 
@@ -45,18 +46,26 @@ export function Receipt({ resource }: Props) {
 		);
 	}
 
-	return <ReceiptDocument key={order.uuid} order={order} />;
+	return (
+		<ReceiptDocument key={`${order.uuid}:${document ?? ''}`} order={order} document={document} />
+	);
 }
 
-function ReceiptDocument({ order }: { order: EngineRecord<'orders'> }) {
+function ReceiptDocument({
+	order,
+	document,
+}: {
+	order: EngineRecord<'orders'>;
+	document?: string;
+}) {
 	const t = useT();
-	const doc = useReceiptDocument({ order, autoPrintAllowed: false });
+	const doc = useReceiptDocument({ order, autoPrintAllowed: false, document });
 	return (
 		<Modal>
 			<ModalContent size="xl" className="h-full">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('common.receipt')}</Text>
+						<Text>{t(document ? 'receipt.refund_receipt' : 'common.receipt')}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
