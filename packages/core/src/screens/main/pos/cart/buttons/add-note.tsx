@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import {
@@ -81,6 +82,9 @@ export function AddNoteButton() {
 				<DialogBody>
 					<Textarea
 						testID="order-note-input"
+						// Web defers focus to the end of the panel's slide (see DialogContent); native
+						// has no deferred focus, so keep the keyboard opening with the dialog there.
+						autoFocus={Platform.OS !== 'web'}
 						value={text}
 						minHeight={80}
 						onChangeText={onChangeText}
