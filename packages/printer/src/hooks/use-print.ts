@@ -8,6 +8,7 @@ import { PrinterService } from '../printer-service';
 import { useOptionalRasterize } from '../raster/rasterize-provider';
 import { isOrderBasedCloudProfile } from '../transport/cloud-adapter';
 import { SYSTEM_TARGET, usesSystemPrintDialog } from '../transport/device-key';
+import { printerLogger } from '../logger';
 import { printFromUrl } from './print-from-url';
 
 import type { ReceiptData } from '../encoder/types';
@@ -235,7 +236,15 @@ export function usePrint(options: UsePrintOptions) {
 				}
 			}
 
-			await prepared?.commit?.();
+			// The paper is already out: a failed count commit must not fail the print (a
+			// retry would print the same copy again). Logged; the local count understates.
+			try {
+				await prepared?.commit?.();
+			} catch (error) {
+				printerLogger.warn('Local print count commit failed after dispatch', {
+					context: { error: String(error) },
+				});
+			}
 			onAfterPrint?.();
 		} catch (error) {
 			onPrintError?.(error as Error);
