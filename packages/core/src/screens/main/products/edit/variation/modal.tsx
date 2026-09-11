@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
@@ -26,7 +27,7 @@ export function EditVariationModal({ resource }: Props) {
 	if (!variation) {
 		return (
 			<Modal>
-				<ModalContent size="lg">
+				<ModalContent side="right" size="lg">
 					<ModalHeader>
 						<ModalTitle>
 							<Text>{t('common.no_variation_found')}</Text>
@@ -39,15 +40,15 @@ export function EditVariationModal({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent size="lg">
+			<ModalContent side="right" size="lg">
 				<ModalHeader>
 					<ModalTitle>
 						<Text decodeHtml>{t('common.edit_2', { name })}</Text>
 					</ModalTitle>
 				</ModalHeader>
-				<ModalBody>
-					<Tabs value={value} onValueChange={setValue}>
-						<TabsList className="w-full flex-row">
+				<View className="min-h-0 flex-1">
+					<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
+						<TabsList className="mx-4 flex-row">
 							<TabsTrigger value="form" className="flex-1">
 								<Text>{t('common.form')}</Text>
 							</TabsTrigger>
@@ -55,14 +56,16 @@ export function EditVariationModal({ resource }: Props) {
 								<Text>{t('common.json')}</Text>
 							</TabsTrigger>
 						</TabsList>
-						<TabsContent value="form">
+						<TabsContent value="form" className="min-h-0 flex-1">
 							<EditVariationForm variation={variation} />
 						</TabsContent>
-						<TabsContent value="json">
-							<Tree value={payload} />
+						<TabsContent value="json" className="min-h-0 flex-1">
+							<ModalBody>
+								<Tree value={payload} />
+							</ModalBody>
 						</TabsContent>
 					</Tabs>
-				</ModalBody>
+				</View>
 			</ModalContent>
 		</Modal>
 	);

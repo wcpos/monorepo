@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
@@ -26,7 +27,7 @@ export function EditCustomer({ resource }: Props) {
 	if (!customer) {
 		return (
 			<Modal>
-				<ModalContent size="xl">
+				<ModalContent side="right" size="xl">
 					<ModalHeader>
 						<ModalTitle>
 							<Text>{t('common.no_customer_found')}</Text>
@@ -39,15 +40,15 @@ export function EditCustomer({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent size="xl">
+			<ModalContent side="right" size="xl">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t('common.edit_2', { name: format(payload ?? {}) })}</Text>
 					</ModalTitle>
 				</ModalHeader>
-				<ModalBody>
-					<Tabs value={value} onValueChange={setValue}>
-						<TabsList className="w-full flex-row">
+				<View className="min-h-0 flex-1">
+					<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
+						<TabsList className="mx-4 flex-row">
 							<TabsTrigger value="form" className="flex-1">
 								<Text>{t('common.form')}</Text>
 							</TabsTrigger>
@@ -55,14 +56,16 @@ export function EditCustomer({ resource }: Props) {
 								<Text>{t('common.json')}</Text>
 							</TabsTrigger>
 						</TabsList>
-						<TabsContent value="form">
+						<TabsContent value="form" className="min-h-0 flex-1">
 							<EditCustomerForm customer={customer} />
 						</TabsContent>
-						<TabsContent value="json">
-							<Tree value={payload} />
+						<TabsContent value="json" className="min-h-0 flex-1">
+							<ModalBody>
+								<Tree value={payload} />
+							</ModalBody>
 						</TabsContent>
 					</Tabs>
-				</ModalBody>
+				</View>
 			</ModalContent>
 		</Modal>
 	);

@@ -18,7 +18,7 @@ import {
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose } from '@wcpos/components/modal';
+import { ModalAction, ModalBody, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import {
 	Table,
 	TableBody,
@@ -416,7 +416,7 @@ export function RefundOrderForm({ order }: Props) {
 
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<ModalBody contentContainerClassName="gap-4">
 				<HStack className="justify-between">
 					<Text className="text-muted-foreground">
 						{t('common.total')}: {format(parseFloat(orderData.total || '0'))}
@@ -553,19 +553,18 @@ export function RefundOrderForm({ order }: Props) {
 					<Text className="text-lg font-bold">{t('orders.refund_total')}</Text>
 					<Text className="text-lg font-bold">{formattedRefundTotal}</Text>
 				</HStack>
-
-				<HStack className="justify-end">
-					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction
-						testID="process-refund-button"
-						loading={loading}
-						disabled={!isValid || storageDegraded}
-						onPress={() => setConfirmOpen(true)}
-					>
-						{t('orders.process_refund')}
-					</ModalAction>
-				</HStack>
-			</VStack>
+			</ModalBody>
+			<ModalFooter>
+				<ModalClose>{t('common.cancel')}</ModalClose>
+				<ModalAction
+					testID="process-refund-button"
+					loading={loading}
+					disabled={!isValid || storageDegraded}
+					onPress={() => setConfirmOpen(true)}
+				>
+					{t('orders.process_refund')}
+				</ModalAction>
+			</ModalFooter>
 
 			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
 				<AlertDialogContent>

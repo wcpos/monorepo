@@ -8,6 +8,7 @@ import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
@@ -96,7 +97,23 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 		[create, currentOrderRecord, format, localPatch, onClose, t]
 	);
 
-	return <CustomerForm form={form} onClose={onClose} onSubmit={handleSave} loading={loading} />;
+	return (
+		<CustomerForm
+			form={form}
+			onClose={onClose}
+			onSubmit={handleSave}
+			loading={loading}
+			renderLayout={(body, footer) => (
+				<>
+					{/* The dialog is height-capped, not fixed-height, so the body must be allowed to
+					    shrink (not flex-1, which collapses in an auto-height parent) or the footer is
+					    pushed below the fold on short screens / with the keyboard up. */}
+					<DialogBody className="min-h-0 shrink">{body}</DialogBody>
+					<DialogFooter>{footer}</DialogFooter>
+				</>
+			)}
+		/>
+	);
 }
 
 /**
@@ -122,9 +139,7 @@ export function AddNewCustomer() {
 					<DialogHeader>
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
-					<DialogBody>
-						<AddCustomerFormBody onClose={close} />
-					</DialogBody>
+					<AddCustomerFormBody onClose={close} />
 				</DialogContent>
 			</Dialog>
 		</ErrorBoundary>
@@ -150,9 +165,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>
-				<DialogBody>
-					<AddCustomerFormBody onClose={close} />
-				</DialogBody>
+				<AddCustomerFormBody onClose={close} />
 			</DialogContent>
 		</Dialog>
 	);

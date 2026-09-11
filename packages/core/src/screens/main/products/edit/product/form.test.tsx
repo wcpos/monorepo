@@ -62,6 +62,7 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 jest.mock('@wcpos/components/modal', () => ({
+	ModalBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	ModalAction: ({
 		children,
 		onPress,
