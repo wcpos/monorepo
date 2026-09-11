@@ -1,4 +1,5 @@
 import { renderHook } from '@testing-library/react';
+import { CanceledError, isCancel } from 'axios';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 
@@ -295,6 +296,38 @@ describe('useHttpClient network audit logs', () => {
 			}
 		}
 	);
+
+	it('rejects with an intercepting handler cancellation without error-level logging', async () => {
+		const failure = Object.assign(new Error('expired'), { response: { status: 401 } });
+		const cancellation = new CanceledError();
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const cancelSpy = jest.spyOn(http, 'isCancel').mockImplementation(isCancel);
+		const nextHandler = jest.fn();
+		const { result } = renderHook(() =>
+			useHttpClient([
+				{
+					name: 'fallback-auth-handler',
+					priority: 50,
+					intercepts: true,
+					canHandle: () => true,
+					handle: async () => {
+						throw cancellation;
+					},
+				},
+				{ name: 'next', canHandle: () => true, handle: nextHandler },
+			])
+		);
+		try {
+			await expect(result.current.get('/wc/v3/products')).rejects.toBe(cancellation);
+			expect(nextHandler).not.toHaveBeenCalled();
+			expect(loggerMock.__error).not.toHaveBeenCalled();
+			expect(loggerMock.__debug).toHaveBeenCalledWith(expect.stringContaining('CanceledError'), {
+				context: { handlerName: 'fallback-auth-handler', status: 401 },
+			});
+		} finally {
+			cancelSpy.mockReturnValue(false);
+		}
+	});
 
 	it('does not persist a recovered request as a failure', async () => {
 		const failure = Object.assign(new Error('expired'), { response: { status: 401 } });
