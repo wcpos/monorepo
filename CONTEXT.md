@@ -296,8 +296,8 @@ carried by the merchant's WordPress site as a mailbox; not the data path.
 
 ## Language — Cashiers & till
 
-Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202, tickets #207, #208,
-#210, #209, #211, #212 and #213); the Register entry amended 2026-09-11 on #214.
+Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202,
+tickets #207, #208, #210, #209, #211, #212 and #213); the Register entry amended 2026-09-11 on #214.
 
 **Cashier**:
 A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
@@ -319,7 +319,7 @@ record serves, never a role name.
 _Avoid_: profile, account (for this concept)
 
 **Register**:
-The identity of one installed till — the workstation a session is opened on. The
+The identity of one cash drawer — the server record a session is opened on. The
 register is not a page and has no menu item (ruled 2026-09-11 on wcpos/roadmap#214,
 superseding the menu-item sentence of #207): it is a state of the POS screen — the cart
 column is the "Open register" card while closed and the count while counting — plus one
