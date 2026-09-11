@@ -93,6 +93,20 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 ): Promise<T> {
 	const facet = writeFacetFor(mutation.collectionName);
 	if (!facet?.graftAckIdentity || mutation.operation === 'delete') return mutation;
+	if (mutation.operation === 'create') {
+		// WOOCOMMERCE-POS-2N3: WooCommerce POST rejects line ids; born-twice discards the payload.
+		const payload = { ...((mutation.payload ?? {}) as Record<string, unknown>) };
+		for (const field of ['line_items', 'fee_lines', 'shipping_lines', 'coupon_lines']) {
+			const lines = payload[field];
+			if (!Array.isArray(lines)) continue;
+			payload[field] = lines.map((line: unknown) => {
+				if (typeof line !== 'object' || line === null || Array.isArray(line)) return line;
+				const { id: _id, ...rest } = line as Record<string, unknown>;
+				return rest;
+			});
+		}
+		return { ...mutation, payload };
+	}
 	const resident = await database.collections[mutation.collectionName]
 		?.findOne(mutation.recordId)
 		.exec();
