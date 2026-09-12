@@ -10,7 +10,7 @@ import { createSimulatedDriver } from '../../../../../services/payment-drivers/s
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
 import { initialTenderState, tenderReducer } from './tender-state';
 import { TenderPane } from './tender-pane';
-import { ThisPaymentLine } from './ledger-pane';
+import { LedgerLines } from './ledger-pane';
 import { ReaderConnection } from './reader-connection';
 
 import type { DriverStatus } from '../../../../../services/payment-drivers/types';
@@ -116,7 +116,12 @@ function makeFlow(count = 1): TenderFlow {
 		balanceMinor: 9295,
 		thisPaymentMinor: 9295,
 		afterThisPaymentMinor: 0,
-		splitLegs: [],
+		plan: null,
+		planLegs: [],
+		planLabel: null,
+		planMore: false,
+		lines: [],
+		linesPaidBy: {},
 		rows: [],
 		liveRows: [],
 		hasLiveLeg: false,
@@ -266,7 +271,7 @@ it.each([
 			...makeFlow(),
 			saveState: null,
 			balanceMinor: balance,
-			thisPaymentMinor: applied,
+			thisPaymentMinor: balance,
 			entryAppliedMinor: applied,
 			entryChangeMinor: change ? entry - applied : 0,
 			state: {
@@ -318,7 +323,7 @@ it('blocks no-change over-tender and restores full balance from a partial entry'
 		<TenderPane
 			flow={{
 				...flow,
-				thisPaymentMinor: 2000,
+				thisPaymentMinor: 9295,
 				entryAppliedMinor: 2000,
 				state: { ...flow.state, entryMinor: 2000 },
 			}}
@@ -330,83 +335,59 @@ it('blocks no-change over-tender and restores full balance from a partial entry'
 	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 9295 });
 });
 
-it.each(['select', 'amount'] as const)('offers split choices from the %s view', (view) => {
-	const flow = { ...makeFlow(), state: { ...initialTenderState, view, splitMenuOpen: true } };
-	const { rerender } = render(<ThisPaymentLine flow={flow} format={String} />);
-	expect(screen.getByTestId('checkout-this-payment').textContent).toBe('9295');
-	for (const [ways, shareMinor] of [
-		[2, 4648],
-		[3, 3098],
-		[4, 2324],
-	]) {
-		fireEvent.click(screen.getByTestId(`checkout-split-${ways}`));
-		expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'set-split-plan', ways, shareMinor });
-	}
-	fireEvent.click(screen.getByTestId('checkout-split-custom'));
-	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'arm-custom-amount' });
-	expect(screen.queryByTestId('checkout-split-clear')).toBeNull();
-	fireEvent.click(screen.getByTestId('checkout-split-close'));
-	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'close-split-menu' });
-	fireEvent.click(screen.getByTestId('checkout-split-payment'));
-	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'close-split-menu' });
-	rerender(
-		<ThisPaymentLine
-			flow={{ ...flow, state: { ...flow.state, splitMenuOpen: false } }}
-			format={String}
-		/>
-	);
-	fireEvent.click(screen.getByTestId('checkout-split-payment'));
-	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'open-split-menu' });
-});
-it('shows plan states, clears a split, and explains a custom entry remainder', () => {
-	const flow = {
+it('shows plan legs, labels, a short entry hint and numbered commit tail', () => {
+	const flow: TenderFlow = {
 		...makeFlow(),
-		splitLegs: [
-			{ minor: 3000, state: 'done' as const },
-			{ minor: 3098, state: 'now' as const },
-			{ minor: 3197, state: 'todo' as const },
+		saveState: null,
+		plan: { kind: 'even', ways: 3, from: 0 },
+		planLabel: 'Payment 2 of 3',
+		planLegs: [
+			{ minor: 100, state: 'done', title: 'Card' },
+			{ minor: 450, state: 'now' },
+			{ minor: 450, state: 'todo' },
 		],
-		state: {
-			...initialTenderState,
-			splitMenuOpen: true,
-			splitPlan: { ways: 3, shareMinor: 3098, taken: 1 },
-		},
+		thisPaymentMinor: 450,
+		balanceMinor: 900,
+		entryAppliedMinor: 200,
+		state: { ...initialTenderState, view: 'amount', entryMinor: 200, entryDirty: true },
 	};
-	const { rerender } = render(<ThisPaymentLine flow={flow} format={String} />);
-	expect(screen.getByTestId('checkout-split-payment').textContent).toBe('Split 3 ways');
-	expect(screen.getByText('Payment 2 of 3')).toBeTruthy();
-	for (const [index, variant] of ['success', 'default', 'muted'].entries()) {
-		expect(screen.getByTestId(`checkout-split-leg-${index}`).getAttribute('data-variant')).toBe(
-			variant
-		);
-	}
-	expect(screen.getByTestId('checkout-split-leg-0').textContent).toBe('3000 ✓');
-	fireEvent.click(screen.getByTestId('checkout-split-clear'));
-	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'clear-split', balanceMinor: 9295 });
-	const custom = {
-		...flow,
-		afterThisPaymentMinor: 8295,
-		state: { ...initialTenderState, view: 'amount' as const, customAmount: true, entryMinor: 1000 },
-	};
-	rerender(<ThisPaymentLine flow={custom} format={String} />);
-	expect(screen.getByTestId('checkout-split-payment').textContent).toBe('Custom amount');
-	expect(screen.getByTestId('checkout-split-after').textContent).toBe(
-		'After this payment: 8295 still to take'
+	render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-label').textContent).toContain('Payment 2 of 3 · 900 left');
+	expect(screen.getByTestId('checkout-plan-leg-0').textContent).toContain('Card 100');
+	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe(
+		'Less than planned · 250 moves to the next payment'
 	);
-	for (const state of [
-		{ ...custom.state, entryMinor: 0 },
-		{ ...custom.state, view: 'select' as const },
-	]) {
-		rerender(<ThisPaymentLine flow={{ ...custom, state }} format={String} />);
-		expect(screen.queryByTestId('checkout-split-after')).toBeNull();
-	}
-	for (const hidden of [
-		{ ...flow, balanceMinor: 0 },
-		{ ...flow, state: { ...flow.state, view: 'cancel' as const } },
-	]) {
-		rerender(<ThisPaymentLine flow={hidden} format={String} />);
-		expect(screen.queryByTestId('checkout-this-payment')).toBeNull();
-	}
+	expect(screen.getByTestId('checkout-commit').textContent).toContain(' · 2 of 3');
+	fireEvent.click(screen.getByTestId('checkout-plan-change'));
+	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'open-split' });
+});
+it('offers next items after a group, and renders a paid line badge', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		plan: { kind: 'items', ways: 1, firstMinor: 100, lineIds: [1], from: 0 },
+		planMore: true,
+		planLabel: 'Rest of the order',
+		planLegs: [
+			{ minor: 100, state: 'done', title: 'Card' },
+			{ minor: 500, state: 'now' },
+		],
+	};
+	render(
+		<>
+			<TenderPane flow={flow} format={String} />
+			<LedgerLines
+				lines={[{ id: 1, name: 'Belt' }]}
+				totalMinor={600}
+				format={String}
+				paidBy={{ 1: ['Card', 'SumUp'] }}
+			/>
+		</>
+	);
+	fireEvent.click(screen.getByTestId('checkout-plan-pick-items'));
+	expect(flow.dispatch).toHaveBeenCalledWith({ type: 'set-split-tab', tab: 'item' });
+	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'open-split' });
+	expect(screen.getByText('paid · Card + SumUp')).toBeTruthy();
 });
 
 it('keeps the keypad visible without a method and disables commit', () => {
@@ -641,22 +622,51 @@ it('keeps typed entry when switching methods without taking money', () => {
 });
 
 it('does not cap manual card at the planned split share', () => {
-	const flow = {
+	const flow: TenderFlow = {
 		...makeFlow(),
+		plan: { kind: 'even', ways: 2, from: 0 },
 		saveState: null,
 		balanceMinor: 2000,
-		thisPaymentMinor: 1500,
+		thisPaymentMinor: 1000,
 		entryAppliedMinor: 1500,
 		method: { ...method, title: 'Card', capabilities: { ...method.capabilities, change: false } },
 		state: {
 			...initialTenderState,
 			methodId: method.id,
 			entryMinor: 1500,
-			splitPlan: { ways: 2, shareMinor: 1000, taken: 0 },
 		},
 	};
 	render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
 	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
 	expect(screen.getByTestId('checkout-quick-balance').textContent).toBe('Exact 1000');
+});
+
+it('keeps fixed plans numbered out of two, but stops numbering a completed item group', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		balanceMinor: 1,
+		thisPaymentMinor: 1,
+		entryAppliedMinor: 1,
+		plan: { kind: 'fixed', firstMinor: 1, title: null, from: 0 },
+		planLegs: [{ minor: 1, state: 'now' }],
+	};
+	const { rerender } = render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-commit').textContent).toContain(' · 1 of 2');
+	rerender(
+		<TenderPane
+			flow={{
+				...flow,
+				plan: { kind: 'items', firstMinor: 100, lineIds: [1], ways: 1, from: 0 },
+				planMore: false,
+				planLegs: [
+					{ minor: 100, state: 'done', title: 'Cash' },
+					{ minor: 1, state: 'now' },
+				],
+			}}
+			format={String}
+		/>
+	);
+	expect(screen.getByTestId('checkout-commit').textContent).toContain(' · pays it off');
 });

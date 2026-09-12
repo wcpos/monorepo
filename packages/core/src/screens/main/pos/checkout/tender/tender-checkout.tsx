@@ -25,6 +25,7 @@ import { useTheme } from '../../../../../contexts/theme';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
+import { getUuidFromLineItem } from '../../hooks/utils';
 
 interface Props {
 	order: EngineRecord<'orders'>;
@@ -66,6 +67,10 @@ export function TenderCheckout({ order }: Props) {
 			finishSale();
 			return;
 		}
+		if (flow.state.splitView) {
+			flow.dispatch({ type: 'close-split' });
+			return;
+		}
 		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) {
 			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;
@@ -76,6 +81,7 @@ export function TenderCheckout({ order }: Props) {
 	const lines = React.useMemo(
 		() =>
 			(payload.line_items ?? []).map((item) => ({
+				id: getUuidFromLineItem(item) ?? item.id,
 				name: item.name,
 				quantity: item.quantity,
 				total: formatCurrency(Number(item.total ?? 0)),

@@ -6,6 +6,7 @@ import { type PaymentRow, readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
 import type { CurrentOrderRecord } from '../contexts/current-order/context';
+import type { TenderLineId, TenderPlan } from './tender/tender-state';
 
 export type OrderSaveState =
 	| { kind: 'saving' }
@@ -13,6 +14,8 @@ export type OrderSaveState =
 	| { kind: 'rejected'; status: number | null; reason: string | null; message: string | null };
 
 export interface CheckoutModeSnapshot {
+	readonly linesPaidBy: ReadonlyMap<string, Record<TenderLineId, string[]>>;
+	readonly tenderPlans: ReadonlyMap<string, TenderPlan>;
 	readonly tenderMethods: ReadonlyMap<string, string>;
 	readonly saveStates: ReadonlyMap<string, OrderSaveState>;
 	readonly checkoutOrders: ReadonlySet<string>;
@@ -22,6 +25,8 @@ export interface CheckoutModeSnapshot {
 
 let snapshot: CheckoutModeSnapshot = {
 	tenderMethods: new Map(),
+	tenderPlans: new Map(),
+	linesPaidBy: new Map(),
 	saveStates: new Map(),
 	checkoutOrders: new Set(),
 	receiptOrders: new Set(),
@@ -96,10 +101,26 @@ export function setTenderMethod(uuid: string, methodId: string | null) {
 	else tenderMethods.set(uuid, methodId);
 	publish({ ...snapshot, tenderMethods });
 }
+export function setTenderPlan(uuid: string, plan: TenderPlan | null) {
+	if (isEqual(snapshot.tenderPlans.get(uuid) ?? null, plan)) return;
+	const tenderPlans = new Map(snapshot.tenderPlans);
+	if (plan === null) tenderPlans.delete(uuid);
+	else tenderPlans.set(uuid, plan);
+	publish({ ...snapshot, tenderPlans });
+}
+/** Client-only split badges shared with the separately mounted checkout ledger. */
+export function setLinesPaidBy(uuid: string, paidBy: Record<TenderLineId, string[]> | null) {
+	const linesPaidBy = new Map(snapshot.linesPaidBy);
+	if (paidBy === null) linesPaidBy.delete(uuid);
+	else linesPaidBy.set(uuid, paidBy);
+	publish({ ...snapshot, linesPaidBy });
+}
 export function useTenderMethod(uuid: string) {
 	return useCheckoutMode().tenderMethods.get(uuid) ?? null;
 }
 export function leaveCheckout(uuid: string) {
+	setLinesPaidBy(uuid, null);
+	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
 	if (!snapshot.checkoutOrders.has(uuid)) return;
 	const checkoutOrders = new Set(snapshot.checkoutOrders);
@@ -113,6 +134,7 @@ export function leaveCheckout(uuid: string) {
  * serving: that order keeps its tab ("Paid · receipt") and waits to be tapped.
  */
 export function enterReceipt(uuid: string, { select = true }: { select?: boolean } = {}) {
+	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
 	const checkoutOrders = new Set(snapshot.checkoutOrders);
 	checkoutOrders.delete(uuid);
@@ -124,6 +146,8 @@ export function enterReceipt(uuid: string, { select = true }: { select?: boolean
 	});
 }
 export function finishReceipt(uuid: string) {
+	setLinesPaidBy(uuid, null);
+	setTenderPlan(uuid, null);
 	setTenderMethod(uuid, null);
 	receiptPrintAttempts.delete(uuid);
 	const receiptOrders = new Set(snapshot.receiptOrders);
@@ -143,6 +167,8 @@ export function resetCheckoutMode() {
 	receiptPrintAttempts.clear();
 	publish({
 		tenderMethods: new Map(),
+		tenderPlans: new Map(),
+		linesPaidBy: new Map(),
 		saveStates: new Map(),
 		checkoutOrders: new Set(),
 		receiptOrders: new Set(),
