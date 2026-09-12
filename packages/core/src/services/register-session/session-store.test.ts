@@ -81,4 +81,8 @@ it('gates counting and missing sessions, and expires the expected snapshot befor
 	await expect(requireOpenSession(db.register_sessions, 'register', true)).rejects.toMatchObject({
 		name: 'RegisterSessionRequiredError',
 	});
+	await row.incrementalPatch({ status: 'open', sync_status: 'failed' });
+	await expect(requireOpenSession(db.register_sessions, 'register', true)).rejects.toMatchObject({
+		name: 'RegisterSessionRequiredError',
+	});
 });

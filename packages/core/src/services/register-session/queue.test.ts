@@ -1,5 +1,6 @@
 import { createRxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 
 import type { StoreDatabase } from '@wcpos/database';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
@@ -22,7 +23,7 @@ beforeEach(async () => {
 	jest.clearAllMocks();
 	db = await createRxDatabase({
 		name: `queue${Math.random().toString(36).slice(2)}`,
-		storage: getRxStorageMemory(),
+		storage: wrappedValidateAjvStorage({ storage: getRxStorageMemory() }),
 		multiInstance: false,
 	});
 	await db.addCollections({
