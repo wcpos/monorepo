@@ -17,6 +17,10 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		expected: { cash: '155' },
 	}),
 }));
+// The movement sheet reaches the receipt document hook (REST client, expo-crypto); not this test's concern.
+jest.mock('../../receipt/use-receipt-document', () => ({
+	useReceiptDocument: () => ({ print, resolvedPrinter: { autoOpenDrawer: true } }),
+}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: string) => `£${v}` }),

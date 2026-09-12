@@ -5,10 +5,13 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import {
+	adoptCounters,
 	bindRegister,
 	getBoundRegisterId,
 	getRegisterSnapshot,
 	readBoundRegister,
+	readCounters,
+	type RegisterCounters,
 	unbindRegister,
 } from './register-document';
 
@@ -17,7 +20,7 @@ type Register = {
 	name: string;
 	status: string;
 	default_float?: string | null;
-	counters?: Record<string, number>;
+	counters?: RegisterCounters;
 };
 type Binding = {
 	status: 'bound' | 'choose' | 'none' | 'unknown';
@@ -81,6 +84,25 @@ function loadDirectory(
 	return entry.request;
 }
 
+/**
+ * Raise the local counter floor to the server's. Never blocks a bind: the closure queue
+ * re-adopts on `wcpos_closure_number_invalid`, and a payload without usable counters is ignored.
+ */
+async function adoptFromServer(
+	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
+	userDB: Parameters<typeof adoptCounters>[0],
+	siteUuid: string,
+	registerId: string
+): Promise<void> {
+	try {
+		const row = (await http.get(`registers/${registerId}`)).data as Register;
+		const counters = readCounters(row?.counters);
+		if (counters) await adoptCounters(userDB, siteUuid, registerId, counters);
+	} catch {
+		// Binding proceeds on the local floor.
+	}
+}
+
 export function useRegisterBindingSession(): void {
 	const { userDB, site, store } = useStoreSession();
 	const http = useRestHttpClient();
@@ -88,6 +110,7 @@ export function useRegisterBindingSession(): void {
 	const entry = directory(site.uuid!, store.id);
 	// Synchronize the persisted pointer and the external register directory on session/connectivity changes.
 	React.useEffect(() => {
+		const adoptServerCounters = (id: string) => adoptFromServer(http, userDB, site.uuid!, id);
 		const load = async () => {
 			const bound = await readBoundRegister(userDB, site.uuid!, store.id);
 			publish(entry, {
@@ -99,8 +122,12 @@ export function useRegisterBindingSession(): void {
 			await loadDirectory(entry, http, store.id);
 			if (!entry.loaded) return;
 			const registers = entry.value.registers;
-			if (bound && registers.some(({ id }) => id === bound.id)) return;
+			if (bound && registers.some(({ id }) => id === bound.id)) {
+				await adoptServerCounters(bound.id);
+				return;
+			}
 			if (registers.length === 1) {
+				await adoptServerCounters(registers[0].id);
 				await bindRegister(userDB, site.uuid!, registers[0], store.id);
 				publish(entry, {
 					status: 'bound',
@@ -145,10 +172,13 @@ export function useRegisterBinding() {
 		async (id: string) => {
 			const register = entry.value.registers.find((row) => row.id === id);
 			if (!register) return;
+			const adoptServerCounters = (registerId: string) =>
+				adoptFromServer(http, userDB, site.uuid!, registerId);
+			await adoptServerCounters(id);
 			await bindRegister(userDB, site.uuid!, register, store.id);
 			publish(entry, { status: 'bound', registerId: id, registerName: register.name });
 		},
-		[entry, site.uuid, store.id, userDB]
+		[entry, http, site.uuid, store.id, userDB]
 	);
 	return { ...value, bind };
 }

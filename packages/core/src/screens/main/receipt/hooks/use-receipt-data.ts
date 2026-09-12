@@ -63,7 +63,7 @@ export function useReceiptData({
 	const mode = document ? 'fiscal' : requestedMode;
 	const fetchData = React.useCallback(
 		async (requestIntent = intent) => {
-			const response = await http.get(`/receipts/${orderId}`, {
+			const response = await http.get(`/receipts/${orderId ?? 0}`, {
 				params: {
 					mode,
 					...(document ? { document } : {}),
@@ -75,9 +75,9 @@ export function useReceiptData({
 		[http, orderId, mode, intent, document]
 	);
 	const fetchForPrint = React.useCallback(async () => {
-		if (!orderId) return null;
+		if (!orderId && !document) return null;
 		return (await fetchData('print')).data ?? null;
-	}, [orderId, fetchData]);
+	}, [orderId, document, fetchData]);
 	const [fetchKey, setFetchKey] = React.useState(0);
 	const [state, setState] = React.useState<ReceiptDataState>({
 		orderId,
@@ -96,7 +96,7 @@ export function useReceiptData({
 	}, []);
 
 	React.useEffect(() => {
-		if (!orderId) {
+		if (!orderId && !document) {
 			// No order: nothing to fetch. The empty result is derived below, so no
 			// setState is needed here.
 			return;
@@ -162,7 +162,7 @@ export function useReceiptData({
 
 	// When there's no order the result is the empty state regardless of any
 	// previously-fetched data (derived rather than reset via setState).
-	if (!orderId || state.orderId !== orderId || state.document !== document) {
+	if ((!orderId && !document) || state.orderId !== orderId || state.document !== document) {
 		return {
 			data: null,
 			mode,

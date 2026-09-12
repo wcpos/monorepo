@@ -32,7 +32,7 @@ export function RegisterBar({
 	panelOpen: boolean;
 	onPanelOpenChange: (open: boolean) => void;
 }) {
-	const { session, sessionsOn, overdue } = useRegisterSession();
+	const { session, sessionsOn, overdue, lastClosure } = useRegisterSession();
 	const { wpCredentials, store, site } = useStoreSession();
 	const { screenSize } = useTheme();
 	const navigation = useNavigation();
@@ -92,7 +92,7 @@ export function RegisterBar({
 			</View>
 			{pill && <StatusBadge testID="register-bar-pill" label={t(pill)} variant="warning" />}
 			<View className="flex-1" />
-			{session && (
+			{(session || lastClosure) && (
 				<Button
 					variant="ghost"
 					className="h-11 w-11 p-0"

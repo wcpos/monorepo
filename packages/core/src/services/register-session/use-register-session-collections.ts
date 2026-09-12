@@ -4,7 +4,7 @@ import type { StoreCollections, StoreDatabase } from '@wcpos/database';
 
 import { useAppState } from '../../contexts/app-state';
 
-function useSessionCollection<K extends 'register_sessions' | 'cash_movements'>(
+function useSessionCollection<K extends 'register_sessions' | 'cash_movements' | 'closures'>(
 	name: K
 ): StoreCollections[K] | undefined {
 	const { storeDB } = useAppState();
@@ -29,3 +29,5 @@ function useSessionCollection<K extends 'register_sessions' | 'cash_movements'>(
 }
 export const useRegisterSessionCollection = () => useSessionCollection('register_sessions');
 export const useCashMovementCollection = () => useSessionCollection('cash_movements');
+
+export const useClosureCollection = () => useSessionCollection('closures');

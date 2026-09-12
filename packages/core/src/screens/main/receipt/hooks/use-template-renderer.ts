@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import Mustache from 'mustache';
+
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encoder/render-preview';
 import type { TemplateDocument } from '@wcpos/database';
@@ -53,6 +55,9 @@ interface UseTemplateRendererOptions {
 	baseReceiptURL: string | undefined;
 	mode: ReceiptMode;
 	document?: string;
+	documentReady?: boolean;
+	localReport?: Record<string, unknown>;
+	formatReport?: (data: Record<string, unknown>) => Record<string, unknown>;
 	/** The RxDB order document — used to build local receipt data when offline */
 	order: Record<string, any> | undefined;
 }
@@ -80,9 +85,12 @@ export function useTemplateRenderer({
 	baseReceiptURL,
 	mode: requestedMode,
 	document,
+	documentReady = true,
+	localReport,
+	formatReport,
 	order,
 }: UseTemplateRendererOptions): TemplateRendererResult {
-	const templates = useActiveTemplates();
+	const templates = useActiveTemplates(localReport ? 'report' : 'receipt');
 	const mode = document ? 'fiscal' : requestedMode;
 	const { store, site } = useAppState();
 	const register = useRegister();
@@ -107,7 +115,11 @@ export function useTemplateRenderer({
 		hasResponded,
 		isLoading,
 		fetchForPrint,
-	} = useReceiptData({ orderId: isOffline ? undefined : orderId, mode, document });
+	} = useReceiptData({
+		orderId: isOffline ? undefined : orderId,
+		mode,
+		document: isOffline || !documentReady ? undefined : document,
+	});
 	// The deadline record is kept together with the order it was armed for; a
 	// stale record from a previous order derives to "not passed" without any
 	// synchronous reset in the effect (same pattern as the template pick below).
@@ -127,8 +139,9 @@ export function useTemplateRenderer({
 
 	// Fall back to locally-built receipt data when the API response is unavailable
 	const receiptData = React.useMemo(() => {
-		if (!isOffline && apiReceiptData) return apiReceiptData;
-		if (document) return null;
+		if (!isOffline && apiReceiptData)
+			return formatReport ? formatReport(apiReceiptData) : apiReceiptData;
+		if (document) return localReport ?? null;
 		if (order && store) {
 			return buildReceiptData(order, store, dp, {
 				getStatusLabel,
@@ -140,6 +153,8 @@ export function useTemplateRenderer({
 		return null;
 	}, [
 		apiReceiptData,
+		localReport,
+		formatReport,
 		document,
 		isOffline,
 		order,
@@ -247,6 +262,11 @@ export function useTemplateRenderer({
 		}
 	}
 
+	const reportContent = localReport
+		? '<h1>{{title}}</h1><p>{{order_number}}</p>{{#line_items}}<p>{{name}}: {{amount}}</p>{{/line_items}}<p>{{footer}}</p>'
+		: undefined;
+	if (!renderedHtml && reportContent && receiptData)
+		renderedHtml = Mustache.render(reportContent, receiptData);
 	const preparePrintContent = async (nextLocalPrintCount: () => Promise<number>) => {
 		const buildLocal = async () =>
 			order && store
@@ -261,14 +281,17 @@ export function useTemplateRenderer({
 		// Online: the server counts and marks (even if the preview fetch failed or timed
 		// out). Only when the print fetch itself fails does the local counter take over.
 		let data: ReceiptData | Record<string, unknown> | null = null;
-		if (!isOffline && orderId) {
+		if (!isOffline && documentReady && (orderId || document)) {
 			try {
-				data = await fetchForPrint();
+				const remote = await fetchForPrint();
+				data = remote && formatReport ? formatReport(remote) : remote;
 			} catch {
 				data = null;
 			}
 		}
-		if (document && !data) throw new Error('receipt_document_requires_store');
+		if (document && !data && ((documentReady && !isOffline) || !localReport))
+			throw new Error('receipt_document_requires_store');
+		data ??= localReport ?? null;
 		data ??= await buildLocal();
 		if (!data) throw new Error('No receipt data available for printing');
 		return {
@@ -280,7 +303,9 @@ export function useTemplateRenderer({
 							content: selectedTemplate.content,
 							receiptData: data as Record<string, unknown>,
 						})
-					: undefined,
+					: reportContent
+						? Mustache.render(reportContent, data)
+						: undefined,
 		};
 	};
 
@@ -292,8 +317,16 @@ export function useTemplateRenderer({
 		renderedHtml,
 		receiptUrl,
 		receiptData,
-		selectedTemplateEngine: selectedTemplate?.engine ?? null,
-		selectedTemplateContent: selectedTemplate?.content ?? null,
+		selectedTemplateEngine: selectedTemplate?.offline_capable
+			? (selectedTemplate.engine ?? null)
+			: localReport
+				? 'thermal'
+				: (selectedTemplate?.engine ?? null),
+		selectedTemplateContent: selectedTemplate?.offline_capable
+			? (selectedTemplate.content ?? null)
+			: localReport
+				? '<receipt><text>{{store.name}}</text><text>{{order.number}}</text>{{#lines}}<text>{{name}}</text>{{/lines}}<text>{{order.customer_note}}</text><feed lines="3"/><cut/></receipt>'
+				: (selectedTemplate?.content ?? null),
 		isOffline,
 		isSyncing,
 		hasFinalData,

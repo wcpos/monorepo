@@ -69,7 +69,8 @@ let unsyncedCount = 3;
 let blind = false,
 	approval_required = false,
 	varianceThreshold = '';
-const closeSession = jest.fn(async () => undefined),
+const closure = { id: 's', number: 1 };
+const closeSession = jest.fn(async () => closure),
 	backToSelling = jest.fn(async () => undefined);
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
@@ -185,7 +186,12 @@ it('closes with other tenders and reports the snapshot; blank cash is disabled',
 	fireEvent.change(screen.getByTestId('count-tender-card'), { target: { value: '22' } });
 	fireEvent.click(screen.getByTestId('count-close'));
 	await waitFor(() =>
-		expect(onClosed).toHaveBeenCalledWith({ counted: '480.80', expected: '480.80', blind: false })
+		expect(onClosed).toHaveBeenCalledWith({
+			closure,
+			counted: '480.80',
+			expected: '480.80',
+			blind: false,
+		})
 	);
 	expect(closeSession).toHaveBeenCalledWith({ counted: { cash: '480.80', card: '22' } });
 });

@@ -134,3 +134,20 @@ it('forces fiscal mode and preserves the refund selector for preview, print, and
 		params: { mode: 'fiscal', document: 'refund:13' },
 	});
 });
+
+it('fetches an orderless closure preview and counts only print intent', async () => {
+	mockGet.mockResolvedValue({ data: { data: { number: 1 } } });
+	const { result } = renderHook(() =>
+		useReceiptData({ orderId: undefined, document: 'closure:session' })
+	);
+	await waitFor(() => expect(result.current.data).toEqual({ number: 1 }));
+	expect(mockGet).toHaveBeenLastCalledWith('/receipts/0', {
+		params: { mode: 'fiscal', document: 'closure:session' },
+	});
+	await act(async () => {
+		await result.current.fetchForPrint();
+	});
+	expect(mockGet).toHaveBeenLastCalledWith('/receipts/0', {
+		params: { mode: 'fiscal', document: 'closure:session', intent: 'print' },
+	});
+});
