@@ -4,6 +4,8 @@ import * as React from 'react';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { useRegisterSession } from './use-register-session';
 import { RegisterSessionBridge } from './bridge';
 import { drainRegisterSessionQueue } from './queue';
@@ -50,11 +52,13 @@ jest.mock('./use-register-session-collections', () => ({
 jest.mock('./queue', () => ({ drainRegisterSessionQueue: jest.fn() }));
 jest.mock('./refresh', () => ({ refreshSessions: jest.fn() }));
 
+const log = jest.mocked(getLogger(['wcpos', 'registerSession']));
 const drain = jest.mocked(drainRegisterSessionQueue);
 const refresh = jest.mocked(refreshSessions);
 
 beforeEach(() => {
 	jest.useFakeTimers();
+	jest.clearAllMocks();
 	drain.mockReset().mockResolvedValue(undefined);
 	refresh.mockReset().mockResolvedValue(undefined);
 });
@@ -74,6 +78,76 @@ it('refreshes shared register state after every periodic drain', async () => {
 
 	expect(drain).toHaveBeenCalledTimes(2);
 	expect(refresh).toHaveBeenCalledTimes(2);
+});
+
+it('names the failing stage and the rejection, and only escalates once it persists', async () => {
+	refresh.mockRejectedValue(
+		Object.assign(new Error('Request failed'), {
+			response: { status: 401, data: { code: 'jwt_auth_invalid_token' } },
+		})
+	);
+	render(<RegisterSessionBridge />);
+
+	// One 60-second cycle is a blip; the rubric keeps a single transient failure forensic.
+	await waitFor(() => expect(log.debug).toHaveBeenCalledTimes(1));
+	expect(log.warn).not.toHaveBeenCalled();
+	expect(log.debug).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({
+				stage: 'refresh',
+				status: 401,
+				errorCode: 'jwt_auth_invalid_token',
+				message: 'Request failed',
+			}),
+		})
+	);
+
+	await act(async () => {
+		jest.advanceTimersByTime(60_000);
+		await Promise.resolve();
+	});
+
+	// Still broken a cycle later: this is the row that fires every minute today with nothing in it.
+	expect(log.warn).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({ stage: 'refresh', status: 401, consecutiveFailures: 2 }),
+		})
+	);
+});
+
+it('distinguishes a drain failure from a refresh failure', async () => {
+	drain.mockRejectedValue(Object.assign(new Error('Storage is full'), {}));
+	render(<RegisterSessionBridge />);
+
+	await waitFor(() => expect(log.debug).toHaveBeenCalledTimes(1));
+	expect(refresh).not.toHaveBeenCalled();
+	expect(log.debug).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({ stage: 'drain', message: 'Storage is full' }),
+		})
+	);
+});
+
+it('forgets the failure streak once a cycle succeeds', async () => {
+	refresh.mockRejectedValueOnce(new Error('Request failed'));
+	render(<RegisterSessionBridge />);
+	await waitFor(() => expect(log.debug).toHaveBeenCalledTimes(1));
+
+	await act(async () => {
+		jest.advanceTimersByTime(60_000);
+		await Promise.resolve();
+	});
+	refresh.mockRejectedValueOnce(new Error('Request failed'));
+	await act(async () => {
+		jest.advanceTimersByTime(60_000);
+		await Promise.resolve();
+	});
+
+	expect(log.warn).not.toHaveBeenCalled();
+	expect(log.debug).toHaveBeenCalledTimes(2);
 });
 
 it('recovers only an interrupted local close; imported history and written closures are never current', () => {

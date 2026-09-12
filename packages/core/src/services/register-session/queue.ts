@@ -11,6 +11,11 @@ import type {
 	RegisterSessionRow,
 	UserDatabase,
 } from '@wcpos/database';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	adoptCounters,
@@ -20,6 +25,7 @@ import {
 	type RegisterCounters,
 } from '../register/register-document';
 import { backoffMs, MAX_SEND_ATTEMPTS } from '../../screens/main/receipt/email-queue/queue';
+import { failureFacts } from './failure-facts';
 
 export type SessionHttp = {
 	get: (
@@ -27,6 +33,27 @@ export type SessionHttp = {
 		options?: { params: Record<string, string | number> }
 	) => Promise<{ data: unknown }>;
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
+};
+/**
+ * The three levels the outbox is entitled to write. It sees a whole attempt, so it can name the
+ * terminal outcome of a permanent refusal, but a retryable failure is mid-arc and stays forensic
+ * — see packages/utils/src/logger/LEVELS.md.
+ */
+export type SessionLogger = {
+	debug: (message: string, options?: SessionLogOptions) => void;
+	warn: (message: string, options?: SessionLogOptions) => void;
+	error: (message: string, options: SessionLogOptions & { code: ErrorCode }) => void;
+};
+type SessionLogOptions = {
+	code?: ErrorCode;
+	showToast?: boolean;
+	context?: Record<string, unknown>;
+	terminal?: {
+		operationId?: string;
+		operationType?: string;
+		attempt?: number;
+		outcome?: 'ok' | 'recovered' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
+	};
 };
 type Deps = {
 	closures: ClosureCollection;
@@ -36,8 +63,50 @@ type Deps = {
 	sessions: RegisterSessionCollection;
 	movements: CashMovementCollection;
 	http: SessionHttp;
-	logger: { warn: (message: string) => void };
+	logger: SessionLogger;
 };
+/** `operationId` is clamped to 32 characters, so a 36-character UUID would truncate. */
+const operationId = (id: string) => id.replace(/-/g, '').slice(0, 32);
+/**
+ * Which registered code a settled refusal is. The outcomes differ in what the merchant has to
+ * DO about them, which is what the code carries: refused cash is money in the drawer the store
+ * will never see; a refused reversal leaves the original standing; a refused open detaches the
+ * shift from its sales; a takeover means two tills on one drawer. A refused closure is the same
+ * problem as a refused close transition — the count did not reach the store — so it shares
+ * REGISTER211 rather than inventing a code that says the same thing.
+ *
+ * The status route carries all three transitions, so it is classified by the transition the row
+ * actually asked for, not by the route: a refused `counting` or `open` transition leaves the
+ * register OPEN and is nothing like a refused close.
+ */
+function refusalCode(
+	endpoint: string,
+	row: RegisterSessionRow | CashMovementRow | ClosureRow,
+	failure: { status?: number; errorCode?: string }
+): ErrorCode {
+	if (failure.status === 409 && failure.errorCode === 'wcpos_session_already_open') {
+		return ERROR_CODES.REGISTER_TAKEN_OVER;
+	}
+	if (endpoint === 'movements') {
+		return 'voids' in row && row.voids
+			? ERROR_CODES.CASH_MOVEMENT_VOID_REFUSED
+			: ERROR_CODES.CASH_MOVEMENT_REFUSED;
+	}
+	if (endpoint === STATUS_ENDPOINT) {
+		return 'pending_status' in row && row.pending_status !== 'closed'
+			? ERROR_CODES.REGISTER_OPEN_REFUSED
+			: ERROR_CODES.REGISTER_CLOSE_REFUSED;
+	}
+	return endpoint === 'sessions'
+		? ERROR_CODES.REGISTER_OPEN_REFUSED
+		: ERROR_CODES.REGISTER_CLOSE_REFUSED;
+}
+/**
+ * The label the status route logs under. `context.endpoint` is searchable, so it must be the
+ * same string every time — interpolating the session id makes every row unique and a search
+ * for the route find nothing.
+ */
+const STATUS_ENDPOINT = 'sessions/status';
 const inFlight = new Map<RegisterSessionCollection, Promise<void>>();
 export const synced = {
 	sync_status: 'synced',
@@ -95,25 +164,14 @@ async function drain({
 }: Deps) {
 	async function send(
 		doc: RegisterSessionDocument | CashMovementDocument | ClosureDocument,
+		endpoint: string,
 		task: () => Promise<void>,
 		statusTransition = false
 	) {
 		try {
 			await task();
 		} catch (error) {
-			const failure = error as {
-				message?: string;
-				response?: {
-					status?: number;
-					data?: {
-						code?: string;
-						message?: string;
-						data?: { session_id?: string; closure_id?: string };
-					};
-				};
-			};
-			const status = failure.response?.status;
-			const body = failure.response?.data;
+			const { status, body, errorCode, field, message } = failureFacts(error);
 			if (doc.collection === closures && status === 409) {
 				const closure = doc as ClosureDocument;
 				if (body?.code === 'wcpos_closure_exists' && body.data?.closure_id) {
@@ -142,7 +200,7 @@ async function drain({
 						number_retried: true,
 						printed_number: closure.printed_at ? closure.number : null,
 					});
-					await send(closure, task);
+					await send(closure, endpoint, task);
 					return;
 				}
 			}
@@ -155,18 +213,69 @@ async function drain({
 					sync_error: 'wcpos_override_refused',
 					closed_at_gmt: null,
 				});
+				// A refused override is recovered, not failed — the count is intact and the session is
+				// back at counting — but repeated failed overrides on a short till are exactly the
+				// pattern worth seeing, and this branch left no record of them whatsoever.
+				logger.warn('Register session close approval refused', {
+					code: ERROR_CODES.REGISTER_APPROVAL_REFUSED,
+					context: { endpoint, status, errorCode, documentId: doc.getLatest().id },
+					terminal: {
+						operationId: operationId(doc.getLatest().id),
+						operationType: 'register.outbox',
+						outcome: 'rejected',
+					},
+				});
 				return;
 			}
 			// 4xx is permanent except the two throttle codes, which the server asks us to retry.
 			const retry = !status || status >= 500 || status === 408 || status === 429;
-			const attempts = doc.getLatest().sync_attempts + 1;
+			const before = doc.getLatest();
+			const attempts = before.sync_attempts + 1;
 			await doc.incrementalPatch({
 				sync_status: retry ? 'pending' : 'failed',
 				sync_attempts: attempts,
 				sync_next_at: retry ? Date.now() + backoffMs(attempts) : null,
-				sync_error: body?.code ?? body?.message ?? failure.message ?? String(status),
+				sync_error: errorCode ?? body?.message ?? message ?? String(status),
 			});
-			logger.warn('Register session outbox request failed');
+			const code = refusalCode(endpoint, before, { status, errorCode });
+			// Losing the race for a register is not a failed arc: the till adopts the winning
+			// server session a few lines below and carries on. The rubric's terminal-outcome rule
+			// makes that `recovered`, and calling it `failed` would put a broken-looking row in
+			// front of a merchant whose till is working.
+			const takeover = code === ERROR_CODES.REGISTER_TAKEN_OVER;
+			// The cashier's typed reason is deliberately absent: `error` forwards its whole context
+			// to Sentry, and a free-text field is the one thing that must not ride along.
+			const options = {
+				context: {
+					endpoint,
+					status,
+					errorCode,
+					field,
+					message,
+					documentId: before.id,
+					...('type' in before ? { type: before.type, amount: before.amount } : {}),
+				},
+				terminal: {
+					operationId: operationId(before.id),
+					operationType: 'register.outbox',
+					attempt: attempts,
+					...(retry ? {} : { outcome: takeover ? ('recovered' as const) : ('failed' as const) }),
+				},
+			};
+			// Retryable means the arc has not settled, so it stays forensic. A 4xx is the server's
+			// final answer, and the registry decides how loud that is: refused cash needs the
+			// cashier now and is an `error` with a toast; a refused reversal or a takeover is a
+			// `warn`. The level follows the code so the two can never drift apart.
+			if (retry) logger.debug('Register session outbox request failed', options);
+			else if (ERROR_CATALOGUE[code].severity === 'error') {
+				logger.error('Register session outbox request permanently refused', {
+					...options,
+					code,
+					showToast: ERROR_CATALOGUE[code].dataSafety === 'money-moved',
+				});
+			} else {
+				logger.warn('Register session outbox request permanently refused', { ...options, code });
+			}
 			if (status === 409 && body?.code === 'wcpos_session_already_open' && body.data?.session_id) {
 				const server = (await http.get(`sessions/${body.data.session_id}`))
 					.data as RegisterSessionRow;
@@ -190,7 +299,7 @@ async function drain({
 			);
 		});
 		if (!due(row) || row.server_status || closingPredecessor) continue;
-		await send(row, async () => {
+		await send(row, 'sessions', async () => {
 			const response = await http.post('sessions', {
 				id: row.id,
 				register_id: row.register_id,
@@ -211,6 +320,7 @@ async function drain({
 			continue;
 		await send(
 			row,
+			STATUS_ENDPOINT,
 			async () => {
 				if (row.pending_status === 'closed' && row.server_status === 'open') {
 					await http.post(`sessions/${row.id}/status`, {
@@ -252,7 +362,7 @@ async function drain({
 			}
 			if (target?.sync_status !== 'synced') continue;
 		}
-		await send(row, async () => {
+		await send(row, 'movements', async () => {
 			const response = await http.post('movements', {
 				id: row.id,
 				session_id: row.session_id,
@@ -307,7 +417,7 @@ async function drain({
 			});
 		}
 		if (due(row) && rowsSynced) {
-			await send(row, async () => {
+			await send(row, 'closures', async () => {
 				const current = row.getLatest();
 				const {
 					id,

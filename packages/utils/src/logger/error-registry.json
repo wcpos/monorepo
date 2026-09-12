@@ -1977,5 +1977,151 @@
 		"logSources": [],
 		"evidence": "packages/core/src/screens/main/pos/customer-display/use-display-snapshot.ts",
 		"introducedIn": "2.0.0"
+	},
+	{
+		"code": "REGISTER101",
+		"symbol": "CASH_MOVEMENT_REFUSED",
+		"domain": "REGISTER",
+		"severity": "error",
+		"actionHint": "The cash is in the drawer but not in your store — retry it from the register panel before you count.",
+		"retryPolicy": "manual",
+		"dataSafety": "money-moved",
+		"escalation": "support-with-export",
+		"summary": "Your store refused a paid in, paid out or no sale that the till has already recorded.",
+		"docsBody": "The cash has physically moved and the till knows about it, but your store does not. Retry the movement from the register panel; if it keeps failing, note the amount and reason before you close, because the store's expected total will be short or over by exactly that amount.",
+		"troubleshooting": [
+			"Open the register panel. A refused movement is listed at the top of the pane with a Retry button — retry it first, because most refusals are a permission or session problem rather than the amount.",
+			"If the log entry names a field, that field is what your store rejected. Record the movement again with a valid amount and a reason.",
+			"If it keeps failing, write the amount, type and reason down before counting: the store's expected total does not include this movement, so the drawer will read short (paid out) or over (paid in) by that amount.",
+			"A refusal on every movement usually means the cashier's account lost the Manage cash capability, or the session was closed on another device. Check both in WP Admin.",
+			"Do not close the register until the movement has either gone through or been written down — the till keeps the row, but it is the only copy."
+		],
+		"logSources": [
+			"browser-console",
+			"network-inspector"
+		],
+		"evidence": "HANDOFF-register-logging-audit-2026-09-12 §1; monorepo#2006",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"code": "REGISTER111",
+		"symbol": "CASH_MOVEMENT_VOID_REFUSED",
+		"domain": "REGISTER",
+		"severity": "warn",
+		"actionHint": "The original movement still stands in your store — check it before recording anything else.",
+		"retryPolicy": "manual",
+		"dataSafety": "local-only",
+		"escalation": "none",
+		"summary": "Your store would not reverse a cash movement, so the original one still counts.",
+		"docsBody": "The till shows the movement as reversed; your store still counts it. The usual causes are a movement that was already reversed, or one that belongs to a session that has since been counted.",
+		"troubleshooting": [
+			"Check the register panel's paid in / out list: the movement the reversal was aimed at is the one your store still counts.",
+			"A movement can only be reversed once, and only while its session is open — after counting starts, your store refuses reversals by design.",
+			"If the reversal was a mistake, nothing needs doing: the store never applied it.",
+			"If the reversal was correct and your store still refuses it, record a matching opposite movement instead so the drawer and the store agree."
+		],
+		"logSources": [
+			"browser-console",
+			"network-inspector"
+		],
+		"evidence": "HANDOFF-register-logging-audit-2026-09-12 §4; wcpos_movement_void_refused",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"code": "REGISTER201",
+		"symbol": "REGISTER_OPEN_REFUSED",
+		"domain": "REGISTER",
+		"severity": "error",
+		"actionHint": "Sales are still safe, but they are not attached to a till session — reopen the register.",
+		"retryPolicy": "manual",
+		"dataSafety": "local-only",
+		"escalation": "store-admin",
+		"summary": "Your store refused to open this register session, so nothing is being counted against it.",
+		"docsBody": "Selling still works and no order is at risk, but this device's register session does not exist in your store. Cash movements cannot be recorded against it and the session will not appear in the register reports.",
+		"troubleshooting": [
+			"Close and reopen the register from the register panel — a fresh session usually opens cleanly.",
+			"If the log entry names a field, the opening float is the usual culprit: re-enter it as plain digits with a single decimal point.",
+			"**Store admin:** confirm the register still exists and is not retired in WP Admin, and that the cashier's account has the Manage cash capability.",
+			"Orders taken while no session exists are saved normally but carry no session, so they will not appear in that shift's register report."
+		],
+		"logSources": [
+			"browser-console",
+			"network-inspector"
+		],
+		"evidence": "HANDOFF-register-logging-audit-2026-09-12 §4; monorepo#2006",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"code": "REGISTER211",
+		"symbol": "REGISTER_CLOSE_REFUSED",
+		"domain": "REGISTER",
+		"severity": "error",
+		"actionHint": "Write the counted figures down before reopening — the till does not keep them.",
+		"retryPolicy": "manual",
+		"dataSafety": "local-only",
+		"escalation": "store-admin",
+		"summary": "Your store refused this register's count, so the session is still open there.",
+		"docsBody": "Your store turned the close down rather than missing it, so nothing retries it. The register goes back to showing Open register, and the till does not keep the count through that: when it rejoins the session its copy of the figures is replaced by the store’s, which has none. Write down what you counted before touching the register again.",
+		"troubleshooting": [
+			"Write down what you counted — notes, cash and each other tender — before touching the register again.",
+			"Fix the cause first, or the next attempt is refused the same way. The usual ones are the closing cashier losing permission to manage cash, and a session already closed on another device.",
+			"If the close needed a manager’s approval, that approval is checked at the moment of the close and does not carry over; ask for it again on the new attempt.",
+			"Reopen the register. The store still has this shift open, so the till rejoins the existing session rather than starting a second one, and the original opening float and cashier are shown.",
+			"Count again from the figures you wrote down, and close."
+		],
+		"logSources": [
+			"browser-console",
+			"network-inspector"
+		],
+		"evidence": "HANDOFF-register-logging-audit-2026-09-12 §4; monorepo#2006",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"code": "REGISTER221",
+		"symbol": "REGISTER_TAKEN_OVER",
+		"domain": "REGISTER",
+		"severity": "warn",
+		"actionHint": "Another device holds this register — check which drawer you are actually counting.",
+		"retryPolicy": "never",
+		"dataSafety": "local-only",
+		"escalation": "store-admin",
+		"summary": "Another device already had this register open, so this till joined that session instead of starting its own.",
+		"docsBody": "Two devices opened the same register. Your store keeps the session that was already open and this device has switched to it, so both tills now count the same drawer. Anything this device recorded before switching belongs to the session it abandoned.",
+		"troubleshooting": [
+			"Check the opening float and the cashier shown in the register panel: they are now the other device's, not the ones typed here.",
+			"Two tills on one register means one physical drawer counted by two people — agree who is counting before the shift ends, or give each device its own register.",
+			"Any cash movement recorded on this device before the switch stayed with the abandoned session and is not in the drawer total you can now see.",
+			"**Store admin:** the register list in WP Admin shows which sessions are open and on which register."
+		],
+		"logSources": [
+			"browser-console",
+			"network-inspector"
+		],
+		"evidence": "HANDOFF-register-logging-audit-2026-09-12 §4; wcpos_session_already_open",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"code": "REGISTER301",
+		"symbol": "REGISTER_APPROVAL_REFUSED",
+		"domain": "REGISTER",
+		"severity": "warn",
+		"actionHint": "Ask a different manager to approve the count, then close again.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "store-admin",
+		"summary": "Your store would not accept the manager approval for this count, so the register is still open.",
+		"docsBody": "The count is held on this device and nothing is lost. Your store refuses an approval when the password is wrong, when the approver is the same person who is closing, or when that account cannot approve closes.",
+		"troubleshooting": [
+			"Check the username and password — an approval is a normal WordPress sign-in and is case sensitive.",
+			"A cashier cannot approve their own count: the approver must be a different account from the one closing the register.",
+			"The approving account needs permission to manage register closures. A shop manager has it by default; a cashier does not.",
+			"**Store admin:** repeated refusals on one till are worth looking at. Each attempt is recorded, and a short drawer with several failed approvals is the pattern worth investigating."
+		],
+		"logSources": [
+			"browser-console",
+			"network-inspector"
+		],
+		"evidence": "HANDOFF-register-logging-audit-2026-09-12 §4; wcpos_override_refused",
+		"introducedIn": "2.0.0"
 	}
 ]
