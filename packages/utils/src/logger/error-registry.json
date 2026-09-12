@@ -597,7 +597,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#105",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PRINT101",
@@ -1896,6 +1896,6 @@
 		],
 		"logSources": [],
 		"evidence": "packages/core/src/screens/main/pos/customer-display/use-display-snapshot.ts",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	}
 ]
