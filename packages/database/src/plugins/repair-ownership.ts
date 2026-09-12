@@ -4,6 +4,7 @@ import type { RxDatabase, RxPlugin } from 'rxdb';
 
 // Bounded so a dead worker cannot hang close.
 const REVOCATION_ACK_TIMEOUT_MS = 250;
+const OWNERSHIP_LEASE_REFRESH_MS = 1000;
 const storageLogger = getLogger(['wcpos', 'db', 'storage']);
 let channelName: string;
 let plugin: RxPlugin | undefined;
@@ -18,6 +19,7 @@ export function createRepairOwnershipPlugin({ channelName }: { channelName: stri
 	if (plugin) return plugin;
 	const owned = new Map<string, Set<RxDatabase>>();
 	let seq = 0;
+	let leaseTimer: ReturnType<typeof setInterval> | undefined;
 	const pendingAcks = new Map<number, () => void>();
 	const closed = new WeakSet<RxDatabase>();
 	const channel =
@@ -25,6 +27,13 @@ export function createRepairOwnershipPlugin({ channelName }: { channelName: stri
 	// Node's BroadcastChannel holds the event loop open (jest, node:test); browsers have no unref.
 	(channel as { unref?: () => void } | undefined)?.unref?.();
 	const publish = () => {
+		if (owned.size && !leaseTimer) {
+			leaseTimer = setInterval(publish, OWNERSHIP_LEASE_REFRESH_MS);
+			(leaseTimer as unknown as { unref?: () => void }).unref?.();
+		} else if (!owned.size && leaseTimer) {
+			clearInterval(leaseTimer);
+			leaseTimer = undefined;
+		}
 		channel?.postMessage({ type: 'ownership', owned: [...owned.keys()], seq: ++seq });
 		return seq;
 	};

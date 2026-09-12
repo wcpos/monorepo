@@ -8,5 +8,8 @@ const ownership = createRepairOwnership({
 	channelName: typeof self !== 'undefined' ? self.name : '',
 });
 exposeWorkerRxStorage({
-	storage: withTargetedOpfsRecovery(getRxStorageOPFS(), { ownsRepairs: ownership.ownsRepairs }),
+	storage: withTargetedOpfsRecovery(getRxStorageOPFS(), {
+		ownsRepairs: ownership.ownsRepairs,
+		onInstance: ownership.onInstance,
+	}),
 });

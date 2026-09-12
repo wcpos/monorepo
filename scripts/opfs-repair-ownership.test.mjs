@@ -87,3 +87,59 @@ test('acknowledges each ownership message after replacing the set', () => {
 		[{ type: 'ownership-ack', seq: undefined }, true],
 	]);
 });
+
+test('a silent worker loses its lease; a fresh message renews it', (t) => {
+	t.mock.timers.enable({ apis: ['Date'], now: 10000 });
+	const ownership = createRepairOwnership({ channelName: 'tab' });
+	const message = { data: { type: 'ownership', owned: ['store'] } };
+	channel.onmessage(message);
+	t.mock.timers.tick(2999);
+	assert.equal(ownership.ownsRepairs(params), true);
+	t.mock.timers.tick(2);
+	assert.equal(ownership.ownsRepairs(params), false);
+	channel.onmessage(message);
+	assert.equal(ownership.ownsRepairs(params), true);
+});
+
+test('revocation ack drains every lost database instance and unregisters on close', async () => {
+	const ownership = createRepairOwnership({ channelName: 'tab' });
+	const releases = [];
+	const closed = [];
+	for (const name of ['store', 'store', 'other']) {
+		const instance = {
+			taskQueue: { awaitIdle: () => new Promise((resolve) => releases.push(resolve)) },
+			close: async () => closed.push(name),
+		};
+		ownership.onInstance(instance, { databaseName: name });
+		if (name === 'other') await instance.close();
+	}
+	await channel.onmessage({ data: { type: 'ownership', owned: ['store', 'other'], seq: 1 } });
+	const revoking = channel.onmessage({ data: { type: 'ownership', owned: [], seq: 2 } });
+	assert.equal(ownership.ownsRepairs(params), false);
+	assert.equal(releases.length, 2);
+	assert.deepEqual(channel.messages.at(-1), { type: 'ownership-ack', seq: 1 });
+	releases[0]();
+	await Promise.resolve();
+	assert.deepEqual(channel.messages.at(-1), { type: 'ownership-ack', seq: 1 });
+	releases[1]();
+	await revoking;
+	assert.deepEqual(channel.messages.at(-1), { type: 'ownership-ack', seq: 2 });
+	assert.deepEqual(closed, ['other']);
+});
+
+test('a wedged queue bounds the revocation drain', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout'] });
+	const ownership = createRepairOwnership({ channelName: 'tab' });
+	ownership.onInstance(
+		{ taskQueue: { awaitIdle: () => new Promise(() => {}) }, close() {} },
+		params
+	);
+	await channel.onmessage({ data: { type: 'ownership', owned: ['store'], seq: 1 } });
+	const revoking = channel.onmessage({ data: { type: 'ownership', owned: [], seq: 2 } });
+	t.mock.timers.tick(1999);
+	await Promise.resolve();
+	assert.equal(channel.messages.at(-1).seq, 1);
+	t.mock.timers.tick(1);
+	await revoking;
+	assert.equal(channel.messages.at(-1).seq, 2);
+});

@@ -196,3 +196,34 @@ test('a dead worker bounds pre-close waiting to 250 ms', async () => {
 		jest.useRealTimers();
 	}
 });
+
+test('renews live ownership until the last leader closes', async () => {
+	const { plugin, channel } = await setup();
+	jest.useFakeTimers();
+	try {
+		const first = fakeDatabase(plugin);
+		const second = fakeDatabase(plugin, true, 'other');
+		first.start();
+		second.start();
+		first.lead(true);
+		second.lead(true);
+		await jest.advanceTimersByTimeAsync(0);
+		channel.postMessage.mockClear();
+		await jest.advanceTimersByTimeAsync(1000);
+		expect(channel.postMessage).toHaveBeenCalledTimes(1);
+		expect(channel.postMessage).toHaveBeenLastCalledWith(ownership('store', 'other'));
+		const closingFirst = first.close();
+		await jest.advanceTimersByTimeAsync(1000);
+		await closingFirst;
+		expect(channel.postMessage).toHaveBeenLastCalledWith(ownership('other'));
+		const closingSecond = second.close();
+		await jest.advanceTimersByTimeAsync(250);
+		await closingSecond;
+		channel.postMessage.mockClear();
+		await jest.advanceTimersByTimeAsync(4000);
+		expect(channel.postMessage).not.toHaveBeenCalled();
+		expect(jest.getTimerCount()).toBe(0);
+	} finally {
+		jest.useRealTimers();
+	}
+});
