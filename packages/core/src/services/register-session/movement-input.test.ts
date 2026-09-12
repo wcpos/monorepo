@@ -19,6 +19,13 @@ describe('normalizeAmount', () => {
 	])('leaves %s alone rather than guess what the cashier meant', (typed, unchanged) => {
 		expect(normalizeAmount(typed)).toBe(unchanged);
 	});
+
+	// A thousands separator converted to a decimal point is money silently lost: "1,000"
+	// would have been recorded as a movement of one.
+	it.each(['1,000', '10,000', '1,0000'])('refuses to read %s as a decimal', (typed) => {
+		expect(normalizeAmount(typed)).toBe(typed);
+		expect(movementFieldError({ type: 'paid_in', amount: typed, reason: 'Change' })).toBe('amount');
+	});
 });
 
 describe('movementFieldError', () => {

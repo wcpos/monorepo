@@ -34,6 +34,10 @@ export function RegisterSessionBridge() {
 	// Imperative outbox delivery has mount/connectivity and timer triggers, not render state.
 	React.useEffect(() => {
 		if (!sessions || !movements || !closures) return;
+		// A streak belongs to one register on one store. AppStack stays mounted across a store
+		// switch, so without this the new scope inherits the old one's count and escalates to
+		// warn on its very first hiccup.
+		consecutiveFailures.current = 0;
 		// Which half of the cycle broke is the first thing a diagnosis needs, and the rejection
 		// never carries it — so each stage tags its own failures on the way out.
 		const staged = <T,>(stage: string, work: () => Promise<T>) =>
@@ -84,10 +88,13 @@ export function RegisterSessionBridge() {
 		const report = (error: unknown) => {
 			const { status, errorCode, message } = failureFacts(error);
 			const failures = (consecutiveFailures.current += 1);
+			// No `endpoint`: a drain rejection can come from any of three routes or from local
+			// storage, and the refresh stage spans both the list GET and a per-session detail GET.
+			// Naming one route for all of them would be a confident, wrong diagnostic — the
+			// per-request rows written inside the outbox carry the real endpoint.
 			const options = {
 				context: {
 					stage: (error as { stage?: string })?.stage ?? 'refresh',
-					endpoint: 'sessions',
 					status,
 					errorCode,
 					message: message ?? String(error),

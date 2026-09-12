@@ -16,14 +16,18 @@ export type MovementType = 'paid_in' | 'paid_out' | 'no_sale';
 
 /**
  * Rewrite what a keypad produced into the server's grammar, but only where the cashier's
- * intent is unambiguous: a lone comma is a decimal separator on a Spanish or German keypad,
- * and a bare leading or trailing point is a half-typed number. Anything with two separators
- * is left exactly as typed so it fails visibly rather than being silently reinterpreted.
+ * intent is unambiguous: a bare leading or trailing point is a half-typed number, and a comma
+ * followed by one or two digits is a decimal separator on a Spanish or German keypad.
+ *
+ * The digit count is the whole safeguard. `"1,000"` is a thousands separator to an English
+ * cashier on a hardware keyboard and a decimal to nobody, so converting it would silently
+ * record a movement of ONE — money quietly lost, which is the exact failure this module
+ * exists to prevent. Anything ambiguous is left as typed so it fails visibly instead.
  */
+const KEYPAD_DECIMAL_COMMA = /^(\d+),(\d{1,2})$/;
 export function normalizeAmount(raw: string): string {
 	const trimmed = raw.trim();
-	const commas = trimmed.length - trimmed.replace(/,/g, '').length;
-	const dotted = commas === 1 && !trimmed.includes('.') ? trimmed.replace(',', '.') : trimmed;
+	const dotted = trimmed.replace(KEYPAD_DECIMAL_COMMA, '$1.$2');
 	return dotted.replace(/^\./, '0.').replace(/\.$/, '');
 }
 

@@ -31,6 +31,9 @@ export function failureFacts(error: unknown) {
 		body,
 		errorCode: body?.code,
 		field: Object.keys(body?.data?.params ?? {})[0],
-		message: failure.message,
+		// The store's own explanation first. Axios overwrites `failure.message` with generic
+		// transport text ("Request failed with status code 400"), so preferring it would put
+		// the one useless sentence on the row and drop the one that says what was wrong.
+		message: body?.message ?? failure.message,
 	};
 }

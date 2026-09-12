@@ -160,8 +160,11 @@ export function MovementSheet({
 		busyRef.current = true;
 		setBusy(true);
 		const normalized = type === 'no_sale' ? '0' : normalizeAmount(amount);
+		// Send exactly what was validated. The length check is on the trimmed reason, so 500
+		// characters and a trailing space passes here and 400s on arrival if sent raw.
+		const trimmedReason = reason.trim();
 		try {
-			const row = await actions.recordMovement({ type, amount: normalized, reason });
+			const row = await actions.recordMovement({ type, amount: normalized, reason: trimmedReason });
 			onDone(row.id, type, normalized);
 			if (type === 'no_sale') await openDrawer();
 			onOpenChange(false);

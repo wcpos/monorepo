@@ -397,7 +397,28 @@ it('names a refused open and a refused close apart', async () => {
 	await drain();
 	expect(logger.error).toHaveBeenCalledWith(
 		expect.any(String),
-		expect.objectContaining({ code: 'REGISTER211' })
+		expect.objectContaining({
+			code: 'REGISTER211',
+			// The endpoint is searchable, so it must not carry the session id — one unique
+			// string per session makes a search for the route match nothing.
+			context: expect.objectContaining({ endpoint: 'sessions/status' }),
+		})
+	);
+});
+
+it('does not call a refused counting transition a refused close', async () => {
+	const row = await open();
+	await row.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	await startCounting(db.register_sessions, row.id);
+	http.post.mockRejectedValueOnce({
+		response: { status: 400, data: { code: 'rest_invalid_param' } },
+	});
+	await drain();
+	// All three transitions share one route, so classifying on the route alone would report a
+	// refused "start counting" as a refused close — and the register is still OPEN.
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER201' })
 	);
 });
 
@@ -414,9 +435,39 @@ it('records a takeover as a takeover, not as a refused open', async () => {
 	// Two tills on one drawer. Today this is completely mute.
 	expect(logger.warn).toHaveBeenCalledWith(
 		expect.any(String),
-		expect.objectContaining({ code: 'REGISTER221' })
+		expect.objectContaining({
+			code: 'REGISTER221',
+			// The till adopts the winning session and carries on, so the arc RECOVERED. Calling
+			// it 'failed' would show a broken-looking row for a till that is working.
+			terminal: expect.objectContaining({ outcome: 'recovered' }),
+		})
 	);
 	expect(logger.error).not.toHaveBeenCalled();
+	expect(await db.register_sessions.findOne('winner').exec()).not.toBeNull();
+});
+
+it('puts the store’s own explanation on the row, not the axios transport text', async () => {
+	await open();
+	http.post.mockRejectedValueOnce(
+		Object.assign(new Error('Request failed with status code 400'), {
+			response: {
+				status: 400,
+				data: {
+					code: 'rest_invalid_param',
+					message: 'The session request could not be completed.',
+				},
+			},
+		})
+	);
+	await drain();
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({
+				message: 'The session request could not be completed.',
+			}),
+		})
+	);
 });
 
 it('records a refused manager approval, which today leaves no trace at all', async () => {

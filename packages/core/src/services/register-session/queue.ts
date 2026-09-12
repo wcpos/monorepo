@@ -74,6 +74,10 @@ const operationId = (id: string) => id.replace(/-/g, '').slice(0, 32);
  * shift from its sales; a takeover means two tills on one drawer. A refused closure is the same
  * problem as a refused close transition — the count did not reach the store — so it shares
  * REGISTER211 rather than inventing a code that says the same thing.
+ *
+ * The status route carries all three transitions, so it is classified by the transition the row
+ * actually asked for, not by the route: a refused `counting` or `open` transition leaves the
+ * register OPEN and is nothing like a refused close.
  */
 function refusalCode(
 	endpoint: string,
@@ -88,10 +92,21 @@ function refusalCode(
 			? ERROR_CODES.CASH_MOVEMENT_VOID_REFUSED
 			: ERROR_CODES.CASH_MOVEMENT_REFUSED;
 	}
+	if (endpoint === STATUS_ENDPOINT) {
+		return 'pending_status' in row && row.pending_status !== 'closed'
+			? ERROR_CODES.REGISTER_OPEN_REFUSED
+			: ERROR_CODES.REGISTER_CLOSE_REFUSED;
+	}
 	return endpoint === 'sessions'
 		? ERROR_CODES.REGISTER_OPEN_REFUSED
 		: ERROR_CODES.REGISTER_CLOSE_REFUSED;
 }
+/**
+ * The label the status route logs under. `context.endpoint` is searchable, so it must be the
+ * same string every time — interpolating the session id makes every row unique and a search
+ * for the route find nothing.
+ */
+const STATUS_ENDPOINT = 'sessions/status';
 const inFlight = new Map<RegisterSessionCollection, Promise<void>>();
 export const synced = {
 	sync_status: 'synced',
@@ -222,6 +237,12 @@ async function drain({
 				sync_next_at: retry ? Date.now() + backoffMs(attempts) : null,
 				sync_error: errorCode ?? body?.message ?? message ?? String(status),
 			});
+			const code = refusalCode(endpoint, before, { status, errorCode });
+			// Losing the race for a register is not a failed arc: the till adopts the winning
+			// server session a few lines below and carries on. The rubric's terminal-outcome rule
+			// makes that `recovered`, and calling it `failed` would put a broken-looking row in
+			// front of a merchant whose till is working.
+			const takeover = code === ERROR_CODES.REGISTER_TAKEN_OVER;
 			// The cashier's typed reason is deliberately absent: `error` forwards its whole context
 			// to Sentry, and a free-text field is the one thing that must not ride along.
 			const options = {
@@ -238,14 +259,13 @@ async function drain({
 					operationId: operationId(before.id),
 					operationType: 'register.outbox',
 					attempt: attempts,
-					...(retry ? {} : { outcome: 'failed' as const }),
+					...(retry ? {} : { outcome: takeover ? ('recovered' as const) : ('failed' as const) }),
 				},
 			};
 			// Retryable means the arc has not settled, so it stays forensic. A 4xx is the server's
 			// final answer, and the registry decides how loud that is: refused cash needs the
 			// cashier now and is an `error` with a toast; a refused reversal or a takeover is a
 			// `warn`. The level follows the code so the two can never drift apart.
-			const code = refusalCode(endpoint, before, { status, errorCode });
 			if (retry) logger.debug('Register session outbox request failed', options);
 			else if (ERROR_CATALOGUE[code].severity === 'error') {
 				logger.error('Register session outbox request permanently refused', {
@@ -300,7 +320,7 @@ async function drain({
 			continue;
 		await send(
 			row,
-			`sessions/${row.id}/status`,
+			STATUS_ENDPOINT,
 			async () => {
 				if (row.pending_status === 'closed' && row.server_status === 'open') {
 					await http.post(`sessions/${row.id}/status`, {
