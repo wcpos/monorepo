@@ -96,6 +96,10 @@ jest.mock('@wcpos/query', () => ({
 	}),
 }));
 
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ site: { uuid: 'site' } }),
+}));
+
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => mockUseT(),
 }));
@@ -947,6 +951,7 @@ it('register attribution starts with resident metadata and retains a simultaneou
 		collection: 'orders' as const,
 		recordId: 'order',
 		registerId: 'register',
+		tillId: 'installation',
 		changes: { meta_data: [{ key: '_wcpos_payments', value: 'new' }] },
 	};
 	await patchAndEnqueueEngineResident(input);
@@ -958,6 +963,7 @@ it('register attribution starts with resident metadata and retains a simultaneou
 				meta_data: [
 					{ key: '_wcpos_payments', value: 'new' },
 					{ key: '_wcpos_register', value: 'register' },
+					{ key: '_wcpos_till', value: 'installation' },
 				],
 			},
 		})
@@ -965,9 +971,11 @@ it('register attribution starts with resident metadata and retains a simultaneou
 	await patchAndEnqueueEngineResident({
 		...input,
 		registerId: 'other',
+		tillId: 'other-till',
 		changes: { status: 'processing' },
 	});
 	expect(stored.payload.meta_data).toContainEqual({ key: '_wcpos_register', value: 'register' });
+	expect(stored.payload.meta_data).toContainEqual({ key: '_wcpos_till', value: 'installation' });
 });
 
 describe('register metadata per attempt', () => {

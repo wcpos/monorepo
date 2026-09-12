@@ -45,7 +45,7 @@ authenticatedTest.describe('Drawer Navigation', () => {
 			// overflows the viewport, so the drawer must scroll for the bottom group
 			// (health/settings/support) to be clickable at all.
 			await page.setViewportSize({ width: 700, height: 360 });
-			await page.getByTestId('drawer-open-button').click();
+			await page.getByTestId('pos-drawer-open-button').click();
 			await page.getByTestId('drawer-item-health').click();
 			await expect(page.getByTestId('health-nav-logs')).toBeVisible({ timeout: 30_000 });
 		}

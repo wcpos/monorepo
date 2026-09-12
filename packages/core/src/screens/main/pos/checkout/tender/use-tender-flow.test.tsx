@@ -209,6 +209,7 @@ jest.mock('../../../../../contexts/app-state', () => ({
 		storeDB: mockStoreDB,
 		site: { uuid: 'site' },
 		store: {
+			register_sessions: mockSessionsOn,
 			price_num_decimals: 2,
 			currency: 'EUR',
 			id: 9,
@@ -218,6 +219,7 @@ jest.mock('../../../../../contexts/app-state', () => ({
 	}),
 }));
 jest.mock('@wcpos/query', () => ({
+	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
 	useQueryRuntime: () => ({}),
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
 		select({ payload: mockPayload }),
@@ -853,6 +855,24 @@ describe('server tender', () => {
 			mockLeg = terminalState({ row, phase: 'creating' });
 		});
 	});
+	it.each([null, 'register'])(
+		'stamps the bound register, never the till, on server tenders (%s)',
+		async (registerId) => {
+			mockBoundRegisterId = registerId;
+			mockSessionsOn = !!registerId;
+			const { result } = renderHook(() => useTenderFlow(order));
+			act(() => result.current.pickMethod('terminal'));
+			await act(async () => result.current.takeTender());
+			expect(mockBegin).toHaveBeenCalledWith(
+				expect.objectContaining({
+					row: expect.objectContaining({
+						register_id: registerId,
+						session_id: registerId ? 'session' : null,
+					}),
+				})
+			);
+		}
+	);
 	it.each([false, true])('remembers a confirmed reader, unless now busy (%s)', async (busy) => {
 		mockMethods = [
 			{
@@ -1159,7 +1179,8 @@ describe('device tender', () => {
 		mockRealService.stop();
 		mockRealService = null;
 	});
-	it('requires connection and routes device tender to the terminal service, not manual recording', async () => {
+	it('requires connection and stamps the session on device tender', async () => {
+		mockSessionsOn = true;
 		const driver = createSimulatedDriver();
 		registerDriver(driver);
 		const { result } = renderHook(() => useTenderFlow(order));
@@ -1176,7 +1197,11 @@ describe('device tender', () => {
 				method: deviceMethod,
 				transport: 'bluetooth',
 				offline: false,
-				row: expect.objectContaining({ capture_mode: 'device', status: 'pending' }),
+				row: expect.objectContaining({
+					capture_mode: 'device',
+					status: 'pending',
+					session_id: 'session',
+				}),
 			})
 		);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
@@ -1269,8 +1294,14 @@ it('reopens a device tile via its queued transport when the selected transport n
 	expect(result.current.tiles[0].disabled).toBe(false);
 });
 
+let mockBoundRegisterId: string | null = 'register';
+beforeEach(() => {
+	mockBoundRegisterId = 'register';
+});
 jest.mock('../../../../../services/register/register-document', () => ({
-	readRegister: async () => ({ id: 'register' }),
+	readRegister: async () => ({ id: 'till' }),
+	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) =>
+		mockBoundRegisterId ? { id: mockBoundRegisterId } : null,
 }));
 jest.mock('../provenance/stamp-completion', () => ({
 	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
@@ -1400,4 +1431,33 @@ it('resets a failed manual tender without logging a second error or toast', asyn
 	expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
 	expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
 	expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+});
+
+let mockSessionsOn = false;
+let mockSessionId: string | null = 'session';
+jest.mock('../../../../../services/register-session/use-register-session-collections', () => ({
+	useRegisterSessionCollection: () => ({
+		findOne: () => ({
+			exec: async () =>
+				mockSessionId ? { id: mockSessionId, incrementalPatch: async () => undefined } : null,
+		}),
+	}),
+}));
+beforeEach(() => {
+	mockSessionsOn = false;
+	mockSessionId = 'session';
+});
+
+it('refuses tender with a typed error when sessions are enabled but none is open', async () => {
+	mockSessionsOn = true;
+	mockSessionId = null;
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	const { result } = renderHook(() => useTenderFlow(order));
+	await act(async () => {
+		await expect(result.current.takeTender()).rejects.toMatchObject({
+			name: 'RegisterSessionRequiredError',
+		});
+	});
 });

@@ -12,6 +12,9 @@ export interface RegisterDocument {
 		string,
 		{
 			sale_counter: number;
+			register_id?: string | null;
+			register_name?: string | null;
+			register_store_id?: number | null;
 			store_id?: number | null;
 			registration?: { at: string; name: string; app_version: string };
 		}
@@ -29,7 +32,7 @@ export function getRegisterId(): string | null {
 	return currentRegisterId;
 }
 
-function mintUuid(): string {
+export function mintUuid(): string {
 	const id = globalThis.crypto?.randomUUID?.();
 	if (id) return id;
 	const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
@@ -75,14 +78,83 @@ export function observeRegister$(userDB: UserDatabase) {
 		.pipe(map((doc) => doc?.toJSON().data ?? null));
 }
 
-export async function renameRegister(userDB: UserDatabase, name: string): Promise<boolean> {
-	name = name.trim();
-	if (!name || name.length > 191) return false;
+export function getBoundRegisterId(siteUuid: string, storeId?: number): string | null {
+	const site = currentRegister?.sites?.[siteUuid];
+	// Legacy pointers have no store; the next bind writes it.
+	if (
+		storeId !== undefined &&
+		site?.register_store_id != null &&
+		site.register_store_id !== storeId
+	)
+		return null;
+	return site?.register_id ?? null;
+}
+
+let currentSiteUuid: string | null = null;
+let currentStoreId: number | undefined;
+
+/** The bound register of the site/store last bound or read — for callers that hold no site handle. */
+export function getCurrentBoundRegisterId(): string | null {
+	return currentSiteUuid ? getBoundRegisterId(currentSiteUuid, currentStoreId) : null;
+}
+
+export async function readBoundRegister(userDB: UserDatabase, siteUuid: string, storeId?: number) {
+	currentSiteUuid = siteUuid;
+	currentStoreId = storeId;
+	const site = (await readRegister(userDB))?.sites?.[siteUuid];
+	const id = getBoundRegisterId(siteUuid, storeId);
+	return id ? { id, name: site?.register_name ?? '' } : null;
+}
+
+export async function bindRegister(
+	userDB: UserDatabase,
+	siteUuid: string,
+	register: { id: string | null; name: string | null },
+	storeId?: number
+): Promise<void> {
 	const doc = await userDB.getLocal<RegisterDocument>('register');
-	if (!doc || doc.get('name') === name) return false;
-	const renamed = await doc.incrementalModify((data) => ({ ...data, name }));
-	currentRegister = renamed.toJSON().data;
-	return true;
+	if (!doc) throw new Error('Register is not initialized');
+	currentSiteUuid = siteUuid;
+	currentStoreId = storeId;
+	const updated = await doc.incrementalModify((data) => ({
+		...data,
+		sites: {
+			...data.sites,
+			[siteUuid]: {
+				...(data.sites[siteUuid] ?? { sale_counter: 0 }),
+				register_id: register.id,
+				register_name: register.name,
+				register_store_id: storeId ?? null,
+			},
+		},
+	}));
+	currentRegister = updated.toJSON().data;
+}
+
+export async function unbindRegister(
+	userDB: UserDatabase,
+	siteUuid: string,
+	storeId?: number
+): Promise<void> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => {
+		const site = data.sites[siteUuid];
+		// A late unbind from one store must not clear a pointer another store has since written.
+		const belongsElsewhere =
+			storeId !== undefined &&
+			site?.register_store_id != null &&
+			site.register_store_id !== storeId;
+		if (!site || belongsElsewhere) return data;
+		return {
+			...data,
+			sites: {
+				...data.sites,
+				[siteUuid]: { ...site, register_id: null, register_name: null, register_store_id: null },
+			},
+		};
+	});
+	currentRegister = updated.toJSON().data;
 }
 
 export async function nextSaleCounter(userDB: UserDatabase, siteUuid: string): Promise<number> {

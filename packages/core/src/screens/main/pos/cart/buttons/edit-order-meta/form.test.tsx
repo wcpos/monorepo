@@ -112,6 +112,7 @@ const meta = [
 	{ key: '_pos_user', value: '7' },
 	{ key: '_pos_store', value: '2' },
 	{ key: '_wcpos_register', value: 'register' },
+	{ key: '_wcpos_till', value: 'till' },
 ];
 const payload = {
 	status: 'pos-open',

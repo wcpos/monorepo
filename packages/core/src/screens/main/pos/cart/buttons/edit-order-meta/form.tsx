@@ -140,6 +140,7 @@ export function EditOrderMetaForm({
 				userId: cashier_id,
 				storeId: identity.storeId ?? storeID ?? NO_STORE,
 				registerId: identity.registerId,
+				tillId: identity.tillId,
 			}),
 		};
 		setLoading(true);

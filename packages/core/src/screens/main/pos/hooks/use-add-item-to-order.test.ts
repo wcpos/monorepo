@@ -44,6 +44,7 @@ jest.mock('observable-hooks', () => ({
 jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({
 		wpCredentials: { id: 7 },
+		site: { uuid: 'site' },
 		store: { id: 11, tax_based_on$: {} },
 	});
 	return { useAppState, useStoreSession: useAppState };
@@ -205,6 +206,8 @@ describe('useAddItemToOrder', () => {
 			expect.arrayContaining([
 				{ key: '_pos_user', value: '7' },
 				{ key: '_pos_store', value: '11' },
+				{ key: '_wcpos_register', value: 'register' },
+				{ key: '_wcpos_till', value: 'till' },
 			])
 		);
 		// The insert payload is the WIRE body extracted from the temp record's payload —
@@ -876,5 +879,5 @@ describe('useAddItemToOrder', () => {
 });
 
 jest.mock('../../../../services/register/use-register', () => ({
-	useRegister: () => ({ id: 'register' }),
+	useRegister: () => ({ id: 'till', sites: { site: { register_id: 'register' } } }),
 }));

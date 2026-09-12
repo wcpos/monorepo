@@ -11,6 +11,8 @@ import { notificationsLiteral } from './schemas/notifications';
 import { templatesLiteral } from './schemas/templates';
 import { ordersLiteral } from './schemas/orders';
 import { productsLiteral } from './schemas/products';
+import { registerSessionsLiteral } from './schemas/register-sessions';
+import { cashMovementsLiteral } from './schemas/cash-movements';
 import { receiptEmailQueueLiteral } from './schemas/receipt-email-queue';
 import { sitesLiteral } from './schemas/sites';
 import { storesLiteral } from './schemas/stores';
@@ -204,6 +206,12 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			return oldDoc;
 		},
 		16(oldDoc: StoreDocumentType) {
+			return oldDoc;
+		},
+		17(oldDoc: StoreDocumentType) {
+			oldDoc.register_sessions = false;
+			oldDoc.variance_threshold = '';
+			oldDoc.expected_close_time = '';
 			return oldDoc;
 		},
 	},
@@ -571,6 +579,19 @@ const receipt_email_queue: RxCollectionCreator<ReceiptEmailQueueDocumentType> = 
 	schema: receiptEmailQueueSchema,
 };
 
+export type RegisterSessionRow = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof registerSessionsLiteral
+>;
+export type RegisterSessionDocument = RxDocument<RegisterSessionRow>;
+export type RegisterSessionCollection = RxCollection<RegisterSessionRow>;
+const register_sessions: RxCollectionCreator<RegisterSessionRow> = {
+	schema: registerSessionsLiteral,
+};
+export type CashMovementRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof cashMovementsLiteral>;
+export type CashMovementDocument = RxDocument<CashMovementRow>;
+export type CashMovementCollection = RxCollection<CashMovementRow>;
+const cash_movements: RxCollectionCreator<CashMovementRow> = { schema: cashMovementsLiteral };
+
 export type UserCollections = {
 	users: UserCollection;
 	sites: SiteCollection;
@@ -587,6 +608,8 @@ export type StoreCollections = {
 	scanner_profiles: ScannerProfileCollection;
 	template_printer_overrides: TemplatePrinterOverrideCollection;
 	receipt_email_queue: ReceiptEmailQueueCollection;
+	register_sessions: RegisterSessionCollection;
+	cash_movements: CashMovementCollection;
 };
 
 export type TemporaryCollections = {
@@ -613,6 +636,8 @@ export const storeCollections = {
 	scanner_profiles,
 	template_printer_overrides,
 	receipt_email_queue,
+	register_sessions,
+	cash_movements,
 };
 
 export const temporaryCollections = {

@@ -15,15 +15,20 @@ import {
 	readLedger,
 	toMinor,
 } from '@wcpos/order-math';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { useRegisterSessionCollection } from '../../../../../services/register-session/use-register-session-collections';
+import {
+	RegisterSessionRequiredError,
+	requireOpenSession,
+} from '../../../../../services/register-session/session-store';
 import {
 	getTerminalPaymentsService,
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
-import { readRegister } from '../../../../../services/register/register-document';
+import { readBoundRegister } from '../../../../../services/register/register-document';
 import { persistProvenance } from '../provenance/persist-provenance';
 import { completionMeta } from '../provenance/stamp-completion';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
@@ -143,6 +148,7 @@ export interface TenderFlow {
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	useDriverChanges();
+	const sessions = useRegisterSessionCollection();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const [busy, setBusy] = React.useState(false);
@@ -150,6 +156,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const busyRef = React.useRef(false);
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, userDB, site } = useStoreSession();
+	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	useResumeTerminalLegs(order);
 	const terminalLeg = useTerminalLeg(order.uuid);
 	const service = getTerminalPaymentsService();
@@ -448,13 +455,23 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		busyRef.current = true;
 		setBusy(true);
 		let savingProvenance = false;
+		let sessionId: string | null = null;
 		const saveProvenance = async () => {
 			if (!online || queuedOffline || !payload.id || entryAppliedMinor !== balanceMinor) return;
 			savingProvenance = true;
-			await persistProvenance({ order, localPatch, pushDocument, userDB, siteUuid: site.uuid! });
+			await persistProvenance({
+				order,
+				localPatch,
+				pushDocument,
+				userDB,
+				siteUuid: site.uuid!,
+				sessionId,
+			});
 			savingProvenance = false;
 		};
 		try {
+			const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id ?? null;
+			sessionId = await requireOpenSession(sessions, registerId, sessionsOn);
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
 				const result = await localPatch({
@@ -464,6 +481,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						meta_data: await completionMeta(order.getLatest().payload, {
 							userDB,
 							siteUuid: site.uuid!,
+							storeId: store.id,
+							sessionId,
 						}),
 					},
 				});
@@ -517,7 +536,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (!service) throw new Error('terminal_service_unavailable');
 				const offline = !online || queuedOffline || !payload.id;
 				const minted = mintDevicePayment({
-					registerId: (await readRegister(userDB))?.id ?? null,
+					registerId,
+					sessionId,
 					method,
 					transport: deviceTransport,
 					recordedOffline: offline,
@@ -572,7 +592,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				}
 				if (!service) throw new Error('terminal_service_unavailable');
 				const minted = mintServerPayment({
-					registerId: (await readRegister(userDB))?.id ?? null,
+					registerId,
+					sessionId,
 					method,
 					orderId: payload.id,
 					amount: fromMinor(entryAppliedMinor, dp),
@@ -626,6 +647,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				showToast: true,
 			});
 		} catch (error) {
+			if (error instanceof RegisterSessionRequiredError) throw error;
 			if (savingProvenance) {
 				logger.error('Checkout failed', {
 					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
@@ -645,6 +667,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			setBusy(false);
 		}
 	}, [
+		sessions,
+		sessionsOn,
 		balanceMinor,
 		deviceTransport,
 		online,

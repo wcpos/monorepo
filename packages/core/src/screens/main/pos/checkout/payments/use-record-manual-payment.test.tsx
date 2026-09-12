@@ -26,14 +26,17 @@ jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		site: { uuid: 'site' },
 		wpCredentials: { id: 7 },
-		store: { id: 9, currency: 'EUR', price_num_decimals: 2 },
+		store: { register_sessions: mockSessionsOn, id: 9, currency: 'EUR', price_num_decimals: 2 },
 	}),
 }));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 	patchEngineResident: (input: unknown) => mockPatchEngineResident(input),
 }));
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => manager }));
+jest.mock('@wcpos/query', () => ({
+	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
+	useQueryRuntime: () => manager,
+}));
 jest.mock('@wcpos/utils/logger', () => ({
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
 	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
@@ -211,8 +214,14 @@ it('localizes an amount-exceeds-balance refusal with the server balance', async 
 	);
 });
 
+let mockBoundRegisterId: string | null = 'register';
+beforeEach(() => {
+	mockBoundRegisterId = 'register';
+});
 jest.mock('../../../../../services/register/register-document', () => ({
-	readRegister: async () => ({ id: 'register' }),
+	readRegister: async () => ({ id: 'till' }),
+	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) =>
+		mockBoundRegisterId ? { id: mockBoundRegisterId } : null,
 }));
 jest.mock('../provenance/stamp-completion', () => ({
 	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
@@ -220,22 +229,26 @@ jest.mock('../provenance/stamp-completion', () => ({
 		{ key: '_wcpos_sale_counter', value: '1' },
 	],
 }));
-it('queues exactly one provenance-only patch after a full online manual payment mirror', async () => {
-	onlineStatus = 'online-website-available';
-	mockPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
-	const { result } = renderHook(() => useRecordManualPayment());
-	await act(() => result.current(order, method, { amount: 100 }));
-	expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
-	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
-	expect(mockLocalPatch).toHaveBeenCalledWith({
-		document: order,
-		data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
-	});
-	expect(mockPost.mock.calls[0][1].payment).toMatchObject({
-		register_id: 'register',
-		session_id: null,
-	});
-});
+it.each([null, 'register'])(
+	'queues one provenance patch and stamps only the bound register (%s)',
+	async (registerId) => {
+		mockBoundRegisterId = registerId;
+		onlineStatus = 'online-website-available';
+		mockPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
+		const { result } = renderHook(() => useRecordManualPayment());
+		await act(() => result.current(order, method, { amount: 100 }));
+		expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
+		});
+		expect(mockPost.mock.calls[0][1].payment).toMatchObject({
+			register_id: registerId,
+			session_id: null,
+		});
+	}
+);
 
 const mockPushDocument = jest.fn(async () => undefined);
 jest.mock('../../../contexts/use-push-document', () => ({
@@ -362,3 +375,46 @@ it.each([false, true])(
 		);
 	}
 );
+
+let mockSessionsOn = false;
+let mockSessionId: string | null = 'session';
+jest.mock('../../../../../services/register-session/use-register-session-collections', () => ({
+	useRegisterSessionCollection: () => ({
+		findOne: () => ({
+			exec: async () =>
+				mockSessionId ? { id: mockSessionId, incrementalPatch: async () => undefined } : null,
+		}),
+	}),
+}));
+beforeEach(() => {
+	mockSessionsOn = false;
+	mockSessionId = 'session';
+});
+
+it.each(['offline', 'online-website-available'])(
+	'stamps the session on manual payments (%s)',
+	async (status) => {
+		mockSessionsOn = true;
+		onlineStatus = status;
+		mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
+		const { result } = renderHook(() => useRecordManualPayment());
+		await act(() => result.current(order, method, { amount: 40 }));
+		if (status === 'offline') {
+			const { readLedger } =
+				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+			expect(readLedger(mockLocalPatch.mock.calls[0][0].data.meta_data)[0].session_id).toBe(
+				'session'
+			);
+		} else expect(mockPost.mock.calls[0][1].payment.session_id).toBe('session');
+	}
+);
+it('refuses manual payment without an open session', async () => {
+	mockSessionsOn = true;
+	mockSessionId = null;
+	const { result } = renderHook(() => useRecordManualPayment());
+	await expect(result.current(order, method, { amount: 40 })).rejects.toMatchObject({
+		name: 'RegisterSessionRequiredError',
+	});
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+});
