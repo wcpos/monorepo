@@ -505,7 +505,10 @@ function TenderKeypad({ flow, format, compact }: Props) {
 										<ButtonText>{reader.label}</ButtonText>
 									</Button>
 									{reader.inUseBy !== null ? (
-										<Text className="text-sidebar-foreground/70 text-xs">
+										<Text
+											className="text-sidebar-foreground/70 text-xs"
+											testID={`checkout-reader-${reader.id}-reason`}
+										>
 											{t('pos_checkout.reader_in_use', { number: reader.inUseBy })}
 										</Text>
 									) : null}

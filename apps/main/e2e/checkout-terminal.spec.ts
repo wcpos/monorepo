@@ -114,6 +114,12 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 				.toBe(balance);
 			const status = terminalResponse(page, orderId, 'status');
 			await takeTerminal(page, orderId, 'sim-approve');
+			await expect
+				.poll(() => page.getByTestId('checkout-terminal-step-1').getAttribute('aria-selected'), {
+					timeout: 60_000,
+				})
+				.toBe('true');
+			await expect(page.getByTestId('checkout-terminal-status')).toBeVisible();
 			await expect(page.getByTestId('checkout-terminal-status')).toHaveText(
 				copy['pos_checkout.waiting_for_terminal']
 			);
@@ -379,8 +385,8 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			await page.getByTestId(`checkout-method-${terminal!.id}`).click();
 			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-stuck')).toBeDisabled();
-			// The reason is a sibling of the reader button; the keypad owns the complete sentence.
-			await expect(page.getByTestId('checkout-keypad')).toContainText(
+			// The reason renders under the reader chip with its own test ID.
+			await expect(page.getByTestId('checkout-reader-sim-stuck-reason')).toHaveText(
 				copy['pos_checkout.reader_in_use'].replace('{number}', String(serverA.number))
 			);
 			await showReaderChips(page);
