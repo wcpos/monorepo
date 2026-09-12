@@ -597,7 +597,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#105",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PRINT101",
@@ -1636,7 +1636,7 @@
 			"browser-console"
 		],
 		"evidence": "2026-08-25 demo store coupons screen spun forever while every existing signal stayed silent; report-only stall detector added in monorepo#1596",
-		"introducedIn": "1.11.0"
+		"introducedIn": "1.10.6"
 	},
 	{
 		"code": "CHECKOUT111",
@@ -1829,7 +1829,7 @@
 			"browser-console"
 		],
 		"evidence": "2026-09-01 log audit: both rebuild-failure paths from monorepo#1733 logged without a code while their sibling detections carried CLIENT141-143",
-		"introducedIn": "1.11.0"
+		"introducedIn": "1.10.6"
 	},
 	{
 		"code": "CHECKOUT411",
@@ -1896,6 +1896,6 @@
 		],
 		"logSources": [],
 		"evidence": "packages/core/src/screens/main/pos/customer-display/use-display-snapshot.ts",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	}
 ]
