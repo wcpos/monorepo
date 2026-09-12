@@ -470,7 +470,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			savingProvenance = false;
 		};
 		try {
-			const registerId = (await readBoundRegister(userDB, site.uuid!))?.id ?? null;
+			const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id ?? null;
 			sessionId = await requireOpenSession(sessions, registerId, sessionsOn);
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
@@ -481,6 +481,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						meta_data: await completionMeta(order.getLatest().payload, {
 							userDB,
 							siteUuid: site.uuid!,
+							storeId: store.id,
 							sessionId,
 						}),
 					},

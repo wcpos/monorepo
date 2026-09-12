@@ -121,12 +121,17 @@ export async function voidMovement(
 	const row = await movements.findOne(movementId).exec();
 	if (!row || row.type === 'void') throw new Error('invalid_void_target');
 	// Repeated Undo taps share one durable reversal: the target's voided_by names it.
-	const existing = row.voided_by ? await movements.findOne(row.voided_by).exec() : null;
-	const id = existing?.id ?? uuid();
+	const id = uuid();
+	const claimed = await row.incrementalModify((doc) => {
+		doc.voided_by ??= id;
+		return doc;
+	});
+	const reversalId = claimed.voided_by!;
+	const existing = await movements.findOne(reversalId).exec();
 	const reversal =
 		existing ??
 		(await movements.incrementalUpsert({
-			id,
+			id: reversalId,
 			session_id: row.session_id,
 			type: 'void',
 			amount: row.amount,
@@ -136,6 +141,5 @@ export async function voidMovement(
 			voids: row.id,
 			...pending,
 		}));
-	await row.incrementalPatch({ voided_by: id });
 	return reversal;
 }

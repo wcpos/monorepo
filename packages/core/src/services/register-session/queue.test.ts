@@ -5,7 +5,13 @@ import type { StoreDatabase } from '@wcpos/database';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
 import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
 
-import { closeSession, openSession, recordMovement, startCounting } from './session-store';
+import {
+	closeSession,
+	openSession,
+	recordMovement,
+	startCounting,
+	voidMovement,
+} from './session-store';
 import { drainRegisterSessionQueue } from './queue';
 import { refreshSessions } from './refresh';
 
@@ -221,4 +227,41 @@ it('prunes movements together with their expired closed session', async () => {
 
 	expect(await db.register_sessions.findOne(row.id).exec()).toBeNull();
 	expect(await db.cash_movements.findOne(movement.id).exec()).toBeNull();
+});
+
+it('does not let a permanently failed close block a successor', async () => {
+	const predecessor = await open();
+	await predecessor.incrementalPatch({ server_status: 'counting', status: 'counting' });
+	await closeSession(db.register_sessions, predecessor.id, { counted: { cash: '100' } });
+	http.post.mockRejectedValueOnce({ response: { status: 403, data: { code: 'close_refused' } } });
+	await drain();
+	expect(predecessor.getLatest().sync_status).toBe('failed');
+	const successor = await open();
+	http.post.mockResolvedValueOnce({ data: successor.toJSON() });
+	await drain();
+	expect(successor.getLatest().sync_status).toBe('synced');
+	expect(http.post).toHaveBeenCalledTimes(2);
+});
+it('permanently fails a reversal with its refused target error', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const target = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	const reversal = await voidMovement(db.cash_movements, target.id, 7);
+	http.post.mockRejectedValueOnce({
+		response: { status: 403, data: { code: 'movement_refused' } },
+	});
+	await drain();
+	await drain();
+	expect(reversal.getLatest().toJSON()).toMatchObject({
+		sync_status: 'failed',
+		sync_error: 'movement_refused',
+		sync_next_at: null,
+	});
+	expect(http.post).toHaveBeenCalledTimes(1);
 });

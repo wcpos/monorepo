@@ -15,17 +15,24 @@ export async function completionMeta(
 	{
 		userDB,
 		siteUuid,
+		storeId,
 		sessionId,
-	}: { userDB: UserDatabase; siteUuid: string; sessionId?: string | null }
+	}: { userDB: UserDatabase; siteUuid: string; storeId?: number; sessionId?: string | null }
 ): Promise<MetaDataEntry[]> {
 	if (hasSaleProvenance(order.meta_data)) return order.meta_data!;
 	const register = await readRegister(userDB);
 	if (!register) return order.meta_data ?? [];
 	const counter = await nextSaleCounter(userDB, siteUuid);
+	const pointer = register.sites[siteUuid];
+	// A register belongs to one store: a pointer bound in another store of the site is not ours.
+	const boundElsewhere =
+		storeId !== undefined &&
+		pointer?.register_store_id != null &&
+		pointer.register_store_id !== storeId;
 	return withSaleProvenance(
 		order.meta_data,
 		saleProvenanceMeta({
-			registerId: register.sites[siteUuid]?.register_id ?? '',
+			registerId: boundElsewhere ? '' : (pointer?.register_id ?? ''),
 			saleCounter: counter,
 			now: new Date(),
 			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',

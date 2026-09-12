@@ -6,6 +6,7 @@ import { useStoreSession } from '../../contexts/app-state';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import {
 	bindRegister,
+	getBoundRegisterId,
 	getRegisterSnapshot,
 	readBoundRegister,
 	unbindRegister,
@@ -35,7 +36,9 @@ const directories = new Map<string, Directory>();
 function directory(siteUuid: string, storeId: number | undefined): Directory {
 	const key = `${siteUuid}:${storeId}`;
 	if (!directories.has(key)) {
-		const pointer = getRegisterSnapshot()?.sites?.[siteUuid];
+		const pointer = getBoundRegisterId(siteUuid, storeId)
+			? getRegisterSnapshot()?.sites?.[siteUuid]
+			: null;
 		directories.set(key, {
 			loaded: false,
 			listeners: new Set(),
@@ -86,7 +89,7 @@ export function useRegisterBindingSession(): void {
 	// Synchronize the persisted pointer and the external register directory on session/connectivity changes.
 	React.useEffect(() => {
 		const load = async () => {
-			const bound = await readBoundRegister(userDB, site.uuid!);
+			const bound = await readBoundRegister(userDB, site.uuid!, store.id);
 			publish(entry, {
 				status: bound ? 'bound' : 'unknown',
 				registerId: bound?.id ?? null,
@@ -98,14 +101,14 @@ export function useRegisterBindingSession(): void {
 			const registers = entry.value.registers;
 			if (bound && registers.some(({ id }) => id === bound.id)) return;
 			if (registers.length === 1) {
-				await bindRegister(userDB, site.uuid!, registers[0]);
+				await bindRegister(userDB, site.uuid!, registers[0], store.id);
 				publish(entry, {
 					status: 'bound',
 					registerId: registers[0].id,
 					registerName: registers[0].name,
 				});
 			} else {
-				if (bound) await unbindRegister(userDB, site.uuid!);
+				if (bound) await unbindRegister(userDB, site.uuid!, store.id);
 				publish(entry, {
 					status: registers.length ? 'choose' : 'none',
 					registerId: null,
@@ -142,10 +145,10 @@ export function useRegisterBinding() {
 		async (id: string) => {
 			const register = entry.value.registers.find((row) => row.id === id);
 			if (!register) return;
-			await bindRegister(userDB, site.uuid!, register);
+			await bindRegister(userDB, site.uuid!, register, store.id);
 			publish(entry, { status: 'bound', registerId: id, registerName: register.name });
 		},
-		[entry, site.uuid, userDB]
+		[entry, site.uuid, store.id, userDB]
 	);
 	return { ...value, bind };
 }

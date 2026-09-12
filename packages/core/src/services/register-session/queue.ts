@@ -123,6 +123,7 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 			return (
 				predecessor.id !== row.id &&
 				predecessor.register_id === row.register_id &&
+				predecessor.sync_status !== 'failed' &&
 				predecessor.server_status !== 'closed'
 			);
 		});
@@ -177,8 +178,18 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 		const row = snapshot.getLatest();
 		const session = await sessions.findOne(row.session_id).exec();
 		if (!due(row) || !session?.server_status || session.sync_status === 'failed') continue;
-		if (row.voids && (await movements.findOne(row.voids).exec())?.sync_status !== 'synced')
-			continue;
+		if (row.voids) {
+			const target = await movements.findOne(row.voids).exec();
+			if (target?.sync_status === 'failed') {
+				await row.incrementalPatch({
+					sync_status: 'failed',
+					sync_attempts: row.sync_attempts + 1,
+					sync_next_at: null,
+					sync_error: target.sync_error,
+				});
+			}
+			if (target?.sync_status !== 'synced') continue;
+		}
 		await send(row, async () => {
 			const response = await http.post('movements', {
 				id: row.id,

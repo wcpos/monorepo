@@ -13,7 +13,8 @@ jest.mock('../../screens/main/hooks/use-rest-http-client', () => ({
 }));
 jest.mock('./register-document', () => ({
 	getRegisterSnapshot: () => null,
-	readBoundRegister: async () => null,
+	getBoundRegisterId: (_siteUuid: string, _storeId?: number) => null,
+	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) => null,
 	bindRegister: async () => undefined,
 	unbindRegister: async () => undefined,
 }));

@@ -8,6 +8,7 @@ import {
 	bindRegister,
 	ensureRegister,
 	getBoundRegisterId,
+	getCurrentBoundRegisterId,
 	nextSaleCounter,
 	readBoundRegister,
 	readRegister,
@@ -94,17 +95,17 @@ it('caches the register identity and mints v4 with random bytes when randomUUID 
 
 it('binds and unbinds independently per site without changing counters or the till', async () => {
 	const till = await ensureRegister(db);
-	expect(await readBoundRegister(db, 'site')).toBeNull();
-	await bindRegister(db, 'site', { id: 'drawer-a', name: 'Front' });
-	await bindRegister(db, 'other', { id: 'drawer-b', name: 'Back' });
+	expect(await readBoundRegister(db, 'site', 1)).toBeNull();
+	await bindRegister(db, 'site', { id: 'drawer-a', name: 'Front' }, 1);
+	await bindRegister(db, 'other', { id: 'drawer-b', name: 'Back' }, 1);
 	expect(await nextSaleCounter(db, 'site')).toBe(1);
 	expect(await nextSaleCounter(db, 'site')).toBe(2);
 	expect(await nextSaleCounter(db, 'other')).toBe(1);
-	expect(await readBoundRegister(db, 'site')).toEqual({ id: 'drawer-a', name: 'Front' });
-	expect(await readBoundRegister(db, 'other')).toEqual({ id: 'drawer-b', name: 'Back' });
+	expect(await readBoundRegister(db, 'site', 1)).toEqual({ id: 'drawer-a', name: 'Front' });
+	expect(await readBoundRegister(db, 'other', 1)).toEqual({ id: 'drawer-b', name: 'Back' });
 	expect(getBoundRegisterId('site')).toBe('drawer-a');
-	await unbindRegister(db, 'site');
-	expect(await readBoundRegister(db, 'site')).toBeNull();
+	await unbindRegister(db, 'site', 1);
+	expect(await readBoundRegister(db, 'site', 1)).toBeNull();
 	expect(getBoundRegisterId('site')).toBeNull();
 	expect(getBoundRegisterId('other')).toBe('drawer-b');
 	expect(await nextSaleCounter(db, 'site')).toBe(3);
@@ -117,9 +118,34 @@ it.each([null, { id: 'server-register', name: 'Front' }])(
 		const { completionMeta } =
 			await import('../../screens/main/pos/checkout/provenance/stamp-completion');
 		await ensureRegister(db);
-		if (bound) await bindRegister(db, 'site', bound);
+		if (bound) await bindRegister(db, 'site', bound, 1);
 		const meta = await completionMeta({}, { userDB: db, siteUuid: 'site' });
 		expect(meta.find(({ key }) => key === '_wcpos_register')?.value).toBe(bound?.id);
 		expect(meta).toContainEqual({ key: '_wcpos_sale_counter', value: '1' });
 	}
 );
+
+it('rejects another store pointer after hydration without resetting the site counter', async () => {
+	await ensureRegister(db);
+	await bindRegister(db, 'site', { id: 'a', name: 'A' }, 1);
+	await nextSaleCounter(db, 'site');
+	await bindRegister(db, 'site', { id: 'b', name: 'B' }, 2);
+	expect(getCurrentBoundRegisterId()).toBe('b');
+	expect(await readBoundRegister(db, 'site', 1)).toBeNull();
+	expect(getCurrentBoundRegisterId()).toBeNull();
+	expect(await readBoundRegister(db, 'site', 2)).toEqual({ id: 'b', name: 'B' });
+	expect(getCurrentBoundRegisterId()).toBe('b');
+	expect(await nextSaleCounter(db, 'site')).toBe(2);
+});
+it('accepts a legacy pointer until the next bind records its store', async () => {
+	await ensureRegister(db);
+	const doc = await db.getLocal('register');
+	await doc!.incrementalPatch({ sites: { site: { sale_counter: 4, register_id: 'old' } } });
+	expect(await readBoundRegister(db, 'site', 0)).toEqual({ id: 'old', name: '' });
+	await bindRegister(db, 'site', { id: 'old', name: 'Legacy' }, 0);
+	expect((await readRegister(db))?.sites.site).toMatchObject({
+		register_store_id: 0,
+		sale_counter: 4,
+	});
+	expect(await readBoundRegister(db, 'site', 1)).toBeNull();
+});

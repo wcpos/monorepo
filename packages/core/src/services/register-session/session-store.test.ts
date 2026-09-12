@@ -56,7 +56,11 @@ it('void inserts a write-once reversal and marks its target', async () => {
 		reason: 'Milk',
 		actor: 7,
 	});
-	const reversal = await voidMovement(db.cash_movements, row.id, 7);
+	const [reversal, concurrent] = await Promise.all([
+		voidMovement(db.cash_movements, row.id, 7),
+		voidMovement(db.cash_movements, row.id, 7),
+	]);
+	expect(concurrent.id).toBe(reversal.id);
 	const repeated = await voidMovement(db.cash_movements, row.id, 7);
 	expect(reversal).toMatchObject({ type: 'void', voids: row.id, sync_status: 'pending' });
 	expect(repeated.id).toBe(reversal.id);

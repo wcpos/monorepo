@@ -14,6 +14,7 @@ export interface RegisterDocument {
 			sale_counter: number;
 			register_id?: string | null;
 			register_name?: string | null;
+			register_store_id?: number | null;
 			store_id?: number | null;
 			registration?: { at: string; name: string; app_version: string };
 		}
@@ -77,31 +78,44 @@ export function observeRegister$(userDB: UserDatabase) {
 		.pipe(map((doc) => doc?.toJSON().data ?? null));
 }
 
-export function getBoundRegisterId(siteUuid: string): string | null {
-	return currentRegister?.sites?.[siteUuid]?.register_id ?? null;
+export function getBoundRegisterId(siteUuid: string, storeId?: number): string | null {
+	const site = currentRegister?.sites?.[siteUuid];
+	// Legacy pointers have no store; the next bind writes it.
+	if (
+		storeId !== undefined &&
+		site?.register_store_id != null &&
+		site.register_store_id !== storeId
+	)
+		return null;
+	return site?.register_id ?? null;
 }
 
 let currentSiteUuid: string | null = null;
+let currentStoreId: number | undefined;
 
-/** The bound register of the site last bound or read — for callers that hold no site handle. */
+/** The bound register of the site/store last bound or read — for callers that hold no site handle. */
 export function getCurrentBoundRegisterId(): string | null {
-	return currentSiteUuid ? getBoundRegisterId(currentSiteUuid) : null;
+	return currentSiteUuid ? getBoundRegisterId(currentSiteUuid, currentStoreId) : null;
 }
 
-export async function readBoundRegister(userDB: UserDatabase, siteUuid: string) {
+export async function readBoundRegister(userDB: UserDatabase, siteUuid: string, storeId?: number) {
 	currentSiteUuid = siteUuid;
+	currentStoreId = storeId;
 	const site = (await readRegister(userDB))?.sites?.[siteUuid];
-	return site?.register_id ? { id: site.register_id, name: site.register_name ?? '' } : null;
+	const id = getBoundRegisterId(siteUuid, storeId);
+	return id ? { id, name: site?.register_name ?? '' } : null;
 }
 
 export async function bindRegister(
 	userDB: UserDatabase,
 	siteUuid: string,
-	register: { id: string | null; name: string | null }
+	register: { id: string | null; name: string | null },
+	storeId?: number
 ): Promise<void> {
 	const doc = await userDB.getLocal<RegisterDocument>('register');
 	if (!doc) throw new Error('Register is not initialized');
 	currentSiteUuid = siteUuid;
+	currentStoreId = storeId;
 	const updated = await doc.incrementalModify((data) => ({
 		...data,
 		sites: {
@@ -110,14 +124,19 @@ export async function bindRegister(
 				...(data.sites[siteUuid] ?? { sale_counter: 0 }),
 				register_id: register.id,
 				register_name: register.name,
+				register_store_id: storeId ?? null,
 			},
 		},
 	}));
 	currentRegister = updated.toJSON().data;
 }
 
-export function unbindRegister(userDB: UserDatabase, siteUuid: string): Promise<void> {
-	return bindRegister(userDB, siteUuid, { id: null, name: null });
+export function unbindRegister(
+	userDB: UserDatabase,
+	siteUuid: string,
+	storeId?: number
+): Promise<void> {
+	return bindRegister(userDB, siteUuid, { id: null, name: null }, storeId);
 }
 
 export async function nextSaleCounter(userDB: UserDatabase, siteUuid: string): Promise<number> {

@@ -103,6 +103,7 @@ export function VoidButton() {
 	 *
 	 */
 	const handleRemove = React.useCallback(async () => {
+		const registerId = getCurrentBoundRegisterId() ?? undefined;
 		// #163 ruling R5: voiding writes a delete (or a status change) that must be
 		// recorded locally. With the worker dead the order's fate is unknowable from
 		// this device, and the undo path below could not restore it either.
@@ -143,7 +144,7 @@ export function VoidButton() {
 					collection: 'orders',
 					recordId,
 					changes: { status: 'pending' },
-					registerId: getCurrentBoundRegisterId() ?? undefined,
+					registerId,
 				});
 				showSuccess(t('pos_cart.order_voided_kept_pending'));
 			} catch (err) {

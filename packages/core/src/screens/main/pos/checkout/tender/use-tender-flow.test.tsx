@@ -1300,7 +1300,8 @@ beforeEach(() => {
 });
 jest.mock('../../../../../services/register/register-document', () => ({
 	readRegister: async () => ({ id: 'till' }),
-	readBoundRegister: async () => (mockBoundRegisterId ? { id: mockBoundRegisterId } : null),
+	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) =>
+		mockBoundRegisterId ? { id: mockBoundRegisterId } : null,
 }));
 jest.mock('../provenance/stamp-completion', () => ({
 	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [

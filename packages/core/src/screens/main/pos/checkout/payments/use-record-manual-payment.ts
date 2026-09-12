@@ -65,7 +65,7 @@ export function useRecordManualPayment(
 
 	return React.useCallback(
 		async (order, method, input) => {
-			const registerId = (await readBoundRegister(userDB, site.uuid!))?.id ?? null;
+			const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id ?? null;
 			const sessionId = await requireOpenSession(sessions, registerId, sessionsOn);
 			const payload = order.getLatest?.().payload ?? order.payload;
 			const paymentOrder = {
@@ -84,11 +84,15 @@ export function useRecordManualPayment(
 				registerId,
 				sessionId,
 				completionMeta: (meta_data) =>
-					completionMeta({ meta_data }, { userDB, siteUuid: site.uuid!, sessionId }),
+					completionMeta(
+						{ meta_data },
+						{ userDB, siteUuid: site.uuid!, storeId: store.id, sessionId }
+					),
 				persistProvenance: async () => {
 					const meta_data = await completionMeta(order.getLatest().payload, {
 						userDB,
 						siteUuid: site.uuid!,
+						storeId: store.id,
 						sessionId,
 					});
 					const patched = await localPatch({ document: order, data: { meta_data } });
@@ -124,6 +128,7 @@ export function useRecordManualPayment(
 							const meta_data = await completionMeta(changes, {
 								userDB,
 								siteUuid: site.uuid!,
+								storeId: store.id,
 								sessionId,
 							});
 							const patched = await localPatch({ document: order, data: { meta_data } });

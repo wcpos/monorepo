@@ -54,7 +54,7 @@ it('silently binds the sole active register and filters by store', async () => {
 	});
 	const view = mount();
 	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
-	expect(await readBoundRegister(mockDB, mockSite)).toEqual({ id: 'a', name: 'a' });
+	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'a', name: 'a' });
 	expect(mockHttp.get).toHaveBeenCalledWith('registers', { params: { store_id: 2 } });
 	expect(view.result.current.registers).toHaveLength(1);
 	const names = renderHook(() => useRegisterNames());
@@ -67,17 +67,20 @@ it('requires a choice among three, then binds the tapped id', async () => {
 	await waitFor(() => expect(view.result.current.status).toBe('choose'));
 	await act(() => view.result.current.bind('b'));
 	expect(view.result.current.status).toBe('bound');
-	expect(await readBoundRegister(mockDB, mockSite)).toEqual({ id: 'b', name: 'b' });
+	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'b', name: 'b' });
 });
 it('keeps an existing valid pointer unchanged', async () => {
-	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Saved' });
+	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Saved' }, mockStoreId);
 	mockHttp.get.mockResolvedValue({ data: rows });
 	const view = mount();
 	await waitFor(() => expect(view.result.current.registers).toHaveLength(3));
-	expect(await readBoundRegister(mockDB, mockSite)).toEqual({ id: 'b', name: 'Saved' });
+	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({
+		id: 'b',
+		name: 'Saved',
+	});
 });
 it('uses the pointer offline without fetching', async () => {
-	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Back' });
+	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Back' }, mockStoreId);
 	mockStatus = 'offline';
 	const view = mount();
 	await waitFor(() => expect(view.result.current.status).toBe('bound'));
@@ -85,7 +88,7 @@ it('uses the pointer offline without fetching', async () => {
 	expect(mockHttp.get).not.toHaveBeenCalled();
 });
 it('leaves status unchanged on request failure', async () => {
-	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Back' });
+	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Back' }, mockStoreId);
 	mockHttp.get.mockRejectedValue(new Error('offline'));
 	const view = mount();
 	await act(async () => {});
@@ -93,11 +96,11 @@ it('leaves status unchanged on request failure', async () => {
 	expect(view.result.current.registerId).toBe('b');
 });
 it('clears a pointer from another store before asking for a choice', async () => {
-	await bindRegister(mockDB, mockSite, { id: 'wrong-store', name: 'Other' });
+	await bindRegister(mockDB, mockSite, { id: 'wrong-store', name: 'Other' }, mockStoreId);
 	mockHttp.get.mockResolvedValue({ data: rows });
 	const view = mount();
 	await waitFor(() => expect(view.result.current.status).toBe('choose'));
-	expect(await readBoundRegister(mockDB, mockSite)).toBeNull();
+	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toBeNull();
 });
 it('shows none for an empty list', async () => {
 	mockHttp.get.mockResolvedValue({ data: [] });
@@ -114,7 +117,7 @@ it('rebinds the site pointer when the store changes', async () => {
 	mockStoreId = 3;
 	view.rerender();
 	await waitFor(() => expect(view.result.current.registerId).toBe('b'));
-	expect(await readBoundRegister(mockDB, mockSite)).toEqual({ id: 'b', name: 'b' });
+	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'b', name: 'b' });
 	expect(mockHttp.get).toHaveBeenLastCalledWith('registers', { params: { store_id: 3 } });
 });
 
@@ -124,4 +127,14 @@ it('requests without a store filter for the default store', async () => {
 	const view = mount();
 	await waitFor(() => expect(view.result.current.status).toBe('none'));
 	expect(mockHttp.get).toHaveBeenCalledWith('registers', undefined);
+});
+
+it('does not expose another store pointer offline, even before hydration', async () => {
+	await bindRegister(mockDB, mockSite, { id: 'a', name: 'A' }, 1);
+	mockStatus = 'offline';
+	const reader = renderHook(() => useRegisterBinding());
+	expect(reader.result.current.registerId).toBeNull();
+	const session = mount();
+	await act(async () => {});
+	expect(session.result.current.registerId).toBeNull();
 });

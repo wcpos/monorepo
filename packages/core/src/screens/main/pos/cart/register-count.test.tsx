@@ -65,6 +65,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	),
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
+let unsyncedCount = 3;
 let blind = false,
 	approval_required = false,
 	varianceThreshold = '';
@@ -77,7 +78,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		session: { id: 's', approval_required },
 		binding: { registerName: 'Front' },
 		expected: { cash: '480.80', card: '20' },
-		unsyncedCount: 3,
+		unsyncedCount,
 		actions: { closeSession, backToSelling },
 	}),
 }));
@@ -102,6 +103,7 @@ jest.mock('./approve-sheet', () => ({ ApproveSheet: () => <div data-testid="appr
 const enter = (value: string) =>
 	fireEvent.change(screen.getByTestId('count-amount'), { target: { value } });
 beforeEach(() => {
+	unsyncedCount = 3;
 	blind = false;
 	approval_required = false;
 	varianceThreshold = '';
@@ -193,4 +195,13 @@ it('returns to selling without closing', async () => {
 	fireEvent.click(screen.getByTestId('count-back'));
 	await waitFor(() => expect(backToSelling).toHaveBeenCalledTimes(1));
 	expect(closeSession).not.toHaveBeenCalled();
+});
+
+it.each([
+	[1, '1 sale not yet'],
+	[3, '3 sales not yet'],
+] as const)('pluralizes %s unsynced sales', (count, text) => {
+	unsyncedCount = count;
+	render(<RegisterCount onClosed={jest.fn()} />);
+	expect(screen.getByTestId('count-unsynced').textContent).toContain(text);
 });
