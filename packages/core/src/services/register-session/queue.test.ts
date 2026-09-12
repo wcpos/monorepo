@@ -7,6 +7,7 @@ import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-m
 
 import { closeSession, openSession, recordMovement, startCounting } from './session-store';
 import { drainRegisterSessionQueue } from './queue';
+import { refreshSessions } from './refresh';
 
 jest.mock('uuid', () => ({ v4: () => globalThis.crypto.randomUUID() }));
 let db: StoreDatabase;
@@ -110,6 +111,36 @@ it('sends movements after create but before a deferred counting transition', asy
 	expect(http.post.mock.calls[2][0]).toBe(`sessions/${row.id}/status`);
 	expect(row.getLatest()).toMatchObject({ sync_status: 'synced', pending_status: null });
 });
+it('closes a predecessor before creating its successor on the same register', async () => {
+	const predecessor = await open();
+	await predecessor.incrementalPatch({
+		server_status: 'open',
+		status: 'closed',
+		pending_status: 'closed',
+		status_at: new Date().toISOString(),
+		closed_at_gmt: new Date().toISOString(),
+	});
+	const successor = await open();
+	http.post.mockImplementation(async (url) => ({
+		data: {
+			...(url === 'sessions' ? successor.toJSON() : predecessor.toJSON()),
+			status: url === 'sessions' ? 'open' : 'closed',
+		},
+	}));
+
+	await drain();
+	expect(http.post.mock.calls.map(([url]) => url)).toEqual([
+		`sessions/${predecessor.id}/status`,
+		`sessions/${predecessor.id}/status`,
+	]);
+
+	await drain();
+	expect(http.post.mock.calls.map(([url]) => url)).toEqual([
+		`sessions/${predecessor.id}/status`,
+		`sessions/${predecessor.id}/status`,
+		'sessions',
+	]);
+});
 it.each([400, 409])('permanently fails HTTP %s', async (status) => {
 	const row = await open();
 	http.post.mockRejectedValue({ response: { status } });
@@ -163,4 +194,32 @@ it('does not apply refused-close recovery to a create', async () => {
 		sync_status: 'failed',
 		sync_error: 'wcpos_override_refused',
 	});
+});
+
+it('prunes movements together with their expired closed session', async () => {
+	const row = await open();
+	await row.incrementalPatch({
+		status: 'closed',
+		server_status: 'closed',
+		sync_status: 'synced',
+		closed_at_gmt: new Date(Date.now() - 8 * 86400_000).toISOString(),
+	});
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: row.id,
+		type: 'paid_in',
+		amount: '5',
+		reason: 'Float',
+		actor: 7,
+	});
+	http.get.mockResolvedValue({ data: [] });
+
+	await refreshSessions({
+		registerId: 'register',
+		http,
+		sessions: db.register_sessions,
+		movements: db.cash_movements,
+	});
+
+	expect(await db.register_sessions.findOne(row.id).exec()).toBeNull();
+	expect(await db.cash_movements.findOne(movement.id).exec()).toBeNull();
 });

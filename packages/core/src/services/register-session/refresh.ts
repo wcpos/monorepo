@@ -51,5 +51,9 @@ export async function refreshSessions({
 			},
 		})
 		.exec();
-	for (const row of expired) await row.remove();
+	for (const row of expired) {
+		const associated = await movements.find({ selector: { session_id: row.id } }).exec();
+		for (const movement of associated) await movement.remove();
+		await row.remove();
+	}
 }

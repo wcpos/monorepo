@@ -18,7 +18,15 @@ import {
 
 jest.mock('uuid', () => ({
 	v4: () => globalThis.crypto.randomUUID(),
-	v5: (_: string, id: string) => id.replace(/^./, id[0] === 'a' ? 'b' : 'a'),
+	v5: Object.assign(
+		(id: string, namespace: string) => {
+			if (namespace !== '6ba7b811-9dad-11d1-80b4-00c04fd430c8') {
+				throw new Error('Invalid UUID namespace');
+			}
+			return id.replace(/^./, id[0] === 'a' ? 'b' : 'a');
+		},
+		{ URL: '6ba7b811-9dad-11d1-80b4-00c04fd430c8' }
+	),
 }));
 let db: StoreDatabase;
 beforeEach(async () => {
@@ -61,7 +69,10 @@ it('void inserts a write-once reversal and marks its target', async () => {
 		actor: 7,
 	});
 	const reversal = await voidMovement(db.cash_movements, row.id, 7);
+	const repeated = await voidMovement(db.cash_movements, row.id, 7);
 	expect(reversal).toMatchObject({ type: 'void', voids: row.id, sync_status: 'pending' });
+	expect(repeated.id).toBe(reversal.id);
+	expect(await db.cash_movements.count().exec()).toBe(2);
 	expect(row.getLatest().voided_by).toBe(reversal.id);
 });
 

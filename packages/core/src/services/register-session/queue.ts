@@ -115,9 +115,18 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 	const rows = (await sessions.find({ selector: { sync_status: 'pending' } }).exec()).sort((a, b) =>
 		a.opened_at_gmt.localeCompare(b.opened_at_gmt)
 	);
+	const locallyClosed = await sessions.find({ selector: { status: 'closed' } }).exec();
 	for (const snapshot of rows) {
 		const row = snapshot.getLatest();
-		if (!due(row) || row.server_status) continue;
+		const closingPredecessor = locallyClosed.some((candidate) => {
+			const predecessor = candidate.getLatest();
+			return (
+				predecessor.id !== row.id &&
+				predecessor.register_id === row.register_id &&
+				predecessor.server_status !== 'closed'
+			);
+		});
+		if (!due(row) || row.server_status || closingPredecessor) continue;
 		await send(row, async () => {
 			const response = await http.post('sessions', {
 				id: row.id,

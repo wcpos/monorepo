@@ -120,8 +120,8 @@ export async function voidMovement(
 ) {
 	const row = await movements.findOne(movementId).exec();
 	if (!row || row.type === 'void') throw new Error('invalid_void_target');
-	// The target UUID is the namespace: repeated Undo taps share one durable reversal.
-	const id = uuidV5('void', movementId);
+	// A fixed namespace makes the target movement UUID the stable name for this reversal.
+	const id = uuidV5(movementId, uuidV5.URL);
 	const existing = await movements.findOne(id).exec();
 	const reversal =
 		existing ??

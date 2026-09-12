@@ -23,14 +23,14 @@ export function RegisterSessionBridge() {
 	React.useEffect(() => {
 		if (!sessions || !movements || !online) return;
 		const drain = () => drainRegisterSessionQueue({ sessions, movements, http, logger });
-		const report = () => logger.warn('Register session refresh/drain failed');
-		void drain()
-			.then(() =>
+		const sync = () =>
+			drain().then(() =>
 				registerId ? refreshSessions({ registerId, sessions, movements, http }) : undefined
-			)
-			.catch(report);
+			);
+		const report = () => logger.warn('Register session refresh/drain failed');
+		void sync().catch(report);
 		const tick = setInterval(() => {
-			void drain().catch(report);
+			void sync().catch(report);
 		}, 60_000);
 		return () => clearInterval(tick);
 	}, [sessions, movements, http, registerId, online]);
