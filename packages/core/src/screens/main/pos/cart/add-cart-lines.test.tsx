@@ -35,6 +35,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 		</button>
 	),
 	DialogClose: ({ children }: React.PropsWithChildren) => <>{children}</>,
+	DialogBody: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	DialogFooter: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	useRootContext: () => ({ onOpenChange: mockOnOpenChange }),
 }));

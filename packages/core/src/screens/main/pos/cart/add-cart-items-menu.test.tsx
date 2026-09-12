@@ -9,6 +9,9 @@ import { AddCartItemsMenu } from './add-cart-items-menu';
 
 const mockTooltip = jest.fn();
 
+// No provider is mounted here; avoid loading the settings provider's ESM-only dependencies.
+jest.mock('../../contexts/ui-settings', () => ({ useUISettings: jest.fn() }));
+
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	DialogBody: ({ children }: { children: React.ReactNode }) => <>{children}</>,

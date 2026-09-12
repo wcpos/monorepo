@@ -14,6 +14,7 @@ import { EditCartCustomerForm } from './edit-cart-customer';
 import { useT } from '../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
+import { usePOSOverlaySide } from '../contexts/overlay-side';
 
 /**
  *
@@ -23,6 +24,7 @@ export function Customer({
 }: {
 	onShowCustomerSelect: (show: boolean) => void;
 }) {
+	const side = usePOSOverlaySide();
 	const { currentOrderRecord } = useCurrentOrder();
 	const billing = useRecordField(currentOrderRecord, (order) => order.payload.billing);
 	const shipping = useRecordField(currentOrderRecord, (order) => order.payload.shipping);
@@ -49,7 +51,7 @@ export function Customer({
 					<ButtonText>{name}</ButtonText>
 				</ButtonPill>
 			</DialogTrigger>
-			<DialogContent side="right" testID="customer-address-dialog" size="xl" portalHost="pos">
+			<DialogContent side={side} testID="customer-address-dialog" size="xl" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.edit_customer_address')}</DialogTitle>
 				</DialogHeader>

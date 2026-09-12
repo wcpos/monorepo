@@ -218,6 +218,8 @@ test('one representative path exercises every ordered rule', () => {
 		['apps/main/e2e/fixtures.ts', 'web-helper', { web: 'full' }],
 		['packages/core/src/x.test.ts', 'unit-test-file', { unit: 'core' }],
 		['packages/virtual-printer/src/x.ts', 'leaf-package', { unit: 'none' }],
+		['packages/virtual-printer/self-signed-cert.test.mjs', 'leaf-package', { unit: 'none', lint: true }],
+		['packages/virtual-printer/package.json', 'package-deps', { native: 'rebuild', web: 'full' }],
 		['packages/core/src/polyfills.ts', 'native-source', { native: 'cachehit' }],
 		['packages/core/package.json', 'package-deps', { native: 'rebuild' }],
 		['packages/utils/src/x.ts', 'package-src', { web: 'full', native: 'none' }],

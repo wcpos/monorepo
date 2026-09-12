@@ -1,4 +1,4 @@
-import { useRegisterWithServer } from '../../../../../../services/register/use-register-with-server';
+import { useRegisterBindingSession } from '../../../../../../services/register/use-register-binding';
 import { useTerminalPaymentsService } from './use-terminal-payments-service';
 
 /**
@@ -9,6 +9,6 @@ import { useTerminalPaymentsService } from './use-terminal-payments-service';
  */
 export function TerminalPaymentsBridge(): null {
 	useTerminalPaymentsService();
-	useRegisterWithServer();
+	useRegisterBindingSession();
 	return null;
 }

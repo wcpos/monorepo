@@ -17,7 +17,7 @@ import { ReceiptStage } from '../receipt-stage/receipt-stage';
 import { useFinishSale } from '../receipt-stage/use-finish-sale';
 import { CancelPaymentView } from './cancel-payment-view';
 import { LegacyTab } from './legacy-tab';
-import { BalanceBar, LedgerPane } from './ledger-pane';
+import { LedgerPane } from './ledger-pane';
 import { TenderPane } from './tender-pane';
 import { useTenderFlow } from './use-tender-flow';
 import { useT } from '../../../../../contexts/translations';
@@ -25,6 +25,7 @@ import { useTheme } from '../../../../../contexts/theme';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { TotalsChangedBanner } from '../../cart/totals-changed-banner';
+import { getUuidFromLineItem } from '../../hooks/utils';
 
 interface Props {
 	order: EngineRecord<'orders'>;
@@ -66,6 +67,10 @@ export function TenderCheckout({ order }: Props) {
 			finishSale();
 			return;
 		}
+		if (flow.state.splitView) {
+			flow.dispatch({ type: 'close-split' });
+			return;
+		}
 		if (flow.hasLiveLeg && !flow.hasLiveTerminalLeg) {
 			if (flow.state.view !== 'cancel') flow.dispatch({ type: 'request-cancel' });
 			return;
@@ -76,6 +81,7 @@ export function TenderCheckout({ order }: Props) {
 	const lines = React.useMemo(
 		() =>
 			(payload.line_items ?? []).map((item) => ({
+				id: getUuidFromLineItem(item) ?? item.id,
 				name: item.name,
 				quantity: item.quantity,
 				total: formatCurrency(Number(item.total ?? 0)),
@@ -89,7 +95,7 @@ export function TenderCheckout({ order }: Props) {
 		if (flow.state.view === 'cancel' && !flow.hasLiveTerminalLeg) {
 			return <CancelPaymentView flow={flow} format={format} />;
 		}
-		if (flow.state.tab === 'legacy') {
+		if (flow.state.tab === 'legacy' && !flow.terminalLeg) {
 			return <LegacyTab flow={flow} order={order} />;
 		}
 		if (flow.totalMinor === 0 && flow.balanceMinor === 0) {
@@ -110,10 +116,10 @@ export function TenderCheckout({ order }: Props) {
 		}
 		if (compact) {
 			return (
-				<VStack space="md" className="flex-1 px-3 pb-3">
-					<BalanceBar flow={flow} format={format} />
+				// The pane's own label row now carries the balance; no bar above it on a phone.
+				<View className="bg-sidebar flex-1 px-3">
 					<TenderPane flow={flow} format={format} compact />
-				</VStack>
+				</View>
 			);
 		}
 		return (
@@ -159,7 +165,8 @@ export function TenderCheckout({ order }: Props) {
 							value={flow.state.tab}
 							onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
 						>
-							<TabsList>
+							{/* TabsList sets no direction of its own; on web a View defaults to a column. */}
+							<TabsList className="flex-row">
 								<TabsTrigger value="payments" testID="checkout-tab-payments">
 									<Text>{t('pos_checkout.payments_tab')}</Text>
 								</TabsTrigger>

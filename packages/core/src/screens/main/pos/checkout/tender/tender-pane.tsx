@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
@@ -13,8 +13,11 @@ import { fromMinor } from '@wcpos/order-math';
 
 import { ReaderConnection } from './reader-connection';
 import { TerminalLegView } from './terminal-leg-view';
-import { deviceTransports } from './tiles';
+import { deviceTransports, selectableReaders } from './tiles';
 import { disabledReasonKey, kindLabelKey } from './labels';
+import { SplitView } from './split-view';
+import { useDriverStatus } from './use-driver-status';
+import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { useT } from '../../../../../contexts/translations';
 
 import type { OrderSaveState } from '../checkout-mode';
@@ -43,15 +46,10 @@ function useElapsed(active: boolean, ms: number): boolean {
 interface Props {
 	flow: TenderFlow;
 	format: (minor: number) => string;
-	/** Phones get two tiles a row and the keypad beneath, instead of a grid beside the ledger. */
+	/** Phones scroll the selector sideways and use a smaller entry. */
 	compact?: boolean;
 }
 
-/**
- * The working side of the checkout: every method the till can offer, then the
- * amount for the one that was tapped. Tiles stay on screen behind the keypad on
- * a wide screen so switching tender is one tap, not a back-then-choose.
- */
 export function TenderPane({ flow, format, compact }: Props) {
 	const t = useT();
 
@@ -107,39 +105,10 @@ export function TenderPane({ flow, format, compact }: Props) {
 		);
 	}
 
-	return (
-		<VStack space="md" className="flex-1">
-			{/* Two-up on a phone, as many as fit beside the ledger on a wide screen —
-			    the tile itself carries the width, so the row only has to wrap. */}
-			<View className="flex-row flex-wrap gap-2">
-				{flow.tiles.map((tile) => (
-					<PaymentTile
-						key={tile.method.id}
-						tile={tile}
-						selected={flow.state.methodId === tile.method.id}
-						compact={compact}
-						onPress={() => flow.pickMethod(tile.method.id)}
-					/>
-				))}
-			</View>
-			{flow.method ? (
-				<TenderKeypad key={flow.method.id} flow={flow} format={format} />
-			) : (
-				<Text className="text-muted-foreground text-sm">
-					{flow.state.splitPlan
-						? t('pos_checkout.choose_payment_for_leg', {
-								n: flow.state.splitPlan.taken + 1,
-								ways: flow.state.splitPlan.ways,
-								amount: format(flow.thisPaymentMinor),
-							})
-						: t(
-								flow.state.customAmount
-									? 'pos_checkout.choose_payment_then_amount'
-									: 'pos_checkout.choose_a_payment_type'
-							)}
-				</Text>
-			)}
-		</VStack>
+	return flow.state.splitView ? (
+		<SplitView flow={flow} format={format} compact={compact} />
+	) : (
+		<TenderKeypad flow={flow} format={format} compact={compact} />
 	);
 }
 
@@ -252,41 +221,240 @@ const KEYPAD_ROWS = [
  * balance and the first keypress starts a fresh number. There is no decimal key
  * because there is no decimal to get wrong.
  */
-function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: number) => string }) {
+function TenderKeypad({ flow, format, compact }: Props) {
 	const t = useT();
-	const [choosingReader, setChoosingReader] = React.useState(false);
-	const method = flow.method!;
-	const givesChange = method.capabilities.change === true;
-	const server = method.capture.mode === 'server';
+	const [choosingReader, setChoosingReader] = React.useState<string | null>(null);
+	const [unavailableOpen, setUnavailableOpen] = React.useState(false);
+	const method = flow.method;
+	if (!method && choosingReader !== null) setChoosingReader(null);
+	const givesChange = method?.capabilities.change === true;
+	const server = method?.capture.mode === 'server';
+	const remote = server || method?.capture.mode === 'device';
 	const locked = flow.lockToDefault || (flow.readers.length === 1 && flow.readers[0].isDefault);
 	const selectedReader = flow.readers.find(({ id }) => id === flow.state.readerId);
 	const needsReader =
 		(server && (!selectedReader || selectedReader.inUseBy !== null)) ||
-		(method.capture.mode === 'device' && !flow.deviceReady);
-	const reason = flow.tiles.find((tile) => tile.method.id === method.id)?.reason;
+		(method?.capture.mode === 'device' && !flow.deviceReady);
+	const reason = flow.tiles.find((tile) => tile.method.id === method?.id)?.reason;
+
+	const plan = flow.plan;
+	const done = flow.planLegs.filter((leg) => leg.state === 'done');
+	const n = done.length + 1;
+	const ways = plan?.kind === 'fixed' ? 2 : Math.max(plan?.ways ?? 1, n);
+	const groupDone =
+		plan?.kind === 'items' && done.reduce((sum, leg) => sum + leg.minor, 0) >= plan.firstMinor;
+	const due = flow.thisPaymentMinor;
+	const noChange = Boolean(method && !givesChange && flow.state.entryMinor > flow.balanceMinor);
+	const left = flow.balanceMinor - flow.entryAppliedMinor;
+	const canChoose = (tile: TenderTile) =>
+		!tile.disabled ||
+		(tile.reason === 'offline' &&
+			tile.method.capture.mode === 'device' &&
+			deviceTransports(tile.method).some((transport) => transport.offline === 'queue'));
+	const unavailable = flow.tiles.filter((tile) => !canChoose(tile));
+	const pills = flow.tiles.filter(canChoose).map((tile) => {
+		const selected = flow.state.methodId === tile.method.id;
+		return (
+			<Button
+				key={tile.method.id}
+				variant={selected ? 'sidebar-solid' : 'sidebar-quiet'}
+				className="h-12 shrink-0 flex-row gap-2 rounded-xl"
+				testID={`checkout-method-${tile.method.id}`}
+				disabled={flow.busy}
+				onPress={() => {
+					setChoosingReader(null);
+					flow.pickMethod(tile.method.id);
+				}}
+			>
+				<Icon name={methodIcon(tile.method)} />
+				<ButtonText decodeHtml>{tile.method.title}</ButtonText>
+				<MethodStatus tile={tile} selected={selected} />
+			</Button>
+		);
+	});
+	const hint = noChange
+		? t('pos_checkout.no_change_for_method', {
+				amount: format(flow.balanceMinor),
+				method: method?.title,
+			})
+		: flow.entryChangeMinor > 0
+			? t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })
+			: flow.entryAppliedMinor < due && flow.state.entryMinor > 0
+				? plan
+					? t('pos_checkout.less_than_planned', { amount: format(due - flow.entryAppliedMinor) })
+					: t('pos_checkout.part_payment_left', { left: format(left) })
+				: '';
+	const commit = method
+		? t(remote ? 'pos_checkout.send_amount_to' : 'pos_checkout.take_amount_in', {
+				amount: format(flow.entryAppliedMinor),
+				method: method.title,
+			}) +
+			(plan && !groupDone
+				? ` · ${t('pos_checkout.n_of_ways', { n, ways })}`
+				: left > 0
+					? ` · ${t('pos_checkout.amount_left', { amount: format(left) })}`
+					: flow.rows.length > 0 || flow.balanceMinor < flow.totalMinor
+						? ` · ${t('pos_checkout.pays_it_off')}`
+						: '')
+		: t('pos_checkout.choose_how_paying');
 
 	return (
-		<VStack space="sm" testID="checkout-keypad" className="max-w-sm">
-			<VStack space="xs">
-				<Text className="text-muted-foreground text-xs tracking-wider uppercase">
-					{givesChange ? t('pos_checkout.tendered') : method.title}
-					{flow.state.splitPlan ? (
-						<Text testID="checkout-keypad-leg">{` · ${t('pos_checkout.payment_n_of', { n: flow.state.splitPlan.taken + 1, ways: flow.state.splitPlan.ways })}`}</Text>
-					) : null}
+		<ScrollView
+			className="bg-sidebar text-sidebar-foreground flex-1"
+			contentContainerClassName="items-center gap-2 pb-4"
+			showsVerticalScrollIndicator={false}
+		>
+			<HStack className="flex-wrap items-center justify-center gap-2">
+				<Text
+					testID="checkout-label"
+					decodeHtml
+					className="text-sidebar-foreground/70 text-xs font-semibold tracking-wider uppercase"
+				>
+					{plan
+						? `${flow.planLabel} · ${t('pos_checkout.amount_left', { amount: format(flow.balanceMinor) })}`
+						: t(
+								flow.balanceMinor < flow.totalMinor
+									? 'pos_checkout.remaining'
+									: 'pos_checkout.to_pay'
+							)}{' '}
+					<Text testID="checkout-balance" className={plan ? 'hidden' : undefined}>
+						{format(flow.balanceMinor)}
+					</Text>
 				</Text>
-				<Text testID="checkout-entry" className="text-4xl font-bold tabular-nums">
-					{format(flow.state.entryMinor)}
-				</Text>
-				{givesChange && flow.entryChangeMinor > 0 ? (
-					<Text className="text-success text-sm font-semibold">
-						{t('pos_checkout.change_due', { amount: format(flow.entryChangeMinor) })}
+				{flow.balanceMinor > 0 ? (
+					<Button
+						variant="sidebar-quiet"
+						size="sm"
+						className="rounded-full"
+						testID="checkout-split-chip"
+						disabled={flow.busy}
+						onPress={() =>
+							flow.dispatch({
+								type: 'open-split',
+							})
+						}
+					>
+						<ButtonText>{t('pos_checkout.split')}</ButtonText>
+					</Button>
+				) : null}
+				{!flow.online ? (
+					<Text testID="checkout-offline" className="text-warning text-xs">
+						{t('pos_checkout.offline')}
 					</Text>
 				) : null}
-			</VStack>
+			</HStack>
+			<Text
+				testID="checkout-entry"
+				className={`text-sidebar-foreground font-bold tabular-nums ${compact ? 'text-6xl' : 'text-8xl'} ${flow.state.entryDirty ? 'opacity-100' : 'opacity-70'}`}
+			>
+				{format(flow.state.view === 'select' ? due : flow.state.entryMinor)}
+			</Text>
+			<Text
+				testID="checkout-entry-hint"
+				className={`min-h-6 text-sm ${noChange ? 'text-warning' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-sidebar-foreground/70'}`}
+				decodeHtml
+			>
+				{hint}
+			</Text>
+			{plan ? (
+				<View
+					testID="checkout-plan"
+					className="flex-row flex-wrap items-center justify-center gap-2"
+				>
+					{flow.planLegs.map((leg, index) => (
+						<View
+							key={index}
+							testID={`checkout-plan-leg-${index}`}
+							className={`flex-row items-center gap-1 rounded-full border px-3 py-2 ${leg.state === 'done' ? 'bg-success/20 border-success/30' : leg.state === 'now' ? 'border-sidebar-foreground' : 'border-sidebar-border opacity-60'} ${leg.state === 'rest' ? 'border-dashed' : ''}`}
+						>
+							{leg.state === 'done' ? (
+								<Icon name="check" size="xs" className="text-success" />
+							) : null}
+							<Text
+								className={
+									leg.state === 'done' ? 'text-success text-xs' : 'text-sidebar-foreground text-xs'
+								}
+								decodeHtml
+							>
+								{leg.state === 'rest'
+									? t('pos_checkout.then_amount', { amount: format(leg.minor) })
+									: `${leg.title ? `${leg.title} ` : ''}${format(leg.minor)}`}
+							</Text>
+						</View>
+					))}
+					{flow.planMore ? (
+						<Button
+							variant="sidebar"
+							size="sm"
+							testID="checkout-plan-pick-items"
+							onPress={() => {
+								flow.dispatch({ type: 'set-split-tab', tab: 'item' });
+								flow.dispatch({ type: 'open-split' });
+							}}
+						>
+							<ButtonText className="underline">{t('pos_checkout.pick_next_items')}</ButtonText>
+						</Button>
+					) : null}
+					<Button
+						variant="sidebar"
+						size="sm"
+						testID="checkout-plan-change"
+						onPress={() => flow.dispatch({ type: 'open-split' })}
+					>
+						<ButtonText className="underline">{t('pos_checkout.change_split')}</ButtonText>
+					</Button>
+				</View>
+			) : null}
+
+			{compact ? (
+				<ScrollView horizontal className="w-full grow-0" showsHorizontalScrollIndicator={false}>
+					<HStack className="gap-2">{pills}</HStack>
+				</ScrollView>
+			) : (
+				<View className="flex-row flex-wrap justify-center gap-2">{pills}</View>
+			)}
+			{unavailable.length > 0 ? (
+				<VStack space="xs" className="w-full max-w-md">
+					<Button
+						variant="sidebar"
+						size="sm"
+						className="rounded-md"
+						testID="checkout-unavailable-toggle"
+						onPress={() => setUnavailableOpen(!unavailableOpen)}
+					>
+						<ButtonText>
+							{t('pos_checkout.not_available_right_now_n', { n: unavailable.length })}
+						</ButtonText>
+					</Button>
+					{unavailableOpen
+						? unavailable.map((tile) => (
+								<View
+									key={tile.method.id}
+									testID={`checkout-unavailable-${tile.method.id}`}
+									className="bg-sidebar-foreground/10 flex-row items-center gap-2 rounded-md p-2"
+								>
+									<Icon name={methodIcon(tile.method)} className="text-sidebar-foreground/70" />
+									<Text className="text-sidebar-foreground text-sm" decodeHtml>
+										{tile.method.title}
+									</Text>
+									<MethodStatus tile={tile} />
+									<Text className="text-sidebar-foreground/70 flex-1 text-xs">
+										{tile.reason
+											? t(disabledReasonKey(tile.reason), {
+													title: tile.method.title,
+													...(typeof tile.reason === 'object' ? tile.reason : {}),
+												})
+											: ''}
+									</Text>
+								</View>
+							))
+						: null}
+				</VStack>
+			) : null}
 
 			{/* The terminal choice sits with the amount, above the keypad: for a card
 			    leg the amount is already right and WHICH reader is the decision. */}
-			{method.capture.mode === 'device' && flow.pickTransport ? (
+			{method?.capture.mode === 'device' && flow.pickTransport ? (
 				<ReaderConnection
 					bootstrap={flow.bootstrapReader}
 					remembered={flow.rememberedReaderId}
@@ -300,11 +468,12 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 			) : null}
 			{server ? (
 				<VStack space="xs">
-					{locked || (!needsReader && (!choosingReader || flow.readers.length === 1)) ? (
+					{locked ||
+					(!needsReader && (choosingReader !== method?.id || flow.readers.length === 1)) ? (
 						<HStack className="items-center gap-2">
 							<Text
 								testID={locked ? 'checkout-reader-locked' : 'checkout-reader-selected'}
-								className="text-muted-foreground text-sm"
+								className="text-sidebar-foreground/70 text-sm"
 							>
 								{t('pos_checkout.reader_line', {
 									label: (locked ? flow.readers[0] : selectedReader)?.label ?? '',
@@ -316,7 +485,7 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 									size="sm"
 									testID="checkout-reader-change"
 									disabled={flow.busy}
-									onPress={() => setChoosingReader(true)}
+									onPress={() => setChoosingReader(method?.id ?? null)}
 								>
 									<ButtonText>{t('pos_checkout.change_reader')}</ButtonText>
 								</Button>
@@ -336,7 +505,10 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 										<ButtonText>{reader.label}</ButtonText>
 									</Button>
 									{reader.inUseBy !== null ? (
-										<Text className="text-muted-foreground text-xs">
+										<Text
+											className="text-sidebar-foreground/70 text-xs"
+											testID={`checkout-reader-${reader.id}-reason`}
+										>
 											{t('pos_checkout.reader_in_use', { number: reader.inUseBy })}
 										</Text>
 									) : null}
@@ -345,41 +517,49 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 						</View>
 					)}
 					{needsReader ? (
-						<Text className="text-muted-foreground text-sm">
+						<Text className="text-sidebar-foreground/70 text-sm">
 							{t('pos_checkout.choose_a_terminal')}
 						</Text>
 					) : null}
 				</VStack>
 			) : null}
 
-			<View className="flex-row flex-wrap gap-2">
-				{givesChange ? (
-					flow.quickAmountsMinor.map((minor) => (
+			{method ? (
+				<View className="flex-row flex-wrap justify-center gap-2">
+					{(givesChange && !remote ? flow.quickAmountsMinor : []).map((minor) => (
 						<Button
 							key={minor}
-							variant="secondary"
+							variant="sidebar-quiet"
 							size="sm"
+							className="rounded-full"
 							testID={`checkout-quick-${fromMinor(minor, flow.dp)}`}
+							disabled={flow.busy}
 							onPress={() => flow.dispatch({ type: 'set-entry', minor })}
 						>
 							<ButtonText>{format(minor)}</ButtonText>
 						</Button>
-					))
-				) : (
+					))}
 					<Button
-						variant="secondary"
+						variant="sidebar-quiet"
 						size="sm"
-						testID="checkout-quick-balance"
-						onPress={() => flow.dispatch({ type: 'set-entry', minor: flow.balanceMinor })}
+						className="rounded-full"
+						testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
+						disabled={flow.busy}
+						onPress={() => flow.dispatch({ type: 'set-entry', minor: due })}
 					>
 						<ButtonText>
-							{t('pos_checkout.full_balance', { amount: format(flow.balanceMinor) })}
+							{t(
+								(givesChange && !remote) || plan
+									? 'pos_checkout.exact_amount'
+									: 'pos_checkout.full_balance',
+								{ amount: format(due) }
+							)}
 						</ButtonText>
 					</Button>
-				)}
-			</View>
+				</View>
+			) : null}
 
-			<VStack space="xs">
+			<VStack space="xs" testID="checkout-keypad" className="min-h-56 w-full max-w-md">
 				{KEYPAD_ROWS.map((row) => (
 					<HStack key={row[0]} className="gap-2">
 						{row.map((key) => (
@@ -399,43 +579,25 @@ function TenderKeypad({ flow, format }: { flow: TenderFlow; format: (minor: numb
 				</HStack>
 			</VStack>
 
-			{reason ? (
-				<Text className="text-warning text-sm">
-					{t(disabledReasonKey(reason), {
-						title: method.title,
-						...(typeof reason === 'object' ? reason : {}),
-					})}
-				</Text>
-			) : null}
-
-			<HStack className="gap-2">
-				<Button
-					variant="success"
-					size="lg"
-					className="flex-1"
-					testID="checkout-take-payment"
-					loading={flow.busy}
-					disabled={flow.busy || flow.entryAppliedMinor <= 0 || needsReader || Boolean(reason)}
-					onPress={() => void flow.takeTender()}
-				>
-					<ButtonText decodeHtml>
-						{t('pos_checkout.take_amount_in', {
-							amount: format(flow.entryAppliedMinor),
-							method: method.title,
-						})}
-					</ButtonText>
-				</Button>
-				<Button
-					variant="outline"
-					size="lg"
-					testID="checkout-tender-back"
-					disabled={flow.busy}
-					onPress={() => flow.dispatch({ type: 'back' })}
-				>
-					<ButtonText>{t('common.cancel')}</ButtonText>
-				</Button>
-			</HStack>
-		</VStack>
+			<Button
+				variant="sidebar-solid"
+				size="lg"
+				className="h-14 w-full max-w-md"
+				testID="checkout-commit"
+				loading={flow.busy}
+				disabled={
+					!method ||
+					flow.busy ||
+					flow.entryAppliedMinor <= 0 ||
+					needsReader ||
+					Boolean(reason) ||
+					noChange
+				}
+				onPress={() => void flow.takeTender()}
+			>
+				<ButtonText decodeHtml>{commit}</ButtonText>
+			</Button>
+		</ScrollView>
 	);
 }
 
@@ -454,13 +616,45 @@ function KeypadKey({
 }) {
 	return (
 		<Button
-			variant="muted"
-			size="lg"
-			className="flex-1"
+			variant="sidebar-key"
+			size="key"
+			className={`flex-1 ${value === 'clear' || icon ? 'opacity-60' : ''}`}
+			disabled={flow.busy}
 			testID={testID ?? `checkout-key-${value}`}
 			onPress={() => flow.dispatch({ type: 'key', key: value })}
 		>
 			{icon ? <Icon name={icon} /> : <ButtonText>{label}</ButtonText>}
 		</Button>
+	);
+}
+
+function methodIcon(method: TenderTile['method']) {
+	return method.kind === 'cash' ? 'cashRegister' : 'creditCard';
+}
+
+function MethodStatus({ tile, selected }: { tile: TenderTile; selected?: boolean }) {
+	const { method } = tile;
+	const t = useT();
+	// A folded (unavailable) row shows a grey dot and never subscribes to its driver.
+	const status = useDriverStatus(
+		method.capture.mode === 'device' && !tile.disabled
+			? getDriver(method.capture.provider)
+			: undefined
+	);
+	if (method.capture.mode !== 'server' && method.capture.mode !== 'device') return null;
+	const connected =
+		!tile.disabled &&
+		(method.capture.mode === 'device'
+			? status.connection === 'connected'
+			: selectableReaders(method).readers.length > 0);
+	return (
+		<View testID={`checkout-method-status-${method.id}`} className="flex-row items-center gap-1">
+			<View className={`size-2 rounded-full ${connected ? 'bg-success' : 'bg-muted-foreground'}`} />
+			{!tile.disabled && status.reader?.battery != null ? (
+				<Text className={`text-xs ${selected ? 'text-sidebar' : 'text-sidebar-foreground'}`}>
+					{t('pos_checkout.reader_battery_percent', { battery: status.reader.battery })}
+				</Text>
+			) : null}
+		</View>
 	);
 }

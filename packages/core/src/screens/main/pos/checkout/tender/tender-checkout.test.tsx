@@ -21,6 +21,7 @@ let mockOnClose: (() => void) | undefined;
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
 let mockNumber = '1187';
+let mockLineItems: NonNullable<import('@wcpos/database').OrderDocument['line_items']> = [];
 
 const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethodDescriptor => ({
 	schema: 1,
@@ -65,7 +66,9 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: str
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
-		select({ payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: [] } }),
+		select({
+			payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: mockLineItems },
+		}),
 }));
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
@@ -94,6 +97,10 @@ jest.mock('@wcpos/components/collapsible', () => ({
 }));
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
+}));
+// Terminal rendering/animations have their own suite; this marker only verifies pane ownership.
+jest.mock('./terminal-leg-view', () => ({
+	TerminalLegView: () => <div data-testid="terminal-leg-view" />,
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
@@ -140,7 +147,12 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		paidMinor: 0,
 		thisPaymentMinor: 9295,
 		afterThisPaymentMinor: 0,
-		splitLegs: [],
+		plan: null,
+		planLegs: [],
+		planLabel: null,
+		planMore: false,
+		lines: [],
+		linesPaidBy: {},
 		balanceMinor: 9295,
 		rows: [],
 		liveRows: [],
@@ -175,6 +187,7 @@ describe('TenderCheckout', () => {
 		mockScreenSize = 'lg';
 		mockStage = 'checkout';
 		mockOnClose = undefined;
+		mockLineItems = [];
 		mockFlow = makeFlow();
 	});
 
@@ -199,15 +212,31 @@ describe('TenderCheckout', () => {
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 	});
 
-	it('collapses the ledger to a balance bar on a phone', () => {
+	it('keeps an offline line payment badge after the server assigns a numeric ID', () => {
+		mockLineItems = [
+			{
+				id: 123,
+				name: 'Coffee',
+				quantity: 1,
+				total: '10.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
+			},
+		];
+		mockFlow = makeFlow({ linesPaidBy: { 'line-local': ['Cash'] } });
+
+		render(<TenderCheckout order={order} />);
+
+		expect(document.body.textContent).toContain('pos_checkout.line_paid_by');
+	});
+
+	it("drops the ledger on a phone; the pane's own label row carries the balance", () => {
 		mockScreenSize = 'sm';
 
 		render(<TenderCheckout order={order} />);
 
-		expect(screen.getByTestId('checkout-balance-bar')).not.toBeNull();
-		// The order lines and the order total are what the bar drops; the balance stays.
+		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 		expect(screen.queryByTestId('checkout-order-total')).toBeNull();
-		expect(screen.getByTestId('checkout-balance').textContent).toBe('$92.95');
+		expect(screen.getByTestId('checkout-label').textContent).toContain('$92.95');
 	});
 
 	it('renders an undrivable method disabled, with the reason, rather than hiding it', () => {
@@ -224,11 +253,12 @@ describe('TenderCheckout', () => {
 
 		render(<TenderCheckout order={order} />);
 
-		const tile = screen.getByTestId('checkout-tile-square_terminal') as HTMLButtonElement;
-		expect(tile.disabled).toBe(true);
-		expect(tile.textContent).toContain('pos_checkout.update_app_to_use');
-
-		fireEvent.click(tile);
+		// Undrivable methods are not pills: they sit in the folded "not available" list.
+		expect(screen.queryByTestId('checkout-method-square_terminal')).toBeNull();
+		fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+		const row = screen.getByTestId('checkout-unavailable-square_terminal');
+		expect(row.textContent).toContain('Square Terminal');
+		expect(row.textContent).toContain('pos_checkout.update_app_to_use');
 		expect(mockPickMethod).not.toHaveBeenCalled();
 	});
 
@@ -253,6 +283,18 @@ describe('TenderCheckout', () => {
 		mockOnClose?.();
 
 		expect(mockBack).not.toHaveBeenCalled();
+	});
+
+	it('keeps the terminal pane mounted when the leg finishes on the Legacy tab', () => {
+		mockFlow = makeFlow({
+			state: { ...initialTenderState, tab: 'legacy' },
+			terminalLeg: { phase: 'final' } as TenderFlow['terminalLeg'],
+		});
+
+		render(<TenderCheckout order={order} />);
+
+		expect(screen.getByTestId('terminal-leg-view')).not.toBeNull();
+		expect(screen.queryByTestId('legacy-tab')).toBeNull();
 	});
 
 	it('offers a completion action for a zero-total order', () => {
@@ -287,11 +329,10 @@ it('reader chips require an explicit choice when there is no default', () => {
 		],
 	});
 	render(<TenderCheckout order={order} />);
-	expect((screen.getByTestId('checkout-take-payment') as HTMLButtonElement).disabled).toBe(true);
+	expect((screen.getByTestId('checkout-commit') as HTMLButtonElement).disabled).toBe(true);
 	expect((screen.getByTestId('checkout-reader-busy') as HTMLButtonElement).disabled).toBe(true);
-	expect(screen.getByTestId('checkout-keypad').textContent).toContain(
-		'pos_checkout.choose_a_terminal'
-	);
+	// The reader chooser sits above the keys now, not inside them.
+	expect(document.body.textContent).toContain('pos_checkout.choose_a_terminal');
 	fireEvent.click(screen.getByTestId('checkout-reader-free'));
 	expect(mockFlow.pickReader).toHaveBeenCalledWith('free');
 });

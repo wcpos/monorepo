@@ -14,6 +14,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
 
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { Actions } from './cells/actions';
 import { Name } from './cells/name';
 import { Price } from './cells/price';
@@ -27,6 +28,7 @@ import { CameraScannerPanel } from './camera-scanner-panel';
 import { StorageOutageBanner } from './storage-outage-banner';
 import { ProductGrid } from './grid';
 import { POS_PRODUCTS_MIN_PAGE_SIZE } from './fit-page-size';
+import { oppositeOverlaySide, usePOSOverlaySide } from '../contexts/overlay-side';
 import { UISettingsForm } from './ui-settings-form';
 import { POSFilterBar } from './filter-bar/pos-filter-bar';
 import { getPOSProductSort } from './pos-product-sort';
@@ -147,6 +149,8 @@ function POSProductsContent({
 	isColumn?: boolean;
 	showOutOfStock: boolean;
 }) {
+	const side = usePOSOverlaySide();
+	const { session } = useRegisterSession();
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
@@ -299,7 +303,11 @@ function POSProductsContent({
 									onToggle={() => setScannerOpen((open) => !open)}
 								/>
 								<ViewModeToggle />
-								<UISettingsDialog title={t('common.product_settings')}>
+								<UISettingsDialog
+									side={oppositeOverlaySide(side)}
+									portalHost="pos"
+									title={t('common.product_settings')}
+								>
 									<UISettingsForm />
 								</UISettingsDialog>
 							</HStack>
@@ -321,7 +329,11 @@ function POSProductsContent({
 					</ErrorBoundary>
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
-					<View className="flex-1" onLayout={handleProductsLayout}>
+					<View
+						className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}
+						testID="register-products"
+						onLayout={handleProductsLayout}
+					>
 						<ErrorBoundary>
 							<Suspense>
 								{viewMode === 'grid' ? (

@@ -61,6 +61,7 @@ jest.mock('expo-router/build/react-navigation/drawer', () => {
 	};
 });
 
+jest.mock('../header/notification-bell', () => ({ NotificationBell: () => null }));
 jest.mock('./drawer-item-list', () => ({
 	DrawerItemList: () => null,
 }));

@@ -22,9 +22,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { SERVER_OWNED_STORE_FIELDS } from '@wcpos/database/collections/schemas/stores';
 import { useDocField } from '@wcpos/query';
 
-import { useRegister } from '../../../services/register/use-register';
-import { renameRegister } from '../../../services/register/register-document';
-import { registerWithServer } from '../../../services/register/register-with-server';
 import { SettingsDangerZone } from './components/settings-danger-zone';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
@@ -51,7 +48,6 @@ const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
  */
 const formSchema = z.object({
 	name: z.string().optional(),
-	register_name: z.string().optional(),
 	store_country: z.string().optional(),
 	store_state: z.string().optional(),
 	store_city: z.string().optional(),
@@ -94,8 +90,7 @@ function GeneralSettingsForm({
 }: {
 	defaultCustomerResource: ReturnType<typeof useDefaultCustomer>['defaultCustomerResource'];
 }) {
-	const { store, userDB, site } = useStoreSession();
-	const register = useRegister();
+	const { store } = useStoreSession();
 	const formData = useDocField(store, (latest) => {
 		return {
 			name: latest.name,
@@ -132,7 +127,7 @@ function GeneralSettingsForm({
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema as never) as never,
-		values: { ...formData, register_name: register?.name ?? '' },
+		values: formData,
 	});
 
 	/**
@@ -140,13 +135,9 @@ function GeneralSettingsForm({
 	 */
 	const handleChange = React.useCallback(
 		async (data: z.infer<typeof formSchema>) => {
-			const { register_name, ...storeData } = data;
-			if (Object.keys(storeData).length) await localPatch({ document: store, data: storeData });
-			if (register_name !== undefined && (await renameRegister(userDB, register_name))) {
-				void registerWithServer({ userDB, http, siteUuid: site.uuid! });
-			}
+			await localPatch({ document: store, data });
 		},
-		[localPatch, store, userDB, http, site.uuid]
+		[localPatch, store]
 	);
 
 	useFormChangeHandler({
@@ -213,15 +204,6 @@ function GeneralSettingsForm({
 						name="name"
 						render={({ field }) => (
 							<SettingsRow label={t('settings.store_name')}>
-								<FormInput {...field} />
-							</SettingsRow>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="register_name"
-						render={({ field }) => (
-							<SettingsRow label={t('settings.register_name')}>
 								<FormInput {...field} />
 							</SettingsRow>
 						)}

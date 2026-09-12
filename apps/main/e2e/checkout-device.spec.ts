@@ -27,7 +27,7 @@ async function connect(page: Page, reader: string) {
 	await option.click();
 	// The reader name in this composite status identifies the completed switch.
 	await expect(page.getByTestId('checkout-reader-status')).toContainText(readerName);
-	await expect(page.getByTestId('checkout-take-payment')).toBeEnabled();
+	await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 }
 function paymentResponse(page: Page, orderId: number, action: string) {
 	let unauthorized = false;
@@ -48,7 +48,7 @@ function paymentResponse(page: Page, orderId: number, action: string) {
 }
 async function take(page: Page, orderId: number) {
 	const intent = paymentResponse(page, orderId, 'intent');
-	await page.getByTestId('checkout-take-payment').click();
+	await page.getByTestId('checkout-commit').click();
 	const response = await intent;
 	expect(response.status()).toBeLessThan(400);
 	expect(response.request().postDataJSON()).toMatchObject({
@@ -80,7 +80,7 @@ liveTest.describe('POS device capture with the simulated driver (live store)', (
 				const device = simulatedDevice(descriptors);
 				liveTest.skip(!device, 'store has no simulated device capture descriptor');
 				expect(device!.id).toBe('wcpos_simulated_device');
-				await page.getByTestId(`checkout-tile-${device!.id}`).click();
+				await page.getByTestId(`checkout-method-${device!.id}`).click();
 				const amount = await readAmountMinor(page, 'checkout-entry');
 				await connect(page, `sim-${scenario}`);
 				const capture =

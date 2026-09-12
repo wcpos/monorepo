@@ -41,6 +41,7 @@ export interface RecordManualPaymentDeps {
 	cashierId: number;
 	storeId: number | null;
 	registerId: string | null;
+	sessionId?: string | null;
 	completionMeta?: (meta: MetaDataEntry[]) => Promise<MetaDataEntry[]>;
 	persistProvenance?: () => Promise<void>;
 	currency: string;
@@ -138,6 +139,7 @@ export async function recordManualPayment(
 		cashierId: deps.cashierId,
 		storeId: deps.storeId,
 		registerId: deps.registerId,
+		sessionId: deps.sessionId,
 		recordedOffline: !online,
 		now: deps.now ?? (() => new Date().toISOString()),
 		uuid: deps.uuid ?? uuidv4,

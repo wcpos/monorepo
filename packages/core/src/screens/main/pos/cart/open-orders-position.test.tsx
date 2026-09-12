@@ -11,6 +11,18 @@ let mockPosition = 'bottom';
 let mockIsNew = false;
 let mockStage = 'cart';
 
+jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
+jest.mock('./register-bar', () => ({ RegisterBar: () => null }));
+jest.mock('./register-picker', () => ({ RegisterPicker: () => null }));
+jest.mock('./open-register-card', () => ({ OpenRegisterCard: () => null }));
+jest.mock('./register-count', () => ({ RegisterCount: () => null }));
+jest.mock('./closure-sheet', () => ({ ClosureSheet: () => null }));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ status: 'bound', registers: [] }),
+}));
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ session: null, sessionsOn: false, overdue: false }),
+}));
 jest.mock('../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { openOrdersPosition: mockPosition } }),
 }));
@@ -25,8 +37,10 @@ jest.mock('./table', () => ({ CartTable: () => <div data-testid="cart-table" /> 
 jest.mock('./totals', () => ({ Totals: () => <div /> }));
 jest.mock('./totals-changed-banner', () => ({ CartTotalsChangedBanner: () => <div /> }));
 jest.mock('./cart-header', () => ({ CartHeader: () => <div /> }));
-jest.mock('./buttons/add-note', () => ({ AddNoteButton: () => <div /> }));
-jest.mock('./buttons/order-meta', () => ({ OrderMetaButton: () => <div /> }));
+jest.mock('./buttons/order-meta', () => ({
+	OrderMetaButton: () => <div />,
+	OrderMetaDialog: () => null,
+}));
 jest.mock('./buttons/pay', () => ({ PayButton: () => <div data-testid="checkout-button" /> }));
 jest.mock('./buttons/save-order', () => ({ SaveButton: () => <div /> }));
 jest.mock('./buttons/void', () => ({ VoidButton: () => <div /> }));
@@ -49,7 +63,13 @@ jest.mock('@wcpos/components/hstack', () => ({
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
-jest.mock('@wcpos/components/button', () => ({ ButtonGroupSeparator: () => <div /> }));
+jest.mock('@wcpos/components/button', () => ({
+	ButtonGroupSeparator: () => <div />,
+	Button: ({ children }: { children?: React.ReactNode }) => <button>{children}</button>,
+}));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
 
 describe('open orders position', () => {
 	it.each(['draft', 'cart', 'checkout'])(

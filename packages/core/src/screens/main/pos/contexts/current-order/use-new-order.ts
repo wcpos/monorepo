@@ -40,7 +40,7 @@ export type DefaultCustomerResource = ReturnType<
  * shape `useOpenOrdersResource` already uses, for the same reason.
  */
 export const useNewOrder = (defaultCustomerResource: DefaultCustomerResource) => {
-	const { store, wpCredentials } = useStoreSession();
+	const { store, wpCredentials, site } = useStoreSession();
 	const register = useRegister();
 
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
@@ -68,7 +68,8 @@ export const useNewOrder = (defaultCustomerResource: DefaultCustomerResource) =>
 		data.prices_include_tax = prices_include_tax === 'yes';
 		data.meta_data = ensurePosOrderIdentityMeta(undefined, {
 			userId: wpCredentials.id!,
-			registerId: register?.id,
+			tillId: register?.id,
+			registerId: register?.sites[site.uuid!]?.register_id ?? undefined,
 			storeId: store.id!,
 			taxBasedOn: typeof tax_based_on === 'string' ? tax_based_on : undefined,
 		});
@@ -94,7 +95,8 @@ export const useNewOrder = (defaultCustomerResource: DefaultCustomerResource) =>
 		prices_include_tax,
 		tax_based_on,
 		country,
-		register?.id,
+		register,
+		site.uuid,
 	]);
 
 	return { newOrder };

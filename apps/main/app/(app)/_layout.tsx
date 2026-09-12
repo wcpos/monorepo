@@ -16,6 +16,7 @@ import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-s
 import { SearchReadinessBridge } from '@wcpos/core/screens/main/components/search-readiness-bridge';
 import { UnsentChangesBridge } from '@wcpos/core/screens/main/components/unsent-changes-bridge';
 import { VariationParentBridge } from '@wcpos/core/screens/main/components/variation-parent-bridge';
+import { RegisterSessionBridge } from '@wcpos/core/services/register-session/bridge';
 import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
@@ -190,6 +191,7 @@ function AppStack() {
 			    screens, because the promise made at the Send button has to be kept
 			    whether or not the receipt modal is still open. */}
 				<ReceiptEmailQueueBridge />
+				<RegisterSessionBridge />
 				{/* Terminal payment legs poll from here, not from the checkout screen, so
 				    a tab chip can say "Waiting for terminal" while another order is on
 				    screen and a finished leg reaches its receipt unattended (#154). */}

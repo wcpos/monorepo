@@ -3,18 +3,18 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { ButtonGroupSeparator } from '@wcpos/components/button';
+import { Button, ButtonGroupSeparator } from '@wcpos/components/button';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField } from '@wcpos/query';
-
 import './register-cart-bar-entries';
+import { Text } from '@wcpos/components/text';
+
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
-import { AddNoteButton } from './buttons/add-note';
-import { OrderMetaButton } from './buttons/order-meta';
+import { OrderMetaButton, OrderMetaDialog } from './buttons/order-meta';
 import { PayButton } from './buttons/pay';
 import { SaveButton } from './buttons/save-order';
 import { VoidButton } from './buttons/void';
@@ -25,8 +25,16 @@ import { CartHeader } from './cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { CartTable } from './table';
 import { Totals } from './totals';
+import { useT } from '../../../../contexts/translations';
+import { useRegisterBinding } from '../../../../services/register/use-register-binding';
+import { OpenRegisterCard } from './open-register-card';
+import { RegisterCount } from './register-count';
+import { type ClosureCount, ClosureSheet } from './closure-sheet';
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
+import { RegisterBar } from './register-bar';
+import { RegisterPicker } from './register-picker';
 import { CartTotalsChangedBanner } from './totals-changed-banner';
-import { useCurrentOrder } from '../contexts/current-order';
+import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 
 const NO_API: SlotContracts['pos.cart.bar']['api'] = {};
 const NEVER_CHANGES = () => () => {};
@@ -43,8 +51,16 @@ export function OpenOrders({
 	// duplicated across them. Keep it mounted in checkout too: swapping the cart
 	// for the ledger must not remove its single settlement writer. See use-cart-settlement.ts.
 	useCartSettlement();
+	const { status: bindingStatus } = useRegisterBinding();
+	const { sessionsOn, session, overdue } = useRegisterSession();
+	const [closure, setClosure] = React.useState<ClosureCount | null>(null);
+	const [panelOpen, setPanelOpen] = React.useState(false);
+	const [pickingRegister, setPickingRegister] = React.useState(false);
+	const t = useT();
 
 	const { currentOrderRecord } = useCurrentOrder();
+	// Keep the dialog mounted on its original order while a send changes the open-order list.
+	const [editingOrder, setEditingOrder] = React.useState<CurrentOrderRecord | null>(null);
 	const stage = useOrderCheckoutStage(currentOrderRecord);
 	const { uiSettings } = useUISettings('pos-cart');
 	const position = useDocField(uiSettings, (value) => value.openOrdersPosition);
@@ -82,6 +98,11 @@ export function OpenOrders({
 	 */
 	return (
 		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
+			<RegisterBar
+				onSwitchRegister={() => setPickingRegister(true)}
+				panelOpen={panelOpen}
+				onPanelOpenChange={setPanelOpen}
+			/>
 			{process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
 				React.createElement(
 					(
@@ -89,8 +110,15 @@ export function OpenOrders({
 					).CartAddTimingReadout
 				)}
 			{position === 'top' && cartBar}
+			{bindingStatus === 'none' && <Text>{t('register.no_register_for_store')}</Text>}
 			<ErrorBoundary>
-				{isColumn && receiptOrderUuid ? (
+				{bindingStatus === 'choose' || pickingRegister ? (
+					<RegisterPicker onBound={() => setPickingRegister(false)} />
+				) : sessionsOn && !session && bindingStatus === 'bound' ? (
+					<OpenRegisterCard />
+				) : session?.status === 'counting' ? (
+					<RegisterCount key={session.id} onClosed={setClosure} />
+				) : isColumn && receiptOrderUuid ? (
 					<React.Suspense fallback={null}>
 						<ReceiptLedger uuid={receiptOrderUuid} />
 					</React.Suspense>
@@ -104,6 +132,15 @@ export function OpenOrders({
 							</ErrorBoundary>
 						</CardHeader>
 						<CardContent className="flex-1 p-0" />
+						{overdue && (
+							<Button
+								testID="checkout-close-register"
+								className="min-h-14"
+								onPress={() => setPanelOpen(true)}
+							>
+								{t('register.close_register')}
+							</Button>
+						)}
 					</Card>
 				) : (
 					<Card className="flex-1">
@@ -126,10 +163,7 @@ export function OpenOrders({
 							</ErrorBoundary>
 							<HStack className="bg-footer p-2">
 								<View className="flex-1">
-									<AddNoteButton />
-								</View>
-								<View className="flex-1">
-									<OrderMetaButton />
+									<OrderMetaButton onPress={() => setEditingOrder(currentOrderRecord)} />
 								</View>
 								<View className="flex-1">
 									<SaveButton />
@@ -139,13 +173,38 @@ export function OpenOrders({
 								<ErrorBoundary>
 									<VoidButton />
 									<ButtonGroupSeparator className="bg-card-header" />
-									<PayButton />
+									{sessionsOn && !session ? (
+										<Button
+											testID="checkout-open-register"
+											className="min-h-14 flex-1"
+											onPress={() => setPickingRegister(true)}
+										>
+											{t('register.open_register')}
+										</Button>
+									) : overdue && !currentOrderRecord.payload.line_items?.length ? (
+										<Button
+											testID="checkout-close-register"
+											className="min-h-14 flex-1"
+											onPress={() => setPanelOpen(true)}
+										>
+											{t('register.close_register')}
+										</Button>
+									) : (
+										<PayButton />
+									)}
 								</ErrorBoundary>
 							</HStack>
 						</CardContent>
 					</Card>
 				)}
 			</ErrorBoundary>
+			{closure && !session && <ClosureSheet {...closure} onDone={() => setClosure(null)} />}
+			<OrderMetaDialog
+				order={editingOrder}
+				onOpenChange={(open) => {
+					if (!open) setEditingOrder(null);
+				}}
+			/>
 			{position !== 'top' && cartBar}
 		</VStack>
 	);

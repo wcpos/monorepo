@@ -151,10 +151,19 @@ let mockPayload: {
 	number?: string;
 	total: string;
 	meta_data: import('@wcpos/order-math').MetaDataEntry[];
+	line_items?: {
+		id?: number;
+		name: string;
+		quantity: number;
+		total: string;
+		total_tax?: string;
+		meta_data?: { key: string; value: unknown }[];
+	}[];
 } = { total: '92.95', meta_data: [] as { key: string; value: unknown }[] };
 let mockMethodsLoaded = true;
 let mockMethods: PaymentMethodDescriptor[] = methods;
 let mockOnlineStatus = 'online-website-available';
+let mockTaxDisplayCart: 'incl' | 'excl' = 'excl';
 
 jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockManualPost }),
@@ -199,11 +208,18 @@ jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		storeDB: mockStoreDB,
 		site: { uuid: 'site' },
-		store: { price_num_decimals: 2, currency: 'EUR', id: 9 },
+		store: {
+			register_sessions: mockSessionsOn,
+			price_num_decimals: 2,
+			currency: 'EUR',
+			id: 9,
+			tax_display_cart: mockTaxDisplayCart,
+		},
 		wpCredentials: { id: 7 },
 	}),
 }));
 jest.mock('@wcpos/query', () => ({
+	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
 	useQueryRuntime: () => ({}),
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
 		select({ payload: mockPayload }),
@@ -225,7 +241,7 @@ const order = {
 	uuid: 'order-1',
 	getLatest: () => ({ payload: mockPayload }),
 } as EngineRecord<'orders'>;
-const recorded = { kind: 'recorded', via: 'online' } as const;
+const recorded = { kind: 'recorded', via: 'online', row: payment() } as const;
 
 function payment(overrides: Partial<PaymentRow> = {}): PaymentRow {
 	return {
@@ -267,11 +283,26 @@ describe('useTenderFlow', () => {
 		mockMethods = methods;
 		mockMethodsLoaded = true;
 		mockOnlineStatus = 'online-website-available';
+		mockTaxDisplayCart = 'excl';
 		mockBlockIfDegraded.mockReturnValue(false);
 		mockRecordManualPayment.mockResolvedValue(recorded);
 		mockVoidPayments.mockResolvedValue({ failed: [] });
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockLocalPatch.mockResolvedValue({ document: order });
+	});
+	it('preselects the first available method once, without recording', async () => {
+		mockMethods = [noDriver, card];
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state).toMatchObject({
+			methodId: 'pos_card',
+			entryMinor: 9295,
+			entryDirty: false,
+		});
+		act(() => result.current.dispatch({ type: 'key', key: '2' }));
+		rerender();
+		expect(result.current.state.entryMinor).toBe(2);
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		await act(async () => {});
 	});
 
 	it('publishes a picked method to the URL store', async () => {
@@ -293,33 +324,36 @@ describe('useTenderFlow', () => {
 		expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
 		await act(async () => {});
 	});
-	it('keeps the keypad closed for a stored method the till does not offer', async () => {
+	it('falls back from a stored method the till does not offer', async () => {
 		setTenderMethod(order.uuid, 'not_offered');
 		const { result } = renderHook(() => useTenderFlow(order));
-		expect(result.current.state.methodId).toBe('not_offered');
-		expect(result.current.method).toBeNull();
-		await act(async () => {
-			await result.current.takeTender();
+		expect(result.current.state).toMatchObject({
+			view: 'amount',
+			methodId: 'pos_cash',
+			entryMinor: result.current.balanceMinor,
 		});
-		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(result.current.method?.id).toBe('pos_cash');
+		await act(async () => {});
 	});
-	it('clears the published method once a leg is recorded', async () => {
+	it('keeps the chosen method for the next leg once one is recorded', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 1000 }));
 		await act(async () => {
 			await result.current.takeTender();
 		});
-		expect(result.current.state.methodId).toBeNull();
-		expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
+		// The selector is always on screen now, so a leg never sends the cashier back to a menu.
+		expect(result.current.state.methodId).toBe('pos_cash');
+		expect(result.current.state.view).toBe('amount');
+		expect(getCheckoutModeSnapshot().tenderMethods.get(order.uuid)).toBe('pos_cash');
 	});
 
 	it('blocks method selection and recording while saving', async () => {
 		markOrderSaving(order.uuid);
 		const { result } = renderHook(() => useTenderFlow(order));
 		expect(result.current.saveState).toEqual({ kind: 'saving' });
-		act(() => result.current.pickMethod('pos_cash'));
-		expect(result.current.state.view).toBe('select');
+		act(() => result.current.pickMethod('pos_card'));
+		expect(result.current.state.methodId).toBe('pos_cash');
 		// Exercise takeTender with a selected method so its guard is tested independently.
 		act(() =>
 			result.current.dispatch({
@@ -383,7 +417,13 @@ describe('useTenderFlow', () => {
 
 	it('treats cash above a planned share as change, not a bigger leg', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
 		expect(result.current.entryAppliedMinor).toBe(4648);
@@ -391,8 +431,14 @@ describe('useTenderFlow', () => {
 		await act(async () => {});
 	});
 	it('lets the last planned cash leg take the whole remaining balance', async () => {
-		const { result } = renderHook(() => useTenderFlow(order));
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 		act(() =>
 			result.current.dispatch({
 				type: 'pick-method',
@@ -401,9 +447,16 @@ describe('useTenderFlow', () => {
 				readerId: null,
 			})
 		);
-		act(() => result.current.dispatch({ type: 'tender-recorded' }));
-		act(() => result.current.pickMethod('pos_cash'));
-		expect(result.current.state.splitPlan).toMatchObject({ taken: 1 });
+		mockPayload.meta_data = withLedger([], [payment({ amount: '10.00' })]);
+		rerender();
+		act(() =>
+			result.current.dispatch({
+				type: 'tender-recorded',
+				rowsSinceFrom: [{ title: 'Cash', amountMinor: 1000 }],
+				balanceMinor: result.current.balanceMinor,
+			})
+		);
+		expect(result.current.planLabel).toBe('pos_checkout.payment_n_of');
 		expect(result.current.entryAppliedMinor).toBe(result.current.balanceMinor);
 		await act(async () => {});
 	});
@@ -499,7 +552,7 @@ describe('useTenderFlow', () => {
 			tendered: '50.00',
 		});
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
-		expect(result.current.state.view).toBe('select');
+		expect(result.current.state.view).toBe('amount');
 	});
 
 	it('never records a card amount above the balance', async () => {
@@ -517,7 +570,13 @@ describe('useTenderFlow', () => {
 
 	it('uses a split share as the next tender pre-fill', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 
 		act(() => result.current.pickMethod('pos_cash'));
 
@@ -528,29 +587,41 @@ describe('useTenderFlow', () => {
 	it('derives this payment, custom prefill, and quick amounts from the entry', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 		expect(result.current.thisPaymentMinor).toBe(9295);
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 		expect(result.current.thisPaymentMinor).toBe(4648);
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.thisPaymentMinor).toBe(4648);
 		expect(result.current.quickAmountsMinor).toEqual([4648, 5000]);
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 1200 }));
-		expect(result.current.thisPaymentMinor).toBe(1200);
+		expect(result.current.thisPaymentMinor).toBe(4648);
 		expect(result.current.afterThisPaymentMinor).toBe(8095);
 		expect(result.current.quickAmountsMinor).toEqual([1200, 1500, 2000, 5000]);
 		act(() => result.current.dispatch({ type: 'back' }));
-		act(() => result.current.dispatch({ type: 'arm-custom-amount' }));
+		act(() => result.current.dispatch({ type: 'arm-custom' }));
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(0);
-		expect(result.current.thisPaymentMinor).toBe(0);
+		expect(result.current.thisPaymentMinor).toBe(9295);
 		await act(async () => {});
 	});
 	it('advances the plan only for a recorded leg and shows its actual ledger amount', async () => {
 		const { result, rerender } = renderHook(() => useTenderFlow(order));
-		act(() => result.current.dispatch({ type: 'set-split-plan', ways: 2, shareMinor: 4648 }));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
 		act(() => result.current.pickMethod('pos_cash'));
 		mockRecordManualPayment.mockResolvedValueOnce({ kind: 'refused' });
 		await act(async () => result.current.takeTender());
-		expect(result.current.state.splitPlan?.taken).toBe(0);
+		expect(result.current.planLegs.filter((leg) => leg.state === 'done')).toHaveLength(0);
 		act(() => result.current.pickMethod('pos_cash'));
 		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
 		mockPayload.meta_data = [
@@ -561,21 +632,100 @@ describe('useTenderFlow', () => {
 		];
 		await act(async () => result.current.takeTender());
 		rerender();
-		expect(result.current.state.splitPlan?.taken).toBe(1);
-		expect(result.current.splitLegs).toEqual([
-			{ minor: 5000, state: 'done' },
+		expect(result.current.planLabel).toBe('pos_checkout.payment_n_of');
+		expect(result.current.planLegs).toEqual([
+			{ minor: 5000, state: 'done', title: 'Cash' },
 			{ minor: 4295, state: 'now' },
 		]);
 		act(() => result.current.pickMethod('pos_cash'));
 		expect(result.current.state.entryMinor).toBe(4295);
 	});
 
+	it('exposes item lines, derives their shared group and publishes completed badges for the ledger', async () => {
+		mockPayload.total = '46.00';
+		mockPayload.line_items = [
+			{ id: 1, name: 'Scarf', quantity: 1, total: '22.00' },
+			{ id: 2, name: 'Socks', quantity: 2, total: '6.00' },
+		];
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		expect(result.current.lines[1]).toEqual({ id: 2, name: 'Socks', quantity: 2, totalMinor: 600 });
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'items', lineIds: [1], ways: 2, firstMinor: 2200, from: 0 },
+				balanceMinor: 4600,
+			})
+		);
+		expect(result.current.planLabel).toBe('pos_checkout.item_payment_n_of');
+		const first = payment({ id: 'first', amount: '11.00', method_id: 'pos_card' });
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger([], [first]);
+			return { ...recorded, row: first };
+		});
+		act(() => result.current.pickMethod('pos_card'));
+		await act(async () => result.current.takeTender());
+		expect(result.current.linesPaidBy).toEqual({});
+		const second = payment({ id: 'second', amount: '11.00' });
+		mockRecordManualPayment.mockImplementationOnce(async () => {
+			mockPayload.meta_data = withLedger([], [first, second]);
+			return { ...recorded, row: second };
+		});
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		rerender();
+		expect(result.current.planLabel).toBe('pos_checkout.rest_of_the_order');
+		expect(result.current.thisPaymentMinor).toBe(2400);
+		expect(result.current.planMore).toBe(true);
+		expect(result.current.linesPaidBy).toEqual({ 1: ['Card', 'Cash'] });
+		expect(getCheckoutModeSnapshot().linesPaidBy.get(order.uuid)).toEqual(
+			result.current.linesPaidBy
+		);
+	});
+	it('uses the tax-inclusive cart amount for item splits when configured', async () => {
+		mockTaxDisplayCart = 'incl';
+		mockPayload.line_items = [
+			{ id: 1, name: 'Scarf', quantity: 1, total: '10.00', total_tax: '2.00' },
+		];
+
+		const { result } = renderHook(() => useTenderFlow(order));
+
+		expect(result.current.lines[0]?.totalMinor).toBe(1200);
+		await act(async () => {});
+	});
+	it('keeps the POS line UUID stable when an offline item receives its server ID', async () => {
+		const line = {
+			name: 'Scarf',
+			quantity: 1,
+			total: '10.00',
+			meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
+		};
+		mockPayload.line_items = [line];
+		const { result, rerender } = renderHook(() => useTenderFlow(order));
+		expect(result.current.lines[0]?.id).toBe('line-local');
+
+		mockPayload.line_items = [{ ...line, id: 123 }];
+		rerender();
+
+		expect(result.current.lines[0]?.id).toBe('line-local');
+		await act(async () => {});
+	});
+	it('restores an active split plan after an order-switch remount', async () => {
+		const plan = { kind: 'even' as const, ways: 2, from: 0 };
+		const first = renderHook(() => useTenderFlow(order));
+		act(() => first.result.current.dispatch({ type: 'set-plan', plan, balanceMinor: 9295 }));
+		first.unmount();
+
+		const second = renderHook(() => useTenderFlow(order));
+
+		expect(second.result.current.state).toMatchObject({ plan, entryMinor: 4648 });
+		second.unmount();
+	});
 	it('does not pick a disabled tile', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 
 		act(() => result.current.pickMethod('device_card'));
 
-		expect(result.current.state.view).toBe('select');
+		expect(result.current.state.methodId).toBe('pos_cash');
 		await act(async () => {});
 	});
 
@@ -705,6 +855,24 @@ describe('server tender', () => {
 			mockLeg = terminalState({ row, phase: 'creating' });
 		});
 	});
+	it.each([null, 'register'])(
+		'stamps the bound register, never the till, on server tenders (%s)',
+		async (registerId) => {
+			mockBoundRegisterId = registerId;
+			mockSessionsOn = !!registerId;
+			const { result } = renderHook(() => useTenderFlow(order));
+			act(() => result.current.pickMethod('terminal'));
+			await act(async () => result.current.takeTender());
+			expect(mockBegin).toHaveBeenCalledWith(
+				expect.objectContaining({
+					row: expect.objectContaining({
+						register_id: registerId,
+						session_id: registerId ? 'session' : null,
+					}),
+				})
+			);
+		}
+	);
 	it.each([false, true])('remembers a confirmed reader, unless now busy (%s)', async (busy) => {
 		mockMethods = [
 			{
@@ -760,6 +928,27 @@ describe('server tender', () => {
 		expect(result.current.state.readerId).toBeNull();
 		await waitFor(() => expect(result.current.state.readerId).toBe('reader'));
 	});
+	it('lets a remembered reader override the initially preselected default', async () => {
+		mockReaderPreferences.terminal = 'b';
+		mockMethods = [
+			{
+				...terminal,
+				capture: {
+					...terminal.capture,
+					hardware: {
+						...terminal.capture.hardware,
+						readers: [
+							...terminal.capture.hardware.readers,
+							{ id: 'b', label: 'Back', status: 'online', default: false },
+						],
+					},
+				},
+			},
+		];
+		const { result } = renderHook(() => useTenderFlow(order));
+		expect(result.current.state.readerId).toBe('reader');
+		await waitFor(() => expect(result.current.state.readerId).toBe('b'));
+	});
 	it('mints once, begins on the selected reader, and never records manually', async () => {
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('terminal'));
@@ -785,7 +974,7 @@ describe('server tender', () => {
 			})
 		);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
-		expect(result.current.state.view).toBe('select');
+		expect(result.current.state.view).toBe('amount');
 	});
 	it.each(['reader', 'order'] as const)('refuses Take without %s', async (missing) => {
 		if (missing === 'order') delete mockPayload.id;
@@ -840,7 +1029,7 @@ describe('server tender', () => {
 			});
 			const { result } = renderHook(() => useTenderFlow(order));
 			expect(mockDismiss).toHaveBeenCalledWith('order-1');
-			expect(result.current.state.view).toBe('select');
+			expect(result.current.state.view).toBe('amount');
 			expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(balance === '0.00' ? 1 : 0);
 			if (balance === '0.00') expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: true });
 			await act(async () => {});
@@ -990,7 +1179,8 @@ describe('device tender', () => {
 		mockRealService.stop();
 		mockRealService = null;
 	});
-	it('requires connection and routes device tender to the terminal service, not manual recording', async () => {
+	it('requires connection and stamps the session on device tender', async () => {
+		mockSessionsOn = true;
 		const driver = createSimulatedDriver();
 		registerDriver(driver);
 		const { result } = renderHook(() => useTenderFlow(order));
@@ -1007,7 +1197,11 @@ describe('device tender', () => {
 				method: deviceMethod,
 				transport: 'bluetooth',
 				offline: false,
-				row: expect.objectContaining({ capture_mode: 'device', status: 'pending' }),
+				row: expect.objectContaining({
+					capture_mode: 'device',
+					status: 'pending',
+					session_id: 'session',
+				}),
 			})
 		);
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
@@ -1100,8 +1294,14 @@ it('reopens a device tile via its queued transport when the selected transport n
 	expect(result.current.tiles[0].disabled).toBe(false);
 });
 
+let mockBoundRegisterId: string | null = 'register';
+beforeEach(() => {
+	mockBoundRegisterId = 'register';
+});
 jest.mock('../../../../../services/register/register-document', () => ({
-	readRegister: async () => ({ id: 'register' }),
+	readRegister: async () => ({ id: 'till' }),
+	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) =>
+		mockBoundRegisterId ? { id: mockBoundRegisterId } : null,
 }));
 jest.mock('../provenance/stamp-completion', () => ({
 	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
@@ -1231,4 +1431,33 @@ it('resets a failed manual tender without logging a second error or toast', asyn
 	expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
 	expect(getCheckoutModeSnapshot().tenderMethods.has(order.uuid)).toBe(false);
 	expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+});
+
+let mockSessionsOn = false;
+let mockSessionId: string | null = 'session';
+jest.mock('../../../../../services/register-session/use-register-session-collections', () => ({
+	useRegisterSessionCollection: () => ({
+		findOne: () => ({
+			exec: async () =>
+				mockSessionId ? { id: mockSessionId, incrementalPatch: async () => undefined } : null,
+		}),
+	}),
+}));
+beforeEach(() => {
+	mockSessionsOn = false;
+	mockSessionId = 'session';
+});
+
+it('refuses tender with a typed error when sessions are enabled but none is open', async () => {
+	mockSessionsOn = true;
+	mockSessionId = null;
+	mockLeg = null;
+	mockRealService = null;
+	resetCheckoutMode();
+	const { result } = renderHook(() => useTenderFlow(order));
+	await act(async () => {
+		await expect(result.current.takeTender()).rejects.toMatchObject({
+			name: 'RegisterSessionRequiredError',
+		});
+	});
 });

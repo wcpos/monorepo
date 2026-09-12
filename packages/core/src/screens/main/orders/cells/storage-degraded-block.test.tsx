@@ -98,7 +98,11 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 
 jest.mock('../../../../contexts/app-state', () => {
-	const useAppState = () => ({ store: { id: 1 }, wpCredentials: { id: 7 } });
+	const useAppState = () => ({
+		store: { id: 1 },
+		wpCredentials: { id: 7 },
+		site: { uuid: 'site-1' },
+	});
 	return { useAppState, useStoreSession: useAppState };
 });
 

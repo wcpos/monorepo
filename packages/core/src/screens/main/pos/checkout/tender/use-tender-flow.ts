@@ -15,15 +15,20 @@ import {
 	readLedger,
 	toMinor,
 } from '@wcpos/order-math';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { useRegisterSessionCollection } from '../../../../../services/register-session/use-register-session-collections';
+import {
+	RegisterSessionRequiredError,
+	requireOpenSession,
+} from '../../../../../services/register-session/session-store';
 import {
 	getTerminalPaymentsService,
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
-import { readRegister } from '../../../../../services/register/register-document';
+import { readBoundRegister } from '../../../../../services/register/register-document';
 import { persistProvenance } from '../provenance/persist-provenance';
 import { completionMeta } from '../provenance/stamp-completion';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
@@ -31,9 +36,12 @@ import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-le
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
 import {
+	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
+	setLinesPaidBy,
 	setTenderMethod,
+	setTenderPlan,
 	useTenderMethod,
 } from '../checkout-mode';
 import { usePushDocument } from '../../../contexts/use-push-document';
@@ -43,18 +51,21 @@ import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
+import { getUuidFromLineItem } from '../../hooks/utils';
 import { useRecordManualPayment, useVoidPayments } from '../payments';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
 import { useRememberedReader } from './remembered-readers';
 import { disabledReasonKey, providerErrorMessage } from './labels';
 import {
+	activePlan,
 	appliedMinor,
 	changeMinor,
 	initTenderState,
+	planLegs,
 	quickTenderedAmounts,
-	splitPlanLegs,
 	type TenderAction,
+	type TenderLineId,
 	tenderReducer,
 	type TenderState,
 } from './tender-state';
@@ -99,7 +110,12 @@ export interface TenderFlow {
 	balanceMinor: number;
 	thisPaymentMinor: number;
 	afterThisPaymentMinor: number;
-	splitLegs: ReturnType<typeof splitPlanLegs>;
+	plan: TenderState['plan'];
+	planLegs: ReturnType<typeof planLegs>['legs'];
+	planLabel: string | null;
+	planMore: boolean;
+	lines: { id: TenderLineId; name: string; quantity: number; totalMinor: number }[];
+	linesPaidBy: TenderState['linesPaidBy'];
 
 	/** The order's ledger rows, in ledger order. */
 	rows: PaymentRow[];
@@ -132,6 +148,7 @@ export interface TenderFlow {
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	useDriverChanges();
+	const sessions = useRegisterSessionCollection();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const [busy, setBusy] = React.useState(false);
@@ -139,6 +156,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const busyRef = React.useRef(false);
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, userDB, site } = useStoreSession();
+	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	useResumeTerminalLegs(order);
 	const terminalLeg = useTerminalLeg(order.uuid);
 	const service = getTerminalPaymentsService();
@@ -172,10 +190,44 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// the method the URL seeded or the cashier picked before switching tabs, so the keypad
 	// comes back the way it was left. The reducer stays the truth for the entry itself, and
 	// every action that opens or closes the keypad publishes the method back to the store.
-	const [initialState] = React.useState(() =>
-		initTenderState({ methodId: storedMethodId, balanceMinor })
-	);
+	const [initialState] = React.useState(() => {
+		const initialTiles = buildTenderTiles(methods, {
+			online: online && !queuedOffline,
+			readersInUse: service?.readersInUse(),
+			currentOrderUuid: order.uuid,
+		});
+		const first = initialTiles.find((tile) => !tile.disabled)?.method;
+		const stored = initialTiles.find((tile) => tile.method.id === storedMethodId)?.method;
+		const methodId = stored?.id ?? first?.id ?? null;
+		const initial = initTenderState({ methodId, balanceMinor });
+		const storedPlan = getCheckoutModeSnapshot().tenderPlans.get(order.uuid) ?? null;
+		const planRows = rows
+			.slice(storedPlan?.from ?? rows.length)
+			.filter(
+				(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
+			)
+			.map((row) => ({
+				minor: toMinor(row.amount, dp),
+				title: byId.get(row.method_id)?.title ?? row.method_id,
+			}));
+		const plan = activePlan(storedPlan, planRows.length, balanceMinor);
+		const { readers, lockToDefault } = selectableReaders(
+			byId.get(methodId ?? '') ?? null,
+			service?.readersInUse(),
+			order.uuid
+		);
+		return {
+			...initial,
+			plan,
+			entryMinor: plan
+				? planLegs(plan, planRows, balanceMinor).thisPaymentMinor
+				: initial.entryMinor,
+			linesPaidBy: getCheckoutModeSnapshot().linesPaidBy.get(order.uuid) ?? {},
+			readerId: initialReaderId(readers, lockToDefault, null),
+		};
+	});
 	const [state, reducerDispatch] = React.useReducer(tenderReducer, initialState);
+	const manuallyPickedReaderMethod = React.useRef<string | null>(null);
 	const { readerId: remembered, getLoaded, remember } = useRememberedReader(state.methodId);
 	const liveRows = React.useMemo(
 		() => rows.filter(({ status }) => ['pending', 'authorized', 'captured'].includes(status)),
@@ -220,11 +272,57 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// not a bigger leg (the "50" chip for a 46,48 leg). A method that gives no change takes
 	// what was typed, capped at the balance — typing a different amount IS changing the leg.
 	// The last leg is whatever balance remains (rounding, or a short earlier leg), never the share.
-	const plannedLegMinor = state.splitPlan
-		? state.splitPlan.taken >= state.splitPlan.ways - 1
-			? balanceMinor
-			: Math.min(state.splitPlan.shareMinor, balanceMinor)
-		: balanceMinor;
+	const rowsSinceFrom = rows
+		.slice(state.plan?.from ?? rows.length)
+		.filter(
+			(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
+		)
+		.map((row) => ({
+			minor: toMinor(row.amount, dp),
+			title: byId.get(row.method_id)?.title ?? row.method_id,
+		}));
+	const plan = activePlan(state.plan, rowsSinceFrom.length, balanceMinor);
+	const figures = plan ? planLegs(plan, rowsSinceFrom, balanceMinor) : null;
+	const lines = (payload.line_items ?? []).flatMap((line) => {
+		const id = getUuidFromLineItem(line) ?? line.id;
+		return id === undefined
+			? []
+			: [
+					{
+						id,
+						name: line.name ?? '',
+						quantity: line.quantity ?? 1,
+						totalMinor:
+							toMinor(line.total ?? '0', dp) +
+							(store.tax_display_cart === 'incl' ? toMinor(line.total_tax ?? '0', dp) : 0),
+					},
+				];
+	});
+	const itemTitle =
+		plan?.kind === 'items'
+			? lines
+					.filter((line) => plan.lineIds.includes(line.id))
+					.map((line) => line.name)
+					.join(' + ')
+			: null;
+	const label = figures?.label;
+	const planLabel = !label
+		? null
+		: label.rest
+			? t('pos_checkout.rest_of_the_order')
+			: itemTitle
+				? label.ways > 1
+					? t('pos_checkout.item_payment_n_of', { title: itemTitle, n: label.n, ways: label.ways })
+					: itemTitle
+				: label.title
+					? t('pos_checkout.titled_payment_n_of', {
+							title: label.title,
+							n: label.n,
+							ways: label.ways,
+						})
+					: t('pos_checkout.payment_n_of', { n: label.n, ways: label.ways });
+	const planMore = Boolean(label?.rest && lines.some((line) => !state.linesPaidBy[line.id]));
+	const plannedLegMinor = figures?.thisPaymentMinor ?? balanceMinor;
 	const legCapMinor = method?.capabilities.change ? plannedLegMinor : balanceMinor;
 	const entryAppliedMinor = appliedMinor(state.entryMinor, legCapMinor);
 	const entryChangeMinor = changeMinor(
@@ -232,24 +330,28 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		entryAppliedMinor,
 		method?.capabilities.change ?? false
 	);
-	const thisPaymentMinor = state.view === 'amount' ? entryAppliedMinor : plannedLegMinor;
-	const afterThisPaymentMinor = balanceMinor - thisPaymentMinor;
+	const thisPaymentMinor = plannedLegMinor;
+	const afterThisPaymentMinor =
+		balanceMinor - (state.view === 'amount' ? entryAppliedMinor : thisPaymentMinor);
 
 	const quickAmountsMinor = React.useMemo(
 		() =>
 			method?.capabilities.change
 				? quickTenderedAmounts(
-						thisPaymentMinor,
+						state.view === 'amount' ? entryAppliedMinor : thisPaymentMinor,
 						QUICK_TENDER_STEPS.map((step) => step * 10 ** dp)
 					)
 				: [],
-		[thisPaymentMinor, dp, method]
+		[thisPaymentMinor, dp, method, state.view, entryAppliedMinor]
 	);
 
 	const dispatch = React.useCallback<React.Dispatch<TenderAction>>(
 		(action) => {
 			if (busyRef.current) return;
 			reducerDispatch(action);
+			if (action.type === 'set-plan') setTenderPlan(order.uuid, action.plan);
+			if (action.type === 'clear-plan' || action.type === 'arm-custom' || action.type === 'reset')
+				setTenderPlan(order.uuid, null);
 			// These are the actions that close the keypad; the store mirrors which method holds it.
 			if (action.type === 'back' || action.type === 'reset') setTenderMethod(order.uuid, null);
 		},
@@ -258,9 +360,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 
 	// A local preference can arrive after the tile tap; leave a cashier's choice alone.
 	React.useEffect(() => {
-		if (method?.capture.mode !== 'server' || state.readerId !== null || remembered === null) return;
+		if (
+			method?.capture.mode !== 'server' ||
+			manuallyPickedReaderMethod.current === method.id ||
+			remembered === null
+		)
+			return;
 		const readerId = initialReaderId(readers, lockToDefault, remembered);
-		if (readerId !== null) dispatch({ type: 'pick-reader', readerId });
+		if (readerId !== null && readerId !== state.readerId)
+			dispatch({ type: 'pick-reader', readerId });
 	}, [method, state.readerId, readers, lockToDefault, remembered, dispatch]);
 
 	const pickMethod = React.useCallback(
@@ -273,7 +381,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					? deviceTransports(tile.method).find((item) => item.offline === 'queue')
 					: undefined;
 			if (tile.disabled && !offlineTransport) return;
-			const prefillMinor = state.customAmount ? 0 : plannedLegMinor;
+			const prefillMinor = state.view === 'amount' ? state.entryMinor : plannedLegMinor;
 			const { readers, lockToDefault } = selectableReaders(
 				tile.method,
 				service?.readersInUse(),
@@ -292,12 +400,49 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			plannedLegMinor,
 			order.uuid,
 			saveState,
-			state.customAmount,
+			state.view,
+			state.entryMinor,
 			tiles,
 			service,
 			reducerDispatch,
 			getLoaded,
 		]
+	);
+
+	const tenderRecorded = React.useCallback(
+		(row: PaymentRow) => {
+			const latest = readLedger(order.getLatest().payload.meta_data);
+			const index = latest.findIndex((candidate) => candidate.id === row.id);
+			if (index < 0) latest.push(row);
+			else latest[index] = row;
+			const counts = (candidate: PaymentRow) =>
+				candidate.status === 'captured' ||
+				(candidate.status === 'authorized' && candidate.recorded_offline);
+			const paidAfter = latest.filter(counts).reduce((sum, r) => sum + toMinor(r.amount, dp), 0);
+			const action: TenderAction = {
+				type: 'tender-recorded',
+				balanceMinor: Math.max(0, totalMinor - paidAfter),
+				rowsSinceFrom: latest
+					.slice(state.plan?.from ?? latest.length)
+					.filter(
+						(candidate) =>
+							candidate.status === 'captured' ||
+							(candidate.status === 'authorized' && candidate.recorded_offline)
+					)
+					.map((candidate) => ({
+						amountMinor: toMinor(candidate.amount, dp),
+						title: byId.get(candidate.method_id)?.title ?? candidate.method_id,
+					})),
+			};
+			const next = tenderReducer(state, action);
+			reducerDispatch(action);
+			setTenderPlan(
+				order.uuid,
+				activePlan(state.plan, action.rowsSinceFrom.length, action.balanceMinor)
+			);
+			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
+		},
+		[order, state, dp, byId, totalMinor]
 	);
 
 	const takeTender = React.useCallback(async () => {
@@ -310,13 +455,23 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		busyRef.current = true;
 		setBusy(true);
 		let savingProvenance = false;
+		let sessionId: string | null = null;
 		const saveProvenance = async () => {
 			if (!online || queuedOffline || !payload.id || entryAppliedMinor !== balanceMinor) return;
 			savingProvenance = true;
-			await persistProvenance({ order, localPatch, pushDocument, userDB, siteUuid: site.uuid! });
+			await persistProvenance({
+				order,
+				localPatch,
+				pushDocument,
+				userDB,
+				siteUuid: site.uuid!,
+				sessionId,
+			});
 			savingProvenance = false;
 		};
 		try {
+			const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id ?? null;
+			sessionId = await requireOpenSession(sessions, registerId, sessionsOn);
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
 				const result = await localPatch({
@@ -326,6 +481,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						meta_data: await completionMeta(order.getLatest().payload, {
 							userDB,
 							siteUuid: site.uuid!,
+							storeId: store.id,
+							sessionId,
 						}),
 					},
 				});
@@ -379,7 +536,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (!service) throw new Error('terminal_service_unavailable');
 				const offline = !online || queuedOffline || !payload.id;
 				const minted = mintDevicePayment({
-					registerId: (await readRegister(userDB))?.id ?? null,
+					registerId,
+					sessionId,
 					method,
 					transport: deviceTransport,
 					recordedOffline: offline,
@@ -413,7 +571,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							: null,
 				});
 				reducerDispatch({ type: 'tender-started' });
-				setTenderMethod(order.uuid, null);
 				return;
 			}
 			if (method.capture.mode === 'server') {
@@ -435,7 +592,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				}
 				if (!service) throw new Error('terminal_service_unavailable');
 				const minted = mintServerPayment({
-					registerId: (await readRegister(userDB))?.id ?? null,
+					registerId,
+					sessionId,
 					method,
 					orderId: payload.id,
 					amount: fromMinor(entryAppliedMinor, dp),
@@ -459,7 +617,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				});
 				void remember(reader.id);
 				reducerDispatch({ type: 'tender-started' });
-				setTenderMethod(order.uuid, null);
 				return;
 			}
 
@@ -469,8 +626,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				tendered,
 			});
 			if (outcome.kind === 'recorded') {
-				reducerDispatch({ type: 'tender-recorded' });
-				setTenderMethod(order.uuid, null);
+				tenderRecorded(outcome.row);
 				if (balanceMinor - entryAppliedMinor === 0) {
 					await completeOrderFlow({ refresh: outcome.via === 'online' });
 				}
@@ -491,6 +647,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				showToast: true,
 			});
 		} catch (error) {
+			if (error instanceof RegisterSessionRequiredError) throw error;
 			if (savingProvenance) {
 				logger.error('Checkout failed', {
 					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
@@ -510,6 +667,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			setBusy(false);
 		}
 	}, [
+		sessions,
+		sessionsOn,
 		balanceMinor,
 		deviceTransport,
 		online,
@@ -525,6 +684,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		localPatch,
 		order,
 		recordManualPayment,
+		tenderRecorded,
 		remember,
 		saveState,
 		state.entryMinor,
@@ -554,7 +714,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (leg.outcome !== 'captured') return;
 			service?.dismiss(order.uuid);
-			reducerDispatch({ type: 'tender-recorded' });
+			tenderRecorded(leg.row);
 			if (toMinor(leg.order?.balance ?? derived.balance, dp) === 0) {
 				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch(() =>
 					logger.error(t('pos_checkout.payment_not_recorded'), {
@@ -567,7 +727,16 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const unsubscribe = service?.subscribe(consumeOutcome);
 		consumeOutcome();
 		return unsubscribe;
-	}, [terminalLeg?.outcome, service, order.uuid, derived.balance, dp, completeOrderFlow, t]);
+	}, [
+		terminalLeg?.outcome,
+		service,
+		order.uuid,
+		derived.balance,
+		dp,
+		completeOrderFlow,
+		t,
+		tenderRecorded,
+	]);
 
 	const pickReader = React.useCallback(
 		(id: string) => {
@@ -575,8 +744,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				selectableReaders(method, service?.readersInUse(), order.uuid).readers.some(
 					(reader) => reader.id === id && reader.inUseBy === null
 				)
-			)
+			) {
+				manuallyPickedReaderMethod.current = method?.id ?? null;
 				dispatch({ type: 'pick-reader', readerId: id });
+			}
 		},
 		[method, service, order.uuid, dispatch]
 	);
@@ -674,18 +845,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			balanceMinor,
 			thisPaymentMinor,
 			afterThisPaymentMinor,
-			splitLegs: state.splitPlan
-				? splitPlanLegs(
-						state.splitPlan,
-						state.splitPlan.taken
-							? liveRows
-									.filter((row) => row.status === 'captured')
-									.slice(-state.splitPlan.taken)
-									.map((row) => toMinor(row.amount, dp))
-							: [],
-						balanceMinor
-					)
-				: [],
+			plan,
+			planLegs: figures?.legs ?? [],
+			planLabel,
+			planMore,
+			lines,
+			linesPaidBy: state.linesPaidBy,
 			rows,
 			liveRows,
 			hasLiveTerminalLeg: Boolean(terminalLeg && terminalLeg.phase !== 'final'),
@@ -706,6 +871,11 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			cancelPayment,
 		}),
 		[
+			plan,
+			figures,
+			planLabel,
+			planMore,
+			lines,
 			remembered,
 			remember,
 			terminalLeg,

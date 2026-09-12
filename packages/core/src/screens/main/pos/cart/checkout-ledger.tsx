@@ -9,11 +9,14 @@ import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { useCheckoutMode } from '../checkout/checkout-mode';
 import { useOrderSaving } from '../checkout/use-order-save-state';
 import { useLedgerView } from '../checkout/tender/use-ledger-view';
 import { LedgerLegs, LedgerLines } from '../checkout/tender/ledger-pane';
+import { getUuidFromLineItem } from '../hooks/utils';
 
 export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
+	const paidBy = useCheckoutMode().linesPaidBy.get(order.uuid);
 	const saving = useOrderSaving(order.uuid);
 	const view = useLedgerView(order);
 	const { format } = view;
@@ -24,6 +27,7 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 	const lines = React.useMemo(
 		() =>
 			(payload.line_items ?? []).map((item) => ({
+				id: getUuidFromLineItem(item) ?? item.id,
 				name: item.name,
 				quantity: item.quantity,
 				total: formatCurrency(Number(item.total ?? 0)),
@@ -53,6 +57,7 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 						totalMinor={view.totalMinor}
 						format={format}
 						withTotal={false}
+						paidBy={paidBy}
 					/>
 					<View className="gap-2">
 						<Text className="text-muted-foreground text-xs tracking-wider uppercase">

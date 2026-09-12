@@ -300,7 +300,11 @@ describe('VoidButton', () => {
 	});
 });
 
-it('stamps the register on the refused-void pending fallback through the real writer', async () => {
+jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ site: { uuid: 'site' }, store: { id: 1 } }),
+}));
+
+it('stamps the original register through the real writer when binding switches during the outcome wait', async () => {
 	const query = jest.requireMock('@wcpos/query');
 	const realQuery = jest.requireActual('@wcpos/query');
 	for (const key of [
@@ -313,8 +317,20 @@ it('stamps the register on the refused-void pending fallback through the real wr
 	const { patchAndEnqueueEngineResident } = jest.requireActual(
 		'../../../hooks/mutations/use-local-mutation'
 	);
-	const { readRegister } = jest.requireActual('../../../../../services/register/register-document');
-	await readRegister({ getLocal: async () => ({ toJSON: () => ({ data: { id: 'register' } }) }) });
+	const { readBoundRegister } = jest.requireActual(
+		'../../../../../services/register/register-document'
+	);
+	await readBoundRegister(
+		{
+			getLocal: async () => ({
+				toJSON: () => ({
+					data: { id: 'till', sites: { site: { register_id: 'register', register_store_id: 1 } } },
+				}),
+			}),
+		} as never,
+		'site',
+		1
+	);
 	const stored = { payload: { status: 'pos-open' } };
 	const resident = {
 		toJSON: () => stored,
@@ -339,15 +355,45 @@ it('stamps the register on the refused-void pending fallback through the real wr
 	mockPatchAndEnqueueEngineResident.mockImplementationOnce((input) =>
 		patchAndEnqueueEngineResident({ ...input, manager })
 	);
+	let refuse!: () => void;
+	const outcome = jest.spyOn(query, 'awaitWriteOutcome').mockImplementationOnce(
+		() =>
+			new Promise((_resolve, reject) => {
+				refuse = () => reject(new query.WriteOutcomeError('woocommerce_rest_cannot_delete', 403));
+			})
+	);
 	render(<VoidButton />);
 	fireEvent.click(screen.getByTestId('void-button'));
+	await waitFor(() => expect(outcome).toHaveBeenCalled());
+	await readBoundRegister(
+		{
+			getLocal: async () => ({
+				toJSON: () => ({
+					data: {
+						id: 'till',
+						sites: { site: { register_id: 'new-register', register_store_id: 2 } },
+					},
+				}),
+			}),
+		} as never,
+		'site',
+		2
+	);
+	refuse();
 	await waitFor(() =>
 		expect(mockEngine.write).toHaveBeenCalledWith(
 			expect.objectContaining({
-				payload: { status: 'pending', meta_data: [{ key: '_wcpos_register', value: 'register' }] },
+				payload: {
+					status: 'pending',
+					meta_data: [
+						{ key: '_wcpos_register', value: 'register' },
+						{ key: '_wcpos_till', value: 'till' },
+					],
+				},
 			})
 		)
 	);
+	outcome.mockRestore();
 });
 
 jest.mock('../../contexts/current-order/temporary-order', () => ({}));
