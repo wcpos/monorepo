@@ -31,6 +31,31 @@ function wcposSearchDigest(searchable) {
 	return searchable;
 }
 
+function wcposByteLength(text) {
+	// UTF-8 bytes, not UTF-16 code units: `.length` undercounts by up to 3x, which would let
+	// non-Latin text hold three times the advertised ceiling. Counted rather than encoded so
+	// the hot path allocates nothing.
+	var bytes = 0;
+	for (var i = 0; i < text.length; i++) {
+		var code = text.charCodeAt(i);
+		if (code < 128) bytes += 1;
+		else if (code < 2048) bytes += 2;
+		else if (code >= 55296 && code <= 56319) {
+			// A surrogate PAIR is 4 bytes; a lone surrogate encodes as the 3-byte replacement.
+			if (i + 1 < text.length) {
+				var next = text.charCodeAt(i + 1);
+				if (next >= 56320 && next <= 57343) {
+					bytes += 4;
+					i++;
+					continue;
+				}
+			}
+			bytes += 3;
+		} else bytes += 3;
+	}
+	return bytes;
+}
+
 function wcposRetainDigest(index, digests, id, digest) {
 	// The plugin never observes deletions, so nothing here can prune a single id. A
 	// collection that churns therefore keeps an entry per row EVER seen rather than per row
@@ -44,13 +69,25 @@ function wcposRetainDigest(index, digests, id, digest) {
 	// is more machinery than a cache whose miss is this cheap deserves.
 	var bytes = index.__wcposDigestBytes || 0;
 	var previous = digests.get(id);
-	if (previous !== undefined) bytes -= previous.length;
-	if (digests.size >= 20000 || bytes + digest.length > 2097152) {
+	if (previous !== undefined) bytes -= wcposByteLength(previous);
+	var size = wcposByteLength(digest);
+	// A single value past the whole ceiling is never retained: caching it would leave the
+	// tally above the bound this advertises. `logs.message` has no schema length limit, so
+	// one large error can be that value. Not caching costs one re-index of that document.
+	if (size > 2097152) {
+		digests.clear();
+		index.__wcposDigestBytes = 0;
+		return;
+	}
+	// The entry ceiling applies to GROWTH only. Replacing an id already held does not add an
+	// entry, and clearing there would forget the other 19,999 on a full catalogue because one
+	// title changed — re-indexing everything, which is the churn this exists to stop.
+	if ((previous === undefined && digests.size >= 20000) || bytes + size > 2097152) {
 		digests.clear();
 		bytes = 0;
 	}
 	digests.set(id, digest);
-	index.__wcposDigestBytes = bytes + digest.length;
+	index.__wcposDigestBytes = bytes + size;
 }
 
 export function indexSearchText(index, id, searchable) {
@@ -86,7 +123,7 @@ export function wcposChangedSearchEntries(index, entries) {
 }
 /* eslint-enable no-var */
 
-export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearchDigest.toString()}\n${wcposRetainDigest.toString()}\n${wcposChangedSearchEntries.toString().replace(/^export /, '')}\n${indexSearchText
+export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearchDigest.toString()}\n${wcposByteLength.toString()}\n${wcposRetainDigest.toString()}\n${wcposChangedSearchEntries.toString().replace(/^export /, '')}\n${indexSearchText
 	.toString()
 	.replace('function indexSearchText(', `function ${MARKER}(`)}\n`;
 

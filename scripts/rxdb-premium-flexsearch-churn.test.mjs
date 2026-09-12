@@ -495,6 +495,56 @@ test('a churning collection cannot grow the retained text without bound', () => 
 	assert.deepEqual(index.search('unmistakable'), ['log-fresh']);
 });
 
+test('replacing an id at the entry ceiling keeps the rest of the catalogue', () => {
+	// A replace does not add an entry, so it must not trip the ceiling. Clearing here would
+	// forget 19,999 products because one title changed, and every one of them would then be
+	// re-appended and re-indexed on its next stock write — the exact churn this prevents.
+	const index = new FlexSearch.Index({ preset: 'performance', tokenize: 'full', minlength: 3 });
+	for (let i = 0; i < 20000; i += 1) {
+		indexSearchText(index, `product-${i}`, `title ${i}`);
+	}
+	const digests = index.__wcposSearchDigests;
+	assert.equal(digests.size, 20000, 'precondition: the map is exactly at the ceiling');
+	indexSearchText(index, 'product-0', 'a different title');
+	assert.equal(digests.size, 20000, 'a replace must not clear the map');
+	assert.equal(digests.get('product-1'), 'title 1', 'the other entries must survive');
+});
+
+// These two are about the digest bookkeeping, not about FlexSearch. They use a counting stub
+// because `tokenize: 'full'` expands every substring, so feeding it a megabyte of text is
+// quadratic and aborts the process rather than failing an assertion.
+const countingIndex = () => {
+	const added = [];
+	return { added, add: (id) => added.push(id), remove: () => {} };
+};
+
+test('one oversized value is never retained, and the tally stays under the ceiling', () => {
+	// `logs.message` has no schema length limit, so a single error can exceed the whole
+	// budget. Caching it would leave the tally above the bound this advertises.
+	const index = countingIndex();
+	indexSearchText(index, 'log-huge', 'x'.repeat(2097153));
+	assert.equal(index.__wcposSearchDigests.size, 0, 'an oversized value must not be retained');
+	assert.equal(index.__wcposDigestBytes, 0, 'and must not be counted');
+	assert.deepEqual(index.added, ['log-huge'], 'but it must still reach the index');
+});
+
+test('the byte ceiling counts UTF-8 bytes, not UTF-16 code units', () => {
+	// Each of these is 3 UTF-8 bytes but 1 UTF-16 code unit, so counting `.length` would let
+	// the map hold three times the advertised ceiling before it cleared.
+	const index = countingIndex();
+	const wide = '日'.repeat(40000); // 120,000 bytes, 40,000 code units
+	for (let i = 0; i < 30; i += 1) {
+		indexSearchText(index, `log-${i}`, `${wide}${i}`);
+	}
+	// Measured independently, NOT read back from __wcposDigestBytes: the tally is the thing
+	// a UTF-16 count corrupts, so asserting on it would pass either way.
+	const retained = [...index.__wcposSearchDigests.values()].reduce(
+		(total, value) => total + Buffer.byteLength(value, 'utf8'),
+		0
+	);
+	assert.ok(retained <= 2097152, `retained UTF-8 bytes must stay capped, saw ${retained}`);
+});
+
 test('a forgotten document is simply re-indexed, never skipped wrongly', () => {
 	const index = new FlexSearch.Index({ preset: 'performance', tokenize: 'full', minlength: 3 });
 	indexSearchText(index, 'product', 'quartz');
