@@ -36,6 +36,7 @@ export interface Descriptor {
 	kind?: string;
 	pos_enabled?: boolean;
 	capture?: { mode?: string };
+	capabilities?: { change?: boolean };
 }
 
 export async function fetchDescriptors(
