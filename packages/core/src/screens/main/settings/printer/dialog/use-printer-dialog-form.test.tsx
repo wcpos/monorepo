@@ -63,6 +63,9 @@ const printer: PrinterProfile = {
 	isBuiltIn: false,
 };
 
+// Hoisted: a fresh object per render would re-fire the reset effect on every commit.
+const starPrntPrinter: PrinterProfile = { ...printer, language: 'star-prnt' };
+
 describe('usePrinterDialogForm', () => {
 	beforeAll(() => {
 		(
@@ -78,6 +81,78 @@ describe('usePrinterDialogForm', () => {
 
 	afterEach(() => {
 		jest.useRealTimers();
+	});
+
+	// The fixture above is saved as 'star-line', which is also the vendor default — so it cannot
+	// tell a preserved value from a re-derived one. A star printer saved as StarPRNT can.
+	it('keeps a saved language the vendor default would overwrite', () => {
+		let renderer!: ReactTestRenderer;
+
+		function Snapshot(_props: { value: ReturnType<typeof usePrinterDialogForm> }) {
+			return null;
+		}
+
+		function Harness() {
+			const value = usePrinterDialogForm({
+				open: true,
+				schema: nativePrinterSchema,
+				defaultValues,
+				deriveVendorDefaults,
+				printer: starPrntPrinter,
+				printerCount: 1,
+				onSave,
+			});
+			return <Snapshot value={value} />;
+		}
+
+		act(() => {
+			renderer = create(<Harness />);
+		});
+		act(() => {
+			jest.advanceTimersByTime(500);
+		});
+		const latest = renderer.root.findByType(Snapshot).props.value as ReturnType<
+			typeof usePrinterDialogForm
+		>;
+
+		expect(latest.form.getValues('language')).toBe('star-prnt');
+	});
+
+	// The latch must not swallow a real vendor change that follows the reset.
+	it('still derives the language when the cashier changes vendor', () => {
+		let renderer!: ReactTestRenderer;
+
+		function Snapshot(_props: { value: ReturnType<typeof usePrinterDialogForm> }) {
+			return null;
+		}
+
+		function Harness() {
+			const value = usePrinterDialogForm({
+				open: true,
+				schema: nativePrinterSchema,
+				defaultValues,
+				deriveVendorDefaults,
+				printer: starPrntPrinter,
+				printerCount: 1,
+				onSave,
+			});
+			return <Snapshot value={value} />;
+		}
+
+		act(() => {
+			renderer = create(<Harness />);
+		});
+		act(() => {
+			jest.advanceTimersByTime(500);
+		});
+		const latest = () =>
+			renderer.root.findByType(Snapshot).props.value as ReturnType<typeof usePrinterDialogForm>;
+
+		act(() => {
+			latest().form.setValue('vendor', 'epson');
+		});
+
+		expect(latest().form.getValues('language')).toBe('esc-pos');
 	});
 
 	it('subscribes native watches before publishing initial printer values', () => {

@@ -129,6 +129,13 @@ export function usePrinterDialogForm({
 	const cloudProvider = useWatch({ control: form.control, name: 'cloudProvider' });
 
 	const prevVendorRef = React.useRef(form.getValues('vendor'));
+	// The vendor a `form.reset` below has just published, held until the `vendor` watch catches
+	// up with it. Effects run in declaration order within one commit, so the reset effect has
+	// already re-seeded `prevVendorRef` while `vendor` still holds the PREVIOUS form's value —
+	// which the vendor-change effect would otherwise read as the cashier switching vendor,
+	// twice, and derive the language over whatever the profile had saved. That is how a Star
+	// printer saved as StarPRNT reopened as Star Line Mode every time (gotcha N41).
+	const resetVendorRef = React.useRef<PrinterFormValues['vendor'] | null>(null);
 
 	React.useEffect(() => {
 		printerService.setCloudEnqueueFactory(cloudEnqueueFactory);
@@ -168,6 +175,7 @@ export function usePrinterDialogForm({
 				cloudProvider: printer.cloudProvider,
 			};
 			prevVendorRef.current = next.vendor;
+			resetVendorRef.current = next.vendor;
 			form.reset(next);
 		} else if (prefill) {
 			const resolvedVendor = normalizeVendor(prefill.vendor, defaultValues.vendor);
@@ -188,6 +196,7 @@ export function usePrinterDialogForm({
 				cloudProvider: prefill.cloudProvider,
 			};
 			prevVendorRef.current = next.vendor;
+			resetVendorRef.current = next.vendor;
 			form.reset(next);
 		} else {
 			const autoName =
@@ -202,6 +211,7 @@ export function usePrinterDialogForm({
 				port: vendorDefaults.port,
 			};
 			prevVendorRef.current = next.vendor;
+			resetVendorRef.current = next.vendor;
 			form.reset(next);
 		}
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- vendor-change effect resetting probe state; pre-existing, surfaced when form.watch's compiler bailout went away. The hook does not compile regardless (try/finally). Follow-up: reset from the vendor select's onChange.
@@ -215,6 +225,15 @@ export function usePrinterDialogForm({
 
 	// Vendor change → derive language/port.
 	React.useEffect(() => {
+		if (resetVendorRef.current !== null) {
+			// A reset is still in flight. Wait for the watch to publish its vendor, then adopt it
+			// as the baseline without deriving: a profile being opened is not a vendor change, and
+			// its saved language/port must survive.
+			if (vendor !== resetVendorRef.current) return;
+			resetVendorRef.current = null;
+			prevVendorRef.current = vendor;
+			return;
+		}
 		if (vendor !== prevVendorRef.current) {
 			const previousVendor = prevVendorRef.current;
 			prevVendorRef.current = vendor;
@@ -277,6 +296,7 @@ export function usePrinterDialogForm({
 							form.setValue('columns', identity.columns);
 						}
 						prevVendorRef.current = result as PrinterFormValues['vendor'];
+						resetVendorRef.current = null;
 					} else {
 						setDetectedVendor(null);
 					}

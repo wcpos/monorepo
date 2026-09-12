@@ -301,6 +301,21 @@ function expectScaledVisualCentered(bytes: Uint8Array, text: string, columns: nu
 	expect(Math.abs(actualCenter - columns / 2)).toBeLessThanOrEqual(1);
 }
 
+/**
+ * The longest run of consecutive spaces in an encoded job — the alignment padding, which is
+ * emitted as raw 0x20 bytes and separated from the text it indents by the code-page command.
+ * Words inside the text are separated by single spaces, so the padding always wins.
+ */
+function longestSpaceRun(bytes: Uint8Array): number {
+	let longest = 0;
+	let run = 0;
+	for (const byte of bytes) {
+		run = byte === 0x20 ? run + 1 : 0;
+		longest = Math.max(longest, run);
+	}
+	return longest;
+}
+
 function expectSingleNewlineBetween(bytes: Uint8Array, first: string, second: string): void {
 	const encoder = new TextEncoder();
 	const firstIndex = sequenceIndex(bytes, Array.from(encoder.encode(first)));
@@ -2074,6 +2089,58 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(decoded).toContain('Today');
 		expect(decoded).not.toContain('Mon-Sat "open"');
 		expect(decoded).not.toContain('Total-Today');
+	});
+
+	// A merchant's TSP143III printed `2:05?pm`: ICU >= 72 separates a CLDR short time's hour
+	// from its day period with U+202F, and no Star character table carries it.
+	it('folds no-break and fixed-width spaces on Star, which has no character table for them', () => {
+		for (const language of ['star-line', 'star-prnt'] as const) {
+			for (const space of ['\u00A0', '\u202F', '\u2009', '\u2007']) {
+				const bytes = encodeThermalTemplate(
+					`<receipt><text>2:05${space}pm</text></receipt>`,
+					{},
+					{ columns: 42, language }
+				);
+
+				expect(includesSequence(bytes, [0x32, 0x3a, 0x30, 0x35, 0x20, 0x70, 0x6d])).toBe(true);
+				// 0x3f is the encoder's stand-in for a character the table cannot hold.
+				expect(Array.from(bytes)).not.toContain(0x3f);
+			}
+		}
+	});
+
+	// Centering pads with literal spaces INSIDE the scaled run, so each one is `width` columns
+	// wide. Counting them against width 1 while the printer is in double width laid down twice
+	// the margin and wrapped the line — a merchant's 48-column receipt printed the store name as
+	// 'Evans Hobb' / 'y and Tech'.
+	it('counts centering padding in scaled columns, not characters, on Star', () => {
+		const scaled = (language: 'esc-pos' | 'star-prnt' | 'star-line') =>
+			encodeThermalTemplate(
+				'<receipt paper-width="48"><align mode="center"><size width="2" height="2">' +
+					'<text>Evans Hobby and Tech</text></size></align></receipt>',
+				{},
+				{ columns: 48, language }
+			);
+
+		for (const language of ['star-line', 'star-prnt'] as const) {
+			// 20 characters at double width is 40 of the 48 columns; 8 remain, so 4 columns of
+			// left margin, which is 2 double-width spaces. Fourteen of them (the old count, taken
+			// from the unscaled character width) is 28 columns and overruns the line.
+			const padding = longestSpaceRun(scaled(language));
+
+			expect(padding).toBe(2);
+			expect(padding * 2 + 'Evans Hobby and Tech'.length * 2).toBeLessThanOrEqual(48);
+		}
+	});
+
+	it('leaves unscaled centering padding unchanged', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><align mode="center"><text>Thank you</text></align></receipt>',
+			{},
+			{ columns: 48, language: 'star-line' }
+		);
+		// (48 - 9) / 2 = 19, unaffected by the scale fix because the scale is 1.
+		expect(longestSpaceRun(bytes)).toBe(19);
 	});
 
 	it('reports height-only scaled text in thermal row diagnostics', () => {
