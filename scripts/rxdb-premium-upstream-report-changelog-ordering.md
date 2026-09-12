@@ -82,11 +82,19 @@ older than the on-disk one.
 
 ## Rollout note
 
-Once deletes carry identity (our tagged workaround, or an upstream field), a
-receiver can only enforce it for senders that emit it. During a mixed-version
-window an older tab's untagged delete still matches by index string alone.
-That is today's shipped behaviour, not a regression, but it argues for the
-identity being part of the contract rather than optional.
+The shipped receiver-side workaround changes nothing on the wire: it reads
+the index string already present in `op[3]`, so a patched receiver can
+identity-check a delete from any sender, patched or not. Two mixed-version
+gaps remain during a rollout window:
+
+- an unpatched receiver still applies every sender's delete by position — the
+  original defect, and the more dangerous direction;
+- once senders carry exact-row identity (a pending change tags the removed
+  row on the write and cleanup paths), a receiver can only require it for
+  senders that emit it; an older sender's delete still matches by index
+  string alone, which is the same-string re-add limit described above.
+
+Both argue for the identity being part of the contract rather than optional.
 
 ## What only the op contract can fix
 
