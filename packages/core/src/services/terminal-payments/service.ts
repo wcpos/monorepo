@@ -82,6 +82,13 @@ export class TerminalPaymentsService {
 			timer?: ReturnType<typeof setTimeout>;
 		}
 	>();
+	/**
+	 * Payment rows whose settled failure has already been written to the log.
+	 * It lives here, not in the checkout hook, because a final failed leg stays in
+	 * the service after checkout unmounts: a fresh hook would otherwise consume the
+	 * retained leg and write the same row again on every reopen.
+	 */
+	private narratedFailures = new Set<string>();
 	private unsubscribers: (() => void)[] = [];
 	private stopped = false;
 	private flushing: Promise<void> | null = null;
@@ -262,6 +269,15 @@ export class TerminalPaymentsService {
 				}
 			}
 		}
+	}
+	/**
+	 * True the first time it is called for a row, false afterwards. The caller
+	 * writes the failure row only when it wins.
+	 */
+	claimFailureNarration(rowId: string): boolean {
+		if (this.narratedFailures.has(rowId)) return false;
+		this.narratedFailures.add(rowId);
+		return true;
 	}
 	begin(input: BeginInput): TerminalLeg {
 		return this.create(input, false);

@@ -165,9 +165,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const terminalLeg = useTerminalLeg(order.uuid);
 	const service = getTerminalPaymentsService();
 	const intentRow = React.useRef<string | null>(null);
-	// A leg's settled failure is logged once, keyed on its row: the outcome can arrive
-	// long after `intentRow` has been cleared, and on a remount it arrives again.
-	const loggedLegFailure = React.useRef<string | null>(null);
 	const dp = store.price_num_decimals ?? 2;
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -669,10 +666,19 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		} catch (error) {
 			if (error instanceof RegisterSessionRequiredError) throw error;
 			if (error instanceof RecordManualPaymentMirrorError) {
+				const { outcome } = error;
+				// A refusal that could not be mirrored is NOT money the store holds: the
+				// server stored a `failed` row and took nothing. `raiseAttention` has already
+				// told the cashier what to do about it, and telling them the store has the
+				// payment would both contradict that and stop them retrying a corrected one.
+				if (outcome.kind === 'refused') {
+					reducerDispatch({ type: 'back' });
+					setTenderMethod(order.uuid, null);
+					return;
+				}
 				// The store answered 2xx: the money is on the order there, and only this
 				// till's copy failed to save. Reporting "payment not recorded" here reads as
 				// "take it again", which is how one mirror failure becomes two payments.
-				const { outcome } = error;
 				logger.warn(t('pos_checkout.payment_recorded_not_synced'), {
 					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
 					showToast: true,
@@ -686,19 +692,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
 					},
 				});
-				// The store's summary is the only balance worth trusting now — the local
-				// ledger is exactly the copy that failed to save. Complete only when the
-				// store says the order is settled; otherwise the refreshed pane speaks.
-				if (
-					outcome.kind === 'recorded' &&
-					outcome.order &&
-					toMinor(outcome.order.balance, dp) === 0
-				) {
+				// Fold the accepted row into the pane's own view of the ledger. Without this
+				// the keypad goes back to the pre-payment balance and cheerfully offers the
+				// whole amount again — the recovery refresh may not have landed, and the
+				// resident order is exactly the copy that failed to save.
+				tenderRecorded(outcome.row);
+				// The store's summary is the only balance worth trusting now. Complete only
+				// when it says the order is settled; otherwise stay on the pane, which is now
+				// showing what is actually left to pay.
+				if (outcome.order && toMinor(outcome.order.balance, dp) === 0) {
 					await completeOrderFlow({ refresh: true });
-					return;
 				}
-				reducerDispatch({ type: 'back' });
-				setTenderMethod(order.uuid, null);
 				return;
 			}
 			if (savingProvenance) {
@@ -773,29 +777,35 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			// A decline, an expiry or a failed capture usually settles well after polling
 			// starts, by which point `intentRow` is already null — so gating the LOG on it
-			// kept every settled failure out of the ledger. The row is always written; only
-			// the toast stays with the initial take, because the timeline already shows a
-			// failure the cashier is looking at.
-			if (leg.outcome === 'failed' && leg.error && loggedLegFailure.current !== leg.row.id) {
-				loggedLegFailure.current = leg.row.id;
-				logger.error(providerErrorMessage(leg.error) ?? t('pos_checkout.payment_not_recorded'), {
-					// A declined or cancelled card is an ordinary outcome with an ordinary
-					// answer — ask for another card. Reporting it as "payment handling hit an
-					// unexpected problem" sends the cashier looking for a fault that is not there.
-					code: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
-					showToast: ownTake,
-					terminal: { operationId: leg.row.id },
-					context: {
-						orderId: leg.row.order_id || null,
-						orderUUID: order.uuid,
-						paymentId: leg.row.id,
-						amount: leg.row.amount,
-						method: leg.row.method_id,
-						status: leg.row.status,
-						errorCode: leg.error.code ?? null,
-						reason: leg.row.failure_reason ?? null,
-					},
-				});
+			// kept every settled failure out of the ledger. Nor can it require `leg.error`:
+			// the ordinary asynchronous decline arrives as a 200 whose payment row reads
+			// `failed`, with no error object at all. The row is always written, once per
+			// payment row; only the toast stays with the initial take, because the timeline
+			// already shows a failure the cashier is looking at.
+			if (leg.outcome === 'failed' && service?.claimFailureNarration(leg.row.id)) {
+				logger.error(
+					providerErrorMessage(leg.error) ??
+						leg.row.failure_reason ??
+						t('pos_checkout.payment_not_recorded'),
+					{
+						// A declined or cancelled card is an ordinary outcome with an ordinary
+						// answer — ask for another card. Reporting it as "payment handling hit an
+						// unexpected problem" sends the cashier looking for a fault that is not there.
+						code: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
+						showToast: ownTake,
+						terminal: { operationId: leg.row.id },
+						context: {
+							orderId: leg.row.order_id || null,
+							orderUUID: order.uuid,
+							paymentId: leg.row.id,
+							amount: leg.row.amount,
+							method: leg.row.method_id,
+							status: leg.row.status,
+							errorCode: leg.error?.code ?? null,
+							reason: leg.row.failure_reason ?? null,
+						},
+					}
+				);
 			}
 			if (leg.outcome !== 'captured') return;
 			service?.dismiss(order.uuid);
