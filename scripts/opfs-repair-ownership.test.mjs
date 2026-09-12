@@ -104,19 +104,31 @@ test('a silent worker loses its lease; a fresh message renews it', (t) => {
 test('revocation ack drains every lost database instance and unregisters on close', async () => {
 	const ownership = createRepairOwnership({ channelName: 'tab' });
 	const releases = [];
+	const observed = [];
 	const closed = [];
 	for (const name of ['store', 'store', 'other']) {
+		const queue = new Promise((resolve) => releases.push(resolve));
 		const instance = {
-			taskQueue: { awaitIdle: () => new Promise((resolve) => releases.push(resolve)) },
+			taskQueue: {
+				queue,
+				awaitIdle: () => {
+					observed.push(name);
+					return queue;
+				},
+			},
 			close: async () => closed.push(name),
 		};
 		ownership.onInstance(instance, { databaseName: name });
-		if (name === 'other') await instance.close();
+		if (name === 'other') {
+			await instance.close();
+			releases.pop()();
+		}
 	}
 	await channel.onmessage({ data: { type: 'ownership', owned: ['store', 'other'], seq: 1 } });
 	const revoking = channel.onmessage({ data: { type: 'ownership', owned: [], seq: 2 } });
 	assert.equal(ownership.ownsRepairs(params), false);
 	assert.equal(releases.length, 2);
+	assert.deepEqual(observed, ['store', 'store']);
 	assert.deepEqual(channel.messages.at(-1), { type: 'ownership-ack', seq: 1 });
 	releases[0]();
 	await Promise.resolve();
@@ -125,6 +137,43 @@ test('revocation ack drains every lost database instance and unregisters on clos
 	await revoking;
 	assert.deepEqual(channel.messages.at(-1), { type: 'ownership-ack', seq: 2 });
 	assert.deepEqual(closed, ['other']);
+});
+
+test('revocation drains a 300 ms task and work enqueued just after its first idle', async () => {
+	const ownership = createRepairOwnership({ channelName: 'tab' });
+	let lateFinished = false;
+	let observations = 0;
+	const taskQueue = {
+		queue: new Promise((resolve) => setTimeout(resolve, 300)),
+		awaitIdle() {
+			observations++;
+			const idle = this.queue;
+			if (observations === 1) {
+				// Enqueue after this idle promise resolves, before the drain resumes.
+				void idle.then(() => {
+					this.queue = idle.then(
+						() =>
+							new Promise((resolve) => {
+								setTimeout(() => {
+									lateFinished = true;
+									resolve();
+								}, 20);
+							})
+					);
+				});
+			}
+			return idle;
+		},
+	};
+	ownership.onInstance({ taskQueue, close() {} }, params);
+	await channel.onmessage({ data: { type: 'ownership', owned: ['store'], seq: 1 } });
+	const revoking = channel.onmessage({ data: { type: 'ownership', owned: [], seq: 2 } });
+	assert.equal(ownership.ownsRepairs(params), false);
+	assert.equal(channel.messages.at(-1).seq, 1);
+	await revoking;
+	assert.equal(lateFinished, true);
+	assert.ok(observations >= 3, 'new work resets the two stable idle observations');
+	assert.deepEqual(channel.messages.at(-1), { type: 'ownership-ack', seq: 2 });
 });
 
 test('a wedged queue bounds the revocation drain', async (t) => {

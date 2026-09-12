@@ -2,8 +2,10 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import type { RxDatabase, RxPlugin } from 'rxdb';
 
-// Bounded so a dead worker cannot hang close.
-const REVOCATION_ACK_TIMEOUT_MS = 250;
+// Kept in sync with the plain ESM worker by repair-ownership.test.ts.
+export const REVOCATION_DRAIN_MS = 2000;
+// The ack is a drain barrier: the bounded wait must outlast the worker drain.
+export const REVOCATION_ACK_TIMEOUT_MS = REVOCATION_DRAIN_MS + 500;
 const OWNERSHIP_LEASE_REFRESH_MS = 1000;
 const storageLogger = getLogger(['wcpos', 'db', 'storage']);
 let channelName: string;

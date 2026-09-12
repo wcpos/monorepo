@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import type { RxDatabase, RxPlugin } from 'rxdb';
 
 const mockWarn = jest.fn();
@@ -60,6 +63,14 @@ function fakeDatabase(plugin: RxPlugin, multiInstance = true, name = 'store') {
 	};
 }
 
+async function closeAndAck(db: ReturnType<typeof fakeDatabase>, channel: FakeBroadcastChannel) {
+	const closing = db.close();
+	channel.onmessage?.({
+		data: { type: 'ownership-ack', seq: channel.postMessage.mock.lastCall?.[0].seq },
+	});
+	await closing;
+}
+
 test('one tab name and plugin object are reused for repeated registration', async () => {
 	const fake = await setup();
 	expect(fake.channelName).toMatch(/^wcpos\.repair-ownership:.+/);
@@ -96,9 +107,9 @@ test('leadership publishes the full set; hello replays it to late workers; pre-c
 	channel.postMessage.mockClear();
 	channel.onmessage?.({ data: { type: 'hello' } });
 	expect(channel.postMessage).toHaveBeenCalledWith(ownership('store', 'other'));
-	await first.close();
+	await closeAndAck(first, channel);
 	expect(channel.postMessage).toHaveBeenLastCalledWith(ownership('other'));
-	await second.close();
+	await closeAndAck(second, channel);
 	expect(channel.postMessage).toHaveBeenLastCalledWith(ownership());
 });
 
@@ -150,9 +161,9 @@ test('closing a duplicate preserves the surviving leader until it too closes', a
 	first.lead(true);
 	second.lead(true);
 	await settle();
-	await first.close();
+	await closeAndAck(first, channel);
 	expect(channel.postMessage).toHaveBeenLastCalledWith(ownership('store'));
-	await second.close();
+	await closeAndAck(second, channel);
 	expect(channel.postMessage).toHaveBeenLastCalledWith(ownership());
 });
 
@@ -177,7 +188,41 @@ test('pre-close waits for its own revocation ack, not an earlier publication', a
 	expect(closed).toBe(true);
 });
 
-test('a dead worker bounds pre-close waiting to 250 ms', async () => {
+test('the ack timeout outlasts the worker drain and both sides use the same drain bound', async () => {
+	const { REVOCATION_DRAIN_MS, REVOCATION_ACK_TIMEOUT_MS } = await import('./repair-ownership');
+	const worker = readFileSync(
+		resolve(__dirname, '../../../../scripts/opfs-repair-ownership.mjs'),
+		'utf8'
+	);
+	const drain = Number(worker.match(/const REVOCATION_DRAIN_MS = (\d+)/)?.[1]);
+	expect(REVOCATION_DRAIN_MS).toBe(drain);
+	expect(REVOCATION_ACK_TIMEOUT_MS).toBe(drain + 500);
+	expect(REVOCATION_ACK_TIMEOUT_MS).toBeGreaterThan(drain);
+});
+
+test('pre-close resolves at an ack arriving after 1.9 seconds, not the old timeout', async () => {
+	const { plugin, channel } = await setup();
+	jest.useFakeTimers();
+	try {
+		const db = fakeDatabase(plugin);
+		let closed = false;
+		const closing = Promise.resolve(db.close()).then(() => {
+			closed = true;
+		});
+		const seq = channel.postMessage.mock.lastCall?.[0].seq;
+		setTimeout(() => channel.onmessage?.({ data: { type: 'ownership-ack', seq } }), 1900);
+		await jest.advanceTimersByTimeAsync(1899);
+		expect(closed).toBe(false);
+		await jest.advanceTimersByTimeAsync(1);
+		await closing;
+		expect(closed).toBe(true);
+		expect(jest.getTimerCount()).toBe(0);
+	} finally {
+		jest.useRealTimers();
+	}
+});
+
+test('a dead worker bounds pre-close waiting to the drain bound plus 500 ms', async () => {
 	const { plugin } = await setup();
 	jest.useFakeTimers();
 	try {
@@ -186,7 +231,7 @@ test('a dead worker bounds pre-close waiting to 250 ms', async () => {
 		const closing = Promise.resolve(db.close()).then(() => {
 			closed = true;
 		});
-		await jest.advanceTimersByTimeAsync(249);
+		await jest.advanceTimersByTimeAsync(2499);
 		expect(closed).toBe(false);
 		await jest.advanceTimersByTimeAsync(1);
 		await closing;
@@ -213,11 +258,11 @@ test('renews live ownership until the last leader closes', async () => {
 		expect(channel.postMessage).toHaveBeenCalledTimes(1);
 		expect(channel.postMessage).toHaveBeenLastCalledWith(ownership('store', 'other'));
 		const closingFirst = first.close();
-		await jest.advanceTimersByTimeAsync(1000);
+		await jest.advanceTimersByTimeAsync(2500);
 		await closingFirst;
 		expect(channel.postMessage).toHaveBeenLastCalledWith(ownership('other'));
 		const closingSecond = second.close();
-		await jest.advanceTimersByTimeAsync(250);
+		await jest.advanceTimersByTimeAsync(2500);
 		await closingSecond;
 		channel.postMessage.mockClear();
 		await jest.advanceTimersByTimeAsync(4000);

@@ -1,6 +1,6 @@
 // Three refresh intervals: a closed/frozen tab or lost revocation expires on its own.
 const OWNERSHIP_LEASE_TTL_MS = 3000;
-const REVOCATION_DRAIN_MS = 2000; // A wedged queue must not block the ack forever.
+export const REVOCATION_DRAIN_MS = 2000; // A wedged queue must not block the ack forever.
 
 export function createRepairOwnership({ channelName }) {
 	let owned = new Set();
@@ -25,10 +25,28 @@ export function createRepairOwnership({ channelName }) {
 				const draining = revoked.flatMap((name) => [...(instances.get(name) ?? [])]);
 				if (draining.length) {
 					let timer;
+					let expired = false;
 					await Promise.race([
-						Promise.allSettled(draining.map((instance) => instance.taskQueue.awaitIdle())),
+						(async () => {
+							for (let stable = 0; stable < 2 && !expired;) {
+								const queues = draining.map((instance) => instance.taskQueue.queue);
+								await Promise.allSettled(
+									draining.map((instance) => instance.taskQueue.awaitIdle())
+								);
+								// Observe enqueues after idle, and let the drain deadline run.
+								await new Promise((resolve) => setTimeout(resolve, 0));
+								stable = draining.every(
+									(instance, index) => instance.taskQueue.queue === queues[index]
+								)
+									? stable + 1
+									: 0;
+							}
+						})(),
 						new Promise((resolve) => {
-							timer = setTimeout(resolve, REVOCATION_DRAIN_MS);
+							timer = setTimeout(() => {
+								expired = true;
+								resolve();
+							}, REVOCATION_DRAIN_MS);
 						}),
 					]);
 					clearTimeout(timer);
