@@ -52,8 +52,6 @@ jobs:
   publish:
     name: 🌐 Build & publish web bundle
     runs-on: ubuntu-latest
-    env:
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     steps:
       - name: 🔑 Generate GitHub App token
         id: app-token
@@ -122,12 +120,27 @@ jobs:
       - name: 🔨 Build web bundle
         run: pnpm web build
 
-      - name: ⏭️ Skip Sentry upload when unconfigured
-        if: ${{ env.SENTRY_AUTH_TOKEN == '' }}
-        run: echo "::notice::SENTRY_AUTH_TOKEN is not set; skipping source map upload."
+      # The secrets context is not available in a step `if`, and a job-level env
+      # would hand the token to every step — including the caller-supplied
+      # monorepo_ref's own setup and lifecycle scripts. So a preflight step reads
+      # the secret in its own env only and exports a boolean; the upload step is
+      # the only other step that sees the token.
+      - name: 🔎 Is Sentry configured?
+        id: sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -n "$SENTRY_AUTH_TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SENTRY_AUTH_TOKEN is not set; skipping source map upload."
+          fi
 
       - name: 🗺️ Upload source maps to Sentry
-        if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
+        if: ${{ steps.sentry.outputs.configured == 'true' }}
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
           set -euo pipefail
           APP_VERSION=$(node -p "require('./apps/main/package.json').version")
