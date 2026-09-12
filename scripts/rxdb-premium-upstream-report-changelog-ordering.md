@@ -29,8 +29,17 @@ directory (`multiInstance: true`); the OPFS storage shares the code path
 >   generations.
 >
 > Both were verified failing on 17.2.0 and 17.4.0, each with a passing control
-> that moves the timing by one step. The contract changes this document asks for
-> are still the right ask, and are not yet filed.
+> that moves the timing by one step.
+>
+> **Still unfiled, and both belong on the submit list:**
+>
+> - the contract changes this document asks for (carry identity/ordering on every
+>   operation, or re-read the index files on lock acquisition);
+> - the missed-broadcast cleanup defect under *"A second gap the same contract
+>   would close"* below — instance B persisting its stale rows over the shared
+>   index files. #30 is a different cleanup window (an interruption between the
+>   persist loop and `changelog.empty()`, with no missed broadcast involved) and
+>   #31 is the positional-apply defect, so neither covers it.
 
 ## Summary
 
