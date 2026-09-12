@@ -1,12 +1,22 @@
+import type { EngineCollection } from '@wcpos/query';
 import type {
 	CashMovementCollection,
 	CashMovementDocument,
 	CashMovementRow,
+	ClosureCollection,
+	ClosureDocument,
+	ClosureRow,
 	RegisterSessionCollection,
 	RegisterSessionDocument,
 	RegisterSessionRow,
+	UserDatabase,
 } from '@wcpos/database';
 
+import {
+	adoptCounters,
+	mintClosureNumber,
+	type RegisterCounters,
+} from '../register/register-document';
 import { backoffMs } from '../../screens/main/receipt/email-queue/queue';
 
 export type SessionHttp = {
@@ -17,6 +27,10 @@ export type SessionHttp = {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 };
 type Deps = {
+	closures: ClosureCollection;
+	userDB: UserDatabase;
+	siteUuid: string;
+	orders: Pick<EngineCollection<'orders'>, 'findOne'> | null;
 	sessions: RegisterSessionCollection;
 	movements: CashMovementCollection;
 	http: SessionHttp;
@@ -50,6 +64,7 @@ async function acknowledge(
 			pending_status: outstanding ? local.pending_status : null,
 			status_at: local.status_at,
 			approver_token: outstanding ? local.approver_token : null,
+			closure_id: local.closure_id ?? server.closure_id,
 			counted: outstanding ? local.counted : server.counted,
 			counting_started_at_gmt: outstanding
 				? local.counting_started_at_gmt
@@ -66,9 +81,18 @@ export function drainRegisterSessionQueue(deps: Deps): Promise<void> {
 	inFlight.set(deps.sessions, promise);
 	return promise;
 }
-async function drain({ sessions, movements, http, logger }: Deps) {
+async function drain({
+	sessions,
+	movements,
+	closures,
+	userDB,
+	siteUuid,
+	orders,
+	http,
+	logger,
+}: Deps) {
 	async function send(
-		doc: RegisterSessionDocument | CashMovementDocument,
+		doc: RegisterSessionDocument | CashMovementDocument | ClosureDocument,
 		task: () => Promise<void>,
 		statusTransition = false
 	) {
@@ -79,11 +103,45 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 				message?: string;
 				response?: {
 					status?: number;
-					data?: { code?: string; message?: string; data?: { session_id?: string } };
+					data?: {
+						code?: string;
+						message?: string;
+						data?: { session_id?: string; closure_id?: string };
+					};
 				};
 			};
 			const status = failure.response?.status;
 			const body = failure.response?.data;
+			if (doc.collection === closures && status === 409) {
+				const closure = doc as ClosureDocument;
+				if (body?.code === 'wcpos_closure_exists' && body.data?.closure_id) {
+					await closure.incrementalPatch({
+						...synced,
+						sync_status: 'superseded',
+						server_closure_id: body.data.closure_id,
+					});
+					return;
+				}
+				if (body?.code === 'wcpos_closure_number_invalid' && !closure.getLatest().number_retried) {
+					const response = await http.get(`registers/${closure.register_id}`);
+					await adoptCounters(
+						userDB,
+						siteUuid,
+						(response.data as { counters: RegisterCounters }).counters
+					);
+					const number = await mintClosureNumber(userDB, siteUuid, {
+						...closure.toJSON(),
+						number_retried: true,
+					});
+					await closure.incrementalPatch({
+						number,
+						number_retried: true,
+						printed_number: closure.printed_at ? closure.number : null,
+					});
+					await send(closure, task);
+					return;
+				}
+			}
 			if (statusTransition && body?.code === 'wcpos_override_refused') {
 				await (doc as RegisterSessionDocument).incrementalPatch({
 					status: 'counting',
@@ -208,6 +266,106 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 				voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
 			}));
 		});
+	}
+	const closureRows = (await closures.find().exec()).sort((a, b) => a.number - b.number);
+	for (const snapshot of closureRows) {
+		const row = snapshot.getLatest();
+		if (
+			closureRows.some(
+				(previous) =>
+					previous.register_id === row.register_id &&
+					previous.number < row.number &&
+					previous.getLatest().sync_status === 'pending'
+			)
+		)
+			continue;
+		const session = await sessions.findOne(row.session_id).exec();
+		const entries = await movements.find({ selector: { session_id: row.session_id } }).exec();
+		const dependencies = await Promise.all(row.order_ids.map((id) => orders?.findOne(id).exec()));
+		const rowsSynced =
+			session?.sync_status === 'synced' &&
+			session.server_status === 'closed' &&
+			row.movement_ids.every((id) =>
+				entries.some((entry) => entry.id === id && entry.sync_status === 'synced')
+			) &&
+			dependencies.every((order) => order && !order.local?.dirty);
+		if (
+			due(row) &&
+			dependencies.every((order) => order && !order.local?.dirty) &&
+			session?.server_status === 'closed' &&
+			session.sync_status === 'synced' &&
+			!entries.some((entry) => entry.sync_status === 'pending')
+		) {
+			await send(row, async () => {
+				const current = row.getLatest();
+				const {
+					id,
+					session_id,
+					number,
+					opened_at,
+					closed_at,
+					till_expected,
+					counted,
+					period_sales_total,
+					period_refunds_total,
+					perpetual_sales_total,
+					perpetual_refunds_total,
+					unsynced_count,
+					unsynced_total,
+					first_sale_counter,
+					last_sale_counter,
+					software_version,
+					printed_at,
+					breakdowns,
+				} = current;
+				const server = (
+					await http.post('closures', {
+						id,
+						session_id,
+						number,
+						opened_at,
+						closed_at,
+						till_expected,
+						counted,
+						period_sales_total,
+						period_refunds_total,
+						perpetual_sales_total,
+						perpetual_refunds_total,
+						unsynced_count,
+						unsynced_total,
+						first_sale_counter,
+						last_sale_counter,
+						software_version,
+						printed_at,
+						breakdowns,
+					})
+				).data as ClosureRow & { findings?: Record<string, unknown>; counters?: RegisterCounters };
+				await adoptCounters(
+					userDB,
+					siteUuid,
+					server.counters ?? {
+						last_closure_number: server.number,
+						perpetual_sales_total: server.perpetual_sales_total,
+						perpetual_refunds_total: server.perpetual_refunds_total,
+					}
+				);
+				await row.incrementalPatch({
+					...synced,
+					server_number: server.number,
+					printed_number: server.printed_number ?? null,
+					server_findings: server.findings ?? null,
+					expected: server.expected,
+					variance: server.variance,
+					period_sales_total: server.period_sales_total,
+					period_refunds_total: server.period_refunds_total,
+					perpetual_sales_total: server.perpetual_sales_total,
+					perpetual_refunds_total: server.perpetual_refunds_total,
+					print_count: server.print_count,
+				});
+			});
+		}
+		if (row.getLatest().sync_status === 'synced' && rowsSynced && !row.getLatest().synced_rows_at)
+			await row.incrementalPatch({ synced_rows_at: new Date().toISOString() });
 	}
 }
 export async function adoptSession(

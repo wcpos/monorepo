@@ -5,10 +5,12 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import {
+	adoptCounters,
 	bindRegister,
 	getBoundRegisterId,
 	getRegisterSnapshot,
 	readBoundRegister,
+	type RegisterCounters,
 	unbindRegister,
 } from './register-document';
 
@@ -17,7 +19,7 @@ type Register = {
 	name: string;
 	status: string;
 	default_float?: string | null;
-	counters?: Record<string, number>;
+	counters?: RegisterCounters;
 };
 type Binding = {
 	status: 'bound' | 'choose' | 'none' | 'unknown';
@@ -99,8 +101,14 @@ export function useRegisterBindingSession(): void {
 			await loadDirectory(entry, http, store.id);
 			if (!entry.loaded) return;
 			const registers = entry.value.registers;
-			if (bound && registers.some(({ id }) => id === bound.id)) return;
+			if (bound && registers.some(({ id }) => id === bound.id)) {
+				const row = (await http.get(`registers/${bound.id}`)).data as Register;
+				if (row.counters) await adoptCounters(userDB, site.uuid!, row.counters);
+				return;
+			}
 			if (registers.length === 1) {
+				const row = (await http.get(`registers/${registers[0].id}`)).data as Register;
+				if (row.counters) await adoptCounters(userDB, site.uuid!, row.counters);
 				await bindRegister(userDB, site.uuid!, registers[0], store.id);
 				publish(entry, {
 					status: 'bound',
@@ -145,10 +153,12 @@ export function useRegisterBinding() {
 		async (id: string) => {
 			const register = entry.value.registers.find((row) => row.id === id);
 			if (!register) return;
+			const row = (await http.get(`registers/${id}`)).data as Register;
+			if (row.counters) await adoptCounters(userDB, site.uuid!, row.counters);
 			await bindRegister(userDB, site.uuid!, register, store.id);
 			publish(entry, { status: 'bound', registerId: id, registerName: register.name });
 		},
-		[entry, site.uuid, store.id, userDB]
+		[entry, http, site.uuid, store.id, userDB]
 	);
 	return { ...value, bind };
 }

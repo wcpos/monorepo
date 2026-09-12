@@ -1,7 +1,10 @@
 import { map } from 'rxjs';
 
-import type { UserDatabase } from '@wcpos/database';
+import { fromMinor, toMinor } from '@wcpos/order-math';
+import type { ClosureRow, UserDatabase } from '@wcpos/database';
 import { AppInfo } from '@wcpos/utils/app-info';
+
+import type { DeepReadonly } from 'rxdb';
 
 export interface RegisterDocument {
 	id: string;
@@ -12,6 +15,11 @@ export interface RegisterDocument {
 		string,
 		{
 			sale_counter: number;
+			last_closure_number?: number;
+			perpetual_sales_total?: string;
+			perpetual_refunds_total?: string;
+			counters_started_at?: string | null;
+			closure_reservation?: { row: DeepReadonly<ClosureRow>; applied: boolean };
 			register_id?: string | null;
 			register_name?: string | null;
 			register_store_id?: number | null;
@@ -43,7 +51,7 @@ export function mintUuid(): string {
 }
 
 export async function readRegister(userDB: UserDatabase): Promise<RegisterDocument | null> {
-	const register = (await userDB.getLocal<RegisterDocument>('register'))?.toJSON().data ?? null;
+	const register = (await userDB.getLocal<RegisterDocument>('register'))?.toJSON(true).data ?? null;
 	currentRegisterId = register?.id ?? null;
 	currentRegister = register;
 	return register;
@@ -75,7 +83,7 @@ export async function ensureRegister(userDB: UserDatabase): Promise<RegisterDocu
 export function observeRegister$(userDB: UserDatabase) {
 	return userDB
 		.getLocal$<RegisterDocument>('register')
-		.pipe(map((doc) => doc?.toJSON().data ?? null));
+		.pipe(map((doc) => doc?.toJSON(true).data ?? null));
 }
 
 export function getBoundRegisterId(siteUuid: string, storeId?: number): string | null {
@@ -128,7 +136,7 @@ export async function bindRegister(
 			},
 		},
 	}));
-	currentRegister = updated.toJSON().data;
+	currentRegister = updated.toJSON(true).data;
 }
 
 export async function unbindRegister(
@@ -154,7 +162,7 @@ export async function unbindRegister(
 			},
 		};
 	});
-	currentRegister = updated.toJSON().data;
+	currentRegister = updated.toJSON(true).data;
 }
 
 export async function nextSaleCounter(userDB: UserDatabase, siteUuid: string): Promise<number> {
@@ -168,4 +176,159 @@ export async function nextSaleCounter(userDB: UserDatabase, siteUuid: string): P
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...site, sale_counter: counter } } };
 	});
 	return counter;
+}
+
+export type RegisterCounters = {
+	last_closure_number: number;
+	perpetual_sales_total: string;
+	perpetual_refunds_total: string;
+	counters_started_at?: string | null;
+};
+export async function adoptCounters(
+	userDB: UserDatabase,
+	siteUuid: string,
+	counters: RegisterCounters
+) {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => {
+		const site = data.sites[siteUuid] ?? { sale_counter: 0 };
+		return {
+			...data,
+			sites: {
+				...data.sites,
+				[siteUuid]: {
+					...site,
+					last_closure_number: Math.max(
+						site.last_closure_number ?? 0,
+						counters.last_closure_number
+					),
+					perpetual_sales_total: fromMinor(
+						Math.max(
+							toMinor(site.perpetual_sales_total ?? '0', 4),
+							toMinor(counters.perpetual_sales_total, 4)
+						),
+						4
+					),
+					perpetual_refunds_total: fromMinor(
+						Math.max(
+							toMinor(site.perpetual_refunds_total ?? '0', 4),
+							toMinor(counters.perpetual_refunds_total, 4)
+						),
+						4
+					),
+					counters_started_at: site.counters_started_at ?? counters.counters_started_at ?? null,
+				},
+			},
+		};
+	});
+	currentRegister = updated.toJSON(true).data;
+}
+export async function mintClosureNumber(
+	userDB: UserDatabase,
+	siteUuid: string,
+	closure?: DeepReadonly<ClosureRow>
+): Promise<number> {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	let number = 0;
+	await doc.incrementalModify((data) => {
+		const site = data.sites[siteUuid] ?? { sale_counter: 0 };
+		if (
+			closure &&
+			site.closure_reservation?.row.id === closure.id &&
+			!!site.closure_reservation.row.number_retried === !!closure.number_retried
+		) {
+			number = site.closure_reservation.row.number;
+			return data;
+		}
+		if (
+			closure &&
+			site.closure_reservation &&
+			site.closure_reservation.row.id !== closure.id &&
+			!site.closure_reservation.applied
+		)
+			throw new Error('closure_write_incomplete');
+		number = (site.last_closure_number ?? 0) + 1;
+		const reservation = closure
+			? {
+					row: {
+						...closure,
+						number,
+						perpetual_sales_total: fromMinor(
+							toMinor(site.perpetual_sales_total ?? '0', 4) +
+								toMinor(closure.period_sales_total, 4),
+							4
+						),
+						perpetual_refunds_total: fromMinor(
+							toMinor(site.perpetual_refunds_total ?? '0', 4) +
+								toMinor(closure.period_refunds_total, 4),
+							4
+						),
+					},
+					applied: closure.number_retried ? true : false,
+				}
+			: site.closure_reservation;
+		return {
+			...data,
+			sites: {
+				...data.sites,
+				[siteUuid]: {
+					...site,
+					last_closure_number: number,
+					...(reservation ? { closure_reservation: reservation } : {}),
+				},
+			},
+		};
+	});
+	return number;
+}
+export async function advancePerpetual(
+	userDB: UserDatabase,
+	siteUuid: string,
+	period: { sales: string; refunds: string; closureId?: string }
+) {
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => {
+		const site = data.sites[siteUuid] ?? { sale_counter: 0 };
+		const reservation = site.closure_reservation;
+		if (
+			period.closureId &&
+			(!reservation || reservation.row.id !== period.closureId || reservation.applied)
+		)
+			return data;
+		return {
+			...data,
+			sites: {
+				...data.sites,
+				[siteUuid]: {
+					...site,
+					...(period.closureId && reservation
+						? { closure_reservation: { ...reservation, applied: true } }
+						: {}),
+					perpetual_sales_total: fromMinor(
+						period.closureId && reservation
+							? Math.max(
+									toMinor(site.perpetual_sales_total ?? '0', 4),
+									toMinor(reservation.row.perpetual_sales_total, 4)
+								)
+							: toMinor(site.perpetual_sales_total ?? '0', 4) + toMinor(period.sales, 4),
+						4
+					),
+					perpetual_refunds_total: fromMinor(
+						period.closureId && reservation
+							? Math.max(
+									toMinor(site.perpetual_refunds_total ?? '0', 4),
+									toMinor(reservation.row.perpetual_refunds_total, 4)
+								)
+							: toMinor(site.perpetual_refunds_total ?? '0', 4) + toMinor(period.refunds, 4),
+						4
+					),
+					counters_started_at: site.counters_started_at ?? new Date().toISOString(),
+				},
+			},
+		};
+	});
+	currentRegister = updated.toJSON(true).data;
 }

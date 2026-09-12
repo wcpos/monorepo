@@ -116,7 +116,7 @@ export function OpenOrders({
 					<RegisterPicker onBound={() => setPickingRegister(false)} />
 				) : sessionsOn && !session && bindingStatus === 'bound' ? (
 					<OpenRegisterCard />
-				) : session?.status === 'counting' ? (
+				) : session && session.status !== 'open' ? (
 					<RegisterCount key={session.id} onClosed={setClosure} />
 				) : isColumn && receiptOrderUuid ? (
 					<React.Suspense fallback={null}>

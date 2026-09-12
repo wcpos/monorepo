@@ -8,6 +8,17 @@ import { drainRegisterSessionQueue } from './queue';
 import { refreshSessions } from './refresh';
 
 const sessions = {};
+const engine = { active: () => null };
+const site = { uuid: 'site' };
+const userDB = {};
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine }),
+	engineCollection: () => null,
+}));
+jest.mock('../../contexts/app-state', () => ({
+	useStoreSession: () => ({ userDB, site, store: { id: 1 } }),
+}));
+jest.mock('../register/register-document', () => ({ readRegister: async () => ({ sites: {} }) }));
 const movements = {};
 const http = {};
 
@@ -21,6 +32,7 @@ jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'register' }),
 }));
 jest.mock('./use-register-session-collections', () => ({
+	useClosureCollection: () => sessions,
 	useRegisterSessionCollection: () => sessions,
 	useCashMovementCollection: () => movements,
 }));

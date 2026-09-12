@@ -5,10 +5,13 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import type { UserDatabase } from '@wcpos/database';
 
 import {
+	adoptCounters,
+	advancePerpetual,
 	bindRegister,
 	ensureRegister,
 	getBoundRegisterId,
 	getCurrentBoundRegisterId,
+	mintClosureNumber,
 	nextSaleCounter,
 	readBoundRegister,
 	readRegister,
@@ -157,4 +160,38 @@ it('accepts a legacy pointer until the next bind records its store', async () =>
 		sale_counter: 4,
 	});
 	expect(await readBoundRegister(db, 'site', 1)).toBeNull();
+});
+
+it('mints unique closure numbers after the adopted floor, independently by site', async () => {
+	await ensureRegister(db);
+	await adoptCounters(db, 'site', {
+		last_closure_number: 12,
+		perpetual_sales_total: '100.01',
+		perpetual_refunds_total: '10.02',
+	});
+	expect(
+		(await Promise.all(Array.from({ length: 10 }, () => mintClosureNumber(db, 'site')))).sort(
+			(a, b) => a - b
+		)
+	).toEqual([13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+	expect(await mintClosureNumber(db, 'other')).toBe(1);
+});
+it('only raises each counter and adds perpetual amounts in minor units', async () => {
+	await ensureRegister(db);
+	await adoptCounters(db, 'site', {
+		last_closure_number: 3,
+		perpetual_sales_total: '0.1',
+		perpetual_refunds_total: '0.2',
+	});
+	await adoptCounters(db, 'site', {
+		last_closure_number: 1,
+		perpetual_sales_total: '0.01',
+		perpetual_refunds_total: '0.3',
+	});
+	await advancePerpetual(db, 'site', { sales: '0.2', refunds: '0.0001' });
+	expect((await readRegister(db))?.sites.site).toMatchObject({
+		last_closure_number: 3,
+		perpetual_sales_total: '0.3000',
+		perpetual_refunds_total: '0.3001',
+	});
 });

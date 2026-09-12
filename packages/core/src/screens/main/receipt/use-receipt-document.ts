@@ -22,10 +22,16 @@ export function useReceiptDocument({
 	order,
 	autoPrintAllowed,
 	document,
+	documentReady,
+	localReport,
+	formatReport,
 }: {
-	order: EngineRecord<'orders'>;
+	order?: EngineRecord<'orders'>;
 	autoPrintAllowed: boolean;
 	document?: string;
+	documentReady?: boolean;
+	localReport?: Record<string, unknown>;
+	formatReport?: (data: Record<string, unknown>) => Record<string, unknown>;
 }) {
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
@@ -44,10 +50,10 @@ export function useReceiptDocument({
 	const orderData = useRecordField(order, (record) => record.payload);
 
 	// Get the WC order ID for the receipts API
-	const orderId = orderData.id;
+	const orderId = orderData?.id;
 
 	// Legacy receipt URL from order links
-	const baseReceiptURL = orderData.links?.receipt?.[0]?.href;
+	const baseReceiptURL = orderData?.links?.receipt?.[0]?.href;
 
 	// Template renderer — provides template list, selection, and rendered output
 	const {
@@ -68,19 +74,25 @@ export function useReceiptDocument({
 		baseReceiptURL,
 		mode: 'live',
 		document,
+		documentReady,
+		localReport,
+		formatReport,
 		order: orderData,
 	});
 
 	// Build template info for routing
 	const selectedTemplate = templates.find((tmpl) => String(tmpl.id) === String(selectedTemplateId));
 	const templateInfo = React.useMemo(() => {
-		if (!selectedTemplate) return null;
+		if (!selectedTemplate)
+			return localReport
+				? { id: 'register-session', output_type: 'escpos', paper_width: null }
+				: null;
 		return {
 			id: String(selectedTemplate.id),
 			output_type: selectedTemplate.output_type ?? 'html',
 			paper_width: selectedTemplate.paper_width ?? null,
 		};
-	}, [selectedTemplate]);
+	}, [selectedTemplate, localReport]);
 
 	const { download, isDownloading: isDownloadingPdf } = useDownloadReceiptPdf();
 	const downloadReceiptPdf = () =>
@@ -142,7 +154,8 @@ export function useReceiptDocument({
 		preparePrint: async () => {
 			let commit: (() => Promise<void>) | undefined;
 			const prepared = await preparePrintContent(async () => {
-				const local = order.getLatest().local as typeof order.local & {
+				if (!order) return 0;
+				const local = order.getLatest().local as NonNullable<typeof order>['local'] & {
 					receiptPrintCount?: number;
 				};
 				const count = (local?.receiptPrintCount ?? 0) + 1;
@@ -169,7 +182,11 @@ export function useReceiptDocument({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || (document ? undefined : baseReceiptURL),
-		printerProfile: useSystemDialog ? undefined : (resolvedPrinter ?? undefined),
+		printerProfile: useSystemDialog
+			? undefined
+			: resolvedPrinter
+				? { ...resolvedPrinter, ...(localReport ? { autoOpenDrawer: false } : {}) }
+				: undefined,
 		paperWidth: selectedTemplate?.paper_width ?? undefined,
 		decimals: dp,
 		templateEngine: selectedTemplateEngine ?? undefined,
@@ -184,14 +201,14 @@ export function useReceiptDocument({
 		templateId: document ? undefined : templateInfo?.id,
 		onBeforePrint: () =>
 			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
-				context: { event: 'receipt.print_attempted', orderId: order.uuid ?? orderId },
+				context: { event: 'receipt.print_attempted', orderId: order?.uuid ?? orderId },
 			}),
 		onPrintError: (error) =>
 			getLogger(['wcpos', 'pos', 'receipt']).error('Receipt print failed', {
 				code: ERROR_CODES.PRINT_UNEXPECTED,
 				context: {
 					event: 'receipt.print_failed',
-					orderId: order.uuid ?? orderId,
+					orderId: order?.uuid ?? orderId,
 					error: error.message,
 				},
 			}),
@@ -215,7 +232,7 @@ export function useReceiptDocument({
 	// the auto-print fire — and finishing unblock — before the new preview has loaded. A
 	// different key therefore reads as "loading" without anything having to reset it.
 	type FrameState = 'loading' | 'loaded' | 'failed';
-	const frameKey = `${order.uuid}:${previewKey}`;
+	const frameKey = `${document ?? order?.uuid}:${previewKey}`;
 	const iframeLoadedRef = React.useRef<{ key: string; loaded: boolean }>({
 		key: frameKey,
 		loaded: false,
@@ -229,7 +246,7 @@ export function useReceiptDocument({
 	const frameState: FrameState = frame.key === frameKey ? frame.state : 'loading';
 	// The attempt belongs to an order: a new order on the same hook instance starts unattempted.
 	const [attemptedFor, setAttemptedFor] = React.useState<string | null>(null);
-	const autoPrintAttempted = attemptedFor === order.uuid;
+	const autoPrintAttempted = attemptedFor === order?.uuid;
 
 	// Reset auto-print guards when a new receipt is loaded
 	React.useEffect(() => {
@@ -246,14 +263,14 @@ export function useReceiptDocument({
 			iframeLoadedRef.current.loaded &&
 			hasFinalData &&
 			!hasAutoPrintedRef.current &&
-			claimReceiptAutoPrint(order.uuid)
+			claimReceiptAutoPrint(order?.uuid ?? '')
 		) {
 			hasAutoPrintedRef.current = true;
-			setAttemptedFor(order.uuid);
+			setAttemptedFor(order?.uuid ?? null);
 			// Errors are logged via onPrintError; auto-print must not surface an unhandled rejection.
 			print().catch(() => undefined);
 		}
-	}, [order.uuid, autoPrintAllowed, hasFinalData, frameKey, print, uiSettings.autoPrintReceipt]);
+	}, [order?.uuid, autoPrintAllowed, hasFinalData, frameKey, print, uiSettings.autoPrintReceipt]);
 
 	// Final API data can arrive without causing the receipt frame to load again.
 	React.useEffect(() => {

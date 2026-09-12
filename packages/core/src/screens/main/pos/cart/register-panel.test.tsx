@@ -5,7 +5,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { RegisterPanel } from './register-panel';
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
 let blind = false;
+let syncedRowsAt: string | null = null;
 const voidMovement = jest.fn(async () => undefined);
 const recordMovement = jest.fn(async () => ({ id: 'movement' }));
 const startCounting = jest.fn(async () => undefined);
@@ -20,7 +24,15 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		expected: { cash: '155', card: '30' },
 		salesCount: 2,
 		movements: [{ id: 'old', type: 'paid_out', amount: '7', reason: 'Milk' }],
-		lastClosed: { counted: { cash: '570' }, closed_at_gmt: '2026-09-10T17:00:00Z' },
+		lastClosure: {
+			number: 1,
+			counted: { cash: '570' },
+			till_expected: { cash: '570' },
+			variance: { cash: '0' },
+			closed_at: '2026-09-10T17:00:00Z',
+			synced_rows_at: syncedRowsAt,
+			server_findings: { gap: true },
+		},
 		actions: { voidMovement, recordMovement, startCounting },
 	}),
 }));
@@ -38,6 +50,9 @@ jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: number) => `£${v.toFixed(2)}` }),
 }));
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../../receipt/use-receipt-document', () => ({
+	useReceiptDocument: () => ({ print, resolvedPrinter: { autoOpenDrawer: true } }),
+}));
 jest.mock('@wcpos/printer', () => ({
 	usePrint: () => ({ print }),
 	PrinterService: class {
@@ -148,4 +163,16 @@ it('coalesces same-tick movement taps before React renders saving state', () => 
 		fireEvent.click(screen.getByTestId('movement-confirm'));
 	});
 	expect(recordMovement).toHaveBeenCalledTimes(1);
+});
+
+it('shows Unsynced until every named row is acknowledged, then offers Reprint', () => {
+	syncedRowsAt = null;
+	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel-last-closure').textContent).toContain('£570.00');
+	expect(screen.getByTestId('closure-unsynced')).toBeTruthy();
+	expect(screen.queryByTestId('closure-reprint')).toBeNull();
+	syncedRowsAt = '2026-09-12T12:00:00Z';
+	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('closure-unsynced')).toBeNull();
+	expect(screen.getByTestId('closure-reprint')).toBeTruthy();
 });

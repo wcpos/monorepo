@@ -475,6 +475,61 @@ describe('renderOfflineTemplatePreview', () => {
 jest.mock('../../../../services/register/use-register', () => ({ useRegister: () => null }));
 
 it.each(['offline', 'online-website-available'])(
+	'prints an unsent closure from its frozen local report when %s',
+	async (status) => {
+		mockUseOnlineStatus.mockReturnValue({ status });
+		const fetchForPrint = jest.fn();
+		mockUseReceiptData.mockReturnValue({ data: null, fetchForPrint });
+		mockUseActiveTemplates.mockReturnValue([]);
+		const localReport = {
+			title: 'Z-report',
+			order_number: 'Closure 1',
+			footer: 'Unsynced',
+			line_items: [{ name: 'Counted', amount: '150.00' }],
+		};
+		const { result } = renderHook(() =>
+			useTemplateRenderer({
+				...defaultOptions,
+				order: undefined,
+				orderId: undefined,
+				document: 'closure:s',
+				documentReady: false,
+				localReport,
+			})
+		);
+		const printed = await result.current.preparePrintContent(jest.fn());
+		expect(printed.receiptData).toBe(localReport);
+		expect(printed.html).toContain('Closure 1');
+		expect(printed.html).toContain('150.00');
+		expect(printed.html).toContain('Unsynced');
+		expect(fetchForPrint).not.toHaveBeenCalled();
+	}
+);
+it('uses fresh server-marked closure data for printing, not the preview', async () => {
+	mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+	const formatReport = (data: Record<string, unknown>) => ({ ...data, title: 'Z-report' });
+	mockUseReceiptData.mockReturnValue({
+		data: { footer: 'Original' },
+		fetchForPrint: async () => ({ footer: 'Reprint copy' }),
+	});
+	mockUseActiveTemplates.mockReturnValue([]);
+	const { result } = renderHook(() =>
+		useTemplateRenderer({
+			...defaultOptions,
+			order: undefined,
+			orderId: undefined,
+			document: 'closure:s',
+			localReport: { footer: 'Offline' },
+			formatReport,
+		})
+	);
+	expect(result.current.renderedHtml).toContain('Original');
+	const printed = await result.current.preparePrintContent(jest.fn());
+	expect(printed.html).toContain('Reprint copy');
+	expect(printed.html).not.toContain('Original');
+});
+
+it.each(['offline', 'online-website-available'])(
 	'never builds a refund locally when %s',
 	async (status) => {
 		jest.clearAllMocks();

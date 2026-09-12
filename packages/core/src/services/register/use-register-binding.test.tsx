@@ -6,7 +6,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import type { UserDatabase } from '@wcpos/database';
 
-import { bindRegister, ensureRegister, readBoundRegister } from './register-document';
+import { bindRegister, ensureRegister, readBoundRegister, readRegister } from './register-document';
 import { useRegisterBinding, useRegisterBindingSession } from './use-register-binding';
 import { useRegisterNames } from './use-register-names';
 
@@ -59,7 +59,7 @@ it('silently binds the sole active register and filters by store', async () => {
 	expect(view.result.current.registers).toHaveLength(1);
 	const names = renderHook(() => useRegisterNames());
 	expect(names.result.current).toEqual({ a: 'a' });
-	expect(mockHttp.get).toHaveBeenCalledTimes(1);
+	expect(mockHttp.get).toHaveBeenCalledTimes(2);
 });
 it('requires a choice among three, then binds the tapped id', async () => {
 	mockHttp.get.mockResolvedValue({ data: rows });
@@ -111,14 +111,17 @@ it('shows none for an empty list', async () => {
 it('rebinds the site pointer when the store changes', async () => {
 	mockHttp.get
 		.mockResolvedValueOnce({ data: [rows[0]] })
-		.mockResolvedValueOnce({ data: [rows[1]] });
+		.mockResolvedValueOnce({ data: rows[0] })
+		.mockResolvedValueOnce({ data: [rows[1]] })
+		.mockResolvedValueOnce({ data: rows[1] });
 	const view = mount();
 	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
 	mockStoreId = 3;
 	view.rerender();
 	await waitFor(() => expect(view.result.current.registerId).toBe('b'));
 	expect(await readBoundRegister(mockDB, mockSite, mockStoreId)).toEqual({ id: 'b', name: 'b' });
-	expect(mockHttp.get).toHaveBeenLastCalledWith('registers', { params: { store_id: 3 } });
+	expect(mockHttp.get).toHaveBeenCalledWith('registers', { params: { store_id: 3 } });
+	expect(mockHttp.get).toHaveBeenLastCalledWith('registers/b');
 });
 
 it('requests without a store filter for the default store', async () => {
@@ -137,4 +140,26 @@ it('does not expose another store pointer offline, even before hydration', async
 	const session = mount();
 	await act(async () => {});
 	expect(session.result.current.registerId).toBeNull();
+});
+
+it('adopts the bound register detail counters before publishing the binding', async () => {
+	mockHttp.get.mockImplementation(async (url) => ({
+		data:
+			url === 'registers'
+				? [rows[0]]
+				: {
+						...rows[0],
+						counters: {
+							last_closure_number: 9,
+							perpetual_sales_total: '100',
+							perpetual_refunds_total: '10',
+						},
+					},
+	}));
+	const view = mount();
+	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
+	expect((await readRegister(mockDB))?.sites[mockSite]).toMatchObject({
+		last_closure_number: 9,
+		perpetual_sales_total: '100.0000',
+	});
 });
