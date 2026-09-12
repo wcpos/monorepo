@@ -23,6 +23,7 @@ export type ErrorCode =
 	| 'CHECKOUT211'
 	| 'CHECKOUT301'
 	| 'PAYMENT101'
+	| 'PAYMENT111'
 	| 'PAYMENT201'
 	| 'PAYMENT301'
 	| 'PAYMENT401'
@@ -312,6 +313,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'No action needed — the payment succeeded; reopen to refresh.',
 		dataSafety: 'money-moved',
 		summary: 'Payment succeeded, but WCPOS could not refresh its status afterward.',
+	},
+	PAYMENT111: {
+		code: 'PAYMENT111',
+		symbol: 'PAYMENT_RECORDED_NOT_MIRRORED',
+		domain: 'PAYMENT',
+		severity: 'warn',
+		actionHint: 'No action needed — the store has the payment; this till is catching up.',
+		dataSafety: 'money-moved',
+		summary: 'The store recorded this payment, but the till could not save its own copy.',
 	},
 	PAYMENT201: {
 		code: 'PAYMENT201',
@@ -931,6 +941,7 @@ export const ERROR_CODES = {
 	CHECKOUT_EMPTY_RESPONSE: 'CHECKOUT211',
 	SKU_DUPLICATE: 'CHECKOUT301',
 	PAYMENT_OK_STATUS_CHECK_FAILED: 'PAYMENT101',
+	PAYMENT_RECORDED_NOT_MIRRORED: 'PAYMENT111',
 	PAYMENT_OUTCOME_UNKNOWN: 'PAYMENT201',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
 	TERMINAL_PAIRING_INCOMPLETE: 'PAYMENT401',

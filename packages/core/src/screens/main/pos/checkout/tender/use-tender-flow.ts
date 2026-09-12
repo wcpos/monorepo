@@ -52,7 +52,11 @@ import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { getUuidFromLineItem } from '../../hooks/utils';
-import { useRecordManualPayment, useVoidPayments } from '../payments';
+import {
+	RecordManualPaymentMirrorError,
+	useRecordManualPayment,
+	useVoidPayments,
+} from '../payments';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
 import { useRememberedReader } from './remembered-readers';
@@ -161,6 +165,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const terminalLeg = useTerminalLeg(order.uuid);
 	const service = getTerminalPaymentsService();
 	const intentRow = React.useRef<string | null>(null);
+	// A leg's settled failure is logged once, keyed on its row: the outcome can arrive
+	// long after `intentRow` has been cleared, and on a remount it arrives again.
+	const loggedLegFailure = React.useRef<string | null>(null);
 	const dp = store.price_num_decimals ?? 2;
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -648,6 +655,39 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			});
 		} catch (error) {
 			if (error instanceof RegisterSessionRequiredError) throw error;
+			if (error instanceof RecordManualPaymentMirrorError) {
+				// The store answered 2xx: the money is on the order there, and only this
+				// till's copy failed to save. Reporting "payment not recorded" here reads as
+				// "take it again", which is how one mirror failure becomes two payments.
+				const { outcome } = error;
+				logger.warn(t('pos_checkout.payment_recorded_not_synced'), {
+					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
+					showToast: true,
+					context: {
+						orderId: payload.id ?? null,
+						orderUUID: order.uuid,
+						paymentId: outcome.row.id,
+						amount: outcome.row.amount,
+						method: outcome.row.method_id,
+						status: outcome.row.status,
+						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
+					},
+				});
+				// The store's summary is the only balance worth trusting now — the local
+				// ledger is exactly the copy that failed to save. Complete only when the
+				// store says the order is settled; otherwise the refreshed pane speaks.
+				if (
+					outcome.kind === 'recorded' &&
+					outcome.order &&
+					toMinor(outcome.order.balance, dp) === 0
+				) {
+					await completeOrderFlow({ refresh: true });
+					return;
+				}
+				reducerDispatch({ type: 'back' });
+				setTenderMethod(order.uuid, null);
+				return;
+			}
 			if (savingProvenance) {
 				logger.error('Checkout failed', {
 					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
@@ -704,13 +744,32 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const consumeOutcome = () => {
 			const leg = service?.get(order.uuid);
 			if (!leg) return;
-			if (intentRow.current === leg.row.id && !['idle', 'creating'].includes(leg.phase)) {
+			// The take that is still in the cashier's hands, as opposed to an outcome that
+			// lands while they are watching the terminal timeline.
+			const ownTake = intentRow.current === leg.row.id;
+			if (ownTake && !['idle', 'creating'].includes(leg.phase)) {
 				intentRow.current = null;
-				if (leg.outcome === 'failed' && leg.error)
-					logger.error(providerErrorMessage(leg.error) ?? t('pos_checkout.payment_not_recorded'), {
-						code: ERROR_CODES.PAYMENT_UNEXPECTED,
-						showToast: true,
-					});
+			}
+			// A decline, an expiry or a failed capture usually settles well after polling
+			// starts, by which point `intentRow` is already null — so gating the LOG on it
+			// kept every settled failure out of the ledger. The row is always written; only
+			// the toast stays with the initial take, because the timeline already shows a
+			// failure the cashier is looking at.
+			if (leg.outcome === 'failed' && leg.error && loggedLegFailure.current !== leg.row.id) {
+				loggedLegFailure.current = leg.row.id;
+				logger.error(providerErrorMessage(leg.error) ?? t('pos_checkout.payment_not_recorded'), {
+					code: ERROR_CODES.PAYMENT_UNEXPECTED,
+					showToast: ownTake,
+					context: {
+						orderId: leg.row.order_id || null,
+						orderUUID: order.uuid,
+						paymentId: leg.row.id,
+						amount: leg.row.amount,
+						method: leg.row.method_id,
+						status: leg.row.status,
+						reason: leg.row.failure_reason ?? null,
+					},
+				});
 			}
 			if (leg.outcome !== 'captured') return;
 			service?.dismiss(order.uuid);
@@ -798,9 +857,20 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			const outcome = await voidPayments(order);
 			if (outcome.failed.length > 0) {
+				// Each of these is money still held on the customer's card. The row has to
+				// name them, or the merchant cannot tell which payment to refund by hand.
 				logger.error(t('pos_checkout.void_failed'), {
 					code: ERROR_CODES.PAYMENT_UNEXPECTED,
 					showToast: true,
+					context: {
+						orderId: payload.id ?? null,
+						orderUUID: order.uuid,
+						paymentId: outcome.failed.map((failure) => failure.paymentId).join(', '),
+						reason: outcome.failed
+							.map((failure) => `${failure.paymentId}: ${failure.message}`)
+							.join('; '),
+						voided: outcome.rows.length,
+					},
 				});
 				return;
 			}
