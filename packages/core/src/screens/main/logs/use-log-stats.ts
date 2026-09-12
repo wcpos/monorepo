@@ -97,7 +97,20 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 							sort: [{ timestamp: 'desc' }],
 						}).$
 				)
-			).pipe(map((perDomain) => deriveStuckRecords(perDomain.flat().map((doc) => doc.toJSON()))));
+			).pipe(
+				map((perDomain) =>
+					deriveStuckRecords(
+						perDomain
+							.flat()
+							.map((doc) => doc.toJSON())
+							// Each query sorts its own domain, so the concatenation is grouped by
+							// domain rather than by time. The derivation takes the FIRST row per
+							// record as decisive, so an older sync success would otherwise mask a
+							// newer payment refusal on the same order.
+							.sort((a, b) => b.timestamp - a.timestamp)
+					)
+				)
+			);
 			// The engine writes its once-per-store-open clock check to this exact
 			// category at `warn`; the derivation ignores unrelated warn rows.
 			const clockSkew$ = logsCollection

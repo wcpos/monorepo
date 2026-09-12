@@ -758,7 +758,7 @@ describe('useTenderFlow', () => {
 	it('stays put when a provider reports a failed void', async () => {
 		mockVoidPayments.mockResolvedValue({
 			rows: [],
-			failed: [{ paymentId: 'payment-1', message: 'Provider refused' }],
+			failed: [{ paymentId: 'payment-1', message: 'Provider refused', refused: true }],
 		});
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.dispatch({ type: 'request-cancel' }));
@@ -777,6 +777,24 @@ describe('useTenderFlow', () => {
 					reason: 'payment-1: Provider refused',
 				}),
 			})
+		);
+	});
+
+	it('keeps a lost void answer outcome-unknown rather than promising a refund', async () => {
+		// A void whose answer never arrived may already have been applied; PAYMENT221's
+		// "refund these" instruction would then return the money twice.
+		mockVoidPayments.mockResolvedValue({
+			rows: [],
+			failed: [{ paymentId: 'payment-1', message: 'network', refused: false }],
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'request-cancel' }));
+
+		await act(async () => result.current.cancelPayment());
+
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.void_failed',
+			expect.objectContaining({ code: 'PAYMENT201' })
 		);
 	});
 

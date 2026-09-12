@@ -79,6 +79,10 @@ export class TerminalPaymentsService {
 			refs?: Record<string, unknown>;
 			persisted: boolean;
 			retries: number;
+			/** Set once the exhausted-settlement row is written, so the clearing row knows
+			 * it has something to clear. `retries` cannot answer that: a public
+			 * `flushOffline()` resets it to zero. */
+			reportedFailure?: boolean;
 			timer?: ReturnType<typeof setTimeout>;
 		}
 	>();
@@ -193,20 +197,24 @@ export class TerminalPaymentsService {
 				if (this.stopped) return;
 				const data = response.data as ServerLegResponse;
 				await this.options.mirror(orderUuid, data);
-				if (entry.retries > 0) {
-					// Clears the stuck row this payment may have written after its retries
-					// ran out; without a decisive `ok` the health header holds it forever.
-					logger.debug('Offline payment settled', {
+				if (entry.reportedFailure) {
+					entry.reportedFailure = false;
+					// Clears the stuck row this payment wrote when its retries ran out. It has
+					// to be `info`, not `debug`: debug rows only reach the recorder unless
+					// verbose diagnostics is on, and a clearing row that never reaches the
+					// ledger leaves the failure stuck for the whole retention window.
+					logger.info('Offline payment settled', {
 						terminal: {
 							operationId: row.id,
 							operationType: 'sync.record',
 							outcome: 'ok',
 						},
 						context: {
-							collection: 'orders',
-							recordId: orderUuid,
+							collection: 'payments',
+							recordId: row.id,
 							type: 'payment.settlement',
 							paymentId: row.id,
+							orderUUID: orderUuid,
 						},
 					});
 				}
@@ -237,6 +245,11 @@ export class TerminalPaymentsService {
 					// store will never capture is money in flight, and this is what puts it
 					// in the health header's stuck list instead of leaving it to a log nobody
 					// opens. A later successful settlement writes the clearing `ok` row.
+					//
+					// Keyed on the PAYMENT, not the order: a split order can hold two offline
+					// authorizations, and keying both on the order uuid would let one settling
+					// clear the other's stuck row and hide money still in flight.
+					entry.reportedFailure = true;
 					logger.error('Offline payment settlement failed', {
 						code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
 						terminal: {
@@ -246,8 +259,8 @@ export class TerminalPaymentsService {
 							attempt: entry.retries + 1,
 						},
 						context: {
-							collection: 'orders',
-							recordId: entry.input.orderUuid,
+							collection: 'payments',
+							recordId: entry.input.row.id,
 							type: 'payment.settlement',
 							paymentId: entry.input.row.id,
 							orderUUID: entry.input.orderUuid,

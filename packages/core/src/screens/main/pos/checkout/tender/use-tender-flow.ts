@@ -816,7 +816,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					// order, not taking the money, and saying "payment not recorded" here is
 					// how a captured payment gets taken twice.
 					logger.error(t('pos_checkout.paid_but_order_not_finished'), {
-						code: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
+						// Its own code, not PAYMENT101: with a code and no explicit toast title
+						// the toast shows the CODE's summary and hint, and PAYMENT101's hint is
+						// "No action needed" — the opposite of what this cashier must do.
+						code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
 						showToast: true,
 						terminal: { operationId: leg.row.id },
 						context: {
@@ -910,8 +913,15 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			if (outcome.failed.length > 0) {
 				// Each of these is money still held on the customer's card. The row has to
 				// name them, or the merchant cannot tell which payment to refund by hand.
+				//
+				// Only a refusal the store actually answered earns the definitive "refund
+				// these" instruction. A void whose answer was lost may already have been
+				// applied, and refunding it by hand would return the money twice.
+				const everyoneRefused = outcome.failed.every((failure) => failure.refused);
 				logger.error(t('pos_checkout.void_failed'), {
-					code: ERROR_CODES.PAYMENT_VOID_REFUSED,
+					code: everyoneRefused
+						? ERROR_CODES.PAYMENT_VOID_REFUSED
+						: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
 					showToast: true,
 					context: {
 						...orderContext,

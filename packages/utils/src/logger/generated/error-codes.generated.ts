@@ -24,6 +24,7 @@ export type ErrorCode =
 	| 'CHECKOUT301'
 	| 'PAYMENT101'
 	| 'PAYMENT111'
+	| 'PAYMENT121'
 	| 'PAYMENT201'
 	| 'PAYMENT211'
 	| 'PAYMENT221'
@@ -333,6 +334,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'money-moved',
 		summary: 'The store recorded this payment, but the till could not save its own copy.',
 	},
+	PAYMENT121: {
+		code: 'PAYMENT121',
+		symbol: 'PAYMENT_CAPTURED_ORDER_UNFINISHED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Do not charge again — open the order and finish it.',
+		dataSafety: 'money-moved',
+		summary: 'The card was charged, but the order did not finish.',
+	},
 	PAYMENT201: {
 		code: 'PAYMENT201',
 		symbol: 'PAYMENT_OUTCOME_UNKNOWN',
@@ -557,9 +567,9 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'PAYMENT_EXCEEDS_BALANCE',
 		domain: 'PAYMENT',
 		severity: 'error',
-		actionHint: 'Take the balance the store reports — this till was holding an older total.',
-		dataSafety: 'order-safe',
-		summary: 'The store refused this payment because it is more than the order still owes.',
+		actionHint: 'Refund the difference — the store only owed part of what was taken.',
+		dataSafety: 'money-moved',
+		summary: 'More was taken at the till than the order still owed.',
 	},
 	PAYMENT999: {
 		code: 'PAYMENT999',
@@ -1041,6 +1051,7 @@ export const ERROR_CODES = {
 	SKU_DUPLICATE: 'CHECKOUT301',
 	PAYMENT_OK_STATUS_CHECK_FAILED: 'PAYMENT101',
 	PAYMENT_RECORDED_NOT_MIRRORED: 'PAYMENT111',
+	PAYMENT_CAPTURED_ORDER_UNFINISHED: 'PAYMENT121',
 	PAYMENT_OUTCOME_UNKNOWN: 'PAYMENT201',
 	PAYMENT_TERMINAL_REFUSED: 'PAYMENT211',
 	PAYMENT_VOID_REFUSED: 'PAYMENT221',

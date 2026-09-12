@@ -387,7 +387,9 @@ it('retries failed settlement at 5, 30 and 120 seconds then waits for another tr
 				operationType: 'sync.record',
 				outcome: 'failed',
 			}),
-			context: expect.objectContaining({ collection: 'orders', recordId: 'order' }),
+			// Keyed on the payment, so one settling authorization cannot clear another's
+			// stuck row on a split order.
+			context: expect.objectContaining({ collection: 'payments', recordId: 'leg' }),
 		})
 	);
 	await c.service.flushOffline();

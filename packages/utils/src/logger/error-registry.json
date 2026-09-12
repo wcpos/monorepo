@@ -530,6 +530,26 @@
 		"introducedIn": "1.11.0"
 	},
 	{
+		"code": "PAYMENT121",
+		"symbol": "PAYMENT_CAPTURED_ORDER_UNFINISHED",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Do not charge again — open the order and finish it.",
+		"retryPolicy": "manual",
+		"dataSafety": "money-moved",
+		"escalation": "none",
+		"summary": "The card was charged, but the order did not finish.",
+		"docsBody": "The terminal captured the payment and the store has it, but the step that completes the order afterwards failed. The customer has paid. Charging again would take the money twice; the order simply needs finishing.",
+		"troubleshooting": [
+			"Do not take the payment again — the card was charged.",
+			"Open the order from the orders list and complete it.",
+			"If it still will not complete, check the order in WooCommerce; the payment is on its ledger."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#295",
+		"introducedIn": "1.11.0"
+	},
+	{
 		"code": "PAYMENT201",
 		"symbol": "PAYMENT_OUTCOME_UNKNOWN",
 		"domain": "PAYMENT",
@@ -1062,16 +1082,16 @@
 		"symbol": "PAYMENT_EXCEEDS_BALANCE",
 		"domain": "PAYMENT",
 		"severity": "error",
-		"actionHint": "Take the balance the store reports — this till was holding an older total.",
+		"actionHint": "Refund the difference — the store only owed part of what was taken.",
 		"retryPolicy": "manual",
-		"dataSafety": "order-safe",
+		"dataSafety": "money-moved",
 		"escalation": "none",
-		"summary": "The store refused this payment because it is more than the order still owes.",
-		"docsBody": "The till asked to record more than the order had left to pay, so the store refused it and kept the attempt on the order as a failed row. Nothing was charged. This happens when the order changed elsewhere after the till read it.",
+		"summary": "More was taken at the till than the order still owed.",
+		"docsBody": "The till took a payment larger than the order's remaining balance, and the store refused to apply it: the attempt is kept on the order as a failed row. The money is already in the drawer or on the customer's card, so the difference has to go back. This happens when the order changed elsewhere after the till read it.",
 		"troubleshooting": [
-			"Check the balance the store reports for the order.",
-			"Take that amount instead.",
-			"If the two totals still disagree, refresh the order on the till."
+			"Check what the store says the order still owed.",
+			"Refund the difference to the customer.",
+			"If the two totals still disagree, refresh the order on the till before taking another payment."
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",

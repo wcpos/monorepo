@@ -24,6 +24,13 @@ export interface VoidPaymentsDeps {
 export interface VoidPaymentsFailure {
 	paymentId: string;
 	message: string;
+	/**
+	 * True when the STORE answered and refused. A transport failure — a timeout, a
+	 * dropped connection — leaves this false, because the void may well have been
+	 * applied: telling the cashier to refund by hand in that case is how one void
+	 * becomes two refunds.
+	 */
+	refused: boolean;
 }
 export type VoidPaymentsOutcome = {
 	kind: 'voided';
@@ -65,6 +72,7 @@ export async function voidPayments(
 			via: online ? 'online' : 'offline',
 			rows: [],
 			failed: deviceHeld.map((row) => ({
+				refused: true,
 				paymentId: row.id,
 				message: 'Device payment must settle before cancellation',
 			})),
@@ -102,11 +110,15 @@ export async function voidPayments(
 			// omits one must not throw away the order status an earlier one gave us.
 			if (accepted.order) lastOrder = accepted.order;
 		} catch (error) {
+			const response = errorResponse(error);
 			failed.push({
 				paymentId: row.id,
 				message:
-					errorResponse(error)?.data?.message ||
+					response?.data?.message ||
 					(error instanceof Error && error.message ? error.message : row.id),
+				// The store answered at all — even with a refusal message — means the void was
+				// decided. No response object means the request never completed.
+				refused: response !== undefined,
 			});
 		}
 	}
