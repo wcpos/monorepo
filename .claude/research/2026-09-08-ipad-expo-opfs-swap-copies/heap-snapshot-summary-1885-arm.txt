@@ -1,0 +1,46 @@
+nodes=3,082,716 total self size=448.4 MB
+
+== by type ==
+   231.9 MB  native
+   118.7 MB  object
+    42.7 MB  array
+    36.9 MB  closure
+    17.5 MB  string
+     0.5 MB  regexp
+     0.3 MB  symbol
+     0.0 MB  code
+     0.0 MB  synthetic
+
+== by name (self size) ==
+   218.7 MB    47,443  CodeBlock
+    41.2 MB   474,521  ArrayStorageSmall
+    21.0 MB   274,733  JSArray
+    20.5 MB   269,225  JSFunction
+    18.2 MB   316,708  Environment
+    17.5 MB   405,736  string
+    13.4 MB    20,230  DictPropertyMap
+     7.2 MB    94,775  JSObject(memoizedState, baseState, baseQueue, queue, next)
+     5.9 MB       171  ExternalStringPrimitive
+     3.2 MB    42,446  FiberNode
+     2.9 MB    38,553  OperatorSubscriber
+     2.6 MB    33,905  JSObject
+     2.5 MB    32,227  get
+     2.2 MB    36,008  HiddenClass
+     2.1 MB    27,258  JSObject(constructor)
+     2.0 MB    26,567  JSObject(tag, create, deps, inst, next)
+     2.0 MB    26,518  JSObject($$typeof, type, key, ref, props)
+     1.6 MB    20,712  AnonymousSubject
+     1.6 MB    20,616  JSObject(current)
+     1.6 MB       414  DenseSet
+     1.5 MB    19,543  JSObject(context, memoizedValue, next)
+     1.5 MB    39,082  HashMapEntry
+     1.4 MB    48,351  ArrayStorage
+     1.4 MB    18,270  JSObject(destroy)
+     1.3 MB         1  hermes::ManagedChunkedList<WeakRefSlot>
+     1.3 MB    17,373  JSObject(pending, lanes, dispatch, lastRenderedReducer, lastRenderedState)
+     1.2 MB         1  std::vector<LookupEntry>
+     1.1 MB    15,048  JSObject(lastEffect, events, stores, memoCache)
+     1.0 MB    13,520  JSObject(lanes, firstContext)
+     1.0 MB    13,466  Observable
+
+== biggest strings ==
