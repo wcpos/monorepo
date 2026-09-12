@@ -52,6 +52,8 @@ jobs:
   publish:
     name: 🌐 Build & publish web bundle
     runs-on: ubuntu-latest
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     steps:
       - name: 🔑 Generate GitHub App token
         id: app-token
@@ -119,6 +121,26 @@ jobs:
 
       - name: 🔨 Build web bundle
         run: pnpm web build
+
+      - name: ⏭️ Skip Sentry upload when unconfigured
+        if: ${{ env.SENTRY_AUTH_TOKEN == '' }}
+        run: echo "::notice::SENTRY_AUTH_TOKEN is not set; skipping source map upload."
+
+      - name: 🗺️ Upload source maps to Sentry
+        if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          APP_VERSION=$(node -p "require('./apps/main/package.json').version")
+          MAPS_DIR="$GITHUB_WORKSPACE/apps/web/web-build-maps/_expo/static/js/web"
+          JS_DIR="$GITHUB_WORKSPACE/apps/web/build/_expo/static/js/web"
+          # Latest 2.x: 2.58.4, checked 2026-09-12 against getsentry/sentry-cli CHANGELOG.md.
+          # Injection pairs adjacent files; stage JS with private maps, never maps in build/.
+          cp "$JS_DIR"/*.js "$MAPS_DIR/"
+          npx --yes @sentry/cli@2.58.4 sourcemaps inject "$MAPS_DIR"
+          # shellcheck disable=SC2088 # Sentry's literal host-agnostic prefix, not a home directory.
+          npx --yes @sentry/cli@2.58.4 sourcemaps upload --org wcpos --project woocommerce-pos \
+            --release "wcpos-app@${APP_VERSION}" --url-prefix '~/_expo/static/js/web' "$MAPS_DIR"
+          cp "$MAPS_DIR"/*.js "$JS_DIR/"
 
       - name: 🚀 Publish to web-bundle@${{ github.event.inputs.bundle_branch }}
         env:
