@@ -118,6 +118,65 @@ describe('usePrinterDialogForm', () => {
 		expect(latest.form.getValues('language')).toBe('star-prnt');
 	});
 
+	// Codex review on #2010: an earlier fix latched the reset's vendor and cleared the latch only
+	// on seeing that exact value. `add-printer.tsx` has an effect that corrects generic → epson
+	// when the lane cannot take a generic profile, and it can land in the same passive-effect
+	// batch as the reset — so the watch never publishes the latched vendor, the latch never
+	// clears, and NO later vendor change derives anything. Comparing against `form.getValues`
+	// has no in-flight state to get stuck.
+	it('still derives after an external vendor correction lands before the watch publishes', () => {
+		let renderer!: ReactTestRenderer;
+
+		function Snapshot(_props: { value: ReturnType<typeof usePrinterDialogForm> }) {
+			return null;
+		}
+
+		function Harness() {
+			const corrected = React.useRef(false);
+			const value = usePrinterDialogForm({
+				open: true,
+				schema: nativePrinterSchema,
+				defaultValues,
+				deriveVendorDefaults,
+				printer: starPrntPrinter,
+				printerCount: 1,
+				onSave,
+			});
+			// Mirrors add-printer.tsx's vendor correction: a sibling effect in the same component,
+			// so it runs in the same passive-effect batch as the hook's reset and moves the vendor
+			// off the value that reset just wrote — before the watch has published it.
+			React.useEffect(() => {
+				if (corrected.current) return;
+				corrected.current = true;
+				// Any vendor other than the one reset just wrote; add-printer.tsx uses epson, but the
+				// form's own default here IS epson, and a correction back to the watch's current value
+				// would not re-trigger this effect at all.
+				value.form.setValue('vendor', 'generic');
+			});
+			return <Snapshot value={value} />;
+		}
+
+		act(() => {
+			renderer = create(<Harness />);
+		});
+		act(() => {
+			jest.advanceTimersByTime(500);
+		});
+		const latest = () =>
+			renderer.root.findByType(Snapshot).props.value as ReturnType<typeof usePrinterDialogForm>;
+
+		// The correction is a real vendor change, so its defaults apply...
+		expect(latest().form.getValues('vendor')).toBe('generic');
+		expect(latest().form.getValues('language')).toBe('esc-pos');
+
+		// ...and, critically, the NEXT change still derives. Under the latch this stayed
+		// 'esc-pos' forever, because the latch was waiting for a 'star' the watch never published.
+		act(() => {
+			latest().form.setValue('vendor', 'star');
+		});
+		expect(latest().form.getValues('language')).toBe('star-line');
+	});
+
 	// The latch must not swallow a real vendor change that follows the reset.
 	it('still derives the language when the cashier changes vendor', () => {
 		let renderer!: ReactTestRenderer;
