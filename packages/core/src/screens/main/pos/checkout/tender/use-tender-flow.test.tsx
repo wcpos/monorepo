@@ -46,6 +46,7 @@ const mockStoreDB = { addState: jest.fn(async () => mockReaderState) };
 beforeEach(() => {
 	for (const key of Object.keys(mockReaderPreferences)) delete mockReaderPreferences[key];
 	mockReadersInUse.clear();
+	mockNarrated.clear();
 });
 it('stores only the reader id, separately for each method', async () => {
 	const preferences = rememberedReaders(mockStoreDB as unknown as StoreDatabase);
@@ -66,6 +67,14 @@ const mockBegin = jest.fn();
 const mockDismiss = jest.fn(() => {
 	mockLeg = null;
 });
+// Mirrors the real service: the first claim for a row wins, so a remount cannot
+// write the same settled failure twice.
+const mockNarrated = new Set<string>();
+const mockClaimFailureNarration = jest.fn((rowId: string) => {
+	if (mockNarrated.has(rowId)) return false;
+	mockNarrated.add(rowId);
+	return true;
+});
 const mockCancel = jest.fn();
 const mockCapture = jest.fn();
 const mockRelease = jest.fn();
@@ -75,6 +84,7 @@ jest.mock('../../../../../services/terminal-payments', () => ({
 			subscribe: () => () => {},
 			begin: mockBegin,
 			dismiss: mockDismiss,
+			claimFailureNarration: mockClaimFailureNarration,
 			get: () => mockLeg,
 			readersInUse: () => mockReadersInUse,
 			leg: () => ({ cancel: mockCancel, capture: mockCapture, release: mockRelease }),
@@ -1095,6 +1105,33 @@ describe('server tender', () => {
 			expect(mockError).toHaveBeenCalledTimes(1);
 		}
 	);
+	it('logs a settled failure that carries no error object, once across remounts', async () => {
+		// The ordinary asynchronous decline: a 200 whose payment row reads `failed`, with
+		// no error attached. server-leg finalizes it exactly this way.
+		const { result, rerender, unmount } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		await act(async () => result.current.takeTender());
+		mockLeg = {
+			...mockLeg!,
+			phase: 'final',
+			outcome: 'failed',
+			error: null,
+			row: { ...mockLeg!.row, status: 'failed', failure_reason: 'card_declined' },
+		};
+		rerender();
+		expect(mockError).toHaveBeenCalledWith(
+			'card_declined',
+			expect.objectContaining({ context: expect.objectContaining({ reason: 'card_declined' }) })
+		);
+		expect(mockError).toHaveBeenCalledTimes(1);
+		// Reopening the order finds the same final leg still held by the service; the row
+		// must not be written again.
+		unmount();
+		const reopened = renderHook(() => useTenderFlow(order));
+		expect(mockError).toHaveBeenCalledTimes(1);
+		reopened.unmount();
+	});
+
 	it('routes actions to the existing leg', async () => {
 		mockLeg = terminalState();
 		const { result } = renderHook(() => useTenderFlow(order));
@@ -1430,6 +1467,43 @@ describe('provider completion provenance before intent', () => {
 	});
 });
 
+it('does not claim the store holds a payment it refused but could not mirror', async () => {
+	mockUseRealManual = true;
+	jest.clearAllMocks();
+	resetCheckoutMode();
+	mockLeg = null;
+	mockMethods = methods;
+	mockPayload = { id: 42, total: '10.00', meta_data: [] };
+	mockOnlineStatus = 'online-website-available';
+	mockBlockIfDegraded.mockReturnValue(false);
+	mockLocalPatch.mockResolvedValue(order);
+	mockPushDocument.mockResolvedValue(order);
+	// The server refuses and stores a `failed` row; mirroring that refusal then fails.
+	mockManualPost.mockRejectedValue({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_order_already_paid', data: { order: { status: 'completed' } } },
+		},
+	});
+	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
+	const view = renderHook(() => useTenderFlow(order));
+	try {
+		act(() => view.result.current.pickMethod('pos_cash'));
+		await act(async () => view.result.current.takeTender());
+
+		// Nothing was taken, so "the store has this payment, don't take it again" would
+		// both contradict the refusal the cashier was just shown and block a corrected
+		// retry. The refusal row is the one that speaks.
+		expect(mockWarn).not.toHaveBeenCalled();
+		expect(view.result.current.state).toMatchObject({ view: 'select', methodId: null });
+	} finally {
+		view.unmount();
+		mockUseRealManual = false;
+		mockManualMirror.mockReset();
+		mockManualPost.mockReset();
+	}
+});
+
 it('reports a payment the store took but the till could not mirror, and never says it was not recorded', async () => {
 	mockUseRealManual = true;
 	jest.clearAllMocks();
@@ -1467,7 +1541,7 @@ it('reports a payment the store took but the till could not mirror, and never sa
 	}
 });
 
-it('returns to the method list when the store took a partial payment the till could not mirror', async () => {
+it('keeps the pane on the balance the store reports when a partial payment could not be mirrored', async () => {
 	mockUseRealManual = true;
 	jest.clearAllMocks();
 	resetCheckoutMode();
@@ -1488,7 +1562,12 @@ it('returns to the method list when the store took a partial payment the till co
 
 		expect(mockWarn).toHaveBeenCalledTimes(1);
 		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
-		expect(view.result.current.state).toMatchObject({ view: 'select', methodId: null });
+		// The resident order is the copy that failed to save, and the recovery refresh may
+		// not have landed, so the derived balance is still the pre-payment one. What must
+		// not happen is the keypad pre-typing the whole balance again on a payment the store
+		// already took: folding the accepted row into the pane's own ledger re-types the 5.00
+		// that is actually left.
+		expect(view.result.current.state).toMatchObject({ entryMinor: 500, methodId: 'pos_cash' });
 	} finally {
 		view.unmount();
 		mockUseRealManual = false;
