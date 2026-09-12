@@ -1,9 +1,15 @@
+import { addRxPlugin } from 'rxdb';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
+import {
+	createRepairOwnershipPlugin,
+	getRepairOwnershipChannelName,
+} from '../../plugins/repair-ownership';
 import { getWebNewStorage } from '../storage/index.web';
 import { wrappedErrorHandlerStorage } from '../../plugins/wrapped-error-handler-storage';
 
 const workerStorage = getWebNewStorage();
+addRxPlugin(createRepairOwnershipPlugin({ channelName: getRepairOwnershipChannelName() }));
 
 // Always wrap with error handler (catches/logs raw RxDB errors before they reach UI)
 export const storage = wrappedErrorHandlerStorage({ storage: workerStorage });
