@@ -744,7 +744,10 @@ export function createRxdbSyncEngine(
 			if ((event.type === 'signal.tick.error' || status === 'error') && typeof error === 'string') {
 				if (laneLastEmittedError.get(key) === error) event = { ...event, level: 'info' };
 				laneLastEmittedError.set(key, error);
-			} else if (event.type === 'engine.lane.tick') {
+				// Only a tick that actually RAN is a recovery. A 'skipped' tick polled
+				// nothing — and the auth hold makes the gate emit exactly that — so
+				// clearing on it would re-escalate the identical next failure.
+			} else if (event.type === 'engine.lane.tick' && status === 'ran') {
 				laneLastEmittedError.delete(key);
 				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
 			}
