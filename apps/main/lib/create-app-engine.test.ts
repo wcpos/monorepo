@@ -97,6 +97,7 @@ function loadCreateAppEngine(
 				diagnostics?: typeof appMetricsObserver;
 				multiInstance?: boolean;
 				writePlaneOwner?: () => boolean;
+				holdAutomaticTicks?: () => boolean;
 				writeOutcomeBridge?: { moveTo: (name: string | null) => void };
 			},
 			_scope: unknown
@@ -129,6 +130,7 @@ function loadCreateAppEngine(
 	}));
 	jest.doMock('@wcpos/utils/logger', () => ({
 		getLogger: jest.fn(() => ({
+			debug: jest.fn(),
 			info: networkInfo,
 			warn: networkWarn,
 			error: networkError,
@@ -167,6 +169,73 @@ function loadCreateAppEngine(
 }
 
 describe('createAppSyncEngine scope cache', () => {
+	it('prompts sign-in once per newly exhausted token', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockImplementation(async () => new Response(null, { status: 401 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, networkError } = loadCreateAppEngine();
+		let accessToken = 'rejected-token';
+		createAppSyncEngine({
+			...BASE_OPTIONS,
+			credentials: { getLatest: () => ({ access_token: accessToken }) },
+			refreshAuth: async () => accessToken,
+		});
+		const ports = createRxdbSyncEngine.mock.calls[0]![0];
+		const prompts = () => networkError.mock.calls.filter(([, options]) => options.showToast);
+		try {
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(prompts()).toEqual([
+				[
+					expect.stringContaining('sign in again'),
+					expect.objectContaining({ code: 'AUTH101', showToast: true }),
+				],
+			]);
+
+			accessToken = 'another-rejected-token';
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(prompts()).toHaveLength(2);
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
+	it('holds automatic ticks for an exhausted token until live credentials change', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockImplementation(async () => new Response(null, { status: 401 }));
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
+		const { requestStateManager } = jest.requireActual<
+			typeof import('@wcpos/hooks/use-http-client')
+		>('@wcpos/hooks/use-http-client');
+		const setAuthFailed = jest.spyOn(requestStateManager, 'setAuthFailed');
+		let accessToken = 'expired-token';
+		createAppSyncEngine({
+			...BASE_OPTIONS,
+			credentials: { getLatest: () => ({ access_token: accessToken }) },
+			refreshAuth: async () => {
+				accessToken = 'rejected-token';
+				return accessToken;
+			},
+		});
+		const ports = createRxdbSyncEngine.mock.calls[0]![0];
+		try {
+			expect(ports.holdAutomaticTicks?.()).toBe(false);
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(ports.holdAutomaticTicks?.()).toBe(true);
+			expect(setAuthFailed).not.toHaveBeenCalled();
+			expect(requestStateManager.isAuthFailed()).toBe(false);
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				credentials: { getLatest: () => ({ access_token: 'reauthenticated-token' }) },
+			});
+			expect(ports.holdAutomaticTicks?.()).toBe(false);
+		} finally {
+			setAuthFailed.mockRestore();
+			fetch.mockRestore();
+		}
+	});
+
 	it('passes query transport through to exact GET and push POST URLs', async () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
