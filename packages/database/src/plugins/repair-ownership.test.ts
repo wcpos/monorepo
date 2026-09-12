@@ -24,7 +24,7 @@ afterEach(() => {
 	globalThis.BroadcastChannel = originalChannel;
 });
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
-const ownership = (...owned: string[]) => ({ type: 'ownership', owned });
+const ownership = (...owned: string[]) => ({ type: 'ownership', owned, seq: expect.any(Number) });
 
 async function setup() {
 	const { createRepairOwnershipPlugin, getRepairOwnershipChannelName } =
@@ -139,4 +139,60 @@ test('plugin is inert without BroadcastChannel', async () => {
 	await settle();
 	expect(db.database.waitForLeadership).not.toHaveBeenCalled();
 	expect(FakeBroadcastChannel.instances).toHaveLength(0);
+});
+
+test('closing a duplicate preserves the surviving leader until it too closes', async () => {
+	const { plugin, channel } = await setup();
+	const first = fakeDatabase(plugin);
+	const second = fakeDatabase(plugin);
+	first.start();
+	second.start();
+	first.lead(true);
+	second.lead(true);
+	await settle();
+	await first.close();
+	expect(channel.postMessage).toHaveBeenLastCalledWith(ownership('store'));
+	await second.close();
+	expect(channel.postMessage).toHaveBeenLastCalledWith(ownership());
+});
+
+test('pre-close waits for its own revocation ack, not an earlier publication', async () => {
+	const { plugin, channel } = await setup();
+	const db = fakeDatabase(plugin);
+	db.start();
+	db.lead(true);
+	await settle();
+	const leadingSeq = channel.postMessage.mock.lastCall?.[0].seq;
+	let closed = false;
+	const closing = Promise.resolve(db.close()).then(() => {
+		closed = true;
+	});
+	const revokedSeq = channel.postMessage.mock.lastCall?.[0].seq;
+	expect(revokedSeq).toBeGreaterThan(leadingSeq);
+	channel.onmessage?.({ data: { type: 'ownership-ack', seq: leadingSeq } });
+	await settle();
+	expect(closed).toBe(false);
+	channel.onmessage?.({ data: { type: 'ownership-ack', seq: revokedSeq } });
+	await closing;
+	expect(closed).toBe(true);
+});
+
+test('a dead worker bounds pre-close waiting to 250 ms', async () => {
+	const { plugin } = await setup();
+	jest.useFakeTimers();
+	try {
+		const db = fakeDatabase(plugin);
+		let closed = false;
+		const closing = Promise.resolve(db.close()).then(() => {
+			closed = true;
+		});
+		await jest.advanceTimersByTimeAsync(249);
+		expect(closed).toBe(false);
+		await jest.advanceTimersByTimeAsync(1);
+		await closing;
+		expect(closed).toBe(true);
+		expect(jest.getTimerCount()).toBe(0);
+	} finally {
+		jest.useRealTimers();
+	}
 });

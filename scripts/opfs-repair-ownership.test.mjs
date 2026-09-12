@@ -73,3 +73,17 @@ for (const unavailable of ['name', 'BroadcastChannel']) {
 		assert.doesNotThrow(() => ownership.close());
 	});
 }
+
+test('acknowledges each ownership message after replacing the set', () => {
+	const ownership = createRepairOwnership({ channelName: 'tab' });
+	const observed = [];
+	channel.postMessage = (message) => observed.push([message, ownership.ownsRepairs(params)]);
+	channel.onmessage({ data: { type: 'ownership', owned: ['store'], seq: 1 } });
+	channel.onmessage({ data: { type: 'ownership', owned: [], seq: 2 } });
+	channel.onmessage({ data: { type: 'ownership', owned: ['store'] } });
+	assert.deepEqual(observed, [
+		[{ type: 'ownership-ack', seq: 1 }, true],
+		[{ type: 'ownership-ack', seq: 2 }, false],
+		[{ type: 'ownership-ack', seq: undefined }, true],
+	]);
+});

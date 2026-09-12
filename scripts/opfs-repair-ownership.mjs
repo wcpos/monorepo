@@ -14,6 +14,7 @@ export function createRepairOwnership({ channelName }) {
 				data.owned.every((name) => typeof name === 'string')
 			) {
 				owned = new Set(data.owned);
+				channel.postMessage({ type: 'ownership-ack', seq: data.seq });
 			}
 		};
 		channel.postMessage({ type: 'hello' });
