@@ -19,11 +19,12 @@ export const MARKER = '__wcposIndexSearchText';
 // ES5-safe: these functions' sources are prepended to both installed dists.
 /* eslint-disable no-var */
 function wcposSearchDigest(searchable) {
-	var hash = 0;
-	for (var i = 0; i < searchable.length; i++) {
-		hash = ((hash << 5) - hash + searchable.charCodeAt(i)) | 0;
-	}
-	return searchable.length + ':' + hash;
+	// The EXACT text, not a hash. A 32-bit hash collides in practice ('AaAa' and 'BBBB'
+	// both give 4:2031744), and a collision here is silent and permanent: the document's
+	// text changes, the update is skipped, and its search results are wrong until something
+	// else rebuilds the index. Memory stays bounded by document count, which is the property
+	// that mattered; a catalogue of 5,000 titles is a few hundred kilobytes.
+	return searchable;
 }
 
 export function indexSearchText(index, id, searchable) {
