@@ -2133,6 +2133,35 @@ describe('@wcpos/receipt-renderer exports', () => {
 		}
 	});
 
+	// Star's ESC i magnification is n1/n2 in 0-5 (6x max) while `<size width>` is unbounded on the
+	// way in, so a custom template can ask for more than the command carries. Raised by Codex
+	// review on the PHP twin of this fix (wcpos/woocommerce-pos#1966).
+	it('caps Star magnification at 6x, in the command and in the padding alike', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><align mode="center"><size width="8" height="1">' +
+				'<text>AB</text></size></align></receipt>',
+			{},
+			{ columns: 48, language: 'star-line' }
+		);
+
+		// ESC i <height-1> <width-1>, so the width byte is the 6x cap at 0x05, not 0x07.
+		expect(includesSequence(bytes, [0x1b, 0x69, 0x00, 0x05])).toBe(true);
+		// 2 glyphs x 6 = 12 of 48 columns; half the remaining 36 is 18 columns = 3 six-cell spaces.
+		expect(longestSpaceRun(bytes)).toBe(3);
+	});
+
+	it('leaves ESC/POS magnification alone, where GS ! really does reach 8x', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><size width="8" height="1"><text>AB</text></size></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+
+		// GS ! n: bits 4-7 are the WIDTH magnification, bits 0-3 the height. Width 8 with height 1
+		// is therefore (8 - 1) << 4 = 0x70, uncapped.
+		expect(includesSequence(bytes, [0x1d, 0x21, 0x70])).toBe(true);
+	});
+
 	it('leaves unscaled centering padding unchanged', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt paper-width="48"><align mode="center"><text>Thank you</text></align></receipt>',

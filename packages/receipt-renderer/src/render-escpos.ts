@@ -116,6 +116,16 @@ export interface ThermalLayoutDiagnostics {
 const CP932_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]/;
 const FULL_WIDTH_TEXT_RE =
 	/[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u;
+/**
+ * Star's `ESC i` carries its magnification as n1/n2 in 0-5, so 6x is the ceiling; ESC/POS's
+ * `GS !` packs a nibble each and genuinely reaches 8x. Nothing bounds `<size width>` on the way
+ * in — `parse-xml.ts` takes the attribute verbatim — so a custom template asking for 8 made the
+ * encoder emit an out-of-range ESC i byte AND made the padding below measure the line at 8 cells
+ * per glyph when the printer was applying at most 6. Clamp once, and both agree.
+ * The PHP emitter caps the same way (`Starprnt_Thermal_Emitter::effective_magnification`).
+ */
+const STAR_MAX_MAGNIFICATION = 6;
+
 const KANJI_MODE_ON = [0x1c, 0x26];
 const KANJI_MODE_OFF = [0x1c, 0x2e];
 
@@ -747,6 +757,8 @@ function updateEscposSize(
 ): void {
 	// Every language tracks the scale, because every language pads alignment with spaces the
 	// printer draws at that scale. Only ESC/POS carries the `ESC !` companion byte below.
+	width = effectiveScale(context, width);
+	height = effectiveScale(context, height);
 	context.textScale.width = width;
 	context.textScale.height = height;
 	if (!context.escposPrintMode) {
@@ -769,6 +781,12 @@ function updateEscposSize(
 	}
 	encoder.size(width, height);
 	encoder.raw([0x1b, 0x21, escposPrintModeByte(context.escposPrintMode)]);
+}
+
+/** The magnification the printer will actually apply for a requested multiplier. */
+function effectiveScale(context: RenderContext, value: number): number {
+	const max = context.language === 'esc-pos' ? Number.POSITIVE_INFINITY : STAR_MAX_MAGNIFICATION;
+	return Math.max(1, Math.min(max, value));
 }
 
 function escposPrintModeByte(mode: EscposPrintModeState): number {
