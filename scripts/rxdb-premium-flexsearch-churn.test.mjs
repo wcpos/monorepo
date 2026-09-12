@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -18,10 +18,25 @@ import {
 } from './patch-rxdb-premium-flexsearch-churn.mjs';
 
 const require = createRequire(import.meta.url);
-const packageRoot = dirname(require.resolve('rxdb-premium/package.json'));
+// rxdb-premium is licence-gated: its dist is materialised by a postinstall step. CI installs
+// Dependabot branches with --ignore-scripts, so the dist is legitimately absent there and a
+// top-level read would throw ENOENT before a single test ran, blocking every dependency PR.
+// Resolve lazily and skip only the cases that need the installed file.
+let packageRoot = null;
+try {
+	packageRoot = dirname(require.resolve('rxdb-premium/package.json'));
+} catch {
+	packageRoot = null;
+}
 const indexOptions = { preset: 'performance', tokenize: 'full', minlength: 3 };
 const installedPath = (dist) =>
-	join(packageRoot, `dist/${dist}/plugins/flexsearch/rx-fulltext-search.js`);
+	packageRoot ? join(packageRoot, `dist/${dist}/plugins/flexsearch/rx-fulltext-search.js`) : null;
+
+/** Whether the licence-gated dist was materialised in this environment. */
+function installedDistPresent(dist) {
+	const path = installedPath(dist);
+	return Boolean(path) && existsSync(path);
+}
 
 // The offline copy lacks RxJS/Babel. Execute the installed plugin body, not a
 // reimplementation, with only module bindings and database/event I/O stubbed.
@@ -143,6 +158,14 @@ async function exportedSize(index) {
 }
 
 for (const dist of ['esm', 'cjs']) {
+	if (!installedDistPresent(dist)) {
+		test(
+			`[${dist}] installed dist absent — licence-gated postinstall did not run`,
+			{ skip: true },
+			() => {}
+		);
+		continue;
+	}
 	test(`[${dist}] emitted prelude and rewritten regions run in strict mode`, async (t) => {
 		const plugin = loadPlugin(dist, undefined, true);
 		const { instance, writeBatch } = await openPlugin(plugin, [
@@ -344,6 +367,10 @@ function withFixture(content, fn) {
 
 for (const anchors of DISTS) {
 	const { dist } = anchors;
+	if (!installedDistPresent(dist)) {
+		test(`[${dist}] anchors unverifiable — installed dist absent`, { skip: true }, () => {});
+		continue;
+	}
 	const installed = readFileSync(installedPath(dist), 'utf8');
 	const keys = ['live', 'replay', 'pipeline', 'append', 'close'];
 	const pristine = keys.reduce(
@@ -357,7 +384,7 @@ for (const anchors of DISTS) {
 			writeFileSync(path, next);
 			assert.deepEqual(preparePatch(path, anchors), { path, status: 'already patched' });
 			assert.equal(readFileSync(path, 'utf8'), next);
-			writeFileSync(path, next.replace('var hash = 0;', 'var hash = 1;'));
+			writeFileSync(path, next.replace('return searchable;', "return searchable + '';"));
 			assert.throws(() => preparePatch(path, anchors), /outdated prelude/);
 			writeFileSync(path, next.replace(PRELUDE, `function ${MARKER}(){}\n`));
 			assert.throws(() => preparePatch(path, anchors), /outdated prelude/);
@@ -383,23 +410,27 @@ for (const anchors of DISTS) {
 	}
 }
 
-test('running the installed patch twice leaves both dists byte-identical', () => {
-	let previous;
-	for (let i = 0; i < 2; i++) {
-		const result = spawnSync(
-			process.execPath,
-			['scripts/patch-rxdb-premium-flexsearch-churn.mjs'],
-			{
-				cwd: join(import.meta.dirname, '..'),
-				encoding: 'utf8',
-			}
-		);
-		assert.equal(result.status, 0, result.stderr);
-		const current = DISTS.map(({ dist }) => readFileSync(installedPath(dist), 'utf8'));
-		if (previous) assert.deepEqual(current, previous);
-		previous = current;
+test(
+	'running the installed patch twice leaves both dists byte-identical',
+	{ skip: !DISTS.every(({ dist }) => installedDistPresent(dist)) },
+	() => {
+		let previous;
+		for (let i = 0; i < 2; i++) {
+			const result = spawnSync(
+				process.execPath,
+				['scripts/patch-rxdb-premium-flexsearch-churn.mjs'],
+				{
+					cwd: join(import.meta.dirname, '..'),
+					encoding: 'utf8',
+				}
+			);
+			assert.equal(result.status, 0, result.stderr);
+			const current = DISTS.map(({ dist }) => readFileSync(installedPath(dist), 'utf8'));
+			if (previous) assert.deepEqual(current, previous);
+			previous = current;
+		}
 	}
-});
+);
 
 for (const removeAvailable of [true, false]) {
 	test(`missing update falls back with remove=${removeAvailable}`, async () => {
@@ -428,7 +459,17 @@ for (const removeAvailable of [true, false]) {
 	});
 }
 
-test('digest state is per-index, compact, and not committed on failed writes', () => {
+test('text sharing a 32-bit hash with the previous value is still re-indexed', () => {
+	// 'AaAa' and 'BBBB' both hash to 4:2031744. Under the old digest the update was skipped
+	// and the document kept answering to its OLD text forever.
+	const index = new FlexSearch.Index({ preset: 'performance', tokenize: 'full', minlength: 3 });
+	indexSearchText(index, 'product', 'AaAa');
+	indexSearchText(index, 'product', 'BBBB');
+	assert.deepEqual(index.search('BBBB'), ['product']);
+	assert.deepEqual(index.search('AaAa'), []);
+});
+
+test('indexed-text state is per-index, exact, and not committed on failed writes', () => {
 	const first = new FlexSearch.Index(indexOptions);
 	const second = new FlexSearch.Index(indexOptions);
 	const text = 'searchable '.repeat(100);
@@ -437,7 +478,9 @@ test('digest state is per-index, compact, and not committed on failed writes', (
 	assert.deepEqual(second.search('searchable'), ['product']);
 	assert.notEqual(first.__wcposSearchDigests, second.__wcposSearchDigests);
 	assert.equal(first.__wcposSearchDigests.size, 1);
-	assert.match(first.__wcposSearchDigests.get('product'), /^1100:-?\d{1,10}$/);
+	// The EXACT text, not a digest: 'AaAa' and 'BBBB' share a 32-bit hash, and a collision
+	// here silently freezes that document's search results.
+	assert.equal(first.__wcposSearchDigests.get('product'), text);
 	const update = first.update;
 	first.update = () => {
 		throw new Error('write failed');
