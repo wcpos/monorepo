@@ -1,6 +1,6 @@
 // Three refresh intervals: a closed/frozen tab or lost revocation expires on its own.
 const OWNERSHIP_LEASE_TTL_MS = 3000;
-export const REVOCATION_DRAIN_MS = 2000; // A wedged queue must not block the ack forever.
+export const REVOCATION_DRAIN_MS = 2000; // Report a wedged queue without acknowledging a false drain.
 
 export function createRepairOwnership({ channelName }) {
 	let owned = new Set();
@@ -50,6 +50,10 @@ export function createRepairOwnership({ channelName }) {
 						}),
 					]);
 					clearTimeout(timer);
+					if (expired) {
+						channel.postMessage({ type: 'ownership-drain-timeout', seq: data.seq });
+						return;
+					}
 				}
 				channel.postMessage({ type: 'ownership-ack', seq: data.seq });
 			}

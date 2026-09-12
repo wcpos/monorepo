@@ -117,7 +117,7 @@ test('leadership resolving after pre-close never re-adds the database', async ()
 	const { plugin, channel } = await setup();
 	const db = fakeDatabase(plugin);
 	db.start();
-	await db.close();
+	await closeAndAck(db, channel);
 	db.lead(true);
 	await settle();
 	expect(channel.postMessage.mock.calls).toEqual([[ownership()]]);
@@ -188,19 +188,17 @@ test('pre-close waits for its own revocation ack, not an earlier publication', a
 	expect(closed).toBe(true);
 });
 
-test('the ack timeout outlasts the worker drain and both sides use the same drain bound', async () => {
-	const { REVOCATION_DRAIN_MS, REVOCATION_ACK_TIMEOUT_MS } = await import('./repair-ownership');
+test('the ack timeout outlasts the worker drain', async () => {
+	const { REVOCATION_ACK_TIMEOUT_MS } = await import('./repair-ownership');
 	const worker = readFileSync(
 		resolve(__dirname, '../../../../scripts/opfs-repair-ownership.mjs'),
 		'utf8'
 	);
 	const drain = Number(worker.match(/const REVOCATION_DRAIN_MS = (\d+)/)?.[1]);
-	expect(REVOCATION_DRAIN_MS).toBe(drain);
-	expect(REVOCATION_ACK_TIMEOUT_MS).toBe(drain + 500);
 	expect(REVOCATION_ACK_TIMEOUT_MS).toBeGreaterThan(drain);
 });
 
-test('pre-close resolves at an ack arriving after 1.9 seconds, not the old timeout', async () => {
+test('pre-close resolves at an ack arriving after 3 seconds, not the old timeout', async () => {
 	const { plugin, channel } = await setup();
 	jest.useFakeTimers();
 	try {
@@ -210,8 +208,8 @@ test('pre-close resolves at an ack arriving after 1.9 seconds, not the old timeo
 			closed = true;
 		});
 		const seq = channel.postMessage.mock.lastCall?.[0].seq;
-		setTimeout(() => channel.onmessage?.({ data: { type: 'ownership-ack', seq } }), 1900);
-		await jest.advanceTimersByTimeAsync(1899);
+		setTimeout(() => channel.onmessage?.({ data: { type: 'ownership-ack', seq } }), 3000);
+		await jest.advanceTimersByTimeAsync(2999);
 		expect(closed).toBe(false);
 		await jest.advanceTimersByTimeAsync(1);
 		await closing;
@@ -222,7 +220,7 @@ test('pre-close resolves at an ack arriving after 1.9 seconds, not the old timeo
 	}
 });
 
-test('a dead worker bounds pre-close waiting to the drain bound plus 500 ms', async () => {
+test('a dead worker bounds pre-close waiting to 10 seconds', async () => {
 	const { plugin } = await setup();
 	jest.useFakeTimers();
 	try {
@@ -231,7 +229,7 @@ test('a dead worker bounds pre-close waiting to the drain bound plus 500 ms', as
 		const closing = Promise.resolve(db.close()).then(() => {
 			closed = true;
 		});
-		await jest.advanceTimersByTimeAsync(2499);
+		await jest.advanceTimersByTimeAsync(9999);
 		expect(closed).toBe(false);
 		await jest.advanceTimersByTimeAsync(1);
 		await closing;
@@ -241,6 +239,37 @@ test('a dead worker bounds pre-close waiting to the drain bound plus 500 ms', as
 		jest.useRealTimers();
 	}
 });
+
+test.each(['ack', 'deadline'])(
+	'a drain timeout is logged but close waits for the %s',
+	async (end) => {
+		const { plugin, channel } = await setup();
+		jest.useFakeTimers();
+		try {
+			const db = fakeDatabase(plugin);
+			let closed = false;
+			const closing = Promise.resolve(db.close()).then(() => {
+				closed = true;
+			});
+			const seq = channel.postMessage.mock.lastCall?.[0].seq;
+			await jest.advanceTimersByTimeAsync(2000);
+			channel.onmessage?.({ data: { type: 'ownership-drain-timeout', seq } });
+			expect(mockWarn).toHaveBeenCalledTimes(1);
+			expect(mockWarn).toHaveBeenCalledWith(expect.stringMatching(/drain.*timed out/i), {
+				context: { seq },
+			});
+			await jest.advanceTimersByTimeAsync(end === 'ack' ? 1000 : 7999);
+			expect(closed).toBe(false);
+			if (end === 'ack') channel.onmessage?.({ data: { type: 'ownership-ack', seq } });
+			else await jest.advanceTimersByTimeAsync(1);
+			await closing;
+			expect(closed).toBe(true);
+			expect(jest.getTimerCount()).toBe(0);
+		} finally {
+			jest.useRealTimers();
+		}
+	}
+);
 
 test('renews live ownership until the last leader closes', async () => {
 	const { plugin, channel } = await setup();
@@ -258,11 +287,11 @@ test('renews live ownership until the last leader closes', async () => {
 		expect(channel.postMessage).toHaveBeenCalledTimes(1);
 		expect(channel.postMessage).toHaveBeenLastCalledWith(ownership('store', 'other'));
 		const closingFirst = first.close();
-		await jest.advanceTimersByTimeAsync(2500);
+		await jest.advanceTimersByTimeAsync(10000);
 		await closingFirst;
 		expect(channel.postMessage).toHaveBeenLastCalledWith(ownership('other'));
 		const closingSecond = second.close();
-		await jest.advanceTimersByTimeAsync(2500);
+		await jest.advanceTimersByTimeAsync(10000);
 		await closingSecond;
 		channel.postMessage.mockClear();
 		await jest.advanceTimersByTimeAsync(4000);

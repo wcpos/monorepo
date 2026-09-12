@@ -176,7 +176,31 @@ test('revocation drains a 300 ms task and work enqueued just after its first idl
 	assert.deepEqual(channel.messages.at(-1), { type: 'ownership-ack', seq: 2 });
 });
 
-test('a wedged queue bounds the revocation drain', async (t) => {
+test('a queue that goes idle at 1.5 seconds acknowledges after two stable observations', async () => {
+	const ownership = createRepairOwnership({ channelName: 'tab' });
+	let observations = 0;
+	const queue = new Promise((resolve) => setTimeout(resolve, 1500));
+	ownership.onInstance(
+		{
+			taskQueue: {
+				queue,
+				awaitIdle: () => {
+					observations++;
+					return queue;
+				},
+			},
+			close() {},
+		},
+		params
+	);
+	await channel.onmessage({ data: { type: 'ownership', owned: ['store'], seq: 1 } });
+	await channel.onmessage({ data: { type: 'ownership', owned: [], seq: 2 } });
+	assert.equal(observations, 2);
+	assert.equal(ownership.ownsRepairs(params), false);
+	assert.deepEqual(channel.messages.at(-1), { type: 'ownership-ack', seq: 2 });
+});
+
+test('a wedged queue reports a drain timeout without acknowledging revocation', async (t) => {
 	t.mock.timers.enable({ apis: ['setTimeout'] });
 	const ownership = createRepairOwnership({ channelName: 'tab' });
 	ownership.onInstance(
@@ -190,5 +214,10 @@ test('a wedged queue bounds the revocation drain', async (t) => {
 	assert.equal(channel.messages.at(-1).seq, 1);
 	t.mock.timers.tick(1);
 	await revoking;
-	assert.equal(channel.messages.at(-1).seq, 2);
+	assert.equal(ownership.ownsRepairs(params), false);
+	assert.deepEqual(channel.messages.at(-1), { type: 'ownership-drain-timeout', seq: 2 });
+	assert.equal(
+		channel.messages.some(({ type, seq }) => type === 'ownership-ack' && seq === 2),
+		false
+	);
 });

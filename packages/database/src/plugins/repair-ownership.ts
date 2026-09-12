@@ -2,10 +2,10 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import type { RxDatabase, RxPlugin } from 'rxdb';
 
-// Kept in sync with the plain ESM worker by repair-ownership.test.ts.
-export const REVOCATION_DRAIN_MS = 2000;
-// The ack is a drain barrier: the bounded wait must outlast the worker drain.
-export const REVOCATION_ACK_TIMEOUT_MS = REVOCATION_DRAIN_MS + 500;
+// Closing is rare (store switch, logout); a worker that cannot drain in ten seconds is wedged.
+// Release leadership then so the app can proceed; lease expiry and in-lock ownership rechecks
+// bound what such a worker can still do.
+export const REVOCATION_ACK_TIMEOUT_MS = 10_000;
 const OWNERSHIP_LEASE_REFRESH_MS = 1000;
 const storageLogger = getLogger(['wcpos', 'db', 'storage']);
 let channelName: string;
@@ -43,6 +43,10 @@ export function createRepairOwnershipPlugin({ channelName }: { channelName: stri
 		channel.onmessage = ({ data }) => {
 			if (data?.type === 'hello') publish();
 			if (data?.type === 'ownership-ack') pendingAcks.get(data.seq)?.();
+			if (data?.type === 'ownership-drain-timeout')
+				storageLogger.warn('Repair ownership drain timed out; waiting for acknowledgment', {
+					context: { seq: data.seq },
+				});
 		};
 	plugin = {
 		name: 'wcpos-repair-ownership',
