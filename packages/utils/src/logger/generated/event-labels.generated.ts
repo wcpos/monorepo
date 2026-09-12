@@ -817,7 +817,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_approval_granted',
 		description:
 			'A manager approved a drawer count whose difference was over your store’s threshold.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.approval-refused': {
 		type: 'register.approval-refused',
@@ -826,7 +826,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Approval for the count was refused',
 		descriptionKey: 'health.logs.event_description.register_approval_refused',
 		description: 'An attempt to approve a drawer count over the threshold was refused.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.bound': {
 		type: 'register.bound',
@@ -836,7 +836,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_bound',
 		description:
 			'This device was linked to a register, so its sales now record where they were taken.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.counting-abandoned': {
 		type: 'register.counting-abandoned',
@@ -845,7 +845,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Went back to selling without closing',
 		descriptionKey: 'health.logs.event_description.register_counting_abandoned',
 		description: 'Counting the drawer was stopped and the register stayed open.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.counting-started': {
 		type: 'register.counting-started',
@@ -854,7 +854,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Started counting the drawer',
 		descriptionKey: 'health.logs.event_description.register_counting_started',
 		description: 'The drawer count began. Cash movements cannot be recorded after this point.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.directory-unavailable': {
 		type: 'register.directory-unavailable',
@@ -864,7 +864,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_directory_unavailable',
 		description:
 			'Your store’s registers could not be fetched, so this device may not be able to link to one.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.drawer-opened': {
 		type: 'register.drawer-opened',
@@ -873,7 +873,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Cash drawer opened',
 		descriptionKey: 'health.logs.event_description.register_drawer_opened',
 		description: 'The cash drawer was opened without a sale.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.movement-accepted': {
 		type: 'register.movement-accepted',
@@ -882,7 +882,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Your store recorded a cash movement',
 		descriptionKey: 'health.logs.event_description.register_movement_accepted',
 		description: 'A paid in, paid out or no sale reached your store and was accepted.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.movement-recorded': {
 		type: 'register.movement-recorded',
@@ -891,7 +891,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Cash moved in or out of the drawer',
 		descriptionKey: 'health.logs.event_description.register_movement_recorded',
 		description: 'Cash was paid into or out of the drawer on this device.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.movement-rejected': {
 		type: 'register.movement-rejected',
@@ -901,7 +901,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_movement_rejected',
 		description:
 			'Your store refused a cash movement, so the drawer and your store no longer agree.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.movement-retrying': {
 		type: 'register.movement-retrying',
@@ -910,7 +910,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Trying a cash movement again',
 		descriptionKey: 'health.logs.event_description.register_movement_retrying',
 		description: 'A cash movement did not reach your store and will be sent again.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.movement-voided': {
 		type: 'register.movement-voided',
@@ -919,7 +919,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'A cash movement was reversed',
 		descriptionKey: 'health.logs.event_description.register_movement_voided',
 		description: 'An earlier paid in or paid out was reversed.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.session-adopted': {
 		type: 'register.session-adopted',
@@ -929,7 +929,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_session_adopted',
 		description:
 			'Another device opened this register, so the session here is no longer the active one.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.session-closed': {
 		type: 'register.session-closed',
@@ -938,7 +938,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Register closed',
 		descriptionKey: 'health.logs.event_description.register_session_closed',
 		description: 'The drawer was counted and the register was closed.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.session-opened': {
 		type: 'register.session-opened',
@@ -947,7 +947,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Register opened',
 		descriptionKey: 'health.logs.event_description.register_session_opened',
 		description: 'A register session was started and the opening float recorded.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.session-pruned': {
 		type: 'register.session-pruned',
@@ -956,7 +956,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Removed an expired register session',
 		descriptionKey: 'health.logs.event_description.register_session_pruned',
 		description: 'An old register session and its cash movements were cleared from this device.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.session-refresh-failed': {
 		type: 'register.session-refresh-failed',
@@ -965,7 +965,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Could not refresh the register session',
 		descriptionKey: 'health.logs.event_description.register_session_refresh_failed',
 		description: 'The register session could not be brought up to date with your store.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.switched': {
 		type: 'register.switched',
@@ -974,7 +974,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Switched to another register',
 		descriptionKey: 'health.logs.event_description.register_switched',
 		description: 'This device was moved from one register to another.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.unbound': {
 		type: 'register.unbound',
@@ -984,7 +984,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_unbound',
 		description:
 			'This device is no longer linked to a register, so its sales do not record where they were taken.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.variance-over-threshold': {
 		type: 'register.variance-over-threshold',
@@ -994,7 +994,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_variance_over_threshold',
 		description:
 			'The drawer count differs from the expected total by more than your store allows without approval.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.x-report-printed': {
 		type: 'register.x-report-printed',
@@ -1003,7 +1003,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Printed an X-report',
 		descriptionKey: 'health.logs.event_description.register_x_report_printed',
 		description: 'A mid-shift summary of the register was printed. The register stayed open.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'signal.cursor': {
 		type: 'signal.cursor',
