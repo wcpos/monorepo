@@ -99,4 +99,6 @@ test('counts denominations, closes, and returns to the open register card', asyn
 	await page.getByTestId('closure-done').click();
 	await expect(page.getByTestId('closure-sheet')).toHaveCount(0);
 	await expect(page.getByTestId('open-register-card')).toBeVisible();
+	// Routes stay armed after the last assertion; a late fetch would otherwise abort the run.
+	await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
