@@ -547,6 +547,153 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"type": "register.approval-granted",
+		"domain": "REGISTER",
+		"label": "A manager approved the count",
+		"description": "A manager approved a drawer count whose difference was over your store’s threshold.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.approval-refused",
+		"domain": "REGISTER",
+		"label": "Approval for the count was refused",
+		"description": "An attempt to approve a drawer count over the threshold was refused.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.bound",
+		"domain": "REGISTER",
+		"label": "This device was linked to a register",
+		"description": "This device was linked to a register, so its sales now record where they were taken.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.counting-abandoned",
+		"domain": "REGISTER",
+		"label": "Went back to selling without closing",
+		"description": "Counting the drawer was stopped and the register stayed open.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.counting-started",
+		"domain": "REGISTER",
+		"label": "Started counting the drawer",
+		"description": "The drawer count began. Cash movements cannot be recorded after this point.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.directory-unavailable",
+		"domain": "REGISTER",
+		"label": "The list of registers could not be loaded",
+		"description": "Your store’s registers could not be fetched, so this device may not be able to link to one.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.drawer-opened",
+		"domain": "REGISTER",
+		"label": "Cash drawer opened",
+		"description": "The cash drawer was opened without a sale.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.movement-accepted",
+		"domain": "REGISTER",
+		"label": "Your store recorded a cash movement",
+		"description": "A paid in, paid out or no sale reached your store and was accepted.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.movement-recorded",
+		"domain": "REGISTER",
+		"label": "Cash moved in or out of the drawer",
+		"description": "Cash was paid into or out of the drawer on this device.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.movement-rejected",
+		"domain": "REGISTER",
+		"label": "Your store refused a cash movement",
+		"description": "Your store refused a cash movement, so the drawer and your store no longer agree.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.movement-retrying",
+		"domain": "REGISTER",
+		"label": "Trying a cash movement again",
+		"description": "A cash movement did not reach your store and will be sent again.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.movement-voided",
+		"domain": "REGISTER",
+		"label": "A cash movement was reversed",
+		"description": "An earlier paid in or paid out was reversed.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.session-adopted",
+		"domain": "REGISTER",
+		"label": "The register was taken over by another device",
+		"description": "Another device opened this register, so the session here is no longer the active one.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.session-closed",
+		"domain": "REGISTER",
+		"label": "Register closed",
+		"description": "The drawer was counted and the register was closed.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.session-opened",
+		"domain": "REGISTER",
+		"label": "Register opened",
+		"description": "A register session was started and the opening float recorded.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.session-pruned",
+		"domain": "REGISTER",
+		"label": "Removed an expired register session",
+		"description": "An old register session and its cash movements were cleared from this device.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.session-refresh-failed",
+		"domain": "REGISTER",
+		"label": "Could not refresh the register session",
+		"description": "The register session could not be brought up to date with your store.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.switched",
+		"domain": "REGISTER",
+		"label": "Switched to another register",
+		"description": "This device was moved from one register to another.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.unbound",
+		"domain": "REGISTER",
+		"label": "This device was unlinked from its register",
+		"description": "This device is no longer linked to a register, so its sales do not record where they were taken.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.variance-over-threshold",
+		"domain": "REGISTER",
+		"label": "The counted drawer differs from the expected amount",
+		"description": "The drawer count differs from the expected total by more than your store allows without approval.",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"type": "register.x-report-printed",
+		"domain": "REGISTER",
+		"label": "Printed an X-report",
+		"description": "A mid-shift summary of the register was printed. The register stayed open.",
+		"introducedIn": "1.11.0"
+	},
+	{
 		"type": "signal.cursor",
 		"domain": "SYNC",
 		"label": "Sync position moved unexpectedly",

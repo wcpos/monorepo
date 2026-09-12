@@ -39,6 +39,12 @@ export const EVENT_SOURCE_ROOTS = [
 	// titles the same way. Scoped to its own directory for the same reason as
 	// the email queue above.
 	'packages/core/src/screens/main/components/online-status',
+	// The register writes `context.type` rows for the cash events a merchant is
+	// audited on — opening a float, paying in or out, counting and closing.
+	// Scoped to the two register service directories for the same reason as the
+	// email queue above: every register event is emitted from here by design.
+	'packages/core/src/services/register-session',
+	'packages/core/src/services/register',
 ];
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
