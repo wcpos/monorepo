@@ -120,13 +120,38 @@ it('degrades after ten seconds and still refreshes reduced stock from the local 
 	expect(c.stockRelease).toHaveBeenCalledTimes(2);
 });
 
-it('warns on rejected readiness and still refreshes reduced stock', async () => {
+it('records a recovered arc when the refresh never answers within its bound', async () => {
+	const c = setup();
+	// A store that never answers used to look exactly like one that answered instantly:
+	// the race resolved on the timer and completion carried on with no row at all.
+	c.orderHandle.ready = new Promise(() => {});
+	const completion = reconcileCompletedOrder(c.runtime, c.order);
+	await jest.advanceTimersByTimeAsync(10_000);
+	await completion;
+	expect(getLogger(['wcpos', 'pos', 'checkout']).debug).toHaveBeenCalledWith(
+		'Post-payment order refresh timed out; completing from the local record',
+		expect.objectContaining({
+			terminal: expect.objectContaining({ outcome: 'recovered' }),
+			context: expect.objectContaining({ orderId: 'order-42', timeoutMs: 10_000 }),
+		})
+	);
+	expect(c.release).toHaveBeenCalledTimes(1);
+	expect(c.stockRelease).toHaveBeenCalledTimes(2);
+});
+
+it('records a recovered arc on rejected readiness and still refreshes reduced stock', async () => {
 	const c = setup();
 	c.orderHandle.ready = Promise.reject(new Error('network unavailable'));
 	await reconcileCompletedOrder(c.runtime, c.order);
-	expect(getLogger(['wcpos', 'pos', 'checkout']).warn).toHaveBeenCalledWith(
+	// The sale completed from the local record, so per LEVELS.md this arc recovered —
+	// warning here told the merchant something was broken when nothing was.
+	expect(getLogger(['wcpos', 'pos', 'checkout']).warn).not.toHaveBeenCalled();
+	expect(getLogger(['wcpos', 'pos', 'checkout']).debug).toHaveBeenCalledWith(
 		'Post-payment order refresh failed; completing from the local record',
-		{ context: { orderId: 'order-42', error: 'network unavailable' } }
+		expect.objectContaining({
+			terminal: expect.objectContaining({ outcome: 'recovered' }),
+			context: expect.objectContaining({ orderId: 'order-42', error: 'network unavailable' }),
+		})
 	);
 	expect(c.release).toHaveBeenCalledTimes(1);
 	expect(c.requireRefresh).toHaveBeenCalledTimes(3);

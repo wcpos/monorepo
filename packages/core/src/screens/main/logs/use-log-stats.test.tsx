@@ -32,17 +32,27 @@ describe('useLogStats', () => {
 		mockFind.mockReturnValue({ $: of([]) });
 	});
 
-	it('queries every retained sync record outcome before deriving stuck records', async () => {
+	it('queries every retained record outcome in the sync and money domains before deriving stuck records', async () => {
 		renderHook(() => useLogStats());
 
-		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(2));
-		expect(mockFind).toHaveBeenCalledWith({
-			selector: {
-				category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' },
-				operationType: { $eq: 'sync.record' },
-			},
-			sort: [{ timestamp: 'desc' }],
-		});
+		// Three stuck-record range scans (sync, payments, checkout) plus the clock-skew
+		// query. A refused payment is written under `wcpos.payments`, and scanning only
+		// the sync range is why a till could lose one and still report 0 stuck.
+		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(5));
+		for (const domain of [
+			'wcpos.sync',
+			'wcpos.payments',
+			'wcpos.checkout',
+			'wcpos.terminal-payments',
+		]) {
+			expect(mockFind).toHaveBeenCalledWith({
+				selector: {
+					category: { $gte: domain, $lt: `${domain}/` },
+					operationType: { $eq: 'sync.record' },
+				},
+				sort: [{ timestamp: 'desc' }],
+			});
+		}
 	});
 
 	it('derives the clock-skew warning from engine warn rows', async () => {

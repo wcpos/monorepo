@@ -23,7 +23,11 @@ export type ErrorCode =
 	| 'CHECKOUT211'
 	| 'CHECKOUT301'
 	| 'PAYMENT101'
+	| 'PAYMENT111'
+	| 'PAYMENT121'
 	| 'PAYMENT201'
+	| 'PAYMENT211'
+	| 'PAYMENT221'
 	| 'PAYMENT301'
 	| 'PAYMENT401'
 	| 'PAYMENT501'
@@ -45,6 +49,7 @@ export type ErrorCode =
 	| 'SYNC999'
 	| 'AUTH999'
 	| 'CHECKOUT999'
+	| 'PAYMENT511'
 	| 'PAYMENT999'
 	| 'PRINT999'
 	| 'PRODUCT999'
@@ -320,6 +325,24 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'money-moved',
 		summary: 'Payment succeeded, but WCPOS could not refresh its status afterward.',
 	},
+	PAYMENT111: {
+		code: 'PAYMENT111',
+		symbol: 'PAYMENT_RECORDED_NOT_MIRRORED',
+		domain: 'PAYMENT',
+		severity: 'warn',
+		actionHint: 'No action needed — the store has the payment; this till is catching up.',
+		dataSafety: 'money-moved',
+		summary: 'The store recorded this payment, but the till could not save its own copy.',
+	},
+	PAYMENT121: {
+		code: 'PAYMENT121',
+		symbol: 'PAYMENT_CAPTURED_ORDER_UNFINISHED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Do not charge again — open the order and finish it.',
+		dataSafety: 'money-moved',
+		summary: 'The card was charged, but the order did not finish.',
+	},
 	PAYMENT201: {
 		code: 'PAYMENT201',
 		symbol: 'PAYMENT_OUTCOME_UNKNOWN',
@@ -328,6 +351,24 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Check the terminal and provider dashboard before re-charging.',
 		dataSafety: 'outcome-unknown',
 		summary: 'WCPOS could not confirm whether the terminal charged the payment.',
+	},
+	PAYMENT211: {
+		code: 'PAYMENT211',
+		symbol: 'PAYMENT_TERMINAL_REFUSED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Ask for another card or take a different payment method.',
+		dataSafety: 'no-impact',
+		summary: 'The terminal did not take this payment.',
+	},
+	PAYMENT221: {
+		code: 'PAYMENT221',
+		symbol: 'PAYMENT_VOID_REFUSED',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Refund the named payments from the order — the money is still held.',
+		dataSafety: 'money-moved',
+		summary: 'A payment could not be voided, so that money is still held.',
 	},
 	PAYMENT301: {
 		code: 'PAYMENT301',
@@ -520,6 +561,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		actionHint: 'Check WooCommerce → Orders before retrying. Do not re-charge.',
 		dataSafety: 'outcome-unknown',
 		summary: 'Checkout hit an unexpected problem.',
+	},
+	PAYMENT511: {
+		code: 'PAYMENT511',
+		symbol: 'PAYMENT_EXCEEDS_BALANCE',
+		domain: 'PAYMENT',
+		severity: 'error',
+		actionHint: 'Refund the difference — the store only owed part of what was taken.',
+		dataSafety: 'money-moved',
+		summary: 'More was taken at the till than the order still owed.',
 	},
 	PAYMENT999: {
 		code: 'PAYMENT999',
@@ -1000,7 +1050,11 @@ export const ERROR_CODES = {
 	CHECKOUT_EMPTY_RESPONSE: 'CHECKOUT211',
 	SKU_DUPLICATE: 'CHECKOUT301',
 	PAYMENT_OK_STATUS_CHECK_FAILED: 'PAYMENT101',
+	PAYMENT_RECORDED_NOT_MIRRORED: 'PAYMENT111',
+	PAYMENT_CAPTURED_ORDER_UNFINISHED: 'PAYMENT121',
 	PAYMENT_OUTCOME_UNKNOWN: 'PAYMENT201',
+	PAYMENT_TERMINAL_REFUSED: 'PAYMENT211',
+	PAYMENT_VOID_REFUSED: 'PAYMENT221',
 	GATEWAY_UNAVAILABLE: 'PAYMENT301',
 	TERMINAL_PAIRING_INCOMPLETE: 'PAYMENT401',
 	PAYMENT_ALREADY_PAID_ONLINE: 'PAYMENT501',
@@ -1022,6 +1076,7 @@ export const ERROR_CODES = {
 	SYNC_UNEXPECTED: 'SYNC999',
 	AUTH_UNEXPECTED: 'AUTH999',
 	CHECKOUT_UNEXPECTED: 'CHECKOUT999',
+	PAYMENT_EXCEEDS_BALANCE: 'PAYMENT511',
 	PAYMENT_UNEXPECTED: 'PAYMENT999',
 	PRINT_UNEXPECTED: 'PRINT999',
 	PRODUCT_UNEXPECTED: 'PRODUCT999',

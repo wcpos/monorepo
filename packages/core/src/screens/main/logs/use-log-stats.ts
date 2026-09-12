@@ -20,6 +20,17 @@ import type { Observable } from 'rxjs';
 /** Re-derive the day boundary once a minute. */
 const REFRESH_MS = 60_000;
 
+/**
+ * Log categories whose settled `sync.record` rows count towards stuck records.
+ * Each is scanned as a prefix range on the `[category, timestamp]` index.
+ */
+const STUCK_RECORD_DOMAINS = [
+	'wcpos.sync',
+	'wcpos.payments',
+	'wcpos.checkout',
+	'wcpos.terminal-payments',
+] as const;
+
 export type LogStats = {
 	/**
 	 * LOG VOLUME, not a fault-counter family (CONTEXT.md § Language — Fault
@@ -70,15 +81,36 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 			// on `timestamp` silently un-sticks real failures. Retention (30 days)
 			// is the honest horizon. The `[category, timestamp]` index bounds the
 			// scan to the sync domain; `operationType` narrows it to outcome rows.
-			const stuck$ = logsCollection
-				.find({
-					selector: {
-						category: { $gte: 'wcpos.sync', $lt: 'wcpos.sync/' },
-						operationType: { $eq: 'sync.record' },
-					},
-					sort: [{ timestamp: 'desc' }],
-				})
-				.$.pipe(map((docs) => deriveStuckRecords(docs.map((doc) => doc.toJSON()))));
+			// One range scan per domain that writes settled record outcomes, merged before
+			// the derivation rules per record. A refused payment is written by the checkout
+			// path under `wcpos.payments` with the same terminal shape as a sync rejection,
+			// and scanning only the sync range is why a till could lose a payment and still
+			// report 0 stuck.
+			const stuck$ = combineLatest(
+				STUCK_RECORD_DOMAINS.map(
+					(domain) =>
+						logsCollection.find({
+							selector: {
+								category: { $gte: domain, $lt: `${domain}/` },
+								operationType: { $eq: 'sync.record' },
+							},
+							sort: [{ timestamp: 'desc' }],
+						}).$
+				)
+			).pipe(
+				map((perDomain) =>
+					deriveStuckRecords(
+						perDomain
+							.flat()
+							.map((doc) => doc.toJSON())
+							// Each query sorts its own domain, so the concatenation is grouped by
+							// domain rather than by time. The derivation takes the FIRST row per
+							// record as decisive, so an older sync success would otherwise mask a
+							// newer payment refusal on the same order.
+							.sort((a, b) => b.timestamp - a.timestamp)
+					)
+				)
+			);
 			// The engine writes its once-per-store-open clock check to this exact
 			// category at `warn`; the derivation ignores unrelated warn rows.
 			const clockSkew$ = logsCollection

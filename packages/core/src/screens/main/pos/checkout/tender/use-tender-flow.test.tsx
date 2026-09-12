@@ -46,6 +46,7 @@ const mockStoreDB = { addState: jest.fn(async () => mockReaderState) };
 beforeEach(() => {
 	for (const key of Object.keys(mockReaderPreferences)) delete mockReaderPreferences[key];
 	mockReadersInUse.clear();
+	mockNarrated.clear();
 });
 it('stores only the reader id, separately for each method', async () => {
 	const preferences = rememberedReaders(mockStoreDB as unknown as StoreDatabase);
@@ -66,6 +67,14 @@ const mockBegin = jest.fn();
 const mockDismiss = jest.fn(() => {
 	mockLeg = null;
 });
+// Mirrors the real service: the first claim for a row wins, so a remount cannot
+// write the same settled failure twice.
+const mockNarrated = new Set<string>();
+const mockClaimFailureNarration = jest.fn((rowId: string) => {
+	if (mockNarrated.has(rowId)) return false;
+	mockNarrated.add(rowId);
+	return true;
+});
 const mockCancel = jest.fn();
 const mockCapture = jest.fn();
 const mockRelease = jest.fn();
@@ -75,6 +84,7 @@ jest.mock('../../../../../services/terminal-payments', () => ({
 			subscribe: () => () => {},
 			begin: mockBegin,
 			dismiss: mockDismiss,
+			claimFailureNarration: mockClaimFailureNarration,
 			get: () => mockLeg,
 			readersInUse: () => mockReadersInUse,
 			leg: () => ({ cancel: mockCancel, capture: mockCapture, release: mockRelease }),
@@ -107,6 +117,7 @@ const mockBlockIfDegraded = jest.fn();
 const mockReplace = jest.fn();
 const mockInfo = jest.fn();
 const mockError = jest.fn();
+const mockWarn = jest.fn();
 
 const cash = {
 	schema: 1,
@@ -169,6 +180,8 @@ jest.mock('../../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({ post: mockManualPost }),
 }));
 jest.mock('../payments', () => ({
+	RecordManualPaymentMirrorError: jest.requireActual('../payments/record-manual-payment')
+		.RecordManualPaymentMirrorError,
 	useRecordManualPayment: (options: unknown) => {
 		mockRecordOptions(options);
 		if (mockUseRealManual)
@@ -230,6 +243,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 	// initialised — so the spies are read inside the call, not captured here.
 	getLogger: () => ({
 		info: (...args: unknown[]) => mockInfo(...args),
+		warn: (...args: unknown[]) => mockWarn(...args),
 		error: (...args: unknown[]) => mockError(...args),
 	}),
 }));
@@ -535,9 +549,10 @@ describe('useTenderFlow', () => {
 
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		// Refusing silently would leave the cashier pressing a dead button.
-		expect(mockInfo).toHaveBeenCalledWith('pos_checkout.needs_a_connection', {
-			showToast: true,
-		});
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.needs_a_connection',
+			expect.objectContaining({ showToast: true })
+		);
 	});
 
 	it('returns to method selection without completing after a part payment', async () => {
@@ -742,7 +757,8 @@ describe('useTenderFlow', () => {
 
 	it('stays put when a provider reports a failed void', async () => {
 		mockVoidPayments.mockResolvedValue({
-			failed: [{ paymentId: 'payment-1', message: 'Provider refused' }],
+			rows: [],
+			failed: [{ paymentId: 'payment-1', message: 'Provider refused', refused: true }],
 		});
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.dispatch({ type: 'request-cancel' }));
@@ -753,7 +769,32 @@ describe('useTenderFlow', () => {
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockError).toHaveBeenCalledWith(
 			'pos_checkout.void_failed',
-			expect.objectContaining({ showToast: true })
+			expect.objectContaining({
+				code: 'PAYMENT221',
+				showToast: true,
+				context: expect.objectContaining({
+					paymentId: 'payment-1',
+					reason: 'payment-1: Provider refused',
+				}),
+			})
+		);
+	});
+
+	it('keeps a lost void answer outcome-unknown rather than promising a refund', async () => {
+		// A void whose answer never arrived may already have been applied; PAYMENT221's
+		// "refund these" instruction would then return the money twice.
+		mockVoidPayments.mockResolvedValue({
+			rows: [],
+			failed: [{ paymentId: 'payment-1', message: 'network', refused: false }],
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'request-cancel' }));
+
+		await act(async () => result.current.cancelPayment());
+
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.void_failed',
+			expect.objectContaining({ code: 'PAYMENT201' })
 		);
 	});
 
@@ -988,7 +1029,10 @@ describe('server tender', () => {
 			missing === 'reader'
 				? 'pos_checkout.choose_a_terminal'
 				: 'pos_checkout.order_not_on_store_yet',
-			{ showToast: true }
+			expect.objectContaining({
+				showToast: true,
+				context: expect.objectContaining({ orderUUID: 'order-1' }),
+			})
 		);
 	});
 	it('never preselects the first reader without a default', async () => {
@@ -1059,9 +1103,9 @@ describe('server tender', () => {
 	it.each([
 		['provider_declined', 'Bank says no', 'Bank says no', false],
 		['wcpos_amount_exceeds_balance', 'Too much', 'pos_checkout.payment_not_recorded', false],
-		['provider_declined', 'Bank says no', null, true],
+		['provider_declined', 'Bank says no', 'Bank says no', true],
 	] as const)(
-		'toasts only initial Take refusals (%s, polling=%s)',
+		'logs every settled refusal and toasts only the initial Take (%s, polling=%s)',
 		async (code, message, expected, polling) => {
 			const { result, rerender } = renderHook(() => useTenderFlow(order));
 			act(() => result.current.pickMethod('terminal'));
@@ -1072,14 +1116,49 @@ describe('server tender', () => {
 			}
 			mockLeg = { ...mockLeg!, phase: 'final', outcome: 'failed', error: { code, message } };
 			rerender();
-			if (expected)
-				expect(mockError).toHaveBeenCalledWith(
-					expected,
-					expect.objectContaining({ showToast: true })
-				);
-			else expect(mockError).not.toHaveBeenCalled();
+			// The row is written either way: a decline that settles while the cashier watches
+			// the timeline used to leave no record at all.
+			expect(mockError).toHaveBeenCalledWith(
+				expected,
+				expect.objectContaining({
+					// A declined card is an ordinary outcome with an ordinary answer, not
+					// "payment handling hit an unexpected problem".
+					code: 'PAYMENT211',
+					showToast: !polling,
+					terminal: expect.objectContaining({ operationId: expect.any(String) }),
+					context: expect.objectContaining({ paymentId: expect.any(String) }),
+				})
+			);
+			expect(mockError).toHaveBeenCalledTimes(1);
 		}
 	);
+	it('logs a settled failure that carries no error object, once across remounts', async () => {
+		// The ordinary asynchronous decline: a 200 whose payment row reads `failed`, with
+		// no error attached. server-leg finalizes it exactly this way.
+		const { result, rerender, unmount } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		await act(async () => result.current.takeTender());
+		mockLeg = {
+			...mockLeg!,
+			phase: 'final',
+			outcome: 'failed',
+			error: null,
+			row: { ...mockLeg!.row, status: 'failed', failure_reason: 'card_declined' },
+		};
+		rerender();
+		expect(mockError).toHaveBeenCalledWith(
+			'card_declined',
+			expect.objectContaining({ context: expect.objectContaining({ reason: 'card_declined' }) })
+		);
+		expect(mockError).toHaveBeenCalledTimes(1);
+		// Reopening the order finds the same final leg still held by the service; the row
+		// must not be written again.
+		unmount();
+		const reopened = renderHook(() => useTenderFlow(order));
+		expect(mockError).toHaveBeenCalledTimes(1);
+		reopened.unmount();
+	});
+
 	it('routes actions to the existing leg', async () => {
 		mockLeg = terminalState();
 		const { result } = renderHook(() => useTenderFlow(order));
@@ -1224,7 +1303,10 @@ describe('device tender', () => {
 			expect(result.current.deviceReady).toBe(false);
 			await act(async () => take());
 			expect(mockBegin).not.toHaveBeenCalled();
-			expect(mockInfo).toHaveBeenCalledWith('pos_checkout.reader_connecting', { showToast: true });
+			expect(mockInfo).toHaveBeenCalledWith(
+				'pos_checkout.reader_connecting',
+				expect.objectContaining({ showToast: true })
+			);
 			await act(async () => connecting);
 			expect(result.current.deviceReady).toBe(true);
 			await act(async () => take());
@@ -1253,9 +1335,10 @@ describe('device tender', () => {
 			expect(result.current.deviceReady).toBe(false);
 			await act(async () => result.current.takeTender());
 			expect(mockBegin).not.toHaveBeenCalled();
-			expect(mockInfo).toHaveBeenCalledWith('pos_checkout.reader_disconnected', {
-				showToast: true,
-			});
+			expect(mockInfo).toHaveBeenCalledWith(
+				'pos_checkout.reader_disconnected',
+				expect.objectContaining({ showToast: true })
+			);
 		}
 	);
 	it('does not locally void an offline device authorization when abandoning a split sale', async () => {
@@ -1413,6 +1496,114 @@ describe('provider completion provenance before intent', () => {
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockPushDocument).not.toHaveBeenCalled();
 	});
+});
+
+it('does not claim the store holds a payment it refused but could not mirror', async () => {
+	mockUseRealManual = true;
+	jest.clearAllMocks();
+	resetCheckoutMode();
+	mockLeg = null;
+	mockMethods = methods;
+	mockPayload = { id: 42, total: '10.00', meta_data: [] };
+	mockOnlineStatus = 'online-website-available';
+	mockBlockIfDegraded.mockReturnValue(false);
+	mockLocalPatch.mockResolvedValue(order);
+	mockPushDocument.mockResolvedValue(order);
+	// The server refuses and stores a `failed` row; mirroring that refusal then fails.
+	mockManualPost.mockRejectedValue({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_order_already_paid', data: { order: { status: 'completed' } } },
+		},
+	});
+	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
+	const view = renderHook(() => useTenderFlow(order));
+	try {
+		act(() => view.result.current.pickMethod('pos_cash'));
+		await act(async () => view.result.current.takeTender());
+
+		// Nothing was taken, so "the store has this payment, don't take it again" would
+		// both contradict the refusal the cashier was just shown and block a corrected
+		// retry. The refusal row is the one that speaks.
+		expect(mockWarn).not.toHaveBeenCalled();
+		expect(view.result.current.state).toMatchObject({ view: 'select', methodId: null });
+	} finally {
+		view.unmount();
+		mockUseRealManual = false;
+		mockManualMirror.mockReset();
+		mockManualPost.mockReset();
+	}
+});
+
+it('reports a payment the store took but the till could not mirror, and never says it was not recorded', async () => {
+	mockUseRealManual = true;
+	jest.clearAllMocks();
+	resetCheckoutMode();
+	mockLeg = null;
+	mockMethods = methods;
+	mockPayload = { id: 42, total: '10.00', meta_data: [] };
+	mockOnlineStatus = 'online-website-available';
+	mockBlockIfDegraded.mockReturnValue(false);
+	mockLocalPatch.mockResolvedValue(order);
+	mockPushDocument.mockResolvedValue(order);
+	// The store answers 2xx and settles the order; only the local mirror fails.
+	mockManualPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
+	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
+	const view = renderHook(() => useTenderFlow(order));
+	try {
+		act(() => view.result.current.pickMethod('pos_cash'));
+		await act(async () => view.result.current.takeTender());
+
+		expect(mockWarn).toHaveBeenCalledWith(
+			'pos_checkout.payment_recorded_not_synced',
+			expect.objectContaining({
+				code: 'PAYMENT111',
+				showToast: true,
+				context: expect.objectContaining({ orderId: 42, paymentId: expect.any(String) }),
+			})
+		);
+		expect(mockError).not.toHaveBeenCalled();
+		// The store said the order is settled, so the sale still finishes.
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: true });
+	} finally {
+		view.unmount();
+		mockUseRealManual = false;
+		mockManualMirror.mockReset();
+	}
+});
+
+it('keeps the pane on the balance the store reports when a partial payment could not be mirrored', async () => {
+	mockUseRealManual = true;
+	jest.clearAllMocks();
+	resetCheckoutMode();
+	mockLeg = null;
+	mockMethods = methods;
+	mockPayload = { id: 42, total: '10.00', meta_data: [] };
+	mockOnlineStatus = 'online-website-available';
+	mockBlockIfDegraded.mockReturnValue(false);
+	mockLocalPatch.mockResolvedValue(order);
+	mockPushDocument.mockResolvedValue(order);
+	mockManualPost.mockResolvedValue({ data: { order: { status: 'pos-open', balance: '5.00' } } });
+	mockManualMirror.mockRejectedValue(new Error('resident write failed'));
+	const view = renderHook(() => useTenderFlow(order));
+	try {
+		act(() => view.result.current.pickMethod('pos_cash'));
+		act(() => view.result.current.dispatch({ type: 'set-entry', minor: 500 }));
+		await act(async () => view.result.current.takeTender());
+
+		expect(mockWarn).toHaveBeenCalledTimes(1);
+		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		// The resident order is the copy that failed to save, and the recovery refresh may
+		// not have landed, so the derived balance is still the pre-payment one. What must
+		// not happen is the keypad pre-typing the whole balance again on a payment the store
+		// already took: folding the accepted row into the pane's own ledger re-types the 5.00
+		// that is actually left.
+		expect(view.result.current.state).toMatchObject({ entryMinor: 500, methodId: 'pos_cash' });
+	} finally {
+		view.unmount();
+		mockUseRealManual = false;
+		mockManualMirror.mockReset();
+	}
 });
 
 it('resets a failed manual tender without logging a second error or toast', async () => {
