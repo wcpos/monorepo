@@ -70,7 +70,7 @@ async function showReaderChips(page: Page): Promise<void> {
 
 async function takeTerminal(page: Page, orderId: number, reader: string): Promise<void> {
 	const intent = terminalResponse(page, orderId, 'intent');
-	await page.getByTestId('checkout-take-payment').click();
+	await page.getByTestId('checkout-commit').click();
 	const response = await intent;
 	expect(response.status(), 'intent payment POST must succeed').toBeLessThan(400);
 	expect(response.request().postDataJSON()).toMatchObject({ context: { reader } });
@@ -102,13 +102,13 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			const terminal = simulatedTerminal(descriptors);
 			liveTest.skip(!terminal, 'store has no simulated terminal provider');
 			const balance = await readAmountMinor(page, 'checkout-balance');
-			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await page.getByTestId(`checkout-method-${terminal!.id}`).click();
 			await expect(page.getByTestId('checkout-keypad')).toBeVisible({ timeout: 15_000 });
 			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toBeVisible();
 			// Reader selection is rendered by Button's default (primary) variant, not aria-selected.
 			await expect(page.getByTestId('checkout-reader-sim-approve')).toHaveClass(/\bbg-primary\b/);
-			await expect(page.getByTestId('checkout-take-payment')).toBeEnabled();
+			await expect(page.getByTestId('checkout-commit')).toBeEnabled();
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance);
@@ -155,7 +155,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			const terminal = simulatedTerminal(descriptors);
 			liveTest.skip(!terminal, 'store has no simulated terminal provider');
 			const balance = await readAmountMinor(page, 'checkout-balance');
-			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await page.getByTestId(`checkout-method-${terminal!.id}`).click();
 			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-decline').click();
 			await takeTerminal(page, orderId, 'sim-decline');
@@ -214,7 +214,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			);
 			const terminal = simulatedTerminal(descriptors);
 			liveTest.skip(!terminal, 'store has no simulated terminal provider');
-			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await page.getByTestId(`checkout-method-${terminal!.id}`).click();
 			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-late-capture').click();
 			await takeTerminal(page, orderId, 'sim-late-capture');
@@ -254,7 +254,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			const terminal = simulatedTerminal(descriptors);
 			liveTest.skip(!terminal, 'store has no simulated terminal provider');
 			const balance = await readAmountMinor(page, 'checkout-balance');
-			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await page.getByTestId(`checkout-method-${terminal!.id}`).click();
 			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-expire').click();
 			const voided = terminalResponse(page, orderId, 'void');
@@ -267,7 +267,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			await expect(page.getByTestId('checkout-terminal-retry')).toBeVisible();
 			await expect(page.getByTestId('checkout-terminal-another')).toBeVisible();
 			await page.getByTestId('checkout-terminal-another').click();
-			await expect(page.getByTestId(`checkout-tile-${terminal!.id}`)).toBeVisible();
+			await expect(page.getByTestId(`checkout-method-${terminal!.id}`)).toBeVisible();
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-balance'), { timeout: 30_000 })
 				.toBe(balance);
@@ -305,7 +305,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			);
 			const terminal = simulatedTerminal(descriptors);
 			liveTest.skip(!terminal, 'store has no simulated terminal provider');
-			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await page.getByTestId(`checkout-method-${terminal!.id}`).click();
 			const amount = (await page.getByTestId('checkout-entry').textContent())!;
 			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-slow').click();
@@ -364,7 +364,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 				serverA.number,
 				'use the store-assigned order number in the reader reason'
 			).toBeTruthy();
-			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await page.getByTestId(`checkout-method-${terminal!.id}`).click();
 			await showReaderChips(page);
 			await page.getByTestId('checkout-reader-sim-stuck').click();
 			await takeTerminal(page, orderA.orderId, 'sim-stuck');
@@ -376,7 +376,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			const orderB = await openCheckout(page, (order) => trackOrder({ ...order, label: labelB }));
 			expect(orderB.mode).toBe('tender');
 			expect(orderB.uuid).not.toBe(orderA.uuid);
-			await page.getByTestId(`checkout-tile-${terminal!.id}`).click();
+			await page.getByTestId(`checkout-method-${terminal!.id}`).click();
 			await showReaderChips(page);
 			await expect(page.getByTestId('checkout-reader-sim-stuck')).toBeDisabled();
 			// The reason is a sibling of the reader button; the keypad owns the complete sentence.
@@ -395,7 +395,7 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 				copy['pos_checkout.payment_released']
 			);
 			await page.getByTestId('checkout-terminal-another').click();
-			await expect(page.getByTestId(`checkout-tile-${terminal!.id}`)).toBeVisible();
+			await expect(page.getByTestId(`checkout-method-${terminal!.id}`)).toBeVisible();
 		}
 	);
 });

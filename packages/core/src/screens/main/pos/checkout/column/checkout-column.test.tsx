@@ -146,6 +146,9 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		entryAppliedMinor: 0,
 		entryChangeMinor: 0,
 		quickAmountsMinor: [],
+		readers: [],
+		lockToDefault: false,
+		deviceReady: false,
 		busy: false,
 		saveState: null,
 		pickMethod: mockPickMethod,
@@ -169,7 +172,7 @@ beforeEach(() => {
 it.each([false, true])('Cart protects a live leg: %s', (live) => {
 	mockFlow = makeFlow({ hasLiveLeg: live });
 	mountColumn();
-	fireEvent.click(screen.getByTestId('checkout-back-to-cart'));
+	fireEvent.click(screen.getByTestId('checkout-close'));
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(live);
 	if (live) expect(mockFlow.dispatch).toHaveBeenCalledWith({ type: 'request-cancel' });
 });
@@ -228,6 +231,8 @@ it('reads the ledger independently, with balance only in the tender header', () 
 	expect(mockUseFlow).toHaveBeenCalledTimes(1);
 	expect(screen.getAllByTestId('checkout-balance')).toHaveLength(1);
 	expect(screen.getByTestId('checkout-balance').textContent).toBe('$42.95');
+	expect(screen.getAllByTestId('checkout-label')).toHaveLength(1);
+	expect(screen.getByTestId('checkout-label').textContent).toContain('$42.95');
 	expect(screen.getByTestId('checkout-ledger-remaining').textContent).toBe('$42.95');
 	expect(screen.getByTestId('checkout-ledger-totals').textContent).toContain('$50.00');
 	expect(screen.getByTestId('checkout-ledger-header').textContent).toContain('Guest');
@@ -261,7 +266,7 @@ it('does not silently finish a receipt on Escape', () => {
 it('leaves a live terminal leg without whole-order cancellation', () => {
 	mockFlow = makeFlow({ hasLiveLeg: true, hasLiveTerminalLeg: true });
 	mountColumn();
-	fireEvent.click(screen.getByTestId('checkout-back-to-cart'));
+	fireEvent.click(screen.getByTestId('checkout-close'));
 	expect(getCheckoutModeSnapshot().checkoutOrders.has('order-1')).toBe(false);
 	expect(mockFlow.dispatch).not.toHaveBeenCalled();
 	expect(screen.queryByTestId('checkout-cancel-payment')).toBeNull();

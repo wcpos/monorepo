@@ -90,8 +90,8 @@ export function tenderReducer(state: TenderState, action: TenderAction): TenderS
 				methodId: action.methodId,
 				readerId: action.readerId,
 				transport: action.transport ?? null,
-				entryMinor: action.prefillMinor,
-				entryDirty: false,
+				entryMinor: state.entryDirty ? state.entryMinor : action.prefillMinor,
+				entryDirty: state.entryDirty,
 			};
 		case 'pick-transport':
 			return { ...state, transport: action.transport };

@@ -45,7 +45,7 @@ function manualMethods(descriptors: Descriptor[]): Descriptor[] {
 
 /** Tap a tile, then key in an exact minor-unit amount (digits shift in from the right). */
 async function enterAmount(page: Page, methodId: string, amountMinor: number): Promise<void> {
-	await page.getByTestId(`checkout-tile-${methodId}`).click();
+	await page.getByTestId(`checkout-method-${methodId}`).click();
 	await expect(page.getByTestId('checkout-keypad')).toBeVisible({ timeout: 15_000 });
 	await page.getByTestId('checkout-key-clear').click();
 	for (const digit of String(amountMinor)) {
@@ -105,13 +105,13 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			liveTest.skip(!cash, 'store declares no manual cash method');
 
 			const balance = await readAmountMinor(page, 'checkout-balance');
-			await page.getByTestId(`checkout-tile-${cash!.id}`).click();
+			await page.getByTestId(`checkout-method-${cash!.id}`).click();
 			// The keypad opens pre-filled with the balance — the cashier confirms, never retypes.
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance);
 
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 
 			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
 			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
@@ -163,7 +163,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(part, 'the probe order must be big enough to split').toBeGreaterThan(0);
 
 			await enterAmount(page, cash!.id, part);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 
 			// The balance falls by exactly what was taken, and the ledger shows the one leg.
 			await expect
@@ -171,12 +171,12 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 				.toBe(balance - part);
 			await expect(page.locator('[data-testid^="checkout-leg-"]')).toHaveCount(1);
 
-			await page.getByTestId(`checkout-tile-${second!.id}`).click();
+			await page.getByTestId(`checkout-method-${second!.id}`).click();
 			// Pre-filled with the REMAINING balance, so the second leg closes the order.
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-entry'), { timeout: 15_000 })
 				.toBe(balance - part);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 
 			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
 			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
@@ -227,7 +227,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const part = Math.floor(balance / 2);
 			expect(part, 'the probe order must be big enough to part-pay').toBeGreaterThan(0);
 			await enterAmount(page, cash!.id, part);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderA.orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderA.orderId, 'record');
 			const ledgerRow = page.getByTestId('checkout-ledger').getByTestId(/^checkout-leg-/);
 			await expect(ledgerRow).toHaveCount(1);
 			const legTestId = await ledgerRow.getAttribute('data-testid');
@@ -249,7 +249,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			const balanceB = await readAmountMinor(page, 'checkout-balance');
 			expect(balanceB).toBeGreaterThan(0);
 			await enterAmount(page, cash!.id, balanceB);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderB.orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderB.orderId, 'record');
 			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
 			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
 			await page.getByTestId('receipt-new-sale').click();
@@ -270,7 +270,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			await expect.poll(() => readAmountMinor(page, 'checkout-ledger-remaining')).toBe(remaining);
 			await expect.poll(() => readAmountMinor(page, 'checkout-balance')).toBe(remaining);
 			await enterAmount(page, cash!.id, remaining);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderA.orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderA.orderId, 'record');
 			await expect(page.getByTestId('checkout-receipt-stage')).toBeVisible({ timeout: 120_000 });
 			await expect(page.getByTestId('receipt-paid-banner')).toBeVisible();
 			await page.getByTestId('receipt-new-sale').click();
@@ -301,7 +301,7 @@ liveTest.describe('POS two-pane checkout (live store)', () => {
 			expect(part, 'the probe order must be big enough to part-pay').toBeGreaterThan(0);
 
 			await enterAmount(page, cash!.id, part);
-			await clickAndExpectPaymentWrite(page, 'checkout-take-payment', orderId, 'record');
+			await clickAndExpectPaymentWrite(page, 'checkout-commit', orderId, 'record');
 			await expect
 				.poll(() => readAmountMinor(page, 'checkout-balance'), { timeout: 60_000 })
 				.toBe(balance - part);

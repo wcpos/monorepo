@@ -8,7 +8,7 @@ import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
-import { initialTenderState } from './tender-state';
+import { initialTenderState, tenderReducer } from './tender-state';
 import { TenderPane } from './tender-pane';
 import { ThisPaymentLine } from './ledger-pane';
 import { ReaderConnection } from './reader-connection';
@@ -40,7 +40,9 @@ jest.mock('@wcpos/components/button', () => ({
 			{children}
 		</button>
 	),
-	ButtonText: 'span',
+	ButtonText: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+		<span className={className}>{children}</span>
+	),
 }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 // The leg view has its own suite; here it only needs to stay out of the saving skeleton's way.
@@ -70,7 +72,11 @@ jest.mock('@wcpos/components/text', () => ({
 		<span data-testid={testID}>{children}</span>
 	),
 }));
-jest.mock('@wcpos/components/hstack', () => ({ HStack: 'div' }));
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
+}));
 jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<div data-testid={testID}>{children}</div>
@@ -192,32 +198,136 @@ it('renders the refusal, not a skeleton, for a rejected save', () => {
 	expect(screen.getByTestId('checkout-refused').textContent).toContain('rest_invalid_param');
 	expect(screen.getByTestId('checkout-refused-store-health')).toBeTruthy();
 });
-it('renders tiles instead of skeletons when queued offline', () => {
-	render(
-		<TenderPane
-			flow={{ ...makeFlow(), method: null, saveState: { kind: 'queued-offline', mutationId: 'm' } }}
-			format={String}
-		/>
+it('selects methods without committing and folds unavailable reasons', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		state: { ...initialTenderState, methodId: method.id },
+		tiles: [
+			...makeFlow().tiles,
+			{
+				method: {
+					...method,
+					id: 'terminal',
+					title: 'Terminal',
+					capture: { ...method.capture, mode: 'server' },
+				},
+				disabled: true,
+				reason: 'offline' as const,
+				worksOffline: false,
+			},
+		],
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-method-pos_cash').getAttribute('data-variant')).toBe(
+		'sidebar-solid'
 	);
-	expect(screen.queryByTestId('checkout-tile-skeleton')).toBeNull();
-	expect(screen.queryByTestId('checkout-save-slow')).toBeNull();
-	expect(screen.getByTestId('checkout-tile-pos_cash')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('checkout-method-pos_cash'));
+	expect(flow.pickMethod).toHaveBeenCalledWith('pos_cash');
+	expect(flow.takeTender).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('checkout-method-terminal')).toBeNull();
+	expect(screen.queryByTestId('checkout-unavailable-terminal')).toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+	expect(screen.getByTestId('checkout-unavailable-terminal').textContent).toContain(
+		'Needs a connection'
+	);
+	fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+	expect(screen.queryByTestId('checkout-unavailable-terminal')).toBeNull();
 });
 
-it('labels the keypad leg and takes the amount in the verbatim method title', () => {
+it('keeps an offline queue-capable device method selectable', () => {
+	const flow: TenderFlow = {
+		...makeFlow(),
+		saveState: null,
+		tiles: [
+			{
+				method: deviceMethod,
+				disabled: true,
+				reason: 'offline',
+				worksOffline: false,
+			},
+		],
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	fireEvent.click(screen.getByTestId('checkout-method-device'));
+	expect(flow.pickMethod).toHaveBeenCalledWith('device');
+	expect(screen.queryByTestId('checkout-unavailable-toggle')).toBeNull();
+});
+
+it.each([
+	[9295, 9295, 9295, false, 'Take 9295 in Cash'],
+	[2000, 2000, 9295, false, 'Take 2000 in Cash · 7295 left'],
+	[10000, 9295, 9295, true, 'Take 9295 in Cash'],
+	[2000, 2000, 2000, false, 'Take 2000 in Cash · pays it off'],
+])(
+	'labels the amount and commit for entry %s, applied %s, balance %s',
+	(entry, applied, balance, change, label) => {
+		const flow = {
+			...makeFlow(),
+			saveState: null,
+			balanceMinor: balance,
+			thisPaymentMinor: applied,
+			entryAppliedMinor: applied,
+			entryChangeMinor: change ? entry - applied : 0,
+			state: {
+				...initialTenderState,
+				view: 'amount' as const,
+				methodId: method.id,
+				entryMinor: entry,
+			},
+		};
+		render(<TenderPane flow={flow} format={String} />);
+		expect(screen.getByTestId('checkout-commit').textContent).toBe(label);
+		expect(screen.getByTestId('checkout-label').textContent).toBe(
+			`${balance < 9295 ? 'Remaining' : 'To pay'} ${balance}`
+		);
+		if (change) expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('Change 705');
+		if (applied < balance)
+			expect(screen.getByTestId('checkout-entry-hint').textContent).toBe(
+				'Part payment · 7295 left after this'
+			);
+		fireEvent.click(screen.getByTestId('checkout-commit'));
+		expect(flow.takeTender).toHaveBeenCalledTimes(1);
+		fireEvent.click(screen.getByTestId('checkout-quick-exact'));
+		expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: balance });
+	}
+);
+
+it('blocks no-change over-tender and restores full balance from a partial entry', () => {
+	const card = {
+		...method,
+		title: 'Card',
+		capabilities: { ...method.capabilities, change: false },
+	};
 	const flow = {
 		...makeFlow(),
 		saveState: null,
-		entryAppliedMinor: 3100,
-		state: {
-			...initialTenderState,
-			view: 'amount' as const,
-			splitPlan: { ways: 3, shareMinor: 3100, taken: 1 },
-		},
+		method: card,
+		thisPaymentMinor: 9295,
+		entryAppliedMinor: 9295,
+		state: { ...initialTenderState, methodId: method.id, entryMinor: 10000 },
 	};
-	render(<TenderPane flow={flow} format={String} />);
-	expect(screen.getByTestId('checkout-keypad-leg').textContent).toBe(' · Payment 2 of 3');
-	expect(screen.getByTestId('checkout-take-payment').textContent).toBe('Take 3100 in Cash');
+	const { rerender } = render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe(
+		"Only 9295 is due — Card can't give change"
+	);
+	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
+	fireEvent.click(screen.getByTestId('checkout-commit'));
+	expect(flow.takeTender).not.toHaveBeenCalled();
+	rerender(
+		<TenderPane
+			flow={{
+				...flow,
+				thisPaymentMinor: 2000,
+				entryAppliedMinor: 2000,
+				state: { ...flow.state, entryMinor: 2000 },
+			}}
+			format={String}
+		/>
+	);
+	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
+	fireEvent.click(screen.getByTestId('checkout-quick-balance'));
+	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'set-entry', minor: 9295 });
 });
 
 it.each(['select', 'amount'] as const)('offers split choices from the %s view', (view) => {
@@ -299,33 +409,20 @@ it('shows plan states, clears a split, and explains a custom entry remainder', (
 	}
 });
 
-it('explains the next step for a plan, a custom amount, and ordinary payment', () => {
-	const flow = { ...makeFlow(), method: null, saveState: null, thisPaymentMinor: 3100 };
-	const { rerender } = render(
+it('keeps the keypad visible without a method and disables commit', () => {
+	render(
 		<TenderPane
-			flow={{
-				...flow,
-				state: { ...initialTenderState, splitPlan: { ways: 3, shareMinor: 3100, taken: 1 } },
-			}}
+			flow={{ ...makeFlow(), method: null, saveState: null, online: false }}
 			format={String}
+			compact
 		/>
 	);
-	expect(screen.getByText('Choose how the customer pays payment 2 of 3, 3100.')).toBeTruthy();
-	rerender(
-		<TenderPane
-			flow={{ ...flow, state: { ...initialTenderState, customAmount: true } }}
-			format={String}
-		/>
+	expect(screen.getByTestId('checkout-keypad')).toBeTruthy();
+	expect(screen.getByTestId('checkout-commit').textContent).toBe(
+		'Choose how the customer is paying'
 	);
-	expect(
-		screen.getByText('Choose the payment type, then type the amount on the keypad.')
-	).toBeTruthy();
-	rerender(<TenderPane flow={flow} format={String} />);
-	expect(
-		screen.getByText(
-			'Choose how the customer is paying. Use Split to take it in parts, or type a smaller amount after choosing a type.'
-		)
-	).toBeTruthy();
+	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('checkout-offline').textContent).toBe('Offline');
 });
 
 it.each([1, 2])('collapses a preselected reader (%s readers)', (count) => {
@@ -370,7 +467,7 @@ it('device status, discovery, bootstrap and transport choice drive payment readi
 	};
 	const rendered = render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('No reader connected');
-	expect(screen.getByTestId('checkout-take-payment').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(true);
 	await act(async () => {
 		fireEvent.click(screen.getByTestId('checkout-reader-connect'));
 	});
@@ -381,8 +478,14 @@ it('device status, discovery, bootstrap and transport choice drive payment readi
 	});
 	expect(mockBootstrap).toHaveBeenCalledWith('bluetooth');
 	expect(screen.getByTestId('checkout-reader-status').textContent).toContain('Simulated approve');
+	expect(screen.getByTestId(`checkout-method-status-${deviceMethod.id}`).textContent).toContain(
+		'82%'
+	);
+	expect(screen.getByTestId('checkout-commit').textContent).toContain(
+		`Send 1000 to ${deviceMethod.title}`
+	);
 	rendered.rerender(<TenderPane flow={{ ...flow, deviceReady: true }} format={String} />);
-	expect(screen.getByTestId('checkout-take-payment').hasAttribute('disabled')).toBe(false);
+	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
 	fireEvent.click(screen.getByTestId('checkout-transport-tap_to_pay'));
 	expect(transportChanges).toHaveBeenCalledWith('tap_to_pay');
 });
@@ -525,4 +628,35 @@ describe('reader dev controls', () => {
 		expect(devControls).not.toHaveBeenCalled();
 		expect(screen.queryByTestId('checkout-dev-control-offline')).toBeNull();
 	});
+});
+
+it('keeps typed entry when switching methods without taking money', () => {
+	const state = tenderReducer(
+		{ ...initialTenderState, view: 'amount', methodId: 'cash', entryMinor: 2000, entryDirty: true },
+		{ type: 'pick-method', methodId: 'card', prefillMinor: 9295, readerId: null }
+	);
+	expect(state.methodId).toBe('card');
+	expect(state.entryMinor).toBe(2000);
+	expect(state.entryDirty).toBe(true);
+});
+
+it('does not cap manual card at the planned split share', () => {
+	const flow = {
+		...makeFlow(),
+		saveState: null,
+		balanceMinor: 2000,
+		thisPaymentMinor: 1500,
+		entryAppliedMinor: 1500,
+		method: { ...method, title: 'Card', capabilities: { ...method.capabilities, change: false } },
+		state: {
+			...initialTenderState,
+			methodId: method.id,
+			entryMinor: 1500,
+			splitPlan: { ways: 2, shareMinor: 1000, taken: 0 },
+		},
+	};
+	render(<TenderPane flow={flow} format={String} />);
+	expect(screen.getByTestId('checkout-commit').hasAttribute('disabled')).toBe(false);
+	expect(screen.getByTestId('checkout-entry-hint').textContent).toBe('');
+	expect(screen.getByTestId('checkout-quick-balance').textContent).toBe('Exact 1000');
 });
