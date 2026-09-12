@@ -35,7 +35,7 @@ const directories = new Map<string, Directory>();
 function directory(siteUuid: string, storeId: number | undefined): Directory {
 	const key = `${siteUuid}:${storeId}`;
 	if (!directories.has(key)) {
-		const pointer = getRegisterSnapshot()?.sites[siteUuid];
+		const pointer = getRegisterSnapshot()?.sites?.[siteUuid];
 		directories.set(key, {
 			loaded: false,
 			listeners: new Set(),
@@ -56,6 +56,28 @@ function publish(entry: Directory, changes: Partial<Binding>) {
 }
 
 /** Mounted once at the store-session bridge. Readers share this one site:store directory. */
+/** One directory request per (site, store) per app session, shared by every reader. */
+function loadDirectory(
+	entry: Directory,
+	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
+	storeId: number | undefined
+): Promise<void> {
+	entry.request ??= http
+		.get('registers', storeId && storeId > 0 ? { params: { store_id: storeId } } : undefined)
+		.then((response) => {
+			entry.loaded = true;
+			publish(entry, {
+				registers: (response.data as Register[]).filter((row) => row.status === 'active'),
+			});
+		})
+		.catch(() => {
+			// A failed list request leaves the pointer and status unchanged; the next
+			// session (or reconnect) tries again.
+			entry.request = undefined;
+		});
+	return entry.request;
+}
+
 export function useRegisterBindingSession(): void {
 	const { userDB, site, store } = useStoreSession();
 	const http = useRestHttpClient();
@@ -71,15 +93,7 @@ export function useRegisterBindingSession(): void {
 				registerName: bound?.name ?? null,
 			});
 			if (!online) return;
-			entry.request ??= http
-				.get('registers', store.id && store.id > 0 ? { params: { store_id: store.id } } : undefined)
-				.then((response) => {
-					entry.loaded = true;
-					publish(entry, {
-						registers: (response.data as Register[]).filter((row) => row.status === 'active'),
-					});
-				});
-			await entry.request;
+			await loadDirectory(entry, http, store.id);
 			if (!entry.loaded) return;
 			const registers = entry.value.registers;
 			if (bound && registers.some(({ id }) => id === bound.id)) return;
@@ -106,7 +120,13 @@ export function useRegisterBindingSession(): void {
 
 export function useRegisterBinding() {
 	const { userDB, site, store } = useStoreSession();
+	const http = useRestHttpClient();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const entry = directory(site.uuid!, store.id);
+	// A reader mounted before (or without) the session hook still gets the directory.
+	React.useEffect(() => {
+		if (online && !entry.loaded) void loadDirectory(entry, http, store.id);
+	}, [entry, http, online, store.id]);
 	const subscribe = React.useCallback(
 		(notify: () => void) => {
 			entry.listeners.add(notify);

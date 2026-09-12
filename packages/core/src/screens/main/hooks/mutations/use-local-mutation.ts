@@ -23,8 +23,10 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { getBoundRegisterId, getRegisterId } from '../../../../services/register/register-document';
-import { useAppState } from '../../../../contexts/app-state';
+import {
+	getCurrentBoundRegisterId,
+	getRegisterId,
+} from '../../../../services/register/register-document';
 import { useT } from '../../../../contexts/translations';
 import {
 	getTemporaryOrder,
@@ -415,7 +417,6 @@ async function patchLocalResident<T extends EngineResident>(
 export const useLocalMutation = () => {
 	const t = useT();
 	const manager = useQueryRuntime();
-	const { site } = useAppState();
 
 	const localPatch = React.useCallback(
 		async <TDocument extends MutationDocument, TData extends object>({
@@ -511,7 +512,7 @@ export const useLocalMutation = () => {
 							recordId: recordId!,
 							changes: syncChanges,
 							initial: scopedEngineResident!,
-							registerId: site?.uuid ? (getBoundRegisterId(site.uuid) ?? undefined) : undefined,
+							registerId: getCurrentBoundRegisterId() ?? undefined,
 						});
 					} else {
 						patched = await applyEngineResidentChanges(
@@ -553,7 +554,7 @@ export const useLocalMutation = () => {
 				}
 			}
 		},
-		[manager, t, site]
+		[manager, t]
 	);
 
 	return { localPatch };

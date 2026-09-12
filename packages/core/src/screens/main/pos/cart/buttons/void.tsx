@@ -9,8 +9,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
-import { useStoreSession } from '../../../../../contexts/app-state';
-import { getBoundRegisterId } from '../../../../../services/register/register-document';
+import { getCurrentBoundRegisterId } from '../../../../../services/register/register-document';
 import { requestServerDelete } from '../../../hooks/mutations/request-server-delete';
 import {
 	findEngineResident,
@@ -35,7 +34,6 @@ const LATE_OUTCOME_TIMEOUT_MS = 120_000;
  *
  */
 export function VoidButton() {
-	const { site } = useStoreSession();
 	const currentOrder = useCurrentOrderRecord();
 	const router = useRouter();
 	const manager = useQueryRuntime();
@@ -145,7 +143,7 @@ export function VoidButton() {
 					collection: 'orders',
 					recordId,
 					changes: { status: 'pending' },
-					registerId: getBoundRegisterId(site.uuid!) ?? undefined,
+					registerId: getCurrentBoundRegisterId() ?? undefined,
 				});
 				showSuccess(t('pos_cart.order_voided_kept_pending'));
 			} catch (err) {
@@ -201,7 +199,7 @@ export function VoidButton() {
 				}
 			}
 		}
-	}, [blockIfDegraded, currentOrder, manager, t, undoRemove, site.uuid]);
+	}, [blockIfDegraded, currentOrder, manager, t, undoRemove]);
 
 	/**
 	 *

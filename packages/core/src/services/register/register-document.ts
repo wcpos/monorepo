@@ -78,11 +78,19 @@ export function observeRegister$(userDB: UserDatabase) {
 }
 
 export function getBoundRegisterId(siteUuid: string): string | null {
-	return currentRegister?.sites[siteUuid]?.register_id ?? null;
+	return currentRegister?.sites?.[siteUuid]?.register_id ?? null;
+}
+
+let currentSiteUuid: string | null = null;
+
+/** The bound register of the site last bound or read — for callers that hold no site handle. */
+export function getCurrentBoundRegisterId(): string | null {
+	return currentSiteUuid ? getBoundRegisterId(currentSiteUuid) : null;
 }
 
 export async function readBoundRegister(userDB: UserDatabase, siteUuid: string) {
-	const site = (await readRegister(userDB))?.sites[siteUuid];
+	currentSiteUuid = siteUuid;
+	const site = (await readRegister(userDB))?.sites?.[siteUuid];
 	return site?.register_id ? { id: site.register_id, name: site.register_name ?? '' } : null;
 }
 
@@ -93,6 +101,7 @@ export async function bindRegister(
 ): Promise<void> {
 	const doc = await userDB.getLocal<RegisterDocument>('register');
 	if (!doc) throw new Error('Register is not initialized');
+	currentSiteUuid = siteUuid;
 	const updated = await doc.incrementalModify((data) => ({
 		...data,
 		sites: {

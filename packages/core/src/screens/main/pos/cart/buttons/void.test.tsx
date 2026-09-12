@@ -317,12 +317,17 @@ it('stamps distinct register and till ids on the refused-void pending fallback t
 	const { patchAndEnqueueEngineResident } = jest.requireActual(
 		'../../../hooks/mutations/use-local-mutation'
 	);
-	const { readRegister } = jest.requireActual('../../../../../services/register/register-document');
-	await readRegister({
-		getLocal: async () => ({
-			toJSON: () => ({ data: { id: 'till', sites: { site: { register_id: 'register' } } } }),
-		}),
-	});
+	const { readBoundRegister } = jest.requireActual(
+		'../../../../../services/register/register-document'
+	);
+	await readBoundRegister(
+		{
+			getLocal: async () => ({
+				toJSON: () => ({ data: { id: 'till', sites: { site: { register_id: 'register' } } } }),
+			}),
+		} as never,
+		'site'
+	);
 	const stored = { payload: { status: 'pos-open' } };
 	const resident = {
 		toJSON: () => stored,
