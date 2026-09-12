@@ -137,6 +137,15 @@ it('rejects another store pointer after hydration without resetting the site cou
 	expect(getCurrentBoundRegisterId()).toBe('b');
 	expect(await nextSaleCounter(db, 'site')).toBe(2);
 });
+it('does not unbind a pointer another store of the site has written', async () => {
+	await ensureRegister(db);
+	await bindRegister(db, 'site', { id: 'drawer-a', name: 'Front' }, 1);
+	await bindRegister(db, 'site', { id: 'drawer-b', name: 'Back' }, 2);
+	await unbindRegister(db, 'site', 1);
+	expect(await readBoundRegister(db, 'site', 2)).toEqual({ id: 'drawer-b', name: 'Back' });
+	await unbindRegister(db, 'site', 2);
+	expect(await readBoundRegister(db, 'site', 2)).toBeNull();
+});
 it('accepts a legacy pointer until the next bind records its store', async () => {
 	await ensureRegister(db);
 	const doc = await db.getLocal('register');

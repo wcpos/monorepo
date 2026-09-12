@@ -131,12 +131,30 @@ export async function bindRegister(
 	currentRegister = updated.toJSON().data;
 }
 
-export function unbindRegister(
+export async function unbindRegister(
 	userDB: UserDatabase,
 	siteUuid: string,
 	storeId?: number
 ): Promise<void> {
-	return bindRegister(userDB, siteUuid, { id: null, name: null }, storeId);
+	const doc = await userDB.getLocal<RegisterDocument>('register');
+	if (!doc) throw new Error('Register is not initialized');
+	const updated = await doc.incrementalModify((data) => {
+		const site = data.sites[siteUuid];
+		// A late unbind from one store must not clear a pointer another store has since written.
+		const belongsElsewhere =
+			storeId !== undefined &&
+			site?.register_store_id != null &&
+			site.register_store_id !== storeId;
+		if (!site || belongsElsewhere) return data;
+		return {
+			...data,
+			sites: {
+				...data.sites,
+				[siteUuid]: { ...site, register_id: null, register_name: null, register_store_id: null },
+			},
+		};
+	});
+	currentRegister = updated.toJSON().data;
 }
 
 export async function nextSaleCounter(userDB: UserDatabase, siteUuid: string): Promise<number> {
