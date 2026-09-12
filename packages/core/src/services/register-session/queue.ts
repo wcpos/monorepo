@@ -376,7 +376,8 @@ async function drain({
 					period_refunds_total: server.period_refunds_total,
 					perpetual_sales_total: server.perpetual_sales_total,
 					perpetual_refunds_total: server.perpetual_refunds_total,
-					print_count: server.print_count,
+					// An offline print is not on the server yet; never lose it.
+					print_count: Math.max(row.getLatest().print_count ?? 0, server.print_count ?? 0),
 				});
 			});
 		}

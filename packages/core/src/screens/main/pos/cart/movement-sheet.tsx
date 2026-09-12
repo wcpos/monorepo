@@ -69,6 +69,7 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 			.filter(Boolean)
 			.join(' · ');
 		const title = t(closure ? 'register.z_report' : 'register.x_report');
+		const order_number = `${title} ${fiscal?.receipt_number ?? row?.server_number ?? row?.printed_number ?? row?.number ?? session?.id ?? ''}`;
 		const line_items = Object.entries(figures).map(([name, total]) => ({
 			name,
 			quantity: 1,
@@ -80,12 +81,14 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 			closure: row,
 			title,
 			store: { name: binding.registerName },
-			order_number: `${title} ${fiscal?.receipt_number ?? row?.server_number ?? row?.printed_number ?? row?.number ?? session?.id ?? ''}`,
+			order_number,
 			date_created: row?.closed_at ?? session?.opened_at_gmt,
 			line_items,
 			lines: line_items.map((line) => ({ name: `${line.name}: ${line.amount}`, qty: 1 })),
 			footer,
 			customer_note: footer,
+			// The thermal report template reads order.number and order.customer_note.
+			order: { ...(data.order as object | undefined), number: order_number, customer_note: footer },
 		};
 	};
 	const report = useReceiptDocument({

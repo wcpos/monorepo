@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { combineLatest, map, of, timer } from 'rxjs';
+import { combineLatest, map, of, switchMap, timer } from 'rxjs';
 
 import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
 import { readLedger } from '@wcpos/order-math';
@@ -32,14 +32,27 @@ export function useRegisterSession() {
 		const active$ = sessions.find({
 			selector: { register_id: binding.registerId, status: { $in: ['open', 'counting'] } },
 		}).$;
-		// An older order can be paid in this session too; ledger provenance, not birth date, binds it.
-		const orders$ = observeEngineQuery(engine, locale, {
-			collection: 'orders',
-			limit: Number.MAX_SAFE_INTEGER,
-		});
+		const closed$ = sessions.find({
+			selector: { register_id: binding.registerId, status: 'closed' },
+		}).$;
+		// An older order can be paid in this session too, so the bound is the modified date,
+		// not the birth date; ledger provenance then binds it.
+		const orders$ = combineLatest([active$, closed$]).pipe(
+			switchMap(([active, closed]) => {
+				const current =
+					active.find((row) => row.sync_status !== 'failed') ??
+					closed.find((row) => row.closure_id === row.id && row.sync_status !== 'synced');
+				if (!current) return of({ hits: [] as never[] });
+				return observeEngineQuery(engine, locale, {
+					collection: 'orders',
+					selector: { date_modified_gmt: { $gte: current.opened_at_gmt } },
+					limit: Number.MAX_SAFE_INTEGER,
+				});
+			})
+		);
 		return combineLatest([
 			active$,
-			sessions.find({ selector: { register_id: binding.registerId, status: 'closed' } }).$,
+			closed$,
 			movements.find().$,
 			orders$,
 			timer(0, 60_000),

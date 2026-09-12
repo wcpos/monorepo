@@ -137,7 +137,7 @@ export function RegisterPanel({
 								</Button>
 							</View>
 						))}
-					{!blind && (
+					{!blind && !!session && (
 						<Button
 							testID="register-panel-print"
 							className="min-h-11"
