@@ -86,7 +86,13 @@ export type ErrorCode =
 	| 'CLIENT144'
 	| 'CHECKOUT411'
 	| 'CHECKOUT421'
-	| 'DISPLAY101';
+	| 'DISPLAY101'
+	| 'REGISTER101'
+	| 'REGISTER111'
+	| 'REGISTER201'
+	| 'REGISTER211'
+	| 'REGISTER221'
+	| 'REGISTER301';
 export type ErrorDomain =
 	| 'AUTH'
 	| 'SYNC'
@@ -97,7 +103,8 @@ export type ErrorDomain =
 	| 'LICENSE'
 	| 'CLIENT'
 	| 'HOST'
-	| 'DISPLAY';
+	| 'DISPLAY'
+	| 'REGISTER';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
 export type DataSafety =
 	'no-impact' | 'local-only' | 'order-safe' | 'money-moved' | 'outcome-unknown' | 'data-at-risk';
@@ -906,6 +913,68 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		summary:
 			'The customer display could not build the cart snapshot; the display shows the idle screen until the next change.',
 	},
+	REGISTER101: {
+		code: 'REGISTER101',
+		symbol: 'CASH_MOVEMENT_REFUSED',
+		domain: 'REGISTER',
+		severity: 'error',
+		actionHint:
+			'The cash is in the drawer but not in your store — retry it from the register panel before you count.',
+		dataSafety: 'money-moved',
+		summary:
+			'Your store refused a paid in, paid out or no sale that the till has already recorded.',
+	},
+	REGISTER111: {
+		code: 'REGISTER111',
+		symbol: 'CASH_MOVEMENT_VOID_REFUSED',
+		domain: 'REGISTER',
+		severity: 'warn',
+		actionHint:
+			'The original movement still stands in your store — check it before recording anything else.',
+		dataSafety: 'local-only',
+		summary: 'Your store would not reverse a cash movement, so the original one still counts.',
+	},
+	REGISTER201: {
+		code: 'REGISTER201',
+		symbol: 'REGISTER_OPEN_REFUSED',
+		domain: 'REGISTER',
+		severity: 'error',
+		actionHint:
+			'Sales are still safe, but they are not attached to a till session — reopen the register.',
+		dataSafety: 'local-only',
+		summary:
+			'Your store refused to open this register session, so nothing is being counted against it.',
+	},
+	REGISTER211: {
+		code: 'REGISTER211',
+		symbol: 'REGISTER_CLOSE_REFUSED',
+		domain: 'REGISTER',
+		severity: 'error',
+		actionHint: 'Write the counted figures down before reopening — the till does not keep them.',
+		dataSafety: 'local-only',
+		summary: "Your store refused this register's count, so the session is still open there.",
+	},
+	REGISTER221: {
+		code: 'REGISTER221',
+		symbol: 'REGISTER_TAKEN_OVER',
+		domain: 'REGISTER',
+		severity: 'warn',
+		actionHint:
+			'Another device holds this register — check which drawer you are actually counting.',
+		dataSafety: 'local-only',
+		summary:
+			'Another device already had this register open, so this till joined that session instead of starting its own.',
+	},
+	REGISTER301: {
+		code: 'REGISTER301',
+		symbol: 'REGISTER_APPROVAL_REFUSED',
+		domain: 'REGISTER',
+		severity: 'warn',
+		actionHint: 'Ask a different manager to approve the count, then close again.',
+		dataSafety: 'no-impact',
+		summary:
+			'Your store would not accept the manager approval for this count, so the register is still open.',
+	},
 };
 
 export const ERROR_CODES = {
@@ -995,4 +1064,10 @@ export const ERROR_CODES = {
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
 	CUSTOMER_DISPLAY_SNAPSHOT_FAILED: 'DISPLAY101',
+	CASH_MOVEMENT_REFUSED: 'REGISTER101',
+	CASH_MOVEMENT_VOID_REFUSED: 'REGISTER111',
+	REGISTER_OPEN_REFUSED: 'REGISTER201',
+	REGISTER_CLOSE_REFUSED: 'REGISTER211',
+	REGISTER_TAKEN_OVER: 'REGISTER221',
+	REGISTER_APPROVAL_REFUSED: 'REGISTER301',
 } as const satisfies Record<string, ErrorCode>;

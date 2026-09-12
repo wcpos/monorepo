@@ -105,6 +105,16 @@ export const closeSession = (
 		counted: input.counted,
 		closure_id: id,
 	});
+/**
+ * Put a refused movement back in the outbox. The row is the only record of cash that has
+ * physically moved, so the cashier needs a way to send it again once whatever the server
+ * objected to — a capability, a closed session, a bad field — has been dealt with.
+ */
+export async function retryMovement(movements: CashMovementCollection, movementId: string) {
+	const row = await movements.findOne(movementId).exec();
+	if (!row) throw new Error('invalid_retry_target');
+	return row.incrementalPatch({ ...pending });
+}
 export function recordMovement(
 	movements: CashMovementCollection,
 	input: {

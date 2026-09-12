@@ -14,6 +14,7 @@ const DOMAINS = [
 	'CLIENT',
 	'HOST',
 	'DISPLAY',
+	'REGISTER',
 ];
 const SEVERITIES = ['info', 'warn', 'error'];
 const RETRY_POLICIES = ['automatic', 'manual', 'after-change', 'never'];
