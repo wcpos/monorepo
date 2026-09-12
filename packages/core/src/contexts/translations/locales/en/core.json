@@ -1863,7 +1863,7 @@
 	"health.logs.error_action.REGISTER101": "The cash is in the drawer but not in your store — retry it from the register panel before you count.",
 	"health.logs.error_action.REGISTER111": "The original movement still stands in your store — check it before recording anything else.",
 	"health.logs.error_action.REGISTER201": "Sales are still safe, but they are not attached to a till session — reopen the register.",
-	"health.logs.error_action.REGISTER211": "Your count has not reached the store — do not clear the drawer until it has.",
+	"health.logs.error_action.REGISTER211": "Write the counted figures down before reopening — the till does not keep them.",
 	"health.logs.error_action.REGISTER221": "Another device holds this register — check which drawer you are actually counting.",
 	"health.logs.error_action.REGISTER301": "Ask a different manager to approve the count, then close again.",
 	"pos_checkout.payments_tab": "Payments",

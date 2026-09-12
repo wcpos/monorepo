@@ -1976,17 +1976,18 @@
 		"symbol": "REGISTER_CLOSE_REFUSED",
 		"domain": "REGISTER",
 		"severity": "error",
-		"actionHint": "Your count has not reached the store — do not clear the drawer until it has.",
+		"actionHint": "Write the counted figures down before reopening — the till does not keep them.",
 		"retryPolicy": "manual",
 		"dataSafety": "local-only",
 		"escalation": "store-admin",
 		"summary": "Your store refused this register's count, so the session is still open there.",
-		"docsBody": "The till shows the register as counted; your store still has the session open. The counted figures are held on this device and are sent again on the next connection, but until your store accepts them the shift is not closed.",
+		"docsBody": "Your store turned the close down rather than missing it, so nothing retries it. The register goes back to showing Open register, and the till does not keep the count through that: when it rejoins the session its copy of the figures is replaced by the store’s, which has none. Write down what you counted before touching the register again.",
 		"troubleshooting": [
-			"Leave the counted figures on screen and try closing again — the till keeps them, and most refusals clear on a second attempt.",
-			"If the close needed a manager's approval, ask the manager to approve it again: an approval is checked at the moment of the close and does not carry over.",
-			"Write the counted totals down before the device is handed over or restarted.",
-			"**Store admin:** check in WP Admin that the session is still open and that the closing cashier has the Manage cash capability."
+			"Write down what you counted — notes, cash and each other tender — before touching the register again.",
+			"Fix the cause first, or the next attempt is refused the same way. The usual ones are the closing cashier losing permission to manage cash, and a session already closed on another device.",
+			"If the close needed a manager’s approval, that approval is checked at the moment of the close and does not carry over; ask for it again on the new attempt.",
+			"Reopen the register. The store still has this shift open, so the till rejoins the existing session rather than starting a second one, and the original opening float and cashier are shown.",
+			"Count again from the figures you wrote down, and close."
 		],
 		"logSources": [
 			"browser-console",

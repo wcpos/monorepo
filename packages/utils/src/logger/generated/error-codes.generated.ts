@@ -950,7 +950,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'REGISTER_CLOSE_REFUSED',
 		domain: 'REGISTER',
 		severity: 'error',
-		actionHint: 'Your count has not reached the store — do not clear the drawer until it has.',
+		actionHint: 'Write the counted figures down before reopening — the till does not keep them.',
 		dataSafety: 'local-only',
 		summary: "Your store refused this register's count, so the session is still open there.",
 	},
