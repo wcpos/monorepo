@@ -1070,6 +1070,28 @@ describe('createEngineFetcher', () => {
 		}
 	});
 
+	it('reports the token actually sent when refresh returns a different token', async () => {
+		let accessToken = 'expired-token';
+		const onAuthExhausted = jest.fn();
+		const fetch = jest.fn(async () => new Response(null, { status: 401 }));
+		const { fetcher } = createFetcherHarness({
+			fetch,
+			auth: {
+				credentials: { getLatest: () => ({ access_token: accessToken }) },
+				refreshAuth: async () => {
+					accessToken = 'live-retry-token';
+					return 'refresh-return-token';
+				},
+				onAuthExhausted,
+			},
+		});
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(onAuthExhausted).toHaveBeenCalledWith('live-retry-token');
+	});
+
 	it('refreshes after a 401 and retries once with the latest access token', async () => {
 		let accessToken = 'expired-token';
 		const credentials = {

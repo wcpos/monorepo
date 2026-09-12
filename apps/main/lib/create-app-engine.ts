@@ -426,7 +426,15 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		credentials: options.credentials,
 		refreshAuth: options.refreshAuth,
 		onAuthExhausted: (token) => {
+			if (authExhaustedToken === token) return;
 			authExhaustedToken = token;
+			engineLogger.error(
+				'Sync paused: the store rejected the renewed session — sign in again to resume',
+				{
+					code: ERROR_CODES.SESSION_EXPIRED,
+					showToast: true,
+				}
+			);
 		},
 		useJwtAsParam: options.useJwtAsParam,
 		bareAuthParam: options.bareAuthParam,

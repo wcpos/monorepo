@@ -169,6 +169,37 @@ function loadCreateAppEngine(
 }
 
 describe('createAppSyncEngine scope cache', () => {
+	it('prompts sign-in once per newly exhausted token', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockImplementation(async () => new Response(null, { status: 401 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, networkError } = loadCreateAppEngine();
+		let accessToken = 'rejected-token';
+		createAppSyncEngine({
+			...BASE_OPTIONS,
+			credentials: { getLatest: () => ({ access_token: accessToken }) },
+			refreshAuth: async () => accessToken,
+		});
+		const ports = createRxdbSyncEngine.mock.calls[0]![0];
+		const prompts = () => networkError.mock.calls.filter(([, options]) => options.showToast);
+		try {
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(prompts()).toEqual([
+				[
+					expect.stringContaining('sign in again'),
+					expect.objectContaining({ code: 'AUTH101', showToast: true }),
+				],
+			]);
+
+			accessToken = 'another-rejected-token';
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(prompts()).toHaveLength(2);
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
 	it('holds automatic ticks for an exhausted token until live credentials change', async () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')

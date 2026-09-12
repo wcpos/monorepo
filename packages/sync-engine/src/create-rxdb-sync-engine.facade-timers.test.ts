@@ -293,6 +293,39 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		}
 	});
 
+	it('raises an identical signal tick error again after a successful tick', async () => {
+		let failing = true;
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			fetcher: async (url) => {
+				if (failing) throw new Error('token rejected');
+				if (url.endsWith('/changes/tick')) return new Response(null, { status: 404 });
+				return new Response(
+					JSON.stringify({ changes: [], checkpoint: { since: 0, head: 0 }, complete: true }),
+					{ headers: { 'content-type': 'application/json' } }
+				);
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			await engine.sync('change-signal');
+			await engine.sync('change-signal');
+			failing = false;
+			expect((await engine.sync('change-signal')).status).toBe('ran');
+			failing = true;
+			await engine.sync('change-signal');
+
+			const rows = diagnostics.mock.calls
+				.map(([event]) => event)
+				.filter((event) => event.type === 'signal.tick.error');
+			expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error']);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('keeps every tick row but lowers consecutive identical errors per lane', async () => {
 		let failure: string | null = null;
 		const diagnostics = vi.fn();

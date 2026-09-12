@@ -532,7 +532,7 @@ export function createEngineFetcher(input: {
 			// something is actually wrong and the user will need to re-authenticate.
 			first.settle('debug', { outcome: 'failed', operationId });
 			retry.settle('error', { operationId });
-			input.auth.onAuthExhausted?.(retryToken);
+			input.auth.onAuthExhausted?.(tokenUsed ?? null);
 		} else {
 			// The 401 was cured but the retry hit a different failure — classify that
 			// failure on its own terms, keeping the arc id for the chain.

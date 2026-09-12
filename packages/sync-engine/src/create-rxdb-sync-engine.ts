@@ -746,6 +746,7 @@ export function createRxdbSyncEngine(
 				laneLastEmittedError.set(key, error);
 			} else if (event.type === 'engine.lane.tick') {
 				laneLastEmittedError.delete(key);
+				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
 			}
 		}
 		if (event.type === 'coverage.ledger-rebuilt') {
