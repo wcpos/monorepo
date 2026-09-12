@@ -416,6 +416,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		]
 	);
 
+	// Every row this flow writes names the order it is about. Without it the Logs
+	// screen cannot answer "what happened on order 1041?", which is the only question
+	// a merchant actually asks of a checkout row.
+	const orderContext = React.useMemo(
+		() => ({ orderId: payload.id ?? null, orderUUID: order.uuid }),
+		[payload.id, order.uuid]
+	);
+
 	const tenderRecorded = React.useCallback(
 		(row: PaymentRow) => {
 			const latest = readLedger(order.getLatest().payload.meta_data);
@@ -499,7 +507,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (!method) return;
 			if (entryAppliedMinor <= 0) {
-				logger.info(t('pos_checkout.enter_an_amount'), { showToast: true });
+				logger.info(t('pos_checkout.enter_an_amount'), { showToast: true, context: orderContext });
 				return;
 			}
 			if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
@@ -516,6 +524,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					}),
 					{
 						showToast: true,
+						context: { ...orderContext, method: method.id },
 					}
 				);
 				return;
@@ -536,7 +545,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 								? 'pos_checkout.reader_connecting'
 								: 'pos_checkout.reader_disconnected'
 						),
-						{ showToast: true }
+						{ showToast: true, context: { ...orderContext, method: method.id } }
 					);
 					return;
 				}
@@ -582,7 +591,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (method.capture.mode === 'server') {
 				if (!payload.id) {
-					logger.info(t('pos_checkout.order_not_on_store_yet'), { showToast: true });
+					logger.info(t('pos_checkout.order_not_on_store_yet'), {
+						showToast: true,
+						context: orderContext,
+					});
 					return;
 				}
 				const reader = selectableReaders(method, service?.readersInUse(), order.uuid).readers.find(
@@ -593,7 +605,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						reader?.inUseBy
 							? t('pos_checkout.reader_in_use', { number: reader.inUseBy })
 							: t('pos_checkout.choose_a_terminal'),
-						{ showToast: true }
+						{ showToast: true, context: { ...orderContext, method: method.id } }
 					);
 					return;
 				}
@@ -652,6 +664,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			logger.error(t('pos_checkout.payment_not_recorded'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
+				context: { ...orderContext, method: method.id },
 			});
 		} catch (error) {
 			if (error instanceof RegisterSessionRequiredError) throw error;
@@ -663,9 +676,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				logger.warn(t('pos_checkout.payment_recorded_not_synced'), {
 					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
 					showToast: true,
+					terminal: { operationId: outcome.row.id },
 					context: {
-						orderId: payload.id ?? null,
-						orderUUID: order.uuid,
+						...orderContext,
 						paymentId: outcome.row.id,
 						amount: outcome.row.amount,
 						method: outcome.row.method_id,
@@ -693,14 +706,22 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 					showToast: true,
 					toast: { title: t('pos_cart.checkout_failed') },
-					context: { error: error instanceof Error ? error.message : String(error) },
+					context: {
+						...orderContext,
+						method: method?.id ?? null,
+						error: error instanceof Error ? error.message : String(error),
+					},
 				});
 				return;
 			}
 			logger.error(t('pos_checkout.payment_not_recorded'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
-				context: { error: error instanceof Error ? error.message : String(error) },
+				context: {
+					...orderContext,
+					method: method?.id ?? null,
+					error: error instanceof Error ? error.message : String(error),
+				},
 			});
 		} finally {
 			busyRef.current = false;
@@ -758,8 +779,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			if (leg.outcome === 'failed' && leg.error && loggedLegFailure.current !== leg.row.id) {
 				loggedLegFailure.current = leg.row.id;
 				logger.error(providerErrorMessage(leg.error) ?? t('pos_checkout.payment_not_recorded'), {
-					code: ERROR_CODES.PAYMENT_UNEXPECTED,
+					// A declined or cancelled card is an ordinary outcome with an ordinary
+					// answer — ask for another card. Reporting it as "payment handling hit an
+					// unexpected problem" sends the cashier looking for a fault that is not there.
+					code: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
 					showToast: ownTake,
+					terminal: { operationId: leg.row.id },
 					context: {
 						orderId: leg.row.order_id || null,
 						orderUUID: order.uuid,
@@ -767,6 +792,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						amount: leg.row.amount,
 						method: leg.row.method_id,
 						status: leg.row.status,
+						errorCode: leg.error.code ?? null,
 						reason: leg.row.failure_reason ?? null,
 					},
 				});
@@ -775,10 +801,22 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			service?.dismiss(order.uuid);
 			tenderRecorded(leg.row);
 			if (toMinor(leg.order?.balance ?? derived.balance, dp) === 0) {
-				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch(() =>
-					logger.error(t('pos_checkout.payment_not_recorded'), {
-						code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch((error) =>
+					// The card has been charged by this point: the failure is finishing the
+					// order, not taking the money, and saying "payment not recorded" here is
+					// how a captured payment gets taken twice.
+					logger.error(t('pos_checkout.paid_but_order_not_finished'), {
+						code: ERROR_CODES.PAYMENT_OK_STATUS_CHECK_FAILED,
 						showToast: true,
+						terminal: { operationId: leg.row.id },
+						context: {
+							orderId: leg.row.order_id || null,
+							orderUUID: order.uuid,
+							paymentId: leg.row.id,
+							amount: leg.row.amount,
+							method: leg.row.method_id,
+							error: error instanceof Error ? error.message : String(error),
+						},
 					})
 				);
 			}
@@ -852,7 +890,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							(!online && ['pending', 'authorized', 'captured'].includes(row.status)))
 				)
 			) {
-				logger.info(t('pos_checkout.device_void_needs_settlement'), { showToast: true });
+				logger.info(t('pos_checkout.device_void_needs_settlement'), {
+					showToast: true,
+					context: orderContext,
+				});
 				return;
 			}
 			const outcome = await voidPayments(order);
@@ -860,11 +901,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				// Each of these is money still held on the customer's card. The row has to
 				// name them, or the merchant cannot tell which payment to refund by hand.
 				logger.error(t('pos_checkout.void_failed'), {
-					code: ERROR_CODES.PAYMENT_UNEXPECTED,
+					code: ERROR_CODES.PAYMENT_VOID_REFUSED,
 					showToast: true,
 					context: {
-						orderId: payload.id ?? null,
-						orderUUID: order.uuid,
+						...orderContext,
 						paymentId: outcome.failed.map((failure) => failure.paymentId).join(', '),
 						reason: outcome.failed
 							.map((failure) => `${failure.paymentId}: ${failure.message}`)
@@ -880,9 +920,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			if (screenSize === 'sm') router.replace({ pathname: '/cart' });
 		} catch (error) {
 			logger.error(t('pos_checkout.void_failed'), {
-				code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				code: ERROR_CODES.PAYMENT_VOID_REFUSED,
 				showToast: true,
-				context: { error: error instanceof Error ? error.message : String(error) },
+				context: {
+					...orderContext,
+					error: error instanceof Error ? error.message : String(error),
+				},
 			});
 		} finally {
 			busyRef.current = false;

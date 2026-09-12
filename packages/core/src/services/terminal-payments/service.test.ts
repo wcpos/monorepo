@@ -367,9 +367,29 @@ it('retries failed settlement at 5, 30 and 120 seconds then waits for another tr
 	await jest.advanceTimersByTimeAsync(600000);
 	expect(c.http.post).toHaveBeenCalledTimes(4);
 	expect(jest.getTimerCount()).toBe(0);
-	expect(getLogger([]).warn).toHaveBeenCalledWith('Offline payment settlement failed', {
-		context: { paymentId: 'leg', error: 'capture unavailable' },
-	});
+	// Mid-arc attempts stay forensic; only the exhausted arc is an error the merchant
+	// must act on — the card holds an authorization the store will never capture.
+	expect(getLogger([]).debug).toHaveBeenCalledWith(
+		'Offline payment settlement attempt failed',
+		expect.objectContaining({
+			context: expect.objectContaining({ paymentId: 'leg', error: 'capture unavailable' }),
+		})
+	);
+	expect(getLogger([]).warn).not.toHaveBeenCalled();
+	expect(getLogger([]).error).toHaveBeenCalledWith(
+		'Offline payment settlement failed',
+		expect.objectContaining({
+			code: 'PAYMENT201',
+			// The settled-record shape is what puts an authorization the store will never
+			// capture into the health header's stuck list.
+			terminal: expect.objectContaining({
+				operationId: 'leg',
+				operationType: 'sync.record',
+				outcome: 'failed',
+			}),
+			context: expect.objectContaining({ collection: 'orders', recordId: 'order' }),
+		})
+	);
 	await c.service.flushOffline();
 	expect(c.http.post).toHaveBeenCalledTimes(5);
 	expect(c.schedule).toHaveBeenLastCalledWith(expect.any(Function), 5000);

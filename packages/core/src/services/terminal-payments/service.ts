@@ -1,4 +1,5 @@
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type {
 	OrderPaymentSummary,
 	PaymentMethodDescriptor,
@@ -185,6 +186,23 @@ export class TerminalPaymentsService {
 				if (this.stopped) return;
 				const data = response.data as ServerLegResponse;
 				await this.options.mirror(orderUuid, data);
+				if (entry.retries > 0) {
+					// Clears the stuck row this payment may have written after its retries
+					// ran out; without a decisive `ok` the health header holds it forever.
+					logger.debug('Offline payment settled', {
+						terminal: {
+							operationId: row.id,
+							operationType: 'sync.record',
+							outcome: 'ok',
+						},
+						context: {
+							collection: 'orders',
+							recordId: orderUuid,
+							type: 'payment.settlement',
+							paymentId: row.id,
+						},
+					});
+				}
 				if (
 					data.payment.status === 'captured' ||
 					data.payment.status === 'failed' ||
@@ -194,14 +212,46 @@ export class TerminalPaymentsService {
 					this.offline.delete(row.id);
 				}
 			} catch (error) {
-				logger.warn('Offline payment settlement failed', {
-					context: { paymentId: entry.input.row.id, error: getErrorMessage(error) },
-				});
-				if (
+				const willRetry =
 					!this.stopped &&
 					entry.timer === undefined &&
-					entry.retries < SETTLEMENT_RETRY_DELAYS.length
-				) {
+					entry.retries < SETTLEMENT_RETRY_DELAYS.length;
+				// An attempt that is about to be retried is mid-arc, and warning on each one
+				// told the merchant something was broken while the service was still healing
+				// it. Only the exhausted arc earns a row they must act on: the card holds an
+				// authorization the store will never capture.
+				if (willRetry) {
+					logger.debug('Offline payment settlement attempt failed', {
+						terminal: { operationId: entry.input.row.id, attempt: entry.retries + 1 },
+						context: { paymentId: entry.input.row.id, error: getErrorMessage(error) },
+					});
+				} else {
+					// Written in the settled-record shape on purpose: an authorization the
+					// store will never capture is money in flight, and this is what puts it
+					// in the health header's stuck list instead of leaving it to a log nobody
+					// opens. A later successful settlement writes the clearing `ok` row.
+					logger.error('Offline payment settlement failed', {
+						code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+						terminal: {
+							operationId: entry.input.row.id,
+							operationType: 'sync.record',
+							outcome: 'failed',
+							attempt: entry.retries + 1,
+						},
+						context: {
+							collection: 'orders',
+							recordId: entry.input.orderUuid,
+							type: 'payment.settlement',
+							paymentId: entry.input.row.id,
+							orderUUID: entry.input.orderUuid,
+							amount: entry.input.row.amount,
+							method: entry.input.row.method_id,
+							reason: getErrorMessage(error),
+							error: getErrorMessage(error),
+						},
+					});
+				}
+				if (willRetry) {
 					entry.timer = (
 						this.options.setTimeout ??
 						((callback: () => void, ms: number) => setTimeout(callback, ms))

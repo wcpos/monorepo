@@ -555,6 +555,46 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "PAYMENT211",
+		"symbol": "PAYMENT_TERMINAL_REFUSED",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Ask for another card or take a different payment method.",
+		"retryPolicy": "manual",
+		"dataSafety": "no-impact",
+		"escalation": "none",
+		"summary": "The terminal did not take this payment.",
+		"docsBody": "The card terminal ended this payment without taking it: declined by the bank, cancelled on the reader, or expired before a card was presented. Nothing was charged and the order still owes its balance. The provider's own reason is on the log row.",
+		"troubleshooting": [
+			"Read the reason on the log row or the terminal screen.",
+			"Ask the customer for another card, or take a different payment method.",
+			"If every card is refused, check the terminal and the provider dashboard."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#295",
+		"introducedIn": "1.11.0"
+	},
+	{
+		"code": "PAYMENT221",
+		"symbol": "PAYMENT_VOID_REFUSED",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Refund the named payments from the order — the money is still held.",
+		"retryPolicy": "manual",
+		"dataSafety": "money-moved",
+		"escalation": "none",
+		"summary": "A payment could not be voided, so that money is still held.",
+		"docsBody": "Cancelling the sale asked the store to void each payment on the order, and at least one was refused. That money is still held on the customer's card, or still counted in the till. The refused payments are named on the log row.",
+		"troubleshooting": [
+			"Open the order and find the payments named on the log row.",
+			"Refund them from WooCommerce, or void them again once the provider recovers.",
+			"Do not treat the sale as reversed until each one is settled."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#295",
+		"introducedIn": "1.11.0"
+	},
+	{
 		"code": "PAYMENT301",
 		"symbol": "GATEWAY_UNAVAILABLE",
 		"domain": "PAYMENT",
@@ -1016,6 +1056,26 @@
 		],
 		"evidence": "coverage net (map #1136, A1.1)",
 		"introducedIn": "1.10.0"
+	},
+	{
+		"code": "PAYMENT511",
+		"symbol": "PAYMENT_EXCEEDS_BALANCE",
+		"domain": "PAYMENT",
+		"severity": "error",
+		"actionHint": "Take the balance the store reports — this till was holding an older total.",
+		"retryPolicy": "manual",
+		"dataSafety": "order-safe",
+		"escalation": "none",
+		"summary": "The store refused this payment because it is more than the order still owes.",
+		"docsBody": "The till asked to record more than the order had left to pay, so the store refused it and kept the attempt on the order as a failed row. Nothing was charged. This happens when the order changed elsewhere after the till read it.",
+		"troubleshooting": [
+			"Check the balance the store reports for the order.",
+			"Take that amount instead.",
+			"If the two totals still disagree, refresh the order on the till."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#295",
+		"introducedIn": "1.11.0"
 	},
 	{
 		"code": "PAYMENT999",
