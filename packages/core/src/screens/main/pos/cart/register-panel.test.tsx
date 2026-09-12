@@ -10,6 +10,8 @@ jest.mock('@wcpos/query', () => ({
 }));
 let blind = false;
 let movements: Record<string, unknown>[] = [];
+let refusedMovements: Record<string, unknown>[] = [];
+let currentSession: Record<string, unknown> | null = null;
 let serverNumber: number | null = null;
 let syncStatus = 'pending';
 let syncedRowsAt: string | null = null;
@@ -23,11 +25,12 @@ const showToast = jest.fn();
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
-		session: { id: 'session', status: 'open', opened_by: 7, opened_at_gmt: '2026-09-11T09:02:00Z' },
+		session: currentSession,
 		binding: { registerName: 'Front' },
 		expected: { cash: '155', card: '30' },
 		salesCount: 2,
 		movements,
+		refusedMovements,
 		lastClosure: {
 			number: 1,
 			server_number: serverNumber,
@@ -121,7 +124,14 @@ jest.mock('@wcpos/components/dialog', () => ({
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
 	blind = false;
+	currentSession = {
+		id: 'session',
+		status: 'open',
+		opened_by: 7,
+		opened_at_gmt: '2026-09-11T09:02:00Z',
+	};
 	movements = [{ id: 'old', type: 'paid_out', amount: '7', reason: 'Milk', sync_status: 'synced' }];
+	refusedMovements = [];
 	syncedRowsAt = null;
 	serverNumber = null;
 	syncStatus = 'pending';
@@ -219,21 +229,37 @@ it.each(['1e2', '1 0', '10.50.1', '0'])(
 	}
 );
 
+const lost = {
+	id: 'lost',
+	type: 'paid_in',
+	amount: '20',
+	reason: 'Change',
+	sync_status: 'failed',
+	sync_error: 'rest_invalid_param',
+};
+
 it('shows refused movements at the top of the pane and offers a retry', async () => {
 	movements = [
 		{ id: 'old', type: 'paid_out', amount: '7', reason: 'Milk', sync_status: 'synced' },
-		{
-			id: 'lost',
-			type: 'paid_in',
-			amount: '20',
-			reason: 'Change',
-			sync_status: 'failed',
-			sync_error: 'rest_invalid_param',
-		},
+		lost,
 	];
+	refusedMovements = [lost];
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	// Today nothing in the register UI reads sync_status, so this row is indistinguishable
 	// from a delivered one and the cash goes missing silently.
+	expect(screen.getByTestId('register-panel-refused').textContent).toContain('1');
+	fireEvent.click(screen.getByTestId('register-panel-retry-refused'));
+	await waitFor(() => expect(retryMovement).toHaveBeenCalledWith('lost'));
+});
+
+it('keeps the refused banner and its retry after the session has closed', async () => {
+	// The close succeeds and the session stops being current. The cash still moved, and the
+	// server still accepts a movement recorded before counting started — so both the record
+	// and the way to send it have to survive the transition.
+	currentSession = null;
+	movements = [];
+	refusedMovements = [lost];
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-panel-refused').textContent).toContain('1');
 	fireEvent.click(screen.getByTestId('register-panel-retry-refused'));
 	await waitFor(() => expect(retryMovement).toHaveBeenCalledWith('lost'));

@@ -7,18 +7,20 @@ import { useRegisterSession } from './use-register-session';
 type Row = Record<string, unknown>;
 
 let active: Row[] = [];
+let closed: Row[] = [];
 let entries: Row[] = [];
+let closureRows: Row[] = [];
 
 // The hook only trusts an emission whose collections are identical to the ones it holds now,
-// so these have to be stable across renders.
-const collection = (rows: () => Row[]) => ({
+// so these have to be stable across renders. Both session queries are register-scoped, so
+// whatever they return IS this register's set of sessions.
+const mockSessions = {
 	find: (query?: { selector?: { status?: unknown } }) => ({
-		$: of(query?.selector?.status === 'closed' ? [] : rows()),
+		$: of(query?.selector?.status === 'closed' ? closed : active),
 	}),
-});
-const mockSessions = collection(() => active);
-const mockMovements = collection(() => entries);
-const mockClosures = collection(() => []);
+};
+const mockMovements = { find: () => ({ $: of(entries) }) };
+const mockClosures = { find: () => ({ $: of(closureRows) }) };
 const mockBinding = { registerId: 'register', registerName: 'Front' };
 const mockRuntime = { engine: {}, locale: 'en' };
 const mockStoreSession = {
@@ -78,6 +80,8 @@ async function settled() {
 
 beforeEach(() => {
 	active = [session];
+	closed = [];
+	closureRows = [];
 	entries = [movement];
 });
 
@@ -107,4 +111,58 @@ it('trusts the server total once every local row is delivered', async () => {
 	const result = await settled();
 	expect(result.current.expected.cash).toBe('100');
 	expect(result.current.unsyncedCount).toBe(0);
+});
+
+describe('refusedMovements', () => {
+	const refused = { ...movement, sync_status: 'failed', sync_error: 'rest_invalid_param' };
+	// A session that has been counted and written: the hook stops treating it as current.
+	const settledSession = { ...session, status: 'closed', closure_id: session.id };
+
+	const closureRow = {
+		id: session.id,
+		session_id: session.id,
+		sync_status: 'synced',
+		closed_at: '2026-09-12T17:00:00.000Z',
+	};
+
+	// `session` is deliberately null in these cases, so it cannot be the signal that the
+	// observable has emitted — wait on the closure row instead.
+	async function rendered() {
+		const { result } = renderHook(() => useRegisterSession());
+		await waitFor(() => expect(result.current.lastClosure).not.toBeNull());
+		return result;
+	}
+
+	it('outlives the session it belonged to', async () => {
+		active = [];
+		closed = [settledSession];
+		closureRows = [closureRow];
+		entries = [refused];
+		const result = await rendered();
+		// The session is gone from the panel's point of view, but the cash still moved and the
+		// device holds the only record of it — scoping the banner to the current session hid it.
+		expect(result.current.session).toBeNull();
+		expect(result.current.refusedMovements).toHaveLength(1);
+		expect(result.current.refusedMovements[0].id).toBe('movement');
+	});
+
+	it('ignores a refused movement belonging to another register', async () => {
+		active = [];
+		closed = [settledSession];
+		closureRows = [closureRow];
+		// The movements collection is not register-scoped, so an unfiltered list would put
+		// another till's refused cash on this one's pane.
+		entries = [refused, { ...refused, id: 'elsewhere', session_id: 'other-register-session' }];
+		const result = await rendered();
+		expect(result.current.refusedMovements.map((row) => row.id)).toEqual(['movement']);
+	});
+
+	it('is empty once the row is accepted', async () => {
+		active = [];
+		closed = [settledSession];
+		closureRows = [closureRow];
+		entries = [{ ...movement, sync_status: 'synced' }];
+		const result = await rendered();
+		expect(result.current.refusedMovements).toHaveLength(0);
+	});
 });

@@ -87,6 +87,22 @@ export function useRegisterSession() {
 		) ??
 		null;
 	const entries = data?.entries.filter((row) => row.session_id === session?.id) ?? [];
+	/**
+	 * Refused cash outlives the session it was recorded against. Scoping it to the current
+	 * session hid it the moment the register closed, even though the row is still the only
+	 * record that the cash moved and the server still accepts a movement created before
+	 * counting started (`Cash_Movement_Store::accepts`).
+	 *
+	 * Scoped by REGISTER, not left unscoped: the movements collection spans every register, so
+	 * dropping the filter entirely would put another till's refused cash on this one's pane.
+	 */
+	const registerSessionIds = new Set(
+		[...(data?.active ?? []), ...(data?.closed ?? [])].map((row) => row.id)
+	);
+	const refusedMovements =
+		data?.entries.filter(
+			(row) => row.sync_status === 'failed' && registerSessionIds.has(row.session_id)
+		) ?? [];
 	const orders =
 		data?.orders.hits.filter(
 			({ record }) =>
@@ -123,6 +139,7 @@ export function useRegisterSession() {
 	return {
 		session,
 		movements: entries,
+		refusedMovements,
 		expected,
 		varianceThreshold,
 		unsyncedCount:
