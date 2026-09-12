@@ -3036,9 +3036,7 @@ test(
           state.firstIdx.metaIdMap.has(orphan.id),
           "peer broadcast applied before cleanup",
         );
-        before = state.indexStates.map((index) =>
-          structuredClone(index.rows),
-        );
+        before = state.indexStates.map((index) => structuredClone(index.rows));
         return runCleanup(callback);
       };
       const result = await owner.bulkWrite(
@@ -3065,9 +3063,7 @@ test(
           sort: secondary.index.map((field) => ({ [field]: "asc" })),
         }),
       );
-      assert.deepEqual((await owner.query(prepared)).documents, [
-        peerDocument,
-      ]);
+      assert.deepEqual((await owner.query(prepared)).documents, [peerDocument]);
       assert.deepEqual(capture.events, [
         {
           kind: "stale-secondary-refused",

@@ -321,7 +321,11 @@ async function dropIndexRowsById(
 // applied changelog add whose matching delete was lost), and the insert the
 // stripped write becomes would file a second row for the id beside the stale
 // one, so that secondary would serve both revisions from then on.
-async function dropSecondaryRowsById(instance, documentIds, ownsRepairs = () => true) {
+async function dropSecondaryRowsById(
+  instance,
+  documentIds,
+  ownsRepairs = () => true,
+) {
   const state = await instance.internals.statePromise;
   return instance.taskQueue.runCleanup(async (runState) => {
     if (!ownsRepairs()) return "multi-instance";
@@ -896,7 +900,11 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
           report("stale-secondary-dropped", { target, id });
         }
         for (const id of outcome.reappeared) {
-          report("stale-secondary-refused", { target, id, reason: "reappeared" });
+          report("stale-secondary-refused", {
+            target,
+            id,
+            reason: "reappeared",
+          });
         }
         return writes.map((row, index) =>
           outcome.reappeared.includes(row.document[instance.primaryPath])
