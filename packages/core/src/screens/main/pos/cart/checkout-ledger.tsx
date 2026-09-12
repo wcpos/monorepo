@@ -13,6 +13,7 @@ import { useCheckoutMode } from '../checkout/checkout-mode';
 import { useOrderSaving } from '../checkout/use-order-save-state';
 import { useLedgerView } from '../checkout/tender/use-ledger-view';
 import { LedgerLegs, LedgerLines } from '../checkout/tender/ledger-pane';
+import { getUuidFromLineItem } from '../hooks/utils';
 
 export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 	const paidBy = useCheckoutMode().linesPaidBy.get(order.uuid);
@@ -26,7 +27,7 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 	const lines = React.useMemo(
 		() =>
 			(payload.line_items ?? []).map((item) => ({
-				id: item.id,
+				id: getUuidFromLineItem(item) ?? item.id,
 				name: item.name,
 				quantity: item.quantity,
 				total: formatCurrency(Number(item.total ?? 0)),

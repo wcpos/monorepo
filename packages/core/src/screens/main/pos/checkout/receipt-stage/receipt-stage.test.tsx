@@ -41,6 +41,7 @@ jest.mock('../../../hooks/use-payment-methods', () => ({
 	usePaymentMethods: () => ({
 		methods: [
 			{ id: 'pos_cash', title: 'Cash' },
+			{ id: 'till_cash', title: 'Till cash' },
 			{ id: 'pos_card', title: 'Card' },
 		],
 	}),
@@ -131,6 +132,7 @@ beforeEach(() => {
 	mockAutoPrintPending = false;
 	Platform.isNative = false;
 	jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+	mockOrder.payload.total = '92.95';
 	mockOrder.payload.meta_data = [
 		{
 			key: '_wcpos_payments',
@@ -141,6 +143,7 @@ beforeEach(() => {
 						id: 'cash',
 						status: 'captured',
 						method_id: 'pos_cash',
+						kind: 'cash',
 						amount: '92.95',
 						tendered: '100.00',
 						captured_at_gmt: null,
@@ -160,6 +163,94 @@ it('shows the change headline and cash tendered sub-line', () => {
 		'Paid $92.95 · tendered $100.00 in cash'
 	);
 	expect(screen.queryByTestId('receipt-printed-to')).toBeNull();
+});
+it('recognizes a custom cash method from the payment row kind', () => {
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [
+					{
+						id: 'cash',
+						status: 'captured',
+						method_id: 'till_cash',
+						kind: 'cash',
+						amount: '92.95',
+						tendered: '100.00',
+					},
+				],
+			},
+		},
+	] as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe(
+		'Paid $92.95 · tendered $100.00 in cash'
+	);
+});
+it('sums cash-row tendered values for a mixed split', () => {
+	mockOrder.payload.total = '100.00';
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [
+					{
+						id: 'cash',
+						status: 'captured',
+						method_id: 'pos_cash',
+						kind: 'cash',
+						amount: '40.00',
+						tendered: '50.00',
+					},
+					{
+						id: 'card',
+						status: 'captured',
+						method_id: 'pos_card',
+						kind: 'card',
+						amount: '60.00',
+						tendered: null,
+					},
+				],
+			},
+		},
+	] as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe(
+		'Paid $100.00 · tendered $50.00 in cash · 2 payments'
+	);
+});
+it('counts recorded-offline authorizations as settled payments', () => {
+	mockOrder.payload.meta_data = [
+		{
+			key: '_wcpos_payments',
+			value: {
+				schema: 1,
+				payments: [
+					{
+						id: 'cash',
+						status: 'captured',
+						method_id: 'pos_cash',
+						kind: 'cash',
+						amount: '40.00',
+						tendered: '40.00',
+					},
+					{
+						id: 'card',
+						status: 'authorized',
+						recorded_offline: true,
+						method_id: 'pos_card',
+						kind: 'card',
+						amount: '52.95',
+						tendered: null,
+					},
+				],
+			},
+		},
+	] as never;
+	render(<ReceiptStage orderUuid="paid" compact={false} />);
+	expect(screen.getByTestId('receipt-paid-with').textContent).toBe('Cash + Card · 2 payments');
 });
 it('shows successful printing and omits zero change', () => {
 	mockPrintedTo = 'Till printer';
@@ -260,9 +351,14 @@ it('renders a complete tick and surface without animation when motion is reduced
 	expect(screen.getByTestId('receipt-paid-banner').style.opacity).toBe('1');
 });
 it('starts the pop and delayed tick when motion is allowed', async () => {
-	jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
+	let resolvePreference!: (enabled: boolean) => void;
+	jest
+		.mocked(AccessibilityInfo.isReduceMotionEnabled)
+		.mockImplementationOnce(() => new Promise<boolean>((resolve) => (resolvePreference = resolve)));
+	render(<ReceiptStage orderUuid="paid" compact />);
+	expect(screen.getByTestId('receipt-paid-banner').style.opacity).toBe('0');
 	await act(async () => {
-		render(<ReceiptStage orderUuid="paid" compact />);
+		resolvePreference(false);
 	});
 	expect(withTiming).toHaveBeenCalledWith(1, expect.objectContaining({ duration: 400 }));
 	expect(withTiming).toHaveBeenCalledWith(0, expect.objectContaining({ duration: 450 }));

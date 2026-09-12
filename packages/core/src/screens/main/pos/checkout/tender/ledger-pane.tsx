@@ -12,10 +12,11 @@ import { statusLabelKey, statusVariant } from './labels';
 import { useT } from '../../../../../contexts/translations';
 
 import type { LedgerView } from './use-ledger-view';
+import type { TenderLineId } from './tender-state';
 import type { TenderFlow } from './use-tender-flow';
 
 interface OrderLine {
-	id?: number;
+	id?: TenderLineId;
 	name?: string;
 	quantity?: number;
 	total?: string;
@@ -56,7 +57,7 @@ export function LedgerLines({
 }: Pick<Props, 'lines' | 'format'> & {
 	totalMinor: number;
 	withTotal?: boolean;
-	paidBy?: Record<number, string[]>;
+	paidBy?: Record<TenderLineId, string[]>;
 }) {
 	const t = useT();
 	return (
