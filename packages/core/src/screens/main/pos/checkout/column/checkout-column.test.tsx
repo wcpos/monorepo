@@ -89,6 +89,17 @@ jest.mock('@wcpos/components/collapsible', () => ({
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
+// Keep the real terminal cancel action; only its UI-thread animation runtime is mocked.
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: jest.requireActual('react-native').View },
+	useSharedValue: (value: number) => React.useRef({ value }).current,
+	useAnimatedStyle: (style: () => object) => style(),
+	withTiming: (value: number) => value,
+	withRepeat: (value: number) => value,
+	cancelAnimation: jest.fn(),
+	Easing: { linear: (value: number) => value },
+}));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
