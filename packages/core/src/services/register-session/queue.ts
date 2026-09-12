@@ -1,10 +1,15 @@
+import type { EngineCollection } from '@wcpos/query';
 import type {
 	CashMovementCollection,
 	CashMovementDocument,
 	CashMovementRow,
+	ClosureCollection,
+	ClosureDocument,
+	ClosureRow,
 	RegisterSessionCollection,
 	RegisterSessionDocument,
 	RegisterSessionRow,
+	UserDatabase,
 } from '@wcpos/database';
 import {
 	ERROR_CATALOGUE,
@@ -12,7 +17,14 @@ import {
 	type ErrorCode,
 } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { backoffMs } from '../../screens/main/receipt/email-queue/queue';
+import {
+	adoptCounters,
+	mintClosureNumber,
+	readCounters,
+	readRegister,
+	type RegisterCounters,
+} from '../register/register-document';
+import { backoffMs, MAX_SEND_ATTEMPTS } from '../../screens/main/receipt/email-queue/queue';
 import { failureFacts } from './failure-facts';
 
 export type SessionHttp = {
@@ -44,6 +56,10 @@ type SessionLogOptions = {
 	};
 };
 type Deps = {
+	closures: ClosureCollection;
+	userDB: UserDatabase;
+	siteUuid: string;
+	orders: Pick<EngineCollection<'orders'>, 'findOne'> | null;
 	sessions: RegisterSessionCollection;
 	movements: CashMovementCollection;
 	http: SessionHttp;
@@ -52,14 +68,16 @@ type Deps = {
 /** `operationId` is clamped to 32 characters, so a 36-character UUID would truncate. */
 const operationId = (id: string) => id.replace(/-/g, '').slice(0, 32);
 /**
- * Which registered code a settled refusal is. The four outcomes differ in what the merchant
- * has to DO about them, which is what the code carries: refused cash is money in the drawer
- * the store will never see; a refused reversal leaves the original standing; a refused open
- * detaches the shift from its sales; a takeover means two tills on one drawer.
+ * Which registered code a settled refusal is. The outcomes differ in what the merchant has to
+ * DO about them, which is what the code carries: refused cash is money in the drawer the store
+ * will never see; a refused reversal leaves the original standing; a refused open detaches the
+ * shift from its sales; a takeover means two tills on one drawer. A refused closure is the same
+ * problem as a refused close transition — the count did not reach the store — so it shares
+ * REGISTER211 rather than inventing a code that says the same thing.
  */
 function refusalCode(
 	endpoint: string,
-	row: RegisterSessionRow | CashMovementRow,
+	row: RegisterSessionRow | CashMovementRow | ClosureRow,
 	failure: { status?: number; errorCode?: string }
 ): ErrorCode {
 	if (failure.status === 409 && failure.errorCode === 'wcpos_session_already_open') {
@@ -102,6 +120,7 @@ async function acknowledge(
 			pending_status: outstanding ? local.pending_status : null,
 			status_at: local.status_at,
 			approver_token: outstanding ? local.approver_token : null,
+			closure_id: local.closure_id ?? server.closure_id,
 			counted: outstanding ? local.counted : server.counted,
 			counting_started_at_gmt: outstanding
 				? local.counting_started_at_gmt
@@ -118,9 +137,18 @@ export function drainRegisterSessionQueue(deps: Deps): Promise<void> {
 	inFlight.set(deps.sessions, promise);
 	return promise;
 }
-async function drain({ sessions, movements, http, logger }: Deps) {
+async function drain({
+	sessions,
+	movements,
+	closures,
+	userDB,
+	siteUuid,
+	orders,
+	http,
+	logger,
+}: Deps) {
 	async function send(
-		doc: RegisterSessionDocument | CashMovementDocument,
+		doc: RegisterSessionDocument | CashMovementDocument | ClosureDocument,
 		endpoint: string,
 		task: () => Promise<void>,
 		statusTransition = false
@@ -129,6 +157,38 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 			await task();
 		} catch (error) {
 			const { status, body, errorCode, field, message } = failureFacts(error);
+			if (doc.collection === closures && status === 409) {
+				const closure = doc as ClosureDocument;
+				if (body?.code === 'wcpos_closure_exists' && body.data?.closure_id) {
+					await closure.incrementalPatch({
+						...synced,
+						sync_status: 'superseded',
+						server_closure_id: body.data.closure_id,
+					});
+					return;
+				}
+				if (body?.code === 'wcpos_closure_number_invalid' && !closure.getLatest().number_retried) {
+					const response = await http.get(`registers/${closure.register_id}`);
+					const floor = readCounters((response.data as { counters?: unknown })?.counters);
+					if (floor) await adoptCounters(userDB, siteUuid, closure.register_id, floor);
+					const number = await mintClosureNumber(userDB, siteUuid, closure.register_id, {
+						...closure.toJSON(),
+						number_retried: true,
+					});
+					const reserved = (await readRegister(userDB))!.sites[siteUuid].registers![
+						closure.register_id
+					].closure_reservation!.row;
+					await closure.incrementalPatch({
+						number,
+						perpetual_sales_total: reserved.perpetual_sales_total,
+						perpetual_refunds_total: reserved.perpetual_refunds_total,
+						number_retried: true,
+						printed_number: closure.printed_at ? closure.number : null,
+					});
+					await send(closure, endpoint, task);
+					return;
+				}
+			}
 			if (statusTransition && body?.code === 'wcpos_override_refused') {
 				await (doc as RegisterSessionDocument).incrementalPatch({
 					status: 'counting',
@@ -300,6 +360,120 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 				voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
 			}));
 		});
+	}
+	const closureRows = (await closures.find().exec()).sort((a, b) => a.number - b.number);
+	for (const snapshot of closureRows) {
+		const row = snapshot.getLatest();
+		if (
+			closureRows.some(
+				(previous) =>
+					previous.register_id === row.register_id &&
+					previous.number < row.number &&
+					previous.getLatest().sync_status === 'pending'
+			)
+		)
+			continue;
+		const session = await sessions.findOne(row.session_id).exec();
+		const entries = await movements.find({ selector: { session_id: row.session_id } }).exec();
+		const dependencies = await Promise.all(row.order_ids.map((id) => orders?.findOne(id).exec()));
+		const rowsSynced =
+			session?.sync_status === 'synced' &&
+			session.server_status === 'closed' &&
+			row.movement_ids.every((id) =>
+				entries.some((entry) => entry.id === id && entry.sync_status === 'synced')
+			) &&
+			dependencies.every((order) => order && !order.local?.dirty);
+		const failedMovement = entries.find(
+			(entry) => row.movement_ids.includes(entry.id) && entry.sync_status === 'failed'
+		);
+		if (due(row) && failedMovement) {
+			const attempts = row.sync_attempts + 1;
+			const retry = attempts < MAX_SEND_ATTEMPTS;
+			await row.incrementalPatch({
+				sync_status: retry ? 'pending' : 'failed',
+				sync_attempts: attempts,
+				sync_next_at: retry ? Date.now() + backoffMs(attempts) : null,
+				sync_error: failedMovement.sync_error,
+			});
+		}
+		if (due(row) && rowsSynced) {
+			await send(row, 'closures', async () => {
+				const current = row.getLatest();
+				const {
+					id,
+					session_id,
+					number,
+					opened_at,
+					closed_at,
+					till_expected,
+					counted,
+					period_sales_total,
+					period_refunds_total,
+					perpetual_sales_total,
+					perpetual_refunds_total,
+					unsynced_count,
+					unsynced_total,
+					first_sale_counter,
+					last_sale_counter,
+					software_version,
+					printed_at,
+					breakdowns,
+				} = current;
+				const server = (
+					await http.post('closures', {
+						id,
+						session_id,
+						number,
+						opened_at,
+						closed_at,
+						till_expected,
+						counted,
+						period_sales_total,
+						period_refunds_total,
+						perpetual_sales_total,
+						perpetual_refunds_total,
+						unsynced_count,
+						unsynced_total,
+						first_sale_counter,
+						last_sale_counter,
+						software_version,
+						printed_at,
+						breakdowns,
+					})
+				).data as ClosureRow & { findings?: Record<string, unknown>; counters?: RegisterCounters };
+				await adoptCounters(
+					userDB,
+					siteUuid,
+					row.register_id,
+					readCounters(server.counters) ?? {
+						last_closure_number: server.number,
+						perpetual_sales_total: server.perpetual_sales_total,
+						perpetual_refunds_total: server.perpetual_refunds_total,
+					}
+				);
+				await row.incrementalPatch({
+					...synced,
+					server_number: server.number,
+					server_closure_id: server.id,
+					printed_number: server.printed_number ?? null,
+					server_findings: server.findings ?? null,
+					expected: server.expected,
+					variance: server.variance,
+					period_sales_total: server.period_sales_total,
+					period_refunds_total: server.period_refunds_total,
+					perpetual_sales_total: server.perpetual_sales_total,
+					perpetual_refunds_total: server.perpetual_refunds_total,
+					// An offline print is not on the server yet; never lose it.
+					print_count: Math.max(row.getLatest().print_count ?? 0, server.print_count ?? 0),
+				});
+			});
+		}
+		if (
+			['synced', 'superseded'].includes(row.getLatest().sync_status) &&
+			rowsSynced &&
+			!row.getLatest().synced_rows_at
+		)
+			await row.incrementalPatch({ synced_rows_at: new Date().toISOString() });
 	}
 }
 export async function adoptSession(

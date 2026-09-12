@@ -16,7 +16,12 @@ export function failureFacts(error: unknown) {
 			data?: {
 				code?: string;
 				message?: string;
-				data?: { status?: number; session_id?: string; params?: Record<string, string> };
+				data?: {
+					status?: number;
+					session_id?: string;
+					closure_id?: string;
+					params?: Record<string, string>;
+				};
 			};
 		};
 	};

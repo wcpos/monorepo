@@ -5,8 +5,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { RegisterPanel } from './register-panel';
 
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
 let blind = false;
 let movements: Record<string, unknown>[] = [];
+let serverNumber: number | null = null;
+let syncStatus = 'pending';
+let syncedRowsAt: string | null = null;
 const voidMovement = jest.fn(async () => undefined);
 const recordMovement = jest.fn(async () => ({ id: 'movement' }));
 const retryMovement = jest.fn(async () => undefined);
@@ -22,7 +28,19 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		expected: { cash: '155', card: '30' },
 		salesCount: 2,
 		movements,
-		lastClosed: { counted: { cash: '570' }, closed_at_gmt: '2026-09-10T17:00:00Z' },
+		lastClosure: {
+			number: 1,
+			server_number: serverNumber,
+			sync_status: syncStatus,
+			server_closure_id: 'winner',
+			sync_error: 'movement_refused',
+			counted: { cash: '570' },
+			till_expected: { cash: '570' },
+			variance: { cash: '0' },
+			closed_at: '2026-09-10T17:00:00Z',
+			synced_rows_at: syncedRowsAt,
+			server_findings: { gap: true },
+		},
 		actions: { voidMovement, recordMovement, retryMovement, startCounting },
 	}),
 }));
@@ -40,6 +58,9 @@ jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: number) => `£${v.toFixed(2)}` }),
 }));
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../../receipt/use-receipt-document', () => ({
+	useReceiptDocument: () => ({ print, resolvedPrinter: { autoOpenDrawer: true } }),
+}));
 jest.mock('@wcpos/printer', () => ({
 	usePrint: () => ({ print }),
 	PrinterService: class {
@@ -101,6 +122,9 @@ const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButton
 beforeEach(() => {
 	blind = false;
 	movements = [{ id: 'old', type: 'paid_out', amount: '7', reason: 'Milk', sync_status: 'synced' }];
+	syncedRowsAt = null;
+	serverNumber = null;
+	syncStatus = 'pending';
 	jest.clearAllMocks();
 });
 it('hides every amount and the X report for blind cashiers', () => {
@@ -238,4 +262,38 @@ it('coalesces same-tick movement taps before React renders saving state', () => 
 		fireEvent.click(screen.getByTestId('movement-confirm'));
 	});
 	expect(recordMovement).toHaveBeenCalledTimes(1);
+});
+
+it('shows Unsynced until every named row is acknowledged, then offers Reprint', () => {
+	syncedRowsAt = null;
+	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel-last-closure').textContent).toContain('£570.00');
+	expect(screen.getByTestId('closure-unsynced')).toBeTruthy();
+	expect(screen.queryByTestId('closure-reprint')).toBeNull();
+	syncedRowsAt = '2026-09-12T12:00:00Z';
+	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('closure-unsynced')).toBeNull();
+	expect(screen.getByTestId('closure-reprint')).toBeTruthy();
+});
+
+it('shows the server number and offers Reprint for an acknowledged superseded closure', () => {
+	serverNumber = 4;
+	syncStatus = 'superseded';
+	syncedRowsAt = '2026-09-12T12:00:00Z';
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel-last-closure').textContent).toContain(
+		'register.closure_written_n 4'
+	);
+	expect(screen.getByTestId('closure-reprint')).toBeTruthy();
+});
+it('hides acknowledged closure reprinting from blind cashiers', () => {
+	blind = true;
+	syncedRowsAt = '2026-09-12T12:00:00Z';
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('closure-reprint')).toBeNull();
+});
+it('shows the dead-lettered closure movement error', () => {
+	syncStatus = 'failed';
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('closure-sync-error').textContent).toBe('movement_refused');
 });

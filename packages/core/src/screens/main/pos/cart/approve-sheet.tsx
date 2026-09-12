@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import type { ClosureDocument } from '@wcpos/database';
 
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
@@ -17,7 +18,7 @@ export function ApproveSheet({
 	onOpenChange,
 }: {
 	counted: Record<string, string>;
-	onClosed: () => void;
+	onClosed: (closure: ClosureDocument) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const { session, actions } = useRegisterSession();
@@ -41,8 +42,7 @@ export function ApproveSheet({
 				approval_required: false,
 				sync_error: null,
 			});
-			await actions.closeSession({ counted });
-			onClosed();
+			onClosed(await actions.closeSession({ counted }));
 			onOpenChange(false);
 		} catch (e) {
 			const refused =

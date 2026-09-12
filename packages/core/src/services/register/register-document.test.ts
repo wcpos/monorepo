@@ -5,12 +5,17 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import type { UserDatabase } from '@wcpos/database';
 
 import {
+	adoptCounters,
+	advancePerpetual,
 	bindRegister,
 	ensureRegister,
 	getBoundRegisterId,
 	getCurrentBoundRegisterId,
+	getRegisterSnapshot,
+	mintClosureNumber,
 	nextSaleCounter,
 	readBoundRegister,
+	readCounters,
 	readRegister,
 	unbindRegister,
 } from './register-document';
@@ -157,4 +162,116 @@ it('accepts a legacy pointer until the next bind records its store', async () =>
 		sale_counter: 4,
 	});
 	expect(await readBoundRegister(db, 'site', 1)).toBeNull();
+});
+
+it('mints unique closure numbers after the adopted floor, independently by site', async () => {
+	await ensureRegister(db);
+	await adoptCounters(db, 'site', 'a', {
+		last_closure_number: 12,
+		perpetual_sales_total: '100.01',
+		perpetual_refunds_total: '10.02',
+	});
+	expect(
+		(await Promise.all(Array.from({ length: 10 }, () => mintClosureNumber(db, 'site', 'a')))).sort(
+			(a, b) => a - b
+		)
+	).toEqual([13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+	expect(await mintClosureNumber(db, 'other', 'a')).toBe(1);
+});
+it('only raises each counter and adds perpetual amounts in minor units', async () => {
+	await ensureRegister(db);
+	await adoptCounters(db, 'site', 'a', {
+		last_closure_number: 3,
+		perpetual_sales_total: '0.1',
+		perpetual_refunds_total: '0.2',
+	});
+	await adoptCounters(db, 'site', 'a', {
+		last_closure_number: 1,
+		perpetual_sales_total: '0.01',
+		perpetual_refunds_total: '0.3',
+	});
+	await advancePerpetual(db, 'site', 'a', { sales: '0.2', refunds: '0.0001' });
+	expect((await readRegister(db))?.sites.site.registers?.a).toMatchObject({
+		last_closure_number: 3,
+		perpetual_sales_total: '0.3000',
+		perpetual_refunds_total: '0.3001',
+	});
+});
+
+it('keeps register B independent of A and ignores legacy site counters', async () => {
+	await ensureRegister(db);
+	await (await db.getLocal('register'))!.incrementalPatch({
+		sites: { site: { sale_counter: 7, last_closure_number: 99, perpetual_sales_total: '999' } },
+	});
+	await bindRegister(db, 'site', { id: 'a', name: 'A' });
+	await adoptCounters(db, 'site', 'a', {
+		last_closure_number: 12,
+		perpetual_sales_total: '100',
+		perpetual_refunds_total: '10',
+	});
+	await bindRegister(db, 'site', { id: 'b', name: 'B' });
+	const floor = {
+		last_closure_number: 0,
+		perpetual_sales_total: '0',
+		perpetual_refunds_total: '0',
+	};
+	await adoptCounters(db, 'site', 'b', floor);
+	expect(await mintClosureNumber(db, 'site', 'b')).toBe(1);
+	await advancePerpetual(db, 'site', 'b', { sales: '2', refunds: '1' });
+	await adoptCounters(db, 'site', 'b', floor);
+	expect((await readRegister(db))?.sites.site.registers).toMatchObject({
+		a: { last_closure_number: 12, perpetual_sales_total: '100.0000' },
+		b: {
+			last_closure_number: 1,
+			perpetual_sales_total: '2.0000',
+			perpetual_refunds_total: '1.0000',
+		},
+	});
+	expect(await nextSaleCounter(db, 'site')).toBe(8);
+});
+
+it('a re-mint after adopting a newer server floor carries the period exactly once', async () => {
+	await ensureRegister(db);
+	const closure = {
+		id: 'c1',
+		period_sales_total: '20',
+		period_refunds_total: '5',
+	} as Parameters<typeof mintClosureNumber>[3] & object;
+	expect(await mintClosureNumber(db, 'site', 'a', closure)).toBe(1);
+	await advancePerpetual(db, 'site', 'a', { sales: '20', refunds: '5', closureId: 'c1' });
+	// Another till closed on the server meanwhile: floor 3, totals 100/10 (without our period).
+	await adoptCounters(db, 'site', 'a', {
+		last_closure_number: 3,
+		perpetual_sales_total: '100',
+		perpetual_refunds_total: '10',
+	});
+	const bucket = () => (getRegisterSnapshot()!.sites.site.registers ?? {})['a'];
+	expect(Number(bucket().perpetual_sales_total)).toBe(120);
+	expect(Number(bucket().perpetual_refunds_total)).toBe(15);
+	expect(await mintClosureNumber(db, 'site', 'a', { ...closure, number_retried: true })).toBe(4);
+	expect(Number(bucket().closure_reservation?.row.perpetual_sales_total)).toBe(120);
+	expect(Number(bucket().closure_reservation?.row.perpetual_refunds_total)).toBe(15);
+});
+it('readCounters refuses payloads that cannot serve as a floor', () => {
+	expect(readCounters(null)).toBeNull();
+	expect(readCounters({})).toBeNull();
+	expect(
+		readCounters({
+			last_closure_number: 'x',
+			perpetual_sales_total: '1',
+			perpetual_refunds_total: '0',
+		})
+	).toBeNull();
+	expect(
+		readCounters({
+			last_closure_number: 2,
+			perpetual_sales_total: '1.5',
+			perpetual_refunds_total: 0,
+		})
+	).toEqual({
+		last_closure_number: 2,
+		perpetual_sales_total: '1.5',
+		perpetual_refunds_total: '0',
+		counters_started_at: null,
+	});
 });

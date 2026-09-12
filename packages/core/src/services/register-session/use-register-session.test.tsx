@@ -18,13 +18,20 @@ const collection = (rows: () => Row[]) => ({
 });
 const mockSessions = collection(() => active);
 const mockMovements = collection(() => entries);
+const mockClosures = collection(() => []);
 const mockBinding = { registerId: 'register', registerName: 'Front' };
 const mockRuntime = { engine: {}, locale: 'en' };
-const mockStoreSession = { store: { id: 1 }, wpCredentials: { id: 7 } };
+const mockStoreSession = {
+	store: { id: 1 },
+	wpCredentials: { id: 7 },
+	userDB: {},
+	site: { uuid: 'site' },
+};
 
 jest.mock('./use-register-session-collections', () => ({
 	useRegisterSessionCollection: () => mockSessions,
 	useCashMovementCollection: () => mockMovements,
+	useClosureCollection: () => mockClosures,
 }));
 jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => mockBinding,

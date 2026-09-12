@@ -1,5 +1,6 @@
 import { ExtractDocumentTypeFromTypedRxJsonSchema, RxJsonSchema } from 'rxdb';
 
+import { closuresLiteral } from './schemas/closures';
 import { brandsLiteral } from './schemas/brands';
 import { categoriesLiteral } from './schemas/categories';
 import { couponsLiteral } from './schemas/coupons';
@@ -579,6 +580,11 @@ const receipt_email_queue: RxCollectionCreator<ReceiptEmailQueueDocumentType> = 
 	schema: receiptEmailQueueSchema,
 };
 
+export type ClosureRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof closuresLiteral>;
+export type ClosureDocument = RxDocument<ClosureRow>;
+export type ClosureCollection = RxCollection<ClosureRow>;
+const closures: RxCollectionCreator<ClosureRow> = { schema: closuresLiteral };
+
 export type RegisterSessionRow = ExtractDocumentTypeFromTypedRxJsonSchema<
 	typeof registerSessionsLiteral
 >;
@@ -608,6 +614,7 @@ export type StoreCollections = {
 	scanner_profiles: ScannerProfileCollection;
 	template_printer_overrides: TemplatePrinterOverrideCollection;
 	receipt_email_queue: ReceiptEmailQueueCollection;
+	closures: ClosureCollection;
 	register_sessions: RegisterSessionCollection;
 	cash_movements: CashMovementCollection;
 };
@@ -636,6 +643,7 @@ export const storeCollections = {
 	scanner_profiles,
 	template_printer_overrides,
 	receipt_email_queue,
+	closures,
 	register_sessions,
 	cash_movements,
 };

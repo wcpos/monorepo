@@ -1,6 +1,7 @@
 import type {
 	CashMovementCollection,
 	CashMovementRow,
+	ClosureCollection,
 	RegisterSessionCollection,
 	RegisterSessionRow,
 } from '@wcpos/database';
@@ -12,11 +13,13 @@ export async function refreshSessions({
 	http,
 	sessions,
 	movements,
+	closures,
 }: {
 	registerId: string;
 	http: SessionHttp;
 	sessions: RegisterSessionCollection;
 	movements: CashMovementCollection;
+	closures: ClosureCollection;
 }) {
 	const response = await http.get('sessions', {
 		params: { register_id: registerId, status: 'all', per_page: 30 },
@@ -52,6 +55,8 @@ export async function refreshSessions({
 		})
 		.exec();
 	for (const row of expired) {
+		const closure = await closures.findOne({ selector: { session_id: row.id } }).exec();
+		if (closure && !closure.synced_rows_at) continue;
 		const associated = await movements.find({ selector: { session_id: row.id } }).exec();
 		// A movement the server never accepted exists only here. Pruning it — with the session
 		// that gives it meaning — is a silent deletion of the record of cash that has moved.

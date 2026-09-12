@@ -2024,5 +2024,19 @@
 	"register.refused_one": "{count} movement refused by the store",
 	"register.refused_other": "{count} movements refused by the store",
 	"register.refused_row": "Refused",
-	"register.retry": "Retry"
+	"register.retry": "Retry",
+	"register.closure_written_n": "Closure {n} written",
+	"register.report_system_print": "This cloud printer requires an order. Opening the system print dialog for this report.",
+	"register.print_z_report": "Print Z-report",
+	"register.printed_on": "Printed on {time}",
+	"register.unsynced_closure": "Unsynced · {count} rows not yet on the store",
+	"register.reprint_copy": "Reprint copy",
+	"register.listed_in_health": "Listed in Store health",
+	"register.z_report": "Z-report",
+	"register.unsynced": "Unsynced",
+	"register.print_failed": "Printing failed. Try again.",
+	"register.period_sales": "Period sales",
+	"register.period_refunds": "Period refunds",
+	"register.perpetual_sales": "Perpetual sales",
+	"register.perpetual_refunds": "Perpetual refunds"
 }

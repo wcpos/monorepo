@@ -74,6 +74,9 @@ export type {
 } from './collections';
 
 export type {
+	ClosureRow,
+	ClosureDocument,
+	ClosureCollection,
 	RegisterSessionRow,
 	RegisterSessionDocument,
 	RegisterSessionCollection,

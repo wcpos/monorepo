@@ -1,16 +1,38 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { act, render, waitFor } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
+import { of } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { useRegisterSession } from './use-register-session';
 import { RegisterSessionBridge } from './bridge';
 import { drainRegisterSessionQueue } from './queue';
 import { refreshSessions } from './refresh';
 
-const sessions = {};
-const movements = {};
+const sessions = { find: () => ({ $: of([]) }) };
+let observed: unknown = null;
+jest.mock('observable-hooks', () => ({ useObservableState: () => observed }));
+const engine = { active: () => null };
+const site = { uuid: 'site' };
+const userDB = {};
+jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => ({ engine }),
+	engineCollection: () => null,
+	observeEngineQuery: () => of({ hits: [] }),
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+jest.mock('../../contexts/app-state', () => ({
+	useStoreSession: () => ({
+		userDB,
+		site,
+		store: { id: 1, register_sessions: true },
+		wpCredentials: { capabilities: [] },
+	}),
+}));
+jest.mock('../register/register-document', () => ({ readRegister: async () => ({ sites: {} }) }));
+const movements = sessions;
 const http = {};
 
 jest.mock('@wcpos/hooks/use-online-status', () => ({
@@ -23,6 +45,7 @@ jest.mock('../register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'register' }),
 }));
 jest.mock('./use-register-session-collections', () => ({
+	useClosureCollection: () => sessions,
 	useRegisterSessionCollection: () => sessions,
 	useCashMovementCollection: () => movements,
 }));
@@ -125,4 +148,33 @@ it('forgets the failure streak once a cycle succeeds', async () => {
 
 	expect(log.warn).not.toHaveBeenCalled();
 	expect(log.debug).toHaveBeenCalledTimes(2);
+});
+
+it('recovers only an interrupted local close; imported history and written closures are never current', () => {
+	const closed = { id: 'history', closure_id: 'history', status: 'closed', sync_status: 'synced' };
+	const data = {
+		sessions,
+		registerId: 'register',
+		active: [] as unknown[],
+		closed: [closed] as unknown[],
+		entries: [],
+		orders: { hits: [] },
+		closureRows: [] as unknown[],
+	};
+	observed = data;
+	const view = renderHook(() => useRegisterSession());
+	// Imported closed history: synced, no local closure row.
+	expect(view.result.current.session).toBeNull();
+	// A close this till made whose closure write was interrupted: pending, no closure row.
+	const interrupted = { id: 'mine', closure_id: 'mine', status: 'closed', sync_status: 'pending' };
+	data.closed = [closed, interrupted];
+	view.rerender();
+	expect(view.result.current.session?.id).toBe('mine');
+	// Once the closure row exists the closed session is history, whatever its sync state.
+	data.closureRows = [{ id: 'mine', session_id: 'mine', sync_status: 'pending' }];
+	view.rerender();
+	expect(view.result.current.session).toBeNull();
+	data.active = [{ id: 'counting', status: 'counting' }];
+	view.rerender();
+	expect(view.result.current.session?.id).toBe('counting');
 });

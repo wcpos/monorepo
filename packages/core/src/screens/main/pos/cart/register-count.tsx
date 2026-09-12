@@ -98,7 +98,8 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 		cash: amount,
 		...Object.fromEntries(Object.entries(others).filter(([, value]) => value !== '')),
 	};
-	const completed = () => onClosed({ counted: amount, expected: expected.cash ?? '0', blind });
+	const completed = (closure: ClosureCount['closure']) =>
+		onClosed({ closure, counted: amount, expected: expected.cash ?? '0', blind });
 	const attempt = async (action: () => Promise<unknown>) => {
 		setBusy(true);
 		setError('');
@@ -240,8 +241,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 					if (needsManager) setApproving(true);
 					else
 						void attempt(async () => {
-							await actions.closeSession({ counted });
-							completed();
+							completed(await actions.closeSession({ counted }));
 						});
 				}}
 			>

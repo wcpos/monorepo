@@ -17,7 +17,7 @@ import { useTemplatesSync } from './use-templates-sync';
  * Pro + store has active_templates: returns only those templates, in assigned sort order.
  * Otherwise: returns all published + virtual templates, sorted by menu_order.
  */
-export function useActiveTemplates(): TemplateDocument[] {
+export function useActiveTemplates(type: 'receipt' | 'report' = 'receipt'): TemplateDocument[] {
 	const { store, storeDB } = useStoreSession();
 	const { license } = useAppInfo();
 	const isPro = !!license?.isPro;
@@ -38,10 +38,10 @@ export function useActiveTemplates(): TemplateDocument[] {
 	// Query all receipt templates from RxDB
 	const query = React.useMemo(() => {
 		return storeDB.templates.find({
-			selector: { type: 'receipt' },
+			selector: { type },
 			sort: [{ menu_order: 'asc' }],
 		});
-	}, [storeDB]);
+	}, [storeDB, type]);
 
 	const allTemplates$ = React.useMemo(
 		() =>

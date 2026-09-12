@@ -36,7 +36,7 @@ export function RegisterPanel({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const { session, binding, expected, salesCount, blind, movements, lastClosed, actions } =
+	const { session, binding, expected, salesCount, blind, movements, lastClosure, actions } =
 		useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [expanded, setExpanded] = React.useState(false);
@@ -44,6 +44,7 @@ export function RegisterPanel({
 	const [error, setError] = React.useState('');
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
+	const { print: reprint } = useSessionReport(lastClosure);
 	const t = useT();
 	const side = usePOSOverlaySide();
 	const attempt = async (action: () => Promise<unknown>) => {
@@ -53,7 +54,7 @@ export function RegisterPanel({
 			setError(String(e));
 		}
 	};
-	if (!session) return null;
+	if (!session && !lastClosure) return null;
 	const activeMovements = movements.filter(
 		(row) =>
 			row.type !== 'void' && !row.voided_by && !movements.some((entry) => entry.voids === row.id)
@@ -73,13 +74,16 @@ export function RegisterPanel({
 					<Text>
 						{t('register.in_the_drawer')} · {binding.registerName} ·{' '}
 						{t('register.opened_at_by', {
-							time: new Date(session.opened_at_gmt).toLocaleTimeString([], {
-								hour: '2-digit',
-								minute: '2-digit',
-							}),
+							time: new Date(session?.opened_at_gmt ?? lastClosure!.closed_at).toLocaleTimeString(
+								[],
+								{
+									hour: '2-digit',
+									minute: '2-digit',
+								}
+							),
 						})}{' '}
 						<React.Suspense fallback={null}>
-							<Opener id={session.opened_by} />
+							<Opener id={session?.opened_by} />
 						</React.Suspense>
 					</Text>
 				)}
@@ -107,7 +111,7 @@ export function RegisterPanel({
 							testID={`register-panel-${type.replace('_', '-')}`}
 							className="min-h-14 flex-1"
 							variant="outline"
-							disabled={session.status !== 'open'}
+							disabled={session?.status !== 'open'}
 							onPress={() => setMovement(type)}
 						>
 							{t(`register.${type}`)}
@@ -150,14 +154,14 @@ export function RegisterPanel({
 									variant="ghost"
 									className="min-h-11"
 									testID={`movement-void-${row.id}`}
-									disabled={session.status !== 'open'}
+									disabled={session?.status !== 'open'}
 									onPress={() => attempt(() => actions.voidMovement(row.id))}
 								>
 									{t('register.void')}
 								</Button>
 							</View>
 						))}
-					{!blind && (
+					{!blind && !!session && (
 						<Button
 							testID="register-panel-print"
 							className="min-h-11"
@@ -167,20 +171,44 @@ export function RegisterPanel({
 							{t('register.print_x_report')}
 						</Button>
 					)}
-					{lastClosed && (
-						<Text className="min-h-11">
-							{blind
-								? t('register.last_count_blind')
-								: t('register.last_count', {
-										amount: format(Number(lastClosed.counted?.cash ?? 0)),
-										date: new Date(lastClosed.closed_at_gmt!).toLocaleDateString(),
-									})}
-						</Text>
+					{lastClosure && (
+						<View testID="register-panel-last-closure" className="gap-2">
+							<Text>
+								{t('register.closure_written_n', {
+									n: lastClosure.server_number ?? lastClosure.number,
+								})}
+								{blind ? '' : ` · ${format(Number(lastClosure.counted.cash))}`}
+							</Text>
+							{!lastClosure.synced_rows_at ? (
+								<Text testID="closure-unsynced" className="text-muted-foreground">
+									{t('register.unsynced')}
+								</Text>
+							) : !blind ? (
+								<Button
+									testID="closure-reprint"
+									variant="ghost"
+									className="min-h-11"
+									onPress={() => attempt(reprint)}
+								>
+									{t('register.reprint_copy')}
+								</Button>
+							) : null}
+							{lastClosure.sync_status === 'failed' && (
+								<Text testID="closure-sync-error" className="text-destructive">
+									{lastClosure.sync_error}
+								</Text>
+							)}
+							{lastClosure.server_findings &&
+								Object.keys(lastClosure.server_findings).length > 0 && (
+									<Text className="text-muted-foreground">{t('register.listed_in_health')}</Text>
+								)}
+						</View>
 					)}
 				</ScrollView>
 				{!!error && <Text>{error}</Text>}
 				<Button
 					testID="register-panel-close"
+					disabled={!session}
 					variant="outline"
 					className="min-h-14"
 					onPress={() =>

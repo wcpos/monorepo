@@ -1,10 +1,27 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { createTestT } from '../../../../../jest/translate';
 import { ClosureSheet } from './closure-sheet';
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
+const closure = { number: 1, unsynced_count: 2, printed_at: null } as never;
+const print = jest.fn(async () => '2026-09-12T10:00:00Z');
+jest.mock('./movement-sheet', () => ({
+	useSessionReport: () => ({ print, previewProps: {}, isOffline: true }),
+}));
+jest.mock('../../receipt/receipt-body', () => ({
+	ReceiptBody: () => <div data-testid="z-preview" />,
+}));
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: jest.requireActual('react-native').View },
+	ZoomIn: { duration: () => ({ reduceMotion: () => undefined }) },
+	ReduceMotion: { System: 'system' },
+}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
@@ -67,7 +84,15 @@ jest.mock('@wcpos/components/dialog', () => ({
 }));
 it('shows figures and dismisses with Done', () => {
 	const onDone = jest.fn();
-	render(<ClosureSheet counted="463.30" expected="480.80" blind={false} onDone={onDone} />);
+	render(
+		<ClosureSheet
+			closure={closure}
+			counted="463.30"
+			expected="480.80"
+			blind={false}
+			onDone={onDone}
+		/>
+	);
 	expect(screen.getByTestId('closure-counted').textContent).toContain('£463.30');
 	expect(screen.getByTestId('closure-expected').textContent).toContain('£480.80');
 	expect(screen.getByTestId('closure-variance').textContent).toContain('−£17.50 short');
@@ -75,8 +100,60 @@ it('shows figures and dismisses with Done', () => {
 	expect(onDone).toHaveBeenCalledTimes(1);
 });
 it('blind closure hides expected and variance', () => {
-	render(<ClosureSheet counted="463.30" expected="480.80" blind onDone={jest.fn()} />);
+	render(
+		<ClosureSheet closure={closure} counted="463.30" expected="480.80" blind onDone={jest.fn()} />
+	);
 	expect(screen.getByTestId('closure-counted')).toBeTruthy();
 	expect(screen.queryByTestId('closure-expected')).toBeNull();
 	expect(screen.queryByTestId('closure-variance')).toBeNull();
+	expect(screen.queryByTestId('closure-print')).toBeNull();
+	expect(screen.queryByTestId('closure-preview-fold')).toBeNull();
+	expect(screen.queryByTestId('z-preview')).toBeNull();
+});
+
+it('shows the minted number offline, prints and acknowledges the printed time', async () => {
+	render(
+		<ClosureSheet
+			closure={closure}
+			counted="463.30"
+			expected="480.80"
+			blind={false}
+			onDone={jest.fn()}
+		/>
+	);
+	expect(screen.getByTestId('closure-sheet').textContent).toContain('Closure 1 written');
+	expect(screen.getByTestId('closure-unsynced')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('closure-print'));
+	await waitFor(() =>
+		expect(screen.getByTestId('closure-printed').textContent).toContain('Printed on')
+	);
+});
+
+it('updates the title to the server number once acknowledged', () => {
+	const row = {
+		number: 1,
+		server_number: null as number | null,
+		printed_at: null,
+		unsynced_count: 0,
+	};
+	const view = render(
+		<ClosureSheet
+			closure={row as never}
+			counted="100"
+			expected="100"
+			blind={false}
+			onDone={jest.fn()}
+		/>
+	);
+	row.server_number = 4;
+	view.rerender(
+		<ClosureSheet
+			closure={row as never}
+			counted="100"
+			expected="100"
+			blind={false}
+			onDone={jest.fn()}
+		/>
+	);
+	expect(screen.getByTestId('closure-sheet').textContent).toContain('Closure 4 written');
 });

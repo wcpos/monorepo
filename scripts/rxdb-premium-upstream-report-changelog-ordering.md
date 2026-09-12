@@ -65,6 +65,37 @@ wcpos/monorepo repository) rewrites `runChangelogOperation` in both dists:
 
 The position-correct fast path returns exactly upstream's result.
 
+## A second gap the same contract would close: cleanup persists stale rows after a missed broadcast
+
+Reproduced on the installed storage with two instances: instance A compacts
+(`cleanupDocumentJsonFile`), moving documents to lower offsets and broadcasting
+`R` operations. With those broadcasts withheld from instance B — a tab that was
+frozen, or one that was just promoted to leader and had not yet consumed the
+channel — B's next cleanup runs `cleanupChangelogOperations`, which persists
+B's live (stale) rows over the shared index files and empties the changelog.
+The persisted indexes then address the wrong bytes. No wrapper-side change
+fixes this: it is premium's own cleanup, and the only safe point to reconcile is
+inside the collection lock before persisting. A reload of the persisted indexes
+plus a replay of the durable changelog at lock acquisition (the resync we ask
+for below) would close it, as would refusing to persist rows whose generation is
+older than the on-disk one.
+
+## Rollout note
+
+The shipped receiver-side workaround changes nothing on the wire: it reads
+the index string already present in `op[3]`, so a patched receiver can
+identity-check a delete from any sender, patched or not. Two mixed-version
+gaps remain during a rollout window:
+
+- an unpatched receiver still applies every sender's delete by position — the
+  original defect, and the more dangerous direction;
+- once senders carry exact-row identity (a pending change tags the removed
+  row on the write and cleanup paths), a receiver can only require it for
+  senders that emit it; an older sender's delete still matches by index
+  string alone, which is the same-string re-add limit described above.
+
+Both argue for the identity being part of the contract rather than optional.
+
 ## What only the op contract can fix
 
 If two senders' batches for the same document reach a third instance out of
