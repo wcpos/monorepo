@@ -32,27 +32,38 @@ Two things make the cost compound rather than merely repeat:
 ## What we ship as a workaround
 
 A postinstall patch, `scripts/patch-rxdb-premium-flexsearch-churn.mjs`, keeps a per-index
-`Map` from document id to a 32-bit digest of the searchable string, and skips `index.add`
-entirely when the digest is unchanged. When it did change, it prefers `index.update`, then
+`Map` from document id to that document's exact searchable text, and skips `index.add`
+entirely when the text is unchanged. When it did change, it prefers `index.update`, then
 `remove`+`add`, then plain `add`, so the patch can never leave the plugin unusable. The map
 is cleared when the instance closes, and is bounded by document count rather than update
 count, which is the property that matters.
+
+We tried a 32-bit digest first and withdrew it: `AaAa` and `BBBB` hash identically, and a
+collision means the document keeps answering to its old text with nothing to surface the
+fault. Storing the text is the only collision-free comparison, and for short indexed fields
+it costs little.
+
+The same comparison runs before the pipeline writes its `append` document, so a batch in
+which nothing changed persists nothing at all. A batch carrying the same document more than
+once is coalesced to its last entry first, or the history would record text the document no
+longer has.
 
 Measured after the patch: re-indexing a 50-term vocabulary twenty further times leaves the
 serialized index byte-identical at 4,075 bytes.
 
 ## What only upstream can fix
 
-The patch removes the redundant work but not its persisted trace. The pipeline still writes
-an `append` document per processed batch even when nothing about the searchable text
-changed, so the on-disk history still grows with sales and still has to be replayed at boot
-until a cleanup succeeds. Two changes would close that:
+Our patch stops new redundant history from being written, but it cannot touch what is
+already on disk, and it cannot change when compaction runs. Two changes would close the
+rest:
 
-1. Decide whether the searchable text changed **before** writing the append entry, not only
-   before feeding the index, so an unchanged document produces no history at all.
-2. Give compaction a trigger that does not depend on `postCleanup`, or page the append
-   history at rehydration rather than materializing it. #9023 proposes the paging half.
+1. Give compaction a trigger that does not depend on `postCleanup`. An instance whose
+   cleanup is failing today accumulates history forever with nothing to reclaim it, and the
+   failure is in a different subsystem entirely.
+2. Page the append history at rehydration rather than materializing all of it. #9023
+   proposes this half, and it is what makes a boot survivable when the history is already
+   large.
 
-We would also welcome the digest check upstream so the patch can be retired. It is six lines
-of logic and it is the difference between an index that is proportional to the catalogue and
+We would also welcome this comparison upstream so the patch can be retired. It is a handful
+of lines and it is the difference between an index that is proportional to the catalogue and
 one that is proportional to trading volume.

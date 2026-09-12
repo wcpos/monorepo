@@ -12,6 +12,7 @@ import FlexSearch from 'flexsearch';
 import {
 	DISTS,
 	indexSearchText,
+	wcposChangedSearchEntries as changedSearchEntries,
 	MARKER,
 	PRELUDE,
 	preparePatch,
@@ -458,6 +459,24 @@ for (const removeAvailable of [true, false]) {
 		assert.equal(await exportedSize(real), before);
 	});
 }
+
+test('a batch carrying one document twice persists only its last text', () => {
+	// Superseded entries must not reach the history: comparing each entry against the
+	// PRE-batch value keeps 'sapphire' and drops the trailing 'quartz', leaving the history
+	// claiming text the document no longer has.
+	const index = new FlexSearch.Index({ preset: 'performance', tokenize: 'full', minlength: 3 });
+	indexSearchText(index, 'product', 'quartz');
+	const kept = changedSearchEntries(index, [
+		{ id: 'product', searchable: 'sapphire' },
+		{ id: 'product', searchable: 'quartz' },
+	]);
+	assert.deepEqual(kept, []);
+	const changed = changedSearchEntries(index, [
+		{ id: 'product', searchable: 'quartz' },
+		{ id: 'product', searchable: 'sapphire' },
+	]);
+	assert.deepEqual(changed, [{ id: 'product', searchable: 'sapphire' }]);
+});
 
 test('text sharing a 32-bit hash with the previous value is still re-indexed', () => {
 	// 'AaAa' and 'BBBB' both hash to 4:2031744. Under the old digest the update was skipped

@@ -1,7 +1,10 @@
 /**
- * Skip unchanged append writes/re-indexing and explicitly replace changed text.
- * Digests retain no searchable text and grow with document count, not writes.
- * This does not compact append history or FlexSearch's empty token keys.
+ * Skip append writes and re-indexing for text the index already holds.
+ * The map holds each document's EXACT searchable text, so it grows with document
+ * count rather than with writes; a 32-bit digest was tried first and rejected because
+ * it collides ('AaAa' and 'BBBB' agree), and a collision here silently freezes that
+ * document's search results.
+ * This does not compact existing append history or FlexSearch's empty token keys.
  *
  * Why not `pnpm patch`: rxdb-premium's dist/ is materialized by its own
  * license-gated postinstall, so it does not exist in the tarball pnpm patches.
@@ -40,19 +43,27 @@ export function indexSearchText(index, id, searchable) {
 	digests.set(id, digest);
 }
 
-function wcposChangedSearchEntries(index, entries) {
+export function wcposChangedSearchEntries(index, entries) {
 	// Every mapped id was indexed from already persisted or appended data: skipping is safe.
 	// Snapshot-restored indexes start with an empty map, so the first update still appends
 	// once per document even if unchanged. That document-count-bounded overhead is acceptable.
 	// Only indexing updates the map; filtering must not advance it before persistence.
+	// A batch can carry the same document twice. Compare only its LAST entry: every earlier
+	// one is superseded, and persisting a superseded entry would leave the history claiming
+	// text the document no longer has, which replay would then load into the index.
 	var digests = index.__wcposSearchDigests;
-	return entries.filter(function (entry) {
+	var last = new Map();
+	entries.forEach(function (entry, position) {
+		last.set(entry.id, position);
+	});
+	return entries.filter(function (entry, position) {
+		if (last.get(entry.id) !== position) return false;
 		return !digests || digests.get(entry.id) !== wcposSearchDigest(entry.searchable);
 	});
 }
 /* eslint-enable no-var */
 
-export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearchDigest.toString()}\n${wcposChangedSearchEntries.toString()}\n${indexSearchText
+export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearchDigest.toString()}\n${wcposChangedSearchEntries.toString().replace(/^export /, '')}\n${indexSearchText
 	.toString()
 	.replace('function indexSearchText(', `function ${MARKER}(`)}\n`;
 
