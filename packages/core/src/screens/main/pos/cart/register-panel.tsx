@@ -150,14 +150,16 @@ export function RegisterPanel({
 					{lastClosure && (
 						<View testID="register-panel-last-closure" className="gap-2">
 							<Text>
-								{t('register.closure_written_n', { n: lastClosure.number })}
+								{t('register.closure_written_n', {
+									n: lastClosure.server_number ?? lastClosure.number,
+								})}
 								{blind ? '' : ` · ${format(Number(lastClosure.counted.cash))}`}
 							</Text>
 							{!lastClosure.synced_rows_at ? (
 								<Text testID="closure-unsynced" className="text-muted-foreground">
 									{t('register.unsynced')}
 								</Text>
-							) : (
+							) : !blind ? (
 								<Button
 									testID="closure-reprint"
 									variant="ghost"
@@ -166,6 +168,11 @@ export function RegisterPanel({
 								>
 									{t('register.reprint_copy')}
 								</Button>
+							) : null}
+							{lastClosure.sync_status === 'failed' && (
+								<Text testID="closure-sync-error" className="text-destructive">
+									{lastClosure.sync_error}
+								</Text>
 							)}
 							{lastClosure.server_findings &&
 								Object.keys(lastClosure.server_findings).length > 0 && (

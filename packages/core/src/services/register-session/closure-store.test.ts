@@ -155,7 +155,7 @@ it('freezes the count figures and breakdowns; retries reuse one number and one p
 		},
 	});
 	expect((await writeClosure(input)).number).toBe(1);
-	expect((await readRegister(userDB))?.sites.site).toMatchObject({
+	expect((await readRegister(userDB))?.sites.site.registers?.register).toMatchObject({
 		last_closure_number: 1,
 		perpetual_sales_total: '80.0000',
 		perpetual_refunds_total: '10.0000',

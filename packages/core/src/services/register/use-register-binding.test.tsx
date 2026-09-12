@@ -158,7 +158,7 @@ it('adopts the bound register detail counters before publishing the binding', as
 	}));
 	const view = mount();
 	await waitFor(() => expect(view.result.current.registerId).toBe('a'));
-	expect((await readRegister(mockDB))?.sites[mockSite]).toMatchObject({
+	expect((await readRegister(mockDB))?.sites[mockSite].registers?.a).toMatchObject({
 		last_closure_number: 9,
 		perpetual_sales_total: '100.0000',
 	});

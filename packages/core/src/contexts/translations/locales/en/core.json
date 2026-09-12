@@ -2008,6 +2008,7 @@
 	"register.approval_failed": "Approval failed — try again",
 	"register.count_failed": "Could not save the count — try again",
 	"register.closure_written_n": "Closure {n} written",
+	"register.report_system_print": "This cloud printer requires an order. Opening the system print dialog for this report.",
 	"register.print_z_report": "Print Z-report",
 	"register.printed_on": "Printed on {time}",
 	"register.unsynced_closure": "Unsynced · {count} rows not yet on the store",

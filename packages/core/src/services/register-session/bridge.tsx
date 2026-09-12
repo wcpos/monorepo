@@ -31,7 +31,9 @@ export function RegisterSessionBridge() {
 	React.useEffect(() => {
 		if (!sessions || !movements || !closures) return;
 		const sync = async () => {
-			const reservation = (await readRegister(userDB))?.sites[site.uuid!]?.closure_reservation;
+			const reservation = (await readRegister(userDB))?.sites[site.uuid!]?.registers?.[
+				registerId ?? ''
+			]?.closure_reservation;
 			if (reservation && !reservation.applied && reservation.row.store_id === (store.id ?? null)) {
 				const session = await sessions.findOne(reservation.row.session_id).exec();
 				if (session)

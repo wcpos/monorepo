@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 import { PrinterService } from '@wcpos/printer';
+import { log } from '@wcpos/utils/logger';
 
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { useT } from '../../../../contexts/translations';
@@ -79,7 +80,7 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 			closure: row,
 			title,
 			store: { name: binding.registerName },
-			order_number: `${title} ${fiscal?.receipt_number ?? row?.printed_number ?? row?.number ?? session?.id ?? ''}`,
+			order_number: `${title} ${fiscal?.receipt_number ?? row?.server_number ?? row?.printed_number ?? row?.number ?? session?.id ?? ''}`,
 			date_created: row?.closed_at ?? session?.opened_at_gmt,
 			line_items,
 			lines: line_items.map((line) => ({ name: `${line.name}: ${line.amount}`, qty: 1 })),
@@ -90,11 +91,13 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 	const report = useReceiptDocument({
 		autoPrintAllowed: false,
 		document: closure
-			? `closure:${closure.server_closure_id ?? closure.id}`
+			? `closure:${snapshot?.server_closure_id ?? closure.id}`
 			: session
 				? `xreport:${session.id}`
 				: undefined,
-		documentReady: closure ? snapshot?.sync_status === 'synced' : !!session,
+		documentReady: closure
+			? snapshot?.sync_status === 'synced' || snapshot?.sync_status === 'superseded'
+			: !!session,
 		localReport: formatReport(),
 		formatReport,
 	});
@@ -104,12 +107,18 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 		print: async () => {
 			await report.print();
 			const at = new Date().toISOString();
-			if (closure)
-				await closure.incrementalModify((row) => ({
-					...row,
-					printed_at: row.printed_at ?? at,
-					print_count: row.print_count + 1,
-				}));
+			try {
+				if (closure)
+					await closure.incrementalModify((row) => ({
+						...row,
+						printed_at: row.printed_at ?? at,
+						print_count: row.print_count + 1,
+					}));
+			} catch (error) {
+				log.warn('Closure print marker write failed after dispatch', {
+					context: { error: String(error) },
+				});
+			}
 			return at;
 		},
 		openDrawer: async () => {

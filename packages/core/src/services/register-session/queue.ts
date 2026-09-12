@@ -15,9 +15,10 @@ import type {
 import {
 	adoptCounters,
 	mintClosureNumber,
+	readRegister,
 	type RegisterCounters,
 } from '../register/register-document';
-import { backoffMs } from '../../screens/main/receipt/email-queue/queue';
+import { backoffMs, MAX_SEND_ATTEMPTS } from '../../screens/main/receipt/email-queue/queue';
 
 export type SessionHttp = {
 	get: (
@@ -127,14 +128,20 @@ async function drain({
 					await adoptCounters(
 						userDB,
 						siteUuid,
+						closure.register_id,
 						(response.data as { counters: RegisterCounters }).counters
 					);
-					const number = await mintClosureNumber(userDB, siteUuid, {
+					const number = await mintClosureNumber(userDB, siteUuid, closure.register_id, {
 						...closure.toJSON(),
 						number_retried: true,
 					});
+					const reserved = (await readRegister(userDB))!.sites[siteUuid].registers![
+						closure.register_id
+					].closure_reservation!.row;
 					await closure.incrementalPatch({
 						number,
+						perpetual_sales_total: reserved.perpetual_sales_total,
+						perpetual_refunds_total: reserved.perpetual_refunds_total,
 						number_retried: true,
 						printed_number: closure.printed_at ? closure.number : null,
 					});
@@ -289,13 +296,20 @@ async function drain({
 				entries.some((entry) => entry.id === id && entry.sync_status === 'synced')
 			) &&
 			dependencies.every((order) => order && !order.local?.dirty);
-		if (
-			due(row) &&
-			dependencies.every((order) => order && !order.local?.dirty) &&
-			session?.server_status === 'closed' &&
-			session.sync_status === 'synced' &&
-			!entries.some((entry) => entry.sync_status === 'pending')
-		) {
+		const failedMovement = entries.find(
+			(entry) => row.movement_ids.includes(entry.id) && entry.sync_status === 'failed'
+		);
+		if (due(row) && failedMovement) {
+			const attempts = row.sync_attempts + 1;
+			const retry = attempts < MAX_SEND_ATTEMPTS;
+			await row.incrementalPatch({
+				sync_status: retry ? 'pending' : 'failed',
+				sync_attempts: attempts,
+				sync_next_at: retry ? Date.now() + backoffMs(attempts) : null,
+				sync_error: failedMovement.sync_error,
+			});
+		}
+		if (due(row) && rowsSynced) {
 			await send(row, async () => {
 				const current = row.getLatest();
 				const {
@@ -343,6 +357,7 @@ async function drain({
 				await adoptCounters(
 					userDB,
 					siteUuid,
+					row.register_id,
 					server.counters ?? {
 						last_closure_number: server.number,
 						perpetual_sales_total: server.perpetual_sales_total,
@@ -352,6 +367,7 @@ async function drain({
 				await row.incrementalPatch({
 					...synced,
 					server_number: server.number,
+					server_closure_id: server.id,
 					printed_number: server.printed_number ?? null,
 					server_findings: server.findings ?? null,
 					expected: server.expected,
@@ -364,7 +380,11 @@ async function drain({
 				});
 			});
 		}
-		if (row.getLatest().sync_status === 'synced' && rowsSynced && !row.getLatest().synced_rows_at)
+		if (
+			['synced', 'superseded'].includes(row.getLatest().sync_status) &&
+			rowsSynced &&
+			!row.getLatest().synced_rows_at
+		)
 			await row.incrementalPatch({ synced_rows_at: new Date().toISOString() });
 	}
 }

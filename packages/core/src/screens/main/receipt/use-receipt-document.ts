@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { usePrint } from '@wcpos/printer';
+import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
+import { Toast } from '@wcpos/components/toast';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -150,6 +151,9 @@ export function useReceiptDocument({
 		useSystemDialog,
 	} = useResolvedPrinter({ template: templateInfo });
 
+	// Order-only cloud jobs cannot name X/Z documents; use the existing HTML print contract.
+	const reportSystemDialog =
+		!!localReport && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
 			let commit: (() => Promise<void>) | undefined;
@@ -182,11 +186,12 @@ export function useReceiptDocument({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || (document ? undefined : baseReceiptURL),
-		printerProfile: useSystemDialog
-			? undefined
-			: resolvedPrinter
-				? { ...resolvedPrinter, ...(localReport ? { autoOpenDrawer: false } : {}) }
-				: undefined,
+		printerProfile:
+			useSystemDialog || reportSystemDialog
+				? undefined
+				: resolvedPrinter
+					? { ...resolvedPrinter, ...(localReport ? { autoOpenDrawer: false } : {}) }
+					: undefined,
 		paperWidth: selectedTemplate?.paper_width ?? undefined,
 		decimals: dp,
 		templateEngine: selectedTemplateEngine ?? undefined,
@@ -199,10 +204,12 @@ export function useReceiptDocument({
 		// (the same `wcpos_template` id the receipt URL uses as `?template=`).
 		orderId: document ? undefined : orderId,
 		templateId: document ? undefined : templateInfo?.id,
-		onBeforePrint: () =>
+		onBeforePrint: () => {
+			if (reportSystemDialog) Toast.show({ title: t('register.report_system_print') });
 			getLogger(['wcpos', 'pos', 'receipt']).info('Receipt print attempted', {
 				context: { event: 'receipt.print_attempted', orderId: order?.uuid ?? orderId },
-			}),
+			});
+		},
 		onPrintError: (error) =>
 			getLogger(['wcpos', 'pos', 'receipt']).error('Receipt print failed', {
 				code: ERROR_CODES.PRINT_UNEXPECTED,
@@ -215,10 +222,11 @@ export function useReceiptDocument({
 	});
 
 	const [printedTo, setPrintedTo] = React.useState<string | null>(null);
+	const printDestination =
+		(reportSystemDialog ? undefined : resolvedPrinter?.name) ?? t('receipt.print_dialog');
 	const print = React.useCallback(
-		() =>
-			printReceipt().then(() => setPrintedTo(resolvedPrinter?.name ?? t('receipt.print_dialog'))),
-		[printReceipt, resolvedPrinter?.name, t]
+		() => printReceipt().then(() => setPrintedTo(printDestination)),
+		[printReceipt, printDestination]
 	);
 
 	/**

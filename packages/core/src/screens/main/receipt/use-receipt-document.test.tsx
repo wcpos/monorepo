@@ -12,10 +12,20 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: mockOnline ? 'online-website-available' : 'offline' }),
 }));
 jest.mock('@wcpos/query', () => ({
-	useDocField: <T,>(source: T, select: (value: T) => unknown) => select(source),
-	useRecordField: <T,>(source: T, select: (value: T) => unknown) => select(source),
+	useDocField: <T,>(source: T, select: (value: T) => unknown) =>
+		source == null ? undefined : select(source),
+	useRecordField: <T,>(source: T, select: (value: T) => unknown) =>
+		source == null ? undefined : select(source),
 }));
-jest.mock('@wcpos/printer', () => ({ usePrint: () => ({ print: mockPrint, isPrinting: false }) }));
+jest.mock('@wcpos/printer', () => ({
+	usePrint: () => ({ print: mockPrint, isPrinting: false }),
+	isOrderBasedCloudProfile: jest.requireActual('@wcpos/printer/transport/cloud-adapter')
+		.isOrderBasedCloudProfile,
+}));
+const mockToast = jest.fn();
+jest.mock('@wcpos/components/toast', () => ({
+	Toast: { show: (props: unknown) => mockToast(props) },
+}));
 jest.mock('./hooks/use-template-renderer', () => ({
 	useTemplateRenderer: () => ({
 		templates: [{ id: 7 }],
@@ -293,6 +303,35 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		);
 		expect(mockGet.mock.calls.map(([, options]) => options.params)).toEqual([{ mode: 'live' }]);
 	});
+
+	it.each(['epson-sdp', 'printnode', 'star-cloudprnt'])(
+		'prints orderless reports via system HTML instead of %s cloud',
+		async (cloudProvider) => {
+			jest
+				.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
+				.mockReturnValue({
+					resolvedPrinter: { name: 'Cloud', connectionType: 'cloud', cloudProvider },
+				});
+			for (const document of ['xreport:s', 'closure:winner']) {
+				const view = renderHook(() =>
+					useReceiptDocument({
+						autoPrintAllowed: false,
+						document,
+						documentReady: true,
+						localReport: { title: 'Report' },
+					})
+				);
+				await act(async () => {
+					await view.result.current.print();
+				});
+				expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain('COPY 1');
+				expect(view.result.current.printedTo).toBe('receipt.print_dialog');
+				view.unmount();
+			}
+			expect(mockCloudPrint).not.toHaveBeenCalled();
+			expect(mockToast).toHaveBeenCalledWith({ title: 'register.report_system_print' });
+		}
+	);
 
 	it('preserves uncounted legacy URL printing when marked JSON cannot be rendered', async () => {
 		jest

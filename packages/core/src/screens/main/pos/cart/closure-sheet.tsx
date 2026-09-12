@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 
+import { useDocField } from '@wcpos/query';
 import type { ClosureDocument } from '@wcpos/database';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
@@ -30,6 +31,7 @@ export function ClosureSheet({
 	onDone,
 }: ClosureCount & { onDone: () => void }) {
 	const report = useSessionReport(closure);
+	const number = useDocField(closure, (row) => row.server_number ?? row.number);
 	const [preview, setPreview] = React.useState(false);
 	const [printedAt, setPrintedAt] = React.useState(closure.printed_at);
 	const [busy, setBusy] = React.useState(false);
@@ -52,7 +54,7 @@ export function ClosureSheet({
 					<Icon name="check" className="text-success" />
 				</Animated.View>
 				<DialogTitle testID="closure-title">
-					{t('register.closure_written_n', { n: closure.number })}
+					{t('register.closure_written_n', { n: number })}
 				</DialogTitle>
 				<Text testID="closure-counted" className="min-h-11 text-[32px] tabular-nums">
 					{t('register.counted')} · {format(Number(counted))}
@@ -67,7 +69,7 @@ export function ClosureSheet({
 						</Text>
 					</>
 				)}
-				{closure.unsynced_count > 0 && (
+				{!blind && closure.unsynced_count > 0 && (
 					<Text testID="closure-unsynced" className="text-muted-foreground">
 						{t('register.unsynced_closure', { count: closure.unsynced_count })}
 					</Text>
@@ -88,7 +90,7 @@ export function ClosureSheet({
 					</View>
 				)}
 				{error && <Text testID="closure-print-error">{error}</Text>}
-				{printedAt ? (
+				{!blind && printedAt ? (
 					<Text testID="closure-printed" className="text-success">
 						{t('register.printed_on', {
 							time: new Date(printedAt).toLocaleTimeString([], {
@@ -97,7 +99,7 @@ export function ClosureSheet({
 							}),
 						})}
 					</Text>
-				) : (
+				) : !blind ? (
 					<Button
 						testID="closure-print"
 						className="min-h-14"
@@ -116,10 +118,10 @@ export function ClosureSheet({
 					>
 						{t('register.print_z_report')}
 					</Button>
-				)}
+				) : null}
 				<Button
 					testID="closure-done"
-					variant={printedAt ? 'default' : 'outline'}
+					variant={blind || printedAt ? 'default' : 'outline'}
 					className="min-h-14"
 					onPress={onDone}
 				>

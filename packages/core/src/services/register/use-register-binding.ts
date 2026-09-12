@@ -103,12 +103,12 @@ export function useRegisterBindingSession(): void {
 			const registers = entry.value.registers;
 			if (bound && registers.some(({ id }) => id === bound.id)) {
 				const row = (await http.get(`registers/${bound.id}`)).data as Register;
-				if (row.counters) await adoptCounters(userDB, site.uuid!, row.counters);
+				if (row.counters) await adoptCounters(userDB, site.uuid!, row.id, row.counters);
 				return;
 			}
 			if (registers.length === 1) {
 				const row = (await http.get(`registers/${registers[0].id}`)).data as Register;
-				if (row.counters) await adoptCounters(userDB, site.uuid!, row.counters);
+				if (row.counters) await adoptCounters(userDB, site.uuid!, row.id, row.counters);
 				await bindRegister(userDB, site.uuid!, registers[0], store.id);
 				publish(entry, {
 					status: 'bound',
@@ -154,7 +154,7 @@ export function useRegisterBinding() {
 			const register = entry.value.registers.find((row) => row.id === id);
 			if (!register) return;
 			const row = (await http.get(`registers/${id}`)).data as Register;
-			if (row.counters) await adoptCounters(userDB, site.uuid!, row.counters);
+			if (row.counters) await adoptCounters(userDB, site.uuid!, row.id, row.counters);
 			await bindRegister(userDB, site.uuid!, register, store.id);
 			publish(entry, { status: 'bound', registerId: id, registerName: register.name });
 		},

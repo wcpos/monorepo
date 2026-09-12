@@ -27,6 +27,8 @@ const http = { post: jest.fn(), get: jest.fn() };
 const logger = { warn: jest.fn() };
 beforeEach(async () => {
 	jest.clearAllMocks();
+	http.post.mockReset();
+	http.get.mockReset();
 	db = await createRxDatabase({
 		name: `queue${Math.random().toString(36).slice(2)}`,
 		storage: wrappedValidateAjvStorage({ storage: getRxStorageMemory() }),
@@ -340,7 +342,7 @@ it('waits for session rows, then adopts server number, totals and findings', asy
 		server_findings: { gap: true },
 		synced_rows_at: expect.any(String),
 	});
-	expect((await readRegister(userDB))?.sites.site).toMatchObject({
+	expect((await readRegister(userDB))?.sites.site.registers?.register).toMatchObject({
 		last_closure_number: 4,
 		perpetual_sales_total: '100.1234',
 		perpetual_refunds_total: '10.1000',
@@ -360,7 +362,11 @@ it('supersedes a closure that landed as a recount', async () => {
 		},
 	});
 	await drain();
-	expect(row.getLatest()).toMatchObject({ sync_status: 'superseded', server_closure_id: 'winner' });
+	expect(row.getLatest()).toMatchObject({
+		sync_status: 'superseded',
+		server_closure_id: 'winner',
+		synced_rows_at: expect.any(String),
+	});
 });
 it('waits for pending movements and dirty named orders before acknowledging a closure', async () => {
 	const { session, row } = await closure();
@@ -430,5 +436,72 @@ it('adopts the floor and re-mints only once, including across drains, before dea
 		sync_status: 'failed',
 		sync_error: 'wcpos_closure_number_invalid',
 	});
-	expect((await readRegister(userDB))?.sites.site.last_closure_number).toBe(9);
+	expect((await readRegister(userDB))?.sites.site.registers?.register.last_closure_number).toBe(9);
+});
+
+it('blocks a failed named movement and dead-letters the closure after six due attempts', async () => {
+	const { session, row } = await closure();
+	await session.incrementalPatch({
+		sync_status: 'synced',
+		server_status: 'closed',
+		pending_status: null,
+	});
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	await movement.incrementalPatch({ sync_status: 'failed', sync_error: 'movement_refused' });
+	await row.incrementalPatch({ movement_ids: [movement.id] });
+	for (let attempt = 1; attempt <= 6; attempt++) {
+		await row.incrementalPatch({ sync_next_at: null });
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+		expect(row.getLatest()).toMatchObject({
+			sync_status: attempt < 6 ? 'pending' : 'failed',
+			sync_attempts: attempt,
+			sync_error: 'movement_refused',
+			synced_rows_at: null,
+		});
+		if (attempt < 6) {
+			expect(row.getLatest().sync_next_at).toBeGreaterThan(Date.now());
+			await drain();
+			expect(row.getLatest().sync_attempts).toBe(attempt);
+		}
+	}
+	expect(row.getLatest().sync_next_at).toBeNull();
+});
+it('resubmits the current closure with re-adopted perpetual totals', async () => {
+	const { session, row } = await closure();
+	await session.incrementalPatch({
+		sync_status: 'synced',
+		server_status: 'closed',
+		pending_status: null,
+	});
+	await row.incrementalPatch({ period_sales_total: '20', period_refunds_total: '3' });
+	http.post.mockRejectedValueOnce({
+		response: { status: 409, data: { code: 'wcpos_closure_number_invalid' } },
+	});
+	http.post.mockImplementation(async (_url, body) => ({
+		data: { ...row.getLatest().toJSON(), ...body },
+	}));
+	http.get.mockResolvedValue({
+		data: {
+			counters: {
+				last_closure_number: 8,
+				perpetual_sales_total: '100',
+				perpetual_refunds_total: '10',
+			},
+		},
+	});
+	await drain();
+	expect(http.get).toHaveBeenCalledWith('registers/register');
+	expect(http.post.mock.calls[1][1]).toMatchObject({
+		number: 9,
+		perpetual_sales_total: '120.0000',
+		perpetual_refunds_total: '13.0000',
+	});
+	expect(row.getLatest().sync_status).toBe('synced');
 });

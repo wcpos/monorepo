@@ -9,6 +9,8 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 let blind = false;
+let serverNumber: number | null = null;
+let syncStatus = 'pending';
 let syncedRowsAt: string | null = null;
 const voidMovement = jest.fn(async () => undefined);
 const recordMovement = jest.fn(async () => ({ id: 'movement' }));
@@ -26,6 +28,10 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		movements: [{ id: 'old', type: 'paid_out', amount: '7', reason: 'Milk' }],
 		lastClosure: {
 			number: 1,
+			server_number: serverNumber,
+			sync_status: syncStatus,
+			server_closure_id: 'winner',
+			sync_error: 'movement_refused',
 			counted: { cash: '570' },
 			till_expected: { cash: '570' },
 			variance: { cash: '0' },
@@ -112,6 +118,9 @@ jest.mock('@wcpos/components/dialog', () => ({
 }));
 beforeEach(() => {
 	blind = false;
+	syncedRowsAt = null;
+	serverNumber = null;
+	syncStatus = 'pending';
 	jest.clearAllMocks();
 });
 it('hides every amount and the X report for blind cashiers', () => {
@@ -175,4 +184,26 @@ it('shows Unsynced until every named row is acknowledged, then offers Reprint', 
 	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('closure-unsynced')).toBeNull();
 	expect(screen.getByTestId('closure-reprint')).toBeTruthy();
+});
+
+it('shows the server number and offers Reprint for an acknowledged superseded closure', () => {
+	serverNumber = 4;
+	syncStatus = 'superseded';
+	syncedRowsAt = '2026-09-12T12:00:00Z';
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel-last-closure').textContent).toContain(
+		'register.closure_written_n 4'
+	);
+	expect(screen.getByTestId('closure-reprint')).toBeTruthy();
+});
+it('hides acknowledged closure reprinting from blind cashiers', () => {
+	blind = true;
+	syncedRowsAt = '2026-09-12T12:00:00Z';
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('closure-reprint')).toBeNull();
+});
+it('shows the dead-lettered closure movement error', () => {
+	syncStatus = 'failed';
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('closure-sync-error').textContent).toBe('movement_refused');
 });

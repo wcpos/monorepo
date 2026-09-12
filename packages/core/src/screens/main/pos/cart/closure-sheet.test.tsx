@@ -5,6 +5,9 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { createTestT } from '../../../../../jest/translate';
 import { ClosureSheet } from './closure-sheet';
+jest.mock('@wcpos/query', () => ({
+	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
+}));
 const closure = { number: 1, unsynced_count: 2, printed_at: null } as never;
 const print = jest.fn(async () => '2026-09-12T10:00:00Z');
 jest.mock('./movement-sheet', () => ({
@@ -103,6 +106,9 @@ it('blind closure hides expected and variance', () => {
 	expect(screen.getByTestId('closure-counted')).toBeTruthy();
 	expect(screen.queryByTestId('closure-expected')).toBeNull();
 	expect(screen.queryByTestId('closure-variance')).toBeNull();
+	expect(screen.queryByTestId('closure-print')).toBeNull();
+	expect(screen.queryByTestId('closure-preview-fold')).toBeNull();
+	expect(screen.queryByTestId('z-preview')).toBeNull();
 });
 
 it('shows the minted number offline, prints and acknowledges the printed time', async () => {
@@ -121,4 +127,33 @@ it('shows the minted number offline, prints and acknowledges the printed time', 
 	await waitFor(() =>
 		expect(screen.getByTestId('closure-printed').textContent).toContain('Printed on')
 	);
+});
+
+it('updates the title to the server number once acknowledged', () => {
+	const row = {
+		number: 1,
+		server_number: null as number | null,
+		printed_at: null,
+		unsynced_count: 0,
+	};
+	const view = render(
+		<ClosureSheet
+			closure={row as never}
+			counted="100"
+			expected="100"
+			blind={false}
+			onDone={jest.fn()}
+		/>
+	);
+	row.server_number = 4;
+	view.rerender(
+		<ClosureSheet
+			closure={row as never}
+			counted="100"
+			expected="100"
+			blind={false}
+			onDone={jest.fn()}
+		/>
+	);
+	expect(screen.getByTestId('closure-sheet').textContent).toContain('Closure 4 written');
 });

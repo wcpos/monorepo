@@ -79,3 +79,28 @@ it('prints the persisted closure and marks its time only after successful printi
 		})
 	);
 });
+
+it('returns print success even when the local marker write fails', async () => {
+	const incrementalModify = jest.fn().mockRejectedValue(new Error('disk write'));
+	const closure = { id: 's', number: 1, print_count: 0, incrementalModify };
+	const view = renderHook(() => useSessionReport(closure as never));
+	await expect(view.result.current.print()).resolves.toEqual(expect.any(String));
+	expect(incrementalModify).toHaveBeenCalledTimes(1);
+});
+it('loads a superseded closure from its authoritative server document', () => {
+	const closure = {
+		id: 's',
+		server_closure_id: 'winner',
+		number: 1,
+		server_number: 4,
+		sync_status: 'superseded',
+	};
+	renderHook(() => useSessionReport(closure as never));
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			document: 'closure:winner',
+			documentReady: true,
+			localReport: expect.objectContaining({ order_number: 'Z-report 4' }),
+		})
+	);
+});

@@ -180,7 +180,7 @@ export async function writeClosure({
 }) {
 	const existing = await closures.findOne(session.id).exec();
 	if (existing) {
-		await advancePerpetual(userDB, siteUuid, {
+		await advancePerpetual(userDB, siteUuid, session.register_id, {
 			sales: existing.period_sales_total,
 			refunds: existing.period_refunds_total,
 			closureId: existing.id,
@@ -309,8 +309,9 @@ export async function writeClosure({
 	};
 	// Reserve the snapshot in the same atomic document write as its number. A failed insert
 	// or restarted till reuses this exact snapshot; the existing outbox remains the only sender.
-	await mintClosureNumber(userDB, siteUuid, draft);
-	const reserved = (await readRegister(userDB))!.sites[siteUuid].closure_reservation!.row;
+	await mintClosureNumber(userDB, siteUuid, session.register_id, draft);
+	const reserved = (await readRegister(userDB))!.sites[siteUuid].registers![session.register_id]
+		.closure_reservation!.row;
 	let row: ClosureDocument;
 	try {
 		row = await closures.insert({
@@ -323,7 +324,7 @@ export async function writeClosure({
 		if (!winner) throw error;
 		row = winner;
 	}
-	await advancePerpetual(userDB, siteUuid, {
+	await advancePerpetual(userDB, siteUuid, session.register_id, {
 		sales: row.period_sales_total,
 		refunds: row.period_refunds_total,
 		closureId: row.id,

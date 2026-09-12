@@ -164,34 +164,66 @@ it('accepts a legacy pointer until the next bind records its store', async () =>
 
 it('mints unique closure numbers after the adopted floor, independently by site', async () => {
 	await ensureRegister(db);
-	await adoptCounters(db, 'site', {
+	await adoptCounters(db, 'site', 'a', {
 		last_closure_number: 12,
 		perpetual_sales_total: '100.01',
 		perpetual_refunds_total: '10.02',
 	});
 	expect(
-		(await Promise.all(Array.from({ length: 10 }, () => mintClosureNumber(db, 'site')))).sort(
+		(await Promise.all(Array.from({ length: 10 }, () => mintClosureNumber(db, 'site', 'a')))).sort(
 			(a, b) => a - b
 		)
 	).toEqual([13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
-	expect(await mintClosureNumber(db, 'other')).toBe(1);
+	expect(await mintClosureNumber(db, 'other', 'a')).toBe(1);
 });
 it('only raises each counter and adds perpetual amounts in minor units', async () => {
 	await ensureRegister(db);
-	await adoptCounters(db, 'site', {
+	await adoptCounters(db, 'site', 'a', {
 		last_closure_number: 3,
 		perpetual_sales_total: '0.1',
 		perpetual_refunds_total: '0.2',
 	});
-	await adoptCounters(db, 'site', {
+	await adoptCounters(db, 'site', 'a', {
 		last_closure_number: 1,
 		perpetual_sales_total: '0.01',
 		perpetual_refunds_total: '0.3',
 	});
-	await advancePerpetual(db, 'site', { sales: '0.2', refunds: '0.0001' });
-	expect((await readRegister(db))?.sites.site).toMatchObject({
+	await advancePerpetual(db, 'site', 'a', { sales: '0.2', refunds: '0.0001' });
+	expect((await readRegister(db))?.sites.site.registers?.a).toMatchObject({
 		last_closure_number: 3,
 		perpetual_sales_total: '0.3000',
 		perpetual_refunds_total: '0.3001',
 	});
+});
+
+it('keeps register B independent of A and ignores legacy site counters', async () => {
+	await ensureRegister(db);
+	await (await db.getLocal('register'))!.incrementalPatch({
+		sites: { site: { sale_counter: 7, last_closure_number: 99, perpetual_sales_total: '999' } },
+	});
+	await bindRegister(db, 'site', { id: 'a', name: 'A' });
+	await adoptCounters(db, 'site', 'a', {
+		last_closure_number: 12,
+		perpetual_sales_total: '100',
+		perpetual_refunds_total: '10',
+	});
+	await bindRegister(db, 'site', { id: 'b', name: 'B' });
+	const floor = {
+		last_closure_number: 0,
+		perpetual_sales_total: '0',
+		perpetual_refunds_total: '0',
+	};
+	await adoptCounters(db, 'site', 'b', floor);
+	expect(await mintClosureNumber(db, 'site', 'b')).toBe(1);
+	await advancePerpetual(db, 'site', 'b', { sales: '2', refunds: '1' });
+	await adoptCounters(db, 'site', 'b', floor);
+	expect((await readRegister(db))?.sites.site.registers).toMatchObject({
+		a: { last_closure_number: 12, perpetual_sales_total: '100.0000' },
+		b: {
+			last_closure_number: 1,
+			perpetual_sales_total: '2.0000',
+			perpetual_refunds_total: '1.0000',
+		},
+	});
+	expect(await nextSaleCounter(db, 'site')).toBe(8);
 });

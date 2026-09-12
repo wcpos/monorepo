@@ -63,9 +63,10 @@ export function useRegisterSession() {
 			: null;
 	const session =
 		data?.active.find((row) => row.sync_status !== 'failed') ??
-		data?.closed.find(
-			(row) =>
-				row.closure_id === row.id && !data.closureRows.some((closure) => closure.id === row.id)
+		data?.closed.find((row) =>
+			data.closureRows.some(
+				(closure) => closure.session_id === row.id && closure.sync_status === 'pending'
+			)
 		) ??
 		null;
 	const entries = data?.entries.filter((row) => row.session_id === session?.id) ?? [];
