@@ -6,6 +6,32 @@ licence. Everything below was reproduced against `rxdb-premium@17.4.0` /
 directory (`multiInstance: true`); the OPFS storage shares the code path
 (`plugins/storage-abstract-filesystem`).
 
+> **Two parts of this are already filed upstream. Do not re-submit them.**
+>
+> The vendor asks for defects as a failing test in its own harness
+> (`pubkey/rxdb-premium-issues`, see that repo's README), so the two reproducible
+> parts went in that form on 2026-09-12:
+>
+> - **pubkey/rxdb-premium-issues#31** — the positional-apply defect below.
+>   Reproduced with **two real processes, ordinary writes and clean exits**: no
+>   fabricated BroadcastChannel message, no interruption, no override of vendor
+>   logic. A stored document stays reachable by `findOne()` but vanishes from
+>   `find({selector: {id: {$lt: 'c'}}})`. Cite this rather than the third-channel
+>   reproduction sketched under "Reproduction" below — the vendor can dismiss an
+>   injected message as something the storage never produced, and it cannot
+>   dismiss this.
+> - **pubkey/rxdb-premium-issues#30** — a *separate* window in the same
+>   subsystem, not described in this document: an interrupted `cleanup()` between
+>   the `persistInMemoryRows()` loop and `changelog.empty()` leaves the log
+>   holding operations the index files already contain, and the next open applies
+>   them twice. A follow-up comment there shows the window is wider still — an
+>   interruption *inside* the loop leaves the index files at different
+>   generations.
+>
+> Both were verified failing on 17.2.0 and 17.4.0, each with a passing control
+> that moves the timing by one step. The contract changes this document asks for
+> are still the right ask, and are not yet filed.
+
 ## Summary
 
 `storage-abstract-filesystem` keeps every index as a sorted in-memory row array
