@@ -76,24 +76,28 @@ it('refreshes shared register state after every periodic drain', async () => {
 	expect(refresh).toHaveBeenCalledTimes(2);
 });
 
-it('never recovers imported closed history, but retains pending local closures and counting', () => {
+it('recovers only an interrupted local close; imported history and written closures are never current', () => {
 	const closed = { id: 'history', closure_id: 'history', status: 'closed', sync_status: 'synced' };
 	const data = {
 		sessions,
 		registerId: 'register',
 		active: [] as unknown[],
-		closed: [closed],
+		closed: [closed] as unknown[],
 		entries: [],
 		orders: { hits: [] },
 		closureRows: [] as unknown[],
 	};
 	observed = data;
 	const view = renderHook(() => useRegisterSession());
+	// Imported closed history: synced, no local closure row.
 	expect(view.result.current.session).toBeNull();
-	data.closureRows = [{ id: 'history', session_id: 'history', sync_status: 'pending' }];
+	// A close this till made whose closure write was interrupted: pending, no closure row.
+	const interrupted = { id: 'mine', closure_id: 'mine', status: 'closed', sync_status: 'pending' };
+	data.closed = [closed, interrupted];
 	view.rerender();
-	expect(view.result.current.session?.id).toBe('history');
-	data.closureRows = [{ id: 'history', session_id: 'history', sync_status: 'synced' }];
+	expect(view.result.current.session?.id).toBe('mine');
+	// Once the closure row exists the closed session is history, whatever its sync state.
+	data.closureRows = [{ id: 'mine', session_id: 'mine', sync_status: 'pending' }];
 	view.rerender();
 	expect(view.result.current.session).toBeNull();
 	data.active = [{ id: 'counting', status: 'counting' }];

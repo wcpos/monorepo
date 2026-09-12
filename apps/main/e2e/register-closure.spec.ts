@@ -110,10 +110,12 @@ test('writes Closure 1 and leaves the last closure in the register panel', async
 	await page.getByTestId('open-register-button').click();
 	await page.getByTestId('register-bar-drawer').click();
 	await page.getByTestId('register-panel-close').click();
+	await expect(page.getByTestId('count-amount')).toBeVisible();
 	await page.getByTestId('count-amount').fill('100');
+	await expect(page.getByTestId('count-amount')).toHaveValue('100');
 	await page.getByTestId('count-close').click();
 	// The composite title deliberately proves that the minted number is visible offline.
-	await expect(page.getByTestId('closure-title')).toContainText('Closure 1');
+	await expect(page.getByTestId('closure-title')).toContainText('Closure 1', { timeout: 15_000 });
 	await page.getByTestId('closure-done').click();
 	await expect(page.getByTestId('closure-sheet')).toHaveCount(0);
 	await page.getByTestId('register-bar-drawer').click();

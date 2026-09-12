@@ -63,10 +63,14 @@ export function useRegisterSession() {
 			: null;
 	const session =
 		data?.active.find((row) => row.sync_status !== 'failed') ??
-		data?.closed.find((row) =>
-			data.closureRows.some(
-				(closure) => closure.session_id === row.id && closure.sync_status === 'pending'
-			)
+		// Recover only a close this till made and never got acknowledged whose closure write
+		// was interrupted (closure_id stamped, no local closure row); imported closed history
+		// is synced and is never current, and a written closure needs no current session.
+		data?.closed.find(
+			(row) =>
+				row.closure_id === row.id &&
+				row.sync_status !== 'synced' &&
+				!data.closureRows.some((closure) => closure.id === row.id)
 		) ??
 		null;
 	const entries = data?.entries.filter((row) => row.session_id === session?.id) ?? [];
