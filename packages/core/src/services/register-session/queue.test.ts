@@ -9,7 +9,6 @@ import { closeSession, openSession, recordMovement, startCounting } from './sess
 import { drainRegisterSessionQueue } from './queue';
 import { refreshSessions } from './refresh';
 
-jest.mock('uuid', () => ({ v4: () => globalThis.crypto.randomUUID() }));
 let db: StoreDatabase;
 const http = { post: jest.fn(), get: jest.fn() };
 const logger = { warn: jest.fn() };

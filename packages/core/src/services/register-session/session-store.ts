@@ -1,11 +1,11 @@
-import { v4 as uuid, v5 as uuidV5 } from 'uuid';
-
 import type {
 	CashMovementCollection,
 	RegisterSessionCollection,
 	RegisterSessionRow,
 } from '@wcpos/database';
 import { fromMinor, toMinor } from '@wcpos/order-math';
+
+import { mintUuid as uuid } from '../register/register-document';
 
 export const pending = {
 	sync_status: 'pending',
@@ -120,9 +120,9 @@ export async function voidMovement(
 ) {
 	const row = await movements.findOne(movementId).exec();
 	if (!row || row.type === 'void') throw new Error('invalid_void_target');
-	// A fixed namespace makes the target movement UUID the stable name for this reversal.
-	const id = uuidV5(movementId, uuidV5.URL);
-	const existing = await movements.findOne(id).exec();
+	// Repeated Undo taps share one durable reversal: the target's voided_by names it.
+	const existing = row.voided_by ? await movements.findOne(row.voided_by).exec() : null;
+	const id = existing?.id ?? uuid();
 	const reversal =
 		existing ??
 		(await movements.incrementalUpsert({

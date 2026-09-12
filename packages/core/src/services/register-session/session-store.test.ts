@@ -16,18 +16,6 @@ import {
 	voidMovement,
 } from './session-store';
 
-jest.mock('uuid', () => ({
-	v4: () => globalThis.crypto.randomUUID(),
-	v5: Object.assign(
-		(id: string, namespace: string) => {
-			if (namespace !== '6ba7b811-9dad-11d1-80b4-00c04fd430c8') {
-				throw new Error('Invalid UUID namespace');
-			}
-			return id.replace(/^./, id[0] === 'a' ? 'b' : 'a');
-		},
-		{ URL: '6ba7b811-9dad-11d1-80b4-00c04fd430c8' }
-	),
-}));
 let db: StoreDatabase;
 beforeEach(async () => {
 	db = await createRxDatabase({

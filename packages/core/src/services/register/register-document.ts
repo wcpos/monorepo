@@ -31,7 +31,7 @@ export function getRegisterId(): string | null {
 	return currentRegisterId;
 }
 
-function mintUuid(): string {
+export function mintUuid(): string {
 	const id = globalThis.crypto?.randomUUID?.();
 	if (id) return id;
 	const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
