@@ -6,6 +6,11 @@ import type {
 	RegisterSessionDocument,
 	RegisterSessionRow,
 } from '@wcpos/database';
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { backoffMs } from '../../screens/main/receipt/email-queue/queue';
 import { failureFacts } from './failure-facts';
@@ -18,15 +23,18 @@ export type SessionHttp = {
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 };
 /**
- * Only the two levels the outbox is entitled to write. It sees a whole attempt, so it can name
- * the terminal outcome of a permanent refusal, but a retryable failure is mid-arc and stays
- * forensic — see packages/utils/src/logger/LEVELS.md.
+ * The three levels the outbox is entitled to write. It sees a whole attempt, so it can name the
+ * terminal outcome of a permanent refusal, but a retryable failure is mid-arc and stays forensic
+ * — see packages/utils/src/logger/LEVELS.md.
  */
 export type SessionLogger = {
 	debug: (message: string, options?: SessionLogOptions) => void;
 	warn: (message: string, options?: SessionLogOptions) => void;
+	error: (message: string, options: SessionLogOptions & { code: ErrorCode }) => void;
 };
 type SessionLogOptions = {
+	code?: ErrorCode;
+	showToast?: boolean;
 	context?: Record<string, unknown>;
 	terminal?: {
 		operationId?: string;
@@ -43,6 +51,29 @@ type Deps = {
 };
 /** `operationId` is clamped to 32 characters, so a 36-character UUID would truncate. */
 const operationId = (id: string) => id.replace(/-/g, '').slice(0, 32);
+/**
+ * Which registered code a settled refusal is. The four outcomes differ in what the merchant
+ * has to DO about them, which is what the code carries: refused cash is money in the drawer
+ * the store will never see; a refused reversal leaves the original standing; a refused open
+ * detaches the shift from its sales; a takeover means two tills on one drawer.
+ */
+function refusalCode(
+	endpoint: string,
+	row: RegisterSessionRow | CashMovementRow,
+	failure: { status?: number; errorCode?: string }
+): ErrorCode {
+	if (failure.status === 409 && failure.errorCode === 'wcpos_session_already_open') {
+		return ERROR_CODES.REGISTER_TAKEN_OVER;
+	}
+	if (endpoint === 'movements') {
+		return 'voids' in row && row.voids
+			? ERROR_CODES.CASH_MOVEMENT_VOID_REFUSED
+			: ERROR_CODES.CASH_MOVEMENT_REFUSED;
+	}
+	return endpoint === 'sessions'
+		? ERROR_CODES.REGISTER_OPEN_REFUSED
+		: ERROR_CODES.REGISTER_CLOSE_REFUSED;
+}
 const inFlight = new Map<RegisterSessionCollection, Promise<void>>();
 export const synced = {
 	sync_status: 'synced',
@@ -107,6 +138,18 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 					sync_error: 'wcpos_override_refused',
 					closed_at_gmt: null,
 				});
+				// A refused override is recovered, not failed — the count is intact and the session is
+				// back at counting — but repeated failed overrides on a short till are exactly the
+				// pattern worth seeing, and this branch left no record of them whatsoever.
+				logger.warn('Register session close approval refused', {
+					code: ERROR_CODES.REGISTER_APPROVAL_REFUSED,
+					context: { endpoint, status, errorCode, documentId: doc.getLatest().id },
+					terminal: {
+						operationId: operationId(doc.getLatest().id),
+						operationType: 'register.outbox',
+						outcome: 'rejected',
+					},
+				});
 				return;
 			}
 			// 4xx is permanent except the two throttle codes, which the server asks us to retry.
@@ -119,8 +162,8 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 				sync_next_at: retry ? Date.now() + backoffMs(attempts) : null,
 				sync_error: errorCode ?? body?.message ?? message ?? String(status),
 			});
-			// The cashier's typed reason is deliberately absent: step 3 promotes the permanent row
-			// to a registered `error`, and `error` forwards its whole context to Sentry.
+			// The cashier's typed reason is deliberately absent: `error` forwards its whole context
+			// to Sentry, and a free-text field is the one thing that must not ride along.
 			const options = {
 				context: {
 					endpoint,
@@ -138,10 +181,21 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 					...(retry ? {} : { outcome: 'failed' as const }),
 				},
 			};
-			// Retryable means the arc has not settled, so it stays forensic; a 4xx is the server's
-			// final answer on money that has already physically moved.
+			// Retryable means the arc has not settled, so it stays forensic. A 4xx is the server's
+			// final answer, and the registry decides how loud that is: refused cash needs the
+			// cashier now and is an `error` with a toast; a refused reversal or a takeover is a
+			// `warn`. The level follows the code so the two can never drift apart.
+			const code = refusalCode(endpoint, before, { status, errorCode });
 			if (retry) logger.debug('Register session outbox request failed', options);
-			else logger.warn('Register session outbox request permanently refused', options);
+			else if (ERROR_CATALOGUE[code].severity === 'error') {
+				logger.error('Register session outbox request permanently refused', {
+					...options,
+					code,
+					showToast: ERROR_CATALOGUE[code].dataSafety === 'money-moved',
+				});
+			} else {
+				logger.warn('Register session outbox request permanently refused', { ...options, code });
+			}
 			if (status === 409 && body?.code === 'wcpos_session_already_open' && body.data?.session_id) {
 				const server = (await http.get(`sessions/${body.data.session_id}`))
 					.data as RegisterSessionRow;

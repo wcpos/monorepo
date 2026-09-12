@@ -18,7 +18,7 @@ import { refreshSessions } from './refresh';
 
 let db: StoreDatabase;
 const http = { post: jest.fn(), get: jest.fn() };
-const logger = { warn: jest.fn(), debug: jest.fn() };
+const logger = { warn: jest.fn(), debug: jest.fn(), error: jest.fn() };
 beforeEach(async () => {
 	jest.clearAllMocks();
 	db = await createRxDatabase({
@@ -265,7 +265,7 @@ it.each(['pending', 'failed'] as const)(
 	}
 );
 
-it('logs a retryable outbox failure at debug and a permanent one at warn, with the transport facts', async () => {
+it('logs a retryable outbox failure at debug and a permanent one at its registered level, with the transport facts', async () => {
 	const session = await open();
 	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
 	const movement = await recordMovement(db.cash_movements, {
@@ -302,9 +302,15 @@ it('logs a retryable outbox failure at debug and a permanent one at warn, with t
 	});
 	await drain();
 	expect(logger.debug).not.toHaveBeenCalled();
-	expect(logger.warn).toHaveBeenCalledWith(
+	expect(logger.warn).not.toHaveBeenCalled();
+	// Money that has physically moved and the server will never take is an `error`: it needs
+	// the cashier now, and only a registered code gives the row a merchant-readable title,
+	// a Help link and a toast.
+	expect(logger.error).toHaveBeenCalledWith(
 		expect.any(String),
 		expect.objectContaining({
+			code: 'REGISTER101',
+			showToast: true,
 			context: expect.objectContaining({
 				endpoint: 'movements',
 				status: 400,
@@ -315,9 +321,109 @@ it('logs a retryable outbox failure at debug and a permanent one at warn, with t
 			terminal: expect.objectContaining({ outcome: 'failed', attempt: 2 }),
 		})
 	);
-	// Step 3 promotes this row to a registered `error`, which forwards context to Sentry.
-	// The cashier's free text must not be in it before that happens.
-	expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('Bread money');
+	// `logger.error` forwards message AND context to Sentry. The cashier's free text
+	// must never ride along.
+	expect(JSON.stringify(logger.error.mock.calls)).not.toContain('Bread money');
+});
+
+it('gives a refused reversal its own code, below error, because the original still stands', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const target = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	await target.incrementalPatch({ sync_status: 'synced' });
+	await voidMovement(db.cash_movements, target.id, 7);
+	http.post.mockRejectedValueOnce({
+		response: { status: 409, data: { code: 'wcpos_movement_void_refused' } },
+	});
+	await drain();
+	expect(logger.error).not.toHaveBeenCalled();
+	expect(logger.warn).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER111' })
+	);
+});
+
+it('names a refused open and a refused close apart', async () => {
+	await open();
+	http.post.mockRejectedValueOnce({
+		response: { status: 400, data: { code: 'rest_invalid_param' } },
+	});
+	await drain();
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER201' })
+	);
+
+	logger.error.mockClear();
+	const other = await open();
+	await other.incrementalPatch({
+		server_status: 'counting',
+		status: 'counting',
+		sync_status: 'synced',
+	});
+	await closeSession(db.register_sessions, other.id, { counted: { cash: '100' } });
+	http.post.mockRejectedValueOnce({
+		response: { status: 400, data: { code: 'rest_invalid_param' } },
+	});
+	await drain();
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER211' })
+	);
+});
+
+it('records a takeover as a takeover, not as a refused open', async () => {
+	const row = await open();
+	http.post.mockRejectedValue({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_session_already_open', data: { session_id: 'winner' } },
+		},
+	});
+	http.get.mockResolvedValue({ data: { ...row.toJSON(), id: 'winner', status: 'open' } });
+	await drain();
+	// Two tills on one drawer. Today this is completely mute.
+	expect(logger.warn).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER221' })
+	);
+	expect(logger.error).not.toHaveBeenCalled();
+});
+
+it('records a refused manager approval, which today leaves no trace at all', async () => {
+	const row = await open();
+	await row.incrementalPatch({
+		server_status: 'counting',
+		sync_status: 'synced',
+		status: 'counting',
+	});
+	await closeSession(db.register_sessions, row.id, { counted: { cash: '80' } });
+	http.post.mockRejectedValue({
+		response: {
+			status: 403,
+			data: { code: 'wcpos_override_refused', message: 'Manager required' },
+		},
+	});
+	await drain();
+	expect(logger.warn).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			code: 'REGISTER301',
+			context: expect.objectContaining({ status: 403, errorCode: 'wcpos_override_refused' }),
+		})
+	);
+	// The recovery branch returns the session to counting; it must not also be logged as a
+	// refused close.
+	expect(logger.error).not.toHaveBeenCalled();
+	// Neither the approver's username nor their password is ever in scope here, but the
+	// session row is — assert the row we log carries no credential-shaped key.
+	expect(JSON.stringify(logger.warn.mock.calls)).not.toMatch(/password|username|approver_token/);
 });
 
 it('chains outbox attempts on one operation id the ledger can follow', async () => {
