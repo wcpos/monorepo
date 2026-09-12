@@ -59,6 +59,21 @@ interface EscposPrintModeState {
 	height: number;
 }
 
+/**
+ * The size multipliers currently in force, in every language.
+ *
+ * This is deliberately NOT `escposPrintMode`, which exists only to assemble the ESC/POS
+ * `ESC !` byte and is therefore absent on Star. Alignment padding is laid down as literal
+ * spaces *inside* the scaled run, so every space costs `width` columns — a padding count
+ * computed against `width: 1` while the printer is in double width lays down twice the
+ * margin asked for and pushes the line off the paper. Reading the scale off an ESC/POS-only
+ * field made that the standing behaviour for every Star receipt.
+ */
+interface TextScaleState {
+	width: number;
+	height: number;
+}
+
 interface RenderContext {
 	columns: number;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
@@ -70,6 +85,7 @@ interface RenderContext {
 	supportsCp932: boolean;
 	normalizeText: boolean;
 	emitEscPrintMode: boolean;
+	textScale: TextScaleState;
 	escposPrintMode?: EscposPrintModeState;
 	activeScaledLineSpacing?: number;
 	imageAssets: ThermalImageAssets;
@@ -100,6 +116,16 @@ export interface ThermalLayoutDiagnostics {
 const CP932_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]/;
 const FULL_WIDTH_TEXT_RE =
 	/[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u;
+/**
+ * Star's `ESC i` carries its magnification as n1/n2 in 0-5, so 6x is the ceiling; ESC/POS's
+ * `GS !` packs a nibble each and genuinely reaches 8x. Nothing bounds `<size width>` on the way
+ * in — `parse-xml.ts` takes the attribute verbatim — so a custom template asking for 8 made the
+ * encoder emit an out-of-range ESC i byte AND made the padding below measure the line at 8 cells
+ * per glyph when the printer was applying at most 6. Clamp once, and both agree.
+ * The PHP emitter caps the same way (`Starprnt_Thermal_Emitter::effective_magnification`).
+ */
+const STAR_MAX_MAGNIFICATION = 6;
+
 const KANJI_MODE_ON = [0x1c, 0x26];
 const KANJI_MODE_OFF = [0x1c, 0x2e];
 
@@ -164,8 +190,14 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		allowAlignedRawTextLine: true,
 		styleDepth: 0,
 		supportsCp932: resolvedLanguage === 'esc-pos' && enableCp932,
+		// ASCII-folding of dashes and quotes stays ESC/POS-only: on Star the encoder switches
+		// code page and maps them faithfully (– → CP1252 0x96, “ ” → 0x93/0x94), so folding
+		// them there would lose typography the printer can actually render. The no-break and
+		// fixed-width SPACES are the opposite case and are handled separately — see
+		// `normalizeThermalSpaces`.
 		normalizeText: resolvedLanguage === 'esc-pos',
 		emitEscPrintMode: resolvedLanguage === 'esc-pos' && emitEscPrintMode,
+		textScale: { width: 1, height: 1 },
 		escposPrintMode:
 			resolvedLanguage === 'esc-pos'
 				? { bold: false, underline: false, width: 1, height: 1 }
@@ -369,8 +401,10 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			encoder.invert(false);
 			break;
 		case 'size': {
-			const previousWidth = context.escposPrintMode?.width ?? 1;
-			const previousHeight = context.escposPrintMode?.height ?? 1;
+			const previousWidth = context.textScale.width;
+			const previousHeight = context.textScale.height;
+			// ESC 3 n is an ESC/POS command with no Star equivalent, so this stays keyed to
+			// the ESC/POS-only print-mode state even though the scale above no longer is.
 			if (context.escposPrintMode !== undefined && node.height > 1) {
 				// ESC 3 n — set line spacing to n/180". The default LF after
 				// double-height text advances by ~30/180", which is too small for
@@ -413,7 +447,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			}
 			const rowData = node.children.map((col) => {
 				const text = extractText(col.children);
-				return context.normalizeText ? normalizeThermalText(text) : text;
+				return normalizeForContext(context, text);
 			});
 			if (context.supportsCp932 && rowData.some(containsJapaneseText)) {
 				writeText(
@@ -721,6 +755,12 @@ function updateEscposSize(
 	width: number,
 	height: number
 ): void {
+	// Every language tracks the scale, because every language pads alignment with spaces the
+	// printer draws at that scale. Only ESC/POS carries the `ESC !` companion byte below.
+	width = effectiveScale(context, width);
+	height = effectiveScale(context, height);
+	context.textScale.width = width;
+	context.textScale.height = height;
 	if (!context.escposPrintMode) {
 		encoder.size(width, height);
 		return;
@@ -743,6 +783,12 @@ function updateEscposSize(
 	encoder.raw([0x1b, 0x21, escposPrintModeByte(context.escposPrintMode)]);
 }
 
+/** The magnification the printer will actually apply for a requested multiplier. */
+function effectiveScale(context: RenderContext, value: number): number {
+	const max = context.language === 'esc-pos' ? Number.POSITIVE_INFINITY : STAR_MAX_MAGNIFICATION;
+	return Math.max(1, Math.min(max, value));
+}
+
 function escposPrintModeByte(mode: EscposPrintModeState): number {
 	return (
 		(mode.bold ? 0x08 : 0) |
@@ -758,7 +804,7 @@ function writeText(
 	supportsCp932: boolean,
 	normalizeText: boolean
 ): void {
-	const normalized = normalizeText ? normalizeThermalText(value) : value;
+	const normalized = normalizeText ? normalizeThermalText(value) : normalizeThermalSpaces(value);
 	if (!supportsCp932 || !containsJapaneseText(normalized)) {
 		encoder.text(normalized);
 		return;
@@ -785,8 +831,8 @@ function writeIndentedStandaloneTextLine(
 	nodes: ThermalNode[],
 	context: RenderContext
 ): boolean {
-	const activeWidth = context.escposPrintMode?.width ?? 1;
-	const activeHeight = context.escposPrintMode?.height ?? 1;
+	const activeWidth = context.textScale.width;
+	const activeHeight = context.textScale.height;
 	if (
 		context.align !== 'left' ||
 		activeWidth > 1 ||
@@ -797,7 +843,7 @@ function writeIndentedStandaloneTextLine(
 		return false;
 	}
 
-	const normalized = context.normalizeText ? normalizeThermalText(nodes[0].value) : nodes[0].value;
+	const normalized = normalizeForContext(context, nodes[0].value);
 	const leadingSpaces = normalized.match(/^ +/)?.[0] ?? '';
 	const rest = normalized.slice(leadingSpaces.length);
 	if (
@@ -849,7 +895,7 @@ function writeAlignedStandaloneTextLine(
 	nodes: ThermalNode[],
 	context: RenderContext
 ): boolean {
-	const activeWidth = context.escposPrintMode?.width ?? 1;
+	const activeWidth = context.textScale.width;
 	if (
 		context.align === 'left' ||
 		context.lineHasText ||
@@ -860,7 +906,7 @@ function writeAlignedStandaloneTextLine(
 	}
 
 	const text = extractText(nodes);
-	const normalized = context.normalizeText ? normalizeThermalText(text) : text;
+	const normalized = normalizeForContext(context, text);
 	if (hasLineBreak(normalized)) {
 		const lines = splitInlineTextLines(nodes);
 		for (const [index, line] of lines.entries()) {
@@ -899,6 +945,9 @@ function writeAlignedStandaloneTextLine(
 		align: 'left',
 		lineHasText: false,
 		allowAlignedRawTextLine: false,
+		// Both size states are cloned for the same reason: a `<size>` inside the padded run
+		// must not leave its multipliers behind on the line that follows it.
+		textScale: { ...context.textScale },
 		escposPrintMode: context.escposPrintMode ? { ...context.escposPrintMode } : undefined,
 		activeScaledLineSpacing: undefined,
 	});
@@ -915,13 +964,13 @@ function writeAlignedRawTextLine(
 	value: string,
 	context: RenderContext
 ): boolean {
-	const activeWidth = context.escposPrintMode?.width ?? 1;
-	const activeHeight = context.escposPrintMode?.height ?? 1;
+	const activeWidth = context.textScale.width;
+	const activeHeight = context.textScale.height;
 	if (context.align === 'left' || context.lineHasText || (activeHeight > 1 && activeWidth === 1)) {
 		return false;
 	}
 
-	const normalized = context.normalizeText ? normalizeThermalText(value) : value;
+	const normalized = normalizeForContext(context, value);
 	if (hasLineBreak(normalized)) {
 		return writeAlignedStandaloneTextLine(encoder, [{ type: 'raw-text', value }], context);
 	}
@@ -989,12 +1038,35 @@ function alignedPadding(
 	return ' '.repeat(paddingCharacters);
 }
 
+/**
+ * Fold the no-break and fixed-width spaces to an ASCII space. Applied in EVERY language,
+ * unlike the punctuation folding below.
+ *
+ * These are spaces: on a monospace thermal line there is no typography to preserve, and no
+ * printer character table carries them. Measured against `@point-of-sale/receipt-printer-
+ * encoder` on `star-line`, U+202F, U+2009 and U+2007 each encode to `?` and U+00A0 to a bare
+ * 0x80 (Ç in the default Star table) — which is how a CLDR short time, whose hour and day
+ * period ICU >= 72 separates with U+202F, printed as `2:05?pm` on a merchant's receipt.
+ */
+export function normalizeThermalSpaces(value: string): string {
+	return value.replace(/[\u00A0\u202F\u2009\u2007]/g, ' ');
+}
+
 export function normalizeThermalText(value: string): string {
-	return value
-		.replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-')
-		.replace(/[\u2018\u2019]/g, "'")
-		.replace(/[\u201C\u201D]/g, '"')
-		.replace(/[\u00A0\u202F\u2009\u2007]/g, ' ');
+	return normalizeThermalSpaces(
+		value
+			.replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-')
+			.replace(/[\u2018\u2019]/g, "'")
+			.replace(/[\u201C\u201D]/g, '"')
+	);
+}
+
+/**
+ * Normalize one string for the current language: punctuation too where the context asks for
+ * it, spaces always.
+ */
+function normalizeForContext(context: RenderContext, value: string): string {
+	return context.normalizeText ? normalizeThermalText(value) : normalizeThermalSpaces(value);
 }
 
 function containsJapaneseText(value: string): boolean {
