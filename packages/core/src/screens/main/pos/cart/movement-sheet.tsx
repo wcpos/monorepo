@@ -10,6 +10,11 @@ import { Text } from '@wcpos/components/text';
 import { PrinterService, usePrint } from '@wcpos/printer';
 
 import { useT } from '../../../../contexts/translations';
+import {
+	movementFieldError,
+	type MovementType,
+	normalizeAmount,
+} from '../../../../services/register-session/movement-input';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useResolvedPrinter } from '../../receipt/hooks/use-resolved-printer';
@@ -17,7 +22,6 @@ import { usePOSOverlaySide } from '../contexts/overlay-side';
 
 const REPORT_TEMPLATE = { id: 'register-session', output_type: 'escpos', paper_width: null };
 
-type MovementType = 'paid_in' | 'paid_out' | 'no_sale';
 export function RegisterAmount(props: {
 	value: string;
 	onChangeText: (v: string) => void;
@@ -94,17 +98,17 @@ export function MovementSheet({
 	const [error, setError] = React.useState('');
 	const t = useT();
 	const side = usePOSOverlaySide();
+	// The cash moves the moment the cashier confirms, so the only safe place to catch an input
+	// the server will refuse is before the tap — a 400 afterwards loses the money silently.
+	const invalid = type ? movementFieldError({ type, amount, reason }) : 'amount';
 	const confirm = async () => {
-		if (!type || busyRef.current) return;
+		if (!type || invalid || busyRef.current) return;
 		busyRef.current = true;
 		setBusy(true);
+		const normalized = type === 'no_sale' ? '0' : normalizeAmount(amount);
 		try {
-			const row = await actions.recordMovement({
-				type,
-				amount: type === 'no_sale' ? '0' : amount,
-				reason,
-			});
-			onDone(row.id, type, amount);
+			const row = await actions.recordMovement({ type, amount: normalized, reason });
+			onDone(row.id, type, normalized);
 			if (type === 'no_sale') await openDrawer();
 			onOpenChange(false);
 		} catch (e) {
@@ -128,12 +132,12 @@ export function MovementSheet({
 					onChangeText={setReason}
 				/>
 				{!!error && <Text>{error}</Text>}
-				<Button
-					testID="movement-confirm"
-					loading={busy}
-					disabled={type !== 'no_sale' && !(Number(amount) > 0)}
-					onPress={confirm}
-				>
+				{!!invalid && (
+					<Text testID="movement-invalid" className="text-muted-foreground">
+						{t(`register.movement_needs_${invalid}`)}
+					</Text>
+				)}
+				<Button testID="movement-confirm" loading={busy} disabled={!!invalid} onPress={confirm}>
 					{t('register.movement_recorded')}
 				</Button>
 			</DialogContent>

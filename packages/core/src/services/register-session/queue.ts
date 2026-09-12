@@ -8,6 +8,7 @@ import type {
 } from '@wcpos/database';
 
 import { backoffMs } from '../../screens/main/receipt/email-queue/queue';
+import { failureFacts } from './failure-facts';
 
 export type SessionHttp = {
 	get: (
@@ -16,12 +17,32 @@ export type SessionHttp = {
 	) => Promise<{ data: unknown }>;
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
 };
+/**
+ * Only the two levels the outbox is entitled to write. It sees a whole attempt, so it can name
+ * the terminal outcome of a permanent refusal, but a retryable failure is mid-arc and stays
+ * forensic — see packages/utils/src/logger/LEVELS.md.
+ */
+export type SessionLogger = {
+	debug: (message: string, options?: SessionLogOptions) => void;
+	warn: (message: string, options?: SessionLogOptions) => void;
+};
+type SessionLogOptions = {
+	context?: Record<string, unknown>;
+	terminal?: {
+		operationId?: string;
+		operationType?: string;
+		attempt?: number;
+		outcome?: 'ok' | 'recovered' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
+	};
+};
 type Deps = {
 	sessions: RegisterSessionCollection;
 	movements: CashMovementCollection;
 	http: SessionHttp;
-	logger: { warn: (message: string) => void };
+	logger: SessionLogger;
 };
+/** `operationId` is clamped to 32 characters, so a 36-character UUID would truncate. */
+const operationId = (id: string) => id.replace(/-/g, '').slice(0, 32);
 const inFlight = new Map<RegisterSessionCollection, Promise<void>>();
 export const synced = {
 	sync_status: 'synced',
@@ -69,21 +90,14 @@ export function drainRegisterSessionQueue(deps: Deps): Promise<void> {
 async function drain({ sessions, movements, http, logger }: Deps) {
 	async function send(
 		doc: RegisterSessionDocument | CashMovementDocument,
+		endpoint: string,
 		task: () => Promise<void>,
 		statusTransition = false
 	) {
 		try {
 			await task();
 		} catch (error) {
-			const failure = error as {
-				message?: string;
-				response?: {
-					status?: number;
-					data?: { code?: string; message?: string; data?: { session_id?: string } };
-				};
-			};
-			const status = failure.response?.status;
-			const body = failure.response?.data;
+			const { status, body, errorCode, field, message } = failureFacts(error);
 			if (statusTransition && body?.code === 'wcpos_override_refused') {
 				await (doc as RegisterSessionDocument).incrementalPatch({
 					status: 'counting',
@@ -97,14 +111,37 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 			}
 			// 4xx is permanent except the two throttle codes, which the server asks us to retry.
 			const retry = !status || status >= 500 || status === 408 || status === 429;
-			const attempts = doc.getLatest().sync_attempts + 1;
+			const before = doc.getLatest();
+			const attempts = before.sync_attempts + 1;
 			await doc.incrementalPatch({
 				sync_status: retry ? 'pending' : 'failed',
 				sync_attempts: attempts,
 				sync_next_at: retry ? Date.now() + backoffMs(attempts) : null,
-				sync_error: body?.code ?? body?.message ?? failure.message ?? String(status),
+				sync_error: errorCode ?? body?.message ?? message ?? String(status),
 			});
-			logger.warn('Register session outbox request failed');
+			// The cashier's typed reason is deliberately absent: step 3 promotes the permanent row
+			// to a registered `error`, and `error` forwards its whole context to Sentry.
+			const options = {
+				context: {
+					endpoint,
+					status,
+					errorCode,
+					field,
+					message,
+					documentId: before.id,
+					...('type' in before ? { type: before.type, amount: before.amount } : {}),
+				},
+				terminal: {
+					operationId: operationId(before.id),
+					operationType: 'register.outbox',
+					attempt: attempts,
+					...(retry ? {} : { outcome: 'failed' as const }),
+				},
+			};
+			// Retryable means the arc has not settled, so it stays forensic; a 4xx is the server's
+			// final answer on money that has already physically moved.
+			if (retry) logger.debug('Register session outbox request failed', options);
+			else logger.warn('Register session outbox request permanently refused', options);
 			if (status === 409 && body?.code === 'wcpos_session_already_open' && body.data?.session_id) {
 				const server = (await http.get(`sessions/${body.data.session_id}`))
 					.data as RegisterSessionRow;
@@ -128,7 +165,7 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 			);
 		});
 		if (!due(row) || row.server_status || closingPredecessor) continue;
-		await send(row, async () => {
+		await send(row, 'sessions', async () => {
 			const response = await http.post('sessions', {
 				id: row.id,
 				register_id: row.register_id,
@@ -149,6 +186,7 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 			continue;
 		await send(
 			row,
+			`sessions/${row.id}/status`,
 			async () => {
 				if (row.pending_status === 'closed' && row.server_status === 'open') {
 					await http.post(`sessions/${row.id}/status`, {
@@ -190,7 +228,7 @@ async function drain({ sessions, movements, http, logger }: Deps) {
 			}
 			if (target?.sync_status !== 'synced') continue;
 		}
-		await send(row, async () => {
+		await send(row, 'movements', async () => {
 			const response = await http.post('movements', {
 				id: row.id,
 				session_id: row.session_id,

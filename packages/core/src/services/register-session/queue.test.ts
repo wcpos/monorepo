@@ -18,7 +18,7 @@ import { refreshSessions } from './refresh';
 
 let db: StoreDatabase;
 const http = { post: jest.fn(), get: jest.fn() };
-const logger = { warn: jest.fn() };
+const logger = { warn: jest.fn(), debug: jest.fn() };
 beforeEach(async () => {
 	jest.clearAllMocks();
 	db = await createRxDatabase({
@@ -217,6 +217,7 @@ it('prunes movements together with their expired closed session', async () => {
 		reason: 'Float',
 		actor: 7,
 	});
+	await movement.incrementalPatch({ sync_status: 'synced' });
 	http.get.mockResolvedValue({ data: [] });
 
 	await refreshSessions({
@@ -228,6 +229,107 @@ it('prunes movements together with their expired closed session', async () => {
 
 	expect(await db.register_sessions.findOne(row.id).exec()).toBeNull();
 	expect(await db.cash_movements.findOne(movement.id).exec()).toBeNull();
+});
+
+it.each(['pending', 'failed'] as const)(
+	'keeps an expired session whose %s movement the server never accepted',
+	async (status) => {
+		const row = await open();
+		await row.incrementalPatch({
+			status: 'closed',
+			server_status: 'closed',
+			sync_status: 'synced',
+			closed_at_gmt: new Date(Date.now() - 8 * 86400_000).toISOString(),
+		});
+		const movement = await recordMovement(db.cash_movements, {
+			sessionId: row.id,
+			type: 'paid_in',
+			amount: '5',
+			reason: 'Float',
+			actor: 7,
+		});
+		await movement.incrementalPatch({ sync_status: status });
+		http.get.mockResolvedValue({ data: [] });
+
+		await refreshSessions({
+			registerId: 'register',
+			http,
+			sessions: db.register_sessions,
+			movements: db.cash_movements,
+		});
+
+		// The cash physically moved and the server never took the row: the device holds the
+		// only record of it, so the prune must leave both it and its session alone.
+		expect(await db.cash_movements.findOne(movement.id).exec()).not.toBeNull();
+		expect(await db.register_sessions.findOne(row.id).exec()).not.toBeNull();
+	}
+);
+
+it('logs a retryable outbox failure at debug and a permanent one at warn, with the transport facts', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '20',
+		reason: 'Bread money',
+		actor: 7,
+	});
+	http.post.mockRejectedValueOnce({ response: { status: 503 } });
+	await drain();
+	expect(logger.warn).not.toHaveBeenCalled();
+	expect(logger.debug).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({
+				endpoint: 'movements',
+				status: 503,
+				documentId: movement.id,
+				type: 'paid_in',
+				amount: '20',
+			}),
+			terminal: expect.objectContaining({ operationType: 'register.outbox', attempt: 1 }),
+		})
+	);
+
+	logger.debug.mockClear();
+	await movement.incrementalPatch({ sync_status: 'pending', sync_next_at: null });
+	http.post.mockRejectedValueOnce({
+		response: {
+			status: 400,
+			data: { code: 'rest_invalid_param', data: { params: { reason: 'Reason is required.' } } },
+		},
+	});
+	await drain();
+	expect(logger.debug).not.toHaveBeenCalled();
+	expect(logger.warn).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({
+				endpoint: 'movements',
+				status: 400,
+				errorCode: 'rest_invalid_param',
+				field: 'reason',
+				documentId: movement.id,
+			}),
+			terminal: expect.objectContaining({ outcome: 'failed', attempt: 2 }),
+		})
+	);
+	// Step 3 promotes this row to a registered `error`, which forwards context to Sentry.
+	// The cashier's free text must not be in it before that happens.
+	expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('Bread money');
+});
+
+it('chains outbox attempts on one operation id the ledger can follow', async () => {
+	const row = await open();
+	http.post.mockRejectedValue({ response: { status: 503 } });
+	await drain();
+	await row.incrementalPatch({ sync_next_at: null });
+	await drain();
+	const ids = logger.debug.mock.calls.map(([, options]) => options.terminal.operationId);
+	expect(ids).toEqual([ids[0], ids[0]]);
+	// `operationId` is clamped to 32 characters, so a 36-character UUID would truncate.
+	expect(ids[0]).toHaveLength(32);
 });
 
 it('does not let a permanently failed close block a successor', async () => {

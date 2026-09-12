@@ -2006,5 +2006,11 @@
 	"register.done": "Done",
 	"register.approve_offline": "Approval needs a connection",
 	"register.approval_failed": "Approval failed — try again",
-	"register.count_failed": "Could not save the count — try again"
+	"register.count_failed": "Could not save the count — try again",
+	"register.movement_needs_amount": "Enter an amount",
+	"register.movement_needs_reason": "Add a reason",
+	"register.refused_one": "{count} movement refused by the store",
+	"register.refused_other": "{count} movements refused by the store",
+	"register.refused_row": "Refused",
+	"register.retry": "Retry"
 }

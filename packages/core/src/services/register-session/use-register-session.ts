@@ -73,9 +73,11 @@ export function useRegisterSession() {
 				(row) => row.session_id === session?.id && row.status === 'captured'
 			)
 		) ?? [];
+	// 'failed' counts as outstanding, not settled: the server never took the row, so falling
+	// back to its expected total drops the movement and hands the cashier the variance.
 	const localPending =
 		session?.sync_status !== 'synced' ||
-		entries.some((row) => row.sync_status === 'pending') ||
+		entries.some((row) => row.sync_status !== 'synced') ||
 		orders.some(({ record }) => record.local.dirty);
 	const expected = session
 		? !localPending && session.server_expected
@@ -103,7 +105,7 @@ export function useRegisterSession() {
 		varianceThreshold,
 		unsyncedCount:
 			orders.filter(({ record }) => record.local.dirty).length +
-			entries.filter((row) => row.sync_status === 'pending').length +
+			entries.filter((row) => row.sync_status !== 'synced').length +
 			(session?.sync_status === 'pending' ? 1 : 0),
 		sessionsOn,
 		overdue,
@@ -145,6 +147,7 @@ export function useRegisterSession() {
 				await actions.requireOpenSession(sessions, binding.registerId, true);
 				return actions.voidMovement(movements!, id, wpCredentials.id ?? 0);
 			},
+			retryMovement: (id: string) => actions.retryMovement(movements!, id),
 		},
 	};
 }
