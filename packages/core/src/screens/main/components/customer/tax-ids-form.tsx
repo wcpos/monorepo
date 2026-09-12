@@ -36,6 +36,7 @@ import {
 	TAX_ID_TYPES,
 	type TaxIdType,
 } from '../../../../lib/tax-id';
+import { useEnabledTaxIdTypes } from '../../hooks/use-enabled-tax-id-types';
 
 interface TaxIdsFormProps {
 	/** RHF field path (e.g. `tax_ids` for customer form, also `tax_ids` for order). */
@@ -43,31 +44,38 @@ interface TaxIdsFormProps {
 }
 
 /**
- * Default value for a freshly-appended row. EU VAT covers the most common case;
- * users can immediately switch type via the select.
+ * Value shape for a freshly-appended row. The type and its matching country are
+ * filled in from the store's enabled-types list at append time.
  */
-const DEFAULT_ROW = {
-	type: 'eu_vat' as TaxIdType,
+const EMPTY_ROW = {
 	value: '',
-	country: '',
 	label: null as string | null,
 	verified: null as null,
 };
 
 /**
  * Inner Select bound to the FormSelect's `customComponent` slot. Renders the
- * TAX_ID_TYPES catalogue with translated labels.
+ * store's enabled tax-ID types with translated labels.
  */
 function TaxIdTypeSelect({ value, onValueChange, ...props }: SelectSingleRootProps) {
 	const t = useT();
-	const options = React.useMemo(
-		() =>
-			TAX_ID_TYPES.map((type) => ({
-				value: type,
-				label: t(TAX_ID_LABEL_KEYS[type], { _: type }),
-			})),
-		[t]
-	);
+	const enabledTypes = useEnabledTaxIdTypes();
+	const currentType = value?.value as TaxIdType | undefined;
+
+	const options = React.useMemo(() => {
+		// A row already holding a type the store has since removed from the
+		// allow-list keeps that option, otherwise opening the select would
+		// silently rewrite existing customer data.
+		const types =
+			currentType && !enabledTypes.includes(currentType)
+				? [...enabledTypes, currentType]
+				: enabledTypes;
+
+		return types.map((type) => ({
+			value: type,
+			label: t(TAX_ID_LABEL_KEYS[type], { _: type }),
+		}));
+	}, [currentType, enabledTypes, t]);
 	return (
 		<OptionSelect
 			options={options}
@@ -85,6 +93,8 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 	const t = useT();
 	const { control, setValue } = useFormContext();
 	const { fields, append, remove } = useFieldArray({ control, name });
+	const enabledTypes = useEnabledTaxIdTypes();
+	const defaultType = enabledTypes[0];
 	const watched = (useWatch({ name, control }) ?? []) as {
 		type?: TaxIdType;
 		value?: string;
@@ -108,7 +118,7 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 				<VStack className="gap-2">
 					{fields.map((field, index) => {
 						const row = watched[index];
-						const type = (row?.type ?? 'eu_vat') as TaxIdType;
+						const type = (row?.type ?? defaultType) as TaxIdType;
 						const value = row?.value ?? '';
 						const showFormatWarning = value.length > 0 && !isValidTaxIdFormat(type, value);
 						return (
@@ -182,7 +192,16 @@ export function TaxIdsForm({ name = 'tax_ids' }: TaxIdsFormProps) {
 						);
 					})}
 					<HStack>
-						<Button variant="outline" onPress={() => append({ ...DEFAULT_ROW })}>
+						<Button
+							variant="outline"
+							onPress={() =>
+								append({
+									...EMPTY_ROW,
+									type: defaultType,
+									country: TAX_ID_DEFAULT_COUNTRIES[defaultType] ?? '',
+								})
+							}
+						>
 							<ButtonText>{t('tax_id.add', { _: 'Add tax ID' })}</ButtonText>
 						</Button>
 					</HStack>
