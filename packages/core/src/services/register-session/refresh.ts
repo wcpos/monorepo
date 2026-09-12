@@ -30,13 +30,15 @@ export async function refreshSessions({
 		if (row.status === 'closed') continue;
 		const detail = (await http.get(`sessions/${row.id}`)).data as RegisterSessionRow & {
 			movements: CashMovementRow[];
-			expected: Record<string, string>;
-			sales_count: number;
+			// Omitted for a cashier without the reports capability: the count is blind.
+			expected?: Record<string, string>;
+			sales_count?: number;
 		};
 		await adoptSession(sessions, {
 			...detail,
-			server_expected: detail.expected,
-			server_sales_count: detail.sales_count,
+			// A cashier counting blind is not served the expected figure at all.
+			server_expected: detail.expected ?? null,
+			server_sales_count: detail.sales_count ?? null,
 		});
 		for (const movement of detail.movements ?? []) {
 			const local = await movements.findOne(movement.id).exec();
