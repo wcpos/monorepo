@@ -1,7 +1,8 @@
 /**
  * Skip append writes and re-indexing for text the index already holds.
- * The map holds each document's EXACT searchable text, so it grows with document
- * count rather than with writes; a 32-bit digest was tried first and rejected because
+ * The map holds each document's EXACT searchable text under a hard ceiling on entries and
+ * retained bytes, because nothing can prune it by id and a churning collection would
+ * otherwise keep an entry per row ever seen; a 32-bit digest was tried first and rejected because
  * it collides ('AaAa' and 'BBBB' agree), and a collision here silently freezes that
  * document's search results.
  * This does not compact existing append history or FlexSearch's empty token keys.
@@ -30,6 +31,28 @@ function wcposSearchDigest(searchable) {
 	return searchable;
 }
 
+function wcposRetainDigest(index, digests, id, digest) {
+	// The plugin never observes deletions, so nothing here can prune a single id. A
+	// collection that churns therefore keeps an entry per row EVER seen rather than per row
+	// present. `logs` does exactly that: its retention sweep removes rows while its
+	// searchFields cover message and error text, and since the collision fix each entry
+	// holds that exact text rather than a small number.
+	//
+	// Forgetting is always safe. A missing entry only means the next write re-indexes, which
+	// is what the unpatched plugin did every time anyway, so the bound costs correctness
+	// nothing and buys a ceiling. Cleared wholesale rather than evicted one at a time: an LRU
+	// is more machinery than a cache whose miss is this cheap deserves.
+	var bytes = index.__wcposDigestBytes || 0;
+	var previous = digests.get(id);
+	if (previous !== undefined) bytes -= previous.length;
+	if (digests.size >= 20000 || bytes + digest.length > 2097152) {
+		digests.clear();
+		bytes = 0;
+	}
+	digests.set(id, digest);
+	index.__wcposDigestBytes = bytes + digest.length;
+}
+
 export function indexSearchText(index, id, searchable) {
 	var digests = index.__wcposSearchDigests || (index.__wcposSearchDigests = new Map());
 	var digest = wcposSearchDigest(searchable);
@@ -40,7 +63,7 @@ export function indexSearchText(index, id, searchable) {
 		if (digests.has(id) && typeof index.remove === 'function') index.remove(id);
 		index.add(id, searchable);
 	}
-	digests.set(id, digest);
+	wcposRetainDigest(index, digests, id, digest);
 }
 
 export function wcposChangedSearchEntries(index, entries) {
@@ -63,7 +86,7 @@ export function wcposChangedSearchEntries(index, entries) {
 }
 /* eslint-enable no-var */
 
-export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearchDigest.toString()}\n${wcposChangedSearchEntries.toString().replace(/^export /, '')}\n${indexSearchText
+export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearchDigest.toString()}\n${wcposRetainDigest.toString()}\n${wcposChangedSearchEntries.toString().replace(/^export /, '')}\n${indexSearchText
 	.toString()
 	.replace('function indexSearchText(', `function ${MARKER}(`)}\n`;
 
@@ -105,7 +128,7 @@ export const DISTS = [
 	),
 	closeBefore: 'this.subs.forEach((e=>e.unsubscribe())),await this.queue}',
 	closeAfter:
-		'this.subs.forEach((e=>e.unsubscribe())),await this.queue,this.index.__wcposSearchDigests&&this.index.__wcposSearchDigests.clear()}',
+		'this.subs.forEach((e=>e.unsubscribe())),await this.queue,this.index.__wcposSearchDigests&&this.index.__wcposSearchDigests.clear(),this.index.__wcposDigestBytes=0}',
 }));
 
 // Validate every dist before writing any, as in the changelog-identity patcher.

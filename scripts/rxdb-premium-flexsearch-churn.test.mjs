@@ -478,6 +478,32 @@ test('a batch carrying one document twice persists only its last text', () => {
 	assert.deepEqual(changed, [{ id: 'product', searchable: 'sapphire' }]);
 });
 
+test('a churning collection cannot grow the retained text without bound', () => {
+	// `logs` sweeps rows away by retention while its searchFields cover message and error
+	// text, and the plugin never observes a deletion, so nothing can prune by id. Without a
+	// ceiling the map keeps an entry per row EVER seen, each holding a full log line.
+	const index = new FlexSearch.Index({ preset: 'performance', tokenize: 'full', minlength: 3 });
+	const line = 'request failed for order '.repeat(20);
+	for (let i = 0; i < 40000; i += 1) {
+		indexSearchText(index, `log-${i}`, `${line}${i}`);
+	}
+	const digests = index.__wcposSearchDigests;
+	assert.ok(digests.size < 20000, `entries must stay capped, saw ${digests.size}`);
+	assert.ok(index.__wcposDigestBytes <= 2097152, `retained bytes must stay capped, saw ${index.__wcposDigestBytes}`);
+	// Forgetting must never be visible as a wrong answer.
+	indexSearchText(index, 'log-fresh', 'unmistakable marker text');
+	assert.deepEqual(index.search('unmistakable'), ['log-fresh']);
+});
+
+test('a forgotten document is simply re-indexed, never skipped wrongly', () => {
+	const index = new FlexSearch.Index({ preset: 'performance', tokenize: 'full', minlength: 3 });
+	indexSearchText(index, 'product', 'quartz');
+	index.__wcposSearchDigests.clear();
+	index.__wcposDigestBytes = 0;
+	indexSearchText(index, 'product', 'sapphire');
+	assert.deepEqual(index.search('sapphire'), ['product']);
+});
+
 test('text sharing a 32-bit hash with the previous value is still re-indexed', () => {
 	// 'AaAa' and 'BBBB' both hash to 4:2031744. Under the old digest the update was skipped
 	// and the document kept answering to its OLD text forever.
