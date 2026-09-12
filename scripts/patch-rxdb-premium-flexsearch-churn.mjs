@@ -1,5 +1,5 @@
 /**
- * Skip stock-only re-indexing and explicitly replace changed searchable text.
+ * Skip unchanged append writes/re-indexing and explicitly replace changed text.
  * Digests retain no searchable text and grow with document count, not writes.
  * This does not compact append history or FlexSearch's empty token keys.
  *
@@ -16,15 +16,19 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 export const MARKER = '__wcposIndexSearchText';
 
-// ES5-safe: this exact function's source is prepended to both installed dists.
+// ES5-safe: these functions' sources are prepended to both installed dists.
 /* eslint-disable no-var */
-export function indexSearchText(index, id, searchable) {
-	var digests = index.__wcposSearchDigests || (index.__wcposSearchDigests = new Map());
+function wcposSearchDigest(searchable) {
 	var hash = 0;
 	for (var i = 0; i < searchable.length; i++) {
 		hash = ((hash << 5) - hash + searchable.charCodeAt(i)) | 0;
 	}
-	var digest = searchable.length + ':' + hash;
+	return searchable.length + ':' + hash;
+}
+
+export function indexSearchText(index, id, searchable) {
+	var digests = index.__wcposSearchDigests || (index.__wcposSearchDigests = new Map());
+	var digest = wcposSearchDigest(searchable);
 	if (digests.get(id) === digest) return;
 	if (digests.has(id) && typeof index.update === 'function') {
 		index.update(id, searchable);
@@ -34,23 +38,59 @@ export function indexSearchText(index, id, searchable) {
 	}
 	digests.set(id, digest);
 }
+
+function wcposChangedSearchEntries(index, entries) {
+	// Every mapped id was indexed from already persisted or appended data: skipping is safe.
+	// Snapshot-restored indexes start with an empty map, so the first update still appends
+	// once per document even if unchanged. That document-count-bounded overhead is acceptable.
+	// Only indexing updates the map; filtering must not advance it before persistence.
+	var digests = index.__wcposSearchDigests;
+	return entries.filter(function (entry) {
+		return !digests || digests.get(entry.id) !== wcposSearchDigest(entry.searchable);
+	});
+}
 /* eslint-enable no-var */
 
-export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${indexSearchText
+export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearchDigest.toString()}\n${wcposChangedSearchEntries.toString()}\n${indexSearchText
 	.toString()
 	.replace('function indexSearchText(', `function ${MARKER}(`)}\n`;
 
 // Byte-exact per-dist literals: keep everything outside these rewrites untouched.
 // These installed dists have two indexing add sites: boot replay and live events.
 export const DISTS = [
-	{ dist: 'esm', liveBefore: 's.add(e.id,e.searchable)', replayBefore: 'o.add(e.id,e.searchable)' },
-	{ dist: 'cjs', liveBefore: 'n.add(e.id,e.searchable)', replayBefore: 'l.add(e.id,e.searchable)' },
-].map(({ dist, liveBefore, replayBefore }) => ({
+	{
+		dist: 'esm',
+		liveBefore: 's.add(e.id,e.searchable)',
+		replayBefore: 'o.add(e.id,e.searchable)',
+		pipelineBefore: 'l=await a.collection.addPipeline({destination:s,',
+		destination: 's',
+		appendBefore: 'i.push({id:o,searchable:r})}var l=',
+	},
+	{
+		dist: 'cjs',
+		liveBefore: 'n.add(e.id,e.searchable)',
+		replayBefore: 'l.add(e.id,e.searchable)',
+		pipelineBefore: 'h=await e.collection.addPipeline({destination:c,',
+		destination: 'c',
+		appendBefore: 'i.push({id:s,searchable:n})}var o=',
+	},
+].map(({ dist, liveBefore, replayBefore, pipelineBefore, appendBefore, destination }) => ({
 	dist,
 	liveBefore,
 	liveAfter: `${MARKER}(${liveBefore[0]},e.id,e.searchable)`,
 	replayBefore,
 	replayAfter: `${MARKER}(${replayBefore[0]},e.id,e.searchable)`,
+	// Both handlers shadow the index variable; bind it to their destination instead.
+	pipelineBefore,
+	pipelineAfter: pipelineBefore.replace(
+		`destination:${destination},`,
+		`destination:(${destination}.__wcposAppendIndex=${replayBefore[0]},${destination}),`
+	),
+	appendBefore,
+	appendAfter: appendBefore.replace(
+		'}var ',
+		`}i=wcposChangedSearchEntries(${destination}.__wcposAppendIndex,i);if(!i.length)return;var `
+	),
 	closeBefore: 'this.subs.forEach((e=>e.unsubscribe())),await this.queue}',
 	closeAfter:
 		'this.subs.forEach((e=>e.unsubscribe())),await this.queue,this.index.__wcposSearchDigests&&this.index.__wcposSearchDigests.clear()}',

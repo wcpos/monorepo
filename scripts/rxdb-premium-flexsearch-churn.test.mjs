@@ -26,7 +26,7 @@ const installedPath = (dist) =>
 // The offline copy lacks RxJS/Babel. Execute the installed plugin body, not a
 // reimplementation, with only module bindings and database/event I/O stubbed.
 // Indexing, replay, subscriber, pipeline handler and close remain premium code.
-function loadPlugin(dist, source = readFileSync(installedPath(dist), 'utf8')) {
+function loadPlugin(dist, source = readFileSync(installedPath(dist), 'utf8'), strict = false) {
 	const core = { ensureNotFalsy: (value) => assert.ok(value) || value };
 	const schema = { getFlexsearchIndexSchema: (value) => value };
 	const rxjs = { filter: (fn) => fn, mergeMap: (fn) => fn };
@@ -50,7 +50,7 @@ function loadPlugin(dist, source = readFileSync(installedPath(dist), 'utf8')) {
 			.replaceAll('export ', '');
 		source += ';Object.assign(exports,{RxFulltextSearch,addFulltextSearch});';
 	}
-	runInNewContext(source, {
+	runInNewContext((strict ? "'use strict';\n" : '') + source, {
 		core,
 		schema,
 		rxjs,
@@ -114,6 +114,15 @@ async function openPlugin(plugin, persisted = []) {
 	await instance.queue;
 	return {
 		instance,
+		collection,
+		writeBatch: (entries) =>
+			handler(
+				entries.map(({ id, searchable }) => ({
+					primary: id,
+					text: searchable,
+					_data: { _meta: { lwt: 1 } },
+				}))
+			),
 		write: (text, id = 'product') =>
 			handler([
 				{
@@ -134,6 +143,117 @@ async function exportedSize(index) {
 }
 
 for (const dist of ['esm', 'cjs']) {
+	test(`[${dist}] emitted prelude and rewritten regions run in strict mode`, async (t) => {
+		const plugin = loadPlugin(dist, undefined, true);
+		const { instance, writeBatch } = await openPlugin(plugin, [
+			{ type: 'append', dataAr: [{ id: 'product', searchable: 'quartz' }] },
+		]);
+		t.after(() => instance.close());
+		assert.deepEqual(instance.index.search('quartz'), ['product']);
+		await assert.doesNotReject(() =>
+			writeBatch([
+				{ id: 'product', searchable: 'quartz' },
+				{ id: 'other', searchable: 'topaz' },
+			])
+		);
+		assert.deepEqual(instance.index.search('topaz'), ['other']);
+		await assert.doesNotReject(() => instance.close());
+		assert.equal(instance.index.__wcposSearchDigests.size, 0);
+	});
+
+	test(`[${dist}] two plugin instances filter against their own indexes`, async (t) => {
+		// Load once: separate VM contexts would hide a module-scoped capture bug.
+		const plugin = loadPlugin(dist);
+		const products = await openPlugin(plugin, [
+			{ type: 'append', dataAr: [{ id: 'shared', searchable: 'quartz' }] },
+		]);
+		t.after(() => products.instance.close());
+		const customers = await openPlugin(plugin, [
+			{ type: 'append', dataAr: [{ id: 'shared', searchable: 'sapphire' }] },
+		]);
+		t.after(() => customers.instance.close());
+		const productUpsert = t.mock.method(products.collection, 'upsert');
+		const customerUpsert = t.mock.method(customers.collection, 'upsert');
+		// Both pipelines exist before either handler runs. The changed product text
+		// equals the customer's digest, so a shared capture wrongly drops it.
+		await products.writeBatch([
+			{ id: 'shared', searchable: 'quartz' },
+			{ id: 'shared', searchable: 'sapphire' },
+			{ id: 'product-only', searchable: 'emerald' },
+		]);
+		await customers.writeBatch([
+			{ id: 'shared', searchable: 'sapphire' },
+			{ id: 'customer-only', searchable: 'topaz' },
+		]);
+		assert.equal(productUpsert.mock.callCount(), 1);
+		assert.equal(customerUpsert.mock.callCount(), 1);
+		assert.deepEqual(JSON.parse(JSON.stringify(productUpsert.mock.calls[0].arguments[0].dataAr)), [
+			{ id: 'shared', searchable: 'sapphire' },
+			{ id: 'product-only', searchable: 'emerald' },
+		]);
+		assert.deepEqual(JSON.parse(JSON.stringify(customerUpsert.mock.calls[0].arguments[0].dataAr)), [
+			{ id: 'customer-only', searchable: 'topaz' },
+		]);
+		assert.deepEqual(products.instance.index.search('sapphire'), ['shared']);
+		assert.deepEqual(customers.instance.index.search('emerald'), []);
+	});
+
+	test(`[${dist}] all unchanged entries never upsert an append document`, async (t) => {
+		const entries = [
+			{ id: 'product', searchable: 'quartz' },
+			{ id: 'other', searchable: 'topaz' },
+		];
+		const { instance, collection, writeBatch } = await openPlugin(loadPlugin(dist), [
+			{ type: 'append', dataAr: entries },
+		]);
+		t.after(() => instance.close());
+		const upsert = t.mock.method(collection, 'upsert');
+		await writeBatch(entries);
+		assert.equal(upsert.mock.callCount(), 0);
+	});
+
+	test(`[${dist}] mixed batch appends only changed text without advancing digests`, async (t) => {
+		const entries = [
+			{ id: 'product', searchable: 'quartz' },
+			{ id: 'other', searchable: 'topaz' },
+			{ id: 'third', searchable: 'emerald' },
+		];
+		const { instance, collection, writeBatch } = await openPlugin(loadPlugin(dist), [
+			{ type: 'append', dataAr: entries },
+		]);
+		t.after(() => instance.close());
+		const before = new Map(instance.index.__wcposSearchDigests);
+		// Do not emit the append yet: only the index subscriber may advance digests.
+		const upsert = t.mock.method(collection, 'upsert', async () => {});
+		await writeBatch([entries[0], { id: 'other', searchable: 'sapphire' }, entries[2]]);
+		assert.equal(upsert.mock.callCount(), 1);
+		const document = upsert.mock.calls[0].arguments[0];
+		assert.equal(document.type, 'append');
+		assert.deepEqual(JSON.parse(JSON.stringify(document.dataAr)), [
+			{ id: 'other', searchable: 'sapphire' },
+		]);
+		assert.deepEqual(instance.index.__wcposSearchDigests, before);
+	});
+
+	test(`[${dist}] snapshot-restored boot still appends the first unchanged entry`, async (t) => {
+		const index = new FlexSearch.Index(indexOptions);
+		index.add('product', 'quartz');
+		const persisted = [];
+		await index.export((name, dataStr) => persisted.push({ type: 'index', name, dataStr }));
+		const { instance, collection, write } = await openPlugin(loadPlugin(dist), persisted);
+		t.after(() => instance.close());
+		assert.deepEqual(instance.index.search('quartz'), ['product']);
+		assert.equal(instance.index.__wcposSearchDigests?.size ?? 0, 0);
+		const upsert = t.mock.method(collection, 'upsert');
+		await write('quartz');
+		assert.equal(upsert.mock.callCount(), 1);
+		const document = upsert.mock.calls[0].arguments[0];
+		assert.equal(document.type, 'append');
+		assert.deepEqual(JSON.parse(JSON.stringify(document.dataAr)), [
+			{ id: 'product', searchable: 'quartz' },
+		]);
+	});
+
 	test(`[${dist}] unchanged text skips indexing and keeps serialized size stable`, async (t) => {
 		const { instance, write } = await openPlugin(loadPlugin(dist));
 		t.after(() => instance.close());
@@ -225,7 +345,7 @@ function withFixture(content, fn) {
 for (const anchors of DISTS) {
 	const { dist } = anchors;
 	const installed = readFileSync(installedPath(dist), 'utf8');
-	const keys = ['live', 'replay', 'close'];
+	const keys = ['live', 'replay', 'pipeline', 'append', 'close'];
 	const pristine = keys.reduce(
 		(source, key) => source.replace(anchors[`${key}After`], anchors[`${key}Before`]),
 		installed.replace(PRELUDE, '')
