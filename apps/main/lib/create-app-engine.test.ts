@@ -200,6 +200,37 @@ describe('createAppSyncEngine scope cache', () => {
 		}
 	});
 
+	it('does not prompt for a store the engine has already been switched away from', async () => {
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockImplementation(async () => new Response(null, { status: 401 }));
+		const { createAppSyncEngine, createRxdbSyncEngine, networkError } = loadCreateAppEngine();
+		let accessToken = 'rejected-token';
+		createAppSyncEngine({
+			...BASE_OPTIONS,
+			credentials: { getLatest: () => ({ access_token: accessToken }) },
+			refreshAuth: async () => accessToken,
+		});
+		const supersededPorts = createRxdbSyncEngine.mock.calls[0]![0];
+		const prompts = () => networkError.mock.calls.filter(([, options]) => options.showToast);
+		try {
+			// The cashier switches to another store; the cached engine is replaced.
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, site: 'https://other.example.test' },
+			});
+
+			// A 401 retry that was already in flight on the OLD engine now settles.
+			await supersededPorts.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+
+			expect(prompts()).toEqual([]);
+			// The obsolete engine still latches, so its own lanes stay held.
+			expect(supersededPorts.holdAutomaticTicks?.()).toBe(true);
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
 	it('holds automatic ticks for an exhausted token until live credentials change', async () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
