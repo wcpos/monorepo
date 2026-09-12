@@ -1793,7 +1793,10 @@ for (const [filler, fill] of [
               : /reading '_deleted'/,
           );
           assert.equal(state.firstIdx.metaIdMap.has(damaged.id), true);
-          assert.deepEqual(state.indexStates.map((index) => index.rows), before);
+          assert.deepEqual(
+            state.indexStates.map((index) => index.rows),
+            before,
+          );
         } else if (filler === "NUL") {
           // A NUL range fails JSON parsing, so the per-id repair path refuses
           // it by name under multi-instance and no row moves.
@@ -2976,11 +2979,7 @@ test("sole repair owner drops a stale secondary survivor when multi-instance", a
   }
 });
 
-for (const delivery of [
-  "received",
-  "withheld-changelog",
-  "withheld-index",
-]) {
+for (const delivery of ["received", "withheld-changelog", "withheld-index"]) {
   test(
     `stale-secondary drop preserves a peer insert ${delivery} before cleanup`,
     { timeout: 5000 },
@@ -3021,9 +3020,7 @@ for (const delivery of [
           value: "owner lost",
           _rev: "2-owner",
         };
-        const runCleanup = owner.taskQueue.runCleanup.bind(
-          owner.taskQueue,
-        );
+        const runCleanup = owner.taskQueue.runCleanup.bind(owner.taskQueue);
         let before;
         owner.taskQueue.runCleanup = async (callback) => {
           owner.taskQueue.runCleanup = runCleanup;
@@ -3038,12 +3035,8 @@ for (const delivery of [
             };
           });
           assert.deepEqual(
-            (
-              await peer.bulkWrite(
-                [{ document: peerDocument }],
-                "peer insert",
-              )
-            ).error,
+            (await peer.bulkWrite([{ document: peerDocument }], "peer insert"))
+              .error,
             [],
           );
           await received;
@@ -3094,10 +3087,9 @@ for (const delivery of [
           before,
           "no secondary rows removed",
         );
-        assert.deepEqual(
-          await owner.findDocumentsById([orphan.id], false),
-          [peerDocument],
-        );
+        assert.deepEqual(await owner.findDocumentsById([orphan.id], false), [
+          peerDocument,
+        ]);
         const secondary = state.indexStates.find(
           (index) => index !== state.firstIdx,
         );
