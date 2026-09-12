@@ -11,9 +11,11 @@ import {
 	ensureRegister,
 	getBoundRegisterId,
 	getCurrentBoundRegisterId,
+	getRegisterSnapshot,
 	mintClosureNumber,
 	nextSaleCounter,
 	readBoundRegister,
+	readCounters,
 	readRegister,
 	unbindRegister,
 } from './register-document';
@@ -226,4 +228,50 @@ it('keeps register B independent of A and ignores legacy site counters', async (
 		},
 	});
 	expect(await nextSaleCounter(db, 'site')).toBe(8);
+});
+
+it('a re-mint after adopting a newer server floor carries the period exactly once', async () => {
+	await ensureRegister(db);
+	const closure = {
+		id: 'c1',
+		period_sales_total: '20',
+		period_refunds_total: '5',
+	} as Parameters<typeof mintClosureNumber>[3] & object;
+	expect(await mintClosureNumber(db, 'site', 'a', closure)).toBe(1);
+	await advancePerpetual(db, 'site', 'a', { sales: '20', refunds: '5', closureId: 'c1' });
+	// Another till closed on the server meanwhile: floor 3, totals 100/10 (without our period).
+	await adoptCounters(db, 'site', 'a', {
+		last_closure_number: 3,
+		perpetual_sales_total: '100',
+		perpetual_refunds_total: '10',
+	});
+	const bucket = () => (getRegisterSnapshot()!.sites.site.registers ?? {})['a'];
+	expect(Number(bucket().perpetual_sales_total)).toBe(120);
+	expect(Number(bucket().perpetual_refunds_total)).toBe(15);
+	expect(await mintClosureNumber(db, 'site', 'a', { ...closure, number_retried: true })).toBe(4);
+	expect(Number(bucket().closure_reservation?.row.perpetual_sales_total)).toBe(120);
+	expect(Number(bucket().closure_reservation?.row.perpetual_refunds_total)).toBe(15);
+});
+it('readCounters refuses payloads that cannot serve as a floor', () => {
+	expect(readCounters(null)).toBeNull();
+	expect(readCounters({})).toBeNull();
+	expect(
+		readCounters({
+			last_closure_number: 'x',
+			perpetual_sales_total: '1',
+			perpetual_refunds_total: '0',
+		})
+	).toBeNull();
+	expect(
+		readCounters({
+			last_closure_number: 2,
+			perpetual_sales_total: '1.5',
+			perpetual_refunds_total: 0,
+		})
+	).toEqual({
+		last_closure_number: 2,
+		perpetual_sales_total: '1.5',
+		perpetual_refunds_total: '0',
+		counters_started_at: null,
+	});
 });

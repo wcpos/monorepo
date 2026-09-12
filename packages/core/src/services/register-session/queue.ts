@@ -15,6 +15,7 @@ import type {
 import {
 	adoptCounters,
 	mintClosureNumber,
+	readCounters,
 	readRegister,
 	type RegisterCounters,
 } from '../register/register-document';
@@ -125,12 +126,8 @@ async function drain({
 				}
 				if (body?.code === 'wcpos_closure_number_invalid' && !closure.getLatest().number_retried) {
 					const response = await http.get(`registers/${closure.register_id}`);
-					await adoptCounters(
-						userDB,
-						siteUuid,
-						closure.register_id,
-						(response.data as { counters: RegisterCounters }).counters
-					);
+					const floor = readCounters((response.data as { counters?: unknown })?.counters);
+					if (floor) await adoptCounters(userDB, siteUuid, closure.register_id, floor);
 					const number = await mintClosureNumber(userDB, siteUuid, closure.register_id, {
 						...closure.toJSON(),
 						number_retried: true,
@@ -358,7 +355,7 @@ async function drain({
 					userDB,
 					siteUuid,
 					row.register_id,
-					server.counters ?? {
+					readCounters(server.counters) ?? {
 						last_closure_number: server.number,
 						perpetual_sales_total: server.perpetual_sales_total,
 						perpetual_refunds_total: server.perpetual_refunds_total,

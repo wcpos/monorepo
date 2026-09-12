@@ -196,6 +196,21 @@ export async function adoptCounters(
 	const updated = await doc.incrementalModify((data) => {
 		const bucket = data.sites[siteUuid] ?? { sale_counter: 0 };
 		const register = bucket.registers?.[registerId] ?? {};
+		// A closure already applied locally but not yet on the server sits on top of the
+		// adopted floor: take its period out before the max and put it back after.
+		const applied = register.closure_reservation?.applied ? register.closure_reservation.row : null;
+		const periodSales = applied ? toMinor(applied.period_sales_total, 4) : 0;
+		const periodRefunds = applied ? toMinor(applied.period_refunds_total, 4) : 0;
+		const sales =
+			Math.max(
+				toMinor(register.perpetual_sales_total ?? '0', 4) - periodSales,
+				toMinor(counters.perpetual_sales_total, 4)
+			) + periodSales;
+		const refunds =
+			Math.max(
+				toMinor(register.perpetual_refunds_total ?? '0', 4) - periodRefunds,
+				toMinor(counters.perpetual_refunds_total, 4)
+			) + periodRefunds;
 		const registers = {
 			...bucket.registers,
 			[registerId]: {
@@ -204,26 +219,46 @@ export async function adoptCounters(
 					register.last_closure_number ?? 0,
 					counters.last_closure_number
 				),
-				perpetual_sales_total: fromMinor(
-					Math.max(
-						toMinor(register.perpetual_sales_total ?? '0', 4),
-						toMinor(counters.perpetual_sales_total, 4)
-					),
-					4
-				),
-				perpetual_refunds_total: fromMinor(
-					Math.max(
-						toMinor(register.perpetual_refunds_total ?? '0', 4),
-						toMinor(counters.perpetual_refunds_total, 4)
-					),
-					4
-				),
+				perpetual_sales_total: fromMinor(sales, 4),
+				perpetual_refunds_total: fromMinor(refunds, 4),
 				counters_started_at: register.counters_started_at ?? counters.counters_started_at ?? null,
+				...(applied && register.closure_reservation
+					? {
+							closure_reservation: {
+								...register.closure_reservation,
+								row: {
+									...applied,
+									perpetual_sales_total: fromMinor(sales, 4),
+									perpetual_refunds_total: fromMinor(refunds, 4),
+								},
+							},
+						}
+					: {}),
 			},
 		};
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
 	});
 	currentRegister = updated.toJSON(true).data;
+}
+/** The server's counters, or null when the payload cannot be trusted as a floor. */
+export function readCounters(input: unknown): RegisterCounters | null {
+	const value = input as Partial<Record<keyof RegisterCounters, unknown>> | null | undefined;
+	if (!value || typeof value !== 'object') return null;
+	const number = Number(value.last_closure_number);
+	const money = (amount: unknown) =>
+		(typeof amount === 'string' || typeof amount === 'number') && Number.isFinite(Number(amount))
+			? String(amount)
+			: null;
+	const sales = money(value.perpetual_sales_total);
+	const refunds = money(value.perpetual_refunds_total);
+	if (!Number.isInteger(number) || number < 0 || sales === null || refunds === null) return null;
+	return {
+		last_closure_number: number,
+		perpetual_sales_total: sales,
+		perpetual_refunds_total: refunds,
+		counters_started_at:
+			typeof value.counters_started_at === 'string' ? value.counters_started_at : null,
+	};
 }
 export async function mintClosureNumber(
 	userDB: UserDatabase,
@@ -253,23 +288,33 @@ export async function mintClosureNumber(
 		)
 			throw new Error('closure_write_incomplete');
 		number = (register.last_closure_number ?? 0) + 1;
+		// A re-mint of a closure whose period was already applied to the register must not
+		// add it again: the register totals already carry it.
+		const applied =
+			closure &&
+			register.closure_reservation?.row.id === closure.id &&
+			register.closure_reservation.applied
+				? register.closure_reservation.row
+				: null;
+		const sales = closure
+			? toMinor(register.perpetual_sales_total ?? '0', 4) -
+				(applied ? toMinor(applied.period_sales_total, 4) : 0) +
+				toMinor(closure.period_sales_total, 4)
+			: 0;
+		const refunds = closure
+			? toMinor(register.perpetual_refunds_total ?? '0', 4) -
+				(applied ? toMinor(applied.period_refunds_total, 4) : 0) +
+				toMinor(closure.period_refunds_total, 4)
+			: 0;
 		const reservation = closure
 			? {
 					row: {
 						...closure,
 						number,
-						perpetual_sales_total: fromMinor(
-							toMinor(register.perpetual_sales_total ?? '0', 4) +
-								toMinor(closure.period_sales_total, 4),
-							4
-						),
-						perpetual_refunds_total: fromMinor(
-							toMinor(register.perpetual_refunds_total ?? '0', 4) +
-								toMinor(closure.period_refunds_total, 4),
-							4
-						),
+						perpetual_sales_total: fromMinor(sales, 4),
+						perpetual_refunds_total: fromMinor(refunds, 4),
 					},
-					applied: closure.number_retried ? true : false,
+					applied: !!applied || !!closure.number_retried,
 				}
 			: register.closure_reservation;
 		const registers = {
@@ -278,6 +323,13 @@ export async function mintClosureNumber(
 				...register,
 				last_closure_number: number,
 				...(reservation ? { closure_reservation: reservation } : {}),
+				// An applied period follows the closure row it came from.
+				...(applied
+					? {
+							perpetual_sales_total: fromMinor(sales, 4),
+							perpetual_refunds_total: fromMinor(refunds, 4),
+						}
+					: {}),
 			},
 		};
 		return { ...data, sites: { ...data.sites, [siteUuid]: { ...bucket, registers } } };
