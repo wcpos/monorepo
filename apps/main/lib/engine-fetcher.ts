@@ -67,6 +67,7 @@ function createRateLimitObserver(): (status: number) => void {
 export type EngineFetcherAuth = {
 	credentials: { getLatest: () => { access_token?: string } };
 	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
+	onAuthExhausted?: (token: string | null) => void;
 	useJwtAsParam?: boolean;
 	bareAuthParam?: boolean;
 	/** These ride the same live-options ref as the auth flags: cache hits mutate it
@@ -531,6 +532,7 @@ export function createEngineFetcher(input: {
 			// something is actually wrong and the user will need to re-authenticate.
 			first.settle('debug', { outcome: 'failed', operationId });
 			retry.settle('error', { operationId });
+			input.auth.onAuthExhausted?.(retryToken);
 		} else {
 			// The 401 was cured but the retry hit a different failure — classify that
 			// failure on its own terms, keeping the arc id for the chain.

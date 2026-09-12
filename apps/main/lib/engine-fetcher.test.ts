@@ -38,6 +38,7 @@ function createFetcherHarness(
 	input: {
 		auth?: typeof BASE_AUTH & {
 			refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
+			onAuthExhausted?: (token: string | null) => void;
 			useJwtAsParam?: boolean;
 			bareAuthParam?: boolean;
 			useProtocolHeaders?: boolean;
@@ -1036,6 +1037,38 @@ describe('createEngineFetcher', () => {
 			fetch.mockReset();
 		}
 	);
+
+	it('reports the rejected retry token on auth exhaustion, but not on a successful retry', async () => {
+		let accessToken = 'expired-token';
+		const onAuthExhausted = jest.fn();
+		const fetch = jest.fn();
+		const { fetcher } = createFetcherHarness({
+			fetch,
+			auth: {
+				credentials: { getLatest: () => ({ access_token: accessToken }) },
+				refreshAuth: async () => {
+					accessToken = 'refreshed-token';
+					return accessToken;
+				},
+				onAuthExhausted,
+			},
+		});
+		for (const retryStatus of [401, 200]) {
+			accessToken = 'expired-token';
+			onAuthExhausted.mockClear();
+			fetch
+				.mockResolvedValueOnce(new Response(null, { status: 401 }))
+				.mockResolvedValueOnce(new Response(null, { status: retryStatus }));
+			const response = await fetcher('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(response.status).toBe(retryStatus);
+			if (retryStatus === 401) {
+				expect(onAuthExhausted).toHaveBeenCalledTimes(1);
+				expect(onAuthExhausted).toHaveBeenCalledWith('refreshed-token');
+			} else {
+				expect(onAuthExhausted).not.toHaveBeenCalled();
+			}
+		}
+	});
 
 	it('refreshes after a 401 and retries once with the latest access token', async () => {
 		let accessToken = 'expired-token';

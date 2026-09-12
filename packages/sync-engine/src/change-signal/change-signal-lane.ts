@@ -37,6 +37,7 @@ import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache
 import { censusQueryKey } from '../scheduler';
 import { buildReplicationHandlers } from './change-signal-handlers';
 import {
+	ChangeSignalPoisonError,
 	createLiveChangeSignalSource,
 	type EngineSourceFetcher,
 	SUPPORTED_HYBRID_COLLECTIONS,
@@ -495,7 +496,13 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				lastError = null;
 				return { lane: 'change-signal', status: 'skipped', reason: 'aborted' };
 			}
-			deps.diagnostics({ type: 'signal.tick.error', level: 'error', message });
+			const status = error instanceof ChangeSignalPoisonError ? error.status : undefined;
+			deps.diagnostics({
+				type: 'signal.tick.error',
+				level: 'error',
+				message,
+				fields: { lane: 'change-signal', ...(status !== undefined ? { status } : {}) },
+			});
 			return { lane: 'change-signal', status: 'error', error: message };
 		} finally {
 			activeFetch = null;

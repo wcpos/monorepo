@@ -266,6 +266,33 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		}
 	});
 
+	it('lowers identical signal tick errors independently of lane tick errors', async () => {
+		let message = 'token rejected';
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			fetcher: async () => {
+				throw new Error(message);
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			await engine.sync('change-signal');
+			await engine.sync('change-signal');
+			message = 'different failure';
+			await engine.sync('change-signal');
+			for (const type of ['signal.tick.error', 'engine.lane.tick']) {
+				const rows = diagnostics.mock.calls
+					.map(([event]) => event)
+					.filter((event) => event.type === type);
+				expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error']);
+			}
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('keeps every tick row but lowers consecutive identical errors per lane', async () => {
 		let failure: string | null = null;
 		const diagnostics = vi.fn();

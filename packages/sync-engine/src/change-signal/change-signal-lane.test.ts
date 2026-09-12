@@ -43,6 +43,41 @@ function stubDatabase(): ScopeDatabase {
 }
 
 describe('change-signal cursor observability', () => {
+	it('emits the lane and HTTP status when a tick fetch returns 401', async () => {
+		const actual = await vi.importActual<typeof import('@wcpos/sync-core')>('@wcpos/sync-core');
+		vi.mocked(createHybridChangeSignalEngine).mockImplementationOnce(
+			actual.createHybridChangeSignalEngine
+		);
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		const diagnostics = vi.fn();
+		const fetcher = vi.fn(async () => new Response(null, { status: 401 }));
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher,
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => JSON.stringify({ cursor: { sequence: 5 }, baselineDigests: [] }),
+			writeBlob: vi.fn(),
+			connectivity: () => 'online',
+			diagnostics,
+			emitEvent: () => undefined,
+		});
+
+		expect(await lane.tick()).toMatchObject({ status: 'error' });
+		expect(fetcher).toHaveBeenCalledWith(
+			expect.stringContaining('/changes/tick'),
+			expect.anything()
+		);
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'signal.tick.error',
+				level: 'error',
+				fields: { lane: 'change-signal', status: 401 },
+			})
+		);
+	});
+
 	it('emits backwards when a poll reports zero behind a non-zero cursor', async () => {
 		const manager = new StoreScopeManager({
 			createDatabase: async () => stubDatabase(),

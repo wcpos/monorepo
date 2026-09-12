@@ -43,7 +43,12 @@ import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
 import { getEngineConnectivity } from './connectivity';
 import { createE2eEngineLedgerObserver } from './e2e-engine-ledger';
-import { createEngineFetcher, type EngineFetcherScope, fetchWooQueryTotal } from './engine-fetcher';
+import {
+	createEngineFetcher,
+	type EngineFetcherAuth,
+	type EngineFetcherScope,
+	fetchWooQueryTotal,
+} from './engine-fetcher';
 import { platformEngineFetch } from './engine-platform-fetch';
 import { appMetricsObserver } from './metrics';
 import { createSyncLogObserver } from './sync-log-observer';
@@ -416,9 +421,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 
 	const site = deriveSyncSite(options.wpApiUrl);
 	const databaseOpenBarrier = pendingDisposals.get(cacheKey);
-	const fetcherOptions: MutableFetcherOptions = {
+	let authExhaustedToken: string | null = null;
+	const fetcherOptions: MutableFetcherOptions & Pick<EngineFetcherAuth, 'onAuthExhausted'> = {
 		credentials: options.credentials,
 		refreshAuth: options.refreshAuth,
+		onAuthExhausted: (token) => {
+			authExhaustedToken = token;
+		},
 		useJwtAsParam: options.useJwtAsParam,
 		bareAuthParam: options.bareAuthParam,
 		useRestRouteParam: options.useRestRouteParam,
@@ -571,7 +580,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				fetchWooQueryTotal: (input) => fetchWooQueryTotal(input, fetcher, site.wpJsonRoot),
 			},
 			connectivity: getEngineConnectivity,
-			holdAutomaticTicks: () => requestStateManager.isAuthFailed(),
+			holdAutomaticTicks: () =>
+				requestStateManager.isAuthFailed() ||
+				(authExhaustedToken !== null &&
+					authExhaustedToken === fetcherOptions.credentials.getLatest().access_token),
 			// The one authored product default (initial-settings) — the engine's
 			// boot seed and trickle fallback derive from it, never restate it.
 			...(hostDefaultProductBrowseSort

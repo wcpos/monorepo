@@ -734,13 +734,18 @@ export function createRxdbSyncEngine(
 	// All tick emitters share per-lane severity state, including rejected automatic ticks.
 	const laneLastEmittedError = new Map<string, string>();
 	const diagnostics: SyncObserver = (event) => {
-		if (event.type === 'engine.lane.tick' && typeof event.fields?.lane === 'string') {
-			const { lane, status, error } = event.fields;
-			if (status === 'error' && typeof error === 'string') {
-				if (laneLastEmittedError.get(lane) === error) event = { ...event, level: 'info' };
-				laneLastEmittedError.set(lane, error);
-			} else {
-				laneLastEmittedError.delete(lane);
+		if (
+			(event.type === 'engine.lane.tick' || event.type === 'signal.tick.error') &&
+			typeof event.fields?.lane === 'string'
+		) {
+			const { lane, status } = event.fields;
+			const key = `${event.type}:${lane}`;
+			const error = event.type === 'signal.tick.error' ? event.message : event.fields.error;
+			if ((event.type === 'signal.tick.error' || status === 'error') && typeof error === 'string') {
+				if (laneLastEmittedError.get(key) === error) event = { ...event, level: 'info' };
+				laneLastEmittedError.set(key, error);
+			} else if (event.type === 'engine.lane.tick') {
+				laneLastEmittedError.delete(key);
 			}
 		}
 		if (event.type === 'coverage.ledger-rebuilt') {
