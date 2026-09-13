@@ -173,7 +173,8 @@ async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> 
 		await search.close();
 	} finally {
 		// Keep persisted storage registered, but do not retain its in-memory index.
-		delete (search.collection as RxCollection & { __wcposAppendIndex?: unknown }).__wcposAppendIndex;
+		delete (search.collection as RxCollection & { __wcposAppendIndex?: unknown })
+			.__wcposAppendIndex;
 	}
 }
 
