@@ -1,6 +1,6 @@
 /**
  * Skip append writes and re-indexing for text the index already holds.
- * The map holds each document's EXACT searchable text under a hard ceiling on entries and
+ * Each map holds exact searchable text (strong surrogates for oversized rows), bounded by entries and
  * retained bytes, because nothing can prune it by id and a churning collection would
  * otherwise keep an entry per row ever seen; a 32-bit digest was tried first and rejected because
  * it collides ('AaAa' and 'BBBB' agree), and a collision here silently freezes that
@@ -23,12 +23,52 @@ export const MARKER = '__wcposIndexSearchText';
 // ES5-safe: these functions' sources are prepended to both installed dists.
 /* eslint-disable no-var */
 function wcposSearchDigest(searchable) {
-	// The EXACT text, not a hash. A 32-bit hash collides in practice ('AaAa' and 'BBBB'
-	// both give 4:2031744), and a collision here is silent and permanent: the document's
-	// text changes, the update is skipped, and its search results are wrong until something
-	// else rebuilds the index. Memory stays bounded by document count, which is the property
-	// that mattered; a catalogue of 5,000 titles is a few hundred kilobytes.
+	// Exact text normally; oversized rows use SHA-256 (FIPS 180-4) plus UTF-8 length.
+	// For bounded JS strings its collision risk is negligible; a collision costs only one
+	// stale search row. Escape literal descriptors so they cannot impersonate a large value.
+	var bytes = wcposByteLength(searchable);
+	if (bytes > 2097152) return '\0sha256:' + bytes + ':' + wcposSha256(searchable);
+	if (searchable.charCodeAt(0) === 0) return '\0text:' + searchable;
 	return searchable;
+}
+
+function wcposSha256(text) {
+	// Hash UTF-16BE code units in fixed-size blocks, preserving even lone surrogates.
+	var k = [
+		0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+		0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+		0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+		0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+		0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+		0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+		0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+		0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+	];
+	var h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+	var words = new Array(64), blocks = Math.ceil((text.length * 2 + 9) / 64);
+	function rotate(x, n) { return (x >>> n) | (x << (32 - n)); }
+	for (var block = 0; block < blocks; block++) {
+		for (var j = 0; j < 16; j++) {
+			var position = block * 32 + j * 2;
+			words[j] = ((text.charCodeAt(position) || 0) << 16) | (text.charCodeAt(position + 1) || 0);
+			if (position === text.length) words[j] |= 0x80000000;
+			if (position + 1 === text.length) words[j] |= 0x8000;
+		}
+		if (block === blocks - 1) {
+			words[14] = Math.floor(text.length * 16 / 4294967296);
+			words[15] = (text.length * 16) | 0;
+		}
+		var state = h.slice();
+		for (var i = 0; i < 64; i++) {
+			var x = words[i - 15], y = words[i - 2], a = state[0], e = state[4];
+			if (i >= 16) words[i] = (words[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) + words[i - 7] + (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10))) | 0;
+			var t1 = (state[7] + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & state[5]) ^ (~e & state[6])) + k[i] + words[i]) | 0;
+			var t2 = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & state[1]) ^ (a & state[2]) ^ (state[1] & state[2]))) | 0;
+			state.pop(); state.unshift((t1 + t2) | 0); state[4] = (state[4] + t1) | 0;
+		}
+		for (var n = 0; n < 8; n++) h[n] = (h[n] + state[n]) | 0;
+	}
+	return h.map(function (word) { return ('00000000' + (word >>> 0).toString(16)).slice(-8); }).join('');
 }
 
 function wcposByteLength(text) {
@@ -56,7 +96,7 @@ function wcposByteLength(text) {
 	return bytes;
 }
 
-function wcposRetainDigest(index, digests, id, digest) {
+function wcposRetainDigest(index, digests, byteKey, id, digest) {
 	// The plugin never observes deletions, so nothing here can prune a single id. A
 	// collection that churns therefore keeps an entry per row EVER seen rather than per row
 	// present. `logs` does exactly that: its retention sweep removes rows while its
@@ -67,16 +107,15 @@ function wcposRetainDigest(index, digests, id, digest) {
 	// is what the unpatched plugin did every time anyway, so the bound costs correctness
 	// nothing and buys a ceiling. Cleared wholesale rather than evicted one at a time: an LRU
 	// is more machinery than a cache whose miss is this cheap deserves.
-	var bytes = index.__wcposDigestBytes || 0;
+	var bytes = index[byteKey] || 0;
 	var previous = digests.get(id);
 	if (previous !== undefined) bytes -= wcposByteLength(previous);
 	var size = wcposByteLength(digest);
-	// A single value past the whole ceiling is never retained: caching it would leave the
-	// tally above the bound this advertises. `logs.message` has no schema length limit, so
-	// one large error can be that value. Not caching costs one re-index of that document.
+	// Surrogates are small; escaping a literal descriptor can still push an exact value
+	// past the ceiling. Forget only this id, preserving the other retained values.
 	if (size > 2097152) {
-		digests.clear();
-		index.__wcposDigestBytes = 0;
+		digests.delete(id);
+		index[byteKey] = bytes;
 		return;
 	}
 	// The entry ceiling applies to GROWTH only. Replacing an id already held does not add an
@@ -87,7 +126,7 @@ function wcposRetainDigest(index, digests, id, digest) {
 		bytes = 0;
 	}
 	digests.set(id, digest);
-	index.__wcposDigestBytes = bytes + size;
+	index[byteKey] = bytes + size;
 }
 
 export function indexSearchText(index, id, searchable) {
@@ -97,33 +136,36 @@ export function indexSearchText(index, id, searchable) {
 	if (digests.has(id) && typeof index.update === 'function') {
 		index.update(id, searchable);
 	} else {
-		if (digests.has(id) && typeof index.remove === 'function') index.remove(id);
+		if (digests.has(id) && typeof index.remove === 'function') {
+			index.remove(id);
+			index.__wcposDigestBytes -= wcposByteLength(digests.get(id));
+			digests.delete(id);
+		}
 		index.add(id, searchable);
 	}
-	wcposRetainDigest(index, digests, id, digest);
+	wcposRetainDigest(index, digests, '__wcposDigestBytes', id, digest);
 }
 
 export function wcposChangedSearchEntries(index, entries) {
-	// Every mapped id was indexed from already persisted or appended data: skipping is safe.
-	// Snapshot-restored indexes start with an empty map, so the first update still appends
-	// once per document even if unchanged. That document-count-bounded overhead is acceptable.
-	// Only indexing updates the map; filtering must not advance it before persistence.
-	// A batch can carry the same document twice. Compare only its LAST entry: every earlier
-	// one is superseded, and persisting a superseded entry would leave the history claiming
-	// text the document no longer has, which replay would then load into the index.
-	var digests = index.__wcposSearchDigests;
+	// Persisted/emitted text and asynchronously indexed text answer different questions.
+	// Replay starts empty here: its first unchanged write may append once redundantly.
+	// Within a batch only the last entry for an id can describe its current text.
+	var digests = index.__wcposPersistedDigests || (index.__wcposPersistedDigests = new Map());
 	var last = new Map();
 	entries.forEach(function (entry, position) {
 		last.set(entry.id, position);
 	});
 	return entries.filter(function (entry, position) {
 		if (last.get(entry.id) !== position) return false;
-		return !digests || digests.get(entry.id) !== wcposSearchDigest(entry.searchable);
+		var digest = wcposSearchDigest(entry.searchable);
+		if (digests.get(entry.id) === digest) return false;
+		wcposRetainDigest(index, digests, '__wcposPersistedDigestBytes', entry.id, digest);
+		return true;
 	});
 }
 /* eslint-enable no-var */
 
-export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearchDigest.toString()}\n${wcposByteLength.toString()}\n${wcposRetainDigest.toString()}\n${wcposChangedSearchEntries.toString().replace(/^export /, '')}\n${indexSearchText
+export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearchDigest.toString()}\n${wcposSha256.toString()}\n${wcposByteLength.toString()}\n${wcposRetainDigest.toString()}\n${wcposChangedSearchEntries.toString().replace(/^export /, '')}\n${indexSearchText
 	.toString()
 	.replace('function indexSearchText(', `function ${MARKER}(`)}\n`;
 
@@ -165,7 +207,7 @@ export const DISTS = [
 	),
 	closeBefore: 'this.subs.forEach((e=>e.unsubscribe())),await this.queue}',
 	closeAfter:
-		'this.subs.forEach((e=>e.unsubscribe())),await this.queue,this.index.__wcposSearchDigests&&this.index.__wcposSearchDigests.clear(),this.index.__wcposDigestBytes=0}',
+		'this.subs.forEach((e=>e.unsubscribe())),await this.queue,this.index.__wcposSearchDigests&&this.index.__wcposSearchDigests.clear(),this.index.__wcposDigestBytes=0,this.index.__wcposPersistedDigests&&this.index.__wcposPersistedDigests.clear(),this.index.__wcposPersistedDigestBytes=0}',
 }));
 
 // Validate every dist before writing any, as in the changelog-identity patcher.

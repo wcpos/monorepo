@@ -131,6 +131,16 @@ function touchLRU(collection: RxCollection, locale: string): void {
 	collection._localeLRU.push(locale);
 }
 
+// Premium's close stops the index subscriber, but the source pipeline needs its own close.
+async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> {
+	const search = instance as FlexSearchInstance & {
+		close(): Promise<void>;
+		pipeline: { close(): Promise<void> };
+	};
+	await search.pipeline.close();
+	await search.close();
+}
+
 /**
  * Evict least recently used locale if over limit.
  */
@@ -152,10 +162,10 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 			const instance = collection._searchInstances.get(oldestLocale);
 			collection._searchInstances.delete(oldestLocale);
 
-			// Destroy the search collection
-			if (instance?.collection && typeof instance.collection.destroy === 'function') {
+			// Close the pipeline and release retained index state
+			if (instance) {
 				try {
-					await instance.collection.destroy();
+					await closeSearchInstance(instance);
 				} catch (error: any) {
 					searchLogger.warn('Failed to destroy evicted search instance', {
 						context: {
@@ -642,10 +652,10 @@ export const searchPlugin: RxPlugin = {
 					const oldInstance = this._searchInstances.get(locale);
 					this._searchInstances.delete(locale);
 
-					// Destroy the old search collection
-					if (oldInstance?.collection && typeof oldInstance.collection.destroy === 'function') {
+					// Close the pipeline and release retained index state
+					if (oldInstance) {
 						try {
-							await oldInstance.collection.destroy();
+							await closeSearchInstance(oldInstance);
 						} catch (error: any) {
 							searchLogger.warn('Error destroying old search instance', {
 								context: {
