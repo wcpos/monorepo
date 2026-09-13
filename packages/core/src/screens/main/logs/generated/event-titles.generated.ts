@@ -188,6 +188,48 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.queue_write_resolve');
 		case 'queue.write.tick.error':
 			return t('health.logs.event.queue_write_tick_error');
+		case 'register.approval-granted':
+			return t('health.logs.event.register_approval_granted');
+		case 'register.approval-refused':
+			return t('health.logs.event.register_approval_refused');
+		case 'register.bound':
+			return t('health.logs.event.register_bound');
+		case 'register.counting-abandoned':
+			return t('health.logs.event.register_counting_abandoned');
+		case 'register.counting-started':
+			return t('health.logs.event.register_counting_started');
+		case 'register.directory-unavailable':
+			return t('health.logs.event.register_directory_unavailable');
+		case 'register.drawer-opened':
+			return t('health.logs.event.register_drawer_opened');
+		case 'register.movement-accepted':
+			return t('health.logs.event.register_movement_accepted');
+		case 'register.movement-recorded':
+			return t('health.logs.event.register_movement_recorded');
+		case 'register.movement-rejected':
+			return t('health.logs.event.register_movement_rejected');
+		case 'register.movement-retrying':
+			return t('health.logs.event.register_movement_retrying');
+		case 'register.movement-voided':
+			return t('health.logs.event.register_movement_voided');
+		case 'register.session-adopted':
+			return t('health.logs.event.register_session_adopted');
+		case 'register.session-closed':
+			return t('health.logs.event.register_session_closed');
+		case 'register.session-opened':
+			return t('health.logs.event.register_session_opened');
+		case 'register.session-pruned':
+			return t('health.logs.event.register_session_pruned');
+		case 'register.session-refresh-failed':
+			return t('health.logs.event.register_session_refresh_failed');
+		case 'register.switched':
+			return t('health.logs.event.register_switched');
+		case 'register.unbound':
+			return t('health.logs.event.register_unbound');
+		case 'register.variance-over-threshold':
+			return t('health.logs.event.register_variance_over_threshold');
+		case 'register.x-report-printed':
+			return t('health.logs.event.register_x_report_printed');
 		case 'signal.cursor':
 			return t('health.logs.event.signal_cursor');
 		case 'signal.cycle':
@@ -275,6 +317,48 @@ export function translateEventDescription(
 			return t('health.logs.event_description.queue_write_drain');
 		case 'queue.write.enqueued':
 			return t('health.logs.event_description.queue_write_enqueued');
+		case 'register.approval-granted':
+			return t('health.logs.event_description.register_approval_granted');
+		case 'register.approval-refused':
+			return t('health.logs.event_description.register_approval_refused');
+		case 'register.bound':
+			return t('health.logs.event_description.register_bound');
+		case 'register.counting-abandoned':
+			return t('health.logs.event_description.register_counting_abandoned');
+		case 'register.counting-started':
+			return t('health.logs.event_description.register_counting_started');
+		case 'register.directory-unavailable':
+			return t('health.logs.event_description.register_directory_unavailable');
+		case 'register.drawer-opened':
+			return t('health.logs.event_description.register_drawer_opened');
+		case 'register.movement-accepted':
+			return t('health.logs.event_description.register_movement_accepted');
+		case 'register.movement-recorded':
+			return t('health.logs.event_description.register_movement_recorded');
+		case 'register.movement-rejected':
+			return t('health.logs.event_description.register_movement_rejected');
+		case 'register.movement-retrying':
+			return t('health.logs.event_description.register_movement_retrying');
+		case 'register.movement-voided':
+			return t('health.logs.event_description.register_movement_voided');
+		case 'register.session-adopted':
+			return t('health.logs.event_description.register_session_adopted');
+		case 'register.session-closed':
+			return t('health.logs.event_description.register_session_closed');
+		case 'register.session-opened':
+			return t('health.logs.event_description.register_session_opened');
+		case 'register.session-pruned':
+			return t('health.logs.event_description.register_session_pruned');
+		case 'register.session-refresh-failed':
+			return t('health.logs.event_description.register_session_refresh_failed');
+		case 'register.switched':
+			return t('health.logs.event_description.register_switched');
+		case 'register.unbound':
+			return t('health.logs.event_description.register_unbound');
+		case 'register.variance-over-threshold':
+			return t('health.logs.event_description.register_variance_over_threshold');
+		case 'register.x-report-printed':
+			return t('health.logs.event_description.register_x_report_printed');
 		case 'signal.cursor':
 			return t('health.logs.event_description.signal_cursor');
 		case 'signal.cycle':
