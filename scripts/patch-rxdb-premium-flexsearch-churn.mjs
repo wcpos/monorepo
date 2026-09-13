@@ -42,11 +42,16 @@ function wcposSha256(text) {
 		0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
 		0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
 		0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-		0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+		0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 	];
-	var h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
-	var words = new Array(64), blocks = Math.ceil((text.length * 2 + 9) / 64);
-	function rotate(x, n) { return (x >>> n) | (x << (32 - n)); }
+	var h = [
+		0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+	];
+	var words = new Array(64),
+		blocks = Math.ceil((text.length * 2 + 9) / 64);
+	function rotate(x, n) {
+		return (x >>> n) | (x << (32 - n));
+	}
 	for (var block = 0; block < blocks; block++) {
 		for (var j = 0; j < 16; j++) {
 			var position = block * 32 + j * 2;
@@ -55,20 +60,44 @@ function wcposSha256(text) {
 			if (position + 1 === text.length) words[j] |= 0x8000;
 		}
 		if (block === blocks - 1) {
-			words[14] = Math.floor(text.length * 16 / 4294967296);
+			words[14] = Math.floor((text.length * 16) / 4294967296);
 			words[15] = (text.length * 16) | 0;
 		}
 		var state = h.slice();
 		for (var i = 0; i < 64; i++) {
-			var x = words[i - 15], y = words[i - 2], a = state[0], e = state[4];
-			if (i >= 16) words[i] = (words[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) + words[i - 7] + (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10))) | 0;
-			var t1 = (state[7] + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & state[5]) ^ (~e & state[6])) + k[i] + words[i]) | 0;
-			var t2 = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & state[1]) ^ (a & state[2]) ^ (state[1] & state[2]))) | 0;
-			state.pop(); state.unshift((t1 + t2) | 0); state[4] = (state[4] + t1) | 0;
+			var x = words[i - 15],
+				y = words[i - 2],
+				a = state[0],
+				e = state[4];
+			if (i >= 16)
+				words[i] =
+					(words[i - 16] +
+						(rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) +
+						words[i - 7] +
+						(rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10))) |
+					0;
+			var t1 =
+				(state[7] +
+					(rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) +
+					((e & state[5]) ^ (~e & state[6])) +
+					k[i] +
+					words[i]) |
+				0;
+			var t2 =
+				((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) +
+					((a & state[1]) ^ (a & state[2]) ^ (state[1] & state[2]))) |
+				0;
+			state.pop();
+			state.unshift((t1 + t2) | 0);
+			state[4] = (state[4] + t1) | 0;
 		}
 		for (var n = 0; n < 8; n++) h[n] = (h[n] + state[n]) | 0;
 	}
-	return h.map(function (word) { return ('00000000' + (word >>> 0).toString(16)).slice(-8); }).join('');
+	return h
+		.map(function (word) {
+			return ('00000000' + (word >>> 0).toString(16)).slice(-8);
+		})
+		.join('');
 }
 
 function wcposByteLength(text) {

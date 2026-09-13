@@ -51,8 +51,10 @@ function pristineSource(dist) {
 		source = source.slice(source.indexOf(start));
 		// Accept only the exact prior cleanup or this revision's cleanup, not arbitrary
 		// vendor close changes. Unknown anchors must still fail fixture patching.
-		const previousClose = 'this.subs.forEach((e=>e.unsubscribe())),await this.queue,this.index.__wcposSearchDigests&&this.index.__wcposSearchDigests.clear(),this.index.__wcposDigestBytes=0}';
-		source = source.replace(anchors.closeAfter, anchors.closeBefore)
+		const previousClose =
+			'this.subs.forEach((e=>e.unsubscribe())),await this.queue,this.index.__wcposSearchDigests&&this.index.__wcposSearchDigests.clear(),this.index.__wcposDigestBytes=0}';
+		source = source
+			.replace(anchors.closeAfter, anchors.closeBefore)
 			.replace(previousClose, anchors.closeBefore);
 		for (const key of ['live', 'replay', 'pipeline', 'append']) {
 			assert.ok(source.includes(anchors[`${key}After`]), `missing installed ${key} rewrite`);
@@ -63,8 +65,14 @@ function pristineSource(dist) {
 }
 
 function patchedSource(dist) {
-	return withFixture(pristineSource(dist), (path) =>
-		preparePatch(path, DISTS.find((item) => item.dist === dist)).next);
+	return withFixture(
+		pristineSource(dist),
+		(path) =>
+			preparePatch(
+				path,
+				DISTS.find((item) => item.dist === dist)
+			).next
+	);
 }
 
 // The offline copy lacks RxJS/Babel. Execute the installed plugin body, not a
@@ -184,15 +192,112 @@ async function openPlugin(plugin, persisted = [], deferred = false) {
 	};
 }
 
-function loadAppTeardown() {
-	const source = stripTypeScriptTypes(readFileSync(
-		new URL('../packages/database/src/plugins/search.ts', import.meta.url), 'utf8'))
-		.replace(/^import[\s\S]*?;\n/gm, '').replaceAll('export ', '');
-	const context = { getLogger: () => ({ debug() {}, info() {}, warn() {} }) };
+function loadAppTeardown(create = async () => ({})) {
+	const source = stripTypeScriptTypes(
+		readFileSync(new URL('../packages/database/src/plugins/search.ts', import.meta.url), 'utf8')
+	)
+		.replace(/^import[\s\S]*?;\n/gm, '')
+		.replaceAll('export ', '');
+	const context = { create, getLogger: () => ({ debug() {}, info() {}, warn() {} }) };
 	runInNewContext(source + ';globalThis.app = { evictLRUIfNeeded, searchPlugin };', context);
 	// Teardown is real app code; creation after teardown is unrelated database I/O.
-	runInNewContext('createSearchInstance = async function () { return {}; };', context);
+	runInNewContext('createSearchInstance = create;', context);
 	return context.app;
+}
+
+// Hold database/pipeline I/O at explicit boundaries; the app lifecycle methods stay real.
+for (const path of ['eviction', 'recreation']) {
+	for (const closeFails of [false, true]) {
+		test(`app ${path} serializes same-locale init (close fails: ${closeFails})`, async () => {
+			const closing = Promise.withResolvers();
+			const releaseClose = Promise.withResolvers();
+			const removing = Promise.withResolvers();
+			const releaseRemove = Promise.withResolvers();
+			const creating = Promise.withResolvers();
+			const releaseCreate = Promise.withResolvers();
+			const live = new Set();
+			let creations = 0;
+			const destination = {
+				async remove() {
+					removing.resolve();
+					await releaseRemove.promise;
+					delete collection.database.collections['products-search-v4-en_flexsearch'];
+				},
+			};
+			const old = {
+				collection: destination,
+				pipeline: {
+					async close() {
+						closing.resolve();
+						await releaseClose.promise;
+					},
+				},
+				async close() {
+					live.delete(old);
+					if (closeFails) throw new Error('close failed');
+				},
+			};
+			live.add(old);
+			const app = loadAppTeardown(async (_collection, locale) => {
+				if (locale !== 'en') return {};
+				creations++;
+				creating.resolve();
+				await releaseCreate.promise;
+				const instance = { collection: {} };
+				live.add(instance);
+				return instance;
+			});
+			const proto = {};
+			app.searchPlugin.prototypes.RxCollection(proto);
+			const collection = Object.assign(Object.create(proto), {
+				name: 'products',
+				options: { searchFields: ['name'] },
+				onClose: [],
+				database: { collections: { 'products-search-v4-en_flexsearch': destination } },
+				_searchInstances: new Map([['en', old]]),
+				_localeLRU: ['en'],
+			});
+			if (path === 'eviction') {
+				for (const locale of ['de', 'fr', 'es']) {
+					collection._searchInstances.set(locale, {
+						collection: {},
+						pipeline: { close: async () => {} },
+						close: async () => {},
+					});
+					collection._localeLRU.push(locale);
+				}
+			}
+			const teardown =
+				path === 'eviction' ? app.evictLRUIfNeeded(collection) : collection.recreateSearch('en');
+			await closing.promise;
+			const init = collection.initSearch('EN-us');
+			// This must finish while English is still closing (no collection-wide lock).
+			await collection.initSearch('de');
+			assert.equal(creations, 0, 'must not create while the old instance is closing');
+			releaseClose.resolve();
+			if (path === 'recreation') {
+				await removing.promise;
+				assert.equal(creations, 0, 'must not create while destination removal is pending');
+			}
+			releaseRemove.resolve();
+			await creating.promise;
+			const secondInit = collection.initSearch('en');
+			await collection.initSearch('de');
+			assert.equal(creations, 1, 'replacement creation must also be deduplicated');
+			releaseCreate.resolve();
+			const [recreated, initialized, second] = await Promise.all([teardown, init, secondInit]);
+			assert.equal(creations, 1);
+			assert.equal(live.size, 1, 'only one English instance survives');
+			assert.equal(initialized, second);
+			assert.equal(collection._searchInstances.get('en'), initialized);
+			if (path === 'recreation') assert.equal(recreated, initialized);
+			assert.equal(
+				await collection.initSearch('en'),
+				initialized,
+				'failed close must not wedge init'
+			);
+		});
+	}
 }
 
 async function exportedSize(index) {
@@ -214,20 +319,28 @@ for (const dist of ['esm', 'cjs']) {
 	}
 	for (const path of ['eviction', 'recreation']) {
 		test(`[${dist}] app ${path} closes the pipeline and clears both retained maps`, async (t) => {
-			const { instance, write } = await openPlugin(loadPlugin(dist));
+			const { instance, collection: destination, write } = await openPlugin(loadPlugin(dist));
 			t.after(() => instance.close());
 			await write('quartz');
 			let pipelineClosed = false;
-			instance.pipeline.close = async () => { pipelineClosed = true; };
+			instance.pipeline.close = async () => {
+				pipelineClosed = true;
+			};
 			const indexed = instance.index.__wcposSearchDigests;
 			const persisted = instance.index.__wcposPersistedDigests;
 			assert.equal(indexed.size, 1);
 			assert.equal(persisted.size, 1);
 			const app = loadAppTeardown();
 			const collection = {
-				name: 'products', options: { searchFields: ['name'] },
+				name: 'products',
+				options: { searchFields: ['name'] },
 				database: { collections: {} },
-				_searchInstances: new Map([['en', instance], ['de', {}], ['fr', {}], ['es', {}]]),
+				_searchInstances: new Map([
+					['en', instance],
+					['de', {}],
+					['fr', {}],
+					['es', {}],
+				]),
 				_localeLRU: ['en', 'de', 'fr', 'es'],
 			};
 			if (path === 'eviction') await app.evictLRUIfNeeded(collection);
@@ -236,6 +349,11 @@ for (const dist of ['esm', 'cjs']) {
 				app.searchPlugin.prototypes.RxCollection(proto);
 				await proto.recreateSearch.call(collection, 'en');
 			}
+			assert.equal(
+				Object.hasOwn(destination, '__wcposAppendIndex'),
+				false,
+				'destination must not retain the evicted index'
+			);
 			assert.equal(pipelineClosed, true, 'source pipeline must be stopped');
 			assert.equal(instance.stopped, true);
 			assert.equal(indexed.size, 0);
@@ -508,7 +626,10 @@ test(
 		const directory = mkdtempSync(join(tmpdir(), 'wcpos-flexsearch-cli-'));
 		try {
 			const script = join(directory, 'patch.mjs');
-			writeFileSync(script, readFileSync(new URL('./patch-rxdb-premium-flexsearch-churn.mjs', import.meta.url)));
+			writeFileSync(
+				script,
+				readFileSync(new URL('./patch-rxdb-premium-flexsearch-churn.mjs', import.meta.url))
+			);
 			const root = join(directory, 'node_modules/rxdb-premium');
 			mkdirSync(root, { recursive: true });
 			writeFileSync(join(root, 'package.json'), '{}');
@@ -610,7 +731,9 @@ for (const [label, line, count] of [
 			assert.ok([...map.values()].reduce((n, text) => n + Buffer.byteLength(text), 0) <= 2097152);
 		}
 		// An id forgotten during churn must still be searchable on its next write.
-		for (const entry of changedSearchEntries(index, [{ id: 'log-0', searchable: 'unmistakable' }])) {
+		for (const entry of changedSearchEntries(index, [
+			{ id: 'log-0', searchable: 'unmistakable' },
+		])) {
 			indexSearchText(index, entry.id, entry.searchable);
 		}
 		assert.deepEqual(index.search('unmistakable'), ['log-0']);
@@ -673,8 +796,18 @@ test('oversized repeated text uses a bounded strong surrogate in both maps', () 
 test('the emitted SHA-256 surrogate matches node crypto over exact UTF-16BE code units', () => {
 	const context = {};
 	runInNewContext(PRELUDE, context);
-	for (const text of ['', 'abc', '日😀', '\ud800', '\udc01', 'x\ud800z', ...Array.from({ length: 65 }, (_, n) => 'x'.repeat(n))]) {
-		const expected = createHash('sha256').update(Buffer.from(text, 'utf16le').swap16()).digest('hex');
+	for (const text of [
+		'',
+		'abc',
+		'日😀',
+		'\ud800',
+		'\udc01',
+		'x\ud800z',
+		...Array.from({ length: 65 }, (_, n) => 'x'.repeat(n)),
+	]) {
+		const expected = createHash('sha256')
+			.update(Buffer.from(text, 'utf16le').swap16())
+			.digest('hex');
 		assert.equal(context.wcposSha256(text), expected);
 	}
 });
@@ -754,10 +887,12 @@ test('an oversized replacement preserves unrelated indexed and persisted digests
 		[index.__wcposPersistedDigests, index.__wcposPersistedDigestBytes],
 	]) {
 		assert.equal(map.get('product'), 'quartz');
-		assert.equal(tally, [...map.values()].reduce((n, text) => n + Buffer.byteLength(text), 0));
+		assert.equal(
+			tally,
+			[...map.values()].reduce((n, text) => n + Buffer.byteLength(text), 0)
+		);
 	}
 });
-
 
 test('a failed fallback add cannot strand the removed document behind its old digest', () => {
 	const index = new FlexSearch.Index(indexOptions);
@@ -765,7 +900,9 @@ test('a failed fallback add cannot strand the removed document behind its old di
 	indexSearchText(index, 'product', 'quartz');
 	indexSearchText(index, 'other', 'topaz');
 	const add = index.add;
-	index.add = () => { throw new Error('add failed'); };
+	index.add = () => {
+		throw new Error('add failed');
+	};
 	assert.throws(() => indexSearchText(index, 'product', 'sapphire'), /add failed/);
 	assert.deepEqual(index.search('quartz'), []);
 	const bytesAfterFailure = index.__wcposDigestBytes;
@@ -774,7 +911,6 @@ test('a failed fallback add cannot strand the removed document behind its old di
 	assert.deepEqual(index.search('quartz'), ['product']);
 	assert.equal(bytesAfterFailure, Buffer.byteLength('topaz'));
 });
-
 
 test('an over-budget escaped literal removes only its own digest and bytes', () => {
 	const index = countingIndex();

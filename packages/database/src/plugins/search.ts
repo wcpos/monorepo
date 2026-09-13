@@ -131,6 +131,37 @@ function touchLRU(collection: RxCollection, locale: string): void {
 	collection._localeLRU.push(locale);
 }
 
+// Barriers belong to a source collection and locale, not the whole database.
+const searchTeardowns = new WeakMap<RxCollection, Map<string, Promise<void>>>();
+
+async function withSearchTeardown<T>(
+	collection: RxCollection,
+	locale: string,
+	teardown: () => Promise<T>
+): Promise<T> {
+	let pending = searchTeardowns.get(collection);
+	if (!pending) {
+		pending = new Map();
+		searchTeardowns.set(collection, pending);
+	}
+	while (pending.has(locale)) await pending.get(locale);
+	// Defer work until the barrier is registered, including synchronous close calls.
+	const result = Promise.resolve().then(teardown);
+	// Waiters need settlement; teardown errors still propagate to its caller.
+	pending.set(
+		locale,
+		result.then(
+			() => undefined,
+			() => undefined
+		)
+	);
+	try {
+		return await result;
+	} finally {
+		pending.delete(locale);
+	}
+}
+
 // Premium's close stops the index subscriber, but the source pipeline needs its own close.
 async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> {
 	const search = instance as FlexSearchInstance & {
@@ -138,7 +169,12 @@ async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> 
 		pipeline: { close(): Promise<void> };
 	};
 	await search.pipeline.close();
-	await search.close();
+	try {
+		await search.close();
+	} finally {
+		// Keep persisted storage registered, but do not retain its in-memory index.
+		delete (search.collection as RxCollection & { __wcposAppendIndex?: unknown }).__wcposAppendIndex;
+	}
 }
 
 /**
@@ -165,7 +201,7 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 			// Close the pipeline and release retained index state
 			if (instance) {
 				try {
-					await closeSearchInstance(instance);
+					await withSearchTeardown(collection, oldestLocale, () => closeSearchInstance(instance));
 				} catch (error: any) {
 					searchLogger.warn('Failed to destroy evicted search instance', {
 						context: {
@@ -358,6 +394,9 @@ export const searchPlugin: RxPlugin = {
 				}
 
 				locale = normalizeLocale(locale);
+				while (searchTeardowns.get(this)?.has(locale)) {
+					await searchTeardowns.get(this)!.get(locale);
+				}
 				if (!this._searchInitializationOptions) {
 					this._searchInitializationOptions = new Map<string, SearchInitializationOptions>();
 				}
@@ -647,74 +686,78 @@ export const searchPlugin: RxPlugin = {
 					context: { collection: this.name, locale },
 				});
 
-				// Remove existing instance from cache
-				if (this._searchInstances?.has(locale)) {
-					const oldInstance = this._searchInstances.get(locale);
-					this._searchInstances.delete(locale);
+				// Include removal and replacement publication so init cannot race either step.
+				const recreated = await withSearchTeardown(this, locale, async () => {
+					// Remove existing instance from cache
+					if (this._searchInstances?.has(locale)) {
+						const oldInstance = this._searchInstances.get(locale);
+						this._searchInstances.delete(locale);
 
-					// Close the pipeline and release retained index state
-					if (oldInstance) {
-						try {
-							await closeSearchInstance(oldInstance);
-						} catch (error: any) {
-							searchLogger.warn('Error destroying old search instance', {
-								context: {
-									collection: this.name,
-									locale,
-									error: error.message,
-								},
-							});
+						// Close the pipeline and release retained index state
+						if (oldInstance) {
+							try {
+								await closeSearchInstance(oldInstance);
+							} catch (error: any) {
+								searchLogger.warn('Error destroying old search instance', {
+									context: {
+										collection: this.name,
+										locale,
+										error: error.message,
+									},
+								});
+							}
 						}
 					}
-				}
 
-				// Also try to destroy any orphaned search collection
-				await destroySearchCollection(this, locale);
+					// Also try to destroy any orphaned search collection
+					await destroySearchCollection(this, locale);
 
-				// Remove from LRU tracking
-				if (this._localeLRU) {
-					const index = this._localeLRU.indexOf(locale);
-					if (index > -1) {
-						this._localeLRU.splice(index, 1);
+					// Remove from LRU tracking
+					if (this._localeLRU) {
+						const index = this._localeLRU.indexOf(locale);
+						if (index > -1) {
+							this._localeLRU.splice(index, 1);
+						}
 					}
-				}
 
-				// Clear any pending promise
-				this._searchPromises?.delete(locale);
+					// Clear any pending promise
+					this._searchPromises?.delete(locale);
 
-				// Create fresh instance
-				try {
-					const searchInstance = await createSearchInstance(
-						this,
-						locale,
-						this._searchInitializationOptions?.get(locale)
-					);
-
-					// Store and track
-					if (!this._searchInstances) {
-						this._searchInstances = new Map();
-					}
-					this._searchInstances.set(locale, searchInstance);
-					touchLRU(this, locale);
-					await evictLRUIfNeeded(this);
-
-					searchLogger.info('Search index recreated successfully', {
-						context: { collection: this.name, locale },
-					});
-
-					return searchInstance;
-				} catch (error: any) {
-					searchLogger.error('Failed to recreate search index', {
-						showToast: true,
-						code: ERROR_CODES.UNEXPECTED_ERROR,
-						context: {
-							collection: this.name,
+					// Create fresh instance
+					try {
+						const searchInstance = await createSearchInstance(
+							this,
 							locale,
-							error: error.message,
-						},
-					});
-					throw error;
-				}
+							this._searchInitializationOptions?.get(locale)
+						);
+
+						// Store and track
+						if (!this._searchInstances) {
+							this._searchInstances = new Map();
+						}
+						this._searchInstances.set(locale, searchInstance);
+						touchLRU(this, locale);
+
+						searchLogger.info('Search index recreated successfully', {
+							context: { collection: this.name, locale },
+						});
+
+						return searchInstance;
+					} catch (error: any) {
+						searchLogger.error('Failed to recreate search index', {
+							showToast: true,
+							code: ERROR_CODES.UNEXPECTED_ERROR,
+							context: {
+								collection: this.name,
+								locale,
+								error: error.message,
+							},
+						});
+						throw error;
+					}
+				});
+				await evictLRUIfNeeded(this);
+				return recreated;
 			};
 		},
 	},
