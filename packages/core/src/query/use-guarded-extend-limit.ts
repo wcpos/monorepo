@@ -35,6 +35,15 @@ const UNKNOWN_EXHAUSTED$ = of(null as boolean | null);
  * is in flight. `exhausted: null` means the engine has no opinion (no search lane, a walk that
  * failed, a browse window), and the short-page rule stands.
  *
+ * `exhausted: true` answers "does the SERVER have more?", not "is there more to SHOW?". Since
+ * the search walk requests a dial-sized wire page even for a small window and persists every
+ * row (#1935), a lane can end complete holding more rows than the screen's limit: a 13-hit
+ * search on the Products page (limit 10) recorded all 13, the verdict read `true`, and the
+ * guard refused to extend — the read stayed clipped at 10 with 3 resident rows never shown
+ * (1.10.14, frikifunko 2026-09-15). So `exhausted` only ends paging when the read is SHORT:
+ * a full read extends regardless, and the require-plane serves the wider declaration from the
+ * complete lane without a wire request; the next read comes back short and paging stops.
+ *
  * `limit` is a parameter rather than a store read because the same guard serves two owners of
  * a limit: the query-state store (the grids) and `useSearchSelect`'s local paging state (the
  * comboboxes, which have no store).
@@ -52,8 +61,10 @@ export function useGuardedExtension(
 	const pending = engine?.pending ?? false;
 	const exhausted = engine?.exhausted ?? null;
 	return React.useCallback(() => {
-		if (pending || exhausted === true) return;
-		if (exhausted === null && resultCount < limit) return;
+		if (pending) return;
+		// A short read is the end unless the engine says more may exist (`false`); a full read
+		// always extends — even past an exhausted lane, which can hold more than the limit.
+		if (resultCount < limit && exhausted !== false) return;
 		if (extensionScheduled.current) return;
 		extensionScheduled.current = true;
 		extendLimit();
