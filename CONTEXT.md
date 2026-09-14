@@ -462,10 +462,13 @@ reached. One report, two prints, not two features.
 _Avoid_: closure report, shift report, end-of-day report
 
 **Sales**:
-The date-range report — count, gross, refunds, net, tax — **grouped by** tender, cashier,
-register, tax rate, item or category. One report with a grouping, never six reports; the
-grouping words are what the picker searches. Takes either scope mode. By session it
-reconciles a drawer; by range it is a payment mix or what sold, and the heading says which.
+The what-sold and payment-mix report — count, gross, refunds, net, tax — **grouped by**
+tender, cashier, register, tax rate, item or category. One report with a grouping, never six
+reports; the grouping words are what the picker searches. Takes either scope mode. By
+session, the tender grouping sums payment and refund rows by tender-time session, the
+drawer's basis, and every other grouping counts the sales that completed in the session,
+the closure's basis; by range, every grouping is order-level, sales dated by completion in
+the store's clock. The heading says which.
 _Avoid_: Z-report, range report, tender report, tax report, cashier report (as entries)
 
 **Scope**:
@@ -493,11 +496,12 @@ completing session or its order total. The sale itself records the session it co
 in; that key drives reports and receipts and the closure's grand total, which is a sales
 figure and the one deliberate exception to the tender-time rule. Membership is only ever by the stamped session, never
 inferred from a time window or from whichever session is open when the sale reaches the
-server. **Sales** follows the scope: by session it sums payment and refund rows by their
-tender-time session, the closure's basis, so its tender grouping is the drawer; by date
-range it is order-level — sales dated by completion in the store's clock, payments as
-recorded on those sales — outside this rule, so its tender grouping is a payment mix, and
-a split sale can show under different days in the two modes.
+server. **Sales** follows the scope: by session, its tender grouping sums payment and
+refund rows by tender-time session and its other groupings count sales by completing
+session, the closure's two bases; by date range it is order-level — sales dated by
+completion in the store's clock, payments as recorded on those sales — outside this rule,
+so its tender grouping is a payment mix, and a split sale can show under different days in
+the two modes.
 _Avoid_: shift on the order, current session (for a late-arriving sale)
 
 **Unsynced**:
