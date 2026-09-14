@@ -489,8 +489,9 @@ column order, group subtotals and totals — beside the store, register, cashier
 fiscal and label blocks a receipt carries. A report adds its own figures as named keys
 *beside* the core, never inside it, so one default template renders every report and a
 template guards on an extra's key the way ADR 0039 prescribes. The Session report is not
-one of these: it is the closure document, rendered by the `closure` template type, and
-template types are never added to.
+one of these: it renders a closure-shaped document — the closure itself for a closed
+session, the same shape built live from the open session for an X-report — through the
+`closure` template type, and template types are never added to.
 _Avoid_: report payload, report data (for this shape), report type (for a template type)
 
 **Registered report**:
