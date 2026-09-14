@@ -160,12 +160,19 @@ export function useRecordManualPayment(
 									})
 								: t('payments.refusal.exceeds_balance', values);
 					logger.error(message, {
+						// Two different stories with two different answers: an order already paid
+						// online needs a refund, an over-payment needs the store's balance taken
+						// instead. Neither is "payment handling hit an unexpected problem".
 						code:
 							reason === 'order_already_paid'
 								? ERROR_CODES.PAYMENT_ALREADY_PAID_ONLINE
-								: ERROR_CODES.PAYMENT_UNEXPECTED,
+								: ERROR_CODES.PAYMENT_EXCEEDS_BALANCE,
 						showToast: true,
-						terminal: { operationType: 'sync.record', outcome: 'failed' },
+						terminal: {
+							operationType: 'sync.record',
+							outcome: 'failed',
+							operationId: row.id,
+						},
 						context: {
 							collection: 'orders',
 							recordId: paymentOrder.uuid,
