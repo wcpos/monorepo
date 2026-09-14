@@ -64,9 +64,12 @@ export function syncTemplates(
 			// schema validation rejects every row. Parse per row.
 			const parse = (collection as any)?.parseRestResponse;
 			const rows = await Promise.all(
-				data.map((row: Record<string, unknown>) =>
-					typeof parse === 'function' ? parse.call(collection, row) : row
-				)
+				data.map((row: Record<string, unknown>, index) => {
+					// The API array carries the resolved global/store display order;
+					// post menu_order does not. Preserve it for the local sorted query.
+					const orderedRow = { ...row, menu_order: index };
+					return typeof parse === 'function' ? parse.call(collection, orderedRow) : orderedRow;
+				})
 			);
 			if (rows.length > 0) {
 				const result = await collection.bulkUpsert(rows);
