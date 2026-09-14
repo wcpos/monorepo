@@ -501,10 +501,10 @@ figure and the one deliberate exception to the tender-time rule. Membership is o
 inferred from a time window or from whichever session is open when the sale reaches the
 server. **Sales** follows the scope: by session, its payment-method grouping sums payment and
 refund rows by tender-time session and its other groupings count sales by completing
-session, the closure's two bases; by date range it is order-level — sales dated by
-completion in the store's clock, payments as recorded on those sales — outside this rule,
-so its payment-method grouping is a payment mix, and a split sale can show under different days in
-the two modes.
+session, the closure's two bases; by date range, membership is order-level — the sales
+that completed in the range by the store's clock — outside this rule, and the
+payment-method grouping then sums the payment and refund rows of those sales, a payment
+mix, so a split sale can show under different days in the two modes.
 _Avoid_: shift on the order, current session (for a late-arriving sale)
 
 **Unsynced**:
