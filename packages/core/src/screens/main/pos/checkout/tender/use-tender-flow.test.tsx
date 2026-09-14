@@ -549,9 +549,10 @@ describe('useTenderFlow', () => {
 
 		expect(mockRecordManualPayment).not.toHaveBeenCalled();
 		// Refusing silently would leave the cashier pressing a dead button.
-		expect(mockInfo).toHaveBeenCalledWith('pos_checkout.needs_a_connection', {
-			showToast: true,
-		});
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.needs_a_connection',
+			expect.objectContaining({ showToast: true })
+		);
 	});
 
 	it('returns to method selection without completing after a part payment', async () => {
@@ -757,7 +758,7 @@ describe('useTenderFlow', () => {
 	it('stays put when a provider reports a failed void', async () => {
 		mockVoidPayments.mockResolvedValue({
 			rows: [],
-			failed: [{ paymentId: 'payment-1', message: 'Provider refused' }],
+			failed: [{ paymentId: 'payment-1', message: 'Provider refused', refused: true }],
 		});
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.dispatch({ type: 'request-cancel' }));
@@ -769,12 +770,31 @@ describe('useTenderFlow', () => {
 		expect(mockError).toHaveBeenCalledWith(
 			'pos_checkout.void_failed',
 			expect.objectContaining({
+				code: 'PAYMENT221',
 				showToast: true,
 				context: expect.objectContaining({
 					paymentId: 'payment-1',
 					reason: 'payment-1: Provider refused',
 				}),
 			})
+		);
+	});
+
+	it('keeps a lost void answer outcome-unknown rather than promising a refund', async () => {
+		// A void whose answer never arrived may already have been applied; PAYMENT221's
+		// "refund these" instruction would then return the money twice.
+		mockVoidPayments.mockResolvedValue({
+			rows: [],
+			failed: [{ paymentId: 'payment-1', message: 'network', refused: false }],
+		});
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.dispatch({ type: 'request-cancel' }));
+
+		await act(async () => result.current.cancelPayment());
+
+		expect(mockError).toHaveBeenCalledWith(
+			'pos_checkout.void_failed',
+			expect.objectContaining({ code: 'PAYMENT201' })
 		);
 	});
 
@@ -1009,7 +1029,10 @@ describe('server tender', () => {
 			missing === 'reader'
 				? 'pos_checkout.choose_a_terminal'
 				: 'pos_checkout.order_not_on_store_yet',
-			{ showToast: true }
+			expect.objectContaining({
+				showToast: true,
+				context: expect.objectContaining({ orderUUID: 'order-1' }),
+			})
 		);
 	});
 	it('never preselects the first reader without a default', async () => {
@@ -1098,7 +1121,11 @@ describe('server tender', () => {
 			expect(mockError).toHaveBeenCalledWith(
 				expected,
 				expect.objectContaining({
+					// A declined card is an ordinary outcome with an ordinary answer, not
+					// "payment handling hit an unexpected problem".
+					code: 'PAYMENT211',
 					showToast: !polling,
+					terminal: expect.objectContaining({ operationId: expect.any(String) }),
 					context: expect.objectContaining({ paymentId: expect.any(String) }),
 				})
 			);
@@ -1276,7 +1303,10 @@ describe('device tender', () => {
 			expect(result.current.deviceReady).toBe(false);
 			await act(async () => take());
 			expect(mockBegin).not.toHaveBeenCalled();
-			expect(mockInfo).toHaveBeenCalledWith('pos_checkout.reader_connecting', { showToast: true });
+			expect(mockInfo).toHaveBeenCalledWith(
+				'pos_checkout.reader_connecting',
+				expect.objectContaining({ showToast: true })
+			);
 			await act(async () => connecting);
 			expect(result.current.deviceReady).toBe(true);
 			await act(async () => take());
@@ -1305,9 +1335,10 @@ describe('device tender', () => {
 			expect(result.current.deviceReady).toBe(false);
 			await act(async () => result.current.takeTender());
 			expect(mockBegin).not.toHaveBeenCalled();
-			expect(mockInfo).toHaveBeenCalledWith('pos_checkout.reader_disconnected', {
-				showToast: true,
-			});
+			expect(mockInfo).toHaveBeenCalledWith(
+				'pos_checkout.reader_disconnected',
+				expect.objectContaining({ showToast: true })
+			);
 		}
 	);
 	it('does not locally void an offline device authorization when abandoning a split sale', async () => {

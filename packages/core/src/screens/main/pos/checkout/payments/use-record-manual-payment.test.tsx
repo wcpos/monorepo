@@ -176,7 +176,7 @@ it('logs a refused online payment as a failed sync record needing attention', as
 		expect.stringContaining('Order #1042 was already paid online'),
 		expect.objectContaining({
 			code: 'PAYMENT501',
-			terminal: { operationType: 'sync.record', outcome: 'failed' },
+			terminal: expect.objectContaining({ operationType: 'sync.record', outcome: 'failed' }),
 			context: expect.objectContaining({
 				collection: 'orders',
 				recordId: order.uuid,
@@ -214,7 +214,12 @@ it('localizes an amount-exceeds-balance refusal with the server balance', async 
 	});
 	expect(mockLoggerError).toHaveBeenCalledWith(
 		'Order #1042 only had 15.00 outstanding; 40.00 Cash was taken at the till — refund the difference.',
-		expect.any(Object)
+		// Its own code: an over-payment is answered by taking the store's balance, which
+		// is a different story from an order that was already paid online.
+		expect.objectContaining({
+			code: 'PAYMENT511',
+			terminal: expect.objectContaining({ operationId: expect.any(String) }),
+		})
 	);
 });
 
