@@ -61,6 +61,45 @@ describe('event registry', () => {
 		}
 	});
 
+	/**
+	 * The checkout vocabulary is what turns a money row in the ledger from a
+	 * developer string into something a merchant can read. Every action that moves
+	 * money has to be nameable, or step 4's action rows fall back to their raw type.
+	 */
+	it('names every money-bearing checkout action', () => {
+		const checkout = new Set(
+			registry.filter(({ domain }) => domain === 'CHECKOUT').map(({ type }) => type)
+		);
+		for (const type of [
+			'payment.recorded',
+			'payment.recorded-offline',
+			'payment.captured',
+			'payment.authorized-offline',
+			'payment.settlement',
+			'payment.refused',
+			'payment.declined',
+			'payment.voided',
+			'payment.void-refused',
+			'payment.not-mirrored',
+			'checkout.completed',
+			'checkout.cancelled',
+		]) {
+			expect(checkout.has(type)).toBe(true);
+		}
+	});
+
+	/**
+	 * A cashier reading the ledger after a busy day needs to tell "we took this"
+	 * from "the store would not take this" at a glance, so the refusal labels say
+	 * who refused rather than naming a status.
+	 */
+	it('says who refused a payment, in words a cashier uses', () => {
+		const label = (type: string) => registry.find((entry) => entry.type === type)?.label;
+		expect(label('payment.refused')).toBe('Your store refused a payment');
+		expect(label('payment.declined')).toBe('The terminal did not take the payment');
+		expect(label('payment.recorded-offline')).toBe('Took a payment while offline');
+	});
+
 	it('describes existence reconciliation as a deletion audit', () => {
 		expect(registry.find(({ type }) => type === 'coverage.existence-reconcile')?.label).toBe(
 			'Checked this device for records deleted on your store'
