@@ -468,14 +468,17 @@ reports; the grouping words are what the picker searches. Takes either scope mod
 session, the payment-method grouping sums payment and refund rows by tender-time session, the
 drawer's basis, and every other grouping counts the sales that completed in the session,
 the closure's basis; by range, every grouping is order-level, sales dated by completion in
-the store's clock. The heading says which.
+the store's clock. The payment-method grouping shows what each method took and refunded
+and counts payments, never gross or tax, which no payment row carries; every other
+grouping counts sales. The heading says which.
 _Avoid_: Z-report, range report, tender report, payment report, tax report, cashier report (as entries)
 
 **Scope**:
 What a report is *about*: either one **session**, current or past, or a **date range** in
 the store's timezone. Every report declares which modes it accepts, so a question a report
 cannot answer is unaskable rather than answered wrongly. The default is the open session
-when there is one, otherwise today. Free is limited to the session mode and today on its own
+when there is one, otherwise today for a report that takes a range and the last session
+for one that does not. Free is limited to the session mode and today on its own
 register; wider ranges, other registers and other stores are Pro.
 _Avoid_: filter (for the session/range choice), period (for a session)
 
