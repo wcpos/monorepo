@@ -72,6 +72,10 @@ jobs:
       native: ${{ steps.plan.outputs.native }}
       self: ${{ steps.plan.outputs.self }}
       reason: ${{ steps.plan.outputs.reason }}
+      # `main`, `next`, or EMPTY when the run belongs to neither trunk. Every
+      # lane-dependent value below reads this one output; nothing else may
+      # look at base_ref / ref_name to pick a store.
+      lane: ${{ steps.lane.outputs.lane }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -80,6 +84,40 @@ jobs:
         id: plan
         with:
           base-sha: ${{ github.event.pull_request.base.sha }}
+      # Lane → E2E store is decided ONCE, here. The old inline expression
+      # (`base_ref == 'next' || ref_name == 'next'`, else main) defaulted every
+      # run it did not recognise to the MAIN-lane stores. A PR whose base was a
+      # feature branch stacked on `next` (#1997 while it still sat on
+      # `codex/tender-pane-surface`) therefore ran a next-lane app against
+      # dev-free/dev-pro, a plugin generation older than the app supports; 126
+      # cases passed against the wrong store and the one that could not
+      # (the quick-discount coupon line, a 1.11.0 server feature) was read as a
+      # plugin bug (roadmap#277). A run that belongs to neither trunk has NO
+      # store; the e2e job refuses it before spending a runner on it.
+      #
+      # `inputs.lane` wins when a human dispatches: base_ref is empty and
+      # ref_name is the feature branch, so `auto` cannot see the lane of a
+      # feature branch and must not guess one either.
+      - name: 🛤 Resolve E2E lane
+        id: lane
+        env:
+          INPUT_LANE: ${{ inputs.lane }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          case "$INPUT_LANE" in
+            main|next) lane="$INPUT_LANE" ;;
+            *)
+              if [ "$EVENT_NAME" = "pull_request" ]; then ref="$BASE_REF"; else ref="$REF_NAME"; fi
+              case "$ref" in
+                main|next) lane="$ref" ;;
+                *) lane="" ;;
+              esac
+              ;;
+          esac
+          echo "lane=${lane:-<unresolved>} (event=$EVENT_NAME base_ref=${BASE_REF:-} ref_name=$REF_NAME input=${INPUT_LANE:-auto})"
+          echo "lane=$lane" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: 🚀 Deploy
@@ -217,6 +255,19 @@ jobs:
       group: ${{ github.ref == 'refs/heads/main' && format('deploy-main-verify-shard-{0}', matrix.shardIndex) || format('deploy-verify-{0}-{1}', github.run_id, matrix.shardIndex) }}
       cancel-in-progress: true
     steps:
+      # First, before any setup: a run that belongs to neither trunk has no
+      # store to test against, and guessing one is how a next-lane app was
+      # verified against the main-lane plugin (see the lane step in `changes`).
+      - name: 🛤 Refuse an unresolved lane
+        if: needs.changes.outputs.lane == ''
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          echo "::error::No E2E lane for this run (event=$EVENT_NAME base_ref=${BASE_REF:-<none>} ref_name=$REF_NAME). Web E2E runs only for main or next: retarget the PR at a trunk, or dispatch with the 'lane' input set. Refusing to guess a store."
+          exit 1
+
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -249,9 +300,9 @@ jobs:
           # (bounds generations); restore-keys still serve older states, gated
           # by the same validation.
           path: apps/main/e2e/auth-state.enc
-          key: e2e-auth-v2-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-${{ steps.cache-date.outputs.today }}
+          key: e2e-auth-v2-${{ runner.os }}-${{ needs.changes.outputs.lane || 'unknown' }}-shard${{ matrix.shardIndex }}-${{ steps.cache-date.outputs.today }}
           restore-keys: |
-            e2e-auth-v2-${{ runner.os }}-${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'next' || 'main' }}-shard${{ matrix.shardIndex }}-
+            e2e-auth-v2-${{ runner.os }}-${{ needs.changes.outputs.lane || 'unknown' }}-shard${{ matrix.shardIndex }}-
 
       - name: 🔓 Decrypt cached auth state
         if: env.E2E_AUTH_CACHE_KEY != ''
@@ -311,8 +362,8 @@ jobs:
       - name: 🌡 Probe store health (pre-flight)
         continue-on-error: true
         env:
-          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
-          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store" "before the tests started"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then
@@ -358,22 +409,21 @@ jobs:
           # serves both variants (the free matrix gets its licence masked by
           # stubStoreVersionForE2E, as it already does on every lane).
           #
-          # `inputs.lane` wins when a human dispatches: for workflow_dispatch,
-          # base_ref is empty and ref_name is the feature branch, so `auto` would
-          # read every next-lane feature branch as main and recreate exactly the
-          # cross-lane testing this change removes.
+          # The lane itself is resolved once, in the `changes` job (which is
+          # also where `inputs.lane` wins for a manual dispatch). An unresolved
+          # lane never reaches this step: the first step of this job refuses it.
           #
           # These MUST be set here. playwright.config used to fall back to
           # dev-next when they were absent, and since this job never set them,
           # the whole main lane silently gated 1.9.x against the 1.10 store
           # while dev-free coverage was switched off entirely. The config now
           # fails the job rather than guessing, so an unset value is loud.
-          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
           # Naming a free store is what enables the free matrix (#1277). The
           # 2026-08-18 timeouts that deferred it came from the app never issuing
           # the awaited server requests against dev-free's 18-product catalogue;
           # the catalogue has since been rebuilt to match dev-pro's scale.
-          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
           # The shard index no longer reaches Playwright via --shard, but the
           # cashier-slot isolation is keyed on it. Without this every shard would
           # normalize to slot 0 and share one cashier.
@@ -401,8 +451,8 @@ jobs:
         if: failure()
         continue-on-error: true
         env:
-          E2E_STORE_URL_PRO: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
-          E2E_STORE_URL_FREE: ${{ (inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next'))) && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}
+          E2E_STORE_URL_PRO: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-pro.wcpos.com' || '' }}
+          E2E_STORE_URL_FREE: ${{ needs.changes.outputs.lane == 'next' && 'https://dev-next.wcpos.com' || needs.changes.outputs.lane == 'main' && 'https://dev-free.wcpos.com' || '' }}
         run: |
           node scripts/probe-store-health.mjs "$E2E_STORE_URL_PRO" "pro store (post-failure)" "after the tests failed"
           if [ -n "$E2E_STORE_URL_FREE" ] && [ "$E2E_STORE_URL_FREE" != "$E2E_STORE_URL_PRO" ]; then

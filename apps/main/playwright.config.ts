@@ -78,7 +78,9 @@ export function assertLaneStoresConfigured(): void {
 	throw new Error(
 		'E2E_STORE_URL_PRO is not set. Every lane runs the pro matrix, so the workflow ' +
 			'must name its store (main → dev-pro, next → dev-next); the config will not ' +
-			'guess one. The free matrix is opt-in: name E2E_STORE_URL_FREE to run it.'
+			'guess one. An EMPTY value in CI usually means the run belongs to neither ' +
+			'trunk (a PR based on a feature branch, or a dispatch without the lane input): ' +
+			'retarget it or name the lane. The free matrix is opt-in: name E2E_STORE_URL_FREE to run it.'
 	);
 }
 const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;

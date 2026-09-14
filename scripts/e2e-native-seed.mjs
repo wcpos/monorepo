@@ -29,11 +29,19 @@ const WRITER_PASS = process.env.E2E_PRODUCT_WRITER_PASS;
 // This script sends write-capable credentials to STORE_URL — never over plain
 // HTTP, and never to a host outside the standing E2E stores.
 const ALLOWED_WRITE_HOSTS = ['dev-pro.wcpos.com', 'dev-free.wcpos.com', 'dev-next.wcpos.com'];
-const storeHost = new URL(STORE_URL).hostname;
+if (!STORE_URL) {
+	// The workflow sets E2E_STORE_URL to EMPTY for a run that belongs to
+	// neither trunk (a PR based on a feature branch); it must not be guessed.
+	console.error(
+		'✖ E2E_STORE_URL is empty: this run belongs to neither main nor next, so it has no store. Retarget the PR at a trunk.'
+	);
+	process.exit(1);
+}
 if (!STORE_URL.startsWith('https://')) {
 	console.error(`✖ E2E_STORE_URL must use https:// (got: ${STORE_URL})`);
 	process.exit(1);
 }
+const storeHost = new URL(STORE_URL).hostname;
 if (WRITER_USER && WRITER_PASS && !ALLOWED_WRITE_HOSTS.includes(storeHost)) {
 	console.error(
 		`✖ Refusing authenticated writes to ${storeHost} — allowed hosts: ${ALLOWED_WRITE_HOSTS.join(', ')}`
