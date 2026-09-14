@@ -510,6 +510,26 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "PAYMENT111",
+		"symbol": "PAYMENT_RECORDED_NOT_MIRRORED",
+		"domain": "PAYMENT",
+		"severity": "warn",
+		"actionHint": "No action needed — the store has the payment; this till is catching up.",
+		"retryPolicy": "never",
+		"dataSafety": "money-moved",
+		"escalation": "none",
+		"summary": "The store recorded this payment, but the till could not save its own copy.",
+		"docsBody": "The payment reached the store and is on the order; only the till's local copy of the order failed to update. Never take the payment again — WCPOS refreshes the order from the store, and the till catches up on its own.",
+		"troubleshooting": [
+			"Do not take the payment again: the store already has it.",
+			"Check the order in WooCommerce — the payment is on its ledger.",
+			"If the till still shows a balance after the order refreshes, reopen the order or sync it."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#294",
+		"introducedIn": "1.11.0"
+	},
+	{
 		"code": "PAYMENT201",
 		"symbol": "PAYMENT_OUTCOME_UNKNOWN",
 		"domain": "PAYMENT",

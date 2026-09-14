@@ -22,6 +22,7 @@ import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
+import { refreshOrderRecord } from '../hooks/reconcile-completed-order';
 import { recordManualPayment } from './record-manual-payment';
 
 import type { RecordManualPaymentInput, RecordManualPaymentOutcome } from './record-manual-payment';
@@ -134,11 +135,16 @@ export function useRecordManualPayment(
 							const patched = await localPatch({ document: order, data: { meta_data } });
 							if (!patched) throw new Error('provenance_save_failed');
 						}
-					} catch {
-						logger.error(t('pos_cart.checkout_failed'), {
-							code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
-							showToast: true,
-						});
+					} catch (error) {
+						// The store has already answered: the money is on the order there, and only
+						// this till's copy is behind. Swallowing that used to report a generic
+						// "checkout failed" on a payment the store had taken, which invites the
+						// cashier to take it again. Pull the store's copy so the ledger catches up,
+						// then let the caller report the gap for what it is.
+						if (paymentOrder.id) {
+							await refreshOrderRecord(manager, paymentOrder.id).catch(() => undefined);
+						}
+						throw error;
 					}
 				},
 				raiseAttention: ({ row, order: summary, reason }) => {
