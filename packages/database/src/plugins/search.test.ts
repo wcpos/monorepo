@@ -39,6 +39,8 @@ jest.mock('rxdb-premium/plugins/flexsearch', () => ({
 			collection: {
 				__wcposAppendIndex: {},
 				remove: jest.fn().mockResolvedValue(undefined),
+				// A real RxCollection has close() as well as remove(); eviction calls it.
+				close: jest.fn().mockResolvedValue(undefined),
 				$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
 				// A healthy index: no appended entries, so the oversized-index check never rebuilds here.
 				find: jest.fn(() => ({ exec: jest.fn().mockResolvedValue([]) })),
@@ -104,9 +106,14 @@ describe('search plugin', () => {
 				evicted.close.mock.invocationCallOrder[0]
 			);
 			expect(evicted.collection).not.toHaveProperty('__wcposAppendIndex');
+			// Nothing rebuilds an evicted locale, so its destination is deregistered too:
+			// the onClose hook holds the whole index until the collection itself closes.
+			expect(evicted.collection.close).toHaveBeenCalledTimes(1);
+			expect(evicted.collection.remove).not.toHaveBeenCalled();
 			for (const instance of retained) {
 				expect(instance.pipeline.close).not.toHaveBeenCalled();
 				expect(instance.close).not.toHaveBeenCalled();
+				expect(instance.collection.close).not.toHaveBeenCalled();
 				expect(instance.collection).toHaveProperty('__wcposAppendIndex');
 			}
 		});

@@ -206,7 +206,10 @@ function loadAppTeardown(create = async () => ({})) {
 		ERROR_CODES: { UNEXPECTED_ERROR: 1 },
 		getLogger: () => ({ debug() {}, info() {}, warn() {}, error() {} }),
 	};
-	runInNewContext(source + ';globalThis.app = { evictLRUIfNeeded, searchPlugin };', context);
+	runInNewContext(
+		source + ';globalThis.app = { evictLRUIfNeeded, searchPlugin, getSearchIdentifier };',
+		context
+	);
 	// Teardown is real app code; creation after teardown is unrelated database I/O.
 	runInNewContext('createSearchInstance = create;', context);
 	return context.app;
@@ -227,6 +230,70 @@ function appCollection(app) {
 
 // Flush the promise-only lifecycle work; deferred database I/O remains held.
 const lifecycleTurn = () => new Promise((resolve) => setImmediate(resolve));
+
+const liveInstance = () => ({
+	collection: { async close() {} },
+	pipeline: { async close() {} },
+	async close() {},
+});
+
+// RxCollection.close() deregisters the collection from database.collections and leaves the
+// persisted index alone; remove() drops the storage. destroySearchCollection() reaches the
+// destination only through that registry, so modelling both is what separates the two paths.
+function registerDestination(database, name) {
+	const state = { closed: false, removed: false };
+	const destination = {
+		name,
+		__wcposAppendIndex: {},
+		async close() {
+			state.closed = true;
+			delete database.collections[name];
+		},
+		async remove() {
+			state.removed = true;
+			delete database.collections[name];
+		},
+	};
+	database.collections[name] = destination;
+	return { destination, state };
+}
+
+for (const path of ['eviction', 'recreation']) {
+	test(`${path} frees the destination without stranding a corrupt index`, async () => {
+		const app = loadAppTeardown(async () => liveInstance());
+		const collection = appCollection(app);
+		const { destination, state } = registerDestination(
+			collection.database,
+			`${app.getSearchIdentifier(collection.name, 'en')}_flexsearch`
+		);
+		collection._searchInstances.set('en', {
+			collection: destination,
+			pipeline: { async close() {} },
+			async close() {},
+		});
+		collection._localeLRU.push('en');
+		if (path === 'eviction') {
+			for (const locale of ['de', 'fr']) {
+				collection._searchInstances.set(locale, liveInstance());
+				collection._localeLRU.push(locale);
+			}
+			await collection.initSearch('es');
+		} else {
+			await collection.recreateSearch('en');
+		}
+		assert.equal(Object.hasOwn(destination, '__wcposAppendIndex'), false);
+		if (path === 'eviction') {
+			// Nothing is wrong with this index; deregister so the onClose hook releases it in
+			// memory, but keep the persisted index so the locale reopens instead of rebuilding.
+			assert.equal(state.closed, true, 'eviction must close the destination');
+			assert.equal(state.removed, false, 'eviction must keep the persisted index');
+		} else {
+			// Recreation was asked to rebuild. Closing the destination first would deregister it
+			// and turn destroySearchCollection() into a no-op, reopening the corrupt index.
+			assert.equal(state.removed, true, 'recreation must remove the destination storage');
+		}
+	});
+}
 
 for (const path of ['eviction', 'recreation']) {
 	for (const failure of ['none', 'pipeline', 'index']) {
@@ -290,8 +357,10 @@ for (const path of ['eviction', 'recreation']) {
 			assert.equal(stopped, true, 'index shutdown must run after a rejecting pipeline close');
 			assert.equal(
 				deregistered,
-				true,
-				'the destination collection must close even when shutdown rejects'
+				path === 'eviction',
+				path === 'eviction'
+					? 'the destination collection must close even when shutdown rejects'
+					: 'recreation must leave the destination registered for destroySearchCollection'
 			);
 			assert.equal(Object.hasOwn(destination, '__wcposAppendIndex'), false);
 			assert.equal(creates, 1);
