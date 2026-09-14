@@ -33,15 +33,22 @@ async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> 
 		close(): Promise<void>;
 		pipeline: { close(): Promise<void> };
 	};
+	const destination = search.collection as RxCollection & { __wcposAppendIndex?: unknown };
 	try {
 		await search.pipeline.close();
 	} finally {
 		try {
 			await search.close();
 		} finally {
-			// RxDB retains the destination in database.collections after locale eviction.
-			delete (search.collection as RxCollection & { __wcposAppendIndex?: unknown })
-				.__wcposAppendIndex;
+			try {
+				// The premium close() leaves its destination registered in database.collections,
+				// and that collection's onClose hook retains the whole FlexSearch index. Closing
+				// it deregisters the collection without touching the persisted index, so the
+				// locale reopens from storage instead of rebuilding.
+				await destination.close();
+			} finally {
+				delete destination.__wcposAppendIndex;
+			}
 		}
 	}
 }

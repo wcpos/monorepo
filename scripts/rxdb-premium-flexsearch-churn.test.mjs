@@ -236,7 +236,14 @@ for (const path of ['eviction', 'recreation']) {
 			let creates = 0;
 			let closing = false;
 			let stopped = false;
-			const destination = { __wcposAppendIndex: {}, async remove() {} };
+			let deregistered = false;
+			const destination = {
+				__wcposAppendIndex: {},
+				async remove() {},
+				async close() {
+					deregistered = true;
+				},
+			};
 			const old = {
 				collection: destination,
 				pipeline: {
@@ -251,7 +258,11 @@ for (const path of ['eviction', 'recreation']) {
 					if (failure === 'index') throw new Error('index failed');
 				},
 			};
-			const replacement = { collection: {}, pipeline: { async close() {} }, async close() {} };
+			const replacement = {
+				collection: { async close() {} },
+				pipeline: { async close() {} },
+				async close() {},
+			};
 			const app = loadAppTeardown(async (_collection, locale) => {
 				if (locale !== 'en') return replacement;
 				creates++;
@@ -277,6 +288,11 @@ for (const path of ['eviction', 'recreation']) {
 			releaseClose.resolve();
 			await lifecycleTurn();
 			assert.equal(stopped, true, 'index shutdown must run after a rejecting pipeline close');
+			assert.equal(
+				deregistered,
+				true,
+				'the destination collection must close even when shutdown rejects'
+			);
 			assert.equal(Object.hasOwn(destination, '__wcposAppendIndex'), false);
 			assert.equal(creates, 1);
 			const second = collection.initSearch('en');
@@ -297,7 +313,7 @@ for (const first of ['initSearch', 'recreateSearch']) {
 		let creates = 0;
 		let closes = 0;
 		const old = {
-			collection: {},
+			collection: { async close() {} },
 			pipeline: { async close() {} },
 			async close() {
 				closes++;
