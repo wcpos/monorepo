@@ -198,6 +198,32 @@ describe('search plugin', () => {
 			expect(collection._searchInstances.size).toBe(1);
 		});
 
+		it('an init requested after a recreate does not join an init still building', async () => {
+			// While the first init is still creating, recreate has nothing cached to retire; it
+			// must still drop the dedupe entry so a later init queues behind the rebuild.
+			const collection = makeCollection();
+			const started = deferred();
+			const gate = deferred();
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			const create = fulltextSearch.getMockImplementation()!;
+			fulltextSearch.mockImplementationOnce(async (config) => {
+				started.resolve();
+				await gate.promise;
+				return create(config);
+			});
+			const first = collection.initSearch('en');
+			await started.promise;
+			const recreate = collection.recreateSearch('en');
+			const later = collection.initSearch('en');
+			gate.resolve();
+			const [fromFirst, replacement, fromLater] = await Promise.all([first, recreate, later]);
+			expect(fromLater).toBe(replacement);
+			expect(fromLater).not.toBe(fromFirst);
+			expect(fromFirst.close).toHaveBeenCalledTimes(1);
+			expect(collection._searchInstances.get('en')).toBe(replacement);
+			expect(collection._searchInstances.size).toBe(1);
+		});
+
 		it('concurrent init for a different locale is not blocked', async () => {
 			const collection = makeCollection();
 			await collection.initSearch('en');

@@ -692,6 +692,10 @@ export const searchPlugin: RxPlugin = {
 				// the fast path on an instance that is about to be closed.
 				const retiring = this._searchInstances?.get(locale);
 				this._searchInstances?.delete(locale);
+				// Likewise drop the dedupe entry of an init still building: an init arriving after
+				// this request must queue behind the rebuild, not join the earlier one whose
+				// instance the rebuild will retire.
+				this._searchPromises?.delete(locale);
 				const instance = await withSearchLocale(this, locale, () =>
 					recreateSearch.call(this, locale, retiring)
 				);
