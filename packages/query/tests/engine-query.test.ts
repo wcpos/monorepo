@@ -1,6 +1,8 @@
 import { waitFor } from '@testing-library/react';
+import { Index } from 'flexsearch';
 import { firstValueFrom, of, Subject } from 'rxjs';
 
+import { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -20,6 +22,122 @@ const searchError = jest.mocked(searchLogger.error);
 const searchWarn = jest.mocked(searchLogger.warn);
 
 describe('observeEngineQuery', () => {
+	it.each(['index', 'unavailable', 'stalled'])(
+		'matches the whole Georgian phrase before counting/paging via %s',
+		async (lane) => {
+			const database = await createEngineDatabase(['products']);
+			const engine = createFakeEngine(database);
+			await database.collections.products.bulkInsert([
+				engineProduct({ uuid: 'phrase', id: 1, name: 'xxxx MY საბარგული xxxx' }),
+				engineProduct({ uuid: 'model', id: 2, name: 'M3 საბარგული' }),
+				engineProduct({ uuid: 'reverse', id: 3, name: 'საბარგული MY' }),
+				engineProduct({ uuid: 'gap', id: 4, name: 'MY xxxx საბარგული' }),
+				engineProduct({ uuid: 'split', id: 5, name: 'საბარგული', sku: 'MY' }),
+			]);
+			const documents = await database.collections.products.find().exec();
+			const find = jest.fn().mockResolvedValue(documents);
+			const init = jest.spyOn(database.collections.products, 'initSearch');
+			if (lane === 'unavailable') init.mockResolvedValue(null);
+			else
+				init.mockResolvedValue({
+					collection: { $: of(null) },
+					find: lane === 'stalled' ? () => new Promise(() => {}) : find,
+				} as never);
+			const recreateSearch = jest.fn();
+			Object.assign(database.collections.products, { recreateSearch });
+			try {
+				const result = await firstValueFrom(
+					observeEngineQuery(engine, `phrase-${lane}`, {
+						collection: 'products',
+						search: 'MY საბარგული',
+						searchFields: ['name', 'sku'],
+						limit: 1,
+					})
+				);
+				expect(result.count).toBe(1);
+				expect(result.hits.map((hit) => hit.id)).toEqual(['phrase']);
+				expect(recreateSearch).not.toHaveBeenCalled();
+				if (lane === 'index')
+					expect(find).toHaveBeenCalledWith('საბარგული', { limit: Number.MAX_SAFE_INTEGER });
+			} finally {
+				await database.close();
+			}
+		}
+	);
+
+	it('keeps a phrase hit after the first 100 real index candidates', async () => {
+		const database = await createEngineDatabase(['products']);
+		const engine = createFakeEngine(database);
+		const products = Array.from({ length: 150 }, (_, id) =>
+			engineProduct({
+				uuid: `candidate-${id}`,
+				id: id + 1,
+				name: id === 149 ? 'xxxx MY საბარგული xxxx' : `M3 საბარგული ${id}`,
+			})
+		);
+		await database.collections.products.bulkInsert(products);
+		const indexOptions = {
+			tokenize: 'full',
+			minlength: FLEXSEARCH_MIN_TERM_LENGTH,
+			encode: encodeSearchText,
+		} as const;
+		const index = new Index(indexOptions);
+		for (const p of products) index.add(p.uuid, p.payload.name);
+		const documents = await database.collections.products.find().exec();
+		const find = jest.fn(async (term: string, options?: { limit?: number }) => {
+			const ids = index.search(term, options);
+			return documents.filter((doc) => ids.includes(doc.primary));
+		});
+		jest
+			.spyOn(database.collections.products, 'initSearch')
+			.mockResolvedValue({ collection: { $: of(null) }, find } as never);
+		try {
+			expect(index.search('საბარგული')).toHaveLength(100);
+			const result = await firstValueFrom(
+				observeEngineQuery(engine, 'real-index-phrase', {
+					collection: 'products',
+					search: 'MY საბარგული',
+					searchFields: ['name'],
+					limit: 1,
+				})
+			);
+			expect(result.count).toBe(1);
+			expect(result.hits.map((hit) => hit.id)).toEqual(['candidate-149']);
+		} finally {
+			await database.close();
+		}
+	});
+
+	it.each(['MY', 'A', 'A B', '0.4'])(
+		'scans the complete anchorless phrase %s and reacts to writes',
+		async (search) => {
+			const database = await createEngineDatabase(['products']);
+			const init = jest.spyOn(database.collections.products, 'initSearch');
+			await database.collections.products.insert(
+				engineProduct({ uuid: 'empty', id: 1, name: 'zzz' })
+			);
+			let latest: string[] | null = null;
+			const sub = observeEngineQuery(createFakeEngine(database), 'anchorless-phrase', {
+				collection: 'products',
+				search,
+				searchFields: ['name'],
+			}).subscribe((result) => {
+				latest = result.hits.map((hit) => hit.id);
+			});
+			try {
+				await waitFor(() => expect(latest).toEqual([]));
+				await database.collections.products.insert(
+					engineProduct({ uuid: 'embedded', id: 2, name: `xx${search}xx` })
+				);
+				await waitFor(() => expect(latest).toEqual(['embedded']));
+				expect(init).not.toHaveBeenCalled();
+			} finally {
+				sub.unsubscribe();
+				await database.close();
+			}
+		}
+	);
+
 	it('exposes the native engine record beside the legacy document', async () => {
 		const database = await createEngineDatabase(['products']);
 		const engine = createFakeEngine(database);
@@ -41,7 +159,7 @@ describe('observeEngineQuery', () => {
 		}
 	});
 
-	it('matches one- and two-character word prefixes without mid-token fallthrough', async () => {
+	it('matches one- and two-character substrings including identifiers', async () => {
 		const database = await createEngineDatabase(['products']);
 		const engine = createFakeEngine(database);
 		await database.collections.products.bulkInsert([
@@ -59,8 +177,9 @@ describe('observeEngineQuery', () => {
 						searchFields: ['name', 'sku'],
 					})
 				);
-				expect(result.hits.map((hit) => hit.id)).toEqual(['name-prefix', 'sku-prefix']);
-				expect(result.hits.map((hit) => hit.id)).not.toContain('mid-token');
+				expect(result.hits.map((hit) => hit.id).sort()).toEqual(
+					term === '4' ? ['mid-token', 'name-prefix', 'sku-prefix'] : ['name-prefix', 'sku-prefix']
+				);
 			}
 		} finally {
 			await database.close();
@@ -207,7 +326,7 @@ describe('observeEngineQuery', () => {
 				})
 			);
 			expect(initSearch).toHaveBeenCalledTimes(1);
-			expect(search).toHaveBeenCalledWith('abc');
+			expect(search).toHaveBeenCalledWith('abc', { limit: Number.MAX_SAFE_INTEGER });
 			expect(result.hits.map((hit) => hit.id)).toEqual(['flex-hit']);
 		} finally {
 			await database.close();
