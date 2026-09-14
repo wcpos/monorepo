@@ -225,6 +225,16 @@ describe('mintDevicePayment', () => {
 			},
 		});
 	});
+	it.each([
+		['serial-123', { reader: 'serial-123' }],
+		[undefined, {}],
+		[null, {}],
+	] as const)('keeps the connected reader identity %s on the row', (readerId, refs) => {
+		const minted = mintDevicePayment({ ...input, readerId });
+		expect(minted.ok).toBe(true);
+		if (!minted.ok) throw new Error(minted.reason);
+		expect(minted.row.provider_refs).toEqual(refs);
+	});
 	it('allows unsaved orders only offline', () => {
 		expect(mintDevicePayment({ ...input, orderId: null, recordedOffline: true })).toMatchObject({
 			ok: true,

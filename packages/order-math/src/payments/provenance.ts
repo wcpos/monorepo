@@ -24,6 +24,48 @@ export function saleProvenanceMeta(input: {
 	}).map(([key, value]) => ({ key, value }));
 }
 
+export const SPLIT_META_KEY = '_wcpos_split';
+
+export function splitPlanMeta(input: {
+	kind: 'even' | 'fixed' | 'items';
+	ways: number;
+	shares: string[];
+}): MetaDataEntry {
+	const { kind, ways, shares } = input;
+	return { key: SPLIT_META_KEY, value: JSON.stringify({ kind, ways, shares }) };
+}
+
+/**
+ * Replace-by-key merge for facts that describe the sale as it finally completed. The
+ * split summary is written before each attempt at the final leg, so a declined attempt
+ * followed by a re-divided remainder must overwrite what the first attempt wrote —
+ * unlike the completion tuple, which `withSaleProvenance` deliberately never replaces.
+ *
+ * An entry already on the order is updated in place so it keeps the id Woo assigned
+ * it: an id-less element on the wire is an append, and a replaced-by-removal entry
+ * would leave the stale one on the server next to the new one.
+ *
+ * An entry whose `value` is `null` means "remove": one that has an id is kept with the
+ * null value, which is how Woo is told to delete it on the next push; one that was never
+ * synced is simply dropped. Readers treat a null value as absent.
+ */
+export function withMetaReplaced(
+	meta: readonly MetaDataEntry[] | null | undefined,
+	entries: readonly MetaDataEntry[]
+): MetaDataEntry[] {
+	const result = (meta ?? []).map((entry) => ({ ...entry }));
+	for (const entry of entries) {
+		const index = result.findIndex(({ key }) => key === entry.key);
+		if (entry.value === null) {
+			if (index === -1) continue;
+			if (result[index].id === undefined) result.splice(index, 1);
+			else result[index] = { ...result[index], value: null };
+		} else if (index === -1) result.push({ ...entry });
+		else result[index] = { ...result[index], value: entry.value };
+	}
+	return result;
+}
+
 export function hasSaleProvenance(meta: readonly MetaDataEntry[] | null | undefined): boolean {
 	return !!meta?.some(({ key }) => key === '_wcpos_sale_counter');
 }

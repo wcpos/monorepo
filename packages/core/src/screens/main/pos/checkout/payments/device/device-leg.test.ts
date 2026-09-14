@@ -20,7 +20,7 @@ function deferred<T>() {
 	});
 	return { promise, resolve };
 }
-function setup(offline = false, resume = false, missing?: 'driver' | 'method') {
+function setup(offline = false, resume = false, missing?: 'driver' | 'method', pendingRow = row) {
 	const collection = deferred<CollectResult>();
 	const driver: PaymentDriver = {
 		provider: 'simulated',
@@ -65,7 +65,7 @@ function setup(offline = false, resume = false, missing?: 'driver' | 'method') {
 		{
 			dp: 3,
 			orderId: 42,
-			row,
+			row: pendingRow,
 			method: missing === 'method' ? undefined : method,
 			transport: 'bluetooth',
 			offline,
@@ -318,12 +318,36 @@ it('queues offline authorization before telling the till it is paid', async () =
 		expect.objectContaining({
 			status: 'authorized',
 			recorded_offline: true,
+			authorized_at_gmt: '2026-01-01T00:00:00.000Z',
+			updated_at_gmt: '2026-01-01T00:00:00.000Z',
 			provider_refs: { payment_intent: null },
 		})
 	);
 	write.resolve();
 	await start;
 	expect(c.leg.getState()).toMatchObject({ outcome: 'captured', row: { status: 'authorized' } });
+});
+it('keeps the reader the row was minted for through an offline authorization', async () => {
+	const c = setup(true, false, undefined, { ...row, provider_refs: { reader: 'sn-1' } });
+	const start = c.leg.start();
+	c.collection.resolve({
+		...approved,
+		outcome: 'authorized',
+		provider_refs: { payment_intent: null },
+	});
+	await start;
+	// The driver's refs describe the offline intent; the reader is a fact about the row.
+	expect(c.leg.getState().row.provider_refs).toEqual({ reader: 'sn-1', payment_intent: null });
+});
+it('does not stamp an approval time for an offline decline', async () => {
+	const pendingRow = { ...row };
+	delete pendingRow.authorized_at_gmt;
+	const c = setup(true, false, undefined, pendingRow);
+	const start = c.leg.start();
+	c.collection.resolve({ ...approved, outcome: 'declined', provider_refs: {} });
+	await start;
+	expect(c.leg.getState().row.status).toBe('failed');
+	expect(c.leg.getState().row).not.toHaveProperty('authorized_at_gmt');
 });
 it('a failed offline write stays held for retry without a second collect', async () => {
 	const c = setup(true);
@@ -336,9 +360,17 @@ it('a failed offline write stays held for retry without a second collect', async
 	});
 	await start;
 	expect(c.leg.getState()).toMatchObject({ outcome: null, captureFailed: true });
+	// The retry happens later; the approval time is when the reader answered, not now.
+	jest.setSystemTime(new Date('2026-01-01T00:05:00Z'));
 	await c.leg.capture();
 	expect(c.leg.getState().outcome).toBe('captured');
 	expect(c.driver.collect).toHaveBeenCalledTimes(1);
+	expect(c.patchAndEnqueue).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			authorized_at_gmt: '2026-01-01T00:00:00.000Z',
+			updated_at_gmt: '2026-01-01T00:05:00.000Z',
+		})
+	);
 });
 it('lost pending sessions fail locally without restarting the driver', async () => {
 	const c = setup(false, true);

@@ -137,7 +137,12 @@ export function mintManualPayment(input: MintManualPaymentInput): MintManualPaym
 	};
 }
 
-export type MintServerPaymentInput = Omit<MintManualPaymentInput, 'tendered' | 'recordedOffline'>;
+export type MintServerPaymentInput = Omit<
+	MintManualPaymentInput,
+	'tendered' | 'recordedOffline'
+> & {
+	readerId?: string | null;
+};
 export type MintServerPaymentResult =
 	| { ok: true; row: PaymentRow }
 	| { ok: false; reason: 'not_server' | 'amount_not_positive' | 'no_order_id' };
@@ -189,7 +194,7 @@ function mintTerminalPayment(
 			failure_reason: null,
 			refunded_amount: fromMinor(0, dp),
 			refunds: [],
-			provider_refs: {},
+			provider_refs: input.readerId ? { reader: input.readerId } : {},
 			receipt: {},
 			cashier_id: input.cashierId,
 			store_id: input.storeId,

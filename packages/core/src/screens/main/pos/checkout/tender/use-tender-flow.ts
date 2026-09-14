@@ -13,7 +13,10 @@ import {
 	type PaymentRow,
 	type PaymentTransport,
 	readLedger,
+	SPLIT_META_KEY,
+	splitPlanMeta,
 	toMinor,
+	withMetaReplaced,
 } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -488,8 +491,40 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		setBusy(true);
 		let savingProvenance = false;
 		let sessionId: string | null = null;
+		// The split as the cashier saw it, written with whichever leg completes the sale —
+		// cash included, which does not pass through saveProvenance below. With no plan, a
+		// split an earlier abandoned attempt left on the order is cleared: it must not
+		// describe a sale that was then completed in one go. Otherwise nothing is sent.
+		const hasStaleSplit = (payload.meta_data ?? []).some(
+			({ key, value }) => key === SPLIT_META_KEY && value !== null
+		);
+		const splitMeta = state.plan
+			? [
+					splitPlanMeta({
+						kind: state.plan.kind,
+						ways: planLegs(state.plan, rowsSinceFrom, balanceMinor).label.ways,
+						shares: [
+							...rowsSinceFrom.map(({ minor }) => fromMinor(minor, dp)),
+							fromMinor(entryAppliedMinor, dp),
+						],
+					}),
+				]
+			: hasStaleSplit
+				? [{ key: SPLIT_META_KEY, value: null }]
+				: undefined;
 		const saveProvenance = async () => {
-			if (!online || queuedOffline || !payload.id || entryAppliedMinor !== balanceMinor) return;
+			if (entryAppliedMinor !== balanceMinor) return;
+			if (!online || queuedOffline || !payload.id) {
+				// No completion tuple can be stamped yet, but the split is a fact about this
+				// till's sale and the offline completion write keeps whatever is on the order.
+				if (!splitMeta) return;
+				const patched = await localPatch({
+					document: order,
+					data: { meta_data: withMetaReplaced(order.getLatest().payload.meta_data, splitMeta) },
+				});
+				if (!patched) throw new Error('provenance_save_failed');
+				return;
+			}
 			savingProvenance = true;
 			await persistProvenance({
 				order,
@@ -498,6 +533,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				userDB,
 				siteUuid: site.uuid!,
 				sessionId,
+				...(splitMeta ? { extraMeta: splitMeta } : {}),
 			});
 			savingProvenance = false;
 		};
@@ -569,6 +605,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (!service) throw new Error('terminal_service_unavailable');
 				const offline = !online || queuedOffline || !payload.id;
 				const minted = mintDevicePayment({
+					readerId: status.reader.id,
 					registerId,
 					sessionId,
 					method,
@@ -660,6 +697,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(entryAppliedMinor, dp),
 				tendered,
+				...(splitMeta ? { extraMeta: splitMeta } : {}),
 			});
 			if (outcome.kind === 'recorded') {
 				tenderRecorded(outcome.row, outcome.via);
@@ -774,6 +812,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		remember,
 		saveState,
 		state.entryMinor,
+		state.plan,
+		rowsSinceFrom,
 		state.readerId,
 		payload.id,
 		payload.number,

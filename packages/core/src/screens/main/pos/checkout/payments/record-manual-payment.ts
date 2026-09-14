@@ -32,6 +32,8 @@ export interface RecordManualPaymentOrder {
 	meta_data: MetaDataEntry[];
 }
 export interface RecordManualPaymentInput {
+	/** Facts about the sale as it completes (the split summary); merged by key when this leg completes it. */
+	extraMeta?: MetaDataEntry[];
 	amount: string | number;
 	tendered?: string | number | null;
 }

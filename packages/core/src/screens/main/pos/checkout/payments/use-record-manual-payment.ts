@@ -9,7 +9,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import {
 	hasSaleProvenance,
 	isCompletingStatus,
+	type MetaDataEntry,
 	type PaymentMethodDescriptor,
+	withMetaReplaced,
 } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -77,6 +79,10 @@ export function useRecordManualPayment(
 				// RxDB serves object fields as Proxies; the ledger helpers need plain data.
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
+			// The split summary rides with whichever leg completes the sale; every path
+			// that stamps completion here merges it by key so a re-divided remainder wins.
+			const withCompletionFacts = (meta: MetaDataEntry[]) =>
+				withMetaReplaced(meta, input.extraMeta ?? []);
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post: (url, body) => http.post(url, body),
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
@@ -84,18 +90,22 @@ export function useRecordManualPayment(
 				storeId: store.id ? store.id : null,
 				registerId,
 				sessionId,
-				completionMeta: (meta_data) =>
-					completionMeta(
-						{ meta_data },
-						{ userDB, siteUuid: site.uuid!, storeId: store.id, sessionId }
+				completionMeta: async (meta_data) =>
+					withCompletionFacts(
+						await completionMeta(
+							{ meta_data },
+							{ userDB, siteUuid: site.uuid!, storeId: store.id, sessionId }
+						)
 					),
 				persistProvenance: async () => {
-					const meta_data = await completionMeta(order.getLatest().payload, {
-						userDB,
-						siteUuid: site.uuid!,
-						storeId: store.id,
-						sessionId,
-					});
+					const meta_data = withCompletionFacts(
+						await completionMeta(order.getLatest().payload, {
+							userDB,
+							siteUuid: site.uuid!,
+							storeId: store.id,
+							sessionId,
+						})
+					);
 					const patched = await localPatch({ document: order, data: { meta_data } });
 					if (!patched) throw new Error('provenance_save_failed');
 					await pushDocument(order);
@@ -126,12 +136,14 @@ export function useRecordManualPayment(
 							isCompletingStatus(changes.status ?? '') &&
 							!hasSaleProvenance(changes.meta_data)
 						) {
-							const meta_data = await completionMeta(changes, {
-								userDB,
-								siteUuid: site.uuid!,
-								storeId: store.id,
-								sessionId,
-							});
+							const meta_data = withCompletionFacts(
+								await completionMeta(changes, {
+									userDB,
+									siteUuid: site.uuid!,
+									storeId: store.id,
+									sessionId,
+								})
+							);
 							const patched = await localPatch({ document: order, data: { meta_data } });
 							if (!patched) throw new Error('provenance_save_failed');
 						}
