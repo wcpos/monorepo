@@ -182,6 +182,22 @@ describe('search plugin', () => {
 			expect(old.collection).not.toHaveProperty('__wcposAppendIndex');
 		});
 
+		it('an init in the same tick as a recreate joins the replacement', async () => {
+			// The chain defers the rebuild to a later microtask. Without retiring the cached
+			// instance synchronously, this init takes the fast path and receives the instance
+			// the queued recreate is about to close.
+			const collection = makeCollection();
+			const old = await collection.initSearch('en');
+			const recreate = collection.recreateSearch('en');
+			const joined = collection.initSearch('en');
+			const [replacement, fromInit] = await Promise.all([recreate, joined]);
+			expect(fromInit).toBe(replacement);
+			expect(fromInit).not.toBe(old);
+			expect(old.close).toHaveBeenCalledTimes(1);
+			expect(collection._searchInstances.get('en')).toBe(replacement);
+			expect(collection._searchInstances.size).toBe(1);
+		});
+
 		it('concurrent init for a different locale is not blocked', async () => {
 			const collection = makeCollection();
 			await collection.initSearch('en');

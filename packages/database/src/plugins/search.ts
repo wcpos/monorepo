@@ -602,7 +602,8 @@ export const searchPlugin: RxPlugin = {
 			 */
 			const recreateSearch = async function (
 				this: RxCollection,
-				locale?: string
+				locale?: string,
+				retiring?: FlexSearchInstance
 			): Promise<FlexSearchInstance | null> {
 				// Check if collection has searchFields configured
 				const normalizedLocale = normalizeLocale(locale || this._activeLocale || 'en');
@@ -617,24 +618,23 @@ export const searchPlugin: RxPlugin = {
 					context: { collection: this.name, locale },
 				});
 
-				// Remove existing instance from cache
-				if (this._searchInstances?.has(locale)) {
-					const oldInstance = this._searchInstances.get(locale);
-					this._searchInstances.delete(locale);
+				// The wrapper retired the cached instance before queueing; an init that published
+				// while this waited in the chain is retired here.
+				const oldInstance = retiring ?? this._searchInstances?.get(locale);
+				this._searchInstances?.delete(locale);
 
-					// Close before removing the destination collection.
-					if (oldInstance) {
-						try {
-							await closeSearchInstance(oldInstance);
-						} catch (error: any) {
-							searchLogger.warn('Error destroying old search instance', {
-								context: {
-									collection: this.name,
-									locale,
-									error: error.message,
-								},
-							});
-						}
+				// Close before removing the destination collection.
+				if (oldInstance) {
+					try {
+						await closeSearchInstance(oldInstance);
+					} catch (error: any) {
+						searchLogger.warn('Error destroying old search instance', {
+							context: {
+								collection: this.name,
+								locale,
+								error: error.message,
+							},
+						});
 					}
 				}
 
@@ -687,8 +687,13 @@ export const searchPlugin: RxPlugin = {
 			};
 			proto.recreateSearch = async function (locale?: string): Promise<FlexSearchInstance | null> {
 				locale = normalizeLocale(locale || this._activeLocale || 'en');
+				// Retire the cached instance NOW. The chain defers the rebuild to a later microtask,
+				// and an initSearch arriving before then must join the replacement rather than take
+				// the fast path on an instance that is about to be closed.
+				const retiring = this._searchInstances?.get(locale);
+				this._searchInstances?.delete(locale);
 				const instance = await withSearchLocale(this, locale, () =>
-					recreateSearch.call(this, locale)
+					recreateSearch.call(this, locale, retiring)
 				);
 				if (instance) await evictLRUIfNeeded(this);
 				return instance;
