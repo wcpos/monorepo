@@ -24,6 +24,35 @@ const searchLogger = getLogger(['wcpos', 'db', 'search']);
  */
 const MAX_CACHED_LOCALES = 3;
 
+// LRU eviction touches other locales, so serialize the whole source collection's
+// init/recreate operations, including creation already in flight before teardown.
+const searchOperations = new WeakMap<RxCollection, Promise<void>>();
+
+async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> {
+	const search = instance as FlexSearchInstance & {
+		close(): Promise<void>;
+		pipeline: { close(): Promise<void> };
+	};
+	const destination = search.collection as RxCollection & { __wcposAppendIndex?: unknown };
+	try {
+		await search.pipeline.close();
+	} finally {
+		try {
+			await search.close();
+		} finally {
+			try {
+				// The premium close() leaves its destination registered in database.collections,
+				// and that collection's onClose hook retains the whole FlexSearch index. Closing
+				// it deregisters the collection without touching the persisted index, so the
+				// locale reopens from storage instead of rebuilding.
+				await destination.close();
+			} finally {
+				delete destination.__wcposAppendIndex;
+			}
+		}
+	}
+}
+
 /**
  * Normalize locale to 2-character code.
  */
@@ -152,10 +181,10 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 			const instance = collection._searchInstances.get(oldestLocale);
 			collection._searchInstances.delete(oldestLocale);
 
-			// Destroy the search collection
-			if (instance?.collection && typeof instance.collection.destroy === 'function') {
+			// Stop indexing and release retained append state.
+			if (instance) {
 				try {
-					await instance.collection.destroy();
+					await closeSearchInstance(instance);
 				} catch (error: any) {
 					searchLogger.warn('Failed to destroy evicted search instance', {
 						context: {
@@ -642,10 +671,10 @@ export const searchPlugin: RxPlugin = {
 					const oldInstance = this._searchInstances.get(locale);
 					this._searchInstances.delete(locale);
 
-					// Destroy the old search collection
-					if (oldInstance?.collection && typeof oldInstance.collection.destroy === 'function') {
+					// Stop indexing and release retained append state.
+					if (oldInstance) {
 						try {
-							await oldInstance.collection.destroy();
+							await closeSearchInstance(oldInstance);
 						} catch (error: any) {
 							searchLogger.warn('Error destroying old search instance', {
 								context: {
@@ -706,6 +735,25 @@ export const searchPlugin: RxPlugin = {
 					throw error;
 				}
 			};
+
+			for (const method of ['initSearch', 'recreateSearch'] as const) {
+				const run: (this: RxCollection, ...args: unknown[]) => Promise<FlexSearchInstance | null> =
+					proto[method];
+				proto[method] = function (this: RxCollection, ...args: unknown[]) {
+					const previous = searchOperations.get(this) ?? Promise.resolve();
+					const operation = previous.then(() => run.apply(this, args));
+					// A rejected operation reaches its caller, but must not wedge later searches.
+					const settled = operation.then(
+						() => {},
+						() => {}
+					);
+					searchOperations.set(this, settled);
+					void settled.then(() => {
+						if (searchOperations.get(this) === settled) searchOperations.delete(this);
+					});
+					return operation;
+				};
+			}
 		},
 	},
 	overwritable: {},
