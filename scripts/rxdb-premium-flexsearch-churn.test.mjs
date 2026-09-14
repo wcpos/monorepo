@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire, stripTypeScriptTypes } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -39,10 +40,45 @@ function installedDistPresent(dist) {
 	return Boolean(path) && existsSync(path);
 }
 
+// Recover only the vendor body for test fixtures, including when the local install has an
+// older prelude. Production preparePatch still rejects outdated/partial installed patches.
+function pristineSource(dist) {
+	const anchors = DISTS.find((item) => item.dist === dist);
+	let source = readFileSync(installedPath(dist), 'utf8');
+	if (source.includes(MARKER)) {
+		const start = dist === 'esm' ? 'import{ensureNotFalsy' : 'var e=require(';
+		assert.ok(source.includes(start));
+		source = source.slice(source.indexOf(start));
+		// Accept only the exact prior cleanup or this revision's cleanup, not arbitrary
+		// vendor close changes. Unknown anchors must still fail fixture patching.
+		const previousClose =
+			'this.subs.forEach((e=>e.unsubscribe())),await this.queue,this.index.__wcposSearchDigests&&this.index.__wcposSearchDigests.clear(),this.index.__wcposDigestBytes=0}';
+		source = source
+			.replace(anchors.closeAfter, anchors.closeBefore)
+			.replace(previousClose, anchors.closeBefore);
+		for (const key of ['live', 'replay', 'pipeline', 'append']) {
+			assert.ok(source.includes(anchors[`${key}After`]), `missing installed ${key} rewrite`);
+			source = source.replace(anchors[`${key}After`], anchors[`${key}Before`]);
+		}
+	}
+	return source;
+}
+
+function patchedSource(dist) {
+	return withFixture(
+		pristineSource(dist),
+		(path) =>
+			preparePatch(
+				path,
+				DISTS.find((item) => item.dist === dist)
+			).next
+	);
+}
+
 // The offline copy lacks RxJS/Babel. Execute the installed plugin body, not a
 // reimplementation, with only module bindings and database/event I/O stubbed.
 // Indexing, replay, subscriber, pipeline handler and close remain premium code.
-function loadPlugin(dist, source = readFileSync(installedPath(dist), 'utf8'), strict = false) {
+function loadPlugin(dist, source = patchedSource(dist), strict = false) {
 	const core = { ensureNotFalsy: (value) => assert.ok(value) || value };
 	const schema = { getFlexsearchIndexSchema: (value) => value };
 	const rxjs = { filter: (fn) => fn, mergeMap: (fn) => fn };
@@ -81,7 +117,8 @@ function loadPlugin(dist, source = readFileSync(installedPath(dist), 'utf8'), st
 	return exports;
 }
 
-async function openPlugin(plugin, persisted = []) {
+async function openPlugin(plugin, persisted = [], deferred = false) {
+	const pending = [];
 	const listeners = new Set();
 	const emit = async (bulk) => {
 		for (const listener of listeners) await listener(bulk);
@@ -108,7 +145,9 @@ async function openPlugin(plugin, persisted = []) {
 		schema: { jsonSchema: { properties: { id: { maxLength: 100 } } } },
 		find: () => ({ exec: async () => persisted }),
 		upsert: async (documentData) => {
-			await emit({ collectionName: collection.name, events: [{ documentData }] });
+			const bulk = { collectionName: collection.name, events: [{ documentData }] };
+			if (deferred) pending.push(bulk);
+			else await emit(bulk);
 		},
 	};
 	database.addCollections = async () => ({ test_flexsearch: collection });
@@ -131,6 +170,9 @@ async function openPlugin(plugin, persisted = []) {
 	return {
 		instance,
 		collection,
+		flush: async () => {
+			while (pending.length) await emit(pending.shift());
+		},
 		writeBatch: (entries) =>
 			handler(
 				entries.map(({ id, searchable }) => ({
@@ -167,6 +209,19 @@ for (const dist of ['esm', 'cjs']) {
 		);
 		continue;
 	}
+
+	test(`[${dist}] deferred indexing preserves the final A in A → B → A`, async (t) => {
+		const { instance, write, flush } = await openPlugin(loadPlugin(dist), [], true);
+		t.after(() => instance.close());
+		await write('quartz');
+		await flush();
+		await write('sapphire'); // Persist B, but its subscriber has not indexed it yet.
+		await write('quartz'); // Must compare with persisted B, not indexed A.
+		await flush();
+		assert.deepEqual(instance.index.search('quartz'), ['product']);
+		assert.deepEqual(instance.index.search('sapphire'), []);
+	});
+
 	test(`[${dist}] emitted prelude and rewritten regions run in strict mode`, async (t) => {
 		const plugin = loadPlugin(dist, undefined, true);
 		const { instance, writeBatch } = await openPlugin(plugin, [
@@ -196,6 +251,8 @@ for (const dist of ['esm', 'cjs']) {
 			{ type: 'append', dataAr: [{ id: 'shared', searchable: 'sapphire' }] },
 		]);
 		t.after(() => customers.instance.close());
+		await products.write('quartz', 'shared');
+		await customers.write('sapphire', 'shared');
 		const productUpsert = t.mock.method(products.collection, 'upsert');
 		const customerUpsert = t.mock.method(customers.collection, 'upsert');
 		// Both pipelines exist before either handler runs. The changed product text
@@ -231,6 +288,7 @@ for (const dist of ['esm', 'cjs']) {
 			{ type: 'append', dataAr: entries },
 		]);
 		t.after(() => instance.close());
+		await writeBatch(entries); // First write after replay populates persisted state.
 		const upsert = t.mock.method(collection, 'upsert');
 		await writeBatch(entries);
 		assert.equal(upsert.mock.callCount(), 0);
@@ -246,6 +304,7 @@ for (const dist of ['esm', 'cjs']) {
 			{ type: 'append', dataAr: entries },
 		]);
 		t.after(() => instance.close());
+		await writeBatch(entries);
 		const before = new Map(instance.index.__wcposSearchDigests);
 		// Do not emit the append yet: only the index subscriber may advance digests.
 		const upsert = t.mock.method(collection, 'upsert', async () => {});
@@ -372,12 +431,8 @@ for (const anchors of DISTS) {
 		test(`[${dist}] anchors unverifiable — installed dist absent`, { skip: true }, () => {});
 		continue;
 	}
-	const installed = readFileSync(installedPath(dist), 'utf8');
 	const keys = ['live', 'replay', 'pipeline', 'append', 'close'];
-	const pristine = keys.reduce(
-		(source, key) => source.replace(anchors[`${key}After`], anchors[`${key}Before`]),
-		installed.replace(PRELUDE, '')
-	);
+	const pristine = pristineSource(dist);
 	test(`[${dist}] exact anchors patch idempotently and reject changed preludes`, () => {
 		withFixture(pristine, (path) => {
 			const { next, status } = preparePatch(path, anchors);
@@ -412,23 +467,35 @@ for (const anchors of DISTS) {
 }
 
 test(
-	'running the installed patch twice leaves both dists byte-identical',
+	'running the patch twice leaves isolated installed-dist fixtures byte-identical',
 	{ skip: !DISTS.every(({ dist }) => installedDistPresent(dist)) },
 	() => {
-		let previous;
-		for (let i = 0; i < 2; i++) {
-			const result = spawnSync(
-				process.execPath,
-				['scripts/patch-rxdb-premium-flexsearch-churn.mjs'],
-				{
-					cwd: join(import.meta.dirname, '..'),
-					encoding: 'utf8',
-				}
+		const directory = mkdtempSync(join(tmpdir(), 'wcpos-flexsearch-cli-'));
+		try {
+			const script = join(directory, 'patch.mjs');
+			writeFileSync(
+				script,
+				readFileSync(new URL('./patch-rxdb-premium-flexsearch-churn.mjs', import.meta.url))
 			);
-			assert.equal(result.status, 0, result.stderr);
-			const current = DISTS.map(({ dist }) => readFileSync(installedPath(dist), 'utf8'));
-			if (previous) assert.deepEqual(current, previous);
-			previous = current;
+			const root = join(directory, 'node_modules/rxdb-premium');
+			mkdirSync(root, { recursive: true });
+			writeFileSync(join(root, 'package.json'), '{}');
+			const paths = DISTS.map(({ dist }) => {
+				const path = join(root, `dist/${dist}/plugins/flexsearch/rx-fulltext-search.js`);
+				mkdirSync(dirname(path), { recursive: true });
+				writeFileSync(path, pristineSource(dist));
+				return path;
+			});
+			let previous;
+			for (let i = 0; i < 2; i++) {
+				const result = spawnSync(process.execPath, [script], { encoding: 'utf8' });
+				assert.equal(result.status, 0, result.stderr);
+				const current = paths.map((path) => readFileSync(path, 'utf8'));
+				if (previous) assert.deepEqual(current, previous);
+				previous = current;
+			}
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
 		}
 	}
 );
@@ -466,6 +533,7 @@ test('a batch carrying one document twice persists only its last text', () => {
 	// claiming text the document no longer has.
 	const index = new FlexSearch.Index({ preset: 'performance', tokenize: 'full', minlength: 3 });
 	indexSearchText(index, 'product', 'quartz');
+	changedSearchEntries(index, [{ id: 'product', searchable: 'quartz' }]);
 	const kept = changedSearchEntries(index, [
 		{ id: 'product', searchable: 'sapphire' },
 		{ id: 'product', searchable: 'quartz' },
@@ -478,21 +546,134 @@ test('a batch carrying one document twice persists only its last text', () => {
 	assert.deepEqual(changed, [{ id: 'product', searchable: 'sapphire' }]);
 });
 
-test('a churning collection cannot grow the retained text without bound', () => {
-	// `logs` sweeps rows away by retention while its searchFields cover message and error
-	// text, and the plugin never observes a deletion, so nothing can prune by id. Without a
-	// ceiling the map keeps an entry per row EVER seen, each holding a full log line.
+for (const [label, line, count] of [
+	['entry', 'log', 40005],
+	['byte', 'request failed '.repeat(100), 5000],
+]) {
+	test(`retention churn stays under both ceilings across ${label} clears`, () => {
+		const index = new FlexSearch.Index(indexOptions);
+		const rows = new Map();
+		let clears = 0;
+		for (let i = 0; i < count; i++) {
+			const id = `log-${i}`;
+			rows.set(id, line);
+			const before = index.__wcposPersistedDigests?.size ?? 0;
+			for (const entry of changedSearchEntries(index, [{ id, searchable: line }])) {
+				indexSearchText(index, entry.id, entry.searchable);
+			}
+			// Model source retention: the plugin receives no delete event or index.remove.
+			rows.delete(id);
+			if (index.__wcposPersistedDigests.size < before) clears++;
+			for (const [map, bytes] of [
+				[index.__wcposSearchDigests, index.__wcposDigestBytes],
+				[index.__wcposPersistedDigests, index.__wcposPersistedDigestBytes],
+			]) {
+				assert.ok(map.size <= 20000);
+				assert.ok(bytes <= 2097152);
+			}
+		}
+		assert.equal(rows.size, 0);
+		assert.ok(clears >= 2, `expected repeated ${label} clears, saw ${clears}`);
+		for (const map of [index.__wcposSearchDigests, index.__wcposPersistedDigests]) {
+			assert.ok([...map.values()].reduce((n, text) => n + Buffer.byteLength(text), 0) <= 2097152);
+		}
+		// An id forgotten during churn must still be searchable on its next write.
+		for (const entry of changedSearchEntries(index, [
+			{ id: 'log-0', searchable: 'unmistakable' },
+		])) {
+			indexSearchText(index, entry.id, entry.searchable);
+		}
+		assert.deepEqual(index.search('unmistakable'), ['log-0']);
+	});
+}
+
+test('replacing an id at the entry ceiling keeps the rest of the catalogue', () => {
+	// A replace does not add an entry, so it must not trip the ceiling. Clearing here would
+	// forget 19,999 products because one title changed, and every one of them would then be
+	// re-appended and re-indexed on its next stock write — the exact churn this prevents.
 	const index = new FlexSearch.Index({ preset: 'performance', tokenize: 'full', minlength: 3 });
-	const line = 'request failed for order '.repeat(20);
-	for (let i = 0; i < 40000; i += 1) {
-		indexSearchText(index, `log-${i}`, `${line}${i}`);
+	for (let i = 0; i < 20000; i += 1) {
+		indexSearchText(index, `product-${i}`, `title ${i}`);
 	}
 	const digests = index.__wcposSearchDigests;
-	assert.ok(digests.size < 20000, `entries must stay capped, saw ${digests.size}`);
-	assert.ok(index.__wcposDigestBytes <= 2097152, `retained bytes must stay capped, saw ${index.__wcposDigestBytes}`);
-	// Forgetting must never be visible as a wrong answer.
-	indexSearchText(index, 'log-fresh', 'unmistakable marker text');
-	assert.deepEqual(index.search('unmistakable'), ['log-fresh']);
+	assert.equal(digests.size, 20000, 'precondition: the map is exactly at the ceiling');
+	indexSearchText(index, 'product-0', 'a different title');
+	assert.equal(digests.size, 20000, 'a replace must not clear the map');
+	assert.equal(digests.get('product-1'), 'title 1', 'the other entries must survive');
+});
+
+// These two are about the digest bookkeeping, not about FlexSearch. They use a counting stub
+// because `tokenize: 'full'` expands every substring, so feeding it a megabyte of text is
+// quadratic and aborts the process rather than failing an assertion.
+const countingIndex = () => {
+	const added = [];
+	return { added, add: (id) => added.push(id), remove: () => {} };
+};
+
+test('oversized repeated text uses a bounded strong surrogate in both maps', () => {
+	const index = countingIndex();
+	const text = 'x'.repeat(2097153);
+	for (let i = 0; i < 3; i++) {
+		const kept = changedSearchEntries(index, [{ id: 'log-huge', searchable: text }]);
+		assert.equal(kept.length, i === 0 ? 1 : 0);
+		indexSearchText(index, 'log-huge', text);
+	}
+	assert.deepEqual(index.added, ['log-huge']);
+	const encoded = Buffer.from(text, 'utf16le').swap16();
+	const expected = `\0sha256:${Buffer.byteLength(text)}:${createHash('sha256').update(encoded).digest('hex')}`;
+	for (const [map, tally] of [
+		[index.__wcposSearchDigests, index.__wcposDigestBytes],
+		[index.__wcposPersistedDigests, index.__wcposPersistedDigestBytes],
+	]) {
+		assert.equal(map.get('log-huge'), expected);
+		assert.equal(tally, Buffer.byteLength(expected));
+		assert.ok(tally < 100);
+	}
+	const changed = text.slice(0, -1) + 'y';
+	assert.equal(changedSearchEntries(index, [{ id: 'log-huge', searchable: changed }]).length, 1);
+	indexSearchText(index, 'log-huge', changed);
+	assert.equal(index.added.length, 2);
+	// A literal descriptor must not compare equal to an oversized value.
+	indexSearchText(index, 'log-huge', index.__wcposSearchDigests.get('log-huge'));
+	assert.equal(index.added.length, 3);
+});
+
+// Exercise padding boundaries, Unicode and lone surrogates in the emitted, self-contained
+// helper. Node's crypto implementation is an independent oracle, not the production helper.
+test('the emitted SHA-256 surrogate matches node crypto over exact UTF-16BE code units', () => {
+	const context = {};
+	runInNewContext(PRELUDE, context);
+	for (const text of [
+		'',
+		'abc',
+		'日😀',
+		'\ud800',
+		'\udc01',
+		'x\ud800z',
+		...Array.from({ length: 65 }, (_, n) => 'x'.repeat(n)),
+	]) {
+		const expected = createHash('sha256')
+			.update(Buffer.from(text, 'utf16le').swap16())
+			.digest('hex');
+		assert.equal(context.wcposSha256(text), expected);
+	}
+});
+
+test('the byte ceiling counts UTF-8 bytes, not UTF-16 code units', () => {
+	// Each of these is 3 UTF-8 bytes but 1 UTF-16 code unit, so counting `.length` would let
+	// the map hold three times the advertised ceiling before it cleared.
+	const index = countingIndex();
+	const wide = '日'.repeat(40000); // 120,000 bytes, 40,000 code units
+	for (let i = 0; i < 30; i += 1) {
+		indexSearchText(index, `log-${i}`, `${wide}${i}`);
+	}
+	// Measured independently, NOT read back from __wcposDigestBytes: the tally is the thing
+	// a UTF-16 count corrupts, so asserting on it would pass either way.
+	const retained = [...index.__wcposSearchDigests.values()].reduce(
+		(total, value) => total + Buffer.byteLength(value, 'utf8'),
+		0
+	);
+	assert.ok(retained <= 2097152, `retained UTF-8 bytes must stay capped, saw ${retained}`);
 });
 
 test('a forgotten document is simply re-indexed, never skipped wrongly', () => {
@@ -534,4 +715,63 @@ test('indexed-text state is per-index, exact, and not committed on failed writes
 	first.update = update;
 	indexSearchText(first, 'product', 'sapphire');
 	assert.deepEqual(first.search('sapphire'), ['product']);
+});
+
+test('an oversized replacement preserves unrelated indexed and persisted digests', () => {
+	const index = countingIndex();
+	const write = (id, searchable) => {
+		const kept = changedSearchEntries(index, [{ id, searchable }]);
+		indexSearchText(index, id, searchable);
+		return kept;
+	};
+	write('product', 'quartz');
+	write('log', 'old error');
+	write('log', 'x'.repeat(2097153));
+	assert.deepEqual(write('product', 'quartz'), []);
+	assert.equal(index.added.filter((id) => id === 'product').length, 1);
+	for (const [map, tally] of [
+		[index.__wcposSearchDigests, index.__wcposDigestBytes],
+		[index.__wcposPersistedDigests, index.__wcposPersistedDigestBytes],
+	]) {
+		assert.equal(map.get('product'), 'quartz');
+		assert.equal(
+			tally,
+			[...map.values()].reduce((n, text) => n + Buffer.byteLength(text), 0)
+		);
+	}
+});
+
+test('a failed fallback add cannot strand the removed document behind its old digest', () => {
+	const index = new FlexSearch.Index(indexOptions);
+	index.update = undefined;
+	indexSearchText(index, 'product', 'quartz');
+	indexSearchText(index, 'other', 'topaz');
+	const add = index.add;
+	index.add = () => {
+		throw new Error('add failed');
+	};
+	assert.throws(() => indexSearchText(index, 'product', 'sapphire'), /add failed/);
+	assert.deepEqual(index.search('quartz'), []);
+	const bytesAfterFailure = index.__wcposDigestBytes;
+	index.add = add;
+	indexSearchText(index, 'product', 'quartz');
+	assert.deepEqual(index.search('quartz'), ['product']);
+	assert.equal(bytesAfterFailure, Buffer.byteLength('topaz'));
+});
+
+test('an over-budget escaped literal removes only its own digest and bytes', () => {
+	const index = countingIndex();
+	for (const searchable of ['old error', '\0' + 'x'.repeat(2097151)]) {
+		changedSearchEntries(index, [{ id: 'product', searchable: 'quartz' }]);
+		indexSearchText(index, 'product', 'quartz');
+		changedSearchEntries(index, [{ id: 'log', searchable }]);
+		indexSearchText(index, 'log', searchable);
+	}
+	for (const [map, bytes] of [
+		[index.__wcposSearchDigests, index.__wcposDigestBytes],
+		[index.__wcposPersistedDigests, index.__wcposPersistedDigestBytes],
+	]) {
+		assert.deepEqual([...map], [['product', 'quartz']]);
+		assert.equal(bytes, 6);
+	}
 });
