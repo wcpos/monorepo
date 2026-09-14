@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -67,8 +67,18 @@ jest.mock('@wcpos/query', () => ({
 	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
+let mockBindingStatus: 'bound' | 'choose' | 'none' | 'unknown' = 'bound';
+jest.mock('../../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({
+		status: mockBindingStatus,
+		registerId: null,
+		registerName: null,
+		registers: [],
+		bind: jest.fn(),
+	}),
+}));
 jest.mock('../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ userDB: mockUserDB, site: mockSite }),
+	useStoreSession: () => ({ userDB: mockUserDB, site: mockSite, store: { id: 1 } }),
 	useAppState: () => ({
 		wpCredentials: { access_token: 'jwt-token', access_token$: {} },
 	}),
@@ -1064,3 +1074,32 @@ it.each([false, true])(
 		}
 	}
 );
+
+describe('PaymentWebview register gate', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockOnlineStatus = 'online-website-available';
+		mockLocalPatch.mockResolvedValue(true);
+	});
+	afterEach(() => {
+		mockBindingStatus = 'bound';
+		mockOnlineStatus = 'offline';
+	});
+	it('does not expose the pay page while a register is still to be chosen', async () => {
+		mockBindingStatus = 'choose';
+		const setFrameStatus = jest.fn();
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+				retryToken={0}
+			/>
+		);
+		await waitFor(() => expect(setFrameStatus).toHaveBeenCalledWith('stalled'));
+		// The pay page completes the whole balance: no provenance write, no URL.
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(webViewProps.source).toBeUndefined();
+	});
+});

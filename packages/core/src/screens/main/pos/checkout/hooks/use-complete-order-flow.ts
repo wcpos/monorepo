@@ -12,6 +12,7 @@ import { enterReceipt, leaveCheckout } from '../checkout-mode';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
+import { reportProvenanceGap } from '../provenance/provenance-gap';
 import { reconcileCompletedOrder } from './reconcile-completed-order';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
@@ -31,7 +32,7 @@ export function useCompleteOrderFlow(
 	receiptHost: 'stage' | 'modal' = 'stage'
 ): (options?: CompleteOrderFlowOptions) => Promise<void> {
 	const runtime = useQueryRuntime();
-	const { wpCredentials } = useStoreSession();
+	const { wpCredentials, userDB, site, store } = useStoreSession();
 	const actor = React.useMemo(
 		() => ({
 			id: String(wpCredentials.id ?? ''),
@@ -57,6 +58,12 @@ export function useCompleteOrderFlow(
 			}
 			await reconcileCompletedOrder(runtime, order, refresh, stockAdjustment);
 			const latest = order.getLatest().payload;
+			await reportProvenanceGap({
+				userDB,
+				siteUuid: site.uuid!,
+				storeId: store.id,
+				order: { id: latest.id, uuid: order.uuid, meta_data: latest.meta_data },
+			});
 			logger.info(`Sale ${order.uuid} completed`, {
 				actor,
 				context: {

@@ -11,6 +11,7 @@ import { useStoreSession } from '../../../../../contexts/app-state';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { persistProvenance } from '../provenance/persist-provenance';
+import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { useT } from '../../../../../contexts/translations';
 import {
 	PaymentGatewayContract,
@@ -61,7 +62,8 @@ export function createCheckoutIdempotencyKey(
 
 export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const http = useRestHttpClient();
-	const { userDB, site } = useStoreSession();
+	const { userDB, site, store } = useStoreSession();
+	const { status: bindingStatus } = useRegisterBinding();
 	const siteUuid = site.uuid!;
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
@@ -158,6 +160,12 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const startCheckout = React.useCallback(async () => {
 		if (!orderId || !gatewayResolved) return;
 		if (blockIfDegraded('process-payment', { orderId: orderId })) return;
+		// A gateway sale completes the whole balance, so a store with several registers
+		// and none chosen cannot start one; the picker is on the cart.
+		if (bindingStatus === 'choose') {
+			checkoutLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
+			return;
+		}
 		setLoading(true);
 		setError(null);
 
@@ -174,7 +182,14 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		try {
 			if (online) {
 				try {
-					await persistProvenance({ order, localPatch, pushDocument, userDB, siteUuid });
+					await persistProvenance({
+						order,
+						localPatch,
+						pushDocument,
+						userDB,
+						siteUuid,
+						storeId: store.id,
+					});
 				} catch {
 					const message = t('pos_cart.checkout_failed');
 					setError(message);
@@ -286,6 +301,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		gateway,
 		gatewayId,
 		gatewayResolved,
+		bindingStatus,
+		store.id,
 		handleStockRejection,
 		http,
 		orderId,

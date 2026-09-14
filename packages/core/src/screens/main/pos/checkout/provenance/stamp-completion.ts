@@ -7,12 +7,9 @@ import {
 	saleProvenanceMeta,
 	withSaleProvenance,
 } from '@wcpos/order-math';
-import { getLogger } from '@wcpos/utils/logger';
 import { AppInfo } from '@wcpos/utils/app-info';
 
 import { nextSaleCounter, readRegister } from '../../../../../services/register/register-document';
-
-const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export async function completionMeta(
 	order: { id?: number | null; uuid?: string; meta_data?: MetaDataEntry[] },
@@ -42,39 +39,12 @@ export async function completionMeta(
 					null,
 			})
 		);
-	// Name the sale where the caller knows it. Some callers hold only the meta tuple
-	// being written, and a row that cannot say WHICH sale went unstamped is still worth
-	// more than silence — a merchant reconciling a register report needs to know that
-	// sales like this exist at all. Written once per sale: a stamped sale returns early.
-	const warnUnstamped = (
-		reason: 'no_register_document' | 'no_register_bound' | 'register_bound_elsewhere'
-	) =>
-		logger.warn('Sale recorded without register provenance', {
-			context: {
-				type: 'checkout.provenance-skipped',
-				reason,
-				// Truthiness is deliberate: an order the store has not seen yet carries
-				// `id: 0` (see the void button, which re-creates one that way). Naming that
-				// as order 0 would key every unsynced sale to the same record and fold
-				// them into one row — the opposite of what the id is here for.
-				...(order.id ? { orderId: order.id } : {}),
-				...(order.uuid ? { orderUUID: order.uuid } : {}),
-				// `recordId` is part of the repeat-collapse identity. Without it two
-				// unstamped sales inside the 60-second window fold into one row that keeps
-				// only the first sale's ids — which is exactly the reconciliation this row
-				// exists for. Sales the caller cannot name still collapse, and nothing is
-				// lost there: they are indistinguishable by construction.
-				...(order.uuid || order.id ? { recordId: order.uuid ?? String(order.id) } : {}),
-				storeId: storeId ?? null,
-			},
-		});
 	if (!register) {
 		// Every device mints its register document during hydration, so this is a till
 		// that has not finished hydrating. Stamp what is known and leave the register and
 		// the counter empty rather than invent them; a sale already carrying the partial
 		// tuple is left alone.
 		if (hasSaleTime(order.meta_data)) return order.meta_data!;
-		warnUnstamped('no_register_document');
 		return stamp(null, null);
 	}
 	const counter = await nextSaleCounter(userDB, siteUuid);
@@ -87,8 +57,7 @@ export async function completionMeta(
 	// The store seeds a default register and a till binds to a lone register on its own,
 	// so a sale reaches here unbound only when the store has several registers and none
 	// was chosen (checkout refuses to complete in that state) or an admin removed them
-	// all. The counter is the device's and is stamped regardless.
-	if (boundElsewhere) warnUnstamped('register_bound_elsewhere');
-	else if (!pointer?.register_id) warnUnstamped('no_register_bound');
+	// all. The counter is the device's and is stamped regardless; the gap is reported
+	// when the sale actually completes (see provenance-gap.ts), not here.
 	return stamp(boundElsewhere ? null : (pointer?.register_id ?? null), counter);
 }

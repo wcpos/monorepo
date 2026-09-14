@@ -13,11 +13,18 @@ export async function persistProvenance(input: {
 	pushDocument: ReturnType<typeof usePushDocument>;
 	userDB: UserDatabase;
 	siteUuid: string;
+	/** Without it a register bound in another store of the site is stamped as ours. */
+	storeId?: number;
 	sessionId?: string | null;
 	extraMeta?: MetaDataEntry[];
 }): Promise<void> {
-	const { order, localPatch, pushDocument, userDB, siteUuid, sessionId } = input;
-	const meta = await completionMeta(order.getLatest().payload, { userDB, siteUuid, sessionId });
+	const { order, localPatch, pushDocument, userDB, siteUuid, storeId, sessionId } = input;
+	const meta = await completionMeta(order.getLatest().payload, {
+		userDB,
+		siteUuid,
+		storeId,
+		sessionId,
+	});
 	const patched = await localPatch({
 		document: order,
 		// Replace, not keep: these describe the sale as it is completing now, and an

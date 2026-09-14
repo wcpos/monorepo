@@ -10,11 +10,25 @@ import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../ch
 import { useCompleteOrderFlow } from './use-complete-order-flow';
 
 const mockInfo = jest.fn();
+const mockWarn = jest.fn();
+let mockBound: { id: string; name: string } | null = null;
+jest.mock('../../../../../services/register/register-document', () => ({
+	readBoundRegister: async () => mockBound,
+}));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ debug: jest.fn(), info: (...args: unknown[]) => mockInfo(...args) }),
+	getLogger: () => ({
+		debug: jest.fn(),
+		info: (...args: unknown[]) => mockInfo(...args),
+		warn: (...args: unknown[]) => mockWarn(...args),
+	}),
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ wpCredentials: { id: 7, username: 'pat' } }),
+	useStoreSession: () => ({
+		wpCredentials: { id: 7, username: 'pat' },
+		userDB: {},
+		site: { uuid: 'site' },
+		store: { id: 1 },
+	}),
 }));
 const mockReplace = jest.fn();
 const mockRequire = jest.fn();
@@ -189,3 +203,40 @@ it.each([true, false])(
 		);
 	}
 );
+
+describe('useCompleteOrderFlow provenance gap', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockBound = null;
+		resetCheckoutMode();
+		enterCheckout('uuid-42');
+		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+	});
+	it('reports a completed sale that carries no store register, once it has completed', async () => {
+		const { record } = makeOrder();
+		const { result } = renderHook(() => useCompleteOrderFlow(record));
+		await act(async () => result.current());
+		expect(mockWarn).toHaveBeenCalledWith('Sale recorded without register provenance', {
+			context: {
+				type: 'checkout.provenance-skipped',
+				reason: 'no_register_bound',
+				orderId: 42,
+				orderUUID: 'uuid-42',
+				recordId: 'uuid-42',
+				storeId: 1,
+			},
+		});
+	});
+	it('names the reason when the till is bound to a register of another store', async () => {
+		mockBound = { id: 'elsewhere', name: 'Other' };
+		const { record } = makeOrder();
+		const { result } = renderHook(() => useCompleteOrderFlow(record));
+		await act(async () => result.current());
+		expect(mockWarn).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ reason: 'register_bound_elsewhere' }),
+			})
+		);
+	});
+});

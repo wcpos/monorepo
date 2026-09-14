@@ -545,6 +545,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				pushDocument,
 				userDB,
 				siteUuid: site.uuid!,
+				storeId: store.id,
 				sessionId,
 				...(splitMeta ? { extraMeta: splitMeta } : {}),
 			});
