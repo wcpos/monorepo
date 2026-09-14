@@ -624,10 +624,37 @@ test('PRs targeting next skip both E2E suites and their gates accept the skip', 
 test('native E2E routes next-target PRs to the next store', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 
+	// A PR is routed by its base, a push by its ref, a manual dispatch by the
+	// `ref` INPUT (what the build job checks out — github.ref_name on a
+	// dispatch is only where the workflow file came from), and a run that
+	// belongs to neither trunk gets NO store (the seed refuses an empty one)
+	// rather than the old default of dev-pro — see the deploy.yml lane test.
 	assert.equal(
 		workflow.env.E2E_STORE_URL,
-		"${{ github.event_name == 'pull_request' && github.base_ref == 'next' && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
+		"${{ (github.base_ref == 'next' || (github.event_name == 'push' && github.ref_name == 'next') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'next')) && 'https://dev-next.wcpos.com' || (github.base_ref == 'main' || (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'main')) && 'https://dev-pro.wcpos.com' || '' }}"
 	);
+	const checkout = workflow.jobs.build.steps.find((step) => step.with && 'ref' in step.with);
+	assert.equal(
+		checkout && checkout.with.ref,
+		'${{ github.event.inputs.ref || github.sha }}',
+		'the dispatch checkout ref changed; the store expression above must route by the same input'
+	);
+	const emptyStore = spawnSync(
+		process.execPath,
+		['--input-type=module', '--eval', "await import('./scripts/e2e-native-seed.mjs');"],
+		{
+			cwd: ROOT,
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				E2E_STORE_URL: '',
+				E2E_PRODUCT_WRITER_USER: 'writer',
+				E2E_PRODUCT_WRITER_PASS: 'password',
+			},
+		}
+	);
+	assert.notEqual(emptyStore.status, 0, 'the native seed accepted an EMPTY store URL');
+	assert.match(emptyStore.stderr, /E2E_STORE_URL is empty/);
 
 	// A 404, not a 503: the seed retries transient statuses for a minute
 	// (store-transient-retry.mjs), and this test is about routing, not retries.
@@ -1485,9 +1512,9 @@ test('the E2E auth-state cache is shard- and lane-scoped', () => {
 
 	assert.ok(step, 'deploy.yml e2e job no longer caches the auth state');
 	assert.match(step.with.key, /shard\$\{\{ matrix\.shardIndex \}\}/);
-	assert.match(step.with.key, /'next' \|\| 'main'/);
+	assert.match(step.with.key, /needs\.changes\.outputs\.lane \|\| 'unknown'/);
 	assert.match(step.with['restore-keys'], /shard\$\{\{ matrix\.shardIndex \}\}/);
-	assert.match(step.with['restore-keys'], /'next' \|\| 'main'/);
+	assert.match(step.with['restore-keys'], /needs\.changes\.outputs\.lane \|\| 'unknown'/);
 
 	// The snapshot embeds cashier access+refresh tokens and the repo is public:
 	// ONLY ciphertext may be cached. Pin that no step caches the plaintext dir
@@ -1780,17 +1807,110 @@ test('deploy.yml names BOTH lane stores for the E2E job', () => {
 	// may use dev-free + dev-pro and nothing else; next has only dev-next.
 	// Pin the EXACT expressions, arm order included — hostname-presence checks
 	// would pass with the lanes swapped, silently gating each lane against the
-	// other's store (greptile catch on #1289).
-	const nextLane =
-		"(inputs.lane == 'next' || (inputs.lane != 'main' && (github.base_ref == 'next' || github.ref_name == 'next')))";
+	// other's store (greptile catch on #1289). A third arm, EMPTY, is what a
+	// run outside both trunks gets: the config refuses an empty store in CI.
+	const lane = 'needs.changes.outputs.lane';
 	assert.equal(
 		runStep.env.E2E_STORE_URL_PRO,
-		'${{ ' + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}"
+		`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-pro.wcpos.com' || '' }}`
 	);
 	assert.equal(
 		runStep.env.E2E_STORE_URL_FREE,
-		'${{ ' + nextLane + " && 'https://dev-next.wcpos.com' || 'https://dev-free.wcpos.com' }}"
+		`\${{ ${lane} == 'next' && 'https://dev-next.wcpos.com' || ${lane} == 'main' && 'https://dev-free.wcpos.com' || '' }}`
 	);
+});
+
+test('the E2E lane is resolved once and a run outside both trunks gets no store', () => {
+	// The old inline expression defaulted every run it did not recognise to the
+	// main-lane stores. A PR whose base was a feature branch stacked on `next`
+	// (#1997 on `codex/tender-pane-surface`) therefore ran a 1.11 app against
+	// the 1.10 plugin on dev-free/dev-pro: 126 cases passed against the wrong
+	// store and the one 1.11-only server feature it hit was filed as a plugin
+	// bug (roadmap#277). The lane is now one output of the `changes` job, and
+	// an unresolved lane fails the e2e job before it spends a runner.
+	const workflow = readWorkflow('deploy.yml');
+	assert.equal(workflow.jobs.changes.outputs.lane, '${{ steps.lane.outputs.lane }}');
+	const resolve = findStep(workflow, 'changes', '🛤 Resolve E2E lane');
+	assert.ok(resolve, 'deploy.yml changes job no longer resolves the lane');
+
+	const laneFor = (env) => {
+		const out = mkdtempSync(path.join(tmpdir(), 'wcpos-lane-'));
+		const outputFile = path.join(out, 'output');
+		const result = runShell(resolve.run, {
+			env: {
+				INPUT_LANE: '',
+				EVENT_NAME: '',
+				BASE_REF: '',
+				REF_NAME: '',
+				...env,
+				GITHUB_OUTPUT: outputFile,
+			},
+		});
+		assert.equal(result.status, 0, result.stdout + result.stderr);
+		const written = readFileSync(outputFile, 'utf8').trim();
+		rmSync(out, { recursive: true, force: true });
+		return written.replace(/^lane=/, '');
+	};
+	// A PR is routed by its base…
+	assert.equal(
+		laneFor({ EVENT_NAME: 'pull_request', BASE_REF: 'main', REF_NAME: '12/merge' }),
+		'main'
+	);
+	assert.equal(
+		laneFor({ EVENT_NAME: 'pull_request', BASE_REF: 'next', REF_NAME: '12/merge' }),
+		'next'
+	);
+	// …a push or dispatch by its ref…
+	assert.equal(laneFor({ EVENT_NAME: 'push', REF_NAME: 'main' }), 'main');
+	assert.equal(laneFor({ EVENT_NAME: 'workflow_dispatch', REF_NAME: 'next' }), 'next');
+	// …an explicit dispatch input wins over both…
+	assert.equal(
+		laneFor({ EVENT_NAME: 'workflow_dispatch', REF_NAME: 'feat/anything', INPUT_LANE: 'next' }),
+		'next'
+	);
+	// …and anything else resolves to NOTHING: no guessing a trunk.
+	assert.equal(
+		laneFor({
+			EVENT_NAME: 'pull_request',
+			BASE_REF: 'codex/tender-pane-surface',
+			REF_NAME: '12/merge',
+		}),
+		''
+	);
+	assert.equal(laneFor({ EVENT_NAME: 'workflow_dispatch', REF_NAME: 'feat/anything' }), '');
+	assert.equal(
+		laneFor({ EVENT_NAME: 'workflow_dispatch', REF_NAME: 'feat/anything', INPUT_LANE: 'auto' }),
+		''
+	);
+
+	// The refusal is the e2e job's FIRST step, before checkout or setup.
+	const refuse = workflow.jobs.e2e.steps[0];
+	assert.equal(refuse.name, '🛤 Refuse an unresolved lane');
+	assert.equal(refuse.if, "needs.changes.outputs.lane == ''");
+	const refused = runShell(refuse.run, {
+		env: {
+			EVENT_NAME: 'pull_request',
+			BASE_REF: 'codex/tender-pane-surface',
+			REF_NAME: '12/merge',
+		},
+	});
+	assert.notEqual(refused.status, 0);
+	assert.match(refused.stdout, /::error::No E2E lane/);
+
+	// Nothing else in the workflow may pick a store from base_ref / ref_name:
+	// every store expression reads the one resolved lane.
+	const raw = readFileSync(path.join(ROOT, '.github', 'workflows', 'deploy.yml'), 'utf8');
+	const storeLines = raw.split('\n').filter((line) => /^\s*E2E_STORE_URL_(PRO|FREE):/.test(line));
+	assert.ok(
+		storeLines.length >= 6,
+		`expected the six routed store lines, found ${storeLines.length}`
+	);
+	for (const line of storeLines) {
+		if (line.includes('${{')) {
+			assert.match(line, /needs\.changes\.outputs\.lane/, line);
+			assert.doesNotMatch(line, /base_ref|ref_name|inputs\.lane/, line);
+		}
+	}
 });
 
 test('a failing Maestro flow fails the iOS job', () => {

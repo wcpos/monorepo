@@ -10,6 +10,10 @@ import {
 	type TestInfo,
 } from '@playwright/test';
 
+import {
+	isWcposPluginCompatible,
+	MINIMUM_WCPOS_PLUGIN_VERSION,
+} from '@wcpos/core/utils/wcpos-plugin-version';
 import { log } from '@wcpos/utils/logger';
 
 import {
@@ -350,6 +354,26 @@ export async function stubStoreVersionForE2E(
 				// response through unstubbed so only this test sees the failure.
 				console.warn(
 					`[stubStoreVersionForE2E] Non-JSON response (status ${response.status()}) for ${route.request().url()}; passing through unstubbed.`
+				);
+				await route.fulfill({ response });
+				return;
+			}
+			// The stub exists to mask the LICENCE per variant (one next-lane site
+			// serves both) and to keep the app's version string in step with the
+			// store's. It must never carry the app past its own minimum-plugin
+			// gate: a store older than MINIMUM_WCPOS_PLUGIN_VERSION is one this
+			// app refuses in production, so a run that reaches it is pointed at
+			// the wrong lane's store (roadmap#277). Pass the real response through
+			// and let the connect screen refuse it with the real reason, rather
+			// than run the whole suite against a plugin generation the app does
+			// not support and read the first feature it lacks as a bug.
+			// A missing or non-string version is the same case: the endpoint answered
+			// without the plugin's discovery payload, and painting the app version
+			// onto it would fabricate a plugin the store did not report.
+			const realVersion = typeof data.wcpos_version === 'string' ? data.wcpos_version : undefined;
+			if (!isWcposPluginCompatible(realVersion)) {
+				console.error(
+					`[stubStoreVersionForE2E] ${storeOrigin} ${realVersion ? `runs woocommerce-pos ${realVersion}, below this app's minimum ${MINIMUM_WCPOS_PLUGIN_VERSION}` : 'reported no wcpos_version at all'}. Leaving the discovery response unstubbed so the app refuses the store with the real reason: this run is pointed at the wrong lane's store (see the lane routing in deploy.yml).`
 				);
 				await route.fulfill({ response });
 				return;

@@ -99,7 +99,15 @@ concurrency:
 
 env:
   EXPO_USE_FAST_RESOLVER: true
-  E2E_STORE_URL: ${{ github.event_name == 'pull_request' && github.base_ref == 'next' && 'https://dev-next.wcpos.com' || 'https://dev-pro.wcpos.com' }}
+  # Lane → store, by the trunk of the revision this run actually TESTS: a PR's
+  # base, a push's ref, or the `ref` input of a manual dispatch (that is what
+  # the build job checks out; github.ref_name on a dispatch is only the branch
+  # the workflow file was read from). A run that belongs to neither trunk gets
+  # NO store: the old form defaulted every unrecognised base to dev-pro, which
+  # is how a next-lane app came to be verified against the main-lane plugin
+  # (deploy.yml has the full story; roadmap#277). The seed refuses an empty
+  # store.
+  E2E_STORE_URL: ${{ (github.base_ref == 'next' || (github.event_name == 'push' && github.ref_name == 'next') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'next')) && 'https://dev-next.wcpos.com' || (github.base_ref == 'main' || (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'main')) && 'https://dev-pro.wcpos.com' || '' }}
 
 permissions:
   contents: read
