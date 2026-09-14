@@ -372,7 +372,13 @@ it('retries failed settlement at 5, 30 and 120 seconds then waits for another tr
 	expect(getLogger([]).debug).toHaveBeenCalledWith(
 		'Offline payment settlement attempt failed',
 		expect.objectContaining({
-			context: expect.objectContaining({ paymentId: 'leg', error: 'capture unavailable' }),
+			// All three rows of one settlement carry the same type, so the Logs screen
+			// titles attempt, failure and recovery as the same story.
+			context: expect.objectContaining({
+				type: 'payment.settlement',
+				paymentId: 'leg',
+				error: 'capture unavailable',
+			}),
 		})
 	);
 	expect(getLogger([]).warn).not.toHaveBeenCalled();

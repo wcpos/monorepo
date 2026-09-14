@@ -238,7 +238,14 @@ export class TerminalPaymentsService {
 				if (willRetry) {
 					logger.debug('Offline payment settlement attempt failed', {
 						terminal: { operationId: entry.input.row.id, attempt: entry.retries + 1 },
-						context: { paymentId: entry.input.row.id, error: getErrorMessage(error) },
+						context: {
+							// Same `type` as the exhausted and clearing rows: it is what the Logs
+							// screen titles the row from, so all three steps of one settlement read
+							// as the same story in whatever language the till runs.
+							type: 'payment.settlement',
+							paymentId: entry.input.row.id,
+							error: getErrorMessage(error),
+						},
 					});
 				} else {
 					// Written in the settled-record shape on purpose: an authorization the
