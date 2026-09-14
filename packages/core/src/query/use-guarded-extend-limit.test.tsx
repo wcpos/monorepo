@@ -95,10 +95,32 @@ describe('useGuardedExtendLimit (#1221)', () => {
 		expect(limit).toBe(20);
 	});
 
-	it('does not extend when the engine says the search is exhausted', () => {
-		renderProbe(10, { pending$: of(false), exhausted$: of(true) });
+	it('does not extend a short read when the engine says the search is exhausted', () => {
+		renderProbe(4, { pending$: of(false), exhausted$: of(true) });
 		act(() => fire!());
 		expect(limit).toBe(10);
+	});
+
+	it('extends a FULL read past an exhausted lane, then stops once the read comes back short', () => {
+		// The walk over-fetches a dial-sized page and persists every row, so a complete lane can
+		// hold more than the limit: 13 hits on a limit-10 screen read as exhausted while three
+		// resident rows sat past the clip (1.10.14 Products page, 2026-09-15).
+		const view = renderProbe(10, { pending$: of(false), exhausted$: of(true) });
+		act(() => fire!());
+		expect(limit).toBe(20);
+
+		view.rerender(
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={10}
+				initialSort={{ field: 'name', direction: 'asc' }}
+			>
+				<Probe resultCount={13} binding={{ pending$: of(false), exhausted$: of(true) }} />
+			</QueryStateProvider>
+		);
+		act(() => fire!());
+		act(() => fire!());
+		expect(limit).toBe(20);
 	});
 
 	it('waits for a pending extension to settle before extending again', () => {
