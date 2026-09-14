@@ -36,16 +36,27 @@ import { reconcileCompletedOrder } from '../../hooks/reconcile-completed-order';
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export function useTerminalPaymentsService(): void {
-	const { store, site, userDB } = useStoreSession();
+	const { store, site, userDB, wpCredentials } = useStoreSession();
+	const actor = React.useMemo(
+		() => ({
+			id: String(wpCredentials?.id ?? ''),
+			name: wpCredentials?.display_name || wpCredentials?.username || '',
+		}),
+		[wpCredentials?.id, wpCredentials?.display_name, wpCredentials?.username]
+	);
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
 	const { methods } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
-	const latest = React.useRef({ localPatch, methods, online });
+	// The service outlives a cashier change — its effect keys on store, site and
+	// manager only, so an in-flight leg is never torn down by a re-login — and the
+	// action row must name whoever is at the till when the money lands, not
+	// whoever started the service. So the actor is read live, like the rest.
+	const latest = React.useRef({ localPatch, methods, online, actor });
 	React.useLayoutEffect(() => {
-		latest.current = { localPatch, methods, online };
-	}, [localPatch, methods, online]);
+		latest.current = { localPatch, methods, online, actor };
+	}, [localPatch, methods, online, actor]);
 	// Connectivity changes are external events; they resume deferred settlements.
 	React.useEffect(() => {
 		if (online) void getTerminalPaymentsService()?.flushOffline();
@@ -154,7 +165,24 @@ export function useTerminalPaymentsService(): void {
 					});
 				}
 			},
-			onCaptured: (orderUuid, order) => {
+			onCaptured: (orderUuid, order, row, narrate) => {
+				// A capture can land with checkout unmounted — the cashier moved on, or the
+				// leg was resumed from the open tabs. The action row is the audit trail for
+				// money, so it is written from whichever path sees the outcome first.
+				if (narrate) {
+					logger.info('Card payment taken', {
+						actor: latest.current.actor,
+						terminal: { operationId: row.id },
+						context: {
+							type: row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',
+							orderId: row.order_id || null,
+							orderUUID: orderUuid,
+							paymentId: row.id,
+							amount: row.amount,
+							method: row.method_id,
+						},
+					});
+				}
 				// Never select: the order the cashier is serving stays on screen. When
 				// the captured order IS the current one, the tender flow's own outcome
 				// handler runs the complete-order flow, which selects the receipt.

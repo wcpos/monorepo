@@ -82,6 +82,7 @@ export const SYNC_EVENT_TYPES = [
 	'payment.released',
 	'payment.settlement',
 	'payment.void-refused',
+	'payment.void-unknown',
 	'payment.voided',
 	'product.browse-window.approximate',
 	'product.browse-window.brand-filter-ignored',
@@ -750,6 +751,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'A payment could not be reversed',
 		descriptionKey: 'health.logs.event_description.payment_void_refused',
 		description: 'Your store refused to reverse a payment, so that money is still held.',
+		introducedIn: '1.11.0',
+	},
+	'payment.void-unknown': {
+		type: 'payment.void-unknown',
+		domain: 'CHECKOUT',
+		key: 'health.logs.event.payment_void_unknown',
+		label: 'A reversal could not be confirmed',
+		descriptionKey: 'health.logs.event_description.payment_void_unknown',
+		description:
+			'The till asked your store to reverse a payment and the answer never arrived, so the money may or may not still be held. Check the order before refunding by hand.',
 		introducedIn: '1.11.0',
 	},
 	'payment.voided': {

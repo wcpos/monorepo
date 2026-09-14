@@ -47,6 +47,7 @@ beforeEach(() => {
 	for (const key of Object.keys(mockReaderPreferences)) delete mockReaderPreferences[key];
 	mockReadersInUse.clear();
 	mockNarrated.clear();
+	mockClaimedCaptures.clear();
 });
 it('stores only the reader id, separately for each method', async () => {
 	const preferences = rememberedReaders(mockStoreDB as unknown as StoreDatabase);
@@ -70,6 +71,14 @@ const mockDismiss = jest.fn(() => {
 // Mirrors the real service: the first claim for a row wins, so a remount cannot
 // write the same settled failure twice.
 const mockNarrated = new Set<string>();
+// The capture row is claimed the same way: the service and the tender flow can both
+// see one settle, and only the first writes it.
+const mockClaimedCaptures = new Set<string>();
+const mockClaimCaptureNarration = jest.fn((rowId: string) => {
+	if (mockClaimedCaptures.has(rowId)) return false;
+	mockClaimedCaptures.add(rowId);
+	return true;
+});
 const mockClaimFailureNarration = jest.fn((rowId: string) => {
 	if (mockNarrated.has(rowId)) return false;
 	mockNarrated.add(rowId);
@@ -85,6 +94,7 @@ jest.mock('../../../../../services/terminal-payments', () => ({
 			begin: mockBegin,
 			dismiss: mockDismiss,
 			claimFailureNarration: mockClaimFailureNarration,
+			claimCaptureNarration: mockClaimCaptureNarration,
 			get: () => mockLeg,
 			readersInUse: () => mockReadersInUse,
 			leg: () => ({ cancel: mockCancel, capture: mockCapture, release: mockRelease }),
@@ -228,7 +238,7 @@ jest.mock('../../../../../contexts/app-state', () => ({
 			id: 9,
 			tax_display_cart: mockTaxDisplayCart,
 		},
-		wpCredentials: { id: 7 },
+		wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
 	}),
 }));
 jest.mock('@wcpos/query', () => ({
@@ -300,10 +310,37 @@ describe('useTenderFlow', () => {
 		mockTaxDisplayCart = 'excl';
 		mockBlockIfDegraded.mockReturnValue(false);
 		mockRecordManualPayment.mockResolvedValue(recorded);
-		mockVoidPayments.mockResolvedValue({ failed: [] });
+		mockVoidPayments.mockResolvedValue({ rows: [], failed: [] });
 		mockCompleteOrderFlow.mockResolvedValue(undefined);
 		mockLocalPatch.mockResolvedValue({ document: order });
 	});
+	it.each([
+		['online', 'payment.recorded'],
+		['offline', 'payment.recorded-offline'],
+	])('logs one manual action for a payment recorded %s', async (via, type) => {
+		mockPayload.id = 42;
+		mockRecordManualPayment.mockResolvedValue({ ...recorded, via });
+		const { result } = renderHook(() => useTenderFlow(order));
+		await act(async () => result.current.takeTender());
+		expect(mockInfo.mock.calls.filter(([, options]) => options.context?.type === type)).toEqual([
+			[
+				expect.any(String),
+				expect.objectContaining({
+					actor: { id: '7', name: 'Pat' },
+					terminal: { operationId: 'payment-1' },
+					context: {
+						type,
+						orderId: 42,
+						orderUUID: 'order-1',
+						paymentId: 'payment-1',
+						amount: '50.00',
+						method: 'pos_cash',
+					},
+				}),
+			],
+		]);
+	});
+
 	it('preselects the first available method once, without recording', async () => {
 		mockMethods = [noDriver, card];
 		const { result, rerender } = renderHook(() => useTenderFlow(order));
@@ -745,11 +782,31 @@ describe('useTenderFlow', () => {
 	});
 
 	it('voids live payments, resets tender state, and routes to the cart', async () => {
+		mockVoidPayments.mockResolvedValue({ rows: [payment({ status: 'voided' })], failed: [] });
 		const { result } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.dispatch({ type: 'request-cancel' }));
 
 		await act(async () => result.current.cancelPayment());
 
+		expect(mockInfo).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				actor: { id: '7', name: 'Pat' },
+				context: expect.objectContaining({
+					type: 'checkout.cancelled',
+					voided: 1,
+					orderUUID: 'order-1',
+				}),
+			})
+		);
+		expect(mockInfo).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				actor: { id: '7', name: 'Pat' },
+				terminal: { operationId: 'payment-1' },
+				context: expect.objectContaining({ type: 'payment.voided', paymentId: 'payment-1' }),
+			})
+		);
 		expect(mockVoidPayments).toHaveBeenCalledWith(order);
 		expect(result.current.state).toMatchObject({ view: 'select', methodId: null });
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
@@ -757,7 +814,7 @@ describe('useTenderFlow', () => {
 
 	it('stays put when a provider reports a failed void', async () => {
 		mockVoidPayments.mockResolvedValue({
-			rows: [],
+			rows: [payment({ id: 'voided-payment', status: 'voided' })],
 			failed: [{ paymentId: 'payment-1', message: 'Provider refused', refused: true }],
 		});
 		const { result } = renderHook(() => useTenderFlow(order));
@@ -765,6 +822,15 @@ describe('useTenderFlow', () => {
 
 		await act(async () => result.current.cancelPayment());
 
+		expect(
+			mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.cancelled')
+		).toHaveLength(0);
+		expect(mockInfo).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ type: 'payment.voided', paymentId: 'voided-payment' }),
+			})
+		);
 		expect(result.current.state.view).toBe('cancel');
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(mockError).toHaveBeenCalledWith(
@@ -773,6 +839,7 @@ describe('useTenderFlow', () => {
 				code: 'PAYMENT221',
 				showToast: true,
 				context: expect.objectContaining({
+					type: 'payment.void-refused',
 					paymentId: 'payment-1',
 					reason: 'payment-1: Provider refused',
 				}),
@@ -794,7 +861,11 @@ describe('useTenderFlow', () => {
 
 		expect(mockError).toHaveBeenCalledWith(
 			'pos_checkout.void_failed',
-			expect.objectContaining({ code: 'PAYMENT201' })
+			expect.objectContaining({
+				code: 'PAYMENT201',
+				// The type titles the row on every till: it must not read as a refusal.
+				context: expect.objectContaining({ type: 'payment.void-unknown' }),
+			})
 		);
 	});
 
@@ -834,7 +905,7 @@ jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSiz
 it('leaves wide checkout mode without navigating after cancellation', async () => {
 	jest.clearAllMocks();
 	mockSize = 'lg';
-	mockVoidPayments.mockResolvedValue({ failed: [] });
+	mockVoidPayments.mockResolvedValue({ rows: [], failed: [] });
 	enterCheckout(order.uuid);
 	const { result } = renderHook(() => useTenderFlow(order));
 	await act(async () => result.current.cancelPayment());
@@ -1079,6 +1150,25 @@ describe('server tender', () => {
 			await act(async () => {});
 		}
 	);
+	it('logs an offline card authorization once across rerenders', async () => {
+		mockLeg = terminalState({
+			phase: 'final',
+			outcome: 'captured',
+			row: payment({
+				capture_mode: 'device',
+				status: 'authorized',
+				recorded_offline: true,
+			}),
+		});
+		const { rerender } = renderHook(() => useTenderFlow(order));
+		rerender();
+		await act(async () => {});
+		expect(
+			mockInfo.mock.calls.filter(
+				([, options]) => options.context?.type === 'payment.authorized-offline'
+			)
+		).toEqual([[expect.any(String), expect.objectContaining({ actor: { id: '7', name: 'Pat' } })]]);
+	});
 	it('retry preserves amount and reader but the next Take mints a new row', async () => {
 		const { result, rerender } = renderHook(() => useTenderFlow(order));
 		act(() => result.current.pickMethod('terminal'));
@@ -1124,9 +1214,14 @@ describe('server tender', () => {
 					// A declined card is an ordinary outcome with an ordinary answer, not
 					// "payment handling hit an unexpected problem".
 					code: 'PAYMENT211',
+					// Registered type, so the Logs screen titles this row in the language the
+					// till runs rather than replaying an English developer string.
 					showToast: !polling,
 					terminal: expect.objectContaining({ operationId: expect.any(String) }),
-					context: expect.objectContaining({ paymentId: expect.any(String) }),
+					context: expect.objectContaining({
+						type: 'payment.declined',
+						paymentId: expect.any(String),
+					}),
 				})
 			);
 			expect(mockError).toHaveBeenCalledTimes(1);
@@ -1215,6 +1310,26 @@ describe('server tender', () => {
 		expect(getCheckoutModeSnapshot().receiptOrders.has('order-1')).toBe(true);
 		expect(mockRealService.get('order-1')).toBeNull();
 		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: true });
+		host.rerender(<Host />);
+		mockRealService.dismiss('order-1');
+		expect(
+			mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'payment.captured')
+		).toEqual([
+			[
+				expect.any(String),
+				expect.objectContaining({
+					actor: { id: '7', name: 'Pat' },
+					terminal: { operationId: 'payment-1' },
+					context: expect.objectContaining({
+						orderId: 42,
+						orderUUID: 'order-1',
+						paymentId: 'payment-1',
+						amount: '50.00',
+						method: 'terminal',
+					}),
+				}),
+			],
+		]);
 		mockRealService.stop();
 		mockRealService = null;
 	});
@@ -1559,7 +1674,11 @@ it('reports a payment the store took but the till could not mirror, and never sa
 			expect.objectContaining({
 				code: 'PAYMENT111',
 				showToast: true,
-				context: expect.objectContaining({ orderId: 42, paymentId: expect.any(String) }),
+				context: expect.objectContaining({
+					type: 'payment.not-mirrored',
+					orderId: 42,
+					paymentId: expect.any(String),
+				}),
 			})
 		);
 		expect(mockError).not.toHaveBeenCalled();

@@ -1,3 +1,4 @@
+import * as sentrySink from './sentry-sink';
 import {
 	CategoryLogger,
 	getLogger,
@@ -63,6 +64,53 @@ async function flushWrites() {
 }
 
 describe('logger/index', () => {
+	it('persists bounded actors, omits empty actors, and separates cashiers', async () => {
+		const { collection, rows } = createLogCollection();
+		setDatabase(collection);
+		const options = { context: { type: 'payment.recorded' }, terminal: { operationId: 'payment' } };
+		log.info('Payment recorded', { ...options, actor: { id: '7', name: 'Pat' } });
+		log.info('Payment recorded', { ...options, actor: { id: '8', name: 'Sam' } });
+		log.info('Payment recorded', { ...options, actor: { id: '7', name: 'Pat' } });
+		log.info('Empty actor', { actor: { id: '', role: '', name: '' } });
+		log.info('Long actor', {
+			actor: { id: 'i'.repeat(80), role: 'r'.repeat(80), name: 'n'.repeat(80) },
+		});
+		await flushWrites();
+		expect(rows).toHaveLength(4);
+		expect(rows[0]).toMatchObject({ actor: { id: '7', name: 'Pat' }, count: 2 });
+		expect(rows[1]).toMatchObject({ actor: { id: '8', name: 'Sam' }, count: 1 });
+		expect(rows[2]).not.toHaveProperty('actor');
+		expect(rows[3].actor).toEqual({
+			id: 'i'.repeat(64),
+			role: 'r'.repeat(64),
+			name: 'n'.repeat(64),
+		});
+		setDatabase(null);
+	});
+
+	it('keeps the actor when promoting narration, without sending it to Sentry', async () => {
+		const capture = jest.spyOn(sentrySink, 'captureLoggedError');
+		const { collection, rows } = createLogCollection();
+		setDatabase(collection);
+		setVerboseDiagnostics(false);
+		log.debug('Narration', { actor: { id: '7', name: 'n'.repeat(80) } });
+		await promoteRecorder('test');
+		expect(rows[0].actor).toEqual({ id: '7', name: 'n'.repeat(64) });
+		log.error('Checkout failed', {
+			code: 'CHECKOUT999',
+			actor: { id: '7', name: 'Private cashier' },
+			context: { orderId: 42 },
+		});
+		expect(capture).toHaveBeenCalledWith({
+			message: 'Checkout failed',
+			code: 'CHECKOUT999',
+			context: { orderId: 42, errorCode: 'CHECKOUT999' },
+		});
+		await flushWrites();
+		capture.mockRestore();
+		setDatabase(null);
+	});
+
 	describe('module initialization', () => {
 		it('uses production behavior when the Metro __DEV__ global is unavailable', async () => {
 			const devDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');

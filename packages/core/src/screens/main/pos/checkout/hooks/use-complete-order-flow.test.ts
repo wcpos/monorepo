@@ -3,9 +3,19 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { withLedger } from '@wcpos/order-math';
+
+import { row } from '../payments/device/fixtures.test-utils';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
 
+const mockInfo = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({ debug: jest.fn(), info: (...args: unknown[]) => mockInfo(...args) }),
+}));
+jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ wpCredentials: { id: 7, username: 'pat' } }),
+}));
 const mockReplace = jest.fn();
 const mockRequire = jest.fn();
 const mockStockAdjustment = jest.fn();
@@ -42,7 +52,22 @@ function makeOrder(id: number | null = 42) {
 	const record = {
 		uuid: 'uuid-42',
 		payload: { id, line_items: [] },
-		getLatest: () => ({ payload: { id, line_items: [reduced, untouched] } }),
+		getLatest: () => ({
+			payload: {
+				id,
+				number: '1042',
+				total: '50.00',
+				line_items: [reduced, untouched],
+				meta_data: withLedger(
+					[],
+					[
+						{ ...row, id: 'cash', status: 'captured' },
+						{ ...row, id: 'offline', status: 'authorized', recorded_offline: true },
+						{ ...row, id: 'failed', status: 'failed' },
+					]
+				),
+			},
+		}),
 	};
 	return { record: record as never, reduced };
 }
@@ -63,6 +88,17 @@ describe('useCompleteOrderFlow', () => {
 
 		await act(async () => result.current());
 
+		expect(mockInfo).toHaveBeenCalledWith(expect.any(String), {
+			actor: { id: '7', name: 'pat' },
+			context: {
+				type: 'checkout.completed',
+				orderId: 42,
+				orderUUID: 'uuid-42',
+				orderNumber: '1042',
+				total: '50.00',
+				paymentLegs: 2,
+			},
+		});
 		expect(mockRequire).toHaveBeenCalledWith({
 			id: 'checkout:order-refresh:42',
 			collection: 'orders',
@@ -105,6 +141,7 @@ describe('useCompleteOrderFlow', () => {
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 
 		await expect(result.current()).rejects.toThrow('checkout_refresh_requires_persisted_order');
+		expect(mockInfo).not.toHaveBeenCalled();
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).not.toHaveBeenCalled();
 	});
