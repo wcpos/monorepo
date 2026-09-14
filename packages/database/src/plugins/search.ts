@@ -488,6 +488,12 @@ export const searchPlugin: RxPlugin = {
 					}
 				}).then(async (searchInstance) => {
 					await evictLRUIfNeeded(this);
+					// Concurrent inits can push this locale to the LRU head between the chain
+					// publishing it and this callback running, so the eviction above may have just
+					// closed it. Never hand a caller a closed instance; build a live one instead.
+					if (this._searchInstances.get(locale) !== searchInstance) {
+						return (await this.initSearch(locale)) ?? searchInstance;
+					}
 					return searchInstance;
 				});
 
@@ -699,7 +705,13 @@ export const searchPlugin: RxPlugin = {
 				const instance = await withSearchLocale(this, locale, () =>
 					recreateSearch.call(this, locale, retiring)
 				);
-				if (instance) await evictLRUIfNeeded(this);
+				if (instance) {
+					await evictLRUIfNeeded(this);
+					// Same guard as initSearch: do not return an instance the eviction just closed.
+					if (this._searchInstances?.get(locale) !== instance) {
+						return (await this.initSearch(locale)) ?? instance;
+					}
+				}
 				return instance;
 			};
 		},

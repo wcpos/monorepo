@@ -173,10 +173,13 @@ describe('search plugin', () => {
 			await started.promise;
 			const recreate = collection.recreateSearch('en');
 			gate.resolve();
-			const [old, replacement] = await Promise.all([init, recreate]);
+			const [fromInit, replacement] = await Promise.all([init, recreate]);
+			const old = await fulltextSearch.mock.results[0].value;
 			expect(collection._searchInstances.size).toBe(1);
 			expect(collection._searchInstances.get('en')).toBe(replacement);
 			expect(replacement).not.toBe(old);
+			// The init's caller is not handed the instance the recreate just closed.
+			expect(fromInit).toBe(replacement);
 			expect(old.close).toHaveBeenCalledTimes(1);
 			expect(old.pipeline.close).toHaveBeenCalledTimes(1);
 			expect(old.collection).not.toHaveProperty('__wcposAppendIndex');
@@ -217,11 +220,46 @@ describe('search plugin', () => {
 			const later = collection.initSearch('en');
 			gate.resolve();
 			const [fromFirst, replacement, fromLater] = await Promise.all([first, recreate, later]);
+			const built = await fulltextSearch.mock.results[0].value;
 			expect(fromLater).toBe(replacement);
-			expect(fromLater).not.toBe(fromFirst);
-			expect(fromFirst.close).toHaveBeenCalledTimes(1);
+			expect(replacement).not.toBe(built);
+			// Both callers end up on the live replacement; the instance built first was retired.
+			expect(fromFirst).toBe(replacement);
+			expect(built.close).toHaveBeenCalledTimes(1);
 			expect(collection._searchInstances.get('en')).toBe(replacement);
 			expect(collection._searchInstances.size).toBe(1);
+		});
+
+		it('an init whose locale is evicted before it returns hands back a live instance', async () => {
+			// Cache full with en/de/fr. While es is being created, the other three are touched
+			// after es publishes but before its eviction pass runs, so es becomes the LRU head
+			// and its own eviction closes it. The caller must not receive that closed instance.
+			const collection = makeCollection();
+			for (const locale of ['en', 'de', 'fr']) await collection.initSearch(locale);
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			// The moment es is recorded in the LRU (inside its chain, before the deferred
+			// eviction callback), the cached three are touched: cached-locale inits touch
+			// synchronously on the fast path. es is then the LRU head when eviction runs.
+			const lru = collection._localeLRU as string[];
+			const push = lru.push.bind(lru);
+			let armed = true;
+			lru.push = (locale: string) => {
+				const length = push(locale);
+				if (armed && locale === 'es') {
+					armed = false;
+					for (const cached of ['en', 'de', 'fr']) collection.initSearch(cached);
+				}
+				return length;
+			};
+			const returned = await collection.initSearch('es');
+			// The fourth create is the es instance the eviction closed; the fifth is the live one.
+			const builtFirst = await fulltextSearch.mock.results[3].value;
+			expect(fulltextSearch).toHaveBeenCalledTimes(5);
+			expect(builtFirst.close).toHaveBeenCalledTimes(1);
+			expect(returned).not.toBe(builtFirst);
+			expect(returned.close).not.toHaveBeenCalled();
+			expect(collection._searchInstances.get('es')).toBe(returned);
+			expect(collection._searchInstances.size).toBe(3);
 		});
 
 		it('concurrent init for a different locale is not blocked', async () => {
