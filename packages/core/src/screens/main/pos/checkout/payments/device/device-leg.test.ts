@@ -360,9 +360,17 @@ it('a failed offline write stays held for retry without a second collect', async
 	});
 	await start;
 	expect(c.leg.getState()).toMatchObject({ outcome: null, captureFailed: true });
+	// The retry happens later; the approval time is when the reader answered, not now.
+	jest.setSystemTime(new Date('2026-01-01T00:05:00Z'));
 	await c.leg.capture();
 	expect(c.leg.getState().outcome).toBe('captured');
 	expect(c.driver.collect).toHaveBeenCalledTimes(1);
+	expect(c.patchAndEnqueue).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			authorized_at_gmt: '2026-01-01T00:00:00.000Z',
+			updated_at_gmt: '2026-01-01T00:05:00.000Z',
+		})
+	);
 });
 it('lost pending sessions fail locally without restarting the driver', async () => {
 	const c = setup(false, true);

@@ -1592,20 +1592,41 @@ describe('provider completion provenance before intent', () => {
 				expect.objectContaining({ extraMeta: [split] })
 			);
 			// A declined attempt followed by a re-divided remainder must not leave the first
-			// attempt's shares on the order: the split is replaced by key, never kept.
+			// attempt's shares on the order: the split is replaced by key, in place so a synced
+			// entry keeps its Woo id, never kept.
 			expect(mockLocalPatch).toHaveBeenCalledWith({
 				document: order,
 				data: {
-					meta_data: [
-						...mockPayload.meta_data.filter(({ key }) => key !== '_wcpos_split'),
-						{ key: '_wcpos_sale_counter', value: '1' },
-						split,
-					],
+					meta_data: existing
+						? [
+								split,
+								...mockPayload.meta_data.filter(({ key }) => key !== '_wcpos_split'),
+								{ key: '_wcpos_sale_counter', value: '1' },
+							]
+						: [...mockPayload.meta_data, { key: '_wcpos_sale_counter', value: '1' }, split],
 				},
 			});
 			expect(mockBegin).toHaveBeenCalledTimes(1);
 		}
 	);
+	it('a completion with no plan clears the split a failed earlier attempt left behind', async () => {
+		const stale = { id: 7, key: '_wcpos_split', value: 'stale' };
+		mockPayload.meta_data = withLedger([stale], [payment({ id: 'first', amount: '46.48' })]);
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('terminal'));
+		await act(async () => result.current.takeTender());
+		const cleared = { key: '_wcpos_split', value: null };
+		expect(persistProvenanceSpy).toHaveBeenCalledWith(
+			expect.objectContaining({ extraMeta: [cleared] })
+		);
+		// A synced entry is nulled rather than dropped: that is how Woo is told to delete it.
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: {
+				meta_data: expect.arrayContaining([{ id: 7, key: '_wcpos_split', value: null }]),
+			},
+		});
+	});
 	it('hands the split summary to a cash leg, which never passes through saveProvenance', async () => {
 		mockMethods = [cash];
 		const { result } = renderHook(() => useTenderFlow(order));

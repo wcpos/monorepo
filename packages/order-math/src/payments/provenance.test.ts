@@ -2,6 +2,7 @@ import {
 	hasSaleProvenance,
 	saleProvenanceMeta,
 	splitPlanMeta,
+	withMetaReplaced,
 	withSaleProvenance,
 } from './provenance';
 
@@ -68,3 +69,44 @@ it.each(['even', 'fixed', 'items'] as const)(
 		});
 	}
 );
+
+describe('withMetaReplaced', () => {
+	const existing = [
+		{ id: 7, key: '_wcpos_split', value: 'stale' },
+		{ id: 8, key: '_wcpos_sale_counter', value: '1' },
+	];
+	it('updates an entry in place so it keeps the id Woo assigned it', () => {
+		// An id-less element on the wire is an append: removing and re-adding would leave
+		// the stale split on the server next to the new one.
+		expect(withMetaReplaced(existing, [{ key: '_wcpos_split', value: 'fresh' }])).toEqual([
+			{ id: 7, key: '_wcpos_split', value: 'fresh' },
+			{ id: 8, key: '_wcpos_sale_counter', value: '1' },
+		]);
+	});
+	it('appends an entry the order does not have', () => {
+		expect(withMetaReplaced([existing[1]], [{ key: '_wcpos_split', value: 'fresh' }])).toEqual([
+			existing[1],
+			{ key: '_wcpos_split', value: 'fresh' },
+		]);
+	});
+	it('a null value nulls a synced entry (Woo deletes it on push) and drops an unsynced one', () => {
+		expect(withMetaReplaced(existing, [{ key: '_wcpos_split', value: null }])).toEqual([
+			{ id: 7, key: '_wcpos_split', value: null },
+			existing[1],
+		]);
+		expect(
+			withMetaReplaced(
+				[{ key: '_wcpos_split', value: 'never synced' }],
+				[{ key: '_wcpos_split', value: null }]
+			)
+		).toEqual([]);
+		expect(withMetaReplaced([existing[1]], [{ key: '_wcpos_split', value: null }])).toEqual([
+			existing[1],
+		]);
+	});
+	it("never hands back the caller's objects", () => {
+		const result = withMetaReplaced(existing, []);
+		expect(result).toEqual(existing);
+		expect(result[0]).not.toBe(existing[0]);
+	});
+});

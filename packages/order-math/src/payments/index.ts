@@ -4,6 +4,7 @@
 
 export {
 	saleProvenanceMeta,
+	SPLIT_META_KEY,
 	splitPlanMeta,
 	hasSaleProvenance,
 	withSaleProvenance,

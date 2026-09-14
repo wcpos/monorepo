@@ -57,6 +57,9 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 	let stopped = false;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let result: CollectResult | null = null;
+	// When the reader answered. A failed local write is retried through capture(), and
+	// the approval time must not drift to the time of the retry.
+	let approvedAt: string | null = null;
 	let inFlight = false;
 	let cancelReason = 'cashier';
 	const active = () => !stopped && state.phase !== 'final';
@@ -151,6 +154,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				if (result.outcome === 'captured')
 					throw new Error('Offline collection must return authorization');
 				const timestamp = new Date(deps.now()).toISOString();
+				approvedAt ??= timestamp;
 				const row: PaymentRow = {
 					...state.row,
 					recorded_offline: true,
@@ -165,7 +169,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 						payment_intent: null,
 					},
 					failure_reason: result.failure_reason ?? null,
-					...(authorized ? { authorized_at_gmt: timestamp } : {}),
+					...(authorized ? { authorized_at_gmt: approvedAt } : {}),
 					updated_at_gmt: timestamp,
 				};
 				const order = await deps.patchAndEnqueue(row);
@@ -270,6 +274,7 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		}
 		set({ phase: 'collecting' });
 		try {
+			approvedAt = null;
 			result = await deps.driver.collect({
 				dp: input.dp,
 				row: state.row,

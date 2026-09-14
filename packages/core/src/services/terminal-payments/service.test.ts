@@ -365,6 +365,22 @@ it('recovers transaction-id-only settlement and ignores all-null references', as
 	c.service.stop();
 	empty.service.stop();
 });
+it('a row that only names its reader is not ready to settle, and keeps the reader when it is', async () => {
+	// The reader is minted onto the row before any collection; capturing on it alone
+	// would fail until the driver emits the transaction reference and burn the retries.
+	const c = offlineSetup({ reader: 'sn-1' });
+	await c.service.flushOffline();
+	expect(c.options.http.post).not.toHaveBeenCalled();
+	c.emit({ rowId: 'leg', provider_refs: { transaction_id: 'txn' } });
+	await c.service.flushOffline();
+	expect(c.options.http.post).toHaveBeenCalledWith(expect.stringContaining('/capture'), {
+		context: { provider_refs: { transaction_id: 'txn' } },
+	});
+	expect(c.patch).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ provider_refs: { reader: 'sn-1', transaction_id: 'txn' } })
+	);
+});
 it('retries failed settlement at 5, 30 and 120 seconds then waits for another trigger', async () => {
 	const c = offlineSetup();
 	c.http.post.mockRejectedValue(new Error('capture unavailable'));
@@ -450,9 +466,12 @@ it('coalesces concurrent flushes and drains one follow-up using updated refs', a
 	expect(c.http.post).toHaveBeenLastCalledWith('orders/42/payments/leg/capture', {
 		context: { provider_refs: { transaction_id: 'updated' } },
 	});
+	// Settlement refs merge into the row's own (which name its reader) rather than replace them.
 	expect(c.patch).toHaveBeenCalledWith(
 		'order',
-		expect.objectContaining({ provider_refs: { transaction_id: 'updated' } })
+		expect.objectContaining({
+			provider_refs: expect.objectContaining({ transaction_id: 'updated' }),
+		})
 	);
 	c.service.stop();
 });

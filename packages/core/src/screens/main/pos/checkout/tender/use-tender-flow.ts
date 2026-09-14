@@ -13,8 +13,10 @@ import {
 	type PaymentRow,
 	type PaymentTransport,
 	readLedger,
+	SPLIT_META_KEY,
 	splitPlanMeta,
 	toMinor,
+	withMetaReplaced,
 } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -490,7 +492,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		let savingProvenance = false;
 		let sessionId: string | null = null;
 		// The split as the cashier saw it, written with whichever leg completes the sale —
-		// cash included, which does not pass through saveProvenance below.
+		// cash included, which does not pass through saveProvenance below. With no plan, a
+		// split an earlier abandoned attempt left on the order is cleared: it must not
+		// describe a sale that was then completed in one go. Otherwise nothing is sent.
+		const hasStaleSplit = (payload.meta_data ?? []).some(
+			({ key, value }) => key === SPLIT_META_KEY && value !== null
+		);
 		const splitMeta = state.plan
 			? [
 					splitPlanMeta({
@@ -502,9 +509,22 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						],
 					}),
 				]
-			: null;
+			: hasStaleSplit
+				? [{ key: SPLIT_META_KEY, value: null }]
+				: undefined;
 		const saveProvenance = async () => {
-			if (!online || queuedOffline || !payload.id || entryAppliedMinor !== balanceMinor) return;
+			if (entryAppliedMinor !== balanceMinor) return;
+			if (!online || queuedOffline || !payload.id) {
+				// No completion tuple can be stamped yet, but the split is a fact about this
+				// till's sale and the offline completion write keeps whatever is on the order.
+				if (!splitMeta) return;
+				const patched = await localPatch({
+					document: order,
+					data: { meta_data: withMetaReplaced(order.getLatest().payload.meta_data, splitMeta) },
+				});
+				if (!patched) throw new Error('provenance_save_failed');
+				return;
+			}
 			savingProvenance = true;
 			await persistProvenance({
 				order,

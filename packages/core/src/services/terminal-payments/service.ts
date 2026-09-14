@@ -26,8 +26,17 @@ import type {
 
 const logger = getLogger(['wcpos', 'terminal-payments']);
 const SETTLEMENT_RETRY_DELAYS = [5000, 30000, 120000];
+/**
+ * Refs that name WHO took the payment rather than the provider's record of it. The
+ * reader is minted onto a device row before any collection, so it must not count as
+ * settlement readiness: capturing on `{ reader }` alone would fail until the driver's
+ * settlement emits the transaction reference, and burn the retries doing it.
+ */
+const IDENTITY_REFS = new Set(['reader']);
 const hasProviderRefs = (refs: Record<string, unknown>) =>
-	Object.values(refs).some((value) => value !== null && value !== undefined);
+	Object.entries(refs).some(
+		([key, value]) => !IDENTITY_REFS.has(key) && value !== null && value !== undefined
+	);
 
 export interface TerminalPaymentsServiceOptions {
 	factories?: { server?: typeof createServerLeg; device?: typeof createDeviceLeg };
@@ -193,7 +202,11 @@ export class TerminalPaymentsService {
 			try {
 				const { orderUuid, row } = entry.input;
 				// Persist the settlement reference before a request so a reload can reconcile it.
-				const settled = { ...row, provider_refs: offlineProviderRefs(refs) };
+				// Merge, never replace: the row already names the reader it was minted for.
+				const settled = {
+					...row,
+					provider_refs: { ...row.provider_refs, ...offlineProviderRefs(refs) },
+				};
 				if (!entry.persisted) {
 					await this.options.patchAndEnqueue?.(orderUuid, settled);
 					entry.persisted = entry.refs === refs;
