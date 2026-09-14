@@ -467,10 +467,11 @@ payment method, cashier, register, tax rate, item or category. One report with a
 reports; the grouping words are what the picker searches. Takes either scope mode. By
 session, the payment-method grouping sums payment and refund rows by tender-time session, the
 drawer's basis, and every other grouping counts the sales that completed in the session,
-the closure's basis; by range, every grouping is order-level, sales dated by completion in
-the store's clock. The payment-method grouping shows what each method took and refunded
-and counts payments, never gross or tax, which no payment row carries; every other
-grouping counts sales. The heading says which.
+the closure's basis; by range, membership is order-level, the sales that completed in the
+range by the store's clock, and the same two bases apply within it. The payment-method
+grouping shows what each method took and refunded and counts payments, never gross or
+tax, which no payment row carries; every other grouping counts sales. The heading says
+which.
 _Avoid_: Z-report, range report, tender report, payment report, tax report, cashier report (as entries)
 
 **Scope**:
