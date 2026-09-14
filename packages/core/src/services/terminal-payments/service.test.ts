@@ -156,7 +156,16 @@ it('captured callback fires once with authoritative summary and a final leg can 
 	await jest.advanceTimersByTimeAsync(0);
 	await leg.checkNow();
 	expect(c.onCaptured).toHaveBeenCalledTimes(1);
-	expect(c.onCaptured).toHaveBeenCalledWith('order', c.summary);
+	// The row and the narration claim ride along: a capture that lands with checkout
+	// unmounted has to write its own action row, and the claim is what stops the tender
+	// flow writing a second one when it is on screen.
+	expect(c.onCaptured).toHaveBeenCalledWith(
+		'order',
+		c.summary,
+		expect.objectContaining({ id: row.id, status: 'captured' }),
+		true
+	);
+	expect(c.service.claimCaptureNarration(row.id)).toBe(false);
 	expect(c.service.resume(input)).toBe(leg);
 	expect(c.service.begin({ ...input, row: { ...row, id: 'new-leg' } })).not.toBe(leg);
 });
@@ -243,7 +252,12 @@ it('online device capture notifies once without tracking or writing an offline s
 	await service.flushOffline();
 	expect(service.get('order')).toBeNull();
 	expect(c.onCaptured).toHaveBeenCalledTimes(1);
-	expect(c.onCaptured).toHaveBeenCalledWith('order', c.summary);
+	expect(c.onCaptured).toHaveBeenCalledWith(
+		'order',
+		c.summary,
+		expect.objectContaining({ status: 'captured' }),
+		true
+	);
 	expect(trackOffline).not.toHaveBeenCalled();
 	expect(patchAndEnqueue).not.toHaveBeenCalled();
 	expect(c.http.post.mock.calls.map(([url]) => url)).toEqual([
@@ -351,6 +365,22 @@ it('recovers transaction-id-only settlement and ignores all-null references', as
 	c.service.stop();
 	empty.service.stop();
 });
+it('a row that only names its reader is not ready to settle, and keeps the reader when it is', async () => {
+	// The reader is minted onto the row before any collection; capturing on it alone
+	// would fail until the driver emits the transaction reference and burn the retries.
+	const c = offlineSetup({ reader: 'sn-1' });
+	await c.service.flushOffline();
+	expect(c.options.http.post).not.toHaveBeenCalled();
+	c.emit({ rowId: 'leg', provider_refs: { transaction_id: 'txn' } });
+	await c.service.flushOffline();
+	expect(c.options.http.post).toHaveBeenCalledWith(expect.stringContaining('/capture'), {
+		context: { provider_refs: { transaction_id: 'txn' } },
+	});
+	expect(c.patch).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ provider_refs: { reader: 'sn-1', transaction_id: 'txn' } })
+	);
+});
 it('retries failed settlement at 5, 30 and 120 seconds then waits for another trigger', async () => {
 	const c = offlineSetup();
 	c.http.post.mockRejectedValue(new Error('capture unavailable'));
@@ -367,9 +397,37 @@ it('retries failed settlement at 5, 30 and 120 seconds then waits for another tr
 	await jest.advanceTimersByTimeAsync(600000);
 	expect(c.http.post).toHaveBeenCalledTimes(4);
 	expect(jest.getTimerCount()).toBe(0);
-	expect(getLogger([]).warn).toHaveBeenCalledWith('Offline payment settlement failed', {
-		context: { paymentId: 'leg', error: 'capture unavailable' },
-	});
+	// Mid-arc attempts stay forensic; only the exhausted arc is an error the merchant
+	// must act on — the card holds an authorization the store will never capture.
+	expect(getLogger([]).debug).toHaveBeenCalledWith(
+		'Offline payment settlement attempt failed',
+		expect.objectContaining({
+			// All three rows of one settlement carry the same type, so the Logs screen
+			// titles attempt, failure and recovery as the same story.
+			context: expect.objectContaining({
+				type: 'payment.settlement',
+				paymentId: 'leg',
+				error: 'capture unavailable',
+			}),
+		})
+	);
+	expect(getLogger([]).warn).not.toHaveBeenCalled();
+	expect(getLogger([]).error).toHaveBeenCalledWith(
+		'Offline payment settlement failed',
+		expect.objectContaining({
+			code: 'PAYMENT201',
+			// The settled-record shape is what puts an authorization the store will never
+			// capture into the health header's stuck list.
+			terminal: expect.objectContaining({
+				operationId: 'leg',
+				operationType: 'sync.record',
+				outcome: 'failed',
+			}),
+			// Keyed on the payment, so one settling authorization cannot clear another's
+			// stuck row on a split order.
+			context: expect.objectContaining({ collection: 'payments', recordId: 'leg' }),
+		})
+	);
 	await c.service.flushOffline();
 	expect(c.http.post).toHaveBeenCalledTimes(5);
 	expect(c.schedule).toHaveBeenLastCalledWith(expect.any(Function), 5000);
@@ -408,9 +466,12 @@ it('coalesces concurrent flushes and drains one follow-up using updated refs', a
 	expect(c.http.post).toHaveBeenLastCalledWith('orders/42/payments/leg/capture', {
 		context: { provider_refs: { transaction_id: 'updated' } },
 	});
+	// Settlement refs merge into the row's own (which name its reader) rather than replace them.
 	expect(c.patch).toHaveBeenCalledWith(
 		'order',
-		expect.objectContaining({ provider_refs: { transaction_id: 'updated' } })
+		expect.objectContaining({
+			provider_refs: expect.objectContaining({ transaction_id: 'updated' }),
+		})
 	);
 	c.service.stop();
 });

@@ -96,6 +96,28 @@ const EXPLICIT_OUTCOMES = new Set<NonNullable<LogTerminalFields['outcome']>>([
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0);
 
+function httpStatusCode(status: number): ErrorCode {
+	if (status === 401) return ERROR_CODES.SESSION_EXPIRED;
+	if (status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
+	if (status === 429) return ERROR_CODES.STORE_RATE_LIMITED;
+	if (status === 0) return ERROR_CODES.SYNC_UNREACHABLE;
+	// A response IS reachability — only status 0 (no response at all) may say
+	// "cannot be reached". A 409 is the conflict the record-level events
+	// already narrate (SYNC221); any other 4xx/5xx is the server answering
+	// with an error (SYNC131). The old catch-all sent every unlisted status
+	// to SYNC121, so a slow-but-answered 409 read as an unreachable store
+	// (dev-next 2026-08-14: a 14.8s conflicted push labeled "cannot be
+	// reached" while the server had refused it in plain HTTP).
+	if (status === 409) return ERROR_CODES.RECORD_CONFLICT;
+	// The protocol gate's deliberate refusal (wcpos/woocommerce-pos#1752).
+	// Authoritative detection is body-keyed in the engine transport (the
+	// status is advisory and middleboxes rewrite it); this only labels the
+	// forensic request row when the status DID survive.
+	if (status === 426) return ERROR_CODES.APP_UPDATE_REQUIRED;
+	if (status >= 400) return ERROR_CODES.STORE_SERVER_ERROR;
+	return ERROR_CODES.SYNC_UNREACHABLE;
+}
+
 function sanitizeReason(value: unknown): string | undefined {
 	if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
 		return undefined;
@@ -198,9 +220,7 @@ export const CONFORMANCE_TABLE = {
 		code: (_event, fields) =>
 			typeof fields.status !== 'number'
 				? ERROR_CODES.SYNC_TASK_CRASHED
-				: fields.status >= 500
-					? ERROR_CODES.STORE_SERVER_ERROR
-					: ERROR_CODES.SYNC_UNREACHABLE,
+				: httpStatusCode(fields.status),
 	},
 	'engine.lane.tick': {
 		operationType: 'sync.lane',
@@ -356,28 +376,7 @@ export const CONFORMANCE_TABLE = {
 	'transport.request': {
 		operationType: 'sync.http',
 		outcome: 'ok',
-		code: (_event, fields) => {
-			const status = num(fields.status);
-			if (status === 401) return ERROR_CODES.SESSION_EXPIRED;
-			if (status === 403) return ERROR_CODES.INSUFFICIENT_ROLE;
-			if (status === 429) return ERROR_CODES.STORE_RATE_LIMITED;
-			if (status === 0) return ERROR_CODES.SYNC_UNREACHABLE;
-			// A response IS reachability — only status 0 (no response at all) may say
-			// "cannot be reached". A 409 is the conflict the record-level events
-			// already narrate (SYNC221); any other 4xx/5xx is the server answering
-			// with an error (SYNC131). The old catch-all sent every unlisted status
-			// to SYNC121, so a slow-but-answered 409 read as an unreachable store
-			// (dev-next 2026-08-14: a 14.8s conflicted push labeled "cannot be
-			// reached" while the server had refused it in plain HTTP).
-			if (status === 409) return ERROR_CODES.RECORD_CONFLICT;
-			// The protocol gate's deliberate refusal (wcpos/woocommerce-pos#1752).
-			// Authoritative detection is body-keyed in the engine transport (the
-			// status is advisory and middleboxes rewrite it); this only labels the
-			// forensic request row when the status DID survive.
-			if (status === 426) return ERROR_CODES.APP_UPDATE_REQUIRED;
-			if (status >= 400) return ERROR_CODES.STORE_SERVER_ERROR;
-			return ERROR_CODES.SYNC_UNREACHABLE;
-		},
+		code: (_event, fields) => httpStatusCode(num(fields.status)),
 		// Failures only. A successful data-bearing request is a unit of work, but
 		// the engine issues them continuously (a poll every few seconds, several
 		// requests each), so persisting them would evict every other row well

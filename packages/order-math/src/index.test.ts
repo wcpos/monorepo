@@ -34,9 +34,11 @@ test('public value surface is exactly the spec', () => {
 		'settleAggregate',
 		'settleCart',
 		'snapshotFromOrderJSON',
+		'splitPlanMeta',
 		'toMinor',
 		'upsertPaymentRow',
 		'withLedger',
+		'withMetaReplaced',
 		'withSaleProvenance',
 	]);
 });

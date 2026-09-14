@@ -12,6 +12,7 @@ export const LOG_DOMAINS = [
 	'db',
 	'ui',
 	'settings',
+	'register',
 ] as const;
 
 export type LogDomain = (typeof LOG_DOMAINS)[number];

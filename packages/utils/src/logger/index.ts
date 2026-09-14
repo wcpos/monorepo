@@ -44,6 +44,7 @@ export interface LoggerOptions {
 	showToast?: boolean;
 	context?: any;
 	terminal?: LogTerminalFields;
+	actor?: { id?: string; role?: string; name?: string };
 	toast?: {
 		title?: string; // Override the toast title when the log message is forensic (ids, codes) rather than cashier-readable
 		text2?: string; // Secondary message
@@ -132,7 +133,7 @@ const REPEAT_IDENTITY_LIMIT = 16;
 const repeatStateByCollection = new WeakMap<object, Map<string, RepeatState>>();
 
 const SEARCH_CONTEXT_KEY =
-	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|collection|type|lane|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|endpoint|status|customerId|errorCode|reason|previousQuantity|quantity|previousPrice|price)$/;
+	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|collection|type|lane|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|movementType|endpoint|status|customerId|errorCode|field|paymentId|registerId|sessionId|readerId|reason|previousQuantity|quantity|previousPrice|price)$/;
 
 function searchableContext(context: Record<string, any>): string {
 	return Object.entries(context)
@@ -206,6 +207,7 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 		const rows = recorded.map((event) => {
 			sequence += 1;
 			const terminal = event.terminal;
+			const actor = clampActor(event.actor);
 			// Mirror persistLog's column extraction so promoted narration answers the
 			// same category/code filters as live rows — otherwise the trail is present
 			// but invisible behind the Logs tab's preset chips.
@@ -228,6 +230,7 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 				lastSeen: event.timestamp,
 				...(code && { code }),
 				...(category && { category }),
+				...(actor && { actor }),
 				...(terminal?.outcome && { outcome: terminal.outcome }),
 				...(terminal?.operationId !== undefined && {
 					operationId: clampColumn('operationId', terminal.operationId),
@@ -323,6 +326,14 @@ function clampColumn<K extends keyof typeof COLUMN_MAX_LENGTH>(
 	return value.length > max ? value.slice(0, max) : value;
 }
 
+function clampActor(actor: LoggerOptions['actor']): LoggerOptions['actor'] {
+	const fields = (['id', 'role', 'name'] as const).flatMap((key) => {
+		const value = actor?.[key];
+		return typeof value === 'string' && value.length > 0 ? [[key, value.slice(0, 64)]] : [];
+	});
+	return fields.length > 0 ? Object.fromEntries(fields) : undefined;
+}
+
 const GENERIC_ERROR_CODES = [
 	['wcpos.pos.checkout.payment', 'PAYMENT999'],
 	['wcpos.payment', 'PAYMENT999'],
@@ -344,7 +355,8 @@ function persistLog(
 	level: LogLevel,
 	message: string,
 	context: Record<string, unknown>,
-	terminal?: LogTerminalFields
+	terminal?: LogTerminalFields,
+	actor?: LoggerOptions['actor']
 ): void {
 	const now = Date.now();
 	const outcome = terminal?.outcome;
@@ -381,6 +393,7 @@ function persistLog(
 		// Chained operations are distinct units of work and must not collapse.
 		// Uncorrelated record failures keep null here and still collapse by record/reason.
 		terminal?.operationId ?? null,
+		actor?.id ?? null,
 		// Collection is part of the identity or per-collection events with no
 		// message of their own collapse across collections: one change-signal cycle
 		// emitting apply.refresh for tax_rates and then for another collection
@@ -438,6 +451,7 @@ function persistLog(
 	}
 
 	sequence += 1;
+	const persistedActor = clampActor(actor);
 	const row = recordSize({
 		timestamp: now,
 		level,
@@ -449,6 +463,7 @@ function persistLog(
 		lastSeen: now,
 		...(code && { code }),
 		...(category && { category }),
+		...(persistedActor && { actor: persistedActor }),
 		...(outcome && { outcome }),
 		...(terminal?.operationId !== undefined && {
 			operationId: clampColumn('operationId', terminal.operationId),
@@ -744,6 +759,7 @@ const mainTransport = (props: any) => {
 	}
 
 	if (levelName === 'error') {
+		// Actor names are device-only cashier data and must never enter the Sentry payload.
 		captureLoggedError({ message, code: options.code, context: options.context });
 	}
 
@@ -830,13 +846,21 @@ const mainTransport = (props: any) => {
 				message,
 				context: options.context ?? {},
 				terminal: options.terminal,
+				actor: clampActor(options.actor),
 			});
 			if (dbCollection && isVerboseDiagnostics()) {
 				// Forward terminal fields too: a forensic debug row (e.g. a recovered 401
 				// attempt, #899) is only chainable to its refresh/success rows through
 				// outcome + operationId, and dropping them here would break the chain
 				// exactly where verbose diagnostics is meant to expose it.
-				persistLog(dbCollection, levelName, message, options.context ?? {}, options.terminal);
+				persistLog(
+					dbCollection,
+					levelName,
+					message,
+					options.context ?? {},
+					options.terminal,
+					options.actor
+				);
 			}
 		} catch (error) {
 			console.error('Failed to record debug log entry', error);
@@ -847,7 +871,7 @@ const mainTransport = (props: any) => {
 				level.text === 'success'
 					? { ...options.terminal, outcome: options.terminal?.outcome ?? 'ok' }
 					: options.terminal;
-			persistLog(dbCollection, levelName, message, options.context || {}, terminal);
+			persistLog(dbCollection, levelName, message, options.context || {}, terminal, options.actor);
 			if (levelName === 'error') void promoteRecorder('error');
 		} catch (error) {
 			console.error('Failed to persist log entry', error);

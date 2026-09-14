@@ -12,6 +12,7 @@ import {
 	openSession,
 	recordMovement,
 	requireOpenSession,
+	retryMovement,
 	startCounting,
 	voidMovement,
 } from './session-store';
@@ -84,5 +85,32 @@ it('gates counting and missing sessions, and expires the expected snapshot befor
 	await row.incrementalPatch({ status: 'open', sync_status: 'failed' });
 	await expect(requireOpenSession(db.register_sessions, 'register', true)).rejects.toMatchObject({
 		name: 'RegisterSessionRequiredError',
+	});
+});
+
+it('re-queues a refused movement so the outbox will send it again', async () => {
+	const session = await openSession(db.register_sessions, input);
+	const row = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '20',
+		reason: 'Change',
+		actor: 7,
+	});
+	await row.incrementalPatch({
+		sync_status: 'failed',
+		sync_attempts: 3,
+		sync_error: 'rest_invalid_param',
+		sync_next_at: null,
+	});
+
+	await retryMovement(db.cash_movements, row.id);
+
+	expect(row.getLatest().toJSON()).toMatchObject({
+		sync_status: 'pending',
+		sync_attempts: 0,
+		sync_next_at: null,
+		sync_error: null,
+		amount: '20',
 	});
 });

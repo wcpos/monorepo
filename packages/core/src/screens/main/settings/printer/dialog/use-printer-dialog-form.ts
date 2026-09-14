@@ -214,12 +214,23 @@ export function usePrinterDialogForm({
 	}, [open, printer, prefill, form, printerCount, t, defaultValues, deriveVendorDefaults]);
 
 	// Vendor change → derive language/port.
+	//
+	// The watched `vendor` is the TRIGGER; the form is the source of truth. Effects run in
+	// declaration order within one commit, so on the pass right after `form.reset` the watch
+	// still holds the PREVIOUS form's vendor — reading it compared the old form against the new
+	// baseline, saw a vendor change that never happened, and derived the language over whatever
+	// the profile had saved. That is how a Star printer saved as StarPRNT reopened as Star Line
+	// Mode every time. `form.getValues` is never stale, so the comparison is always the real one
+	// and there is no in-flight state to latch (a latch keyed to the reset's vendor gets stuck
+	// forever when something else — `add-printer.tsx`'s generic→epson correction, say — changes
+	// the vendor again before the watch ever publishes the latched value).
 	React.useEffect(() => {
-		if (vendor !== prevVendorRef.current) {
+		const currentVendor = form.getValues('vendor');
+		if (currentVendor !== prevVendorRef.current) {
 			const previousVendor = prevVendorRef.current;
-			prevVendorRef.current = vendor;
+			prevVendorRef.current = currentVendor;
 			const previousDefaults = deriveVendorDefaults(previousVendor);
-			const d = deriveVendorDefaults(vendor);
+			const d = deriveVendorDefaults(currentVendor);
 			const currentPort = form.getValues('port');
 			form.setValue('language', d.language);
 			if (

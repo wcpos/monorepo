@@ -9,7 +9,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import {
 	hasSaleProvenance,
 	isCompletingStatus,
+	type MetaDataEntry,
 	type PaymentMethodDescriptor,
+	withMetaReplaced,
 } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
@@ -22,6 +24,7 @@ import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
+import { refreshOrderRecord } from '../hooks/reconcile-completed-order';
 import { recordManualPayment } from './record-manual-payment';
 
 import type { RecordManualPaymentInput, RecordManualPaymentOutcome } from './record-manual-payment';
@@ -76,6 +79,10 @@ export function useRecordManualPayment(
 				// RxDB serves object fields as Proxies; the ledger helpers need plain data.
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
+			// The split summary rides with whichever leg completes the sale; every path
+			// that stamps completion here merges it by key so a re-divided remainder wins.
+			const withCompletionFacts = (meta: MetaDataEntry[]) =>
+				withMetaReplaced(meta, input.extraMeta ?? []);
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post: (url, body) => http.post(url, body),
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
@@ -83,18 +90,22 @@ export function useRecordManualPayment(
 				storeId: store.id ? store.id : null,
 				registerId,
 				sessionId,
-				completionMeta: (meta_data) =>
-					completionMeta(
-						{ meta_data },
-						{ userDB, siteUuid: site.uuid!, storeId: store.id, sessionId }
+				completionMeta: async (meta_data) =>
+					withCompletionFacts(
+						await completionMeta(
+							{ meta_data },
+							{ userDB, siteUuid: site.uuid!, storeId: store.id, sessionId }
+						)
 					),
 				persistProvenance: async () => {
-					const meta_data = await completionMeta(order.getLatest().payload, {
-						userDB,
-						siteUuid: site.uuid!,
-						storeId: store.id,
-						sessionId,
-					});
+					const meta_data = withCompletionFacts(
+						await completionMeta(order.getLatest().payload, {
+							userDB,
+							siteUuid: site.uuid!,
+							storeId: store.id,
+							sessionId,
+						})
+					);
 					const patched = await localPatch({ document: order, data: { meta_data } });
 					if (!patched) throw new Error('provenance_save_failed');
 					await pushDocument(order);
@@ -125,20 +136,27 @@ export function useRecordManualPayment(
 							isCompletingStatus(changes.status ?? '') &&
 							!hasSaleProvenance(changes.meta_data)
 						) {
-							const meta_data = await completionMeta(changes, {
-								userDB,
-								siteUuid: site.uuid!,
-								storeId: store.id,
-								sessionId,
-							});
+							const meta_data = withCompletionFacts(
+								await completionMeta(changes, {
+									userDB,
+									siteUuid: site.uuid!,
+									storeId: store.id,
+									sessionId,
+								})
+							);
 							const patched = await localPatch({ document: order, data: { meta_data } });
 							if (!patched) throw new Error('provenance_save_failed');
 						}
-					} catch {
-						logger.error(t('pos_cart.checkout_failed'), {
-							code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
-							showToast: true,
-						});
+					} catch (error) {
+						// The store has already answered: the money is on the order there, and only
+						// this till's copy is behind. Swallowing that used to report a generic
+						// "checkout failed" on a payment the store had taken, which invites the
+						// cashier to take it again. Pull the store's copy so the ledger catches up,
+						// then let the caller report the gap for what it is.
+						if (paymentOrder.id) {
+							await refreshOrderRecord(manager, paymentOrder.id).catch(() => undefined);
+						}
+						throw error;
 					}
 				},
 				raiseAttention: ({ row, order: summary, reason }) => {
@@ -154,12 +172,19 @@ export function useRecordManualPayment(
 									})
 								: t('payments.refusal.exceeds_balance', values);
 					logger.error(message, {
+						// Two different stories with two different answers: an order already paid
+						// online needs a refund, an over-payment needs the store's balance taken
+						// instead. Neither is "payment handling hit an unexpected problem".
 						code:
 							reason === 'order_already_paid'
 								? ERROR_CODES.PAYMENT_ALREADY_PAID_ONLINE
-								: ERROR_CODES.PAYMENT_UNEXPECTED,
+								: ERROR_CODES.PAYMENT_EXCEEDS_BALANCE,
 						showToast: true,
-						terminal: { operationType: 'sync.record', outcome: 'failed' },
+						terminal: {
+							operationType: 'sync.record',
+							outcome: 'failed',
+							operationId: row.id,
+						},
 						context: {
 							collection: 'orders',
 							recordId: paymentOrder.uuid,

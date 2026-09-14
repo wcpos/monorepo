@@ -37,6 +37,7 @@ import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache
 import { censusQueryKey } from '../scheduler';
 import { buildReplicationHandlers } from './change-signal-handlers';
 import {
+	ChangeSignalPoisonError,
 	createLiveChangeSignalSource,
 	type EngineSourceFetcher,
 	SUPPORTED_HYBRID_COLLECTIONS,
@@ -156,7 +157,13 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 		const response = await sourceFetcher(
 			`${deps.syncBaseUrl}/changes/sequence-log?collection=all&since=0&limit=1`
 		);
-		if (!response.ok) throw new Error(`change-signal head fetch failed: HTTP ${response.status}`);
+		if (!response.ok) {
+			throw new ChangeSignalPoisonError(
+				`change-signal head fetch failed: HTTP ${response.status}`,
+				'/changes/sequence-log',
+				response.status
+			);
+		}
 		const body = (await response.json()) as { checkpoint?: { head?: number; epoch?: string } };
 		const head = body.checkpoint?.head;
 		// The epoch travels WITH the primed head: a cursor adopted from this
@@ -495,7 +502,13 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				lastError = null;
 				return { lane: 'change-signal', status: 'skipped', reason: 'aborted' };
 			}
-			deps.diagnostics({ type: 'signal.tick.error', level: 'error', message });
+			const status = error instanceof ChangeSignalPoisonError ? error.status : undefined;
+			deps.diagnostics({
+				type: 'signal.tick.error',
+				level: 'error',
+				message,
+				fields: { lane: 'change-signal', ...(status !== undefined ? { status } : {}) },
+			});
 			return { lane: 'change-signal', status: 'error', error: message };
 		} finally {
 			activeFetch = null;

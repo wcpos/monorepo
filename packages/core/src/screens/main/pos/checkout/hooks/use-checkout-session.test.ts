@@ -51,7 +51,7 @@ jest.mock('../../hooks/use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({ resolveStockOwnerId: mockResolveStockOwnerId }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ success: jest.fn(), error: jest.fn() }),
+	getLogger: () => ({ info: jest.fn(), success: jest.fn(), error: jest.fn() }),
 }));
 
 const makeOrder = (paymentMethod = 'stripe_terminal_for_woocommerce') => {
@@ -392,7 +392,11 @@ jest.mock('../../../contexts/use-push-document', () => ({
 	usePushDocument: () => mockProvenancePush,
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ userDB: {}, site: { uuid: 'site' } }),
+	useStoreSession: () => ({
+		userDB: {},
+		site: { uuid: 'site' },
+		wpCredentials: { id: 7, username: 'pat' },
+	}),
 }));
 jest.mock('../provenance/stamp-completion', () => ({
 	completionMeta: async () => [{ key: '_wcpos_sale_counter', value: '1' }],

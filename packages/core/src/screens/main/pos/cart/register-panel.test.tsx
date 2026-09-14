@@ -9,11 +9,15 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 let blind = false;
+let movements: Record<string, unknown>[] = [];
+let refusedMovements: Record<string, unknown>[] = [];
+let currentSession: Record<string, unknown> | null = null;
 let serverNumber: number | null = null;
 let syncStatus = 'pending';
 let syncedRowsAt: string | null = null;
 const voidMovement = jest.fn(async () => undefined);
 const recordMovement = jest.fn(async () => ({ id: 'movement' }));
+const retryMovement = jest.fn(async () => undefined);
 const startCounting = jest.fn(async () => undefined);
 const print = jest.fn(async () => undefined);
 const openDrawer = jest.fn(async () => undefined);
@@ -21,11 +25,12 @@ const showToast = jest.fn();
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
-		session: { id: 'session', status: 'open', opened_by: 7, opened_at_gmt: '2026-09-11T09:02:00Z' },
+		session: currentSession,
 		binding: { registerName: 'Front' },
 		expected: { cash: '155', card: '30' },
 		salesCount: 2,
-		movements: [{ id: 'old', type: 'paid_out', amount: '7', reason: 'Milk' }],
+		movements,
+		refusedMovements,
 		lastClosure: {
 			number: 1,
 			server_number: serverNumber,
@@ -39,7 +44,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			synced_rows_at: syncedRowsAt,
 			server_findings: { gap: true },
 		},
-		actions: { voidMovement, recordMovement, startCounting },
+		actions: { voidMovement, recordMovement, retryMovement, startCounting },
 	}),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
@@ -116,8 +121,17 @@ jest.mock('@wcpos/components/dialog', () => ({
 		<h2 data-testid={testID}>{children}</h2>
 	),
 }));
+const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
 	blind = false;
+	currentSession = {
+		id: 'session',
+		status: 'open',
+		opened_by: 7,
+		opened_at_gmt: '2026-09-11T09:02:00Z',
+	};
+	movements = [{ id: 'old', type: 'paid_out', amount: '7', reason: 'Milk', sync_status: 'synced' }];
+	refusedMovements = [];
 	syncedRowsAt = null;
 	serverNumber = null;
 	syncStatus = 'pending';
@@ -150,9 +164,110 @@ it('no sale hides amount and opens the resolved drawer', async () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-no-sale'));
 	expect(screen.queryByTestId('movement-amount')).toBeNull();
+	fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Wrong change' } });
 	fireEvent.click(screen.getByTestId('movement-confirm'));
 	await waitFor(() => expect(openDrawer).toHaveBeenCalled());
-	expect(recordMovement).toHaveBeenCalledWith({ type: 'no_sale', amount: '0', reason: '' });
+	expect(recordMovement).toHaveBeenCalledWith({
+		type: 'no_sale',
+		amount: '0',
+		reason: 'Wrong change',
+	});
+});
+
+it('will not record a movement the server would refuse for a blank reason', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-in'));
+	fireEvent.change(screen.getByTestId('movement-amount'), { target: { value: '20' } });
+	// The server requires a reason on every non-void movement; a blank one 400s after the
+	// cash is already in the drawer.
+	expect(confirmButton().disabled).toBe(true);
+	expect(screen.getByTestId('movement-invalid').textContent).toContain('reason');
+	fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Change' } });
+	expect(confirmButton().disabled).toBe(false);
+});
+
+it('will not open the drawer for a no sale the server would refuse', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-no-sale'));
+	// No amount to gate on, so today this button is never disabled and every no-sale 400s.
+	expect(confirmButton().disabled).toBe(true);
+	fireEvent.click(screen.getByTestId('movement-confirm'));
+	expect(recordMovement).not.toHaveBeenCalled();
+	expect(openDrawer).not.toHaveBeenCalled();
+});
+
+it.each([
+	['10,50', '10.50'],
+	['10.', '10'],
+	['.5', '0.5'],
+	[' 10 ', '10'],
+])('normalises %s to the amount grammar the server accepts', async (typed, sent) => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-paid-in'));
+	fireEvent.change(screen.getByTestId('movement-amount'), { target: { value: typed } });
+	fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Change' } });
+	expect(confirmButton().disabled).toBe(false);
+	fireEvent.click(screen.getByTestId('movement-confirm'));
+	await waitFor(() =>
+		expect(recordMovement).toHaveBeenCalledWith({
+			type: 'paid_in',
+			amount: sent,
+			reason: 'Change',
+		})
+	);
+});
+
+it.each(['1e2', '1 0', '10.50.1', '0'])(
+	'keeps confirm dead for %s, which the server would refuse',
+	(typed) => {
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		fireEvent.click(screen.getByTestId('register-panel-paid-in'));
+		fireEvent.change(screen.getByTestId('movement-amount'), { target: { value: typed } });
+		fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Change' } });
+		expect(confirmButton().disabled).toBe(true);
+		expect(screen.getByTestId('movement-invalid').textContent).toContain('amount');
+	}
+);
+
+const lost = {
+	id: 'lost',
+	type: 'paid_in',
+	amount: '20',
+	reason: 'Change',
+	sync_status: 'failed',
+	sync_error: 'rest_invalid_param',
+};
+
+it('shows refused movements at the top of the pane and offers a retry', async () => {
+	movements = [
+		{ id: 'old', type: 'paid_out', amount: '7', reason: 'Milk', sync_status: 'synced' },
+		lost,
+	];
+	refusedMovements = [lost];
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	// Today nothing in the register UI reads sync_status, so this row is indistinguishable
+	// from a delivered one and the cash goes missing silently.
+	expect(screen.getByTestId('register-panel-refused').textContent).toContain('1');
+	fireEvent.click(screen.getByTestId('register-panel-retry-refused'));
+	await waitFor(() => expect(retryMovement).toHaveBeenCalledWith('lost'));
+});
+
+it('keeps the refused banner and its retry after the session has closed', async () => {
+	// The close succeeds and the session stops being current. The cash still moved, and the
+	// server still accepts a movement recorded before counting started — so both the record
+	// and the way to send it have to survive the transition.
+	currentSession = null;
+	movements = [];
+	refusedMovements = [lost];
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-panel-refused').textContent).toContain('1');
+	fireEvent.click(screen.getByTestId('register-panel-retry-refused'));
+	await waitFor(() => expect(retryMovement).toHaveBeenCalledWith('lost'));
+});
+
+it('says nothing about refused movements when every row is delivered', () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('register-panel-refused')).toBeNull();
 });
 it('Close register starts counting and dismisses the panel', async () => {
 	const onOpenChange = jest.fn();
@@ -167,6 +282,7 @@ it('coalesces same-tick movement taps before React renders saving state', () => 
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	fireEvent.click(screen.getByTestId('register-panel-paid-out'));
 	fireEvent.change(screen.getByTestId('movement-amount'), { target: { value: '20' } });
+	fireEvent.change(screen.getByTestId('movement-reason'), { target: { value: 'Milk' } });
 	act(() => {
 		fireEvent.click(screen.getByTestId('movement-confirm'));
 		fireEvent.click(screen.getByTestId('movement-confirm'));

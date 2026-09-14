@@ -13,7 +13,10 @@ import {
 	type PaymentRow,
 	type PaymentTransport,
 	readLedger,
+	SPLIT_META_KEY,
+	splitPlanMeta,
 	toMinor,
+	withMetaReplaced,
 } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
@@ -52,7 +55,11 @@ import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
 import { getUuidFromLineItem } from '../../hooks/utils';
-import { useRecordManualPayment, useVoidPayments } from '../payments';
+import {
+	RecordManualPaymentMirrorError,
+	useRecordManualPayment,
+	useVoidPayments,
+} from '../payments';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
 import { useRememberedReader } from './remembered-readers';
@@ -156,6 +163,13 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const busyRef = React.useRef(false);
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, userDB, site } = useStoreSession();
+	const actor = React.useMemo(
+		() => ({
+			id: String(wpCredentials.id ?? ''),
+			name: wpCredentials.display_name || wpCredentials.username || '',
+		}),
+		[wpCredentials.id, wpCredentials.display_name, wpCredentials.username]
+	);
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	useResumeTerminalLegs(order);
 	const terminalLeg = useTerminalLeg(order.uuid);
@@ -409,8 +423,29 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		]
 	);
 
+	// Every row this flow writes names the order it is about. Without it the Logs
+	// screen cannot answer "what happened on order 1041?", which is the only question
+	// a merchant actually asks of a checkout row.
+	const orderContext = React.useMemo(
+		() => ({ orderId: payload.id ?? null, orderUUID: order.uuid }),
+		[payload.id, order.uuid]
+	);
+
 	const tenderRecorded = React.useCallback(
-		(row: PaymentRow) => {
+		(row: PaymentRow, via?: 'online' | 'offline') => {
+			if (via) {
+				logger.info('Manual payment recorded', {
+					actor,
+					terminal: { operationId: row.id },
+					context: {
+						...orderContext,
+						type: via === 'offline' ? 'payment.recorded-offline' : 'payment.recorded',
+						paymentId: row.id,
+						amount: row.amount,
+						method: row.method_id,
+					},
+				});
+			}
 			const latest = readLedger(order.getLatest().payload.meta_data);
 			const index = latest.findIndex((candidate) => candidate.id === row.id);
 			if (index < 0) latest.push(row);
@@ -442,7 +477,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			);
 			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
 		},
-		[order, state, dp, byId, totalMinor]
+		[order, state, dp, byId, totalMinor, actor, orderContext]
 	);
 
 	const takeTender = React.useCallback(async () => {
@@ -456,8 +491,40 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		setBusy(true);
 		let savingProvenance = false;
 		let sessionId: string | null = null;
+		// The split as the cashier saw it, written with whichever leg completes the sale —
+		// cash included, which does not pass through saveProvenance below. With no plan, a
+		// split an earlier abandoned attempt left on the order is cleared: it must not
+		// describe a sale that was then completed in one go. Otherwise nothing is sent.
+		const hasStaleSplit = (payload.meta_data ?? []).some(
+			({ key, value }) => key === SPLIT_META_KEY && value !== null
+		);
+		const splitMeta = state.plan
+			? [
+					splitPlanMeta({
+						kind: state.plan.kind,
+						ways: planLegs(state.plan, rowsSinceFrom, balanceMinor).label.ways,
+						shares: [
+							...rowsSinceFrom.map(({ minor }) => fromMinor(minor, dp)),
+							fromMinor(entryAppliedMinor, dp),
+						],
+					}),
+				]
+			: hasStaleSplit
+				? [{ key: SPLIT_META_KEY, value: null }]
+				: undefined;
 		const saveProvenance = async () => {
-			if (!online || queuedOffline || !payload.id || entryAppliedMinor !== balanceMinor) return;
+			if (entryAppliedMinor !== balanceMinor) return;
+			if (!online || queuedOffline || !payload.id) {
+				// No completion tuple can be stamped yet, but the split is a fact about this
+				// till's sale and the offline completion write keeps whatever is on the order.
+				if (!splitMeta) return;
+				const patched = await localPatch({
+					document: order,
+					data: { meta_data: withMetaReplaced(order.getLatest().payload.meta_data, splitMeta) },
+				});
+				if (!patched) throw new Error('provenance_save_failed');
+				return;
+			}
 			savingProvenance = true;
 			await persistProvenance({
 				order,
@@ -466,6 +533,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				userDB,
 				siteUuid: site.uuid!,
 				sessionId,
+				...(splitMeta ? { extraMeta: splitMeta } : {}),
 			});
 			savingProvenance = false;
 		};
@@ -492,7 +560,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (!method) return;
 			if (entryAppliedMinor <= 0) {
-				logger.info(t('pos_checkout.enter_an_amount'), { showToast: true });
+				logger.info(t('pos_checkout.enter_an_amount'), { showToast: true, context: orderContext });
 				return;
 			}
 			if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
@@ -509,6 +577,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					}),
 					{
 						showToast: true,
+						context: { ...orderContext, method: method.id },
 					}
 				);
 				return;
@@ -529,13 +598,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 								? 'pos_checkout.reader_connecting'
 								: 'pos_checkout.reader_disconnected'
 						),
-						{ showToast: true }
+						{ showToast: true, context: { ...orderContext, method: method.id } }
 					);
 					return;
 				}
 				if (!service) throw new Error('terminal_service_unavailable');
 				const offline = !online || queuedOffline || !payload.id;
 				const minted = mintDevicePayment({
+					readerId: status.reader.id,
 					registerId,
 					sessionId,
 					method,
@@ -575,7 +645,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (method.capture.mode === 'server') {
 				if (!payload.id) {
-					logger.info(t('pos_checkout.order_not_on_store_yet'), { showToast: true });
+					logger.info(t('pos_checkout.order_not_on_store_yet'), {
+						showToast: true,
+						context: orderContext,
+					});
 					return;
 				}
 				const reader = selectableReaders(method, service?.readersInUse(), order.uuid).readers.find(
@@ -586,7 +659,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						reader?.inUseBy
 							? t('pos_checkout.reader_in_use', { number: reader.inUseBy })
 							: t('pos_checkout.choose_a_terminal'),
-						{ showToast: true }
+						{ showToast: true, context: { ...orderContext, method: method.id } }
 					);
 					return;
 				}
@@ -624,9 +697,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(entryAppliedMinor, dp),
 				tendered,
+				...(splitMeta ? { extraMeta: splitMeta } : {}),
 			});
 			if (outcome.kind === 'recorded') {
-				tenderRecorded(outcome.row);
+				tenderRecorded(outcome.row, outcome.via);
 				if (balanceMinor - entryAppliedMinor === 0) {
 					await completeOrderFlow({ refresh: outcome.via === 'online' });
 				}
@@ -645,22 +719,72 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			logger.error(t('pos_checkout.payment_not_recorded'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
+				context: { ...orderContext, method: method.id },
 			});
 		} catch (error) {
 			if (error instanceof RegisterSessionRequiredError) throw error;
+			if (error instanceof RecordManualPaymentMirrorError) {
+				const { outcome } = error;
+				// A refusal that could not be mirrored is NOT money the store holds: the
+				// server stored a `failed` row and took nothing. `raiseAttention` has already
+				// told the cashier what to do about it, and telling them the store has the
+				// payment would both contradict that and stop them retrying a corrected one.
+				if (outcome.kind === 'refused') {
+					reducerDispatch({ type: 'back' });
+					setTenderMethod(order.uuid, null);
+					return;
+				}
+				// The store answered 2xx: the money is on the order there, and only this
+				// till's copy failed to save. Reporting "payment not recorded" here reads as
+				// "take it again", which is how one mirror failure becomes two payments.
+				logger.warn(t('pos_checkout.payment_recorded_not_synced'), {
+					code: ERROR_CODES.PAYMENT_RECORDED_NOT_MIRRORED,
+					showToast: true,
+					terminal: { operationId: outcome.row.id },
+					context: {
+						type: 'payment.not-mirrored',
+						...orderContext,
+						paymentId: outcome.row.id,
+						amount: outcome.row.amount,
+						method: outcome.row.method_id,
+						status: outcome.row.status,
+						error: error.cause instanceof Error ? error.cause.message : String(error.cause),
+					},
+				});
+				// Fold the accepted row into the pane's own view of the ledger. Without this
+				// the keypad goes back to the pre-payment balance and cheerfully offers the
+				// whole amount again — the recovery refresh may not have landed, and the
+				// resident order is exactly the copy that failed to save.
+				tenderRecorded(outcome.row, outcome.via);
+				// The store's summary is the only balance worth trusting now. Complete only
+				// when it says the order is settled; otherwise stay on the pane, which is now
+				// showing what is actually left to pay.
+				if (outcome.order && toMinor(outcome.order.balance, dp) === 0) {
+					await completeOrderFlow({ refresh: true });
+				}
+				return;
+			}
 			if (savingProvenance) {
 				logger.error('Checkout failed', {
 					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 					showToast: true,
 					toast: { title: t('pos_cart.checkout_failed') },
-					context: { error: error instanceof Error ? error.message : String(error) },
+					context: {
+						...orderContext,
+						method: method?.id ?? null,
+						error: error instanceof Error ? error.message : String(error),
+					},
 				});
 				return;
 			}
 			logger.error(t('pos_checkout.payment_not_recorded'), {
 				code: ERROR_CODES.PAYMENT_UNEXPECTED,
 				showToast: true,
-				context: { error: error instanceof Error ? error.message : String(error) },
+				context: {
+					...orderContext,
+					method: method?.id ?? null,
+					error: error instanceof Error ? error.message : String(error),
+				},
 			});
 		} finally {
 			busyRef.current = false;
@@ -688,6 +812,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		remember,
 		saveState,
 		state.entryMinor,
+		state.plan,
+		rowsSinceFrom,
 		state.readerId,
 		payload.id,
 		payload.number,
@@ -704,22 +830,84 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		const consumeOutcome = () => {
 			const leg = service?.get(order.uuid);
 			if (!leg) return;
-			if (intentRow.current === leg.row.id && !['idle', 'creating'].includes(leg.phase)) {
+			// The take that is still in the cashier's hands, as opposed to an outcome that
+			// lands while they are watching the terminal timeline.
+			const ownTake = intentRow.current === leg.row.id;
+			if (ownTake && !['idle', 'creating'].includes(leg.phase)) {
 				intentRow.current = null;
-				if (leg.outcome === 'failed' && leg.error)
-					logger.error(providerErrorMessage(leg.error) ?? t('pos_checkout.payment_not_recorded'), {
-						code: ERROR_CODES.PAYMENT_UNEXPECTED,
-						showToast: true,
-					});
+			}
+			// A decline, an expiry or a failed capture usually settles well after polling
+			// starts, by which point `intentRow` is already null — so gating the LOG on it
+			// kept every settled failure out of the ledger. Nor can it require `leg.error`:
+			// the ordinary asynchronous decline arrives as a 200 whose payment row reads
+			// `failed`, with no error object at all. The row is always written, once per
+			// payment row; only the toast stays with the initial take, because the timeline
+			// already shows a failure the cashier is looking at.
+			if (leg.outcome === 'failed' && service?.claimFailureNarration(leg.row.id)) {
+				logger.error(
+					providerErrorMessage(leg.error) ??
+						leg.row.failure_reason ??
+						t('pos_checkout.payment_not_recorded'),
+					{
+						// A declined or cancelled card is an ordinary outcome with an ordinary
+						// answer — ask for another card. Reporting it as "payment handling hit an
+						// unexpected problem" sends the cashier looking for a fault that is not there.
+						code: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
+						showToast: ownTake,
+						terminal: { operationId: leg.row.id },
+						context: {
+							type: 'payment.declined',
+							orderId: leg.row.order_id || null,
+							orderUUID: order.uuid,
+							paymentId: leg.row.id,
+							amount: leg.row.amount,
+							method: leg.row.method_id,
+							status: leg.row.status,
+							errorCode: leg.error?.code ?? null,
+							reason: leg.row.failure_reason ?? null,
+						},
+					}
+				);
 			}
 			if (leg.outcome !== 'captured') return;
 			service?.dismiss(order.uuid);
+			// The service writes this row too, from its own outcome path, for a capture
+			// that lands after checkout unmounts. Whichever sees it first wins the claim.
+			if (service?.claimCaptureNarration(leg.row.id)) {
+				logger.info('Card payment taken', {
+					actor,
+					terminal: { operationId: leg.row.id },
+					context: {
+						orderId: leg.row.order_id || null,
+						orderUUID: order.uuid,
+						type: leg.row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',
+						paymentId: leg.row.id,
+						amount: leg.row.amount,
+						method: leg.row.method_id,
+					},
+				});
+			}
 			tenderRecorded(leg.row);
 			if (toMinor(leg.order?.balance ?? derived.balance, dp) === 0) {
-				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch(() =>
-					logger.error(t('pos_checkout.payment_not_recorded'), {
-						code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch((error) =>
+					// The card has been charged by this point: the failure is finishing the
+					// order, not taking the money, and saying "payment not recorded" here is
+					// how a captured payment gets taken twice.
+					logger.error(t('pos_checkout.paid_but_order_not_finished'), {
+						// Its own code, not PAYMENT101: with a code and no explicit toast title
+						// the toast shows the CODE's summary and hint, and PAYMENT101's hint is
+						// "No action needed" — the opposite of what this cashier must do.
+						code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
 						showToast: true,
+						terminal: { operationId: leg.row.id },
+						context: {
+							orderId: leg.row.order_id || null,
+							orderUUID: order.uuid,
+							paymentId: leg.row.id,
+							amount: leg.row.amount,
+							method: leg.row.method_id,
+							error: error instanceof Error ? error.message : String(error),
+						},
 					})
 				);
 			}
@@ -728,6 +916,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		consumeOutcome();
 		return unsubscribe;
 	}, [
+		actor,
 		terminalLeg?.outcome,
 		service,
 		order.uuid,
@@ -793,32 +982,87 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 							(!online && ['pending', 'authorized', 'captured'].includes(row.status)))
 				)
 			) {
-				logger.info(t('pos_checkout.device_void_needs_settlement'), { showToast: true });
-				return;
-			}
-			const outcome = await voidPayments(order);
-			if (outcome.failed.length > 0) {
-				logger.error(t('pos_checkout.void_failed'), {
-					code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				logger.info(t('pos_checkout.device_void_needs_settlement'), {
 					showToast: true,
+					context: orderContext,
 				});
 				return;
 			}
+			const outcome = await voidPayments(order);
+			for (const row of outcome.rows) {
+				logger.info('Payment voided', {
+					actor,
+					terminal: { operationId: row.id },
+					context: {
+						...orderContext,
+						type: 'payment.voided',
+						paymentId: row.id,
+						amount: row.amount,
+						method: row.method_id,
+					},
+				});
+			}
+			if (outcome.failed.length > 0) {
+				// Each of these is money still held on the customer's card. The row has to
+				// name them, or the merchant cannot tell which payment to refund by hand.
+				//
+				// Only a refusal the store actually answered earns the definitive "refund
+				// these" instruction. A void whose answer was lost may already have been
+				// applied, and refunding it by hand would return the money twice.
+				const everyoneRefused = outcome.failed.every((failure) => failure.refused);
+				logger.error(t('pos_checkout.void_failed'), {
+					code: everyoneRefused
+						? ERROR_CODES.PAYMENT_VOID_REFUSED
+						: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+					showToast: true,
+					context: {
+						// The type is the row's title on every till; it must not promise a
+						// refusal the store never gave.
+						type: everyoneRefused ? 'payment.void-refused' : 'payment.void-unknown',
+						...orderContext,
+						paymentId: outcome.failed.map((failure) => failure.paymentId).join(', '),
+						reason: outcome.failed
+							.map((failure) => `${failure.paymentId}: ${failure.message}`)
+							.join('; '),
+						voided: outcome.rows.length,
+					},
+				});
+				return;
+			}
+			logger.info(`Sale ${order.uuid} cancelled`, {
+				actor,
+				context: { ...orderContext, type: 'checkout.cancelled', voided: outcome.rows.length },
+			});
 			reducerDispatch({ type: 'reset' });
 			setTenderMethod(order.uuid, null);
 			leaveCheckout(order.uuid);
 			if (screenSize === 'sm') router.replace({ pathname: '/cart' });
 		} catch (error) {
 			logger.error(t('pos_checkout.void_failed'), {
-				code: ERROR_CODES.PAYMENT_UNEXPECTED,
+				code: ERROR_CODES.PAYMENT_VOID_REFUSED,
 				showToast: true,
-				context: { error: error instanceof Error ? error.message : String(error) },
+				context: {
+					...orderContext,
+					error: error instanceof Error ? error.message : String(error),
+				},
 			});
 		} finally {
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [order, router, screenSize, t, voidPayments, service, reducerDispatch, rows, online]);
+	}, [
+		order,
+		router,
+		screenSize,
+		t,
+		voidPayments,
+		service,
+		reducerDispatch,
+		rows,
+		online,
+		actor,
+		orderContext,
+	]);
 
 	return React.useMemo(
 		() => ({

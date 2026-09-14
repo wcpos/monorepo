@@ -127,6 +127,8 @@ export interface PaymentRow {
 	session_id?: string | null;
 	created_at_gmt: string;
 	captured_at_gmt: string | null;
+	// This is when the reader approved the hold; captured_at_gmt is when the money was taken.
+	authorized_at_gmt?: string | null;
 	updated_at_gmt: string;
 	[extra: string]: unknown;
 }

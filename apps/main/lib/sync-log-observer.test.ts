@@ -87,6 +87,14 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].code).toBe(errorCode);
 	});
 
+	it('classifies signal tick auth, rate-limit and local failures separately', () => {
+		for (const fields of [{ status: 401 }, { status: 429 }, {}]) {
+			observer.observe(event({ type: 'signal.tick.error', level: 'error', fields }));
+		}
+
+		expect(rows.map((row) => row.code)).toEqual(['AUTH101', 'SYNC141', 'SYNC401']);
+	});
+
 	it('stamps a statusless signal tick failure as a crashed task, not unreachable', () => {
 		observer.observe(event({ type: 'signal.tick.error', level: 'error', fields: {} }));
 

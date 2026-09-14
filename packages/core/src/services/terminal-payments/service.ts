@@ -1,4 +1,5 @@
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type {
 	OrderPaymentSummary,
 	PaymentMethodDescriptor,
@@ -25,8 +26,17 @@ import type {
 
 const logger = getLogger(['wcpos', 'terminal-payments']);
 const SETTLEMENT_RETRY_DELAYS = [5000, 30000, 120000];
+/**
+ * Refs that name WHO took the payment rather than the provider's record of it. The
+ * reader is minted onto a device row before any collection, so it must not count as
+ * settlement readiness: capturing on `{ reader }` alone would fail until the driver's
+ * settlement emits the transaction reference, and burn the retries doing it.
+ */
+const IDENTITY_REFS = new Set(['reader']);
 const hasProviderRefs = (refs: Record<string, unknown>) =>
-	Object.values(refs).some((value) => value !== null && value !== undefined);
+	Object.entries(refs).some(
+		([key, value]) => !IDENTITY_REFS.has(key) && value !== null && value !== undefined
+	);
 
 export interface TerminalPaymentsServiceOptions {
 	factories?: { server?: typeof createServerLeg; device?: typeof createDeviceLeg };
@@ -35,7 +45,17 @@ export interface TerminalPaymentsServiceOptions {
 	resolveOrderId?: (orderUuid: string) => Promise<number | null>;
 	http: Pick<ServerLegDeps, 'get' | 'post'>;
 	mirror: (orderUuid: string, response: ServerLegResponse) => Promise<void>;
-	onCaptured?: (orderUuid: string, order: OrderPaymentSummary | undefined) => void;
+	/**
+	 * `narrate` is true only for the first caller to see this row settle, so the
+	 * action row is written once whether the capture lands in front of the cashier
+	 * or after checkout has unmounted.
+	 */
+	onCaptured?: (
+		orderUuid: string,
+		order: OrderPaymentSummary | undefined,
+		row: PaymentRow,
+		narrate: boolean
+	) => void;
 	/**
 	 * The store's price decimals for resumed legs, read at resume time (a getter, so a
 	 * setting changed mid-session — the store document is patched in place — is honoured).
@@ -78,9 +98,22 @@ export class TerminalPaymentsService {
 			refs?: Record<string, unknown>;
 			persisted: boolean;
 			retries: number;
+			/** Set once the exhausted-settlement row is written, so the clearing row knows
+			 * it has something to clear. `retries` cannot answer that: a public
+			 * `flushOffline()` resets it to zero. */
+			reportedFailure?: boolean;
 			timer?: ReturnType<typeof setTimeout>;
 		}
 	>();
+	/**
+	 * Payment rows whose settled failure has already been written to the log.
+	 * It lives here, not in the checkout hook, because a final failed leg stays in
+	 * the service after checkout unmounts: a fresh hook would otherwise consume the
+	 * retained leg and write the same row again on every reopen.
+	 */
+	private narratedFailures = new Set<string>();
+	/** As `narratedFailures`, for settled captures. */
+	private narratedCaptures = new Set<string>();
 	private unsubscribers: (() => void)[] = [];
 	private stopped = false;
 	private flushing: Promise<void> | null = null;
@@ -169,7 +202,11 @@ export class TerminalPaymentsService {
 			try {
 				const { orderUuid, row } = entry.input;
 				// Persist the settlement reference before a request so a reload can reconcile it.
-				const settled = { ...row, provider_refs: offlineProviderRefs(refs) };
+				// Merge, never replace: the row already names the reader it was minted for.
+				const settled = {
+					...row,
+					provider_refs: { ...row.provider_refs, ...offlineProviderRefs(refs) },
+				};
 				if (!entry.persisted) {
 					await this.options.patchAndEnqueue?.(orderUuid, settled);
 					entry.persisted = entry.refs === refs;
@@ -185,6 +222,27 @@ export class TerminalPaymentsService {
 				if (this.stopped) return;
 				const data = response.data as ServerLegResponse;
 				await this.options.mirror(orderUuid, data);
+				if (entry.reportedFailure) {
+					entry.reportedFailure = false;
+					// Clears the stuck row this payment wrote when its retries ran out. It has
+					// to be `info`, not `debug`: debug rows only reach the recorder unless
+					// verbose diagnostics is on, and a clearing row that never reaches the
+					// ledger leaves the failure stuck for the whole retention window.
+					logger.info('Offline payment settled', {
+						terminal: {
+							operationId: row.id,
+							operationType: 'sync.record',
+							outcome: 'ok',
+						},
+						context: {
+							collection: 'payments',
+							recordId: row.id,
+							type: 'payment.settlement',
+							paymentId: row.id,
+							orderUUID: orderUuid,
+						},
+					});
+				}
 				if (
 					data.payment.status === 'captured' ||
 					data.payment.status === 'failed' ||
@@ -194,14 +252,58 @@ export class TerminalPaymentsService {
 					this.offline.delete(row.id);
 				}
 			} catch (error) {
-				logger.warn('Offline payment settlement failed', {
-					context: { paymentId: entry.input.row.id, error: getErrorMessage(error) },
-				});
-				if (
+				const willRetry =
 					!this.stopped &&
 					entry.timer === undefined &&
-					entry.retries < SETTLEMENT_RETRY_DELAYS.length
-				) {
+					entry.retries < SETTLEMENT_RETRY_DELAYS.length;
+				// An attempt that is about to be retried is mid-arc, and warning on each one
+				// told the merchant something was broken while the service was still healing
+				// it. Only the exhausted arc earns a row they must act on: the card holds an
+				// authorization the store will never capture.
+				if (willRetry) {
+					logger.debug('Offline payment settlement attempt failed', {
+						terminal: { operationId: entry.input.row.id, attempt: entry.retries + 1 },
+						context: {
+							// Same `type` as the exhausted and clearing rows: it is what the Logs
+							// screen titles the row from, so all three steps of one settlement read
+							// as the same story in whatever language the till runs.
+							type: 'payment.settlement',
+							paymentId: entry.input.row.id,
+							error: getErrorMessage(error),
+						},
+					});
+				} else {
+					// Written in the settled-record shape on purpose: an authorization the
+					// store will never capture is money in flight, and this is what puts it
+					// in the health header's stuck list instead of leaving it to a log nobody
+					// opens. A later successful settlement writes the clearing `ok` row.
+					//
+					// Keyed on the PAYMENT, not the order: a split order can hold two offline
+					// authorizations, and keying both on the order uuid would let one settling
+					// clear the other's stuck row and hide money still in flight.
+					entry.reportedFailure = true;
+					logger.error('Offline payment settlement failed', {
+						code: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
+						terminal: {
+							operationId: entry.input.row.id,
+							operationType: 'sync.record',
+							outcome: 'failed',
+							attempt: entry.retries + 1,
+						},
+						context: {
+							collection: 'payments',
+							recordId: entry.input.row.id,
+							type: 'payment.settlement',
+							paymentId: entry.input.row.id,
+							orderUUID: entry.input.orderUuid,
+							amount: entry.input.row.amount,
+							method: entry.input.row.method_id,
+							reason: getErrorMessage(error),
+							error: getErrorMessage(error),
+						},
+					});
+				}
+				if (willRetry) {
 					entry.timer = (
 						this.options.setTimeout ??
 						((callback: () => void, ms: number) => setTimeout(callback, ms))
@@ -212,6 +314,25 @@ export class TerminalPaymentsService {
 				}
 			}
 		}
+	}
+	/**
+	 * True the first time it is called for a row, false afterwards. The caller
+	 * writes the failure row only when it wins.
+	 */
+	claimFailureNarration(rowId: string): boolean {
+		if (this.narratedFailures.has(rowId)) return false;
+		this.narratedFailures.add(rowId);
+		return true;
+	}
+	/**
+	 * The same, for a settled capture. Two places can see one: the tender flow while
+	 * the cashier is watching, and the service's own outcome path when checkout has
+	 * unmounted. Whichever arrives first writes the row.
+	 */
+	claimCaptureNarration(rowId: string): boolean {
+		if (this.narratedCaptures.has(rowId)) return false;
+		this.narratedCaptures.add(rowId);
+		return true;
 	}
 	begin(input: BeginInput): TerminalLeg {
 		return this.create(input, false);
@@ -252,7 +373,13 @@ export class TerminalPaymentsService {
 					this.trackOffline({ ...input, row: state.row });
 					void this.flushOffline();
 				}
-				if (state.outcome === 'captured') this.options.onCaptured?.(input.orderUuid, state.order);
+				if (state.outcome === 'captured')
+					this.options.onCaptured?.(
+						input.orderUuid,
+						state.order,
+						state.row,
+						this.claimCaptureNarration(state.row.id)
+					);
 			},
 		};
 		const device = input.row.capture_mode === 'device';

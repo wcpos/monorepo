@@ -266,6 +266,98 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		}
 	});
 
+	it('lowers identical signal tick errors independently of lane tick errors', async () => {
+		let message = 'token rejected';
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			fetcher: async () => {
+				throw new Error(message);
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			await engine.sync('change-signal');
+			await engine.sync('change-signal');
+			message = 'different failure';
+			await engine.sync('change-signal');
+			for (const type of ['signal.tick.error', 'engine.lane.tick']) {
+				const rows = diagnostics.mock.calls
+					.map(([event]) => event)
+					.filter((event) => event.type === type);
+				expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error']);
+			}
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('keeps suppressing an identical signal tick error across a skipped tick', async () => {
+		let online = true;
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			connectivity: () => (online ? 'online' : 'offline'),
+			fetcher: async () => {
+				throw new Error('token rejected');
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			await engine.sync('change-signal');
+			await engine.sync('change-signal');
+			// A skip polled nothing, so it is not a recovery. recordLaneTick emits
+			// engine.lane.tick for ANY report status, so this reaches the same reset
+			// branch a successful tick does — the asserted status keeps that honest.
+			online = false;
+			expect((await engine.sync('change-signal')).status).toBe('skipped');
+			online = true;
+			await engine.sync('change-signal');
+
+			const rows = diagnostics.mock.calls
+				.map(([event]) => event)
+				.filter((event) => event.type === 'signal.tick.error');
+			expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'info']);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('raises an identical signal tick error again after a successful tick', async () => {
+		let failing = true;
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			fetcher: async (url) => {
+				if (failing) throw new Error('token rejected');
+				if (url.endsWith('/changes/tick')) return new Response(null, { status: 404 });
+				return new Response(
+					JSON.stringify({ changes: [], checkpoint: { since: 0, head: 0 }, complete: true }),
+					{ headers: { 'content-type': 'application/json' } }
+				);
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			await engine.sync('change-signal');
+			await engine.sync('change-signal');
+			failing = false;
+			expect((await engine.sync('change-signal')).status).toBe('ran');
+			failing = true;
+			await engine.sync('change-signal');
+
+			const rows = diagnostics.mock.calls
+				.map(([event]) => event)
+				.filter((event) => event.type === 'signal.tick.error');
+			expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error']);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('keeps every tick row but lowers consecutive identical errors per lane', async () => {
 		let failure: string | null = null;
 		const diagnostics = vi.fn();

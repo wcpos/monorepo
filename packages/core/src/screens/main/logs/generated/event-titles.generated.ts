@@ -50,6 +50,18 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.cadence_recovered');
 		case 'cadence.start':
 			return t('health.logs.event.cadence_start');
+		case 'checkout.cancelled':
+			return t('health.logs.event.checkout_cancelled');
+		case 'checkout.completed':
+			return t('health.logs.event.checkout_completed');
+		case 'checkout.opened':
+			return t('health.logs.event.checkout_opened');
+		case 'checkout.order-refresh':
+			return t('health.logs.event.checkout_order_refresh');
+		case 'checkout.provenance-skipped':
+			return t('health.logs.event.checkout_provenance_skipped');
+		case 'checkout.split-planned':
+			return t('health.logs.event.checkout_split_planned');
 		case 'connectivity.device-offline':
 			return t('health.logs.event.connectivity_device_offline');
 		case 'connectivity.restored':
@@ -134,6 +146,32 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.maintenance_lane_error');
 		case 'maintenance.lane.tick':
 			return t('health.logs.event.maintenance_lane_tick');
+		case 'payment.authorized-offline':
+			return t('health.logs.event.payment_authorized_offline');
+		case 'payment.cancelled':
+			return t('health.logs.event.payment_cancelled');
+		case 'payment.captured':
+			return t('health.logs.event.payment_captured');
+		case 'payment.declined':
+			return t('health.logs.event.payment_declined');
+		case 'payment.not-mirrored':
+			return t('health.logs.event.payment_not_mirrored');
+		case 'payment.recorded':
+			return t('health.logs.event.payment_recorded');
+		case 'payment.recorded-offline':
+			return t('health.logs.event.payment_recorded_offline');
+		case 'payment.refused':
+			return t('health.logs.event.payment_refused');
+		case 'payment.released':
+			return t('health.logs.event.payment_released');
+		case 'payment.settlement':
+			return t('health.logs.event.payment_settlement');
+		case 'payment.void-refused':
+			return t('health.logs.event.payment_void_refused');
+		case 'payment.void-unknown':
+			return t('health.logs.event.payment_void_unknown');
+		case 'payment.voided':
+			return t('health.logs.event.payment_voided');
 		case 'product.browse-window.approximate':
 			return t('health.logs.event.product_browse_window_approximate');
 		case 'product.browse-window.brand-filter-ignored':
@@ -188,6 +226,12 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.queue_write_resolve');
 		case 'queue.write.tick.error':
 			return t('health.logs.event.queue_write_tick_error');
+		case 'reader.battery-low':
+			return t('health.logs.event.reader_battery_low');
+		case 'reader.connected':
+			return t('health.logs.event.reader_connected');
+		case 'reader.disconnected':
+			return t('health.logs.event.reader_disconnected');
 		case 'register.approval-granted':
 			return t('health.logs.event.register_approval_granted');
 		case 'register.approval-refused':
@@ -265,6 +309,16 @@ export function translateEventDescription(
 			return t('health.logs.event_description.apply_rebaseline');
 		case 'apply.refetch':
 			return t('health.logs.event_description.apply_refetch');
+		case 'checkout.cancelled':
+			return t('health.logs.event_description.checkout_cancelled');
+		case 'checkout.completed':
+			return t('health.logs.event_description.checkout_completed');
+		case 'checkout.order-refresh':
+			return t('health.logs.event_description.checkout_order_refresh');
+		case 'checkout.provenance-skipped':
+			return t('health.logs.event_description.checkout_provenance_skipped');
+		case 'checkout.split-planned':
+			return t('health.logs.event_description.checkout_split_planned');
 		case 'connectivity.device-offline':
 			return t('health.logs.event_description.connectivity_device_offline');
 		case 'connectivity.restored':
@@ -295,6 +349,28 @@ export function translateEventDescription(
 			return t('health.logs.event_description.engine_write_leader_degraded');
 		case 'maintenance.lane.error':
 			return t('health.logs.event_description.maintenance_lane_error');
+		case 'payment.authorized-offline':
+			return t('health.logs.event_description.payment_authorized_offline');
+		case 'payment.captured':
+			return t('health.logs.event_description.payment_captured');
+		case 'payment.declined':
+			return t('health.logs.event_description.payment_declined');
+		case 'payment.not-mirrored':
+			return t('health.logs.event_description.payment_not_mirrored');
+		case 'payment.recorded':
+			return t('health.logs.event_description.payment_recorded');
+		case 'payment.recorded-offline':
+			return t('health.logs.event_description.payment_recorded_offline');
+		case 'payment.refused':
+			return t('health.logs.event_description.payment_refused');
+		case 'payment.released':
+			return t('health.logs.event_description.payment_released');
+		case 'payment.settlement':
+			return t('health.logs.event_description.payment_settlement');
+		case 'payment.void-refused':
+			return t('health.logs.event_description.payment_void_refused');
+		case 'payment.void-unknown':
+			return t('health.logs.event_description.payment_void_unknown');
 		case 'push.conflict':
 			return t('health.logs.event_description.push_conflict');
 		case 'push.error':

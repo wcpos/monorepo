@@ -2,14 +2,19 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
+import { readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
+import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
 import { enterReceipt, leaveCheckout } from '../checkout-mode';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
 import { reconcileCompletedOrder } from './reconcile-completed-order';
+
+const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export interface CompleteOrderFlowOptions {
 	/**
@@ -26,6 +31,14 @@ export function useCompleteOrderFlow(
 	receiptHost: 'stage' | 'modal' = 'stage'
 ): (options?: CompleteOrderFlowOptions) => Promise<void> {
 	const runtime = useQueryRuntime();
+	const { wpCredentials } = useStoreSession();
+	const actor = React.useMemo(
+		() => ({
+			id: String(wpCredentials.id ?? ''),
+			name: wpCredentials.display_name || wpCredentials.username || '',
+		}),
+		[wpCredentials.id, wpCredentials.display_name, wpCredentials.username]
+	);
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
@@ -43,6 +56,21 @@ export function useCompleteOrderFlow(
 				enterReceipt(order.uuid);
 			}
 			await reconcileCompletedOrder(runtime, order, refresh, stockAdjustment);
+			const latest = order.getLatest().payload;
+			logger.info(`Sale ${order.uuid} completed`, {
+				actor,
+				context: {
+					type: 'checkout.completed',
+					orderId: latest.id ?? null,
+					orderUUID: order.uuid,
+					orderNumber: latest.number,
+					total: latest.total,
+					paymentLegs: readLedger(latest.meta_data).filter(
+						(row) =>
+							row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
+					).length,
+				},
+			});
 
 			// The pre-tender contract checkout still hosts receipts in a routed modal.
 			if (receiptHost === 'modal') {
@@ -65,6 +93,7 @@ export function useCompleteOrderFlow(
 			}
 		},
 		[
+			actor,
 			receiptHost,
 			runtime,
 			order,
