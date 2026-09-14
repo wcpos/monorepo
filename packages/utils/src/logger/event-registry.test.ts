@@ -10,7 +10,17 @@ import {
 	SYNC_EVENT_TYPES,
 } from './generated/event-labels.generated';
 
-const DOMAINS = ['AUTH', 'SYNC', 'CHECKOUT', 'PAYMENT', 'PRINT', 'PRODUCT', 'LICENSE', 'CLIENT'];
+const DOMAINS = [
+	'AUTH',
+	'SYNC',
+	'CHECKOUT',
+	'PAYMENT',
+	'PRINT',
+	'PRODUCT',
+	'LICENSE',
+	'CLIENT',
+	'REGISTER',
+];
 const REQUIRED_FIELDS = ['type', 'domain', 'label', 'introducedIn'];
 
 const repoRoot = path.resolve(__dirname, '../../../..');

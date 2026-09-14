@@ -308,7 +308,7 @@ it('logs a retryable outbox failure at debug and a permanent one at its register
 				endpoint: 'movements',
 				status: 503,
 				documentId: movement.id,
-				type: 'paid_in',
+				movementType: 'paid_in',
 				amount: '20',
 			}),
 			terminal: expect.objectContaining({ operationType: 'register.outbox', attempt: 1 }),

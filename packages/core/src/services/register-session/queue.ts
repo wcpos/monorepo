@@ -253,7 +253,11 @@ async function drain({
 					field,
 					message,
 					documentId: before.id,
-					...('type' in before ? { type: before.type, amount: before.amount } : {}),
+					// `context.type` is the field the Logs UI titles a row from, and it is
+					// looked up in the event registry. A movement type ('paid_in', 'void')
+					// is not an event type, so writing it there produced no title and
+					// squatted a reserved key. It rides under its own name instead.
+					...('type' in before ? { movementType: before.type, amount: before.amount } : {}),
 				},
 				terminal: {
 					operationId: operationId(before.id),
