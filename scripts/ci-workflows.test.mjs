@@ -624,12 +624,20 @@ test('PRs targeting next skip both E2E suites and their gates accept the skip', 
 test('native E2E routes next-target PRs to the next store', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 
-	// A PR is routed by its base, anything else by its ref, and a run that
+	// A PR is routed by its base, a push by its ref, a manual dispatch by the
+	// `ref` INPUT (what the build job checks out — github.ref_name on a
+	// dispatch is only where the workflow file came from), and a run that
 	// belongs to neither trunk gets NO store (the seed refuses an empty one)
 	// rather than the old default of dev-pro — see the deploy.yml lane test.
 	assert.equal(
 		workflow.env.E2E_STORE_URL,
-		"${{ (github.base_ref == 'next' || (github.event_name != 'pull_request' && github.ref_name == 'next')) && 'https://dev-next.wcpos.com' || (github.base_ref == 'main' || (github.event_name != 'pull_request' && github.ref_name == 'main')) && 'https://dev-pro.wcpos.com' || '' }}"
+		"${{ (github.base_ref == 'next' || (github.event_name == 'push' && github.ref_name == 'next') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'next')) && 'https://dev-next.wcpos.com' || (github.base_ref == 'main' || (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && inputs.ref == 'main')) && 'https://dev-pro.wcpos.com' || '' }}"
+	);
+	const checkout = workflow.jobs.build.steps.find((step) => step.with && 'ref' in step.with);
+	assert.equal(
+		checkout && checkout.with.ref,
+		'${{ github.event.inputs.ref || github.sha }}',
+		'the dispatch checkout ref changed; the store expression above must route by the same input'
 	);
 	const emptyStore = spawnSync(
 		process.execPath,

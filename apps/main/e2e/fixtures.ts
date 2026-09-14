@@ -367,10 +367,13 @@ export async function stubStoreVersionForE2E(
 			// and let the connect screen refuse it with the real reason, rather
 			// than run the whole suite against a plugin generation the app does
 			// not support and read the first feature it lacks as a bug.
-			const realVersion = data.wcpos_version;
-			if (typeof realVersion === 'string' && !isWcposPluginCompatible(realVersion)) {
+			// A missing or non-string version is the same case: the endpoint answered
+			// without the plugin's discovery payload, and painting the app version
+			// onto it would fabricate a plugin the store did not report.
+			const realVersion = typeof data.wcpos_version === 'string' ? data.wcpos_version : undefined;
+			if (!isWcposPluginCompatible(realVersion)) {
 				console.error(
-					`[stubStoreVersionForE2E] ${storeOrigin} runs woocommerce-pos ${realVersion}, below this app's minimum ${MINIMUM_WCPOS_PLUGIN_VERSION}. Leaving wcpos_version unstubbed so the app refuses the store: this run is pointed at the wrong lane's store (see the lane routing in deploy.yml).`
+					`[stubStoreVersionForE2E] ${storeOrigin} ${realVersion ? `runs woocommerce-pos ${realVersion}, below this app's minimum ${MINIMUM_WCPOS_PLUGIN_VERSION}` : 'reported no wcpos_version at all'}. Leaving the discovery response unstubbed so the app refuses the store with the real reason: this run is pointed at the wrong lane's store (see the lane routing in deploy.yml).`
 				);
 				await route.fulfill({ response });
 				return;
