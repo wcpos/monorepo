@@ -1500,6 +1500,16 @@ let mockBoundRegisterId: string | null = 'register';
 beforeEach(() => {
 	mockBoundRegisterId = 'register';
 });
+let mockBindingStatus: 'bound' | 'choose' | 'none' | 'unknown' = 'bound';
+jest.mock('../../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({
+		status: mockBindingStatus,
+		registerId: null,
+		registerName: null,
+		registers: [],
+		bind: jest.fn(),
+	}),
+}));
 jest.mock('../../../../../services/register/register-document', () => ({
 	readRegister: async () => ({ id: 'till' }),
 	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) =>
@@ -1860,5 +1870,43 @@ it('refuses tender with a typed error when sessions are enabled but none is open
 		await expect(result.current.takeTender()).rejects.toMatchObject({
 			name: 'RegisterSessionRequiredError',
 		});
+	});
+});
+
+describe('register still to be chosen', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		mockMethods = [cash];
+		mockPayload = { id: 42, total: '92.95', meta_data: [] };
+		mockBlockIfDegraded.mockReturnValue(false);
+		mockBindingStatus = 'choose';
+	});
+	afterEach(() => {
+		mockBindingStatus = 'bound';
+	});
+	it('refuses the completing leg until a register is picked, with the reason on screen', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		expect(mockRecordManualPayment).not.toHaveBeenCalled();
+		expect(mockInfo).toHaveBeenCalledWith(
+			'pos_checkout.choose_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+	});
+	it('lets a part payment through: only completion needs the register', async () => {
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		act(() => result.current.dispatch({ type: 'set-entry', minor: 5000 }));
+		await act(async () => result.current.takeTender());
+		expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
+	});
+	it('a store with no register at all keeps trading', async () => {
+		mockBindingStatus = 'none';
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		expect(mockRecordManualPayment).toHaveBeenCalledTimes(1);
 	});
 });

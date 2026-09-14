@@ -7,6 +7,7 @@ export {
 	SPLIT_META_KEY,
 	splitPlanMeta,
 	hasSaleProvenance,
+	hasSaleTime,
 	withSaleProvenance,
 	withMetaReplaced,
 } from './provenance';

@@ -1,6 +1,7 @@
 import type { UserDatabase } from '@wcpos/database';
 import {
 	hasSaleProvenance,
+	hasSaleTime,
 	type MetaDataEntry,
 	readLedger,
 	saleProvenanceMeta,
@@ -24,14 +25,34 @@ export async function completionMeta(
 ): Promise<MetaDataEntry[]> {
 	if (hasSaleProvenance(order.meta_data)) return order.meta_data!;
 	const register = await readRegister(userDB);
-	if (!register) {
-		// Name the sale where the caller knows it. Some callers hold only the meta
-		// tuple being written, and a row that cannot say WHICH sale went unstamped is
-		// still worth more than the silence this replaced — a merchant reconciling a
-		// register report needs to know that sales like this exist at all.
+	const stamp = (registerId: string | null, saleCounter: number | null) =>
+		withSaleProvenance(
+			order.meta_data,
+			saleProvenanceMeta({
+				registerId,
+				saleCounter,
+				now: new Date(),
+				timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+				appVersion: AppInfo.version,
+				appBuild: AppInfo.buildNumber,
+				sessionId:
+					sessionId ??
+					readLedger(order.meta_data).findLast((row) => row.status === 'captured' && row.session_id)
+						?.session_id ??
+					null,
+			})
+		);
+	// Name the sale where the caller knows it. Some callers hold only the meta tuple
+	// being written, and a row that cannot say WHICH sale went unstamped is still worth
+	// more than silence — a merchant reconciling a register report needs to know that
+	// sales like this exist at all. Written once per sale: a stamped sale returns early.
+	const warnUnstamped = (
+		reason: 'no_register_document' | 'no_register_bound' | 'register_bound_elsewhere'
+	) =>
 		logger.warn('Sale recorded without register provenance', {
 			context: {
 				type: 'checkout.provenance-skipped',
+				reason,
 				// Truthiness is deliberate: an order the store has not seen yet carries
 				// `id: 0` (see the void button, which re-creates one that way). Naming that
 				// as order 0 would key every unsynced sale to the same record and fold
@@ -47,7 +68,14 @@ export async function completionMeta(
 				storeId: storeId ?? null,
 			},
 		});
-		return order.meta_data ?? [];
+	if (!register) {
+		// Every device mints its register document during hydration, so this is a till
+		// that has not finished hydrating. Stamp what is known and leave the register and
+		// the counter empty rather than invent them; a sale already carrying the partial
+		// tuple is left alone.
+		if (hasSaleTime(order.meta_data)) return order.meta_data!;
+		warnUnstamped('no_register_document');
+		return stamp(null, null);
 	}
 	const counter = await nextSaleCounter(userDB, siteUuid);
 	const pointer = register.sites[siteUuid];
@@ -56,20 +84,11 @@ export async function completionMeta(
 		storeId !== undefined &&
 		pointer?.register_store_id != null &&
 		pointer.register_store_id !== storeId;
-	return withSaleProvenance(
-		order.meta_data,
-		saleProvenanceMeta({
-			registerId: boundElsewhere ? '' : (pointer?.register_id ?? ''),
-			saleCounter: counter,
-			now: new Date(),
-			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-			appVersion: AppInfo.version,
-			appBuild: AppInfo.buildNumber,
-			sessionId:
-				sessionId ??
-				readLedger(order.meta_data).findLast((row) => row.status === 'captured' && row.session_id)
-					?.session_id ??
-				null,
-		}).filter(({ key, value }) => key !== '_wcpos_register' || !!value)
-	);
+	// The store seeds a default register and a till binds to a lone register on its own,
+	// so a sale reaches here unbound only when the store has several registers and none
+	// was chosen (checkout refuses to complete in that state) or an admin removed them
+	// all. The counter is the device's and is stamped regardless.
+	if (boundElsewhere) warnUnstamped('register_bound_elsewhere');
+	else if (!pointer?.register_id) warnUnstamped('no_register_bound');
+	return stamp(boundElsewhere ? null : (pointer?.register_id ?? null), counter);
 }

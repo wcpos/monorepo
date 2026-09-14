@@ -60,6 +60,7 @@ import {
 	useRecordManualPayment,
 	useVoidPayments,
 } from '../payments';
+import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
 import { useRememberedReader } from './remembered-readers';
@@ -186,6 +187,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	// online-only tiles stay disabled and a works-offline tile records its local leg.
 	const queuedOffline = saveState?.kind === 'queued-offline';
 	const recordManualPayment = useRecordManualPayment({ offline: queuedOffline });
+	const { status: bindingStatus } = useRegisterBinding();
 	const voidPayments = useVoidPayments();
 	const completeOrderFlow = useCompleteOrderFlow(order);
 	const router = useRouter();
@@ -487,6 +489,17 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			service?.get(order.uuid)
 		)
 			return;
+		// A store with several registers needs one picked before a sale can be attributed
+		// to it; the picker is on the cart. Part payments may proceed, the completing leg
+		// may not. A store with no register at all keeps trading (an admin removed it) and
+		// the completion stamp says so.
+		if (bindingStatus === 'choose' && entryAppliedMinor === balanceMinor) {
+			logger.info(t('pos_checkout.choose_register_first'), {
+				showToast: true,
+				context: orderContext,
+			});
+			return;
+		}
 		busyRef.current = true;
 		setBusy(true);
 		let savingProvenance = false;
@@ -811,6 +824,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		tenderRecorded,
 		remember,
 		saveState,
+		bindingStatus,
 		state.entryMinor,
 		state.plan,
 		rowsSinceFrom,

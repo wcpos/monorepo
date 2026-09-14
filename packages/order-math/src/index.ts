@@ -60,6 +60,7 @@ export {
 	derive,
 	isCompletingStatus,
 	hasSaleProvenance,
+	hasSaleTime,
 	saleProvenanceMeta,
 	SPLIT_META_KEY,
 	splitPlanMeta,
