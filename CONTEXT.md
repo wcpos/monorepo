@@ -446,12 +446,43 @@ settled one.
 _Avoid_: edit count, reopen, amend
 
 **X-report / Z-report**:
-The two printed renderings: an X-report reads an open session without closing it and is
-never stored; a Z-report is the print of a closure, printed once at close, every later
-print being a marked copy. Today's Reports screen prints a date-range sales
-summary under the name "Z-report"; that is a **range report**, not a Z-report, and it is
-renamed when closures land.
-_Avoid_: Z-report (for any date-range summary)
+The two printed renderings of the **Session report**: an X-report is the print of an open
+session, read without closing it and never stored; a Z-report is the print of a closure,
+printed once at close, every later print being a marked copy. Neither is a screen or a
+picker entry — they are names for paper. The date-range sales summary the old Reports
+screen printed under the name "Z-report" is the **Sales** report.
+_Avoid_: Z-report (for any date-range summary), X-report (for anything on screen)
+
+**Session report**:
+The one report whose scope is a single session: opened and closed, float, counted against
+expected, variance, movements, tender and tax breakdowns. Printing it for an open session
+gives the X-report; for a closed session, its closure — the Z. The register panel's *Print
+X-report* button is a shortcut into it; the **Closures** list is how a past session is
+reached. One report, two prints, not two features.
+_Avoid_: closure report, shift report, end-of-day report
+
+**Sales**:
+The date-range report — count, gross, refunds, net, tax — **grouped by** tender, cashier,
+register, tax rate, item or category. One report with a grouping, never six reports; the
+grouping words are what the picker searches. Takes either scope mode. By session it
+reconciles a drawer; by range it is a payment mix or what sold, and the heading says which.
+_Avoid_: Z-report, range report, tender report, tax report, cashier report (as entries)
+
+**Scope**:
+What a report is *about*: either one **session**, current or past, or a **date range** in
+the store's timezone. Every report declares which modes it accepts, so a question a report
+cannot answer is unaskable rather than answered wrongly. The default is the open session
+when there is one, otherwise today. Free is limited to the session mode and today on its own
+register; wider ranges, other registers and other stores are Pro.
+_Avoid_: filter (for the session/range choice), period (for a session)
+
+**Business day**:
+The trading day a closure belongs to: the day, in the **store's** timezone, on which its
+session *opened*. A session that runs past midnight is one night's trade, never split, so
+there is no configurable day-start setting. Stamped on the closure when it is written, so a
+later change to the store's timezone moves no history. Day boundaries in every report are
+the store's, not the device's: two tills in one shop never disagree about today.
+_Avoid_: calendar day (for a closure), trading day start, cutoff time
 
 **Session on the sale**:
 Which session a sale's money belongs to. Each payment row binds to the session open on the
