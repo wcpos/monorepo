@@ -34,6 +34,12 @@ export async function completionMeta(
 				type: 'checkout.provenance-skipped',
 				...(order.id ? { orderId: order.id } : {}),
 				...(order.uuid ? { orderUUID: order.uuid } : {}),
+				// `recordId` is part of the repeat-collapse identity. Without it two
+				// unstamped sales inside the 60-second window fold into one row that keeps
+				// only the first sale's ids — which is exactly the reconciliation this row
+				// exists for. Sales the caller cannot name still collapse, and nothing is
+				// lost there: they are indistinguishable by construction.
+				...(order.uuid || order.id ? { recordId: order.uuid ?? String(order.id) } : {}),
 				storeId: storeId ?? null,
 			},
 		});

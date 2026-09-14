@@ -15,7 +15,11 @@ import { useTerminalLeg } from './use-terminal-leg';
 import { useResumeTerminalLegs, useResumeTerminalLegsForOrders } from './use-resume-terminal-legs';
 
 const mockManager = { engine: { db$: () => () => {} } };
-let mockSession = { store: { id: 1 }, site: { id: 1 } };
+let mockSession = {
+	store: { id: 1 },
+	site: { id: 1 },
+	wpCredentials: { id: 7, display_name: 'Pat' },
+};
 const mockFind = jest.fn();
 const mockPatch = jest.fn();
 const mockReceipt = jest.fn();
@@ -70,7 +74,11 @@ beforeEach(() => {
 	jest.useFakeTimers();
 	jest.setSystemTime(new Date('2026-01-01T00:00:00Z'));
 	jest.clearAllMocks();
-	mockSession = { store: { id: 1 }, site: { id: 1 } };
+	mockSession = {
+		store: { id: 1 },
+		site: { id: 1 },
+		wpCredentials: { id: 7, display_name: 'Pat' },
+	};
 	mockHttp = {
 		get: jest.fn(async () => ({
 			data: { payment: { ...row, status: 'captured' }, order: summary },

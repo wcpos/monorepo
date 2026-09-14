@@ -156,7 +156,16 @@ it('captured callback fires once with authoritative summary and a final leg can 
 	await jest.advanceTimersByTimeAsync(0);
 	await leg.checkNow();
 	expect(c.onCaptured).toHaveBeenCalledTimes(1);
-	expect(c.onCaptured).toHaveBeenCalledWith('order', c.summary);
+	// The row and the narration claim ride along: a capture that lands with checkout
+	// unmounted has to write its own action row, and the claim is what stops the tender
+	// flow writing a second one when it is on screen.
+	expect(c.onCaptured).toHaveBeenCalledWith(
+		'order',
+		c.summary,
+		expect.objectContaining({ id: row.id, status: 'captured' }),
+		true
+	);
+	expect(c.service.claimCaptureNarration(row.id)).toBe(false);
 	expect(c.service.resume(input)).toBe(leg);
 	expect(c.service.begin({ ...input, row: { ...row, id: 'new-leg' } })).not.toBe(leg);
 });
@@ -243,7 +252,12 @@ it('online device capture notifies once without tracking or writing an offline s
 	await service.flushOffline();
 	expect(service.get('order')).toBeNull();
 	expect(c.onCaptured).toHaveBeenCalledTimes(1);
-	expect(c.onCaptured).toHaveBeenCalledWith('order', c.summary);
+	expect(c.onCaptured).toHaveBeenCalledWith(
+		'order',
+		c.summary,
+		expect.objectContaining({ status: 'captured' }),
+		true
+	);
 	expect(trackOffline).not.toHaveBeenCalled();
 	expect(patchAndEnqueue).not.toHaveBeenCalled();
 	expect(c.http.post.mock.calls.map(([url]) => url)).toEqual([

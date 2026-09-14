@@ -36,7 +36,14 @@ import { reconcileCompletedOrder } from '../../hooks/reconcile-completed-order';
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export function useTerminalPaymentsService(): void {
-	const { store, site, userDB } = useStoreSession();
+	const { store, site, userDB, wpCredentials } = useStoreSession();
+	const actor = React.useMemo(
+		() => ({
+			id: String(wpCredentials?.id ?? ''),
+			name: wpCredentials?.display_name || wpCredentials?.username || '',
+		}),
+		[wpCredentials?.id, wpCredentials?.display_name, wpCredentials?.username]
+	);
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
@@ -154,7 +161,24 @@ export function useTerminalPaymentsService(): void {
 					});
 				}
 			},
-			onCaptured: (orderUuid, order) => {
+			onCaptured: (orderUuid, order, row, narrate) => {
+				// A capture can land with checkout unmounted — the cashier moved on, or the
+				// leg was resumed from the open tabs. The action row is the audit trail for
+				// money, so it is written from whichever path sees the outcome first.
+				if (narrate) {
+					logger.info('Card payment taken', {
+						actor,
+						terminal: { operationId: row.id },
+						context: {
+							type: row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',
+							orderId: row.order_id || null,
+							orderUUID: orderUuid,
+							paymentId: row.id,
+							amount: row.amount,
+							method: row.method_id,
+						},
+					});
+				}
 				// Never select: the order the cashier is serving stays on screen. When
 				// the captured order IS the current one, the tender flow's own outcome
 				// handler runs the complete-order flow, which selects the receipt.

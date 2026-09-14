@@ -36,7 +36,17 @@ export interface TerminalPaymentsServiceOptions {
 	resolveOrderId?: (orderUuid: string) => Promise<number | null>;
 	http: Pick<ServerLegDeps, 'get' | 'post'>;
 	mirror: (orderUuid: string, response: ServerLegResponse) => Promise<void>;
-	onCaptured?: (orderUuid: string, order: OrderPaymentSummary | undefined) => void;
+	/**
+	 * `narrate` is true only for the first caller to see this row settle, so the
+	 * action row is written once whether the capture lands in front of the cashier
+	 * or after checkout has unmounted.
+	 */
+	onCaptured?: (
+		orderUuid: string,
+		order: OrderPaymentSummary | undefined,
+		row: PaymentRow,
+		narrate: boolean
+	) => void;
 	/**
 	 * The store's price decimals for resumed legs, read at resume time (a getter, so a
 	 * setting changed mid-session — the store document is patched in place — is honoured).
@@ -93,6 +103,8 @@ export class TerminalPaymentsService {
 	 * retained leg and write the same row again on every reopen.
 	 */
 	private narratedFailures = new Set<string>();
+	/** As `narratedFailures`, for settled captures. */
+	private narratedCaptures = new Set<string>();
 	private unsubscribers: (() => void)[] = [];
 	private stopped = false;
 	private flushing: Promise<void> | null = null;
@@ -299,6 +311,16 @@ export class TerminalPaymentsService {
 		this.narratedFailures.add(rowId);
 		return true;
 	}
+	/**
+	 * The same, for a settled capture. Two places can see one: the tender flow while
+	 * the cashier is watching, and the service's own outcome path when checkout has
+	 * unmounted. Whichever arrives first writes the row.
+	 */
+	claimCaptureNarration(rowId: string): boolean {
+		if (this.narratedCaptures.has(rowId)) return false;
+		this.narratedCaptures.add(rowId);
+		return true;
+	}
 	begin(input: BeginInput): TerminalLeg {
 		return this.create(input, false);
 	}
@@ -338,7 +360,13 @@ export class TerminalPaymentsService {
 					this.trackOffline({ ...input, row: state.row });
 					void this.flushOffline();
 				}
-				if (state.outcome === 'captured') this.options.onCaptured?.(input.orderUuid, state.order);
+				if (state.outcome === 'captured')
+					this.options.onCaptured?.(
+						input.orderUuid,
+						state.order,
+						state.row,
+						this.claimCaptureNarration(state.row.id)
+					);
 			},
 		};
 		const device = input.row.capture_mode === 'device';

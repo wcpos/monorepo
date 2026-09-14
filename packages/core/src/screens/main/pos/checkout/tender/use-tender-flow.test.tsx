@@ -47,6 +47,7 @@ beforeEach(() => {
 	for (const key of Object.keys(mockReaderPreferences)) delete mockReaderPreferences[key];
 	mockReadersInUse.clear();
 	mockNarrated.clear();
+	mockClaimedCaptures.clear();
 });
 it('stores only the reader id, separately for each method', async () => {
 	const preferences = rememberedReaders(mockStoreDB as unknown as StoreDatabase);
@@ -70,6 +71,14 @@ const mockDismiss = jest.fn(() => {
 // Mirrors the real service: the first claim for a row wins, so a remount cannot
 // write the same settled failure twice.
 const mockNarrated = new Set<string>();
+// The capture row is claimed the same way: the service and the tender flow can both
+// see one settle, and only the first writes it.
+const mockClaimedCaptures = new Set<string>();
+const mockClaimCaptureNarration = jest.fn((rowId: string) => {
+	if (mockClaimedCaptures.has(rowId)) return false;
+	mockClaimedCaptures.add(rowId);
+	return true;
+});
 const mockClaimFailureNarration = jest.fn((rowId: string) => {
 	if (mockNarrated.has(rowId)) return false;
 	mockNarrated.add(rowId);
@@ -85,6 +94,7 @@ jest.mock('../../../../../services/terminal-payments', () => ({
 			begin: mockBegin,
 			dismiss: mockDismiss,
 			claimFailureNarration: mockClaimFailureNarration,
+			claimCaptureNarration: mockClaimCaptureNarration,
 			get: () => mockLeg,
 			readersInUse: () => mockReadersInUse,
 			leg: () => ({ cancel: mockCancel, capture: mockCapture, release: mockRelease }),

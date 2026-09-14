@@ -65,7 +65,11 @@ jest.mock('@wcpos/query', () => ({
 	engineCollection: () => ({ find: mockFind }),
 }));
 jest.mock('../../../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store: mockStore, site: mockSite }),
+	useStoreSession: () => ({
+		store: mockStore,
+		site: mockSite,
+		wpCredentials: { id: 7, display_name: 'Pat' },
+	}),
 }));
 jest.mock('../../../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
 jest.mock('../../../../hooks/use-payment-methods', () => ({

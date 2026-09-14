@@ -831,18 +831,22 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (leg.outcome !== 'captured') return;
 			service?.dismiss(order.uuid);
-			logger.info('Card payment taken', {
-				actor,
-				terminal: { operationId: leg.row.id },
-				context: {
-					orderId: leg.row.order_id || null,
-					orderUUID: order.uuid,
-					type: leg.row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',
-					paymentId: leg.row.id,
-					amount: leg.row.amount,
-					method: leg.row.method_id,
-				},
-			});
+			// The service writes this row too, from its own outcome path, for a capture
+			// that lands after checkout unmounts. Whichever sees it first wins the claim.
+			if (service?.claimCaptureNarration(leg.row.id)) {
+				logger.info('Card payment taken', {
+					actor,
+					terminal: { operationId: leg.row.id },
+					context: {
+						orderId: leg.row.order_id || null,
+						orderUUID: order.uuid,
+						type: leg.row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',
+						paymentId: leg.row.id,
+						amount: leg.row.amount,
+						method: leg.row.method_id,
+					},
+				});
+			}
 			tenderRecorded(leg.row);
 			if (toMinor(leg.order?.balance ?? derived.balance, dp) === 0) {
 				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch((error) =>

@@ -46,6 +46,9 @@ it('warns without an actor when completion has no register, naming the sale wher
 			type: 'checkout.provenance-skipped',
 			orderId: 1041,
 			orderUUID: 'order-1',
+			// Part of the collapse identity: two unstamped sales inside the 60-second
+			// window would otherwise fold into one row keeping only the first sale's ids.
+			recordId: 'order-1',
 			storeId: null,
 		},
 	});
