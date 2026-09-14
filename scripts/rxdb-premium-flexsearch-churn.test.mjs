@@ -9,6 +9,9 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 
 import FlexSearch from 'flexsearch';
+import { addRxPlugin, createRxDatabase, randomToken } from 'rxdb';
+import { getCheckpointDoc, RxDBPipelinePlugin } from 'rxdb/plugins/pipeline';
+import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import {
 	DISTS,
@@ -774,4 +777,78 @@ test('an over-budget escaped literal removes only its own digest and bytes', () 
 		assert.deepEqual([...map], [['product', 'quartz']]);
 		assert.equal(bytes, 6);
 	}
+});
+
+// `wcposChangedSearchEntries` marks an id as persisted BEFORE the handler's upsert resolves. That
+// is only safe because the vendor pipeline never runs a throwing handler again in the same
+// process; a fresh process re-reads the batch with empty maps. This pins that vendor behaviour on
+// a real RxPipeline over memory storage rather than trusting a comment. Mutation-checked: a
+// pipeline that retries the handler once goes red on the call count (it reaches 2).
+test('RxPipeline never re-invokes a throwing handler in-process', async (t) => {
+	addRxPlugin(RxDBPipelinePlugin);
+	const schema = {
+		version: 0,
+		primaryKey: 'id',
+		type: 'object',
+		properties: { id: { type: 'string', maxLength: 100 }, text: { type: 'string' } },
+		required: ['id'],
+	};
+	const database = await createRxDatabase({
+		name: `pipeline-pin-${randomToken(10)}`,
+		storage: getRxStorageMemory(),
+	});
+	t.after(() => database.close());
+	const { source, destination } = await database.addCollections({
+		source: { schema },
+		destination: { schema },
+	});
+	let calls = 0;
+	// Throw only on the FIRST call: a pipeline that retried would then succeed, advance the
+	// checkpoint and clear its error — visibly wrong on every assertion below.
+	const pipeline = await source.addPipeline({
+		identifier: 'pin',
+		destination,
+		waitForLeadership: false,
+		handler: async () => {
+			calls += 1;
+			if (calls === 1) throw new Error('handler failed once');
+		},
+	});
+	await pipeline.awaitIdle();
+	const before = await getCheckpointDoc(pipeline);
+	await source.insert({ id: 'product', text: 'quartz' });
+	// Capture rather than assert.rejects so the call-count and checkpoint assertions below run
+	// even when a retrying pipeline swallows the error.
+	const surfaced = await pipeline.awaitIdle().then(
+		() => null,
+		(error) => error
+	);
+	// A further source write re-triggers the loop; the errored pipeline must still not run it.
+	await source.insert({ id: 'other', text: 'topaz' });
+	await new Promise((resolve) => setTimeout(resolve, 50));
+	assert.equal(calls, 1, 'the throwing handler must run exactly once in this process');
+	assert.deepEqual(
+		(await getCheckpointDoc(pipeline))?.data,
+		before?.data,
+		'a throw must leave the checkpoint where it was'
+	);
+	assert.match(
+		String(surfaced?.message),
+		/handler failed once/,
+		'the error must surface through awaitIdle, not be swallowed'
+	);
+	// The "next process": a fresh pipeline with the same identifier re-reads the unacknowledged
+	// batch, which is what makes the pre-write marking self-healing across restarts.
+	await pipeline.close();
+	const replayed = [];
+	const restarted = await source.addPipeline({
+		identifier: 'pin',
+		destination,
+		waitForLeadership: false,
+		handler: async (documents) => {
+			replayed.push(...documents.map((document) => document.primary));
+		},
+	});
+	await restarted.awaitIdle();
+	assert.deepEqual(replayed.sort(), ['other', 'product']);
 });

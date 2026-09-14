@@ -175,6 +175,18 @@ export function indexSearchText(index, id, searchable) {
 	wcposRetainDigest(index, digests, '__wcposDigestBytes', id, digest);
 }
 
+// The `wcposRetainDigest` call inside marks an id as persisted BEFORE the caller's `s.upsert(...)`
+// has resolved (the caller is the pipeline handler in the vendor dist; see `appendAfter`). Read on
+// its own that is data loss: if the same handler ran the same batch again in this process, the
+// entry would compare equal, be filtered out, and the append would never be written — the index
+// would then be stale after the next boot. It is safe ONLY because RxPipeline never re-invokes a
+// throwing handler in-process: on a throw it sets `pipeline.error`, exits its loop and skips
+// `setCheckpointDoc`, so the batch is re-read by the NEXT process, whose maps start empty. That
+// vendor behaviour is pinned by 'RxPipeline never re-invokes a throwing handler in-process' in the
+// churn test. Do not wrap the handler in a retry, and do not reuse an index object across an
+// in-place restart, without first moving this marking after the upsert (a post-write anchor).
+// This comment sits outside the function body on purpose: the body is serialised into PRELUDE,
+// and a byte change there makes every already-patched install fail closed and demand a reinstall.
 export function wcposChangedSearchEntries(index, entries) {
 	// Persisted/emitted text and asynchronously indexed text answer different questions.
 	// Replay starts empty here: its first unchanged write may append once redundantly.
