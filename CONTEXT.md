@@ -446,12 +446,50 @@ settled one.
 _Avoid_: edit count, reopen, amend
 
 **X-report / Z-report**:
-The two printed renderings: an X-report reads an open session without closing it and is
-never stored; a Z-report is the print of a closure, printed once at close, every later
-print being a marked copy. Today's Reports screen prints a date-range sales
-summary under the name "Z-report"; that is a **range report**, not a Z-report, and it is
-renamed when closures land.
-_Avoid_: Z-report (for any date-range summary)
+The two printed renderings of the **Session report**: an X-report is the print of an open
+session, read without closing it and never stored; a Z-report is the print of a closure,
+printed once at close, every later print being a marked copy. Neither is a screen or a
+picker entry — they are names for paper. The date-range sales summary the old Reports
+screen printed under the name "Z-report" is the **Sales** report.
+_Avoid_: Z-report (for any date-range summary), X-report (for anything on screen)
+
+**Session report**:
+The one report whose scope is a single session: opened and closed, float, counted against
+expected, variance, movements, payment-method and tax breakdowns. Printing it for an open
+session gives the X-report; for a closed session, the Z-report printed from its closure. The register panel's *Print
+X-report* button is a shortcut into it; the **Closures** list is how a past session is
+reached. One report, two prints, not two features.
+_Avoid_: closure report, shift report, end-of-day report
+
+**Sales**:
+The what-sold and payment-mix report — count, gross, refunds, net, tax — **grouped by**
+payment method, cashier, register, tax rate, item or category. One report with a grouping, never six
+reports; the grouping words are what the picker searches. Takes either scope mode. By
+session, the payment-method grouping sums payment and refund rows by tender-time session, the
+drawer's basis, and every other grouping counts the sales that completed in the session,
+the closure's basis; by range, membership is order-level, the sales that completed in the
+range by the store's clock, and the same two bases apply within it. The payment-method
+grouping shows what each method took and refunded and counts payments, never gross or
+tax, which no payment row carries; every other grouping counts sales. The heading says
+which.
+_Avoid_: Z-report, range report, tender report, payment report, tax report, cashier report (as entries)
+
+**Scope**:
+What a report is *about*: either one **session**, current or past, or a **date range** in
+the store's timezone. Every report declares which modes it accepts, so a question a report
+cannot answer is unaskable rather than answered wrongly. The default is the open session
+when there is one, otherwise today for a report that takes a range and the last session
+for one that does not. Free is limited to the session mode and today on its own
+register; wider ranges, other registers and other stores are Pro.
+_Avoid_: filter (for the session/range choice), period (for a session)
+
+**Business day**:
+The trading day a closure belongs to: the day, in the **store's** timezone, on which its
+session *opened*. A session that runs past midnight is one night's trade, never split, so
+there is no configurable day-start setting. Stamped on the closure when it is written, so a
+later change to the store's timezone moves no history. Day boundaries in every report are
+the store's, not the device's: two tills in one shop never disagree about today.
+_Avoid_: calendar day (for a closure), trading day start, cutoff time
 
 **Session on the sale**:
 Which session a sale's money belongs to. Each payment row binds to the session open on the
@@ -462,7 +500,12 @@ completing session or its order total. The sale itself records the session it co
 in; that key drives reports and receipts and the closure's grand total, which is a sales
 figure and the one deliberate exception to the tender-time rule. Membership is only ever by the stamped session, never
 inferred from a time window or from whichever session is open when the sale reaches the
-server. The range report stays an order-level, date-range report outside this rule.
+server. **Sales** follows the scope: by session, its payment-method grouping sums payment and
+refund rows by tender-time session and its other groupings count sales by completing
+session, the closure's two bases; by date range, membership is order-level — the sales
+that completed in the range by the store's clock — outside this rule, and the
+payment-method grouping then sums the payment and refund rows of those sales, a payment
+mix, so a split sale can show under different days in the two modes.
 _Avoid_: shift on the order, current session (for a late-arriving sale)
 
 **Unsynced**:
