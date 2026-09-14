@@ -260,12 +260,15 @@ function registerDestination(database, name) {
 
 for (const path of ['eviction', 'recreation']) {
 	test(`${path} frees the destination without stranding a corrupt index`, async () => {
-		const app = loadAppTeardown(async () => liveInstance());
+		let name;
+		let registeredAtRebuild = null;
+		const app = loadAppTeardown(async (sourceCollection) => {
+			registeredAtRebuild = Boolean(sourceCollection.database.collections[name]);
+			return liveInstance();
+		});
 		const collection = appCollection(app);
-		const { destination, state } = registerDestination(
-			collection.database,
-			`${app.getSearchIdentifier(collection.name, 'en')}_flexsearch`
-		);
+		name = `${app.getSearchIdentifier(collection.name, 'en')}_flexsearch`;
+		const { destination, state } = registerDestination(collection.database, name);
 		collection._searchInstances.set('en', {
 			collection: destination,
 			pipeline: { async close() {} },
@@ -288,9 +291,16 @@ for (const path of ['eviction', 'recreation']) {
 			assert.equal(state.closed, true, 'eviction must close the destination');
 			assert.equal(state.removed, false, 'eviction must keep the persisted index');
 		} else {
-			// Recreation was asked to rebuild. Closing the destination first would deregister it
-			// and turn destroySearchCollection() into a no-op, reopening the corrupt index.
-			assert.equal(state.removed, true, 'recreation must remove the destination storage');
+			// Recreation was asked to rebuild. createSearchInstance() is the only code that
+			// resets the pipeline checkpoint before dropping the storage, and it reaches the
+			// destination solely through database.collections — so teardown must hand it over
+			// still registered. (The removal itself lives inside the stubbed-out creator.)
+			assert.equal(state.closed, false, 'recreation must not deregister the destination');
+			assert.equal(
+				registeredAtRebuild,
+				true,
+				'the rebuild must still see the destination in database.collections'
+			);
 		}
 	});
 }

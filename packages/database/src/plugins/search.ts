@@ -682,8 +682,10 @@ export const searchPlugin: RxPlugin = {
 					}
 				}
 
-				// Also try to destroy any orphaned search collection
-				await destroySearchCollection(this, locale);
+				// The destination is deliberately left registered for createSearchInstance below:
+				// its `existing` branch resets the pipeline checkpoint BEFORE removing the
+				// storage. Removing it here instead drops the storage but keeps the checkpoint,
+				// so the fresh index resumes after the source rows and rebuilds to nothing.
 
 				// Remove from LRU tracking
 				if (this._localeLRU) {

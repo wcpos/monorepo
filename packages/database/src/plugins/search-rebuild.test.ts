@@ -125,6 +125,37 @@ it.each([false, true])(
 	}
 );
 
+it('the divergence rebuild removes the registered destination before recreating it', async () => {
+	database = await createRxDatabase({
+		name: 'searchrecreatedivergence',
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	});
+	const { coupons } = await database.addCollections({ coupons: couponsConfig });
+	await coupons.insert({ id: 'coupon-1', name: 'Discount' });
+	const first = (await coupons.initSearch!('en')) as unknown as SearchIndex;
+	await first.pipeline.awaitIdle();
+	const searchName = `${getSearchIdentifier('coupons', 'en')}_flexsearch`;
+	expect(database.collections[searchName]).toBe(first.collection);
+
+	// recreateSearch is what the index-divergence handler calls. destroySearchCollection()
+	// reaches the destination only through database.collections, so tearing the old instance
+	// down must not deregister it first — otherwise the removal is a no-op and the corrupt
+	// index and its pipeline checkpoint are reopened instead of rebuilt.
+	const remove = jest.spyOn(first.collection, 'remove');
+	const rebuilt = (await coupons.recreateSearch!('en')) as unknown as SearchIndex;
+	await rebuilt.pipeline.awaitIdle();
+
+	expect(remove).toHaveBeenCalledTimes(1);
+	expect(rebuilt.collection).not.toBe(first.collection);
+	expect(database.collections[searchName]).toBe(rebuilt.collection);
+	// And the rebuild must carry the source rows: removing the storage without resetting the
+	// pipeline checkpoint would leave the fresh index resuming after them, i.e. empty.
+	expect((await rebuilt.find('discount')).map((doc) => doc.primary)).toEqual(['coupon-1']);
+	await rebuilt.pipeline.close();
+	await rebuilt.close();
+});
+
 it('removes and rebuilds a registered healthy index after the source collection resets', async () => {
 	database = await createRxDatabase({
 		name: 'searchrebuildreset',

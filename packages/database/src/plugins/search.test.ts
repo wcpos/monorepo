@@ -25,6 +25,15 @@ let shouldFailOnCreate = false;
 // The plugin only imports the storage-removal helper from rxdb; types are erased.
 jest.mock('rxdb', () => ({
 	removeCollectionStorages: jest.fn().mockResolvedValue(undefined),
+	// A recreate now rebuilds through createSearchInstance's `existing` branch, which resets
+	// the pipeline checkpoint before dropping the storage. These fixtures persist no
+	// checkpoint, so the reset is a lookup that finds nothing; search-rebuild.test.ts covers
+	// the real thing against real rxdb.
+	getPrimaryKeyOfInternalDocument: jest.fn((key: string) => key),
+	INTERNAL_CONTEXT_PIPELINE_CHECKPOINT: 'rx-pipeline-checkpoint',
+	flatCloneDocWithMeta: jest.fn((doc: unknown) => ({ ...(doc as object) })),
+	createRevision: jest.fn(() => '1-rev'),
+	now: jest.fn(() => 0),
 }));
 
 jest.mock('rxdb-premium/plugins/flexsearch', () => ({
@@ -79,7 +88,14 @@ describe('search plugin', () => {
 			return Object.assign(Object.create(prototype), {
 				name: 'products',
 				options: { searchFields: ['name'] },
-				database: { collections: {} },
+				database: {
+					collections: {},
+					// Reached by the checkpoint reset on the rebuild path; no checkpoint here.
+					internalStore: {
+						findDocumentsById: jest.fn().mockResolvedValue([]),
+						bulkWrite: jest.fn().mockResolvedValue({ error: [] }),
+					},
+				},
 				onClose: [],
 				count: () => ({ exec: async () => 0 }),
 			});
