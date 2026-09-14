@@ -493,7 +493,11 @@ completing session or its order total. The sale itself records the session it co
 in; that key drives reports and receipts and the closure's grand total, which is a sales
 figure and the one deliberate exception to the tender-time rule. Membership is only ever by the stamped session, never
 inferred from a time window or from whichever session is open when the sale reaches the
-server. The range report stays an order-level, date-range report outside this rule.
+server. **Sales** follows the scope: by session it sums payment and refund rows by their
+tender-time session, the closure's basis, so its tender grouping is the drawer; by date
+range it is order-level — sales dated by completion in the store's clock, payments as
+recorded on those sales — outside this rule, so its tender grouping is a payment mix, and
+a split sale can show under different days in the two modes.
 _Avoid_: shift on the order, current session (for a late-arriving sale)
 
 **Unsynced**:
