@@ -1,5 +1,9 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
 
+import {
+	isWcposPluginCompatible,
+	MINIMUM_WCPOS_PLUGIN_VERSION,
+} from '@wcpos/core/utils/wcpos-plugin-version';
 import { log } from '@wcpos/utils/logger';
 
 import { addCheckoutProbeProduct } from './checkout-probe';
@@ -187,6 +191,50 @@ async function addQuickDiscount(page: Page, amount: string, percent = false) {
 	await fillCurrencyField(page, 'discount-amount-input', amount);
 	await page.getByTestId('add-discount-submit').click();
 	await expect(dialog).toBeHidden({ timeout: 15_000 });
+}
+
+/**
+ * Quick discounts are a 1.11.0 SERVER feature: the till sends a `pos-discount`
+ * coupon line and the plugin turns it into a request-scoped virtual coupon
+ * (roadmap#91, woocommerce-pos#1927). This spec is otherwise store-agnostic by
+ * construction, but these two cases are the exception — they need the plugin to
+ * accept that coupon line. An older plugin has no such coupon, so WooCommerce's
+ * own `validate_coupon_exists` answers a 400 ("coupon does not exist").
+ *
+ * In CI that older store is reachable at all only because `stubStoreVersionForE2E`
+ * reports the app version to the browser, which lets a 1.11.0 app connect to the
+ * 1.10.x main-lane stores (dev-free/dev-pro) despite the app's own
+ * MINIMUM_WCPOS_PLUGIN_VERSION gate — and, as a side effect, lets it offer a
+ * feature those stores cannot fulfil. So read the store's REAL plugin version
+ * from Node (outside Playwright's routing, where the stub does not apply) and skip
+ * where the feature is absent, exactly as the mixed-tax-class case skips when its
+ * fixtures are missing. The plugin's own PHPUnit (Test_Rest_Dispatch_Quick_Discount)
+ * covers the money and lifecycle on both write lanes; these live cases run against
+ * the next-lane store. See wcpos/roadmap#277.
+ */
+async function skipUnlessStoreSupportsQuickDiscounts(testInfo: TestInfo): Promise<boolean> {
+	const storeUrl = getStoreUrl(testInfo).replace(/\/+$/, '');
+	let version: string | undefined;
+	try {
+		const response = await fetch(`${storeUrl}/wp-json?wcpos=1`, { headers: { 'X-WCPOS': '1' } });
+		if (response.ok) {
+			version = ((await response.json()) as { wcpos_version?: string }).wcpos_version;
+		}
+	} catch {
+		// Probe failed: fall through and let the case run, so a genuine problem
+		// surfaces as a failure rather than a silent skip.
+	}
+	if (version && !isWcposPluginCompatible(version)) {
+		liveTest.skip(
+			true,
+			`store runs woocommerce-pos ${version}, which predates the quick-discount coupon ` +
+				`line (needs >= ${MINIMUM_WCPOS_PLUGIN_VERSION}). The main-lane E2E stores sit ` +
+				`below the app's minimum plugin version by design; these cases exercise the ` +
+				`next-lane store. See wcpos/roadmap#277.`
+		);
+		return true;
+	}
+	return false;
 }
 
 /** Adds a fixed-amount fee. `prices_include_tax` defaults ON — the cashier's default. */
@@ -589,6 +637,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 	liveTest(
 		'a percent quick discount is a coupon line: pro-rata across a mixed taxable / non-taxable cart',
 		async ({ posPage: page, trackOrder }, testInfo) => {
+			if (await skipUnlessStoreSupportsQuickDiscounts(testInfo)) return;
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
@@ -617,6 +666,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 	liveTest(
 		'a fixed quick discount is a coupon line: equal-per-unit across a mixed taxable / non-taxable cart',
 		async ({ posPage: page, trackOrder }, testInfo) => {
+			if (await skipUnlessStoreSupportsQuickDiscounts(testInfo)) return;
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
