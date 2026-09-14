@@ -23,6 +23,14 @@ const searchLogger = getLogger(['wcpos', 'db', 'search']);
  * Older locales are evicted when this limit is exceeded (LRU strategy).
  */
 const MAX_CACHED_LOCALES = 3;
+// This is a HARD cap, and eviction really closes (pipeline, instance, index back-reference).
+// A session that holds a fourth locale live on one collection therefore loses one: a consumer
+// still bound to the evicted instance stops receiving source changes until it re-resolves
+// through initSearch, and with four concurrent inits one caller's instance is closed before it
+// returns (initSearch re-inits in that case, but the next eviction can land on a caller that
+// already resolved). Before 2026-09 an evicted instance was left running untracked, which
+// hid this at the cost of the memory the cap exists to bound. Raising the cap is the lever
+// if a real workflow ever needs more than three locales per collection at once.
 
 const searchLocaleChains = new WeakMap<RxCollection, Map<string, Promise<unknown>>>();
 
