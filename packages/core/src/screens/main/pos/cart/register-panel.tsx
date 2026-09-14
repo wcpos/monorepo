@@ -36,8 +36,17 @@ export function RegisterPanel({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const { session, binding, expected, salesCount, blind, movements, lastClosure, actions } =
-		useRegisterSession();
+	const {
+		session,
+		binding,
+		expected,
+		salesCount,
+		blind,
+		movements,
+		refusedMovements,
+		lastClosure,
+		actions,
+	} = useRegisterSession();
 	const [movement, setMovement] = React.useState<'paid_in' | 'paid_out' | 'no_sale' | null>(null);
 	const [expanded, setExpanded] = React.useState(false);
 	const [highlight, setHighlight] = React.useState(false);
@@ -54,11 +63,18 @@ export function RegisterPanel({
 			setError(String(e));
 		}
 	};
-	if (!session && !lastClosure) return null;
+	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
+	// so it must not depend on there also being a current session or a written closure.
+	if (!session && !lastClosure && refusedMovements.length === 0) return null;
 	const activeMovements = movements.filter(
 		(row) =>
 			row.type !== 'void' && !row.voided_by && !movements.some((entry) => entry.voids === row.id)
 	);
+	// A movement the server refused is cash in the drawer that the ledger will never show.
+	// Nothing in this pane used to read sync_status, so it went missing in silence. The list
+	// comes from the hook already scoped to this register and NOT to the current session, so
+	// the banner survives the close that would otherwise hide the last record of the cash.
+	const refused = refusedMovements;
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side={side} portalHost="pos" testID="register-panel">
@@ -83,6 +99,23 @@ export function RegisterPanel({
 							<Opener id={session?.opened_by} />
 						</React.Suspense>
 					</Text>
+				)}
+				{refused.length > 0 && (
+					<View className="border-destructive mx-4 flex-row items-center gap-2 border px-3 py-2">
+						<Text testID="register-panel-refused" className="text-destructive flex-1">
+							{t('register.refused', { count: refused.length })}
+						</Text>
+						<Button
+							testID="register-panel-retry-refused"
+							variant="outline"
+							className="min-h-11"
+							onPress={() =>
+								attempt(() => Promise.all(refused.map((row) => actions.retryMovement(row.id))))
+							}
+						>
+							{t('register.retry')}
+						</Button>
+					</View>
 				)}
 				<View className="flex-row gap-2 px-4">
 					{(['paid_in', 'paid_out', 'no_sale'] as const).map((type) => (
@@ -122,9 +155,13 @@ export function RegisterPanel({
 					{expanded &&
 						activeMovements.map((row) => (
 							<View key={row.id} className="min-h-11 flex-row items-center gap-2">
-								<Text className="flex-1">
+								<Text
+									testID={`movement-row-${row.id}`}
+									className={`flex-1 ${row.sync_status === 'failed' ? 'text-destructive' : ''}`}
+								>
 									{t(`register.${row.type}`)}
 									{!blind ? ` · ${format(Number(row.amount))} · ${row.reason}` : ''}
+									{row.sync_status === 'failed' ? ` · ${t('register.refused_row')}` : ''}
 								</Text>
 								<Button
 									variant="ghost"

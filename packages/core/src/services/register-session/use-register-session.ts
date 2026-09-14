@@ -87,6 +87,22 @@ export function useRegisterSession() {
 		) ??
 		null;
 	const entries = data?.entries.filter((row) => row.session_id === session?.id) ?? [];
+	/**
+	 * Refused cash outlives the session it was recorded against. Scoping it to the current
+	 * session hid it the moment the register closed, even though the row is still the only
+	 * record that the cash moved and the server still accepts a movement created before
+	 * counting started (`Cash_Movement_Store::accepts`).
+	 *
+	 * Scoped by REGISTER, not left unscoped: the movements collection spans every register, so
+	 * dropping the filter entirely would put another till's refused cash on this one's pane.
+	 */
+	const registerSessionIds = new Set(
+		[...(data?.active ?? []), ...(data?.closed ?? [])].map((row) => row.id)
+	);
+	const refusedMovements =
+		data?.entries.filter(
+			(row) => row.sync_status === 'failed' && registerSessionIds.has(row.session_id)
+		) ?? [];
 	const orders =
 		data?.orders.hits.filter(
 			({ record }) =>
@@ -95,9 +111,11 @@ export function useRegisterSession() {
 						key === '_wcpos_session' && value === session?.id
 				) || readLedger(record.payload.meta_data).some((row) => row.session_id === session?.id)
 		) ?? [];
+	// 'failed' counts as outstanding, not settled: the server never took the row, so falling
+	// back to its expected total drops the movement and hands the cashier the variance.
 	const localPending =
 		session?.sync_status !== 'synced' ||
-		entries.some((row) => row.sync_status === 'pending') ||
+		entries.some((row) => row.sync_status !== 'synced') ||
 		orders.some(({ record }) => record.local.dirty);
 	const expected = session
 		? !localPending && session.server_expected
@@ -121,11 +139,12 @@ export function useRegisterSession() {
 	return {
 		session,
 		movements: entries,
+		refusedMovements,
 		expected,
 		varianceThreshold,
 		unsyncedCount:
 			orders.filter(({ record }) => record.local.dirty).length +
-			entries.filter((row) => row.sync_status === 'pending').length +
+			entries.filter((row) => row.sync_status !== 'synced').length +
 			(session?.sync_status === 'pending' ? 1 : 0),
 		sessionsOn,
 		overdue,
@@ -186,6 +205,7 @@ export function useRegisterSession() {
 				await actions.requireOpenSession(sessions, binding.registerId, true);
 				return actions.voidMovement(movements!, id, wpCredentials.id ?? 0);
 			},
+			retryMovement: (id: string) => actions.retryMovement(movements!, id),
 		},
 	};
 }

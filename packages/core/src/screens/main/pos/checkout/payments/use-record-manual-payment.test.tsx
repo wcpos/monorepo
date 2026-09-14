@@ -12,7 +12,11 @@ const mockLocalPatch = jest.fn();
 const mockPatchEngineResident = jest.fn(async (_input: unknown) => undefined);
 const mockLoggerError = jest.fn();
 const mockT = jest.fn();
-const manager = {};
+const mockEngineRequire = jest.fn((_input: unknown) => ({
+	ready: Promise.resolve(),
+	release: () => {},
+}));
+const manager = { engine: { require: (input: unknown) => mockEngineRequire(input) } };
 let onlineStatus = 'offline';
 
 jest.mock('uuid', () => ({ v4: () => 'payment-id' }));
@@ -172,7 +176,7 @@ it('logs a refused online payment as a failed sync record needing attention', as
 		expect.stringContaining('Order #1042 was already paid online'),
 		expect.objectContaining({
 			code: 'PAYMENT501',
-			terminal: { operationType: 'sync.record', outcome: 'failed' },
+			terminal: expect.objectContaining({ operationType: 'sync.record', outcome: 'failed' }),
 			context: expect.objectContaining({
 				collection: 'orders',
 				recordId: order.uuid,
@@ -210,7 +214,12 @@ it('localizes an amount-exceeds-balance refusal with the server balance', async 
 	});
 	expect(mockLoggerError).toHaveBeenCalledWith(
 		'Order #1042 only had 15.00 outstanding; 40.00 Cash was taken at the till — refund the difference.',
-		expect.any(Object)
+		// Its own code: an over-payment is answered by taking the store's balance, which
+		// is a different story from an order that was already paid online.
+		expect.objectContaining({
+			code: 'PAYMENT511',
+			terminal: expect.objectContaining({ operationId: expect.any(String) }),
+		})
 	);
 });
 
@@ -359,20 +368,25 @@ it('mirrors a refused server status without allocating or patching provenance', 
 });
 
 it.each([false, true])(
-	'logs a failed accepted mirror without throwing (throws=%s)',
+	'rejects with the accepted outcome when the mirror fails, after pulling the store copy (throws=%s)',
 	async (throws) => {
+		// The store has answered 2xx: the money is on the order there. Swallowing this used
+		// to report a generic "checkout failed" on a payment the store had taken, which is
+		// an invitation to take it twice. The caller is told what actually happened instead.
 		onlineStatus = 'online-website-available';
+		mockEngineRequire.mockClear();
 		mockPost.mockResolvedValueOnce({ data: { order: { status: 'completed' } } });
 		if (throws) mockLocalPatch.mockRejectedValueOnce(new Error('storage failed'));
 		else mockLocalPatch.mockResolvedValueOnce(undefined);
 		const { result } = renderHook(() => useRecordManualPayment());
-		await expect(result.current(order, method, { amount: 40 })).resolves.toMatchObject({
-			kind: 'recorded',
+		await expect(result.current(order, method, { amount: 40 })).rejects.toMatchObject({
+			name: 'RecordManualPaymentMirrorError',
+			outcome: expect.objectContaining({ kind: 'recorded' }),
 		});
-		expect(mockLoggerError).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({ code: 'CHECKOUT101', showToast: true })
+		expect(mockEngineRequire).toHaveBeenCalledWith(
+			expect.objectContaining({ collection: 'orders', forceRefresh: true })
 		);
+		expect(mockLoggerError).not.toHaveBeenCalled();
 	}
 );
 

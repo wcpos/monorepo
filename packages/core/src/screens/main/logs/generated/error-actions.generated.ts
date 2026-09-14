@@ -54,8 +54,16 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.CHECKOUT301');
 		case 'PAYMENT101':
 			return t('health.logs.error_action.PAYMENT101');
+		case 'PAYMENT111':
+			return t('health.logs.error_action.PAYMENT111');
+		case 'PAYMENT121':
+			return t('health.logs.error_action.PAYMENT121');
 		case 'PAYMENT201':
 			return t('health.logs.error_action.PAYMENT201');
+		case 'PAYMENT211':
+			return t('health.logs.error_action.PAYMENT211');
+		case 'PAYMENT221':
+			return t('health.logs.error_action.PAYMENT221');
 		case 'PAYMENT301':
 			return t('health.logs.error_action.PAYMENT301');
 		case 'PAYMENT401':
@@ -98,6 +106,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.AUTH999');
 		case 'CHECKOUT999':
 			return t('health.logs.error_action.CHECKOUT999');
+		case 'PAYMENT511':
+			return t('health.logs.error_action.PAYMENT511');
 		case 'PAYMENT999':
 			return t('health.logs.error_action.PAYMENT999');
 		case 'PRINT999':
@@ -182,6 +192,18 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.CHECKOUT421');
 		case 'DISPLAY101':
 			return t('health.logs.error_action.DISPLAY101');
+		case 'REGISTER101':
+			return t('health.logs.error_action.REGISTER101');
+		case 'REGISTER111':
+			return t('health.logs.error_action.REGISTER111');
+		case 'REGISTER201':
+			return t('health.logs.error_action.REGISTER201');
+		case 'REGISTER211':
+			return t('health.logs.error_action.REGISTER211');
+		case 'REGISTER221':
+			return t('health.logs.error_action.REGISTER221');
+		case 'REGISTER301':
+			return t('health.logs.error_action.REGISTER301');
 		default: {
 			const exhaustive: never = code;
 			return exhaustive;
