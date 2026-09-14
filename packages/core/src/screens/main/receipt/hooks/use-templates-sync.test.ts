@@ -128,6 +128,30 @@ const invalidHttpClient: SyncTemplatesHttpClient = { get: () => 42 };
 void invalidHttpClient;
 
 describe('syncTemplates', () => {
+	it.each([
+		['global', [64967, 64965, 64966, 'plugin-core', 64968]],
+		['store-specific', [64968, 'plugin-core', 64965]],
+	] as const)('preserves %s display order on initial sync and reorder', async (_scope, ids) => {
+		const collection = db.collections.templates;
+		const query = collection.find({
+			selector: { type: 'receipt' },
+			sort: [{ menu_order: 'asc' }],
+		});
+		for (const order of [ids, [...ids].reverse()]) {
+			// The API orders the array, not the posts' menu_order fields. The
+			// store-specific response is already filtered and ordered by the server.
+			const payload = order.map((id, index) => ({
+				...serverPayload.find((template) => template.id === id)!,
+				is_active: index === 0,
+			}));
+			await syncTemplates(collection, fakeHttpClient(payload));
+
+			const docs = await query.exec();
+			expect(docs.find((doc) => doc.is_active)?.id).toBe(order[0]);
+			expect(docs.map((doc) => doc.id)).toEqual(order);
+		}
+	});
+
 	it('upserts every template despite undeclared server fields on validating storage', async () => {
 		await syncTemplates(db.collections.templates, fakeHttpClient(serverPayload));
 
