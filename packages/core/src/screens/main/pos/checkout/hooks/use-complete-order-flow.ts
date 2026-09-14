@@ -109,6 +109,9 @@ export function useCompleteOrderFlow(
 			setCurrentOrderID,
 			stockAdjustment,
 			uiSettings.autoShowReceipt,
+			userDB,
+			site.uuid,
+			store.id,
 		]
 	);
 }
