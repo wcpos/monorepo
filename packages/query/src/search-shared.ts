@@ -7,7 +7,7 @@ import type { Observable } from 'rxjs';
 
 export type SearchInstance = {
 	collection: { $: Observable<unknown> };
-	find(term: string): Promise<EngineRxDocument[]>;
+	find(term: string, options?: { limit?: number }): Promise<EngineRxDocument[]>;
 };
 
 export type SearchableCollection = {

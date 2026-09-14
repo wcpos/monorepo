@@ -195,6 +195,157 @@ async function openPlugin(plugin, persisted = [], deferred = false) {
 	};
 }
 
+function loadAppTeardown(create = async () => ({})) {
+	const source = stripTypeScriptTypes(
+		readFileSync(new URL('../packages/database/src/plugins/search.ts', import.meta.url), 'utf8')
+	)
+		.replace(/^import[\s\S]*?;\n/gm, '')
+		.replaceAll('export ', '');
+	const context = {
+		create,
+		ERROR_CODES: { UNEXPECTED_ERROR: 1 },
+		getLogger: () => ({ debug() {}, info() {}, warn() {}, error() {} }),
+	};
+	runInNewContext(source + ';globalThis.app = { evictLRUIfNeeded, searchPlugin };', context);
+	// Teardown is real app code; creation after teardown is unrelated database I/O.
+	runInNewContext('createSearchInstance = create;', context);
+	return context.app;
+}
+
+function appCollection(app) {
+	const proto = {};
+	app.searchPlugin.prototypes.RxCollection(proto);
+	return Object.assign(Object.create(proto), {
+		name: 'products',
+		options: { searchFields: ['name'] },
+		onClose: [],
+		database: { collections: {} },
+		_searchInstances: new Map(),
+		_localeLRU: [],
+	});
+}
+
+// Flush the promise-only lifecycle work; deferred database I/O remains held.
+const lifecycleTurn = () => new Promise((resolve) => setImmediate(resolve));
+
+for (const path of ['eviction', 'recreation']) {
+	for (const failure of ['none', 'pipeline', 'index']) {
+		test(`app ${path} waits for teardown, including rejecting shutdown (${failure})`, async () => {
+			const releaseClose = Promise.withResolvers();
+			const releaseCreate = Promise.withResolvers();
+			let creates = 0;
+			let closing = false;
+			let stopped = false;
+			let deregistered = false;
+			const destination = {
+				__wcposAppendIndex: {},
+				async remove() {},
+				async close() {
+					deregistered = true;
+				},
+			};
+			const old = {
+				collection: destination,
+				pipeline: {
+					async close() {
+						closing = true;
+						await releaseClose.promise;
+						if (failure === 'pipeline') throw new Error('pipeline failed');
+					},
+				},
+				async close() {
+					stopped = true;
+					if (failure === 'index') throw new Error('index failed');
+				},
+			};
+			const replacement = {
+				collection: { async close() {} },
+				pipeline: { async close() {} },
+				async close() {},
+			};
+			const app = loadAppTeardown(async (_collection, locale) => {
+				if (locale !== 'en') return replacement;
+				creates++;
+				await releaseCreate.promise;
+				return replacement;
+			});
+			const collection = appCollection(app);
+			collection._searchInstances.set('en', old);
+			collection._localeLRU.push('en');
+			if (path === 'eviction') {
+				for (const locale of ['de', 'fr']) {
+					collection._searchInstances.set(locale, replacement);
+					collection._localeLRU.push(locale);
+				}
+			}
+			const teardown =
+				path === 'eviction' ? collection.initSearch('es') : collection.recreateSearch('en');
+			await lifecycleTurn();
+			assert.equal(closing, true, 'must close the pipeline, not only the destination');
+			const init = collection.initSearch('EN-us');
+			await lifecycleTurn();
+			assert.equal(creates, 0, 'initialization must wait for shutdown');
+			releaseClose.resolve();
+			await lifecycleTurn();
+			assert.equal(stopped, true, 'index shutdown must run after a rejecting pipeline close');
+			assert.equal(
+				deregistered,
+				true,
+				'the destination collection must close even when shutdown rejects'
+			);
+			assert.equal(Object.hasOwn(destination, '__wcposAppendIndex'), false);
+			assert.equal(creates, 1);
+			const second = collection.initSearch('en');
+			await lifecycleTurn();
+			assert.equal(creates, 1, 'replacement initialization must be deduplicated');
+			releaseCreate.resolve();
+			const [, initialized, secondInitialized] = await Promise.all([teardown, init, second]);
+			assert.equal(initialized, secondInitialized);
+			assert.equal(collection._searchInstances.get('en'), initialized);
+			assert.ok(collection._searchInstances.size <= 3);
+		});
+	}
+}
+
+for (const first of ['initSearch', 'recreateSearch']) {
+	test(`recreation waits for an already-running ${first} before replacing it`, async () => {
+		const releaseCreate = Promise.withResolvers();
+		let creates = 0;
+		let closes = 0;
+		const old = {
+			collection: { async close() {} },
+			pipeline: { async close() {} },
+			async close() {
+				closes++;
+			},
+		};
+		const replacement = { collection: {} };
+		const app = loadAppTeardown(async () => {
+			creates++;
+			if (creates > 1) return replacement;
+			await releaseCreate.promise;
+			return old;
+		});
+		const collection = appCollection(app);
+		const initial = collection[first]('en');
+		await lifecycleTurn();
+		assert.equal(creates, 1);
+		const recreated = collection.recreateSearch('EN-us');
+		const joined = collection.initSearch('en');
+		await lifecycleTurn();
+		assert.equal(creates, 1, 'must not create a replacement before previous init publishes');
+		releaseCreate.resolve();
+		const [original, final, initialized] = await Promise.all([initial, recreated, joined]);
+		// The recreate retires the in-flight init's instance and really closes it, so that
+		// caller must land on the live replacement rather than a closed zombie (#2046).
+		assert.equal(original, replacement);
+		assert.equal(final, replacement);
+		assert.equal(initialized, replacement);
+		assert.equal(collection._searchInstances.get('en'), replacement);
+		assert.equal(closes, 1);
+	});
+}
+
 async function exportedSize(index) {
 	let bytes = 0;
 	await index.export((_key, data) => {
@@ -211,6 +362,52 @@ for (const dist of ['esm', 'cjs']) {
 			() => {}
 		);
 		continue;
+	}
+
+	for (const path of ['eviction', 'recreation']) {
+		test(`[${dist}] app ${path} closes the pipeline and clears both retained maps`, async (t) => {
+			const { instance, collection: destination, write } = await openPlugin(loadPlugin(dist));
+			t.after(() => instance.close());
+			await write('quartz');
+			let pipelineClosed = false;
+			instance.pipeline.close = async () => {
+				pipelineClosed = true;
+			};
+			const indexed = instance.index.__wcposSearchDigests;
+			const persisted = instance.index.__wcposPersistedDigests;
+			assert.equal(indexed.size, 1);
+			assert.equal(persisted.size, 1);
+			const app = loadAppTeardown();
+			const collection = {
+				name: 'products',
+				options: { searchFields: ['name'] },
+				database: { collections: {} },
+				_searchInstances: new Map([
+					['en', instance],
+					['de', {}],
+					['fr', {}],
+					['es', {}],
+				]),
+				_localeLRU: ['en', 'de', 'fr', 'es'],
+			};
+			if (path === 'eviction') await app.evictLRUIfNeeded(collection);
+			else {
+				const proto = {};
+				app.searchPlugin.prototypes.RxCollection(proto);
+				await proto.recreateSearch.call(collection, 'en');
+			}
+			assert.equal(
+				Object.hasOwn(destination, '__wcposAppendIndex'),
+				false,
+				'destination must not retain the evicted index'
+			);
+			assert.equal(pipelineClosed, true, 'source pipeline must be stopped');
+			assert.equal(instance.stopped, true);
+			assert.equal(indexed.size, 0);
+			assert.equal(persisted.size, 0);
+			assert.equal(instance.index.__wcposDigestBytes, 0);
+			assert.equal(instance.index.__wcposPersistedDigestBytes, 0);
+		});
 	}
 
 	test(`[${dist}] deferred indexing preserves the final A in A → B → A`, async (t) => {

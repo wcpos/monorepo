@@ -40,9 +40,11 @@ import {
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
 import {
+	fieldsMatchPhrase,
 	fieldsMatchShortPrefix,
 	fieldsMatchTokens,
 	fieldsMissAnyOfTokens,
+	phraseSearchAnchor,
 	searchTokens,
 } from './search-match';
 import {
@@ -144,9 +146,8 @@ function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): Legac
 
 /**
  * The fallback answer when the index cannot answer: match the query directly
- * against the documents, mirroring the index's semantics — per-token AND over
- * the same fields joined into one blob, substring match (`tokenize: 'full'`),
- * tokens under the index's minimum length dropped as the index drops them.
+ * against the documents: products/variations require a phrase in one field;
+ * other collections retain the index's per-token AND semantics.
  * Folding goes through the SAME `foldSearchText` the index's encoder uses
  * (#1732), so a scan answer and the indexed answer that replaces it agree.
  *
@@ -158,17 +159,19 @@ async function scanDocumentsForSearch(
 	collection: SearchableCollection,
 	search: string,
 	searchFields: string[],
-	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>
+	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>,
+	phraseSearch: boolean
 ): Promise<EngineRxDocument[]> {
 	const tokens = searchTokens(search);
-	if (searchFields.length === 0 || tokens.length === 0) return [];
+	const foldedPhrase = foldSearchText(search);
+	if (searchFields.length === 0 || (!phraseSearch && tokens.length === 0)) return [];
 	const documents = await collection.find().exec();
 	return documents.filter((document) => {
 		const snapshot = documentSnapshot(document);
-		return fieldsMatchTokens(
-			searchFields.map((field) => String(get(snapshot, field) ?? '')),
-			tokens
-		);
+		const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
+		return phraseSearch
+			? fieldsMatchPhrase(fields, foldedPhrase)
+			: fieldsMatchTokens(fields, tokens);
 	});
 }
 function matchingSelectors$(
@@ -189,11 +192,16 @@ function matchingSelectors$(
 
 	// Route on the FOLDED length, not the raw one: a pasted NFD "Cè" is 3 code units but
 	// folds to 2 chars, which the index's minlength would silently drop — it belongs on the
-	// short-prefix path with the typed NFC "Cè" (#1732). A query that folds away entirely
+	// scan path with the typed NFC "Cè" (#1732). A query that folds away entirely
 	// (only combining marks) matches everything, like WooCommerce's ai_ci LIKE would.
 	const foldedSearch = foldSearchText(search);
 	if (!foldedSearch) return of(selector);
-	if (foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
+	const phraseSearch =
+		descriptor.collection === 'products' || descriptor.collection === 'variations';
+	const anchor = phraseSearch ? phraseSearchAnchor(foldedSearch) : null;
+	const indexSearch = anchor ?? search;
+	// Product phrases without an indexed anchor scan literally; other collections keep prefixes.
+	if (phraseSearch ? !anchor : foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
 		const prefix = foldedSearch;
 		// Mirror initSearch's fallback so short and indexed terms search the same fields.
 		const searchFields =
@@ -212,7 +220,7 @@ function matchingSelectors$(
 					documents
 						.filter((document) => {
 							const snapshot = documentSnapshot(document);
-							return fieldsMatchShortPrefix(
+							return (phraseSearch ? fieldsMatchPhrase : fieldsMatchShortPrefix)(
 								searchFields.map((field) => String(get(snapshot, field) ?? '')),
 								prefix
 							);
@@ -225,7 +233,7 @@ function matchingSelectors$(
 	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
 	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
 	const findFalseHits = (documents: EngineRxDocument[]) => {
-		const tokens = searchTokens(search);
+		const tokens = searchTokens(indexSearch);
 		if (searchFields.length === 0 || tokens.length === 0) return [];
 		return documents.flatMap((document) => {
 			const snapshot = documentSnapshot(document);
@@ -265,7 +273,9 @@ function matchingSelectors$(
 				trailing: true,
 			}),
 			switchMap(() =>
-				from(scanDocumentsForSearch(collection, search, searchFields, documentSnapshot))
+				from(
+					scanDocumentsForSearch(collection, search, searchFields, documentSnapshot, phraseSearch)
+				)
 			)
 		);
 
@@ -301,7 +311,13 @@ function matchingSelectors$(
 				const indexAnswered$ = new ReplaySubject<void>(1);
 				const indexedLane$ = activeSearch.collection.$.pipe(
 					startWith(null),
-					switchMap(() => from(activeSearch.find(search)).pipe(tap(() => indexAnswered$.next()))),
+					switchMap(() =>
+						from(
+							phraseSearch
+								? activeSearch.find(indexSearch, { limit: Number.MAX_SAFE_INTEGER })
+								: activeSearch.find(search)
+						).pipe(tap(() => indexAnswered$.next()))
+					),
 					switchMap(async (documents) => {
 						const falseHits = findFalseHits(documents);
 						if (falseHits.length === 0) return documents;
@@ -362,7 +378,16 @@ function matchingSelectors$(
 		map((documents) =>
 			withSearchSelector(
 				selector,
-				documents.map((document) => document.primary)
+				documents
+					.filter(
+						(document) =>
+							!phraseSearch ||
+							fieldsMatchPhrase(
+								searchFields.map((field) => String(get(documentSnapshot(document), field) ?? '')),
+								foldedSearch
+							)
+					)
+					.map((document) => document.primary)
 			)
 		)
 	);

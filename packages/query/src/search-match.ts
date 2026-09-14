@@ -33,3 +33,19 @@ export function fieldsMissAnyOfTokens(fields: string[], tokens: string[]): boole
 export function fieldsMissAnyToken(fields: string[], search: string): boolean {
 	return fieldsMissAnyOfTokens(fields, searchTokens(search));
 }
+
+/** Typed product search is one literal phrase within one searchable field. */
+export function fieldsMatchPhrase(fields: string[], foldedPhrase: string): boolean {
+	return (
+		foldedPhrase.length > 0 && fields.some((field) => foldSearchText(field).includes(foldedPhrase))
+	);
+}
+
+/** A punctuation-free anchor remains indexed even when long field tokens are split. */
+export function phraseSearchAnchor(foldedPhrase: string): string | null {
+	return (
+		(foldedPhrase.match(/[\p{L}\p{N}]+/gu) ?? [])
+			.filter((term) => term.length >= FLEXSEARCH_MIN_TERM_LENGTH)
+			.sort((a, b) => b.length - a.length)[0] ?? null
+	);
+}

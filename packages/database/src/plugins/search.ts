@@ -57,7 +57,7 @@ async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> 
 	const search = instance as FlexSearchInstance & {
 		close(): Promise<void>;
 		pipeline: { close(): Promise<void> };
-		collection: { __wcposAppendIndex?: unknown };
+		collection: { __wcposAppendIndex?: unknown; close(): Promise<void> };
 	};
 	let pipelineFailed = false;
 	let pipelineError: unknown;
@@ -72,7 +72,16 @@ async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> 
 		} catch (error) {
 			if (!pipelineFailed) throw error;
 		} finally {
-			delete search.collection.__wcposAppendIndex;
+			try {
+				// The premium close() leaves its destination registered in database.collections,
+				// and that collection's onClose hook retains the RxFulltextSearch and its Index,
+				// so deleting the back-reference alone does not free an evicted locale. Closing
+				// it deregisters the collection without touching the persisted index, so the
+				// locale reopens from storage instead of rebuilding.
+				await search.collection.close();
+			} finally {
+				delete search.collection.__wcposAppendIndex;
+			}
 		}
 	}
 	if (pipelineFailed) throw pipelineError;
