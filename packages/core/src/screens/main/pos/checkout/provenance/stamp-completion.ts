@@ -6,12 +6,15 @@ import {
 	saleProvenanceMeta,
 	withSaleProvenance,
 } from '@wcpos/order-math';
+import { getLogger } from '@wcpos/utils/logger';
 import { AppInfo } from '@wcpos/utils/app-info';
 
 import { nextSaleCounter, readRegister } from '../../../../../services/register/register-document';
 
+const logger = getLogger(['wcpos', 'pos', 'checkout']);
+
 export async function completionMeta(
-	order: { meta_data?: MetaDataEntry[] },
+	order: { id?: number | null; uuid?: string; meta_data?: MetaDataEntry[] },
 	{
 		userDB,
 		siteUuid,
@@ -21,7 +24,21 @@ export async function completionMeta(
 ): Promise<MetaDataEntry[]> {
 	if (hasSaleProvenance(order.meta_data)) return order.meta_data!;
 	const register = await readRegister(userDB);
-	if (!register) return order.meta_data ?? [];
+	if (!register) {
+		// Name the sale where the caller knows it. Some callers hold only the meta
+		// tuple being written, and a row that cannot say WHICH sale went unstamped is
+		// still worth more than the silence this replaced — a merchant reconciling a
+		// register report needs to know that sales like this exist at all.
+		logger.warn('Sale recorded without register provenance', {
+			context: {
+				type: 'checkout.provenance-skipped',
+				...(order.id ? { orderId: order.id } : {}),
+				...(order.uuid ? { orderUUID: order.uuid } : {}),
+				storeId: storeId ?? null,
+			},
+		});
+		return order.meta_data ?? [];
+	}
 	const counter = await nextSaleCounter(userDB, siteUuid);
 	const pointer = register.sites[siteUuid];
 	// A register belongs to one store: a pointer bound in another store of the site is not ours.

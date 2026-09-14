@@ -160,6 +160,13 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const busyRef = React.useRef(false);
 	const payload = useRecordField(order, (record) => record.payload);
 	const { store, wpCredentials, userDB, site } = useStoreSession();
+	const actor = React.useMemo(
+		() => ({
+			id: String(wpCredentials.id ?? ''),
+			name: wpCredentials.display_name || wpCredentials.username || '',
+		}),
+		[wpCredentials.id, wpCredentials.display_name, wpCredentials.username]
+	);
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	useResumeTerminalLegs(order);
 	const terminalLeg = useTerminalLeg(order.uuid);
@@ -422,7 +429,20 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	);
 
 	const tenderRecorded = React.useCallback(
-		(row: PaymentRow) => {
+		(row: PaymentRow, via?: 'online' | 'offline') => {
+			if (via) {
+				logger.info('Manual payment recorded', {
+					actor,
+					terminal: { operationId: row.id },
+					context: {
+						...orderContext,
+						type: via === 'offline' ? 'payment.recorded-offline' : 'payment.recorded',
+						paymentId: row.id,
+						amount: row.amount,
+						method: row.method_id,
+					},
+				});
+			}
 			const latest = readLedger(order.getLatest().payload.meta_data);
 			const index = latest.findIndex((candidate) => candidate.id === row.id);
 			if (index < 0) latest.push(row);
@@ -454,7 +474,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			);
 			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
 		},
-		[order, state, dp, byId, totalMinor]
+		[order, state, dp, byId, totalMinor, actor, orderContext]
 	);
 
 	const takeTender = React.useCallback(async () => {
@@ -642,7 +662,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				tendered,
 			});
 			if (outcome.kind === 'recorded') {
-				tenderRecorded(outcome.row);
+				tenderRecorded(outcome.row, outcome.via);
 				if (balanceMinor - entryAppliedMinor === 0) {
 					await completeOrderFlow({ refresh: outcome.via === 'online' });
 				}
@@ -684,6 +704,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					showToast: true,
 					terminal: { operationId: outcome.row.id },
 					context: {
+						type: 'payment.not-mirrored',
 						...orderContext,
 						paymentId: outcome.row.id,
 						amount: outcome.row.amount,
@@ -696,7 +717,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				// the keypad goes back to the pre-payment balance and cheerfully offers the
 				// whole amount again — the recovery refresh may not have landed, and the
 				// resident order is exactly the copy that failed to save.
-				tenderRecorded(outcome.row);
+				tenderRecorded(outcome.row, outcome.via);
 				// The store's summary is the only balance worth trusting now. Complete only
 				// when it says the order is settled; otherwise stay on the pane, which is now
 				// showing what is actually left to pay.
@@ -795,6 +816,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						showToast: ownTake,
 						terminal: { operationId: leg.row.id },
 						context: {
+							type: 'payment.declined',
 							orderId: leg.row.order_id || null,
 							orderUUID: order.uuid,
 							paymentId: leg.row.id,
@@ -809,6 +831,18 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			}
 			if (leg.outcome !== 'captured') return;
 			service?.dismiss(order.uuid);
+			logger.info('Card payment taken', {
+				actor,
+				terminal: { operationId: leg.row.id },
+				context: {
+					orderId: leg.row.order_id || null,
+					orderUUID: order.uuid,
+					type: leg.row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',
+					paymentId: leg.row.id,
+					amount: leg.row.amount,
+					method: leg.row.method_id,
+				},
+			});
 			tenderRecorded(leg.row);
 			if (toMinor(leg.order?.balance ?? derived.balance, dp) === 0) {
 				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch((error) =>
@@ -838,6 +872,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		consumeOutcome();
 		return unsubscribe;
 	}, [
+		actor,
 		terminalLeg?.outcome,
 		service,
 		order.uuid,
@@ -910,6 +945,19 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				return;
 			}
 			const outcome = await voidPayments(order);
+			for (const row of outcome.rows) {
+				logger.info('Payment voided', {
+					actor,
+					terminal: { operationId: row.id },
+					context: {
+						...orderContext,
+						type: 'payment.voided',
+						paymentId: row.id,
+						amount: row.amount,
+						method: row.method_id,
+					},
+				});
+			}
 			if (outcome.failed.length > 0) {
 				// Each of these is money still held on the customer's card. The row has to
 				// name them, or the merchant cannot tell which payment to refund by hand.
@@ -924,6 +972,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
 					showToast: true,
 					context: {
+						type: 'payment.void-refused',
 						...orderContext,
 						paymentId: outcome.failed.map((failure) => failure.paymentId).join(', '),
 						reason: outcome.failed
@@ -934,6 +983,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				});
 				return;
 			}
+			logger.info(`Sale ${order.uuid} cancelled`, {
+				actor,
+				context: { ...orderContext, type: 'checkout.cancelled', voided: outcome.rows.length },
+			});
 			reducerDispatch({ type: 'reset' });
 			setTenderMethod(order.uuid, null);
 			leaveCheckout(order.uuid);
@@ -951,7 +1004,19 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			busyRef.current = false;
 			setBusy(false);
 		}
-	}, [order, router, screenSize, t, voidPayments, service, reducerDispatch, rows, online]);
+	}, [
+		order,
+		router,
+		screenSize,
+		t,
+		voidPayments,
+		service,
+		reducerDispatch,
+		rows,
+		online,
+		actor,
+		orderContext,
+	]);
 
 	return React.useMemo(
 		() => ({

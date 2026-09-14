@@ -1,11 +1,16 @@
 import type { UserDatabase } from '@wcpos/database';
 
+import { readRegister } from '../../../../../services/register/register-document';
 import { completionMeta } from './stamp-completion';
 
+const mockWarn = jest.fn();
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({ warn: (...args: unknown[]) => mockWarn(...args) }),
+}));
 jest.mock('../../../../../services/register/register-document', () => ({
-	readRegister: async () => ({
+	readRegister: jest.fn(async () => ({
 		sites: { site: { register_id: 'register', register_store_id: 1 } },
-	}),
+	})),
 	nextSaleCounter: async () => 1,
 }));
 jest.mock('@wcpos/utils/app-info', () => ({ AppInfo: { version: 'test', buildNumber: 'test' } }));
@@ -30,4 +35,27 @@ it('does not invent a session when sessions are off', async () => {
 it('preserves the original completion tuple when revisiting a sale', async () => {
 	const meta_data = await completionMeta({}, { ...deps, sessionId: 'first' });
 	expect(await completionMeta({ meta_data }, { ...deps, sessionId: 'second' })).toEqual(meta_data);
+});
+
+it('warns without an actor when completion has no register, naming the sale where it can', async () => {
+	// No actor: this is the system noticing a gap, not a cashier doing something.
+	jest.mocked(readRegister).mockResolvedValueOnce(null);
+	expect(await completionMeta({ id: 1041, uuid: 'order-1' }, deps)).toEqual([]);
+	expect(mockWarn).toHaveBeenCalledWith(expect.any(String), {
+		context: {
+			type: 'checkout.provenance-skipped',
+			orderId: 1041,
+			orderUUID: 'order-1',
+			storeId: null,
+		},
+	});
+
+	// Callers that hold only the meta tuple still get a row; a sale that went
+	// unstamped is worth recording even when it cannot be named.
+	mockWarn.mockClear();
+	jest.mocked(readRegister).mockResolvedValueOnce(null);
+	expect(await completionMeta({}, deps)).toEqual([]);
+	expect(mockWarn).toHaveBeenCalledWith(expect.any(String), {
+		context: { type: 'checkout.provenance-skipped', storeId: null },
+	});
 });
