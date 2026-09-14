@@ -211,20 +211,33 @@ async function addQuickDiscount(page: Page, amount: string, percent = false) {
  * fixtures are missing. The plugin's own PHPUnit (Test_Rest_Dispatch_Quick_Discount)
  * covers the money and lifecycle on both write lanes; these live cases run against
  * the next-lane store. See wcpos/roadmap#277.
+ *
+ * Following the store-agnostic policy (CLAUDE.md): try pretty then plain permalinks,
+ * and skip ONLY on a definite, parseable plugin version that is genuinely below the
+ * minimum. A failed probe, a missing field, or a malformed version is a broken
+ * environment, which the policy makes a FAILURE, not a silent skip — so those fall
+ * through and `saveAndCapture` surfaces them.
  */
 async function skipUnlessStoreSupportsQuickDiscounts(testInfo: TestInfo): Promise<boolean> {
 	const storeUrl = getStoreUrl(testInfo).replace(/\/+$/, '');
-	let version: string | undefined;
-	try {
-		const response = await fetch(`${storeUrl}/wp-json?wcpos=1`, { headers: { 'X-WCPOS': '1' } });
-		if (response.ok) {
-			version = ((await response.json()) as { wcpos_version?: string }).wcpos_version;
+	const readWcposVersion = async (): Promise<unknown> => {
+		for (const url of [
+			`${storeUrl}/wp-json?wcpos=1`,
+			`${storeUrl}/index.php?rest_route=/&wcpos=1`,
+		]) {
+			try {
+				const response = await fetch(url, { headers: { 'X-WCPOS': '1' } });
+				if (response.ok) {
+					return ((await response.json()) as { wcpos_version?: unknown }).wcpos_version;
+				}
+			} catch {
+				// Try the next permalink form; a probe that never resolves falls through.
+			}
 		}
-	} catch {
-		// Probe failed: fall through and let the case run, so a genuine problem
-		// surfaces as a failure rather than a silent skip.
-	}
-	if (version && !isWcposPluginCompatible(version)) {
+		return undefined;
+	};
+	const version = await readWcposVersion();
+	if (typeof version === 'string' && /^\d+\.\d+/.test(version) && !isWcposPluginCompatible(version)) {
 		liveTest.skip(
 			true,
 			`store runs woocommerce-pos ${version}, which predates the quick-discount coupon ` +
