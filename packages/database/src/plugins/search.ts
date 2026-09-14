@@ -24,6 +24,52 @@ const searchLogger = getLogger(['wcpos', 'db', 'search']);
  */
 const MAX_CACHED_LOCALES = 3;
 
+const searchLocaleChains = new WeakMap<RxCollection, Map<string, Promise<unknown>>>();
+
+function withSearchLocale<T>(
+	collection: RxCollection,
+	locale: string,
+	run: () => Promise<T>
+): Promise<T> {
+	let chains = searchLocaleChains.get(collection);
+	if (!chains) {
+		chains = new Map();
+		searchLocaleChains.set(collection, chains);
+	}
+	const result = (chains.get(locale) ?? Promise.resolve()).then(run);
+	const settled = result.then(
+		() => undefined,
+		() => undefined
+	);
+	chains.set(locale, settled);
+	return result;
+}
+
+async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> {
+	const search = instance as FlexSearchInstance & {
+		close(): Promise<void>;
+		pipeline: { close(): Promise<void> };
+		collection: { __wcposAppendIndex?: unknown };
+	};
+	let pipelineFailed = false;
+	let pipelineError: unknown;
+	try {
+		await search.pipeline.close();
+	} catch (error) {
+		pipelineFailed = true;
+		pipelineError = error;
+	} finally {
+		try {
+			await search.close();
+		} catch (error) {
+			if (!pipelineFailed) throw error;
+		} finally {
+			delete search.collection.__wcposAppendIndex;
+		}
+	}
+	if (pipelineFailed) throw pipelineError;
+}
+
 /**
  * Normalize locale to 2-character code.
  */
@@ -152,10 +198,10 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 			const instance = collection._searchInstances.get(oldestLocale);
 			collection._searchInstances.delete(oldestLocale);
 
-			// Destroy the search collection
-			if (instance?.collection && typeof instance.collection.destroy === 'function') {
+			// Close the evicted instance under its locale chain.
+			if (instance) {
 				try {
-					await instance.collection.destroy();
+					await withSearchLocale(collection, oldestLocale, () => closeSearchInstance(instance));
 				} catch (error: any) {
 					searchLogger.warn('Failed to destroy evicted search instance', {
 						context: {
@@ -376,7 +422,12 @@ export const searchPlugin: RxPlugin = {
 				}
 
 				// Create initialization promise
-				const searchPromise = (async (): Promise<FlexSearchInstance> => {
+				const searchPromise = withSearchLocale(this, locale, async () => {
+					if (this._searchInstances.has(locale)) {
+						this._searchPromises.delete(locale);
+						touchLRU(this, locale);
+						return this._searchInstances.get(locale)!;
+					}
 					try {
 						const searchInstance = await createSearchInstance(this, locale, initializationOptions);
 
@@ -384,9 +435,6 @@ export const searchPlugin: RxPlugin = {
 						this._searchInstances.set(locale, searchInstance);
 						this._searchPromises.delete(locale);
 						touchLRU(this, locale);
-
-						// Evict old instances if over limit
-						await evictLRUIfNeeded(this);
 
 						return searchInstance;
 					} catch (error: any) {
@@ -417,7 +465,6 @@ export const searchPlugin: RxPlugin = {
 								);
 								this._searchInstances.set(locale, searchInstance);
 								touchLRU(this, locale);
-								await evictLRUIfNeeded(this);
 
 								searchLogger.info('Search recovery successful', {
 									context: { collection: this.name, locale },
@@ -439,7 +486,10 @@ export const searchPlugin: RxPlugin = {
 
 						throw error;
 					}
-				})();
+				}).then(async (searchInstance) => {
+					await evictLRUIfNeeded(this);
+					return searchInstance;
+				});
 
 				// Store promise for deduplication
 				this._searchPromises.set(locale, searchPromise);
@@ -476,87 +526,14 @@ export const searchPlugin: RxPlugin = {
 							return;
 						}
 
-						// Destroy all search instances
-						// NOTE: We only destroy FlexSearch collections (ending in _flexsearch)
-						// to avoid accidentally destroying other collections
 						if (this._searchInstances) {
 							for (const [loc, searchInstance] of this._searchInstances.entries()) {
-								// Diagnostic: what does searchInstance actually contain?
-								const collectionKeys = searchInstance?.collection
-									? Object.keys(searchInstance.collection)
-									: [];
-								const collectionProto = searchInstance?.collection
-									? Object.getOwnPropertyNames(Object.getPrototypeOf(searchInstance.collection))
-									: [];
-								searchLogger.debug('Inspecting search instance for cleanup', {
-									context: {
-										mainCollection: this.name,
-										locale: loc,
-										hasSearchInstance: !!searchInstance,
-										hasCollection: !!searchInstance?.collection,
-										collectionName: searchInstance?.collection?.name || 'none',
-										hasDestroyFn: typeof searchInstance?.collection?.destroy === 'function',
-										collectionType: searchInstance?.collection?.constructor?.name || 'unknown',
-										collectionKeys: collectionKeys.slice(0, 10),
-										protoMethods: collectionProto.slice(0, 10),
-									},
-								});
-
-								if (
-									searchInstance.collection &&
-									typeof searchInstance.collection.destroy === 'function'
-								) {
-									// Log what we're about to destroy
-									const searchCollectionName = searchInstance.collection?.name || 'unknown';
-									const searchCollectionDb = searchInstance.collection?.database?.name || 'unknown';
-									const isFlexSearchCollection = searchCollectionName.endsWith('_flexsearch');
-									const isAlreadyDestroyed = (searchInstance.collection as any)?.destroyed;
-
-									searchLogger.debug('About to destroy search instance collection', {
-										context: {
-											mainCollection: this.name,
-											locale: loc,
-											searchCollectionName,
-											searchCollectionDb,
-											isFlexSearchCollection,
-											isAlreadyDestroyed,
-										},
+								try {
+									await withSearchLocale(this, loc, () => closeSearchInstance(searchInstance));
+								} catch (error: any) {
+									searchLogger.warn('Error destroying search instance on cleanup', {
+										context: { collection: this.name, locale: loc, error: error.message },
 									});
-
-									// Only destroy if it's a FlexSearch collection and not already destroyed
-									if (!isFlexSearchCollection) {
-										searchLogger.warn('Skipping non-FlexSearch collection destruction', {
-											context: {
-												mainCollection: this.name,
-												locale: loc,
-												searchCollectionName,
-												expectedPattern: `${getSearchIdentifier(this.name, loc)}_flexsearch`,
-											},
-										});
-										continue;
-									}
-
-									if (isAlreadyDestroyed) {
-										searchLogger.debug('Skipping already-destroyed FlexSearch collection', {
-											context: { mainCollection: this.name, locale: loc },
-										});
-										continue;
-									}
-
-									try {
-										await searchInstance.collection.destroy();
-										searchLogger.debug('Search instance collection destroyed', {
-											context: { mainCollection: this.name, locale: loc },
-										});
-									} catch (error: any) {
-										searchLogger.warn('Error destroying search instance on cleanup', {
-											context: {
-												collection: this.name,
-												locale: loc,
-												error: error.message,
-											},
-										});
-									}
 								}
 							}
 							this._searchInstances.clear();
@@ -623,7 +600,10 @@ export const searchPlugin: RxPlugin = {
 			 * @param locale - The locale to recreate (defaults to active locale)
 			 * @returns The new FlexSearch instance
 			 */
-			proto.recreateSearch = async function (locale?: string): Promise<FlexSearchInstance | null> {
+			const recreateSearch = async function (
+				this: RxCollection,
+				locale?: string
+			): Promise<FlexSearchInstance | null> {
 				// Check if collection has searchFields configured
 				const normalizedLocale = normalizeLocale(locale || this._activeLocale || 'en');
 				const initializationOptions = this._searchInitializationOptions?.get(normalizedLocale);
@@ -642,10 +622,10 @@ export const searchPlugin: RxPlugin = {
 					const oldInstance = this._searchInstances.get(locale);
 					this._searchInstances.delete(locale);
 
-					// Destroy the old search collection
-					if (oldInstance?.collection && typeof oldInstance.collection.destroy === 'function') {
+					// Close before removing the destination collection.
+					if (oldInstance) {
 						try {
-							await oldInstance.collection.destroy();
+							await closeSearchInstance(oldInstance);
 						} catch (error: any) {
 							searchLogger.warn('Error destroying old search instance', {
 								context: {
@@ -686,7 +666,6 @@ export const searchPlugin: RxPlugin = {
 					}
 					this._searchInstances.set(locale, searchInstance);
 					touchLRU(this, locale);
-					await evictLRUIfNeeded(this);
 
 					searchLogger.info('Search index recreated successfully', {
 						context: { collection: this.name, locale },
@@ -705,6 +684,14 @@ export const searchPlugin: RxPlugin = {
 					});
 					throw error;
 				}
+			};
+			proto.recreateSearch = async function (locale?: string): Promise<FlexSearchInstance | null> {
+				locale = normalizeLocale(locale || this._activeLocale || 'en');
+				const instance = await withSearchLocale(this, locale, () =>
+					recreateSearch.call(this, locale)
+				);
+				if (instance) await evictLRUIfNeeded(this);
+				return instance;
 			};
 		},
 	},

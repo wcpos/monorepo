@@ -14,6 +14,7 @@ import { Index } from 'flexsearch';
 import { removeCollectionStorages } from 'rxdb';
 
 import { deriveBarcodeFromPayload, encodeSearchText } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { getSearchIdentifier, searchPlugin, staleSearchCollectionNames } from './search';
 
@@ -36,12 +37,14 @@ jest.mock('rxdb-premium/plugins/flexsearch', () => ({
 		// Return a mock search instance
 		return {
 			collection: {
-				destroy: jest.fn().mockResolvedValue(undefined),
+				__wcposAppendIndex: {},
 				remove: jest.fn().mockResolvedValue(undefined),
 				$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
 				// A healthy index: no appended entries, so the oversized-index check never rebuilds here.
 				find: jest.fn(() => ({ exec: jest.fn().mockResolvedValue([]) })),
 			},
+			close: jest.fn().mockResolvedValue(undefined),
+			pipeline: { close: jest.fn().mockResolvedValue(undefined) },
 			search: jest.fn().mockResolvedValue(['uuid-1', 'uuid-2']),
 		};
 	}),
@@ -57,10 +60,169 @@ jest.mock('@wcpos/utils/logger', () => ({
 	})),
 }));
 
+const searchLogger = jest.mocked(getLogger).mock.results[0].value;
+
 describe('search plugin', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		shouldFailOnCreate = false;
+	});
+
+	describe('instance lifecycle', () => {
+		function makeCollection() {
+			const prototype: Record<string, unknown> = {};
+			const install = searchPlugin.prototypes?.RxCollection;
+			if (!install) throw new Error('search plugin RxCollection prototype is missing');
+			install(prototype as unknown as RxCollection);
+			return Object.assign(Object.create(prototype), {
+				name: 'products',
+				options: { searchFields: ['name'] },
+				database: { collections: {} },
+				onClose: [],
+				count: () => ({ exec: async () => 0 }),
+			});
+		}
+
+		function deferred() {
+			let resolve!: () => void;
+			const promise = new Promise<void>((done) => {
+				resolve = done;
+			});
+			return { promise, resolve };
+		}
+
+		it('eviction closes only the evicted instance, pipeline first', async () => {
+			const collection = makeCollection();
+			const instances = [];
+			for (const locale of ['en', 'de', 'fr', 'es']) {
+				instances.push(await collection.initSearch(locale));
+			}
+			const [evicted, ...retained] = instances;
+			expect(evicted.pipeline.close).toHaveBeenCalledTimes(1);
+			expect(evicted.close).toHaveBeenCalledTimes(1);
+			expect(evicted.pipeline.close.mock.invocationCallOrder[0]).toBeLessThan(
+				evicted.close.mock.invocationCallOrder[0]
+			);
+			expect(evicted.collection).not.toHaveProperty('__wcposAppendIndex');
+			for (const instance of retained) {
+				expect(instance.pipeline.close).not.toHaveBeenCalled();
+				expect(instance.close).not.toHaveBeenCalled();
+				expect(instance.collection).toHaveProperty('__wcposAppendIndex');
+			}
+		});
+
+		it('recreate closes the old instance before building the new one', async () => {
+			const collection = makeCollection();
+			const old = await collection.initSearch('en');
+			const remove = jest.fn().mockResolvedValue(undefined);
+			collection.database.collections['products-search-v4-en_flexsearch'] = { remove };
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			const create = fulltextSearch.getMockImplementation()!;
+			fulltextSearch.mockImplementationOnce((config) => {
+				expect(old.pipeline.close).toHaveBeenCalledTimes(1);
+				expect(old.close).toHaveBeenCalledTimes(1);
+				expect(old.collection).not.toHaveProperty('__wcposAppendIndex');
+				delete collection.database.collections['products-search-v4-en_flexsearch'];
+				return create(config);
+			});
+			remove.mockImplementation(async () => {
+				delete collection.database.collections['products-search-v4-en_flexsearch'];
+			});
+			const replacement = await collection.recreateSearch('en');
+			expect(remove).toHaveBeenCalledTimes(1);
+			expect(old.close.mock.invocationCallOrder[0]).toBeLessThan(
+				remove.mock.invocationCallOrder[0]
+			);
+			expect(replacement).not.toBe(old);
+			expect(collection._searchInstances.get('en')).toBe(replacement);
+		});
+
+		it.each([false, true])(
+			'cleanup continues on pipeline rejection (close rejects: %s)',
+			async (closeRejects) => {
+				const collection = makeCollection();
+				const old = await collection.initSearch('en');
+				old.pipeline.close.mockRejectedValue(new Error('pipeline failed'));
+				if (closeRejects) old.close.mockRejectedValue(new Error('instance failed'));
+				await collection.initSearch('de');
+				await collection.initSearch('fr');
+				await expect(collection.initSearch('es')).resolves.toBeDefined();
+				expect(old.close).toHaveBeenCalledTimes(1);
+				expect(old.collection).not.toHaveProperty('__wcposAppendIndex');
+				expect(searchLogger.warn).toHaveBeenCalledWith(
+					expect.any(String),
+					expect.objectContaining({
+						context: expect.objectContaining({ error: 'pipeline failed' }),
+					})
+				);
+			}
+		);
+
+		it('an init already past the cache check cannot outlive a recreate', async () => {
+			const collection = makeCollection();
+			const started = deferred();
+			const gate = deferred();
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			const create = fulltextSearch.getMockImplementation()!;
+			fulltextSearch.mockImplementationOnce(async (config) => {
+				started.resolve();
+				await gate.promise;
+				return create(config);
+			});
+			const init = collection.initSearch('en');
+			await started.promise;
+			const recreate = collection.recreateSearch('en');
+			gate.resolve();
+			const [old, replacement] = await Promise.all([init, recreate]);
+			expect(collection._searchInstances.size).toBe(1);
+			expect(collection._searchInstances.get('en')).toBe(replacement);
+			expect(replacement).not.toBe(old);
+			expect(old.close).toHaveBeenCalledTimes(1);
+			expect(old.pipeline.close).toHaveBeenCalledTimes(1);
+			expect(old.collection).not.toHaveProperty('__wcposAppendIndex');
+		});
+
+		it('concurrent init for a different locale is not blocked', async () => {
+			const collection = makeCollection();
+			await collection.initSearch('en');
+			const started = deferred();
+			const gate = deferred();
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			const create = fulltextSearch.getMockImplementation()!;
+			fulltextSearch.mockImplementationOnce(async (config) => {
+				started.resolve();
+				await gate.promise;
+				return create(config);
+			});
+			let recreated = false;
+			const recreate = collection.recreateSearch('en').then((instance: unknown) => {
+				recreated = true;
+				return instance;
+			});
+			await started.promise;
+			const sameLocaleInit = collection.initSearch('en');
+			try {
+				const german = await collection.initSearch('de');
+				expect(collection._searchInstances.get('de')).toBe(german);
+				expect(recreated).toBe(false);
+			} finally {
+				gate.resolve();
+			}
+			expect(await sameLocaleInit).toBe(await recreate);
+			expect(fulltextSearch).toHaveBeenCalledTimes(3);
+		});
+
+		it('collection close tears every instance down', async () => {
+			const collection = makeCollection();
+			const instances = [await collection.initSearch('en'), await collection.initSearch('de')];
+			for (const close of collection.onClose) await close();
+			for (const instance of instances) {
+				expect(instance.pipeline.close).toHaveBeenCalledTimes(1);
+				expect(instance.close).toHaveBeenCalledTimes(1);
+				expect(instance.collection).not.toHaveProperty('__wcposAppendIndex');
+			}
+			expect(collection._searchInstances.size).toBe(0);
+		});
 	});
 
 	describe('locale normalization', () => {
@@ -552,23 +714,6 @@ describe('search plugin', () => {
 
 			expect(cleanupRegistered).toBe(previousState);
 		});
-
-		it('should destroy all search instances on cleanup', async () => {
-			const instances = new Map([
-				['en', { collection: { destroy: jest.fn().mockResolvedValue(undefined) } }],
-				['de', { collection: { destroy: jest.fn().mockResolvedValue(undefined) } }],
-			]);
-
-			// Cleanup logic
-			for (const [locale, instance] of instances.entries()) {
-				if (instance.collection?.destroy) {
-					await instance.collection.destroy();
-				}
-				instances.delete(locale);
-			}
-
-			expect(instances.size).toBe(0);
-		});
 	});
 
 	describe('recreateSearch logic', () => {
@@ -588,17 +733,6 @@ describe('search plugin', () => {
 
 			expect(instances.has('en')).toBe(false);
 			expect(lru).not.toContain('en');
-		});
-
-		it('should call destroy on old instance', async () => {
-			const destroyMock = jest.fn().mockResolvedValue(undefined);
-			const oldInstance = { collection: { destroy: destroyMock } };
-
-			if (oldInstance.collection?.destroy) {
-				await oldInstance.collection.destroy();
-			}
-
-			expect(destroyMock).toHaveBeenCalled();
 		});
 	});
 
