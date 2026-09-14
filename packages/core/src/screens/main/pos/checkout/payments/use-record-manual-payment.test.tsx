@@ -245,12 +245,19 @@ it.each([null, 'register'])(
 		onlineStatus = 'online-website-available';
 		mockPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
 		const { result } = renderHook(() => useRecordManualPayment());
-		await act(() => result.current(order, method, { amount: 100 }));
+		const split = {
+			key: '_wcpos_split',
+			value: '{"kind":"even","ways":2,"shares":["50.00","50.00"]}',
+		};
+		await act(() => result.current(order, method, { amount: 100, extraMeta: [split] }));
 		expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		// The split summary rides with the leg that completes the sale.
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: order,
-			data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
+			data: {
+				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }, split]),
+			},
 		});
 		expect(mockPost.mock.calls[0][1].payment).toMatchObject({
 			register_id: registerId,

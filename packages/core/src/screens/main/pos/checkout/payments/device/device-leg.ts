@@ -150,15 +150,23 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 					throw new Error('Offline authorization is below the payment amount');
 				if (result.outcome === 'captured')
 					throw new Error('Offline collection must return authorization');
+				const timestamp = new Date(deps.now()).toISOString();
 				const row: PaymentRow = {
 					...state.row,
 					recorded_offline: true,
 					status: authorized ? 'authorized' : result.outcome === 'declined' ? 'failed' : 'voided',
 					// Reader-added tips are not applied to the sale until the server echoes them.
 					amount: input.row.amount,
-					provider_refs: { ...offlineProviderRefs(result.provider_refs), payment_intent: null },
+					// Keep what the row already carries (the reader it was minted for): the driver's
+					// refs describe the offline intent, not the whole row.
+					provider_refs: {
+						...state.row.provider_refs,
+						...offlineProviderRefs(result.provider_refs),
+						payment_intent: null,
+					},
 					failure_reason: result.failure_reason ?? null,
-					updated_at_gmt: new Date(deps.now()).toISOString(),
+					...(authorized ? { authorized_at_gmt: timestamp } : {}),
+					updated_at_gmt: timestamp,
 				};
 				const order = await deps.patchAndEnqueue(row);
 				if (active()) {

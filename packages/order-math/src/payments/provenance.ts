@@ -24,6 +24,30 @@ export function saleProvenanceMeta(input: {
 	}).map(([key, value]) => ({ key, value }));
 }
 
+export function splitPlanMeta(input: {
+	kind: 'even' | 'fixed' | 'items';
+	ways: number;
+	shares: string[];
+}): MetaDataEntry {
+	const { kind, ways, shares } = input;
+	return { key: '_wcpos_split', value: JSON.stringify({ kind, ways, shares }) };
+}
+
+/**
+ * Replace-by-key merge for facts that describe the sale as it finally completed. The
+ * split summary is written before each attempt at the final leg, so a declined attempt
+ * followed by a re-divided remainder must overwrite what the first attempt wrote —
+ * unlike the completion tuple, which `withSaleProvenance` deliberately never replaces.
+ */
+export function withMetaReplaced(
+	meta: readonly MetaDataEntry[] | null | undefined,
+	entries: readonly MetaDataEntry[]
+): MetaDataEntry[] {
+	if (entries.length === 0) return [...(meta ?? [])];
+	const keys = new Set(entries.map(({ key }) => key));
+	return [...(meta ?? []).filter(({ key }) => !keys.has(key)), ...entries];
+}
+
 export function hasSaleProvenance(meta: readonly MetaDataEntry[] | null | undefined): boolean {
 	return !!meta?.some(({ key }) => key === '_wcpos_sale_counter');
 }

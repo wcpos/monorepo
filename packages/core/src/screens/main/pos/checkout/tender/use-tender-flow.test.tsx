@@ -23,6 +23,7 @@ import {
 	setTenderMethod,
 	useCheckoutMode,
 } from '../checkout-mode';
+import * as provenance from '../provenance/persist-provenance';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
 import { rememberedReaders } from './remembered-readers';
@@ -31,6 +32,8 @@ import type {
 	TerminalLegState,
 	TerminalPaymentsService,
 } from '../../../../../services/terminal-payments';
+
+const persistProvenanceSpy = jest.spyOn(provenance, 'persistProvenance');
 
 let mockRealService: TerminalPaymentsService | null = null;
 let mockLeg: TerminalLegState | null = null;
@@ -1395,6 +1398,7 @@ describe('device tender', () => {
 					capture_mode: 'device',
 					status: 'pending',
 					session_id: 'session',
+					provider_refs: { reader: driver.status$.get().reader!.id },
 				}),
 			})
 		);
@@ -1559,6 +1563,70 @@ describe('provider completion provenance before intent', () => {
 		mockPushDocument.mockResolvedValue(order);
 		mockBlockIfDegraded.mockReturnValue(false);
 	});
+	it.each([false, true])(
+		'passes the final three split shares, replacing what an earlier attempt wrote (%s)',
+		async (existing) => {
+			const original = { key: '_wcpos_split', value: 'original split' };
+			const { result, rerender } = renderHook(() => useTenderFlow(order));
+			act(() =>
+				result.current.dispatch({
+					type: 'set-plan',
+					plan: { kind: 'even', ways: 3, from: 0 },
+					balanceMinor: 9295,
+				})
+			);
+			mockPayload.meta_data = withLedger(existing ? [original] : [], [
+				payment({ id: 'first', amount: '30.99' }),
+				payment({ id: 'declined', amount: '30.98', status: 'failed' }),
+				payment({ id: 'second', amount: '30.98' }),
+			]);
+			rerender();
+			act(() => result.current.pickMethod('terminal'));
+			expect(result.current.entryAppliedMinor).toBe(3098);
+			await act(async () => result.current.takeTender());
+			const split = {
+				key: '_wcpos_split',
+				value: JSON.stringify({ kind: 'even', ways: 3, shares: ['30.99', '30.98', '30.98'] }),
+			};
+			expect(persistProvenanceSpy).toHaveBeenCalledWith(
+				expect.objectContaining({ extraMeta: [split] })
+			);
+			// A declined attempt followed by a re-divided remainder must not leave the first
+			// attempt's shares on the order: the split is replaced by key, never kept.
+			expect(mockLocalPatch).toHaveBeenCalledWith({
+				document: order,
+				data: {
+					meta_data: [
+						...mockPayload.meta_data.filter(({ key }) => key !== '_wcpos_split'),
+						{ key: '_wcpos_sale_counter', value: '1' },
+						split,
+					],
+				},
+			});
+			expect(mockBegin).toHaveBeenCalledTimes(1);
+		}
+	);
+	it('hands the split summary to a cash leg, which never passes through saveProvenance', async () => {
+		mockMethods = [cash];
+		const { result } = renderHook(() => useTenderFlow(order));
+		act(() =>
+			result.current.dispatch({
+				type: 'set-plan',
+				plan: { kind: 'even', ways: 2, from: 0 },
+				balanceMinor: 9295,
+			})
+		);
+		act(() => result.current.pickMethod('pos_cash'));
+		await act(async () => result.current.takeTender());
+		const [, , input] = mockRecordManualPayment.mock.calls[0];
+		expect(input.extraMeta).toHaveLength(1);
+		expect(input.extraMeta?.[0].key).toBe('_wcpos_split');
+		expect(JSON.parse(input.extraMeta?.[0].value as string)).toEqual({
+			kind: 'even',
+			ways: 2,
+			shares: ['46.48'],
+		});
+	});
 	it('awaits the explicit tuple write before beginning the server leg', async () => {
 		let finish!: (value: typeof order) => void;
 		mockPushDocument.mockImplementationOnce(
@@ -1577,6 +1645,8 @@ describe('provider completion provenance before intent', () => {
 			document: order,
 			data: { meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
 		});
+		expect(persistProvenanceSpy).toHaveBeenCalledTimes(1);
+		expect(persistProvenanceSpy.mock.calls[0][0]).not.toHaveProperty('extraMeta');
 		expect(mockPushDocument).toHaveBeenCalledWith(order);
 		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
 			mockPushDocument.mock.invocationCallOrder[0]

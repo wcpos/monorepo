@@ -1,4 +1,9 @@
-import { hasSaleProvenance, saleProvenanceMeta, withSaleProvenance } from './provenance';
+import {
+	hasSaleProvenance,
+	saleProvenanceMeta,
+	splitPlanMeta,
+	withSaleProvenance,
+} from './provenance';
 
 it('stamps seconds precision at the device offset, with timezone and optional session', () => {
 	const offset = jest.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-120);
@@ -53,3 +58,13 @@ it.each([
 	).toBe(false);
 	offset.mockRestore();
 });
+
+it.each(['even', 'fixed', 'items'] as const)(
+	'serializes the %s split facts in payment order',
+	(kind) => {
+		expect(splitPlanMeta({ kind, ways: 3, shares: ['30.99', '30.98', '30.98'] })).toEqual({
+			key: '_wcpos_split',
+			value: JSON.stringify({ kind, ways: 3, shares: ['30.99', '30.98', '30.98'] }),
+		});
+	}
+);

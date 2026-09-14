@@ -13,6 +13,7 @@ import {
 	type PaymentRow,
 	type PaymentTransport,
 	readLedger,
+	splitPlanMeta,
 	toMinor,
 } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
@@ -488,6 +489,20 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		setBusy(true);
 		let savingProvenance = false;
 		let sessionId: string | null = null;
+		// The split as the cashier saw it, written with whichever leg completes the sale —
+		// cash included, which does not pass through saveProvenance below.
+		const splitMeta = state.plan
+			? [
+					splitPlanMeta({
+						kind: state.plan.kind,
+						ways: planLegs(state.plan, rowsSinceFrom, balanceMinor).label.ways,
+						shares: [
+							...rowsSinceFrom.map(({ minor }) => fromMinor(minor, dp)),
+							fromMinor(entryAppliedMinor, dp),
+						],
+					}),
+				]
+			: null;
 		const saveProvenance = async () => {
 			if (!online || queuedOffline || !payload.id || entryAppliedMinor !== balanceMinor) return;
 			savingProvenance = true;
@@ -498,6 +513,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				userDB,
 				siteUuid: site.uuid!,
 				sessionId,
+				...(splitMeta ? { extraMeta: splitMeta } : {}),
 			});
 			savingProvenance = false;
 		};
@@ -569,6 +585,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				if (!service) throw new Error('terminal_service_unavailable');
 				const offline = !online || queuedOffline || !payload.id;
 				const minted = mintDevicePayment({
+					readerId: status.reader.id,
 					registerId,
 					sessionId,
 					method,
@@ -660,6 +677,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const outcome = await recordManualPayment(order, method, {
 				amount: fromMinor(entryAppliedMinor, dp),
 				tendered,
+				...(splitMeta ? { extraMeta: splitMeta } : {}),
 			});
 			if (outcome.kind === 'recorded') {
 				tenderRecorded(outcome.row, outcome.via);
@@ -774,6 +792,8 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		remember,
 		saveState,
 		state.entryMinor,
+		state.plan,
+		rowsSinceFrom,
 		state.readerId,
 		payload.id,
 		payload.number,
