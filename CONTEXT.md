@@ -483,6 +483,25 @@ for one that does not. Free is limited to the session mode and today on its own
 register; wider ranges, other registers and other stores are Pro.
 _Avoid_: filter (for the session/range choice), period (for a session)
 
+**Report document**:
+What a `report` template renders: a tabular core — the scope, columns, rows with cells in
+column order, group subtotals and totals — beside the store, register, cashier, software,
+fiscal and label blocks a receipt carries. A report adds its own figures as named keys
+*beside* the core, never inside it, so one default template renders every report and a
+template guards on an extra's key the way ADR 0039 prescribes. The Session report is not
+one of these: it is the closure document, rendered by the `closure` template type, and
+template types are never added to.
+_Avoid_: report payload, report data (for this shape), report type (for a template type)
+
+**Registered report**:
+A report a plugin adds through the `woocommerce_pos_reports` filter in the Free plugin: a
+key, a title, the scopes it accepts, a capability, and a query that returns a report
+document for a resolved scope. It sits in the picker beside the built-ins, on Free under
+the scope gate, and prints with the default report template unless it brings its own. It
+is computed on the server, so it needs a connection; the built-ins are computed on the
+device.
+_Avoid_: custom report (for this concept), report plugin, third-party report type
+
 **Business day**:
 The trading day a closure belongs to: the day, in the **store's** timezone, on which its
 session *opened*. A session that runs past midnight is one night's trade, never split, so
