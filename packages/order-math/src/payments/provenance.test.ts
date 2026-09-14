@@ -1,5 +1,6 @@
 import {
 	hasSaleProvenance,
+	hasSaleTime,
 	saleProvenanceMeta,
 	splitPlanMeta,
 	withMetaReplaced,
@@ -109,4 +110,27 @@ describe('withMetaReplaced', () => {
 		expect(result).toEqual(existing);
 		expect(result[0]).not.toBe(existing[0]);
 	});
+});
+
+it('omits the register and the counter for a sale outside the numbered sequence', () => {
+	const entries = saleProvenanceMeta({
+		registerId: null,
+		saleCounter: null,
+		now: new Date('2026-09-10T22:42:10.987Z'),
+		timeZone: 'UTC',
+		appVersion: 'version',
+		appBuild: 'build',
+		sessionId: 'session',
+	});
+	const keys = entries.map(({ key }) => key);
+	expect(keys).toEqual([
+		'_wcpos_sale_time',
+		'_wcpos_sale_tz',
+		'_wcpos_app_version',
+		'_wcpos_app_build',
+		'_wcpos_session',
+	]);
+	expect(hasSaleProvenance(entries)).toBe(false);
+	expect(hasSaleTime(entries)).toBe(true);
+	expect(hasSaleTime([])).toBe(false);
 });

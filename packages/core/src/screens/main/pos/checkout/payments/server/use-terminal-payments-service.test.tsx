@@ -166,10 +166,14 @@ it('background terminal settlement enqueues one provenance-only patch after mirr
 
 const mockMirrorError = jest.fn();
 const mockInfo = jest.fn();
+const mockWarn = jest.fn();
+jest.mock('../../../../../../services/register/register-document', () => ({
+	readBoundRegister: async () => null,
+}));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		error: (...args: unknown[]) => mockMirrorError(...args),
-		warn: jest.fn(),
+		warn: (...args: unknown[]) => mockWarn(...args),
 		info: (...args: unknown[]) => mockInfo(...args),
 	}),
 	getErrorMessage: String,
@@ -277,3 +281,42 @@ it.each(['ledger', 'provenance'] as const)(
 		}
 	}
 );
+
+it('a completion nobody was watching still reports its missing store register', async () => {
+	const start = jest.spyOn(
+		await import('../../../../../../services/terminal-payments'),
+		'startTerminalPaymentsService'
+	);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		const options = start.mock.calls[0][0];
+		mockWarn.mockClear();
+		options.onCaptured!(
+			'completed-order',
+			{
+				status: 'completed',
+				total: '10.00',
+				paid: '10.00',
+				balance: '0',
+				payment_method: 'device',
+				payment_method_title: 'Reader',
+			},
+			mockRow,
+			true
+		);
+		await waitFor(() =>
+			expect(mockWarn).toHaveBeenCalledWith(
+				'Sale recorded without register provenance',
+				expect.objectContaining({
+					context: expect.objectContaining({
+						reason: 'no_register_bound',
+						orderUUID: 'completed-order',
+					}),
+				})
+			)
+		);
+	} finally {
+		hook.unmount();
+		start.mockRestore();
+	}
+});

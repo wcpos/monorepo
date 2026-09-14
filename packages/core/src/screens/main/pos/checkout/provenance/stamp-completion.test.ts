@@ -29,6 +29,15 @@ it('does not stamp a register bound in another store of the site', async () => {
 	expect(meta.some(({ key }) => key === '_wcpos_register')).toBe(false);
 	expect(meta.some(({ key }) => key === '_wcpos_sale_counter')).toBe(true);
 });
+it('still counts a sale on a till with no store register bound', async () => {
+	// The device register exists (it always does after hydration); the store side is
+	// what is missing, so the counter is stamped and the register is not.
+	jest.mocked(readRegister).mockResolvedValueOnce({ sites: {} } as never);
+	const meta = await completionMeta({ id: 7, uuid: 'order-7' }, deps);
+	const keys = meta.map(({ key }) => key);
+	expect(keys).toContain('_wcpos_sale_counter');
+	expect(keys).not.toContain('_wcpos_register');
+});
 it('does not invent a session when sessions are off', async () => {
 	expect((await completionMeta({}, deps)).some(({ key }) => key === '_wcpos_session')).toBe(false);
 });
@@ -37,38 +46,40 @@ it('preserves the original completion tuple when revisiting a sale', async () =>
 	expect(await completionMeta({ meta_data }, { ...deps, sessionId: 'second' })).toEqual(meta_data);
 });
 
-it('warns without an actor when completion has no register, naming the sale where it can', async () => {
-	// No actor: this is the system noticing a gap, not a cashier doing something.
+it('stamps what is known, and never a register or a counter, without a register document', async () => {
 	jest.mocked(readRegister).mockResolvedValueOnce(null);
-	expect(await completionMeta({ id: 1041, uuid: 'order-1' }, deps)).toEqual([]);
-	expect(mockWarn).toHaveBeenCalledWith(expect.any(String), {
-		context: {
-			type: 'checkout.provenance-skipped',
-			orderId: 1041,
-			orderUUID: 'order-1',
-			// Part of the collapse identity: two unstamped sales inside the 60-second
-			// window would otherwise fold into one row keeping only the first sale's ids.
-			recordId: 'order-1',
-			storeId: null,
-		},
-	});
+	const stamped = await completionMeta(
+		{ id: 1041, uuid: 'order-1' },
+		{ ...deps, sessionId: 'session' }
+	);
+	// What is known is stamped; the register and the counter are not invented.
+	const keys = stamped.map(({ key }) => key);
+	expect(keys).toEqual(
+		expect.arrayContaining([
+			'_wcpos_sale_time',
+			'_wcpos_sale_tz',
+			'_wcpos_app_version',
+			'_wcpos_session',
+		])
+	);
+	expect(keys).not.toContain('_wcpos_register');
+	expect(keys).not.toContain('_wcpos_sale_counter');
 
 	// Callers that hold only the meta tuple still get a row; a sale that went
 	// unstamped is worth recording even when it cannot be named.
-	mockWarn.mockClear();
 	jest.mocked(readRegister).mockResolvedValueOnce(null);
-	expect(await completionMeta({}, deps)).toEqual([]);
-	expect(mockWarn).toHaveBeenCalledWith(expect.any(String), {
-		context: { type: 'checkout.provenance-skipped', storeId: null },
-	});
+	expect((await completionMeta({}, deps)).map(({ key }) => key)).toContain('_wcpos_sale_time');
+
+	// Revisiting a sale that already carries the partial tuple does not re-stamp it.
+	jest.mocked(readRegister).mockResolvedValueOnce(null);
+	expect(await completionMeta({ meta_data: stamped }, deps)).toEqual(stamped);
 });
 
 it('does not name an unsynced sale as order 0', async () => {
 	// `id: 0` is what an order carries before the store has seen it. Naming it
 	// would key every such sale to one record and fold them into a single row.
 	jest.mocked(readRegister).mockResolvedValueOnce(null);
-	expect(await completionMeta({ id: 0 }, deps)).toEqual([]);
-	expect(mockWarn).toHaveBeenCalledWith(expect.any(String), {
-		context: { type: 'checkout.provenance-skipped', storeId: null },
-	});
+	expect((await completionMeta({ id: 0 }, deps)).map(({ key }) => key)).not.toContain(
+		'_wcpos_register'
+	);
 });

@@ -13,6 +13,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { persistProvenance } from '../provenance/persist-provenance';
+import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { useAppState, useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrderActions } from '../../contexts/current-order';
@@ -135,7 +136,8 @@ export function PaymentWebview({
 	const orderData = useRecordField(order, (record) => record.payload);
 	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
 	const online = useOnlineStatus().status === 'online-website-available';
-	const { userDB, site } = useStoreSession();
+	const { userDB, site, store } = useStoreSession();
+	const { status: bindingStatus } = useRegisterBinding();
 	const siteUuid = site.uuid!;
 	const pushDocument = usePushDocument();
 	const { localPatch } = useLocalMutation();
@@ -211,6 +213,14 @@ export function PaymentWebview({
 			t,
 		} = collaborators.current;
 		let active = true;
+		// The pay page completes the whole balance: with several registers and none
+		// chosen it is not exposed, and the frame says why. Picking one re-runs this.
+		if (bindingStatus === 'choose') {
+			setPreparation({ uuid: currentOrder.uuid, status: 'failed' });
+			setFrameStatus('stalled');
+			orderLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
+			return;
+		}
 		void (async () => {
 			try {
 				await persistProvenance({
@@ -219,6 +229,7 @@ export function PaymentWebview({
 					pushDocument,
 					userDB,
 					siteUuid,
+					storeId: store.id,
 				});
 				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready' });
 			} catch (error) {
@@ -236,7 +247,7 @@ export function PaymentWebview({
 		return () => {
 			active = false;
 		};
-	}, [order.uuid, userDB, siteUuid, online, rawPaymentURL, retryToken]);
+	}, [order.uuid, userDB, siteUuid, store.id, online, rawPaymentURL, retryToken, bindingStatus]);
 
 	/**
 	 *

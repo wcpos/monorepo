@@ -51,7 +51,10 @@ jest.mock('../../hooks/use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({ resolveStockOwnerId: mockResolveStockOwnerId }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ info: jest.fn(), success: jest.fn(), error: jest.fn() }),
+	getLogger: () => ({ info: jest.fn(), success: jest.fn(), warn: jest.fn(), error: jest.fn() }),
+}));
+jest.mock('../../../../../services/register/register-document', () => ({
+	readBoundRegister: async () => null,
 }));
 
 const makeOrder = (paymentMethod = 'stripe_terminal_for_woocommerce') => {
@@ -391,10 +394,21 @@ jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 jest.mock('../../../contexts/use-push-document', () => ({
 	usePushDocument: () => mockProvenancePush,
 }));
+let mockBindingStatus: 'bound' | 'choose' | 'none' | 'unknown' = 'bound';
+jest.mock('../../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({
+		status: mockBindingStatus,
+		registerId: null,
+		registerName: null,
+		registers: [],
+		bind: jest.fn(),
+	}),
+}));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		userDB: {},
 		site: { uuid: 'site' },
+		store: { id: 1 },
 		wpCredentials: { id: 7, username: 'pat' },
 	}),
 }));
@@ -448,5 +462,36 @@ describe('contract provenance preparation', () => {
 		await act(() => result.current.startCheckout());
 		expect(mockPost).not.toHaveBeenCalled();
 		expect(result.current.error).toBe('pos_cart.checkout_failed');
+	});
+});
+
+describe('useCheckoutSession register gate', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+	});
+	afterEach(() => {
+		mockBindingStatus = 'bound';
+	});
+	it('refuses to start a gateway sale while a register is still to be chosen', async () => {
+		mockBindingStatus = 'choose';
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => result.current.startCheckout());
+		// No provenance write, no checkout post: the sale never started.
+		expect(mockProvenancePatch).not.toHaveBeenCalled();
+		expect(mockProvenancePush).not.toHaveBeenCalled();
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(result.current.loading).toBe(false);
 	});
 });

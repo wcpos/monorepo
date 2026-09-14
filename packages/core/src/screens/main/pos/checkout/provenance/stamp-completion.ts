@@ -1,17 +1,15 @@
 import type { UserDatabase } from '@wcpos/database';
 import {
 	hasSaleProvenance,
+	hasSaleTime,
 	type MetaDataEntry,
 	readLedger,
 	saleProvenanceMeta,
 	withSaleProvenance,
 } from '@wcpos/order-math';
-import { getLogger } from '@wcpos/utils/logger';
 import { AppInfo } from '@wcpos/utils/app-info';
 
 import { nextSaleCounter, readRegister } from '../../../../../services/register/register-document';
-
-const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export async function completionMeta(
 	order: { id?: number | null; uuid?: string; meta_data?: MetaDataEntry[] },
@@ -24,30 +22,30 @@ export async function completionMeta(
 ): Promise<MetaDataEntry[]> {
 	if (hasSaleProvenance(order.meta_data)) return order.meta_data!;
 	const register = await readRegister(userDB);
+	const stamp = (registerId: string | null, saleCounter: number | null) =>
+		withSaleProvenance(
+			order.meta_data,
+			saleProvenanceMeta({
+				registerId,
+				saleCounter,
+				now: new Date(),
+				timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+				appVersion: AppInfo.version,
+				appBuild: AppInfo.buildNumber,
+				sessionId:
+					sessionId ??
+					readLedger(order.meta_data).findLast((row) => row.status === 'captured' && row.session_id)
+						?.session_id ??
+					null,
+			})
+		);
 	if (!register) {
-		// Name the sale where the caller knows it. Some callers hold only the meta
-		// tuple being written, and a row that cannot say WHICH sale went unstamped is
-		// still worth more than the silence this replaced — a merchant reconciling a
-		// register report needs to know that sales like this exist at all.
-		logger.warn('Sale recorded without register provenance', {
-			context: {
-				type: 'checkout.provenance-skipped',
-				// Truthiness is deliberate: an order the store has not seen yet carries
-				// `id: 0` (see the void button, which re-creates one that way). Naming that
-				// as order 0 would key every unsynced sale to the same record and fold
-				// them into one row — the opposite of what the id is here for.
-				...(order.id ? { orderId: order.id } : {}),
-				...(order.uuid ? { orderUUID: order.uuid } : {}),
-				// `recordId` is part of the repeat-collapse identity. Without it two
-				// unstamped sales inside the 60-second window fold into one row that keeps
-				// only the first sale's ids — which is exactly the reconciliation this row
-				// exists for. Sales the caller cannot name still collapse, and nothing is
-				// lost there: they are indistinguishable by construction.
-				...(order.uuid || order.id ? { recordId: order.uuid ?? String(order.id) } : {}),
-				storeId: storeId ?? null,
-			},
-		});
-		return order.meta_data ?? [];
+		// Every device mints its register document during hydration, so this is a till
+		// that has not finished hydrating. Stamp what is known and leave the register and
+		// the counter empty rather than invent them; a sale already carrying the partial
+		// tuple is left alone.
+		if (hasSaleTime(order.meta_data)) return order.meta_data!;
+		return stamp(null, null);
 	}
 	const counter = await nextSaleCounter(userDB, siteUuid);
 	const pointer = register.sites[siteUuid];
@@ -56,20 +54,10 @@ export async function completionMeta(
 		storeId !== undefined &&
 		pointer?.register_store_id != null &&
 		pointer.register_store_id !== storeId;
-	return withSaleProvenance(
-		order.meta_data,
-		saleProvenanceMeta({
-			registerId: boundElsewhere ? '' : (pointer?.register_id ?? ''),
-			saleCounter: counter,
-			now: new Date(),
-			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-			appVersion: AppInfo.version,
-			appBuild: AppInfo.buildNumber,
-			sessionId:
-				sessionId ??
-				readLedger(order.meta_data).findLast((row) => row.status === 'captured' && row.session_id)
-					?.session_id ??
-				null,
-		}).filter(({ key, value }) => key !== '_wcpos_register' || !!value)
-	);
+	// The store seeds a default register and a till binds to a lone register on its own,
+	// so a sale reaches here unbound only when the store has several registers and none
+	// was chosen (checkout refuses to complete in that state) or an admin removed them
+	// all. The counter is the device's and is stamped regardless; the gap is reported
+	// when the sale actually completes (see provenance-gap.ts), not here.
+	return stamp(boundElsewhere ? null : (pointer?.register_id ?? null), counter);
 }

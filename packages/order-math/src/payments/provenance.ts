@@ -1,8 +1,15 @@
 import type { MetaDataEntry } from './ledger';
 
+/**
+ * The completion tuple. A sale on a till with no register bound (or one bound in another
+ * store) still stamps what is known — when, where, which build, which session — and omits
+ * the register and the counter rather than inventing them: the counter is the numbered
+ * sequence a register report is reconciled against, and a sale outside it must not
+ * claim a place in it.
+ */
 export function saleProvenanceMeta(input: {
-	registerId: string;
-	saleCounter: number;
+	registerId: string | null;
+	saleCounter: number | null;
 	now: Date;
 	timeZone: string;
 	appVersion: string;
@@ -14,10 +21,10 @@ export function saleProvenanceMeta(input: {
 	const local = new Date(input.now.getTime() + offset * 60_000).toISOString().slice(0, 19);
 	const suffix = `${offset < 0 ? '-' : '+'}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`;
 	return Object.entries({
-		_wcpos_register: input.registerId,
+		...(input.registerId ? { _wcpos_register: input.registerId } : {}),
 		_wcpos_sale_time: local + suffix,
 		_wcpos_sale_tz: input.timeZone || 'UTC',
-		_wcpos_sale_counter: String(input.saleCounter),
+		...(input.saleCounter !== null ? { _wcpos_sale_counter: String(input.saleCounter) } : {}),
 		_wcpos_app_version: input.appVersion,
 		_wcpos_app_build: input.appBuild,
 		...(input.sessionId ? { _wcpos_session: input.sessionId } : {}),
@@ -66,8 +73,14 @@ export function withMetaReplaced(
 	return result;
 }
 
+/** Fully stamped: the sale has its place in the register's numbered sequence. */
 export function hasSaleProvenance(meta: readonly MetaDataEntry[] | null | undefined): boolean {
 	return !!meta?.some(({ key }) => key === '_wcpos_sale_counter');
+}
+
+/** Stamped at all, including the partial tuple a sale with no register gets. */
+export function hasSaleTime(meta: readonly MetaDataEntry[] | null | undefined): boolean {
+	return !!meta?.some(({ key }) => key === '_wcpos_sale_time');
 }
 
 export function withSaleProvenance(

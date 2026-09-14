@@ -17,6 +17,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { completionMeta } from '../../provenance/stamp-completion';
+import { reportProvenanceGap } from '../../provenance/provenance-gap';
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
 	getTerminalPaymentsService,
@@ -105,7 +106,10 @@ export function useTerminalPaymentsService(): void {
 					document: resident,
 					data: {
 						meta_data: isCompletingStatus(summary.status)
-							? await completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! })
+							? await completionMeta(
+									{ meta_data },
+									{ userDB, siteUuid: site.uuid!, storeId: store.id }
+								)
 							: meta_data,
 						status: summary.status,
 					},
@@ -150,7 +154,10 @@ export function useTerminalPaymentsService(): void {
 						const patched = await latest.current.localPatch({
 							document: resident,
 							data: {
-								meta_data: await completionMeta({ meta_data }, { userDB, siteUuid: site.uuid! }),
+								meta_data: await completionMeta(
+									{ meta_data },
+									{ userDB, siteUuid: site.uuid!, storeId: store.id }
+								),
 							},
 						});
 						if (!patched) throw new Error('provenance_save_failed');
@@ -189,12 +196,24 @@ export function useTerminalPaymentsService(): void {
 				if (!stopped && order && Number(order.balance) === 0) {
 					enterReceipt(orderUuid, { select: false });
 					void findEngineResident(manager, 'orders', orderUuid)
-						.then((resident) => {
-							if (!stopped && resident)
-								return reconcileCompletedOrder(
-									manager,
-									resident as unknown as EngineRecord<'orders'>
-								);
+						.then(async (resident) => {
+							if (stopped || !resident) return;
+							// A completion nobody was watching still reports its gap; the tender
+							// flow reports the one it watched (it holds the narration claim). From
+							// the till's own copy, before the refresh: the tuple was stamped here
+							// and the report must not depend on the network.
+							if (narrate) {
+								const payload = (resident.getLatest?.().payload ??
+									resident.payload) as EngineRecord<'orders'>['payload'];
+								await reportProvenanceGap({
+									userDB,
+									siteUuid: site.uuid!,
+									storeId: store.id,
+									order: { id: payload.id, uuid: orderUuid, meta_data: payload.meta_data },
+								});
+							}
+							if (stopped) return;
+							await reconcileCompletedOrder(manager, resident as unknown as EngineRecord<'orders'>);
 						})
 						.catch((error) => {
 							logger.warn('Background post-payment reconciliation failed', {
