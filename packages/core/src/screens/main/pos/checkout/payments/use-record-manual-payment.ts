@@ -9,8 +9,8 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import {
 	hasSaleProvenance,
 	isCompletingStatus,
-	type PaymentMethodDescriptor,
 	type MetaDataEntry,
+	type PaymentMethodDescriptor,
 	withMetaReplaced,
 } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
