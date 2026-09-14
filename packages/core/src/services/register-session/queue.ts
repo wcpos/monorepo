@@ -477,8 +477,10 @@ async function drain({
 					server_closure_id: server.id,
 					printed_number: server.printed_number ?? null,
 					server_findings: server.findings ?? null,
-					expected: server.expected,
-					variance: server.variance,
+					// Redacted for a cashier counting blind; keep the local figures rather than
+					// patching required fields with undefined.
+					...(server.expected === undefined ? {} : { expected: server.expected }),
+					...(server.variance === undefined ? {} : { variance: server.variance }),
 					period_sales_total: server.period_sales_total,
 					period_refunds_total: server.period_refunds_total,
 					perpetual_sales_total: server.perpetual_sales_total,

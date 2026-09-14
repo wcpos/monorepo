@@ -427,7 +427,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		refreshAuth: options.refreshAuth,
 		onAuthExhausted: (token) => {
 			if (authExhaustedToken === token) return;
+			// The latch is this engine's own state and stays unguarded: a superseded
+			// engine must still hold its lanes. The TOAST is global, so it takes the
+			// same cache-identity guard as guardedDiagnostics — a late 401 from a
+			// disposed engine must not tell the cashier to sign in to the store they
+			// just switched TO.
 			authExhaustedToken = token;
+			if (engineSelf !== null && cachedEngine?.engine !== engineSelf) return;
 			engineLogger.error(
 				'Sync paused: the store rejected the renewed session — sign in again to resume',
 				{
