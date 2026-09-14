@@ -861,7 +861,11 @@ describe('useTenderFlow', () => {
 
 		expect(mockError).toHaveBeenCalledWith(
 			'pos_checkout.void_failed',
-			expect.objectContaining({ code: 'PAYMENT201' })
+			expect.objectContaining({
+				code: 'PAYMENT201',
+				// The type titles the row on every till: it must not read as a refusal.
+				context: expect.objectContaining({ type: 'payment.void-unknown' }),
+			})
 		);
 	});
 

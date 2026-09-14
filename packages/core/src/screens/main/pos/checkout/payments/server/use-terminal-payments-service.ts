@@ -49,10 +49,14 @@ export function useTerminalPaymentsService(): void {
 	const { localPatch } = useLocalMutation();
 	const { methods } = usePaymentMethods();
 	const online = useOnlineStatus().status === 'online-website-available';
-	const latest = React.useRef({ localPatch, methods, online });
+	// The service outlives a cashier change — its effect keys on store, site and
+	// manager only, so an in-flight leg is never torn down by a re-login — and the
+	// action row must name whoever is at the till when the money lands, not
+	// whoever started the service. So the actor is read live, like the rest.
+	const latest = React.useRef({ localPatch, methods, online, actor });
 	React.useLayoutEffect(() => {
-		latest.current = { localPatch, methods, online };
-	}, [localPatch, methods, online]);
+		latest.current = { localPatch, methods, online, actor };
+	}, [localPatch, methods, online, actor]);
 	// Connectivity changes are external events; they resume deferred settlements.
 	React.useEffect(() => {
 		if (online) void getTerminalPaymentsService()?.flushOffline();
@@ -167,7 +171,7 @@ export function useTerminalPaymentsService(): void {
 				// money, so it is written from whichever path sees the outcome first.
 				if (narrate) {
 					logger.info('Card payment taken', {
-						actor,
+						actor: latest.current.actor,
 						terminal: { operationId: row.id },
 						context: {
 							type: row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',

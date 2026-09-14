@@ -64,11 +64,13 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
 	engineCollection: () => ({ find: mockFind }),
 }));
+// Mutable so a test can change the cashier without remounting the hook.
+const mockSession = { wpCredentials: { id: 7, display_name: 'Pat' } };
 jest.mock('../../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		store: mockStore,
 		site: mockSite,
-		wpCredentials: { id: 7, display_name: 'Pat' },
+		wpCredentials: mockSession.wpCredentials,
 	}),
 }));
 jest.mock('../../../../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
@@ -163,8 +165,13 @@ it('background terminal settlement enqueues one provenance-only patch after mirr
 });
 
 const mockMirrorError = jest.fn();
+const mockInfo = jest.fn();
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ error: (...args: unknown[]) => mockMirrorError(...args), warn: jest.fn() }),
+	getLogger: () => ({
+		error: (...args: unknown[]) => mockMirrorError(...args),
+		warn: jest.fn(),
+		info: (...args: unknown[]) => mockInfo(...args),
+	}),
 	getErrorMessage: String,
 }));
 it('reports a falsy terminal provenance patch without rejecting the recorded payment', async () => {
@@ -183,6 +190,46 @@ it('reports a falsy terminal provenance patch without rejecting the recorded pay
 	} finally {
 		hook.unmount();
 		mockResident.payload.meta_data = original;
+	}
+});
+
+it('names the cashier at the till when a capture lands, not the one who started the service', async () => {
+	const start = jest.spyOn(
+		await import('../../../../../../services/terminal-payments'),
+		'startTerminalPaymentsService'
+	);
+	const hook = renderHook(() => useTerminalPaymentsService());
+	try {
+		const options = start.mock.calls[0][0];
+		options.onCaptured!('completed-order', undefined, mockRow, true);
+		expect(mockInfo).toHaveBeenLastCalledWith(
+			'Card payment taken',
+			expect.objectContaining({
+				actor: { id: '7', name: 'Pat' },
+				context: expect.objectContaining({ type: 'payment.authorized-offline' }),
+			})
+		);
+
+		// A re-login does not restart the service — its effect keys on store, site
+		// and manager — so a capture that lands afterwards must still name whoever
+		// is at the till now.
+		mockSession.wpCredentials = { id: 9, display_name: 'Sam' };
+		hook.rerender();
+		expect(start).toHaveBeenCalledTimes(1);
+		options.onCaptured!('completed-order', undefined, mockRow, true);
+		expect(mockInfo).toHaveBeenLastCalledWith(
+			'Card payment taken',
+			expect.objectContaining({ actor: { id: '9', name: 'Sam' } })
+		);
+
+		// The row is written by whichever path claimed it; a lost claim writes nothing.
+		mockInfo.mockClear();
+		options.onCaptured!('completed-order', undefined, mockRow, false);
+		expect(mockInfo).not.toHaveBeenCalled();
+	} finally {
+		hook.unmount();
+		start.mockRestore();
+		mockSession.wpCredentials = { id: 7, display_name: 'Pat' };
 	}
 });
 

@@ -62,3 +62,13 @@ it('warns without an actor when completion has no register, naming the sale wher
 		context: { type: 'checkout.provenance-skipped', storeId: null },
 	});
 });
+
+it('does not name an unsynced sale as order 0', async () => {
+	// `id: 0` is what an order carries before the store has seen it. Naming it
+	// would key every such sale to one record and fold them into a single row.
+	jest.mocked(readRegister).mockResolvedValueOnce(null);
+	expect(await completionMeta({ id: 0 }, deps)).toEqual([]);
+	expect(mockWarn).toHaveBeenCalledWith(expect.any(String), {
+		context: { type: 'checkout.provenance-skipped', storeId: null },
+	});
+});

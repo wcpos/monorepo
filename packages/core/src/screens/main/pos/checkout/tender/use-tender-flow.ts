@@ -976,7 +976,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 						: ERROR_CODES.PAYMENT_OUTCOME_UNKNOWN,
 					showToast: true,
 					context: {
-						type: 'payment.void-refused',
+						// The type is the row's title on every till; it must not promise a
+						// refusal the store never gave.
+						type: everyoneRefused ? 'payment.void-refused' : 'payment.void-unknown',
 						...orderContext,
 						paymentId: outcome.failed.map((failure) => failure.paymentId).join(', '),
 						reason: outcome.failed

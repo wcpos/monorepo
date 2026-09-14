@@ -491,6 +491,13 @@
 		"introducedIn": "1.11.0"
 	},
 	{
+		"type": "payment.void-unknown",
+		"domain": "CHECKOUT",
+		"label": "A reversal could not be confirmed",
+		"description": "The till asked your store to reverse a payment and the answer never arrived, so the money may or may not still be held. Check the order before refunding by hand.",
+		"introducedIn": "1.11.0"
+	},
+	{
 		"type": "payment.voided",
 		"domain": "CHECKOUT",
 		"label": "Reversed a payment",

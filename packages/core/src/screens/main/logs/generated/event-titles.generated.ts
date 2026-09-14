@@ -168,6 +168,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.payment_settlement');
 		case 'payment.void-refused':
 			return t('health.logs.event.payment_void_refused');
+		case 'payment.void-unknown':
+			return t('health.logs.event.payment_void_unknown');
 		case 'payment.voided':
 			return t('health.logs.event.payment_voided');
 		case 'product.browse-window.approximate':
@@ -325,6 +327,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.payment_settlement');
 		case 'payment.void-refused':
 			return t('health.logs.event_description.payment_void_refused');
+		case 'payment.void-unknown':
+			return t('health.logs.event_description.payment_void_unknown');
 		case 'push.conflict':
 			return t('health.logs.event_description.push_conflict');
 		case 'push.error':

@@ -32,6 +32,10 @@ export async function completionMeta(
 		logger.warn('Sale recorded without register provenance', {
 			context: {
 				type: 'checkout.provenance-skipped',
+				// Truthiness is deliberate: an order the store has not seen yet carries
+				// `id: 0` (see the void button, which re-creates one that way). Naming that
+				// as order 0 would key every unsynced sale to the same record and fold
+				// them into one row — the opposite of what the id is here for.
 				...(order.id ? { orderId: order.id } : {}),
 				...(order.uuid ? { orderUUID: order.uuid } : {}),
 				// `recordId` is part of the repeat-collapse identity. Without it two
