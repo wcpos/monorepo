@@ -4,9 +4,8 @@ import { ObservableResource } from 'observable-hooks';
 import { combineLatest, defer, from, of, throwError } from 'rxjs';
 import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
-import { encodeSearchText } from '@wcpos/sync-core';
-
 import { useQueryRuntime } from './provider';
+import { searchTokens } from './search-match';
 import { useLocalCollection$ } from './use-local-collection';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 
@@ -115,7 +114,9 @@ function accentInsensitiveSource(token: string): string {
  * OPFS worker on web, off the main thread — and the query's own `limit` bounds
  * what comes back. The encoder folds the typed term; the stored text is raw, so
  * each folded letter is widened to its accented variants (Codex review: the
- * first cut missed even the exact accented spelling).
+ * first cut missed even the exact accented spelling). Terms under the index's
+ * minimum length are dropped exactly as the index dropped them (`searchTokens`),
+ * so "pull x" still means "pull" and "x" alone selects nothing.
  *
  * `null` means the search cannot select anything (no fields, or a term with no
  * usable token) — callers turn that into "no hits", never into "all rows".
@@ -124,7 +125,7 @@ export function scanSelectorFor(
 	fields: readonly string[],
 	search: string
 ): MangoQuerySelector<LocalDocumentData> | null {
-	const terms = encodeSearchText(search);
+	const terms = searchTokens(search);
 	if (terms.length === 0 || fields.length === 0) return null;
 	return {
 		$and: terms.map((term) => {

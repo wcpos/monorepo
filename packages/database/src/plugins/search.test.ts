@@ -11,11 +11,16 @@
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 // Real FlexSearch engine, used by the tokenizer-behaviour tests below.
 import { Index } from 'flexsearch';
-import { removeCollectionStorages } from 'rxdb';
+import { getAllCollectionDocuments, removeCollectionStorages } from 'rxdb';
 
 import { deriveBarcodeFromPayload, encodeSearchText } from '@wcpos/sync-core';
 
-import { getSearchIdentifier, searchPlugin, staleSearchCollectionNames } from './search';
+import {
+	getSearchIdentifier,
+	removePersistedSearchIndexes,
+	searchPlugin,
+	staleSearchCollectionNames,
+} from './search';
 
 import type { RxCollection } from 'rxdb';
 
@@ -24,6 +29,7 @@ let shouldFailOnCreate = false;
 // The plugin only imports the storage-removal helper from rxdb; types are erased.
 jest.mock('rxdb', () => ({
 	removeCollectionStorages: jest.fn().mockResolvedValue(undefined),
+	getAllCollectionDocuments: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('rxdb-premium/plugins/flexsearch', () => ({
@@ -290,7 +296,43 @@ describe('search plugin', () => {
 			await expect(
 				collection.initSearch('en', { searchFields: ['message', 'context.search'] })
 			).resolves.toBeNull();
+			// The rebuild path honours the opt-out too (Codex review).
+			await expect(collection.recreateSearch('en')).resolves.toBeNull();
 			expect(addFulltextSearch).not.toHaveBeenCalled();
+		});
+
+		it('reclaims the persisted indexes of a collection that now refuses one, every version and locale', async () => {
+			const database = {
+				name: 'upgraded-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			(getAllCollectionDocuments as jest.Mock).mockResolvedValueOnce([
+				{ data: { name: 'logs' } },
+				{ data: { name: 'logs-search-v4-es_flexsearch' } },
+				{ data: { name: 'logs-search-v3-en_flexsearch' } },
+				{ data: { name: 'products-search-v4-en_flexsearch' } },
+			]);
+			(removeCollectionStorages as jest.Mock).mockClear();
+			const collection = {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database,
+			} as unknown as RxCollection;
+
+			const after = searchPlugin.hooks?.createRxCollection?.after;
+			if (!after) throw new Error('search plugin createRxCollection hook is missing');
+			after({ collection } as never);
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([]); // once per session
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			const removed = (removeCollectionStorages as jest.Mock).mock.calls.map((call) => call[4]);
+			expect(removed).toEqual(['logs-search-v4-es_flexsearch', 'logs-search-v3-en_flexsearch']);
 		});
 
 		it('passes the caller snapshot and intended index options to FlexSearch', async () => {

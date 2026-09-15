@@ -445,4 +445,10 @@ describe('scanSelectorFor', () => {
 		expect(scanSelectorFor([], 'pull')).toBeNull();
 		expect(scanSelectorFor(['message'], '   ')).toBeNull();
 	});
+
+	it('drops terms under the index minimum, as the index did (Codex review)', () => {
+		// "pull x" meant "pull" to FlexSearch (minlength 3); "x" alone found nothing.
+		expect(clauses(['message'], 'pull x')).toHaveLength(1);
+		expect(scanSelectorFor(['message'], 'x')).toBeNull();
+	});
 });
