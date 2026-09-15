@@ -7,8 +7,10 @@ name: Publish Mobile Update
 # A native dependency, config plugin, app config or native code change can move
 # that fingerprint and requires build.yml instead: a store submit for
 # `production`, a new internal-distribution build for `adhoc`.
-# The release train decides whether a native build is needed with:
-#   eas fingerprint:compare --build-id <last production build>
+# The release train decides whether a native build is needed by comparing the
+# tree against the latest build of the SAME profile as the channel (adhoc builds
+# carry plugins production does not):
+#   eas fingerprint:compare --build-id <last build of that profile>
 # Matching binaries keep receiving JS-only patches without another store build.
 # Downloaded updates apply on the next cold start without delaying POS startup.
 
@@ -39,6 +41,8 @@ concurrency:
 permissions:
   contents: read
   checks: read
+  # The release gate reads Deploy workflow runs and jobs.
+  actions: read
 
 jobs:
   publish:

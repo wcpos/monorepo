@@ -77,7 +77,8 @@ Updates reach only binaries with a matching fingerprint runtime version.
 A fingerprint move (native dep, config plugin, app config, native code) needs
 `build.yml` instead: a store submit for `production`, a new internal build for `adhoc`.
 The release train decides with
-`eas fingerprint:compare --build-id <last production build>`.
+`eas fingerprint:compare --build-id <last build of the same profile as the channel>`
+(adhoc builds carry plugins production does not, so compare like with like).
 
 ## E2E selector policy
 
