@@ -70,6 +70,17 @@ bought nine build pairs in sixteen hours verifying fixes one commit at a time.
   `apps/main` (Android: `adb reverse tcp:8081 tcp:8081`), then
   `maestro test apps/main/.maestro`.
 
+## Mobile OTA lane (EAS Update)
+
+Mobile release channels are `production` (store) and `adhoc` (internal).
+Ship JS-only patches with `publish-mobile-update.yml` at the release SHA.
+Updates reach only binaries with a matching fingerprint runtime version.
+A fingerprint move (native dep, config plugin, app config, native code) needs
+`build.yml` instead: a store submit for `production`, a new internal build for `adhoc`.
+The release train decides with
+`eas fingerprint:compare --build-id <last build of the same profile as the channel>`
+(adhoc builds carry plugins production does not, so compare like with like).
+
 ## E2E selector policy
 
 E2E tests must use stable `testID` selectors for app UI. Do not use localized UI text as selectors: no `getByText`, no `getByPlaceholder`, no `getByLabel`, and no `getByRole(..., { name })` in `apps/main/e2e`. If a UI element needs to be exercised by E2E, add a stable `testID` to the component and select it with `getByTestId()`. (Reading a testID-addressed cell's `textContent` is fine; _selecting_ by text is not.)

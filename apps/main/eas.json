@@ -30,6 +30,7 @@
     },
     "production": {
       "extends": "monorepo",
+      "channel": "production",
       "distribution": "store",
       "android": {
         "buildType": "app-bundle"
@@ -38,6 +39,7 @@
     },
     "adhoc": {
       "extends": "monorepo",
+      "channel": "adhoc",
       "distribution": "internal"
     }
   },
