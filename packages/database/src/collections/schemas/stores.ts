@@ -103,6 +103,16 @@ export const storesLiteral = {
 				required: ['type', 'value'],
 			},
 		},
+		customer_tax_id_types: {
+			title: 'Customer tax ID types',
+			description:
+				'Allow-list of the tax-ID types offered in the till\'s customer/order "Type" dropdown, configured in WP Admin. An empty array means "no restriction — offer every type", which is also what older plugin versions imply by omitting the field.',
+			type: 'array',
+			default: [],
+			items: {
+				type: 'string',
+			},
+		},
 		default_customer: {
 			title: 'Default POS customer',
 			type: 'integer',
@@ -690,6 +700,7 @@ export const SERVER_OWNED_STORE_FIELDS = [
 	'policies_and_conditions',
 	'footer_imprint',
 	'tax_ids',
+	'customer_tax_id_types',
 	'active_templates',
 ] as const satisfies readonly (keyof typeof storesLiteral.properties)[];
 
