@@ -75,7 +75,7 @@ Mobile release channels are `production` (store) and `adhoc` (internal).
 Ship JS-only patches with `publish-mobile-update.yml` at the release SHA.
 Updates reach only binaries with a matching fingerprint runtime version.
 A fingerprint move (native dep, config plugin, app config, native code) needs
-`build.yml` and a store submit instead of an OTA-only release.
+`build.yml` instead: a store submit for `production`, a new internal build for `adhoc`.
 The release train decides with
 `eas fingerprint:compare --build-id <last production build>`.
 

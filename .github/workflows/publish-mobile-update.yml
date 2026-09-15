@@ -5,7 +5,8 @@ name: Publish Mobile Update
 # This publishes JS only, not a new native binary or a store submission.
 # Updates are served only to binaries whose fingerprint runtime version matches.
 # A native dependency, config plugin, app config or native code change can move
-# that fingerprint and requires build.yml instead, followed by a store submit.
+# that fingerprint and requires build.yml instead: a store submit for
+# `production`, a new internal-distribution build for `adhoc`.
 # The release train decides whether a native build is needed with:
 #   eas fingerprint:compare --build-id <last production build>
 # Matching binaries keep receiving JS-only patches without another store build.
@@ -49,6 +50,7 @@ jobs:
         with:
           submodules: false
           fetch-depth: 1
+          persist-credentials: false
 
       - name: 🔎 Resolve the requested monorepo SHA
         id: monorepo-sha
@@ -71,9 +73,11 @@ jobs:
       - name: 📥 Check out monorepo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.inputs.monorepo_ref }}
+          # The SHA the gate verified, not the ref: a branch can advance between the two.
+          ref: ${{ steps.monorepo-sha.outputs.sha }}
           submodules: false
           fetch-depth: 0
+          persist-credentials: false
 
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
@@ -89,10 +93,13 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           CHANNEL: ${{ inputs.channel }}
+          # EAS gives internal-distribution builds the `preview` environment by default, so an
+          # adhoc update must read the same environment's variables as the adhoc binary.
+          EAS_ENVIRONMENT: ${{ inputs.channel == 'adhoc' && 'preview' || 'production' }}
           SHA: ${{ steps.monorepo-sha.outputs.sha }}
         run: |
           APP_VERSION=$(node -p "require('./package.json').version")
-          eas update --channel "$CHANNEL" --environment production --message "app v${APP_VERSION} ${SHA:0:8}" --non-interactive
+          eas update --channel "$CHANNEL" --environment "$EAS_ENVIRONMENT" --message "app v${APP_VERSION} ${SHA:0:8}" --non-interactive
 
       - name: 🔎 Is Sentry configured?
         id: sentry
