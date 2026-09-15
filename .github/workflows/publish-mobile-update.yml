@@ -4,13 +4,14 @@ name: Publish Mobile Update
 # Manual only: dispatch at the release SHA and choose production or adhoc.
 # This publishes JS only, not a new native binary or a store submission.
 # Updates are served only to binaries whose fingerprint runtime version matches.
+# Read per-platform .runtime.version via eas build:view <id> --json; shipped baselines: CLAUDE.md.
 # A native dependency, config plugin, app config or native code change can move
 # that fingerprint and requires build.yml instead: a store submit for
 # `production`, a new internal-distribution build for `adhoc`.
 # The release train decides whether a native build is needed by comparing the
-# tree against the latest build of the SAME profile as the channel (adhoc builds
+# tree against the shipped build of the SAME platform and profile (adhoc builds
 # carry plugins production does not):
-#   eas fingerprint:compare --build-id <last build of that profile>
+#   eas fingerprint:compare --build-id <shipped build of that platform and profile>
 # Matching binaries keep receiving JS-only patches without another store build.
 # Downloaded updates apply on the next cold start without delaying POS startup.
 
