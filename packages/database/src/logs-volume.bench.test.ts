@@ -143,12 +143,31 @@ async function timed<T>(label: string, fn: () => Promise<T> | T): Promise<[numbe
 	return [ms, value];
 }
 
-/** Mirrors scanSelectorFor in @wcpos/query use-local-query for the seeded term. */
+/**
+ * Mirrors scanSelectorFor in @wcpos/query use-local-query for the seeded term
+ * (this package cannot import query): each folded letter widened to its
+ * accented variants, so the measured regex is as heavy as the real one.
+ */
+const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
+	const variants = new Map<string, string>();
+	for (let codePoint = 0xc0; codePoint <= 0x24f; codePoint += 1) {
+		const letter = String.fromCodePoint(codePoint).toLowerCase();
+		const base = letter.normalize('NFD').replace(/[̀-ͯ]/g, '');
+		if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
+		if (!(variants.get(base) ?? '').includes(letter)) {
+			variants.set(base, `${variants.get(base) ?? ''}${letter}`);
+		}
+	}
+	return variants;
+})();
 function scanSelector(fields: string[], term: string) {
 	return {
-		$and: term.split(/\s+/).map((token) => ({
-			$or: fields.map((field) => ({ [field]: { $regex: token, $options: 'i' } })),
-		})),
+		$and: term.split(/\s+/).map((token) => {
+			const source = [...token]
+				.map((char) => (ACCENT_VARIANTS.has(char) ? `[${char}${ACCENT_VARIANTS.get(char)}]` : char))
+				.join('');
+			return { $or: fields.map((field) => ({ [field]: { $regex: source, $options: 'i' } })) };
+		}),
 	};
 }
 

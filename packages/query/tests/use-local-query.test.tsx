@@ -335,6 +335,13 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 				message: 'Pull escalation cleared',
 				context: { search: 'wcpos.sync.engine 992915' },
 			},
+			{
+				logId: 'd',
+				timestamp: 0,
+				level: 'error',
+				message: 'Conexión rechazada',
+				context: { search: 'wcpos.http' },
+			},
 		]);
 		engineDB = await createEngineDatabase();
 	});
@@ -383,6 +390,14 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 		expect(initSearch).not.toHaveBeenCalled();
 	});
 
+	it('matches accented text from either spelling (what the index gave; Codex review)', async () => {
+		const exact = mount('Conexión');
+		await waitFor(() => expect(hitIds(exact.result)).toEqual(['d']));
+		const folded = mount('conexion');
+		await waitFor(() => expect(hitIds(folded.result)).toEqual(['d']));
+		expect(initSearch).not.toHaveBeenCalled();
+	});
+
 	it('composes the scan with the caller selector and yields no rows for an unusable term', async () => {
 		const { result } = mount('pull escalation', { level: { $eq: 'warn' } });
 		await waitFor(() => expect(hitIds(result)).toEqual(['a', 'b']));
@@ -393,23 +408,37 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 });
 
 describe('scanSelectorFor', () => {
-	it('builds one AND clause per encoder token with regex-escaped terms', () => {
-		expect(scanSelectorFor(['message', 'context.search'], 'Pull (esc.alation)')).toEqual({
-			$and: [
-				{
-					$or: [
-						{ message: { $regex: 'pull', $options: 'i' } },
-						{ 'context.search': { $regex: 'pull', $options: 'i' } },
-					],
-				},
-				{
-					$or: [
-						{ message: { $regex: 'esc\\.alation', $options: 'i' } },
-						{ 'context.search': { $regex: 'esc\\.alation', $options: 'i' } },
-					],
-				},
-			],
-		});
+	type Clause = { $or: Record<string, { $regex: string; $options: string }>[] };
+	const clauses = (fields: string[], search: string) =>
+		(scanSelectorFor(fields, search) as { $and: Clause[] }).$and;
+	const regexOf = (clause: Clause, field: string) => {
+		const match = clause.$or.find((part) => field in part)?.[field];
+		if (!match) throw new Error(`no ${field} clause`);
+		return new RegExp(match.$regex, match.$options);
+	};
+
+	it('builds one AND clause per encoder token, one OR arm per field', () => {
+		const built = clauses(['message', 'context.search'], 'Pull (esc.alation)');
+		expect(built).toHaveLength(2);
+		for (const clause of built) {
+			expect(clause.$or.map((part) => Object.keys(part)[0])).toEqual(['message', 'context.search']);
+			expect(clause.$or.every((part) => Object.values(part)[0].$options === 'i')).toBe(true);
+		}
+	});
+
+	it('escapes regex metacharacters so a term is a literal substring', () => {
+		const [, dotted] = clauses(['message'], 'Pull (esc.alation)');
+		expect(regexOf(dotted, 'message').test('ESC.ALATION')).toBe(true);
+		expect(regexOf(dotted, 'message').test('escXalation')).toBe(false);
+	});
+
+	it('matches accented and unaccented spellings of a letter alike', () => {
+		const [term] = clauses(['message'], 'Conexión');
+		const regex = regexOf(term, 'message');
+		expect(regex.test('Conexión rechazada')).toBe(true);
+		expect(regex.test('CONEXION')).toBe(true);
+		expect(regex.test('Conexiön')).toBe(true);
+		expect(regex.test('Conexxion')).toBe(false);
 	});
 
 	it('returns null when nothing can be selected', () => {

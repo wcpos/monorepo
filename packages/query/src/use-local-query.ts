@@ -72,20 +72,50 @@ function selectorForSearch(
 }
 
 function escapeRegex(value: string): string {
-	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return value.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
+}
+
+/**
+ * Every precomposed Latin letter (U+00C0–U+024F) grouped under the base letter
+ * the encoder folds it to, so a folded token can be matched against UNFOLDED
+ * stored text: `e` → `[eèéêëēĕėęě…]`. Built once; the encoder's own fold
+ * (`foldSearchText`: lowercase + NFD + strip combining marks) is the grouping
+ * rule, so the two can never disagree on what counts as the same letter.
+ */
+const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
+	const variants = new Map<string, string>();
+	for (let codePoint = 0xc0; codePoint <= 0x24f; codePoint += 1) {
+		const letter = String.fromCodePoint(codePoint).toLowerCase();
+		const base = letter.normalize('NFD').replace(/[̀-ͯ]/g, '');
+		if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
+		if (!(variants.get(base) ?? '').includes(letter)) {
+			variants.set(base, `${variants.get(base) ?? ''}${letter}`);
+		}
+	}
+	return variants;
+})();
+
+/** A folded token as a regex source that also matches its accented spellings. */
+function accentInsensitiveSource(token: string): string {
+	return [...token]
+		.map((char) => {
+			const variants = ACCENT_VARIANTS.get(char);
+			return variants ? `[${char}${escapeRegex(variants)}]` : escapeRegex(char);
+		})
+		.join('');
 }
 
 /**
  * The scan-based search for a collection that refuses a FlexSearch index
  * (`options.searchIndex === false` — logs, see the collection creator for the
  * measurement). Every encoder token must appear in at least one searched field,
- * case-insensitively: the same "each term is somewhere in the record" contract
- * the index gives with `tokenize: 'full'`, expressed as a mango selector so the
- * STORAGE evaluates it — in the OPFS worker on web, off the main thread — and
- * the query's own `limit` bounds what comes back. Tokens are accent-folded by
- * the encoder while the stored text is not, so an accented term matches only
- * its accented spelling here; log text is overwhelmingly ASCII, and that is a
- * narrower miss than a 20-second index build.
+ * case- and accent-insensitively: the same "each term is somewhere in the
+ * record" contract the index gives with `tokenize: 'full'` and the folding
+ * encoder, expressed as a mango selector so the STORAGE evaluates it — in the
+ * OPFS worker on web, off the main thread — and the query's own `limit` bounds
+ * what comes back. The encoder folds the typed term; the stored text is raw, so
+ * each folded letter is widened to its accented variants (Codex review: the
+ * first cut missed even the exact accented spelling).
  *
  * `null` means the search cannot select anything (no fields, or a term with no
  * usable token) — callers turn that into "no hits", never into "all rows".
@@ -97,9 +127,10 @@ export function scanSelectorFor(
 	const terms = encodeSearchText(search);
 	if (terms.length === 0 || fields.length === 0) return null;
 	return {
-		$and: terms.map((term) => ({
-			$or: fields.map((field) => ({ [field]: { $regex: escapeRegex(term), $options: 'i' } })),
-		})),
+		$and: terms.map((term) => {
+			const source = accentInsensitiveSource(term);
+			return { $or: fields.map((field) => ({ [field]: { $regex: source, $options: 'i' } })) };
+		}),
 	} as MangoQuerySelector<LocalDocumentData>;
 }
 
