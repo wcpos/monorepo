@@ -6,6 +6,55 @@ import { createEngineHarness } from './testing';
 setPremiumFlag();
 
 describe('idle reference refresh cadence', () => {
+	it('rechecks an empty collection after the short backfill window', async () => {
+		let available = false;
+		const harness = await createEngineHarness({
+			startAtMs: 1_000_000,
+			routes: {
+				'/coupons': () =>
+					available
+						? [
+								{
+									id: 1,
+									code: 'new-coupon',
+									meta_data: [
+										{
+											key: '_woocommerce_pos_uuid',
+											value: '55555555-5555-4555-8555-555555555555',
+										},
+									],
+								},
+							]
+						: [],
+			},
+		});
+		try {
+			const { engine, clock } = harness;
+			await harness.collection('queryTotalCacheEntries').upsert({
+				queryKey: 'census:coupons',
+				totalMatchingRecords: 1,
+				updatedAtMs: clock.now(),
+				freshUntilMs: clock.now() + 60 * 60_000,
+				schemaVersion: 1,
+			});
+			await engine.sync('reference-seed');
+			await engine.sync('scheduler-drain');
+			expect(await harness.collection('coupons').count().exec()).toBe(0);
+			available = true;
+			clock.advance(3 * 60_000);
+			await engine.sync('reference-seed');
+			await engine.sync('scheduler-drain');
+			expect(harness.requests.filter(({ path }) => path.endsWith('/coupons'))).toHaveLength(1);
+			clock.advance(60_000 + 1);
+			await engine.sync('reference-seed');
+			await engine.sync('scheduler-drain');
+			expect(harness.requests.filter(({ path }) => path.endsWith('/coupons'))).toHaveLength(2);
+			expect(await harness.collection('coupons').count().exec()).toBe(1);
+		} finally {
+			await harness.dispose();
+		}
+	});
+
 	it.each(['categories', 'brands', 'tags', 'coupons'] as const)(
 		'%s does not download the unchanged collection every five minutes',
 		async (collection) => {
