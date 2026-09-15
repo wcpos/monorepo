@@ -142,7 +142,10 @@ export const useBarcodeDetection = (
 	 */
 	const onKeyPress = React.useCallback(
 		(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-			handleKeyInput(e.nativeEvent.key);
+			// On web/Electron a focused text field belongs to the typist, regardless
+			// of speed. The document listener still handles wedges outside inputs;
+			// device-identified scans arrive independently through the scan hub.
+			if (Platform.OS !== 'web') handleKeyInput(e.nativeEvent.key);
 		},
 		[handleKeyInput]
 	);

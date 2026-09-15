@@ -50,7 +50,7 @@ function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootPr
 	 */
 	return (
 		<Combobox value={{ value: value?.value ?? '', label: label ?? '' }} {...props}>
-			<ComboboxTrigger disabled={disabled}>
+			<ComboboxTrigger testID="country-select-trigger" disabled={disabled}>
 				<ComboboxValue placeholder={t('common.select_country')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
@@ -58,7 +58,12 @@ function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootPr
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
-						<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+						<ComboboxItem
+							testID={`country-option-${item.value}`}
+							value={String(item.value)}
+							label={item.label}
+							item={item}
+						>
 							<ComboboxItemText />
 						</ComboboxItem>
 					)}

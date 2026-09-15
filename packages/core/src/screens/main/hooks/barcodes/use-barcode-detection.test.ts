@@ -1,9 +1,10 @@
 /**
  * @jest-environment jsdom
  */
-import { Platform } from 'react-native';
+import * as React from 'react';
+import { Platform, TextInput } from 'react-native';
 
-import { act, renderHook } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import type { ScanEvent } from '@wcpos/scanner';
@@ -111,6 +112,7 @@ describe('useBarcodeDetection', () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
 		jest.clearAllMocks();
+		(Platform as { OS: string }).OS = 'web';
 		resetHeuristicTooShortRateLimit();
 		minChars$.next(8);
 		prefix$.next('');
@@ -122,6 +124,39 @@ describe('useBarcodeDetection', () => {
 	afterEach(() => {
 		jest.runOnlyPendingTimers();
 		jest.useRealTimers();
+		(Platform as { OS: string }).OS = 'web';
+	});
+
+	it.each([10, 20])('never turns focused search typing at %i ms/key into a scan', (gap) => {
+		const scans: string[] = [];
+		function Search() {
+			const { onKeyPress, barcode$ } = useBarcodeDetection();
+			const [value, setValue] = React.useState('');
+			React.useEffect(() => {
+				const subscription = barcode$.subscribe((code) => scans.push(code));
+				return () => subscription.unsubscribe();
+			}, [barcode$]);
+			return React.createElement(TextInput, {
+				testID: 'typing-search',
+				value,
+				onChangeText: setValue,
+				onKeyPress,
+			});
+		}
+		render(React.createElement(Search));
+		const input = screen.getByTestId('typing-search') as HTMLInputElement;
+		act(() => input.focus());
+		let value = '';
+		for (const key of 'fasttypist12345') {
+			fireEvent.keyDown(input, { key });
+			value += key;
+			fireEvent.change(input, { target: { value } });
+			act(() => jest.advanceTimersByTime(gap));
+		}
+		act(() => jest.advanceTimersByTime(200));
+		expect(input.value).toBe('fasttypist12345');
+		expect(document.activeElement).toBe(input);
+		expect(scans).toEqual([]);
 	});
 
 	it('does not treat human-speed typing after mount as a barcode scan', () => {
@@ -327,6 +362,7 @@ describe('useBarcodeDetection', () => {
 	});
 
 	it('marks native wedge scans as user activity after they pass the scan gate', () => {
+		(Platform as { OS: string }).OS = 'ios';
 		const { result } = renderHook(() => useBarcodeDetection());
 		const subscription = result.current.scanEvents$.subscribe();
 

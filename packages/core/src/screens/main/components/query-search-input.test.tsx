@@ -8,27 +8,14 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { QueryStateProvider, useQueryState, useQueryStateActions } from '../../../query';
 import { QuerySearchInput } from './query-search-input';
 
-jest.mock('@rn-primitives/hooks', () => ({
-	useComposedRefs: (...refs: React.Ref<unknown>[]) => refs[0],
-}));
-jest.mock('observable-hooks', () => ({ useSubscription: jest.fn() }));
-jest.mock('@wcpos/components/input', () => ({
-	Input: ({
-		value,
-		onChangeText,
-		testID,
-	}: {
-		value: string;
-		onChangeText: (value: string) => void;
-		testID?: string;
-	}) => (
-		<input
-			data-testid={testID}
-			value={value}
-			onChange={(event) => onChangeText(event.currentTarget.value)}
-		/>
+// Keep the real Input + react-native-web TextInput: mocking it concealed remounts
+// and the controlled-input event path. Only icon rendering is irrelevant here.
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ onPress, testID }: { onPress: () => void; testID?: string }) => (
+		<button data-testid={testID} onClick={onPress} />
 	),
 }));
+jest.mock('observable-hooks', () => ({ useSubscription: jest.fn() }));
 
 function Harness() {
 	const search = useQueryState<'customers', string>((state) => state.search);
@@ -150,4 +137,69 @@ describe('QuerySearchInput binding mode', () => {
 		expect((screen.getByTestId('search') as HTMLInputElement).value).toBe('');
 		expect(screen.getByTestId('committed-search').textContent).toBe('');
 	});
+	it('preserves focus and the input node when an external clear cancels a draft', () => {
+		render(
+			<QueryStateProvider
+				collection="customers"
+				initialPageSize={10}
+				initialSort={{ field: 'last_name', direction: 'asc' }}
+			>
+				<Harness />
+			</QueryStateProvider>
+		);
+		const input = screen.getByTestId('search') as HTMLInputElement;
+		act(() => input.focus());
+		fireEvent.change(input, { target: { value: 'unfinished' } });
+		fireEvent.click(screen.getByTestId('clear-search'));
+		expect(screen.getByTestId('search')).toBe(input);
+		expect(document.activeElement).toBe(input);
+		expect(input.value).toBe('');
+		fireEvent.change(input, { target: { value: 'next' } });
+		act(() => jest.advanceTimersByTime(250));
+		expect(screen.getByTestId('committed-search').textContent).toBe('next');
+	});
+
+	it.each(['products', 'customers', 'orders', 'coupons', 'logs'] as const)(
+		'%s preserves rapid edits without rendering query consumers per key',
+		(collection) => {
+			const commits: string[] = [];
+			function Results() {
+				const search = useQueryState((state) => state.search);
+				React.useLayoutEffect(() => {
+					commits.push(search);
+				});
+				return <span data-testid="results">{search}</span>;
+			}
+			render(
+				<QueryStateProvider
+					collection={collection}
+					initialPageSize={10}
+					initialSort={{ field: 'id', direction: 'asc' }}
+				>
+					<QuerySearchInput collectionName={collection} testID="search" />
+					<Results />
+				</QueryStateProvider>
+			);
+			const input = screen.getByTestId('search') as HTMLInputElement;
+			act(() => input.focus());
+			const term = 'rapidtyping12345';
+			for (let i = 1; i <= term.length; i++) {
+				fireEvent.change(input, { target: { value: term.slice(0, i) } });
+				act(() => jest.advanceTimersByTime(10));
+				expect(input.value).toBe(term.slice(0, i));
+			}
+			expect(commits).toEqual(['']);
+			act(() => jest.advanceTimersByTime(250));
+			expect(commits).toEqual(['', term]);
+			for (let i = term.length - 1; i >= 0; i--) {
+				fireEvent.change(input, { target: { value: term.slice(0, i) } });
+				act(() => jest.advanceTimersByTime(10));
+				expect(input.value).toBe(term.slice(0, i));
+				expect(document.activeElement).toBe(input);
+			}
+			expect(commits).toEqual(['', term]);
+			act(() => jest.advanceTimersByTime(250));
+			expect(commits).toEqual(['', term, '']);
+		}
+	);
 });

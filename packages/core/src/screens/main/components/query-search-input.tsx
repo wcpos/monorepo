@@ -15,11 +15,13 @@ interface Props<C extends CollectionKey> extends InputProps {
 
 function DebouncedSearchInput({
 	committedSearch,
+	searchResetNonce,
 	setSearch,
 	ref,
 	...props
 }: InputProps & {
 	committedSearch: string;
+	searchResetNonce: number;
 	setSearch: (search: string) => void;
 }) {
 	const [draftSearch, setDraftSearch] = React.useState(committedSearch);
@@ -27,19 +29,21 @@ function DebouncedSearchInput({
 	// optimistically in handleSearch so the input's own debounced commit echoing
 	// back through the store is a no-op instead of resetting the draft.
 	const lastCommittedRef = React.useRef(committedSearch);
+	const lastResetRef = React.useRef(searchResetNonce);
 	const commitSearch = React.useMemo(() => debounce(setSearch, 250), [setSearch]);
 
 	React.useEffect(() => () => commitSearch.cancel(), [commitSearch]);
 
-	// Adopt committed changes that originate outside this input (e.g. programmatic
-	// setSearch); a pending draft commit would be stale, so cancel it.
-	React.useEffect(() => {
-		if (committedSearch !== lastCommittedRef.current) {
+	// Synchronize external searches/resets before paint, without remounting the input.
+	// A pending draft commit would overwrite the external value, so cancel it.
+	React.useLayoutEffect(() => {
+		if (committedSearch !== lastCommittedRef.current || searchResetNonce !== lastResetRef.current) {
 			commitSearch.cancel();
+			lastResetRef.current = searchResetNonce;
 			lastCommittedRef.current = committedSearch;
 			setDraftSearch(committedSearch);
 		}
-	}, [committedSearch, commitSearch]);
+	}, [committedSearch, commitSearch, searchResetNonce]);
 
 	const handleSearch = React.useCallback(
 		(search: string) => {
@@ -62,12 +66,10 @@ export function QuerySearchInput<C extends CollectionKey>({
 	const searchResetNonce = useSearchResetNonce();
 	const { setSearch } = useQueryStateActions<typeof collectionName>();
 
-	// Keyed on the nonce only: explicit resets (clearSearch) remount the input so
-	// the draft drops and any pending commit cancels, but the input's own debounced
-	// commits must not remount it — that would drop focus on every commit (#904).
+	// Reset the draft in place: replacing the input node loses focus and queued keys.
 	return (
 		<DebouncedSearchInput
-			key={searchResetNonce}
+			searchResetNonce={searchResetNonce}
 			ref={ref}
 			committedSearch={committedSearch}
 			setSearch={setSearch}
