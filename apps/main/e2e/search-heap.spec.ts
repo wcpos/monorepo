@@ -18,6 +18,12 @@ import { authenticatedTest as test } from './fixtures';
  * are sampled over CDP. The gates compare the tail of the run to its warm plateau, never to the
  * cold start, so cache warm-up cannot fail it and a trend cannot pass it.
  *
+ * The harness forces exactly one collection during the run, at the end of the warm-up and BEFORE
+ * the trend window opens: it supplies the collected baseline the end-of-run collected reading is
+ * compared to. From there to the last cycle nothing but V8 collects, so garbage that accumulates
+ * per committed search is measured as it would on a till, not wiped between the plateau and the
+ * tail. The main-thread time that collection costs is subtracted from the long-task budget.
+ *
  * Measured 2026-09-15 on dev-free (359-product fixture store, published 1.10.15 and 1.10.16
  * bundles): 400 committed searches, heap 70 → plateau 150–225 MB, 1 long task (124 ms) in
  * total, post-GC 174 MB. The ceilings below are 2–3× those readings.
@@ -25,11 +31,13 @@ import { authenticatedTest as test } from './fixtures';
 const WORD = 'brake';
 const KEY_GAP_MS = 400; // > the 250 ms debounce, so each key is its own committed search
 const SETTLE_MS = 800;
-/** Cycles before the plateau is read; the first cycles pay index/import/query-cache warm-up. */
+/** Cycles before the collected baseline is taken; the first cycles pay index/import/query-cache warm-up. */
 const WARM_UP_CYCLES = 5;
+/** Cycles after the harness collection before the plateau is read, so it reads a re-warmed heap, not a freshly swept one. */
+const REWARM_CYCLES = 2;
 const PLATEAU_WINDOW = 5;
 /** Fewer cycles than this and the plateau and tail windows overlap, which reads a trend as flat. */
-const MIN_CYCLES = WARM_UP_CYCLES + 2 * PLATEAU_WINDOW;
+const MIN_CYCLES = WARM_UP_CYCLES + REWARM_CYCLES + 2 * PLATEAU_WINDOW;
 const CYCLES = Number(process.env.SEARCH_HEAP_CYCLES ?? 20);
 if (!Number.isInteger(CYCLES) || CYCLES < MIN_CYCLES) {
 	throw new Error(
@@ -40,8 +48,8 @@ if (!Number.isInteger(CYCLES) || CYCLES < MIN_CYCLES) {
 const HEAP_CEILING_BYTES = 768 * 1024 * 1024;
 /** Tail mean over plateau mean: a leak per committed search reads as a rising tail. */
 const MAX_TAIL_OVER_PLATEAU = 1.25;
-/** Post-GC heap over plateau mean: what a forced collection cannot reclaim is retained. */
-const MAX_RETAINED_OVER_PLATEAU = 1.25;
+/** Post-GC heap over the collected baseline: what a forced collection cannot reclaim is retained. */
+const MAX_RETAINED_OVER_BASELINE = 1.25;
 /** DOM nodes at the end over the plateau: detached-but-referenced rows show up here first. */
 const MAX_NODES_OVER_PLATEAU = 1.5;
 /** Total main-thread long-task time across every committed search (measured: 124 ms in 400). */
@@ -104,7 +112,9 @@ test('committed searches neither retain per keystroke nor block the main thread'
 	await expect(input).toBeVisible({ timeout: 30_000 });
 	await sample('start');
 
-	let collectedPlateau: Sample | null = null;
+	let collectedBaseline: Sample | null = null;
+	/** Long-task time the harness's own warm-up collection cost; not search work, so not budgeted. */
+	let harnessLongTaskMs = 0;
 	for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
 		await input.click();
 		for (const ch of WORD) {
@@ -117,27 +127,31 @@ test('committed searches neither retain per keystroke nor block the main thread'
 			await page.waitForTimeout(KEY_GAP_MS);
 		}
 		await page.waitForTimeout(SETTLE_MS);
-		await sample(`cycle-${cycle}`);
-		// Like against like: the retained-heap gate compares the end-of-run collected reading to
-		// a collected reading taken at the end of the plateau window, never to pre-GC samples.
-		if (cycle === WARM_UP_CYCLES + PLATEAU_WINDOW) {
+		const cycleSample = await sample(`cycle-${cycle}`);
+		// Like against like: the retained-heap gate compares the end-of-run collected reading to a
+		// collected reading, never to a pre-GC sample. Taken at the end of the warm-up so the trend
+		// window that follows is never interrupted by a harness collection.
+		if (cycle === WARM_UP_CYCLES) {
 			await cdp.send('HeapProfiler.collectGarbage');
 			await page.waitForTimeout(1_000);
-			collectedPlateau = await sample('plateau-collected');
+			collectedBaseline = await sample('warm-up-collected');
+			harnessLongTaskMs += collectedBaseline.longTaskMs - cycleSample.longTaskMs;
 		}
 	}
 	await expect(input).toHaveValue('');
-	// Long tasks are read BEFORE the harness's own forced collection, which can itself stall the
+	// Long tasks are read BEFORE the harness's final forced collection, which can itself stall the
 	// renderer past the long-task threshold on a big heap; only search work is budgeted.
 	const lastCycle = samples[samples.length - 1];
+	const searchLongTaskMs = lastCycle.longTaskMs - harnessLongTaskMs;
 
 	await cdp.send('HeapProfiler.collectGarbage');
 	await page.waitForTimeout(1_000);
 	const afterGc = await sample('after-gc');
-	if (!collectedPlateau) throw new Error('the collected plateau sample was never taken');
+	if (!collectedBaseline) throw new Error('the collected baseline sample was never taken');
 
 	const cycles = samples.filter((s) => s.label.startsWith('cycle-'));
-	const plateau = cycles.slice(WARM_UP_CYCLES, WARM_UP_CYCLES + PLATEAU_WINDOW);
+	const plateauFrom = WARM_UP_CYCLES + REWARM_CYCLES;
+	const plateau = cycles.slice(plateauFrom, plateauFrom + PLATEAU_WINDOW);
 	const tail = cycles.slice(-PLATEAU_WINDOW);
 	const plateauHeap = mean(plateau.map((s) => s.heapUsed));
 	const tailHeap = mean(tail.map((s) => s.heapUsed));
@@ -156,9 +170,10 @@ test('committed searches neither retain per keystroke nor block the main thread'
 	// never reaches a CI log (search-latency's line never has); stdout and the annotation carry it.
 	const summary =
 		`cycles=${CYCLES} commits=${CYCLES * WORD.length * 2} plateau=${mb(plateauHeap)} ` +
-		`tail=${mb(tailHeap)} max=${mb(maxHeap)} plateauCollected=${mb(collectedPlateau.heapUsed)} ` +
+		`tail=${mb(tailHeap)} max=${mb(maxHeap)} baselineCollected=${mb(collectedBaseline.heapUsed)} ` +
 		`afterGc=${mb(afterGc.heapUsed)} nodes plateau=${plateauNodes.toFixed(0)} end=${afterGc.nodes} ` +
-		`longTasks=${lastCycle.longTasks} longTaskMs=${lastCycle.longTaskMs.toFixed(0)}`;
+		`longTasks=${lastCycle.longTasks} longTaskMs=${searchLongTaskMs.toFixed(0)} ` +
+		`(harness GC ${harnessLongTaskMs.toFixed(0)})`;
 	testInfo.annotations.push({ type: 'search-heap', description: summary });
 	console.log(`[search-heap] ${summary}`);
 
@@ -168,15 +183,15 @@ test('committed searches neither retain per keystroke nor block the main thread'
 		`tail ${mb(tailHeap)} over plateau ${mb(plateauHeap)}: the heap is trending up per committed search`
 	).toBeLessThanOrEqual(MAX_TAIL_OVER_PLATEAU);
 	expect(
-		afterGc.heapUsed / collectedPlateau.heapUsed,
-		`${mb(afterGc.heapUsed)} retained after GC over the collected plateau ${mb(collectedPlateau.heapUsed)}`
-	).toBeLessThanOrEqual(MAX_RETAINED_OVER_PLATEAU);
+		afterGc.heapUsed / collectedBaseline.heapUsed,
+		`${mb(afterGc.heapUsed)} retained after GC over the collected baseline ${mb(collectedBaseline.heapUsed)}`
+	).toBeLessThanOrEqual(MAX_RETAINED_OVER_BASELINE);
 	expect(
 		afterGc.nodes / plateauNodes,
 		`${afterGc.nodes} DOM nodes at the end over plateau ${plateauNodes.toFixed(0)}`
 	).toBeLessThanOrEqual(MAX_NODES_OVER_PLATEAU);
 	expect(
-		lastCycle.longTaskMs,
-		`${lastCycle.longTasks} long tasks blocked the main thread for ${lastCycle.longTaskMs.toFixed(0)} ms`
+		searchLongTaskMs,
+		`${lastCycle.longTasks} long tasks blocked the main thread for ${searchLongTaskMs.toFixed(0)} ms (after subtracting the harness collection)`
 	).toBeLessThanOrEqual(LONG_TASK_BUDGET_MS);
 });
