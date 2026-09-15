@@ -1,5 +1,6 @@
 // This pins the OTA lane's contract; flipping any of these silently returns
 // mobile to store-build-only delivery.
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -37,6 +38,34 @@ describe('mobile OTA configuration', () => {
 
 	it('uses the native fingerprint as the runtime version', () => {
 		expect(appConfig.runtimeVersion).toEqual({ policy: 'fingerprint' });
+	});
+
+	it('reuses the resolved runtime only in the E2E Metro process', () => {
+		// Use Expo's config loader, not Jest's app transform (which inlines EXPO_PUBLIC_*).
+		for (const [e2e, runtime, expected] of [
+			['1', 'resolved-native-fingerprint', 'resolved-native-fingerprint'],
+			['', 'resolved-native-fingerprint', { policy: 'fingerprint' }],
+			['1', '', { policy: 'fingerprint' }],
+		]) {
+			const result = spawnSync(
+				process.execPath,
+				[
+					'-e',
+					'process.stdout.write(JSON.stringify(require("expo/config").getConfig(process.cwd()).exp.runtimeVersion))',
+				],
+				{
+					cwd: resolve(__dirname, '..'),
+					encoding: 'utf8',
+					env: {
+						...process.env,
+						EXPO_PUBLIC_WCPOS_E2E: String(e2e),
+						WCPOS_E2E_RUNTIME_VERSION: String(runtime),
+					},
+				}
+			);
+			expect(result.status).toBe(0);
+			expect(JSON.parse(result.stdout)).toEqual(expected);
+		}
 	});
 
 	it('fetches updates from the existing EAS project', () => {
