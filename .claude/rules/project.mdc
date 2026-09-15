@@ -29,6 +29,11 @@ Always use namespace imports for React hooks: `React.useState`, `React.useRef`, 
 - No `any`. Use strict types and generics.
 - Platform files resolve as `.web.ts`, `.electron.ts`, `.ts` for native.
 
+## Table and List Pagination
+- Auto-pagination requires a measured, positive-size viewport. Hidden/inactive screens can stay mounted with zero layout; zero geometry is not "at the bottom".
+- Apply this gate to scroll, content-size, layout, and rendered-row callbacks; recheck when the viewport becomes visible so short pages still fill normally.
+- Reuse the shared virtualized list where applicable. Custom ScrollViews must preserve the same hidden/visible contract and test it; do not disable scrolling or background sync globally.
+
 ## Styling and Theming
 
 Applies to `**/*.tsx` and `**/global.css`.
