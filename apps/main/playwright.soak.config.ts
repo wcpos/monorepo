@@ -14,7 +14,7 @@ if (!baseURL) {
  */
 export default defineConfig<WcposTestOptions>({
 	testDir: './e2e',
-	testMatch: /idle-backfill\.live\.spec\.ts/,
+	testMatch: [/idle-backfill\.live\.spec\.ts/, /tick-403-soak\.live\.spec\.ts/],
 	fullyParallel: false,
 	workers: 1,
 	retries: 0,
