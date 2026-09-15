@@ -94,8 +94,12 @@ const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
 	const combiningMarks = new RegExp(COMBINING_MARK_CLASS, 'g');
 	for (const [from, to] of PRECOMPOSED_LATIN_RANGES) {
 		for (let codePoint = from; codePoint <= to; codePoint += 1) {
-			const letter = String.fromCodePoint(codePoint).toLowerCase();
-			const base = letter.normalize('NFD').replace(combiningMarks, '');
+			// The fold decides the group; the ORIGINAL code point is what goes in
+			// the class. Lowercasing can expand (Turkish İ, U+0130 → "i" + U+0307),
+			// and the i flag cannot pair such a letter with its plain base, so the
+			// character that actually appears in text must be the one listed.
+			const letter = String.fromCodePoint(codePoint);
+			const base = letter.toLowerCase().normalize('NFD').replace(combiningMarks, '');
 			if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
 			if (!(variants.get(base) ?? '').includes(letter)) {
 				variants.set(base, `${variants.get(base) ?? ''}${letter}`);

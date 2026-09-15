@@ -1,7 +1,7 @@
 /**
  * Logs-volume bench: the Store health → Logs screen under an overnight
- * escalation storm (46k rows in one day, frikifunko.mx 2026-09-15, where the
- * tab went "Page Unresponsive" and then "Aw, Snap").
+ * escalation storm (46k rows in one day on a merchant store, 2026-09-15, where
+ * the tab went "Page Unresponsive" and then "Aw, Snap").
  *
  * Seeds a real in-memory RxDB `logs` collection built from the REAL store
  * collection creator, then times every path the Logs screen runs. The user
@@ -155,8 +155,11 @@ const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
 		[0x1e00, 0x1eff],
 	]) {
 		for (let codePoint = from; codePoint <= to; codePoint += 1) {
-			const letter = String.fromCodePoint(codePoint).toLowerCase();
-			const base = letter.normalize('NFD').replace(new RegExp('[\u0300-\u036f]', 'g'), '');
+			const letter = String.fromCodePoint(codePoint);
+			const base = letter
+				.toLowerCase()
+				.normalize('NFD')
+				.replace(new RegExp('[\u0300-\u036f]', 'g'), '');
 			if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
 			if (!(variants.get(base) ?? '').includes(letter)) {
 				variants.set(base, `${variants.get(base) ?? ''}${letter}`);

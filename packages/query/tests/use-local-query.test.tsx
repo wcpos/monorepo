@@ -457,6 +457,14 @@ describe('scanSelectorFor', () => {
 		expect(regexOf(viet, 'message').test('tiến')).toBe(true); // ế is U+1EBF (Latin Extended Additional)
 	});
 
+	it('matches letters whose lowercase is more than one code point, like Turkish İ (Codex review)', () => {
+		// U+0130 lowercases to "i" + U+0307; the class must carry the ORIGINAL code
+		// point, because the i flag cannot pair U+0130 with a plain "i".
+		const [term] = clauses(['message'], 'istanbul');
+		expect(regexOf(term, 'message').test('İstanbul')).toBe(true);
+		expect(regexOf(term, 'message').test('Istanbul')).toBe(true);
+	});
+
 	it('returns null when nothing can be selected', () => {
 		expect(scanSelectorFor([], 'pull')).toBeNull();
 		expect(scanSelectorFor(['message'], '   ')).toBeNull();
