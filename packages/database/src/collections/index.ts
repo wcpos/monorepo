@@ -428,6 +428,17 @@ const logs: RxCollectionCreator<LogDocumentType> = {
 	},
 	options: {
 		searchFields: ['message', 'context.error', 'context.errorCode', 'context.search'],
+		// NO FlexSearch index for logs — the Logs screen searches these fields with a
+		// bounded substring scan instead (use-local-query). Measured 2026-09-15 on a
+		// 46k-row day (an overnight escalation storm, frikifunko.mx): building the
+		// premium index in the renderer took 21.5 s of blocked main thread and ~350 MB
+		// of heap, and the tokenizer/field choice moved nothing (forward 19.4 s, strict
+		// 18.8 s, message-only 19.6 s) — the cost is the pipeline's per-row index
+		// persistence, ~0.4 ms and ~7 KB a row. The same rows regex-scan in 40 ms,
+		// and on the web that scan runs in the storage worker. Logs are the one
+		// searched collection that churns without bound (retention is bytes, not
+		// rows), so an index sized for a catalogue is the wrong structure here.
+		searchIndex: false,
 	},
 };
 

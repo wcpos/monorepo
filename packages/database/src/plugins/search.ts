@@ -390,6 +390,13 @@ export const searchPlugin: RxPlugin = {
 				if (!Array.isArray(options?.searchFields ?? this.options?.searchFields)) {
 					return null;
 				}
+				// A collection can carry searchFields for a scan-based search and still
+				// refuse an index (logs: see the collection creator). Refusing HERE, not
+				// only in the query layer, means no caller — warmup, audit, a future
+				// binding — can build the index by accident.
+				if (this.options?.searchIndex === false) {
+					return null;
+				}
 
 				locale = normalizeLocale(locale);
 				if (!this._searchInitializationOptions) {

@@ -4,10 +4,12 @@
 import * as React from 'react';
 
 import { cleanup, render, renderHook, waitFor } from '@testing-library/react';
+import { createRxDatabase } from 'rxdb';
+import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { firstValueFrom, Observable } from 'rxjs';
 
 import { QueryProvider } from '../src/provider';
-import { useLocalQuery } from '../src/use-local-query';
+import { scanSelectorFor, useLocalQuery } from '../src/use-local-query';
 import { createStoreDatabase } from './helpers/db';
 import { logsLiteral } from './helpers/schemas/logs';
 import { createEngineDatabase, createFakeEngine } from '../src/testing';
@@ -283,5 +285,135 @@ describe('useLocalQuery', () => {
 			() => expect(query?.resource.valueRef$$.value?.current?.hits[0]?.id).toBe('after'),
 			{ timeout: 3000 }
 		);
+	});
+});
+
+describe('useLocalQuery scan search (collections that refuse an index)', () => {
+	// logs: a 46k-row day cost 21.5 s and ~350 MB to index in the renderer and
+	// crashed the tab (2026-09-15). A collection with `searchIndex: false` is
+	// searched by a bounded, storage-evaluated substring scan instead, and the
+	// index is never asked for.
+	let scanDB: RxDatabase;
+	let engineDB: RxDatabase;
+	let initSearch: jest.Mock;
+
+	beforeEach(async () => {
+		scanDB = await createRxDatabase({
+			name: `scan_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+			storage: getRxStorageMemory(),
+			allowSlowCount: true,
+		});
+		await scanDB.addCollections({
+			logs: {
+				schema: logsLiteral,
+				options: { searchFields: ['message', 'context.search'], searchIndex: false },
+			},
+		});
+		initSearch = jest.fn(async () => {
+			throw new Error('the index must never be built for a scan-searched collection');
+		});
+		(scanDB.collections.logs as unknown as { initSearch: unknown }).initSearch = initSearch;
+		await scanDB.collections.logs.bulkInsert([
+			{
+				logId: 'a',
+				timestamp: 3,
+				level: 'warn',
+				message: '"products/992915" cannot download — products 992915 — pull escalation',
+				context: { search: 'wcpos.sync.engine missing_stored 992915' },
+			},
+			{
+				logId: 'b',
+				timestamp: 2,
+				level: 'warn',
+				message: '"products/992912" cannot download — products 992912 — pull escalation',
+				context: { search: 'wcpos.sync.engine missing_stored 992912' },
+			},
+			{
+				logId: 'c',
+				timestamp: 1,
+				level: 'info',
+				message: 'Pull escalation cleared',
+				context: { search: 'wcpos.sync.engine 992915' },
+			},
+		]);
+		engineDB = await createEngineDatabase();
+	});
+
+	afterEach(async () => {
+		cleanup();
+		if (!scanDB.destroyed) await scanDB.remove();
+		if (!engineDB.destroyed) await engineDB.remove();
+	});
+
+	function mount(search: string, selector: Record<string, unknown> = {}) {
+		const engine = createFakeEngine(engineDB);
+		const wrapper = ({ children }: { children: React.ReactNode }) => (
+			<QueryProvider localDB={scanDB} engine={engine} locale="en">
+				{children}
+			</QueryProvider>
+		);
+		return renderHook(
+			({ term }) =>
+				useLocalQuery({
+					collectionName: 'logs',
+					selector,
+					sort: [{ timestamp: 'desc' }],
+					limit: 20,
+					search: term,
+				}),
+			{ wrapper, initialProps: { term: search } }
+		);
+	}
+
+	const hitIds = (result: { current: ReturnType<typeof useLocalQuery> }) =>
+		result.current.resource.valueRef$$.value?.current?.hits.map((hit) => hit.id);
+
+	it('matches case-insensitively, AND across tokens, OR across fields, without the index', async () => {
+		const { result } = mount('ESCALATION 992915');
+		// Both tokens must land: row a (message + context), row c (message has
+		// "escalation", context has 992915) — row b lacks 992915 entirely.
+		await waitFor(() => expect(hitIds(result)).toEqual(['a', 'c']));
+		await expect(firstValueFrom(result.current.total$)).resolves.toBe(2);
+		expect(initSearch).not.toHaveBeenCalled();
+	});
+
+	it('treats punctuation-bearing terms as literal substrings', async () => {
+		const { result } = mount('products/992912');
+		await waitFor(() => expect(hitIds(result)).toEqual(['b']));
+		expect(initSearch).not.toHaveBeenCalled();
+	});
+
+	it('composes the scan with the caller selector and yields no rows for an unusable term', async () => {
+		const { result } = mount('pull escalation', { level: { $eq: 'warn' } });
+		await waitFor(() => expect(hitIds(result)).toEqual(['a', 'b']));
+		const { result: empty } = mount('---');
+		await waitFor(() => expect(hitIds(empty)).toEqual([]));
+		await expect(firstValueFrom(empty.current.total$)).resolves.toBe(0);
+	});
+});
+
+describe('scanSelectorFor', () => {
+	it('builds one AND clause per encoder token with regex-escaped terms', () => {
+		expect(scanSelectorFor(['message', 'context.search'], 'Pull (esc.alation)')).toEqual({
+			$and: [
+				{
+					$or: [
+						{ message: { $regex: 'pull', $options: 'i' } },
+						{ 'context.search': { $regex: 'pull', $options: 'i' } },
+					],
+				},
+				{
+					$or: [
+						{ message: { $regex: 'esc\\.alation', $options: 'i' } },
+						{ 'context.search': { $regex: 'esc\\.alation', $options: 'i' } },
+					],
+				},
+			],
+		});
+	});
+
+	it('returns null when nothing can be selected', () => {
+		expect(scanSelectorFor([], 'pull')).toBeNull();
+		expect(scanSelectorFor(['message'], '   ')).toBeNull();
 	});
 });

@@ -270,6 +270,29 @@ describe('search plugin', () => {
 	});
 
 	describe('FlexSearch initialization', () => {
+		it('refuses to build an index for a collection that opts out, whatever the caller asks', async () => {
+			// logs: a 46k-row day cost 21.5 s and ~350 MB to index in the renderer
+			// (2026-09-15); the Logs screen scans instead. Refusing at the plugin
+			// means no warmup, audit or binding can build it by accident.
+			const collectionPrototype: Record<string, unknown> = {};
+			const install = searchPlugin.prototypes?.RxCollection;
+			if (!install) throw new Error('search plugin RxCollection prototype is missing');
+			install(collectionPrototype as unknown as RxCollection);
+			const collection = Object.assign(Object.create(collectionPrototype), {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database: { collections: {} },
+				onClose: [],
+				count: () => ({ exec: async () => 0 }),
+			});
+
+			await expect(collection.initSearch('en')).resolves.toBeNull();
+			await expect(
+				collection.initSearch('en', { searchFields: ['message', 'context.search'] })
+			).resolves.toBeNull();
+			expect(addFulltextSearch).not.toHaveBeenCalled();
+		});
+
 		it('passes the caller snapshot and intended index options to FlexSearch', async () => {
 			const collectionPrototype: Record<string, unknown> = {};
 			const install = searchPlugin.prototypes?.RxCollection;

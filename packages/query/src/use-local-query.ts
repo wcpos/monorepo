@@ -4,6 +4,8 @@ import { ObservableResource } from 'observable-hooks';
 import { combineLatest, defer, from, of, throwError } from 'rxjs';
 import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
+import { encodeSearchText } from '@wcpos/sync-core';
+
 import { useQueryRuntime } from './provider';
 import { useLocalCollection$ } from './use-local-collection';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
@@ -48,6 +50,15 @@ function recoverAsEmpty<T>(
 	);
 }
 
+function withSelector(
+	selector: MangoQuerySelector<LocalDocumentData>,
+	extra: MangoQuerySelector<LocalDocumentData>
+): MangoQuerySelector<LocalDocumentData> {
+	return Object.keys(selector).length === 0
+		? extra
+		: ({ $and: [selector, extra] } as MangoQuerySelector<LocalDocumentData>);
+}
+
 function selectorForSearch(
 	collection: LocalCollection,
 	selector: MangoQuerySelector<LocalDocumentData>,
@@ -55,10 +66,59 @@ function selectorForSearch(
 ): MangoQuerySelector<LocalDocumentData> {
 	const primaryPath = collection.schema.primaryPath;
 	const ids = documents.map((document) => document.primary);
-	const searchSelector = { [primaryPath]: { $in: ids } } as MangoQuerySelector<LocalDocumentData>;
-	return Object.keys(selector).length === 0
-		? searchSelector
-		: ({ $and: [selector, searchSelector] } as MangoQuerySelector<LocalDocumentData>);
+	return withSelector(selector, {
+		[primaryPath]: { $in: ids },
+	} as MangoQuerySelector<LocalDocumentData>);
+}
+
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The scan-based search for a collection that refuses a FlexSearch index
+ * (`options.searchIndex === false` — logs, see the collection creator for the
+ * measurement). Every encoder token must appear in at least one searched field,
+ * case-insensitively: the same "each term is somewhere in the record" contract
+ * the index gives with `tokenize: 'full'`, expressed as a mango selector so the
+ * STORAGE evaluates it — in the OPFS worker on web, off the main thread — and
+ * the query's own `limit` bounds what comes back. Tokens are accent-folded by
+ * the encoder while the stored text is not, so an accented term matches only
+ * its accented spelling here; log text is overwhelmingly ASCII, and that is a
+ * narrower miss than a 20-second index build.
+ *
+ * `null` means the search cannot select anything (no fields, or a term with no
+ * usable token) — callers turn that into "no hits", never into "all rows".
+ */
+export function scanSelectorFor(
+	fields: readonly string[],
+	search: string
+): MangoQuerySelector<LocalDocumentData> | null {
+	const terms = encodeSearchText(search);
+	if (terms.length === 0 || fields.length === 0) return null;
+	return {
+		$and: terms.map((term) => ({
+			$or: fields.map((field) => ({ [field]: { $regex: escapeRegex(term), $options: 'i' } })),
+		})),
+	} as MangoQuerySelector<LocalDocumentData>;
+}
+
+function scanFieldsFor(collection: LocalCollection): readonly string[] {
+	const fields = (collection.options as { searchFields?: unknown } | undefined)?.searchFields;
+	return Array.isArray(fields) ? (fields as string[]) : [];
+}
+
+function nothingSelector(collection: LocalCollection): MangoQuerySelector<LocalDocumentData> {
+	return { [collection.schema.primaryPath]: { $in: [] } } as MangoQuerySelector<LocalDocumentData>;
+}
+
+function scanSelector$(
+	collection: LocalCollection,
+	selector: MangoQuerySelector<LocalDocumentData>,
+	search: string
+) {
+	const scan = scanSelectorFor(scanFieldsFor(collection), search);
+	return of(withSelector(selector, scan ?? nothingSelector(collection)));
 }
 
 function localQueryResult$(
@@ -68,23 +128,33 @@ function localQueryResult$(
 ) {
 	const selector = options.selector ?? {};
 	const search = options.search?.trim() ?? '';
-	const selectors$ = search
-		? defer(() =>
-				from(
-					(
-						collection as unknown as { initSearch(locale: string): Promise<LocalSearch> }
-					).initSearch(locale)
-				)
-			).pipe(
-				switchMap((searchInstance) =>
-					searchInstance.collection.$.pipe(
-						startWith(null),
-						switchMap(() => from(searchInstance.find(search)))
+	const refusesIndex =
+		(collection.options as { searchIndex?: unknown } | undefined)?.searchIndex === false;
+	const selectors$ = !search
+		? of(selector)
+		: refusesIndex
+			? scanSelector$(collection, selector, search)
+			: defer(() =>
+					from(
+						(
+							collection as unknown as {
+								initSearch(locale: string): Promise<LocalSearch | null>;
+							}
+						).initSearch(locale)
 					)
-				),
-				map((documents) => selectorForSearch(collection, selector, documents))
-			)
-		: of(selector);
+				).pipe(
+					switchMap((searchInstance) =>
+						// The plugin returns null when it will not index this collection;
+						// the scan is the contract then, not an empty result.
+						searchInstance
+							? searchInstance.collection.$.pipe(
+									startWith(null),
+									switchMap(() => from(searchInstance.find(search))),
+									map((documents) => selectorForSearch(collection, selector, documents))
+								)
+							: scanSelector$(collection, selector, search)
+					)
+				);
 
 	return selectors$.pipe(
 		switchMap((matchingSelector) => {
