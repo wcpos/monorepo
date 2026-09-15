@@ -78,8 +78,21 @@ Updates reach only binaries with a matching fingerprint runtime version.
 A fingerprint move (native dep, config plugin, app config, native code) needs
 `build.yml` instead: a store submit for `production`, a new internal build for `adhoc`.
 The release train decides with
-`eas fingerprint:compare --build-id <last build of the same profile as the channel>`
+`eas fingerprint:compare --build-id <shipped build of that platform and profile>`
 (adhoc builds carry plugins production does not, so compare like with like).
+
+CI sets `EAS_BUILD_PROFILE` to match `--profile`; the CLI does not set it locally. Laptop users must do the same from `apps/main`:
+`EAS_BUILD_PROFILE=development eas build --profile development`.
+Use `adhoc` or `production` in both places for those profiles.
+
+**Shipped 1.10.16 production baseline:** read `.runtime.version` with `eas build:view <build-id> --json` from `apps/main`, not a local fingerprint.
+
+| Platform | Build ID | Runtime version |
+| --- | --- | --- |
+| Android | `2c2a5601-5db5-44ea-abaa-aee8be4fe048` | `0aeafa6969b108dab0f4082f117bc8ee488238a5` |
+| iOS | `98efef84-0804-4d91-ba9e-92b656b3302f` | `d02402d0a158a9b73e6c6666647eeef5e67a2887` |
+
+There is no single production hash: compare each platform with its shipped build of the same profile before OTA.
 
 ## E2E selector policy
 

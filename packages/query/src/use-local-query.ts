@@ -4,6 +4,8 @@ import { ObservableResource } from 'observable-hooks';
 import { combineLatest, defer, from, of, throwError } from 'rxjs';
 import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operators';
 
+import { buildScanSearchSelector } from '@wcpos/sync-core';
+
 import { useQueryRuntime } from './provider';
 import { useLocalCollection$ } from './use-local-collection';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
@@ -48,6 +50,15 @@ function recoverAsEmpty<T>(
 	);
 }
 
+function withSelector(
+	selector: MangoQuerySelector<LocalDocumentData>,
+	extra: MangoQuerySelector<LocalDocumentData>
+): MangoQuerySelector<LocalDocumentData> {
+	return Object.keys(selector).length === 0
+		? extra
+		: ({ $and: [selector, extra] } as MangoQuerySelector<LocalDocumentData>);
+}
+
 function selectorForSearch(
 	collection: LocalCollection,
 	selector: MangoQuerySelector<LocalDocumentData>,
@@ -55,10 +66,45 @@ function selectorForSearch(
 ): MangoQuerySelector<LocalDocumentData> {
 	const primaryPath = collection.schema.primaryPath;
 	const ids = documents.map((document) => document.primary);
-	const searchSelector = { [primaryPath]: { $in: ids } } as MangoQuerySelector<LocalDocumentData>;
-	return Object.keys(selector).length === 0
-		? searchSelector
-		: ({ $and: [selector, searchSelector] } as MangoQuerySelector<LocalDocumentData>);
+	return withSelector(selector, {
+		[primaryPath]: { $in: ids },
+	} as MangoQuerySelector<LocalDocumentData>);
+}
+
+/**
+ * The scan-based search for a collection that refuses a FlexSearch index
+ * (`options.searchIndex === false` — logs, see the collection creator for the
+ * measurement). `buildScanSearchSelector` in @wcpos/sync-core owns the shape:
+ * every encoder term must appear in the collection's FOLDED field (written by
+ * the logger with the same fold the encoder applies to the term, so the match
+ * is exact in fold space for any script or normal form) or, for rows that
+ * predate that field, in one of the raw `searchFields`. The storage evaluates
+ * it — in the OPFS worker on web, off the main thread — bounded by the query's
+ * own `limit`. A term with no usable token selects nothing, never everything.
+ */
+function scanSelector$(
+	collection: LocalCollection,
+	selector: MangoQuerySelector<LocalDocumentData>,
+	search: string
+) {
+	const options = collection.options as
+		{ searchFields?: unknown; searchFoldedField?: unknown } | undefined;
+	const scan = buildScanSearchSelector({
+		foldedField:
+			typeof options?.searchFoldedField === 'string' ? options.searchFoldedField : undefined,
+		rawFields: Array.isArray(options?.searchFields) ? (options.searchFields as string[]) : [],
+		search,
+	});
+	return of(
+		withSelector(
+			selector,
+			(scan as MangoQuerySelector<LocalDocumentData> | null) ?? nothingSelector(collection)
+		)
+	);
+}
+
+function nothingSelector(collection: LocalCollection): MangoQuerySelector<LocalDocumentData> {
+	return { [collection.schema.primaryPath]: { $in: [] } } as MangoQuerySelector<LocalDocumentData>;
 }
 
 function localQueryResult$(
@@ -68,23 +114,33 @@ function localQueryResult$(
 ) {
 	const selector = options.selector ?? {};
 	const search = options.search?.trim() ?? '';
-	const selectors$ = search
-		? defer(() =>
-				from(
-					(
-						collection as unknown as { initSearch(locale: string): Promise<LocalSearch> }
-					).initSearch(locale)
-				)
-			).pipe(
-				switchMap((searchInstance) =>
-					searchInstance.collection.$.pipe(
-						startWith(null),
-						switchMap(() => from(searchInstance.find(search)))
+	const refusesIndex =
+		(collection.options as { searchIndex?: unknown } | undefined)?.searchIndex === false;
+	const selectors$ = !search
+		? of(selector)
+		: refusesIndex
+			? scanSelector$(collection, selector, search)
+			: defer(() =>
+					from(
+						(
+							collection as unknown as {
+								initSearch(locale: string): Promise<LocalSearch | null>;
+							}
+						).initSearch(locale)
 					)
-				),
-				map((documents) => selectorForSearch(collection, selector, documents))
-			)
-		: of(selector);
+				).pipe(
+					switchMap((searchInstance) =>
+						// The plugin returns null when it will not index this collection;
+						// the scan is the contract then, not an empty result.
+						searchInstance
+							? searchInstance.collection.$.pipe(
+									startWith(null),
+									switchMap(() => from(searchInstance.find(search))),
+									map((documents) => selectorForSearch(collection, selector, documents))
+								)
+							: scanSelector$(collection, selector, search)
+					)
+				);
 
 	return selectors$.pipe(
 		switchMap((matchingSelector) => {

@@ -107,6 +107,31 @@ describe('coverage record batch writes', () => {
 		expect(writes.mock.calls[0][1]).toBe('coverage-record-batch');
 	});
 
+	it('skips still-fresh repeated pages and refreshes at half the incoming window', async () => {
+		await repository.recordRecords({ ...PAGE, queryKey: TARGETED });
+		const writes = vi.spyOn(db.coverageRecords.storageInstance, 'bulkWrite');
+		const rowCounts: number[] = [];
+		for (const nowMs of [200, 300, 350, 400, 650]) {
+			writes.mockClear();
+			await repository.recordRecords({ ...PAGE, queryKey: TARGETED, nowMs });
+			rowCounts.push(writes.mock.calls.reduce((count, [rows]) => count + rows.length, 0));
+		}
+		expect(rowCounts).toEqual([0, 0, 3, 0, 3]);
+		const doc = await db.coverageRecords.findOne('products::1').exec(true);
+		expect(doc.toJSON()).toEqual(stored('1', [TARGETED], 1150, 650));
+	});
+
+	it('preserves the revision and timestamps when every record remains comfortably fresh', async () => {
+		await repository.recordRecords({ ...PAGE, queryKey: TARGETED });
+		const previous = (await db.coverageRecords.findOne('products::1').exec(true)).toJSON(true);
+		const writes = vi.spyOn(db.coverageRecords.storageInstance, 'bulkWrite');
+		await repository.recordRecords({ ...PAGE, queryKey: TARGETED, nowMs: 200 });
+		expect(writes).not.toHaveBeenCalled();
+		expect((await db.coverageRecords.findOne('products::1').exec(true)).toJSON(true)).toEqual(
+			previous
+		);
+	});
+
 	it('prunes a repeated new id in a records-only page just as the second serial merge did', async () => {
 		const writes = vi.spyOn(db.coverageRecords.storageInstance, 'bulkWrite');
 		await repository.recordRecords({ ...PAGE, records: [{ id: '1' }, { id: '1' }] });
