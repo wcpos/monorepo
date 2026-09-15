@@ -25,6 +25,7 @@ import {
 	EngineStringStore,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
+import { materializeGreedyPrunable } from './materialization/record-materialization';
 
 import type { RxStorage } from 'rxdb';
 
@@ -253,6 +254,131 @@ async function productCount(engine: RxdbSyncEngine): Promise<number> {
 }
 
 describe('sync("change-signal") through the public handle', () => {
+	it.each(['within a page', 'across pages', 'identity collision', 'shifted window'])(
+		'rejects coupon duplicates %s without writes or checkpointing, then replays',
+		async (overlap) => {
+			const server = scriptedServer();
+			const coupon = (id: number, code = `coupon-${id}`) => ({
+				id,
+				code,
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: variationUuid(id) }],
+			});
+			const firstPage = Array.from({ length: 100 }, (_, index) => coupon(index + 1));
+			firstPage[99] = coupon(100, overlap === 'within a page' ? 'later' : 'earlier');
+			if (overlap === 'within a page') firstPage[98] = coupon(100, 'earlier');
+			const checkpoints = memoryStringStore();
+			let refreshing = false;
+			let stable = false;
+			const events: SyncEvent[] = [];
+			// The shifted walk starts with 1..102. After page 1, resident 102 moves
+			// to the front and new coupon 103 is inserted ahead of it.
+			let catalog = Array.from({ length: 102 }, (_, index) => coupon(index + 1));
+			const stableCatalog = Array.from(
+				{ length: overlap === 'shifted window' ? 103 : 101 },
+				(_, index) => coupon(index + 1, index === 99 ? 'later' : undefined)
+			).filter((row) => overlap !== 'within a page' || row.id !== 99);
+			const pages: number[] = [];
+			const engine = engineWith({
+				storage: memoryEngineStorage(),
+				identity: freshIdentity(),
+				checkpoints,
+				diagnostics: (event) => events.push(event),
+				fetch: async (url) => {
+					const u = new URL(url);
+					if (!u.pathname.endsWith('/coupons') || !refreshing) return server.fetch(url);
+					const page = Number(u.searchParams.get('page'));
+					pages.push(page);
+					if (stable) return Response.json(stableCatalog.slice((page - 1) * 100, page * 100));
+					if (overlap === 'shifted window') {
+						if (page === 2) {
+							catalog = [coupon(103), coupon(102), ...catalog.filter((row) => row.id !== 102)];
+							server.state.head = 7;
+							server.state.rows.push({ ...server.state.rows[0]!, sequence: 7, id: 103 });
+						}
+						return Response.json(catalog.slice((page - 1) * 100, page * 100));
+					}
+					if (overlap === 'identity collision' && page === 2) {
+						return Response.json([{ ...coupon(101), meta_data: coupon(100).meta_data }]);
+					}
+					const lastPage =
+						overlap === 'within a page' ? [coupon(101)] : [coupon(100, 'later'), coupon(101)];
+					return Response.json(page === 1 ? firstPage : lastPage);
+				},
+			});
+			try {
+				await engine.ready;
+				await engine.sync('change-signal');
+				const collection = engine.active()!.database.collections.coupons!;
+				const dirty = materializeGreedyPrunable(coupon(1, 'local')).storedDocument;
+				dirty.local.dirty = true;
+				const seeded = await collection.bulkUpsert([
+					dirty,
+					materializeGreedyPrunable(coupon(999)).storedDocument,
+					materializeGreedyPrunable(coupon(100, 'original')).storedDocument,
+					...(overlap === 'shifted window'
+						? [materializeGreedyPrunable(coupon(102)).storedDocument]
+						: []),
+				]);
+				expect(seeded.error).toEqual([]);
+				refreshing = true;
+				server.state.head = 6;
+				server.state.rows.push({
+					sequence: 6,
+					id: overlap === 'shifted window' ? 102 : 100,
+					deleted: 0,
+					collection: 'coupons',
+					modified_gmt: '2026-07-10T00:00:01',
+				});
+
+				const before = (await collection.find().exec()).map((doc) => doc.toJSON());
+				const checkpointBefore = [...checkpoints.entries()];
+				const report = await engine.sync('change-signal');
+				expect(report).toMatchObject({ status: 'error' });
+				expect(report.error).toContain(
+					overlap === 'identity collision' ? 'identity-ambiguous' : 'incomplete-snapshot'
+				);
+				expect(events).toContainEqual(
+					expect.objectContaining({
+						type: 'signal.tick.error',
+						level: 'error',
+						message: report.error,
+					})
+				);
+				expect((await collection.find().exec()).map((doc) => doc.toJSON())).toEqual(before);
+				expect([...checkpoints.entries()]).toEqual(checkpointBefore);
+				expect(pages).toEqual([1, 2]);
+				stable = true; // Stable walk (or repaired server identity) on the next tick.
+				expect((await engine.sync('change-signal')).status).toBe('ran');
+				expect(pages).toEqual([1, 2, 1, 2]);
+				expect(server.state.sequenceLogSince.slice(-2)).toEqual([5, 5]);
+				const residents = await collection.find().exec();
+				expect(residents).toHaveLength(
+					overlap === 'shifted window' ? 103 : overlap === 'within a page' ? 100 : 101
+				);
+				if (overlap === 'shifted window') {
+					expect(await collection.findOne(variationUuid(102)).exec()).not.toBeNull();
+					expect(await collection.findOne(variationUuid(103)).exec()).not.toBeNull();
+				}
+				expect((await collection.findOne(variationUuid(100)).exec())?.toJSON().payload.code).toBe(
+					'later'
+				);
+				expect((await collection.findOne(variationUuid(1)).exec())?.toJSON().payload.code).toBe(
+					'local'
+				);
+				expect(await collection.findOne(variationUuid(999)).exec()).toBeNull();
+				const persisted = [...checkpoints.entries()].find(([key]) =>
+					key.endsWith(':checkpoint:change-signal')
+				);
+				expect(JSON.parse(persisted![1]).cursor.sequence).toBe(
+					overlap === 'shifted window' ? 7 : 6
+				);
+				expect((await engine.sync('change-signal')).status).toBe('ran');
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('require targeted variations prunes a server-elided resident and resolves fetched', async () => {
 		const server = scriptedServer();
 		const diagnosticsEvents: SyncEvent[] = [];

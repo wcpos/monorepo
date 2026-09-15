@@ -261,7 +261,8 @@ describe('maintenance politeness contracts', () => {
 				reason: 'server-pressure',
 			});
 			expect(bucketRequests).toEqual([0]);
-			await expect(harness.engine.sync('existence-prime')).resolves.toMatchObject({
+			// Trickle still stands down; existence-prime now has its own bounded healing budget.
+			await expect(harness.engine.sync('product-trickle')).resolves.toMatchObject({
 				reason: 'server-pressure',
 			});
 			expect((await harness.engine.sync('change-signal')).reason).not.toBe('server-pressure');

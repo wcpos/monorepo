@@ -18,6 +18,7 @@ import { RxCoverageRepository } from './local-coverage/persistence';
 import {
 	REFERENCE_DEMAND_REFRESH_DEDUPE_MS,
 	REFERENCE_REFRESH_DEDUPE_MS,
+	REFERENCE_SAFETY_REFRESH_MS,
 } from './maintenance/maintenance-lanes';
 import { RxQueryTotalRequestStateRepository } from './rx-query-total-request-state-repository';
 import * as schedulerDrain from './scheduler/engine-scheduler-drain';
@@ -541,7 +542,7 @@ describe('maintenance lanes through the public handle', () => {
 		});
 		expect(pulls).toEqual({ categories: 1, brands: 0, tags: 0, coupons: 0 });
 
-		nowMs += REFERENCE_REFRESH_DEDUPE_MS + 1;
+		nowMs += REFERENCE_SAFETY_REFRESH_MS + 1;
 		await engine.sync('reference-seed');
 		await engine.sync('scheduler-drain');
 		expect(pulls).toEqual({ categories: 2, brands: 0, tags: 0, coupons: 0 });

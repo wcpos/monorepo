@@ -22,10 +22,10 @@ function buildIndex() {
 	return index;
 }
 
-describe('FlexSearch phrase candidate completeness against the fixture traps', () => {
+describe('FlexSearch term candidate completeness against the fixture traps', () => {
 	const index = buildIndex();
 	it.each(SEARCH_FIXTURE_TRAPS.map((t) => [t.name, t] as const))('%s', (_name, trap) => {
-		// Independent candidate probe; final per-field phrase selection belongs to query tests.
+		// Independent candidate probe; final all-term selection belongs to query tests.
 		const anchor = (foldSearchText(trap.query).match(/[\p{L}\p{N}]+/gu) ?? [])
 			.filter((term) => term.length >= FLEXSEARCH_MIN_TERM_LENGTH)
 			.sort((a, b) => b.length - a.length)[0];

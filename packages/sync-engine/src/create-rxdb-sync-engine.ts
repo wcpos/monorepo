@@ -57,6 +57,7 @@ import type {
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
 import {
+	COVERAGE_LANE_HISTORY_LIMIT,
 	ENGINE_KV_COLLECTION,
 	engineCollectionCreators,
 	isResettableCollection,
@@ -1116,6 +1117,7 @@ export function createRxdbSyncEngine(
 		try {
 			setLifecyclePhase('add-collections');
 			await db.addCollections(engineCollectionCreators() as never);
+			db.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			setLifecyclePhase('legacy-cursor-migrate');
 			const engineCheckpoint =
 				await db.collections[ENGINE_KV_COLLECTION].findOne(CHANGE_SIGNAL_STATE_KEY).exec();

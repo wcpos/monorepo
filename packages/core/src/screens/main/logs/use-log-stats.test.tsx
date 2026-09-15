@@ -32,12 +32,14 @@ describe('useLogStats', () => {
 		mockFind.mockReturnValue({ $: of([]) });
 	});
 
-	it('queries every retained record outcome in the sync and money domains before deriving stuck records', async () => {
+	it('bounds the newest record outcomes in the sync and money domains before deriving stuck records', async () => {
 		renderHook(() => useLogStats());
 
-		// Three stuck-record range scans (sync, payments, checkout) plus the clock-skew
-		// query. A refused payment is written under `wcpos.payments`, and scanning only
-		// the sync range is why a till could lose one and still report 0 stuck.
+		// Four stuck-record range scans (sync, payments, checkout, terminal-payments)
+		// plus the clock-skew query. A refused payment is written under
+		// `wcpos.payments`, and scanning only the sync range is why a till could lose
+		// one and still report 0 stuck. Each scan is row-capped so an escalation storm
+		// cannot materialize all of retention.
 		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(5));
 		for (const domain of [
 			'wcpos.sync',
@@ -51,6 +53,7 @@ describe('useLogStats', () => {
 					operationType: { $eq: 'sync.record' },
 				},
 				sort: [{ timestamp: 'desc' }],
+				limit: 5_000,
 			});
 		}
 	});

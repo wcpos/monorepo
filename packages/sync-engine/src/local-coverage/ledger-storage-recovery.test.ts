@@ -582,6 +582,13 @@ describe('coverage ledger recovery', () => {
 		for (const mode of ['seed', 'drain'] as const) {
 			const stale = db.collections.schedulerTaskStates;
 			await Promise.all(LEDGER_COLLECTIONS.map((name) => db.collections[name].close()));
+			const addCollections = db.addCollections.bind(db);
+			vi.spyOn(db, 'addCollections').mockImplementationOnce(async (creators) => {
+				const added = await addCollections(creators);
+				// A peer can close a different ledger collection before reattachment resumes.
+				await added.coverageLanes.close();
+				return added;
+			});
 			let calls = 0;
 			const run = async () => {
 				calls += 1;
@@ -598,6 +605,7 @@ describe('coverage ledger recovery', () => {
 				).resolves.toEqual([]);
 				expect(calls).toBe(1);
 			}
+			await db.addCollections({ coverageLanes: engineCollectionCreators().coverageLanes as never });
 			await expect(coverage.readSnapshot()).resolves.toEqual({ records: [], lanes: [] });
 		}
 		expect(events.filter((event) => event.type === 'coverage.ledger-reattached')).toHaveLength(2);

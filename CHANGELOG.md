@@ -8,9 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Typed product search matches the complete phrase in order within a product name, SKU, or barcode; partial and exact identifiers remain searchable, including through variations.
-- One- and two-character product searches match substrings. Reversed, separated, and cross-field word combinations no longer match; internal spacing and punctuation are literal.
-- This search contract requires the companion WCPOS v2 server update; existing search coverage should be refreshed when verifying the combined release.
+- Typed product and variation search requires every typed word to match, in any order and in any of name, SKU, or barcode, short words included; pairs with the companion WCPOS plugin release.
 
 ## [1.9.1] - 2026-05-19
 
