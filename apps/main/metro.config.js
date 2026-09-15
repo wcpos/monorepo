@@ -3,13 +3,15 @@ const path = require('path');
 // Load .env from monorepo root before Metro starts
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
-const { getDefaultConfig } = require('expo/metro-config');
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const { FileStore } = require('metro-cache');
 const { withUniwindConfig } = require('uniwind/metro');
 
 const { withBundleSerializerCache } = require('./metro/bundle-serializer-cache');
 
-let config = getDefaultConfig(__dirname);
+// Sentry stamps exported bundles and source maps with matching Debug IDs,
+// allowing crashes from OTA bundles to symbolicate after each JS-only update.
+let config = getSentryExpoConfig(__dirname);
 
 // Bundle the zxing-wasm barcode reader as a static asset so the Electron shell
 // can load it from the app origin instead of the CSP-blocked jsDelivr CDN
