@@ -41,6 +41,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		// bumps must keep using the native metadata already cached by EAS.
 		version: isDev ? DEV_CLIENT_NATIVE_VERSION : packageJson.version,
 
+		// Fingerprint hashes native deps and config; a package.json version bump
+		// alone does NOT move it (verified with @expo/fingerprint 0.20.8, 2026-09-15).
+		// One store binary receives every JS-only patch until a native change lands.
+		// fallbackToCacheTimeout: 0 starts the POS instantly; a downloaded update
+		// applies on the next cold start.
+		runtimeVersion: { policy: 'fingerprint' },
+		updates: {
+			url: 'https://u.expo.dev/eb1b6e66-92d7-47f5-b93f-95bf51287f60',
+			checkAutomatically: 'ON_LOAD',
+			fallbackToCacheTimeout: 0,
+		},
+
 		orientation: 'default',
 		icon: './assets/images/icon.png',
 		// One URL scheme per build profile, mirroring the bundle ids below. The
