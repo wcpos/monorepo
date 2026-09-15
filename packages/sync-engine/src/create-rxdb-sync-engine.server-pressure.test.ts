@@ -176,51 +176,45 @@ afterEach(() => {
 });
 
 describe('change-signal server-pressure adaptation', () => {
-	it('defers audit/trickle/query-total maintenance but not change-signal or write-drain', async () => {
+	it('defers trickle/query-total work but allows bounded audits and demand lanes', async () => {
 		const context = await harness({
 			queryTotal: { fetchWooQueryTotal: vi.fn(async () => 0) },
 		});
 		await context.respond(new Response(null, { status: 429 }));
 
-		for (const lane of [
-			'customer-trickle',
-			'product-trickle',
-			'existence-prime',
-			'existence-reconcile',
-			'query-total-retry',
-		] as const) {
+		for (const lane of ['customer-trickle', 'product-trickle', 'query-total-retry'] as const) {
 			await expect(context.engine.sync(lane)).resolves.toMatchObject({
 				lane,
 				status: 'skipped',
 				reason: 'server-pressure',
 			});
 		}
+		for (const lane of ['existence-prime', 'existence-reconcile'] as const) {
+			await expect(context.engine.sync(lane)).resolves.toMatchObject({ lane, status: 'ran' });
+		}
 		expect((await context.engine.sync('change-signal')).reason).not.toBe('server-pressure');
 		expect((await context.engine.sync('write-drain')).reason).not.toBe('server-pressure');
 		await context.engine.dispose();
 	});
 
-	it('bounds the pressure stand-down with the starvation ceiling: one reduced tick per window (mono#1159)', async () => {
+	it('runs bounded existence work immediately under pressure and once per normal interval', async () => {
 		const context = await harness({
 			queryTotal: { fetchWooQueryTotal: vi.fn(async () => 0) },
 		});
 		await context.respond(new Response(null, { status: 429 }));
 
-		// (a) Pressure armed, ceiling not reached: the audit stands down exactly as before.
+		// Pressure reduces the audit budget, not its first opportunity to heal.
 		await expect(context.engine.sync('existence-reconcile')).resolves.toMatchObject({
-			status: 'skipped',
-			reason: 'server-pressure',
+			status: 'ran',
 		});
-		// (d) A session that STARTS under pressure measures its ceiling from the first
-		// observed tick — an immediate retry is still a stand-down, never a run.
+		// An immediate retry still stands down: never more than one bounded pass per interval.
 		await expect(context.engine.sync('existence-reconcile')).resolves.toMatchObject({
 			status: 'skipped',
 			reason: 'server-pressure',
 		});
 
-		// (b) Past 2x the lane's default interval with pressure STILL armed (no healthy
-		// responses arrived), the lane runs one starvation tick instead of skipping.
-		context.setNow(context.now() + 2 * 17 * 60_000 + 1);
+		// At the next normal interval, pressure is still armed and the audit runs again.
+		context.setNow(context.now() + 17 * 60_000);
 		context.diagnostics.length = 0;
 		await expect(context.engine.sync('existence-reconcile')).resolves.toMatchObject({
 			lane: 'existence-reconcile',
