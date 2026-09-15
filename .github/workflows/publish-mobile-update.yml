@@ -93,6 +93,9 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           CHANNEL: ${{ inputs.channel }}
+          # app.config.ts keys bundle id, scheme and plugins off this; the exported manifest must
+          # describe the binary the channel targets (channel names equal profile names).
+          EAS_BUILD_PROFILE: ${{ inputs.channel }}
           # EAS gives internal-distribution builds the `preview` environment by default, so an
           # adhoc update must read the same environment's variables as the adhoc binary.
           EAS_ENVIRONMENT: ${{ inputs.channel == 'adhoc' && 'preview' || 'production' }}
