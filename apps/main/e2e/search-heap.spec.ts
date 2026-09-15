@@ -22,13 +22,20 @@ import { authenticatedTest as test } from './fixtures';
  * bundles): 400 committed searches, heap 70 → plateau 150–225 MB, 1 long task (124 ms) in
  * total, post-GC 174 MB. The ceilings below are 2–3× those readings.
  */
-const CYCLES = Number(process.env.SEARCH_HEAP_CYCLES ?? 20);
 const WORD = 'brake';
 const KEY_GAP_MS = 400; // > the 250 ms debounce, so each key is its own committed search
 const SETTLE_MS = 800;
 /** Cycles before the plateau is read; the first cycles pay index/import/query-cache warm-up. */
 const WARM_UP_CYCLES = 5;
 const PLATEAU_WINDOW = 5;
+/** Fewer cycles than this and the plateau and tail windows overlap, which reads a trend as flat. */
+const MIN_CYCLES = WARM_UP_CYCLES + 2 * PLATEAU_WINDOW;
+const CYCLES = Number(process.env.SEARCH_HEAP_CYCLES ?? 20);
+if (!Number.isInteger(CYCLES) || CYCLES < MIN_CYCLES) {
+	throw new Error(
+		`SEARCH_HEAP_CYCLES=${process.env.SEARCH_HEAP_CYCLES} — need an integer ≥ ${MIN_CYCLES} so the plateau and tail windows are disjoint`
+	);
+}
 /** Absolute ceiling on the heap at any sample — a renderer dies near 4 GB, a healthy tab sits ~200 MB. */
 const HEAP_CEILING_BYTES = 768 * 1024 * 1024;
 /** Tail mean over plateau mean: a leak per committed search reads as a rising tail. */
@@ -132,13 +139,16 @@ test('committed searches neither retain per keystroke nor block the main thread'
 		),
 	].join('\n');
 	await testInfo.attach('search-heap.csv', { body: csv, contentType: 'text/csv' });
-	// Printed on every run so a CI log carries the measured numbers, not only pass/fail.
-	console.log(
-		`[search-heap] cycles=${CYCLES} commits=${CYCLES * WORD.length * 2} plateau=${mb(plateauHeap)} ` +
-			`tail=${mb(tailHeap)} max=${mb(maxHeap)} afterGc=${mb(afterGc.heapUsed)} ` +
-			`nodes plateau=${plateauNodes.toFixed(0)} end=${afterGc.nodes} ` +
-			`longTasks=${afterGc.longTasks} longTaskMs=${afterGc.longTaskMs.toFixed(0)}`
-	);
+	// Printed on every run so a CI log carries the measured numbers, not only pass/fail. The
+	// project logger prints only warn/error outside dev builds, so a measurement routed through it
+	// never reaches a CI log (search-latency's line never has); stdout and the annotation carry it.
+	const summary =
+		`cycles=${CYCLES} commits=${CYCLES * WORD.length * 2} plateau=${mb(plateauHeap)} ` +
+		`tail=${mb(tailHeap)} max=${mb(maxHeap)} afterGc=${mb(afterGc.heapUsed)} ` +
+		`nodes plateau=${plateauNodes.toFixed(0)} end=${afterGc.nodes} ` +
+		`longTasks=${afterGc.longTasks} longTaskMs=${afterGc.longTaskMs.toFixed(0)}`;
+	testInfo.annotations.push({ type: 'search-heap', description: summary });
+	console.log(`[search-heap] ${summary}`);
 
 	expect(maxHeap, `heap peaked at ${mb(maxHeap)}`).toBeLessThanOrEqual(HEAP_CEILING_BYTES);
 	expect(

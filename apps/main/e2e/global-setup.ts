@@ -38,7 +38,7 @@ async function blockScriptRequests(route: import('@playwright/test').Route) {
 	await route.fallback();
 }
 
-function shouldStubCrossOriginStoreRequests(storeUrl: string, baseURL: string): boolean {
+export function shouldStubCrossOriginStoreRequests(storeUrl: string, baseURL: string): boolean {
 	try {
 		const storeOrigin = new URL(storeUrl).origin;
 		const appOrigin = new URL(baseURL).origin;
@@ -65,7 +65,7 @@ export function isAuthenticatedStoreApiResponse(
 	);
 }
 
-async function stubCrossOriginStoreDiscovery(
+export async function stubCrossOriginStoreDiscovery(
 	context: import('@playwright/test').BrowserContext,
 	storeUrl: string
 ): Promise<void> {
