@@ -1,5 +1,6 @@
 import {
 	CategoryLogger,
+	foldLogSearchText,
 	getLogger,
 	log,
 	promoteRecorder,
@@ -470,6 +471,33 @@ describe('logger/index', () => {
 			expect(context.search).toContain('201');
 			expect(context.search).toContain('wcpos.pos.cart');
 			expect(context.search).not.toContain('must not be copied');
+			// The folded blob the Logs screen scans: message + code + search, folded.
+			expect(context.fold).toContain('cart line item updated');
+			expect(context.fold).toContain('diagnostic coffee');
+			expect(context.fold).not.toContain('must not be copied');
+		});
+
+		it('folds accents, case and normal form into context.fold at write time', async () => {
+			const insert = jest.fn().mockResolvedValue(undefined);
+			setDatabase({
+				insert,
+				find: jest
+					.fn()
+					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
+				bulkRemove: jest.fn(),
+			});
+
+			getLogger(['wcpos', 'http']).warn('Conexión rechazada: Kelvin İstanbul', {
+				context: { errorCode: 'HTTP101', error: 'Σύνδεση απέτυχε' },
+			});
+			await Promise.resolve();
+
+			const [{ context }] = insert.mock.calls[0];
+			expect(context.fold).toBe(foldLogSearchText(context.fold)); // already in fold space
+			expect(context.fold).toContain('conexion rechazada');
+			expect(context.fold).toContain('συνδεση απετυχε');
+			expect(context.fold).toContain('kelvin');
 		});
 
 		it('includes collection, type and lane in the search string', async () => {

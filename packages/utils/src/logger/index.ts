@@ -141,6 +141,31 @@ function searchableContext(context: Record<string, any>): string {
 		.join(' ');
 }
 
+/**
+ * The search fold — lowercase, NFD, strip combining marks — applied at WRITE
+ * time to everything the Logs screen searches, so a scan over `context.fold`
+ * is an exact match in fold space against a term folded the same way (any
+ * script, any normal form). This is a mirror of `foldSearchText` in
+ * @wcpos/sync-core, which utils cannot import; the parity is pinned by
+ * packages/database/src/search-fold-parity.test.ts.
+ */
+export function foldLogSearchText(value: unknown): string {
+	return String(value)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(new RegExp('[\\u0300-\\u036f]', 'g'), '');
+}
+
+/** The folded blob of the fields the Logs screen searches (see the logs collection creator). */
+function foldedSearchText(
+	message: string,
+	code: string | undefined,
+	context: Record<string, any>,
+	search: string
+): string {
+	return foldLogSearchText([message, context.error, code, search].filter(Boolean).join(' '));
+}
+
 function serializedBytes(value: unknown): number {
 	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
@@ -367,9 +392,11 @@ function persistLog(
 		console.error(`Dropped failure-severity code ${code} from log row with outcome ok`);
 		code = undefined;
 	}
+	const searchable = searchableContext(persistedContext);
 	const admittedContext = admitContext({
 		...persistedContext,
-		search: searchableContext(persistedContext),
+		search: searchable,
+		fold: foldedSearchText(message, code, persistedContext, searchable),
 	});
 	const identity = JSON.stringify([
 		level,

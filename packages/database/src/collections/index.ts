@@ -439,6 +439,11 @@ const logs: RxCollectionCreator<LogDocumentType> = {
 		// searched collection that churns without bound (retention is bytes, not
 		// rows), so an index sized for a catalogue is the wrong structure here.
 		searchIndex: false,
+		// The logger writes the fold of the searched fields here (foldLogSearchText),
+		// so the scan is an exact fold-space match — any script, any normal form —
+		// exactly the parity the folding index had. The raw searchFields above are
+		// the fallback for rows written before this field existed.
+		searchFoldedField: 'context.fold',
 	},
 };
 

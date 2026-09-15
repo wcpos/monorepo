@@ -26,6 +26,8 @@ import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 import { filter, firstValueFrom } from 'rxjs';
 
+import { buildScanSearchSelector, foldSearchText } from '@wcpos/sync-core';
+
 import { storeCollections } from './collections';
 import { searchPlugin } from './plugins/search';
 
@@ -114,6 +116,10 @@ function stormRows(): LogRow[] {
 					search: `wcpos.sync.engine missing_stored hash-checksum apply.escalation products pull ${id} SYNC331`,
 				},
 			};
+			// What the logger writes: the fold of message + code + searchable context.
+			row.context.fold = foldSearchText(
+				`${row.message} ${row.code} ${row.context.search as string}`
+			);
 			row.sizeBytes = sizeOf(row);
 			rows.push(row);
 		}
@@ -141,39 +147,6 @@ async function timed<T>(label: string, fn: () => Promise<T> | T): Promise<[numbe
 	const ms = Math.round(performance.now() - start);
 	progress(`${label}: ${ms} ms (heap ${heapMb()} MB)`);
 	return [ms, value];
-}
-
-/**
- * Mirrors scanSelectorFor in @wcpos/query use-local-query for the seeded term
- * (this package cannot import query): each folded letter widened to its
- * accented variants, so the measured regex is as heavy as the real one.
- */
-const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
-	const variants = new Map<string, string>();
-	const combiningMarks = new RegExp('[\u0300-\u036f]', 'g');
-	for (let codePoint = 0x80; codePoint <= 0xffff; codePoint += 1) {
-		if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue;
-		const letter = String.fromCodePoint(codePoint);
-		const base = letter.toLowerCase().normalize('NFD').replace(combiningMarks, '');
-		if (base.length !== 1 || base === letter) continue;
-		if (!(variants.get(base) ?? '').includes(letter)) {
-			variants.set(base, `${variants.get(base) ?? ''}${letter}`);
-		}
-	}
-	return variants;
-})();
-function scanSelector(fields: string[], term: string) {
-	return {
-		$and: term.split(/\s+/).map((token) => {
-			const source = [...token]
-				.map(
-					(char) =>
-						`${ACCENT_VARIANTS.has(char) ? `[${char}${ACCENT_VARIANTS.get(char)}]` : char}[\\u0300-\\u036f]*`
-				)
-				.join('');
-			return { $or: fields.map((field) => ({ [field]: { $regex: source, $options: 'i' } })) };
-		}),
-	};
 }
 
 describeBench('logs volume bench', () => {
@@ -229,10 +202,19 @@ describeBench('logs volume bench', () => {
 			collection.find({ sort: [{ timestamp: 'asc' }] }).exec()
 		);
 
-		// (4) the user path: the collection refuses an index, the screen scans
+		// (4) the user path: the collection refuses an index, the screen scans —
+		//     the production selector, so a slower builder shows up here.
 		await expect((collection as any).initSearch('en')).resolves.toBeNull();
-		const fields = (storeCollections.logs.options as { searchFields: string[] }).searchFields;
-		const selector = scanSelector(fields, SEARCH_TERM);
+		const logsOptions = storeCollections.logs.options as {
+			searchFields: string[];
+			searchFoldedField: string;
+		};
+		const fields = logsOptions.searchFields;
+		const selector = buildScanSearchSelector({
+			foldedField: logsOptions.searchFoldedField,
+			rawFields: fields,
+			search: SEARCH_TERM,
+		}) as Record<string, unknown>;
 		[results.scanFind] = await timed(`$regex scan find limit 20 ("${SEARCH_TERM}")`, () =>
 			collection.find({ selector, sort: [{ timestamp: 'desc' }], limit: 20 }).exec()
 		);

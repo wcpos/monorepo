@@ -180,7 +180,18 @@ export async function removePersistedSearchIndexes(collection: RxCollection): Pr
 	if (!database.internalStore || persistedIndexSweeps.has(sweepKey)) return [];
 	persistedIndexSweeps.add(sweepKey);
 	const prefix = `${collection.name}-search-`;
-	const documents = await getAllCollectionDocuments(database.internalStore);
+	let documents: Awaited<ReturnType<typeof getAllCollectionDocuments>>;
+	try {
+		documents = await getAllCollectionDocuments(database.internalStore);
+	} catch (error: any) {
+		// A transient storage failure (worker not up yet) must not spend the
+		// once-per-session ticket: log it and let the next opener retry (Codex review).
+		persistedIndexSweeps.delete(sweepKey);
+		searchLogger.warn('Could not enumerate persisted search indexes', {
+			context: { collection: collection.name, error: error.message },
+		});
+		return [];
+	}
 	const names = documents
 		.map((document) => document.data.name)
 		.filter((name) => name.startsWith(prefix) && name.endsWith('_flexsearch'));

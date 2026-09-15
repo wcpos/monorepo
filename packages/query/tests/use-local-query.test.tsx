@@ -8,8 +8,10 @@ import { createRxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { firstValueFrom, Observable } from 'rxjs';
 
+import { buildScanSearchSelector, foldSearchText } from '@wcpos/sync-core';
+
 import { QueryProvider } from '../src/provider';
-import { scanSelectorFor, useLocalQuery } from '../src/use-local-query';
+import { useLocalQuery } from '../src/use-local-query';
 import { createStoreDatabase } from './helpers/db';
 import { logsLiteral } from './helpers/schemas/logs';
 import { createEngineDatabase, createFakeEngine } from '../src/testing';
@@ -291,11 +293,14 @@ describe('useLocalQuery', () => {
 describe('useLocalQuery scan search (collections that refuse an index)', () => {
 	// logs: a 46k-row day cost 21.5 s and ~350 MB to index in the renderer and
 	// crashed the tab (2026-09-15). A collection with `searchIndex: false` is
-	// searched by a bounded, storage-evaluated substring scan instead, and the
-	// index is never asked for.
+	// searched by a bounded, storage-evaluated scan of its FOLDED field (written
+	// by the logger with the encoder's own fold), falling back to the raw fields
+	// for rows that predate it. The index is never asked for.
 	let scanDB: RxDatabase;
 	let engineDB: RxDatabase;
 	let initSearch: jest.Mock;
+
+	const folded = (message: string, search: string) => foldSearchText(`${message} ${search}`);
 
 	beforeEach(async () => {
 		scanDB = await createRxDatabase({
@@ -306,41 +311,45 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 		await scanDB.addCollections({
 			logs: {
 				schema: logsLiteral,
-				options: { searchFields: ['message', 'context.search'], searchIndex: false },
+				options: {
+					searchFields: ['message', 'context.search'],
+					searchIndex: false,
+					searchFoldedField: 'context.fold',
+				},
 			},
 		});
 		initSearch = jest.fn(async () => {
 			throw new Error('the index must never be built for a scan-searched collection');
 		});
 		(scanDB.collections.logs as unknown as { initSearch: unknown }).initSearch = initSearch;
-		await scanDB.collections.logs.bulkInsert([
+		const rows = [
 			{
 				logId: 'a',
 				timestamp: 3,
 				level: 'warn',
 				message: '"products/992915" cannot download — products 992915 — pull escalation',
-				context: { search: 'wcpos.sync.engine missing_stored 992915' },
+				search: 'wcpos.sync.engine missing_stored 992915',
 			},
 			{
 				logId: 'b',
 				timestamp: 2,
 				level: 'warn',
 				message: '"products/992912" cannot download — products 992912 — pull escalation',
-				context: { search: 'wcpos.sync.engine missing_stored 992912' },
+				search: 'wcpos.sync.engine missing_stored 992912',
 			},
 			{
 				logId: 'c',
 				timestamp: 1,
 				level: 'info',
 				message: 'Pull escalation cleared',
-				context: { search: 'wcpos.sync.engine 992915' },
+				search: 'wcpos.sync.engine 992915',
 			},
 			{
 				logId: 'd',
 				timestamp: 0,
 				level: 'error',
 				message: 'Conexión rechazada',
-				context: { search: 'wcpos.http' },
+				search: 'wcpos.http',
 			},
 			{
 				logId: 'e',
@@ -348,7 +357,21 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 				level: 'error',
 				// Decomposed (NFD): o + combining acute, as some servers and inputs store it.
 				message: 'Conexión perdida',
-				context: { search: 'wcpos.http' },
+				search: 'wcpos.http',
+			},
+		];
+		await scanDB.collections.logs.bulkInsert([
+			...rows.map(({ search, ...row }) => ({
+				...row,
+				context: { search, fold: folded(row.message, search) },
+			})),
+			// A row written before the folded field existed: raw-field fallback only.
+			{
+				logId: 'legacy',
+				timestamp: -2,
+				level: 'info',
+				message: 'Legacy row without a fold',
+				context: { search: 'wcpos.legacy' },
 			},
 		]);
 		engineDB = await createEngineDatabase();
@@ -383,7 +406,7 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 	const hitIds = (result: { current: ReturnType<typeof useLocalQuery> }) =>
 		result.current.resource.valueRef$$.value?.current?.hits.map((hit) => hit.id);
 
-	it('matches case-insensitively, AND across tokens, OR across fields, without the index', async () => {
+	it('matches case-insensitively, AND across tokens, without the index', async () => {
 		const { result } = mount('ESCALATION 992915');
 		// Both tokens must land: row a (message + context), row c (message has
 		// "escalation", context has 992915) — row b lacks 992915 entirely.
@@ -398,13 +421,17 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 		expect(initSearch).not.toHaveBeenCalled();
 	});
 
-	it('matches accented text from either spelling (what the index gave; Codex review)', async () => {
-		// Precomposed (row d) AND decomposed (row e) stored text, from either spelling.
+	it('finds accented text from either spelling and either normal form (fold-space match)', async () => {
 		const exact = mount('Conexión');
 		await waitFor(() => expect(hitIds(exact.result)).toEqual(['d', 'e']));
-		const folded = mount('conexion');
-		await waitFor(() => expect(hitIds(folded.result)).toEqual(['d', 'e']));
+		const plain = mount('conexion');
+		await waitFor(() => expect(hitIds(plain.result)).toEqual(['d', 'e']));
 		expect(initSearch).not.toHaveBeenCalled();
+	});
+
+	it('still finds a row that predates the folded field through the raw fields', async () => {
+		const { result } = mount('legacy');
+		await waitFor(() => expect(hitIds(result)).toEqual(['legacy']));
 	});
 
 	it('composes the scan with the caller selector and yields no rows for an unusable term', async () => {
@@ -416,93 +443,39 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 	});
 });
 
-describe('scanSelectorFor', () => {
-	type Clause = { $or: Record<string, { $regex: string; $options: string }>[] };
-	const clauses = (fields: string[], search: string) =>
-		(scanSelectorFor(fields, search) as { $and: Clause[] }).$and;
-	const regexOf = (clause: Clause, field: string) => {
-		const match = clause.$or.find((part) => field in part)?.[field];
-		if (!match) throw new Error(`no ${field} clause`);
-		return new RegExp(match.$regex, match.$options);
-	};
+describe('buildScanSearchSelector', () => {
+	const clauses = (search: string, foldedField?: string, rawFields: string[] = ['message']) =>
+		buildScanSearchSelector({ foldedField, rawFields, search })?.$and ?? [];
 
-	it('builds one AND clause per encoder token, one OR arm per field', () => {
-		const built = clauses(['message', 'context.search'], 'Pull (esc.alation)');
+	it('builds one AND clause per encoder token: the folded arm first, then a raw arm per field', () => {
+		const built = clauses('Pull (esc.alation)', 'context.fold', ['message', 'context.search']);
 		expect(built).toHaveLength(2);
 		for (const clause of built) {
-			expect(clause.$or.map((part) => Object.keys(part)[0])).toEqual(['message', 'context.search']);
-			expect(clause.$or.every((part) => Object.values(part)[0].$options === 'i')).toBe(true);
+			expect(clause.$or.map((part) => Object.keys(part)[0])).toEqual([
+				'context.fold',
+				'message',
+				'context.search',
+			]);
+			expect(clause.$or[0]['context.fold'].$options).toBeUndefined(); // both sides folded
+			expect(clause.$or[1].message.$options).toBe('i'); // raw fallback
 		}
 	});
 
 	it('escapes regex metacharacters so a term is a literal substring', () => {
-		const [, dotted] = clauses(['message'], 'Pull (esc.alation)');
-		expect(regexOf(dotted, 'message').test('ESC.ALATION')).toBe(true);
-		expect(regexOf(dotted, 'message').test('escXalation')).toBe(false);
+		const [, dotted] = clauses('Pull (esc.alation)');
+		const regex = new RegExp(dotted.$or[0].message.$regex, 'i');
+		expect(regex.test('ESC.ALATION')).toBe(true);
+		expect(regex.test('escXalation')).toBe(false);
 	});
 
-	it('matches accented and unaccented spellings of a letter alike', () => {
-		const [term] = clauses(['message'], 'Conexión');
-		const regex = regexOf(term, 'message');
-		expect(regex.test('Conexión rechazada')).toBe(true);
-		expect(regex.test('CONEXION')).toBe(true);
-		expect(regex.test('Conexiön')).toBe(true);
-		expect(regex.test('Conexxion')).toBe(false);
-	});
-
-	it('matches decomposed marks and precomposed letters beyond Latin Extended-B (Codex review)', () => {
-		const [term] = clauses(['message'], 'conexion');
-		expect(regexOf(term, 'message').test('Conexión')).toBe(true); // NFD o + U+0301
-		const [viet] = clauses(['message'], 'tien');
-		expect(regexOf(viet, 'message').test('tiến')).toBe(true); // ế is U+1EBF (Latin Extended Additional)
-	});
-
-	it('covers every script the encoder folds, not only Latin (Codex review)', () => {
-		// Greek tonos: the encoder folds Σύνδεση → συνδεση, so the stored ύ must be reachable.
-		const [greek] = clauses(['message'], 'συνδεση');
-		expect(regexOf(greek, 'message').test('Σύνδεση απέτυχε')).toBe(true);
-		// Cyrillic й is и + U+0306 under NFD; the encoder folds it to и.
-		const [cyrillic] = clauses(['message'], 'ошибка сети');
-		expect(regexOf(cyrillic, 'message').test('Ошибка сети')).toBe(true);
-		const [short] = clauses(['message'], 'иод');
-		expect(regexOf(short, 'message').test('йод')).toBe(true);
-	});
-
-	it('matches letters the fold changes only by case, beyond the i flag (Codex review)', () => {
-		// Kelvin sign U+212A lowercases to ASCII k; Ohm sign U+2126 to ω; capital ẞ U+1E9E to ß.
-		// The i flag (no u flag) pairs none of them with the plain letter.
-		const [kelvin] = clauses(['message'], 'kelvin');
-		expect(regexOf(kelvin, 'message').test('Kelvin')).toBe(true);
-		const [ohm] = clauses(['message'], 'ωmega');
-		expect(regexOf(ohm, 'message').test('Ωmega')).toBe(true);
-		const [strasse] = clauses(['message'], 'straße');
-		expect(regexOf(strasse, 'message').test('STRAẞE')).toBe(true);
-	});
-
-	it('matches syllables whose NFD is several code points, like Hangul (Codex review)', () => {
-		// The encoder folds 한글 to its Jamo sequence; stored text is usually NFC syllables.
-		const [hangul] = clauses(['message'], '한글');
-		expect(regexOf(hangul, 'message').test('한글 로그')).toBe(true);
-		expect(regexOf(hangul, 'message').test('한글 로그'.normalize('NFD'))).toBe(true);
-		expect(regexOf(hangul, 'message').test('한국')).toBe(false);
-	});
-
-	it('matches letters whose lowercase is more than one code point, like Turkish İ (Codex review)', () => {
-		// U+0130 lowercases to "i" + U+0307; the class must carry the ORIGINAL code
-		// point, because the i flag cannot pair U+0130 with a plain "i".
-		const [term] = clauses(['message'], 'istanbul');
-		expect(regexOf(term, 'message').test('İstanbul')).toBe(true);
-		expect(regexOf(term, 'message').test('Istanbul')).toBe(true);
+	it('drops terms under the index minimum, as the index did', () => {
+		// "pull x" meant "pull" to FlexSearch (minlength 3); "x" alone found nothing.
+		expect(clauses('pull x')).toHaveLength(1);
+		expect(buildScanSearchSelector({ rawFields: ['message'], search: 'x' })).toBeNull();
 	});
 
 	it('returns null when nothing can be selected', () => {
-		expect(scanSelectorFor([], 'pull')).toBeNull();
-		expect(scanSelectorFor(['message'], '   ')).toBeNull();
-	});
-
-	it('drops terms under the index minimum, as the index did (Codex review)', () => {
-		// "pull x" meant "pull" to FlexSearch (minlength 3); "x" alone found nothing.
-		expect(clauses(['message'], 'pull x')).toHaveLength(1);
-		expect(scanSelectorFor(['message'], 'x')).toBeNull();
+		expect(buildScanSearchSelector({ rawFields: [], search: 'pull' })).toBeNull();
+		expect(buildScanSearchSelector({ rawFields: ['message'], search: '   ' })).toBeNull();
 	});
 });

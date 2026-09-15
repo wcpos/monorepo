@@ -335,6 +335,38 @@ describe('search plugin', () => {
 			expect(removed).toEqual(['logs-search-v4-es_flexsearch', 'logs-search-v3-en_flexsearch']);
 		});
 
+		it('a failed enumeration is logged and does not spend the once-per-session sweep (Codex review)', async () => {
+			const database = {
+				name: 'flaky-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			const collection = {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database,
+			} as unknown as RxCollection;
+			(getAllCollectionDocuments as jest.Mock)
+				.mockRejectedValueOnce(new Error('worker not ready'))
+				.mockResolvedValueOnce([{ data: { name: 'logs-search-v4-en_flexsearch' } }]);
+			(removeCollectionStorages as jest.Mock).mockClear();
+
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([]);
+			// The failure was swallowed as "nothing removed", not thrown, and the
+			// retry is not short-circuited by the once-per-session sweep key.
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([
+				'logs-search-v4-en_flexsearch',
+			]);
+			expect((removeCollectionStorages as jest.Mock).mock.calls.map((call) => call[4])).toEqual([
+				'logs-search-v4-en_flexsearch',
+			]);
+		});
+
 		it('passes the caller snapshot and intended index options to FlexSearch', async () => {
 			const collectionPrototype: Record<string, unknown> = {};
 			const install = searchPlugin.prototypes?.RxCollection;
