@@ -457,6 +457,17 @@ describe('scanSelectorFor', () => {
 		expect(regexOf(viet, 'message').test('tiến')).toBe(true); // ế is U+1EBF (Latin Extended Additional)
 	});
 
+	it('covers every script the encoder folds, not only Latin (Codex review)', () => {
+		// Greek tonos: the encoder folds Σύνδεση → συνδεση, so the stored ύ must be reachable.
+		const [greek] = clauses(['message'], 'συνδεση');
+		expect(regexOf(greek, 'message').test('Σύνδεση απέτυχε')).toBe(true);
+		// Cyrillic й is и + U+0306 under NFD; the encoder folds it to и.
+		const [cyrillic] = clauses(['message'], 'ошибка сети');
+		expect(regexOf(cyrillic, 'message').test('Ошибка сети')).toBe(true);
+		const [short] = clauses(['message'], 'иод');
+		expect(regexOf(short, 'message').test('йод')).toBe(true);
+	});
+
 	it('matches letters whose lowercase is more than one code point, like Turkish İ (Codex review)', () => {
 		// U+0130 lowercases to "i" + U+0307; the class must carry the ORIGINAL code
 		// point, because the i flag cannot pair U+0130 with a plain "i".

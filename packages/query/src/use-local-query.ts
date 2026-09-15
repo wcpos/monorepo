@@ -74,40 +74,43 @@ function escapeRegex(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
 }
 
-/**
- * Every precomposed Latin letter (Latin-1 Supplement through Latin Extended-B,
- * U+00C0–U+024F, and Latin Extended Additional, U+1E00–U+1EFF, where
- * Vietnamese lives) grouped under the base letter the encoder folds it to, so
- * a folded token can be matched against UNFOLDED stored text: `e` →
- * `[eèéêëēĕėęěẹẻẽếề…]`. Built once; the encoder's own fold (`foldSearchText`:
- * lowercase + NFD + strip combining marks) is the grouping rule, so the two can
- * never disagree on what counts as the same letter.
- */
-const PRECOMPOSED_LATIN_RANGES: readonly (readonly [number, number])[] = [
-	[0xc0, 0x24f],
-	[0x1e00, 0x1eff],
-];
 /** The Unicode combining diacritical marks block, as a regex class source. */
 const COMBINING_MARK_CLASS = '[\\u0300-\\u036f]';
-const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
+
+/**
+ * Every BMP code point the encoder folds to a single base character, grouped
+ * under that base — ANY script, defined by the encoder's own fold
+ * (`foldSearchText`: lowercase + NFD + strip combining marks) rather than by a
+ * block list, so the two can never disagree on what counts as the same letter
+ * (Codex review: two Latin ranges left Greek tonos and Cyrillic breve
+ * unreachable). A folded token is then matched against UNFOLDED stored text:
+ * `e` → `[eÉéêë…]`, `υ` → `[υΎύϋΰ…]`.
+ *
+ * The ORIGINAL code point is what goes in the class: lowercasing can expand
+ * (Turkish İ, U+0130 → "i" + U+0307) and the i flag cannot pair such a letter
+ * with its plain base, so the character that appears in text is the one
+ * listed. Built lazily on the first scan — one pass over the plane is a few
+ * milliseconds, and a session that never searches should not pay it.
+ */
+let accentVariants: ReadonlyMap<string, string> | null = null;
+function accentVariantsMap(): ReadonlyMap<string, string> {
+	if (accentVariants) return accentVariants;
 	const variants = new Map<string, string>();
 	const combiningMarks = new RegExp(COMBINING_MARK_CLASS, 'g');
-	for (const [from, to] of PRECOMPOSED_LATIN_RANGES) {
-		for (let codePoint = from; codePoint <= to; codePoint += 1) {
-			// The fold decides the group; the ORIGINAL code point is what goes in
-			// the class. Lowercasing can expand (Turkish İ, U+0130 → "i" + U+0307),
-			// and the i flag cannot pair such a letter with its plain base, so the
-			// character that actually appears in text must be the one listed.
-			const letter = String.fromCodePoint(codePoint);
-			const base = letter.toLowerCase().normalize('NFD').replace(combiningMarks, '');
-			if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
-			if (!(variants.get(base) ?? '').includes(letter)) {
-				variants.set(base, `${variants.get(base) ?? ''}${letter}`);
-			}
+	for (let codePoint = 0x80; codePoint <= 0xffff; codePoint += 1) {
+		if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue; // surrogate halves
+		const letter = String.fromCodePoint(codePoint);
+		const base = letter.toLowerCase().normalize('NFD').replace(combiningMarks, '');
+		// A plain case pair (Σ/σ) is the i flag's job; only a letter the fold
+		// actually CHANGES belongs in a class.
+		if (base.length !== 1 || base === letter.toLowerCase()) continue;
+		if (!(variants.get(base) ?? '').includes(letter)) {
+			variants.set(base, `${variants.get(base) ?? ''}${letter}`);
 		}
 	}
+	accentVariants = variants;
 	return variants;
-})();
+}
 
 /**
  * Stored text may be DECOMPOSED (a base letter followed by combining marks,
@@ -118,9 +121,10 @@ const COMBINING_MARKS = `${COMBINING_MARK_CLASS}*`;
 
 /** A folded token as a regex source that also matches its accented spellings. */
 function accentInsensitiveSource(token: string): string {
+	const accents = accentVariantsMap();
 	return [...token]
 		.map((char) => {
-			const variants = ACCENT_VARIANTS.get(char);
+			const variants = accents.get(char);
 			const letter = variants ? `[${char}${escapeRegex(variants)}]` : escapeRegex(char);
 			return `${letter}${COMBINING_MARKS}`;
 		})

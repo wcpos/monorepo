@@ -150,20 +150,14 @@ async function timed<T>(label: string, fn: () => Promise<T> | T): Promise<[numbe
  */
 const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
 	const variants = new Map<string, string>();
-	for (const [from, to] of [
-		[0xc0, 0x24f],
-		[0x1e00, 0x1eff],
-	]) {
-		for (let codePoint = from; codePoint <= to; codePoint += 1) {
-			const letter = String.fromCodePoint(codePoint);
-			const base = letter
-				.toLowerCase()
-				.normalize('NFD')
-				.replace(new RegExp('[\u0300-\u036f]', 'g'), '');
-			if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
-			if (!(variants.get(base) ?? '').includes(letter)) {
-				variants.set(base, `${variants.get(base) ?? ''}${letter}`);
-			}
+	const combiningMarks = new RegExp('[\u0300-\u036f]', 'g');
+	for (let codePoint = 0x80; codePoint <= 0xffff; codePoint += 1) {
+		if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue;
+		const letter = String.fromCodePoint(codePoint);
+		const base = letter.toLowerCase().normalize('NFD').replace(combiningMarks, '');
+		if (base.length !== 1 || base === letter.toLowerCase()) continue;
+		if (!(variants.get(base) ?? '').includes(letter)) {
+			variants.set(base, `${variants.get(base) ?? ''}${letter}`);
 		}
 	}
 	return variants;
