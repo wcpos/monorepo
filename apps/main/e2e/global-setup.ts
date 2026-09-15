@@ -97,6 +97,27 @@ export async function stubCrossOriginStoreDiscovery(
 }
 
 /**
+ * Product-image attachment fetches fail CORS when the app origin differs from the
+ * store's; the images are non-critical, so answer them with a tiny PNG. Shared with
+ * the standalone soak configs, which have no globalSetup of their own.
+ */
+export async function stubCrossOriginStoreUploads(
+	context: import('@playwright/test').BrowserContext
+): Promise<void> {
+	await context.route('**/wp-content/uploads/**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'image/png',
+			headers: {
+				'Access-Control-Allow-Origin': '*',
+				'Cache-Control': 'public, max-age=60',
+			},
+			body: Buffer.from(TRANSPARENT_PNG_BASE64, 'base64'),
+		});
+	});
+}
+
+/**
  * Export localStorage from the page.
  */
 async function exportLocalStorage(
@@ -282,17 +303,7 @@ async function setupVariant(
 			`[global-setup] Installing cross-origin store stubs for auth bootstrap (${new URL(storeUrl).origin} -> ${new URL(baseURL).origin})`
 		);
 		await stubCrossOriginStoreDiscovery(context, storeUrl);
-		await context.route('**/wp-content/uploads/**', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'image/png',
-				headers: {
-					'Access-Control-Allow-Origin': '*',
-					'Cache-Control': 'public, max-age=60',
-				},
-				body: Buffer.from(TRANSPARENT_PNG_BASE64, 'base64'),
-			});
-		});
+		await stubCrossOriginStoreUploads(context);
 	}
 	await stubStoreVersionForE2E(context, storeUrl, variant);
 	const authPage = await context.newPage();

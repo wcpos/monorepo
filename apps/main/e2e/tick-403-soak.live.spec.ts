@@ -1,6 +1,13 @@
+import * as path from 'path';
+
 import { expect, test } from './test';
 import { authenticateWithStore, getStoreUrl, wcposRestRoute } from './fixtures';
-import { shouldStubCrossOriginStoreRequests, stubCrossOriginStoreDiscovery } from './global-setup';
+import {
+	shouldStubCrossOriginStoreRequests,
+	stubCrossOriginStoreDiscovery,
+	stubCrossOriginStoreUploads,
+} from './global-setup';
+import { compareBundleIdentity, entryFromHtml, localEntry } from './served-bundle-identity';
 
 /**
  * A store that refuses the change-check tick forever must not grow the renderer.
@@ -49,15 +56,37 @@ type Sample = {
 const mb = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
 
 test('a permanently 403 tick does not grow the renderer', async ({ page }, testInfo) => {
-	test.setTimeout((SOAK_MINUTES + 8) * 60_000);
+	test.setTimeout((SOAK_MINUTES + 12) * 60_000);
+	// FIRST: prove the URL under test serves THIS build. A stale bundle from another worktree
+	// answers every health check and silently invalidates the oracle (served-bundle-identity.ts).
+	const baseURL = testInfo.project.use.baseURL ?? process.env.BASE_URL ?? '';
+	const servedHtml = await (await page.request.get(baseURL)).text();
+	const identity = compareBundleIdentity(
+		localEntry(path.join(__dirname, '..', 'web-build')),
+		entryFromHtml(servedHtml),
+		baseURL
+	);
+	if (identity.ok === false)
+		throw new Error(`Served bundle identity check failed: ${identity.reason}`);
+	console.log(
+		identity.ok === true
+			? `[tick-403-soak] serving this worktree's build (${identity.entry})`
+			: `[tick-403-soak] bundle identity unchecked — ${identity.reason}`
+	);
+
 	// The main config's globalSetup does this before its own auth bootstrap; a standalone soak
 	// serving the build on localhost against a dev store is exactly the cross-origin case.
 	const storeUrl = getStoreUrl(testInfo);
-	const baseURL = testInfo.project.use.baseURL ?? process.env.BASE_URL ?? '';
 	if (shouldStubCrossOriginStoreRequests(storeUrl, baseURL)) {
 		await stubCrossOriginStoreDiscovery(page.context(), storeUrl);
+		await stubCrossOriginStoreUploads(page.context());
 	}
-	await authenticateWithStore(page, testInfo, { waitForCatalogue: true });
+	// The whole catalogue, not the first row: materialisation that is still running when the
+	// baseline is taken would read as growth against it.
+	await authenticateWithStore(page, testInfo, {
+		waitForCatalogue: true,
+		waitForFullCatalogue: true,
+	});
 
 	// Installed AFTER the store is connected, so the refusal covers the till's own ticks and never
 	// the connect flow. Only requests the app actually sent count as ticks; the browser's CORS
