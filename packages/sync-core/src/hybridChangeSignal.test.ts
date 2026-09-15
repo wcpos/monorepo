@@ -1909,7 +1909,7 @@ describe('TIER 2 + TIER 3 — tax-rate writes split by id-space', () => {
 				detector: 'range-checksum',
 			}),
 		]);
-		// Builds the streak and escalates from sweep 2 onward.
+		// Builds the streak and emits once on sweep 2; the ledger retains it.
 		expect(first.escalatedIds).toEqual([]);
 		expect(second.escalatedIds).toEqual([
 			repairTarget(904, {
@@ -1918,7 +1918,8 @@ describe('TIER 2 + TIER 3 — tax-rate writes split by id-space', () => {
 				detector: 'range-checksum',
 			}),
 		]);
-		expect(third.escalatedIds).toEqual([
+		expect(third.escalatedIds).toEqual([]);
+		expect(third.escalationLedger).toEqual([
 			repairTarget(904, {
 				status: 'deleted',
 				collection: 'tax_rates',
@@ -2113,7 +2114,7 @@ describe('TIER 3 — escalation clearing', () => {
 		expect(after.clearedEscalations).toEqual([]);
 	});
 
-	it('keeps and re-escalates a record that is still drifting', async () => {
+	it('keeps a still-drifting record ledgered without emitting another escalation', async () => {
 		const { source } = makeFakeSource({
 			hashScansBySweep: [[hashBucket({ bucket: 0, current_digest: '222', match: false })]],
 			drillDowns: { '1000:0': [{ id: 8001, status: 'changed' }] },
@@ -2128,7 +2129,7 @@ describe('TIER 3 — escalation clearing', () => {
 		await engine.poll();
 		const stillDrifting = await engine.poll();
 
-		expect(stillDrifting.escalatedIds).toEqual([repairTarget(8001)]);
+		expect(stillDrifting.escalatedIds).toEqual([]);
 		expect(stillDrifting.clearedEscalations).toEqual([]);
 		expect(stillDrifting.escalationLedger).toEqual([repairTarget(8001)]);
 	});

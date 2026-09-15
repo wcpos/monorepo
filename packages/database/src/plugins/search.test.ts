@@ -11,11 +11,16 @@
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 // Real FlexSearch engine, used by the tokenizer-behaviour tests below.
 import { Index } from 'flexsearch';
-import { removeCollectionStorages } from 'rxdb';
+import { getAllCollectionDocuments, removeCollectionStorages } from 'rxdb';
 
 import { deriveBarcodeFromPayload, encodeSearchText } from '@wcpos/sync-core';
 
-import { getSearchIdentifier, searchPlugin, staleSearchCollectionNames } from './search';
+import {
+	getSearchIdentifier,
+	removePersistedSearchIndexes,
+	searchPlugin,
+	staleSearchCollectionNames,
+} from './search';
 
 import type { RxCollection } from 'rxdb';
 
@@ -24,6 +29,7 @@ let shouldFailOnCreate = false;
 // The plugin only imports the storage-removal helper from rxdb; types are erased.
 jest.mock('rxdb', () => ({
 	removeCollectionStorages: jest.fn().mockResolvedValue(undefined),
+	getAllCollectionDocuments: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('rxdb-premium/plugins/flexsearch', () => ({
@@ -36,6 +42,7 @@ jest.mock('rxdb-premium/plugins/flexsearch', () => ({
 		// Return a mock search instance
 		return {
 			collection: {
+				_changeEventBuffer: { limit: 100 },
 				destroy: jest.fn().mockResolvedValue(undefined),
 				remove: jest.fn().mockResolvedValue(undefined),
 				$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
@@ -249,12 +256,12 @@ describe('search plugin', () => {
 
 	describe('search identifier generation', () => {
 		it('should generate a versioned, unique identifier per collection and locale', () => {
-			// The version tag (v3) is migration-critical: it forces the rxdb-premium
+			// The version tag (v5) is migration-critical: it forces the rxdb-premium
 			// flexsearch pipeline to rebuild the persisted index from scratch when the
-			// index config changes. Guard it explicitly. See #679, #1732, and the v4 decimal-term fix.
-			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v4-en');
-			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v4-de');
-			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v4-fr');
+			// index config changes. Guard it explicitly. See #679, #1732, and the v5 decimal-comma fix.
+			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v5-en');
+			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v5-de');
+			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v5-fr');
 		});
 
 		it('should generate different identifiers for different locales', () => {
@@ -270,6 +277,129 @@ describe('search plugin', () => {
 	});
 
 	describe('FlexSearch initialization', () => {
+		it('refuses to build an index for a collection that opts out, whatever the caller asks', async () => {
+			// logs: a 46k-row day cost 21.5 s and ~350 MB to index in the renderer
+			// (2026-09-15); the Logs screen scans instead. Refusing at the plugin
+			// means no warmup, audit or binding can build it by accident.
+			const collectionPrototype: Record<string, unknown> = {};
+			const install = searchPlugin.prototypes?.RxCollection;
+			if (!install) throw new Error('search plugin RxCollection prototype is missing');
+			install(collectionPrototype as unknown as RxCollection);
+			const collection = Object.assign(Object.create(collectionPrototype), {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database: { collections: {} },
+				onClose: [],
+				count: () => ({ exec: async () => 0 }),
+			});
+
+			await expect(collection.initSearch('en')).resolves.toBeNull();
+			await expect(
+				collection.initSearch('en', { searchFields: ['message', 'context.search'] })
+			).resolves.toBeNull();
+			// The rebuild path honours the opt-out too (Codex review).
+			await expect(collection.recreateSearch('en')).resolves.toBeNull();
+			expect(addFulltextSearch).not.toHaveBeenCalled();
+		});
+
+		it('reclaims the persisted indexes of a collection that now refuses one, every version and locale', async () => {
+			const database = {
+				name: 'upgraded-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			(getAllCollectionDocuments as jest.Mock).mockResolvedValueOnce([
+				{ data: { name: 'logs' } },
+				{ data: { name: 'logs-search-v4-es_flexsearch' } },
+				{ data: { name: 'logs-search-v3-en_flexsearch' } },
+				{ data: { name: 'products-search-v4-en_flexsearch' } },
+			]);
+			(removeCollectionStorages as jest.Mock).mockClear();
+			const collection = {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database,
+			} as unknown as RxCollection;
+
+			const after = searchPlugin.hooks?.createRxCollection?.after;
+			if (!after) throw new Error('search plugin createRxCollection hook is missing');
+			after({ collection } as never);
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([]); // once per session
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			const removed = (removeCollectionStorages as jest.Mock).mock.calls.map((call) => call[4]);
+			expect(removed).toEqual(['logs-search-v4-es_flexsearch', 'logs-search-v3-en_flexsearch']);
+		});
+
+		it('a failed enumeration is logged and does not spend the once-per-session sweep (Codex review)', async () => {
+			const database = {
+				name: 'flaky-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			const collection = {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database,
+			} as unknown as RxCollection;
+			(getAllCollectionDocuments as jest.Mock)
+				.mockRejectedValueOnce(new Error('worker not ready'))
+				.mockResolvedValueOnce([{ data: { name: 'logs-search-v4-en_flexsearch' } }]);
+			(removeCollectionStorages as jest.Mock).mockClear();
+
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([]);
+			// The failure was swallowed as "nothing removed", not thrown, and the
+			// retry is not short-circuited by the once-per-session sweep key.
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([
+				'logs-search-v4-en_flexsearch',
+			]);
+			expect((removeCollectionStorages as jest.Mock).mock.calls.map((call) => call[4])).toEqual([
+				'logs-search-v4-en_flexsearch',
+			]);
+		});
+
+		it('a failed removal releases the sweep so the next opener retries the leftover (review)', async () => {
+			const database = {
+				name: 'partial-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			const collection = {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database,
+			} as unknown as RxCollection;
+			(getAllCollectionDocuments as jest.Mock).mockResolvedValue([
+				{ data: { name: 'logs-search-v4-en_flexsearch' } },
+			]);
+			(removeCollectionStorages as jest.Mock)
+				.mockClear()
+				.mockRejectedValueOnce(new Error('storage busy'))
+				.mockResolvedValueOnce(undefined);
+
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([]);
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([
+				'logs-search-v4-en_flexsearch',
+			]);
+			expect(removeCollectionStorages).toHaveBeenCalledTimes(2);
+			(getAllCollectionDocuments as jest.Mock).mockResolvedValue([]);
+		});
+
 		it('passes the caller snapshot and intended index options to FlexSearch', async () => {
 			const collectionPrototype: Record<string, unknown> = {};
 			const install = searchPlugin.prototypes?.RxCollection;
@@ -344,6 +474,7 @@ describe('search plugin', () => {
 				'products-search-en_flexsearch',
 				'products-search-v2-en_flexsearch',
 				'products-search-v3-en_flexsearch',
+				'products-search-v4-en_flexsearch',
 			]);
 			expect(removed).toEqual(staleSearchCollectionNames('products', 'en'));
 			expect(removed).not.toContain(`${getSearchIdentifier('products', 'en')}_flexsearch`);

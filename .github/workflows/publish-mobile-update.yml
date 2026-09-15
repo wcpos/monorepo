@@ -1,0 +1,132 @@
+name: Publish Mobile Update
+
+# Publishes over-the-air JS updates for the iOS and Android app.
+# Manual only: dispatch at the release SHA and choose production or adhoc.
+# This publishes JS only, not a new native binary or a store submission.
+# Updates are served only to binaries whose fingerprint runtime version matches.
+# Read per-platform .runtime.version via eas build:view <id> --json; shipped baselines: CLAUDE.md.
+# A native dependency, config plugin, app config or native code change can move
+# that fingerprint and requires build.yml instead: a store submit for
+# `production`, a new internal-distribution build for `adhoc`.
+# The release train decides whether a native build is needed by comparing the
+# tree against the shipped build of the SAME platform and profile (adhoc builds
+# carry plugins production does not):
+#   eas fingerprint:compare --build-id <shipped build of that platform and profile>
+# Matching binaries keep receiving JS-only patches without another store build.
+# Downloaded updates apply on the next cold start without delaying POS startup.
+
+on:
+  workflow_dispatch:
+    inputs:
+      monorepo_ref:
+        description: Monorepo branch/ref to publish from (use a SHA for branch names containing "/")
+        required: true
+        default: main
+      channel:
+        description: EAS Update channel
+        type: choice
+        required: true
+        default: production
+        options:
+          - production
+          - adhoc
+      override_release_gate:
+        description: Type "I accept a red main" to override the release gate
+        type: string
+        default: ''
+
+concurrency:
+  group: publish-mobile-update-${{ inputs.channel }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: read
+  # The release gate reads Deploy workflow runs and jobs.
+  actions: read
+
+jobs:
+  publish:
+    name: 📱 Build & publish mobile update
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Check out the workflow revision (for the release gate)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: false
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: 🔎 Resolve the requested monorepo SHA
+        id: monorepo-sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONOREPO_REF: ${{ github.event.inputs.monorepo_ref }}
+        run: |
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${MONOREPO_REF}" --jq .sha)
+          [ -n "$sha" ] || { echo "::error::could not resolve monorepo_ref '$MONOREPO_REF'"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: 🟢 Require green main verification
+        uses: ./.github/actions/require-green-main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          sha: ${{ steps.monorepo-sha.outputs.sha }}
+          override: ${{ github.event.inputs.override_release_gate }}
+
+      - name: 📥 Check out monorepo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # The SHA the gate verified, not the ref: a branch can advance between the two.
+          ref: ${{ steps.monorepo-sha.outputs.sha }}
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: 👷 Build packages for main
+        run: pnpm run -w build:main
+
+      - name: 🚀 Publish mobile update
+        working-directory: apps/main
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          CHANNEL: ${{ inputs.channel }}
+          # app.config.ts keys bundle id, scheme and plugins off this; the exported manifest must
+          # describe the binary the channel targets (channel names equal profile names).
+          EAS_BUILD_PROFILE: ${{ inputs.channel }}
+          # EAS gives internal-distribution builds the `preview` environment by default, so an
+          # adhoc update must read the same environment's variables as the adhoc binary.
+          EAS_ENVIRONMENT: ${{ inputs.channel == 'adhoc' && 'preview' || 'production' }}
+          SHA: ${{ steps.monorepo-sha.outputs.sha }}
+        run: |
+          APP_VERSION=$(node -p "require('./package.json').version")
+          eas update --channel "$CHANNEL" --environment "$EAS_ENVIRONMENT" --message "app v${APP_VERSION} ${SHA:0:8}" --non-interactive
+
+      - name: 🔎 Is Sentry configured?
+        id: sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -n "$SENTRY_AUTH_TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SENTRY_AUTH_TOKEN is not set; skipping source map upload."
+          fi
+
+      - name: 🗺️ Upload source maps to Sentry
+        if: ${{ steps.sentry.outputs.configured == 'true' }}
+        working-directory: apps/main
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          test -f dist/metadata.json || { echo "::error::build output missing (dist/metadata.json)"; exit 1; }
+          # Local bin of the installed @sentry/react-native (pinned by the lockfile), not a fresh npx fetch.
+          npx sentry-expo-upload-sourcemaps dist

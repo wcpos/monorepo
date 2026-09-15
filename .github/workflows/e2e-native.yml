@@ -396,6 +396,7 @@ jobs:
         working-directory: apps/main
         env:
           PLATFORM: ${{ steps.resolve.outputs.platform }}
+          EAS_BUILD_PROFILE: development
         run: |
           mkdir -p ../../e2e-builds
           eas build --profile development --platform "$PLATFORM" --non-interactive --wait --json > /tmp/builds.json

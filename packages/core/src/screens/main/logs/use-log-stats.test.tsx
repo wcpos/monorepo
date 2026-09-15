@@ -32,7 +32,7 @@ describe('useLogStats', () => {
 		mockFind.mockReturnValue({ $: of([]) });
 	});
 
-	it('queries every retained sync record outcome before deriving stuck records', async () => {
+	it('bounds the newest sync outcomes before deriving stuck records', async () => {
 		renderHook(() => useLogStats());
 
 		await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(2));
@@ -42,6 +42,7 @@ describe('useLogStats', () => {
 				operationType: { $eq: 'sync.record' },
 			},
 			sort: [{ timestamp: 'desc' }],
+			limit: 5_000,
 		});
 	});
 
