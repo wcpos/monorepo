@@ -290,8 +290,10 @@ for (const path of ['eviction', 'recreation']) {
 			assert.equal(stopped, true, 'index shutdown must run after a rejecting pipeline close');
 			assert.equal(
 				deregistered,
-				true,
-				'the destination collection must close even when shutdown rejects'
+				path === 'eviction',
+				path === 'eviction'
+					? 'the destination collection must close even when shutdown rejects'
+					: 'recreation must leave the destination registered for the rebuild to remove'
 			);
 			assert.equal(Object.hasOwn(destination, '__wcposAppendIndex'), false);
 			assert.equal(creates, 1);

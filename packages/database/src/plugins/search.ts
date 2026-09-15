@@ -28,7 +28,25 @@ const MAX_CACHED_LOCALES = 3;
 // init/recreate operations, including creation already in flight before teardown.
 const searchOperations = new WeakMap<RxCollection, Promise<void>>();
 
-async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> {
+/**
+ * Stop a search instance: pipeline, instance, then the index back-reference.
+ *
+ * `closeDestination` additionally deregisters the `*_flexsearch` collection from
+ * `database.collections`. The premium close() leaves it registered, and that collection's
+ * onClose hook retains the whole FlexSearch index, so deleting the back-reference alone does
+ * not free an evicted locale; RxCollection.close() releases it without touching the persisted
+ * index, so the locale reopens from storage instead of rebuilding.
+ *
+ * It defaults to off because `database.collections` is the ONLY handle the rebuild has on the
+ * destination: `destroySearchCollection()` looks it up there and calls `remove()` on it.
+ * Deregistering first turns that removal into a no-op, so an index-divergence rebuild reopens
+ * the corrupt index and its pipeline checkpoint instead of replacing them. Eviction is the one
+ * path that frees a locale without rebuilding it, so it opts in.
+ */
+async function closeSearchInstance(
+	instance: FlexSearchInstance,
+	{ closeDestination = false }: { closeDestination?: boolean } = {}
+): Promise<void> {
 	const search = instance as FlexSearchInstance & {
 		close(): Promise<void>;
 		pipeline: { close(): Promise<void> };
@@ -41,11 +59,7 @@ async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> 
 			await search.close();
 		} finally {
 			try {
-				// The premium close() leaves its destination registered in database.collections,
-				// and that collection's onClose hook retains the whole FlexSearch index. Closing
-				// it deregisters the collection without touching the persisted index, so the
-				// locale reopens from storage instead of rebuilding.
-				await destination.close();
+				if (closeDestination) await destination.close();
 			} finally {
 				delete destination.__wcposAppendIndex;
 			}
@@ -181,10 +195,11 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 			const instance = collection._searchInstances.get(oldestLocale);
 			collection._searchInstances.delete(oldestLocale);
 
-			// Stop indexing and release retained append state.
+			// Stop indexing and release retained append state. Nothing rebuilds an evicted
+			// locale, so this is the one path that also deregisters the destination.
 			if (instance) {
 				try {
-					await closeSearchInstance(instance);
+					await closeSearchInstance(instance, { closeDestination: true });
 				} catch (error: any) {
 					searchLogger.warn('Failed to destroy evicted search instance', {
 						context: {
@@ -687,8 +702,10 @@ export const searchPlugin: RxPlugin = {
 					}
 				}
 
-				// Also try to destroy any orphaned search collection
-				await destroySearchCollection(this, locale);
+				// The destination is deliberately left registered for createSearchInstance below:
+				// its `existing` branch resets the pipeline checkpoint BEFORE removing the
+				// storage. Removing it here instead drops the storage but keeps the checkpoint,
+				// so the fresh index resumes after the source rows and rebuilds to nothing.
 
 				// Remove from LRU tracking
 				if (this._localeLRU) {
