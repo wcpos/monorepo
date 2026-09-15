@@ -159,6 +159,42 @@ describe('useBarcodeDetection', () => {
 		expect(scans).toEqual([]);
 	});
 
+	it.each(['input', 'textarea'])(
+		'cancels a pending wedge burst when typing enters a focused %s',
+		(tag) => {
+			const detected: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => detected.push(code));
+			const input = document.createElement(tag);
+			document.body.appendChild(input);
+			try {
+				act(() => {
+					for (const key of '12345678') {
+						document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+						jest.advanceTimersByTime(10);
+					}
+				});
+				input.focus();
+				fireEvent.keyDown(input, { key: 'f' });
+				act(() => jest.advanceTimersByTime(200));
+				expect(detected).toEqual([]);
+				// Cancelling the interrupted burst must not disable subsequent outside scans.
+				input.blur();
+				act(() => {
+					for (const key of '87654321') {
+						document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+						jest.advanceTimersByTime(10);
+					}
+					jest.advanceTimersByTime(200);
+				});
+				expect(detected).toEqual(['87654321']);
+			} finally {
+				input.remove();
+				subscription.unsubscribe();
+			}
+		}
+	);
+
 	it('does not treat human-speed typing after mount as a barcode scan', () => {
 		const detected: string[] = [];
 		const { result } = renderHook(() => useBarcodeDetection());

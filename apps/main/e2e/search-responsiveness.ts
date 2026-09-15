@@ -75,9 +75,30 @@ export async function measureSearch(page: Page, testID: string, testInfo: TestIn
 		return gaps[Math.floor(gaps.length / 2)];
 	});
 	expect(frameMs, 'Usable refresh cadence').toBeGreaterThan(0);
+	const listLayout = await page
+		.getByTestId(/^(data-table-scroller-.+|pos-products-grid-scroller)$/)
+		.filter({ visible: true })
+		.evaluateAll((lists) =>
+			lists.map((list) => ({
+				testID: list.getAttribute('data-testid'),
+				viewportHeight: list.clientHeight,
+				scrollHeight: list.scrollHeight,
+				renderedRows: list.querySelectorAll(
+					'[data-testid^="data-table-row-"], [data-testid="product-tile"], [data-testid="variable-product-tile"]'
+				).length,
+				domNodes: list.querySelectorAll('*').length,
+			}))
+		);
+	const layoutPath = testInfo.outputPath(`${label}-list-layout.json`);
+	await writeFile(layoutPath, JSON.stringify(listLayout));
+	await testInfo.attach(`${label}-list-layout`, {
+		path: layoutPath,
+		contentType: 'application/json',
+	});
 	const cdp = await page.context().newCDPSession(page);
 	const trace: TraceEvent[] = [];
-	cdp.on('Tracing.dataCollected', ({ value }) => trace.push(...value));
+	// CDP types this payload as generic dictionaries; the trace schema is decoded below.
+	cdp.on('Tracing.dataCollected', ({ value }) => trace.push(...(value as unknown as TraceEvent[])));
 	await cdp.send('Tracing.start', {
 		categories: 'devtools.timeline,blink.user_timing,cc,benchmark',
 		transferMode: 'ReportEvents',

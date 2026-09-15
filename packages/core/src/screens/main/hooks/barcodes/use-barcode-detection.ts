@@ -130,7 +130,11 @@ export const useBarcodeDetection = (
 		(e: KeyboardEvent) => {
 			const target = e.target as HTMLElement | null;
 			const ignoreInput = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
-			if (!ignoreInput) {
+			if (ignoreInput) {
+				// A burst started outside the field must not replay over new typing.
+				detectorRef.current?.dispose();
+				detectorRef.current = null;
+			} else {
 				handleKeyInput(e.key);
 			}
 		},
