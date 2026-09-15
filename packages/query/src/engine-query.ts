@@ -40,11 +40,12 @@ import {
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
 import {
-	fieldsMatchPhrase,
+	fieldsMatchAllTerms,
 	fieldsMatchShortPrefix,
 	fieldsMatchTokens,
 	fieldsMissAnyOfTokens,
 	phraseSearchAnchor,
+	searchTerms,
 	searchTokens,
 } from './search-match';
 import {
@@ -146,7 +147,7 @@ function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): Legac
 
 /**
  * The fallback answer when the index cannot answer: match the query directly
- * against the documents: products/variations require a phrase in one field;
+ * against the documents: products/variations require every term, including short ones;
  * other collections retain the index's per-token AND semantics.
  * Folding goes through the SAME `foldSearchText` the index's encoder uses
  * (#1732), so a scan answer and the indexed answer that replaces it agree.
@@ -160,18 +161,15 @@ async function scanDocumentsForSearch(
 	search: string,
 	searchFields: string[],
 	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>,
-	phraseSearch: boolean
+	terms: string[] | null
 ): Promise<EngineRxDocument[]> {
 	const tokens = searchTokens(search);
-	const foldedPhrase = foldSearchText(search);
-	if (searchFields.length === 0 || (!phraseSearch && tokens.length === 0)) return [];
+	if (searchFields.length === 0 || (!terms && tokens.length === 0)) return [];
 	const documents = await collection.find().exec();
 	return documents.filter((document) => {
 		const snapshot = documentSnapshot(document);
 		const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-		return phraseSearch
-			? fieldsMatchPhrase(fields, foldedPhrase)
-			: fieldsMatchTokens(fields, tokens);
+		return terms ? fieldsMatchAllTerms(fields, terms) : fieldsMatchTokens(fields, tokens);
 	});
 }
 function matchingSelectors$(
@@ -198,9 +196,10 @@ function matchingSelectors$(
 	if (!foldedSearch) return of(selector);
 	const phraseSearch =
 		descriptor.collection === 'products' || descriptor.collection === 'variations';
+	const terms = phraseSearch ? searchTerms(search) : null;
 	const anchor = phraseSearch ? phraseSearchAnchor(foldedSearch) : null;
 	const indexSearch = anchor ?? search;
-	// Product phrases without an indexed anchor scan literally; other collections keep prefixes.
+	// Product terms without an indexed anchor scan directly; other collections keep prefixes.
 	if (phraseSearch ? !anchor : foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
 		const prefix = foldedSearch;
 		// Mirror initSearch's fallback so short and indexed terms search the same fields.
@@ -220,10 +219,10 @@ function matchingSelectors$(
 					documents
 						.filter((document) => {
 							const snapshot = documentSnapshot(document);
-							return (phraseSearch ? fieldsMatchPhrase : fieldsMatchShortPrefix)(
-								searchFields.map((field) => String(get(snapshot, field) ?? '')),
-								prefix
-							);
+							const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
+							return terms
+								? fieldsMatchAllTerms(fields, terms)
+								: fieldsMatchShortPrefix(fields, prefix);
 						})
 						.map((document) => document.primary)
 				)
@@ -273,9 +272,7 @@ function matchingSelectors$(
 				trailing: true,
 			}),
 			switchMap(() =>
-				from(
-					scanDocumentsForSearch(collection, search, searchFields, documentSnapshot, phraseSearch)
-				)
+				from(scanDocumentsForSearch(collection, search, searchFields, documentSnapshot, terms))
 			)
 		);
 
@@ -381,10 +378,10 @@ function matchingSelectors$(
 				documents
 					.filter(
 						(document) =>
-							!phraseSearch ||
-							fieldsMatchPhrase(
+							!terms ||
+							fieldsMatchAllTerms(
 								searchFields.map((field) => String(get(documentSnapshot(document), field) ?? '')),
-								foldedSearch
+								terms
 							)
 					)
 					.map((document) => document.primary)

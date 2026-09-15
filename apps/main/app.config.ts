@@ -46,7 +46,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		// One store binary receives every JS-only patch until a native change lands.
 		// fallbackToCacheTimeout: 0 starts the POS instantly; a downloaded update
 		// applies on the next cold start.
-		runtimeVersion: { policy: 'fingerprint' },
+		// CI resolves once before Metro: Expo otherwise fingerprints every manifest,
+		// exceeding the iOS launcher's 10 s timeout (expo/expo#46415).
+		runtimeVersion: (process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
+			process.env.WCPOS_E2E_RUNTIME_VERSION) || { policy: 'fingerprint' },
 		updates: {
 			url: 'https://u.expo.dev/eb1b6e66-92d7-47f5-b93f-95bf51287f60',
 			checkAutomatically: 'ON_LOAD',

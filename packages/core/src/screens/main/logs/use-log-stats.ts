@@ -31,6 +31,11 @@ const STUCK_RECORD_DOMAINS = [
 	'wcpos.terminal-payments',
 ] as const;
 
+// Bound each reactive result/OPFS clone even for an existing escalation storm.
+// 5,000 covers the reported 1,652 stuck records with headroom, not all history.
+// Applied per domain range scan, so each domain keeps its own newest window.
+const STUCK_OUTCOME_LIMIT = 5_000;
+
 export type LogStats = {
 	/**
 	 * LOG VOLUME, not a fault-counter family (CONTEXT.md § Language — Fault
@@ -50,7 +55,11 @@ const EMPTY_STATS: LogStats = { eventsToday: 0, errorsToday: 0, stuck: [], clock
 
 type LogsCollectionLike = {
 	count(query: { selector: Record<string, unknown> }): { $: Observable<number> };
-	find(query: { selector: Record<string, unknown>; sort: Record<string, 'asc' | 'desc'>[] }): {
+	find(query: {
+		selector: Record<string, unknown>;
+		sort: Record<string, 'asc' | 'desc'>[];
+		limit?: number;
+	}): {
 		$: Observable<{ toJSON(): LogRow }[]>;
 	};
 };
@@ -75,12 +84,11 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 			const errors$ = logsCollection.count({
 				selector: { level: { $eq: 'error' }, timestamp: { $gte: dayStart } },
 			}).$;
-			// No time window: a stuck record stays stuck until a decisive `ok` row —
-			// repeat-collapse keeps the ORIGINAL `timestamp` (only `lastSeen` moves),
-			// and a permanently rejected record may never write again, so any cutoff
-			// on `timestamp` silently un-sticks real failures. Retention (30 days)
-			// is the honest horizon. The `[category, timestamp]` index bounds the
-			// scan to the sync domain; `operationType` narrows it to outcome rows.
+			// A row cap bounds repeated materialization without a timestamp cutoff:
+			// quiet failures remain visible until newer outcomes displace them.
+			// This is a recent diagnostic window, not the engine's standing ledger;
+			// older unresolved records can fall out. Keep successes in the window
+			// so their latest decisive row still clears a failure (#2058).
 			// One range scan per domain that writes settled record outcomes, merged before
 			// the derivation rules per record. A refused payment is written by the checkout
 			// path under `wcpos.payments` with the same terminal shape as a sync rejection,
@@ -95,6 +103,7 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 								operationType: { $eq: 'sync.record' },
 							},
 							sort: [{ timestamp: 'desc' }],
+							limit: STUCK_OUTCOME_LIMIT,
 						}).$
 				)
 			).pipe(
@@ -148,8 +157,9 @@ function createLogStats$(logsCollection: LogsCollectionLike): Observable<LogStat
 
 /**
  * Live counts for the Logs stat header. Counts use the `[level, timestamp]`
- * index; the stuck-records derivation scans retained sync-domain rows via the
- * `[category, timestamp]` index and rules per record (spec §4).
+ * index; the stuck-records derivation reads a bounded window of record outcomes
+ * per settled domain (see `STUCK_RECORD_DOMAINS`) and rules per record within
+ * that window.
  */
 export function useLogStats(): LogStats {
 	// Follow the collection: logs-storage-recovery removes and re-creates `logs`

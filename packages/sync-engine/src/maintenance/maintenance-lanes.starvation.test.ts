@@ -88,37 +88,30 @@ async function starvationHarness() {
 }
 
 describe('maintenance lane starvation ceiling (mono#1159)', () => {
-	it('waits a full per-lane ceiling when the session starts under pressure', async () => {
+	it('starts bounded existence work on the first pressured tick and keeps normal cadence', async () => {
 		const context = await starvationHarness();
 		context.setPressure(true);
-
-		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({
-			status: 'skipped',
-			reason: 'server-pressure',
-		});
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
+		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({ status: 'ran' });
+		context.advance(15 * 60_000 - 1);
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'skipped' });
 		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({
 			status: 'skipped',
-			reason: 'server-pressure',
 		});
-		context.advance(30 * 60_000 - 1);
-		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({
-			status: 'skipped',
-			reason: 'server-pressure',
-		});
-		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({
-			status: 'skipped',
-			reason: 'server-pressure',
-		});
-		expect(context.primeManifest).not.toHaveBeenCalled();
-		expect(context.reconcilePass).not.toHaveBeenCalled();
+		context.advance(1);
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
+		context.advance(2 * 60_000);
+		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({ status: 'ran' });
+		expect(context.primeManifest).toHaveBeenCalledTimes(2);
+		expect(context.reconcilePass).toHaveBeenCalledTimes(2);
 	});
 
-	it('runs one reduced existence-prime tick after its ceiling, then defers again', async () => {
+	it('runs one reduced existence-prime tick at its normal cadence, then defers again', async () => {
 		const context = await starvationHarness();
 		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
 		context.primeManifest.mockClear();
 		context.setPressure(true);
-		context.advance(30 * 60_000 + 1);
+		context.advance(15 * 60_000 + 1);
 
 		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
 		expect(context.primeManifest).toHaveBeenCalledWith(expect.any(Object), { maxChunks: 1 });
@@ -140,13 +133,16 @@ describe('maintenance lane starvation ceiling (mono#1159)', () => {
 		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({ status: 'ran' });
 		context.reconcilePass.mockClear();
 		context.setPressure(true);
-		context.advance(34 * 60_000 + 1);
+		context.advance(17 * 60_000 + 1);
 
 		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({ status: 'ran' });
 		expect(context.reconcilePass).toHaveBeenCalledOnce();
 		const [, , shouldDefer, options] = context.reconcilePass.mock.calls[0]!;
 		expect(shouldDefer).toEqual(expect.any(Function));
 		expect(shouldDefer!()).toBe(false);
+		context.setRetryAfterActive(true);
+		expect(shouldDefer!()).toBe(true);
+		context.setRetryAfterActive(false);
 		expect(options).toEqual({ maxScanPagesPerSpace: 1, maxDrillDowns: 1 });
 		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({
 			status: 'skipped',
@@ -155,25 +151,19 @@ describe('maintenance lane starvation ceiling (mono#1159)', () => {
 		expect(context.reconcilePass).toHaveBeenCalledOnce();
 	});
 
-	it('waits for an active Retry-After window before running a starvation tick', async () => {
+	it('waits for an active Retry-After window even on the first pressured tick', async () => {
 		const context = await starvationHarness();
 		context.setPressure(true);
-		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({
-			status: 'skipped',
-			reason: 'server-pressure',
-		});
-		context.advance(30 * 60_000 + 1);
 		context.setRetryAfterActive(true);
-
-		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({
+		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'skipped' });
+		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({
 			status: 'skipped',
-			reason: 'server-pressure',
 		});
 		expect(context.primeManifest).not.toHaveBeenCalled();
-
+		expect(context.reconcilePass).not.toHaveBeenCalled();
 		context.setRetryAfterActive(false);
 		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
-		expect(context.primeManifest).toHaveBeenCalledOnce();
+		await expect(context.lanes.existenceReconcile.tick()).resolves.toMatchObject({ status: 'ran' });
 	});
 
 	it('re-arms the ceiling when a starvation tick fails', async () => {
@@ -181,7 +171,7 @@ describe('maintenance lane starvation ceiling (mono#1159)', () => {
 		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
 		context.primeManifest.mockClear();
 		context.setPressure(true);
-		context.advance(30 * 60_000 + 1);
+		context.advance(15 * 60_000 + 1);
 		context.primeManifest.mockRejectedValueOnce(new Error('server unavailable'));
 
 		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'error' });
@@ -197,7 +187,7 @@ describe('maintenance lane starvation ceiling (mono#1159)', () => {
 		await expect(context.lanes.existencePrime.tick()).resolves.toMatchObject({ status: 'ran' });
 		context.primeManifest.mockClear();
 		context.setPressure(true);
-		context.advance(30 * 60_000 + 1);
+		context.advance(15 * 60_000 + 1);
 		let releasePrime: (() => void) | undefined;
 		let markPrimeStarted: (() => void) | undefined;
 		const primeStarted = new Promise<void>((resolve) => {

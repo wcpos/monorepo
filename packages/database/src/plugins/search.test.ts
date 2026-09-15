@@ -53,6 +53,8 @@ jest.mock('rxdb-premium/plugins/flexsearch', () => ({
 		return {
 			collection: {
 				__wcposAppendIndex: {},
+				_changeEventBuffer: { limit: 100 },
+				destroy: jest.fn().mockResolvedValue(undefined),
 				remove: jest.fn().mockResolvedValue(undefined),
 				// A real RxCollection has close() as well as remove(); eviction calls it.
 				close: jest.fn().mockResolvedValue(undefined),
@@ -144,18 +146,24 @@ describe('search plugin', () => {
 			const collection = makeCollection();
 			const old = await collection.initSearch('en');
 			const remove = jest.fn().mockResolvedValue(undefined);
-			collection.database.collections['products-search-v4-en_flexsearch'] = { remove };
+			collection.database.collections[`${getSearchIdentifier('products', 'en')}_flexsearch`] = {
+				remove,
+			};
 			const fulltextSearch = addFulltextSearch as jest.Mock;
 			const create = fulltextSearch.getMockImplementation()!;
 			fulltextSearch.mockImplementationOnce((config) => {
 				expect(old.pipeline.close).toHaveBeenCalledTimes(1);
 				expect(old.close).toHaveBeenCalledTimes(1);
 				expect(old.collection).not.toHaveProperty('__wcposAppendIndex');
-				delete collection.database.collections['products-search-v4-en_flexsearch'];
+				delete collection.database.collections[
+					`${getSearchIdentifier('products', 'en')}_flexsearch`
+				];
 				return create(config);
 			});
 			remove.mockImplementation(async () => {
-				delete collection.database.collections['products-search-v4-en_flexsearch'];
+				delete collection.database.collections[
+					`${getSearchIdentifier('products', 'en')}_flexsearch`
+				];
 			});
 			const replacement = await collection.recreateSearch('en');
 			expect(remove).toHaveBeenCalledTimes(1);
@@ -520,12 +528,12 @@ describe('search plugin', () => {
 
 	describe('search identifier generation', () => {
 		it('should generate a versioned, unique identifier per collection and locale', () => {
-			// The version tag (v3) is migration-critical: it forces the rxdb-premium
+			// The version tag (v5) is migration-critical: it forces the rxdb-premium
 			// flexsearch pipeline to rebuild the persisted index from scratch when the
-			// index config changes. Guard it explicitly. See #679, #1732, and the v4 decimal-term fix.
-			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v4-en');
-			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v4-de');
-			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v4-fr');
+			// index config changes. Guard it explicitly. See #679, #1732, and the v5 decimal-comma fix.
+			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v5-en');
+			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v5-de');
+			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v5-fr');
 		});
 
 		it('should generate different identifiers for different locales', () => {
@@ -738,6 +746,7 @@ describe('search plugin', () => {
 				'products-search-en_flexsearch',
 				'products-search-v2-en_flexsearch',
 				'products-search-v3-en_flexsearch',
+				'products-search-v4-en_flexsearch',
 			]);
 			expect(removed).toEqual(staleSearchCollectionNames('products', 'en'));
 			expect(removed).not.toContain(`${getSearchIdentifier('products', 'en')}_flexsearch`);

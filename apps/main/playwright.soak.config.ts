@@ -8,13 +8,31 @@ if (!baseURL) {
 }
 
 /**
- * Standalone config for the idle-backfill live soak — same pattern as
- * playwright.verify1135.config.ts: self-authenticating single spec, no shared
- * globalSetup, run by hand only.
+ * Standalone config for the hand-run live soaks — same pattern as
+ * playwright.verify1135.config.ts: self-authenticating specs, no shared
+ * globalSetup, one project per soak so `--project=<name>` runs exactly one.
  */
+// Any main-lane store works — the soaks assert wire shapes and renderer
+// growth, never contents. SOAK_STORE_URL/SOAK_STORE_VARIANT pick the healthy one.
+// The variant must match the store, or the version stub advertises the wrong
+// plugin to the client: when SOAK_STORE_VARIANT is not given it follows the
+// dev-store naming (`dev-free.*` is the free plugin, anything else is pro).
+const soakStoreUrl =
+	process.env.SOAK_STORE_URL || process.env.E2E_STORE_URL_PRO || 'https://dev-pro.wcpos.com';
+const soakStoreVariant: 'free' | 'pro' =
+	process.env.SOAK_STORE_VARIANT === 'free' || process.env.SOAK_STORE_VARIANT === 'pro'
+		? process.env.SOAK_STORE_VARIANT
+		: new URL(soakStoreUrl).hostname.startsWith('dev-free')
+			? 'free'
+			: 'pro';
+const soakStore = {
+	...devices['Desktop Chrome'],
+	storeVariant: soakStoreVariant,
+	storeUrl: soakStoreUrl,
+};
+
 export default defineConfig<WcposTestOptions>({
 	testDir: './e2e',
-	testMatch: /idle-backfill\.live\.spec\.ts/,
 	fullyParallel: false,
 	workers: 1,
 	retries: 0,
@@ -29,17 +47,13 @@ export default defineConfig<WcposTestOptions>({
 	projects: [
 		{
 			name: 'idle-soak',
-			use: {
-				...devices['Desktop Chrome'],
-				// Any main-lane store works — the soak asserts wire shapes, never
-				// contents. SOAK_STORE_URL/SOAK_STORE_VARIANT pick the healthy one.
-				storeVariant: (process.env.SOAK_STORE_VARIANT === 'free' ? 'free' : 'pro') as
-					'free' | 'pro',
-				storeUrl:
-					process.env.SOAK_STORE_URL ||
-					process.env.E2E_STORE_URL_PRO ||
-					'https://dev-pro.wcpos.com',
-			},
+			testMatch: /idle-backfill\.live\.spec\.ts/,
+			use: soakStore,
+		},
+		{
+			name: 'tick-403-soak',
+			testMatch: /tick-403-soak\.live\.spec\.ts/,
+			use: soakStore,
 		},
 	],
 });

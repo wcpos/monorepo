@@ -34,11 +34,14 @@ export function fieldsMissAnyToken(fields: string[], search: string): boolean {
 	return fieldsMissAnyOfTokens(fields, searchTokens(search));
 }
 
-/** Typed product search is one literal phrase within one searchable field. */
-export function fieldsMatchPhrase(fields: string[], foldedPhrase: string): boolean {
-	return (
-		foldedPhrase.length > 0 && fields.some((field) => foldSearchText(field).includes(foldedPhrase))
-	);
+/** Typed product search keeps every encoded term, including one- and two-character terms. */
+export function searchTerms(search: string): string[] {
+	return encodeSearchText(search);
+}
+
+/** Every typed term must match the folded searchable fields, in any order. */
+export function fieldsMatchAllTerms(fields: string[], terms: string[]): boolean {
+	return fieldsMatchTokens(fields, terms);
 }
 
 /** A punctuation-free anchor remains indexed even when long field tokens are split. */

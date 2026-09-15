@@ -547,9 +547,9 @@ export async function applyReplicationActions(
 	//    a pull is not fixing would just spin). Emitted AFTER persistState on
 	//    purpose: an escalation row may only exist once its ledger entry is
 	//    durable, or a crash in the gap would strand a banner entry the restored
-	//    engine has no memory of — the exact defect #1338 fixes. A crash BEFORE
-	//    this emit loses nothing: recurring drift re-escalates on the next sweep,
-	//    and a cured one at worst yields an orphan recovered row.
+	//    engine has no memory of (#1338). A crash in this gap can lose the
+	//    diagnostic row: ledgered escalations no longer re-emit (#2058).
+	//    The durable ledger still tracks the record and its eventual cure.
 	for (const escalation of actions.escalations) {
 		log(
 			`change-signal: ESCALATION ${escalation.collection} id ${escalation.id} (${escalation.status}, ${escalation.detector}) — stuck, NOT auto-pulled`

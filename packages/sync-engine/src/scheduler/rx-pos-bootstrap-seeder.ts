@@ -103,8 +103,8 @@ export function laneKeyFor(collection: SyncCollectionName): string | null {
 /**
  * The greedy reference lane task for one collection. The greedy fetcher is prunable, so
  * one re-pull upserts current rows AND set-difference-prunes a deleted one — no separate
- * tombstone arm (unlike tax rates, whose lane only upserts). Used both at boot and by the
- * change-signal tick to re-seed ONLY the changed collection (never the other reference lanes).
+ * tombstone arm (unlike tax rates, whose lane only upserts). Used by demand and maintenance
+ * refreshes; the change-signal handler refreshes changed reference collections directly.
  */
 export function referenceLaneTaskFor<C extends ReferenceCollection>(
 	collection: C,
@@ -182,9 +182,8 @@ export async function seedTaxRatesLane(
 /**
  * Re-seed ONLY the greedy reference lanes for categories, brands, tags, and coupons (F11 —
  * in-session reference refresh). Keeps them fresh mid-session without re-seeding tax rates
- * (which have their own change-signal refresh). Called on a periodic interval so a reference
- * edit or deletion reaches a running POS without an app reload; re-pulling the tiny reference
- * set is cheap.
+ * (which have their own change-signal refresh). Used by demand and census-backed backfill;
+ * periodic refresh of populated collections is a safety net when change signals are unavailable.
  */
 export async function seedReferenceLanes(
 	input: SeedPosBootstrapLanesInput & {

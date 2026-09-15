@@ -13,6 +13,7 @@ import {
 	createFakeEngine,
 	createPendingFakeEngine,
 	engineProduct,
+	engineVariation,
 } from '../src/testing';
 
 import type { RxDatabase } from 'rxdb';
@@ -22,21 +23,29 @@ const searchError = jest.mocked(searchLogger.error);
 const searchWarn = jest.mocked(searchLogger.warn);
 
 describe('observeEngineQuery', () => {
-	it.each(['index', 'unavailable', 'stalled'])(
-		'matches the whole Georgian phrase before counting/paging via %s',
-		async (lane) => {
-			const database = await createEngineDatabase(['products']);
+	it.each([
+		['products', 'index'],
+		['products', 'unavailable'],
+		['products', 'stalled'],
+		['variations', 'index'],
+		['variations', 'unavailable'],
+		['variations', 'stalled'],
+	] as const)(
+		'matches every Georgian search term in %s before counting/paging via %s',
+		async (collection, lane) => {
+			const database = await createEngineDatabase([collection]);
 			const engine = createFakeEngine(database);
-			await database.collections.products.bulkInsert([
-				engineProduct({ uuid: 'phrase', id: 1, name: 'xxxx MY საბარგული xxxx' }),
-				engineProduct({ uuid: 'model', id: 2, name: 'M3 საბარგული' }),
-				engineProduct({ uuid: 'reverse', id: 3, name: 'საბარგული MY' }),
-				engineProduct({ uuid: 'gap', id: 4, name: 'MY xxxx საბარგული' }),
-				engineProduct({ uuid: 'split', id: 5, name: 'საბარგული', sku: 'MY' }),
+			const record = collection === 'products' ? engineProduct : engineVariation;
+			await database.collections[collection].bulkInsert([
+				record({ uuid: 'phrase', id: 1, name: 'xxxx MY საბარგული xxxx' }),
+				record({ uuid: 'model', id: 2, name: 'M3 საბარგული' }),
+				record({ uuid: 'reverse', id: 3, name: 'საბარგული MY' }),
+				record({ uuid: 'gap', id: 4, name: 'MY xxxx საბარგული' }),
+				record({ uuid: 'split', id: 5, name: 'საბარგული', sku: 'MY' }),
 			]);
-			const documents = await database.collections.products.find().exec();
+			const documents = await database.collections[collection].find().exec();
 			const find = jest.fn().mockResolvedValue(documents);
-			const init = jest.spyOn(database.collections.products, 'initSearch');
+			const init = jest.spyOn(database.collections[collection], 'initSearch');
 			if (lane === 'unavailable') init.mockResolvedValue(null);
 			else
 				init.mockResolvedValue({
@@ -44,18 +53,26 @@ describe('observeEngineQuery', () => {
 					find: lane === 'stalled' ? () => new Promise(() => {}) : find,
 				} as never);
 			const recreateSearch = jest.fn();
-			Object.assign(database.collections.products, { recreateSearch });
+			Object.assign(database.collections[collection], { recreateSearch });
 			try {
 				const result = await firstValueFrom(
-					observeEngineQuery(engine, `phrase-${lane}`, {
-						collection: 'products',
+					observeEngineQuery(engine, `terms-${lane}`, {
+						collection,
 						search: 'MY საბარგული',
 						searchFields: ['name', 'sku'],
 						limit: 1,
 					})
 				);
-				expect(result.count).toBe(1);
-				expect(result.hits.map((hit) => hit.id)).toEqual(['phrase']);
+				expect(result.count).toBe(4);
+				expect(result.hits.map((hit) => hit.id)).toEqual(['gap']);
+				const all = await firstValueFrom(
+					observeEngineQuery(engine, `terms-all-${lane}`, {
+						collection,
+						search: 'MY საბარგული',
+						searchFields: ['name', 'sku'],
+					})
+				);
+				expect(all.hits.map((hit) => hit.id).sort()).toEqual(['gap', 'phrase', 'reverse', 'split']);
 				expect(recreateSearch).not.toHaveBeenCalled();
 				if (lane === 'index')
 					expect(find).toHaveBeenCalledWith('საბარგული', { limit: Number.MAX_SAFE_INTEGER });
@@ -65,7 +82,7 @@ describe('observeEngineQuery', () => {
 		}
 	);
 
-	it('keeps a phrase hit after the first 100 real index candidates', async () => {
+	it('keeps an all-term hit after the first 100 real index candidates', async () => {
 		const database = await createEngineDatabase(['products']);
 		const engine = createFakeEngine(database);
 		const products = Array.from({ length: 150 }, (_, id) =>
@@ -94,7 +111,7 @@ describe('observeEngineQuery', () => {
 		try {
 			expect(index.search('საბარგული')).toHaveLength(100);
 			const result = await firstValueFrom(
-				observeEngineQuery(engine, 'real-index-phrase', {
+				observeEngineQuery(engine, 'real-index-terms', {
 					collection: 'products',
 					search: 'MY საბარგული',
 					searchFields: ['name'],
@@ -108,35 +125,36 @@ describe('observeEngineQuery', () => {
 		}
 	});
 
-	it.each(['MY', 'A', 'A B', '0.4'])(
-		'scans the complete anchorless phrase %s and reacts to writes',
-		async (search) => {
-			const database = await createEngineDatabase(['products']);
-			const init = jest.spyOn(database.collections.products, 'initSearch');
-			await database.collections.products.insert(
-				engineProduct({ uuid: 'empty', id: 1, name: 'zzz' })
-			);
-			let latest: string[] | null = null;
-			const sub = observeEngineQuery(createFakeEngine(database), 'anchorless-phrase', {
-				collection: 'products',
-				search,
-				searchFields: ['name'],
-			}).subscribe((result) => {
-				latest = result.hits.map((hit) => hit.id);
-			});
-			try {
-				await waitFor(() => expect(latest).toEqual([]));
-				await database.collections.products.insert(
-					engineProduct({ uuid: 'embedded', id: 2, name: `xx${search}xx` })
-				);
-				await waitFor(() => expect(latest).toEqual(['embedded']));
-				expect(init).not.toHaveBeenCalled();
-			} finally {
-				sub.unsubscribe();
-				await database.close();
-			}
+	it.each([
+		['MY', 'xxMYxx'],
+		['A', 'CAB'],
+		['A B', 'xxB gap Axx'],
+		['0.4', 'Coil 0.4 ohm'],
+		['0,4', 'Coil 0,4 ohm'],
+	])('scans all anchorless terms in %s and reacts to writes', async (search, name) => {
+		const database = await createEngineDatabase(['products']);
+		const init = jest.spyOn(database.collections.products, 'initSearch');
+		await database.collections.products.insert(
+			engineProduct({ uuid: 'empty', id: 1, name: 'zzz' })
+		);
+		let latest: string[] | null = null;
+		const sub = observeEngineQuery(createFakeEngine(database), 'anchorless-terms', {
+			collection: 'products',
+			search,
+			searchFields: ['name'],
+		}).subscribe((result) => {
+			latest = result.hits.map((hit) => hit.id);
+		});
+		try {
+			await waitFor(() => expect(latest).toEqual([]));
+			await database.collections.products.insert(engineProduct({ uuid: 'embedded', id: 2, name }));
+			await waitFor(() => expect(latest).toEqual(['embedded']));
+			expect(init).not.toHaveBeenCalled();
+		} finally {
+			sub.unsubscribe();
+			await database.close();
 		}
-	);
+	});
 
 	it('exposes the native engine record beside the legacy document', async () => {
 		const database = await createEngineDatabase(['products']);

@@ -33,6 +33,11 @@ const MAX_CACHED_LOCALES = 3;
 // hid this at the cost of the memory the cap exists to bound. Raising the cap is the lever
 // if a real workflow ever needs more than three locales per collection at once.
 
+// Export events hold whole serialized indexes twice (current + previous). Keep only
+// the latest event; rare destination queries can re-read storage when history expires.
+// Use one, not zero: RxDB's buffer slicing does not support a zero-length history.
+const SEARCH_EXPORT_HISTORY_LIMIT = 1;
+
 const searchLocaleChains = new WeakMap<RxCollection, Map<string, Promise<unknown>>>();
 
 function withSearchLocale<T>(
@@ -127,15 +132,16 @@ function normalizeLocale(locale: string): string {
  * v2: tokenize 'forward' -> 'full' for WooCommerce-parity mid-word matching (#679).
  * v3: accent-/Unicode-normalization-folding encoder (#1732).
  * v4: terms keep their punctuation — "0.4" is one term, not "0" + "4" dropped by minlength.
+ * v5: `"`, `,`, `+` are no longer term separators — `0,4` is one term.
  */
-const SEARCH_INDEX_VERSION = 'v4';
+const SEARCH_INDEX_VERSION = 'v5';
 
 /**
  * Identifier versions this build no longer reads ('' is the unversioned pre-v2 name).
  * A bump above leaves every upgraded device carrying the whole old index next to the
  * new one, so the first build of a collection+locale in a session drops these.
  */
-const STALE_SEARCH_INDEX_VERSIONS = ['', 'v2', 'v3'];
+const STALE_SEARCH_INDEX_VERSIONS = ['', 'v2', 'v3', 'v4'];
 const staleSearchIndexSweeps = new Set<string>();
 
 /**
@@ -406,6 +412,7 @@ async function createSearchInstance(
 		close(): Promise<void>;
 		pipeline: { close(): Promise<void> };
 	};
+	searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
 	const appendDocs = await searchInstance.collection.find({ selector: { type: 'append' } }).exec();
 	const appendedEntries = appendDocs.reduce((total, doc) => total + doc.get('dataAr').length, 0);
 	const sourceCount = await collection.count().exec();
@@ -418,6 +425,7 @@ async function createSearchInstance(
 		await resetPipelineCheckpoint();
 		await searchInstance.collection.remove();
 		searchInstance = (await addFulltextSearch(searchOptions)) as typeof searchInstance;
+		searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
 	}
 
 	searchLogger.debug('Search instance created successfully', {
