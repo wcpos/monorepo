@@ -1761,7 +1761,7 @@ describe('query bindings', () => {
 	});
 
 	it.each(['sku', 'barcode'] as const)(
-		'matches partial/exact phrases in one child %s, not across parent or carriers',
+		'matches terms within child %s or across child SKU and barcode',
 		async (field) => {
 			await engineDB.collections.products.bulkInsert([
 				engineProduct({ uuid: 'wanted', id: 10, name: 'Plain parent' }),
@@ -1798,7 +1798,10 @@ describe('query bindings', () => {
 				}
 			);
 			await waitFor(() =>
-				expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['wanted'])
+				expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
+					'split',
+					'wanted',
+				])
 			);
 			rerender({ queryState: { ...state, search: 'xxMY საბარგულიxx' } });
 			await waitFor(() =>
