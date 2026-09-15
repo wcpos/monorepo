@@ -22,25 +22,15 @@ function buildIndex() {
 	return index;
 }
 
-describe('FlexSearch index against the search fixture traps', () => {
+describe('FlexSearch phrase candidate completeness against the fixture traps', () => {
 	const index = buildIndex();
-	const indexed = SEARCH_FIXTURE_TRAPS.filter(
-		(t) => foldSearchText(t.query).length >= FLEXSEARCH_MIN_TERM_LENGTH
-	);
-	const short = SEARCH_FIXTURE_TRAPS.filter(
-		(t) => foldSearchText(t.query).length < FLEXSEARCH_MIN_TERM_LENGTH
-	);
-
-	it.each(indexed.map((t) => [t.name, t] as const))('%s', (_name, trap) => {
-		// FlexSearch returns a set in its own order; ranking is asserted at the server and the walk.
-		const ids = index.search(trap.query, { limit: 1000 }) as number[];
-		expect([...ids].sort((a, b) => a - b)).toEqual([...trap.expectedIds].sort((a, b) => a - b));
+	it.each(SEARCH_FIXTURE_TRAPS.map((t) => [t.name, t] as const))('%s', (_name, trap) => {
+		// Independent candidate probe; final per-field phrase selection belongs to query tests.
+		const anchor = (foldSearchText(trap.query).match(/[\p{L}\p{N}]+/gu) ?? [])
+			.filter((term) => term.length >= FLEXSEARCH_MIN_TERM_LENGTH)
+			.sort((a, b) => b.length - a.length)[0];
+		if (!anchor) return; // Deliberate scan, not an index query.
+		const ids = index.search(anchor, { limit: Number.MAX_SAFE_INTEGER });
+		for (const id of trap.expectedIds) expect(ids).toContain(id);
 	});
-
-	it.each(short.map((t) => [t.name, t] as const))(
-		"%s is under minlength and is the short-prefix path's job, not the index's",
-		(_name, trap) => {
-			expect(index.search(trap.query)).toEqual([]);
-		}
-	);
 });

@@ -53,11 +53,30 @@ function withSearchLocale<T>(
 	return result;
 }
 
-async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> {
+/**
+ * Stop a search instance: pipeline, instance, then the index back-reference. Every step runs
+ * even when an earlier one rejects.
+ *
+ * `closeDestination` additionally deregisters the `*_flexsearch` collection from
+ * `database.collections`. The premium close() leaves it registered, and that collection's
+ * onClose hook retains the RxFulltextSearch and its Index, so deleting the back-reference
+ * alone does not free an evicted locale; RxCollection.close() releases it without touching
+ * the persisted index, so the locale reopens from storage instead of rebuilding.
+ *
+ * It defaults to off because `database.collections` is the ONLY handle a later rebuild has
+ * on the destination: both `destroySearchCollection()` and the post-reset rebuild in
+ * `createSearchInstance()` look it up there and call `remove()` on it. Deregistering first
+ * turns that removal into a no-op and reopens the very index the caller asked to rebuild.
+ * Eviction is the one path that frees a locale without rebuilding it, so it opts in.
+ */
+async function closeSearchInstance(
+	instance: FlexSearchInstance,
+	{ closeDestination = false }: { closeDestination?: boolean } = {}
+): Promise<void> {
 	const search = instance as FlexSearchInstance & {
 		close(): Promise<void>;
 		pipeline: { close(): Promise<void> };
-		collection: { __wcposAppendIndex?: unknown };
+		collection: { __wcposAppendIndex?: unknown; close(): Promise<void> };
 	};
 	let pipelineFailed = false;
 	let pipelineError: unknown;
@@ -72,7 +91,14 @@ async function closeSearchInstance(instance: FlexSearchInstance): Promise<void> 
 		} catch (error) {
 			if (!pipelineFailed) throw error;
 		} finally {
-			delete search.collection.__wcposAppendIndex;
+			try {
+				if (closeDestination) await search.collection.close();
+			} catch (error) {
+				// Never let a destination that will not close mask why the teardown started.
+				if (!pipelineFailed) throw error;
+			} finally {
+				delete search.collection.__wcposAppendIndex;
+			}
 		}
 	}
 	if (pipelineFailed) throw pipelineError;
@@ -206,10 +232,13 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 			const instance = collection._searchInstances.get(oldestLocale);
 			collection._searchInstances.delete(oldestLocale);
 
-			// Close the evicted instance under its locale chain.
+			// Close the evicted instance under its locale chain. Nothing rebuilds an evicted
+			// locale, so this is the one path that also deregisters the destination.
 			if (instance) {
 				try {
-					await withSearchLocale(collection, oldestLocale, () => closeSearchInstance(instance));
+					await withSearchLocale(collection, oldestLocale, () =>
+						closeSearchInstance(instance, { closeDestination: true })
+					);
 				} catch (error: any) {
 					searchLogger.warn('Failed to destroy evicted search instance', {
 						context: {
@@ -637,7 +666,8 @@ export const searchPlugin: RxPlugin = {
 				const oldInstance = retiring ?? this._searchInstances?.get(locale);
 				this._searchInstances?.delete(locale);
 
-				// Close before removing the destination collection.
+				// Close before removing the destination collection, but leave it registered:
+				// destroySearchCollection() below reaches it only through database.collections.
 				if (oldInstance) {
 					try {
 						await closeSearchInstance(oldInstance);
@@ -652,8 +682,10 @@ export const searchPlugin: RxPlugin = {
 					}
 				}
 
-				// Also try to destroy any orphaned search collection
-				await destroySearchCollection(this, locale);
+				// The destination is deliberately left registered for createSearchInstance below:
+				// its `existing` branch resets the pipeline checkpoint BEFORE removing the
+				// storage. Removing it here instead drops the storage but keeps the checkpoint,
+				// so the fresh index resumes after the source rows and rebuilds to nothing.
 
 				// Remove from LRU tracking
 				if (this._localeLRU) {
