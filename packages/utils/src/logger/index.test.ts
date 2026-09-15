@@ -1177,6 +1177,27 @@ describe('logger/index', () => {
 			expect(rows).toHaveLength(2);
 		});
 
+		it('keeps the searchable and folded columns when an oversized context is truncated (review)', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['wcpos', 'http']).info('Conexión rechazada', {
+				// Just under the cap on its own, so only the appended columns push it over.
+				context: { payload: 'x'.repeat(16 * 1024 - 100), endpoint: '/wp-json/wcpos/v2/orders' },
+			});
+			await flushWrites();
+
+			// Admission truncates in insertion order, so the payload is the casualty,
+			// never the columns the Logs screen scans.
+			expect(rows[0].context).toMatchObject({ payload: '[truncated]', _truncated: true });
+			expect(rows[0].context.search).toContain('/wp-json/wcpos/v2/orders');
+			expect(rows[0].context.fold).toContain('conexion rechazada');
+			expect(rows[0].context.fold).toContain('/wp-json/wcpos/v2/orders');
+			expect(
+				new TextEncoder().encode(JSON.stringify(rows[0].context)).byteLength
+			).toBeLessThanOrEqual(16 * 1024);
+		});
+
 		it('truncates oversized context and records the serialized row size', async () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);

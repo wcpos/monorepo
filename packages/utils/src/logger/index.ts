@@ -161,17 +161,22 @@ export function foldLogSearchText(value: unknown): string {
  * operational identifiers, and `fold`, the folded blob of the fields the Logs
  * screen scans (see the logs collection creator). ONE builder for both write
  * paths (live rows and flight-recorder promotions), so no row misses the fold.
+ *
+ * The searchable columns come FIRST: admitContext truncates in insertion
+ * order, so on an oversized context the arbitrary payload is the casualty and
+ * the columns the Logs screen scans survive (review).
  */
 function withSearchContext(
 	message: string,
 	code: string | undefined,
 	context: Record<string, any>
 ): Record<string, unknown> {
-	const search = searchableContext(context);
+	const { search: _search, fold: _fold, ...rest } = context;
+	const search = searchableContext(rest);
 	return {
-		...context,
 		search,
-		fold: foldLogSearchText([message, context.error, code, search].filter(Boolean).join(' ')),
+		fold: foldLogSearchText([message, rest.error, code, search].filter(Boolean).join(' ')),
+		...rest,
 	};
 }
 
