@@ -65,9 +65,13 @@ jobs:
       - name: 🚀 Build main
         if: ${{ github.event.inputs.submit == 'false' || github.event.inputs.profile != 'production' }}
         working-directory: apps/main
+        env:
+          EAS_BUILD_PROFILE: ${{ github.event.inputs.profile }}
         run: eas build --non-interactive --wait --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}
 
       - name: 🚀 Build & submit main
         if: ${{ github.event.inputs.submit == 'true' && github.event.inputs.profile == 'production' }}
         working-directory: apps/main
+        env:
+          EAS_BUILD_PROFILE: ${{ github.event.inputs.profile }}
         run: eas build --non-interactive --wait --auto-submit --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}
