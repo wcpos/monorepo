@@ -89,15 +89,16 @@ function normalizeLocale(locale: string): string {
  * v2: tokenize 'forward' -> 'full' for WooCommerce-parity mid-word matching (#679).
  * v3: accent-/Unicode-normalization-folding encoder (#1732).
  * v4: terms keep their punctuation — "0.4" is one term, not "0" + "4" dropped by minlength.
+ * v5: `"`, `,`, `+` are no longer term separators — `0,4` is one term.
  */
-const SEARCH_INDEX_VERSION = 'v4';
+const SEARCH_INDEX_VERSION = 'v5';
 
 /**
  * Identifier versions this build no longer reads ('' is the unversioned pre-v2 name).
  * A bump above leaves every upgraded device carrying the whole old index next to the
  * new one, so the first build of a collection+locale in a session drops these.
  */
-const STALE_SEARCH_INDEX_VERSIONS = ['', 'v2', 'v3'];
+const STALE_SEARCH_INDEX_VERSIONS = ['', 'v2', 'v3', 'v4'];
 const staleSearchIndexSweeps = new Set<string>();
 
 /**

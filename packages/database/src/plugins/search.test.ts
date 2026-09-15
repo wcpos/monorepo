@@ -249,12 +249,12 @@ describe('search plugin', () => {
 
 	describe('search identifier generation', () => {
 		it('should generate a versioned, unique identifier per collection and locale', () => {
-			// The version tag (v3) is migration-critical: it forces the rxdb-premium
+			// The version tag (v5) is migration-critical: it forces the rxdb-premium
 			// flexsearch pipeline to rebuild the persisted index from scratch when the
-			// index config changes. Guard it explicitly. See #679, #1732, and the v4 decimal-term fix.
-			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v4-en');
-			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v4-de');
-			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v4-fr');
+			// index config changes. Guard it explicitly. See #679, #1732, and the v5 decimal-comma fix.
+			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v5-en');
+			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v5-de');
+			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v5-fr');
 		});
 
 		it('should generate different identifiers for different locales', () => {
@@ -344,6 +344,7 @@ describe('search plugin', () => {
 				'products-search-en_flexsearch',
 				'products-search-v2-en_flexsearch',
 				'products-search-v3-en_flexsearch',
+				'products-search-v4-en_flexsearch',
 			]);
 			expect(removed).toEqual(staleSearchCollectionNames('products', 'en'));
 			expect(removed).not.toContain(`${getSearchIdentifier('products', 'en')}_flexsearch`);
