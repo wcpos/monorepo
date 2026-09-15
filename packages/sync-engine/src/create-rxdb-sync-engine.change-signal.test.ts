@@ -25,6 +25,7 @@ import {
 	EngineStringStore,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
+import { materializeGreedyPrunable } from './materialization/record-materialization';
 
 import type { RxStorage } from 'rxdb';
 
@@ -254,6 +255,80 @@ async function productCount(engine: RxdbSyncEngine): Promise<number> {
 }
 
 describe('sync("change-signal") through the public handle', () => {
+	it.each(['within a page', 'across pages'])(
+		'deduplicates coupon UUIDs %s before applying and checkpointing',
+		async (overlap) => {
+			const server = scriptedServer();
+			const coupon = (id: number, code = `coupon-${id}`) => ({
+				id,
+				code,
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: variationUuid(id) }],
+			});
+			const firstPage = Array.from({ length: 100 }, (_, index) => coupon(index + 1));
+			firstPage[99] = coupon(100, overlap === 'within a page' ? 'later' : 'earlier');
+			if (overlap === 'within a page') firstPage[98] = coupon(100, 'earlier');
+			const checkpoints = memoryStringStore();
+			let refreshing = false;
+			const pages: number[] = [];
+			const engine = engineWith({
+				storage: memoryEngineStorage(),
+				identity: freshIdentity(),
+				checkpoints,
+				fetch: async (url) => {
+					const u = new URL(url);
+					if (!u.pathname.endsWith('/coupons') || !refreshing) return server.fetch(url);
+					const page = Number(u.searchParams.get('page'));
+					pages.push(page);
+					const lastPage =
+						overlap === 'within a page' ? [coupon(101)] : [coupon(100, 'later'), coupon(101)];
+					return Response.json(page === 1 ? firstPage : lastPage);
+				},
+			});
+			try {
+				await engine.ready;
+				await engine.sync('change-signal');
+				const collection = engine.active()!.database.collections.coupons!;
+				const dirty = materializeGreedyPrunable(coupon(1, 'local')).storedDocument;
+				dirty.local.dirty = true;
+				const seeded = await collection.bulkUpsert([
+					dirty,
+					materializeGreedyPrunable(coupon(999)).storedDocument,
+				]);
+				expect(seeded.error).toEqual([]);
+				refreshing = true;
+				server.state.head = 6;
+				server.state.rows.push({
+					sequence: 6,
+					id: 100,
+					deleted: 0,
+					collection: 'coupons',
+					modified_gmt: '2026-07-10T00:00:01',
+				});
+
+				const report = await engine.sync('change-signal');
+				expect(report.error?.match(/COL\d+/)?.[0]).toBeUndefined();
+				expect(report).toMatchObject({ status: 'ran' });
+				expect(pages).toEqual([1, 2]);
+				const residents = await collection.find().exec();
+				expect(residents).toHaveLength(overlap === 'within a page' ? 100 : 101);
+				expect((await collection.findOne(variationUuid(100)).exec())?.toJSON().payload.code).toBe(
+					'later'
+				);
+				expect((await collection.findOne(variationUuid(1)).exec())?.toJSON().payload.code).toBe(
+					'local'
+				);
+				expect(await collection.findOne(variationUuid(999)).exec()).toBeNull();
+				const persisted = [...checkpoints.entries()].find(([key]) =>
+					key.endsWith(':checkpoint:change-signal')
+				);
+				expect(JSON.parse(persisted![1]).cursor.sequence).toBe(6);
+				expect((await engine.sync('change-signal')).status).toBe('ran');
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('require targeted variations prunes a server-elided resident and resolves fetched', async () => {
 		const server = scriptedServer();
 		const diagnosticsEvents: SyncEvent[] = [];
