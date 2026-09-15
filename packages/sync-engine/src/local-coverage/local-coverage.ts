@@ -27,6 +27,7 @@ import {
 } from './rx-coverage-compaction-failure-repository';
 import { registerLedgerRecovery, withLedgerRecovery } from './ledger-storage-recovery';
 import {
+	COVERAGE_LANE_HISTORY_LIMIT,
 	DERIVABLE_METADATA_COLLECTIONS,
 	engineCollectionCreators,
 	resetDerivableMetadataCollection,
@@ -317,6 +318,7 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 						)
 					) as never
 				);
+				database.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			} else {
 				for (const name of DERIVABLE_METADATA_COLLECTIONS) {
 					await resetDerivableMetadataCollection(database, name);

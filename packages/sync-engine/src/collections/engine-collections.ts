@@ -81,6 +81,10 @@ export const MUTATION_QUEUE_RXDB_COLLECTION = 'recordMutations';
 /** Engine-owned kv collection backing the default checkpoints StringStore. */
 export const ENGINE_KV_COLLECTION = 'engineKv';
 
+// Whole expectedRecordIds arrays retained 6.67 MiB for 13 lanes in the 2026-09-15 soak.
+// One (not zero, unsupported by RxDB slicing) lets lagging queries re-read storage.
+export const COVERAGE_LANE_HISTORY_LIMIT = 1;
+
 export const engineKvSchema = {
 	title: 'Sync engine internal key-value store',
 	version: 0,
@@ -220,4 +224,7 @@ export async function resetDerivableMetadataCollection(
 	}
 	await live.remove();
 	await db.addCollections({ [name]: SCHEDULER_TIER_CREATORS[name] as never });
+	if (name === 'coverageLanes') {
+		db.collections[name]._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
+	}
 }
