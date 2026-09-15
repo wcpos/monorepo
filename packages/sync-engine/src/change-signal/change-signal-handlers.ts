@@ -295,12 +295,29 @@ async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): P
 /** greedy-prunable: full re-pull upserts AND set-difference-prunes by KEPT storage ids. */
 async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor): Promise<void> {
 	const collection = collectionOf(ctx, d.collection);
-	// Numbered pages can overlap while the server collection changes. Coalesce by
-	// storage identity, keeping the last fetched occurrence before the bulk write.
+	// Matching remote identity makes a repeated row safe to coalesce, but does NOT
+	// prove this numbered-page walk is complete. Fail before writes/pruning so the
+	// signal lane holds its checkpoint and retries from page 1 on the next tick.
 	const documentsByUuid = new Map<unknown, Record<string, unknown>>();
+	let repeated = false;
 	for (const payload of await fetchAll(ctx, d.refreshPath)) {
 		const document = d.project(payload, ctx.barcodeSelectors?.());
+		const previous = documentsByUuid.get(document.uuid);
+		if (previous) {
+			if (previous.remoteId !== document.remoteId) {
+				// Like the push path's permanent identity-ambiguous rejection, this
+				// needs server-side identity repair, never an arbitrary winner.
+				throw new Error(
+					`${d.collection} refresh: identity-ambiguous uuid ${document.uuid} ` +
+						`has remoteIds ${previous.remoteId} and ${document.remoteId}; server repair required`
+				);
+			}
+			repeated = true;
+		}
 		documentsByUuid.set(document.uuid, document);
+	}
+	if (repeated) {
+		throw new Error(`${d.collection} refresh: incomplete-snapshot; repeated record in page walk`);
 	}
 	const documents = [...documentsByUuid.values()];
 	const applicable = await withoutLocallyProtected(
