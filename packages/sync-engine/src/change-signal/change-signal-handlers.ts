@@ -295,9 +295,14 @@ async function refreshUpsert(ctx: HandlerContext, d: UpsertRefreshDescriptor): P
 /** greedy-prunable: full re-pull upserts AND set-difference-prunes by KEPT storage ids. */
 async function refreshPrunable(ctx: HandlerContext, d: GreedyPrunableDescriptor): Promise<void> {
 	const collection = collectionOf(ctx, d.collection);
-	const documents = (await fetchAll(ctx, d.refreshPath)).map((payload) =>
-		d.project(payload, ctx.barcodeSelectors?.())
-	);
+	// Numbered pages can overlap while the server collection changes. Coalesce by
+	// storage identity, keeping the last fetched occurrence before the bulk write.
+	const documentsByUuid = new Map<unknown, Record<string, unknown>>();
+	for (const payload of await fetchAll(ctx, d.refreshPath)) {
+		const document = d.project(payload, ctx.barcodeSelectors?.());
+		documentsByUuid.set(document.uuid, document);
+	}
+	const documents = [...documentsByUuid.values()];
 	const applicable = await withoutLocallyProtected(
 		collection as never,
 		documents as { uuid: string }[]
