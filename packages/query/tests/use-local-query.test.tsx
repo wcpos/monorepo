@@ -342,6 +342,14 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 				message: 'Conexión rechazada',
 				context: { search: 'wcpos.http' },
 			},
+			{
+				logId: 'e',
+				timestamp: -1,
+				level: 'error',
+				// Decomposed (NFD): o + combining acute, as some servers and inputs store it.
+				message: 'Conexión perdida',
+				context: { search: 'wcpos.http' },
+			},
 		]);
 		engineDB = await createEngineDatabase();
 	});
@@ -391,10 +399,11 @@ describe('useLocalQuery scan search (collections that refuse an index)', () => {
 	});
 
 	it('matches accented text from either spelling (what the index gave; Codex review)', async () => {
+		// Precomposed (row d) AND decomposed (row e) stored text, from either spelling.
 		const exact = mount('Conexión');
-		await waitFor(() => expect(hitIds(exact.result)).toEqual(['d']));
+		await waitFor(() => expect(hitIds(exact.result)).toEqual(['d', 'e']));
 		const folded = mount('conexion');
-		await waitFor(() => expect(hitIds(folded.result)).toEqual(['d']));
+		await waitFor(() => expect(hitIds(folded.result)).toEqual(['d', 'e']));
 		expect(initSearch).not.toHaveBeenCalled();
 	});
 
@@ -439,6 +448,13 @@ describe('scanSelectorFor', () => {
 		expect(regex.test('CONEXION')).toBe(true);
 		expect(regex.test('Conexiön')).toBe(true);
 		expect(regex.test('Conexxion')).toBe(false);
+	});
+
+	it('matches decomposed marks and precomposed letters beyond Latin Extended-B (Codex review)', () => {
+		const [term] = clauses(['message'], 'conexion');
+		expect(regexOf(term, 'message').test('Conexión')).toBe(true); // NFD o + U+0301
+		const [viet] = clauses(['message'], 'tien');
+		expect(regexOf(viet, 'message').test('tiến')).toBe(true); // ế is U+1EBF (Latin Extended Additional)
 	});
 
 	it('returns null when nothing can be selected', () => {

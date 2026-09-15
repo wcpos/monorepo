@@ -150,12 +150,17 @@ async function timed<T>(label: string, fn: () => Promise<T> | T): Promise<[numbe
  */
 const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
 	const variants = new Map<string, string>();
-	for (let codePoint = 0xc0; codePoint <= 0x24f; codePoint += 1) {
-		const letter = String.fromCodePoint(codePoint).toLowerCase();
-		const base = letter.normalize('NFD').replace(/[̀-ͯ]/g, '');
-		if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
-		if (!(variants.get(base) ?? '').includes(letter)) {
-			variants.set(base, `${variants.get(base) ?? ''}${letter}`);
+	for (const [from, to] of [
+		[0xc0, 0x24f],
+		[0x1e00, 0x1eff],
+	]) {
+		for (let codePoint = from; codePoint <= to; codePoint += 1) {
+			const letter = String.fromCodePoint(codePoint).toLowerCase();
+			const base = letter.normalize('NFD').replace(new RegExp('[\u0300-\u036f]', 'g'), '');
+			if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
+			if (!(variants.get(base) ?? '').includes(letter)) {
+				variants.set(base, `${variants.get(base) ?? ''}${letter}`);
+			}
 		}
 	}
 	return variants;
@@ -164,7 +169,10 @@ function scanSelector(fields: string[], term: string) {
 	return {
 		$and: term.split(/\s+/).map((token) => {
 			const source = [...token]
-				.map((char) => (ACCENT_VARIANTS.has(char) ? `[${char}${ACCENT_VARIANTS.get(char)}]` : char))
+				.map(
+					(char) =>
+						`${ACCENT_VARIANTS.has(char) ? `[${char}${ACCENT_VARIANTS.get(char)}]` : char}[\\u0300-\\u036f]*`
+				)
 				.join('');
 			return { $or: fields.map((field) => ({ [field]: { $regex: source, $options: 'i' } })) };
 		}),

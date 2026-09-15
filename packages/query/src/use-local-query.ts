@@ -75,31 +75,50 @@ function escapeRegex(value: string): string {
 }
 
 /**
- * Every precomposed Latin letter (U+00C0–U+024F) grouped under the base letter
- * the encoder folds it to, so a folded token can be matched against UNFOLDED
- * stored text: `e` → `[eèéêëēĕėęě…]`. Built once; the encoder's own fold
- * (`foldSearchText`: lowercase + NFD + strip combining marks) is the grouping
- * rule, so the two can never disagree on what counts as the same letter.
+ * Every precomposed Latin letter (Latin-1 Supplement through Latin Extended-B,
+ * U+00C0–U+024F, and Latin Extended Additional, U+1E00–U+1EFF, where
+ * Vietnamese lives) grouped under the base letter the encoder folds it to, so
+ * a folded token can be matched against UNFOLDED stored text: `e` →
+ * `[eèéêëēĕėęěẹẻẽếề…]`. Built once; the encoder's own fold (`foldSearchText`:
+ * lowercase + NFD + strip combining marks) is the grouping rule, so the two can
+ * never disagree on what counts as the same letter.
  */
+const PRECOMPOSED_LATIN_RANGES: readonly (readonly [number, number])[] = [
+	[0xc0, 0x24f],
+	[0x1e00, 0x1eff],
+];
+/** The Unicode combining diacritical marks block, as a regex class source. */
+const COMBINING_MARK_CLASS = '[\\u0300-\\u036f]';
 const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
 	const variants = new Map<string, string>();
-	for (let codePoint = 0xc0; codePoint <= 0x24f; codePoint += 1) {
-		const letter = String.fromCodePoint(codePoint).toLowerCase();
-		const base = letter.normalize('NFD').replace(/[̀-ͯ]/g, '');
-		if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
-		if (!(variants.get(base) ?? '').includes(letter)) {
-			variants.set(base, `${variants.get(base) ?? ''}${letter}`);
+	const combiningMarks = new RegExp(COMBINING_MARK_CLASS, 'g');
+	for (const [from, to] of PRECOMPOSED_LATIN_RANGES) {
+		for (let codePoint = from; codePoint <= to; codePoint += 1) {
+			const letter = String.fromCodePoint(codePoint).toLowerCase();
+			const base = letter.normalize('NFD').replace(combiningMarks, '');
+			if (base.length !== 1 || base === letter || !/[a-z]/.test(base)) continue;
+			if (!(variants.get(base) ?? '').includes(letter)) {
+				variants.set(base, `${variants.get(base) ?? ''}${letter}`);
+			}
 		}
 	}
 	return variants;
 })();
+
+/**
+ * Stored text may be DECOMPOSED (a base letter followed by combining marks,
+ * U+0300–U+036F) rather than precomposed; every letter in the pattern tolerates
+ * trailing marks so both forms match (Codex review).
+ */
+const COMBINING_MARKS = `${COMBINING_MARK_CLASS}*`;
 
 /** A folded token as a regex source that also matches its accented spellings. */
 function accentInsensitiveSource(token: string): string {
 	return [...token]
 		.map((char) => {
 			const variants = ACCENT_VARIANTS.get(char);
-			return variants ? `[${char}${escapeRegex(variants)}]` : escapeRegex(char);
+			const letter = variants ? `[${char}${escapeRegex(variants)}]` : escapeRegex(char);
+			return `${letter}${COMBINING_MARKS}`;
 		})
 		.join('');
 }
