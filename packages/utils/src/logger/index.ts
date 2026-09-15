@@ -172,10 +172,14 @@ function withSearchContext(
 	context: Record<string, any>
 ): Record<string, unknown> {
 	const { search: _search, fold: _fold, ...rest } = context;
-	const search = searchableContext(rest);
+	const search = Array.from(searchableContext(rest)).slice(0, SEARCH_COLUMN_MAX_CHARS).join('');
 	return {
 		search,
-		fold: foldLogSearchText([message, rest.error, code, search].filter(Boolean).join(' ')),
+		fold: Array.from(
+			foldLogSearchText([message, code, search, rest.error].filter(Boolean).join(' '))
+		)
+			.slice(0, SEARCH_COLUMN_MAX_CHARS)
+			.join(''),
 		...rest,
 	};
 }
@@ -357,6 +361,12 @@ const COLUMN_MAX_LENGTH = {
 	requestId: 40,
 	serverRequestId: 40,
 } as const;
+
+// At most 4 UTF-8 bytes per code point: 4 KiB per column, 8 KiB for the pair.
+// Even JSON escaping fits under MAX_CONTEXT_BYTES (16 KiB), so admission trims
+// caller payload, not these first columns. Hundreds of search tokens suffice;
+// the tail of a multi-kilobyte blob is not a useful search target.
+const SEARCH_COLUMN_MAX_CHARS = 1024;
 
 function clampColumn<K extends keyof typeof COLUMN_MAX_LENGTH>(
 	column: K,

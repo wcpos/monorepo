@@ -1198,6 +1198,25 @@ describe('logger/index', () => {
 			).toBeLessThanOrEqual(16 * 1024);
 		});
 
+		it('keeps folded search when a large whitelisted value fills both derived columns (review)', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['wcpos', 'http']).info('Conexión rechazada', {
+				context: { reason: 'y'.repeat(8300) },
+			});
+			await flushWrites();
+
+			expect(rows[0].context.fold).not.toBe('[truncated]');
+			expect(rows[0].context.fold).toBeDefined();
+			expect(rows[0].context.fold).toContain('conexion rechazada');
+			expect(rows[0].context.search).not.toBe('[truncated]');
+			expect(rows[0].context.search).toBeDefined();
+			expect(
+				new TextEncoder().encode(JSON.stringify(rows[0].context)).byteLength
+			).toBeLessThanOrEqual(16 * 1024);
+		});
+
 		it('truncates oversized context and records the serialized row size', async () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);
