@@ -68,6 +68,8 @@ const SEARCH_INDEX_AUDIT_INTERVAL_MS = 10 * 60_000;
 const SEARCH_INDEX_AUDIT_FIND_TIMEOUT_MS = 5_000;
 /** How many of the sampled document's own tokens to try before calling it missed. */
 const SEARCH_INDEX_AUDIT_TOKENS_PER_DOCUMENT = 3;
+/** Keep audit probes bounded; a full page cannot prove a document is absent. */
+const SEARCH_INDEX_AUDIT_RESULT_LIMIT = 100;
 /**
  * Missed audits on DIFFERENT documents before declaring a false miss. One
  * document can legitimately carry only tokens the tokenizer drops (minlength
@@ -255,9 +257,10 @@ export function startSearchReadiness(options: {
 		);
 		if (tokens.length === 0) return;
 
+		let allProbesLimited = true;
 		for (const token of tokens) {
 			const found = await withTimeout(
-				(instance as SearchInstance).find(token),
+				(instance as SearchInstance).find(token, { limit: SEARCH_INDEX_AUDIT_RESULT_LIMIT }),
 				timings.auditFindTimeoutMs
 			);
 			if (stale()) return;
@@ -268,6 +271,20 @@ export function startSearchReadiness(options: {
 				auditFailureStreaks.delete(key);
 				return;
 			}
+			allProbesLimited &&= found.length >= SEARCH_INDEX_AUDIT_RESULT_LIMIT;
+		}
+		// Common words can fill every probe page while a healthy sample ranks below
+		// the cutoff. Rebuilding cannot change that; do not call it corruption.
+		if (allProbesLimited) {
+			searchLogger.debug('Search index audit inconclusive: probe reached result limit', {
+				context: {
+					collection: name,
+					locale,
+					uuid: sample.primary,
+					limit: SEARCH_INDEX_AUDIT_RESULT_LIMIT,
+				},
+			});
+			return;
 		}
 
 		const previous = auditFailureStreaks.get(key);
