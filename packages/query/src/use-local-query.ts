@@ -101,9 +101,11 @@ function accentVariantsMap(): ReadonlyMap<string, string> {
 		if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue; // surrogate halves
 		const letter = String.fromCodePoint(codePoint);
 		const base = letter.toLowerCase().normalize('NFD').replace(combiningMarks, '');
-		// A plain case pair (Σ/σ) is the i flag's job; only a letter the fold
-		// actually CHANGES belongs in a class.
-		if (base.length !== 1 || base === letter.toLowerCase()) continue;
+		// Every letter the fold changes at all: the i flag (no u flag) pairs
+		// ordinary case pairs but not Kelvin sign → k, Ohm sign → ω or ẞ → ß
+		// (Codex review), and listing a pair it does handle costs nothing. A fold
+		// that is several code points (Hangul → Jamo) is handled per token below.
+		if (base.length !== 1 || base === letter) continue;
 		if (!(variants.get(base) ?? '').includes(letter)) {
 			variants.set(base, `${variants.get(base) ?? ''}${letter}`);
 		}
@@ -119,14 +121,26 @@ function accentVariantsMap(): ReadonlyMap<string, string> {
  */
 const COMBINING_MARKS = `${COMBINING_MARK_CLASS}*`;
 
-/** A folded token as a regex source that also matches its accented spellings. */
+/**
+ * A folded token as a regex source that also matches its accented spellings.
+ *
+ * The token is recomposed to NFC first: the encoder's fold leaves a Hangul
+ * syllable as its Jamo sequence, and stored text is normally the composed
+ * syllable (Codex review). Each composed character then matches EITHER its
+ * composed form (widened by its class, tolerating trailing marks) OR its full
+ * NFD expansion, so both stored normal forms are found.
+ */
 function accentInsensitiveSource(token: string): string {
 	const accents = accentVariantsMap();
-	return [...token]
+	return [...token.normalize('NFC')]
 		.map((char) => {
 			const variants = accents.get(char);
 			const letter = variants ? `[${char}${escapeRegex(variants)}]` : escapeRegex(char);
-			return `${letter}${COMBINING_MARKS}`;
+			const composed = `${letter}${COMBINING_MARKS}`;
+			const decomposed = char.normalize('NFD');
+			return decomposed.length > 1 && !/^.[̀-ͯ]+$/u.test(decomposed)
+				? `(?:${composed}|${escapeRegex(decomposed)})`
+				: composed;
 		})
 		.join('');
 }

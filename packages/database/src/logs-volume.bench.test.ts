@@ -155,7 +155,7 @@ const ACCENT_VARIANTS: ReadonlyMap<string, string> = (() => {
 		if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue;
 		const letter = String.fromCodePoint(codePoint);
 		const base = letter.toLowerCase().normalize('NFD').replace(combiningMarks, '');
-		if (base.length !== 1 || base === letter.toLowerCase()) continue;
+		if (base.length !== 1 || base === letter) continue;
 		if (!(variants.get(base) ?? '').includes(letter)) {
 			variants.set(base, `${variants.get(base) ?? ''}${letter}`);
 		}

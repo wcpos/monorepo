@@ -468,6 +468,25 @@ describe('scanSelectorFor', () => {
 		expect(regexOf(short, 'message').test('йод')).toBe(true);
 	});
 
+	it('matches letters the fold changes only by case, beyond the i flag (Codex review)', () => {
+		// Kelvin sign U+212A lowercases to ASCII k; Ohm sign U+2126 to ω; capital ẞ U+1E9E to ß.
+		// The i flag (no u flag) pairs none of them with the plain letter.
+		const [kelvin] = clauses(['message'], 'kelvin');
+		expect(regexOf(kelvin, 'message').test('Kelvin')).toBe(true);
+		const [ohm] = clauses(['message'], 'ωmega');
+		expect(regexOf(ohm, 'message').test('Ωmega')).toBe(true);
+		const [strasse] = clauses(['message'], 'straße');
+		expect(regexOf(strasse, 'message').test('STRAẞE')).toBe(true);
+	});
+
+	it('matches syllables whose NFD is several code points, like Hangul (Codex review)', () => {
+		// The encoder folds 한글 to its Jamo sequence; stored text is usually NFC syllables.
+		const [hangul] = clauses(['message'], '한글');
+		expect(regexOf(hangul, 'message').test('한글 로그')).toBe(true);
+		expect(regexOf(hangul, 'message').test('한글 로그'.normalize('NFD'))).toBe(true);
+		expect(regexOf(hangul, 'message').test('한국')).toBe(false);
+	});
+
 	it('matches letters whose lowercase is more than one code point, like Turkish İ (Codex review)', () => {
 		// U+0130 lowercases to "i" + U+0307; the class must carry the ORIGINAL code
 		// point, because the i flag cannot pair U+0130 with a plain "i".
