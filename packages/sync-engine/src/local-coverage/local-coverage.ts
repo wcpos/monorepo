@@ -318,7 +318,8 @@ export function createLocalCoverage(options: CreateLocalCoverageOptions): LocalC
 						)
 					) as never
 				);
-				database.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
+				const lanes = database.collections.coverageLanes;
+				if (lanes) lanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			} else {
 				for (const name of DERIVABLE_METADATA_COLLECTIONS) {
 					await resetDerivableMetadataCollection(database, name);

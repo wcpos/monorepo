@@ -11,8 +11,7 @@ import { resetDerivableMetadataCollection } from './engine-collections';
 
 import type { JsonSchema, RxCollection, RxDatabase, RxDatabaseCreator } from 'rxdb';
 
-// Real factories/recipes, memory storage and logging; enable event-reduce to test
-// the stronger query contract even where the factory leaves it at RxDB's default.
+// Memory-backed real factories; enable event-reduce to exercise its stronger query contract.
 vi.mock('rxdb', async (importOriginal) => {
 	const rxdb = await importOriginal<typeof import('rxdb')>();
 	return {
@@ -38,8 +37,7 @@ const MAX_HISTORY_BYTES = 2 * 1024 * 1024;
 const WRITES = 110; // Fill and roll over RxDB's default 100-event history.
 type Document = Record<string, unknown>;
 
-// A small schema-shaped workload automatically exercises new collections/fields.
-// This is a payload regression canary, not a bound on arbitrary merchant documents.
+// Schema-shaped regression canary for new collections, not a bound on arbitrary merchant data.
 function sample(field: JsonSchema<Document>, revision: number): unknown {
 	if (field.enum) return field.enum[0];
 	if ('default' in field && field.default !== undefined) return structuredClone(field.default);
@@ -67,8 +65,7 @@ function payload(collection: RxCollection<Document>, revision: number): Document
 	const doc = sample(collection.schema.jsonSchema, revision) as Document;
 	doc[collection.schema.primaryPath] = 'history-probe';
 	if (collection.name === 'coverageLanes') {
-		// A catalogue-sized lane, rewritten with distinct arrays like persistence.ts merges.
-		// 5,000 six-digit ids weigh ~45 KB; 100 current+previous payloads exceed 2 MiB.
+		// Catalogue-sized lane: 5,000 six-digit IDs (~45 KB), distinct arrays like persistence.ts.
 		doc.expectedRecordIds = Array.from({ length: 5000 }, (_, i) => String(100000 + i + revision));
 		doc.updatedAtMs = revision;
 	}
@@ -103,8 +100,7 @@ it('app-created collections keep buffered document payloads under 2 MiB', async 
 	const harness = await createEngineHarness({ validateSchemas: false });
 	const databases: Pick<RxDatabase, 'collections' | 'remove'>[] = [];
 	try {
-		// Enumerate live databases, not a duplicated collection-name list. Plugin-created
-		// search destinations have their own real-pipeline test in scripts/flexsearch-export-history.
+		// Enumerate live databases; lazy search destinations have their separate pipeline test.
 		for (const create of [createUserDB, () => createStoreDB('history'), createTemporaryDB]) {
 			const db = await create();
 			expect(db, 'app database creation failed').toBeDefined();
@@ -130,8 +126,7 @@ it('app-created collections keep buffered document payloads under 2 MiB', async 
 		const bytes = await exercise(lanes);
 		expect(bytes, `recreated coverageLanes: ${bytes} bytes`).toBeLessThanOrEqual(MAX_HISTORY_BYTES);
 
-		// Real coverage observers use findOne(...).$: check that updates and deletion
-		// remain observable, and an idle query catches up after its history expires.
+		// Real findOne(...).$ observers and idle queries must catch up after history expires.
 		const idle = lanes.find();
 		expect(await idle.exec()).toHaveLength(1);
 		const query = lanes.findOne('history-probe');
