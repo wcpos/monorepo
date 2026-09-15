@@ -43,6 +43,7 @@ const scopeDatabase = {
 	collections: {
 		orders: { findOne: () => ({ exec: mockFindOneExec }) },
 		products: { findOne: () => ({ exec: mockFindOneExec }) },
+		coupons: { findOne: () => ({ exec: mockFindOneExec }) },
 	},
 };
 
@@ -120,6 +121,47 @@ describe('useLocalMutation', () => {
 		mockStatus.mockReturnValue({ activeScopeId: 'scope-1' });
 		mockUseT.mockReturnValue((_key: string, options?: Record<string, unknown>) =>
 			String(options?.message || '')
+		);
+	});
+
+	it('keeps coupon search operands current on an optimistic edit', async () => {
+		const stored: Record<string, unknown> = {
+			uuid: 'coupon-uuid',
+			remoteId: '42',
+			payload: { id: 42, code: 'OLD', description: 'Été' },
+			searchFold: { code: 'old', description: 'ete' },
+			sync: { revision: 'rev-1' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		mockFindOneExec.mockResolvedValue({
+			incrementalModify: async (
+				modifier: (old: Record<string, unknown>) => Record<string, unknown>
+			) => {
+				Object.assign(stored, modifier(stored));
+				return stored;
+			},
+			toJSON: () => JSON.parse(JSON.stringify(stored)),
+		});
+		const document = {
+			uuid: 'coupon-uuid',
+			collection: { name: 'coupons' },
+			getLatest: () => document,
+		};
+		const { result } = renderHook(() => useLocalMutation());
+		await act(() =>
+			result.current.localPatch({
+				document: document as never,
+				data: { code: 'CAFÉ-123' } as never,
+			})
+		);
+		expect(stored).toMatchObject({
+			payload: { code: 'CAFÉ-123', description: 'Été' },
+			searchFold: { code: 'cafe-123', description: 'ete' },
+		});
+		expect(mockWrite).toHaveBeenCalledWith(
+			expect.objectContaining({
+				payload: { code: 'CAFÉ-123', date_modified_gmt: '2026-03-02T00:00:00' },
+			})
 		);
 	});
 

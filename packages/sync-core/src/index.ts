@@ -100,3 +100,5 @@ export {
 	type SyncEventFields, type SyncEventFieldsBase, type SyncEventFieldsByType,
 	type SyncEventType, type SyncObserver,
 } from './telemetry';
+
+export { promotedCouponColumns } from './protocol';

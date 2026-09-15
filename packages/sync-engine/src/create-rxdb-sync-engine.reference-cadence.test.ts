@@ -127,6 +127,9 @@ describe('idle reference refresh cadence', () => {
 						)?.toJSON()
 					).toMatchObject({
 						payload: { description: 'Updated searchable description' },
+						...(collection === 'coupons'
+							? { searchFold: { description: 'updated searchable description' } }
+							: {}),
 					});
 					clock.advance(5 * 60_000);
 					await engine.sync('reference-seed');

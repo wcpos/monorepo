@@ -7,7 +7,7 @@
  * groups categories with tax rates).
  */
 
-import { type RemoteId } from '@wcpos/sync-core';
+import { promotedCouponColumns, type RemoteId } from '@wcpos/sync-core';
 
 export type WooReferencePayload = Record<string, unknown> & { id?: number };
 
@@ -80,15 +80,24 @@ export const tagSchema = {
 // stamper (not the term adapter), same shape the client consumes.
 export const couponSchema = {
 	title: 'Woo coupon document schema',
-	version: 0,
+	version: 1,
 	primaryKey: 'uuid',
 	type: 'object',
 	properties: {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		searchFold: {
+			type: 'object',
+			properties: { code: { type: 'string' }, description: { type: 'string' } },
+			required: ['code', 'description'],
+		},
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'payload', 'sync', 'local', 'searchFold'],
 } as const;
+
+export const couponMigrationStrategies = {
+	1: (doc: LocalReferenceDocument) => ({ ...doc, ...promotedCouponColumns(doc.payload) }),
+};

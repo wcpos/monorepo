@@ -23,6 +23,101 @@ const searchError = jest.mocked(searchLogger.error);
 const searchWarn = jest.mocked(searchLogger.warn);
 
 describe('observeEngineQuery', () => {
+	it('searches coupons in storage without an index or a 100-hit cutoff, and reacts to writes', async () => {
+		const database = await createEngineDatabase(['coupons']);
+		const collection = database.collections.coupons;
+		const init = jest.spyOn(collection, 'initSearch').mockResolvedValue(null);
+		const row = (id: number) => ({
+			uuid: `coupon-${String(id).padStart(3, '0')}`,
+			remoteId: String(id),
+			payload: { code: 'CAFÉ-ABC.123', description: 'Summer offer', discount_type: 'percent' },
+			searchFold: { code: 'cafe-abc.123', description: 'summer offer' },
+			sync: { revision: '1', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		await collection.bulkInsert(Array.from({ length: 105 }, (_, id) => row(id + 1)));
+		const find = jest.spyOn(collection, 'find');
+		const engine = createFakeEngine(database);
+		let latest: { count: number; ids: string[] } | undefined;
+		const sub = observeEngineQuery(engine, 'coupon-scan', {
+			collection: 'coupons',
+			search: 'afé-abc.123 SUMMER',
+			searchFields: ['code', 'description'],
+			selector: { discount_type: 'percent' },
+			sort: [{ uuid: 'asc' }],
+			skip: 100,
+			limit: 2,
+		}).subscribe((result) => {
+			latest = { count: result.count, ids: result.hits.map((hit) => hit.id) };
+		});
+		try {
+			await waitFor(() =>
+				expect(latest).toEqual({ count: 105, ids: ['coupon-101', 'coupon-102'] })
+			);
+			expect(init).not.toHaveBeenCalled();
+			expect(find.mock.calls.every(([query]) => query?.limit === 2)).toBe(true);
+			expect(find.mock.calls[0][0]).toEqual(
+				expect.objectContaining({
+					selector: expect.objectContaining({ $and: expect.any(Array) }),
+					skip: 100,
+					limit: 2,
+				})
+			);
+			await collection
+				.findOne('coupon-101')
+				.exec()
+				.then((doc) => doc!.remove());
+			await waitFor(() =>
+				expect(latest).toEqual({ count: 104, ids: ['coupon-102', 'coupon-103'] })
+			);
+			await collection.insert(row(106));
+			await waitFor(() => expect(latest?.count).toBe(105));
+		} finally {
+			sub.unsubscribe();
+			await database.close();
+		}
+	});
+
+	it.each([
+		['CA', ['hit']],
+		['AF', []],
+		['Ce\u0301', []],
+		['ABC.123', ['hit']],
+		['ABCx123', []],
+		['SUM café', ['hit']],
+		['zz café', ['hit']],
+		['a b', []],
+		['***', []],
+		['\u0301', ['hit']],
+		['OFF', ['hit']],
+		['fe-', []],
+	])('keeps coupon folding, literal terms and short prefixes for %s', async (search, expected) => {
+		const database = await createEngineDatabase(['coupons']);
+		const collection = database.collections.coupons;
+		const init = jest.spyOn(collection, 'initSearch').mockResolvedValue(null);
+		await collection.insert({
+			uuid: 'hit',
+			remoteId: '1',
+			payload: { code: 'CAFÉ-ABC.123', description: 'Summer offer' },
+			searchFold: { code: 'cafe-abc.123', description: 'summer offer' },
+			sync: { revision: '1', partial: false, source: 'woo-rest' },
+			local: { dirty: false, pendingMutationIds: [] },
+		});
+		try {
+			const result = await firstValueFrom(
+				observeEngineQuery(createFakeEngine(database), 'coupon-terms', {
+					collection: 'coupons',
+					search,
+					searchFields: ['code', 'description'],
+				})
+			);
+			expect(result.hits.map((hit) => hit.id)).toEqual(expected);
+			expect(init).not.toHaveBeenCalled();
+		} finally {
+			await database.close();
+		}
+	});
+
 	it.each([
 		['products', 'index'],
 		['products', 'unavailable'],

@@ -22,7 +22,7 @@ import {
 } from 'rxjs/operators';
 import get from 'lodash/get';
 
-import { FLEXSEARCH_MIN_TERM_LENGTH, foldSearchText } from '@wcpos/sync-core';
+import { escapeRegex, FLEXSEARCH_MIN_TERM_LENGTH, foldSearchText } from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -184,6 +184,30 @@ function matchingSelectors$(
 	const collectionName = engineCollectionNameFor(descriptor.collection);
 	const collection = database.collections[collectionName] as unknown as
 		SearchableCollection | undefined;
+	if (descriptor.collection === 'coupons' && collection) {
+		const folded = foldSearchText(search);
+		if (!folded) return of(selector);
+		const short = folded.length < FLEXSEARCH_MIN_TERM_LENGTH;
+		const terms = short ? [folded] : searchTokens(search);
+		const fields = descriptor.read?.searchFields ??
+			descriptor.searchFields ?? ['code', 'description'];
+		if (!terms.length || !fields.length) return of(withSearchSelector(selector, []));
+		// Keep the filter in Mango: storage finds matches before materializing RxDocuments.
+		return of({
+			$and: [
+				selector,
+				{
+					$and: terms.map((term) => ({
+						$or: fields.map((field) => ({
+							[`searchFold.${field}`]: {
+								$regex: `${short ? '(?:^|\\s)' : ''}${escapeRegex(term)}`,
+							},
+						})),
+					})),
+				},
+			],
+		});
+	}
 	if (!collection?.initSearch) return of(withSearchSelector(selector, []));
 	const documentSnapshot = (document: EngineRxDocument): Record<string, unknown> =>
 		legacySearchSnapshot(descriptor.collection, document);

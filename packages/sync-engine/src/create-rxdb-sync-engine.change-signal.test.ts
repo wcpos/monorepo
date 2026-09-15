@@ -25,7 +25,7 @@ import {
 	EngineStringStore,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
-import { materializeGreedyPrunable } from './materialization/record-materialization';
+import { COLLECTION_DESCRIPTORS } from './collections/collection-descriptors';
 
 import type { RxStorage } from 'rxdb';
 
@@ -310,15 +310,18 @@ describe('sync("change-signal") through the public handle', () => {
 				await engine.ready;
 				await engine.sync('change-signal');
 				const collection = engine.active()!.database.collections.coupons!;
-				const dirty = materializeGreedyPrunable(coupon(1, 'local')).storedDocument;
+				const descriptor = COLLECTION_DESCRIPTORS.find((d) => d.collection === 'coupons');
+				if (!descriptor || descriptor.shape !== 'greedy-prunable')
+					throw new Error('missing coupons');
+				const project = (payload: ReturnType<typeof coupon>) =>
+					descriptor.project(payload) as { local: { dirty: boolean } };
+				const dirty = project(coupon(1, 'local'));
 				dirty.local.dirty = true;
 				const seeded = await collection.bulkUpsert([
 					dirty,
-					materializeGreedyPrunable(coupon(999)).storedDocument,
-					materializeGreedyPrunable(coupon(100, 'original')).storedDocument,
-					...(overlap === 'shifted window'
-						? [materializeGreedyPrunable(coupon(102)).storedDocument]
-						: []),
+					project(coupon(999)),
+					project(coupon(100, 'original')),
+					...(overlap === 'shifted window' ? [project(coupon(102))] : []),
 				]);
 				expect(seeded.error).toEqual([]);
 				refreshing = true;

@@ -41,7 +41,6 @@ const SECONDARY_COLLECTIONS = [
 	'products/categories',
 	'products/tags',
 	'products/brands',
-	'coupons',
 ] as const satisfies readonly SearchedCollection[];
 
 const SEARCHED_COLLECTIONS = [

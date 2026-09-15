@@ -71,6 +71,8 @@ describe.each([
 					attributes: [],
 					stockQuantity: null,
 				});
+			if (name === 'coupons')
+				return Object.assign(document, { searchFold: { code: '', description: '' } });
 			return document;
 		});
 		const bulkUpsert = vi.spyOn(collection, 'bulkUpsert');
