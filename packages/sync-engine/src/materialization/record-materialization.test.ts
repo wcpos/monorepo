@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { remoteId } from '../testing';
+import { COLLECTION_DESCRIPTORS } from '../collections/collection-descriptors';
 import {
 	materializeGreedyPrunable,
 	materializeLocalOnly,
@@ -167,5 +168,15 @@ describe('record materialization seam', () => {
 				!name.endsWith('.test.ts') && source.includes("from '../write-path/adopt-stamped-revision'")
 		);
 		expect(importers.map(([name]) => name)).toEqual(['./record-materialization.ts']);
+	});
+});
+
+it('folds coupon code and description at the refresh/write projection', () => {
+	const descriptor = COLLECTION_DESCRIPTORS.find((d) => d.collection === 'coupons');
+	if (!descriptor || descriptor.shape !== 'greedy-prunable') throw new Error('missing coupons');
+	const payload = { id: 7, code: 'CAFÉ-ABC.123', description: 'Été', meta_data };
+	expect(descriptor.project(payload)).toMatchObject({
+		payload,
+		searchFold: { code: 'cafe-abc.123', description: 'ete' },
 	});
 });

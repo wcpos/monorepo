@@ -1,3 +1,4 @@
+import { foldSearchText } from './searchIndexConfig';
 import { type RemoteId } from './woo/remoteIdCodec';
 import { GUEST_CUSTOMER_ID } from './woo/sentinels';
 
@@ -273,4 +274,14 @@ export function checkpointInstantMs(updatedAtGmt: string | null | undefined): nu
 	}
 	const ms = Date.parse(iso);
 	return Number.isNaN(ms) ? 0 : ms;
+}
+
+/** Stored search operands: no substring postings, and raw coupon payloads stay unchanged. */
+export function promotedCouponColumns(payload: Record<string, unknown>) {
+	return {
+		searchFold: {
+			code: foldSearchText(payload.code ?? ''),
+			description: foldSearchText(payload.description ?? ''),
+		},
+	};
 }

@@ -1,5 +1,6 @@
 import { normalizeVariationAttributes } from '@wcpos/sync-engine';
 import {
+	promotedCouponColumns,
 	promotedOrderColumns,
 	promotedProductColumns,
 	remoteIdOrNull,
@@ -738,6 +739,16 @@ export const collectionMap = {
 	coupons: {
 		engineCollection: 'coupons',
 		fields: {
+			'searchFold.code': {
+				legacy: 'searchFold.code',
+				kind: 'payload',
+				enginePath: 'searchFold.code',
+			},
+			'searchFold.description': {
+				legacy: 'searchFold.description',
+				kind: 'payload',
+				enginePath: 'searchFold.description',
+			},
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
@@ -841,6 +852,7 @@ export function promotedColumnsFor(
 	// path and materialization cannot drift. Ruled 2026-08-19: no negative-price clamp;
 	// bare-number taxonomy ids are accepted. Collections without a sync-core projector
 	// (variations carry the map-only parentRemoteId promotion) keep the map-driven path.
+	if (collection === 'coupons') return promotedCouponColumns(legacyPayload);
 	if (collection === 'products') {
 		return { ...promotedProductColumns(legacyPayload as unknown as WooProductPayload) };
 	}

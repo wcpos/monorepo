@@ -38,6 +38,7 @@ import { taxRateSchema } from './tax-rate-schema';
 import {
 	brandSchema,
 	categorySchema,
+	couponMigrationStrategies,
 	couponSchema,
 	tagSchema,
 } from './reference-collection-schema';
@@ -97,7 +98,11 @@ export const engineKvSchema = {
 	required: ['key', 'value'],
 } as const;
 
-export type CollectionCreator = { schema: unknown; migrationStrategies?: unknown };
+export type CollectionCreator = {
+	schema: unknown;
+	migrationStrategies?: unknown;
+	options?: { searchIndex?: boolean };
+};
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
 	orders: { schema: orderSchema },
@@ -108,7 +113,11 @@ const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = 
 	categories: { schema: categorySchema },
 	brands: { schema: brandSchema },
 	tags: { schema: tagSchema },
-	coupons: { schema: couponSchema },
+	coupons: {
+		schema: couponSchema,
+		migrationStrategies: couponMigrationStrategies,
+		options: { searchIndex: false },
+	},
 };
 
 /** Deliberate `/testing` seam for hosts that open schema-canary databases. */

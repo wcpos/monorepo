@@ -210,10 +210,11 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 		['brands', brandSchema, 'woo-brand'],
 		['tags', tagSchema, 'woo-tag'],
 		['coupons', couponSchema, 'woo-coupon'],
-	] as const)('%s', async (_name, schema, prefix) => {
+	] as const)('%s', async (name, schema, prefix) => {
 		await expectRoundTrip({
 			schema,
 			document: {
+				...(name === 'coupons' ? { searchFold: { code: '', description: '' } } : {}),
 				uuid: referenceDocumentId(prefix, remoteId(3)),
 				remoteId: '3',
 				payload: { id: 3, name: 'Ref' },
@@ -447,14 +448,14 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		orders: '72d3cd3ea083c10c',
 		products: '914ff9bc836d2f03',
 		variations: '478a682482d83df3',
-		// customers and the four reference schemas share a digest: they ARE the same
+		// customers and the taxonomy reference schemas share a digest: they ARE the same
 		// shape apart from title (ADR 0019 — see the identity test below).
 		customers: '85e1373e0643f472',
 		taxRates: 'faea838bf1991ead',
 		categories: '85e1373e0643f472',
 		brands: '85e1373e0643f472',
 		tags: '85e1373e0643f472',
-		coupons: '85e1373e0643f472',
+		coupons: '99166f2dbe3c4d72',
 		schedulerTaskStates: '3fbf7c70726dec3c',
 		coverageRecords: '3022569cc18cc7df',
 		coverageLanes: '12a1f38d36ffc0d0',
@@ -494,13 +495,54 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 });
 
 describe('reference schema identity — a recorded decision, not an accident (ADR 0019)', () => {
-	it('the four reference schemas are byte-identical apart from title', () => {
+	it('taxonomy reference schemas remain identical; coupons add migrated folded search', () => {
 		const shapeOf = ({ title: _title, ...shape }: { title: string }) => shape;
 		const category = shapeOf(categorySchema);
 		expect(shapeOf(brandSchema)).toEqual(category);
 		expect(shapeOf(tagSchema)).toEqual(category);
-		expect(shapeOf(couponSchema)).toEqual(category);
-		// Deliberate divergence is an edit to THIS test plus ADR 0019's log —
-		// that friction is the point; silent drift is what this catches.
+		expect(couponSchema.version).toBe(1);
+		expect(couponSchema.required).toContain('searchFold');
+		// #2073: coupon-only folding intentionally diverges from taxonomy storage.
+	});
+});
+
+describe('coupon folded search', () => {
+	it('backfills every v0 coupon without changing payload, identity or pending edits', async () => {
+		const storage = memoryEngineStorage();
+		const dbName = `coupon-migration-${(dbSeq += 1)}`;
+		const old = await openCollection({
+			schema: { ...categorySchema, title: couponSchema.title },
+			storage,
+			dbName,
+		});
+		const documents = Array.from({ length: 205 }, (_, id) => ({
+			uuid: `coupon-${id}`,
+			remoteId: String(id + 1),
+			payload: { code: 'CAFÉ-ABC.123', description: 'Été offer', usage_count: id },
+			sync: { revision: `r${id}`, partial: false, source: 'woo-rest' },
+			local: { dirty: true, pendingMutationIds: [`edit-${id}`] },
+		}));
+		await old.collection.bulkInsert(documents);
+		await old.db.close();
+		const creator = engineCollectionCreators().coupons;
+		const current = await openCollection({
+			...creator,
+			migrationStrategies: creator.migrationStrategies as MigrationStrategies,
+			storage,
+			dbName,
+		});
+		try {
+			const rows = await current.collection.find().exec();
+			expect(rows).toHaveLength(205);
+			for (const document of documents) {
+				expect(rows.find((row) => row.primary === document.uuid)?.toJSON()).toEqual({
+					...document,
+					searchFold: { code: 'cafe-abc.123', description: 'ete offer' },
+				});
+			}
+			expect(creator).toMatchObject({ options: { searchIndex: false } });
+		} finally {
+			await current.db.close();
+		}
 	});
 });

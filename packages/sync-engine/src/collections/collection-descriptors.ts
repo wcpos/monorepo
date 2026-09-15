@@ -36,6 +36,7 @@ import {
 	assertBulkSuccess,
 	Fetcher,
 	HybridCollection,
+	promotedCouponColumns,
 	ReferenceCollection,
 	type RemoteId,
 	remoteIdOrNull,
@@ -466,6 +467,10 @@ function referenceDocument(rawPayload: WooPayload): Record<string, unknown> {
 	return materializeGreedyPrunable(rawPayload as WooReferencePayload).storedDocument;
 }
 
+function couponDocument(rawPayload: WooPayload): Record<string, unknown> {
+	return { ...referenceDocument(rawPayload), ...promotedCouponColumns(rawPayload) };
+}
+
 function taxRateDocument(rawPayload: WooPayload): Record<string, unknown> {
 	return materializeUpsertRefresh(rawPayload as WooTaxRatePayload).storedDocument;
 }
@@ -620,14 +625,14 @@ const couponsWriteFacet = createWriteFacet({
 	remoteIdField: 'remoteId',
 	pullPath: '/coupons',
 	parse: parseBareArray,
-	project: referenceDocument,
+	project: couponDocument,
 	// Greedy reference pruning recognizes only server-sourced rows. Once Woo
 	// assigns the create's id, the coupon participates in authoritative pruning.
 	createAckSource: 'woo-rest',
 	// Woo normalizes coupon codes to lowercase and derives usage_count/date
 	// fields server-side — the ack document is the only prompt carrier of them.
 	documentPatchFromAckDocument: (document, barcodeSelectors) =>
-		catalogAckPatch(referenceDocument, document, barcodeSelectors),
+		catalogAckPatch(couponDocument, document, barcodeSelectors),
 });
 /** The order facet retains its repository and pull-side materializer byte-for-byte. */
 const ordersWriteFacet = createWriteFacet({
@@ -749,7 +754,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		collection: 'coupons',
 		hybrid: 'coupons',
 		refreshPath: '/coupons',
-		project: referenceDocument,
+		project: couponDocument,
 		write: couponsWriteFacet,
 	},
 	{ shape: 'local-only', collection: 'orders', write: ordersWriteFacet },

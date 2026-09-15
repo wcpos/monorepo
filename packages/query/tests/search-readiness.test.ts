@@ -27,8 +27,9 @@ describe('startSearchReadiness', () => {
 	beforeEach(() => searchError.mockClear());
 
 	it('warms every searched collection without waiting for a search — till pair first', async () => {
-		const database = await createEngineDatabase(['products', 'variations', 'customers']);
+		const database = await createEngineDatabase(['products', 'variations', 'customers', 'coupons']);
 		const engine = createFakeEngine(database);
+		const initCoupons = jest.spyOn(database.collections.coupons, 'initSearch');
 		const stub = { collection: { $: of(null) }, find: async () => [] };
 		const initProducts = jest
 			.spyOn(database.collections.products, 'initSearch')
@@ -51,6 +52,7 @@ describe('startSearchReadiness', () => {
 			// A cashier refreshing the customer list expects a customer just the same:
 			// the secondary tier warms too, after the till pair.
 			await waitFor(() => expect(initCustomers).toHaveBeenCalled());
+			expect(initCoupons).not.toHaveBeenCalled();
 			expect(initProducts).toHaveBeenCalledWith(
 				'warmup-locale',
 				expect.objectContaining({

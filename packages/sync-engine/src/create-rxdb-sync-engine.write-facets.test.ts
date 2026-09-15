@@ -131,6 +131,8 @@ function storedDocument(input: {
 			stockQuantity: null,
 		};
 	}
+	if (spec.collection === 'coupons')
+		return { ...common, searchFold: { code: label.toLowerCase(), description: '' } };
 	return common;
 }
 
