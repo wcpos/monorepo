@@ -42,6 +42,7 @@ jest.mock('rxdb-premium/plugins/flexsearch', () => ({
 		// Return a mock search instance
 		return {
 			collection: {
+				_changeEventBuffer: { limit: 100 },
 				destroy: jest.fn().mockResolvedValue(undefined),
 				remove: jest.fn().mockResolvedValue(undefined),
 				$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
