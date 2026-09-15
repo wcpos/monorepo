@@ -1,6 +1,7 @@
 import {
 	addRxPlugin,
 	createRxDatabase,
+	getAllCollectionDocuments,
 	type RxCollection,
 	RxCollectionBase,
 	type RxDatabase,
@@ -124,6 +125,49 @@ it.each([false, true])(
 		await rebuilt.close();
 	}
 );
+
+it('a collection that now refuses an index drops its persisted index on reopen (Codex review)', async () => {
+	// An upgraded till that ever searched its logs holds the index on disk; the
+	// opt-out would otherwise strand it there forever (~7 KB a row).
+	const config = {
+		name: 'searchoptoutreclaim',
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	};
+	database = await createRxDatabase(config);
+	const { coupons } = await database.addCollections({ coupons: couponsConfig });
+	await coupons.insert({ id: 'coupon-1', name: 'Discount' });
+	const first = (await coupons.initSearch!('en')) as unknown as SearchIndex;
+	await first.pipeline.awaitIdle();
+	await first.pipeline.close();
+	await first.close();
+	const searchName = `${getSearchIdentifier('coupons', 'en')}_flexsearch`;
+	const persistedBefore = (await getAllCollectionDocuments(database.internalStore)).map(
+		(doc) => doc.data.name
+	);
+	expect(persistedBefore).toContain(searchName);
+	await database.close();
+
+	database = await createRxDatabase(config);
+	const { coupons: reopened } = await database.addCollections({
+		coupons: { ...couponsConfig, options: { ...couponsConfig.options, searchIndex: false } },
+	});
+	await expect(reopened.initSearch!('en')).resolves.toBeNull();
+	// The hook fires without awaiting the removal; give it a few ticks.
+	const persistedNames = async () =>
+		(await getAllCollectionDocuments(database.internalStore)).map((doc) => doc.data.name);
+	for (
+		let attempt = 0;
+		attempt < 50 && (await persistedNames()).includes(searchName);
+		attempt += 1
+	) {
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	}
+	expect(await persistedNames()).not.toContain(searchName);
+	expect(logger.info).toHaveBeenCalledWith(expect.any(String), {
+		context: { collection: 'coupons', removed: [searchName] },
+	});
+});
 
 it('the divergence rebuild removes the registered destination before recreating it', async () => {
 	database = await createRxDatabase({

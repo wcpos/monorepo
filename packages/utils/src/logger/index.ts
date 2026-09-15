@@ -142,6 +142,49 @@ function searchableContext(context: Record<string, any>): string {
 		.join(' ');
 }
 
+/**
+ * The search fold — lowercase, NFD, strip combining marks — applied at WRITE
+ * time to everything the Logs screen searches, so a scan over `context.fold`
+ * is an exact match in fold space against a term folded the same way (any
+ * script, any normal form). This is a mirror of `foldSearchText` in
+ * @wcpos/sync-core, which utils cannot import; the parity is pinned by
+ * packages/database/src/search-fold-parity.test.ts.
+ */
+export function foldLogSearchText(value: unknown): string {
+	return String(value)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(new RegExp('[\\u0300-\\u036f]', 'g'), '');
+}
+
+/**
+ * The searchable columns every persisted row carries — `search`, the raw
+ * operational identifiers, and `fold`, the folded blob of the fields the Logs
+ * screen scans (see the logs collection creator). ONE builder for both write
+ * paths (live rows and flight-recorder promotions), so no row misses the fold.
+ *
+ * The searchable columns come FIRST: admitContext truncates in insertion
+ * order, so on an oversized context the arbitrary payload is the casualty and
+ * the columns the Logs screen scans survive (review).
+ */
+function withSearchContext(
+	message: string,
+	code: string | undefined,
+	context: Record<string, any>
+): Record<string, unknown> {
+	const { search: _search, fold: _fold, ...rest } = context;
+	const search = Array.from(searchableContext(rest)).slice(0, SEARCH_COLUMN_MAX_CHARS).join('');
+	return {
+		search,
+		fold: Array.from(
+			foldLogSearchText([message, code, search, rest.error].filter(Boolean).join(' '))
+		)
+			.slice(0, SEARCH_COLUMN_MAX_CHARS)
+			.join(''),
+		...rest,
+	};
+}
+
 function serializedBytes(value: unknown): number {
 	return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
@@ -223,7 +266,12 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 				timestamp: event.timestamp,
 				level: event.level,
 				message: event.message,
-				context: { ...event.context, _promotedBy: reason },
+				// Same searchable + folded columns as a live row (review): a promoted
+				// row must be findable in fold space like every other.
+				context: withSearchContext(event.message, code, {
+					...event.context,
+					_promotedBy: reason,
+				}),
 				seq: sequence,
 				count: 1,
 				firstSeen: event.timestamp,
@@ -317,6 +365,12 @@ const COLUMN_MAX_LENGTH = {
 	serverRequestId: 40,
 } as const;
 
+// At most 4 UTF-8 bytes per code point: 4 KiB per column, 8 KiB for the pair.
+// Even JSON escaping fits under MAX_CONTEXT_BYTES (16 KiB), so admission trims
+// caller payload, not these first columns. Hundreds of search tokens suffice;
+// the tail of a multi-kilobyte blob is not a useful search target.
+const SEARCH_COLUMN_MAX_CHARS = 1024;
+
 function clampColumn<K extends keyof typeof COLUMN_MAX_LENGTH>(
 	column: K,
 	value: string | undefined
@@ -379,10 +433,7 @@ function persistLog(
 		console.error(`Dropped failure-severity code ${code} from log row with outcome ok`);
 		code = undefined;
 	}
-	const admittedContext = admitContext({
-		...persistedContext,
-		search: searchableContext(persistedContext),
-	});
+	const admittedContext = admitContext(withSearchContext(message, code, persistedContext));
 	const identity = JSON.stringify([
 		level,
 		code ?? null,
