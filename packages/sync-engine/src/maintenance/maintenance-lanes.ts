@@ -269,6 +269,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			tick: { starvation: boolean } & MaintenanceLaneTickOptions
 		) => Promise<MaintenanceLaneBodyReport>
 	): MaintenanceLane {
+		const existenceAudit = name === 'existence-prime' || name === 'existence-reconcile';
 		let lastError: string | null = null;
 		/**
 		 * A skipped tick used to be COMPLETELY silent, which is why #1318 — a lane
@@ -297,6 +298,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 		return {
 			tick: async (callerSignal, options) => {
+				const startedAtMs = now();
 				let starvation = false;
 				let starvationReservationAtMs: number | null = null;
 				if (callerSignal?.aborted) {
@@ -320,16 +322,20 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				if (pressureDeferredLanes.has(name) && !forcedCensusTick) {
 					const tickAtMs = now();
 					if (deps.isServerBackingOff?.(tickAtMs)) {
+						// Existing caches must heal even on persistently busy hosts. Start
+						// bounded existence work on the first tick, then at normal cadence;
+						// other background lanes retain their two-interval stand-down.
 						const previousRunAtMs = lastRanAtMs.get(name);
-						if (previousRunAtMs === undefined) {
+						if (previousRunAtMs === undefined && !existenceAudit) {
 							lastRanAtMs.set(name, tickAtMs);
 							return skipped('server-pressure');
 						}
 						if (deps.isServerRetryAfterActive?.(tickAtMs)) {
 							return skipped('server-pressure');
 						}
-						const starvationCeilingMs = 2 * laneRegistryEntry(name).defaultMs;
-						if (tickAtMs - previousRunAtMs < starvationCeilingMs) {
+						const starvationCeilingMs =
+							(existenceAudit ? 1 : 2) * laneRegistryEntry(name).defaultMs;
+						if (previousRunAtMs !== undefined && tickAtMs - previousRunAtMs < starvationCeilingMs) {
 							return skipped('server-pressure');
 						}
 						starvation = true;
@@ -405,7 +411,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 									...(options?.forceAllCensus === true ? { forceAllCensus: true } : {}),
 								});
 								if (bodyReport.status !== 'skipped' && pressureDeferredLanes.has(name)) {
-									lastRanAtMs.set(name, now());
+									// Auto timers are start-to-start; request duration must not
+									// make the next scheduled existence pass miss its cadence.
+									lastRanAtMs.set(name, existenceAudit ? startedAtMs : now());
 								}
 								const { summary, level } = bodyReport;
 								if (summary !== null) {
@@ -905,7 +913,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			const result = await coverage.reconcilePass(
 				signal,
 				fetcher,
-				tick.starvation ? () => false : () => Boolean(deps.isServerBackingOff?.(now())),
+				() =>
+					Boolean(
+						tick.starvation
+							? deps.isServerRetryAfterActive?.(now())
+							: deps.isServerBackingOff?.(now())
+					),
 				tick.starvation ? { maxScanPagesPerSpace: 1, maxDrillDowns: 1 } : undefined
 			);
 			deps.diagnostics({
