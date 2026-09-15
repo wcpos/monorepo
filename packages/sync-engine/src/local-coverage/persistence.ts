@@ -701,27 +701,47 @@ export class RxCoverageRepository {
 				);
 			}
 			const current = await this.coverageRecords.findByIds([...recordsByKey.keys()]).exec();
-			const rows = [...recordsByKey].map(([key, record]) => {
-				const previous = current.get(key)?.toJSON(true) as
-					RxDocumentData<CoverageRecordDocument> | undefined;
-				return {
-					previous,
-					document: {
-						...(previous
-							? mergeRecordWithCurrentRevision(previous, record, liveLaneKeys)
-							: toRecordDocument(record)),
-						_rev: createRevision(this.coverageRecords.database.token, previous),
-						_meta: { ...previous?._meta, lwt: now() },
-						_deleted: false,
-						_attachments: previous?._attachments ?? {},
-					},
-				};
-			});
+			const rows = [...recordsByKey].flatMap<BulkWriteRow<CoverageRecordDocument>>(
+				([key, record]) => {
+					const previous = current.get(key)?.toJSON(true) as
+						RxDocumentData<CoverageRecordDocument> | undefined;
+					const merged = previous
+						? mergeRecordWithCurrentRevision(previous, record, liveLaneKeys)
+						: toRecordDocument(record);
+					// Re-pulls need not re-stamp unchanged records while over half the incoming
+					// freshness window remains. Merge/prune first so membership changes still write.
+					if (
+						previous &&
+						!previous._deleted &&
+						previous.freshUntilMs - record.updatedAtMs >
+							(record.freshUntilMs - record.updatedAtMs) / 2 &&
+						previous.coverageKey === merged.coverageKey &&
+						previous.collectionName === merged.collectionName &&
+						previous.documentId === merged.documentId &&
+						previous.schemaVersion === merged.schemaVersion &&
+						sameStringArray(previous.coveredQueryKeys, merged.coveredQueryKeys)
+					)
+						return [];
+					return [
+						{
+							previous,
+							document: {
+								...merged,
+								_rev: createRevision(this.coverageRecords.database.token, previous),
+								_meta: { ...previous?._meta, lwt: now() },
+								_deleted: false,
+								_attachments: previous?._attachments ?? {},
+							},
+						},
+					];
+				}
+			);
 			// CAS keeps the prune tied to the revision written; only conflicts take the old path.
 			// A 409 (another writer moved the revision) is expected and merges below; any other
 			// row failure is fatal, so only the non-conflict remainder reaches the assert.
 			const storage = this.coverageRecords.storageInstance;
-			const result = await storage.bulkWrite(rows, 'coverage-record-batch');
+			const result =
+				rows.length > 0 ? await storage.bulkWrite(rows, 'coverage-record-batch') : { error: [] };
 			assertBulkSuccess(
 				{ error: result.error.filter((error) => error.status !== 409) },
 				'Coverage record batch write'
