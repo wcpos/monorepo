@@ -196,6 +196,7 @@ export async function removePersistedSearchIndexes(collection: RxCollection): Pr
 		.map((document) => document.data.name)
 		.filter((name) => name.startsWith(prefix) && name.endsWith('_flexsearch'));
 	const removed: string[] = [];
+	let removalFailed = false;
 	for (const name of names) {
 		try {
 			await removeCollectionStorages(
@@ -210,11 +211,15 @@ export async function removePersistedSearchIndexes(collection: RxCollection): Pr
 			);
 			removed.push(name);
 		} catch (error: any) {
+			removalFailed = true;
 			searchLogger.warn('Could not remove a persisted search index', {
 				context: { collection: collection.name, searchCollection: name, error: error.message },
 			});
 		}
 	}
+	// A partial sweep must not spend the once-per-session ticket either: the
+	// next opener retries what is left (review: CodeRabbit + Codex).
+	if (removalFailed) persistedIndexSweeps.delete(sweepKey);
 	if (removed.length > 0) {
 		searchLogger.info('Removed persisted search indexes of an unindexed collection', {
 			context: { collection: collection.name, removed },

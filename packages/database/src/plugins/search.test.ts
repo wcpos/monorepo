@@ -367,6 +367,38 @@ describe('search plugin', () => {
 			]);
 		});
 
+		it('a failed removal releases the sweep so the next opener retries the leftover (review)', async () => {
+			const database = {
+				name: 'partial-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			const collection = {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database,
+			} as unknown as RxCollection;
+			(getAllCollectionDocuments as jest.Mock).mockResolvedValue([
+				{ data: { name: 'logs-search-v4-en_flexsearch' } },
+			]);
+			(removeCollectionStorages as jest.Mock)
+				.mockClear()
+				.mockRejectedValueOnce(new Error('storage busy'))
+				.mockResolvedValueOnce(undefined);
+
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([]);
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([
+				'logs-search-v4-en_flexsearch',
+			]);
+			expect(removeCollectionStorages).toHaveBeenCalledTimes(2);
+			(getAllCollectionDocuments as jest.Mock).mockResolvedValue([]);
+		});
+
 		it('passes the caller snapshot and intended index options to FlexSearch', async () => {
 			const collectionPrototype: Record<string, unknown> = {};
 			const install = searchPlugin.prototypes?.RxCollection;

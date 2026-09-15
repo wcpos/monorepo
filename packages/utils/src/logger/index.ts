@@ -156,14 +156,23 @@ export function foldLogSearchText(value: unknown): string {
 		.replace(new RegExp('[\\u0300-\\u036f]', 'g'), '');
 }
 
-/** The folded blob of the fields the Logs screen searches (see the logs collection creator). */
-function foldedSearchText(
+/**
+ * The searchable columns every persisted row carries — `search`, the raw
+ * operational identifiers, and `fold`, the folded blob of the fields the Logs
+ * screen scans (see the logs collection creator). ONE builder for both write
+ * paths (live rows and flight-recorder promotions), so no row misses the fold.
+ */
+function withSearchContext(
 	message: string,
 	code: string | undefined,
-	context: Record<string, any>,
-	search: string
-): string {
-	return foldLogSearchText([message, context.error, code, search].filter(Boolean).join(' '));
+	context: Record<string, any>
+): Record<string, unknown> {
+	const search = searchableContext(context);
+	return {
+		...context,
+		search,
+		fold: foldLogSearchText([message, context.error, code, search].filter(Boolean).join(' ')),
+	};
 }
 
 function serializedBytes(value: unknown): number {
@@ -246,7 +255,12 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 				timestamp: event.timestamp,
 				level: event.level,
 				message: event.message,
-				context: { ...event.context, _promotedBy: reason },
+				// Same searchable + folded columns as a live row (review): a promoted
+				// row must be findable in fold space like every other.
+				context: withSearchContext(event.message, code, {
+					...event.context,
+					_promotedBy: reason,
+				}),
 				seq: sequence,
 				count: 1,
 				firstSeen: event.timestamp,
@@ -392,12 +406,7 @@ function persistLog(
 		console.error(`Dropped failure-severity code ${code} from log row with outcome ok`);
 		code = undefined;
 	}
-	const searchable = searchableContext(persistedContext);
-	const admittedContext = admitContext({
-		...persistedContext,
-		search: searchable,
-		fold: foldedSearchText(message, code, persistedContext, searchable),
-	});
+	const admittedContext = admitContext(withSearchContext(message, code, persistedContext));
 	const identity = JSON.stringify([
 		level,
 		code ?? null,

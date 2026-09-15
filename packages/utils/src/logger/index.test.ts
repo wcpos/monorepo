@@ -605,6 +605,19 @@ describe('logger/index', () => {
 			expect(snapshotRecorder()).toEqual([expect.objectContaining({ message: 'First step' })]);
 		});
 
+		it('promoted recorder rows carry the same searchable and folded columns as live rows (review)', async () => {
+			const { collection } = createLogCollection();
+			setDatabase(collection);
+			getLogger(['sync']).debug('Conexión reintentada', { context: { errorCode: 'HTTP101' } });
+
+			await expect(promoteRecorder('test')).resolves.toBe(1);
+			const [rows] = collection.bulkInsert.mock.calls[0];
+			expect(rows[0].context.search).toContain('HTTP101');
+			expect(rows[0].context.fold).toContain('conexion reintentada');
+			expect(rows[0].context.fold).toContain('http101');
+			expect(rows[0].context._promotedBy).toBe('test');
+		});
+
 		it('serializes overlapping recorder promotions', async () => {
 			const { collection } = createLogCollection();
 			let releaseInsert!: () => void;
