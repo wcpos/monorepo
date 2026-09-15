@@ -25,6 +25,11 @@ const searchLogger = getLogger(['wcpos', 'db', 'search']);
  */
 const MAX_CACHED_LOCALES = 3;
 
+// Export events hold whole serialized indexes twice (current + previous). Keep only
+// the latest event; rare destination queries can re-read storage when history expires.
+// Use one, not zero: RxDB's buffer slicing does not support a zero-length history.
+const SEARCH_EXPORT_HISTORY_LIMIT = 1;
+
 // LRU eviction touches other locales, so serialize the whole source collection's
 // init/recreate operations, including creation already in flight before teardown.
 const searchOperations = new WeakMap<RxCollection, Promise<void>>();
@@ -368,6 +373,7 @@ async function createSearchInstance(
 		close(): Promise<void>;
 		pipeline: { close(): Promise<void> };
 	};
+	searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
 	const appendDocs = await searchInstance.collection.find({ selector: { type: 'append' } }).exec();
 	const appendedEntries = appendDocs.reduce((total, doc) => total + doc.get('dataAr').length, 0);
 	const sourceCount = await collection.count().exec();
@@ -380,6 +386,7 @@ async function createSearchInstance(
 		await resetPipelineCheckpoint();
 		await searchInstance.collection.remove();
 		searchInstance = (await addFulltextSearch(searchOptions)) as typeof searchInstance;
+		searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
 	}
 
 	searchLogger.debug('Search instance created successfully', {
