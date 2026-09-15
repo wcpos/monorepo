@@ -1990,6 +1990,43 @@ test('both native warm-manifest probes have a finite transfer timeout', () => {
 	}
 });
 
+test('iOS resolves and exports its runtime before Metro starts, stopping on resolution failure', () => {
+	const step = findStep(
+		readWorkflow('e2e-native.yml'),
+		'ios',
+		'📦 Start Metro and pre-compile the bundle'
+	);
+	const prefix = step.run.slice(0, step.run.indexOf('nohup'));
+	const workspace = mkdtempSync(path.join(tmpdir(), 'wcpos-native-runtime-'));
+	try {
+		writeFileSync(
+			path.join(workspace, 'node'),
+			`#!/bin/sh
+if [ "$1" = '-p' ]; then echo '/expo-updates-cli'; exit 0; fi
+[ "$*" = '/expo-updates-cli runtimeversion:resolve --platform ios' ] || exit 2
+[ "$RESOLVER_FAIL" != 1 ] || exit 1
+echo '{"runtimeVersion":"resolved-native-fingerprint"}'
+`
+		);
+		chmodSync(path.join(workspace, 'node'), 0o755);
+		for (const fail of ['0', '1']) {
+			const result = runShell(`set -e\n${prefix}\nprintenv WCPOS_E2E_RUNTIME_VERSION`, {
+				env: { PATH: `${workspace}:${process.env.PATH}`, RESOLVER_FAIL: fail },
+				unsetEnv: ['WCPOS_E2E_RUNTIME_VERSION'],
+			});
+			if (fail === '0') {
+				assert.equal(result.status, 0, result.stderr);
+				assert.equal(result.stdout.trim(), 'resolved-native-fingerprint');
+			} else {
+				assert.notEqual(result.status, 0);
+				assert.equal(result.stdout.trim(), '');
+			}
+		}
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+});
+
 test('both native Metro steps enable the E2E engine ledger', () => {
 	const workflow = readWorkflow('e2e-native.yml');
 
