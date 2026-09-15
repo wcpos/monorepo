@@ -1,5 +1,6 @@
 import {
 	CategoryLogger,
+	foldLogSearchText,
 	getLogger,
 	log,
 	promoteRecorder,
@@ -470,6 +471,33 @@ describe('logger/index', () => {
 			expect(context.search).toContain('201');
 			expect(context.search).toContain('wcpos.pos.cart');
 			expect(context.search).not.toContain('must not be copied');
+			// The folded blob the Logs screen scans: message + code + search, folded.
+			expect(context.fold).toContain('cart line item updated');
+			expect(context.fold).toContain('diagnostic coffee');
+			expect(context.fold).not.toContain('must not be copied');
+		});
+
+		it('folds accents, case and normal form into context.fold at write time', async () => {
+			const insert = jest.fn().mockResolvedValue(undefined);
+			setDatabase({
+				insert,
+				find: jest
+					.fn()
+					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
+				bulkRemove: jest.fn(),
+			});
+
+			getLogger(['wcpos', 'http']).warn('Conexión rechazada: Kelvin İstanbul', {
+				context: { errorCode: 'HTTP101', error: 'Σύνδεση απέτυχε' },
+			});
+			await Promise.resolve();
+
+			const [{ context }] = insert.mock.calls[0];
+			expect(context.fold).toBe(foldLogSearchText(context.fold)); // already in fold space
+			expect(context.fold).toContain('conexion rechazada');
+			expect(context.fold).toContain('συνδεση απετυχε');
+			expect(context.fold).toContain('kelvin');
 		});
 
 		it('includes collection, type and lane in the search string', async () => {
@@ -575,6 +603,19 @@ describe('logger/index', () => {
 
 			await expect(promoteRecorder('test')).resolves.toBe(1);
 			expect(snapshotRecorder()).toEqual([expect.objectContaining({ message: 'First step' })]);
+		});
+
+		it('promoted recorder rows carry the same searchable and folded columns as live rows (review)', async () => {
+			const { collection } = createLogCollection();
+			setDatabase(collection);
+			getLogger(['sync']).debug('Conexión reintentada', { context: { errorCode: 'HTTP101' } });
+
+			await expect(promoteRecorder('test')).resolves.toBe(1);
+			const [rows] = collection.bulkInsert.mock.calls[0];
+			expect(rows[0].context.search).toContain('HTTP101');
+			expect(rows[0].context.fold).toContain('conexion reintentada');
+			expect(rows[0].context.fold).toContain('http101');
+			expect(rows[0].context._promotedBy).toBe('test');
 		});
 
 		it('serializes overlapping recorder promotions', async () => {
@@ -1134,6 +1175,46 @@ describe('logger/index', () => {
 			await flushWrites();
 
 			expect(rows).toHaveLength(2);
+		});
+
+		it('keeps the searchable and folded columns when an oversized context is truncated (review)', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['wcpos', 'http']).info('Conexión rechazada', {
+				// Just under the cap on its own, so only the appended columns push it over.
+				context: { payload: 'x'.repeat(16 * 1024 - 100), endpoint: '/wp-json/wcpos/v2/orders' },
+			});
+			await flushWrites();
+
+			// Admission truncates in insertion order, so the payload is the casualty,
+			// never the columns the Logs screen scans.
+			expect(rows[0].context).toMatchObject({ payload: '[truncated]', _truncated: true });
+			expect(rows[0].context.search).toContain('/wp-json/wcpos/v2/orders');
+			expect(rows[0].context.fold).toContain('conexion rechazada');
+			expect(rows[0].context.fold).toContain('/wp-json/wcpos/v2/orders');
+			expect(
+				new TextEncoder().encode(JSON.stringify(rows[0].context)).byteLength
+			).toBeLessThanOrEqual(16 * 1024);
+		});
+
+		it('keeps folded search when a large whitelisted value fills both derived columns (review)', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['wcpos', 'http']).info('Conexión rechazada', {
+				context: { reason: 'y'.repeat(8300) },
+			});
+			await flushWrites();
+
+			expect(rows[0].context.fold).not.toBe('[truncated]');
+			expect(rows[0].context.fold).toBeDefined();
+			expect(rows[0].context.fold).toContain('conexion rechazada');
+			expect(rows[0].context.search).not.toBe('[truncated]');
+			expect(rows[0].context.search).toBeDefined();
+			expect(
+				new TextEncoder().encode(JSON.stringify(rows[0].context)).byteLength
+			).toBeLessThanOrEqual(16 * 1024);
 		});
 
 		it('truncates oversized context and records the serialized row size', async () => {

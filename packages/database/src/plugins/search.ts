@@ -2,6 +2,7 @@ import get from 'lodash/get';
 import {
 	createRevision,
 	flatCloneDocWithMeta,
+	getAllCollectionDocuments,
 	getPrimaryKeyOfInternalDocument,
 	INTERNAL_CONTEXT_PIPELINE_CHECKPOINT,
 	now,
@@ -154,6 +155,77 @@ async function removeStaleSearchCollections(
 			});
 		}
 	}
+}
+
+/** A collection that carries searchFields for a scan but must never be indexed (logs). */
+function refusesSearchIndex(collection: RxCollection): boolean {
+	return (collection.options as { searchIndex?: unknown } | undefined)?.searchIndex === false;
+}
+
+const persistedIndexSweeps = new Set<string>();
+
+/**
+ * Drop every persisted `<collection>-search-*_flexsearch` collection of a
+ * collection that now refuses an index — any version, any locale — once per
+ * database+collection per session (Codex review). An upgraded device that ever
+ * searched its logs holds that index on disk (~7 KB a row); `initSearch` will
+ * never open it again, so nothing else would ever reclaim it. The names come
+ * from the internal store's collection documents, so no locale list is needed.
+ * The pipeline checkpoints stay: a few bytes each, and harmless without their
+ * collection.
+ */
+export async function removePersistedSearchIndexes(collection: RxCollection): Promise<string[]> {
+	const database = collection.database;
+	const sweepKey = `${database.name}:${collection.name}`;
+	if (!database.internalStore || persistedIndexSweeps.has(sweepKey)) return [];
+	persistedIndexSweeps.add(sweepKey);
+	const prefix = `${collection.name}-search-`;
+	let documents: Awaited<ReturnType<typeof getAllCollectionDocuments>>;
+	try {
+		documents = await getAllCollectionDocuments(database.internalStore);
+	} catch (error: any) {
+		// A transient storage failure (worker not up yet) must not spend the
+		// once-per-session ticket: log it and let the next opener retry (Codex review).
+		persistedIndexSweeps.delete(sweepKey);
+		searchLogger.warn('Could not enumerate persisted search indexes', {
+			context: { collection: collection.name, error: error.message },
+		});
+		return [];
+	}
+	const names = documents
+		.map((document) => document.data.name)
+		.filter((name) => name.startsWith(prefix) && name.endsWith('_flexsearch'));
+	const removed: string[] = [];
+	let removalFailed = false;
+	for (const name of names) {
+		try {
+			await removeCollectionStorages(
+				database.storage,
+				database.internalStore,
+				database.token,
+				database.name,
+				name,
+				database.multiInstance,
+				database.password,
+				database.hashFunction
+			);
+			removed.push(name);
+		} catch (error: any) {
+			removalFailed = true;
+			searchLogger.warn('Could not remove a persisted search index', {
+				context: { collection: collection.name, searchCollection: name, error: error.message },
+			});
+		}
+	}
+	// A partial sweep must not spend the once-per-session ticket either: the
+	// next opener retries what is left (review: CodeRabbit + Codex).
+	if (removalFailed) persistedIndexSweeps.delete(sweepKey);
+	if (removed.length > 0) {
+		searchLogger.info('Removed persisted search indexes of an unindexed collection', {
+			context: { collection: collection.name, removed },
+		});
+	}
+	return removed;
 }
 
 /**
@@ -388,6 +460,13 @@ export const searchPlugin: RxPlugin = {
 			): Promise<FlexSearchInstance | null> {
 				// Check if collection has searchFields configured
 				if (!Array.isArray(options?.searchFields ?? this.options?.searchFields)) {
+					return null;
+				}
+				// A collection can carry searchFields for a scan-based search and still
+				// refuse an index (logs: see the collection creator). Refusing HERE, not
+				// only in the query layer, means no caller — warmup, audit, a future
+				// binding — can build the index by accident.
+				if (refusesSearchIndex(this)) {
 					return null;
 				}
 
@@ -674,6 +753,11 @@ export const searchPlugin: RxPlugin = {
 				if (!Array.isArray(initializationOptions?.searchFields ?? this.options?.searchFields)) {
 					return null;
 				}
+				// The opt-out holds on the rebuild path too (Codex review): a maintenance
+				// caller must not be the one that builds the index initSearch refused.
+				if (refusesSearchIndex(this)) {
+					return null;
+				}
 
 				locale = normalizedLocale;
 
@@ -771,6 +855,17 @@ export const searchPlugin: RxPlugin = {
 					return operation;
 				};
 			}
+		},
+	},
+	hooks: {
+		createRxCollection: {
+			// Fire-and-forget: the hook is synchronous and collection creation must
+			// not wait on storage removal. Errors are logged inside the sweep.
+			after: ({ collection }: { collection: RxCollection }) => {
+				if (refusesSearchIndex(collection)) {
+					void removePersistedSearchIndexes(collection).catch(() => undefined);
+				}
+			},
 		},
 	},
 	overwritable: {},

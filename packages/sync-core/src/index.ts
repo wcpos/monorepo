@@ -32,6 +32,13 @@ export { pushEndpointResolver, pushRecordMutation, reconcileCreateAck, WOO_REST_
 // prettier-ignore
 export { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH, FLEXSEARCH_TOKEN_BOUNDARY, foldSearchText } from './searchIndexConfig';
 export {
+	buildScanSearchSelector,
+	escapeRegex,
+	scanSearchTerms,
+	type ScanSearchArm,
+	type ScanSearchSelector,
+} from './scanSearchSelector';
+export {
 	canonicalSiteKey,
 	containsScopeDatabaseName,
 	scopeDatabaseName,

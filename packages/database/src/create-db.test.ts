@@ -35,8 +35,15 @@ describe('create-db', () => {
 		jest.clearAllMocks();
 	});
 
-	it('indexes the logger searchable summary for health-log queries', () => {
+	it('searches the logger searchable summary for health-log queries', () => {
 		expect(storeCollections.logs.options?.searchFields).toContain('context.search');
+	});
+
+	it('never builds a FlexSearch index for logs (ruling 2026-09-15, pinned)', () => {
+		// A 46k-row day (an overnight escalation storm) took 21.5 s and ~350 MB to
+		// index in the renderer and crashed the tab; the Logs screen scans instead.
+		// Flipping this back must go red here, not on a merchant's till.
+		expect(storeCollections.logs.options?.searchIndex).toBe(false);
 	});
 
 	it.each([
