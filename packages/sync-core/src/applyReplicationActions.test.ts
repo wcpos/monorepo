@@ -23,8 +23,9 @@ import {
 	type SyncedDocument,
 } from './applyReplicationActions';
 import { type RebuildBarcodeIndexResult } from './barcodeResolve';
+import { planReplicationActions, type ReplicationActions } from './changeSignalReplication';
+import { createHybridChangeSignalEngine } from './hybridChangeSignal';
 
-import type { ReplicationActions } from './changeSignalReplication';
 import type { HybridCollection, ReferenceCollection } from './hybridChangeSignal';
 
 function actions(overrides: Partial<ReplicationActions> = {}): ReplicationActions {
@@ -571,6 +572,73 @@ describe('applyReplicationActions — variations pull + delete via the variation
 });
 
 describe('applyReplicationActions — escalations are surfaced, never pulled', () => {
+	it('logs each escalation once across repeated sweeps, restart, cure and recurrence', async () => {
+		let now = 0;
+		let match = false;
+		const source = {
+			pollSequenceLog: async () => ({ rows: [], cursor: { sequence: 0 }, hasMore: false }),
+			hashChecksumScan: async () => ({
+				buckets: [
+					{
+						bucket: 0,
+						range: { start: 0, end: 999 },
+						stored_count: 0,
+						current_count: 2,
+						stored_digest: '0',
+						current_digest: '123',
+						match,
+					},
+				],
+				complete: true,
+				nextAfterId: 0,
+			}),
+			rangeChecksumScan: async () => ({ buckets: [] }),
+			drillDownBucket: async () => ({
+				driftedIds: [80, 81].map((id) => ({ id, status: 'missing_stored' as const })),
+			}),
+			revisionHashForIds: async ({ ids }: { ids: number[] }) => ({
+				rows: ids.map((id) => ({ id, revision: `rev-${id}` })),
+			}),
+		};
+		const options = {
+			source,
+			now: () => now,
+			policy: { sweepEveryNPolls: 0, sweepIntervalMs: 300_000, escalateToRevisionHashAfter: 1 },
+		};
+		let engine = createHybridChangeSignalEngine(options);
+		const { handlers, calls } = fakeHandlers();
+		const sweep = async () => {
+			await applyReplicationActions(planReplicationActions(await engine.poll()), handlers);
+			now += 300_000;
+		};
+		const escalationIds = () =>
+			calls.events
+				.filter((event) => event.type === 'apply.escalation')
+				.map((event) => event.fields?.id);
+
+		await sweep();
+		await sweep();
+		expect(escalationIds()).toEqual([80, 81]);
+		expect(calls.persisted[1].escalations).toHaveLength(2);
+		expect(calls.events.filter((event) => event.type === 'apply.escalation-cleared')).toEqual([]);
+
+		engine = createHybridChangeSignalEngine({
+			...options,
+			initialEscalations: calls.persisted[1].escalations,
+		});
+		await sweep();
+		expect(escalationIds()).toEqual([80, 81]);
+		match = true;
+		await sweep();
+		expect(calls.events.filter((event) => event.type === 'apply.escalation-cleared')).toHaveLength(
+			2
+		);
+		expect(calls.persisted[3].escalations).toEqual([]);
+		match = false;
+		await sweep();
+		expect(escalationIds()).toEqual([80, 81, 80, 81]);
+	});
+
 	it('logs escalations and does not seed a pull for them', async () => {
 		const { handlers, calls } = fakeHandlers();
 		const result = await applyReplicationActions(

@@ -905,7 +905,10 @@ export function createHybridChangeSignalEngine(input: {
 					source.revisionHashForIds
 				);
 				for (const target of escalated) {
-					escalatedIds.set(repairKey(target), target);
+					// Emit the transition, not the standing set on every sweep (#2058).
+					if (!escalatedLedger.has(escalationKey(target))) {
+						escalatedIds.set(repairKey(target), target);
+					}
 				}
 			}
 		}
