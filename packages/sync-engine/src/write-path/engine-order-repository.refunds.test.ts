@@ -102,6 +102,39 @@ describe('order refund reconciliation', () => {
 		}
 	);
 
+	// Revert to cascading removed parent ids: retry cannot remove the now-orphaned children.
+	it('retries resync cleanup after parents are gone, preserving protected children and POS stamps', async () => {
+		const h = await harness();
+		await h.repo.upsertMany([parent(42, [{ id: 1 }, { id: 2 }]), parent(43, [{ id: 3 }])]);
+		for (const [id, key] of [
+			[4, '_wcpos_session'],
+			[5, '_wcpos_register'],
+		] as const) {
+			await h.collection('refunds').insert(
+				materializeRefund({
+					id,
+					parent_id: 42,
+					date_created_gmt: '',
+					meta_data: [{ key, value: 'pos' }],
+				}).storedDocument
+			);
+		}
+		const pending = new Set([parent(43).uuid]);
+		const remove = vi
+			.spyOn(h.collection('refunds'), 'bulkRemove')
+			.mockRejectedValueOnce(new Error('child remove failed'));
+		try {
+			await expect(h.repo.resetForResync(pending)).rejects.toThrow('child remove failed');
+			expect(await h.collection('orders').findOne(parent(42).uuid).exec()).toBeNull();
+			expect(await h.ids()).toEqual([1, 2, 3, 4, 5]);
+			await h.repo.resetForResync(pending);
+			expect(await h.ids()).toEqual([3, 4, 5]);
+			expect(await h.collection('orders').findOne(parent(43).uuid).exec()).not.toBeNull();
+		} finally {
+			remove.mockRestore();
+		}
+	});
+
 	// Move the ack cascade above await doc.remove(): children disappear while removal is pending.
 	it('waits for delete acknowledgement parent removal before cascading', async () => {
 		const h = await harness();
@@ -355,7 +388,7 @@ describe('order refund reconciliation', () => {
 		expect(await h.ids()).toEqual([3]);
 	});
 	it.each(['delete', 'resync', 'ack'] as const)(
-		'cascades %s without deleting unrelated refunds',
+		'cascades %s (resync also removes pre-existing unstamped orphans)',
 		async (action) => {
 			const h = await harness();
 			await h.repo.upsertMany([parent(42, [{ id: 1 }, { id: 2 }])]);
@@ -365,7 +398,7 @@ describe('order refund reconciliation', () => {
 				await writeFacetFor('orders')!.onDeleteAck(h.scope.database, {
 					recordId: parent(42).uuid,
 				} as never);
-			expect(await h.ids()).toEqual([3]);
+			expect(await h.ids()).toEqual(action === 'resync' ? [] : [3]);
 		}
 	);
 	it('delete and resync preserve a protected parent and its refunds', async () => {
@@ -374,8 +407,8 @@ describe('order refund reconciliation', () => {
 		const pending = new Set([parent(42).uuid]);
 		await h.repo.removeDeletedOrders([mintRemoteId(42, 'test')], pending);
 		await h.repo.resetForResync(pending);
-		expect(await h.ids()).toEqual([1, 2, 3]);
+		expect(await h.ids()).toEqual([1, 2]);
 		await h.repo.resetForResync();
-		expect(await h.ids()).toEqual([3]);
+		expect(await h.ids()).toEqual([]);
 	});
 });

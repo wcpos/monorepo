@@ -414,14 +414,14 @@ export function useRegisterSession() {
 						clearTimeout(timeout);
 					}
 				}
-				const accounting = handles.length > 0 ? latestAccounting.current : null;
 				const closed =
 					session!.status === 'closed'
 						? session!
 						: await actions.closeSession(sessions!, session!.id, input);
+				const accounting = latestAccounting.current;
 				const closure = await actions.writeClosure({
 					closures: closures!,
-					tillExpected: handles.length > 0 ? undefined : expected,
+					tillExpected: !localPending && session!.server_expected ? expected : undefined,
 					userDB,
 					siteUuid: site.uuid!,
 					session: closed,

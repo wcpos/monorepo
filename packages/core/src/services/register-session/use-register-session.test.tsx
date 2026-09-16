@@ -1,12 +1,24 @@
 /** @jest-environment jsdom */
+import { webcrypto } from 'node:crypto';
+import { TextEncoder } from 'node:util';
+
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { BehaviorSubject, map, merge, of, Subject } from 'rxjs';
 import { Query } from 'mingo';
+import { addRxPlugin, createRxDatabase } from 'rxdb';
+import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
+import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
+import type { StoreDatabase, UserDatabase } from '@wcpos/database';
+import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { getLogger } from '@wcpos/utils/logger';
 
+import { ensureRegister } from '../register/register-document';
 import * as actions from './session-store';
 import { useRegisterSession } from './use-register-session';
+
+Object.assign(globalThis, { TextEncoder });
+Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
 
 jest.mock('./session-store');
 const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
@@ -586,6 +598,65 @@ it('replaces missing parent demand and releases it when the session scope change
 	});
 	expect(mockReleaseParents).toHaveBeenCalledTimes(2);
 	view.unmount();
+});
+
+// Revert to pre-await/render-time accounting or expected: the closure misses the late refund.
+it('includes a refund emitted while the session close write is awaiting without pending parents', async () => {
+	addRxPlugin(RxDBLocalDocumentsPlugin);
+	const db: StoreDatabase = await createRxDatabase({
+		name: `lateclosure${Math.random().toString(36).slice(2)}`,
+		storage: getRxStorageMemory(),
+		multiInstance: false,
+	});
+	const userDB: UserDatabase = await createRxDatabase({
+		name: `lateuser${Math.random().toString(36).slice(2)}`,
+		storage: getRxStorageMemory(),
+		localDocuments: true,
+		multiInstance: false,
+	});
+	try {
+		await db.addCollections({ closures: { schema: closuresLiteral } });
+		await ensureRegister(userDB);
+		entries = [];
+		active = [{ ...active[0], server_expected: null }];
+		mockOrders.next([parentHit()]);
+		let release!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		jest.mocked(actions.closeSession).mockImplementationOnce(async () => {
+			await pending;
+			return { ...session, status: 'closed', closed_at_gmt: '2026-09-15T11:00:00' } as never;
+		});
+		const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
+		jest
+			.mocked(actions.writeClosure)
+			.mockImplementationOnce((input) => writeClosure({ ...input, closures: db.closures, userDB }));
+		const result = await settled();
+		let closing!: ReturnType<typeof result.current.actions.closeSession>;
+		await act(async () => {
+			closing = result.current.actions.closeSession({ counted: { cash: '100' } });
+		});
+		expect(actions.closeSession).toHaveBeenCalledTimes(1);
+		expect(actions.writeClosure).not.toHaveBeenCalled();
+		await act(async () => mockRefunds.next([refundHit()]));
+		expect(mockDeclareRequirements).not.toHaveBeenCalled();
+		await act(async () => {
+			release();
+			await closing;
+		});
+		expect((await closing).toJSON()).toMatchObject({
+			period_refunds_total: '20.0000',
+			till_expected: { cash: '100.0000', stripe: '-20.0000' },
+			breakdowns: {
+				refund_count: 1,
+				payment_methods: { stripe: { sales: '0', refunds: '20.0000' } },
+			},
+		});
+	} finally {
+		await db.remove();
+		await userDB.remove();
+	}
 });
 
 // Remove the parent wait or use the pre-wait accounting: the closure records cash instead of card.

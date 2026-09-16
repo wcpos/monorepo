@@ -299,10 +299,30 @@ export class EngineOrderRepository {
 				await this.db.orders.bulkRemove(removable.map((doc) => doc.uuid)),
 				'engine-order-repository remove'
 			);
-		await removeRefundChildren(
-			this.db.refunds,
-			removable.map((doc) => doc.remoteId)
-		);
+		// A retry may find the parents already gone. Sweep against current residency,
+		// retaining POS-stamped history even when its parent is not held locally.
+		const held = (await this.db.refunds.find({ selector: {} }).exec()).map((doc) => doc.toJSON());
+		if (held.length === 0) return;
+		const parents = await this.db.orders
+			.find({
+				selector: { 'payload.id': { $in: [...new Set(held.map((doc) => doc.payload.parent_id))] } },
+			})
+			.exec();
+		const residentIds = new Set(parents.map((doc) => (doc.toJSON() as OrderDocument).payload.id));
+		const orphanIds = held
+			.filter(
+				(doc) =>
+					!residentIds.has(doc.payload.parent_id) &&
+					!doc.payload.meta_data?.some(
+						({ key }) => key === '_wcpos_session' || key === '_wcpos_register'
+					)
+			)
+			.map((doc) => doc.uuid);
+		if (orphanIds.length > 0)
+			assertBulkSuccess(
+				await this.db.refunds.bulkRemove(orphanIds),
+				'orders resync refund cascade'
+			);
 	}
 
 	/**
