@@ -747,6 +747,59 @@ describe('cold-start priming', () => {
 		expect(mocks.poll).toHaveBeenCalledTimes(pollsBefore + 2);
 	});
 
+	it('keeps the chain waiting once the prime write has begun, abort or not', async () => {
+		// A slow checkpoint port: the write is in flight when the deadline fires.
+		// The next tick must not run (and persist) beside it, or the late prime
+		// write would replace the tick's cursor and baselines with the empty prime.
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		let finishWrite!: () => void;
+		let blob: string | null = null;
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher: primingFetcher({ head: 40, epoch: 'epoch-FIRST' }),
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => blob,
+			writeBlob: (_scope, _key, value) =>
+				new Promise<void>((resolve) => {
+					finishWrite = () => {
+						blob = value;
+						resolve();
+					};
+				}),
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		const abort = new AbortController();
+		const prime = lane.prime(abort.signal);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(finishWrite).toBeDefined();
+		abort.abort();
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 40 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} satisfies HybridPollOutcome);
+		const pollsBefore = mocks.poll.mock.calls.length;
+		const tick = lane.tick();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(mocks.poll).toHaveBeenCalledTimes(pollsBefore);
+		finishWrite();
+		expect(await prime).toEqual({ status: 'primed', head: 40 });
+		expect(await tick).toMatchObject({ status: 'ran' });
+		expect(mocks.poll).toHaveBeenCalledTimes(pollsBefore + 1);
+	});
+
 	it('rejects a 401 prime with the poison error and writes nothing', async () => {
 		const { lane, writeBlob } = await openPrimeLane(null, false, true);
 		const prime = lane.prime();

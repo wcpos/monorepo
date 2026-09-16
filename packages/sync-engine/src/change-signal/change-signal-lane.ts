@@ -550,6 +550,9 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			return run;
 		},
 		prime: (signal) => {
+			// Flips once the blob write has begun: from then on the chain waits for
+			// the prime (see below), abort or not.
+			let writing = false;
 			const run = async (): ReturnType<ChangeSignalLane['prime']> => {
 				if (signal?.aborted) return { status: 'skipped' };
 				if (deps.connectivity() === 'offline') return { status: 'skipped' };
@@ -586,6 +589,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							primedAtOpen.set(scopeId, { head, ...(epoch ? { epoch } : {}) });
 							return { status: 'restored' };
 						}
+						writing = true;
 						const wrote = await bound.guardWrite(() =>
 							deps.writeBlob(
 								scopeId,
@@ -624,11 +628,14 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			const queued = chain.then(run, run);
 			// A checkpoint or fetch port that never settles must not wedge the lane
 			// behind this prime: once the caller's deadline aborts, the chain moves
-			// on and later ticks run. Safe because the prime holds no shared state
-			// (own bound fetcher, guarded write) and its late result can only ever
-			// be a LOWER cursor than a tick's. Only the prime's OWN run is skipped:
-			// the chain still waits for whatever was queued before it, so an abort
-			// during an in-flight tick never lets the next tick overlap that one.
+			// on and later ticks run. Safe while the prime is still READING or
+			// FETCHING — it holds no shared state (own bound fetcher) and writes
+			// nothing once aborted. Once its blob write has begun the chain waits
+			// for it regardless: a late write landing after a tick's persist would
+			// replace that tick's cursor, baselines and ledger with the empty prime.
+			// Only the prime's OWN run is skipped: the chain still waits for whatever
+			// was queued before it, so an abort during an in-flight tick never lets
+			// the next tick overlap that one.
 			const ownRunOrAborted =
 				signal === undefined
 					? queued
@@ -637,7 +644,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							new Promise<void>((resolve) => {
 								if (signal.aborted) resolve();
 								else signal.addEventListener('abort', () => resolve(), { once: true });
-							}),
+							}).then(() => (writing ? queued.then(() => undefined) : undefined)),
 						]);
 			chain = predecessor
 				.then(() => ownRunOrAborted)
