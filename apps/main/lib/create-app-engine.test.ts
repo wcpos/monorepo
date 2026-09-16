@@ -672,6 +672,44 @@ describe('createAppSyncEngine scope cache', () => {
 		}
 	});
 
+	it('a same-key render during an awaited switch never rewrites the activated header', async () => {
+		// The engine has activated store-2 inside scope.switch but the switch
+		// has not resolved, so entry.key still names store-1. A memo recompute
+		// rendering store-1 is a cache hit; it must not put store-1 back on the wire.
+		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
+		const storeHeaderOf = (call: unknown[]) =>
+			new Headers((call[1] as RequestInit | undefined)?.headers).get('X-WCPOS-Store');
+		let ports: { fetcher?: (url: string) => Promise<Response> } = {};
+		let render!: () => void;
+		let seen: string | null = null;
+		let first!: ReturnType<typeof createEngineDouble>;
+		first = createEngineDouble(undefined, async (identity) => {
+			first.activate(identity);
+			render();
+			await ports.fetcher?.(
+				'https://store.example.test/wp-json/wcpos/v2/changes/config-fingerprint'
+			);
+			seen = storeHeaderOf(fetch.mock.calls.at(-1)!);
+		});
+		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
+			() => first
+		);
+		try {
+			createAppSyncEngine(BASE_OPTIONS);
+			ports = createRxdbSyncEngine.mock.calls[0]![0];
+			render = () => createAppSyncEngine(BASE_OPTIONS);
+
+			await switchAppEngineScope({
+				site: { wp_api_url: BASE_OPTIONS.scope.site },
+				wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+				store: { id: 'store-2' },
+			});
+			expect(seen).toBe('store-2');
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
 	it('an earlier rejected switch never clobbers the header a later activation set', async () => {
 		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
 		const storeHeaderOf = (call: unknown[]) =>

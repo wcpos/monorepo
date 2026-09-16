@@ -325,9 +325,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		cachedEngine.fetcherOptions.bareAuthParam = options.bareAuthParam;
 		cachedEngine.fetcherOptions.useRestRouteParam = options.useRestRouteParam;
 		cachedEngine.fetcherOptions.useProtocolHeaders = options.useProtocolHeaders;
-		cachedEngine.fetcherScope.storeId = options.scope.storeId;
-		// The engine IS on this scope, so these are committed values, not
-		// optimistic ones — a later failed switch must fall back to them.
+		// fetcherScope.storeId is NOT refreshed here: it follows the engine's
+		// activation (db$ subscription below). A same-key render can land while an
+		// awaited switch has already activated the incoming scope but not yet
+		// resolved (entry.key still names the outgoing one); rewriting the header
+		// from the cache key would put the outgoing store back on the wire.
+		// The auth options are committed values — the engine IS on this scope's
+		// site — and a later failed switch must fall back to them.
 		cachedEngine.committed = {
 			...cachedEngine.committed,
 			storeId: options.scope.storeId,
