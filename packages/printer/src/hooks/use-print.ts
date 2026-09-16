@@ -54,7 +54,7 @@ interface UsePrintOptions {
 // Singleton service instance
 let printerService: PrinterService | null = null;
 // Include counted preparation in each printer's dispatch order, across hook instances.
-const printQueues = new Map<string, Promise<void>>();
+const printQueues = new Map<string, Promise<unknown>>();
 
 function getService(): PrinterService {
 	if (!printerService) {
@@ -246,6 +246,7 @@ export function usePrint(options: UsePrintOptions) {
 				});
 			}
 			onAfterPrint?.();
+			return true;
 		} catch (error) {
 			onPrintError?.(error as Error);
 			throw error;

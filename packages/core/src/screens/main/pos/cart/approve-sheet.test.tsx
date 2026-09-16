@@ -3,12 +3,18 @@ import * as React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { createTestT } from '../../../../../jest/translate';
 import { ApproveSheet } from './approve-sheet';
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
+}));
+const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -75,7 +81,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
-		session: { id: 's', incrementalPatch: patch },
+		session: { id: 's', register_id: 'r', incrementalPatch: patch },
 		actions: { closeSession },
 	}),
 }));
@@ -98,6 +104,14 @@ it('refused credentials/capability show an error without closing', async () => {
 			'This account cannot approve closes'
 		)
 	);
+	expect(logger.warn).toHaveBeenCalledWith(
+		'Register session approval refused',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: { type: 'register.approval-refused', sessionId: 's', registerId: 'r' },
+		})
+	);
+	expect(JSON.stringify(logger.warn.mock.calls)).not.toMatch(/secret|manager/);
 	expect(patch).not.toHaveBeenCalled();
 	expect(closeSession).not.toHaveBeenCalled();
 });
@@ -116,6 +130,19 @@ it('approves on the server, persists only approved_by, then closes without a tok
 		sync_error: null,
 	});
 	expect(closeSession).toHaveBeenCalledWith({ counted: props.counted });
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register session approval granted',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: {
+				type: 'register.approval-granted',
+				sessionId: 's',
+				registerId: 'r',
+				approvedBy: 42,
+			},
+		})
+	);
+	expect(JSON.stringify(logger.info.mock.calls)).not.toMatch(/secret|manager/);
 	expect(patch.mock.invocationCallOrder[0]).toBeLessThan(closeSession.mock.invocationCallOrder[0]);
 });
 it.each(['offline', 'online-website-unavailable'])('blocks approval while %s', (status) => {
@@ -133,4 +160,14 @@ it('409 stays in the sheet and never leaks the request error', async () => {
 	await waitFor(() => expect(screen.getByTestId('approve-error')).toBeTruthy());
 	expect(screen.getByTestId('approve-error').textContent).not.toContain('secret');
 	expect(closeSession).not.toHaveBeenCalled();
+});
+
+it('does not label a failed close as a refused approval', async () => {
+	post.mockResolvedValue({ data: { approved_by: 42 } });
+	closeSession.mockRejectedValueOnce(new Error('disk'));
+	render(<ApproveSheet {...props} />);
+	fill();
+	await waitFor(() => expect(screen.getByTestId('approve-error')).toBeTruthy());
+	expect(logger.warn).not.toHaveBeenCalled();
+	expect(logger.info).toHaveBeenCalledTimes(1);
 });

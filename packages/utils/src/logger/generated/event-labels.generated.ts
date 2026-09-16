@@ -126,6 +126,7 @@ export const SYNC_EVENT_TYPES = [
 	'register.movement-rejected',
 	'register.movement-retrying',
 	'register.movement-voided',
+	'register.no-sale-recorded',
 	'register.session-adopted',
 	'register.session-closed',
 	'register.session-opened',
@@ -133,6 +134,7 @@ export const SYNC_EVENT_TYPES = [
 	'register.session-refresh-failed',
 	'register.switched',
 	'register.unbound',
+	'register.upload-refused',
 	'register.variance-over-threshold',
 	'register.x-report-printed',
 	'signal.cursor',
@@ -1097,7 +1099,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		key: 'health.logs.event.register_movement_accepted',
 		label: 'Your store recorded a cash movement',
 		descriptionKey: 'health.logs.event_description.register_movement_accepted',
-		description: 'A paid in, paid out or no sale reached your store and was accepted.',
+		description: 'A paid in, paid out, no sale or reversal reached your store and was accepted.',
 		introducedIn: '2.0.0',
 	},
 	'register.movement-recorded': {
@@ -1135,6 +1137,15 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'A cash movement was reversed',
 		descriptionKey: 'health.logs.event_description.register_movement_voided',
 		description: 'An earlier paid in or paid out was reversed.',
+		introducedIn: '2.0.0',
+	},
+	'register.no-sale-recorded': {
+		type: 'register.no-sale-recorded',
+		domain: 'REGISTER',
+		key: 'health.logs.event.register_no_sale_recorded',
+		label: 'No sale recorded',
+		descriptionKey: 'health.logs.event_description.register_no_sale_recorded',
+		description: 'The cashier recorded a no-sale; no cash changed hands.',
 		introducedIn: '2.0.0',
 	},
 	'register.session-adopted': {
@@ -1200,6 +1211,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_unbound',
 		description:
 			'This device is no longer linked to a register, so its sales do not record where they were taken.',
+		introducedIn: '2.0.0',
+	},
+	'register.upload-refused': {
+		type: 'register.upload-refused',
+		domain: 'REGISTER',
+		key: 'health.logs.event.register_upload_refused',
+		label: 'Your store refused a register update',
+		descriptionKey: 'health.logs.event_description.register_upload_refused',
+		description:
+			'Your store refused a session or closure this device sent, so the register and your store no longer agree.',
 		introducedIn: '2.0.0',
 	},
 	'register.variance-over-threshold': {

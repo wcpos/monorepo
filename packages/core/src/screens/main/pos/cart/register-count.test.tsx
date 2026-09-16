@@ -3,12 +3,15 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
+const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -76,7 +79,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		blind,
 		varianceThreshold,
-		session: { id: 's', approval_required },
+		session: { id: 's', register_id: 'r', approval_required },
 		binding: { registerName: 'Front' },
 		expected: { cash: '480.80', card: '20' },
 		unsyncedCount,
@@ -84,7 +87,10 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ store: { currency: 'GBP' } }),
+	useStoreSession: () => ({
+		store: { currency: 'GBP' },
+		wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
+	}),
 }));
 jest.mock('@wcpos/query', () => ({
 	useDocField: (doc: unknown, select: (doc: unknown) => unknown) => select(doc),
@@ -167,6 +173,19 @@ it('requires manager over threshold', () => {
 	fireEvent.click(screen.getByTestId('count-close'));
 	expect(screen.getByTestId('approve-sheet')).toBeTruthy();
 	expect(closeSession).not.toHaveBeenCalled();
+	expect(logger.warn).toHaveBeenCalledWith(
+		'Register count exceeds variance threshold',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: {
+				type: 'register.variance-over-threshold',
+				sessionId: 's',
+				registerId: 'r',
+				variance: '-17.50',
+				threshold: '5',
+			},
+		})
+	);
 });
 it('server refusal requires approval even for an exact blind count', () => {
 	blind = true;

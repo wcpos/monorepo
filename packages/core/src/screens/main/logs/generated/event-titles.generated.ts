@@ -256,6 +256,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.register_movement_retrying');
 		case 'register.movement-voided':
 			return t('health.logs.event.register_movement_voided');
+		case 'register.no-sale-recorded':
+			return t('health.logs.event.register_no_sale_recorded');
 		case 'register.session-adopted':
 			return t('health.logs.event.register_session_adopted');
 		case 'register.session-closed':
@@ -270,6 +272,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.register_switched');
 		case 'register.unbound':
 			return t('health.logs.event.register_unbound');
+		case 'register.upload-refused':
+			return t('health.logs.event.register_upload_refused');
 		case 'register.variance-over-threshold':
 			return t('health.logs.event.register_variance_over_threshold');
 		case 'register.x-report-printed':
@@ -417,6 +421,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.register_movement_retrying');
 		case 'register.movement-voided':
 			return t('health.logs.event_description.register_movement_voided');
+		case 'register.no-sale-recorded':
+			return t('health.logs.event_description.register_no_sale_recorded');
 		case 'register.session-adopted':
 			return t('health.logs.event_description.register_session_adopted');
 		case 'register.session-closed':
@@ -431,6 +437,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.register_switched');
 		case 'register.unbound':
 			return t('health.logs.event_description.register_unbound');
+		case 'register.upload-refused':
+			return t('health.logs.event_description.register_upload_refused');
 		case 'register.variance-over-threshold':
 			return t('health.logs.event_description.register_variance_over_threshold');
 		case 'register.x-report-printed':

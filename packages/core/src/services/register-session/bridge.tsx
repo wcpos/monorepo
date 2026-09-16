@@ -87,6 +87,7 @@ export function RegisterSessionBridge() {
 		};
 		const report = (error: unknown) => {
 			const { status, errorCode, message } = failureFacts(error);
+			const stage = (error as { stage?: string })?.stage ?? 'refresh';
 			const failures = (consecutiveFailures.current += 1);
 			// No `endpoint`: a drain rejection can come from any of three routes or from local
 			// storage, and the refresh stage spans both the list GET and a per-session detail GET.
@@ -94,7 +95,9 @@ export function RegisterSessionBridge() {
 			// per-request rows written inside the outbox carry the real endpoint.
 			const options = {
 				context: {
-					stage: (error as { stage?: string })?.stage ?? 'refresh',
+					...(stage === 'refresh' ? { type: 'register.session-refresh-failed' } : {}),
+					registerId,
+					stage,
 					status,
 					errorCode,
 					message: message ?? String(error),

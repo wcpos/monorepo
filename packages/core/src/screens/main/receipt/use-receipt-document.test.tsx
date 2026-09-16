@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { resetCheckoutMode } from '../pos/checkout/checkout-mode';
 import { useReceiptDocument } from './use-receipt-document';
 
-const mockPrint = jest.fn<Promise<void>, []>();
+const mockPrint = jest.fn<Promise<boolean>, []>();
 let mockFinal = true;
 let mockAutoPrint = true;
 const order = { uuid: 'paid', payload: { id: 42, currency: 'USD' } } as never;
@@ -59,7 +59,7 @@ jest.mock('../contexts/tax-rates/provider', () => ({ useTaxSettingsOptional: () 
 
 beforeEach(() => {
 	resetCheckoutMode();
-	mockPrint.mockReset().mockResolvedValue(undefined);
+	mockPrint.mockReset().mockResolvedValue(true);
 	mockFinal = true;
 	mockAutoPrint = true;
 });
@@ -97,19 +97,19 @@ it('never auto-prints in a reprint host but records a successful manual print', 
 	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
 	await act(async () => result.current.previewProps.handleLoad());
 	expect(mockPrint).not.toHaveBeenCalled();
-	let resolve!: () => void;
+	let resolve!: (value: boolean) => void;
 	mockPrint.mockReturnValue(
-		new Promise<void>((done) => {
+		new Promise<boolean>((done) => {
 			resolve = done;
 		})
 	);
-	let printing!: Promise<void>;
+	let printing!: Promise<unknown>;
 	act(() => {
 		printing = result.current.print();
 	});
 	expect(result.current.printedTo).toBeNull();
 	await act(async () => {
-		resolve();
+		resolve(true);
 		await printing;
 	});
 	expect(result.current.printedTo).toBe('Till printer');
@@ -518,4 +518,20 @@ it('withholds sale cloud identifiers and the raw sale preview URL for a refund',
 	} finally {
 		printer.mockRestore();
 	}
+});
+
+it('does not mark a silent print failure as printed and returns no success signal', async () => {
+	mockPrint.mockResolvedValueOnce(undefined as never);
+	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
+	await act(async () => {
+		await expect(result.current.print()).resolves.toBe(false);
+	});
+	expect(result.current.printedTo).toBeNull();
+});
+
+it('returns an explicit success signal after print dispatch', async () => {
+	const { result } = renderHook(() => useReceiptDocument({ order, autoPrintAllowed: false }));
+	await act(async () => {
+		await expect(result.current.print()).resolves.toBe(true);
+	});
 });

@@ -45,6 +45,10 @@ export const EVENT_SOURCE_ROOTS = [
 	// service that settles offline card approvals.
 	'packages/core/src/screens/main/pos/checkout',
 	'packages/core/src/services/terminal-payments',
+	// Register actions and their system outcomes write `register.*` rows titled
+	// from the same registry: session/outbox/audit and device binding.
+	'packages/core/src/services/register-session',
+	'packages/core/src/services/register',
 ];
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
@@ -385,7 +389,12 @@ export async function collectEmittedEventTypes(roots = EVENT_SOURCE_ROOTS, known
 		[...emitted.keys(), ...knownTypes].map((type) => type.slice(0, type.indexOf('.')))
 	);
 	for (const [file, source] of sources) {
-		for (const type of quotedTypesIn(source)) {
+		// Operation kinds are persisted metadata, not event types.
+		const eventSource = source.replace(
+			/\boperationType\s*:\s*(['"])[^'"]*\1/g,
+			'operationType: ""'
+		);
+		for (const type of quotedTypesIn(eventSource)) {
 			if (namespaces.has(type.slice(0, type.indexOf('.')))) record(type, file);
 		}
 	}

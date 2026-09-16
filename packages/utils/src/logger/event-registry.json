@@ -747,7 +747,7 @@
 		"type": "register.movement-accepted",
 		"domain": "REGISTER",
 		"label": "Your store recorded a cash movement",
-		"description": "A paid in, paid out or no sale reached your store and was accepted.",
+		"description": "A paid in, paid out, no sale or reversal reached your store and was accepted.",
 		"introducedIn": "2.0.0"
 	},
 	{
@@ -776,6 +776,13 @@
 		"domain": "REGISTER",
 		"label": "A cash movement was reversed",
 		"description": "An earlier paid in or paid out was reversed.",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"type": "register.no-sale-recorded",
+		"domain": "REGISTER",
+		"label": "No sale recorded",
+		"description": "The cashier recorded a no-sale; no cash changed hands.",
 		"introducedIn": "2.0.0"
 	},
 	{
@@ -825,6 +832,13 @@
 		"domain": "REGISTER",
 		"label": "This device was unlinked from its register",
 		"description": "This device is no longer linked to a register, so its sales do not record where they were taken.",
+		"introducedIn": "2.0.0"
+	},
+	{
+		"type": "register.upload-refused",
+		"domain": "REGISTER",
+		"label": "Your store refused a register update",
+		"description": "Your store refused a session or closure this device sent, so the register and your store no longer agree.",
 		"introducedIn": "2.0.0"
 	},
 	{

@@ -116,6 +116,13 @@ describe('event registry', () => {
 		);
 	});
 
+	it('describes a no-sale record without claiming the drawer opened', () => {
+		expect(registry.find(({ type }) => type === 'register.no-sale-recorded')).toMatchObject({
+			label: 'No sale recorded',
+			description: 'The cashier recorded a no-sale; no cash changed hands.',
+		});
+	});
+
 	it('exposes every registered type through the generated catalogue', () => {
 		expect([...SYNC_EVENT_TYPES].sort()).toEqual(registry.map(({ type }) => type).sort());
 		for (const entry of registry) {

@@ -7,6 +7,10 @@ import { Text } from '@wcpos/components/text';
 import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
+import {
+	logVarianceOverThreshold,
+	useRegisterActor,
+} from '../../../../services/register-session/audit';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
@@ -73,6 +77,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 	const { session, actions, expected, blind, binding, varianceThreshold, unsyncedCount } =
 		useRegisterSession();
 	const { store } = useStoreSession();
+	const actor = useRegisterActor();
 	const currency = useDocField(store, (value) => value.currency);
 	const [cash, setCash] = React.useState(session?.counted?.cash ?? '');
 	const [pieces, setPieces] = React.useState<Record<string, number>>({});
@@ -238,6 +243,14 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 					!valid || Object.values(others).some((value) => value !== '' && !validAmount(value))
 				}
 				onPress={() => {
+					if (!blind && valid && overThreshold(variance, varianceThreshold))
+						logVarianceOverThreshold({
+							actor,
+							sessionId: session?.id,
+							registerId: session?.register_id,
+							variance: fromMinor(variance, 2),
+							threshold: varianceThreshold,
+						});
 					if (needsManager) setApproving(true);
 					else
 						void attempt(async () => {

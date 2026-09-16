@@ -224,10 +224,11 @@ export function useReceiptDocument({
 	const [printedTo, setPrintedTo] = React.useState<string | null>(null);
 	const printDestination =
 		(reportSystemDialog ? undefined : resolvedPrinter?.name) ?? t('receipt.print_dialog');
-	const print = React.useCallback(
-		() => printReceipt().then(() => setPrintedTo(printDestination)),
-		[printReceipt, printDestination]
-	);
+	const print = React.useCallback(async () => {
+		const dispatched = (await printReceipt()) === true;
+		if (dispatched) setPrintedTo(printDestination);
+		return dispatched;
+	}, [printReceipt, printDestination]);
 
 	/**
 	 * Allow auto print for checkout

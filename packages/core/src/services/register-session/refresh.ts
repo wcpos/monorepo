@@ -5,8 +5,11 @@ import type {
 	RegisterSessionCollection,
 	RegisterSessionRow,
 } from '@wcpos/database';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { adoptSession, type SessionHttp, synced } from './queue';
+
+const logger = getLogger(['wcpos', 'registerSession']);
 
 export async function refreshSessions({
 	registerId,
@@ -65,5 +68,9 @@ export async function refreshSessions({
 		if (associated.some((movement) => movement.getLatest().sync_status !== 'synced')) continue;
 		for (const movement of associated) await movement.remove();
 		await row.remove();
+		logger.info('Register session pruned', {
+			terminal: { operationId: row.id.replace(/-/g, '') },
+			context: { type: 'register.session-pruned', sessionId: row.id, registerId },
+		});
 	}
 }

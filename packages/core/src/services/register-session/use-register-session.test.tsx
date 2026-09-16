@@ -2,7 +2,13 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
+import { getLogger } from '@wcpos/utils/logger';
+
+import * as actions from './session-store';
 import { useRegisterSession } from './use-register-session';
+
+jest.mock('./session-store');
+const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 
 type Row = Record<string, unknown>;
 
@@ -25,7 +31,7 @@ const mockBinding = { registerId: 'register', registerName: 'Front' };
 const mockRuntime = { engine: {}, locale: 'en' };
 const mockStoreSession = {
 	store: { id: 1 },
-	wpCredentials: { id: 7 },
+	wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
 	userDB: {},
 	site: { uuid: 'site' },
 };
@@ -79,6 +85,7 @@ async function settled() {
 }
 
 beforeEach(() => {
+	jest.clearAllMocks();
 	active = [session];
 	closed = [];
 	closureRows = [];
@@ -165,4 +172,198 @@ describe('refusedMovements', () => {
 		const result = await rendered();
 		expect(result.current.refusedMovements).toHaveLength(0);
 	});
+});
+
+// Removing any of the action's log calls must lose its typed, cashier-attributed row.
+it.each([
+	['openSession', 'Register session opened', 'register.session-opened'],
+	['startCounting', 'Register session counting started', 'register.counting-started'],
+	['backToSelling', 'Register session counting abandoned', 'register.counting-abandoned'],
+] as const)('logs %s with the cashier only after it succeeds', async (action, message, type) => {
+	jest
+		.mocked(
+			{
+				openSession: actions.openSession,
+				startCounting: actions.startCounting,
+				backToSelling: actions.backToSelling,
+			}[action]
+		)
+		.mockResolvedValue(session as never);
+	const result = await settled();
+	if (action === 'openSession') {
+		await result.current.actions.openSession({ expectedFloat: null, countedFloat: '100' });
+	} else await result.current.actions[action]();
+	expect(logger.info).toHaveBeenCalledWith(
+		message,
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: expect.objectContaining({ type, sessionId: 'session', registerId: 'register' }),
+		})
+	);
+});
+
+it.each(['startCounting', 'backToSelling'] as const)(
+	'keeps repeated %s actions as distinct audit attempts',
+	async (action) => {
+		jest
+			.mocked(
+				{ startCounting: actions.startCounting, backToSelling: actions.backToSelling }[action]
+			)
+			.mockResolvedValue(session as never);
+		const result = await settled();
+		await result.current.actions[action]();
+		await result.current.actions[action]();
+		expect(logger.info).toHaveBeenCalledTimes(2);
+		const ids = logger.info.mock.calls.map(([, options]) => options?.terminal?.operationId);
+		for (const id of ids) expect(id).toEqual(expect.stringMatching(/^[0-9a-f]{32}$/));
+		expect(new Set(ids).size).toBe(2);
+	}
+);
+
+it('logs a manual retry with the current cashier and the movement session', async () => {
+	jest.mocked(actions.retryMovement).mockResolvedValue({
+		...movement,
+		session_id: 'earlier-session',
+	} as never);
+	const result = await settled();
+	await expect(result.current.actions.retryMovement('movement')).resolves.toMatchObject({
+		id: 'movement',
+	});
+	expect(actions.retryMovement).toHaveBeenCalledWith(mockMovements, 'movement');
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register cash movement retry requested',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			terminal: { operationId: expect.stringMatching(/^[0-9a-f]{32}$/) },
+			context: {
+				type: 'register.movement-retrying',
+				sessionId: 'earlier-session',
+				registerId: 'register',
+				movementId: 'movement',
+			},
+		})
+	);
+});
+
+it('does not log a manual retry when resetting the movement fails', async () => {
+	jest.mocked(actions.retryMovement).mockRejectedValueOnce(new Error('disk'));
+	const result = await settled();
+	await expect(result.current.actions.retryMovement('movement')).rejects.toThrow('disk');
+	expect(logger.info).not.toHaveBeenCalled();
+});
+
+it('logs the closed snapshot with its count and variance', async () => {
+	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
+	jest.mocked(actions.writeClosure).mockResolvedValue({
+		id: 'closure',
+		counted: { cash: '115' },
+		variance: { cash: '-5.0000' },
+	} as never);
+	const result = await settled();
+	await result.current.actions.closeSession({ counted: { cash: '115' } });
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register session closed',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: expect.objectContaining({
+				type: 'register.session-closed',
+				sessionId: 'session',
+				registerId: 'register',
+				closureId: 'closure',
+				counted: { cash: '115' },
+				variance: { cash: '-5.0000' },
+			}),
+		})
+	);
+});
+
+it.each(['paid_in', 'paid_out'] as const)(
+	'records %s under movementType, not the event type',
+	async (movementType) => {
+		jest.mocked(actions.requireOpenSession).mockResolvedValue('session');
+		jest
+			.mocked(actions.recordMovement)
+			.mockResolvedValue({ ...movement, type: movementType } as never);
+		const result = await settled();
+		await result.current.actions.recordMovement({
+			type: movementType,
+			amount: '20',
+			reason: 'Private reason',
+		});
+		expect(logger.info).toHaveBeenCalledWith(
+			'Register cash movement recorded',
+			expect.objectContaining({
+				actor: { id: '7', name: 'Pat' },
+				terminal: { operationId: 'movement' },
+				context: expect.objectContaining({
+					type: 'register.movement-recorded',
+					sessionId: 'session',
+					registerId: 'register',
+					movementId: 'movement',
+					movementType,
+					amount: '20',
+				}),
+			})
+		);
+		expect(JSON.stringify(logger.info.mock.calls)).not.toContain('Private reason');
+	}
+);
+
+it('logs a void with the reversal id and the current cashier', async () => {
+	jest
+		.mocked(actions.voidMovement)
+		.mockResolvedValue({ ...movement, id: 'reversal', type: 'void' } as never);
+	const result = await settled();
+	await result.current.actions.voidMovement('movement');
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register cash movement voided',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: expect.objectContaining({
+				type: 'register.movement-voided',
+				movementId: 'reversal',
+				sessionId: 'session',
+				registerId: 'register',
+				movementType: 'void',
+				amount: '20',
+			}),
+		})
+	);
+});
+
+it('does not report an open when its write fails', async () => {
+	jest.mocked(actions.openSession).mockRejectedValueOnce(new Error('disk'));
+	const result = await settled();
+	await expect(
+		result.current.actions.openSession({ expectedFloat: null, countedFloat: '100' })
+	).rejects.toThrow('disk');
+	expect(logger.info).not.toHaveBeenCalled();
+});
+
+it('records a no-sale without claiming cash moved', async () => {
+	jest.mocked(actions.requireOpenSession).mockResolvedValue('session');
+	jest
+		.mocked(actions.recordMovement)
+		.mockResolvedValue({ ...movement, type: 'no_sale', amount: '0' } as never);
+	const result = await settled();
+	await expect(
+		result.current.actions.recordMovement({ type: 'no_sale', amount: '0', reason: '' })
+	).resolves.toMatchObject({ type: 'no_sale' });
+	expect(logger.info).not.toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({ type: 'register.movement-recorded' }),
+		})
+	);
+	// ...but the cashier's action is still on the audit, drawer hardware or not.
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register no-sale recorded',
+		expect.objectContaining({
+			actor: expect.objectContaining({ id: expect.any(String) }),
+			context: expect.objectContaining({
+				type: 'register.no-sale-recorded',
+				movementId: movement.id,
+			}),
+		})
+	);
 });
