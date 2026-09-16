@@ -617,13 +617,19 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					throw error;
 				}
 			};
+			const predecessor = chain.then(
+				() => undefined,
+				() => undefined
+			);
 			const queued = chain.then(run, run);
 			// A checkpoint or fetch port that never settles must not wedge the lane
 			// behind this prime: once the caller's deadline aborts, the chain moves
 			// on and later ticks run. Safe because the prime holds no shared state
 			// (own bound fetcher, guarded write) and its late result can only ever
-			// be a LOWER cursor than a tick's.
-			const released =
+			// be a LOWER cursor than a tick's. Only the prime's OWN run is skipped:
+			// the chain still waits for whatever was queued before it, so an abort
+			// during an in-flight tick never lets the next tick overlap that one.
+			const ownRunOrAborted =
 				signal === undefined
 					? queued
 					: Promise.race([
@@ -633,10 +639,12 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 								else signal.addEventListener('abort', () => resolve(), { once: true });
 							}),
 						]);
-			chain = released.then(
-				() => undefined,
-				() => undefined
-			);
+			chain = predecessor
+				.then(() => ownRunOrAborted)
+				.then(
+					() => undefined,
+					() => undefined
+				);
 			return queued;
 		},
 		prune: (scopeId) => {
