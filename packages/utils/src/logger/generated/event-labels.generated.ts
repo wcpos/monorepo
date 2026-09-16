@@ -126,6 +126,7 @@ export const SYNC_EVENT_TYPES = [
 	'register.movement-rejected',
 	'register.movement-retrying',
 	'register.movement-voided',
+	'register.no-sale-recorded',
 	'register.session-adopted',
 	'register.session-closed',
 	'register.session-opened',
@@ -1136,6 +1137,15 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'A cash movement was reversed',
 		descriptionKey: 'health.logs.event_description.register_movement_voided',
 		description: 'An earlier paid in or paid out was reversed.',
+		introducedIn: '2.0.0',
+	},
+	'register.no-sale-recorded': {
+		type: 'register.no-sale-recorded',
+		domain: 'REGISTER',
+		key: 'health.logs.event.register_no_sale_recorded',
+		label: 'No sale recorded',
+		descriptionKey: 'health.logs.event_description.register_no_sale_recorded',
+		description: 'The cashier opened the drawer without a sale.',
 		introducedIn: '2.0.0',
 	},
 	'register.session-adopted': {

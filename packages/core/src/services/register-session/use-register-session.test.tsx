@@ -305,4 +305,15 @@ it('records a no-sale without claiming cash moved', async () => {
 			context: expect.objectContaining({ type: 'register.movement-recorded' }),
 		})
 	);
+	// ...but the cashier's action is still on the audit, drawer hardware or not.
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register no-sale recorded',
+		expect.objectContaining({
+			actor: expect.objectContaining({ id: expect.any(String) }),
+			context: expect.objectContaining({
+				type: 'register.no-sale-recorded',
+				movementId: movement.id,
+			}),
+		})
+	);
 });

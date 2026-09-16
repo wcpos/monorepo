@@ -779,6 +779,13 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"type": "register.no-sale-recorded",
+		"domain": "REGISTER",
+		"label": "No sale recorded",
+		"description": "The cashier opened the drawer without a sale.",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"type": "register.session-adopted",
 		"domain": "REGISTER",
 		"label": "The register was taken over by another device",

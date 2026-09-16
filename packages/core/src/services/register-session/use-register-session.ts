@@ -253,7 +253,22 @@ export function useRegisterSession() {
 					sessionId: id!,
 					actor: wpCredentials.id ?? 0,
 				});
-				if (row.type !== 'paid_in' && row.type !== 'paid_out') return row;
+				if (row.type === 'no_sale') {
+					// A no-sale is an action the cashier is audited on even when no drawer
+					// kick is configured or the kick fails, so it has its own row here rather
+					// than riding on `register.drawer-opened`.
+					logger.info('Register no-sale recorded', {
+						actor,
+						terminal: { operationId: row.id.replace(/-/g, '') },
+						context: {
+							type: 'register.no-sale-recorded',
+							sessionId: row.session_id,
+							registerId: binding.registerId,
+							movementId: row.id,
+						},
+					});
+					return row;
+				}
 				logger.info('Register cash movement recorded', {
 					actor,
 					terminal: { operationId: row.id.replace(/-/g, '') },
