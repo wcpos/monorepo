@@ -11,7 +11,6 @@
 		"test:watch": "jest --watchAll",
 		"test:plugins": "node --test plugins/*.test.js",
 		"test:e2e": "playwright test",
-		"test:search-performance": "playwright test -c playwright.search-performance.config.ts",
 		"test:e2e:native": "maestro test .maestro",
 		"test:e2e:native:check": "node ../../scripts/check-maestro-testids.mjs",
 		"test:e2e:native:seed": "node ../../scripts/e2e-native-seed.mjs",
