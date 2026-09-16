@@ -263,6 +263,7 @@ describe('createEngineFetcher', () => {
 		['variations', 'wcpos/v1/products/variations'],
 		['customers', 'wcpos/v2/customers'],
 		['taxRates', 'wcpos/v2/taxes'],
+		['refunds', 'wcpos/v2/refunds'],
 		['categories', 'wcpos/v2/products/categories'],
 		['brands', 'wcpos/v2/products/brands'],
 		['tags', 'wcpos/v2/products/tags'],

@@ -87,6 +87,7 @@ describe('engine adapter collection map', () => {
 			brands: 'brands',
 			tags: 'tags',
 			coupons: 'coupons',
+			refunds: 'refunds',
 			tax_rates: 'taxRates',
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.legacyName]))).toEqual({
@@ -98,6 +99,7 @@ describe('engine adapter collection map', () => {
 			brands: 'products/brands',
 			tags: 'products/tags',
 			coupons: 'coupons',
+			refunds: 'refunds',
 			taxRates: 'taxes',
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.labelKey]))).toEqual({
@@ -109,6 +111,7 @@ describe('engine adapter collection map', () => {
 			brands: 'common.brands',
 			tags: 'common.tags',
 			coupons: 'common.coupons',
+			refunds: 'common.refunds',
 			taxRates: 'common.tax_rates',
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [row.legacyName, name]))).toEqual({
@@ -121,6 +124,7 @@ describe('engine adapter collection map', () => {
 			'products/tags': 'tags',
 			'products/brands': 'brands',
 			coupons: 'coupons',
+			refunds: 'refunds',
 		});
 		expect(Object.fromEntries(SYNC_COLLECTION_NAMES.map((name) => [name, null]))).toEqual({
 			orders: null,
@@ -132,6 +136,7 @@ describe('engine adapter collection map', () => {
 			brands: null,
 			tags: null,
 			coupons: null,
+			refunds: null,
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.censusRoute]))).toEqual({
 			orders: 'wcpos/v2/orders',
@@ -143,6 +148,7 @@ describe('engine adapter collection map', () => {
 			brands: 'wcpos/v2/products/brands',
 			tags: 'wcpos/v2/products/tags',
 			coupons: 'wcpos/v2/coupons',
+			refunds: 'wcpos/v2/refunds',
 		});
 		expect(Object.fromEntries(entries.map(([name, row]) => [name, row.writeable]))).toEqual({
 			orders: true,
@@ -154,6 +160,7 @@ describe('engine adapter collection map', () => {
 			brands: false,
 			tags: false,
 			coupons: true,
+			refunds: false,
 		});
 	});
 
@@ -168,6 +175,8 @@ describe('engine adapter collection map', () => {
 		});
 		expect(resolveLegacyField('orders', 'id').enginePath).toBe('remoteId');
 		expect(resolveLegacyField('customers', 'id').enginePath).toBe('remoteId');
+		expect(resolveLegacyField('refunds', 'id').enginePath).toBe('remoteId');
+		expect(resolveLegacyField('refunds', 'parent_id').enginePath).toBe('payload.parent_id');
 		expect(resolveLegacyField('taxes', 'id').enginePath).toBe('remoteId');
 		expect(resolveLegacyField('products/categories', 'id').enginePath).toBe('remoteId');
 	});
@@ -187,6 +196,7 @@ describe('engine adapter collection map', () => {
 			'products/tags': 'tags',
 			'products/brands': 'brands',
 			coupons: 'coupons',
+			refunds: 'refunds',
 		});
 	});
 

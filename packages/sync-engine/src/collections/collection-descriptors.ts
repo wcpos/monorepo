@@ -271,8 +271,8 @@ export type CollectionWriteFacet = {
 /** shape: 'local-only' — no change-signal arms (orders). */
 export type LocalOnlyDescriptor = {
 	shape: 'local-only';
-	collection: Extract<SyncCollectionName, 'orders'>;
-	write: CollectionWriteFacet;
+	collection: Extract<SyncCollectionName, 'orders' | 'refunds'>;
+	write?: CollectionWriteFacet;
 };
 
 type AckDoc = {
@@ -702,6 +702,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		write: couponsWriteFacet,
 	},
 	{ shape: 'local-only', collection: 'orders', write: ordersWriteFacet },
+	{ shape: 'local-only', collection: 'refunds' },
 ] as const;
 
 /**

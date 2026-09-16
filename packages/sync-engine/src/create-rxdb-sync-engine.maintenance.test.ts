@@ -161,10 +161,10 @@ describe('maintenance lanes through the public handle', () => {
 		await expect(engine.sync()).resolves.toMatchObject({ lane: 'all', status: 'ran' });
 
 		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey);
-		expect(requested.filter((queryKey) => queryKey.startsWith('census:'))).toHaveLength(9);
+		expect(requested.filter((queryKey) => queryKey.startsWith('census:'))).toHaveLength(10);
 		expect(requested).not.toContain('a:due');
 		expect(requested).not.toContain('b:due');
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(9);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
 		await vi.waitFor(() => expect(emissions.at(-1)?.products?.total).toBe(91));
 		unsubscribe();
 		await engine.dispose();
@@ -225,7 +225,7 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.sync();
 
 		const requested = fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey);
-		expect(requested).toHaveLength(8);
+		expect(requested).toHaveLength(9);
 		expect(requested).not.toContain('census:products');
 		await expect(states.readForQueryKeys(['census:products'])).resolves.toEqual([
 			expect.objectContaining({
@@ -467,15 +467,22 @@ describe('maintenance lanes through the public handle', () => {
 			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/products/categories'))
 		).toHaveLength(expectedPulls);
 		await expect(scope.database.collections.categories.count().exec()).resolves.toBe(expectedPulls);
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/refunds'))
+		).toHaveLength(1);
+		await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/refunds'))
+		).toHaveLength(2);
 		if (expectedPulls === 1) {
 			expect(report.status).toBe('ran');
 			expect(diagnostics.mock.calls.map(([event]) => event.message)).toContain(
-				'Reference refresh (categories + brands + tags + coupons; backfilled: categories): 1 inserted, 0 requeued'
+				'Reference refresh (refunds + categories + brands + tags + coupons; backfilled: categories): 2 inserted, 0 requeued'
 			);
 		} else {
 			expect(report).toMatchObject({
-				status: 'skipped',
-				reason: 'no reference collections need seeding',
+				status: 'ran',
 			});
 		}
 		await engine.dispose();
@@ -516,9 +523,9 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.ready;
 
 		await engine.sync('reference-seed');
-		expect((await taskRows(engine)).filter((row) => row['collectionName'] !== 'taxRates')).toEqual(
-			[]
-		);
+		expect((await taskRows(engine)).filter((row) => row['collectionName'] !== 'taxRates')).toEqual([
+			expect.objectContaining({ collectionName: 'refunds', queryKey: 'refunds:history:days=92' }),
+		]);
 
 		const opened = await engine.require({
 			id: 'category-picker',
@@ -782,7 +789,7 @@ describe('maintenance lanes through the public handle', () => {
 
 		const report = await engine.sync('query-total-retry');
 		expect(report.status).toBe('ran');
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(11);
 		expect(fetchWooQueryTotal.mock.calls.map(([input]) => input.request.queryKey)).toContain(
 			'orders:total:test'
 		);
@@ -822,6 +829,7 @@ describe('maintenance lanes through the public handle', () => {
 			'census:customers',
 			'census:orders',
 			'census:products',
+			'census:refunds',
 			'census:tags',
 			'census:taxRates',
 			'census:variations',
@@ -880,7 +888,7 @@ describe('maintenance lanes through the public handle', () => {
 
 		const freshRevision = ordersState?.['_rev'];
 		await engine.sync('query-total-retry');
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(9);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(10);
 		expect((await readOrdersState())?.['_rev']).toBe(freshRevision);
 
 		let previousRevisionHeight = Number(String(freshRevision).split('-')[0]);
@@ -893,7 +901,7 @@ describe('maintenance lanes through the public handle', () => {
 			expect(revisionHeight).toBeGreaterThan(previousRevisionHeight);
 			previousRevisionHeight = revisionHeight;
 		}
-		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(27);
+		expect(fetchWooQueryTotal).toHaveBeenCalledTimes(30);
 
 		unsubscribe();
 		await engine.dispose();
@@ -932,6 +940,7 @@ describe('maintenance lanes through the public handle', () => {
 			'census:customers',
 			'census:orders',
 			'census:products',
+			'census:refunds',
 			'census:tags',
 			'census:taxRates',
 			'census:variations',
@@ -1121,12 +1130,13 @@ describe('maintenance lanes through the public handle', () => {
 				expect(events[1]).toMatchObject({
 					type: 'lane-finish',
 					lane,
-					status: lane === 'reference-seed' ? 'skipped' : 'ran',
+					status: 'ran',
 				});
 			}
 			const fetchedUrls = fetcher.mock.calls.map(([url]) => url);
 			expect(fetchedUrls.some((url) => new URL(url).pathname.endsWith('/products'))).toBe(false);
 			expect(fetchedUrls).toContainEqual(expect.stringContaining('/orders?'));
+			expect(fetchedUrls).toContainEqual(expect.stringContaining('/refunds?'));
 		} finally {
 			await engine.dispose();
 		}
@@ -1234,8 +1244,7 @@ describe('maintenance lanes through the public handle', () => {
 
 		const report = await engine.sync('reference-seed');
 		expect(report).toMatchObject({
-			status: 'skipped',
-			reason: 'no reference collections need seeding',
+			status: 'ran',
 		});
 		const lifecycle = events.filter(
 			(event) => event.type === 'lane-start' || event.type === 'lane-finish'
@@ -1245,8 +1254,7 @@ describe('maintenance lanes through the public handle', () => {
 			{
 				type: 'lane-finish',
 				lane: 'reference-seed',
-				status: 'skipped',
-				detail: 'no reference collections need seeding',
+				status: 'ran',
 			},
 		]);
 		await engine.dispose();

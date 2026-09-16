@@ -59,7 +59,7 @@ export {
 // prettier-ignore
 export {
 	catalogDocumentId, customerDocumentId, orderDocumentId, productDocumentId,
-	referenceDocumentId, taxRateDocumentId, variationDocumentId,
+	referenceDocumentId, taxRateDocumentId, refundDocumentId, variationDocumentId,
 } from './woo/documentKeys';
 export {
 	orderChangesAssertIntent,
@@ -100,3 +100,5 @@ export {
 	type SyncEventFields, type SyncEventFieldsBase, type SyncEventFieldsByType,
 	type SyncEventType, type SyncObserver,
 } from './telemetry';
+
+export { HISTORY_DAYS } from './history-policy';

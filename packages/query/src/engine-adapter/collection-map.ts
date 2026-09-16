@@ -26,7 +26,8 @@ export type LegacyCollectionName =
 	| 'products/categories'
 	| 'products/tags'
 	| 'products/brands'
-	| 'coupons';
+	| 'coupons'
+	| 'refunds';
 
 export type EngineCollectionName = SyncCollectionName;
 
@@ -107,6 +108,13 @@ type CollectionVocabularyEntry = {
  * page (wc/v3) reported different totals for the same catalogue.
  */
 export const COLLECTION_VOCABULARY = {
+	refunds: {
+		legacyName: 'refunds',
+		telemetryName: 'refunds',
+		labelKey: 'common.refunds',
+		censusRoute: 'wcpos/v2/refunds',
+		writeable: false,
+	},
 	orders: {
 		legacyName: 'orders',
 		telemetryName: 'orders',
@@ -290,6 +298,13 @@ export function sanitizeVariationAttributesRead(value: unknown): unknown {
  * `readEnginePath` preserves a legacy result type when its promoted query column is lossy.
  */
 export const collectionMap = {
+	refunds: {
+		engineCollection: 'refunds',
+		fields: {
+			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
+			id: { legacy: 'id', kind: 'identifier', enginePath: 'remoteId', read: readRemoteId },
+		},
+	},
 	products: {
 		engineCollection: 'products',
 		fields: {

@@ -77,6 +77,11 @@ import {
 	seedReferenceLanes,
 	seedTargetedOrderSchedulerTask,
 } from './scheduler';
+import { refundParentQueryKey } from './scheduler/refund-lane-descriptor';
+import {
+	seedRefundParentLane,
+	seedRefundWindowLane,
+} from './scheduler/rx-refund-scheduler-task-seeder';
 import { createDemandFloodDetector } from './demand-flood-detector';
 import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
@@ -223,6 +228,7 @@ export type CustomerBrowseDimensions = {
  */
 export type EngineRequirement = EngineRequirementCommon &
 	(
+		| { kind: 'refunds-by-parent'; collection: 'refunds'; parentRemoteId: RemoteId }
 		| { kind: 'targeted-records'; collection: SyncCollectionName; remoteIds: RemoteId[] }
 		// The current bridge narrows this with a runtime Set that TypeScript cannot follow.
 		| { kind: 'search'; collection: SyncCollectionName; term: string; limit?: number }
@@ -903,6 +909,33 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					freshReason: spec.freshReason,
 				});
 			};
+
+			if (
+				item.requirement.collection === 'refunds' &&
+				(item.requirement.kind === 'refresh' || item.requirement.kind === 'refunds-by-parent')
+			) {
+				const requirement = item.requirement;
+				return runSeedDrain({
+					seed: async () => {
+						const input = {
+							database,
+							nowMs: deps.now?.() ?? Date.now(),
+							completedDedupeForMs: requirement.forceRefresh
+								? 0
+								: REFERENCE_DEMAND_REFRESH_DEDUPE_MS,
+						};
+						const seed = await (requirement.kind === 'refunds-by-parent'
+							? seedRefundParentLane({ ...input, parentRemoteId: requirement.parentRemoteId })
+							: seedRefundWindowLane(input));
+						return { seed, drain: { taskId: seed.taskIds[0], nowMs: input.nowMs } };
+					},
+					droppedMessage: 'require: scope moved mid-refund refresh (writes dropped)',
+					activeReason: 'refund refresh already in progress',
+					dedupedReason: 'refund lane refreshed within the dedupe window',
+					fetchedReason: 'drained refund refresh',
+					freshReason: 'refund lane refreshed within the dedupe window',
+				});
+			}
 
 			if (item.requirement.collection === 'orders' && item.requirement.kind === 'query') {
 				// Captured here: the guardWrite closure below loses this narrowing.
@@ -1594,6 +1627,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				});
 			}
 			const queryKey = (() => {
+				if (requirement.kind === 'refunds-by-parent')
+					return refundParentQueryKey(requirement.parentRemoteId);
 				if (requirement.kind === 'search') return searchLaneQueryKey(requirement);
 				if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 				if (requirement.kind === 'product-browse') {

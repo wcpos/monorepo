@@ -30,6 +30,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { cn } from '@wcpos/components/lib/utils';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage } from '@wcpos/utils/logger';
+import { HISTORY_DAYS } from '@wcpos/sync-core';
 
 import { AttentionPanel } from './attention-panel';
 import { ConflictedMutationsPanel } from './conflicted-mutations';
@@ -84,6 +85,7 @@ const ROW_ORDER = exhaustiveCollectionOrder([
 	'products',
 	'variations',
 	'orders',
+	'refunds',
 	'customers',
 	'categories',
 	'brands',
@@ -148,6 +150,12 @@ function useRowStory(row: CollectionRow, phase: RowPhase, backingOff: boolean): 
 		return {
 			serverText: '0',
 			coverage: { kind: 'empty', label: '—' },
+		};
+	}
+	if (row.key === 'refunds') {
+		return {
+			serverText: row.serverTotal.toLocaleString(),
+			coverage: { kind: 'none', label: t('health.database.window_short') },
 		};
 	}
 	if (row.windowed) {
@@ -288,17 +296,19 @@ function CollectionRowView({
 			}
 			await runResetRefill(engine, legacyNames);
 			const successMessage =
-				row.key === 'products'
-					? t('health.database.redownload_done_products', {
-							label,
-						})
-					: row.key === 'variations' || row.key === 'customers' || row.key === 'orders'
-						? t('health.database.redownload_done_lazy', {
+				row.key === 'refunds'
+					? t('health.database.redownload_done_refunds')
+					: row.key === 'products'
+						? t('health.database.redownload_done_products', {
 								label,
 							})
-						: t('health.database.redownload_done', {
-								label,
-							});
+						: row.key === 'variations' || row.key === 'customers' || row.key === 'orders'
+							? t('health.database.redownload_done_lazy', {
+									label,
+								})
+							: t('health.database.redownload_done', {
+									label,
+								});
 			Toast.show({
 				type: 'success',
 				text1: successMessage,
@@ -372,9 +382,11 @@ function CollectionRowView({
 							{t('health.database.variations_policy')}
 						</Text>
 					) : null}
-					{row.key === 'orders' ? (
+					{row.key === 'orders' || row.key === 'refunds' ? (
 						<Text className="text-muted-foreground text-xs">
-							{t('health.database.orders_policy')}
+							{row.key === 'refunds'
+								? t('health.database.refunds_policy', { days: HISTORY_DAYS })
+								: t('health.database.orders_policy')}
 						</Text>
 					) : null}
 					{clearingSub}
@@ -417,7 +429,7 @@ function CollectionRowView({
 								})
 							: isVariations
 								? `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })} · ${t('health.database.with_products')}`
-								: row.key === 'orders'
+								: row.key === 'orders' || row.key === 'refunds'
 									? `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })} · ${t('health.database.window_short')}`
 									: story.coverage.kind === 'empty'
 										? '0'
@@ -461,8 +473,10 @@ function CollectionRowView({
 										? t('health.database.clear_body_customers', {
 												...clearBodyValues,
 											})
-										: row.key === 'orders'
-											? t('health.database.clear_body_orders')
+										: row.key === 'orders' || row.key === 'refunds'
+											? row.key === 'refunds'
+												? t('health.database.clear_body_refunds', { days: HISTORY_DAYS })
+												: t('health.database.clear_body_orders')
 											: t('health.database.clear_body', {
 													...clearBodyValues,
 												})}

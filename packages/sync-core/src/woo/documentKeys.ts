@@ -42,6 +42,11 @@ export function taxRateDocumentId(remoteId: RemoteId): string {
 	return `woo-tax-rate:${wooIdOf(remoteId)}`;
 }
 
+/** Refunds are pull-only and carry no server UUID stamp. */
+export function refundDocumentId(remoteId: RemoteId): string {
+	return `woo-refund:${wooIdOf(remoteId)}`;
+}
+
 /** `woo-category:<n>` / `woo-brand:<n>` / `woo-tag:<n>` — the stable document id derived from the Woo id. */
 export function referenceDocumentId(prefix: string, remoteId: RemoteId): string {
 	return `${prefix}:${wooIdOf(remoteId)}`;

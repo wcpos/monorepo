@@ -39,6 +39,8 @@ import {
 	createReferenceCollectionFetcher,
 	TAG_REFERENCE_CONFIG,
 } from './rx-scheduler-reference-fetcher';
+import { createRefundsSchedulerFetcher } from './rx-scheduler-refund-fetcher';
+import { parseRefundLaneQueryKey } from './refund-lane-descriptor';
 import { parseReferenceLaneQueryKey } from './reference-lane-descriptor';
 import { referenceCollectionRepository } from '../collections/rx-reference-collection-repository';
 import {
@@ -63,6 +65,7 @@ import { PRODUCT_BROWSE_WINDOW_GRAMMAR } from './product-browse-window-descripto
 import { censusCollectionFromQueryKey } from './census';
 import { type CacheQueryTotals, QUERY_TOTAL_FRESH_FOR_MS } from './query-total-requests';
 
+import type { LocalRefundDocument } from '../collections/refund-schema';
 import type { BarcodeSelectorsReader } from '../materialization/barcode-selectors';
 import type { LocalCoverage } from '../local-coverage/local-coverage';
 import type { FetchTask, FetchTaskResult } from './replication-policy';
@@ -222,6 +225,7 @@ export function collectionSchedulerRepository<T extends { uuid: string }>(
 /** Structural: the collections the drain touches (superset of the repos it builds). */
 export type SchedulerDrainDatabase = OrderRepositoryDatabase &
 	SchedulerTaskStateDatabase & {
+		refunds: BulkUpsertCollection<LocalRefundDocument>;
 		products: BulkUpsertCollection<{ uuid: string }>;
 		variations: BulkUpsertCollection<{ uuid: string }>;
 		customers: BulkUpsertCollection<{ uuid: string }>;
@@ -436,6 +440,26 @@ function createEngineSchedulerFetcherRegistry(
 
 	return createSchedulerFetcherRegistry([
 		{
+			name: 'refunds',
+			supportsTask: (task) =>
+				task.collection === 'refunds' &&
+				task.mode === 'greedy' &&
+				hasNoTargetedIds(task) &&
+				parseRefundLaneQueryKey(task.queryKey) !== null,
+			fetcher: createRefundsSchedulerFetcher({
+				...shared,
+				repository: collectionSchedulerRepository(db.refunds),
+				heldParentIds: async (ids) => {
+					const parents = await db.orders
+						.find({ selector: { remoteId: { $in: ids.map(String) } } })
+						.exec();
+					return new Set(
+						parents.map((parent) => Number((parent.toJSON() as { remoteId: string }).remoteId))
+					);
+				},
+			}),
+		},
+		{
 			name: 'orders',
 			supportsTask: isSupportedOrderSchedulerTask,
 			fetcher: createOrdersSchedulerFetcher({
@@ -533,7 +557,7 @@ export async function runEngineSchedulerDrain(
 	return withSchedulerDrainLedgerRecovery({
 		database: db,
 		aborted: ledgerRebuiltSchedulerTaskRunnerResult,
-		run: () => {
+		run: async () => {
 			const schedulerRepository = new RxSchedulerTaskStateRepository(db);
 			const fetcherRegistry = createEngineSchedulerFetcherRegistry(input, 'propagate-refusal');
 			const supportedRepository = fetcherRegistry.supportedRepository(schedulerRepository);
@@ -549,7 +573,7 @@ export async function runEngineSchedulerDrain(
 								),
 						};
 
-			return runPersistedSchedulerTasks({
+			const result = await runPersistedSchedulerTasks({
 				repository,
 				fetcher: fetcherRegistry.fetcher,
 				...(input.withCollectionActivity !== undefined
@@ -563,10 +587,26 @@ export async function runEngineSchedulerDrain(
 				getNowMs,
 				leaseForMs: ORDER_SCHEDULER_LEASE_FOR_MS,
 				retryAfterMs: ORDER_SCHEDULER_RETRY_AFTER_MS,
+				// A history/parent walk is exhausted, not capped at the ordinary 100 pages.
+				maxRequestsForTask: (task) =>
+					task.collection === 'refunds' ? Number.MAX_SAFE_INTEGER : undefined,
 				maxRequestsPerTask: input.maxRequestsPerTask ?? ORDER_SCHEDULER_MAX_REQUESTS,
 				...(input.onProgress !== undefined ? { onProgress: input.onProgress } : {}),
 				...(input.signal !== undefined ? { signal: input.signal } : {}),
 			});
+			for (const task of result.tasks) {
+				if (task.collection === 'refunds' && task.kind !== 'succeeded') {
+					input.diagnostics?.({
+						type: 'engine.guard',
+						level: 'warn',
+						collection: 'refunds',
+						message:
+							'refunds.walk-stopped: Refund walk stopped before completion; resident refunds retained',
+						fields: { queryKey: task.queryKey, outcome: task.kind },
+					});
+				}
+			}
+			return result;
 		},
 	});
 }

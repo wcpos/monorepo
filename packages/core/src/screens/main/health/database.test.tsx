@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 
+import { Toast } from '@wcpos/components/toast';
+
 import { DatabaseScreen } from './database';
 
 import type { StuckRecord } from '../logs/logs-logic';
@@ -62,7 +64,19 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	}
 	return {
 		AlertDialog: Component,
-		AlertDialogAction: Component,
+		AlertDialogAction: ({
+			children,
+			testID,
+			onPress,
+		}: {
+			children: React.ReactNode;
+			testID?: string;
+			onPress?: () => void;
+		}) => (
+			<button data-testid={testID} onClick={onPress}>
+				{children}
+			</button>
+		),
 		AlertDialogCancel: Component,
 		AlertDialogContent: Component,
 		AlertDialogDescription: Component,
@@ -173,7 +187,7 @@ jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => ({
 		engine: {
 			active: jest.fn(),
-			scope: {},
+			scope: { resetCollection: jest.fn().mockResolvedValue('reset') },
 			sync: mockSync,
 			checkCollection: mockCheckCollection,
 		},
@@ -476,4 +490,22 @@ describe('DatabaseScreen coverage', () => {
 
 		expect(getAllByText('1 stuck')).toHaveLength(2);
 	});
+});
+
+it('shows the refund history policy on the registered Health row', () => {
+	const { getByTestId } = render(<DatabaseScreen />);
+	expect(getByTestId('db-row-refunds').textContent).toContain(
+		'Refunds from the last 92 days, plus any refund of an order you have opened'
+	);
+});
+
+it('does not claim refund history downloaded after requesting reset refill', async () => {
+	const { getByTestId } = render(<DatabaseScreen />);
+	fireEvent.click(getByTestId('db-row-clear-confirm-refunds'));
+	await waitFor(() =>
+		expect(Toast.show).toHaveBeenCalledWith({
+			type: 'success',
+			text1: 'Refunds cleared — recent history requested again',
+		})
+	);
 });

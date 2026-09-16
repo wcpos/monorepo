@@ -38,6 +38,7 @@ import { productSchema } from './product-schema';
 import { variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
+import { refundSchema } from './refund-schema';
 import {
 	brandSchema,
 	categorySchema,
@@ -70,6 +71,7 @@ export const SYNC_COLLECTION_NAMES = [
 	'brands',
 	'tags',
 	'coupons',
+	'refunds',
 ] as const;
 
 export type SyncCollectionName = (typeof SYNC_COLLECTION_NAMES)[number];
@@ -120,6 +122,7 @@ const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = 
 	brands: { schema: brandSchema },
 	tags: { schema: tagSchema },
 	coupons: { schema: couponSchema },
+	refunds: { schema: refundSchema },
 };
 
 /** Deliberate `/testing` seam for hosts that open schema-canary databases. */
