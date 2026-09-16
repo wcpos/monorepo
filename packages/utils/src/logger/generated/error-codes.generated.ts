@@ -890,7 +890,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'STORE_SESSION_INCOMPLETE',
 		domain: 'AUTH',
 		severity: 'error',
-		actionHint: 'Choose the store again to sign back in.',
+		actionHint:
+			'Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data.',
 		dataSafety: 'local-only',
 		summary: 'The saved store session was incomplete, so WCPOS returned to the store list.',
 	},

@@ -18,6 +18,7 @@ type SentryEventLike = {
 	request?: { url?: string };
 	breadcrumbs?: { data?: Record<string, unknown> }[];
 	extra?: Record<string, unknown>;
+	contexts?: Record<string, unknown>;
 };
 
 function stripOrigin(url: string): string {
@@ -36,6 +37,10 @@ function scrubUrlValues(value: unknown): unknown {
 	return Object.fromEntries(
 		Object.entries(value).map(([key, nestedValue]) => [key, scrubUrlValues(nestedValue)])
 	);
+}
+
+function scrubComponentStack(stack: string): string {
+	return redactSensitiveText(stack.replace(URL_ORIGIN, '{}'));
 }
 
 export function scrubEvent<T extends SentryEventLike>(event: T): T {
@@ -63,6 +68,24 @@ export function scrubEvent<T extends SentryEventLike>(event: T): T {
 			Object.entries(event.extra).map(([key, value]) => [key, scrubUrlValues(value)])
 		);
 	}
+	// A React component stack names the bundle URL on every frame on web, and
+	// that URL is the merchant's origin. The stack is not itself a URL, so the
+	// per-value stripper above never fires on it; strip the origins embedded in
+	// it, in both places the boundary report puts it.
+	const react = event.contexts?.react;
+	if (react && typeof react === 'object' && 'componentStack' in react) {
+		const stack = (react as { componentStack?: unknown }).componentStack;
+		if (typeof stack === 'string') {
+			(react as { componentStack?: unknown }).componentStack = scrubComponentStack(stack);
+		}
+	}
+	const context = event.extra?.context;
+	if (context && typeof context === 'object' && 'componentStack' in context) {
+		const stack = (context as { componentStack?: unknown }).componentStack;
+		if (typeof stack === 'string') {
+			(context as { componentStack?: unknown }).componentStack = scrubComponentStack(stack);
+		}
+	}
 	return event;
 }
 
@@ -84,13 +107,23 @@ export function messageTemplate(message: string): string {
 		.replace(INTEGER, '{}');
 }
 
+/** A quoted string that is an identifier or a dotted path, e.g. `'price'`, `"items.0.name"`. */
+const QUOTED_IDENTIFIER = /^(['"])[A-Za-z_$][\w$.-]{0,63}\1$/;
+
 /**
- * `messageTemplate` for an error thrown during render, keeping quoted strings:
- * there they name the property or component the code tripped over
- * (`reading 'price'`), which is the bug's identity, not per-record noise.
+ * `messageTemplate` for an error thrown during render. A quoted identifier is
+ * kept: it names the property or component the code tripped over
+ * (`reading 'price'`), which is the bug's identity, and folding it would put
+ * every undefined-property read in the app into one issue. Any other quoted
+ * string (a name, an email, a store title) is per-record noise and is still
+ * templated, so merchant data never becomes a grouping key.
  */
 export function renderErrorTemplate(message: string): string {
-	return message.replace(URL_ORIGIN, '{}').replace(UUID, '{}').replace(INTEGER, '{}');
+	return message
+		.replace(URL_ORIGIN, '{}')
+		.replace(UUID, '{}')
+		.replace(QUOTED, (quoted) => (QUOTED_IDENTIFIER.test(quoted) ? quoted : '{}'))
+		.replace(INTEGER, '{}');
 }
 
 /**
@@ -112,8 +145,10 @@ function fingerprintFor(message: string, code: string, context: unknown) {
 	const fields =
 		context !== null && typeof context === 'object' ? (context as Record<string, unknown>) : {};
 	if (fields.type === 'render.error') {
-		const errorMessage = typeof fields.errorMessage === 'string' ? fields.errorMessage : message;
-		return [code, renderErrorTemplate(errorMessage)];
+		// `context.message` is the thrown error's own message (the serialised-error
+		// shape the hydration logger uses too); the log message merely prefixes it.
+		const thrownMessage = typeof fields.message === 'string' ? fields.message : message;
+		return [code, renderErrorTemplate(thrownMessage)];
 	}
 	const endpoint = fields.endpoint;
 	if (typeof endpoint === 'string' && endpoint.length > 0) {

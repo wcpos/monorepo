@@ -48,16 +48,18 @@ const wpCredentials = { localID: 'creds-1' };
 const store = { localID: 'store-1' };
 const storeDB = { name: 'store-db' };
 const extraData = { get: jest.fn() };
+const pointer = { siteID: 'site-1', wpCredentialsID: 'creds-1', storeID: 'store-1' };
 
-function sessionBase() {
+/** The always-present half of the hydrated context, with the persisted `current` pointer. */
+function sessionBase(current: typeof pointer | null = pointer) {
 	return {
 		userDB: {},
 		appState: {
-			get: jest.fn(async () => ({
-				siteID: 'site-1',
-				wpCredentialsID: 'creds-1',
-				storeID: 'store-1',
-			})),
+			// RxState.get is synchronous; an async mock here hid a `.catch()` on a
+			// plain object that threw before the report (Codex review). It keeps
+			// returning the pointer after `set`, which is what a slow store looks
+			// like to the re-run effect — the recovery must not report it twice.
+			get: jest.fn(() => current),
 			set: jest.fn(async () => undefined),
 		},
 		translationsState: {},
@@ -71,6 +73,15 @@ function Probe() {
 		<div data-testid="probe">
 			{hasStoreSession(state) ? 'session' : 'no-session'}:{state.storeDB ? 'db' : 'no-db'}
 		</div>
+	);
+}
+
+function renderProvider(context: Record<string, unknown>) {
+	mockHydration.context = context;
+	render(
+		<AppStateProvider>
+			<Probe />
+		</AppStateProvider>
 	);
 }
 
@@ -140,16 +151,10 @@ describe('useStoreSession', () => {
 	});
 });
 
-describe('AppStateProvider with an incomplete hydrated session', () => {
-	it('reports which fields were missing, clears the session pointer and signs the till out', async () => {
+describe('AppStateProvider with a session pointer the hydrated state cannot honour', () => {
+	it('reports which fields were missing, clears the pointer and signs the till out', async () => {
 		const base = sessionBase();
-		mockHydration.context = { ...base, storeDB, store, extraData, site: null };
-
-		render(
-			<AppStateProvider>
-				<Probe />
-			</AppStateProvider>
-		);
+		renderProvider({ ...base, storeDB, store, extraData, site: null });
 
 		await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('no-session:no-db'));
 
@@ -177,30 +182,41 @@ describe('AppStateProvider with an incomplete hydrated session', () => {
 		expect(update()).toBeNull();
 	});
 
+	it('catches a lost STORE row, which leaves no store database to key on', async () => {
+		const base = sessionBase();
+		renderProvider({ ...base, site, wpCredentials, store: null });
+
+		await waitFor(() => expect(logger.error).toHaveBeenCalledTimes(1));
+		const [message, options] = (logger.error as jest.Mock).mock.calls[0];
+		expect(message).toBe('Store session incomplete: missing storeDB, store, extraData');
+		expect(options.context.missingFields).toEqual(['storeDB', 'store', 'extraData']);
+		expect(base.appState.set).toHaveBeenCalledTimes(1);
+	});
+
+	it('still signs the till out when the pointer write fails', async () => {
+		const base = sessionBase();
+		base.appState.set.mockRejectedValueOnce(new Error('storage gone'));
+		renderProvider({ ...base, storeDB, store, extraData, site: null });
+
+		await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('no-session:no-db'));
+		expect(logger.error).toHaveBeenCalledTimes(1);
+		expect(logger.warn).toHaveBeenCalledWith('Could not clear the incomplete session pointer', {
+			context: { error: 'storage gone' },
+		});
+	});
+
 	it('leaves a complete session alone', async () => {
 		const base = sessionBase();
-		mockHydration.context = { ...base, storeDB, store, site, wpCredentials, extraData };
-
-		render(
-			<AppStateProvider>
-				<Probe />
-			</AppStateProvider>
-		);
+		renderProvider({ ...base, storeDB, store, site, wpCredentials, extraData });
 
 		await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('session:db'));
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(base.appState.set).not.toHaveBeenCalled();
 	});
 
-	it('treats a signed-out session as signed out, not as incomplete', async () => {
-		const base = sessionBase();
-		mockHydration.context = { ...base };
-
-		render(
-			<AppStateProvider>
-				<Probe />
-			</AppStateProvider>
-		);
+	it('treats a till with no pointer as signed out, not as incomplete', async () => {
+		const base = sessionBase(null);
+		renderProvider({ ...base });
 
 		await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('no-session:no-db'));
 		expect(logger.error).not.toHaveBeenCalled();

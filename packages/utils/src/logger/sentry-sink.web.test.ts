@@ -228,7 +228,7 @@ describe('sentry-sink.web', () => {
 			buildCaptureOptions({
 				message: `Render failed: ${message}`,
 				code: 'CLIENT151',
-				context: { type: 'render.error', errorMessage: message, componentStack },
+				context: { type: 'render.error', message, componentStack },
 			});
 		const appLayout = capture('\n    at AppLayout\n    at RootStack');
 		const header = capture('\n    at Header\n    at PosScreen');
@@ -241,12 +241,12 @@ describe('sentry-sink.web', () => {
 		});
 	});
 
-	it('keeps quoted names in a render-error fingerprint but folds record noise', () => {
-		const render = (errorMessage: string) =>
+	it('keeps quoted identifiers in a render-error fingerprint but folds record noise', () => {
+		const render = (message: string) =>
 			buildCaptureOptions({
-				message: `Render failed: ${errorMessage}`,
+				message: `Render failed: ${message}`,
 				code: 'CLIENT151',
-				context: { type: 'render.error', errorMessage },
+				context: { type: 'render.error', message },
 			}).fingerprint;
 
 		// A property name is the bug's identity; the shared template would fold
@@ -254,10 +254,33 @@ describe('sentry-sink.web', () => {
 		expect(render("Cannot read properties of undefined (reading 'name')")).not.toEqual(
 			render("Cannot read properties of undefined (reading 'price')")
 		);
+		expect(render("Cannot read properties of undefined (reading 'price')")).toEqual([
+			'CLIENT151',
+			"Cannot read properties of undefined (reading 'price')",
+		]);
+		// Merchant data in quotes is per-record noise and must never be a grouping key.
+		expect(render("Customer 'jane@example.com' has no orders")).toEqual(
+			render("Customer 'Bob Smith' has no orders")
+		);
 		expect(render('Order 12 has no line 3')).toEqual(render('Order 99 has no line 4'));
 		expect(render('Fetch https://a.example.com/x failed')).toEqual(
 			render('Fetch https://b.example.org/x failed')
 		);
+	});
+
+	it('scrubs merchant origins out of the React component stack, in both places it is sent', () => {
+		const componentStack = '\n    at Header (https://shop.example.com/wp-content/pos.js:10:5)';
+		const event = scrubEvent({
+			contexts: { react: { componentStack } },
+			extra: { message: 'Render failed: x', context: { type: 'render.error', componentStack } },
+		});
+		expect(event.contexts).toEqual({
+			react: { componentStack: '\n    at Header ({}/wp-content/pos.js:10:5)' },
+		});
+		expect(event.extra?.context).toEqual({
+			type: 'render.error',
+			componentStack: '\n    at Header ({}/wp-content/pos.js:10:5)',
+		});
 	});
 
 	it('captures Error context as an exception', () => {

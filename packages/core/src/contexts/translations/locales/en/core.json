@@ -1446,6 +1446,7 @@
 	"health.logs.event.queue_write_reschedule_failed": "Could not schedule another try for a change",
 	"health.logs.event.queue_write_resolve": "Settled a clashing change",
 	"health.logs.event.queue_write_tick_error": "Sending queued changes failed",
+	"health.logs.event.render_error": "Part of the screen failed to load",
 	"health.logs.event.signal_cursor": "Sync position moved unexpectedly",
 	"health.logs.event.signal_cycle": "Checked your store for changes",
 	"health.logs.event.signal_log": "Change check detail",
@@ -1483,6 +1484,7 @@
 	"health.logs.event_description.queue_write_conflict_recovered": "A change clashed with your store's copy, was re-checked against it, and saved successfully.",
 	"health.logs.event_description.queue_write_drain": "The POS sent your queued changes to your store.",
 	"health.logs.event_description.queue_write_enqueued": "A change you made was queued to send to your store.",
+	"health.logs.event_description.render_error": "A screen or panel hit an error while drawing and was replaced by an error message. Close the message to retry; reload the app if it comes back.",
 	"health.logs.event_description.signal_cursor": "The POS's bookmark of where it was up to in your store's changes moved unexpectedly.",
 	"health.logs.event_description.signal_cycle": "The POS checked your store for changes and saved anything new.",
 	"health.logs.event_description.signal_tick_error": "A routine check of your store for changes did not get an answer.",
@@ -1672,5 +1674,5 @@
 	"health.logs.error_action.CHECKOUT411": "Remove that line and add it again, then check the total.",
 	"health.logs.error_action.CHECKOUT421": "Check the tax on this order; ask the admin whether a tax rate was deleted.",
 	"health.logs.error_action.CLIENT151": "Close the error message to retry; if it comes back, reload the app.",
-	"health.logs.error_action.AUTH131": "Choose the store again to sign back in."
+	"health.logs.error_action.AUTH131": "Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data."
 }

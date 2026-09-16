@@ -17,6 +17,7 @@ import { getEngineScopeSwitcher } from './engine-scope-port';
 import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
 
 import type {
+	CurrentSessionIDs,
 	ExtraDataState,
 	HydrationContext,
 	SessionAppState,
@@ -39,7 +40,7 @@ export interface AppState extends HydrationContext {
 /**
  * AppState narrowed to an active store session — everything the logged-in area
  * may assume present. Login and store-switch write these fields together, and
- * the `(app)` stack is mounted behind `Stack.Protected guard={!!storeDB}`.
+ * the `(app)` stack is mounted behind `Stack.Protected guard={hasStoreSession(state)}`.
  */
 export interface StoreSessionState extends AppState {
 	site: SiteDocument;
@@ -77,6 +78,15 @@ export function missingStoreSessionFields(state: SessionFields): StoreSessionFie
 export function hasStoreSession(state: SessionFields): boolean {
 	return missingStoreSessionFields(state).length === 0;
 }
+
+/** The React-state half of signing out: every session field cleared. */
+const SIGNED_OUT_SESSION: Partial<HydrationContext> = {
+	site: undefined,
+	wpCredentials: undefined,
+	store: undefined,
+	storeDB: undefined,
+	extraData: undefined,
+};
 
 const sessionLogger = getLogger(['wcpos', 'app-state', 'session']);
 
@@ -139,6 +149,16 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		[state.appState, state.userDB, updateAppState]
 	);
 
+	/**
+	 * What logout does once it has decided to: forget the persisted pointer,
+	 * then sign the React state out. Shared with the incomplete-session
+	 * recovery below, so anything added to signing out reaches both.
+	 */
+	const clearStoreSession = React.useCallback(async () => {
+		await state.appState!.set('current', () => null);
+		updateAppState(SIGNED_OUT_SESSION);
+	}, [state.appState, updateAppState]);
+
 	const logout = React.useCallback(async () => {
 		if (Platform.isWeb) {
 			// Get logout URL from global initialProps if available
@@ -152,18 +172,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			// Fall through to native logout logic below
 		}
 
-		// Clear session state in database
-		await state.appState!.set('current', () => null);
-
-		// Clear React state
-		updateAppState({
-			site: undefined,
-			wpCredentials: undefined,
-			store: undefined,
-			storeDB: undefined,
-			extraData: undefined,
-		});
-	}, [state.appState, updateAppState]);
+		await clearStoreSession();
+	}, [clearStoreSession]);
 
 	const switchStore = React.useCallback(
 		async (store: StoreDocument): Promise<void> => {
@@ -184,52 +194,55 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	);
 
 	/**
-	 * A store database without the site, credential or store rows beside it is
-	 * not a session the till can run: the `(app)` stack would throw on its first
-	 * render and strand the cashier on a red banner over a blank window (#2112 —
-	 * the rows went missing when the user database's storage failed,
-	 * wcpos/electron#459). Report which fields were missing, then do what logout
-	 * does: clear the persisted pointer so the next launch starts at the store
-	 * list instead of replaying the failure, and sign the React state out so the
-	 * auth stack shows now. The store's own database and its sales are untouched.
+	 * A persisted session pointer the hydrated state cannot honour — the site,
+	 * credential or store rows it names are gone — is not a session the till can
+	 * run: the `(app)` stack would throw on its first render and strand the
+	 * cashier on a red banner over a blank window (#2112 — the rows went missing
+	 * when the user database's storage failed, wcpos/electron#459). Report which
+	 * fields were missing, then do what logout does: clear the pointer so the
+	 * next launch starts at the store list instead of replaying the failure, and
+	 * sign the React state out so the auth stack shows now. The store's own
+	 * database and its sales are untouched. Keyed on the POINTER, not on
+	 * `storeDB`: a lost store row leaves no database at all and must still be
+	 * reported and cleared. A signed-out till has no pointer and is left alone.
 	 */
-	const incompleteSession = state.storeDB ? missingStoreSessionFields(state).join(',') : '';
-	/* eslint-disable react-you-might-not-need-an-effect/no-event-handler -- the session arrives through render (Suspense hydration, or setState from login/switchStore); there is no handler to move this into, and the toast needs the mounted tree. */
+	const missingSessionFields = missingStoreSessionFields(state).join(',');
+	// The pointer already recovered from: the effect re-runs when the sign-out
+	// it triggers lands, and must not report the same pointer twice.
+	const recoveredPointer = React.useRef<string | null>(null);
 	React.useEffect(() => {
-		if (!incompleteSession) return;
-		const missingFields = incompleteSession.split(',');
-		const appStateStore = state.appState;
-		void (async () => {
-			const current = await appStateStore?.get('current').catch(() => undefined);
-			sessionLogger.error(`Store session incomplete: missing ${missingFields.join(', ')}`, {
-				code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
-				showToast: true,
-				context: {
-					missingFields,
-					siteID: current?.siteID,
-					wpCredentialsID: current?.wpCredentialsID,
-					storeID: current?.storeID,
-				},
+		if (!missingSessionFields) return;
+		// RxState reads are synchronous (`set` is the async one).
+		let current: CurrentSessionIDs | null | undefined;
+		try {
+			current = state.appState?.get('current');
+		} catch {
+			current = undefined;
+		}
+		if (!current?.siteID && !current?.wpCredentialsID && !current?.storeID) return;
+		const pointerKey = [current.siteID, current.wpCredentialsID, current.storeID].join('|');
+		if (recoveredPointer.current === pointerKey) return;
+		recoveredPointer.current = pointerKey;
+		const missingFields = missingSessionFields.split(',');
+		sessionLogger.error(`Store session incomplete: missing ${missingFields.join(', ')}`, {
+			code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
+			showToast: true,
+			context: {
+				missingFields,
+				siteID: current.siteID,
+				wpCredentialsID: current.wpCredentialsID,
+				storeID: current.storeID,
+			},
+		});
+		void clearStoreSession().catch((error: unknown) => {
+			// The same failing storage that lost the rows may refuse this write too;
+			// the till is still signed out, it just replays the report next launch.
+			sessionLogger.warn('Could not clear the incomplete session pointer', {
+				context: { error: getErrorMessage(error) },
 			});
-			try {
-				await appStateStore?.set('current', () => null);
-			} catch (error) {
-				// The same failing storage that lost the rows may refuse this write too;
-				// the till is still signed out below, it just replays the report next launch.
-				sessionLogger.warn('Could not clear the incomplete session pointer', {
-					context: { error: getErrorMessage(error) },
-				});
-			}
-			updateAppState({
-				site: undefined,
-				wpCredentials: undefined,
-				store: undefined,
-				storeDB: undefined,
-				extraData: undefined,
-			});
-		})();
-	}, [incompleteSession, state.appState, updateAppState]);
-	/* eslint-enable react-you-might-not-need-an-effect/no-event-handler */
+			updateAppState(SIGNED_OUT_SESSION);
+		});
+	}, [missingSessionFields, state.appState, clearStoreSession, updateAppState]);
 
 	const value = React.useMemo<AppState>(() => {
 		return {
@@ -260,10 +273,11 @@ export const useAppState = (): AppState => {
 
 /**
  * `useAppState` asserted to an active store session. For consumers inside the
- * `(app)` stack, which only mounts behind `Stack.Protected guard={!!storeDB}` —
- * a missing field here is session-state corruption, and throwing a named error
- * beats the undefined-property crash it would otherwise become. Sessionless
- * surfaces (auth screens, connect flow) must stay on `useAppState`.
+ * `(app)` stack, which only mounts behind
+ * `Stack.Protected guard={hasStoreSession(state)}` — a missing field here is
+ * session-state corruption, and throwing a named error beats the
+ * undefined-property crash it would otherwise become. Sessionless surfaces
+ * (auth screens, connect flow) must stay on `useAppState`.
  */
 export const useStoreSession = (): StoreSessionState => {
 	const context = useAppState();

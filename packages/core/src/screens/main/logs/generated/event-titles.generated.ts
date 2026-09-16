@@ -188,6 +188,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.queue_write_resolve');
 		case 'queue.write.tick.error':
 			return t('health.logs.event.queue_write_tick_error');
+		case 'render.error':
+			return t('health.logs.event.render_error');
 		case 'signal.cursor':
 			return t('health.logs.event.signal_cursor');
 		case 'signal.cycle':
@@ -275,6 +277,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.queue_write_drain');
 		case 'queue.write.enqueued':
 			return t('health.logs.event_description.queue_write_enqueued');
+		case 'render.error':
+			return t('health.logs.event_description.render_error');
 		case 'signal.cursor':
 			return t('health.logs.event_description.signal_cursor');
 		case 'signal.cycle':
