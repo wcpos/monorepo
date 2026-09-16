@@ -118,7 +118,7 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 		...report,
 		doc: report,
 		print: async () => {
-			await report.print();
+			if ((await report.print()) !== true) throw new Error('Print was not dispatched');
 			if (!closure)
 				logXReportPrinted({
 					actor,

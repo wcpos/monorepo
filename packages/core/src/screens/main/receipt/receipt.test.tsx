@@ -198,6 +198,7 @@ jest.mock('@wcpos/printer', () => ({
 		print: async () => {
 			options.onBeforePrint?.();
 			await mockPrint();
+			return true;
 		},
 		isPrinting: false,
 	}),

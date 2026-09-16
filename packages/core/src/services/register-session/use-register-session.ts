@@ -253,6 +253,7 @@ export function useRegisterSession() {
 					sessionId: id!,
 					actor: wpCredentials.id ?? 0,
 				});
+				if (row.type !== 'paid_in' && row.type !== 'paid_out') return row;
 				logger.info('Register cash movement recorded', {
 					actor,
 					terminal: { operationId: row.id.replace(/-/g, '') },

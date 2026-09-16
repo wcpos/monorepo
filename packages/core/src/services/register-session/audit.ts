@@ -10,10 +10,10 @@ export function useRegisterActor() {
 	const { wpCredentials } = useStoreSession();
 	return React.useMemo(
 		() => ({
-			id: String(wpCredentials.id ?? ''),
-			name: wpCredentials.display_name || wpCredentials.username || '',
+			id: String(wpCredentials?.id ?? ''),
+			name: wpCredentials?.display_name || wpCredentials?.username || '',
 		}),
-		[wpCredentials.id, wpCredentials.display_name, wpCredentials.username]
+		[wpCredentials?.id, wpCredentials?.display_name, wpCredentials?.username]
 	);
 }
 

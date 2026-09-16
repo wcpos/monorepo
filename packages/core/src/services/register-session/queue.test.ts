@@ -423,6 +423,7 @@ it('names a refused open and a refused close apart', async () => {
 		expect.objectContaining({ code: 'REGISTER201' })
 	);
 
+	expect(logger.error.mock.calls[0][1].context).not.toHaveProperty('type');
 	logger.error.mockClear();
 	const other = await open();
 	await other.incrementalPatch({
@@ -444,6 +445,7 @@ it('names a refused open and a refused close apart', async () => {
 			context: expect.objectContaining({ endpoint: 'sessions/status' }),
 		})
 	);
+	expect(logger.error.mock.calls[0][1].context).not.toHaveProperty('type');
 });
 
 it('does not call a refused counting transition a refused close', async () => {
@@ -812,3 +814,25 @@ it('resubmits the current closure with re-adopted perpetual totals', async () =>
 	});
 	expect(row.getLatest().sync_status).toBe('synced');
 });
+
+it.each([403, 503])(
+	'does not title a closure upload failure (%s) as a session refresh',
+	async (status) => {
+		const { session, row } = await closure();
+		await session.incrementalPatch({
+			sync_status: 'synced',
+			server_status: 'closed',
+			pending_status: null,
+		});
+		http.post.mockRejectedValueOnce({ response: { status } });
+		await drain();
+		const calls = [
+			...logger.debug.mock.calls,
+			...logger.warn.mock.calls,
+			...logger.error.mock.calls,
+		];
+		expect(calls).toHaveLength(1);
+		expect(calls[0][1].context).toMatchObject({ endpoint: 'closures', closureId: row.id, status });
+		expect(calls[0][1].context).not.toHaveProperty('type');
+	}
+);

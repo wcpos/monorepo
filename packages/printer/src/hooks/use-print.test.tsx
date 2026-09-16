@@ -26,8 +26,8 @@ it('prepares and dispatches overlapping prints in call order, not response order
 	});
 	const first = renderHook(() => usePrint({ preparePrint }));
 	const second = renderHook(() => usePrint({ preparePrint }));
-	let firstJob!: Promise<void>;
-	let secondJob!: Promise<void>;
+	let firstJob!: Promise<boolean>;
+	let secondJob!: Promise<boolean>;
 	await act(async () => {
 		firstJob = first.result.current.print();
 		secondJob = second.result.current.print();
@@ -88,7 +88,7 @@ it('awaits successful dispatch before committing the local count once', async ()
 	const { result } = renderHook(() =>
 		usePrint({ preparePrint: async () => ({ html: '<p>Receipt</p>', commit }) })
 	);
-	let job!: Promise<void>;
+	let job!: Promise<boolean>;
 	await act(async () => {
 		job = result.current.print();
 	});
@@ -99,4 +99,19 @@ it('awaits successful dispatch before committing the local count once', async ()
 		await job;
 	});
 	expect(commit).toHaveBeenCalledTimes(1);
+});
+
+it('returns an explicit success signal only after dispatch', async () => {
+	const { result } = renderHook(() => usePrint({ html: '<p>Report</p>' }));
+	await act(async () => {
+		await expect(result.current.print()).resolves.toBe(true);
+	});
+});
+
+it('does not report success when there is no printable content', async () => {
+	const { result } = renderHook(() => usePrint({}));
+	await act(async () => {
+		await expect(result.current.print()).rejects.toThrow('No printable content');
+	});
+	expect(printHtml).not.toHaveBeenCalled();
 });

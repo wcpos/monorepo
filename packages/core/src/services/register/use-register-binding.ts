@@ -84,7 +84,10 @@ function loadDirectory(
 			// session (or reconnect) tries again.
 			entry.request = undefined;
 			logger.warn('Register directory unavailable', {
-				context: { type: 'register.directory-unavailable', registerId: entry.value.registerId },
+				context: {
+					type: 'register.directory-unavailable',
+					registerId: entry.value?.registerId ?? null,
+				},
 			});
 		});
 	return entry.request;

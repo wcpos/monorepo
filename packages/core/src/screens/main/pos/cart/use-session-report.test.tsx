@@ -12,7 +12,7 @@ const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
 let mockAutoOpen = false;
 const mockOpenDrawer = jest.fn(async () => undefined);
-const print = jest.fn(async () => undefined);
+const print = jest.fn<Promise<boolean | undefined>, []>(async () => true);
 const documentHook = jest.fn(() => ({ print }));
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: (...args: unknown[]) => documentHook(...(args as [])),
@@ -152,5 +152,25 @@ it('does not report an X-report when dispatch fails', async () => {
 	const view = renderHook(() => useSessionReport());
 	print.mockRejectedValueOnce(new Error('paper'));
 	await expect(view.result.current.print()).rejects.toThrow('paper');
+	expect(logger.info).not.toHaveBeenCalled();
+});
+
+it.each([false, undefined])(
+	'does not log an X-report without explicit dispatch success (%s)',
+	async (outcome) => {
+		const view = renderHook(() => useSessionReport());
+		print.mockResolvedValueOnce(outcome);
+		await expect(view.result.current.print()).rejects.toThrow('Print was not dispatched');
+		expect(logger.info).not.toHaveBeenCalled();
+	}
+);
+
+it('does not mark a closure printed when the print layer silently fails', async () => {
+	const incrementalModify = jest.fn();
+	const closure = { id: 's', number: 1, print_count: 0, incrementalModify };
+	const view = renderHook(() => useSessionReport(closure as never));
+	print.mockResolvedValueOnce(undefined);
+	await expect(view.result.current.print()).rejects.toThrow('Print was not dispatched');
+	expect(incrementalModify).not.toHaveBeenCalled();
 	expect(logger.info).not.toHaveBeenCalled();
 });

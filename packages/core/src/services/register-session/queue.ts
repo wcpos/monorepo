@@ -256,12 +256,9 @@ async function drain({
 			// to Sentry, and a free-text field is the one thing that must not ride along.
 			const options = {
 				context: {
-					type:
-						endpoint === 'movements'
-							? retry
-								? 'register.movement-retrying'
-								: 'register.movement-rejected'
-							: 'register.session-refresh-failed',
+					...(endpoint === 'movements'
+						? { type: retry ? 'register.movement-retrying' : 'register.movement-rejected' }
+						: {}),
 					sessionId: 'session_id' in before ? before.session_id : before.id,
 					...('register_id' in before ? { registerId: before.register_id } : {}),
 					...('type' in before ? { movementId: before.id } : {}),

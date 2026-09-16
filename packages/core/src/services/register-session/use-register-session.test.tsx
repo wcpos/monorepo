@@ -227,7 +227,7 @@ it('logs the closed snapshot with its count and variance', async () => {
 	);
 });
 
-it.each(['paid_in', 'paid_out', 'no_sale'] as const)(
+it.each(['paid_in', 'paid_out'] as const)(
 	'records %s under movementType, not the event type',
 	async (movementType) => {
 		jest.mocked(actions.requireOpenSession).mockResolvedValue('session');
@@ -288,4 +288,21 @@ it('does not report an open when its write fails', async () => {
 		result.current.actions.openSession({ expectedFloat: null, countedFloat: '100' })
 	).rejects.toThrow('disk');
 	expect(logger.info).not.toHaveBeenCalled();
+});
+
+it('records a no-sale without claiming cash moved', async () => {
+	jest.mocked(actions.requireOpenSession).mockResolvedValue('session');
+	jest
+		.mocked(actions.recordMovement)
+		.mockResolvedValue({ ...movement, type: 'no_sale', amount: '0' } as never);
+	const result = await settled();
+	await expect(
+		result.current.actions.recordMovement({ type: 'no_sale', amount: '0', reason: '' })
+	).resolves.toMatchObject({ type: 'no_sale' });
+	expect(logger.info).not.toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({ type: 'register.movement-recorded' }),
+		})
+	);
 });

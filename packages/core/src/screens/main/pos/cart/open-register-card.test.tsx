@@ -5,6 +5,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { OpenRegisterCard } from './open-register-card';
 
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({}),
+}));
+
 let defaultFloat: string | undefined = '200';
 let lastCount: string | undefined = '570.10';
 const open = jest.fn(async () => undefined);
