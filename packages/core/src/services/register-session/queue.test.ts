@@ -99,10 +99,21 @@ it('marks a losing create failed and adopts the server session', async () => {
 	expect(logger.info).toHaveBeenCalledWith(
 		'Register session adopted',
 		expect.objectContaining({
+			// Its own operationId: two adoptions in one drain must stay two rows.
+			terminal: { operationId: 'winner' },
 			context: { type: 'register.session-adopted', sessionId: 'winner', registerId: 'register' },
 		})
 	);
 	expect(logger.info.mock.calls[0][1]).not.toHaveProperty('actor');
+	// The lost race is recovered, not refused: no "refused upload" title on its failure row.
+	const failures = [
+		...logger.debug.mock.calls,
+		...logger.warn.mock.calls,
+		...logger.error.mock.calls,
+	];
+	expect(failures).toHaveLength(1);
+	expect(failures[0][1].terminal).toMatchObject({ outcome: 'recovered' });
+	expect(failures[0][1].context).not.toHaveProperty('type');
 });
 it('backs off a 5xx without posting dependent movements', async () => {
 	const row = await open();

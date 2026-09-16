@@ -266,7 +266,7 @@ async function drain({
 						? persist
 							? {}
 							: { type: retry ? 'register.movement-retrying' : 'register.movement-rejected' }
-						: retry
+						: retry || takeover
 							? {}
 							: { type: 'register.upload-refused' }),
 					sessionId: 'session_id' in before ? before.session_id : before.id,
@@ -311,6 +311,7 @@ async function drain({
 					.data as RegisterSessionRow;
 				await adoptSession(sessions, server);
 				logger.info('Register session adopted', {
+					terminal: { operationId: operationId(server.id) },
 					context: {
 						type: 'register.session-adopted',
 						sessionId: server.id,
