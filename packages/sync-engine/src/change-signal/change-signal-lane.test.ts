@@ -476,6 +476,135 @@ describe('cold-start priming', () => {
 		expect(fetcher).toHaveBeenCalledTimes(2);
 	});
 
+	it('lets the FIRST of two concurrent openers win the persisted baseline', async () => {
+		// Two tabs open one fresh scope; both read "no state" before either
+		// writes. Tab A primes at 5 and starts fetching; the server then moves to
+		// 6 and tab B's head fetch answers 6. Persisting 6 would skip the change
+		// that made A's records stale, so B restores A's baseline instead.
+		let blob: string | null = null;
+		const store = {
+			readBlob: async () => blob,
+			writeBlob: vi.fn(async (_scope: string, _key: string, value: string) => {
+				blob = value;
+			}),
+		};
+		const deferred = () => {
+			let resolve!: (head: number) => void;
+			const promise = new Promise<number>((r) => (resolve = r));
+			return { promise, resolve };
+		};
+		const answers = { a: deferred(), b: deferred() };
+		const laneFor = async (answer: { promise: Promise<number> }) => {
+			const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+			await manager.switchTo('scope-a');
+			return createChangeSignalLane({
+				manager,
+				databaseFor: () => ({ collections: {} }) as never,
+				fetcher: async () =>
+					Response.json({ checkpoint: { head: await answer.promise, epoch: 'epoch-FIRST' } }),
+				syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+				...store,
+				connectivity: () => 'online',
+				diagnostics: () => undefined,
+				emitEvent: () => undefined,
+			});
+		};
+		const tabA = await laneFor(answers.a);
+		const tabB = await laneFor(answers.b);
+		const primeA = tabA.prime();
+		const primeB = tabB.prime();
+		// Both head fetches are in flight (both already read null).
+		await new Promise((r) => setTimeout(r, 0));
+		answers.a.resolve(5);
+		expect(await primeA).toEqual({ status: 'primed', head: 5 });
+		answers.b.resolve(6);
+		expect(await primeB).toEqual({ status: 'restored' });
+		expect(store.writeBlob).toHaveBeenCalledTimes(1);
+		expect(deserializeChangeSignalState(blob!)).toMatchObject({ initialCursor: { sequence: 5 } });
+	});
+
+	it('starts the engine from its own lower prime when a concurrent opener persisted a higher head', async () => {
+		// The read/write interleaving the first-writer check cannot see: the
+		// other tab's 6 landed AFTER our re-read. Our own 5 is the floor, once.
+		let blob: string | null = null;
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher: primingFetcher({ head: 5, epoch: 'epoch-FIRST' }),
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => blob,
+			writeBlob: async (_scope, _key, value) => {
+				blob = value;
+			},
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		expect(await lane.prime()).toEqual({ status: 'primed', head: 5 });
+		// The other tab's later prime lands over ours.
+		blob = JSON.stringify({ cursor: { sequence: 6 }, baselineDigests: [], epoch: 'epoch-FIRST' });
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 5 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} satisfies HybridPollOutcome);
+		expect(await lane.tick()).toMatchObject({ status: 'ran' });
+		expect(createHybridChangeSignalEngine).toHaveBeenLastCalledWith(
+			expect.objectContaining({ initialCursor: { sequence: 5 }, initialEpoch: 'epoch-FIRST' })
+		);
+		// One-shot: an engine re-created after a tick error restores the persisted cursor.
+		lane.prune('scope-a');
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 5 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} satisfies HybridPollOutcome);
+		expect(await lane.tick()).toMatchObject({ status: 'ran' });
+		expect(createHybridChangeSignalEngine).toHaveBeenLastCalledWith(
+			expect.objectContaining({ initialCursor: { sequence: 6 } })
+		);
+	});
+
+	it('drops the prime write when the scope moved during the head fetch', async () => {
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		const writeBlob = vi.fn(async () => undefined);
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher: async () => {
+				await manager.switchTo('scope-b');
+				return Response.json({ checkpoint: { head: 40 } });
+			},
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => null,
+			writeBlob,
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		expect(await lane.prime()).toEqual({ status: 'skipped' });
+		expect(writeBlob).not.toHaveBeenCalled();
+	});
+
 	it('rejects a 401 prime with the poison error and writes nothing', async () => {
 		const { lane, writeBlob } = await openPrimeLane(null, false, true);
 		const prime = lane.prime();

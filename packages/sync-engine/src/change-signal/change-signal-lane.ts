@@ -144,6 +144,13 @@ export type ChangeSignalLane = {
 
 export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignalLane {
 	const engines = new Map<string, HybridChangeSignalEngine>();
+	/** The head THIS instance primed a scope at (scope open), consumed by the
+	 * first engineFor. Two tabs opening one fresh scope can both read "no state"
+	 * and the later, higher head can land in the blob after ours; restoring that
+	 * would skip everything this tab fetched in between. A lower cursor is always
+	 * safe (re-delivery is idempotent), so the engine starts from the lower of
+	 * the two — once. After that the persisted cursor is the truth again. */
+	const primedAtOpen = new Map<string, { head: number; epoch?: string }>();
 	/** Rebindable per-tick fetch — see the module header. */
 	let activeFetch: Fetcher | null = null;
 	const sourceFetcher: EngineSourceFetcher = (url, init) => {
@@ -197,6 +204,16 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			baselineDigests: undefined,
 		};
 		const initialEpoch = restored?.epoch ?? primed?.epoch;
+		const ownPrime = primedAtOpen.get(scopeId);
+		primedAtOpen.delete(scopeId);
+		if (
+			ownPrime !== undefined &&
+			restored !== null &&
+			ownPrime.epoch === restored.epoch &&
+			ownPrime.head < restored.initialCursor.sequence
+		) {
+			initial.initialCursor = { sequence: ownPrime.head };
+		}
 		const engine = createHybridChangeSignalEngine({
 			source: createLiveChangeSignalSource({
 				syncBaseUrl: deps.syncBaseUrl,
@@ -534,9 +551,11 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				if (signal?.aborted) return { status: 'skipped' };
 				if (deps.connectivity() === 'offline') return { status: 'skipped' };
 				if (deps.manager.activeScope === null) return { status: 'skipped' };
+				let primeScopeId: string | null = null;
 				try {
 					return await deps.manager.runGuarded(async (bound) => {
 						const scopeId = bound.scopeId;
+						primeScopeId = scopeId;
 						if (engines.has(scopeId)) return { status: 'cached' };
 						const blob = await deps.readBlob(scopeId, CHANGE_SIGNAL_STATE_KEY);
 						if (blob !== null && deserializeChangeSignalState(blob)) return { status: 'restored' };
@@ -549,16 +568,31 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						activeFetch = bound.bindFetch(fetcherWithSignal(signal));
 						const { head, epoch } = await fetchHeadCheckpoint();
 						if (signal?.aborted) return { status: 'skipped' };
-						await deps.writeBlob(
-							scopeId,
-							CHANGE_SIGNAL_STATE_KEY,
-							serializeChangeSignalState({
-								cursor: { sequence: head },
-								baselineDigests: new Map(),
-								escalations: [],
-								...(epoch ? { epoch } : {}),
-							})
+						// Another instance (a second tab on the same fresh scope) may have
+						// primed while our head fetch was in flight. Its head is never above
+						// a change it has yet to fetch, and ours may be — so the FIRST prime
+						// wins and we restore it. The write itself is a guarded scope write:
+						// a switch or dispose landing meanwhile drops it instead of letting a
+						// slow checkpoint port overwrite a successor's state.
+						const raced = await deps.readBlob(scopeId, CHANGE_SIGNAL_STATE_KEY);
+						if (raced !== null && deserializeChangeSignalState(raced)) {
+							primedAtOpen.set(scopeId, { head, ...(epoch ? { epoch } : {}) });
+							return { status: 'restored' };
+						}
+						const wrote = await bound.guardWrite(() =>
+							deps.writeBlob(
+								scopeId,
+								CHANGE_SIGNAL_STATE_KEY,
+								serializeChangeSignalState({
+									cursor: { sequence: head },
+									baselineDigests: new Map(),
+									escalations: [],
+									...(epoch ? { epoch } : {}),
+								})
+							)
 						);
+						if (wrote === 'dropped') return { status: 'skipped' };
+						primedAtOpen.set(scopeId, { head, ...(epoch ? { epoch } : {}) });
 						deps.diagnostics({
 							type: 'signal.log',
 							level: 'debug',
@@ -566,6 +600,14 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						});
 						return { status: 'primed', head };
 					});
+				} catch (error) {
+					// A switch or reset landing mid-prime makes the bound fetch reject with
+					// a stale ticket — the same shape a tick reports as 'skipped', not an
+					// error worth a warning at the facade.
+					if (primeScopeId !== null && deps.manager.activeScope !== primeScopeId) {
+						return { status: 'skipped' };
+					}
+					throw error;
 				} finally {
 					activeFetch = null;
 				}
