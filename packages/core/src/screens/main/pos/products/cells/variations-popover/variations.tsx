@@ -7,12 +7,13 @@ import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 
 import { VariationButtons } from './buttons';
 import { VariationSelect } from './select';
 import { useVariationStock, VariationStockBadge } from './stock-status';
 import { getDisabledVariationOptions, parseAttributes } from './utils';
+import { useAppState } from '../../../../../../contexts/app-state';
 import { useT } from '../../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 import {
@@ -181,8 +182,20 @@ export function Variations({
 }
 
 /**
- * Resolved-variation footer: stock badge + add-to-cart, disabled when the
- * variation isn't sellable (only reachable when out-of-stock items are shown).
+ * Resolved-variation footer: stock badge + add-to-cart.
+ *
+ * The button refuses an unsellable variation ONLY while the store's "Avoid
+ * overselling" setting is on — the same gate the cart applies to every line
+ * (`useCartStockGuard` bypasses its check when `prevent_overselling` is off).
+ * A simple product's Add to Cart never disables on stock, so with the setting
+ * off a cashier could sell an out-of-stock simple product but not an
+ * out-of-stock variation (reported by two stores, 2026-09-16). The badge still
+ * carries the stock news either way.
+ *
+ * `useAppState` is safe here even though PopoverContent portals to the app
+ * root on native: the AppState provider sits above every portal host
+ * (`HydrationProviders` in the root layout), unlike the products screen's
+ * query-state provider that `stockStatus` has to be threaded around.
  */
 function VariationAddToCart({
 	variation,
@@ -195,6 +208,8 @@ function VariationAddToCart({
 }) {
 	const stock = useVariationStock(variation);
 	const price = useRecordField(variation, (record) => record.payload.price);
+	const { store } = useAppState();
+	const preventOverselling = useDocField(store, (value) => value.prevent_overselling);
 	const { format } = useCurrencyFormat();
 	const t = useT();
 
@@ -205,7 +220,7 @@ function VariationAddToCart({
 				testID="variation-popover-add-to-cart"
 				onPress={onAddToCart}
 				loading={adding}
-				disabled={!stock.sellable}
+				disabled={preventOverselling === true && !stock.sellable}
 			>
 				<ButtonText>{t('common.add_to_cart') + ': ' + format(Number(price ?? 0))}</ButtonText>
 			</Button>
