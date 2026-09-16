@@ -398,11 +398,9 @@ function ackBookkeeping(options: {
 				.findOne(mutation.recordId)
 				.exec()) as AckDoc | null;
 			if (!doc || signal?.aborted) return; // already removed, or the scope switched
-			if (collection === 'orders')
-				await removeRefundChildren(db.collections.refunds, [
-					doc.toJSON().remoteId as string | null,
-				]);
+			const remoteId = doc.toJSON().remoteId as string | null;
 			await doc.remove();
+			if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
 		},
 	};
 }

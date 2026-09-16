@@ -47,7 +47,9 @@ const mockMovements = { find: () => ({ $: of(entries) }) };
 const mockClosures = { find: () => ({ $: of(closureRows) }) };
 const mockBinding = { registerId: 'register', registerName: 'Front' };
 const mockReleaseParents = jest.fn();
-const mockDeclareRequirements = jest.fn((..._args: unknown[]) => [{ release: mockReleaseParents }]);
+const mockDeclareRequirements = jest.fn((..._args: unknown[]) => [
+	{ release: mockReleaseParents, ready: Promise.resolve() },
+]);
 const mockRuntime = { engine: {}, locale: 'en' };
 const mockStoreSession = {
 	store: { id: 1 },
@@ -584,4 +586,44 @@ it('replaces missing parent demand and releases it when the session scope change
 	});
 	expect(mockReleaseParents).toHaveBeenCalledTimes(2);
 	view.unmount();
+});
+
+// Remove the parent wait or use the pre-wait accounting: the closure records cash instead of card.
+it('waits for missing refund parents before computing the closure tender', async () => {
+	entries = [];
+	mockRefunds.next([refundHit()]);
+	let resolve!: () => void;
+	const ready = new Promise<void>((done) => {
+		resolve = done;
+	});
+	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
+	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
+	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
+		const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+		const { readLedger } =
+			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+		const attributed = attributeRefunds(
+			input.session.id,
+			input.orders.flatMap((order) => readLedger(order.payload.meta_data)),
+			input.refundRecords ?? []
+		);
+		return {
+			id: 'closure',
+			counted: {},
+			variance: {},
+			breakdowns: { payment_methods: attributed.byMethod },
+		} as never;
+	});
+	const result = await settled();
+	let closing!: ReturnType<typeof result.current.actions.closeSession>;
+	await act(async () => {
+		closing = result.current.actions.closeSession({ counted: { cash: '100' } });
+	});
+	expect(actions.writeClosure).not.toHaveBeenCalled();
+	await act(async () => {
+		mockOrders.next([parentHit()]);
+		resolve();
+		await closing;
+	});
+	expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
 });

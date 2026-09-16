@@ -248,15 +248,15 @@ export class EngineOrderRepository {
 		if (remoteIds.length === 0) return;
 		const { unprotected, protectedRemoteIds } = await this.orderCensus(pendingMutationOrderIds);
 		const storageIds = orderStorageIdsForWooDeletes(unprotected, remoteIds);
-		await removeRefundChildren(
-			this.db.refunds,
-			remoteIds.filter((remoteId) => !protectedRemoteIds.has(remoteId))
-		);
 		if (storageIds.length > 0)
 			assertBulkSuccess(
 				await this.db.orders.bulkRemove(storageIds),
 				'engine-order-repository remove'
 			);
+		await removeRefundChildren(
+			this.db.refunds,
+			remoteIds.filter((remoteId) => !protectedRemoteIds.has(remoteId))
+		);
 		// Leg-3 maintenance invariant (ADR 0015): depurate the deleted remoteIds from the order
 		// manifest — except the ones whose document we just declined to remove.
 		await removeManifestByWooIds(
@@ -282,15 +282,15 @@ export class EngineOrderRepository {
 		// Persist before deleting orders: the next pull batch uses a new repository.
 		if (Object.keys(counts).length > 0)
 			await this.db.orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
-		await removeRefundChildren(
-			this.db.refunds,
-			removable.map((doc) => doc.remoteId)
-		);
 		if (removable.length > 0)
 			assertBulkSuccess(
 				await this.db.orders.bulkRemove(removable.map((doc) => doc.uuid)),
 				'engine-order-repository remove'
 			);
+		await removeRefundChildren(
+			this.db.refunds,
+			removable.map((doc) => doc.remoteId)
+		);
 	}
 
 	/**

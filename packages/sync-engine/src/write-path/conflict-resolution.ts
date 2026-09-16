@@ -544,10 +544,6 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 											`resolveConflict: the resolution claim on "${mutationId}" expired or was taken by another window mid-resolution — refresh the list and retry`
 										);
 									}
-									if (entry.collectionName === 'orders')
-										await removeRefundChildren(database.collections.refunds, [
-											row?.remoteId as string | null,
-										]);
 									try {
 										await doc.remove();
 										residentRemoved = true;
@@ -558,6 +554,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 										if (stillResident) throw error;
 										residentRemoved = true;
 									}
+									if (entry.collectionName === 'orders')
+										await removeRefundChildren(database.collections.refunds, [
+											row?.remoteId as string | null,
+										]);
 								}
 								// CAS, not an unconditional remove: two discards of one terminal row
 								// (a double-tap that beat the button's disabled state, two windows)

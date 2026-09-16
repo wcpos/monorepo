@@ -37,8 +37,16 @@ import {
 } from './use-register-session-collections';
 
 const logger = getLogger(['wcpos', 'registerSession']);
+// A drain that has not answered in fifteen seconds is offline or stalled, and the till must
+// still close; the closure then carries the fallback and the parent arrives later.
+const REFUND_PARENT_WAIT_MS = 15_000;
 
 export function useRegisterSession() {
+	const pendingParents = React.useRef<RequirementHandle[]>([]);
+	const latestAccounting = React.useRef<Pick<
+		Parameters<typeof actions.writeClosure>[0],
+		'orders' | 'refundRecords'
+	> | null>(null);
 	const { store, wpCredentials, userDB, site } = useStoreSession();
 	const actor = useRegisterActor();
 	const { engine, locale } = useQueryRuntime();
@@ -67,6 +75,7 @@ export function useRegisterSession() {
 					closed.find((row) => row.closure_id === row.id && row.sync_status !== 'synced')
 			),
 			distinctUntilChanged((previous, current) => previous?.id === current?.id),
+			// eslint-disable-next-line react-hooks/refs -- RxJS invokes this on subscription emissions, not while constructing the observable during render.
 			switchMap((current) => {
 				if (!current)
 					return of({ orders: { hits: [] as never[] }, refundRecords: [] as RefundDocumentType[] });
@@ -132,8 +141,12 @@ export function useRegisterSession() {
 													},
 												])
 											: [];
+										pendingParents.current = parentRequirements;
 									}),
-									finalize(() => parentRequirements.forEach((handle) => handle.release())),
+									finalize(() => {
+										parentRequirements.forEach((handle) => handle.release());
+										if (pendingParents.current === parentRequirements) pendingParents.current = [];
+									}),
 									map((parents) => ({
 										orders: {
 											hits: [
@@ -147,6 +160,12 @@ export function useRegisterSession() {
 								);
 							})
 						);
+					}),
+					tap((accounting) => {
+						latestAccounting.current = {
+							orders: accounting.orders.hits.map(({ record }) => record),
+							refundRecords: accounting.refundRecords,
+						};
 					}),
 					concatMap(async (accounting) => {
 						const allocations = accounting.orders.hits
@@ -338,13 +357,31 @@ export function useRegisterSession() {
 				return row;
 			},
 			closeSession: async (input: { counted: Record<string, string> }) => {
+				const handles = pendingParents.current;
+				if (handles.length > 0) {
+					let timeout: ReturnType<typeof setTimeout> | undefined;
+					try {
+						await Promise.race([
+							Promise.allSettled(handles.map((handle) => handle.ready)),
+							new Promise<void>((resolve) => {
+								timeout = setTimeout(() => {
+									logger.warn('Refund parent wait timed out; closing with available accounting');
+									resolve();
+								}, REFUND_PARENT_WAIT_MS);
+							}),
+						]);
+					} finally {
+						clearTimeout(timeout);
+					}
+				}
+				const accounting = handles.length > 0 ? latestAccounting.current : null;
 				const closed =
 					session!.status === 'closed'
 						? session!
 						: await actions.closeSession(sessions!, session!.id, input);
 				const closure = await actions.writeClosure({
 					closures: closures!,
-					tillExpected: expected,
+					tillExpected: handles.length > 0 ? undefined : expected,
 					userDB,
 					siteUuid: site.uuid!,
 					session: closed,
@@ -353,8 +390,8 @@ export function useRegisterSession() {
 						Object.entries(input.counted).filter(([method]) => method !== 'cash')
 					),
 					movements: entries,
-					orders: accountingOrders.map(({ record }) => record),
-					refundRecords: data?.refundRecords,
+					orders: accounting?.orders ?? accountingOrders.map(({ record }) => record),
+					refundRecords: accounting?.refundRecords ?? data?.refundRecords,
 				});
 				logger.info('Register session closed', {
 					actor,

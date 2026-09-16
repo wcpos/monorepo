@@ -35,7 +35,7 @@ export function attributeRefunds(
 	);
 	const byMethod: Record<string, number> = {};
 	const ids = new Set<number | string>();
-	const allocated = new Set<number>();
+	const allocated = new Map<number, number>();
 	const debit = (method: string, amount: number) => {
 		byMethod[method] = (byMethod[method] ?? 0) + amount;
 	};
@@ -51,7 +51,7 @@ export function attributeRefunds(
 				continue;
 			}
 			const amount = toMinor(allocation.amount, 4);
-			allocated.add(allocation.id);
+			allocated.set(allocation.id, (allocated.get(allocation.id) ?? 0) + amount);
 			covered += amount;
 			if (record.sessionId === sessionId) {
 				debit(method, amount);
@@ -68,8 +68,8 @@ export function attributeRefunds(
 		}
 	}
 	for (const [id, record] of stamped) {
-		if (record.sessionId !== sessionId || allocated.has(id)) continue;
-		const amount = toMinor(record.refund.amount ?? '0', 4);
+		if (record.sessionId !== sessionId) continue;
+		const amount = toMinor(record.refund.amount ?? '0', 4) - (allocated.get(id) ?? 0);
 		if (amount > 0) {
 			debit('cash', amount);
 			ids.add(id);

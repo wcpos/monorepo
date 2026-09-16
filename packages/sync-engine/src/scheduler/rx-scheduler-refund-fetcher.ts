@@ -13,6 +13,9 @@ import type { LocalRefundDocument, WooRefundPayload } from '../collections/refun
 import type { SchedulerFetcher } from './replication-policy';
 
 export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDocument> & {
+	repository: CollectionSchedulerInput<LocalRefundDocument>['repository'] & {
+		removeMany(documents: LocalRefundDocument[]): Promise<void>;
+	};
 	heldParentIds(ids: number[]): Promise<Map<number, number[] | null>>;
 };
 
@@ -60,7 +63,21 @@ export function createRefundsSchedulerFetcher(
 				);
 			})
 			.map((raw) => materializeRefund(raw).storedDocument);
-		const applied = (await input.repository.upsertMany(documents)) ?? documents;
+		let applied = (await input.repository.upsertMany(documents)) ?? documents;
+		if (applied.length > 0) {
+			const current = await input.heldParentIds([
+				...new Set(applied.map((doc) => doc.payload.parent_id)),
+			]);
+			const removed = applied.filter(({ payload }) => {
+				const listed = current.get(payload.parent_id);
+				return Array.isArray(listed) && !listed.includes(payload.id);
+			});
+			if (removed.length > 0) {
+				await input.repository.removeMany(removed);
+				const removedIds = new Set(removed.map(({ uuid }) => uuid));
+				applied = applied.filter(({ uuid }) => !removedIds.has(uuid));
+			}
+		}
 		walk.ids.push(...applied.map((document) => document.uuid));
 		// WooCommerce always sends the page count; a short page is the end only when it does not.
 		const totalPages = Number(response.headers.get('X-WP-TotalPages'));

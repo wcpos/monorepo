@@ -58,6 +58,61 @@ async function harness() {
 	};
 }
 describe('order refund reconciliation', () => {
+	// Move the child cascade before parent removal: a failed delete destroys live refunds.
+	it.each(['delete', 'resync'] as const)(
+		'preserves children when %s parent removal fails',
+		async (action) => {
+			const h = await harness();
+			await h.repo.upsertMany([parent(42, [{ id: 1 }, { id: 2 }])]);
+			const remove = vi
+				.spyOn(h.collection('orders'), 'bulkRemove')
+				.mockRejectedValueOnce(new Error('parent remove failed'));
+			try {
+				await expect(
+					action === 'delete'
+						? h.repo.removeDeletedOrders([mintRemoteId(42, 'test')])
+						: h.repo.resetForResync()
+				).rejects.toThrow('parent remove failed');
+				expect(await h.ids()).toEqual([1, 2, 3]);
+			} finally {
+				remove.mockRestore();
+			}
+		}
+	);
+
+	// Move the ack cascade above await doc.remove(): children disappear while removal is pending.
+	it('waits for delete acknowledgement parent removal before cascading', async () => {
+		const h = await harness();
+		await h.repo.upsertMany([parent(42, [{ id: 1 }, { id: 2 }])]);
+		const doc = (await h.collection('orders').findOne(parent(42).uuid).exec())!;
+		let release!: () => void;
+		let entered!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const started = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const original = doc.remove.bind(doc);
+		const remove = vi.spyOn(doc, 'remove').mockImplementationOnce(async () => {
+			entered();
+			await pending;
+			return original();
+		});
+		const ack = writeFacetFor('orders')!.onDeleteAck(h.scope.database, {
+			recordId: parent(42).uuid,
+		} as never);
+		await started;
+		try {
+			expect(await h.ids()).toEqual([1, 2, 3]);
+		} finally {
+			release();
+			await ack;
+			remove.mockRestore();
+		}
+		expect(await h.ids()).toEqual([3]);
+	});
+
 	// Revert the current-parent reread: the older empty summary deletes refund 1.
 	it('keeps a refund listed by the current parent after two upserts interleave', async () => {
 		const h = await harness();

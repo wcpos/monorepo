@@ -111,6 +111,24 @@ async function readRefunds(h: Awaited<ReturnType<typeof harness>>, parentId?: nu
 }
 
 describe('refund requirements', () => {
+	// Remove the forced history requirement after the cascade: reset never refills refunds.
+	it('refreshes refund history after an orders reset even after a completed history walk', async () => {
+		const h = await harness();
+		const scope = await h.engine.whenActive();
+		await new EngineOrderRepository(scope.database.collections as never).upsertMany([
+			parent(42, [{ id: 1 }]),
+		]);
+		await refresh(h);
+		const before = h.requests.length;
+		await h.engine.scope.resetCollection('orders');
+		await vi.waitFor(() =>
+			expect(h.requests.slice(before).some((url) => url.searchParams.has('after'))).toBe(true)
+		);
+		await vi.waitFor(async () =>
+			expect((await readRefunds(h)).map((doc) => doc.payload.id)).toEqual([1])
+		);
+	});
+
 	// Remove parent-lane coalesceInFlight: the signal during the first fetch is dropped.
 	it('runs one more parent walk for a signal arriving during the active walk', async () => {
 		let signal!: () => Promise<unknown>;
@@ -162,6 +180,7 @@ describe('refund requirements', () => {
 		expect(await scope.database.collections.orders.find().exec()).toHaveLength(1);
 		expect(await readRefunds(h, 42)).toHaveLength(1);
 		remove.mockRestore();
+		h.setPages(0); // Keep this test focused on the cascade, not its asynchronous refill.
 		await expect(h.engine.scope.resetCollection('orders')).resolves.toBe('reset');
 		expect(await readRefunds(h, 42)).toEqual([]);
 	});
@@ -250,6 +269,7 @@ describe('refund requirements', () => {
 		await refresh(h);
 		// The current empty summary still rejects parent 42's stale response after reset.
 		expect((await readRefunds(h)).map((doc) => doc.payload.id)).toEqual([3]);
+		empty = true;
 		await h.engine.scope.resetCollection('orders');
 		expect((await readRefunds(h)).map((doc) => doc.payload.id)).toEqual([3]);
 	});

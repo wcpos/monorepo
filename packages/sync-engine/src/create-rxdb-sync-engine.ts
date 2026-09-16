@@ -2339,6 +2339,22 @@ export function createRxdbSyncEngine(
 							activeScopeOf(scopeId).database.collections.refunds,
 							parentIds
 						);
+						const handle = engine.require({
+							id: 'orders-reset:refund-history',
+							kind: 'refresh',
+							collection: 'refunds',
+							forceRefresh: true,
+						});
+						void handle.ready
+							.catch((error) => {
+								diagnostics({
+									type: 'engine.guard',
+									level: 'warn',
+									collection: 'refunds',
+									message: `Orders reset refund history refresh failed: ${String(error)}`,
+								});
+							})
+							.finally(() => handle.release());
 					}
 					return outcome;
 				});

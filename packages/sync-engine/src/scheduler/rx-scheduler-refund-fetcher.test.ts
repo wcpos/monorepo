@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createRefundsSchedulerFetcher } from './rx-scheduler-refund-fetcher';
 
@@ -31,11 +31,18 @@ function setup(
 	const requests: URL[] = [];
 	const coverage: BuildCoverageDocumentsFromQueryResultInput[] = [];
 	let now = Date.parse('2026-09-16T00:00:00Z');
+	const heldParentIds = vi.fn(async (_ids: number[]) => held);
+	const removeMany = vi.fn(async (rows: LocalRefundDocument[]) => {
+		const ids = rows.map(({ uuid }) => uuid);
+		for (let i = documents.length - 1; i >= 0; i -= 1)
+			if (ids.includes(documents[i].uuid)) documents.splice(i, 1);
+	});
 	const fetcher = createRefundsSchedulerFetcher({
 		baseUrl: 'https://example.test/wp-json/wcpos/v2',
 		nowMs: () => now,
-		heldParentIds: async () => held,
+		heldParentIds,
 		repository: {
+			removeMany,
 			upsertMany: async (rows) => {
 				documents.push(...rows);
 			},
@@ -51,10 +58,22 @@ function setup(
 			return new Response(JSON.stringify(pages[requests.length - 1]), { status: 200 });
 		},
 	});
-	return { fetcher, documents, requests, coverage };
+	return { fetcher, documents, requests, coverage, heldParentIds };
 }
 
 describe('refund paged upsert-only fetcher', () => {
+	// Remove the post-upsert parent confirmation: the stale page resurrects refund 1.
+	it('removes written refunds dropped by the parent between admission and upsert', async () => {
+		const h = setup([[row(1)]], new Map([[42, [1]]]));
+		h.heldParentIds
+			.mockResolvedValueOnce(new Map([[42, [1]]]))
+			.mockResolvedValueOnce(new Map([[42, []]]));
+		await h.fetcher(task());
+		expect(h.documents).toEqual([]);
+		expect(h.heldParentIds.mock.calls).toEqual([[[42]], [[42]]]);
+		expect(h.coverage.at(-1)?.records).toEqual([]);
+	});
+
 	// Restore held.has(parent_id) admission: the stamped but unlisted row is resurrected.
 	it('uses an explicit held-parent summary before POS stamps, but admits without array authority', async () => {
 		const rows = [row(1, 42, [{ key: '_wcpos_session', value: 'B' }]), row(2)];

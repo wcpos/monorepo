@@ -150,3 +150,28 @@ it.each(['pending', 'failed'])('uses cash fallback when the only allocation is %
 	};
 	expect(deriveExpected(input)).toEqual({ cash: '-20.0000' });
 });
+
+// Restore allocated.has(id): the successful 7 suppresses the remaining 13 cash debit.
+it('debits the unallocated remainder to cash without adding a remainder to a fully allocated refund', () => {
+	const rows = [
+		{ ...sale, refunded_amount: '7', refunds: [{ id: 20, amount: '7', status: 'succeeded' }] },
+		{
+			...sale,
+			kind: 'card',
+			method_id: 'card',
+			refunded_amount: '0',
+			refunds: [{ id: 20, amount: '13', status: 'failed' }],
+		},
+	];
+	const input = {
+		session: { id: 'B', counted_float: '0' },
+		movements: [],
+		ledgerRowsBySession: rows,
+		refundRecords: [refund],
+	};
+	expect(deriveExpected(input)).toEqual({ cash: '-20.0000' });
+	expect(attributeRefunds('B', rows, [refund])).toEqual({ byMethod: { cash: 200000 }, count: 1 });
+	rows[1].refunds[0].status = 'succeeded';
+	rows[1].refunded_amount = '13';
+	expect(deriveExpected(input)).toEqual({ cash: '-7.0000', card: '-13.0000' });
+});
