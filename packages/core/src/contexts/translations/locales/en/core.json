@@ -1058,7 +1058,7 @@
 	"health.performance.server_over_time_note": "Server load is everything running on your server — not just the POS.",
 	"health.performance.server_load": "Server load",
 	"health.performance.pace_normal": "✓ Normal pace",
-	"health.performance.pace_normal_reported": "✓ Normal pace — your server reports {level} load but answers quickly, so checks continue as usual",
+	"health.performance.pace_normal_reported_advisory": "✓ Normal pace — your server reports {level} load; the till only slows down if its answers do",
 	"health.performance.pace_easing": "⚠ Easing off — checking {factor}× less often: {reason}",
 	"health.performance.pace_paused": "⏸ Paused until {time} — your server asked the POS to wait",
 	"health.performance.pace_level_elevated": "elevated",

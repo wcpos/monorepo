@@ -66,7 +66,11 @@ export type ServerPressureMonitor = {
 	setMaxMultiplier(maxMultiplier: number): void;
 	/** The last pressure bucket the server reported, or null before any response carried one. */
 	reported(): ServerPressure | null;
-	/** What started the current back-off, or null while the ladder sits at ×1. */
+	/**
+	 * What raised the ladder to its current multiplier, or null while it sits at ×1.
+	 * A server-named pause is NOT a signal: it is read from `retryAfterUntilMs()`
+	 * and expires with it, whereas a signal lives exactly as long as the multiplier.
+	 */
 	signal(): PressureSignal | null;
 };
 
@@ -298,16 +302,13 @@ export function createServerPressureMonitor(
 	 * about it — otherwise an ALREADY-ARMED timer fires inside the pause and we
 	 * violate the one instruction the server gave us explicitly.
 	 */
-	const pauseOnly = (signal: PressureSignal): ServerPressureTransition => {
-		lastSignal = signal;
-		return {
-			direction: 'backoff',
-			signal,
-			fromMultiplier: effectiveMultiplier(),
-			toMultiplier: effectiveMultiplier(),
-			retryAfterUntilMs,
-		};
-	};
+	const pauseOnly = (signal: PressureSignal): ServerPressureTransition => ({
+		direction: 'backoff',
+		signal,
+		fromMultiplier: effectiveMultiplier(),
+		toMultiplier: effectiveMultiplier(),
+		retryAfterUntilMs,
+	});
 
 	return {
 		isBackingOff: (atMs) => multiplier > 1 || retryAfterUntilMs > atMs,
@@ -316,7 +317,9 @@ export function createServerPressureMonitor(
 		reported: () => lastReported,
 		// The soft-load machine raises the effective multiplier without stepUp(),
 		// so it has no recorded signal of its own: while it alone holds the
-		// cadence at x2, the reason IS reported server load.
+		// cadence at x2, the reason IS reported server load. `lastSignal` is only
+		// ever set while the hard multiplier is above 1 and cleared when it returns,
+		// so it can never outlive the back-off it names.
 		signal: () => lastSignal ?? (softLoadActive ? 'server-pressure' : null),
 
 		setMaxMultiplier(next) {

@@ -184,7 +184,7 @@ describe('PerformanceScreen · server over time', () => {
 		mockServerPressure = { ...idlePressure(), reported: 'high' };
 		const renderer = renderScreen([bucket(1, 5, 0.4)]);
 		expect(paceText(renderer)).toBe(
-			'✓ Normal pace — your server reports high load but answers quickly, so checks continue as usual'
+			'✓ Normal pace — your server reports high load; the till only slows down if its answers do'
 		);
 		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
 			'text-muted-foreground'

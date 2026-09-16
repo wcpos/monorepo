@@ -665,11 +665,18 @@ describe('reported() and signal() — the Health page read-out', () => {
 		expect(monitor.signal()).toBeNull();
 	});
 
-	it('records a server-named pause as the signal even when the ladder cannot move', () => {
-		const monitor = createServerPressureMonitor({ maxMultiplier: 1 });
+	it('does not let a pause-only response leave a signal behind once its Retry-After expires', () => {
+		// The pause is read from retryAfterUntilMs() and expires with it; a signal
+		// that outlived it would mislabel a later load-only x2 as a server error.
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		monitor.observe({ atMs: 0, status: 503, durationMs: 40, retryAfter: '30' });
 		expect(monitor.multiplier()).toBe(1);
 		expect(monitor.retryAfterUntilMs()).toBe(30_000);
-		expect(monitor.signal()).toBe('server-error');
+		expect(monitor.signal()).toBeNull();
+		monitor.observe({ atMs: 31_000, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 31_001, ...OK, serverLoad1m: 1 });
+		monitor.observe({ atMs: 31_002, ...OK, serverLoad1m: 1 });
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.signal()).toBe('server-pressure');
 	});
 });

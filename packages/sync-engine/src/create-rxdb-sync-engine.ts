@@ -822,6 +822,7 @@ export function createRxdbSyncEngine(
 		): void => {
 			const atMs = nowMs();
 			const reportedBefore = serverPressure.reported();
+			const signalBefore = serverPressure.signal();
 			const transition = serverPressure.observe({
 				atMs,
 				status,
@@ -832,10 +833,16 @@ export function createRxdbSyncEngine(
 				...(serverLoad1m === undefined ? {} : { serverLoad1m }),
 			});
 			if (transition !== null) cadence?.onServerPressureTransition(transition);
-			// A header that moved without crossing a back-off threshold changes
-			// `status().serverPressure.reported` and nothing else; subscribers
-			// were promised a snapshot when status changes, so tell them.
-			if (serverPressure.reported() !== reportedBefore) scheduleStatusChange();
+			// A header that moved without crossing a back-off threshold, or a
+			// signal re-labelled at the ladder's ceiling, changes the status
+			// read-out without a transition; subscribers were promised a snapshot
+			// when status changes, so tell them.
+			if (
+				serverPressure.reported() !== reportedBefore ||
+				serverPressure.signal() !== signalBefore
+			) {
+				scheduleStatusChange();
+			}
 		};
 		let response: Response;
 		try {

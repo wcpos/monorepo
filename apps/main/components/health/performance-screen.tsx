@@ -352,7 +352,9 @@ export function PerformanceScreen() {
 					<VStack className="gap-5">
 						{/* The pace the till keeps with this server, and why. One line, at the
 						    top of the server section, so a merchant whose host stamps every
-						    response "high" can see the till is NOT slowing down for it. */}
+						    response "high" can see the till is NOT slowing down for it. The
+						    advisory line claims nothing about measured speed: at x1 the engine
+						    may still be inside its ten-sample slow window. */}
 						<Text
 							className={
 								pace.kind === 'normal' ? 'text-muted-foreground text-sm' : 'text-warning text-sm'
@@ -373,7 +375,7 @@ export function PerformanceScreen() {
 										})
 									: pace.reported === null
 										? t('health.performance.pace_normal')
-										: t('health.performance.pace_normal_reported', {
+										: t('health.performance.pace_normal_reported_advisory', {
 												level: t(`health.performance.pace_level_${pace.reported}`),
 											})}
 						</Text>
