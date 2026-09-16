@@ -4,7 +4,10 @@ import { mintRemoteId } from '@wcpos/sync-core';
 
 import { createEngineHarness } from './testing';
 import { materializeLocalOnly, materializeRefund } from './materialization/record-materialization';
-import { seedRefundParentLane } from './scheduler/rx-refund-scheduler-task-seeder';
+import {
+	seedRefundParentLane,
+	seedRefundWindowLane,
+} from './scheduler/rx-refund-scheduler-task-seeder';
 import { runEngineSchedulerDrain } from './scheduler/engine-scheduler-drain';
 import { createLocalCoverage } from './local-coverage/local-coverage';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
@@ -113,6 +116,63 @@ async function readRefunds(h: Awaited<ReturnType<typeof harness>>, parentId?: nu
 }
 
 describe('refund requirements', () => {
+	// Revert the protected-parent guard: stale empty summaries reject both incoming rows.
+	it.each([
+		{ dirty: true, pendingMutationIds: [] },
+		{ dirty: false, pendingMutationIds: ['pending'] },
+	])(
+		'admits stamped and unstamped refunds without pruning for protected parent %j',
+		async (local) => {
+			const h = await harness(() => Response.json([row(1), { ...row(2), meta_data: [] }]));
+			const scope = await h.engine.whenActive();
+			await new EngineOrderRepository(scope.database.collections as never).upsertMany([parent(42)]);
+			const storedParent = await scope.database.collections.orders.findOne(parent(42).uuid).exec();
+			await storedParent!.incrementalPatch({ local });
+			await h.collection('refunds').insert(materializeRefund(row(3)).storedDocument);
+			const remove = vi.spyOn(scope.database.collections.refunds, 'bulkRemove');
+			await expect(refresh(h)).resolves.toMatchObject({ documents: 2 });
+			expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([1, 2, 3]);
+			expect(remove).not.toHaveBeenCalled();
+		}
+	);
+
+	// Revert failed-task wakeup: future retryAfterMs makes forced refresh serve-local.
+	it.each([undefined, 42])(
+		'forced refresh wakes a failed refund lane, parent %s',
+		async (parentId) => {
+			const h = await harness();
+			const scope = await h.engine.whenActive();
+			if (parentId === undefined) await seedRefundWindowLane({ database: scope.database });
+			else
+				await seedRefundParentLane({
+					database: scope.database,
+					parentRemoteId: mintRemoteId(parentId, 'test'),
+				});
+			const [task] = await scope.database.collections.schedulerTaskStates
+				.find({ selector: { collectionName: 'refunds' } })
+				.exec();
+			await task.incrementalPatch({ status: 'failed', retryAfterMs: h.clock.now() + 60_000 });
+			await expect(refresh(h, parentId)).resolves.toMatchObject({ action: 'fetched' });
+			expect(h.requests).toHaveLength(1);
+			expect(h.requests[0].searchParams.has(parentId === undefined ? 'after' : 'parent')).toBe(
+				true
+			);
+		}
+	);
+
+	// Revert serve-local classification: Sync now reports ran without fetching refunds.
+	it('reports a serve-local refund check as skipped', async () => {
+		const h = await createEngineHarness({
+			site: 'https://refund-check.test',
+			connectivity: 'offline',
+		});
+		vi.spyOn(h.engine, 'require').mockReturnValue({
+			ready: Promise.resolve({ action: 'serve-local' }),
+			release: vi.fn(),
+		} as never);
+		expect((await h.engine.checkCollection('refunds')).status).toBe('skipped');
+	});
+
 	// Revert the disposal guard: a completed reset throws when its refill calls require.
 	it('resolves an orders reset while disposal is queued', async () => {
 		const h = await harness();

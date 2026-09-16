@@ -11,6 +11,8 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { StorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
 
 const refundLogger = getLogger(['wcpos', 'orders', 'refund']);
+// Follow a competing parent's release without keeping a successful money operation waiting forever.
+const REFUND_RECORD_REFRESH_ATTEMPTS = 3;
 
 interface RefundLineItem {
 	id?: number;
@@ -129,23 +131,32 @@ export function useRefundMutation() {
 				handle?.release();
 			}
 
-			let refundHandle;
-			try {
-				refundHandle = runtime.engine.require({
-					id: `refund:record-refresh:${orderId}`,
-					kind: 'refunds-by-parent',
-					collection: 'refunds',
-					parentRemoteId: mintRemoteId(orderId, 'refund parent'),
-					forceRefresh: true,
-				});
-				await refundHandle.ready;
-			} catch (error) {
-				// As with the parent refresh, the money has already moved; never invite a retry.
-				refundLogger.warn('Refund succeeded but the local refund record refresh failed', {
-					context: { orderId, error: getErrorMessage(error) },
-				});
-			} finally {
-				refundHandle?.release();
+			for (let attempt = 0; attempt < REFUND_RECORD_REFRESH_ATTEMPTS; attempt += 1) {
+				let refundHandle;
+				try {
+					refundHandle = runtime.engine.require({
+						id: `refund:record-refresh:${orderId}`,
+						kind: 'refunds-by-parent',
+						collection: 'refunds',
+						parentRemoteId: mintRemoteId(orderId, 'refund parent'),
+						forceRefresh: true,
+					});
+					const result = await refundHandle.ready;
+					if (result?.action !== 'released') break;
+					if (attempt === REFUND_RECORD_REFRESH_ATTEMPTS - 1) {
+						refundLogger.warn('Refund succeeded but the local refund record refresh was released', {
+							context: { orderId, attempts: REFUND_RECORD_REFRESH_ATTEMPTS },
+						});
+					}
+				} catch (error) {
+					// As with the parent refresh, the money has already moved; never invite a retry.
+					refundLogger.warn('Refund succeeded but the local refund record refresh failed', {
+						context: { orderId, error: getErrorMessage(error) },
+					});
+					break;
+				} finally {
+					refundHandle?.release();
+				}
 			}
 
 			return response?.data;

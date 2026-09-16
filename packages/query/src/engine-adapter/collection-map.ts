@@ -302,6 +302,7 @@ export const collectionMap = {
 		engineCollection: 'refunds',
 		fields: {
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
+			session_id: { legacy: 'session_id', kind: 'payload', enginePath: 'sessionId' },
 			id: { legacy: 'id', kind: 'identifier', enginePath: 'remoteId', read: readRemoteId },
 		},
 	},

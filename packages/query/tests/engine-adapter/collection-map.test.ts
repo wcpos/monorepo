@@ -176,6 +176,8 @@ describe('engine adapter collection map', () => {
 		expect(resolveLegacyField('orders', 'id').enginePath).toBe('remoteId');
 		expect(resolveLegacyField('customers', 'id').enginePath).toBe('remoteId');
 		expect(resolveLegacyField('refunds', 'id').enginePath).toBe('remoteId');
+		// Revert session_id mapping: the indexed lookup falls back to payload.session_id.
+		expect(resolveLegacyField('refunds', 'session_id').enginePath).toBe('sessionId');
 		expect(resolveLegacyField('refunds', 'parent_id').enginePath).toBe('payload.parent_id');
 		expect(resolveLegacyField('taxes', 'id').enginePath).toBe('remoteId');
 		expect(resolveLegacyField('products/categories', 'id').enginePath).toBe('remoteId');

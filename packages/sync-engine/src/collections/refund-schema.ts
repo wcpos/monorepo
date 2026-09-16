@@ -39,6 +39,7 @@ export type WooRefundPayload = Record<string, unknown> & {
 export type LocalRefundDocument = {
 	uuid: string;
 	remoteId: RemoteId;
+	sessionId: string;
 	payload: WooRefundPayload;
 	local: { dirty: false; pendingMutationIds: string[] };
 	sync: { revision: string; partial: boolean; source: 'woo-rest' };
@@ -52,6 +53,7 @@ export const refundSchema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: 'string', maxLength: 64 },
+		sessionId: { type: 'string', maxLength: 64 },
 		payload: {
 			type: 'object',
 			additionalProperties: true,
@@ -64,6 +66,6 @@ export const refundSchema = {
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
-	indexes: ['payload.parent_id', 'payload.date_created_gmt'],
+	required: ['uuid', 'remoteId', 'sessionId', 'payload', 'sync', 'local'],
+	indexes: ['payload.parent_id', 'payload.date_created_gmt', 'sessionId', 'remoteId'],
 } as const;

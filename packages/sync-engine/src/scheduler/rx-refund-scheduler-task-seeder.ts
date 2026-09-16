@@ -32,6 +32,7 @@ function seedRefundLane(
 				nowMs: input.nowMs ?? Date.now(),
 				completedDedupeForMs: input.completedDedupeForMs ?? 0,
 				coalesceInFlight,
+				wakeFailed: input.completedDedupeForMs === 0,
 			}),
 	});
 }

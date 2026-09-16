@@ -464,7 +464,7 @@ function createEngineSchedulerFetcherRegistry(
 							};
 							return [
 								Number(order.remoteId),
-								Array.isArray(order.payload.refunds)
+								!hasPendingLocalWork(order) && Array.isArray(order.payload.refunds)
 									? order.payload.refunds.map((refund) => refund.id)
 									: null,
 							];

@@ -34,11 +34,13 @@ type Hit = { record: { uuid: string; local: { dirty: boolean }; payload: Row } }
 let mockOrders = new BehaviorSubject<Hit[]>([]);
 let mockRefunds = new BehaviorSubject<Hit[]>([]);
 let mockParentOrders: BehaviorSubject<Hit[]> | undefined;
+const mockQueryCalls = jest.fn();
 function mockObserve(
 	_engine: unknown,
 	_locale: string,
 	query: { collection: string; selector: Row }
 ) {
+	mockQueryCalls(query);
 	const source =
 		query.collection === 'refunds'
 			? mockRefunds
@@ -47,7 +49,15 @@ function mockObserve(
 				: mockOrders;
 	return source.pipe(
 		map((hits) => ({
-			hits: hits.filter(({ record }) => new Query(query.selector).test(record.payload)),
+			hits: hits.filter(({ record }) =>
+				new Query(query.selector).test({
+					...record.payload,
+					session_id:
+						(record.payload.meta_data as { key: string; value: unknown }[] | undefined)?.find(
+							({ key }) => key === '_wcpos_session'
+						)?.value ?? '',
+				})
+			),
 		}))
 	);
 }
@@ -1005,4 +1015,44 @@ it('shares one close deadline across replacement refund parent handles', async (
 	} finally {
 		jest.useRealTimers();
 	}
+});
+
+// Revert catch to finally: a failed patch ends accounting and close reuses the stale anchor.
+it('keeps processing after anchor patch failures and derives the closure', async () => {
+	entries = [];
+	const patch = jest.fn().mockRejectedValue(new Error('anchor patch failed'));
+	active = [{ ...active[0], incrementalPatch: patch }];
+	mockOrders.next([parentHit('session', false, '2026-09-15')]);
+	const result = await settled();
+	await act(async () => mockOrders.next([parentHit('session', true, '2026-09-15')]));
+	expect(patch).toHaveBeenCalledTimes(1);
+	expect(logger.warn).toHaveBeenCalled();
+	await act(async () => mockOrders.next([parentHit('session', true, '2026-09-16')]));
+	expect(patch).toHaveBeenCalledTimes(2);
+	jest
+		.mocked(actions.closeSession)
+		.mockResolvedValueOnce({ ...session, status: 'closed' } as never);
+	jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+	await act(async () => {
+		await result.current.actions.closeSession({ counted: { cash: '100' } });
+	});
+	expect(actions.writeClosure).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			tillExpected: undefined,
+			orders: [parentHit('session', true, '2026-09-16').record],
+			refundRecords: [],
+		})
+	);
+});
+
+// Revert session_id to metadata $elemMatch: every order emission scans refund metadata.
+it('queries refunds by the promoted session field and referenced ids', async () => {
+	mockOrders.next([parentHit('session', true, '2026-09-15')]);
+	await settled();
+	expect(mockQueryCalls).toHaveBeenCalledWith(
+		expect.objectContaining({
+			collection: 'refunds',
+			selector: { $or: [{ session_id: 'session' }, { id: { $in: [20] } }] },
+		})
+	);
 });

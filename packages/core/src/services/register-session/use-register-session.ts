@@ -21,7 +21,7 @@ import {
 	useDocField,
 	useQueryRuntime,
 } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { readLedger, toMinor } from '@wcpos/order-math';
 import { mintRemoteId } from '@wcpos/sync-core';
 import type { RequirementHandle } from '@wcpos/sync-engine';
@@ -98,10 +98,7 @@ export function useRegisterSession() {
 						return observeEngineQuery(engine, locale, {
 							collection: 'refunds',
 							selector: {
-								$or: [
-									{ meta_data: { $elemMatch: { key: '_wcpos_session', value: current.id } } },
-									{ id: { $in: ids } },
-								],
+								$or: [{ session_id: current.id }, { id: { $in: ids } }],
 							},
 							limit: Number.MAX_SAFE_INTEGER,
 						}).pipe(
@@ -198,8 +195,14 @@ export function useRegisterSession() {
 							if (anchorInvalidationPending.current && current.getLatest().server_expected) {
 								await current.getLatest().incrementalPatch({ server_expected: null });
 							}
-						} finally {
 							anchorInvalidationPending.current = false;
+						} catch (error) {
+							logger.warn(
+								'Register session anchor invalidation failed; close will derive accounting',
+								{
+									context: { sessionId: current.id, error: getErrorMessage(error) },
+								}
+							);
 						}
 						return accounting;
 					})

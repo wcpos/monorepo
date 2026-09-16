@@ -2439,7 +2439,8 @@ export function createRxdbSyncEngine(
 					const result = await handle.ready;
 					reports.push({
 						lane: 'scheduler-drain',
-						status: result.action === 'released' ? 'skipped' : 'ran',
+						status:
+							result.action === 'released' || result.action === 'serve-local' ? 'skipped' : 'ran',
 					});
 				} catch (error) {
 					reports.push({

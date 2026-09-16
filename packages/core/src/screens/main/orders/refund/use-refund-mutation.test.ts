@@ -215,6 +215,44 @@ describe('useRefundMutation', () => {
 		}
 	);
 
+	// Revert the released-result retry: the mutation finishes before the second fetch.
+	it('redeclares a released refund refresh and waits for the fetched record', async () => {
+		let finish!: (value: { action: string }) => void;
+		const fetched = new Promise((resolve) => {
+			finish = resolve;
+		});
+		const release = jest.fn();
+		mockEngineRequire
+			.mockReturnValueOnce({ ready: Promise.resolve(), release: jest.fn() })
+			.mockReturnValueOnce({ ready: Promise.resolve({ action: 'released' }), release })
+			.mockReturnValueOnce({ ready: fetched, release });
+		const { result } = renderHook(() => useRefundMutation());
+		let finished = false;
+		const mutation = result
+			.current({
+				order: makeOrder(77) as never,
+				amount: '10.00',
+				reason: '',
+				lineItems: [],
+				refundDestination: 'cash',
+			})
+			.then((response) => {
+				finished = true;
+				return response;
+			});
+		await act(async () => {});
+		expect(mockEngineRequire).toHaveBeenCalledTimes(3);
+		expect(mockEngineRequire.mock.calls[2]).toEqual(mockEngineRequire.mock.calls[1]);
+		expect(finished).toBe(false);
+		expect(release).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			finish({ action: 'fetched' });
+			await expect(mutation).resolves.toEqual({ refund_id: 123 });
+		});
+		expect(release).toHaveBeenCalledTimes(2);
+		expect(mockPost).toHaveBeenCalledTimes(1);
+	});
+
 	it('resolves when engine.require itself throws synchronously — the refund already succeeded', async () => {
 		const order = makeOrder(78);
 		mockEngineRequire.mockImplementationOnce(() => {

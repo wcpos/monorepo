@@ -194,6 +194,7 @@ it('materializes refunds without a server UUID or manifest and adopts stamped re
 	expect(result.storedDocument).toMatchObject({
 		uuid: 'woo-refund:17',
 		remoteId: remoteId(17),
+		sessionId: 'B',
 		payload: { amount: '20.00', meta_data: raw.meta_data },
 		sync: { revision: 'stamp', partial: false, source: 'woo-rest' },
 	});
@@ -211,4 +212,11 @@ it('materializes refunds without a server UUID or manifest and adopts stamped re
 		materializeRefund({ id: 17, parent_id: 3, date_created_gmt: '2026-09-16T12:00:00' })
 			.storedDocument.sync.revision
 	).toBe('');
+});
+
+// Revert session promotion/default: indexed lookups cannot find the materialized rows.
+it('materializes an empty sessionId when a refund has no session stamp', () => {
+	expect(
+		materializeRefund({ id: 18, parent_id: 3, date_created_gmt: '2026-09-16' }).storedDocument
+	).toHaveProperty('sessionId', '');
 });
