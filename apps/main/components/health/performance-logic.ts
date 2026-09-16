@@ -97,6 +97,42 @@ export function summarizeLast24h(buckets: MetricsBucket[], nowMs: number) {
 
 const HOUR_MS_LOCAL = 60 * 60 * 1000;
 
+/** The engine's pressure read-out, as the Health > Performance page shows it. */
+export type ServerPressureStatus = {
+	multiplier: number;
+	retryAfterUntilMs: number | null;
+	reported: 'low' | 'elevated' | 'high' | null;
+	signal: 'rate-limited' | 'server-error' | 'timeout' | 'slow' | 'server-pressure' | null;
+};
+
+export type ServerPace =
+	| { kind: 'paused'; untilMs: number }
+	| { kind: 'easing'; factor: number; reason: NonNullable<ServerPressureStatus['signal']> }
+	| { kind: 'normal'; reported: 'elevated' | 'high' | null };
+
+/**
+ * One line about the pace the till is keeping with the server, and why.
+ *
+ * Order matters: a server-named pause outranks a raised multiplier (the pause
+ * is the one instruction the server gave explicitly), and a raised multiplier
+ * outranks an advisory header. A header alone never changes the pace — the
+ * engine trusts measured latency over it — so at ×1 the page says so rather
+ * than showing a warning the cadence does not act on.
+ */
+export function describeServerPace(pressure: ServerPressureStatus, nowMs: number): ServerPace {
+	if (pressure.retryAfterUntilMs !== null && pressure.retryAfterUntilMs > nowMs) {
+		return { kind: 'paused', untilMs: pressure.retryAfterUntilMs };
+	}
+	if (pressure.multiplier > 1) {
+		return { kind: 'easing', factor: pressure.multiplier, reason: pressure.signal ?? 'slow' };
+	}
+	return {
+		kind: 'normal',
+		reported:
+			pressure.reported === 'elevated' || pressure.reported === 'high' ? pressure.reported : null,
+	};
+}
+
 export type UptimeCellState = 'running' | 'errors' | 'closed';
 export type UptimeCell = {
 	hourStartMs: number;

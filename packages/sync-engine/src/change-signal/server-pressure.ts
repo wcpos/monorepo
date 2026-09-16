@@ -64,6 +64,14 @@ export type ServerPressureMonitor = {
 	retryAfterUntilMs(): number;
 	/** Raise/lower the ladder's top when the merchant's cadence changes. */
 	setMaxMultiplier(maxMultiplier: number): void;
+	/** The last pressure bucket the server reported, or null before any response carried one. */
+	reported(): ServerPressure | null;
+	/**
+	 * What raised the ladder to its current multiplier, or null while it sits at ×1.
+	 * A server-named pause is NOT a signal: it is read from `retryAfterUntilMs()`
+	 * and expires with it, whereas a signal lives exactly as long as the multiplier.
+	 */
+	signal(): PressureSignal | null;
 };
 
 /**
@@ -222,6 +230,11 @@ export function createServerPressureMonitor(
 	// Track header-triggered back-off separately from its post-recovery cooldown.
 	let headerStartedBackoff = false;
 	let headerClampCooldownUntilMs = 0;
+	// Read back by the Health > Performance page so a merchant can see WHY the
+	// till is easing off — or that the server's advisory header is being
+	// overruled by fast responses.
+	let lastReported: ServerPressure | null = null;
+	let lastSignal: PressureSignal | null = null;
 	/** Timestamps of 5xx / transport failures inside the rolling window. */
 	let distressAtMs: number[] = [];
 	let latencySamples: { atMs: number; durationMs: number; pressure?: ServerPressure }[] = [];
@@ -272,6 +285,7 @@ export function createServerPressureMonitor(
 			headerStartedBackoff = true;
 		}
 		multiplier = to;
+		if (multiplier > 1) lastSignal = signal;
 		if (effectiveMultiplier() === from) return null;
 		return {
 			direction: 'backoff',
@@ -300,6 +314,13 @@ export function createServerPressureMonitor(
 		isBackingOff: (atMs) => multiplier > 1 || retryAfterUntilMs > atMs,
 		multiplier: effectiveMultiplier,
 		retryAfterUntilMs: () => retryAfterUntilMs,
+		reported: () => lastReported,
+		// The soft-load machine raises the effective multiplier without stepUp(),
+		// so it has no recorded signal of its own: while it alone holds the
+		// cadence at x2, the reason IS reported server load. `lastSignal` is only
+		// ever set while the hard multiplier is above 1 and cleared when it returns,
+		// so it can never outlive the back-off it names.
+		signal: () => lastSignal ?? (softLoadActive ? 'server-pressure' : null),
 
 		setMaxMultiplier(next) {
 			maxMultiplier = Math.max(1, next);
@@ -308,7 +329,10 @@ export function createServerPressureMonitor(
 				multiplier = maxMultiplier;
 				// A forced drop to ×1 skips the recovery branch, so settle the header
 				// marker here or the clamp stays disabled for the life of the monitor.
-				if (multiplier === 1) headerStartedBackoff = false;
+				if (multiplier === 1) {
+					headerStartedBackoff = false;
+					lastSignal = null;
+				}
 			}
 		},
 
@@ -319,6 +343,7 @@ export function createServerPressureMonitor(
 			// off exactly when reconnecting wants a prompt poll, so offline failures
 			// are not evidence of anything and are dropped whole.
 			if (observation.offline === true && status === 0) return null;
+			if (observation.pressure !== undefined) lastReported = observation.pressure;
 
 			const retryAfterMs = parseRetryAfterMs(observation.retryAfter, atMs);
 			// A server that names its own pause gets it honoured verbatim, on any
@@ -427,6 +452,7 @@ export function createServerPressureMonitor(
 				headerClampCooldownUntilMs = atMs + HEADER_CLAMP_COOLDOWN_MS;
 				headerStartedBackoff = false;
 			}
+			if (multiplier === 1) lastSignal = null;
 			if (effectiveMultiplier() === from) return softTransition;
 			return {
 				direction: 'recovery',

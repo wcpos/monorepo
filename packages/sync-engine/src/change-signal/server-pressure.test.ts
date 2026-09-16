@@ -625,3 +625,58 @@ describe('server pressure monitor', () => {
 		expect(monitor.multiplier()).toBe(2);
 	});
 });
+
+describe('reported() and signal() — the Health page read-out', () => {
+	it('remembers the last reported bucket and clears the signal only when the ladder is back at x1', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		expect(monitor.reported()).toBeNull();
+		expect(monitor.signal()).toBeNull();
+
+		monitor.observe({ atMs: 0, ...OK, pressure: 'high' });
+		expect(monitor.reported()).toBe('high');
+		// One header is advisory: nothing started a back-off.
+		expect(monitor.signal()).toBeNull();
+
+		monitor.observe({ atMs: 1, status: 429, durationMs: 40 });
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.signal()).toBe('rate-limited');
+
+		// Ten healthy responses after the dwell walk the ladder back to x1.
+		healthy(monitor, 10, 61_000);
+		expect(monitor.multiplier()).toBe(1);
+		expect(monitor.signal()).toBeNull();
+		// The last reported bucket survives recovery; it is what the server said, not what we did.
+		expect(monitor.reported()).toBe('high');
+		monitor.observe({ atMs: 70_000, ...OK, pressure: 'low' });
+		expect(monitor.reported()).toBe('low');
+	});
+
+	it('names reported server load as the signal while the soft-load machine alone holds x2', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 1, ...OK, serverLoad1m: 1 });
+		monitor.observe({ atMs: 2, ...OK, serverLoad1m: 1 });
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.signal()).toBe('server-pressure');
+		// Load back under 1.25x the learned baseline for two samples ends the soft back-off.
+		monitor.observe({ atMs: 3, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 4, ...OK, serverLoad1m: 0.4 });
+		expect(monitor.multiplier()).toBe(1);
+		expect(monitor.signal()).toBeNull();
+	});
+
+	it('does not let a pause-only response leave a signal behind once its Retry-After expires', () => {
+		// The pause is read from retryAfterUntilMs() and expires with it; a signal
+		// that outlived it would mislabel a later load-only x2 as a server error.
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 503, durationMs: 40, retryAfter: '30' });
+		expect(monitor.multiplier()).toBe(1);
+		expect(monitor.retryAfterUntilMs()).toBe(30_000);
+		expect(monitor.signal()).toBeNull();
+		monitor.observe({ atMs: 31_000, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 31_001, ...OK, serverLoad1m: 1 });
+		monitor.observe({ atMs: 31_002, ...OK, serverLoad1m: 1 });
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.signal()).toBe('server-pressure');
+	});
+});
