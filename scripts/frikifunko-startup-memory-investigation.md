@@ -1,80 +1,112 @@
-# Research: POS startup memory spike
+# Research and fix: POS startup memory spike
 
-Status: investigation open; root cause unconfirmed. Captured 2026-09-16 local
-time (Europe/Madrid; 2026-09-15 UTC) on the existing Chrome session at
+Captured 2026-09-16 (Europe/Madrid) on the existing Chrome session at
 `https://frikifunko.mx/pos/`, displaying WCPOS 1.10.17.
+**Observed:** eager log retention is a substantial startup-memory contributor.
+**Unverified:** this does not fully explain the owner's approximately 3 GB
+Task Manager reading or establish that all memory issues are resolved.
 
-## Scope and separation from Logs
+## Separate from hidden Logs
 
-The owner reported memory jumping to approximately 3 GB immediately after a
-refresh on POS, without opening Logs. This is separate from the reproduced
-hidden-Logs pagination loop addressed by [PR #2079](https://github.com/wcpos/monorepo/pull/2079).
-Neither investigation is a dependency of the other. The Logs fix must not be
-presented as resolving this startup symptom.
+[PR #2079](https://github.com/wcpos/monorepo/pull/2079) fixes the reproduced
+hidden-Logs pagination loop. Fresh POS captures had no mounted `screen-logs`,
+so that fix cannot explain this separate startup symptom. Neither fix depends
+on the other. This PR changes the logger's background retention sweep, not UI
+pagination, product tables, or search indexing.
 
-## Observed evidence
+## Observed causal comparison
 
-| Measurement | Result | Interpretation limit |
-| --- | --- | --- |
-| Fresh POS DOM inspection | No mounted `screen-logs` | Hidden Logs cannot explain this captured fresh-load state |
-| Startup trace main JS heap | Peak 434,753,400 bytes (~435 MB) | Not total renderer memory |
-| Startup trace storage-worker JS heap | Peak 279,834,988 bytes (~280 MB) | Separate peak; do not add as a simultaneous total |
-| Startup trace DOM nodes | Peak 1,165 | No reproduction of the earlier hundreds-of-thousands-of-nodes growth |
-| Renderer OS RSS sampling | Peak 1,898 MiB; later 863 MiB | Not Chrome Task Manager's memory-footprint metric |
-| Later main-thread heap snapshot | 188 MB | A retained-heap measurement after startup, not peak allocation |
-| Later console inspection at 23:26:04 UTC | Used heap 177 MiB; allocated heap 179 MiB; 414 DOM elements; zero Logs screens | Separate from trace node counters and sampling time |
-| Images in that later DOM inspection | 13 images; estimated RGBA storage ~3 MiB | Width × height × 4 estimate, not measured total image/cache memory |
+Chrome DevTools Performance: Memory enabled, Record and reload, roughly 6–7
+seconds per capture. Same production bundle, browser session, renderer PID
+19849, and existing local database. Local Overrides changed only the retention
+module; all compared runs used the override setup. No extension isolation was
+performed, and other agents were using the laptop. This is a live causal
+experiment, not a controlled benchmark. Values are decimal MB.
 
-The RSS observation covered approximately 23:19:04–23:19:50 UTC, sampling
-renderer PID 44545 about every 0.5 seconds. It fell below 900 MiB without a
-manual garbage-collection action during that interval. The heap snapshot was
-taken later and must not be treated as an unperturbed startup measurement.
-This run did **not** reproduce or explain the owner's full 3 GB reading.
+| Retention implementation                    | Main JS heap peak | Storage-worker JS heap peak |
+| ------------------------------------------- | ----------------: | --------------------------: |
+| A: original                                 |        434.634 MB |                  276.176 MB |
+| B: temporarily skip sweep (diagnostic only) |        201.514 MB |                   88.149 MB |
+| A2: original restored                       |        460.487 MB |                  319.731 MB |
+| C: actual paged implementation from this PR |        223.305 MB |                  225.599 MB |
 
-## Observed work during startup, not proven memory causes
+These are **separate peaks**, not simultaneous totals or Task Manager footprint.
+A/B/A implicates the sweep rather than simply a warmer reload. C verifies the
+actual fix, not just disabling retention. The original sweep scanned 46,144
+logs totaling 26,219,709 accounted bytes. C completed 94 storage queries,
+including the terminal empty query, reading 46,159 rows with a maximum response
+of 500. Counts drift as the application writes logs. After C, console inspection
+showed 119 MiB used main heap, 516 DOM elements, and zero Logs screens.
 
-- CPU samples attribute roughly one second to FlexSearch's recursive removal
-  path during persisted append-history replay (`add` → `update` → `remove`).
-  The deployed bundle already contains the WCPOS FlexSearch churn patch.
-- Console warnings report storage-index rebuilds for seven collections:
-  `_rxdb_internal` (72 documents), `schedulerTaskStates` (14),
-  `coverageRecords` (509), `coverageLanes` (30), `coverageCompactionLeases` (1),
-  `queryTotalRequestStates` (9), and `engineKv` (8). Reasons were stale changelog
-  operations. Counts alone do not establish bytes read or allocated.
-- The later main heap contains about 44,187 log-shaped objects despite no Logs
-  screen, with an aggregate retained-size display around 30 MB. This does not
-  demonstrate a multi-gigabyte leak or identify their retaining owner.
+## Mechanism and bounded fix
 
-## Evidence provenance
+**Observed in source:** startup binds the log database and runs retention. The
+old sweep materializes the entire retained history through `find().exec()`,
+creating RxDocuments and cached query results; expiry also uses an unbounded
+query. Allocation sampling attributes substantial allocations to remote-storage
+JSON parsing, worker messages, and RxDocument access during retention.
 
-- Performance panel: Memory enabled, Record and reload; approximately 6.6 seconds.
-- Local trace: `/tmp/frikifunko-startup-20260916.json.gz` (151,960 trace events).
-  It is not committed or uploaded: traces can contain private store/session data,
-  and this temporary local path is not durable evidence storage.
-- Heap peaks above come from trace `UpdateCounters` events; CPU attribution comes
-  from sampled profiles, checked against deployed bundle call frames.
-- Deployed asset: `entry-fd7ffd6f6a91b99a0c8fb05d2bd82118.js` under
-  `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@1.10/build/_expo/static/js/web/`.
-- No extension isolation or clean-browser comparison was performed. Other agents
-  were using the laptop. The capture is not a controlled performance benchmark.
+The fix queries raw storage in timestamp/logId keyset pages of 500 through
+RxDB's prepared-query path. It retains only IDs and accounted sizes across
+pages, and deletes in batches of 500. The direct timestamp lower bound lets the
+existing timestamp index advance; the logId tie-breaker avoids skipping equal
+timestamps. Legacy row accounting excludes the same internal fields as
+`RxDocument.toJSON()`. No new dependency, schema, lock, or background service.
 
-## Next investigation and completion criteria
+## Validation
 
-1. Reproduce the reported peak while recording the same renderer's Task Manager
-   footprint, JS heap, worker heap, DOM count, and timestamps. Verify process ID
-   after reload; keep measurement types separate.
-2. Capture allocation stacks across startup and inspect retainers at the peak.
-   Distinguish temporary allocation pressure from retained growth and memory
-   outside the JS heaps. Do not infer memory ownership from CPU samples alone.
-3. Test search-history replay and storage recovery only if allocation evidence
-   points there. Record collection/history sizes without publishing store data.
-4. Before proposing a fix, establish a repeatable failing measurement. Compare
-   old and changed code against the same local data and browser conditions.
-5. Call this resolved only after the reported peak is reproduced, its allocation
-   source is identified, and a targeted change is measured against that baseline.
+- Real RxDB regression: before the fix, a 1,201-row history returned all 1,201
+  rows in one storage response (failed the 500-row bound); after, it passes.
+- Real RxDB policy cases were run against both implementations: equal-timestamp
+  byte eviction, multi-page expiry with the exact 30-day boundary retained, and
+  legacy UTF-8 byte accounting. These cases passed both; this is not a claim of
+  broad compatibility beyond those inputs.
+- Full utils suite: 22 suites / 263 tests pass; utils lint and typecheck pass.
+- Full core suite: 317 suites / 2,671 tests pass with one worker. The first
+  two-worker run lost one Jest worker to OOM; 316 suites passed.
+- Independent correctness and scope reviews found no actionable findings.
+- Live C used the actual TypeScript implementation transpiled into the deployed
+  retention module, plus aggregate-only diagnostic counters. It completed with
+  no retention error. Overrides were disabled and their configuration removed
+  afterward; no server deployment was performed.
+
+## Other observations and limits
+
+The initial capture on the long-lived incident renderer had main heap peak
+434,753,400 bytes, worker peak 279,834,988 bytes, and peak 1,165 DOM nodes.
+OS RSS sampling peaked at 1,898 MiB and later fell to 863 MiB; RSS is not Chrome
+Task Manager footprint. A later main heap snapshot was 188 MB and contained
+about 44,187 log-shaped objects. None of these measurements alone proves a
+multi-gigabyte retained leak. A fresh renderer subsequently showed a physical
+footprint peak around 1.35 GB and settled around 350–450 MB.
+
+CPU profiles also showed FlexSearch append-history replay, and startup warnings
+reported index rebuilds for small internal collections. Those were not shown
+to cause the full reported peak and were not changed by this PR. The original
+3 GB fresh-load footprint was not reproduced under these captures. If it
+recurs after shipping both fixes, capture that renderer's footprint and heap
+allocation timeline together before attributing the remainder.
+
+## Local evidence provenance
+
+Raw artifacts stay local because they may contain private store/session data:
+`/tmp/frikifunko-retention-{baseline-A,skipped-B,restored-A2,paged-C}.json.gz`,
+`/tmp/frikifunko-startup-20260916.json.gz`, and
+`/tmp/frikifunko-startup-allocations-20260916.heapprofile`.
+Temporary paths are not durable evidence storage. Heap values were extracted
+from trace `UpdateCounters` events by renderer-main/storage-worker thread.
+Deployed asset: `entry-fd7ffd6f6a91b99a0c8fb05d2bd82118.js` under
+`https://cdn.jsdelivr.net/gh/wcpos/web-bundle@1.10/build/_expo/static/js/web/`.
+The captured bytes match the asset at web-bundle commit
+`00196a3f070c1ef88ab5acfd3bc95871dee0b2ea` byte-for-byte (`cmp`, exit 0),
+with SHA-256 `bd345f173f4f26ea93736021555d6c3e16610400cb463185e92174ce03bf915a`.
+The displayed app version is not used to infer bundle provenance, and the
+`@1.10` CDN release selector is not assumed immutable.
 
 ## Behavior changes / regressions
 
-None: this is an evidence record, not a runtime fix. No new production code,
-dependencies, browser instrumentation, or storage changes are introduced.
-No memory improvement, broad compatibility, or root-cause claim is made.
+Reads and deletes are paged instead of materializing the whole history. The
+30-day / 25-MiB oldest-first policy is unchanged in the compared tests. The
+sweep remains non-transactional: concurrent writes can drift from its byte
+snapshot, an accepted existing limitation. No broad cross-platform performance
+claim, full 3 GB resolution claim, or release/deployment claim is made.
