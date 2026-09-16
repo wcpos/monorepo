@@ -1,9 +1,11 @@
 // This pins the OTA lane's contract; flipping any of these silently returns
 // mobile to store-build-only delivery.
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { SourceSkips } from '@expo/fingerprint';
+import { normalizeSourceSkips } from '@expo/fingerprint/build/Config';
 import { parse } from 'yaml';
 
 jest.resetModules();
@@ -38,6 +40,14 @@ describe('mobile OTA configuration', () => {
 
 	it('uses the native fingerprint as the runtime version', () => {
 		expect(appConfig.runtimeVersion).toEqual({ policy: 'fingerprint' });
+	});
+
+	it('excludes only version fields from the native fingerprint', () => {
+		const configPath = resolve(__dirname, '../fingerprint.config.js');
+		expect(existsSync(configPath)).toBe(true);
+		const fingerprintConfig = require(configPath);
+		expect(fingerprintConfig).toHaveProperty('sourceSkips');
+		expect(normalizeSourceSkips(fingerprintConfig.sourceSkips)).toBe(SourceSkips.ExpoConfigVersions);
 	});
 
 	it('reuses the resolved runtime only in the E2E Metro process', () => {
