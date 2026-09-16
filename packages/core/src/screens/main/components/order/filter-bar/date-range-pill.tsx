@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { tz } from '@date-fns/tz';
 import { isSameDay, isToday, isYesterday } from 'date-fns';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
@@ -8,7 +7,7 @@ import type { DateRange } from '@wcpos/components/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
 import { DateRangeCalendar } from './calendar';
-import { calendarDate, useStoreDay } from '../../../../../hooks/use-store-day';
+import { calendarDate, inZone, useStoreDay, zoneOptions } from '../../../../../hooks/use-store-day';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../../hooks/use-local-date';
@@ -41,15 +40,15 @@ export function DateRangePill({ onRemove }: Props = {}) {
 
 		// date_created_gmt in WC REST API is in UTC, but without the 'Z',
 		// we need to convert it to a local date
-		const from = tz(timezone)(convertUTCStringToLocalDate(selectedDateRange.from));
-		const to = tz(timezone)(convertUTCStringToLocalDate(selectedDateRange.to));
+		const from = inZone(timezone, convertUTCStringToLocalDate(selectedDateRange.from));
+		const to = inZone(timezone, convertUTCStringToLocalDate(selectedDateRange.to));
 
 		// check if to and from are the same day
 		if (isSameDay(from, to)) {
-			if (isToday(from, { in: tz(timezone) })) {
+			if (isToday(from, zoneOptions(timezone))) {
 				return t('common.today');
 			}
-			if (isYesterday(from, { in: tz(timezone) })) {
+			if (isYesterday(from, zoneOptions(timezone))) {
 				return t('common.yesterday');
 			}
 		}

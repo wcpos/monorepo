@@ -14,6 +14,7 @@
 
 import { format } from 'date-fns';
 
+import { DEVICE_ZONE } from '../../../../hooks/use-store-day';
 import {
 	aggregateData,
 	determineInterval,
@@ -25,6 +26,8 @@ import {
 } from './utils';
 
 import type { DateRange, OrderPayload } from '../context';
+
+jest.mock('../../../../contexts/app-state', () => ({}));
 
 // Simple mock - treats timestamps as-is (consistent with how dateRange is created in tests)
 jest.mock('../../../../hooks/use-local-date', () => ({
@@ -272,6 +275,20 @@ describe('Chart Utils', () => {
 	});
 
 	describe('aggregateData', () => {
+		it('matches the device IANA zone when using the device sentinel', () => {
+			const orders = [
+				{ date_created_gmt: '2023-01-01T10:15:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-01T12:45:00', total: '200', total_tax: '20' },
+			] as OrderPayload[];
+			const range = {
+				start: new Date(2023, 0, 1),
+				end: new Date(2023, 0, 1, 23, 59, 59, 999),
+			};
+			expect(aggregateData(orders, range, undefined, DEVICE_ZONE)).toEqual(
+				aggregateData(orders, range, undefined, zone)
+			);
+		});
+
 		it('should aggregate orders over months', () => {
 			const orders = [
 				{ date_created_gmt: '2023-01-15T00:00:00', total: '100', total_tax: '10' },

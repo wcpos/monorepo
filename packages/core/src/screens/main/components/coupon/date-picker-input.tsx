@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
-import { tz } from '@date-fns/tz';
 import { format, parseISO } from 'date-fns';
 import { Calendar as RNCalendar } from 'react-native-calendars';
 import { useCSSVariable } from 'uniwind';
@@ -14,7 +13,7 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
-import { calendarDate, useStoreDay } from '../../../../hooks/use-store-day';
+import { calendarDate, inZone, useStoreDay } from '../../../../hooks/use-store-day';
 
 interface Props {
 	value: string | null;
@@ -48,13 +47,13 @@ export function DatePickerInput({ value, onChange, label, disabled }: Props) {
 
 	const displayText = React.useMemo(() => {
 		if (!value) return label || '';
-		const date = tz(timezone)(convertUTCStringToLocalDate(value));
+		const date = inZone(timezone, convertUTCStringToLocalDate(value));
 		return formatDate(date, 'd MMM yyyy');
 	}, [value, label, formatDate, timezone]);
 
 	const selectedDate = React.useMemo(() => {
 		if (!value) return undefined;
-		const date = tz(timezone)(convertUTCStringToLocalDate(value));
+		const date = inZone(timezone, convertUTCStringToLocalDate(value));
 		return format(date, 'yyyy-MM-dd');
 	}, [value, timezone]);
 

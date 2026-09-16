@@ -3,12 +3,15 @@ import { tz } from '@date-fns/tz';
 
 import {
 	calendarDate,
+	DEVICE_ZONE,
+	inZone,
 	resolveDayTimezone,
 	storeDayBounds,
 	storeDayPresets,
 	storeEndOfDayAfter,
 	storeRangeToFilter,
 	storeToday,
+	zoneOptions,
 } from './use-store-day';
 
 jest.mock('../contexts/app-state', () => ({}));
@@ -18,6 +21,20 @@ const now = new Date('2026-09-17T03:00:00Z');
 const zone = 'Europe/London';
 
 describe('store calendar days', () => {
+	it('uses plain device-local day bounds and presets for the device sentinel', () => {
+		const expected = { from: startOfDay(now), to: endOfDay(now) };
+		expect(storeDayBounds(storeToday(now, DEVICE_ZONE), DEVICE_ZONE)).toEqual(expected);
+		expect(storeDayPresets(now, DEVICE_ZONE).today).toEqual(expected);
+	});
+
+	it('copies the instant without timezone conversion for the device sentinel', () => {
+		const local = inZone(DEVICE_ZONE, now);
+		expect(local.getTime()).toBe(now.getTime());
+		expect(local).not.toBe(now);
+		expect(local.constructor).toBe(Date);
+		expect(zoneOptions(DEVICE_ZONE)).toEqual({});
+	});
+
 	it('names the store calendar day in the store zone, whatever zone the device is in', () => {
 		// 03:00Z is 17:00 on the 17th at UTC+14 and 16:00 on the 16th at UTC-11; no device zone
 		// can agree with both, so a helper that read the device clock fails one of these.

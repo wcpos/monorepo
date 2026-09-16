@@ -17,6 +17,16 @@ type DayRange = { from: Date; to: Date };
 type DayAddition = { weeks?: number; months?: number };
 type DayTimezone = { timezone: string; source: 'store' | 'site' | 'offset' | 'device' };
 
+export const DEVICE_ZONE = 'device' as const;
+
+export function zoneOptions(zone: string): { in?: ReturnType<typeof tz> } {
+	return zone === DEVICE_ZONE ? {} : { in: tz(zone) };
+}
+
+export function inZone(zone: string, date: Date): Date {
+	return zone === DEVICE_ZONE ? new Date(date.getTime()) : tz(zone)(date);
+}
+
 const probe = new Date(0);
 
 /**
@@ -52,11 +62,9 @@ export function resolveDayTimezone(
 	for (const [source, zone] of candidates) {
 		if (zone && usableZone(zone)) return { timezone: zone, source };
 	}
-	// The device zone by name so the same conversion path serves it; a runtime that cannot
-	// resolve even its own zone name has no timezone data at all, and UTC is the one zone
-	// every runtime converts without it.
+	// Keep the device zone by name when usable; otherwise bypass timezone conversion entirely.
 	const device = Intl.DateTimeFormat().resolvedOptions().timeZone;
-	return { timezone: device && usableZone(device) ? device : 'UTC', source: 'device' };
+	return { timezone: device && usableZone(device) ? device : DEVICE_ZONE, source: 'device' };
 }
 
 /** Picker dates name device-local calendar days; months are one-based. */
@@ -65,18 +73,22 @@ export const calendarDate = (picked: Date): CalendarDate => ({
 	month: picked.getMonth() + 1,
 	day: picked.getDate(),
 });
-export const storeToday = (now: Date, zone: string): CalendarDate => calendarDate(tz(zone)(now));
+export const storeToday = (now: Date, zone: string): CalendarDate =>
+	calendarDate(inZone(zone, now));
 
 export function storeDayBounds(day: CalendarDate, zone: string): DayRange {
-	const date = new TZDate(day.year, day.month - 1, day.day, zone);
+	const date =
+		zone === DEVICE_ZONE
+			? new Date(day.year, day.month - 1, day.day)
+			: new TZDate(day.year, day.month - 1, day.day, zone);
 	return {
-		from: new Date(dates.startOfDay(date, { in: tz(zone) })),
-		to: new Date(dates.endOfDay(date, { in: tz(zone) })),
+		from: new Date(dates.startOfDay(date, zoneOptions(zone))),
+		to: new Date(dates.endOfDay(date, zoneOptions(zone))),
 	};
 }
 
 export function storeDayPresets(now: Date, zone: string, weekStartsOn: dates.Day = 1) {
-	const options = { in: tz(zone), weekStartsOn };
+	const options = { ...zoneOptions(zone), weekStartsOn };
 	const bounds = (from: Date, to = from): DayRange => ({
 		from: storeDayBounds(storeToday(from, zone), zone).from,
 		to: storeDayBounds(storeToday(to, zone), zone).to,
@@ -98,7 +110,7 @@ export const storeRangeToFilter = ({ from, to }: DayRange) => ({
 	to: convertLocalDateToUTCString(to),
 });
 export const storeEndOfDayAfter = (now: Date, zone: string, amount: DayAddition): Date =>
-	storeDayBounds(storeToday(dates.add(now, amount, { in: tz(zone) }), zone), zone).to;
+	storeDayBounds(storeToday(dates.add(now, amount, zoneOptions(zone)), zone), zone).to;
 
 type FieldSource = Record<string, unknown>;
 

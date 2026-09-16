@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { tz } from '@date-fns/tz';
 import { isSameDay, isToday, isYesterday } from 'date-fns';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
@@ -9,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popov
 
 import { DateRangeCalendar } from '../../components/order/filter-bar/calendar';
 import { useQueryState, useQueryStateActions } from '../../../../query';
-import { calendarDate, useStoreDay } from '../../../../hooks/use-store-day';
+import { calendarDate, inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 
@@ -29,14 +28,14 @@ export function DateRangePill() {
 			return t('coupons.expiry_date');
 		}
 
-		const from = tz(timezone)(convertUTCStringToLocalDate(selectedDateRange.from));
-		const to = tz(timezone)(convertUTCStringToLocalDate(selectedDateRange.to));
+		const from = inZone(timezone, convertUTCStringToLocalDate(selectedDateRange.from));
+		const to = inZone(timezone, convertUTCStringToLocalDate(selectedDateRange.to));
 
 		if (isSameDay(from, to)) {
-			if (isToday(from, { in: tz(timezone) })) {
+			if (isToday(from, zoneOptions(timezone))) {
 				return t('common.today');
 			}
-			if (isYesterday(from, { in: tz(timezone) })) {
+			if (isYesterday(from, zoneOptions(timezone))) {
 				return t('common.yesterday');
 			}
 		}

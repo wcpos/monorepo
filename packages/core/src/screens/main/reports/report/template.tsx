@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { tz } from '@date-fns/tz';
 import { useFocusEffect } from 'expo-router';
 
 import { Br, Line, Row, Text } from '@wcpos/components/print';
@@ -12,7 +11,7 @@ import { useRegisterNames } from '../../../../services/register/use-register-nam
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
-import { useStoreDay } from '../../../../hooks/use-store-day';
+import { inZone, useStoreDay } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
@@ -65,8 +64,8 @@ export function ZReport() {
 
 		// The period is the store's day, so it is labelled in the store's zone, not the till's.
 		return {
-			from: formatDate(tz(timezone)(from), 'yyyy-M-dd HH:mm:ss'),
-			to: formatDate(tz(timezone)(to), 'yyyy-M-dd HH:mm:ss'),
+			from: formatDate(inZone(timezone, from), 'yyyy-M-dd HH:mm:ss'),
+			to: formatDate(inZone(timezone, to), 'yyyy-M-dd HH:mm:ss'),
 		};
 	}, [formatDate, selectedDateRange, timezone]);
 
@@ -94,7 +93,7 @@ export function ZReport() {
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- generatedAt is an event timestamp, not derived render data; new Date() is impure and must not run during render.
 		setGeneratedAt(new Date());
 	}, [selectedOrders]);
-	const reportGenerated = formatDate(tz(timezone)(generatedAt), 'yyyy-M-dd HH:mm:ss');
+	const reportGenerated = formatDate(inZone(timezone, generatedAt), 'yyyy-M-dd HH:mm:ss');
 
 	return (
 		<View>

@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { tz } from '@date-fns/tz';
-
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
@@ -23,7 +21,7 @@ import { useRegisterNames } from '../../../../services/register/use-register-nam
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
-import { useStoreDay } from '../../../../hooks/use-store-day';
+import { inZone, useStoreDay } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
@@ -79,8 +77,8 @@ export function Report() {
 
 		// The period is the store's day, so it is labelled in the store's zone, not the till's.
 		return {
-			from: formatDate(tz(timezone)(from), 'yyyy-M-dd HH:mm:ss'),
-			to: formatDate(tz(timezone)(to), 'yyyy-M-dd HH:mm:ss'),
+			from: formatDate(inZone(timezone, from), 'yyyy-M-dd HH:mm:ss'),
+			to: formatDate(inZone(timezone, to), 'yyyy-M-dd HH:mm:ss'),
 		};
 	}, [formatDate, selectedDateRange, timezone]);
 
@@ -88,7 +86,7 @@ export function Report() {
 	 * Generate report timestamp
 	 */
 	const reportGenerated = React.useMemo(
-		() => formatDate(tz(timezone)(new Date()), 'yyyy-M-dd HH:mm:ss'),
+		() => formatDate(inZone(timezone, new Date()), 'yyyy-M-dd HH:mm:ss'),
 		[formatDate, timezone]
 	);
 

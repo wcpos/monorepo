@@ -1,4 +1,3 @@
-import { tz } from '@date-fns/tz';
 import * as dateFns from 'date-fns';
 import {
 	addMinutes,
@@ -12,6 +11,7 @@ import {
 } from 'date-fns';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
+import { inZone, zoneOptions } from '../../../../hooks/use-store-day';
 
 import type { Locale } from 'date-fns/locale';
 import type { DateRange, OrderPayload } from '../context';
@@ -173,14 +173,14 @@ export const generateAllDates = (
 	zone: string
 ): Date[] => {
 	if (interval === 'months') {
-		return eachMonthOfInterval({ start: startDate, end: endDate }, { in: tz(zone) });
+		return eachMonthOfInterval({ start: startDate, end: endDate }, zoneOptions(zone));
 	} else if (interval === 'days') {
-		return eachDayOfInterval({ start: startDate, end: endDate }, { in: tz(zone) });
+		return eachDayOfInterval({ start: startDate, end: endDate }, zoneOptions(zone));
 	} else {
 		// Minute-based intervals
 		const step = minuteStep ?? 60; // Default to 1 hour if not specified
 		const dates: Date[] = [];
-		let date = getStartOfMinuteInterval(tz(zone)(startDate), step);
+		let date = getStartOfMinuteInterval(inZone(zone, startDate), step);
 		// Use < instead of <= to avoid generating an empty interval at the exact end time
 		while (date < endDate) {
 			dates.push(date);
@@ -209,15 +209,15 @@ export const getEffectiveDailyRange = (
 	if (!bounds) {
 		// No orders - use full day with reasonable business hours fallback
 		return {
-			start: dateFns.startOfDay(dateRange.start, { in: tz(zone) }),
-			end: dateFns.endOfDay(dateRange.start, { in: tz(zone) }),
+			start: dateFns.startOfDay(dateRange.start, zoneOptions(zone)),
+			end: dateFns.endOfDay(dateRange.start, zoneOptions(zone)),
 		};
 	}
 
 	// Expand to interval boundaries (start of hour for earliest, end of hour for latest)
-	const start = dateFns.startOfHour(bounds.earliest, { in: tz(zone) });
+	const start = dateFns.startOfHour(bounds.earliest, zoneOptions(zone));
 	// Add 1 hour to include the hour containing the last sale
-	const end = addMinutes(dateFns.startOfHour(bounds.latest, { in: tz(zone) }), 60);
+	const end = addMinutes(dateFns.startOfHour(bounds.latest, zoneOptions(zone)), 60);
 
 	return { start, end };
 };
@@ -241,15 +241,15 @@ export const aggregateData = (
 ): AggregatedDataPoint[] => {
 	const { start: originalStart, end: originalEnd } = dateRange;
 
-	let effectiveStart = tz(zone)(originalStart);
-	let effectiveEnd = tz(zone)(originalEnd);
+	let effectiveStart = inZone(zone, originalStart);
+	let effectiveEnd = inZone(zone, originalEnd);
 
 	// For single-day reports, trim to order bounds and use minute-based intervals
 	// Use isSameDay for explicit calendar day comparison (avoids edge cases with time ranges)
-	if (isSameDay(originalStart, originalEnd, { in: tz(zone) })) {
+	if (isSameDay(originalStart, originalEnd, zoneOptions(zone))) {
 		const effectiveRange = getEffectiveDailyRange(dateRange, orders, zone);
-		effectiveStart = tz(zone)(effectiveRange.start);
-		effectiveEnd = tz(zone)(effectiveRange.end);
+		effectiveStart = inZone(zone, effectiveRange.start);
+		effectiveEnd = inZone(zone, effectiveRange.end);
 	}
 
 	const { keyFormat, labelFormat, interval, minuteStep } = determineInterval(
@@ -283,11 +283,11 @@ export const aggregateData = (
 		// Skip orders without a valid date
 		if (!date_created_gmt) return;
 
-		let date = tz(zone)(convertUTCStringToLocalDate(date_created_gmt));
+		let date = inZone(zone, convertUTCStringToLocalDate(date_created_gmt));
 
 		// Bucket the date into the appropriate interval
 		if (interval === 'minutes' && minuteStep) {
-			date = tz(zone)(getStartOfMinuteInterval(date, minuteStep));
+			date = inZone(zone, getStartOfMinuteInterval(date, minuteStep));
 		}
 		// For 'days' and 'months', the format itself handles the bucketing
 

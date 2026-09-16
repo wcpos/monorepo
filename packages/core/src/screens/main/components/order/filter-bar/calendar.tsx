@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { format, parseISO } from 'date-fns';
-import { tz } from '@date-fns/tz';
 
 import { Button, ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Calendar, DateRange } from '@wcpos/components/calendar';
@@ -9,7 +8,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 
-import { useStoreDay } from '../../../../../hooks/use-store-day';
+import { useStoreDay, zoneOptions } from '../../../../../hooks/use-store-day';
 import { useT } from '../../../../../contexts/translations';
 
 interface Props {
@@ -36,8 +35,8 @@ export function DateRangeCalendar({ onSelect }: Props) {
 	const ranges = React.useMemo(
 		() =>
 			Object.values(presets()).map(({ from, to }) => ({
-				from: parseISO(format(from, 'yyyy-MM-dd', { in: tz(timezone) })),
-				to: parseISO(format(to, 'yyyy-MM-dd', { in: tz(timezone) })),
+				from: parseISO(format(from, 'yyyy-MM-dd', zoneOptions(timezone))),
+				to: parseISO(format(to, 'yyyy-MM-dd', zoneOptions(timezone))),
 			})),
 		[presets, timezone]
 	);
