@@ -76,6 +76,7 @@ import {
 	parseRetryAfterMs,
 	parseServerLoad1m,
 	parseServerPressure,
+	type PressureSignal,
 	type ServerPressure,
 } from './change-signal/server-pressure';
 import { hydrateBarcodeSelectors } from './change-signal/config-fingerprint-source';
@@ -522,6 +523,14 @@ export type EngineStatus = {
 	bootstrapFailed: Record<string, string>;
 	/** Pending mutation count of the active scope (cached from the last enqueue/drain; null before either). */
 	queueDepth: number | null;
+	serverPressure: {
+		multiplier: number;
+		retryAfterUntilMs: number | null;
+		/** The last pressure bucket the server reported, or null before any response carried one. */
+		reported: ServerPressure | null;
+		/** What started the current back-off, or null while the cadence is at ×1. */
+		signal: PressureSignal | null;
+	};
 	collections: Record<SyncCollectionName, EngineCollectionState>;
 };
 
@@ -830,6 +839,8 @@ export function createRxdbSyncEngine(
 			serverLoad1m?: number
 		): void => {
 			const atMs = nowMs();
+			const reportedBefore = serverPressure.reported();
+			const signalBefore = serverPressure.signal();
 			const transition = serverPressure.observe({
 				atMs,
 				status,
@@ -840,6 +851,16 @@ export function createRxdbSyncEngine(
 				...(serverLoad1m === undefined ? {} : { serverLoad1m }),
 			});
 			if (transition !== null) cadence?.onServerPressureTransition(transition);
+			// A header that moved without crossing a back-off threshold, or a
+			// signal re-labelled at the ladder's ceiling, changes the status
+			// read-out without a transition; subscribers were promised a snapshot
+			// when status changes, so tell them.
+			if (
+				serverPressure.reported() !== reportedBefore ||
+				serverPressure.signal() !== signalBefore
+			) {
+				scheduleStatusChange();
+			}
 		};
 		let response: Response;
 		try {
@@ -2181,6 +2202,7 @@ export function createRxdbSyncEngine(
 			});
 		}
 		const stats = manager.stats();
+		const now = nowMs();
 		const laneStatus = (name: EngineLane, lastError: string | null) => ({
 			lastError,
 			lastTick: laneLastTick.get(name) ?? null,
@@ -2212,6 +2234,13 @@ export function createRxdbSyncEngine(
 				])
 			) as EngineStatus['lanes'],
 			queueDepth: writePlane.queueDepth(),
+			serverPressure: {
+				multiplier: serverPressure.multiplier(),
+				retryAfterUntilMs:
+					serverPressure.retryAfterUntilMs() > now ? serverPressure.retryAfterUntilMs() : null,
+				reported: serverPressure.reported(),
+				signal: serverPressure.signal(),
+			},
 			collections: Object.fromEntries(
 				SYNC_COLLECTION_NAMES.map((collection) => [
 					collection,

@@ -63,6 +63,7 @@ import {
 	deriveRows,
 	formatBytes,
 	isReadyToSell,
+	isServerBackingOff,
 	stuckCountsByRow,
 	totalLocalRecords,
 } from './database-logic';
@@ -120,7 +121,7 @@ type RowStory = { serverText: string; coverage: RowCoverage };
  * - a stale/missing census reads "checking…", never "unknown"
  * - an empty fresh census reads "—" (nothing to mirror)
  */
-function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
+function useRowStory(row: CollectionRow, phase: RowPhase, backingOff: boolean): RowStory {
 	const t = useT();
 	if (phase === 'clearing') {
 		return {
@@ -139,7 +140,7 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 			serverText: row.serverTotal !== null ? row.serverTotal.toLocaleString() : '…',
 			coverage: {
 				kind: 'checking',
-				label: t('health.database.checking'),
+				label: backingOff ? t('health.database.checking_busy') : t('health.database.checking'),
 			},
 		};
 	}
@@ -244,12 +245,14 @@ function CollectionRowView({
 	label,
 	sizeBytes,
 	stuckCount = 0,
+	backingOff,
 	wide,
 }: {
 	row: CollectionRow;
 	label: string;
 	sizeBytes: number | null | undefined;
 	stuckCount?: number;
+	backingOff: boolean;
 	wide: boolean;
 }) {
 	const t = useT();
@@ -258,7 +261,7 @@ function CollectionRowView({
 	const { checking, check } = useCollectionCheck();
 	const [confirming, setConfirming] = React.useState(false);
 	const [phase, setPhase] = React.useState<RowPhase>('idle');
-	const story = useRowStory(row, phase);
+	const story = useRowStory(row, phase, backingOff);
 
 	const isVariations = row.key === 'variations';
 	const sizeText = formatBytes(sizeBytes ?? null);
@@ -423,6 +426,7 @@ function CollectionRowView({
 													count: row.local.toLocaleString(),
 												})
 											: `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })}`}
+						{story.coverage.kind === 'checking' ? ` · ${story.coverage.label}` : ''}
 					</Text>
 				</View>
 				<View className="items-end">
@@ -546,6 +550,7 @@ export function DatabaseScreen() {
 	const footprint = useStorageFootprint();
 	const sizes = useCollectionSizes(counts, ROW_ORDER);
 	const nowMs = useNowMs(1_000);
+	const backingOff = isServerBackingOff(status.serverPressure, nowMs);
 	const relative = useRelativeTime();
 
 	const stats = useLogStats();
@@ -699,6 +704,7 @@ export function DatabaseScreen() {
 							stuckCount={stuckByRow[row.key] ?? 0}
 							label={t(ROW_LABEL_KEYS[row.key])}
 							wide={tableLayout.wide}
+							backingOff={backingOff}
 						/>
 					))}
 					{/* Measured storage the collection rows don't itemize — every bucket
@@ -794,14 +800,18 @@ export function DatabaseScreen() {
 						<Text className="text-muted-foreground pl-3.5 text-xs">
 							{censusWindow.updatedAtMs === null
 								? t('health.database.totals_pending')
-								: censusRefreshDue(censusWindow, nowMs)
-									? t('health.database.totals_refreshing', {
+								: backingOff
+									? t('health.database.totals_server_busy', {
 											ago: relative(censusWindow.updatedAtMs, nowMs),
 										})
-									: t('health.database.totals_updated', {
-											ago: relative(censusWindow.updatedAtMs, nowMs),
-											next: relative(nowMs, censusWindow.nextUpdateAtMs ?? nowMs),
-										})}
+									: censusRefreshDue(censusWindow, nowMs)
+										? t('health.database.totals_refreshing', {
+												ago: relative(censusWindow.updatedAtMs, nowMs),
+											})
+										: t('health.database.totals_updated', {
+												ago: relative(censusWindow.updatedAtMs, nowMs),
+												next: relative(nowMs, censusWindow.nextUpdateAtMs ?? nowMs),
+											})}
 						</Text>
 						{censusProgress !== null && !censusRefreshDue(censusWindow, nowMs) ? (
 							<View className="bg-muted mt-1 ml-3.5 h-0.5 w-40 overflow-hidden rounded-full">
