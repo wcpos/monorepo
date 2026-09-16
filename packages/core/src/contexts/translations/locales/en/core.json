@@ -1446,6 +1446,7 @@
 	"health.logs.event.queue_write_reschedule_failed": "Could not schedule another try for a change",
 	"health.logs.event.queue_write_resolve": "Settled a clashing change",
 	"health.logs.event.queue_write_tick_error": "Sending queued changes failed",
+	"health.logs.event.render_error": "Part of the screen failed to load",
 	"health.logs.event.signal_cursor": "Sync position moved unexpectedly",
 	"health.logs.event.signal_cycle": "Checked your store for changes",
 	"health.logs.event.signal_log": "Change check detail",
@@ -1483,6 +1484,7 @@
 	"health.logs.event_description.queue_write_conflict_recovered": "A change clashed with your store's copy, was re-checked against it, and saved successfully.",
 	"health.logs.event_description.queue_write_drain": "The POS sent your queued changes to your store.",
 	"health.logs.event_description.queue_write_enqueued": "A change you made was queued to send to your store.",
+	"health.logs.event_description.render_error": "A screen or panel hit an error while drawing and was replaced by an error message. Close the message to retry; reload the app if it comes back.",
 	"health.logs.event_description.signal_cursor": "The POS's bookmark of where it was up to in your store's changes moved unexpectedly.",
 	"health.logs.event_description.signal_cycle": "The POS checked your store for changes and saved anything new.",
 	"health.logs.event_description.signal_tick_error": "A routine check of your store for changes did not get an answer.",
@@ -1585,6 +1587,8 @@
 	"health.logs.error_summary.CLIENT144": "A search index rebuild failed, so results may be incomplete while the app retries initialization.",
 	"health.logs.error_summary.CHECKOUT411": "A line on this order has price details the POS could not read, so its amount was taken from the stored totals instead.",
 	"health.logs.error_summary.CHECKOUT421": "This order refers to a tax rate your store no longer has, so its tax may be wrong.",
+	"health.logs.error_summary.CLIENT151": "Part of the screen failed to load and was replaced by an error message.",
+	"health.logs.error_summary.AUTH131": "The saved store session was incomplete, so WCPOS returned to the store list.",
 	"health.logs.error_action.SYNC101": "Note the unsaved change and check device storage, then restart. Do not clear local data.",
 	"health.logs.error_action.SYNC111": "Repair from Store health → Database.",
 	"health.logs.error_action.SYNC121": "Keep working — sync resumes when the store is reachable.",
@@ -1668,5 +1672,7 @@
 	"health.logs.error_action.CLIENT143": "No action needed. If search still misses products you can see in the catalogue, reload the app.",
 	"health.logs.error_action.CLIENT144": "Try another search; reload if results still look wrong.",
 	"health.logs.error_action.CHECKOUT411": "Remove that line and add it again, then check the total.",
-	"health.logs.error_action.CHECKOUT421": "Check the tax on this order; ask the admin whether a tax rate was deleted."
+	"health.logs.error_action.CHECKOUT421": "Check the tax on this order; ask the admin whether a tax rate was deleted.",
+	"health.logs.error_action.CLIENT151": "Close the error message to retry; if it comes back, reload the app.",
+	"health.logs.error_action.AUTH131": "Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data."
 }

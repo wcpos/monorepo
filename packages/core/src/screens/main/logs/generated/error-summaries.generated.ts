@@ -184,6 +184,10 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.CHECKOUT411');
 		case 'CHECKOUT421':
 			return t('health.logs.error_summary.CHECKOUT421');
+		case 'CLIENT151':
+			return t('health.logs.error_summary.CLIENT151');
+		case 'AUTH131':
+			return t('health.logs.error_summary.AUTH131');
 		default: {
 			const exhaustive: never = code;
 			return exhaustive;

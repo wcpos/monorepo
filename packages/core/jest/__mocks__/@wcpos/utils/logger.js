@@ -62,6 +62,8 @@ module.exports.CategoryLogger = CategoryLogger;
 module.exports.getErrorMessage = (error) =>
 	error instanceof Error ? error.message : String(error);
 module.exports.setToast = jest.fn();
+module.exports.markErrorReported = jest.fn();
+module.exports.isErrorReported = jest.fn(() => false);
 module.exports.setDatabase = jest.fn();
 module.exports.log = mockLogger;
 

@@ -92,6 +92,7 @@ export const SYNC_EVENT_TYPES = [
 	'queue.write.reschedule-failed',
 	'queue.write.resolve',
 	'queue.write.tick.error',
+	'render.error',
 	'signal.cursor',
 	'signal.cycle',
 	'signal.log',
@@ -787,6 +788,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		key: 'health.logs.event.queue_write_tick_error',
 		label: 'Sending queued changes failed',
 		introducedIn: '1.10.0',
+	},
+	'render.error': {
+		type: 'render.error',
+		domain: 'CLIENT',
+		key: 'health.logs.event.render_error',
+		label: 'Part of the screen failed to load',
+		descriptionKey: 'health.logs.event_description.render_error',
+		description:
+			'A screen or panel hit an error while drawing and was replaced by an error message. Close the message to retry; reload the app if it comes back.',
+		introducedIn: '1.10.21',
 	},
 	'signal.cursor': {
 		type: 'signal.cursor',

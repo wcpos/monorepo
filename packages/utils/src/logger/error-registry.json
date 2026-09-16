@@ -1858,5 +1858,50 @@
 		],
 		"evidence": "monorepo#1560 order-math EngineWarning unknown_tax_rate_id",
 		"introducedIn": "1.10.0"
+	},
+	{
+		"code": "CLIENT151",
+		"symbol": "SCREEN_RENDER_FAILED",
+		"domain": "CLIENT",
+		"severity": "error",
+		"actionHint": "Close the error message to retry; if it comes back, reload the app.",
+		"retryPolicy": "manual",
+		"dataSafety": "no-impact",
+		"escalation": "support-with-export",
+		"summary": "Part of the screen failed to load and was replaced by an error message.",
+		"docsBody": "A screen or panel hit an error while drawing, so WCPOS replaced it with an error message instead of closing. The rest of the app keeps working, and the failure itself wrote and lost nothing: it is a defect in the app, not a problem with your store. The log entry carries the error and the component that failed, which is what support needs; when error reporting is allowed the same failure reaches the developers automatically.",
+		"troubleshooting": [
+			"Close the error message (the X) — the panel redraws, and a one-off failure clears on its own.",
+			"If it comes straight back, reload the app: reload the browser tab on web, or close and reopen the app on desktop and mobile.",
+			"If the same message returns after a reload, export debug info from the Logs screen and contact support — the entry names the error and the component that failed."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "monorepo#2112 — a Windows till blocked at login behind a boundary-caught error that produced no Sentry event in 90 days",
+		"introducedIn": "1.10.21"
+	},
+	{
+		"code": "AUTH131",
+		"symbol": "STORE_SESSION_INCOMPLETE",
+		"domain": "AUTH",
+		"severity": "error",
+		"actionHint": "Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data.",
+		"retryPolicy": "manual",
+		"dataSafety": "local-only",
+		"escalation": "support-with-export",
+		"summary": "The saved store session was incomplete, so WCPOS returned to the store list.",
+		"docsBody": "WCPOS remembers which site, cashier and store were open so the till can resume where it left off. This time part of that record was missing — usually the site or cashier entry — so instead of opening the store with a broken session the till returned to the store list. Only the pointer to the open session was cleared; the store’s local data stays on the device. Choosing the same store again picks it up. If the site had to be added again, the till opens a fresh local copy of the store, and sales still waiting to sync under the previous session are not picked up automatically — contact support before clearing local data. A repeat on one device means its local storage is not keeping what the app writes.",
+		"troubleshooting": [
+			"Choose the site and store again to sign back in — the store’s data on this device is untouched; only the remembered session was cleared.",
+			"If the site is no longer in the list, enter its address again and sign in. Contact support first if you know sales were still waiting to sync: a re-added site opens a fresh local copy of the store and does not pick the old one up.",
+			"If it happens again on the same device, its local storage is not keeping what the app writes: check free disk space, and look at the Logs screen for storage errors from around the same time.",
+			"Export debug info and contact support if it keeps recurring — the log entry names which part of the session was missing."
+		],
+		"logSources": [
+			"browser-console"
+		],
+		"evidence": "monorepo#2112 — 2026-09-16 Spanish Windows till stuck on 'useStoreSession must be called within an active store session' after a main-process storage failure (wcpos/electron#459)",
+		"introducedIn": "1.10.21"
 	}
 ]
