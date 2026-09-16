@@ -4,7 +4,7 @@ import set from 'lodash/set';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getDatabaseEpoch, getLogger, mapExceptionToCode } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	CLIENT_HEADER,
 	formatClientSignal,
@@ -28,12 +28,21 @@ import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 // scope — this interceptor does not, so the flag rides the request config) and
 // `quietErrors` (failure is routine and non-fatal for this request — e.g.
 // decorative image fetches — so log it as a warning instead of an error;
-// the error itself still throws and is enriched identically).
+// the error itself still throws and is enriched identically) and
+// `failureCode` (the registered code a failure of THIS request means when
+// the server sends no WordPress error body). The status table below the
+// parser is written for REST routes — it reads a 404 as "the WCPOS store
+// route is unavailable" — so a request outside the REST namespace, such as
+// an image under /wp-content/uploads/, must name its own meaning or a missing
+// file is logged as AUTH311 and the merchant is told to check REST is not
+// blocked. A WordPress error body still outranks it: that is the server's
+// own account of the failure.
 declare module 'axios' {
 	export interface AxiosRequestConfig {
 		wcposHeaders?: boolean;
 		protocolHeaders?: boolean;
 		quietErrors?: boolean;
+		failureCode?: ErrorCode;
 	}
 }
 
@@ -352,11 +361,19 @@ export const useHttpClient = (
 					? parseWpError(axiosError.response.data, axiosError.message)
 					: undefined;
 				const mappedException = axiosError.response ? undefined : mapExceptionToCode(error);
+				// A transport failure the exception mapper could not name (CLIENT999) is
+				// as generic as the status table, so the request's own code wins there too.
+				const isGenericFallback =
+					mappedException === undefined || mappedException.code === ERROR_CODES.UNEXPECTED_ERROR;
+				const fallbackCode = axiosError.response
+					? mapToInternalCode(null, axiosError.response.status)
+					: mappedException?.code;
 				const errorCode =
 					wpError?.code ??
-					(axiosError.response
-						? mapToInternalCode(null, axiosError.response.status)
-						: mappedException?.code);
+					(isGenericFallback ? (reqConfig.failureCode ?? fallbackCode) : fallbackCode);
+				const codeFallback =
+					mappedException?.code === ERROR_CODES.UNEXPECTED_ERROR &&
+					errorCode === ERROR_CODES.UNEXPECTED_ERROR;
 				if (errorCode === ERROR_CODES.APP_UPDATE_REQUIRED && axiosError.response) {
 					const details = parseUpdateRequiredBody(axiosError.response.data);
 					if (details) onUpdateRequired?.({ ...details, status: axiosError.response.status });
@@ -371,7 +388,7 @@ export const useHttpClient = (
 						method,
 						endpoint,
 						status: axiosError.response?.status ?? 0,
-						...(mappedException?.code === 'CLIENT999' && { codeFallback: true }),
+						...(codeFallback && { codeFallback: true }),
 						...(wpError?.serverCode && { serverCode: wpError.serverCode }),
 						...(wpError?.triage && { triage: true }),
 					};
