@@ -1,9 +1,10 @@
 import React from 'react';
 
-import { WithSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
 import { version } from 'canvaskit-wasm/package.json';
 
 import { Text } from '@wcpos/components/text';
+
+import { FocusedSkiaWeb } from '../../components/focused-skia-web';
 
 /**
  * Chart component using Victory Native XL
@@ -13,7 +14,7 @@ import { Text } from '@wcpos/components/text';
  */
 export const Chart = React.memo(() => {
 	return (
-		<WithSkiaWeb
+		<FocusedSkiaWeb
 			opts={{
 				locateFile: (file) =>
 					`https://cdn.jsdelivr.net/npm/canvaskit-wasm@${version}/bin/full/${file}`,

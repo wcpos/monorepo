@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { WithSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
 import { version } from 'canvaskit-wasm/package.json';
 
 import { useLocalDate } from '@wcpos/core/hooks/use-local-date';
+import { FocusedSkiaWeb } from '@wcpos/core/screens/main/components/focused-skia-web';
 
 import { MIN_TREND_POINTS, TrendFrame, type TrendPoint } from './trend-frame';
 
@@ -38,7 +38,7 @@ export const TrendLine = React.memo(
 		if (props.points.length < MIN_TREND_POINTS) return frame;
 
 		return (
-			<WithSkiaWeb
+			<FocusedSkiaWeb
 				opts={{
 					locateFile: (file) =>
 						`https://cdn.jsdelivr.net/npm/canvaskit-wasm@${version}/bin/full/${file}`,
