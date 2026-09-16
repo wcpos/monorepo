@@ -527,6 +527,8 @@ export function shouldExtendLedger(args: {
 	total: number;
 	lastExtendCount: number | null;
 }): boolean {
+	// Inactive drawer screens stay mounted with zero layout; that is not a scroll end.
+	if (args.viewportHeight <= 0) return false;
 	const distanceFromBottom = args.contentHeight - args.viewportHeight - args.offsetY;
 	if (distanceFromBottom > 800) return false;
 	if (args.total <= args.renderedCount) return false;

@@ -23,6 +23,197 @@ const searchError = jest.mocked(searchLogger.error);
 const searchWarn = jest.mocked(searchLogger.warn);
 
 describe('observeEngineQuery', () => {
+	it('reads resolved search hit ids by findByIds without uuid $in storage selectors', async () => {
+		const database = await createEngineDatabase(['products']);
+		const collection = database.collections.products;
+		await collection.bulkInsert([
+			engineProduct({ uuid: 'hit-b', name: 'Shirt B' }),
+			engineProduct({ uuid: 'hit-a', name: 'Shirt A' }),
+			engineProduct({ uuid: 'other', name: 'Hammer' }),
+		]);
+		const documents = await collection.find().exec();
+		const hits = documents.filter((document) => document.primary !== 'other');
+		jest.spyOn(collection, 'initSearch').mockResolvedValue({
+			collection: { $: of(null) },
+			find: async () => hits,
+		} as never);
+		const find = jest.spyOn(collection, 'find');
+		const count = jest.spyOn(collection, 'count');
+		const findByIds = jest.spyOn(collection, 'findByIds');
+		try {
+			const result = await firstValueFrom(
+				observeEngineQuery(createFakeEngine(database), 'point-reads', {
+					collection: 'products',
+					search: 'shirt',
+					searchFields: ['name'],
+				})
+			);
+			expect(result.hits.map((hit) => hit.id)).toEqual(['hit-a', 'hit-b']);
+			for (const [query] of [...find.mock.calls, ...count.mock.calls]) {
+				expect(JSON.stringify(query?.selector ?? {})).not.toMatch(/"uuid":\{"\$in":/);
+			}
+			expect(findByIds.mock.calls).toEqual([[hits.map((document) => document.primary)]]);
+		} finally {
+			await database.close();
+		}
+	});
+
+	it.each(['legacy', 'compiled'] as const)(
+		'matches the old search selector result, order and count with panel filtering and paging (%s)',
+		async (mode) => {
+			const database = await createEngineDatabase(['products']);
+			const collection = database.collections.products;
+			await collection.bulkInsert([
+				engineProduct({ uuid: 'cheap', name: 'Shirt', price: '5' }),
+				engineProduct({ uuid: 'middle', name: 'Shirt', price: '20' }),
+				engineProduct({ uuid: 'expensive', name: 'Shirt', price: '30' }),
+				engineProduct({ uuid: 'sold-out', name: 'Shirt', price: '40', stock_status: 'outofstock' }),
+				engineProduct({ uuid: 'variable', name: 'Shirt', price: '25', type: 'variable' }),
+				engineProduct({ uuid: 'other', name: 'Hammer', price: '15' }),
+			]);
+			const documents = (await collection.find().exec()).filter((doc) => doc.primary !== 'other');
+			jest.spyOn(collection, 'initSearch').mockResolvedValue({
+				collection: { $: of(null) },
+				find: async () => documents,
+			} as never);
+			try {
+				const selector = {
+					$and: [
+						{ stockStatus: 'instock', type: 'simple' },
+						{ uuid: { $in: documents.map((doc) => doc.primary) } },
+					],
+				};
+				const oldHits = await collection
+					.find({ selector, sort: [{ price: 'asc' }], skip: 1, limit: 1 })
+					.exec();
+				const oldCount = await collection.count({ selector }).exec();
+				const result = await firstValueFrom(
+					observeEngineQuery(createFakeEngine(database), `point-oracle-${mode}`, {
+						collection: 'products',
+						search: 'shirt',
+						searchFields: ['name'],
+						skip: 1,
+						limit: 1,
+						...(mode === 'legacy'
+							? {
+									selector: { stock_status: 'instock', type: 'simple' },
+									sort: [{ price: 'asc' }],
+								}
+							: {
+									selector: { stock_status: 'instock' },
+									read: {
+										prefilter: {},
+										residual: (doc) => doc.type === 'simple',
+										complete: false,
+										sort: [{ direction: 'asc', enginePath: 'price', value: (doc) => doc.price }],
+										sortPushable: true,
+										search: 'shirt',
+										searchFields: ['name'],
+										limit: 1,
+									},
+								}),
+					})
+				);
+				expect(oldCount).toBe(3);
+				expect(oldHits.map((doc) => doc.primary)).toEqual(['middle']);
+				expect(result.hits.map((hit) => hit.id)).toEqual(oldHits.map((doc) => doc.primary));
+				expect(result.count).toBe(oldCount);
+			} finally {
+				await database.close();
+			}
+		}
+	);
+
+	it('keeps the storage order for a pushable string sort (code-unit, not collated)', async () => {
+		const database = await createEngineDatabase(['products']);
+		const collection = database.collections.products;
+		await collection.bulkInsert([
+			engineProduct({ uuid: 'lower', name: 'Shirt', type: 'a-100' }),
+			engineProduct({ uuid: 'upper', name: 'Shirt', type: 'Z-100' }),
+			engineProduct({ uuid: 'other', name: 'Hammer', type: 'b-100' }),
+		]);
+		const documents = (await collection.find().exec()).filter((doc) => doc.primary !== 'other');
+		jest.spyOn(collection, 'initSearch').mockResolvedValue({
+			collection: { $: of(null) },
+			find: async () => documents,
+		} as never);
+		try {
+			const selector = { uuid: { $in: documents.map((doc) => doc.primary) } };
+			const oldHits = await collection.find({ selector, sort: [{ type: 'asc' }] }).exec();
+			const result = await firstValueFrom(
+				observeEngineQuery(createFakeEngine(database), 'point-storage-order', {
+					collection: 'products',
+					search: 'shirt',
+					searchFields: ['name'],
+					sort: [{ type: 'asc' }],
+				})
+			);
+			// The storage's code-unit order puts 'Z-100' before 'a-100'; the cashier
+			// collator would reverse them. The by-id path must match what the storage
+			// returned before it existed.
+			expect(oldHits.map((doc) => doc.primary)).toEqual(['upper', 'lower']);
+			expect(result.hits.map((hit) => hit.id)).toEqual(['upper', 'lower']);
+		} finally {
+			await database.close();
+		}
+	});
+
+	it('returns empty search hits without find, count or findByIds calls', async () => {
+		const database = await createEngineDatabase(['products']);
+		const collection = database.collections.products;
+		await collection.insert(engineProduct({ uuid: 'other', name: 'Hammer' }));
+		jest.spyOn(collection, 'initSearch').mockResolvedValue({
+			collection: { $: of(null) },
+			find: async () => [],
+		} as never);
+		const find = jest.spyOn(collection, 'find');
+		const count = jest.spyOn(collection, 'count');
+		const findByIds = jest.spyOn(collection, 'findByIds');
+		try {
+			const result = await firstValueFrom(
+				observeEngineQuery(createFakeEngine(database), 'point-empty', {
+					collection: 'products',
+					search: 'shirt',
+					searchFields: ['name'],
+				})
+			);
+			expect(result).toEqual({ hits: [], count: 0, searchState: 'answered' });
+			expect(find).not.toHaveBeenCalled();
+			expect(count).not.toHaveBeenCalled();
+			expect(findByIds).not.toHaveBeenCalled();
+		} finally {
+			await database.close();
+		}
+	});
+
+	it('re-emits search hits when a hit stops satisfying the panel selector', async () => {
+		const database = await createEngineDatabase(['products']);
+		const collection = database.collections.products;
+		const hit = await collection.insert(engineProduct({ uuid: 'hit', name: 'Shirt' }));
+		// A single index answer isolates point-read reactivity from search-lane reruns.
+		jest.spyOn(collection, 'initSearch').mockResolvedValue({
+			collection: { $: of(null) },
+			find: async () => [hit],
+		} as never);
+		const results: { ids: string[]; count: number }[] = [];
+		const subscription = observeEngineQuery(createFakeEngine(database), 'point-reactivity', {
+			collection: 'products',
+			search: 'shirt',
+			searchFields: ['name'],
+			selector: { stock_status: 'instock' },
+		}).subscribe((result) =>
+			results.push({ ids: result.hits.map((entry) => entry.id), count: result.count })
+		);
+		try {
+			await waitFor(() => expect(results.at(-1)).toEqual({ ids: ['hit'], count: 1 }));
+			await hit.incrementalPatch({ stockStatus: 'outofstock' });
+			await waitFor(() => expect(results.at(-1)).toEqual({ ids: [], count: 0 }));
+		} finally {
+			subscription.unsubscribe();
+			await database.close();
+		}
+	});
+
 	it.each([
 		['products', 'index'],
 		['products', 'unavailable'],
@@ -229,7 +420,7 @@ describe('observeEngineQuery', () => {
 		}
 	});
 
-	it('reacts to source writes for short searches and keeps an explicit empty id selector', async () => {
+	it('reacts to source writes for short searches without an empty id storage selector', async () => {
 		const database = await createEngineDatabase(['products']);
 		const engine = createFakeEngine(database);
 		await database.collections.products.insert(
@@ -248,7 +439,7 @@ describe('observeEngineQuery', () => {
 
 		try {
 			await waitFor(() => expect(ids).toEqual([]));
-			expect(find.mock.calls).toContainEqual([
+			expect(find.mock.calls).not.toContainEqual([
 				expect.objectContaining({ selector: { uuid: { $in: [] } } }),
 			]);
 			await collection.insert(

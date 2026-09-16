@@ -86,6 +86,7 @@ export function CustomerPill({ resource, guestCustomer, onMissing }: CustomerPil
 		>
 			<ComboboxTrigger asChild>
 				<ButtonPill
+					testID="order-filter-customer"
 					size="xs"
 					leftIcon="user"
 					variant={isActive ? undefined : 'muted'}

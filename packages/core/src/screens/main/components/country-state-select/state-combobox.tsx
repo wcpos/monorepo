@@ -54,7 +54,7 @@ function StateComboboxBase({ value, disabled, ...props }: ComboboxSingleRootProp
 			}}
 			{...props}
 		>
-			<ComboboxTrigger disabled={disabled}>
+			<ComboboxTrigger testID="state-select-trigger" disabled={disabled}>
 				<ComboboxValue placeholder={t('common.select_state')} />
 			</ComboboxTrigger>
 			<ComboboxContent>

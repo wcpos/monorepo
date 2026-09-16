@@ -44,10 +44,7 @@ function createLogCollection() {
 		success: bulkRows.map(addRow),
 		error: [],
 	}));
-	const find = jest.fn((query: Record<string, unknown>) => {
-		if (query.selector) return { remove: jest.fn().mockResolvedValue([]) };
-		return { exec: jest.fn().mockResolvedValue(rows) };
-	});
+	const find = jest.fn((query: Record<string, unknown>) => ({ getPreparedQuery: () => query }));
 
 	return {
 		rows,
@@ -56,6 +53,7 @@ function createLogCollection() {
 			bulkInsert,
 			find,
 			bulkRemove: jest.fn().mockResolvedValue(undefined),
+			storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 		},
 	};
 }
@@ -429,39 +427,24 @@ describe('logger/index', () => {
 				insert: jest.fn(),
 				find: jest
 					.fn()
-					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
 					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
 				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 			};
 			expect(() => setDatabase(mockCollection)).not.toThrow();
 		});
 
 		it('should prune log entries older than 30 days on bind', async () => {
-			const mockRemove = jest.fn().mockResolvedValue([{ id: '1' }, { id: '2' }]);
-			const mockFind = jest
-				.fn()
-				.mockReturnValueOnce({ remove: mockRemove })
-				.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
-			const mockCollection = {
-				insert: jest.fn(),
-				find: mockFind,
-				bulkRemove: jest.fn(),
-			};
-
-			let freshSetDatabase: typeof setDatabase;
-			jest.isolateModules(() => {
-				freshSetDatabase = require('./index').setDatabase;
+			const { collection } = createLogCollection();
+			collection.storageInstance.query.mockResolvedValueOnce({
+				documents: [{ logId: 'expired', timestamp: 1, sizeBytes: 100 }],
 			});
 
-			freshSetDatabase!(mockCollection);
+			setDatabase(collection);
+			await flushWrites();
 
-			// Let the microtask (find().remove().then()) settle
-			await Promise.resolve();
-
-			expect(mockFind).toHaveBeenCalledWith({
-				selector: { timestamp: { $lt: expect.any(Number) } },
-			});
-			expect(mockRemove).toHaveBeenCalled();
+			expect(collection.bulkRemove).toHaveBeenCalledWith(['expired']);
 		});
 
 		it('drops a deferred write when the database binding changes', async () => {
@@ -483,9 +466,10 @@ describe('logger/index', () => {
 				insert,
 				find: jest
 					.fn()
-					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
 					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
 				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 			});
 
 			getLogger(['wcpos', 'pos', 'cart']).info('Cart line item updated', {
@@ -531,9 +515,10 @@ describe('logger/index', () => {
 				insert,
 				find: jest
 					.fn()
-					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
 					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
 				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 			});
 
 			getLogger(['wcpos', 'http']).warn('Conexión rechazada: Kelvin İstanbul', {
@@ -554,9 +539,10 @@ describe('logger/index', () => {
 				insert,
 				find: jest
 					.fn()
-					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
 					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
 				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 			});
 
 			getLogger(['wcpos', 'sync']).info('Applied sync changes', {
@@ -1398,6 +1384,7 @@ describe('flight recorder promotion backoff (#163)', () => {
 				exec: jest.fn().mockResolvedValue([]),
 			})),
 			bulkRemove: jest.fn().mockResolvedValue(undefined),
+			storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 		};
 	}
 
@@ -1495,6 +1482,7 @@ describe('flight recorder promotion backoff — review findings (#163)', () => {
 				exec: jest.fn().mockResolvedValue([]),
 			})),
 			bulkRemove: jest.fn().mockResolvedValue(undefined),
+			storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 		};
 	}
 

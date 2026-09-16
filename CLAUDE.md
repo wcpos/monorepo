@@ -75,6 +75,8 @@ bought nine build pairs in sixteen hours verifying fixes one commit at a time.
 Mobile release channels are `production` (store) and `adhoc` (internal).
 Ship JS-only patches with `publish-mobile-update.yml` at the release SHA.
 Updates reach only binaries with a matching fingerprint runtime version.
+`apps/main/fingerprint.config.js` skips version fields so patch releases keep
+the runtime version stable; it must not be removed. Native inputs still feed the hash.
 A fingerprint move (native dep, config plugin, app config, native code) needs
 `build.yml` instead: a store submit for `production`, a new internal build for `adhoc`.
 The release train decides with
@@ -85,7 +87,11 @@ CI sets `EAS_BUILD_PROFILE` to match `--profile`; the CLI does not set it locall
 `EAS_BUILD_PROFILE=development eas build --profile development`.
 Use `adhoc` or `production` in both places for those profiles.
 
-**Shipped 1.10.16 production baseline:** read `.runtime.version` with `eas build:view <build-id> --json` from `apps/main`, not a local fingerprint.
+**Historical only — shipped 1.10.16 production baseline:** these binaries included
+version fields in their hashes and can never receive updates from this OTA lane.
+The first OTA-capable cohort is the first store build made after the fingerprint
+config change. When it ships, record its per-platform `.runtime.version` here
+using `eas build:view <build-id> --json` from `apps/main`, not a local fingerprint.
 
 | Platform | Build ID | Runtime version |
 | --- | --- | --- |
