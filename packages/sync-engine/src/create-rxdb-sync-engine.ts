@@ -998,6 +998,11 @@ export function createRxdbSyncEngine(
 	};
 	let disposed = false;
 	let scopePrimeAbort: AbortController | null = null;
+	/** Settles with the scope-open prime (or its deadline). A non-initial switch
+	 * publishes the new scope before its lifecycle op returns, so a requirement
+	 * issued by the new UI must wait here or it could pull a record the prime
+	 * has not yet put a cursor under. */
+	let scopePrimeSettled: Promise<void> = Promise.resolve();
 	const collectionActivity = new Map<SyncCollectionName, number>(
 		SYNC_COLLECTION_NAMES.map((collection) => [collection, 0])
 	);
@@ -1613,7 +1618,7 @@ export function createRxdbSyncEngine(
 				if (disposed) primeAbort.abort();
 				const primeTimeout = setTimeout(() => primeAbort.abort(), 5_000);
 				try {
-					await Promise.race([
+					const primeRace = Promise.race([
 						changeSignalLane.prime(primeAbort.signal),
 						new Promise<never>((_, reject) =>
 							primeAbort.signal.addEventListener(
@@ -1623,6 +1628,11 @@ export function createRxdbSyncEngine(
 							)
 						),
 					]);
+					scopePrimeSettled = primeRace.then(
+						() => undefined,
+						() => undefined
+					);
+					await primeRace;
 				} catch (error) {
 					diagnostics({
 						type: 'signal.log',
@@ -1741,7 +1751,8 @@ export function createRxdbSyncEngine(
 	const requirePlane = createRequirePlane({
 		// Lazy: readySettledForSync is created after `ready` below; requirements
 		// enqueued before then await the settled initial open, never 'no active scope'.
-		awaitReady: () => readySettledForSync,
+		// …and, on a later switch, the scope-open prime in flight (see scopePrimeSettled).
+		awaitReady: () => scopePrimeSettled.then(() => readySettledForSync),
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,

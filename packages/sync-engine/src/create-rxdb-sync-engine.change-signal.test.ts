@@ -63,6 +63,8 @@ function scriptedServer() {
 		sequenceLogFetches: 0,
 		sequenceLogSince: [] as number[],
 		headFetches: 0,
+		/** When set, the scope-open head prime waits on it before answering. */
+		holdHeadFetch: null as Promise<void> | null,
 		products: new Map<number, Record<string, unknown>>([
 			[
 				9,
@@ -105,7 +107,10 @@ function scriptedServer() {
 			}
 			const since = Number(u.searchParams.get('since') ?? '0');
 			state.sequenceLogSince.push(since);
-			if (since === 0 && u.searchParams.get('limit') === '1') state.headFetches += 1;
+			if (since === 0 && u.searchParams.get('limit') === '1') {
+				state.headFetches += 1;
+				if (state.holdHeadFetch) await state.holdHeadFetch;
+			}
 			const rows = state.rows.filter((row) => row.sequence > since);
 			const maxSeen = rows.reduce((max, row) => Math.max(max, row.sequence), since);
 			return json({
@@ -527,6 +532,43 @@ describe('sync("change-signal") through the public handle', () => {
 			expect((await engine.sync('change-signal')).status).toBe('ran');
 			expect(server.state.sequenceLogSince[0]).toBe(5);
 			expect(server.state.productIncludes).toContainEqual([9]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('holds a requirement issued during a later switch until that scope is primed', async () => {
+		// A non-initial switch publishes the new scope before its open completes;
+		// a browse the new UI issues meanwhile must not pull before the prime has
+		// put a cursor under it.
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		try {
+			await engine.ready;
+			let releaseHead!: () => void;
+			server.state.holdHeadFetch = new Promise<void>((resolve) => {
+				releaseHead = resolve;
+			});
+			const pullsBefore = server.state.productPulls;
+			const switching = engine.scope.switch(freshIdentity());
+			await vi.waitFor(() => expect(server.state.headFetches).toBe(2));
+			const browse = engine.require({
+				id: 'browse-during-prime',
+				collection: 'products',
+				kind: 'product-browse',
+				limit: 10,
+			});
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			expect(server.state.productPulls).toBe(pullsBefore);
+			releaseHead();
+			await switching;
+			await expect(browse.ready).resolves.toMatchObject({ action: 'fetched' });
+			expect(server.state.productPulls).toBeGreaterThan(pullsBefore);
+			browse.release();
 		} finally {
 			await engine.dispose();
 		}

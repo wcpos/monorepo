@@ -585,13 +585,14 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						// a switch or dispose landing meanwhile drops it instead of letting a
 						// slow checkpoint port overwrite a successor's state.
 						const raced = await deps.readBlob(scopeId, CHANGE_SIGNAL_STATE_KEY);
+						// The re-read is the last await before the write: an abort that landed
+						// during it already released the chain, so a tick may have persisted —
+						// neither a write NOR a floor from this stale head may follow.
+						if (signal?.aborted) return { status: 'skipped' };
 						if (raced !== null && deserializeChangeSignalState(raced)) {
 							primedAtOpen.set(scopeId, { head, ...(epoch ? { epoch } : {}) });
 							return { status: 'restored' };
 						}
-						// The re-read is the last await before the write: an abort that landed
-						// during it already released the chain, so a tick may have persisted.
-						if (signal?.aborted) return { status: 'skipped' };
 						writing = true;
 						const wrote = await bound.guardWrite(() =>
 							deps.writeBlob(

@@ -835,6 +835,64 @@ describe('cold-start priming', () => {
 		expect(writeBlob).not.toHaveBeenCalled();
 	});
 
+	it('installs no floor from a raced checkpoint once the abort has landed', async () => {
+		// The chain was released during the re-read and a tick persisted 6. The
+		// stale prime must not leave its old head as a floor, or a later failed
+		// tick would rewind the rebuilt engine to it.
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		let reads = 0;
+		let answerReRead!: () => void;
+		const persisted = JSON.stringify({
+			cursor: { sequence: 6 },
+			baselineDigests: [],
+			epoch: 'epoch-FIRST',
+		});
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher: primingFetcher({ head: 5, epoch: 'epoch-FIRST' }),
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: () => {
+				const call = reads++;
+				if (call === 0) return Promise.resolve(null);
+				if (call === 1)
+					return new Promise<string>((resolve) => {
+						answerReRead = () => resolve(persisted);
+					});
+				return Promise.resolve(persisted);
+			},
+			writeBlob: vi.fn(async () => undefined),
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		const abort = new AbortController();
+		const prime = lane.prime(abort.signal);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(reads).toBe(2);
+		abort.abort();
+		answerReRead();
+		expect(await prime).toEqual({ status: 'skipped' });
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 6 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} satisfies HybridPollOutcome);
+		expect(await lane.tick()).toMatchObject({ status: 'ran' });
+		expect(createHybridChangeSignalEngine).toHaveBeenLastCalledWith(
+			expect.objectContaining({ initialCursor: { sequence: 6 } })
+		);
+	});
+
 	it('rejects a 401 prime with the poison error and writes nothing', async () => {
 		const { lane, writeBlob } = await openPrimeLane(null, false, true);
 		const prime = lane.prime();
