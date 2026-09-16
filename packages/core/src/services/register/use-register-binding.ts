@@ -143,6 +143,7 @@ export function useRegisterBindingSession(): void {
 					context: {
 						type: bound ? 'register.switched' : 'register.bound',
 						registerId: registers[0].id,
+						previousRegisterId: bound?.id ?? null,
 					},
 				});
 				publish(entry, {

@@ -173,6 +173,10 @@ async function drain({
 			await task();
 		} catch (error) {
 			const { status, body, errorCode, field, message } = failureFacts(error);
+			// A local write that fails AFTER the store answered is not a delivery failure:
+			// the movement is already there, and "trying again" would tell the merchant it
+			// never arrived. Those rows keep their message and no event type.
+			const persist = (error as { stage?: string })?.stage === 'persist';
 			if (doc.collection === closures && status === 409) {
 				const closure = doc as ClosureDocument;
 				if (body?.code === 'wcpos_closure_exists' && body.data?.closure_id) {
@@ -259,7 +263,9 @@ async function drain({
 					// A retryable non-movement failure is mid-arc and stays untitled; the
 					// permanent refusal of a session or closure upload has its own event.
 					...(endpoint === 'movements'
-						? { type: retry ? 'register.movement-retrying' : 'register.movement-rejected' }
+						? persist
+							? {}
+							: { type: retry ? 'register.movement-retrying' : 'register.movement-rejected' }
 						: retry
 							? {}
 							: { type: 'register.upload-refused' }),
@@ -403,13 +409,20 @@ async function drain({
 				created_at: row.created_at_gmt,
 				...(row.voids ? { voids: row.voids } : {}),
 			});
-			await session.incrementalPatch({ server_expected: null, server_sales_count: null });
-			await row.incrementalModify((local) => ({
-				...local,
-				...(response.data as CashMovementRow),
-				...synced,
-				voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
-			}));
+			try {
+				await session.incrementalPatch({ server_expected: null, server_sales_count: null });
+				await row.incrementalModify((local) => ({
+					...local,
+					...(response.data as CashMovementRow),
+					...synced,
+					voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
+				}));
+			} catch (error) {
+				// The store already accepted this movement; see the `persist` note in send().
+				throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
+					stage: 'persist',
+				});
+			}
 			logger.info('Register cash movement accepted', {
 				terminal: { operationId: operationId(row.id) },
 				context: {

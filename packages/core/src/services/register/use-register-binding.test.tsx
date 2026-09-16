@@ -67,7 +67,7 @@ it('silently binds the sole active register and filters by store', async () => {
 	expect(view.result.current.registers).toHaveLength(1);
 	expect(logger.info).toHaveBeenCalledWith('Register bound automatically', {
 		terminal: { operationId: 'a' },
-		context: { type: 'register.bound', registerId: 'a' },
+		context: { type: 'register.bound', registerId: 'a', previousRegisterId: null },
 	});
 	expect(logger.info.mock.calls[0][1]).not.toHaveProperty('actor');
 	const names = renderHook(() => useRegisterNames());
@@ -242,7 +242,10 @@ it('logs an automatic switch only when the previous binding differs', async () =
 	expect(logger.info.mock.calls).toEqual([
 		[
 			'Register switched automatically',
-			{ terminal: { operationId: 'a' }, context: { type: 'register.switched', registerId: 'a' } },
+			{
+				terminal: { operationId: 'a' },
+				context: { type: 'register.switched', registerId: 'a', previousRegisterId: 'b' },
+			},
 		],
 	]);
 });

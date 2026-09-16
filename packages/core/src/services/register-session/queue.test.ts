@@ -319,6 +319,31 @@ it.each(['pending', 'failed'] as const)(
 	}
 );
 
+it('does not call a local write failure after the store accepted a movement a delivery retry', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '20',
+		reason: 'Bread money',
+		actor: 7,
+	});
+	// The store answers, but merging its row into the local document fails: the validating
+	// storage rejects a non-string amount, which stands in for any post-response write failure.
+	http.post.mockResolvedValueOnce({ data: { ...movement.toJSON(), amount: 42 } });
+	await drain();
+	const calls = [...logger.debug.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls];
+	expect(calls).toHaveLength(1);
+	expect(calls[0][1].context).toMatchObject({ endpoint: 'movements', movementId: movement.id });
+	// The store has the movement; "trying again" would tell the merchant it did not arrive.
+	expect(calls[0][1].context).not.toHaveProperty('type');
+	expect(logger.info).not.toHaveBeenCalledWith(
+		'Register cash movement accepted',
+		expect.anything()
+	);
+});
+
 it('logs a retryable outbox failure at debug and a permanent one at its registered level, with the transport facts', async () => {
 	const session = await open();
 	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });

@@ -20,6 +20,7 @@ it('logs approval granted with the requesting cashier and approver id', () => {
 	logApprovalGranted({ ...input, approvedBy: 8 });
 	expect(logger.info).toHaveBeenCalledWith('Register session approval granted', {
 		actor,
+		terminal: attempt,
 		context: { type: 'register.approval-granted', sessionId: 's', registerId: 'r', approvedBy: 8 },
 	});
 });

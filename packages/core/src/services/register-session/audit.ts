@@ -38,6 +38,7 @@ export function logApprovalGranted({
 }: RegisterAction & { approvedBy: number | null }) {
 	logger.info('Register session approval granted', {
 		actor,
+		terminal: attempt(),
 		context: { type: 'register.approval-granted', ...context },
 	});
 }
