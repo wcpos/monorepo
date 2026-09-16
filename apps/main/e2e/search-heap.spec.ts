@@ -33,7 +33,8 @@ import { authenticatedTest as test } from './fixtures';
  * sawtooth is taller and V8's major-collection period no longer fits inside a 5-cycle window, so
  * two window means differ by GC phase alone: on 2026-09-16 first attempts read 1.33–1.51 while the
  * retained-after-GC gate sat at ~1.15 in every run and the window troughs were flat. A leak per
- * committed search raises the troughs; collection timing only moves peaks and means.
+ * committed search raises the troughs; collection timing only moves peaks and means. The windows
+ * are sized to hold a whole sawtooth period so each minimum is a real trough (see PLATEAU_WINDOW).
  */
 const WORD = 'brake';
 const KEY_GAP_MS = 400; // > the 250 ms debounce, so each key is its own committed search
@@ -42,10 +43,15 @@ const SETTLE_MS = 800;
 const WARM_UP_CYCLES = 5;
 /** Cycles after the harness collection before the plateau is read, so it reads a re-warmed heap, not a freshly swept one. */
 const REWARM_CYCLES = 2;
-const PLATEAU_WINDOW = 5;
+/**
+ * A window must span at least one full major-collection period or its minimum is a mid-flank
+ * reading, not a trough. Measured 2026-09-16 (#2106 run 35085499762): the sawtooth repeats every
+ * ~10 cycles with 70–90 MB of amplitude, so a 5-cycle window could sit entirely on a rising flank.
+ */
+const PLATEAU_WINDOW = 10;
 /** Fewer cycles than this and the plateau and tail windows overlap, which reads a trend as flat. */
 const MIN_CYCLES = WARM_UP_CYCLES + REWARM_CYCLES + 2 * PLATEAU_WINDOW;
-const CYCLES = Number(process.env.SEARCH_HEAP_CYCLES ?? 20);
+const CYCLES = Number(process.env.SEARCH_HEAP_CYCLES ?? 30);
 if (!Number.isInteger(CYCLES) || CYCLES < MIN_CYCLES) {
 	throw new Error(
 		`SEARCH_HEAP_CYCLES=${process.env.SEARCH_HEAP_CYCLES} — need an integer ≥ ${MIN_CYCLES} so the plateau and tail windows are disjoint`
@@ -191,7 +197,7 @@ test('committed searches neither retain per keystroke nor block the main thread'
 		`(harness GC ${harnessLongTaskMs.toFixed(0)})`;
 	testInfo.annotations.push({ type: 'search-heap', description: summary });
 	console.log(`[search-heap] ${summary}`);
-	console.log(`[search-heap] heapUsed/cycle (MB): ${heapSeries}`);
+	process.stdout.write(`[search-heap] heapUsed/cycle (MB): ${heapSeries}\n`);
 
 	expect(maxHeap, `heap peaked at ${mb(maxHeap)}`).toBeLessThanOrEqual(HEAP_CEILING_BYTES);
 	expect(
