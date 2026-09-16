@@ -100,6 +100,16 @@ using `eas build:view <build-id> --json` from `apps/main`, not a local fingerpri
 
 There is no single production hash: compare each platform with its shipped build of the same profile before OTA.
 
+**First OTA-capable cohort — 1.10.18 store build from `e962c8b6` (after #2087), run 35059240821.**
+This is the baseline every `eas update` on the `production` channel is compared against; a patch
+version bump no longer moves it. Read from `eas build:view <build-id> --json`, not a local fingerprint.
+
+| Platform | Build ID | Runtime version |
+| --- | --- | --- |
+| Android | `247b12c8-4d98-47d2-8f3e-9840666d211d` | `050c0144c106f24ab23db6509c37f998f4c1dddd` |
+| iOS | `d650ce31-d233-481f-99dc-edc037e58fab` | `612a275dcc877f7d400f203cd56c0b8f77490683` |
+
+
 ## E2E selector policy
 
 E2E tests must use stable `testID` selectors for app UI. Do not use localized UI text as selectors: no `getByText`, no `getByPlaceholder`, no `getByLabel`, and no `getByRole(..., { name })` in `apps/main/e2e`. If a UI element needs to be exercised by E2E, add a stable `testID` to the component and select it with `getByTestId()`. (Reading a testID-addressed cell's `textContent` is fine; _selecting_ by text is not.)

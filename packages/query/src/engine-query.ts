@@ -37,19 +37,19 @@ import {
 	type EngineRxDocument,
 	executeAdapterQuery,
 } from './engine-adapter/execute-query';
+import { catalogueSearchBlobFor } from './catalogue-search-blob';
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
 import {
-	fieldsMatchAllTerms,
 	fieldsMatchShortPrefix,
 	fieldsMatchTokens,
 	fieldsMissAnyOfTokens,
-	phraseSearchAnchor,
 	searchTerms,
 	searchTokens,
 } from './search-match';
 import {
 	rebuiltSearchIndexes,
+	SEARCH_SCAN_RETHROTTLE_MS,
 	type SearchableCollection,
 	searchLogger,
 	sharedSearchInstances,
@@ -68,8 +68,6 @@ import type { MangoQuerySortPart, RxCollection, RxDatabase } from 'rxdb';
  * including the input debounce, without paying a scan on healthy keystrokes.
  */
 const SEARCH_INDEX_ANSWER_DEADLINE_MS = 250;
-/** Collapse scan re-runs while sync churn streams source-collection events. */
-const SEARCH_SCAN_RETHROTTLE_MS = 500;
 /** Log the scan takeover once per collection:locale per session, not per keystroke. */
 const stalledSearchIndexes = new Set<string>();
 // Owned by the side that builds the index; re-exported for existing consumers.
@@ -140,8 +138,7 @@ export function observeCoverage(
 
 /**
  * The fallback answer when the index cannot answer: match the query directly
- * against the documents: products/variations require every term, including short ones;
- * other collections retain the index's per-token AND semantics.
+ * against the documents: non-catalogue collections retain the index's per-token AND semantics.
  * Folding goes through the SAME `foldSearchText` the index's encoder uses
  * (#1732), so a scan answer and the indexed answer that replaces it agree.
  *
@@ -153,16 +150,15 @@ async function scanDocumentsForSearch(
 	collection: SearchableCollection,
 	search: string,
 	searchFields: string[],
-	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>,
-	terms: string[] | null
+	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>
 ): Promise<EngineRxDocument[]> {
 	const tokens = searchTokens(search);
-	if (searchFields.length === 0 || (!terms && tokens.length === 0)) return [];
+	if (searchFields.length === 0 || tokens.length === 0) return [];
 	const documents = await collection.find().exec();
 	return documents.filter((document) => {
 		const snapshot = documentSnapshot(document);
 		const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-		return terms ? fieldsMatchAllTerms(fields, terms) : fieldsMatchTokens(fields, tokens);
+		return fieldsMatchTokens(fields, tokens);
 	});
 }
 function matchingSelectors$(
@@ -189,11 +185,18 @@ function matchingSelectors$(
 	if (!foldedSearch) return of({ selector, hitIds: null });
 	const phraseSearch =
 		descriptor.collection === 'products' || descriptor.collection === 'variations';
-	const terms = phraseSearch ? searchTerms(search) : null;
-	const anchor = phraseSearch ? phraseSearchAnchor(foldedSearch) : null;
-	const indexSearch = anchor ?? search;
-	// Product terms without an indexed anchor scan directly; other collections keep prefixes.
-	if (phraseSearch ? !anchor : foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
+	if (phraseSearch) {
+		const terms = searchTerms(search);
+		if (terms.length === 0) return of({ selector, hitIds: [] });
+		const searchFields =
+			descriptor.read?.searchFields ??
+			descriptor.searchFields ??
+			collection.options?.searchFields ??
+			[];
+		const blob = catalogueSearchBlobFor(collection, searchFields, documentSnapshot);
+		return blob.changes$.pipe(map(() => ({ selector, hitIds: blob.search(terms) })));
+	}
+	if (foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
 		const prefix = foldedSearch;
 		// Mirror initSearch's fallback so short and indexed terms search the same fields.
 		const searchFields =
@@ -212,9 +215,7 @@ function matchingSelectors$(
 					.filter((document) => {
 						const snapshot = documentSnapshot(document);
 						const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-						return terms
-							? fieldsMatchAllTerms(fields, terms)
-							: fieldsMatchShortPrefix(fields, prefix);
+						return fieldsMatchShortPrefix(fields, prefix);
 					})
 					.map((document) => document.primary),
 			}))
@@ -223,7 +224,7 @@ function matchingSelectors$(
 	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
 	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
 	const findFalseHits = (documents: EngineRxDocument[]) => {
-		const tokens = searchTokens(indexSearch);
+		const tokens = searchTokens(search);
 		if (searchFields.length === 0 || tokens.length === 0) return [];
 		return documents.flatMap((document) => {
 			const snapshot = documentSnapshot(document);
@@ -263,7 +264,7 @@ function matchingSelectors$(
 				trailing: true,
 			}),
 			switchMap(() =>
-				from(scanDocumentsForSearch(collection, search, searchFields, documentSnapshot, terms))
+				from(scanDocumentsForSearch(collection, search, searchFields, documentSnapshot))
 			)
 		);
 
@@ -299,13 +300,7 @@ function matchingSelectors$(
 				const indexAnswered$ = new ReplaySubject<void>(1);
 				const indexedLane$ = activeSearch.collection.$.pipe(
 					startWith(null),
-					switchMap(() =>
-						from(
-							phraseSearch
-								? activeSearch.find(indexSearch, { limit: Number.MAX_SAFE_INTEGER })
-								: activeSearch.find(search)
-						).pipe(tap(() => indexAnswered$.next()))
-					),
+					switchMap(() => from(activeSearch.find(search)).pipe(tap(() => indexAnswered$.next()))),
 					switchMap(async (documents) => {
 						const falseHits = findFalseHits(documents);
 						if (falseHits.length === 0) return documents;
@@ -365,16 +360,7 @@ function matchingSelectors$(
 	}).pipe(
 		map((documents) => ({
 			selector,
-			hitIds: documents
-				.filter(
-					(document) =>
-						!terms ||
-						fieldsMatchAllTerms(
-							searchFields.map((field) => String(get(documentSnapshot(document), field) ?? '')),
-							terms
-						)
-				)
-				.map((document) => document.primary),
+			hitIds: documents.map((document) => document.primary),
 		}))
 	);
 }
