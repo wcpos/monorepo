@@ -997,6 +997,7 @@ export function createRxdbSyncEngine(
 		});
 	};
 	let disposed = false;
+	let scopePrimeAbort: AbortController | null = null;
 	const collectionActivity = new Map<SyncCollectionName, number>(
 		SYNC_COLLECTION_NAMES.map((collection) => [collection, 0])
 	);
@@ -1603,6 +1604,36 @@ export function createRxdbSyncEngine(
 			if (!bootstrappedScopes.has(scopeId)) {
 				const database = databaseByScopeId.get(scopeId);
 				if (!database) throw new Error(`Scope ${scopeId} opened without a database`);
+				// Prime the change-signal cursor BEFORE any catalogue pull of this scope, so a
+				// record fetched by the bootstrap seed or the cashier's first browse and then
+				// changed on the server before the first poll still sits ABOVE the cursor.
+				// Best-effort: a failed or offline prime leaves the lane's lazy first-tick
+				// prime as the fallback (with the first-minute gap this closes).
+				const primeAbort = (scopePrimeAbort = new AbortController());
+				if (disposed) primeAbort.abort();
+				const primeTimeout = setTimeout(() => primeAbort.abort(), 5_000);
+				try {
+					await Promise.race([
+						changeSignalLane.prime(primeAbort.signal),
+						new Promise<never>((_, reject) =>
+							primeAbort.signal.addEventListener(
+								'abort',
+								() => reject(new Error('change-signal prime aborted')),
+								{ once: true }
+							)
+						),
+					]);
+				} catch (error) {
+					diagnostics({
+						type: 'signal.log',
+						level: 'warn',
+						message: `change-signal: prime at scope open failed — the first tick primes lazily: ${error instanceof Error ? error.message : String(error)}`,
+						fields: { scopeId },
+					});
+				} finally {
+					clearTimeout(primeTimeout);
+					scopePrimeAbort = null;
+				}
 				setLifecyclePhase('barcode-selector-hydrate');
 				// The carriers land on THIS scope, so a failed hydration leaves this
 				// scope empty (online-fallback scans) without touching any other
@@ -2514,6 +2545,7 @@ export function createRxdbSyncEngine(
 			// each sees the prior outcome), so dispose's turn sees every scope a
 			// pending switch opened.
 			disposed = true;
+			scopePrimeAbort?.abort();
 			// Detach from the cross-tab bridge synchronously (#1209): the host owns
 			// the channel and may keep it for the successor engine, so a stale
 			// subscription would fan a peer's outcome into a disposed instance's

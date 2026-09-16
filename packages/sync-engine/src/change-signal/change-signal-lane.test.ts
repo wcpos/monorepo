@@ -10,7 +10,9 @@ import {
 } from '@wcpos/sync-core';
 
 import { createScopeBarcodeSelectors } from '../materialization/barcode-selectors';
-import { createChangeSignalLane } from './change-signal-lane';
+import { CHANGE_SIGNAL_STATE_KEY, createChangeSignalLane } from './change-signal-lane';
+import { ChangeSignalPoisonError } from './change-signal-source';
+import { deserializeChangeSignalState } from './change-signal-state';
 
 import type { QueryTotalCacheEntry } from '../scheduler';
 
@@ -330,6 +332,90 @@ describe('cold-start priming', () => {
 			json: async () => ({ checkpoint }),
 		})) as never;
 	}
+
+	async function openPrimeLane(blob: string | null = null, offline = false, unauthorized = false) {
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		const fetcher = unauthorized
+			? vi.fn(async () => new Response(null, { status: 401 }))
+			: primingFetcher({ head: 40, epoch: 'epoch-FIRST' });
+		const writeBlob = vi.fn(async (_scope: string, _key: string, value: string) => {
+			blob = value;
+		});
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher,
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => blob,
+			writeBlob,
+			connectivity: () => (offline ? 'offline' : 'online'),
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		return { lane, fetcher, writeBlob };
+	}
+
+	it('primes at open and restores the cursor and epoch on the first tick without another fetch', async () => {
+		const { lane, fetcher, writeBlob } = await openPrimeLane();
+		expect(await lane.prime()).toEqual({ status: 'primed', head: 40 });
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(fetcher).toHaveBeenCalledWith(
+			'https://example.test/wp-json/wcpos/v2/changes/sequence-log?collection=all&since=0&limit=1',
+			expect.anything()
+		);
+		expect(writeBlob).toHaveBeenCalledTimes(1);
+		expect(writeBlob.mock.calls[0].slice(0, 2)).toEqual(['scope-a', CHANGE_SIGNAL_STATE_KEY]);
+		expect(deserializeChangeSignalState(writeBlob.mock.calls[0][2])).toMatchObject({
+			initialCursor: { sequence: 40 },
+			epoch: 'epoch-FIRST',
+		});
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 40 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} satisfies HybridPollOutcome);
+		expect(await lane.tick()).toMatchObject({ status: 'ran' });
+		expect(createHybridChangeSignalEngine).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				initialCursor: { sequence: 40 },
+				initialEpoch: 'epoch-FIRST',
+			})
+		);
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
+	it('restores existing state at open without fetching or writing', async () => {
+		const { lane, fetcher, writeBlob } = await openPrimeLane(
+			JSON.stringify({ cursor: { sequence: 5 }, baselineDigests: [] })
+		);
+		expect(await lane.prime()).toEqual({ status: 'restored' });
+		expect(fetcher).not.toHaveBeenCalled();
+		expect(writeBlob).not.toHaveBeenCalled();
+	});
+
+	it('skips priming offline without fetching or writing', async () => {
+		const { lane, fetcher, writeBlob } = await openPrimeLane(null, true);
+		expect(await lane.prime()).toEqual({ status: 'skipped' });
+		expect(fetcher).not.toHaveBeenCalled();
+		expect(writeBlob).not.toHaveBeenCalled();
+	});
+
+	it('rejects a 401 prime with the poison error and writes nothing', async () => {
+		const { lane, writeBlob } = await openPrimeLane(null, false, true);
+		const prime = lane.prime();
+		await expect(prime).rejects.toBeInstanceOf(ChangeSignalPoisonError);
+		await expect(prime).rejects.toMatchObject({ status: 401 });
+		expect(writeBlob).not.toHaveBeenCalled();
+	});
 
 	async function primeScope(checkpoint: Record<string, unknown>) {
 		const manager = new StoreScopeManager({

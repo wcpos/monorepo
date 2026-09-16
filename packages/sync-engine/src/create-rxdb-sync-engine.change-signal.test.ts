@@ -499,6 +499,39 @@ describe('sync("change-signal") through the public handle', () => {
 		await engine.dispose();
 	});
 
+	it('primes the cursor at scope open so a record changed before the first poll is still pulled', async () => {
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		try {
+			await engine.ready;
+			expect(server.state.headFetches).toBe(1);
+			await engine
+				.active()!
+				.database.collections.products.bulkUpsert([
+					materializeGreedyPrunable(server.state.products.get(9)!).storedDocument,
+				]);
+			server.state.products.get(9)!.stock_status = 'outofstock';
+			server.state.rows.push({
+				sequence: 6,
+				id: 9,
+				deleted: 0,
+				collection: 'products',
+				modified_gmt: '2026-07-10T00:00:01',
+			});
+			server.state.head = 6;
+			server.state.sequenceLogSince = [];
+			expect((await engine.sync('change-signal')).status).toBe('ran');
+			expect(server.state.sequenceLogSince[0]).toBe(5);
+			expect(server.state.productIncludes).toContainEqual([9]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('primes to head, applies a fresh signal, persists the cursor across engines', async () => {
 		const server = scriptedServer();
 		const storage = memoryEngineStorage();
@@ -507,7 +540,7 @@ describe('sync("change-signal") through the public handle', () => {
 		const engine = engineWith({ storage, fetch: server.fetch, identity });
 		await engine.ready;
 
-		// Tick 1: cold start primes AT head (5) — the historical backlog is never drained.
+		// Scope open primed AT head (5) — the first tick never drains the historical backlog.
 		const first = await engine.sync('change-signal');
 		expect(first.status).toBe('ran');
 		expect(server.state.headFetches).toBe(1);
@@ -1177,7 +1210,9 @@ describe('sync("change-signal") through the public handle', () => {
 		const started = new Promise<void>((resolve) => {
 			markStarted = resolve;
 		});
-		const fetch = async (_url: string, init?: RequestInit): Promise<Response> => {
+		const server = scriptedServer();
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (url.includes('since=0&limit=1')) return server.fetch(url);
 			requestSignal = init?.signal ?? undefined;
 			markStarted();
 			return new Promise((_resolve, reject) =>

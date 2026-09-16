@@ -5,8 +5,9 @@
  * succeeded (ADR 0005/0007 — persistState is the applier's last step).
  *
  * Per-scope engine registry (package-internal): one hybrid engine per scope, created lazily on first tick
- * from the persisted state blob (malformed blob → null → cold start, never a
- * crash). Collection resets leave this shared cursor and cached engine intact;
+ * from the persisted state blob. The cursor is primed at scope open; lazy first-tick
+ * priming is the fallback for a failed or offline open (malformed blob → cold start).
+ * Collection resets leave this shared cursor and cached engine intact;
  * later signals for wiped records use the normal targeted apply arms.
  *
  * Scope safety: each tick runs under `manager.runGuarded`; the engine's
@@ -126,6 +127,14 @@ export type ChangeSignalLaneDeps = {
 };
 
 export type ChangeSignalLane = {
+	/** Prime the active scope's cursor at the server head BEFORE any catalogue
+	 * pull (scope open). No-op when the scope already holds state ('restored')
+	 * or a cached engine ('cached'); 'skipped' offline / no scope / aborted.
+	 * Serialized with tick(). Rejects on a failed head fetch — the caller decides. */
+	prime(signal?: AbortSignal): Promise<{
+		status: 'primed' | 'restored' | 'cached' | 'skipped';
+		head?: number;
+	}>;
 	/** One deterministic tick (serialized — concurrent calls queue). */
 	tick(signal?: AbortSignal): Promise<ChangeSignalReport>;
 	/** Explicitly evict one scope's cached engine without changing its persisted state. */
@@ -224,6 +233,22 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 		return engine;
 	}
 
+	function fetcherWithSignal(signal?: AbortSignal): Fetcher {
+		if (!signal) return deps.fetcher;
+		return async (url, init) => {
+			const signals = [signal, init?.signal];
+			const combined = new AbortController();
+			const abort = () => combined.abort();
+			if (signals.some((s) => s?.aborted)) abort();
+			else signals.forEach((s) => s?.addEventListener('abort', abort, { once: true }));
+			try {
+				return await deps.fetcher(url, { ...init, signal: combined.signal });
+			} finally {
+				signals.forEach((s) => s?.removeEventListener('abort', abort));
+			}
+		};
+	}
+
 	async function runTick(signal?: AbortSignal): Promise<ChangeSignalReport> {
 		let tickScopeId: string | null = null;
 		if (signal?.aborted) {
@@ -264,30 +289,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				}
 				// Bind BEFORE engineFor — a cold start's head-priming fetch rides this
 				// tick's scope ticket too.
-				const tickFetcher: Fetcher =
-					signal === undefined
-						? deps.fetcher
-						: async (url, init) => {
-								const scopeSignal = init?.signal;
-								const combined = new AbortController();
-								const abort = () => combined.abort();
-								if (signal.aborted || scopeSignal?.aborted) {
-									abort();
-								} else {
-									signal.addEventListener('abort', abort, { once: true });
-									scopeSignal?.addEventListener('abort', abort, { once: true });
-								}
-								try {
-									return await deps.fetcher(url, {
-										...init,
-										signal: combined.signal,
-									});
-								} finally {
-									signal.removeEventListener('abort', abort);
-									scopeSignal?.removeEventListener('abort', abort);
-								}
-							};
-				activeFetch = bound.bindFetch(tickFetcher);
+				activeFetch = bound.bindFetch(fetcherWithSignal(signal));
 				const engine = await engineFor(scopeId);
 				let report: ChangeSignalReport = {
 					lane: 'change-signal',
@@ -526,6 +528,47 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				() => undefined
 			);
 			return run;
+		},
+		prime: (signal) => {
+			const run = async (): ReturnType<ChangeSignalLane['prime']> => {
+				if (signal?.aborted) return { status: 'skipped' };
+				if (deps.connectivity() === 'offline') return { status: 'skipped' };
+				if (deps.manager.activeScope === null) return { status: 'skipped' };
+				try {
+					return await deps.manager.runGuarded(async (bound) => {
+						const scopeId = bound.scopeId;
+						if (engines.has(scopeId)) return { status: 'cached' };
+						const blob = await deps.readBlob(scopeId, CHANGE_SIGNAL_STATE_KEY);
+						if (blob !== null && deserializeChangeSignalState(blob)) return { status: 'restored' };
+						activeFetch = bound.bindFetch(fetcherWithSignal(signal));
+						const { head, epoch } = await fetchHeadCheckpoint();
+						await deps.writeBlob(
+							scopeId,
+							CHANGE_SIGNAL_STATE_KEY,
+							serializeChangeSignalState({
+								cursor: { sequence: head },
+								baselineDigests: new Map(),
+								escalations: [],
+								...(epoch ? { epoch } : {}),
+							})
+						);
+						deps.diagnostics({
+							type: 'signal.log',
+							level: 'debug',
+							message: `change-signal: primed cursor at head ${head} at scope open`,
+						});
+						return { status: 'primed', head };
+					});
+				} finally {
+					activeFetch = null;
+				}
+			};
+			const queued = chain.then(run, run);
+			chain = queued.then(
+				() => undefined,
+				() => undefined
+			);
+			return queued;
 		},
 		prune: (scopeId) => {
 			engines.delete(scopeId);
