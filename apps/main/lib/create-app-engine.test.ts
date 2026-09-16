@@ -23,15 +23,39 @@ const OTHER_SITE_OPTIONS = {
 	},
 } satisfies CreateAppSyncEngineOptions;
 
+type ScopeIdentity = { site: string; storeId: string | number; cashierId: string | number };
+
 function createEngineDouble(
 	dispose: () => Promise<void> = () => Promise.resolve(),
-	switchScope: () => Promise<void> = () => Promise.resolve()
+	switchScope?: (identity: ScopeIdentity) => Promise<void>
 ) {
+	const dbListeners = new Set<(db: unknown) => void>();
+	let active: { identity: ScopeIdentity } | null = null;
+	const activate = (identity: ScopeIdentity) => {
+		active = { identity };
+		for (const cb of dbListeners) cb({});
+	};
 	return {
 		dispose: jest.fn(dispose),
 		scope: {
-			switch: jest.fn(switchScope),
+			// A resolved switch means the engine ACTIVATED the scope (db$ fired);
+			// a custom impl decides for itself whether and when it activates.
+			switch: jest.fn(
+				switchScope ??
+					((identity: ScopeIdentity) => {
+						activate(identity);
+						return Promise.resolve();
+					})
+			),
 		},
+		db$: jest.fn((cb: (db: unknown) => void) => {
+			dbListeners.add(cb);
+			cb(null);
+			return () => dbListeners.delete(cb);
+		}),
+		active: jest.fn(() => active),
+		/** The engine landing on `identity`: active() flips and db$ fans out, as the real engine does inside scope.switch. */
+		activate,
 	};
 }
 
@@ -611,6 +635,144 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(createRxdbSyncEngine).toHaveBeenCalledTimes(1);
 	});
 
+	it('the store header flips exactly when the engine activates the incoming scope', async () => {
+		// Before activation the outgoing scope's lanes may still be running and
+		// must keep their own header; after it, the incoming open's hydrate,
+		// seed and prime must carry the new one.
+		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
+		const storeHeaderOf = (call: unknown[]) =>
+			new Headers((call[1] as RequestInit | undefined)?.headers).get('X-WCPOS-Store');
+		const seen: (string | null)[] = [];
+		let ports: { fetcher?: (url: string) => Promise<Response> } = {};
+		let first!: ReturnType<typeof createEngineDouble>;
+		first = createEngineDouble(undefined, async (identity) => {
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/orders');
+			seen.push(storeHeaderOf(fetch.mock.calls.at(-1)!));
+			first.activate(identity);
+			await ports.fetcher?.(
+				'https://store.example.test/wp-json/wcpos/v2/changes/config-fingerprint'
+			);
+			seen.push(storeHeaderOf(fetch.mock.calls.at(-1)!));
+		});
+		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
+			() => first
+		);
+		try {
+			createAppSyncEngine(BASE_OPTIONS);
+			ports = createRxdbSyncEngine.mock.calls[0]![0];
+
+			await switchAppEngineScope({
+				site: { wp_api_url: BASE_OPTIONS.scope.site },
+				wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+				store: { id: 'store-2' },
+			});
+			expect(seen).toEqual(['store-1', 'store-2']);
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
+	it('a same-key render during an awaited switch never rewrites the activated header', async () => {
+		// The engine has activated store-2 inside scope.switch but the switch
+		// has not resolved, so entry.key still names store-1. A memo recompute
+		// rendering store-1 is a cache hit; it must not put store-1 back on the wire.
+		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
+		const storeHeaderOf = (call: unknown[]) =>
+			new Headers((call[1] as RequestInit | undefined)?.headers).get('X-WCPOS-Store');
+		let ports: { fetcher?: (url: string) => Promise<Response> } = {};
+		let render!: () => void;
+		let seen: string | null = null;
+		let first!: ReturnType<typeof createEngineDouble>;
+		first = createEngineDouble(undefined, async (identity) => {
+			first.activate(identity);
+			render();
+			await ports.fetcher?.(
+				'https://store.example.test/wp-json/wcpos/v2/changes/config-fingerprint'
+			);
+			seen = storeHeaderOf(fetch.mock.calls.at(-1)!);
+		});
+		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
+			() => first
+		);
+		try {
+			createAppSyncEngine(BASE_OPTIONS);
+			ports = createRxdbSyncEngine.mock.calls[0]![0];
+			render = () => createAppSyncEngine(BASE_OPTIONS);
+
+			await switchAppEngineScope({
+				site: { wp_api_url: BASE_OPTIONS.scope.site },
+				wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+				store: { id: 'store-2' },
+			});
+			expect(seen).toBe('store-2');
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
+	it('an earlier rejected switch never clobbers the header a later activation set', async () => {
+		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
+		const storeHeaderOf = (call: unknown[]) =>
+			new Headers((call[1] as RequestInit | undefined)?.headers).get('X-WCPOS-Store');
+		let first!: ReturnType<typeof createEngineDouble>;
+		first = createEngineDouble(undefined, async (identity) => {
+			if (identity.storeId === 'store-2') {
+				await new Promise((resolve) => setTimeout(resolve, 10));
+				throw new Error('store-2 refused');
+			}
+			first.activate(identity);
+		});
+		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
+			() => first
+		);
+		try {
+			createAppSyncEngine(BASE_OPTIONS);
+			const ports = createRxdbSyncEngine.mock.calls[0]![0];
+			const session = (storeId: string) => ({
+				site: { wp_api_url: BASE_OPTIONS.scope.site },
+				wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+				store: { id: storeId },
+			});
+			const refused = switchAppEngineScope(session('store-2'));
+			const landed = switchAppEngineScope(session('store-3'));
+			await expect(refused).rejects.toThrow('store-2 refused');
+			await landed;
+
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(storeHeaderOf(fetch.mock.calls.at(-1)!)).toBe('store-3');
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
+	it('a rejected switch leaves the committed store header in place', async () => {
+		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
+		const storeHeaderOf = (call: unknown[]) =>
+			new Headers((call[1] as RequestInit | undefined)?.headers).get('X-WCPOS-Store');
+		const error = new Error('scope refused');
+		const first = createEngineDouble(undefined, () => Promise.reject(error));
+		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
+			() => first
+		);
+		try {
+			createAppSyncEngine(BASE_OPTIONS);
+			const ports = createRxdbSyncEngine.mock.calls[0]![0];
+
+			await expect(
+				switchAppEngineScope({
+					site: { wp_api_url: BASE_OPTIONS.scope.site },
+					wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+					store: { id: 'store-2' },
+				})
+			).rejects.toBe(error);
+
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(storeHeaderOf(fetch.mock.calls.at(-1)!)).toBe(String(BASE_OPTIONS.scope.storeId));
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
 	it('awaited scope switch rejection leaves the cache identity untouched', async () => {
 		const error = new Error('scope refused');
 		const first = createEngineDouble(undefined, () => Promise.reject(error));
@@ -887,11 +1049,15 @@ describe('createAppSyncEngine scope cache', () => {
 			let releaseFirstSwitch!: () => void;
 			let rejectSecondSwitch!: (error: Error) => void;
 			let call = 0;
-			const first = createEngineDouble(undefined, () => {
+			const first = createEngineDouble(undefined, (identity) => {
 				call += 1;
 				if (call === 1) {
 					return new Promise<void>((resolve) => {
-						releaseFirstSwitch = resolve;
+						// Landing = the engine activated store-2 (db$ fired), then settled.
+						releaseFirstSwitch = () => {
+							first.activate(identity);
+							resolve();
+						};
 					});
 				}
 				return new Promise<void>((_resolve, reject) => {

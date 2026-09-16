@@ -204,6 +204,10 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.REGISTER221');
 		case 'REGISTER301':
 			return t('health.logs.error_action.REGISTER301');
+		case 'CLIENT151':
+			return t('health.logs.error_action.CLIENT151');
+		case 'AUTH131':
+			return t('health.logs.error_action.AUTH131');
 		default: {
 			const exhaustive: never = code;
 			return exhaustive;

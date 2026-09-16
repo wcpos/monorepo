@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
 
+import type { EngineRecord } from '@wcpos/query';
+
 import { resolveStock, useVariationStock, VariationStockBadge } from './stock-status';
 
 jest.mock('@wcpos/query', () => ({
@@ -51,8 +53,14 @@ function variation(fields: {
 	} as unknown as FakeVariation;
 }
 
-function Probe({ doc }: { doc: FakeVariation }) {
-	const stock = useVariationStock(doc);
+function Probe({
+	doc,
+	parent = { manage_stock: false },
+}: {
+	doc: FakeVariation;
+	parent?: Partial<EngineRecord<'products'>['payload']>;
+}) {
+	const stock = useVariationStock(doc, { payload: parent } as EngineRecord<'products'>);
 	return (
 		<>
 			<div data-testid="sellable">{String(stock.sellable)}</div>
@@ -121,10 +129,57 @@ describe('useVariationStock / VariationStockBadge', () => {
 		expect(badge()!.getAttribute('data-variant')).toBe('error');
 	});
 
-	it('follows the status flag for parent-managed stock without showing numbers', () => {
+	it('follows the child status when neither record manages stock', () => {
 		render(
 			<Probe
 				doc={variation({ manage_stock: 'parent', stock_quantity: 5, stock_status: 'outofstock' })}
+			/>
+		);
+		expect(screen.getByTestId('sellable').textContent).toBe('false');
+		expect(badge()!.textContent).toBe('common.out_of_stock');
+	});
+
+	it.each([
+		{ quantity: 0, backorders: 'no', sellable: 'false', label: 'common.out_of_stock' },
+		{
+			quantity: 3,
+			backorders: 'no',
+			sellable: 'true',
+			label: 'pos_products.in_stock|{"quantity":"3"}',
+		},
+		{ quantity: 0, backorders: 'notify', sellable: 'true', label: 'common.on_backorder' },
+	] as const)('uses parent quantity $quantity with backorders $backorders', (expected) => {
+		render(
+			<Probe
+				doc={variation({ manage_stock: 'parent', stock_status: 'instock' })}
+				parent={{
+					manage_stock: true,
+					stock_quantity: expected.quantity,
+					stock_status: 'instock',
+					backorders: expected.backorders,
+				}}
+			/>
+		);
+		expect(screen.getByTestId('sellable').textContent).toBe(expected.sellable);
+		expect(badge()?.textContent).toBe(expected.label);
+	});
+
+	it('uses the child quantity when it owns stock even if the parent has stock', () => {
+		render(
+			<Probe
+				doc={variation({ manage_stock: true, stock_quantity: 0, stock_status: 'instock' })}
+				parent={{ manage_stock: true, stock_quantity: 5, stock_status: 'instock' }}
+			/>
+		);
+		expect(screen.getByTestId('sellable').textContent).toBe('false');
+		expect(badge()!.textContent).toBe('common.out_of_stock');
+	});
+
+	it('preserves the child out-of-stock status when both records are unmanaged', () => {
+		render(
+			<Probe
+				doc={variation({ manage_stock: false, stock_status: 'outofstock' })}
+				parent={{ manage_stock: false, stock_status: 'instock' }}
 			/>
 		);
 		expect(screen.getByTestId('sellable').textContent).toBe('false');

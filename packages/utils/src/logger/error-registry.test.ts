@@ -121,6 +121,7 @@ const SEED_SYMBOLS = [
 	'REST_ROUTE_MISSING',
 	'REST_TRANSPORT_BLOCKED',
 	'SCHEMA_MISMATCH',
+	'SCREEN_RENDER_FAILED',
 	'SEARCH_BLOCKED_BY_WAF',
 	'SEARCH_INDEX_DIVERGENCE',
 	'SEARCH_INDEX_FALSE_MISS',
@@ -134,6 +135,7 @@ const SEED_SYMBOLS = [
 	'STORE_RATE_LIMITED',
 	'STORE_RESPONSE_MALFORMED',
 	'STORE_SERVER_ERROR',
+	'STORE_SESSION_INCOMPLETE',
 	'STORE_URL_INVALID',
 	'SYNC_BEHIND_HEAD',
 	'SYNC_PARTIAL',
@@ -262,6 +264,30 @@ describe('error registry', () => {
 		const searchRebuild = entryFor('CLIENT144');
 		expect(searchRebuild.retryPolicy).toBe('automatic');
 		expect(searchRebuild.docsBody).toContain('next search');
+	});
+
+	it('tells the cashier what a boundary-caught render failure did and did not touch', () => {
+		const entry = entryFor('CLIENT151');
+		expect(entry.severity).toBe('error');
+		expect(entry.dataSafety).toBe('no-impact');
+		const guidance = entry.troubleshooting.join(' ');
+		expect(guidance).toContain('Close the error message');
+		expect(guidance).toContain('reload the app');
+		expect(guidance).toContain('export debug info');
+	});
+
+	it('routes an incomplete saved session back to the store list and owns the re-added-site caveat', () => {
+		const entry = entryFor('AUTH131');
+		expect(entry.severity).toBe('error');
+		// A re-added site hashes to a new store localID, so the old local copy —
+		// and any sales waiting in it — is not picked up: local data IS at stake.
+		expect(entry.dataSafety).toBe('local-only');
+		expect(entry.summary).toContain('returned to the store list');
+		const guidance = entry.troubleshooting.join(' ');
+		expect(guidance).toContain('Choose the site and store again');
+		expect(guidance).toContain('only the remembered session was cleared');
+		expect(guidance).toContain('fresh local copy of the store');
+		expect(guidance).toContain('which part of the session was missing');
 	});
 
 	it('gives status-aware repair guidance for SYNC331 tombstones', () => {

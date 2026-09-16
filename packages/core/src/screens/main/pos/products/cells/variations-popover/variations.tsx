@@ -159,6 +159,7 @@ export function Variations({
 			{selectedVariation ? (
 				<VariationAddToCart
 					variation={selectedVariation}
+					parent={parent}
 					adding={adding}
 					onAddToCart={handleAddToCart}
 				/>
@@ -199,14 +200,16 @@ export function Variations({
  */
 function VariationAddToCart({
 	variation,
+	parent,
 	adding,
 	onAddToCart,
 }: {
 	variation: EngineRecord<'variations'>;
+	parent: EngineRecord<'products'>;
 	adding: boolean;
 	onAddToCart: () => void;
 }) {
-	const stock = useVariationStock(variation);
+	const stock = useVariationStock(variation, parent);
 	const price = useRecordField(variation, (record) => record.payload.price);
 	const { store } = useAppState();
 	const preventOverselling = useDocField(store, (value) => value.prevent_overselling);

@@ -53,6 +53,21 @@ describe('sentry-sink.native', () => {
 		expect(Sentry.captureMessage).not.toHaveBeenCalled();
 		expect(Sentry.captureException).not.toHaveBeenCalled();
 		expect(File).not.toHaveBeenCalled();
+		// Held, not dropped: denying discards it so nothing leaks into later consent.
+		setTelemetryConsent('denied');
+		setTelemetryConsent('allowed');
+		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+	});
+
+	it('holds a first-run error logged before consent and sends it once allowed', () => {
+		const thrown = new Error('Render failed');
+		captureLoggedError({ message: 'Render failed', code: 'CLIENT151', context: { error: thrown } });
+		expect(Sentry.captureException).not.toHaveBeenCalled();
+
+		setTelemetryConsent('allowed');
+
+		expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+		expect(Sentry.captureException).toHaveBeenCalledWith(thrown, expect.anything());
 	});
 
 	it.each(['ios', 'android'])('initializes once with native metadata for %s', (platform) => {

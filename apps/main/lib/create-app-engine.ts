@@ -291,15 +291,15 @@ export async function switchAppEngineScope(session: {
 	// never opened is a no-op, so the early add is safe on rejection too.
 	entry.databaseNames.add(scopeDatabaseName(scope));
 
+	// The store header is NOT committed here: it follows the engine's own
+	// activation (the db$ subscription in createAppSyncEngine), which lands
+	// after the outgoing scope's ticket is aborted and before the incoming
+	// open's hydrate, seed and prime fetch. A rejection has nothing to revert,
+	// and overlapping switches settle FIFO with each activation setting it —
+	// the stale-header window pro#425 hit is closed by the same subscription.
 	await entry.engine.scope.switch(scope);
 
 	entry.key = targetKey;
-	// Committed HERE rather than left to the next render's cache hit (the way the
-	// auth options are). Between a settled switch and that render the engine is
-	// already pulling and pushing under the new scope; a stale store header in
-	// that window would divert a price edit into the OUTGOING store's meta
-	// (pro#425). Only reached on success, so there is nothing to revert.
-	entry.fetcherScope.storeId = storeId;
 	entry.databaseName = scopeDatabaseName(scope);
 	// The engine confirmed this scope, so it becomes the fallback for any later
 	// switch that fails.
@@ -325,9 +325,13 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		cachedEngine.fetcherOptions.bareAuthParam = options.bareAuthParam;
 		cachedEngine.fetcherOptions.useRestRouteParam = options.useRestRouteParam;
 		cachedEngine.fetcherOptions.useProtocolHeaders = options.useProtocolHeaders;
-		cachedEngine.fetcherScope.storeId = options.scope.storeId;
-		// The engine IS on this scope, so these are committed values, not
-		// optimistic ones — a later failed switch must fall back to them.
+		// fetcherScope.storeId is NOT refreshed here: it follows the engine's
+		// activation (db$ subscription below). A same-key render can land while an
+		// awaited switch has already activated the incoming scope but not yet
+		// resolved (entry.key still names the outgoing one); rewriting the header
+		// from the cache key would put the outgoing store back on the wire.
+		// The auth options are committed values — the engine IS on this scope's
+		// site — and a later failed switch must fall back to them.
 		cachedEngine.committed = {
 			...cachedEngine.committed,
 			storeId: options.scope.storeId,
@@ -370,7 +374,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		entry.fetcherOptions.useRestRouteParam = options.useRestRouteParam;
 		entry.fetcherOptions.bareAuthParam = options.bareAuthParam;
 		entry.fetcherOptions.useProtocolHeaders = options.useProtocolHeaders;
-		entry.fetcherScope.storeId = options.scope.storeId;
+		// fetcherScope.storeId follows the engine's activation (db$ subscription).
 		entry.clockSkew.generation += 1;
 		entry.clockSkew.evaluated = false;
 		void switching.then(
@@ -401,7 +405,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					entry.fetcherOptions.useRestRouteParam = committed.fetcherOptions.useRestRouteParam;
 					entry.fetcherOptions.bareAuthParam = committed.fetcherOptions.bareAuthParam;
 					entry.fetcherOptions.useProtocolHeaders = committed.fetcherOptions.useProtocolHeaders;
-					entry.fetcherScope.storeId = committed.storeId;
 					entry.clockSkew.generation += 1;
 					entry.clockSkew.evaluated = previousClockSkewEvaluated;
 				}
@@ -620,6 +623,17 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		options.scope
 	);
 	engineSelf = engine;
+	// The store header follows the ENGINE's active scope, never the app's
+	// intent. The engine flips scopes after it has aborted the outgoing scope's
+	// ticket and before the incoming open's barcode hydrate, bootstrap seed and
+	// change-signal prime run, so this is the one point at which neither an
+	// outgoing lane nor an incoming open can fetch under the other store's
+	// header. Committing it before an awaited switch mis-scoped outgoing ticks
+	// during a slow open; committing it after mis-scoped the open itself.
+	engine.db$(() => {
+		const active = engine.active();
+		if (active) fetcherScope.storeId = active.identity.storeId;
+	});
 	cachedEngine = {
 		key: cacheKey,
 		site: siteKey,

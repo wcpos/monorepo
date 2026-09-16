@@ -158,6 +158,36 @@ describe('switchUserSessionStore', () => {
 		expect(appState.set.mock.calls[0][1]()).toEqual({ ...current, storeID: 'store-2' });
 	});
 
+	it('refuses a store whose session would be incomplete, before the engine moves or the pointer persists', async () => {
+		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({})) });
+		const appState = {
+			get: jest.fn(async () => ({
+				siteID: 'site-1',
+				wpCredentialsID: 'cred-1',
+				storeID: 'store-1',
+			})),
+			set: jest.fn(),
+		};
+		const switchEngineScope = jest.fn();
+
+		await expect(
+			switchUserSessionStore(
+				{
+					// The site row is gone — the #2112 shape.
+					sites: documentLookup(null),
+					wp_credentials: documentLookup({ uuid: 'cred-1' }),
+					stores: documentLookup({ localID: 'store-2' }),
+				} as any,
+				appState as any,
+				'store-2',
+				{ switchEngineScope }
+			)
+		).rejects.toThrow('Store session incomplete: missing site');
+
+		expect(switchEngineScope).not.toHaveBeenCalled();
+		expect(appState.set).not.toHaveBeenCalled();
+	});
+
 	it('aborts before persisting when the engine scope switch rejects', async () => {
 		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({})) });
 		const error = new Error('engine refused the scope');

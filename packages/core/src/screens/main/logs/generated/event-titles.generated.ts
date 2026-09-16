@@ -278,6 +278,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.register_variance_over_threshold');
 		case 'register.x-report-printed':
 			return t('health.logs.event.register_x_report_printed');
+		case 'render.error':
+			return t('health.logs.event.render_error');
 		case 'signal.cursor':
 			return t('health.logs.event.signal_cursor');
 		case 'signal.cycle':
@@ -443,6 +445,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.register_variance_over_threshold');
 		case 'register.x-report-printed':
 			return t('health.logs.event_description.register_x_report_printed');
+		case 'render.error':
+			return t('health.logs.event_description.render_error');
 		case 'signal.cursor':
 			return t('health.logs.event_description.signal_cursor');
 		case 'signal.cycle':

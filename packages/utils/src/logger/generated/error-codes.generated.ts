@@ -97,7 +97,9 @@ export type ErrorCode =
 	| 'REGISTER201'
 	| 'REGISTER211'
 	| 'REGISTER221'
-	| 'REGISTER301';
+	| 'REGISTER301'
+	| 'CLIENT151'
+	| 'AUTH131';
 export type ErrorDomain =
 	| 'AUTH'
 	| 'SYNC'
@@ -1025,6 +1027,25 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		summary:
 			'Your store would not accept the manager approval for this count, so the register is still open.',
 	},
+	CLIENT151: {
+		code: 'CLIENT151',
+		symbol: 'SCREEN_RENDER_FAILED',
+		domain: 'CLIENT',
+		severity: 'error',
+		actionHint: 'Close the error message to retry; if it comes back, reload the app.',
+		dataSafety: 'no-impact',
+		summary: 'Part of the screen failed to load and was replaced by an error message.',
+	},
+	AUTH131: {
+		code: 'AUTH131',
+		symbol: 'STORE_SESSION_INCOMPLETE',
+		domain: 'AUTH',
+		severity: 'error',
+		actionHint:
+			'Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data.',
+		dataSafety: 'local-only',
+		summary: 'The saved store session was incomplete, so WCPOS returned to the store list.',
+	},
 };
 
 export const ERROR_CODES = {
@@ -1125,4 +1146,6 @@ export const ERROR_CODES = {
 	REGISTER_CLOSE_REFUSED: 'REGISTER211',
 	REGISTER_TAKEN_OVER: 'REGISTER221',
 	REGISTER_APPROVAL_REFUSED: 'REGISTER301',
+	SCREEN_RENDER_FAILED: 'CLIENT151',
+	STORE_SESSION_INCOMPLETE: 'AUTH131',
 } as const satisfies Record<string, ErrorCode>;
