@@ -85,7 +85,7 @@ it('requires a choice among three, then binds the tapped id', async () => {
 		'Register bound',
 		expect.objectContaining({
 			actor: { id: '7', name: 'Pat' },
-			terminal: { operationId: 'b' },
+			terminal: { operationId: expect.stringMatching(/^[0-9a-f]{32}$/) },
 			context: { type: 'register.bound', registerId: 'b', previousRegisterId: null },
 		})
 	);
@@ -94,10 +94,12 @@ it('requires a choice among three, then binds the tapped id', async () => {
 		'Register switched',
 		expect.objectContaining({
 			actor: { id: '7', name: 'Pat' },
-			terminal: { operationId: 'c' },
+			terminal: { operationId: expect.stringMatching(/^[0-9a-f]{32}$/) },
 			context: { type: 'register.switched', registerId: 'c', previousRegisterId: 'b' },
 		})
 	);
+	const ids = logger.info.mock.calls.map((call) => call[1]?.terminal?.operationId);
+	expect(new Set(ids).size).toBe(ids.length);
 });
 it('keeps an existing valid pointer unchanged', async () => {
 	await bindRegister(mockDB, mockSite, { id: 'b', name: 'Saved' }, mockStoreId);

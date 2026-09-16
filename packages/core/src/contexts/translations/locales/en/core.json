@@ -1733,7 +1733,7 @@
 	"health.logs.event_description.register_counting_started": "The drawer count began. Cash movements cannot be recorded after this point.",
 	"health.logs.event_description.register_directory_unavailable": "Your store’s registers could not be fetched, so this device may not be able to link to one.",
 	"health.logs.event_description.register_drawer_opened": "The cash drawer was opened without a sale.",
-	"health.logs.event_description.register_movement_accepted": "A paid in, paid out or no sale reached your store and was accepted.",
+	"health.logs.event_description.register_movement_accepted": "A paid in, paid out, no sale or reversal reached your store and was accepted.",
 	"health.logs.event_description.register_movement_recorded": "Cash was paid into or out of the drawer on this device.",
 	"health.logs.event_description.register_movement_rejected": "Your store refused a cash movement, so the drawer and your store no longer agree.",
 	"health.logs.event_description.register_movement_retrying": "A cash movement did not reach your store and will be sent again.",

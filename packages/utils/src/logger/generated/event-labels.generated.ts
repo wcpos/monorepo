@@ -1099,7 +1099,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		key: 'health.logs.event.register_movement_accepted',
 		label: 'Your store recorded a cash movement',
 		descriptionKey: 'health.logs.event_description.register_movement_accepted',
-		description: 'A paid in, paid out or no sale reached your store and was accepted.',
+		description: 'A paid in, paid out, no sale or reversal reached your store and was accepted.',
 		introducedIn: '2.0.0',
 	},
 	'register.movement-recorded': {

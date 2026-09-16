@@ -3,7 +3,7 @@ import * as React from 'react';
 import { getLogger } from '@wcpos/utils/logger';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
-import { useRegisterActor } from '../register-session/audit';
+import { attempt, useRegisterActor } from '../register-session/audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import {
@@ -204,7 +204,9 @@ export function useRegisterBinding() {
 			if (previousRegisterId !== id)
 				logger.info(switched ? 'Register switched' : 'Register bound', {
 					actor,
-					terminal: { operationId: id.replace(/-/g, '') },
+					// Per attempt, not per destination: A→B, B→A, A→B inside the collapse
+					// window must stay three rows in order.
+					terminal: attempt(),
 					context: {
 						type: switched ? 'register.switched' : 'register.bound',
 						registerId: id,

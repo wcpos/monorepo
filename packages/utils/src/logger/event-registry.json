@@ -747,7 +747,7 @@
 		"type": "register.movement-accepted",
 		"domain": "REGISTER",
 		"label": "Your store recorded a cash movement",
-		"description": "A paid in, paid out or no sale reached your store and was accepted.",
+		"description": "A paid in, paid out, no sale or reversal reached your store and was accepted.",
 		"introducedIn": "2.0.0"
 	},
 	{
