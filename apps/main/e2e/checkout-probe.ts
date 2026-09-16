@@ -47,7 +47,7 @@ const simpleProbesByPage = new WeakMap<Page, SearchProbe[] | null>();
 const variableProbeByPage = new WeakMap<Page, RunPrivateProductProbe | null>();
 const matrixProbeByPage = new WeakMap<Page, VariationMatrixProbe | null>();
 
-function workerStoreUrl(workerInfo: WorkerInfo): string {
+export function workerStoreUrl(workerInfo: WorkerInfo): string {
 	if (process.env.E2E_STORE_URL) return process.env.E2E_STORE_URL;
 	return (workerInfo.project.use as WcposTestOptions).storeUrl || 'https://dev-free.wcpos.com';
 }
