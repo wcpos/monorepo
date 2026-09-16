@@ -802,6 +802,29 @@ describe('shouldExtendLedger', () => {
 		expect(shouldExtendLedger(base)).toBe(true);
 	});
 
+	it('does not drain a large backlog while the mounted drawer screen is hidden', () => {
+		// display:none reports zero geometry. Each materialized page used to
+		// re-arm the next extension, even though the user had returned to POS.
+		const hidden = {
+			...base,
+			offsetY: 0,
+			contentHeight: 0,
+			viewportHeight: 0,
+			total: 46_152,
+		};
+		for (const renderedCount of [20, 40, 8_400]) {
+			expect(
+				shouldExtendLedger({ ...hidden, renderedCount, lastExtendCount: renderedCount - 20 })
+			).toBe(false);
+		}
+	});
+
+	it('waits for a measured viewport, then resumes filling when shown', () => {
+		const unmeasured = { ...base, offsetY: 0, contentHeight: 600, viewportHeight: 0 };
+		expect(shouldExtendLedger(unmeasured)).toBe(false);
+		expect(shouldExtendLedger({ ...unmeasured, viewportHeight: 900 })).toBe(true);
+	});
+
 	it('does nothing far from the bottom', () => {
 		expect(shouldExtendLedger({ ...base, offsetY: 0 })).toBe(false);
 	});
