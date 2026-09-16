@@ -589,6 +589,9 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							primedAtOpen.set(scopeId, { head, ...(epoch ? { epoch } : {}) });
 							return { status: 'restored' };
 						}
+						// The re-read is the last await before the write: an abort that landed
+						// during it already released the chain, so a tick may have persisted.
+						if (signal?.aborted) return { status: 'skipped' };
 						writing = true;
 						const wrote = await bound.guardWrite(() =>
 							deps.writeBlob(

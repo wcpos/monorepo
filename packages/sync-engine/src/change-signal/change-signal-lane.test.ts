@@ -800,6 +800,41 @@ describe('cold-start priming', () => {
 		expect(mocks.poll).toHaveBeenCalledTimes(pollsBefore + 1);
 	});
 
+	it('writes nothing when the abort landed during the cross-instance re-read', async () => {
+		// The re-read is the last await before the write. An abort during it has
+		// already released the chain (nothing is being written yet), so a tick may
+		// have persisted by the time the read answers — the prime must stand down.
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		let reads = 0;
+		let answerReRead!: () => void;
+		const writeBlob = vi.fn(async () => undefined);
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher: primingFetcher({ head: 40, epoch: 'epoch-FIRST' }),
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: () =>
+				reads++ === 0
+					? Promise.resolve(null)
+					: new Promise<null>((resolve) => {
+							answerReRead = () => resolve(null);
+						}),
+			writeBlob,
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		const abort = new AbortController();
+		const prime = lane.prime(abort.signal);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(reads).toBe(2);
+		abort.abort();
+		answerReRead();
+		expect(await prime).toEqual({ status: 'skipped' });
+		expect(writeBlob).not.toHaveBeenCalled();
+	});
+
 	it('rejects a 401 prime with the poison error and writes nothing', async () => {
 		const { lane, writeBlob } = await openPrimeLane(null, false, true);
 		const prime = lane.prime();
