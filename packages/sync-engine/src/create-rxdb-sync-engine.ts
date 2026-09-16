@@ -510,6 +510,7 @@ export type EngineStatus = {
 	bootstrapFailed: Record<string, string>;
 	/** Pending mutation count of the active scope (cached from the last enqueue/drain; null before either). */
 	queueDepth: number | null;
+	serverPressure: { backingOff: boolean; multiplier: number; retryAfterUntilMs: number | null };
 	collections: Record<SyncCollectionName, EngineCollectionState>;
 };
 
@@ -2160,6 +2161,7 @@ export function createRxdbSyncEngine(
 			});
 		}
 		const stats = manager.stats();
+		const now = nowMs();
 		const laneStatus = (name: EngineLane, lastError: string | null) => ({
 			lastError,
 			lastTick: laneLastTick.get(name) ?? null,
@@ -2191,6 +2193,12 @@ export function createRxdbSyncEngine(
 				])
 			) as EngineStatus['lanes'],
 			queueDepth: writePlane.queueDepth(),
+			serverPressure: {
+				backingOff: serverPressure.isBackingOff(now),
+				multiplier: serverPressure.multiplier(),
+				retryAfterUntilMs:
+					serverPressure.retryAfterUntilMs() > now ? serverPressure.retryAfterUntilMs() : null,
+			},
 			collections: Object.fromEntries(
 				SYNC_COLLECTION_NAMES.map((collection) => [
 					collection,

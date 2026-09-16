@@ -138,6 +138,7 @@ export function createCadenceController(options: {
 		}, intervalMs);
 	};
 	const onServerPressureTransition = (transition: ServerPressureTransition): void => {
+		options.onStatusChange();
 		if (options.mode === 'manual') return;
 		const level = changeSignalDecayLevel;
 		options.diagnostics({

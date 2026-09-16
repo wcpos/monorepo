@@ -384,39 +384,64 @@ describe('server pressure monitor', () => {
 		});
 	});
 
-	it('treats elevated pressure as neutral recovery evidence', () => {
-		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
-		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
-
-		for (let index = 0; index < 10; index += 1) {
+	it.each(['elevated', 'high'] as const)(
+		'recovers from %s headers after the dwell and ten responses',
+		(pressure) => {
+			const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+			monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
+			for (let index = 0; index < 9; index += 1) {
+				expect(
+					monitor.observe({ atMs: 60_000 + index, status: 200, durationMs: 100, pressure })
+				).toBeNull();
+			}
+			expect(monitor.multiplier()).toBe(2);
 			expect(
-				monitor.observe({
-					atMs: 60_000 + index,
-					status: 200,
-					durationMs: 50,
-					pressure: 'elevated',
-				})
-			).toBeNull();
+				monitor.observe({ atMs: 60_009, status: 200, durationMs: 100, pressure })
+			).toMatchObject({
+				direction: 'recovery',
+				fromMultiplier: 2,
+				toMultiplier: 1,
+			});
+		}
+	);
+
+	it('recovers from fast high headers and ignores their clamp during the cooldown, not real slowness', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		const fastHigh = { status: 200, durationMs: 100, pressure: 'high' as const };
+		for (let index = 0; index < 10; index += 1) {
+			monitor.observe({ atMs: index, ...fastHigh });
+		}
+		expect(monitor.multiplier()).toBe(2);
+		for (let index = 0; index < 9; index += 1) {
+			expect(monitor.observe({ atMs: 60_010 + index, ...fastHigh })).toBeNull();
+		}
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.observe({ atMs: 60_019, ...fastHigh })).toMatchObject({
+			direction: 'recovery',
+			fromMultiplier: 2,
+			toMultiplier: 1,
+		});
+		for (let index = 0; index < 10; index += 1) {
+			expect(monitor.observe({ atMs: 60_020 + index, ...fastHigh })).toBeNull();
+		}
+		expect(monitor.multiplier()).toBe(1);
+		for (let index = 0; index < 10; index += 1) {
+			monitor.observe({ atMs: 60_030 + index, ...fastHigh, durationMs: 3_000 });
 		}
 		expect(monitor.multiplier()).toBe(2);
 	});
 
-	it('treats high pressure as neutral recovery evidence before the median trips', () => {
+	it('does not count a high header with a raw five-second duration as healthy', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
-		expect(
-			monitor.observe({ atMs: 60_000, status: 200, durationMs: 50, pressure: 'high' })
-		).toBeNull();
-
-		for (let index = 0; index < 9; index += 1) {
-			expect(
-				monitor.observe({ atMs: 60_001 + index, status: 200, durationMs: 50, pressure: 'low' })
-			).toBeNull();
-		}
+		monitor.observe({ atMs: 60_000, status: 200, durationMs: 5_000, pressure: 'high' });
+		healthy(monitor, 9, 60_001);
 		expect(monitor.multiplier()).toBe(2);
-		expect(
-			monitor.observe({ atMs: 60_010, status: 200, durationMs: 50, pressure: 'low' })
-		).toMatchObject({ direction: 'recovery', fromMultiplier: 2, toMultiplier: 1 });
+		expect(monitor.observe({ atMs: 60_020, ...OK })).toMatchObject({
+			direction: 'recovery',
+			fromMultiplier: 2,
+			toMultiplier: 1,
+		});
 	});
 
 	it('does not read a non-429 4xx as either distress or health', () => {

@@ -67,7 +67,14 @@ export class RxQueryTotalRequestStateRepository {
 			sort: [{ queryKey: 'asc' }],
 		});
 
-		return states.filter((state) => isRunnable(state, nowMs)).sort(byQueryKey);
+		return states
+			.filter((state) => isRunnable(state, nowMs))
+			.sort(
+				(left, right) =>
+					left.attempt - right.attempt ||
+					left.updatedAtMs - right.updatedAtMs ||
+					byQueryKey(left, right)
+			);
 	}
 
 	async remove(expectedState: QueryTotalRequestState): Promise<boolean> {
