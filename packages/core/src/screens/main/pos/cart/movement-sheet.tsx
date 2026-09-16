@@ -10,6 +10,11 @@ import { Text } from '@wcpos/components/text';
 import { PrinterService } from '@wcpos/printer';
 import { log } from '@wcpos/utils/logger';
 
+import {
+	logDrawerOpened,
+	logXReportPrinted,
+	useRegisterActor,
+} from '../../../../services/register-session/audit';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { useT } from '../../../../contexts/translations';
 import {
@@ -44,6 +49,7 @@ export function RegisterAmount(props: {
 	);
 }
 export function useSessionReport(closure?: ClosureDocument | null) {
+	const actor = useRegisterActor();
 	const { session, expected, blind, binding } = useRegisterSession();
 	const snapshot = useDocField(closure, (row) => row);
 	const { resolvedPrinter } = useResolvedPrinter({ template: REPORT_TEMPLATE });
@@ -113,6 +119,12 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 		doc: report,
 		print: async () => {
 			await report.print();
+			if (!closure)
+				logXReportPrinted({
+					actor,
+					sessionId: session?.id,
+					registerId: session?.register_id,
+				});
 			const at = new Date().toISOString();
 			try {
 				if (closure)
@@ -129,7 +141,14 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 			return at;
 		},
 		openDrawer: async () => {
-			if (resolvedPrinter?.autoOpenDrawer) await new PrinterService().openDrawer(resolvedPrinter);
+			if (resolvedPrinter?.autoOpenDrawer) {
+				await new PrinterService().openDrawer(resolvedPrinter);
+				logDrawerOpened({
+					actor,
+					sessionId: session?.id,
+					registerId: session?.register_id,
+				});
+			}
 		},
 	};
 }

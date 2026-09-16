@@ -1,18 +1,30 @@
 /** @jest-environment jsdom */
 import { renderHook } from '@testing-library/react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { useSessionReport } from './movement-sheet';
 
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
+}));
+const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+let mockAutoOpen = false;
+const mockOpenDrawer = jest.fn(async () => undefined);
 const print = jest.fn(async () => undefined);
 const documentHook = jest.fn(() => ({ print }));
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: (...args: unknown[]) => documentHook(...(args as [])),
 }));
 jest.mock('../../receipt/hooks/use-resolved-printer', () => ({
-	useResolvedPrinter: () => ({ resolvedPrinter: null }),
+	useResolvedPrinter: () => ({ resolvedPrinter: { autoOpenDrawer: mockAutoOpen } }),
 }));
-jest.mock('@wcpos/printer', () => ({ PrinterService: class {} }));
+jest.mock('@wcpos/printer', () => ({
+	PrinterService: class {
+		openDrawer = mockOpenDrawer;
+	},
+}));
 jest.mock('@wcpos/components/input', () => ({ Input: () => null }));
 jest.mock('@wcpos/components/button', () => ({ Button: () => null }));
 jest.mock('@wcpos/components/dialog', () => ({ Dialog: () => null }));
@@ -28,15 +40,26 @@ jest.mock('../../hooks/use-currency-format', () => ({
 }));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
-		session: { id: 's' },
+		session: { id: 's', register_id: 'r' },
 		expected: { cash: '155' },
 		blind: false,
 		binding: { registerName: 'Front' },
 	}),
 }));
+beforeEach(() => {
+	jest.clearAllMocks();
+	mockAutoOpen = false;
+});
 it('routes X to the session document with the panel figures as offline data', async () => {
 	const view = renderHook(() => useSessionReport());
 	await view.result.current.print();
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register X-report print dispatched',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: { type: 'register.x-report-printed', sessionId: 's', registerId: 'r' },
+		})
+	);
 	expect(documentHook).toHaveBeenLastCalledWith(
 		expect.objectContaining({
 			document: 'xreport:s',
@@ -71,6 +94,7 @@ it('prints the persisted closure and marks its time only after successful printi
 	expect(data.printed_at).toBeNull();
 	const at = await view.result.current.print();
 	expect(data).toMatchObject({ printed_at: at, print_count: 1 });
+	expect(logger.info).not.toHaveBeenCalled();
 	expect(documentHook).toHaveBeenLastCalledWith(
 		expect.objectContaining({
 			document: 'closure:s',
@@ -103,4 +127,30 @@ it('loads a superseded closure from its authoritative server document', () => {
 			localReport: expect.objectContaining({ order_number: 'Z-report 4' }),
 		})
 	);
+});
+
+it('logs the no-sale drawer kick only when dispatched successfully', async () => {
+	const view = renderHook(() => useSessionReport());
+	await view.result.current.openDrawer();
+	expect(logger.info).not.toHaveBeenCalled();
+	mockAutoOpen = true;
+	view.rerender();
+	mockOpenDrawer.mockRejectedValueOnce(new Error('printer'));
+	await expect(view.result.current.openDrawer()).rejects.toThrow('printer');
+	expect(logger.info).not.toHaveBeenCalled();
+	await view.result.current.openDrawer();
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register drawer kick dispatched',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			context: { type: 'register.drawer-opened', sessionId: 's', registerId: 'r' },
+		})
+	);
+});
+
+it('does not report an X-report when dispatch fails', async () => {
+	const view = renderHook(() => useSessionReport());
+	print.mockRejectedValueOnce(new Error('paper'));
+	await expect(view.result.current.print()).rejects.toThrow('paper');
+	expect(logger.info).not.toHaveBeenCalled();
 });

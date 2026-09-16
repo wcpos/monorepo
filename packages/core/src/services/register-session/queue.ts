@@ -41,6 +41,7 @@ export type SessionHttp = {
  */
 export type SessionLogger = {
 	debug: (message: string, options?: SessionLogOptions) => void;
+	info: (message: string, options?: SessionLogOptions) => void;
 	warn: (message: string, options?: SessionLogOptions) => void;
 	error: (message: string, options: SessionLogOptions & { code: ErrorCode }) => void;
 };
@@ -218,7 +219,15 @@ async function drain({
 				// pattern worth seeing, and this branch left no record of them whatsoever.
 				logger.warn('Register session close approval refused', {
 					code: ERROR_CODES.REGISTER_APPROVAL_REFUSED,
-					context: { endpoint, status, errorCode, documentId: doc.getLatest().id },
+					context: {
+						type: 'register.approval-refused',
+						endpoint,
+						status,
+						errorCode,
+						documentId: doc.getLatest().id,
+						sessionId: doc.getLatest().id,
+						registerId: (doc as RegisterSessionDocument).register_id,
+					},
 					terminal: {
 						operationId: operationId(doc.getLatest().id),
 						operationType: 'register.outbox',
@@ -247,6 +256,16 @@ async function drain({
 			// to Sentry, and a free-text field is the one thing that must not ride along.
 			const options = {
 				context: {
+					type:
+						endpoint === 'movements'
+							? retry
+								? 'register.movement-retrying'
+								: 'register.movement-rejected'
+							: 'register.session-refresh-failed',
+					sessionId: 'session_id' in before ? before.session_id : before.id,
+					...('register_id' in before ? { registerId: before.register_id } : {}),
+					...('type' in before ? { movementId: before.id } : {}),
+					...(endpoint === 'closures' ? { closureId: before.id } : {}),
 					endpoint,
 					status,
 					errorCode,
@@ -284,6 +303,13 @@ async function drain({
 				const server = (await http.get(`sessions/${body.data.session_id}`))
 					.data as RegisterSessionRow;
 				await adoptSession(sessions, server);
+				logger.info('Register session adopted', {
+					context: {
+						type: 'register.session-adopted',
+						sessionId: server.id,
+						registerId: server.register_id,
+					},
+				});
 			}
 		}
 	}
@@ -383,6 +409,17 @@ async function drain({
 				...synced,
 				voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
 			}));
+			logger.info('Register cash movement accepted', {
+				terminal: { operationId: operationId(row.id) },
+				context: {
+					type: 'register.movement-accepted',
+					sessionId: row.session_id,
+					registerId: session.register_id,
+					movementId: row.id,
+					movementType: row.type,
+					amount: row.amount,
+				},
+			});
 		});
 	}
 	const closureRows = (await closures.find().exec()).sort((a, b) => a.number - b.number);

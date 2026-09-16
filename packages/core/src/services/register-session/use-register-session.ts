@@ -4,8 +4,10 @@ import { useObservableState } from 'observable-hooks';
 import { combineLatest, map, of, switchMap, timer } from 'rxjs';
 
 import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 import { readLedger } from '@wcpos/order-math';
 
+import { useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
 import { deriveExpected } from './expected';
@@ -16,8 +18,11 @@ import {
 	useRegisterSessionCollection,
 } from './use-register-session-collections';
 
+const logger = getLogger(['wcpos', 'registerSession']);
+
 export function useRegisterSession() {
 	const { store, wpCredentials, userDB, site } = useStoreSession();
+	const actor = useRegisterActor();
 	const { engine, locale } = useQueryRuntime();
 	const binding = useRegisterBinding();
 	const sessions = useRegisterSessionCollection();
@@ -161,21 +166,56 @@ export function useRegisterSession() {
 				(b.closed_at_gmt ?? '').localeCompare(a.closed_at_gmt ?? '')
 			)[0] ?? null,
 		actions: {
-			openSession: (input: { expectedFloat: string | null; countedFloat: string }) =>
-				actions.openSession(sessions!, {
+			openSession: async (input: { expectedFloat: string | null; countedFloat: string }) => {
+				const row = await actions.openSession(sessions!, {
 					...input,
 					registerId: binding.registerId!,
 					openedBy: wpCredentials.id ?? 0,
 					storeId: store.id,
-				}),
-			startCounting: () => actions.startCounting(sessions!, session!.id),
-			backToSelling: () => actions.backToSelling(sessions!, session!.id),
+				});
+				logger.info('Register session opened', {
+					actor,
+					terminal: { operationId: row.id.replace(/-/g, '') },
+					context: {
+						type: 'register.session-opened',
+						sessionId: row.id,
+						registerId: row.register_id,
+						amount: row.counted_float,
+						variance: row.opening_variance,
+					},
+				});
+				return row;
+			},
+			startCounting: async () => {
+				const row = await actions.startCounting(sessions!, session!.id);
+				logger.info('Register session counting started', {
+					actor,
+					context: {
+						type: 'register.counting-started',
+						sessionId: row.id,
+						registerId: row.register_id,
+					},
+				});
+				return row;
+			},
+			backToSelling: async () => {
+				const row = await actions.backToSelling(sessions!, session!.id);
+				logger.info('Register session counting abandoned', {
+					actor,
+					context: {
+						type: 'register.counting-abandoned',
+						sessionId: row.id,
+						registerId: row.register_id,
+					},
+				});
+				return row;
+			},
 			closeSession: async (input: { counted: Record<string, string> }) => {
 				const closed =
 					session!.status === 'closed'
 						? session!
 						: await actions.closeSession(sessions!, session!.id, input);
-				return actions.writeClosure({
+				const closure = await actions.writeClosure({
 					closures: closures!,
 					tillExpected: expected,
 					userDB,
@@ -188,6 +228,19 @@ export function useRegisterSession() {
 					movements: entries,
 					orders: orders.map(({ record }) => record),
 				});
+				logger.info('Register session closed', {
+					actor,
+					terminal: { operationId: closure.id.replace(/-/g, '') },
+					context: {
+						type: 'register.session-closed',
+						sessionId: closed.id,
+						registerId: closed.register_id,
+						closureId: closure.id,
+						counted: closure.counted,
+						variance: closure.variance,
+					},
+				});
+				return closure;
 			},
 			recordMovement: async (input: {
 				type: 'paid_in' | 'paid_out' | 'no_sale';
@@ -195,15 +248,42 @@ export function useRegisterSession() {
 				reason: string;
 			}) => {
 				const id = await actions.requireOpenSession(sessions, binding.registerId, true);
-				return actions.recordMovement(movements!, {
+				const row = await actions.recordMovement(movements!, {
 					...input,
 					sessionId: id!,
 					actor: wpCredentials.id ?? 0,
 				});
+				logger.info('Register cash movement recorded', {
+					actor,
+					terminal: { operationId: row.id.replace(/-/g, '') },
+					context: {
+						type: 'register.movement-recorded',
+						sessionId: row.session_id,
+						registerId: binding.registerId,
+						movementId: row.id,
+						movementType: row.type,
+						amount: row.amount,
+					},
+				});
+				return row;
 			},
 			voidMovement: async (id: string) => {
 				await actions.requireOpenSession(sessions, binding.registerId, true);
-				return actions.voidMovement(movements!, id, wpCredentials.id ?? 0);
+				const row = await actions.voidMovement(movements!, id, wpCredentials.id ?? 0);
+				logger.info('Register cash movement voided', {
+					actor,
+					terminal: { operationId: row.id.replace(/-/g, '') },
+					context: {
+						type: 'register.movement-voided',
+						sessionId: row.session_id,
+						registerId: binding.registerId,
+						movementId: row.id,
+						movementType: row.type,
+						amount: row.amount,
+						voids: id,
+					},
+				});
+				return row;
 			},
 			retryMovement: (id: string) => actions.retryMovement(movements!, id),
 		},

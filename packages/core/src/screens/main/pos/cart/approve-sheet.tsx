@@ -7,6 +7,11 @@ import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import type { ClosureDocument } from '@wcpos/database';
 
+import {
+	logApprovalGranted,
+	logApprovalRefused,
+	useRegisterActor,
+} from '../../../../services/register-session/audit';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -21,6 +26,7 @@ export function ApproveSheet({
 	onClosed: (closure: ClosureDocument) => void;
 	onOpenChange: (open: boolean) => void;
 }) {
+	const actor = useRegisterActor();
 	const { session, actions } = useRegisterSession();
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -36,6 +42,12 @@ export function ApproveSheet({
 		setError('');
 		try {
 			const response = await http.post(`sessions/${session.id}/approve`, { username, password });
+			logApprovalGranted({
+				actor,
+				sessionId: session.id,
+				registerId: session.register_id,
+				approvedBy: response.data.approved_by,
+			});
 			setPassword('');
 			await session.incrementalPatch({
 				approved_by: response.data.approved_by,
@@ -48,6 +60,12 @@ export function ApproveSheet({
 			const refused =
 				(e as { response?: { data?: { code?: string } } }).response?.data?.code ===
 				'wcpos_override_refused';
+			if (refused)
+				logApprovalRefused({
+					actor,
+					sessionId: session.id,
+					registerId: session.register_id,
+				});
 			setError(t(refused ? 'register.cannot_approve' : 'register.approval_failed'));
 		} finally {
 			setBusy(false);

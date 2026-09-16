@@ -94,6 +94,8 @@ export function RegisterSessionBridge() {
 			// per-request rows written inside the outbox carry the real endpoint.
 			const options = {
 				context: {
+					type: 'register.session-refresh-failed',
+					registerId,
 					stage: (error as { stage?: string })?.stage ?? 'refresh',
 					status,
 					errorCode,

@@ -91,10 +91,13 @@ it('names the failing stage and the rejection, and only escalates once it persis
 	// One 60-second cycle is a blip; the rubric keeps a single transient failure forensic.
 	await waitFor(() => expect(log.debug).toHaveBeenCalledTimes(1));
 	expect(log.warn).not.toHaveBeenCalled();
+	expect(log.debug.mock.calls[0][1]).not.toHaveProperty('actor');
 	expect(log.debug).toHaveBeenCalledWith(
-		expect.any(String),
+		'Register session refresh/drain failed',
 		expect.objectContaining({
 			context: expect.objectContaining({
+				type: 'register.session-refresh-failed',
+				registerId: 'register',
 				stage: 'refresh',
 				status: 401,
 				errorCode: 'jwt_auth_invalid_token',
@@ -108,11 +111,17 @@ it('names the failing stage and the rejection, and only escalates once it persis
 		await Promise.resolve();
 	});
 
+	expect(log.warn.mock.calls[0][1]).not.toHaveProperty('actor');
 	// Still broken a cycle later: this is the row that fires every minute today with nothing in it.
 	expect(log.warn).toHaveBeenCalledWith(
 		expect.any(String),
 		expect.objectContaining({
-			context: expect.objectContaining({ stage: 'refresh', status: 401, consecutiveFailures: 2 }),
+			context: expect.objectContaining({
+				type: 'register.session-refresh-failed',
+				stage: 'refresh',
+				status: 401,
+				consecutiveFailures: 2,
+			}),
 		})
 	);
 });

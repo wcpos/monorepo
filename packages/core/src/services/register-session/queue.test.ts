@@ -3,6 +3,7 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
 
+import { getLogger } from '@wcpos/utils/logger';
 import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
@@ -24,7 +25,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: StoreDatabase;
 let userDB: UserDatabase;
 const http = { post: jest.fn(), get: jest.fn() };
-const logger = { warn: jest.fn(), debug: jest.fn(), error: jest.fn() };
+const logger = { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() };
 beforeEach(async () => {
 	jest.clearAllMocks();
 	http.post.mockReset();
@@ -95,6 +96,13 @@ it('marks a losing create failed and adopts the server session', async () => {
 	await drain();
 	expect(row.getLatest().sync_status).toBe('failed');
 	expect((await db.register_sessions.findOne('winner').exec())?.sync_status).toBe('synced');
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register session adopted',
+		expect.objectContaining({
+			context: { type: 'register.session-adopted', sessionId: 'winner', registerId: 'register' },
+		})
+	);
+	expect(logger.info.mock.calls[0][1]).not.toHaveProperty('actor');
 });
 it('backs off a 5xx without posting dependent movements', async () => {
 	const row = await open();
@@ -130,6 +138,20 @@ it('sends movements after create but before a deferred counting transition', asy
 	}));
 	await drain();
 	expect(http.post.mock.calls.map(([url]) => url)).toEqual(['sessions', 'movements']);
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register cash movement accepted',
+		expect.objectContaining({
+			context: expect.objectContaining({
+				type: 'register.movement-accepted',
+				sessionId: row.id,
+				registerId: 'register',
+				movementId: movement.id,
+				amount: '5',
+				movementType: 'paid_out',
+			}),
+		})
+	);
+	expect(logger.info.mock.calls[0][1]).not.toHaveProperty('actor');
 	expect(row.getLatest().toJSON()).toMatchObject({
 		status: 'counting',
 		pending_status: 'counting',
@@ -251,6 +273,15 @@ it('prunes movements together with their expired closed session', async () => {
 
 	expect(await db.register_sessions.findOne(row.id).exec()).toBeNull();
 	expect(await db.cash_movements.findOne(movement.id).exec()).toBeNull();
+	const refreshLogger = jest.mocked(getLogger(['wcpos', 'registerSession']));
+	expect(refreshLogger.info).toHaveBeenCalledWith(
+		'Register session pruned',
+		expect.objectContaining({
+			terminal: { operationId: row.id.replace(/-/g, '') },
+			context: { type: 'register.session-pruned', sessionId: row.id, registerId: 'register' },
+		})
+	);
+	expect(refreshLogger.info.mock.calls[0][1]).not.toHaveProperty('actor');
 });
 
 it.each(['pending', 'failed'] as const)(
@@ -300,11 +331,15 @@ it('logs a retryable outbox failure at debug and a permanent one at its register
 	});
 	http.post.mockRejectedValueOnce({ response: { status: 503 } });
 	await drain();
+	expect(logger.error).not.toHaveBeenCalled();
 	expect(logger.warn).not.toHaveBeenCalled();
 	expect(logger.debug).toHaveBeenCalledWith(
-		expect.any(String),
+		'Register session outbox request failed',
 		expect.objectContaining({
 			context: expect.objectContaining({
+				type: 'register.movement-retrying',
+				movementId: movement.id,
+				sessionId: session.id,
 				endpoint: 'movements',
 				status: 503,
 				documentId: movement.id,
@@ -315,6 +350,7 @@ it('logs a retryable outbox failure at debug and a permanent one at its register
 		})
 	);
 
+	expect(logger.debug.mock.calls[0][1]).not.toHaveProperty('actor');
 	logger.debug.mockClear();
 	await movement.incrementalPatch({ sync_status: 'pending', sync_next_at: null });
 	http.post.mockRejectedValueOnce({
@@ -330,11 +366,14 @@ it('logs a retryable outbox failure at debug and a permanent one at its register
 	// the cashier now, and only a registered code gives the row a merchant-readable title,
 	// a Help link and a toast.
 	expect(logger.error).toHaveBeenCalledWith(
-		expect.any(String),
+		'Register session outbox request permanently refused',
 		expect.objectContaining({
 			code: 'REGISTER101',
 			showToast: true,
 			context: expect.objectContaining({
+				type: 'register.movement-rejected',
+				movementId: movement.id,
+				sessionId: session.id,
 				endpoint: 'movements',
 				status: 400,
 				errorCode: 'rest_invalid_param',
@@ -347,6 +386,7 @@ it('logs a retryable outbox failure at debug and a permanent one at its register
 	// `logger.error` forwards message AND context to Sentry. The cashier's free text
 	// must never ride along.
 	expect(JSON.stringify(logger.error.mock.calls)).not.toContain('Bread money');
+	for (const [, options] of logger.error.mock.calls) expect(options).not.toHaveProperty('actor');
 });
 
 it('gives a refused reversal its own code, below error, because the original still stands', async () => {
@@ -486,10 +526,16 @@ it('records a refused manager approval, which today leaves no trace at all', asy
 	});
 	await drain();
 	expect(logger.warn).toHaveBeenCalledWith(
-		expect.any(String),
+		'Register session close approval refused',
 		expect.objectContaining({
 			code: 'REGISTER301',
-			context: expect.objectContaining({ status: 403, errorCode: 'wcpos_override_refused' }),
+			context: expect.objectContaining({
+				type: 'register.approval-refused',
+				sessionId: row.id,
+				registerId: 'register',
+				status: 403,
+				errorCode: 'wcpos_override_refused',
+			}),
 		})
 	);
 	// The recovery branch returns the session to counting; it must not also be logged as a
@@ -498,6 +544,7 @@ it('records a refused manager approval, which today leaves no trace at all', asy
 	// Neither the approver's username nor their password is ever in scope here, but the
 	// session row is — assert the row we log carries no credential-shaped key.
 	expect(JSON.stringify(logger.warn.mock.calls)).not.toMatch(/password|username|approver_token/);
+	expect(logger.warn.mock.calls[0][1]).not.toHaveProperty('actor');
 });
 
 it('chains outbox attempts on one operation id the ledger can follow', async () => {

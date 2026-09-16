@@ -493,6 +493,8 @@ describe('logger/index', () => {
 					event: 'cart.line-item.updated',
 					orderID: 2468,
 					orderNumber: '67882',
+					movementId: 'movement-search-id',
+					closureId: 'closure-search-id',
 					productName: 'Diagnostic Coffee',
 					previousQuantity: 1,
 					quantity: 3,
@@ -509,6 +511,8 @@ describe('logger/index', () => {
 			const [{ context }] = insert.mock.calls[0];
 			expect(context.search).toContain('2468');
 			expect(context.search).toContain('67882');
+			expect(context.search).toContain('movement-search-id');
+			expect(context.search).toContain('closure-search-id');
 			expect(context.search).toContain('Diagnostic Coffee');
 			expect(context.search).toContain('1');
 			expect(context.search).toContain('3');
