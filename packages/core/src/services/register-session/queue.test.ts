@@ -423,7 +423,7 @@ it('names a refused open and a refused close apart', async () => {
 		expect.objectContaining({ code: 'REGISTER201' })
 	);
 
-	expect(logger.error.mock.calls[0][1].context).not.toHaveProperty('type');
+	expect(logger.error.mock.calls[0][1].context).toHaveProperty('type', 'register.upload-refused');
 	logger.error.mockClear();
 	const other = await open();
 	await other.incrementalPatch({
@@ -445,7 +445,7 @@ it('names a refused open and a refused close apart', async () => {
 			context: expect.objectContaining({ endpoint: 'sessions/status' }),
 		})
 	);
-	expect(logger.error.mock.calls[0][1].context).not.toHaveProperty('type');
+	expect(logger.error.mock.calls[0][1].context).toHaveProperty('type', 'register.upload-refused');
 });
 
 it('does not call a refused counting transition a refused close', async () => {
@@ -816,7 +816,7 @@ it('resubmits the current closure with re-adopted perpetual totals', async () =>
 });
 
 it.each([403, 503])(
-	'does not title a closure upload failure (%s) as a session refresh',
+	'titles a permanent closure upload refusal and leaves a retry untitled (%s)',
 	async (status) => {
 		const { session, row } = await closure();
 		await session.incrementalPatch({
@@ -833,6 +833,10 @@ it.each([403, 503])(
 		];
 		expect(calls).toHaveLength(1);
 		expect(calls[0][1].context).toMatchObject({ endpoint: 'closures', closureId: row.id, status });
-		expect(calls[0][1].context).not.toHaveProperty('type');
+		if (status === 403) {
+			expect(calls[0][1].context).toHaveProperty('type', 'register.upload-refused');
+		} else {
+			expect(calls[0][1].context).not.toHaveProperty('type');
+		}
 	}
 );

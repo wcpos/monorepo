@@ -133,6 +133,7 @@ export const SYNC_EVENT_TYPES = [
 	'register.session-refresh-failed',
 	'register.switched',
 	'register.unbound',
+	'register.upload-refused',
 	'register.variance-over-threshold',
 	'register.x-report-printed',
 	'signal.cursor',
@@ -1200,6 +1201,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_unbound',
 		description:
 			'This device is no longer linked to a register, so its sales do not record where they were taken.',
+		introducedIn: '2.0.0',
+	},
+	'register.upload-refused': {
+		type: 'register.upload-refused',
+		domain: 'REGISTER',
+		key: 'health.logs.event.register_upload_refused',
+		label: 'Your store refused a register update',
+		descriptionKey: 'health.logs.event_description.register_upload_refused',
+		description:
+			'Your store refused a session or closure this device sent, so the register and your store no longer agree.',
 		introducedIn: '2.0.0',
 	},
 	'register.variance-over-threshold': {

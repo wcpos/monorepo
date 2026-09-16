@@ -270,6 +270,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.register_switched');
 		case 'register.unbound':
 			return t('health.logs.event.register_unbound');
+		case 'register.upload-refused':
+			return t('health.logs.event.register_upload_refused');
 		case 'register.variance-over-threshold':
 			return t('health.logs.event.register_variance_over_threshold');
 		case 'register.x-report-printed':
@@ -431,6 +433,8 @@ export function translateEventDescription(
 			return t('health.logs.event_description.register_switched');
 		case 'register.unbound':
 			return t('health.logs.event_description.register_unbound');
+		case 'register.upload-refused':
+			return t('health.logs.event_description.register_upload_refused');
 		case 'register.variance-over-threshold':
 			return t('health.logs.event_description.register_variance_over_threshold');
 		case 'register.x-report-printed':

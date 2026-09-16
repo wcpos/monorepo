@@ -256,9 +256,13 @@ async function drain({
 			// to Sentry, and a free-text field is the one thing that must not ride along.
 			const options = {
 				context: {
+					// A retryable non-movement failure is mid-arc and stays untitled; the
+					// permanent refusal of a session or closure upload has its own event.
 					...(endpoint === 'movements'
 						? { type: retry ? 'register.movement-retrying' : 'register.movement-rejected' }
-						: {}),
+						: retry
+							? {}
+							: { type: 'register.upload-refused' }),
 					sessionId: 'session_id' in before ? before.session_id : before.id,
 					...('register_id' in before ? { registerId: before.register_id } : {}),
 					...('type' in before ? { movementId: before.id } : {}),

@@ -828,6 +828,13 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"type": "register.upload-refused",
+		"domain": "REGISTER",
+		"label": "Your store refused a register update",
+		"description": "Your store refused a session or closure this device sent, so the register and your store no longer agree.",
+		"introducedIn": "2.0.0"
+	},
+	{
 		"type": "register.variance-over-threshold",
 		"domain": "REGISTER",
 		"label": "The counted drawer differs from the expected amount",
