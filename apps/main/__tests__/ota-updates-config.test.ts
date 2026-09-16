@@ -38,6 +38,33 @@ describe('mobile OTA configuration', () => {
 		}
 	});
 
+	it('resolves and exports the platform runtime before every E2E Metro start', () => {
+		const workflow = parse(
+			readFileSync(resolve(__dirname, '../../../.github/workflows/e2e-native.yml'), 'utf8')
+		);
+		const starts = Object.entries(
+			workflow.jobs as Record<string, { steps: { run?: string }[] }>
+		).flatMap(([platform, job]) =>
+			job.steps.flatMap(({ run = '' }) =>
+				Array.from(run.matchAll(/\bexpo start\b/g), (match) => ({
+					platform,
+					before: run.slice(0, match.index),
+				}))
+			)
+		);
+		expect(starts).toHaveLength(2);
+		for (const { platform, before } of starts) {
+			expect(['android', 'ios']).toContain(platform);
+			expect(before).toMatch(
+				new RegExp(
+					`^WCPOS_E2E_RUNTIME_VERSION=.*runtimeversion:resolve --platform ${platform}\\b`,
+					'm'
+				)
+			);
+			expect(before).toMatch(/^export WCPOS_E2E_RUNTIME_VERSION\s*$/m);
+		}
+	});
+
 	it('uses the native fingerprint as the runtime version', () => {
 		expect(appConfig.runtimeVersion).toEqual({ policy: 'fingerprint' });
 	});

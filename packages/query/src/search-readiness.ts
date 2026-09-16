@@ -4,6 +4,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 import { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
 
+import { catalogueSearchBlobFor } from './catalogue-search-blob';
 import { engineCollectionNameFor, LEGACY_SEARCH_FIELDS } from './engine-adapter/collection-map';
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { observeEngineDatabases } from './engine-query';
@@ -21,7 +22,7 @@ type SearchedCollection = keyof typeof LEGACY_SEARCH_FIELDS;
 
 /**
  * The till's hot path: the products panel is the screen every session opens,
- * so these two indexes get the first crack at boot I/O.
+ * so these two blobs get the first crack at boot I/O.
  */
 const TILL_COLLECTIONS = [
 	'products',
@@ -44,16 +45,10 @@ const SECONDARY_COLLECTIONS = [
 	'coupons',
 ] as const satisfies readonly SearchedCollection[];
 
-const SEARCHED_COLLECTIONS = [
-	...TILL_COLLECTIONS,
-	...SECONDARY_COLLECTIONS,
-] as const satisfies readonly SearchedCollection[];
-
 /**
  * Upper bound on the till pair's exclusive head start. The secondary tier
- * normally starts the moment the till indexes report built (their pipelines
- * idle — an event, not a guess); this cap only bounds the pathological tails:
- * a follower/wedged tab whose pipelines never report, or a catalog so large
+ * normally starts the moment the till blobs report ready (their initial reads
+ * completed — an event, not a guess); this cap bounds a stalled read or a catalog so large
  * that waiting for it would postpone customer search indefinitely. A tail
  * guard, not a tuning knob.
  */
@@ -121,8 +116,8 @@ function candidateTokens(snapshot: Record<string, unknown>, searchFields: string
 }
 
 /**
- * Builds the app's search indexes eagerly at startup — the till pair first,
- * every other searched collection as soon as the till indexes report built
+ * Builds the app's search structures eagerly at startup — the till pair first,
+ * every other searched collection as soon as the till blobs report ready
  * (capped) — and periodically verifies a sampled document is findable by its
  * own name (#1733).
  *
@@ -200,18 +195,18 @@ export function startSearchReadiness(options: {
 		});
 
 	const warmDatabase = (database: AdapterDatabase) => {
-		const tillWarmups = warmCollections(database, TILL_COLLECTIONS);
-		// The secondary tier starts when the till indexes report BUILT — a find()
-		// resolves exactly when the index's pipeline goes idle, so an empty probe
-		// is the completion event. The cap bounds the tails where that report
-		// never comes (wedged pipeline) or comes too late (a huge catalog must not
-		// postpone customer search indefinitely). Best-effort by design: on a tab
-		// whose pipeline has not started, the probe resolves early and the head
-		// start collapses — harmless, since no pipeline is consuming I/O there.
+		// The till pair loads folded rows before secondary indexes compete for boot I/O.
+		// The head-start cap still bounds a slow catalogue read.
 		const tillBuilt = Promise.all(
-			tillWarmups.map((warmup) =>
-				warmup.then((instance) => instance?.find('')).catch(() => undefined)
-			)
+			TILL_COLLECTIONS.map((name) => {
+				const collection = database.collections[engineCollectionNameFor(name)] as unknown as
+					SearchableCollection | undefined;
+				if (!collection) return Promise.resolve();
+				const { searchFields, documentSnapshot } = initializationOptionsFor(name);
+				return catalogueSearchBlobFor(collection, searchFields, documentSnapshot).ready.catch(
+					() => undefined
+				);
+			})
 		);
 		void withTimeout(tillBuilt, timings.tillHeadStartCapMs).then(() => {
 			if (disposed || currentDatabase !== database) return;
@@ -241,7 +236,7 @@ export function startSearchReadiness(options: {
 
 		// One bounded read, never the whole catalog: count once, then fetch the
 		// single document at the round-robin cursor (RxDB's default primary-key
-		// sort makes the offset deterministic). A large variation catalog must not
+		// sort makes the offset deterministic). A large secondary collection must not
 		// be materialized every ten minutes just to pick one sample.
 		const key = `${name}:${locale}`;
 		const total = collection.count ? await collection.count().exec() : 0;
@@ -338,7 +333,7 @@ export function startSearchReadiness(options: {
 		const database = currentDatabase;
 		const generation = databaseGeneration;
 		if (!database || disposed) return;
-		for (const name of SEARCHED_COLLECTIONS) {
+		for (const name of SECONDARY_COLLECTIONS) {
 			try {
 				await auditCollection(database, name, generation);
 			} catch (error) {

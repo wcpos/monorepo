@@ -43,12 +43,3 @@ export function searchTerms(search: string): string[] {
 export function fieldsMatchAllTerms(fields: string[], terms: string[]): boolean {
 	return fieldsMatchTokens(fields, terms);
 }
-
-/** A punctuation-free anchor remains indexed even when long field tokens are split. */
-export function phraseSearchAnchor(foldedPhrase: string): string | null {
-	return (
-		(foldedPhrase.match(/[\p{L}\p{N}]+/gu) ?? [])
-			.filter((term) => term.length >= FLEXSEARCH_MIN_TERM_LENGTH)
-			.sort((a, b) => b.length - a.length)[0] ?? null
-	);
-}

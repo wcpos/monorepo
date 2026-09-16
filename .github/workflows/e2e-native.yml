@@ -522,6 +522,11 @@ jobs:
         env:
           EXPO_PUBLIC_WCPOS_E2E: '1'
         run: |
+          # This checkout is immutable during CI. Reuse its exact runtime: the
+          # dev launcher issues two serialized manifest requests per relaunch,
+          # each fingerprinting the project when the runtime is a policy object.
+          WCPOS_E2E_RUNTIME_VERSION=$(node "$(node -p "require.resolve('expo-updates/bin/cli')")" runtimeversion:resolve --platform android | jq -er '.runtimeVersion')
+          export WCPOS_E2E_RUNTIME_VERSION
           nohup npx expo start --no-dev --minify --offline --port 8081 > /tmp/metro.log 2>&1 &
           for i in $(seq 1 60); do
             curl -sf http://localhost:8081/status >/dev/null && break
