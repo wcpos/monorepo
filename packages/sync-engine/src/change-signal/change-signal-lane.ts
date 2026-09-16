@@ -144,12 +144,13 @@ export type ChangeSignalLane = {
 
 export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignalLane {
 	const engines = new Map<string, HybridChangeSignalEngine>();
-	/** The head THIS instance primed a scope at (scope open), consumed by the
-	 * first engineFor. Two tabs opening one fresh scope can both read "no state"
-	 * and the later, higher head can land in the blob after ours; restoring that
-	 * would skip everything this tab fetched in between. A lower cursor is always
-	 * safe (re-delivery is idempotent), so the engine starts from the lower of
-	 * the two — once. After that the persisted cursor is the truth again. */
+	/** The head THIS instance primed a scope at (scope open). Two tabs opening
+	 * one fresh scope can both read "no state" and the later, higher head can
+	 * land in the blob after ours; restoring that would skip everything this tab
+	 * fetched in between. A lower cursor is always safe (re-delivery is
+	 * idempotent), so every engine this instance builds starts from the lower of
+	 * the two until one of ITS ticks commits (persistState) — a tick that fails
+	 * after its poll is pruned and rebuilt, and must find the floor still here. */
 	const primedAtOpen = new Map<string, { head: number; epoch?: string }>();
 	/** Rebindable per-tick fetch — see the module header. */
 	let activeFetch: Fetcher | null = null;
@@ -169,8 +170,8 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 	 * servers in tests, and small labs, drain honestly). A failed head fetch
 	 * throws: the tick reports error and the NEXT tick re-primes (lazy,
 	 * retried — a transient startup failure never disables the loop). */
-	async function fetchHeadCheckpoint(): Promise<{ head: number; epoch?: string }> {
-		const response = await sourceFetcher(
+	async function fetchHeadCheckpoint(fetch: Fetcher): Promise<{ head: number; epoch?: string }> {
+		const response = await fetch(
 			`${deps.syncBaseUrl}/changes/sequence-log?collection=all&since=0&limit=1`
 		);
 		if (!response.ok) {
@@ -198,14 +199,13 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 		if (existing) return existing;
 		const blob = await deps.readBlob(scopeId, CHANGE_SIGNAL_STATE_KEY);
 		const restored = blob === null ? null : deserializeChangeSignalState(blob);
-		const primed = restored === null ? await fetchHeadCheckpoint() : null;
+		const primed = restored === null ? await fetchHeadCheckpoint(sourceFetcher) : null;
 		const initial = restored ?? {
 			initialCursor: { sequence: primed?.head ?? 0 },
 			baselineDigests: undefined,
 		};
 		const initialEpoch = restored?.epoch ?? primed?.epoch;
 		const ownPrime = primedAtOpen.get(scopeId);
-		primedAtOpen.delete(scopeId);
 		if (
 			ownPrime !== undefined &&
 			restored !== null &&
@@ -349,6 +349,9 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 									CHANGE_SIGNAL_STATE_KEY,
 									serializeChangeSignalState(state)
 								);
+								// This instance's cursor is now the persisted truth; the
+								// scope-open floor has done its job.
+								primedAtOpen.delete(scopeId);
 								// THIS persist — the change-signal state of the tick that carried
 								// the forced re-pull — is what spends a hydration-miss recovery.
 								// It lives here, not on the shared blob seam: that seam is also
@@ -565,8 +568,12 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						// this prime closes — so check after every await and write nothing
 						// once aborted.
 						if (signal?.aborted) return { status: 'skipped' };
-						activeFetch = bound.bindFetch(fetcherWithSignal(signal));
-						const { head, epoch } = await fetchHeadCheckpoint();
+						// Its own bound fetcher, never the tick's rebindable one: the prime
+						// shares no state with a tick, so a hung prime can be released from
+						// the chain below without a later tick losing its fetch.
+						const { head, epoch } = await fetchHeadCheckpoint(
+							bound.bindFetch(fetcherWithSignal(signal))
+						);
 						if (signal?.aborted) return { status: 'skipped' };
 						// Another instance (a second tab on the same fresh scope) may have
 						// primed while our head fetch was in flight. Its head is never above
@@ -608,12 +615,25 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						return { status: 'skipped' };
 					}
 					throw error;
-				} finally {
-					activeFetch = null;
 				}
 			};
 			const queued = chain.then(run, run);
-			chain = queued.then(
+			// A checkpoint or fetch port that never settles must not wedge the lane
+			// behind this prime: once the caller's deadline aborts, the chain moves
+			// on and later ticks run. Safe because the prime holds no shared state
+			// (own bound fetcher, guarded write) and its late result can only ever
+			// be a LOWER cursor than a tick's.
+			const released =
+				signal === undefined
+					? queued
+					: Promise.race([
+							queued,
+							new Promise<void>((resolve) => {
+								if (signal.aborted) resolve();
+								else signal.addEventListener('abort', () => resolve(), { once: true });
+							}),
+						]);
+			chain = released.then(
 				() => undefined,
 				() => undefined
 			);

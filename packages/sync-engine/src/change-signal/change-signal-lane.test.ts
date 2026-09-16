@@ -562,11 +562,55 @@ describe('cold-start priming', () => {
 		expect(createHybridChangeSignalEngine).toHaveBeenLastCalledWith(
 			expect.objectContaining({ initialCursor: { sequence: 5 }, initialEpoch: 'epoch-FIRST' })
 		);
-		// One-shot: an engine re-created after a tick error restores the persisted cursor.
+		// A tick that fails AFTER its poll is pruned and rebuilt (commit-only-on-
+		// success): the rebuilt engine must find the floor still in place, or the
+		// retry would restore the other tab's 6 and skip 5..6 after all.
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 6 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} satisfies HybridPollOutcome);
+		vi.mocked(applyReplicationActions).mockRejectedValueOnce(new Error('pull 500'));
+		expect(await lane.tick()).toMatchObject({ status: 'error' });
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 6 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} satisfies HybridPollOutcome);
+		// This tick commits — persistState runs — and the floor is released.
+		vi.mocked(applyReplicationActions).mockImplementationOnce(async (_actions, handlers) => {
+			await handlers.persistState({
+				cursor: { sequence: 6 },
+				baselineDigests: new Map(),
+				escalations: [],
+				epoch: 'epoch-FIRST',
+			} as never);
+			return { reDerived: [] } as never;
+		});
+		expect(await lane.tick()).toMatchObject({ status: 'ran' });
+		expect(createHybridChangeSignalEngine).toHaveBeenLastCalledWith(
+			expect.objectContaining({ initialCursor: { sequence: 5 } })
+		);
 		lane.prune('scope-a');
 		mocks.poll.mockResolvedValueOnce({
 			changes: [],
-			cursor: { sequence: 5 },
+			cursor: { sequence: 6 },
 			rebaseline: false,
 			sweepRan: false,
 			sweepIncomplete: false,
@@ -581,6 +625,49 @@ describe('cold-start priming', () => {
 		expect(createHybridChangeSignalEngine).toHaveBeenLastCalledWith(
 			expect.objectContaining({ initialCursor: { sequence: 6 } })
 		);
+	});
+
+	it('releases the lane chain when a hung checkpoint read is aborted', async () => {
+		// A host checkpoint port that never settles must not leave every later
+		// tick queued behind the prime once the facade's deadline has passed.
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		let reads = 0;
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher: primingFetcher({ head: 40, epoch: 'epoch-FIRST' }),
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: () => (reads++ === 0 ? new Promise<never>(() => undefined) : Promise.resolve(null)),
+			writeBlob: vi.fn(async () => undefined),
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		const abort = new AbortController();
+		void lane.prime(abort.signal);
+		// Let the prime reach its (hung) checkpoint read before the deadline fires.
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(reads).toBe(1);
+		abort.abort();
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 40 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} satisfies HybridPollOutcome);
+		const outcome = await Promise.race([
+			lane.tick(),
+			new Promise<'wedged'>((resolve) => setTimeout(() => resolve('wedged'), 500)),
+		]);
+		expect(outcome).toMatchObject({ status: 'ran' });
 	});
 
 	it('drops the prime write when the scope moved during the head fetch', async () => {
