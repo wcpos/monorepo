@@ -10,6 +10,7 @@ import {
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { requeueRejectedMutation } from './write-intents';
+import { removeRefundChildren } from './refund-children';
 
 import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { RxDatabase } from 'rxdb';
@@ -553,6 +554,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 										if (stillResident) throw error;
 										residentRemoved = true;
 									}
+									if (entry.collectionName === 'orders')
+										await removeRefundChildren(database.collections.refunds, [
+											row?.remoteId as string | null,
+										]);
 								}
 								// CAS, not an unconditional remove: two discards of one terminal row
 								// (a double-tap that beat the button's disabled state, two windows)

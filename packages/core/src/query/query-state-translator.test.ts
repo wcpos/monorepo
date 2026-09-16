@@ -1,4 +1,5 @@
 import { orderBrowserQueryKey } from '@wcpos/query/testing';
+import { mintRemoteId } from '@wcpos/sync-core';
 
 import {
 	compileQuery,
@@ -19,6 +20,30 @@ type ExhaustiveFilterMap = {
 const exhaustiveFilterMap: ExhaustiveFilterMap = FILTER_TRANSLATORS;
 
 describe('query-state translator', () => {
+	// Remove the refunds-by-parent suffix: re-declaration produces an undefined requirement id.
+	it('gives re-declared parent refund demand a stable id and forced refresh', () => {
+		expect(
+			requirementsForCompiledQuery(
+				[
+					{
+						id: 'old',
+						kind: 'refunds-by-parent',
+						collection: 'refunds',
+						parentRemoteId: mintRemoteId(42, 'test'),
+					},
+				],
+				{ id: 'detail', forceRefresh: true }
+			)
+		).toEqual([
+			{
+				id: 'detail:refunds-by-parent',
+				kind: 'refunds-by-parent',
+				collection: 'refunds',
+				parentRemoteId: '42',
+				forceRefresh: true,
+			},
+		]);
+	});
 	it.each([
 		['price', 'sortable_price'],
 		['regular_price', 'regular_price'],

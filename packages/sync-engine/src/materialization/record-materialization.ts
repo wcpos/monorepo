@@ -6,6 +6,7 @@ import {
 	normalizeCheckpoint,
 	type OrderDocument,
 	promotedProductColumns,
+	refundDocumentId,
 	type RemoteId,
 	remoteIdOrNull,
 	taxRateDocumentId,
@@ -26,6 +27,7 @@ import {
 } from '../collections/variation-schema';
 import { stripNonStringMetaDisplayFields } from './strip-order-meta-display';
 
+import type { LocalRefundDocument, WooRefundPayload } from '../collections/refund-schema';
 import type {
 	LocalReferenceDocument,
 	WooReferencePayload,
@@ -206,4 +208,20 @@ export function materializeLocalOnly(
 		local: envelope?.local ?? { dirty: false, pendingMutationIds: [] },
 	} as OrderDocument;
 	return result(document, manifestRow);
+}
+
+export function materializeRefund(raw: WooRefundPayload): Materialized<LocalRefundDocument> {
+	const remoteId = mintRemoteId(raw.id, 'Woo REST refund response id');
+	const sessionId = raw.meta_data?.find(({ key }) => key === '_wcpos_session')?.value;
+	const adopted = adoptStampedRevision(raw, () => String(raw.date_modified_gmt ?? ''));
+	return {
+		storedDocument: {
+			uuid: refundDocumentId(remoteId),
+			remoteId,
+			sessionId: typeof sessionId === 'string' ? sessionId : '',
+			payload: stripDigest(adopted.payload),
+			local: { dirty: false, pendingMutationIds: [] },
+			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
+		},
+	};
 }

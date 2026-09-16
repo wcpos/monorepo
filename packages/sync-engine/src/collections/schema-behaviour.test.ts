@@ -48,6 +48,8 @@ import { productSchema } from './product-schema';
 import { promotedVariationColumns, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
+import { refundSchema } from './refund-schema';
+import { materializeRefund } from '../materialization/record-materialization';
 import {
 	brandSchema,
 	categorySchema,
@@ -190,6 +192,56 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 				local: { dirty: false, pendingMutationIds: [] },
 			},
 		});
+	});
+
+	it('refunds preserve details and can query their indexed parent and creation date', async () => {
+		const document = materializeRefund({
+			id: 17,
+			parent_id: 3,
+			date_created_gmt: '2026-09-16T12:00:00',
+			amount: '20.00',
+			meta_data: [{ key: '_wcpos_session', value: { nested: true } }],
+			line_items: [{ id: 2, quantity: -1, total: '-20.00' }],
+		}).storedDocument;
+		await expectRoundTrip({ schema: refundSchema, document });
+		const { db, collection } = await openCollection({ schema: refundSchema });
+		try {
+			await collection.insert(document);
+			const rows = await collection
+				.find({
+					selector: { 'payload.parent_id': 3, 'payload.date_created_gmt': { $gte: '2026-09-01' } },
+				})
+				.exec();
+			expect(rows.map((row) => row.primary)).toEqual(['woo-refund:17']);
+			expect(rows[0].toJSON()).toMatchObject({ local: { dirty: false, pendingMutationIds: [] } });
+		} finally {
+			await db.close();
+		}
+	});
+
+	// Revert the promoted indexes: session/id queries no longer have indexed columns.
+	it('queries refunds through their session and remote id indexes', async () => {
+		expect(refundSchema.indexes).toEqual(expect.arrayContaining(['sessionId', 'remoteId']));
+		const { db, collection } = await openCollection({ schema: refundSchema });
+		try {
+			await collection.insert(
+				materializeRefund({
+					id: 17,
+					parent_id: 3,
+					date_created_gmt: '2026-09-16',
+					meta_data: [{ key: '_wcpos_session', value: 'B' }],
+				}).storedDocument
+			);
+			for (const [field, value] of [
+				['sessionId', 'B'],
+				['remoteId', '17'],
+			]) {
+				const rows = await collection.find({ selector: { [field]: value }, index: field }).exec();
+				expect(rows.map((row) => row.primary)).toEqual(['woo-refund:17']);
+			}
+		} finally {
+			await db.close();
+		}
 	});
 
 	it('taxRates', async () => {
@@ -451,6 +503,7 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 		// shape apart from title (ADR 0019 — see the identity test below).
 		customers: '85e1373e0643f472',
 		taxRates: 'faea838bf1991ead',
+		refunds: 'd78bcc1758dcf4ab',
 		categories: '85e1373e0643f472',
 		brands: '85e1373e0643f472',
 		tags: '85e1373e0643f472',

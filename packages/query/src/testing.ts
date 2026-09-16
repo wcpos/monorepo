@@ -21,7 +21,7 @@ import type {
 	RxdbSyncEngine,
 	SyncCollectionName,
 } from '@wcpos/sync-engine';
-import { GUEST_CUSTOMER_ID, remoteIdOrNull } from '@wcpos/sync-core';
+import { GUEST_CUSTOMER_ID, HISTORY_DAYS, remoteIdOrNull } from '@wcpos/sync-core';
 
 import { searchPlugin } from './search';
 
@@ -46,7 +46,8 @@ type DataCollection =
 	| 'categories'
 	| 'tags'
 	| 'brands'
-	| 'coupons';
+	| 'coupons'
+	| 'refunds';
 
 /**
  * A standalone RxDB database carrying the ENGINE schemas — the same recipe the
@@ -142,9 +143,12 @@ const requirementQueryKey = (requirement: EngineRequirement): string | null => {
 	if (requirement.kind === 'customer-browse') {
 		return customerBrowseWindowQueryKeyFromDimensions(requirement);
 	}
+	if (requirement.kind === 'refunds-by-parent')
+		return `refunds:parent:${requirement.parentRemoteId}`;
 	if (requirement.kind === 'refresh') {
 		const refreshLaneKeys: Partial<Record<SyncCollectionName, string>> = {
 			taxRates: 'taxRates:all',
+			refunds: `refunds:history:days=${HISTORY_DAYS}`,
 			categories: 'categories:all',
 			brands: 'brands:all',
 			tags: 'tags:all',
@@ -349,6 +353,7 @@ export function createFakeEngine(database: RxDatabase): FakeEngine {
 		'brands',
 		'tags',
 		'coupons',
+		'refunds',
 	];
 	const activityCounts = new Map<SyncCollectionName, number>();
 	let collections = Object.fromEntries(
@@ -530,6 +535,7 @@ export function createPendingFakeEngine(database: RxDatabase): PendingFakeEngine
 				'brands',
 				'tags',
 				'coupons',
+				'refunds',
 			] as SyncCollectionName[]
 		).map((collection) => [collection, { active: false, coverageGeneration: 0 }])
 	) as EngineStatus['collections'];

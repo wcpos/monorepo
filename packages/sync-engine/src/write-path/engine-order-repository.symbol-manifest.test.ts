@@ -20,6 +20,7 @@ function orderDatabase() {
 	const orderUpserts: unknown[][] = [];
 	const manifestUpserts: unknown[][] = [];
 	const db = {
+		refunds: { find: () => ({ exec: async () => [] }), bulkRemove: async () => [] },
 		orders: {
 			getLocal: async (id: string) =>
 				localDocs.has(id)

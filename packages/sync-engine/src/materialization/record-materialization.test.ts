@@ -4,6 +4,7 @@ import { remoteId } from '../testing';
 import {
 	materializeGreedyPrunable,
 	materializeLocalOnly,
+	materializeRefund,
 	materializeTargeted,
 	materializeUpsertRefresh,
 } from './record-materialization';
@@ -177,4 +178,45 @@ describe('record materialization seam', () => {
 		);
 		expect(importers.map(([name]) => name)).toEqual(['./record-materialization.ts']);
 	});
+});
+
+it('materializes refunds without a server UUID or manifest and adopts stamped revisions', () => {
+	const raw = {
+		id: 17,
+		parent_id: 3,
+		date_created_gmt: '2026-09-16T12:00:00',
+		amount: '20.00',
+		date_modified_gmt: 'legacy',
+		_rxdb_revision: 'stamp',
+		meta_data: [{ key: '_wcpos_session', value: 'B' }],
+	};
+	const result = materializeRefund(raw);
+	expect(result.storedDocument).toMatchObject({
+		uuid: 'woo-refund:17',
+		remoteId: remoteId(17),
+		sessionId: 'B',
+		payload: { amount: '20.00', meta_data: raw.meta_data },
+		sync: { revision: 'stamp', partial: false, source: 'woo-rest' },
+	});
+	expect(result.storedDocument.payload).not.toHaveProperty('_rxdb_revision');
+	expect(result.manifestRow).toBeUndefined();
+	expect(
+		materializeRefund({
+			id: 17,
+			parent_id: 3,
+			date_created_gmt: '2026-09-16T12:00:00',
+			date_modified_gmt: 'legacy',
+		}).storedDocument.sync.revision
+	).toBe('legacy');
+	expect(
+		materializeRefund({ id: 17, parent_id: 3, date_created_gmt: '2026-09-16T12:00:00' })
+			.storedDocument.sync.revision
+	).toBe('');
+});
+
+// Revert session promotion/default: indexed lookups cannot find the materialized rows.
+it('materializes an empty sessionId when a refund has no session stamp', () => {
+	expect(
+		materializeRefund({ id: 18, parent_id: 3, date_created_gmt: '2026-09-16' }).storedDocument
+	).toHaveProperty('sessionId', '');
 });

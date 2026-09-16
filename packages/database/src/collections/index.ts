@@ -11,6 +11,7 @@ import { logsLiteral } from './schemas/logs';
 import { notificationsLiteral } from './schemas/notifications';
 import { templatesLiteral } from './schemas/templates';
 import { ordersLiteral } from './schemas/orders';
+import { refundsLiteral } from './schemas/refunds';
 import { productsLiteral } from './schemas/products';
 import { registerSessionsLiteral } from './schemas/register-sessions';
 import { cashMovementsLiteral } from './schemas/cash-movements';
@@ -371,6 +372,13 @@ export type CustomerCollection = RxCollection<CustomerDocumentType>;
 type CouponDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof couponsLiteral>;
 export type CouponDocument = RxDocument<CouponDocumentType>;
 export type CouponCollection = RxCollection<CouponDocumentType>;
+
+export type RefundDocumentType = WithNestedJsonMetaData<
+	WithJsonMetaData<ExtractDocumentTypeFromTypedRxJsonSchema<typeof refundsLiteral>>,
+	'line_items' | 'tax_lines' | 'shipping_lines' | 'fee_lines'
+>;
+export type RefundDocument = RxDocument<RefundDocumentType>;
+export type RefundCollection = RxCollection<RefundDocumentType>;
 
 /**
  * Taxes

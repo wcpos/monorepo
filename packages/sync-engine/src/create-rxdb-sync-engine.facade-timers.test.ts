@@ -112,6 +112,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			'brands',
 			'tags',
 			'coupons',
+			'refunds',
 		]);
 		const initialGeneration = engine.status().collections.products.coverageGeneration;
 		expect(engine.status().collections.products).toEqual({

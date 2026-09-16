@@ -2319,14 +2319,51 @@ export function createRxdbSyncEngine(
 						);
 					}
 					const beforeDrop = opts?.beforeDrop;
-					return manager.resetCollection(scopeId, name, {
+					const outcome = await manager.resetCollection(scopeId, name, {
 						...(opts?.confirmDestroyQueue !== undefined
 							? { confirmDestroyQueue: opts.confirmDestroyQueue }
 							: {}),
-						...(beforeDrop !== undefined
-							? { beforeDrop: () => beforeDrop(activeScopeOf(scopeId)) }
-							: {}),
+						beforeDrop: async () => {
+							await beforeDrop?.(activeScopeOf(scopeId));
+						},
 					});
+					if (name === 'orders' && outcome === 'reset') {
+						// No parents survive a reset. Repeating this after a failed cascade
+						// needs no pre-drop ids; independently POS-stamped refunds stay held.
+						const refunds = activeScopeOf(scopeId).database.collections.refunds;
+						const held = await refunds.find().exec();
+						const orphanIds = held
+							.filter(
+								(doc) =>
+									!doc
+										.toJSON()
+										.payload.meta_data?.some(
+											({ key }: { key: string }) =>
+												key === '_wcpos_session' || key === '_wcpos_register'
+										)
+							)
+							.map((doc) => doc.toJSON().uuid);
+						if (orphanIds.length > 0)
+							assertBulkSuccess(await refunds.bulkRemove(orphanIds), 'orders reset refund cascade');
+						if (disposed) return outcome;
+						const handle = engine.require({
+							id: 'orders-reset:refund-history',
+							kind: 'refresh',
+							collection: 'refunds',
+							forceRefresh: true,
+						});
+						void handle.ready
+							.catch((error) => {
+								diagnostics({
+									type: 'engine.guard',
+									level: 'warn',
+									collection: 'refunds',
+									message: `Orders reset refund history refresh failed: ${String(error)}`,
+								});
+							})
+							.finally(() => handle.release());
+					}
+					return outcome;
 				});
 			},
 		},
@@ -2389,6 +2426,33 @@ export function createRxdbSyncEngine(
 				changeStartedAt
 			);
 			const reports = [censusReport, changeReport];
+			if (name === 'refunds' && !options?.signal?.aborted) {
+				const handle = engine.require({
+					id: 'check-collection:refunds',
+					kind: 'refresh',
+					collection: 'refunds',
+					forceRefresh: true,
+				});
+				const release = () => handle.release();
+				options?.signal?.addEventListener('abort', release, { once: true });
+				try {
+					const result = await handle.ready;
+					reports.push({
+						lane: 'scheduler-drain',
+						status:
+							result.action === 'released' || result.action === 'serve-local' ? 'skipped' : 'ran',
+					});
+				} catch (error) {
+					reports.push({
+						lane: 'scheduler-drain',
+						status: 'error',
+						error: error instanceof Error ? error.message : String(error),
+					});
+				} finally {
+					options?.signal?.removeEventListener('abort', release);
+					release();
+				}
+			}
 			const worst = reports.some((report) => report.status === 'error')
 				? ('error' as const)
 				: reports.some((report) => report.status === 'ran')

@@ -73,6 +73,15 @@ export function resetRefillRequirements(collectionNames: string[]): EngineRequir
 			priority: 1000,
 		});
 	}
+	if (resetEngineCollections.has('refunds')) {
+		requirements.push({
+			id: 'refunds:collection-reset',
+			collection: 'refunds',
+			kind: 'refresh',
+			forceRefresh: true,
+			priority: 1000,
+		});
+	}
 	if (wanted.has('taxes')) {
 		requirements.push({
 			id: 'taxRates:collection-reset',

@@ -50,6 +50,7 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
+	seedRefundWindowLane,
 	SUPPORTED_CENSUS_COLLECTIONS,
 } from '../scheduler';
 import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
@@ -603,6 +604,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	});
 
 	const referenceSeed = lane('reference-seed', async (db) => {
+		const nowMs = now();
+		const result = await seedRefundWindowLane({
+			database: db,
+			nowMs,
+			completedDedupeForMs: REFERENCE_SAFETY_REFRESH_MS,
+		});
 		const counts = await Promise.all(
 			REFERENCE_COLLECTIONS.map((collection) => db.collections[collection].count().exec())
 		);
@@ -615,10 +622,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		});
 		const collections = [...materialized, ...backfill];
 		if (collections.length === 0) {
-			return { summary: null, status: 'skipped', reason: 'no reference collections need seeding' };
+			return seedSummary('Refund history refresh', result);
 		}
-		const result = { inserted: 0, requeued: 0, claimLost: 0 };
-		const nowMs = now();
+
 		for (const [group, completedDedupeForMs] of [
 			[materialized, REFERENCE_SAFETY_REFRESH_MS],
 			[backfill, REFERENCE_REFRESH_DEDUPE_MS],
@@ -634,7 +640,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			result.requeued += seeded.requeued;
 			result.claimLost += seeded.claimLost;
 		}
-		const label = `Reference refresh (categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
+		const label = `Reference refresh (refunds + categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
 		return seedSummary(label, result);
 	});
 

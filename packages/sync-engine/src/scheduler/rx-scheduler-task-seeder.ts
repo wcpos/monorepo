@@ -35,6 +35,8 @@ export type SeedPersistedSchedulerTasksInput = {
 	 * set this; everything else (bootstrap, F11, UI/query, targeted pulls) leaves it false.
 	 */
 	coalesceInFlight?: boolean;
+	/** Explicit refresh can retry failed work immediately instead of waiting for backoff. */
+	wakeFailed?: boolean;
 };
 
 export type SeedPersistedSchedulerTasksResult = {
@@ -133,10 +135,11 @@ export async function seedPersistedSchedulerTasks(
 			continue;
 		}
 
-		if (existing.status === 'completed') {
+		if (existing.status === 'completed' || (input.wakeFailed && existing.status === 'failed')) {
 			// A non-positive window disables completed-dedupe (so a same-millisecond
 			// completion is NOT treated as a duplicate); otherwise skip within the window.
 			if (
+				existing.status === 'completed' &&
 				input.completedDedupeForMs > 0 &&
 				input.nowMs - existing.updatedAtMs <= input.completedDedupeForMs
 			) {

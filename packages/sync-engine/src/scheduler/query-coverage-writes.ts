@@ -11,6 +11,8 @@ export type BuildCoverageDocumentsFromQueryResultInput = {
 	collection: string;
 	queryKey: string;
 	records: QueryCoverageResultRecord[];
+	/** Complete walk membership when only this page's record coverage needs writing. */
+	expectedRecordIds?: string[];
 	complete: boolean;
 	nowMs: number;
 	freshForMs: number;
@@ -54,7 +56,7 @@ export function buildCoverageDocumentsFromQueryResult(
 	input: BuildCoverageDocumentsFromQueryResultInput
 ): PersistedCoverageDocumentSet {
 	const freshUntilMs = input.nowMs + input.freshForMs;
-	const expectedRecordIds = input.records.map((record) => record.id);
+	const expectedRecordIds = input.expectedRecordIds ?? input.records.map((record) => record.id);
 
 	return {
 		records: input.records.map((record) => ({

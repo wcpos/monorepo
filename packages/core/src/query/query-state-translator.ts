@@ -304,6 +304,7 @@ function requirementId(id: string, kind: EngineRequirement['kind']): string {
 		'orders-browse': 'orders-browse',
 		'product-browse': 'products-browse-window',
 		'customer-browse': 'customers-browse-window',
+		'refunds-by-parent': 'refunds-by-parent',
 	}[kind];
 	return `${id}:${suffix}`;
 }

@@ -25,7 +25,11 @@ export type CollectionRow = {
  * products. Their rows show the real server total plus the policy, never a
  * completeness percentage.
  */
-export const WINDOWED_COLLECTIONS: ReadonlySet<CollectionKey> = new Set(['orders', 'variations']);
+export const WINDOWED_COLLECTIONS: ReadonlySet<CollectionKey> = new Set([
+	'orders',
+	'variations',
+	'refunds',
+]);
 
 export function deriveCollectionRow(
 	key: CollectionKey,

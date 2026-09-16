@@ -8,6 +8,7 @@ import type {
 	ProductDocument,
 	ProductTagDocument,
 	ProductVariationDocument,
+	RefundDocument,
 	TaxRateDocument,
 } from '@wcpos/database';
 
@@ -42,10 +43,12 @@ export type EngineRecordCollectionName =
 	| 'categories'
 	| 'tags'
 	| 'brands'
-	| 'coupons';
+	| 'coupons'
+	| 'refunds';
 
 type LegacyDocumentByCollection = {
 	orders: OrderDocument;
+	refunds: RefundDocument;
 	products: ProductDocument;
 	variations: ProductVariationDocument;
 	customers: CustomerDocument;

@@ -4,6 +4,7 @@ import type {
 	ClosureCollection,
 	ClosureDocument,
 	ClosureRow,
+	RefundDocumentType,
 	RegisterSessionCollection,
 	RegisterSessionRow,
 	UserDatabase,
@@ -17,7 +18,7 @@ import {
 	readRegister,
 	mintUuid as uuid,
 } from '../register/register-document';
-import { deriveExpected } from './expected';
+import { attributeRefunds, deriveExpected } from './expected';
 
 export const pending = {
 	sync_status: 'pending',
@@ -177,6 +178,7 @@ export async function writeClosure({
 	movements,
 	orders,
 	tillExpected,
+	refundRecords = [],
 }: {
 	closures: ClosureCollection;
 	userDB: UserDatabase;
@@ -187,6 +189,7 @@ export async function writeClosure({
 	movements: readonly CashMovementRow[];
 	orders: readonly ClosureOrder[];
 	tillExpected?: Record<string, string>;
+	refundRecords?: readonly RefundDocumentType[];
 }) {
 	const existing = await closures.findOne(session.id).exec();
 	if (existing) {
@@ -203,12 +206,15 @@ export async function writeClosure({
 				({ key, value }) => key === '_wcpos_session' && value === session.id
 			) || readLedger(order.payload.meta_data).some((row) => row.session_id === session.id)
 	);
-	const rows = bound
-		.flatMap((order) => readLedger(order.payload.meta_data))
-		.filter((row) => row.session_id === session.id && row.status === 'captured');
+	const ledgerRows = orders.flatMap((order) => readLedger(order.payload.meta_data));
+	const refunds = attributeRefunds(session.id, ledgerRows, refundRecords);
+	const rows = ledgerRows.filter(
+		(row) => row.session_id === session.id && row.status === 'captured'
+	);
 	const entries = movements.filter((row) => row.session_id === session.id);
 	const till_expected =
-		tillExpected ?? deriveExpected({ session, movements: entries, ledgerRowsBySession: rows });
+		tillExpected ??
+		deriveExpected({ session, movements: entries, ledgerRowsBySession: ledgerRows, refundRecords });
 	const counts = { cash: counted, ...otherTenders };
 	const sum = (values: string[]) =>
 		fromMinor(
@@ -221,7 +227,13 @@ export async function writeClosure({
 		const previous = payment_methods[method];
 		payment_methods[method] = {
 			sales: sum([previous?.sales ?? '0', row.amount]),
-			refunds: sum([previous?.refunds ?? '0', row.refunded_amount]),
+			refunds: '0.0000',
+		};
+	}
+	for (const [method, amount] of Object.entries(refunds.byMethod)) {
+		payment_methods[method] = {
+			sales: payment_methods[method]?.sales ?? '0',
+			refunds: fromMinor(amount, 4),
 		};
 	}
 	const tax_rates: Record<string, { net: string; tax: string; gross: string }> = {};
@@ -264,7 +276,10 @@ export async function writeClosure({
 			])
 		),
 		period_sales_total: sum(rows.map((row) => row.amount)),
-		period_refunds_total: sum(rows.map((row) => row.refunded_amount)),
+		period_refunds_total: fromMinor(
+			Object.values(refunds.byMethod).reduce((total, amount) => total + amount, 0),
+			4
+		),
 		perpetual_sales_total: '0',
 		perpetual_refunds_total: '0',
 		unsynced_count:
@@ -302,7 +317,7 @@ export async function writeClosure({
 					(row) => row.session_id === session.id && row.status === 'captured'
 				)
 			).length,
-			refund_count: rows.filter((row) => toMinor(row.refunded_amount, 4) > 0).length,
+			refund_count: refunds.count,
 			cashiers: [
 				...new Set(
 					bound
