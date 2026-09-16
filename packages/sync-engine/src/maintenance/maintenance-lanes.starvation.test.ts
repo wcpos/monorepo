@@ -107,7 +107,7 @@ describe('maintenance lane starvation ceiling (mono#1159)', () => {
 				status: 'failed',
 				ownerId: null,
 				claimedUntilMs: null,
-				attempt: 1,
+				attempt: 0,
 				retryAfterMs: 0,
 				updatedAtMs: 0,
 				request: {
@@ -138,7 +138,7 @@ describe('maintenance lane starvation ceiling (mono#1159)', () => {
 				'census:taxRates',
 				'census:variations',
 			]);
-			expect((await states.readForQueryKeys(['orders:due']))[0]?.attempt).toBe(1);
+			expect((await states.readForQueryKeys(['orders:due']))[0]?.attempt).toBe(0);
 		} finally {
 			await engine.dispose();
 		}

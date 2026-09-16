@@ -157,7 +157,6 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			await engine.hostTransport().fetcher(SYNC_BASE);
 			await vi.waitFor(() =>
 				expect(statuses.at(-1)?.serverPressure).toEqual({
-					backingOff: true,
 					multiplier: 2,
 					retryAfterUntilMs: 60_000,
 				})
@@ -167,7 +166,6 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			for (let index = 0; index < 10; index += 1) await engine.hostTransport().fetcher(SYNC_BASE);
 			await vi.waitFor(() =>
 				expect(statuses.at(-1)?.serverPressure).toEqual({
-					backingOff: false,
 					multiplier: 1,
 					retryAfterUntilMs: null,
 				})
@@ -185,7 +183,6 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		expect(statuses).toHaveLength(1);
 		expect(statuses[0]).toEqual(engine.status());
 		expect(statuses[0]?.serverPressure).toEqual({
-			backingOff: false,
 			multiplier: 1,
 			retryAfterUntilMs: null,
 		});

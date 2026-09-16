@@ -215,7 +215,6 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 	useCollectionCounts: () => ({ products: 1 }),
 	useEngineStatus: () => ({
 		serverPressure: {
-			backingOff: mockBackingOff,
 			multiplier: mockBackingOff ? 2 : 1,
 			retryAfterUntilMs: null,
 		},
@@ -271,6 +270,7 @@ describe('DatabaseScreen coverage', () => {
 		const rowText = getAllByTestId('db-row-products')[0].textContent ?? '';
 		expect(rowText).toContain('203');
 		expect(rowText).toContain('checking…');
+		expect(getAllByTestId('db-row-sm-products')[0].textContent).toContain('checking…');
 	});
 
 	it('explains server pressure on stale rows and the census freshness line', () => {

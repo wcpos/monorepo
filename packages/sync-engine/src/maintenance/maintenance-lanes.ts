@@ -737,6 +737,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 								? SUPPORTED_CENSUS_COLLECTIONS.length
 								: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
 					...(forced !== undefined ? { forceQueryKey: censusQueryKey(forced) } : {}),
+					...(forced === undefined && tick.starvation && !tick.forceAllCensus
+						? { onlyQueryKeys: censusQueryKeys }
+						: {}),
 					...(tick.forceAllCensus
 						? { onlyQueryKeys: censusQueryKeys, ignoreFreshQueryKeys: censusQueryKeys }
 						: {}),

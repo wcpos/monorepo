@@ -429,12 +429,41 @@ describe('server pressure monitor', () => {
 			monitor.observe({ atMs: 60_030 + index, ...fastHigh, durationMs: 3_000 });
 		}
 		expect(monitor.multiplier()).toBe(2);
+		healthy(monitor, 10, 120_040);
+		expect(monitor.multiplier()).toBe(1);
+		const cooldownDeadline = 60_019 + 15 * 60_000;
+		for (let index = 0; index < 9; index += 1) {
+			expect(monitor.observe({ atMs: cooldownDeadline - 9 + index, ...fastHigh })).toBeNull();
+		}
+		// Nine buffered before the deadline plus one fresh response must not re-trip.
+		for (let index = 0; index < 9; index += 1) {
+			expect(monitor.observe({ atMs: cooldownDeadline + index, ...fastHigh })).toBeNull();
+			expect(monitor.multiplier()).toBe(1);
+		}
+		expect(monitor.observe({ atMs: cooldownDeadline + 9, ...fastHigh })).toMatchObject({
+			direction: 'backoff',
+			fromMultiplier: 1,
+			toMultiplier: 2,
+		});
 	});
 
 	it('does not count a high header with a raw five-second duration as healthy', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
 		monitor.observe({ atMs: 60_000, status: 200, durationMs: 5_000, pressure: 'high' });
+		healthy(monitor, 9, 60_001);
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.observe({ atMs: 60_020, ...OK })).toMatchObject({
+			direction: 'recovery',
+			fromMultiplier: 2,
+			toMultiplier: 1,
+		});
+	});
+
+	it('does not count an elevated header with a raw five-second duration as healthy', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
+		monitor.observe({ atMs: 60_000, status: 200, durationMs: 5_000, pressure: 'elevated' });
 		healthy(monitor, 9, 60_001);
 		expect(monitor.multiplier()).toBe(2);
 		expect(monitor.observe({ atMs: 60_020, ...OK })).toMatchObject({

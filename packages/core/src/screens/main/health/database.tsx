@@ -63,6 +63,7 @@ import {
 	deriveRows,
 	formatBytes,
 	isReadyToSell,
+	isServerBackingOff,
 	stuckCountsByRow,
 	totalLocalRecords,
 } from './database-logic';
@@ -424,7 +425,7 @@ function CollectionRowView({
 													count: row.local.toLocaleString(),
 												})
 											: `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })}`}
-						{story.coverage.kind === 'checking' && backingOff ? ` · ${story.coverage.label}` : ''}
+						{story.coverage.kind === 'checking' ? ` · ${story.coverage.label}` : ''}
 					</Text>
 				</View>
 				<View className="items-end">
@@ -548,6 +549,7 @@ export function DatabaseScreen() {
 	const footprint = useStorageFootprint();
 	const sizes = useCollectionSizes(counts, ROW_ORDER);
 	const nowMs = useNowMs(1_000);
+	const backingOff = isServerBackingOff(status.serverPressure, nowMs);
 	const relative = useRelativeTime();
 
 	const stats = useLogStats();
@@ -701,7 +703,7 @@ export function DatabaseScreen() {
 							stuckCount={stuckByRow[row.key] ?? 0}
 							label={t(ROW_LABEL_KEYS[row.key])}
 							wide={tableLayout.wide}
-							backingOff={status.serverPressure.backingOff}
+							backingOff={backingOff}
 						/>
 					))}
 					{/* Measured storage the collection rows don't itemize — every bucket
@@ -797,7 +799,7 @@ export function DatabaseScreen() {
 						<Text className="text-muted-foreground pl-3.5 text-xs">
 							{censusWindow.updatedAtMs === null
 								? t('health.database.totals_pending')
-								: status.serverPressure.backingOff
+								: backingOff
 									? t('health.database.totals_server_busy', {
 											ago: relative(censusWindow.updatedAtMs, nowMs),
 										})
