@@ -611,6 +611,67 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(createRxdbSyncEngine).toHaveBeenCalledTimes(1);
 	});
 
+	it('awaited scope switch names the incoming store on requests made during the switch', async () => {
+		// The barcode hydrate, the bootstrap seed and the change-signal prime all
+		// fetch inside scope.switch; a header still naming the outgoing store
+		// would seed store A's view into store B's scope.
+		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
+		const storeHeaderOf = (call: unknown[]) =>
+			new Headers((call[1] as RequestInit | undefined)?.headers).get('X-WCPOS-Store');
+		const seenDuringSwitch: (string | null)[] = [];
+		let ports: { fetcher?: (url: string) => Promise<Response> } = {};
+		const first = createEngineDouble(undefined, async () => {
+			await ports.fetcher?.(
+				'https://store.example.test/wp-json/wcpos/v2/changes/config-fingerprint'
+			);
+			seenDuringSwitch.push(storeHeaderOf(fetch.mock.calls.at(-1)!));
+		});
+		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
+			() => first
+		);
+		try {
+			createAppSyncEngine(BASE_OPTIONS);
+			ports = createRxdbSyncEngine.mock.calls[0]![0];
+
+			await switchAppEngineScope({
+				site: { wp_api_url: BASE_OPTIONS.scope.site },
+				wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+				store: { id: 'store-2' },
+			});
+			expect(seenDuringSwitch).toEqual(['store-2']);
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
+	it('awaited scope switch rejection restores the committed store header', async () => {
+		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
+		const storeHeaderOf = (call: unknown[]) =>
+			new Headers((call[1] as RequestInit | undefined)?.headers).get('X-WCPOS-Store');
+		const error = new Error('scope refused');
+		const first = createEngineDouble(undefined, () => Promise.reject(error));
+		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
+			() => first
+		);
+		try {
+			createAppSyncEngine(BASE_OPTIONS);
+			const ports = createRxdbSyncEngine.mock.calls[0]![0];
+
+			await expect(
+				switchAppEngineScope({
+					site: { wp_api_url: BASE_OPTIONS.scope.site },
+					wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
+					store: { id: 'store-2' },
+				})
+			).rejects.toBe(error);
+
+			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(storeHeaderOf(fetch.mock.calls.at(-1)!)).toBe(String(BASE_OPTIONS.scope.storeId));
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
 	it('awaited scope switch rejection leaves the cache identity untouched', async () => {
 		const error = new Error('scope refused');
 		const first = createEngineDouble(undefined, () => Promise.reject(error));

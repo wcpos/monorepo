@@ -291,15 +291,23 @@ export async function switchAppEngineScope(session: {
 	// never opened is a no-op, so the early add is safe on rejection too.
 	entry.databaseNames.add(scopeDatabaseName(scope));
 
-	await entry.engine.scope.switch(scope);
+	// The store header must already name the INCOMING store while the switch's
+	// open runs: the barcode-selector hydrate, the POS bootstrap seed and the
+	// change-signal head prime all fetch INSIDE `scope.switch`, and a header
+	// still naming the outgoing store would seed store A's view into store B's
+	// scope. Committing it before the await also covers the window between a
+	// settled switch and the next render, where a stale header would divert a
+	// price edit into the OUTGOING store's meta (pro#425). A rejection restores
+	// the committed store, exactly as the render path's fallback does.
+	entry.fetcherScope.storeId = storeId;
+	try {
+		await entry.engine.scope.switch(scope);
+	} catch (error) {
+		entry.fetcherScope.storeId = entry.committed.storeId;
+		throw error;
+	}
 
 	entry.key = targetKey;
-	// Committed HERE rather than left to the next render's cache hit (the way the
-	// auth options are). Between a settled switch and that render the engine is
-	// already pulling and pushing under the new scope; a stale store header in
-	// that window would divert a price edit into the OUTGOING store's meta
-	// (pro#425). Only reached on success, so there is nothing to revert.
-	entry.fetcherScope.storeId = storeId;
 	entry.databaseName = scopeDatabaseName(scope);
 	// The engine confirmed this scope, so it becomes the fallback for any later
 	// switch that fails.
