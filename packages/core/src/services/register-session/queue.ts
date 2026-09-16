@@ -167,7 +167,9 @@ async function drain({
 		doc: RegisterSessionDocument | CashMovementDocument | ClosureDocument,
 		endpoint: string,
 		task: () => Promise<void>,
-		statusTransition = false
+		statusTransition = false,
+		// A movement row carries no register column; its loop passes the session's.
+		registerId?: string
 	) {
 		try {
 			await task();
@@ -270,7 +272,11 @@ async function drain({
 							? {}
 							: { type: 'register.upload-refused' }),
 					sessionId: 'session_id' in before ? before.session_id : before.id,
-					...('register_id' in before ? { registerId: before.register_id } : {}),
+					...('register_id' in before
+						? { registerId: before.register_id }
+						: registerId
+							? { registerId }
+							: {}),
 					...('type' in before ? { movementId: before.id } : {}),
 					...(endpoint === 'closures' ? { closureId: before.id } : {}),
 					endpoint,
@@ -400,42 +406,48 @@ async function drain({
 			}
 			if (target?.sync_status !== 'synced') continue;
 		}
-		await send(row, 'movements', async () => {
-			const response = await http.post('movements', {
-				id: row.id,
-				session_id: row.session_id,
-				type: row.type,
-				amount: row.amount,
-				reason: row.reason,
-				created_at: row.created_at_gmt,
-				...(row.voids ? { voids: row.voids } : {}),
-			});
-			try {
-				await session.incrementalPatch({ server_expected: null, server_sales_count: null });
-				await row.incrementalModify((local) => ({
-					...local,
-					...(response.data as CashMovementRow),
-					...synced,
-					voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
-				}));
-			} catch (error) {
-				// The store already accepted this movement; see the `persist` note in send().
-				throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
-					stage: 'persist',
-				});
-			}
-			logger.info('Register cash movement accepted', {
-				terminal: { operationId: operationId(row.id) },
-				context: {
-					type: 'register.movement-accepted',
-					sessionId: row.session_id,
-					registerId: session.register_id,
-					movementId: row.id,
-					movementType: row.type,
+		await send(
+			row,
+			'movements',
+			async () => {
+				const response = await http.post('movements', {
+					id: row.id,
+					session_id: row.session_id,
+					type: row.type,
 					amount: row.amount,
-				},
-			});
-		});
+					reason: row.reason,
+					created_at: row.created_at_gmt,
+					...(row.voids ? { voids: row.voids } : {}),
+				});
+				try {
+					await session.incrementalPatch({ server_expected: null, server_sales_count: null });
+					await row.incrementalModify((local) => ({
+						...local,
+						...(response.data as CashMovementRow),
+						...synced,
+						voided_by: local.voided_by || (response.data as CashMovementRow).voided_by,
+					}));
+				} catch (error) {
+					// The store already accepted this movement; see the `persist` note in send().
+					throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
+						stage: 'persist',
+					});
+				}
+				logger.info('Register cash movement accepted', {
+					terminal: { operationId: operationId(row.id) },
+					context: {
+						type: 'register.movement-accepted',
+						sessionId: row.session_id,
+						registerId: session.register_id,
+						movementId: row.id,
+						movementType: row.type,
+						amount: row.amount,
+					},
+				});
+			},
+			false,
+			session.register_id
+		);
 	}
 	const closureRows = (await closures.find().exec()).sort((a, b) => a.number - b.number);
 	for (const snapshot of closureRows) {

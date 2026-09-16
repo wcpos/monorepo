@@ -496,6 +496,7 @@ describe('logger/index', () => {
 					movementId: 'movement-search-id',
 					voids: 'original-movement-search-id',
 					previousRegisterId: 'previous-register-search-id',
+					approvedBy: 'approver-search-id',
 					closureId: 'closure-search-id',
 					productName: 'Diagnostic Coffee',
 					previousQuantity: 1,
@@ -518,6 +519,8 @@ describe('logger/index', () => {
 			expect(context.fold).toContain('original-movement-search-id');
 			expect(context.search).toContain('previous-register-search-id');
 			expect(context.fold).toContain('previous-register-search-id');
+			expect(context.search).toContain('approver-search-id');
+			expect(context.fold).toContain('approver-search-id');
 			expect(context.search).toContain('closure-search-id');
 			expect(context.search).toContain('Diagnostic Coffee');
 			expect(context.search).toContain('1');

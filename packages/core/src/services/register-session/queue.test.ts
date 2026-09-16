@@ -376,6 +376,7 @@ it('logs a retryable outbox failure at debug and a permanent one at its register
 				type: 'register.movement-retrying',
 				movementId: movement.id,
 				sessionId: session.id,
+				registerId: session.register_id,
 				endpoint: 'movements',
 				status: 503,
 				documentId: movement.id,
