@@ -12,8 +12,14 @@ Research for wcpos/monorepo#2073, 2026-09-16. Companion files in this directory:
 
 ## 1. Restate the problem before choosing a structure
 
-What the till needs from local search, exactly as the server defines it (`LIKE '%term%'` per
-whitespace-split term, accent- and case-insensitive since #1732, every term must match — #2065):
+The contract is enshrined in tests: `packages/sync-core/src/searchFixtureCatalogue.ts` (one
+product table, one named trap table, a reference matcher) is asserted against the index
+(`search.fixture-contract.test.ts`), the scan fallback (`search-match.test.ts`) and, ported to
+PHPUnit, the plugin's SQL. Its header states it: *every whitespace-separated term matches a
+substring of name, sku or barcode, in any order and across fields; shared fold and
+wrapping-punctuation stripping, no minimum length. Exact SKU / barcode rank first; descriptions
+never match.* #2065 (2026-09-15) restored the any-order rule for products after the phrase-search
+plan of 2026-09-14 had briefly made the typed string contiguous. Spelled out:
 
 - **substring** match, not prefix and not token: `saippua` must find `Kuorintasaippua`, `count` must
   find `discount`;
@@ -21,6 +27,13 @@ whitespace-split term, accent- and case-insensitive since #1732, every term must
   per row on synthetic data; real stores similar), variations `sku`/`barcode`, customers seven contact
   fields, coupons `code`/`description` (~330 chars);
 - **AND across terms, OR across fields**, answered within a 250 ms input debounce;
+- **one- and two-character terms must match** (owner, 2026-09-16). Products require every typed
+  term including short ones as a substring (`searchTerms`/`fieldsMatchAllTerms` in
+  `search-match.ts`); a lone short term on other collections matches as a word prefix
+  (`fieldsMatchShortPrefix`). The index cannot serve either (`minlength: 3`), so today both are
+  served by reading the **whole collection into the renderer** and filtering in JS on every
+  keystroke (`engine-query.ts:205-230`). `FLEXSEARCH_MIN_TERM_LENGTH` is the index's floor, not the
+  product's;
 - **exact parity** with the server, because the app's own divergence checks compare returned
   documents' text and a silent miss is invisible (issue comment, 2026-09-15).
 
@@ -69,8 +82,19 @@ append-history/export-history/oversized-rebuild machinery in `search.ts` (#2018,
 #2070, #1897) exists to manage a structure that costs 8 s to build; a structure that costs 1 ms to
 build is simply rebuilt.
 
-Result quality is exact by construction: the same fold on both sides, no tokenizer, no `minlength`,
-no literal-term cap. The cap's own side effect disappears with it — `example.com` inside a coupon
+Result quality is the contract by construction — the fixture's own term rule (fold, split on
+whitespace, strip wrapping punctuation, keep every term) applied to the query, then substring over
+the folded fields — with no index-driven `minlength` and no literal-term cap.
+`packages/sync-core/src/searchFixtureCatalogue.blob.test.ts` pins a 40-line reference blob against
+every named trap in the enshrined table and passes all 17 (over-100 hits, AND across terms,
+reordered and gapped terms, accent and Unicode fold, compound substring, exact SKU and barcode first,
+short-term substring, a short qualifier that narrows, decimal comma, description never matches,
+out-of-stock searched, stock-status field not searched, AND across fields, no match), plus four
+wrapped-punctuation queries checked against the fixture's own oracle, because no trap query carries
+wrapping punctuation. Mutation-checked: removing the stripping rule fails exactly those four. One- and two-character terms are just shorter `indexOf` needles at the same
+cost (the `zzzz` miss rows above are the floor; a short needle with many hits costs the per-hit row
+lookup, still sub-ms at 20k), and word-prefix semantics where wanted is a one-character boundary
+check before each hit — so the short-term path stops needing its own whole-collection read. The cap's own side effect disappears with it — `example.com` inside a coupon
 description is found (the current index splits it and returns 0; Codex bench on the issue).
 
 ## 4. Why "scan it in the storage" has a cliff the blob does not
@@ -128,11 +152,15 @@ in-memory blob pays a 0.5 ms `indexOf`.
 
 Two side findings from the same run:
 
-- **The index over-matches punctuation-terminated terms.** Query `01234-` returned 11 index hits
-  (`012340`…`012349` plus the exact SKU) against 1 from every scan, on both storages: the encoder
-  strips wrapping punctuation (`WRAPPING_PUNCTUATION` in `searchIndexConfig.ts`), and the query-side
-  verifier uses the same encoder, so nothing filters the extras. The server's `LIKE '%01234-%'`
-  returns 1. Small, pre-existing, and it goes away with any structure that matches raw folded text.
+- **The scans diverge from the contract on wrapping punctuation, not the index.** Query `01234-`
+  returned 11 index hits (`012340`…`012349` plus the exact SKU) against 1 from every scan, on both
+  storages. The enshrined contract strips wrapping punctuation from each term
+  (`searchFixtureMatches` in `searchFixtureCatalogue.ts`; `WRAPPING_PUNCTUATION` in the encoder), so
+  **11 is the contract-correct answer** and the raw `$regex` scans — the bench's, and any folded-column
+  regex that escapes the typed term verbatim — are the ones that diverge. Any replacement structure
+  must run the query through the contract's term rule before matching; the blob pin below does
+  (`searchFixtureCatalogue.blob.test.ts`). I first wrote this finding the other way round; the
+  fixture file corrected me.
 - **The harness's "sidecar page" mismatch on fs is an artefact**: a `limit: 20` query without a sort
   was compared against the first 20 *sorted* ids; memory storage happens to return primary order and
   fs does not. Not a search finding.
@@ -239,9 +267,9 @@ callers that consume the selector.
 
 Decisions this needs from the owner, each with my pick:
 
-1. **Term minimum length.** The index needed `minlength: 3`; the server matches 1–2 character terms
-   and the blob can too. Pick: keep 3 as product policy for now (short prefixes already have their
-   own path), revisit separately.
+1. ~~Term minimum length.~~ Not a decision: 1- and 2-character matches are a requirement the app
+   already meets (owner, 2026-09-16), today via the renderer-side whole-collection scan. The blob
+   serves them directly; `FLEXSEARCH_MIN_TERM_LENGTH` goes with the index.
 2. **Where the searchable text comes from at boot.** Sidecar rows written by the sync engine (adds a
    write per materialised product) vs a one-time full read per boot. Pick: sidecar, because it also
    gives C for free and keeps boot off the payloads.
