@@ -8,6 +8,32 @@ export type SentryCaptureInput = {
 
 export type TelemetryConsent = 'undecided' | 'allowed' | 'denied';
 
+/**
+ * Captures logged before the merchant's consent is known. On web and Electron
+ * consent is read from the STORE document and reaches the sink through an
+ * effect in the root layout, so a render error caught in the very first commit
+ * — the #2112 login failure — arrived while the sink was uninitialised and was
+ * dropped even on a till that had allowed reporting. Held inputs are sent the
+ * moment consent becomes `allowed` and discarded when it becomes `denied`;
+ * nothing leaves the device before the merchant has said yes. Bounded: a
+ * render loop before consent must not grow memory.
+ */
+export const PENDING_CAPTURE_LIMIT = 20;
+
+export function createPendingCaptures() {
+	const pending: SentryCaptureInput[] = [];
+	return {
+		hold(input: SentryCaptureInput): void {
+			if (pending.length >= PENDING_CAPTURE_LIMIT) pending.shift();
+			pending.push(input);
+		},
+		/** Empties the queue and returns what it held, oldest first. */
+		drain(): SentryCaptureInput[] {
+			return pending.splice(0, pending.length);
+		},
+	};
+}
+
 // Public DSN for the same Sentry project used by the desktop main process.
 export const SENTRY_DSN =
 	'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733';

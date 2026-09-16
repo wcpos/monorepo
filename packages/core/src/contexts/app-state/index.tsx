@@ -8,7 +8,7 @@ import type {
 	UserDocument,
 	WPCredentialsDocument,
 } from '@wcpos/database';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getErrorMessage, getLogger, setDatabase } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
 
@@ -207,9 +207,16 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	 * reported and cleared. A signed-out till has no pointer and is left alone.
 	 */
 	const missingSessionFields = missingStoreSessionFields(state).join(',');
+	// The (app) stack, which binds the logger's collection, never mounts for an
+	// incomplete session, so without this the row would reach only the console.
+	// When the store database survived (a lost site or credential row), its logs
+	// collection keeps the evidence for the Logs screen and debug export; the
+	// next AppLayout mount rebinds to whichever store the cashier opens.
+	const survivingLogs = state.storeDB?.collections.logs;
 	// The pointer already recovered from: the effect re-runs when the sign-out
 	// it triggers lands, and must not report the same pointer twice.
 	const recoveredPointer = React.useRef<string | null>(null);
+	/* eslint-disable react-you-might-not-need-an-effect/no-event-handler -- the session arrives through render (Suspense hydration, or setState from login/switchStore); there is no handler to move this into, and the toast needs the mounted tree. */
 	React.useEffect(() => {
 		if (!missingSessionFields) return;
 		// RxState reads are synchronous (`set` is the async one).
@@ -224,6 +231,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		if (recoveredPointer.current === pointerKey) return;
 		recoveredPointer.current = pointerKey;
 		const missingFields = missingSessionFields.split(',');
+		if (survivingLogs) setDatabase(survivingLogs);
 		sessionLogger.error(`Store session incomplete: missing ${missingFields.join(', ')}`, {
 			code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
 			showToast: true,
@@ -242,7 +250,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			});
 			updateAppState(SIGNED_OUT_SESSION);
 		});
-	}, [missingSessionFields, state.appState, clearStoreSession, updateAppState]);
+	}, [missingSessionFields, survivingLogs, state.appState, clearStoreSession, updateAppState]);
+	/* eslint-enable react-you-might-not-need-an-effect/no-event-handler */
 
 	const value = React.useMemo<AppState>(() => {
 		return {

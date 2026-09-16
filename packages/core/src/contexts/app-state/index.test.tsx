@@ -4,7 +4,7 @@ import * as React from 'react';
 import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-import { getLogger } from '@wcpos/utils/logger';
+import { getLogger, setDatabase } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 // Mutable so each test installs the session the provider hydrates into.
@@ -46,7 +46,7 @@ const logger = getLogger(['wcpos', 'app-state', 'session']);
 const site = { localID: 'site-1' };
 const wpCredentials = { localID: 'creds-1' };
 const store = { localID: 'store-1' };
-const storeDB = { name: 'store-db' };
+const storeDB = { name: 'store-db', collections: { logs: { name: 'logs' } } };
 const extraData = { get: jest.fn() };
 const pointer = { siteID: 'site-1', wpCredentialsID: 'creds-1', storeID: 'store-1' };
 
@@ -174,6 +174,13 @@ describe('AppStateProvider with a session pointer the hydrated state cannot hono
 			})
 		);
 
+		// The surviving store database keeps the row for the Logs screen: nothing
+		// else binds the logger's collection when the (app) stack never mounts.
+		expect(setDatabase).toHaveBeenCalledWith(storeDB.collections.logs);
+		expect((setDatabase as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
+			(logger.error as jest.Mock).mock.invocationCallOrder[0]
+		);
+
 		// The persisted pointer is cleared the way logout clears it, so the next
 		// launch starts at the store list instead of replaying the broken session.
 		expect(base.appState.set).toHaveBeenCalledTimes(1);
@@ -191,6 +198,8 @@ describe('AppStateProvider with a session pointer the hydrated state cannot hono
 		expect(message).toBe('Store session incomplete: missing storeDB, store, extraData');
 		expect(options.context.missingFields).toEqual(['storeDB', 'store', 'extraData']);
 		expect(base.appState.set).toHaveBeenCalledTimes(1);
+		// No store database survived, so there is nothing to bind.
+		expect(setDatabase).not.toHaveBeenCalled();
 	});
 
 	it('still signs the till out when the pointer write fails', async () => {

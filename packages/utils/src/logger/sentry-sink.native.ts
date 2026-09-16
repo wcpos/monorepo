@@ -3,12 +3,13 @@ import { File, Paths } from 'expo-file-system';
 
 import { AppInfo } from '../app-info';
 import { DEFAULT_APP_SCHEME } from '../app-info/scheme';
-import { buildCaptureOptions, scrubEvent, SENTRY_DSN } from './sentry-core';
+import { buildCaptureOptions, createPendingCaptures, scrubEvent, SENTRY_DSN } from './sentry-core';
 
 import type { SentryCaptureInput, TelemetryConsent } from './sentry-core';
 
 let telemetryConsent: TelemetryConsent = 'undecided';
 let isInitialized = false;
+const pendingCaptures = createPendingCaptures();
 
 // Development builds never report, whatever the merchant chose: dev noise would
 // drown the production signal. `__DEV__` alone is not enough on native — the E2E
@@ -76,11 +77,17 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 	telemetryConsent = consent;
 	persistConsent(consent);
 	if (consent === 'allowed') {
-		if (!isReportingBuild()) return;
+		if (!isReportingBuild()) {
+			pendingCaptures.drain();
+			return;
+		}
 		try {
 			initialize();
 		} catch {
 			// Diagnostics (including unavailable storage) must never interrupt the app.
+		}
+		if (isInitialized) {
+			for (const input of pendingCaptures.drain()) send(input);
 		}
 		return;
 	}
@@ -92,6 +99,8 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 			// Diagnostics must never interrupt the app.
 		}
 	}
+	// Denied: what was held before the answer never leaves the device.
+	if (consent === 'denied') pendingCaptures.drain();
 	if (consent === 'denied') {
 		try {
 			const file = installIdFile();
@@ -114,8 +123,7 @@ try {
 	// Diagnostics must never interrupt startup.
 }
 
-export function captureLoggedError(input: SentryCaptureInput): void {
-	if (!isInitialized) return;
+function send(input: SentryCaptureInput): void {
 	try {
 		const error =
 			input.context !== null && typeof input.context === 'object' && 'error' in input.context
@@ -130,6 +138,15 @@ export function captureLoggedError(input: SentryCaptureInput): void {
 	} catch {
 		// Diagnostics must never interfere with the logger.
 	}
+}
+
+export function captureLoggedError(input: SentryCaptureInput): void {
+	if (!isInitialized) {
+		// A first run has no persisted consent yet: hold until the merchant answers.
+		if (telemetryConsent === 'undecided') pendingCaptures.hold(input);
+		return;
+	}
+	send(input);
 }
 
 export function capturePrinterOutcome(

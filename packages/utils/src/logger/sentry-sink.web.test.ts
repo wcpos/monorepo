@@ -59,11 +59,52 @@ describe('sentry-sink.web', () => {
 		expect(Sentry.setUser).toHaveBeenCalledWith({ id: 'new-install-id' });
 	});
 
-	it('does not capture errors before tracking is allowed', () => {
+	it('does not capture errors before tracking is allowed, and discards them when it is denied', () => {
 		captureLoggedError({ message: 'Checkout failed' });
 
 		expect(Sentry.captureException).not.toHaveBeenCalled();
 		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+
+		setTelemetryConsent('denied');
+		setTelemetryConsent('allowed');
+		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+	});
+
+	it('holds errors logged before consent is known and sends them once it is allowed', () => {
+		// The #2112 timing: a render error in the first commit, before the root
+		// layout's effect has read the store's consent and initialised the sink.
+		const thrown = new Error('useStoreSession must be called within an active store session');
+		captureLoggedError({
+			message: `Render failed: ${thrown.message}`,
+			code: 'CLIENT151',
+			context: { type: 'render.error', error: thrown, message: thrown.message },
+		});
+		captureLoggedError({ message: 'Second, uncoded' });
+		expect(Sentry.captureException).not.toHaveBeenCalled();
+
+		setTelemetryConsent('allowed');
+
+		expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+		expect(Sentry.captureException).toHaveBeenCalledWith(
+			thrown,
+			expect.objectContaining({ fingerprint: ['CLIENT151', thrown.message] })
+		);
+		expect(Sentry.captureMessage).toHaveBeenCalledWith('Second, uncoded', expect.anything());
+		// Sent once: a later re-consent must not replay them.
+		setTelemetryConsent('undecided');
+		setTelemetryConsent('allowed');
+		expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps only the newest held captures', () => {
+		for (let index = 0; index < 25; index += 1) {
+			captureLoggedError({ message: `held ${index}` });
+		}
+		setTelemetryConsent('allowed');
+
+		expect(Sentry.captureMessage).toHaveBeenCalledTimes(20);
+		expect(jest.mocked(Sentry.captureMessage).mock.calls[0][0]).toBe('held 5');
+		expect(jest.mocked(Sentry.captureMessage).mock.calls[19][0]).toBe('held 24');
 	});
 
 	it('closes Sentry and forgets the install id when tracking is denied', () => {
