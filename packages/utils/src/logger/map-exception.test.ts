@@ -10,6 +10,17 @@ describe('mapExceptionToCode', () => {
 		expect(mapExceptionToCode(new Error(message)).code).toBe(expectedCode);
 	});
 
+	it('never classifies from the stack: an Electron renderer frame is not an app-start failure', () => {
+		const error = new TypeError("Cannot read properties of undefined (reading 'price')");
+		error.stack = `${error.name}: ${error.message}\n    at Header (wcpos://-/bundle.js:10:5)`;
+
+		const result = mapExceptionToCode(error);
+
+		expect(result.code).toBe('CLIENT999');
+		// The stack still rides along as evidence.
+		expect(result.context.stack).toContain('wcpos://-/bundle.js');
+	});
+
 	it('uses the CLIENT catch-all and keeps raw exception text out of the merchant summary', () => {
 		const rawMessage = 'merchant-private raw exception text';
 		const result = mapExceptionToCode(new TypeError(rawMessage));

@@ -52,6 +52,12 @@ function useGuidanceText(entry: CatalogueEntry | null): string | null {
 		case 'data-at-risk':
 			risk = t('health.logs.safety_data_at_risk');
 			break;
+		case 'local-only':
+			// Nothing on the server moved, but what this device holds may be
+			// affected (e.g. AUTH131: a re-added site opens a fresh local copy of
+			// the store). The merchant must hear that before clearing anything.
+			risk = t('health.logs.safety_local_only');
+			break;
 	}
 
 	const action = translateErrorAction((key) => t(key), entry.code);

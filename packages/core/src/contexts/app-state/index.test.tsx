@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
@@ -30,6 +30,11 @@ jest.mock('@wcpos/utils/platform', () => ({
 	Platform: { isWeb: false },
 }));
 
+// eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
+import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
+// The real store-session module (not mocked): IncompleteStoreSessionError is what the producers discriminate on.
+// eslint-disable-next-line import/first
+import { IncompleteStoreSessionError } from './store-session';
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
 import {
 	type AppState,
@@ -148,6 +153,100 @@ describe('useStoreSession', () => {
 
 		const { result } = renderHook(() => useStoreSession(), { wrapper });
 		expect(result.current.site).toBe(site);
+	});
+});
+
+describe('login', () => {
+	it('reports AUTH131 and does not persist a pointer to an incomplete session', async () => {
+		const base = sessionBase(null);
+		mockHydration.context = { ...base };
+		(hydrateUserSession as jest.Mock).mockResolvedValueOnce({
+			storeDB,
+			store,
+			extraData,
+			site: null,
+			wpCredentials: null,
+		});
+		const { result } = renderHook(() => useAppState(), { wrapper: AppStateProvider });
+
+		// Resolves rather than throwing into wp-users' generic catch (which would
+		// surface AUTH999 with no toast); the cashier gets the named AUTH131.
+		await act(async () => {
+			await result.current.login({
+				siteID: 'site-1',
+				wpCredentialsID: 'creds-1',
+				storeID: 'store-1',
+			});
+		});
+
+		expect(logger.error).toHaveBeenCalledTimes(1);
+		const [message, options] = (logger.error as jest.Mock).mock.calls[0];
+		expect(message).toBe('Store session incomplete: missing site, wpCredentials');
+		expect(options).toEqual(
+			expect.objectContaining({
+				code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
+				showToast: true,
+				context: expect.objectContaining({
+					missingFields: ['site', 'wpCredentials'],
+					siteID: 'site-1',
+					wpCredentialsID: 'creds-1',
+					storeID: 'store-1',
+				}),
+			})
+		);
+		expect(base.appState.set).not.toHaveBeenCalled();
+		expect(hasStoreSession(result.current)).toBe(false);
+	});
+
+	it('persists the pointer once the hydrated session is complete', async () => {
+		const base = sessionBase(null);
+		mockHydration.context = { ...base };
+		(hydrateUserSession as jest.Mock).mockResolvedValueOnce({
+			storeDB,
+			store,
+			extraData,
+			site,
+			wpCredentials,
+		});
+		const { result } = renderHook(() => useAppState(), { wrapper: AppStateProvider });
+
+		await act(async () => {
+			await result.current.login({
+				siteID: 'site-1',
+				wpCredentialsID: 'creds-1',
+				storeID: 'store-1',
+			});
+		});
+
+		expect(base.appState.set).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(hasStoreSession(result.current)).toBe(true));
+	});
+});
+
+describe('switchStore', () => {
+	it('reports AUTH131 and keeps the current session when the target store is incomplete', async () => {
+		const base = sessionBase();
+		mockHydration.context = { ...base, storeDB, store, site, wpCredentials, extraData };
+		(switchUserSessionStore as jest.Mock).mockRejectedValueOnce(
+			new IncompleteStoreSessionError(['site'])
+		);
+		const { result } = renderHook(() => useAppState(), { wrapper: AppStateProvider });
+		await waitFor(() => expect(hasStoreSession(result.current)).toBe(true));
+		jest.clearAllMocks();
+
+		// A different store id than `current`, so the switch actually runs.
+		await act(async () => {
+			await result.current.switchStore({ localID: 'store-9' } as never);
+		});
+
+		expect(logger.error).toHaveBeenCalledTimes(1);
+		const [message, options] = (logger.error as jest.Mock).mock.calls[0];
+		expect(message).toBe('Store session incomplete: missing site');
+		expect(options.code).toBe(ERROR_CODES.STORE_SESSION_INCOMPLETE);
+		expect(options.showToast).toBe(true);
+		expect(options.context.storeID).toBe('store-9');
+		// The current session is untouched.
+		expect(hasStoreSession(result.current)).toBe(true);
 	});
 });
 
