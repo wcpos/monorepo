@@ -243,6 +243,17 @@ function createEngineHarnessImpl(
 		if (request.path.endsWith('/changes/config-fingerprint')) {
 			return json({ fingerprints: {} });
 		}
+		// The scope-open change-signal head prime (`sequence-log?since=0&limit=1`) is
+		// engine plumbing like the fingerprint hydrate above, not catalogue traffic a
+		// test scripted — answer it at head 0, unrecorded. A test that scripts the
+		// journal routes `/changes/sequence-log` (or passes `fetch`) and sees it.
+		if (
+			request.path.endsWith('/changes/sequence-log') &&
+			new URL(url).searchParams.get('since') === '0' &&
+			new URL(url).searchParams.get('limit') === '1'
+		) {
+			return json({ checkpoint: { head: 0 } });
+		}
 		requests.push(request);
 		return json({ changes: [], complete: true, documents: [] });
 	};

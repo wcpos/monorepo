@@ -540,8 +540,15 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						if (engines.has(scopeId)) return { status: 'cached' };
 						const blob = await deps.readBlob(scopeId, CHANGE_SIGNAL_STATE_KEY);
 						if (blob !== null && deserializeChangeSignalState(blob)) return { status: 'restored' };
+						// The caller's deadline may pass while a port that ignores its signal
+						// is still answering. Once the caller has moved on to the bootstrap
+						// pulls, a late head would sit ABOVE their changes — exactly the gap
+						// this prime closes — so check after every await and write nothing
+						// once aborted.
+						if (signal?.aborted) return { status: 'skipped' };
 						activeFetch = bound.bindFetch(fetcherWithSignal(signal));
 						const { head, epoch } = await fetchHeadCheckpoint();
+						if (signal?.aborted) return { status: 'skipped' };
 						await deps.writeBlob(
 							scopeId,
 							CHANGE_SIGNAL_STATE_KEY,

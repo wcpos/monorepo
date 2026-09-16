@@ -409,6 +409,73 @@ describe('cold-start priming', () => {
 		expect(writeBlob).not.toHaveBeenCalled();
 	});
 
+	it('writes nothing when the caller aborted while the head fetch was in flight', async () => {
+		// A port that ignores its signal can answer after the facade's deadline
+		// passed and bootstrap pulls began; adopting that head would skip them.
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		const abort = new AbortController();
+		const writeBlob = vi.fn(async () => undefined);
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher: async () => {
+				abort.abort();
+				return Response.json({ checkpoint: { head: 40, epoch: 'epoch-FIRST' } });
+			},
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => null,
+			writeBlob,
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		expect(await lane.prime(abort.signal)).toEqual({ status: 'skipped' });
+		expect(writeBlob).not.toHaveBeenCalled();
+	});
+
+	it('leaves the lazy first-tick prime intact after a rejected prime', async () => {
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		let serverUp = false;
+		const fetcher = vi.fn(async () =>
+			serverUp
+				? Response.json({ checkpoint: { head: 40, epoch: 'epoch-FIRST' } })
+				: new Response(null, { status: 503 })
+		);
+		const lane = createChangeSignalLane({
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher,
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => null,
+			writeBlob: vi.fn(async () => undefined),
+			connectivity: () => 'online',
+			diagnostics: () => undefined,
+			emitEvent: () => undefined,
+		});
+		await expect(lane.prime()).rejects.toMatchObject({ status: 503 });
+		serverUp = true;
+		mocks.poll.mockResolvedValueOnce({
+			changes: [],
+			cursor: { sequence: 40 },
+			rebaseline: false,
+			sweepRan: false,
+			sweepIncomplete: false,
+			integrityMismatches: [],
+			idsToPull: [],
+			escalatedIds: [],
+			clearedEscalations: [],
+			escalationLedger: [],
+			baselineDigests: new Map(),
+		} satisfies HybridPollOutcome);
+		expect(await lane.tick()).toMatchObject({ status: 'ran' });
+		expect(createHybridChangeSignalEngine).toHaveBeenLastCalledWith(
+			expect.objectContaining({ initialCursor: { sequence: 40 }, initialEpoch: 'epoch-FIRST' })
+		);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+	});
+
 	it('rejects a 401 prime with the poison error and writes nothing', async () => {
 		const { lane, writeBlob } = await openPrimeLane(null, false, true);
 		const prime = lane.prime();
