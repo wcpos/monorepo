@@ -46,6 +46,8 @@ const mockSessions = {
 const mockMovements = { find: () => ({ $: of(entries) }) };
 const mockClosures = { find: () => ({ $: of(closureRows) }) };
 const mockBinding = { registerId: 'register', registerName: 'Front' };
+const mockReleaseParents = jest.fn();
+const mockDeclareRequirements = jest.fn((..._args: unknown[]) => [{ release: mockReleaseParents }]);
 const mockRuntime = { engine: {}, locale: 'en' };
 const mockStoreSession = {
 	store: { id: 1 },
@@ -66,6 +68,7 @@ jest.mock('../../contexts/app-state', () => ({
 	useStoreSession: () => mockStoreSession,
 }));
 jest.mock('@wcpos/query', () => ({
+	declareRequirements: (...args: unknown[]) => mockDeclareRequirements(...args),
 	observeEngineQuery: (...args: Parameters<typeof mockObserve>) => mockObserve(...args),
 	useQueryRuntime: () => mockRuntime,
 	useDocField: (_doc: unknown, select: (value: Record<string, unknown>) => unknown) =>
@@ -527,4 +530,58 @@ it('deduplicates parents also returned by the recent sales query', async () => {
 		expect(result.current.expected).toEqual({ cash: '100.0000', stripe: '80.0000' })
 	);
 	expect(result.current.salesCount).toBe(1);
+});
+
+// Remove missing-parent demand: the old card ledger never arrives without another surface opening it.
+it('requests missing stamped refund parents, releases on arrival, and keeps resident parents local', async () => {
+	entries = [];
+	mockRefunds.next([refundHit()]);
+	const view = renderHook(() => useRegisterSession());
+	await waitFor(() =>
+		expect(mockDeclareRequirements).toHaveBeenCalledWith(mockRuntime.engine, [
+			{
+				id: 'register-session:refund-parents',
+				kind: 'targeted-records',
+				collection: 'orders',
+				remoteIds: ['1'],
+			},
+		])
+	);
+	await act(async () => mockOrders.next([parentHit()]));
+	await waitFor(() =>
+		expect(view.result.current.expected).toEqual({ cash: '100.0000', stripe: '-20.0000' })
+	);
+	expect(mockReleaseParents).toHaveBeenCalledTimes(1);
+	mockDeclareRequirements.mockClear();
+	view.unmount();
+	const resident = renderHook(() => useRegisterSession());
+	await waitFor(() => expect(resident.result.current.session).not.toBeNull());
+	expect(mockDeclareRequirements).not.toHaveBeenCalled();
+});
+
+// Remove replacement/teardown release: stale requirements outlive their missing set or session.
+it('replaces missing parent demand and releases it when the session scope changes or unmounts', async () => {
+	mockRefunds.next([refundHit()]);
+	const view = renderHook(() => useRegisterSession());
+	await waitFor(() => expect(mockDeclareRequirements).toHaveBeenCalledTimes(1));
+	await act(async () =>
+		mockRefunds.next([
+			{
+				...refundHit(),
+				record: { ...refundHit().record, payload: { ...refundHit().record.payload, parent_id: 2 } },
+			},
+		])
+	);
+	await waitFor(() =>
+		expect(mockDeclareRequirements).toHaveBeenLastCalledWith(mockRuntime.engine, [
+			expect.objectContaining({ remoteIds: ['2'] }),
+		])
+	);
+	expect(mockReleaseParents).toHaveBeenCalledTimes(1);
+	await act(async () => {
+		active = [];
+		mockSessionChanges.next();
+	});
+	expect(mockReleaseParents).toHaveBeenCalledTimes(2);
+	view.unmount();
 });

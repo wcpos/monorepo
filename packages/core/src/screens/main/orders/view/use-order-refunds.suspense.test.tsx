@@ -118,6 +118,31 @@ const publish = async (ids: number[]) =>
 	});
 
 describe('local-first live order refunds', () => {
+	// Keep the destroyed memoized resource on replay: the section never receives these rows.
+	it('keeps yielding live refunds after StrictMode effect replay without a destroyed error', async () => {
+		const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			const view = render(
+				<React.StrictMode>
+					<React.Suspense fallback={<div data-testid="route-fallback" />}>
+						<ViewOrderModal resource={orderResource} />
+					</React.Suspense>
+				</React.StrictMode>
+			);
+			await settle();
+			await publish([1, 2]);
+			expect((await screen.findByTestId('refunds-section')).textContent).toBe('2,1');
+			await publish([3]);
+			expect(screen.getByTestId('refunds-section').textContent).toBe('3');
+			expect(screen.queryByTestId('refunds-fallback')).toBeNull();
+			expect(errors.mock.calls.flat().map(String).join(' ')).not.toMatch(/destroyed/i);
+			view.unmount();
+			expect(mockLocal.observed).toBe(false);
+		} finally {
+			errors.mockRestore();
+		}
+	});
+
 	it('contains local loading and renders sorted rows without waiting for refresh readiness', async () => {
 		show();
 		await settle();

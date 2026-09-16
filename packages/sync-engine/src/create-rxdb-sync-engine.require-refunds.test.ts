@@ -110,6 +110,32 @@ async function readRefunds(h: Awaited<ReturnType<typeof harness>>, parentId?: nu
 }
 
 describe('refund requirements', () => {
+	// Remove checkCollection's forced history refresh: census never materializes refunds.
+	it('Sync now fetches refund history even when the previous walk just completed', async () => {
+		const h = await harness();
+		await refresh(h);
+		const before = h.requests.length;
+		await h.engine.checkCollection('refunds');
+		expect(h.requests.slice(before).some((url) => url.searchParams.has('after'))).toBe(true);
+	});
+
+	// Move the cascade back into beforeDrop: a failed orders drop loses its resident children.
+	it('preserves children on a failed orders reset and removes them only after a successful reset', async () => {
+		const h = await harness();
+		const scope = await h.engine.whenActive();
+		await new EngineOrderRepository(scope.database.collections as never).upsertMany([parent(42)]);
+		await refresh(h);
+		const remove = vi
+			.spyOn(scope.database.collections.orders, 'remove')
+			.mockRejectedValueOnce(new Error('drop failed'));
+		await expect(h.engine.scope.resetCollection('orders')).rejects.toThrow('drop failed');
+		expect(await scope.database.collections.orders.find().exec()).toHaveLength(1);
+		expect(await readRefunds(h, 42)).toHaveLength(1);
+		remove.mockRestore();
+		await expect(h.engine.scope.resetCollection('orders')).resolves.toBe('reset');
+		expect(await readRefunds(h, 42)).toEqual([]);
+	});
+
 	// Stop on admitted documents.length rather than raw rows.length: page two is lost.
 	it('queries admitted payloads after a full rejected page without server UUIDs', async () => {
 		const h = await harness((url) =>

@@ -2320,7 +2320,8 @@ export function createRxdbSyncEngine(
 						);
 					}
 					const beforeDrop = opts?.beforeDrop;
-					return manager.resetCollection(scopeId, name, {
+					let parentIds: (string | null)[] = [];
+					const outcome = await manager.resetCollection(scopeId, name, {
 						...(opts?.confirmDestroyQueue !== undefined
 							? { confirmDestroyQueue: opts.confirmDestroyQueue }
 							: {}),
@@ -2329,13 +2330,17 @@ export function createRxdbSyncEngine(
 							if (name === 'orders') {
 								const db = activeScopeOf(scopeId).database;
 								const parents = await db.collections.orders.find().exec();
-								await removeRefundChildren(
-									db.collections.refunds,
-									parents.map((doc) => doc.toJSON().remoteId)
-								);
+								parentIds = parents.map((doc) => doc.toJSON().remoteId);
 							}
 						},
 					});
+					if (name === 'orders' && outcome === 'reset') {
+						await removeRefundChildren(
+							activeScopeOf(scopeId).database.collections.refunds,
+							parentIds
+						);
+					}
+					return outcome;
 				});
 			},
 		},
@@ -2398,6 +2403,29 @@ export function createRxdbSyncEngine(
 				changeStartedAt
 			);
 			const reports = [censusReport, changeReport];
+			if (name === 'refunds' && !options?.signal?.aborted) {
+				const handle = engine.require({
+					id: 'check-collection:refunds',
+					kind: 'refresh',
+					collection: 'refunds',
+					forceRefresh: true,
+				});
+				const release = () => handle.release();
+				options?.signal?.addEventListener('abort', release, { once: true });
+				try {
+					await handle.ready;
+					reports.push({ lane: 'scheduler-drain', status: 'ran' });
+				} catch (error) {
+					reports.push({
+						lane: 'scheduler-drain',
+						status: 'error',
+						error: error instanceof Error ? error.message : String(error),
+					});
+				} finally {
+					options?.signal?.removeEventListener('abort', release);
+					release();
+				}
+			}
 			const worst = reports.some((report) => report.status === 'error')
 				? ('error' as const)
 				: reports.some((report) => report.status === 'ran')

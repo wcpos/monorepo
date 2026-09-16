@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { distinctUntilChanged, map } from 'rxjs';
+import { distinctUntilChanged, map, NEVER } from 'rxjs';
 
 import {
 	declareRequirements,
@@ -17,26 +17,34 @@ export type WCRefund = WooRefundPayload;
 /** Built above the modal's Suspense/error boundaries: only a local read can suspend or fail. */
 export function useOrderRefunds(orderId: number) {
 	const { engine, locale } = useQueryRuntime();
-	const resource = React.useMemo(
+	const local$ = React.useMemo(
 		() =>
-			new ObservableResource(
-				observeEngineQuery(engine, locale, {
-					collection: 'refunds',
-					selector: { parent_id: orderId },
-					limit: Number.MAX_SAFE_INTEGER,
-				}).pipe(
-					map(({ hits }) =>
-						hits
-							.map(({ record }) => record.payload as WCRefund)
-							.sort((a, b) => b.date_created_gmt.localeCompare(a.date_created_gmt))
-					)
+			observeEngineQuery(engine, locale, {
+				collection: 'refunds',
+				selector: { parent_id: orderId },
+				limit: Number.MAX_SAFE_INTEGER,
+			}).pipe(
+				map(({ hits }) =>
+					hits
+						.map(({ record }) => record.payload as WCRefund)
+						.sort((a, b) => b.date_created_gmt.localeCompare(a.date_created_gmt))
 				)
 			),
 		[engine, locale, orderId]
 	);
 
+	const [resource, setResource] = React.useState(() => new ObservableResource<WCRefund[]>(NEVER));
+	const heldResource = React.useRef(resource);
+
 	// The surface owns the demand and local subscription, including scope/collection replacement.
 	React.useEffect(() => {
+		const current = heldResource.current.isDestroyed
+			? new ObservableResource(local$)
+			: heldResource.current;
+		if (current === heldResource.current) current.reload(local$);
+		heldResource.current = current;
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-adjust-state-on-prop-change, react-you-might-not-need-an-effect/no-external-store-subscription -- Suspense resource replacement must follow effect cleanup, not render.
+		setResource(current);
 		let handle: RequirementHandle | undefined;
 		const subscription = observeEngineDatabases(engine)
 			.pipe(
@@ -60,8 +68,8 @@ export function useOrderRefunds(orderId: number) {
 		return () => {
 			subscription.unsubscribe();
 			handle?.release();
-			resource.destroy();
+			current.destroy();
 		};
-	}, [engine, orderId, resource]);
+	}, [engine, orderId, local$]);
 	return resource;
 }

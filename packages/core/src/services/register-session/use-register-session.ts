@@ -1,12 +1,29 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { combineLatest, concatMap, distinctUntilChanged, map, of, switchMap, timer } from 'rxjs';
+import {
+	combineLatest,
+	concatMap,
+	distinctUntilChanged,
+	finalize,
+	map,
+	of,
+	switchMap,
+	tap,
+	timer,
+} from 'rxjs';
 
 import type { RefundDocumentType } from '@wcpos/database';
-import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
+import {
+	declareRequirements,
+	observeEngineQuery,
+	useDocField,
+	useQueryRuntime,
+} from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { readLedger, toMinor } from '@wcpos/order-math';
+import { mintRemoteId } from '@wcpos/sync-core';
+import type { RequirementHandle } from '@wcpos/sync-engine';
 
 import { attempt, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
@@ -93,7 +110,30 @@ export function useRegisterSession() {
 											limit: Number.MAX_SAFE_INTEGER,
 										})
 									: of({ count: 0, hits: [] });
+								let missingKey = '';
+								let parentRequirements: RequirementHandle[] = [];
 								return parents$.pipe(
+									tap((parents) => {
+										const held = new Set(parents.hits.map(({ record }) => record.payload.id));
+										const missing = [...new Set(parentIds)]
+											.filter((id) => !held.has(id))
+											.sort((a, b) => a - b);
+										const key = missing.join(',');
+										if (key === missingKey) return;
+										missingKey = key;
+										parentRequirements.forEach((handle) => handle.release());
+										parentRequirements = missing.length
+											? declareRequirements(engine, [
+													{
+														id: 'register-session:refund-parents',
+														kind: 'targeted-records',
+														collection: 'orders',
+														remoteIds: missing.map((id) => mintRemoteId(id, 'refund parent')),
+													},
+												])
+											: [];
+									}),
+									finalize(() => parentRequirements.forEach((handle) => handle.release())),
 									map((parents) => ({
 										orders: {
 											hits: [
