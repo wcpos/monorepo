@@ -494,6 +494,7 @@ describe('logger/index', () => {
 					orderID: 2468,
 					orderNumber: '67882',
 					movementId: 'movement-search-id',
+					voids: 'original-movement-search-id',
 					closureId: 'closure-search-id',
 					productName: 'Diagnostic Coffee',
 					previousQuantity: 1,
@@ -512,6 +513,8 @@ describe('logger/index', () => {
 			expect(context.search).toContain('2468');
 			expect(context.search).toContain('67882');
 			expect(context.search).toContain('movement-search-id');
+			expect(context.search).toContain('original-movement-search-id');
+			expect(context.fold).toContain('original-movement-search-id');
 			expect(context.search).toContain('closure-search-id');
 			expect(context.search).toContain('Diagnostic Coffee');
 			expect(context.search).toContain('1');

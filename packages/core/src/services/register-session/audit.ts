@@ -13,7 +13,7 @@ const logger = getLogger(['wcpos', 'registerSession']);
  * count, which would keep only the FIRST variance when a cashier re-counts and
  * tries again; a fresh operationId per attempt defeats that.
  */
-const attempt = () => ({ operationId: mintUuid().replace(/-/g, '') });
+export const attempt = () => ({ operationId: mintUuid().replace(/-/g, '') });
 
 export function useRegisterActor() {
 	const { wpCredentials } = useStoreSession();

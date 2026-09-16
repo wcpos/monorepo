@@ -7,7 +7,7 @@ import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { readLedger } from '@wcpos/order-math';
 
-import { useRegisterActor } from './audit';
+import { attempt, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
 import { deriveExpected } from './expected';
@@ -190,6 +190,7 @@ export function useRegisterSession() {
 				const row = await actions.startCounting(sessions!, session!.id);
 				logger.info('Register session counting started', {
 					actor,
+					terminal: attempt(),
 					context: {
 						type: 'register.counting-started',
 						sessionId: row.id,
@@ -202,6 +203,7 @@ export function useRegisterSession() {
 				const row = await actions.backToSelling(sessions!, session!.id);
 				logger.info('Register session counting abandoned', {
 					actor,
+					terminal: attempt(),
 					context: {
 						type: 'register.counting-abandoned',
 						sessionId: row.id,
@@ -301,7 +303,20 @@ export function useRegisterSession() {
 				});
 				return row;
 			},
-			retryMovement: (id: string) => actions.retryMovement(movements!, id),
+			retryMovement: async (id: string) => {
+				const row = await actions.retryMovement(movements!, id);
+				logger.info('Register cash movement retry requested', {
+					actor,
+					terminal: attempt(),
+					context: {
+						type: 'register.movement-retrying',
+						sessionId: row.session_id,
+						registerId: binding.registerId,
+						movementId: row.id,
+					},
+				});
+				return row;
+			},
 		},
 	};
 }

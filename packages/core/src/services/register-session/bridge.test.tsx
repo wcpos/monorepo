@@ -132,6 +132,7 @@ it('distinguishes a drain failure from a refresh failure', async () => {
 
 	await waitFor(() => expect(log.debug).toHaveBeenCalledTimes(1));
 	expect(refresh).not.toHaveBeenCalled();
+	expect(log.debug.mock.calls[0][1]?.context).not.toHaveProperty('type');
 	expect(log.debug).toHaveBeenCalledWith(
 		expect.any(String),
 		expect.objectContaining({

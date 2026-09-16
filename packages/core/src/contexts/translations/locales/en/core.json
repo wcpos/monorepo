@@ -1738,7 +1738,7 @@
 	"health.logs.event_description.register_movement_rejected": "Your store refused a cash movement, so the drawer and your store no longer agree.",
 	"health.logs.event_description.register_movement_retrying": "A cash movement did not reach your store and will be sent again.",
 	"health.logs.event_description.register_movement_voided": "An earlier paid in or paid out was reversed.",
-	"health.logs.event_description.register_no_sale_recorded": "The cashier opened the drawer without a sale.",
+	"health.logs.event_description.register_no_sale_recorded": "The cashier recorded a no-sale; no cash changed hands.",
 	"health.logs.event_description.register_session_adopted": "Another device opened this register, so the session here is no longer the active one.",
 	"health.logs.event_description.register_session_closed": "The drawer was counted and the register was closed.",
 	"health.logs.event_description.register_session_opened": "A register session was started and the opening float recorded.",

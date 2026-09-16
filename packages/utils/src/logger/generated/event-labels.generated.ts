@@ -1145,7 +1145,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		key: 'health.logs.event.register_no_sale_recorded',
 		label: 'No sale recorded',
 		descriptionKey: 'health.logs.event_description.register_no_sale_recorded',
-		description: 'The cashier opened the drawer without a sale.',
+		description: 'The cashier recorded a no-sale; no cash changed hands.',
 		introducedIn: '2.0.0',
 	},
 	'register.session-adopted': {

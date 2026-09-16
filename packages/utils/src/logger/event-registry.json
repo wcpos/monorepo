@@ -782,7 +782,7 @@
 		"type": "register.no-sale-recorded",
 		"domain": "REGISTER",
 		"label": "No sale recorded",
-		"description": "The cashier opened the drawer without a sale.",
+		"description": "The cashier recorded a no-sale; no cash changed hands.",
 		"introducedIn": "2.0.0"
 	},
 	{

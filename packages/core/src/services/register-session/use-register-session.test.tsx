@@ -202,6 +202,56 @@ it.each([
 	);
 });
 
+it.each(['startCounting', 'backToSelling'] as const)(
+	'keeps repeated %s actions as distinct audit attempts',
+	async (action) => {
+		jest
+			.mocked(
+				{ startCounting: actions.startCounting, backToSelling: actions.backToSelling }[action]
+			)
+			.mockResolvedValue(session as never);
+		const result = await settled();
+		await result.current.actions[action]();
+		await result.current.actions[action]();
+		expect(logger.info).toHaveBeenCalledTimes(2);
+		const ids = logger.info.mock.calls.map(([, options]) => options?.terminal?.operationId);
+		for (const id of ids) expect(id).toEqual(expect.stringMatching(/^[0-9a-f]{32}$/));
+		expect(new Set(ids).size).toBe(2);
+	}
+);
+
+it('logs a manual retry with the current cashier and the movement session', async () => {
+	jest.mocked(actions.retryMovement).mockResolvedValue({
+		...movement,
+		session_id: 'earlier-session',
+	} as never);
+	const result = await settled();
+	await expect(result.current.actions.retryMovement('movement')).resolves.toMatchObject({
+		id: 'movement',
+	});
+	expect(actions.retryMovement).toHaveBeenCalledWith(mockMovements, 'movement');
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register cash movement retry requested',
+		expect.objectContaining({
+			actor: { id: '7', name: 'Pat' },
+			terminal: { operationId: expect.stringMatching(/^[0-9a-f]{32}$/) },
+			context: {
+				type: 'register.movement-retrying',
+				sessionId: 'earlier-session',
+				registerId: 'register',
+				movementId: 'movement',
+			},
+		})
+	);
+});
+
+it('does not log a manual retry when resetting the movement fails', async () => {
+	jest.mocked(actions.retryMovement).mockRejectedValueOnce(new Error('disk'));
+	const result = await settled();
+	await expect(result.current.actions.retryMovement('movement')).rejects.toThrow('disk');
+	expect(logger.info).not.toHaveBeenCalled();
+});
+
 it('logs the closed snapshot with its count and variance', async () => {
 	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
 	jest.mocked(actions.writeClosure).mockResolvedValue({
