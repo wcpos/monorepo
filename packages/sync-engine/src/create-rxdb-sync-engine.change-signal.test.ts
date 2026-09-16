@@ -554,14 +554,24 @@ describe('sync("change-signal") through the public handle', () => {
 				releaseHead = resolve;
 			});
 			const pullsBefore = server.state.productPulls;
+			// The requirement is issued from INSIDE the db$ emission for the new
+			// scope — the earliest moment a UI can react to the switch, before the
+			// lifecycle op has resumed past switchTo.
+			let browse!: ReturnType<typeof engine.require>;
+			const initialDb = engine.active()!.database;
+			const unsubscribe = engine.db$((db) => {
+				if (db === null || db === initialDb || browse !== undefined) return;
+				browse = engine.require({
+					id: 'browse-during-prime',
+					collection: 'products',
+					kind: 'product-browse',
+					limit: 10,
+				});
+			});
 			const switching = engine.scope.switch(freshIdentity());
 			await vi.waitFor(() => expect(server.state.headFetches).toBe(2));
-			const browse = engine.require({
-				id: 'browse-during-prime',
-				collection: 'products',
-				kind: 'product-browse',
-				limit: 10,
-			});
+			expect(browse).toBeDefined();
+			unsubscribe();
 			await new Promise((resolve) => setTimeout(resolve, 50));
 			expect(server.state.productPulls).toBe(pullsBefore);
 			releaseHead();
