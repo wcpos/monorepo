@@ -1,4 +1,4 @@
-import { deriveExpected } from './expected';
+import { attributeRefunds, deriveExpected } from './expected';
 
 it('derives captured session cash and card net of refunds and non-voided movements', () => {
 	const result = deriveExpected({
@@ -63,6 +63,26 @@ const refund = {
 	amount: '20',
 	meta_data: [{ key: '_wcpos_session', value: 'B' }],
 };
+
+// Revert Math.max(0, ...) on legacy: the lagging aggregate credits A an extra 15.
+it('does not credit the drawer when the aggregate lags stamped allocations', () => {
+	const rows = [
+		{
+			...sale,
+			refunded_amount: '5',
+			refunds: [{ id: 20, amount: '20', status: 'succeeded' }],
+		},
+	];
+	const input = { movements: [], ledgerRowsBySession: rows, refundRecords: [refund] };
+	expect(deriveExpected({ ...input, session: { id: 'A', counted_float: '10' } })).toEqual({
+		cash: '110.0000',
+	});
+	expect(deriveExpected({ ...input, session: { id: 'B', counted_float: '10' } })).toEqual({
+		cash: '-10.0000',
+	});
+	expect(attributeRefunds('A', rows, [refund])).toEqual({ byMethod: { cash: 0 }, count: 0 });
+	expect(attributeRefunds('B', rows, [refund])).toEqual({ byMethod: { cash: 200000 }, count: 1 });
+});
 
 // Revert the stamped-refund cash debit in attributeRefunds: Tuesday's drawer loses its refund.
 it('keeps Monday cash sales in A and debits an unallocated Tuesday refund in B', () => {

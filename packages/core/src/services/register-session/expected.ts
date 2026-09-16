@@ -58,7 +58,7 @@ export function attributeRefunds(
 				ids.add(allocation.id);
 			}
 		}
-		const legacy = toMinor(row.refunded_amount, 4) - covered;
+		const legacy = Math.max(0, toMinor(row.refunded_amount, 4) - covered);
 		if (row.session_id === sessionId && row.status === 'captured') {
 			debit(method, legacy);
 			if (legacy <= 0) continue;

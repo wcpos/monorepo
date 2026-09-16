@@ -25,6 +25,7 @@ import { type RefundChildrenCollection, removeRefundChildren } from './refund-ch
 import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seeder';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
+import type { LocalRefundDocument } from '../collections/refund-schema';
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
 const RESYNC_RECEIPT_PRINT_COUNTS_ID = 'resync-receipt-print-counts';
@@ -146,29 +147,46 @@ export class EngineOrderRepository {
 			if (Object.keys(counts).length === 0) await stash.remove();
 			else await this.db.orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
 		}
-		for (const order of applicable) {
+		const parents = applicable.filter(
+			(order) => order.remoteId !== null && Array.isArray(order.payload.refunds)
+		);
+		const heldByParent = new Map<number, LocalRefundDocument[]>();
+		if (parents.length > 0) {
+			const held = await this.db.refunds
+				.find({
+					selector: {
+						'payload.parent_id': { $in: parents.map((order) => wooIdOf(order.remoteId!)) },
+					},
+				})
+				.exec();
+			for (const doc of held) {
+				const refund = doc.toJSON();
+				const group = heldByParent.get(refund.payload.parent_id) ?? [];
+				group.push(refund);
+				heldByParent.set(refund.payload.parent_id, group);
+			}
+		}
+		const removeIds: string[] = [];
+		const missingParents: RemoteId[] = [];
+		for (const order of parents) {
 			if (order.remoteId === null || !Array.isArray(order.payload.refunds)) continue;
-			const held = (
-				await this.db.refunds
-					.find({
-						selector: { 'payload.parent_id': wooIdOf(order.remoteId) },
-					})
-					.exec()
-			).map((doc) => doc.toJSON());
+			const held = heldByParent.get(wooIdOf(order.remoteId)) ?? [];
 			const { remove, missing } = reconcileRefundIds(
 				order.payload.refunds,
 				held.map((doc) => doc.payload.id)
 			);
-			if (remove.length > 0)
-				assertBulkSuccess(
-					await this.db.refunds.bulkRemove(
-						held.filter((doc) => remove.includes(doc.payload.id)).map((doc) => doc.uuid)
-					),
-					'engine-order-repository refund reconciliation'
-				);
-			if (missing.length > 0)
-				await seedRefundParentLane({ database: this.db, parentRemoteId: order.remoteId });
+			removeIds.push(
+				...held.filter((doc) => remove.includes(doc.payload.id)).map((doc) => doc.uuid)
+			);
+			if (missing.length > 0) missingParents.push(order.remoteId);
 		}
+		if (removeIds.length > 0)
+			assertBulkSuccess(
+				await this.db.refunds.bulkRemove(removeIds),
+				'engine-order-repository refund reconciliation'
+			);
+		for (const parentRemoteId of missingParents)
+			await seedRefundParentLane({ database: this.db, parentRemoteId });
 		return applicable;
 	}
 

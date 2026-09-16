@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { mintRemoteId, normalizeCheckpoint } from '@wcpos/sync-core';
@@ -11,6 +11,8 @@ import {
 	createOrdersSchedulerFetcher,
 } from '../scheduler/rx-scheduler-order-fetcher';
 import { EngineOrderRepository } from './engine-order-repository';
+
+import type { LocalRefundDocument } from '../collections/refund-schema';
 
 setPremiumFlag();
 let sequence = 0;
@@ -50,10 +52,32 @@ async function harness() {
 		repo,
 		scope,
 		ids: async () =>
-			(await h.collection('refunds').find().exec()).map((doc) => doc.toJSON().payload.id).sort(),
+			(await h.collection<LocalRefundDocument>('refunds').find().exec())
+				.map((doc) => doc.toJSON().payload.id)
+				.sort(),
 	};
 }
 describe('order refund reconciliation', () => {
+	// Revert the batch lookup/removal to the per-parent loop: three reads and two removals.
+	it('reads held refunds once and removes once for a batch of three parents', async () => {
+		const h = await harness();
+		const find = vi.spyOn(h.collection('refunds'), 'find');
+		const remove = vi.spyOn(h.collection('refunds'), 'bulkRemove');
+		await h.repo.upsertMany([parent(42, [{ id: 1 }]), parent(43, []), parent(44, [{ id: 9 }])]);
+		expect(find).toHaveBeenCalledTimes(1);
+		expect(find).toHaveBeenCalledWith({
+			selector: { 'payload.parent_id': { $in: [42, 43, 44] } },
+		});
+		expect(remove).toHaveBeenCalledTimes(1);
+		expect(await h.ids()).toEqual([1]);
+		expect(
+			(
+				await h.scope.database.collections.schedulerTaskStates
+					.find({ selector: { collectionName: 'refunds' } })
+					.exec()
+			).map((doc) => doc.toJSON().queryKey)
+		).toEqual(['refunds:parent:44']);
+	});
 	it('prunes only this parent and seeds missing refund ids, not fully held summaries', async () => {
 		const h = await harness();
 		await h.repo.upsertMany([parent(42)]);
