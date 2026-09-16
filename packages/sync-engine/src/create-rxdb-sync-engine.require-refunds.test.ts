@@ -26,6 +26,7 @@ async function harness(respond?: (url: URL) => Response) {
 	setPremiumFlag();
 	const requests: URL[] = [];
 	let pages = 1;
+	let rowsPerPage = 100;
 	let fail = false;
 	const h = await createEngineHarness({
 		site: 'https://refunds.example.test',
@@ -47,15 +48,16 @@ async function harness(respond?: (url: URL) => Response) {
 					? []
 					: pages === 1
 						? [row(1)]
-						: Array.from({ length: 100 }, (_, i) => row((page - 1) * 100 + i + 1));
+						: Array.from({ length: rowsPerPage }, (_, i) => row((page - 1) * rowsPerPage + i + 1));
 			return new Response(JSON.stringify(rows), { headers: { 'X-WP-TotalPages': String(pages) } });
 		},
 	});
 	return {
 		...h,
 		requests,
-		setPages: (value: number) => {
+		setPages: (value: number, perPage = 100) => {
 			pages = value;
+			rowsPerPage = perPage;
 		},
 		setFail: () => {
 			fail = true;
@@ -266,7 +268,8 @@ describe('refund requirements', () => {
 	});
 	it('walks beyond the ordinary 100-call drain cap', async () => {
 		const h = await harness();
-		h.setPages(101);
+		// One row per page: the walk is proven by request count, not by ten thousand documents.
+		h.setPages(101, 1);
 		const handle = h.engine.require({
 			id: 'long-history',
 			kind: 'refresh',
@@ -276,7 +279,7 @@ describe('refund requirements', () => {
 		await expect(handle.ready).resolves.toMatchObject({
 			action: 'fetched',
 			requests: 101,
-			documents: 10100,
+			documents: 101,
 		});
 		expect(h.requests.at(-1)?.searchParams.get('page')).toBe('101');
 		handle.release();

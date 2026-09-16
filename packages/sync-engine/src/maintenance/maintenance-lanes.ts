@@ -50,9 +50,9 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
+	seedRefundWindowLane,
 	SUPPORTED_CENSUS_COLLECTIONS,
 } from '../scheduler';
-import { seedRefundWindowLane } from '../scheduler/rx-refund-scheduler-task-seeder';
 import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
 import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
 import { RxQueryTotalCacheRepository } from '../collections/rx-query-total-cache-repository';

@@ -62,8 +62,9 @@ export function createRefundsSchedulerFetcher(
 			.map((raw) => materializeRefund(raw).storedDocument);
 		const applied = (await input.repository.upsertMany(documents)) ?? documents;
 		walk.ids.push(...applied.map((document) => document.uuid));
+		// WooCommerce always sends the page count; a short page is the end only when it does not.
 		const totalPages = Number(response.headers.get('X-WP-TotalPages'));
-		const completed = rows.length < walk.perPage || (totalPages > 0 && walk.page >= totalPages);
+		const completed = totalPages > 0 ? walk.page >= totalPages : rows.length < walk.perPage;
 		await recordCoverage('refunds', input, task, walk.ids, completed);
 		if (completed) walks.delete(task.id);
 		else {

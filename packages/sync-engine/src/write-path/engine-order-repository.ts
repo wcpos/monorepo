@@ -22,7 +22,7 @@ import {
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
-import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seeder';
+import { seedRefundParentLane } from '../scheduler';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 import type { LocalRefundDocument } from '../collections/refund-schema';

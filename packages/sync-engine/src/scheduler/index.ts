@@ -21,6 +21,12 @@ export {
 } from './rx-order-scheduler-task-seeder';
 export { laneKeyFor, seedPosBootstrapLanes, seedReferenceLanes } from './rx-pos-bootstrap-seeder';
 export {
+	parseRefundLaneQueryKey,
+	refundHistoryQueryKey,
+	refundParentQueryKey,
+} from './refund-lane-descriptor';
+export { seedRefundParentLane, seedRefundWindowLane } from './rx-refund-scheduler-task-seeder';
+export {
 	type CouponReferenceOrderby,
 	isCouponReferenceOrderby,
 	isTermReferenceOrderby,

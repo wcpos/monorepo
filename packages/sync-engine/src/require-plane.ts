@@ -66,6 +66,7 @@ import {
 	productBrowseWindowQueryKeyFromDimensions,
 	type ReferenceLaneDescriptor,
 	referenceLaneQueryKey,
+	refundParentQueryKey,
 	runEngineSchedulerDrain,
 	runEngineSchedulerTask,
 	type SchedulerDrainDatabase,
@@ -75,13 +76,10 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
-	seedTargetedOrderSchedulerTask,
-} from './scheduler';
-import { refundParentQueryKey } from './scheduler/refund-lane-descriptor';
-import {
 	seedRefundParentLane,
 	seedRefundWindowLane,
-} from './scheduler/rx-refund-scheduler-task-seeder';
+	seedTargetedOrderSchedulerTask,
+} from './scheduler';
 import { createDemandFloodDetector } from './demand-flood-detector';
 import { REFERENCE_DEMAND_REFRESH_DEDUPE_MS } from './maintenance/maintenance-lanes';
 import { RxQueryTotalCacheRepository } from './collections/rx-query-total-cache-repository';
