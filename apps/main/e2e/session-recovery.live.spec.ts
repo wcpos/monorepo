@@ -88,9 +88,15 @@ test.describe('#2112 incomplete store session recovery', () => {
 		await expect(recoveryPage.getByTestId('search-products')).toHaveCount(0);
 
 		// 5. The pointer was cleared, so a second launch is an ordinary signed-out
-		//    start — the store screen again, and the POS still not reachable.
+		//    start. A fresh page-load re-runs the recovery effect from scratch, so
+		//    if `current` still pointed at the broken session it would re-report —
+		//    the AUTH131 toast must NOT reappear. (The storage-level clear itself is
+		//    asserted deterministically in the provider unit test.) Give a
+		//    hypothetical re-recovery time to fire before asserting its absence.
 		await recoveryPage.reload({ waitUntil: 'commit' });
 		await expect(recoveryPage.getByTestId('store-url-input')).toBeVisible({ timeout: 60_000 });
+		await recoveryPage.waitForTimeout(3_000);
+		await expect(recoveryPage.getByTestId('toast-AUTH131')).toHaveCount(0);
 		await expect(recoveryPage.getByTestId('search-products')).toHaveCount(0);
 	});
 });
