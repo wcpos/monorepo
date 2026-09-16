@@ -6,6 +6,7 @@ import {
 	normalizeCheckpoint,
 	type OrderDocument,
 	POS_META_KEYS,
+	reconcileRefundIds,
 	type RemoteId,
 	type SyncCheckpoint,
 	withOrderColumns,
@@ -20,6 +21,8 @@ import {
 } from '../local-coverage/rx-existence-manifest-repository';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
+import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
+import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seeder';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 
@@ -61,6 +64,7 @@ type SyncCheckpointsCollection = {
 /** Structural: the collections the order repository touches — any engine scope database satisfies it. */
 export type OrderRepositoryDatabase = {
 	orders: OrdersCollection;
+	refunds: RefundChildrenCollection;
 	existenceManifestOrders: ManifestCollection;
 	syncCheckpoints: SyncCheckpointsCollection;
 	close(): Promise<unknown>; // RxDatabase.close() resolves boolean; the repository only awaits it
@@ -142,6 +146,29 @@ export class EngineOrderRepository {
 			if (Object.keys(counts).length === 0) await stash.remove();
 			else await this.db.orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
 		}
+		for (const order of applicable) {
+			if (order.remoteId === null || !Array.isArray(order.payload.refunds)) continue;
+			const held = (
+				await this.db.refunds
+					.find({
+						selector: { 'payload.parent_id': wooIdOf(order.remoteId) },
+					})
+					.exec()
+			).map((doc) => doc.toJSON());
+			const { remove, missing } = reconcileRefundIds(
+				order.payload.refunds,
+				held.map((doc) => doc.payload.id)
+			);
+			if (remove.length > 0)
+				assertBulkSuccess(
+					await this.db.refunds.bulkRemove(
+						held.filter((doc) => remove.includes(doc.payload.id)).map((doc) => doc.uuid)
+					),
+					'engine-order-repository refund reconciliation'
+				);
+			if (missing.length > 0)
+				await seedRefundParentLane({ database: this.db, parentRemoteId: order.remoteId });
+		}
 		return applicable;
 	}
 
@@ -180,6 +207,10 @@ export class EngineOrderRepository {
 		if (remoteIds.length === 0) return;
 		const { unprotected, protectedRemoteIds } = await this.orderCensus(pendingMutationOrderIds);
 		const storageIds = orderStorageIdsForWooDeletes(unprotected, remoteIds);
+		await removeRefundChildren(
+			this.db.refunds,
+			unprotected.filter((doc) => storageIds.includes(doc.uuid)).map((doc) => doc.remoteId)
+		);
 		if (storageIds.length > 0)
 			assertBulkSuccess(
 				await this.db.orders.bulkRemove(storageIds),
@@ -210,6 +241,10 @@ export class EngineOrderRepository {
 		// Persist before deleting orders: the next pull batch uses a new repository.
 		if (Object.keys(counts).length > 0)
 			await this.db.orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
+		await removeRefundChildren(
+			this.db.refunds,
+			removable.map((doc) => doc.remoteId)
+		);
 		if (removable.length > 0)
 			assertBulkSuccess(
 				await this.db.orders.bulkRemove(removable.map((doc) => doc.uuid)),

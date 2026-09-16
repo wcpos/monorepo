@@ -1,37 +1,23 @@
-/**
- * @jest-environment jsdom
- *
- * `useOrderRefunds` builds an `ObservableResource` in a `useMemo` during render — the shape
- * that loops in the Orders filter bar (#1707) — and it is deliberately left that way, with no
- * cache. This file is what holds that decision to account.
- *
- * A render-built resource is only discarded when its builder is INSIDE the boundary that
- * catches the suspension: React unwinds to the boundary and throws away the work-in-progress
- * fibers below it, `useMemo` included. `RefundsResourceBoundary` builds the resource and
- * renders the `Suspense` (and the error boundary) BELOW itself, so it commits alongside the
- * skeleton and the retry reads back the resource whose GET is already in flight.
- *
- * A cache would be the wrong fix even though it would also stop a loop: refunds are an HTTP
- * GET with no live subscription behind it, so an entry keyed by order id would serve a snapshot
- * forever — a refund taken on another till would never show up. Per mount is the point.
- *
- * Kept out of `modal.test.tsx` because that file mocks `observable-hooks` wholesale and stubs
- * `useOrderRefunds` to `{}`, so nothing in it can suspend.
- */
+/** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { of } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import { ViewOrderModal } from './modal';
 
-let getCalls: string[] = [];
-let resolveRefunds: (value: { data: unknown[] }) => void;
-
+let mockLocal = new Subject<{
+	hits: { record: { payload: { id: number; date_created_gmt: string } } }[];
+}>();
+const mockDatabases = new BehaviorSubject({ collections: { refunds: {} } });
+const mockRelease = jest.fn();
+const mockRequire = jest.fn();
+const mockObserve = jest.fn((..._args: unknown[]) => mockLocal);
+const mockEngine = { require: mockRequire };
 const mockOrder = {
 	uuid: 'order-uuid',
-	payload: { id: 23858, status: 'completed', currency_symbol: '$' },
+	payload: { id: 23858, status: 'completed', currency_symbol: '$', refunds: [{ id: 99 }] },
 } as never;
 
 jest.mock('react-native', () => ({
@@ -43,25 +29,25 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (record: typeof mockOrder, select: (record: typeof mockOrder) => unknown) =>
 		select(record),
+	useQueryRuntime: () => ({ engine: mockEngine, locale: 'en' }),
+	observeEngineQuery: (...args: unknown[]) => mockObserve(...args),
+	observeEngineDatabases: () => mockDatabases,
+	declareRequirements: (_engine: unknown, requirements: unknown[]) =>
+		requirements.map((r) => {
+			const handle = mockRequire(r);
+			handle.ready.catch(() => undefined);
+			return handle;
+		}),
 }));
 jest.mock('../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({
-		get: (path: string) => {
-			getCalls.push(path);
-			// Never settles until the test says so, which is what keeps the consumer suspended
-			// across several attempts.
-			return new Promise((resolve) => {
-				resolveRefunds = resolve as (value: { data: unknown[] }) => void;
-			});
-		},
-	}),
+	useRestHttpClient: () => ({ get: () => new Promise(() => {}) }),
 }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({ children }: any) => <button type="button">{children}</button>,
 	ButtonText: ({ children }: any) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/error-boundary', () => ({
-	ErrorBoundary: ({ children }: any) => <>{children}</>,
+	ErrorBoundary: jest.requireActual('react-error-boundary').ErrorBoundary,
 }));
 jest.mock('@wcpos/components/modal', () => ({
 	Modal: ({ children }: any) => <div>{children}</div>,
@@ -86,10 +72,16 @@ jest.mock('./sections/pos-metadata', () => ({ POSMetadataSection: () => <div /> 
 // Stands in for the real section at the one thing that matters here: it suspends on the
 // resource `RefundsResourceBoundary` hands it.
 jest.mock('./sections/refunds', () => ({
-	RefundsFallback: () => <div data-testid="refunds-fallback" />,
+	RefundsFallback: ({ onRetry }: { onRetry: () => void }) => (
+		<button data-testid="refunds-fallback" onClick={onRetry} />
+	),
 	RefundsSkeleton: () => <div data-testid="refunds-skeleton" />,
-	RefundsSection: ({ resource }: { resource: ObservableResource<unknown[]> }) => (
-		<div data-testid="refunds-section">{useObservableSuspense(resource).length}</div>
+	RefundsSection: ({ resource }: { resource: ObservableResource<{ id: number }[]> }) => (
+		<div data-testid="refunds-section">
+			{useObservableSuspense(resource)
+				.map((row) => row.id)
+				.join(',')}
+		</div>
 	),
 }));
 jest.mock('./sections/totals', () => ({ TotalsSection: () => <div /> }));
@@ -107,32 +99,96 @@ async function settle() {
 const orderResource = new ObservableResource(of(mockOrder)) as never;
 
 beforeEach(() => {
-	getCalls = [];
+	mockLocal = new Subject();
+	mockRequire.mockReset().mockReturnValue({ ready: new Promise(() => {}), release: mockRelease });
+	mockRelease.mockClear();
+	mockObserve.mockClear();
 });
+const show = () =>
+	render(
+		<React.Suspense fallback={<div data-testid="route-fallback" />}>
+			<ViewOrderModal resource={orderResource} />
+		</React.Suspense>
+	);
+const publish = async (ids: number[]) =>
+	React.act(async () => {
+		mockLocal.next({
+			hits: ids.map((id) => ({ record: { payload: { id, date_created_gmt: `2026-09-${id}` } } })),
+		});
+	});
 
-describe('the refunds resource, built above the boundary that suspends on it', () => {
-	it('asks the server once, however many attempts the refunds section takes', async () => {
-		render(
-			<React.Suspense fallback={<div data-testid="route-fallback" />}>
-				<ViewOrderModal resource={orderResource} />
-			</React.Suspense>
-		);
+describe('local-first live order refunds', () => {
+	it('contains local loading and renders sorted rows without waiting for refresh readiness', async () => {
+		show();
 		await settle();
-
-		// Still waiting on the server, so this is the state the retries happen in.
 		expect(screen.getByTestId('refunds-skeleton')).toBeTruthy();
 		expect(screen.queryByTestId('route-fallback')).toBeNull();
-		// The rest of the modal is on screen: the suspension is contained.
 		expect(screen.getByTestId('customer-rail')).toBeTruthy();
-
-		await React.act(async () => {
-			resolveRefunds({ data: [{ id: 1, total: '-5.00' }] });
-		});
-		await settle();
-
-		expect((await screen.findByTestId('refunds-section')).textContent).toBe('1');
-		// One GET. A builder inside the suspending subtree would have fired a fresh request on
-		// every retry — which is the second reason this shape matters for an HTTP resource.
-		expect(getCalls).toEqual(['orders/23858/refunds']);
+		await publish([1, 2]);
+		expect((await screen.findByTestId('refunds-section')).textContent).toBe('2,1');
+		expect(mockObserve).toHaveBeenCalledWith(
+			mockEngine,
+			'en',
+			expect.objectContaining({ collection: 'refunds', selector: { parent_id: 23858 } })
+		);
+		expect(mockRequire).toHaveBeenCalledTimes(1);
+		expect(mockRequire).toHaveBeenCalledWith(
+			expect.objectContaining({
+				kind: 'refunds-by-parent',
+				parentRemoteId: '23858',
+				forceRefresh: true,
+			})
+		);
+	});
+	it('reflects live inserts and deletions and releases local and remote subscriptions', async () => {
+		const view = show();
+		await publish([1]);
+		await publish([1, 3]);
+		expect(screen.getByTestId('refunds-section').textContent).toBe('3,1');
+		await publish([]);
+		expect(screen.getByTestId('refunds-section').textContent).toBe('');
+		view.unmount();
+		expect(mockRelease).toHaveBeenCalled();
+		expect(mockLocal.observed).toBe(false);
+	});
+	it.each([{ ids: [1] }, { ids: [] }])(
+		'refresh failure retains the local result %j, never the summary fallback',
+		async ({ ids }) => {
+			mockRequire.mockImplementation(() => ({
+				ready: Promise.reject(new Error('offline')),
+				release: mockRelease,
+			}));
+			show();
+			await publish(ids);
+			await settle();
+			expect(screen.getByTestId('refunds-section').textContent).toBe(ids.join(','));
+			expect(screen.queryByTestId('refunds-fallback')).toBeNull();
+		}
+	);
+	it('local read failure shows the summary fallback; Retry re-declares forcibly', async () => {
+		const silence = jest.spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			show();
+			await React.act(async () => mockLocal.error(new Error('local read failed')));
+			expect(screen.getByTestId('refunds-fallback')).toBeTruthy();
+			mockLocal = new Subject();
+			fireEvent.click(screen.getByTestId('refunds-fallback'));
+			await publish([4]);
+			expect(screen.getByTestId('refunds-section').textContent).toBe('4');
+			expect(mockRequire).toHaveBeenCalledTimes(2);
+			expect(mockRequire.mock.calls[1][0].forceRefresh).toBe(true);
+		} finally {
+			silence.mockRestore();
+		}
+	});
+	it('reopening or replacing the refund collection declares a fresh forced pull', async () => {
+		const first = show();
+		await publish([]);
+		first.unmount();
+		show();
+		await publish([]);
+		await React.act(async () => mockDatabases.next({ collections: { refunds: {} } }));
+		expect(mockRequire).toHaveBeenCalledTimes(3);
+		expect(mockRequire.mock.calls.every(([r]) => r.forceRefresh)).toBe(true);
 	});
 });

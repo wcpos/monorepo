@@ -605,7 +605,11 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 
 	const referenceSeed = lane('reference-seed', async (db) => {
 		const nowMs = now();
-		const result = await seedRefundWindowLane({ database: db, nowMs });
+		const result = await seedRefundWindowLane({
+			database: db,
+			nowMs,
+			completedDedupeForMs: REFERENCE_SAFETY_REFRESH_MS,
+		});
 		const counts = await Promise.all(
 			REFERENCE_COLLECTIONS.map((collection) => db.collections[collection].count().exec())
 		);

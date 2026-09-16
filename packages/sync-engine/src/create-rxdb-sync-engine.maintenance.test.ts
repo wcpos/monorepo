@@ -428,7 +428,7 @@ describe('maintenance lanes through the public handle', () => {
 			fresh: true,
 		},
 	])('$name', async ({ total, fresh }) => {
-		const nowMs = 1_000_000;
+		let nowMs = 1_000_000;
 		const diagnostics = vi.fn();
 		const fetcher = vi.fn(async (url: string) => {
 			if (new URL(url).pathname.endsWith('/products/categories')) {
@@ -470,6 +470,12 @@ describe('maintenance lanes through the public handle', () => {
 		expect(
 			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/refunds'))
 		).toHaveLength(1);
+		await engine.sync('reference-seed');
+		await engine.sync('scheduler-drain');
+		expect(
+			fetcher.mock.calls.filter(([url]) => new URL(url).pathname.endsWith('/refunds'))
+		).toHaveLength(1);
+		nowMs += 30 * 60_000 + 1;
 		await engine.sync('reference-seed');
 		await engine.sync('scheduler-drain');
 		expect(

@@ -170,3 +170,110 @@ it('resumes after the insert or perpetual write was interrupted without minting 
 	expect(row.number).toBe(1);
 	expect(await db.closures.count().exec()).toBe(1);
 });
+
+// Revert writeClosure's shared attribution/all-order ledger input: cross-session refunds disappear.
+it('attributes cross-session split refunds once without importing the parent sale or taxes', async () => {
+	const input = await seed();
+	const allocation = (amount: string) => [{ id: 20, amount, status: 'succeeded' }];
+	const refundRecords = [
+		{
+			id: 20,
+			parent_id: 1,
+			date_created_gmt: '2026-09-15T10:00:00',
+			amount: '20',
+			meta_data: [{ key: '_wcpos_session', value: input.session.id }],
+		},
+	];
+	const orders = [
+		{
+			uuid: 'old-parent',
+			payload: {
+				meta_data: [
+					{
+						key: '_wcpos_payments',
+						value: {
+							schema: 1,
+							payments: [
+								{
+									id: 'cash',
+									session_id: 'old-session',
+									kind: 'cash',
+									method_id: 'cash',
+									status: 'captured',
+									amount: '100',
+									refunded_amount: '7',
+									refunds: allocation('7'),
+								},
+								{
+									id: 'card',
+									session_id: 'old-session',
+									kind: 'card',
+									method_id: 'stripe',
+									status: 'captured',
+									amount: '30',
+									refunded_amount: '13',
+									refunds: allocation('13'),
+								},
+							],
+						},
+					},
+				],
+				tax_lines: [{ rate_id: 1, tax_total: '10' }],
+			},
+		},
+	];
+	const refundInput = { ...input, orders, movements: [], refundRecords };
+	const row = await writeClosure(refundInput);
+	expect(row.toJSON()).toMatchObject({
+		till_expected: { cash: '93.0000', stripe: '-13.0000' },
+		period_sales_total: '0.0000',
+		period_refunds_total: '20.0000',
+		order_ids: [],
+		breakdowns: {
+			transaction_count: 0,
+			refund_count: 1,
+			tax_rates: {},
+			payment_methods: {
+				cash: { sales: '0', refunds: '7.0000' },
+				stripe: { sales: '0', refunds: '13.0000' },
+			},
+		},
+	});
+	// Removing the existing-closure return would rewrite this frozen snapshot after deletion.
+	const deletedInput = { ...input, orders: [], movements: [], refundRecords: [] };
+	const afterDelete = await writeClosure(deletedInput);
+	expect(afterDelete.toJSON()).toEqual(row.toJSON());
+});
+
+// Revert refund_count to counting payment rows: one legacy split refund is counted twice.
+it('counts distinct legacy refund identities across tenders', async () => {
+	const input = await seed();
+	const orders = [
+		{
+			uuid: 'sale',
+			payload: {
+				meta_data: [
+					{
+						key: '_wcpos_payments',
+						value: {
+							schema: 1,
+							payments: ['cash', 'card'].map((kind) => ({
+								id: kind,
+								session_id: input.session.id,
+								kind,
+								method_id: kind,
+								status: 'captured',
+								amount: '50',
+								refunded_amount: '5',
+								refunds: [{ id: 90, amount: '5', status: 'succeeded' }],
+							})),
+						},
+					},
+				],
+			},
+		},
+	];
+	const row = await writeClosure({ ...input, orders, movements: [] });
+	expect(row.period_refunds_total).toBe('10.0000');
+	expect(row.breakdowns.refund_count).toBe(1);
+});

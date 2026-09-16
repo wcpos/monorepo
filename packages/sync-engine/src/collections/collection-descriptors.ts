@@ -65,6 +65,7 @@ import {
 import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
 import { preserveEquivalentLocalPrecision } from '../write-path/order-money-divergence';
 import { type WooTaxRatePayload } from './tax-rate-schema';
+import { removeRefundChildren } from '../write-path/refund-children';
 
 import type { RxDatabase } from 'rxdb';
 import type { WooReferencePayload } from './reference-collection-schema';
@@ -276,6 +277,7 @@ export type LocalOnlyDescriptor = {
 };
 
 type AckDoc = {
+	toJSON(): Record<string, unknown>;
 	incrementalModify(
 		fn: (data: Record<string, unknown>) => Record<string, unknown>
 	): Promise<unknown>;
@@ -396,6 +398,10 @@ function ackBookkeeping(options: {
 				.findOne(mutation.recordId)
 				.exec()) as AckDoc | null;
 			if (!doc || signal?.aborted) return; // already removed, or the scope switched
+			if (collection === 'orders')
+				await removeRefundChildren(db.collections.refunds, [
+					doc.toJSON().remoteId as string | null,
+				]);
 			await doc.remove();
 		},
 	};

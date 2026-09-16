@@ -1,11 +1,12 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { combineLatest, map, of, switchMap, timer } from 'rxjs';
+import { combineLatest, concatMap, distinctUntilChanged, map, of, switchMap, timer } from 'rxjs';
 
+import type { RefundDocumentType } from '@wcpos/database';
 import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
-import { readLedger } from '@wcpos/order-math';
+import { readLedger, toMinor } from '@wcpos/order-math';
 
 import { attempt, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
@@ -42,34 +43,114 @@ export function useRegisterSession() {
 		}).$;
 		// An older order can be paid in this session too, so the bound is the modified date,
 		// not the birth date; ledger provenance then binds it.
-		const orders$ = combineLatest([active$, closed$]).pipe(
-			switchMap(([active, closed]) => {
-				const current =
+		const accounting$ = combineLatest([active$, closed$]).pipe(
+			map(
+				([active, closed]) =>
 					active.find((row) => row.sync_status !== 'failed') ??
-					closed.find((row) => row.closure_id === row.id && row.sync_status !== 'synced');
-				if (!current) return of({ hits: [] as never[] });
+					closed.find((row) => row.closure_id === row.id && row.sync_status !== 'synced')
+			),
+			distinctUntilChanged((previous, current) => previous?.id === current?.id),
+			switchMap((current) => {
+				if (!current)
+					return of({ orders: { hits: [] as never[] }, refundRecords: [] as RefundDocumentType[] });
+				let previousRefunds: string | undefined;
 				return observeEngineQuery(engine, locale, {
 					collection: 'orders',
 					selector: { date_modified_gmt: { $gte: current.opened_at_gmt } },
 					limit: Number.MAX_SAFE_INTEGER,
-				});
+				}).pipe(
+					switchMap((recent) => {
+						const ids = recent.hits.flatMap(({ record }) =>
+							readLedger(record.payload.meta_data)
+								.filter((row) => row.session_id === current.id)
+								.flatMap((row) => (row.refunds ?? []).map(({ id }) => id))
+						);
+						return observeEngineQuery(engine, locale, {
+							collection: 'refunds',
+							selector: {
+								$or: [
+									{ meta_data: { $elemMatch: { key: '_wcpos_session', value: current.id } } },
+									{ id: { $in: ids } },
+								],
+							},
+							limit: Number.MAX_SAFE_INTEGER,
+						}).pipe(
+							switchMap((refunds) => {
+								const refundRecords = refunds.hits.map(
+									({ record }) => record.payload as RefundDocumentType
+								);
+								const parentIds = refundRecords
+									.filter((refund) =>
+										refund.meta_data?.some(
+											({ key, value }) => key === '_wcpos_session' && value === current.id
+										)
+									)
+									.map((refund) => refund.parent_id);
+								const parents$: ReturnType<typeof observeEngineQuery> = parentIds.length
+									? observeEngineQuery(engine, locale, {
+											collection: 'orders',
+											selector: { id: { $in: parentIds } },
+											limit: Number.MAX_SAFE_INTEGER,
+										})
+									: of({ count: 0, hits: [] });
+								return parents$.pipe(
+									map((parents) => ({
+										orders: {
+											hits: [
+												...new Map(
+													[...recent.hits, ...parents.hits].map((hit) => [hit.record.uuid, hit])
+												).values(),
+											],
+										},
+										refundRecords,
+									}))
+								);
+							})
+						);
+					}),
+					concatMap(async (accounting) => {
+						const allocations = accounting.orders.hits
+							.flatMap(({ record }) => readLedger(record.payload.meta_data))
+							.filter((row) => row.refunds?.length || toMinor(row.refunded_amount, 4) > 0)
+							.map(({ id, session_id, kind, method_id, status, refunded_amount, refunds }) => ({
+								id,
+								session_id,
+								kind,
+								method_id,
+								status,
+								refunded_amount,
+								refunds,
+							}));
+						const signature = JSON.stringify([accounting.refundRecords, allocations]);
+						const changed =
+							previousRefunds === undefined
+								? accounting.refundRecords.length > 0
+								: signature !== previousRefunds;
+						previousRefunds = signature;
+						// Null the persisted anchor before publishing changed money; session refresh can re-anchor it later.
+						if (changed && current.getLatest().server_expected) {
+							await current.getLatest().incrementalPatch({ server_expected: null });
+						}
+						return accounting;
+					})
+				);
 			})
 		);
 		return combineLatest([
 			active$,
 			closed$,
 			movements.find().$,
-			orders$,
+			accounting$,
 			timer(0, 60_000),
 			closures.find({ selector: { register_id: binding.registerId } }).$,
 		]).pipe(
-			map(([active, closed, entries, orders, , closureRows]) => ({
+			map(([active, closed, entries, accounting, , closureRows]) => ({
 				sessions,
 				registerId: binding.registerId,
 				active,
 				closed,
 				entries,
-				orders,
+				...accounting,
 				closureRows,
 			}))
 		);
@@ -122,13 +203,17 @@ export function useRegisterSession() {
 		session?.sync_status !== 'synced' ||
 		entries.some((row) => row.sync_status !== 'synced') ||
 		orders.some(({ record }) => record.local.dirty);
+	const accountingOrders = data?.orders.hits ?? [];
 	const expected = session
 		? !localPending && session.server_expected
 			? session.server_expected
 			: deriveExpected({
 					session,
 					movements: entries,
-					ledgerRowsBySession: orders.flatMap(({ record }) => readLedger(record.payload.meta_data)),
+					ledgerRowsBySession: accountingOrders.flatMap(({ record }) =>
+						readLedger(record.payload.meta_data)
+					),
+					refundRecords: data?.refundRecords,
 				})
 		: {};
 	const now = new Date();
@@ -228,7 +313,8 @@ export function useRegisterSession() {
 						Object.entries(input.counted).filter(([method]) => method !== 'cash')
 					),
 					movements: entries,
-					orders: orders.map(({ record }) => record),
+					orders: accountingOrders.map(({ record }) => record),
+					refundRecords: data?.refundRecords,
 				});
 				logger.info('Register session closed', {
 					actor,

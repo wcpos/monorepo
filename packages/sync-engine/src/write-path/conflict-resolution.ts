@@ -10,6 +10,7 @@ import {
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { requeueRejectedMutation } from './write-intents';
+import { removeRefundChildren } from './refund-children';
 
 import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { RxDatabase } from 'rxdb';
@@ -543,6 +544,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 											`resolveConflict: the resolution claim on "${mutationId}" expired or was taken by another window mid-resolution — refresh the list and retry`
 										);
 									}
+									if (entry.collectionName === 'orders')
+										await removeRefundChildren(database.collections.refunds, [
+											row?.remoteId as string | null,
+										]);
 									try {
 										await doc.remove();
 										residentRemoved = true;

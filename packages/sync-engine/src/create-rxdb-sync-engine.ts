@@ -56,6 +56,7 @@ import type {
 } from '@wcpos/sync-core';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
+import { removeRefundChildren } from './write-path/refund-children';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
 	ENGINE_KV_COLLECTION,
@@ -2323,9 +2324,17 @@ export function createRxdbSyncEngine(
 						...(opts?.confirmDestroyQueue !== undefined
 							? { confirmDestroyQueue: opts.confirmDestroyQueue }
 							: {}),
-						...(beforeDrop !== undefined
-							? { beforeDrop: () => beforeDrop(activeScopeOf(scopeId)) }
-							: {}),
+						beforeDrop: async () => {
+							await beforeDrop?.(activeScopeOf(scopeId));
+							if (name === 'orders') {
+								const db = activeScopeOf(scopeId).database;
+								const parents = await db.collections.orders.find().exec();
+								await removeRefundChildren(
+									db.collections.refunds,
+									parents.map((doc) => doc.toJSON().remoteId)
+								);
+							}
+						},
 					});
 				});
 			},
