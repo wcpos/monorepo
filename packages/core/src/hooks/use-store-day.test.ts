@@ -60,6 +60,19 @@ describe('store calendar days', () => {
 		});
 	});
 
+	it('skips a configured zone this runtime cannot convert with and carries on down the chain', () => {
+		expect(resolveDayTimezone({ timezone: 'Invalid/Zone' }, { timezone_string: zone })).toEqual({
+			timezone: zone,
+			source: 'site',
+		});
+		expect(
+			resolveDayTimezone({ timezone: 'Invalid/Zone' }, { timezone_string: 'Nowhere/Town' })
+		).toEqual({
+			timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+			source: 'device',
+		});
+	});
+
 	it('uses device bounds only when site timezone fields are absent', () => {
 		const resolved = resolveDayTimezone({}, {});
 		expect(resolved).toEqual({

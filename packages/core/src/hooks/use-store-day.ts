@@ -14,16 +14,39 @@ type DayRange = { from: Date; to: Date };
 type DayAddition = { weeks?: number; months?: number };
 type DayTimezone = { timezone: string; source: 'store' | 'site' | 'offset' | 'device' };
 
+const probe = new Date(0);
+
+/**
+ * A zone this runtime can actually convert with. A synced record may carry a
+ * non-IANA string, and a runtime without timezone data cannot resolve any name;
+ * either way the candidate is skipped rather than thrown on at first use.
+ */
+function usableZone(zone: string): boolean {
+	try {
+		return !Number.isNaN(tz(zone)(probe).getTime());
+	} catch {
+		return false;
+	}
+}
+
+const trimmed = (value: unknown): string | null =>
+	typeof value === 'string' && value.trim() ? value.trim() : null;
+
 export function resolveDayTimezone(
 	...[store, site]: Parameters<typeof resolveStoreTimezone>
 ): DayTimezone {
-	let source: DayTimezone['source'];
-	if (typeof store?.timezone === 'string' && store.timezone.trim()) source = 'store';
-	else if (typeof site?.timezone_string === 'string' && site.timezone_string.trim())
-		source = 'site';
-	else if (site?.gmt_offset != null) source = 'offset';
-	else return { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, source: 'device' };
-	return { timezone: resolveStoreTimezone(store, site), source };
+	const candidates: [DayTimezone['source'], string | null][] = [
+		['store', trimmed(store?.timezone)],
+		['site', trimmed(site?.timezone_string)],
+		[
+			'offset',
+			site?.gmt_offset != null ? resolveStoreTimezone(null, { gmt_offset: site.gmt_offset }) : null,
+		],
+	];
+	for (const [source, zone] of candidates) {
+		if (zone && usableZone(zone)) return { timezone: zone, source };
+	}
+	return { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, source: 'device' };
 }
 
 /** Picker dates name device-local calendar days; months are one-based. */
