@@ -58,6 +58,12 @@ describe('store calendar days', () => {
 			timezone: 'UTC',
 			source: 'offset',
 		});
+		// -0.5 would become "-00:30", which the library reads as +00:30; it is skipped.
+		expect(resolveDayTimezone({}, { gmt_offset: '-0.5' }).source).toBe('device');
+		expect(resolveDayTimezone({}, { gmt_offset: '-3.5' })).toEqual({
+			timezone: '-03:30',
+			source: 'offset',
+		});
 	});
 
 	it('skips a configured zone this runtime cannot convert with and carries on down the chain', () => {

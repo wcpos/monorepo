@@ -32,6 +32,11 @@ jest.mock('../../../query', () => {
 	};
 });
 jest.mock('@wcpos/query', () => ({
+	// The store-day hook reads zone fields through it; a plain test record is read directly.
+	useDocField: (
+		source: Record<string, unknown> | undefined,
+		select: (v: Record<string, unknown>) => unknown
+	) => (source ? select(source) : undefined),
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},

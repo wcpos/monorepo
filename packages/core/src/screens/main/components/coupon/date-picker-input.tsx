@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
 
+import { tz } from '@date-fns/tz';
 import { format, parseISO } from 'date-fns';
 import { Calendar as RNCalendar } from 'react-native-calendars';
 import { useCSSVariable } from 'uniwind';
@@ -12,11 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popov
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
-import {
-	convertLocalDateToUTCString,
-	convertUTCStringToLocalDate,
-	useLocalDate,
-} from '../../../../hooks/use-local-date';
+import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
+import { calendarDate, useStoreDay } from '../../../../hooks/use-store-day';
 
 interface Props {
 	value: string | null;
@@ -29,6 +27,8 @@ export function DatePickerInput({ value, onChange, label, disabled }: Props) {
 	const t = useT();
 	const triggerRef = React.useRef<{ close: () => void }>(null);
 	const { formatDate } = useLocalDate();
+	// A coupon expires on a store day, so the stored instant is shown and picked in the store's zone.
+	const { timezone, dayBounds, rangeToFilter } = useStoreDay();
 
 	const [
 		primaryColor,
@@ -48,15 +48,15 @@ export function DatePickerInput({ value, onChange, label, disabled }: Props) {
 
 	const displayText = React.useMemo(() => {
 		if (!value) return label || '';
-		const date = convertUTCStringToLocalDate(value);
+		const date = tz(timezone)(convertUTCStringToLocalDate(value));
 		return formatDate(date, 'd MMM yyyy');
-	}, [value, label, t, formatDate]);
+	}, [value, label, formatDate, timezone]);
 
 	const selectedDate = React.useMemo(() => {
 		if (!value) return undefined;
-		const date = convertUTCStringToLocalDate(value);
+		const date = tz(timezone)(convertUTCStringToLocalDate(value));
 		return format(date, 'yyyy-MM-dd');
-	}, [value]);
+	}, [value, timezone]);
 
 	const markedDates = React.useMemo(() => {
 		if (!selectedDate) return {};
@@ -70,11 +70,11 @@ export function DatePickerInput({ value, onChange, label, disabled }: Props) {
 
 	const handleDayPress = React.useCallback(
 		(day: { dateString: string }) => {
-			const selected = parseISO(day.dateString);
-			onChange(convertLocalDateToUTCString(selected));
+			const selected = dayBounds(calendarDate(parseISO(day.dateString)));
+			onChange(rangeToFilter(selected).from);
 			triggerRef.current?.close();
 		},
-		[onChange]
+		[onChange, dayBounds, rangeToFilter]
 	);
 
 	const handleClear = React.useCallback(() => {

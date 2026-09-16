@@ -4,10 +4,13 @@ import { tz, TZDate } from '@date-fns/tz';
 import * as dates from 'date-fns';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../contexts/app-state';
 import { resolveStoreTimezone } from '../screens/main/receipt/utils/resolve-store-timezone';
 import { convertLocalDateToUTCString } from './use-local-date';
+
+import type { RxDocument } from 'rxdb';
 
 type CalendarDate = { year: number; month: number; day: number };
 type DayRange = { from: Date; to: Date };
@@ -22,6 +25,9 @@ const probe = new Date(0);
  * either way the candidate is skipped rather than thrown on at first use.
  */
 function usableZone(zone: string): boolean {
+	// "-00:30": the library drops the sign on a negative zero hour and reads it as +00:30.
+	// No real store sits at a negative sub-hour offset, so the candidate is skipped.
+	if (/^-00:/.test(zone)) return false;
 	try {
 		return !Number.isNaN(tz(zone)(probe).getTime());
 	} catch {
@@ -46,7 +52,11 @@ export function resolveDayTimezone(
 	for (const [source, zone] of candidates) {
 		if (zone && usableZone(zone)) return { timezone: zone, source };
 	}
-	return { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, source: 'device' };
+	// The device zone by name so the same conversion path serves it; a runtime that cannot
+	// resolve even its own zone name has no timezone data at all, and UTC is the one zone
+	// every runtime converts without it.
+	const device = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	return { timezone: device && usableZone(device) ? device : 'UTC', source: 'device' };
 }
 
 /** Picker dates name device-local calendar days; months are one-based. */
@@ -90,13 +100,34 @@ export const storeRangeToFilter = ({ from, to }: DayRange) => ({
 export const storeEndOfDayAfter = (now: Date, zone: string, amount: DayAddition): Date =>
 	storeDayBounds(storeToday(dates.add(now, amount, { in: tz(zone) }), zone), zone).to;
 
+type FieldSource = Record<string, unknown>;
+
+/**
+ * A record field that follows the document: a store or site patched by a later sync (a
+ * timezone edited in WP Admin) moves the zone without a reload. Only a live document has
+ * an observable; a plain object (a hydration snapshot, a test double) is read directly.
+ */
+function useLiveField(source: FieldSource | null | undefined, key: string): string | undefined {
+	const document =
+		source && typeof source.$ === 'object' && source.$
+			? (source as unknown as RxDocument<FieldSource>)
+			: undefined;
+	const live = useDocField(document, (value) => value[key]);
+	const value = live ?? source?.[key];
+	return typeof value === 'string' ? value : undefined;
+}
+
 const logger = getLogger(['wcpos', 'app', 'store-day']);
 const loggedTimezones = new Set<string>();
 
 export function useStoreDay() {
 	const { site, store } = useAppState();
-	const { timezone: storeTimezone } = store ?? {};
-	const { timezone_string, gmt_offset } = site ?? {};
+	const storeTimezone = useLiveField(store as unknown as FieldSource | undefined, 'timezone');
+	const timezone_string = useLiveField(
+		site as unknown as FieldSource | undefined,
+		'timezone_string'
+	);
+	const gmt_offset = useLiveField(site as unknown as FieldSource | undefined, 'gmt_offset');
 	const { timezone, source } = React.useMemo(
 		() => resolveDayTimezone({ timezone: storeTimezone }, { timezone_string, gmt_offset }),
 		[storeTimezone, timezone_string, gmt_offset]
