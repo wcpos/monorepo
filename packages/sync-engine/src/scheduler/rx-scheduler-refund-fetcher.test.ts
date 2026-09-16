@@ -23,7 +23,10 @@ const task = (queryKey = 'refunds:history:days=92'): FetchTask => ({
 	priority: 100,
 	mode: 'greedy',
 });
-function setup(pages: ReturnType<typeof row>[][], held = new Set([42])) {
+function setup(
+	pages: ReturnType<typeof row>[][],
+	held = new Map<number, number[] | null>([[42, null]])
+) {
 	const documents: LocalRefundDocument[] = [];
 	const requests: URL[] = [];
 	const coverage: BuildCoverageDocumentsFromQueryResultInput[] = [];
@@ -52,6 +55,17 @@ function setup(pages: ReturnType<typeof row>[][], held = new Set([42])) {
 }
 
 describe('refund paged upsert-only fetcher', () => {
+	// Restore held.has(parent_id) admission: the stamped but unlisted row is resurrected.
+	it('uses an explicit held-parent summary before POS stamps, but admits without array authority', async () => {
+		const rows = [row(1, 42, [{ key: '_wcpos_session', value: 'B' }]), row(2)];
+		const listed = setup([rows], new Map([[42, [2]]]));
+		await listed.fetcher(task());
+		expect(listed.documents.map((doc) => doc.payload.id)).toEqual([2]);
+		const unknown = setup([rows], new Map([[42, null]]));
+		await unknown.fetcher(task());
+		expect(unknown.documents.map((doc) => doc.payload.id)).toEqual([1, 2]);
+	});
+
 	it('freezes the history bound across pages, materializes without UUID, and records only lane coverage', async () => {
 		const h = setup([Array.from({ length: 100 }, (_, i) => row(i + 1)), [row(101)]]);
 		expect(await h.fetcher(task())).toMatchObject({ completed: false, documentCount: 100 });

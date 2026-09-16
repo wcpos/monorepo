@@ -453,8 +453,19 @@ function createEngineSchedulerFetcherRegistry(
 					const parents = await db.orders
 						.find({ selector: { remoteId: { $in: ids.map(String) } } })
 						.exec();
-					return new Set(
-						parents.map((parent) => Number((parent.toJSON() as { remoteId: string }).remoteId))
+					return new Map<number, number[] | null>(
+						parents.map((parent) => {
+							const order = parent.toJSON() as {
+								remoteId: string;
+								payload: { refunds?: { id: number }[] };
+							};
+							return [
+								Number(order.remoteId),
+								Array.isArray(order.payload.refunds)
+									? order.payload.refunds.map((refund) => refund.id)
+									: null,
+							];
+						})
 					);
 				},
 			}),

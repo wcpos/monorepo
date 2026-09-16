@@ -1,7 +1,11 @@
 import type { RemoteId } from '@wcpos/sync-core';
 
 import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
-import { refundHistoryQueryKey, refundParentQueryKey } from './refund-lane-descriptor';
+import {
+	parseRefundLaneQueryKey,
+	refundHistoryQueryKey,
+	refundParentQueryKey,
+} from './refund-lane-descriptor';
 import { seedPersistedSchedulerTasks } from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
@@ -27,6 +31,8 @@ function seedRefundLane(queryKey: string, input: SeedPosBootstrapLanesInput) {
 				],
 				nowMs: input.nowMs ?? Date.now(),
 				completedDedupeForMs: input.completedDedupeForMs ?? 0,
+				// A parent summary can announce a refund after an active walk's last request.
+				coalesceInFlight: parseRefundLaneQueryKey(queryKey)?.kind === 'parent',
 			}),
 	});
 }

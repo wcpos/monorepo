@@ -58,6 +58,57 @@ async function harness() {
 	};
 }
 describe('order refund reconciliation', () => {
+	// Revert the current-parent reread: the older empty summary deletes refund 1.
+	it('keeps a refund listed by the current parent after two upserts interleave', async () => {
+		const h = await harness();
+		let release!: () => void;
+		let entered!: () => void;
+		const paused = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const resume = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const refunds = h.collection('refunds');
+		const originalFind = refunds.find.bind(refunds);
+		const find = vi.spyOn(refunds, 'find').mockImplementationOnce((query) => {
+			const result = originalFind(query);
+			const exec = result.exec.bind(result);
+			vi.spyOn(result, 'exec').mockImplementationOnce(async () => {
+				const docs = await exec();
+				entered();
+				await resume;
+				return docs;
+			});
+			return result;
+		});
+		const older = h.repo.upsertMany([parent(42, [])]);
+		await paused;
+		try {
+			await h.repo.upsertMany([parent(42, [{ id: 1 }])]);
+		} finally {
+			release();
+			await older;
+			find.mockRestore();
+		}
+		expect(await h.ids()).toEqual([1, 3]);
+	});
+
+	// Restore the resident-order-only cascade: orphaned stamped refunds survive.
+	it('cascades a tombstone even when its parent is not resident', async () => {
+		const h = await harness();
+		await h.collection('refunds').upsert(
+			materializeRefund({
+				id: 1,
+				parent_id: 42,
+				date_created_gmt: '',
+				meta_data: [{ key: '_wcpos_session', value: 'B' }],
+			}).storedDocument
+		);
+		await h.repo.removeDeletedOrders([mintRemoteId(42, 'test')]);
+		expect(await h.ids()).toEqual([3]);
+	});
+
 	// Revert the batch lookup/removal to the per-parent loop: three reads and two removals.
 	it('reads held refunds once and removes once for a batch of three parents', async () => {
 		const h = await harness();

@@ -13,7 +13,7 @@ import type { LocalRefundDocument, WooRefundPayload } from '../collections/refun
 import type { SchedulerFetcher } from './replication-policy';
 
 export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDocument> & {
-	heldParentIds(ids: number[]): Promise<ReadonlySet<number>>;
+	heldParentIds(ids: number[]): Promise<Map<number, number[] | null>>;
 };
 
 /** One page per invocation preserves the runner's progress reporting and lease renewal. */
@@ -52,13 +52,13 @@ export function createRefundsSchedulerFetcher(
 		const rows = (await response.json()) as WooRefundPayload[];
 		const held = await input.heldParentIds([...new Set(rows.map((row) => row.parent_id))]);
 		const documents = rows
-			.filter(
-				(row) =>
-					held.has(row.parent_id) ||
-					row.meta_data?.some(
-						(meta) => meta.key === '_wcpos_session' || meta.key === '_wcpos_register'
-					)
-			)
+			.filter((row) => {
+				const listed = held.get(row.parent_id);
+				if (listed !== undefined) return listed === null || listed.includes(row.id);
+				return row.meta_data?.some(
+					(meta) => meta.key === '_wcpos_session' || meta.key === '_wcpos_register'
+				);
+			})
 			.map((raw) => materializeRefund(raw).storedDocument);
 		const applied = (await input.repository.upsertMany(documents)) ?? documents;
 		walk.ids.push(...applied.map((document) => document.uuid));

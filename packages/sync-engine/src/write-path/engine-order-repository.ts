@@ -22,7 +22,9 @@ import {
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
 import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
 import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
-import { seedRefundParentLane } from '../scheduler';
+// Direct import: the scheduler index evaluates the drain and the descriptors, which read this
+// module's constants while it is still initialising (see package-seam.test.ts).
+import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seeder';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 import type { LocalRefundDocument } from '../collections/refund-schema';
@@ -166,17 +168,38 @@ export class EngineOrderRepository {
 				heldByParent.set(refund.payload.parent_id, group);
 			}
 		}
-		const removeIds: string[] = [];
-		const missingParents: RemoteId[] = [];
+		const candidates = new Set<string>();
 		for (const order of parents) {
 			if (order.remoteId === null || !Array.isArray(order.payload.refunds)) continue;
+			const held = heldByParent.get(wooIdOf(order.remoteId)) ?? [];
+			const { remove } = reconcileRefundIds(
+				order.payload.refunds,
+				held.map((doc) => doc.payload.id)
+			);
+			for (const doc of held) {
+				if (remove.includes(doc.payload.id)) candidates.add(doc.uuid);
+			}
+		}
+		// Another upsert may have stored a newer summary during the child lookup.
+		// Only current stored authority can confirm deletions or request missing children.
+		const currentParents =
+			parents.length > 0
+				? await this.db.orders.findByIds(parents.map((order) => order.uuid)).exec()
+				: new Map<string, StoredOrderDoc>();
+		const removeIds: string[] = [];
+		const missingParents: RemoteId[] = [];
+		for (const stored of currentParents.values()) {
+			const order = stored.toJSON() as OrderDocument;
+			if (order.remoteId === null) continue;
 			const held = heldByParent.get(wooIdOf(order.remoteId)) ?? [];
 			const { remove, missing } = reconcileRefundIds(
 				order.payload.refunds,
 				held.map((doc) => doc.payload.id)
 			);
 			removeIds.push(
-				...held.filter((doc) => remove.includes(doc.payload.id)).map((doc) => doc.uuid)
+				...held
+					.filter((doc) => candidates.has(doc.uuid) && remove.includes(doc.payload.id))
+					.map((doc) => doc.uuid)
 			);
 			if (missing.length > 0) missingParents.push(order.remoteId);
 		}
@@ -227,7 +250,7 @@ export class EngineOrderRepository {
 		const storageIds = orderStorageIdsForWooDeletes(unprotected, remoteIds);
 		await removeRefundChildren(
 			this.db.refunds,
-			unprotected.filter((doc) => storageIds.includes(doc.uuid)).map((doc) => doc.remoteId)
+			remoteIds.filter((remoteId) => !protectedRemoteIds.has(remoteId))
 		);
 		if (storageIds.length > 0)
 			assertBulkSuccess(

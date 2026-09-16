@@ -4,6 +4,7 @@ import { mintRemoteId } from '@wcpos/sync-core';
 
 import { createEngineHarness } from './testing';
 import { materializeLocalOnly } from './materialization/record-materialization';
+import { seedRefundParentLane } from './scheduler/rx-refund-scheduler-task-seeder';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 
 import type { LocalRefundDocument } from './collections/refund-schema';
@@ -21,7 +22,7 @@ const row = (id: number) => ({
 	reason: '',
 	meta_data: [{ key: '_wcpos_session', value: 'B' }],
 });
-async function harness(respond?: (url: URL) => Response) {
+async function harness(respond?: (url: URL) => Response | Promise<Response>) {
 	const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
 	setPremiumFlag();
 	const requests: URL[] = [];
@@ -110,6 +111,33 @@ async function readRefunds(h: Awaited<ReturnType<typeof harness>>, parentId?: nu
 }
 
 describe('refund requirements', () => {
+	// Remove parent-lane coalesceInFlight: the signal during the first fetch is dropped.
+	it('runs one more parent walk for a signal arriving during the active walk', async () => {
+		let signal!: () => Promise<unknown>;
+		let calls = 0;
+		const h = await harness(async () => {
+			calls += 1;
+			if (calls === 1) {
+				await signal();
+				await signal();
+				return Response.json([]);
+			}
+			return Response.json([row(1)]);
+		});
+		const scope = await h.engine.whenActive();
+		signal = () =>
+			seedRefundParentLane({
+				database: scope.database,
+				parentRemoteId: mintRemoteId(42, 'test'),
+				nowMs: h.clock.now(),
+			});
+		await refresh(h, 42);
+		await h.engine.sync('scheduler-drain');
+		await h.engine.sync('scheduler-drain');
+		expect((await readRefunds(h, 42)).map((doc) => doc.payload.id)).toEqual([1]);
+		expect(calls).toBe(2);
+	});
+
 	// Remove checkCollection's forced history refresh: census never materializes refunds.
 	it('Sync now fetches refund history even when the previous walk just completed', async () => {
 		const h = await harness();
@@ -123,7 +151,9 @@ describe('refund requirements', () => {
 	it('preserves children on a failed orders reset and removes them only after a successful reset', async () => {
 		const h = await harness();
 		const scope = await h.engine.whenActive();
-		await new EngineOrderRepository(scope.database.collections as never).upsertMany([parent(42)]);
+		await new EngineOrderRepository(scope.database.collections as never).upsertMany([
+			parent(42, [{ id: 1 }]),
+		]);
 		await refresh(h);
 		const remove = vi
 			.spyOn(scope.database.collections.orders, 'remove')
@@ -156,7 +186,9 @@ describe('refund requirements', () => {
 			)
 		);
 		const scope = await h.engine.whenActive();
-		await new EngineOrderRepository(scope.database.collections as never).upsertMany([parent(42)]);
+		await new EngineOrderRepository(scope.database.collections as never).upsertMany([
+			parent(42, [{ id: 101 }]),
+		]);
 		await expect(refresh(h)).resolves.toMatchObject({ documents: 3, requests: 2 });
 		expect(h.requests.map((url) => url.searchParams.get('page'))).toEqual(['1', '2']);
 		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([101, 102, 103]);
@@ -182,7 +214,9 @@ describe('refund requirements', () => {
 			)
 		);
 		const scope = await h.engine.whenActive();
-		await new EngineOrderRepository(scope.database.collections as never).upsertMany([parent(42)]);
+		await new EngineOrderRepository(scope.database.collections as never).upsertMany([
+			parent(42, [{ id: 1 }, { id: 2 }]),
+		]);
 		await refresh(h, 42);
 		await refresh(h);
 		expect((await readRefunds(h, 42)).map((doc) => doc.payload.id)).toEqual([2, 1]);
@@ -200,7 +234,7 @@ describe('refund requirements', () => {
 		);
 		const scope = await h.engine.whenActive();
 		const repo = new EngineOrderRepository(scope.database.collections as never);
-		await repo.upsertMany([parent(42)]);
+		await repo.upsertMany([parent(42, [{ id: 1 }, { id: 2 }])]);
 		await refresh(h);
 		empty = true;
 		await expect(refresh(h, 42)).resolves.toMatchObject({ documents: 0, requests: 1 });
@@ -214,7 +248,8 @@ describe('refund requirements', () => {
 		expect(await readRefunds(h)).toEqual([]);
 		empty = false;
 		await refresh(h);
-		expect(await readRefunds(h)).toHaveLength(3);
+		// The current empty summary still rejects parent 42's stale response after reset.
+		expect((await readRefunds(h)).map((doc) => doc.payload.id)).toEqual([3]);
 		await h.engine.scope.resetCollection('orders');
 		expect((await readRefunds(h)).map((doc) => doc.payload.id)).toEqual([3]);
 	});
