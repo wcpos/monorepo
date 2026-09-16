@@ -23,6 +23,7 @@ import {
 	DEFAULT_CHECK_INTERVAL_MS,
 	DEFAULT_PULL_BATCH_SIZE,
 	deriveUptimeCells,
+	describeServerPace,
 	presetBudget,
 	presetFor,
 	type PresetName,
@@ -78,6 +79,7 @@ export function PerformanceScreen() {
 	}, []);
 
 	const summary = summarizeLast24h(snapshot.buckets, snapshot.nowMs);
+	const pace = describeServerPace(status.serverPressure, snapshot.nowMs);
 	const hasHistory = summary.requests > 0;
 	const hasLoadSamples = summary.loadPoints.length > 0;
 	// Only a server we have actually talked to can be said to not report its
@@ -348,6 +350,33 @@ export function PerformanceScreen() {
 					sub={t('health.performance.server_over_time_note')}
 				>
 					<VStack className="gap-5">
+						{/* The pace the till keeps with this server, and why. One line, at the
+						    top of the server section, so a merchant whose host stamps every
+						    response "high" can see the till is NOT slowing down for it. */}
+						<Text
+							className={
+								pace.kind === 'normal' ? 'text-muted-foreground text-sm' : 'text-warning text-sm'
+							}
+							testID="server-pace"
+						>
+							{pace.kind === 'paused'
+								? t('health.performance.pace_paused', {
+										time: new Date(pace.untilMs).toLocaleTimeString([], {
+											hour: '2-digit',
+											minute: '2-digit',
+										}),
+									})
+								: pace.kind === 'easing'
+									? t('health.performance.pace_easing', {
+											factor: pace.factor,
+											reason: t(`health.performance.pace_reason_${pace.reason.replace('-', '_')}`),
+										})
+									: pace.reported === null
+										? t('health.performance.pace_normal')
+										: t('health.performance.pace_normal_reported', {
+												level: t(`health.performance.pace_level_${pace.reported}`),
+											})}
+						</Text>
 						{/* Three states, kept distinct. Asked and never told = a missing
 						    metric, so say so. Told once = a trend still filling in, and the
 						    frame says so. Not yet asked = we know nothing about this server

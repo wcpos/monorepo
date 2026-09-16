@@ -217,6 +217,8 @@ jest.mock('../hooks/use-engine-monitor', () => ({
 		serverPressure: {
 			multiplier: mockBackingOff ? 2 : 1,
 			retryAfterUntilMs: null,
+			reported: null,
+			signal: null,
 		},
 		bootstrapFailed: {},
 		connectivity: 'online',

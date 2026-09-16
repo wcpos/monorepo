@@ -76,6 +76,7 @@ import {
 	parseRetryAfterMs,
 	parseServerLoad1m,
 	parseServerPressure,
+	type PressureSignal,
 	type ServerPressure,
 } from './change-signal/server-pressure';
 import { hydrateBarcodeSelectors } from './change-signal/config-fingerprint-source';
@@ -510,7 +511,14 @@ export type EngineStatus = {
 	bootstrapFailed: Record<string, string>;
 	/** Pending mutation count of the active scope (cached from the last enqueue/drain; null before either). */
 	queueDepth: number | null;
-	serverPressure: { multiplier: number; retryAfterUntilMs: number | null };
+	serverPressure: {
+		multiplier: number;
+		retryAfterUntilMs: number | null;
+		/** The last pressure bucket the server reported, or null before any response carried one. */
+		reported: ServerPressure | null;
+		/** What started the current back-off, or null while the cadence is at ×1. */
+		signal: PressureSignal | null;
+	};
 	collections: Record<SyncCollectionName, EngineCollectionState>;
 };
 
@@ -2197,6 +2205,8 @@ export function createRxdbSyncEngine(
 				multiplier: serverPressure.multiplier(),
 				retryAfterUntilMs:
 					serverPressure.retryAfterUntilMs() > now ? serverPressure.retryAfterUntilMs() : null,
+				reported: serverPressure.reported(),
+				signal: serverPressure.signal(),
 			},
 			collections: Object.fromEntries(
 				SYNC_COLLECTION_NAMES.map((collection) => [
