@@ -30,6 +30,21 @@ export function hasStoreSession(state: SessionFields): boolean {
 }
 
 /**
+ * Thrown by `assertStoreSession`. Carries the missing fields so the producer
+ * that catches it can report the dedicated AUTH131 (with the merchant toast)
+ * instead of the caller's generic failure code.
+ */
+export class IncompleteStoreSessionError extends Error {
+	readonly missingFields: StoreSessionField[];
+
+	constructor(missingFields: StoreSessionField[]) {
+		super(`Store session incomplete: missing ${missingFields.join(', ')}`);
+		this.name = 'IncompleteStoreSessionError';
+		this.missingFields = missingFields;
+	}
+}
+
+/**
  * Throws when a freshly hydrated session is missing any field, naming them.
  * Used by the producers so a broken store is refused BEFORE its pointer is
  * persisted or the engine is switched to it, leaving the current session intact.
@@ -37,6 +52,6 @@ export function hasStoreSession(state: SessionFields): boolean {
 export function assertStoreSession(state: SessionFields): void {
 	const missing = missingStoreSessionFields(state);
 	if (missing.length > 0) {
-		throw new Error(`Store session incomplete: missing ${missing.join(', ')}`);
+		throw new IncompleteStoreSessionError(missing);
 	}
 }

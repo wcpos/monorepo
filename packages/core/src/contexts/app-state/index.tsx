@@ -15,7 +15,7 @@ import { Platform } from '@wcpos/utils/platform';
 import { useHydrationSuspense } from './use-hydration-suspense';
 import { getEngineScopeSwitcher } from './engine-scope-port';
 import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
-import { assertStoreSession, missingStoreSessionFields } from './store-session';
+import { IncompleteStoreSessionError, missingStoreSessionFields } from './store-session';
 
 import type {
 	CurrentSessionIDs,
@@ -70,6 +70,29 @@ const SIGNED_OUT_SESSION: Partial<HydrationContext> = {
 
 const sessionLogger = getLogger(['wcpos', 'app-state', 'session']);
 
+/**
+ * The one place an incomplete store session is reported: AUTH131 with the
+ * merchant toast and the missing fields. Shared by the three producers — a
+ * fresh login, a store switch, and the hydration-time recovery effect — so the
+ * merchant hears the same named message however the session broke, instead of a
+ * caller's generic code with no toast (#2112 review).
+ */
+function reportIncompleteSession(
+	missingFields: readonly string[],
+	ids: { siteID?: string; wpCredentialsID?: string; storeID?: string }
+): void {
+	sessionLogger.error(`Store session incomplete: missing ${missingFields.join(', ')}`, {
+		code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
+		showToast: true,
+		context: {
+			missingFields,
+			siteID: ids.siteID,
+			wpCredentialsID: ids.wpCredentialsID,
+			storeID: ids.storeID,
+		},
+	});
+}
+
 export const AppStateContext = React.createContext<AppState | undefined>(undefined);
 
 /**
@@ -111,13 +134,19 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		}) => {
 			// Hydrate first and refuse an incomplete session BEFORE the pointer is
 			// persisted: a pointer to rows that are not there would only replay the
-			// #2112 recovery on the next launch.
+			// #2112 recovery on the next launch. Report AUTH131 (with the toast) and
+			// stay on the picker rather than throwing into wp-users' generic catch,
+			// which would surface AUTH999 with no feedback.
 			const sessionData = await hydrateUserSession(state.userDB!, {
 				siteID,
 				wpCredentialsID,
 				storeID,
 			});
-			assertStoreSession(sessionData);
+			const missing = missingStoreSessionFields(sessionData);
+			if (missing.length > 0) {
+				reportIncompleteSession(missing, { siteID, wpCredentialsID, storeID });
+				return;
+			}
 
 			await state.appState!.set('current', () => ({
 				siteID,
@@ -163,12 +192,26 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 				return;
 			}
 
-			const sessionData = await switchUserSessionStore(
-				state.userDB!,
-				state.appState!,
-				store.localID!,
-				{ switchEngineScope: getEngineScopeSwitcher() ?? undefined }
-			);
+			let sessionData;
+			try {
+				sessionData = await switchUserSessionStore(state.userDB!, state.appState!, store.localID!, {
+					switchEngineScope: getEngineScopeSwitcher() ?? undefined,
+				});
+			} catch (error) {
+				if (error instanceof IncompleteStoreSessionError) {
+					// The target store's rows are not all present. The aborted switch
+					// left the engine and pointer untouched, so the current session is
+					// intact; tell the cashier through AUTH131 rather than failing
+					// silently (or as a caller's generic code).
+					reportIncompleteSession(error.missingFields, {
+						siteID: current?.siteID,
+						wpCredentialsID: current?.wpCredentialsID,
+						storeID: store.localID ?? undefined,
+					});
+					return;
+				}
+				throw error;
+			}
 			updateAppState(sessionData);
 		},
 		[state.appState, state.userDB, updateAppState]
@@ -213,16 +256,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		recoveredPointer.current = pointerKey;
 		const missingFields = missingSessionFields.split(',');
 		if (survivingLogs) setDatabase(survivingLogs);
-		sessionLogger.error(`Store session incomplete: missing ${missingFields.join(', ')}`, {
-			code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
-			showToast: true,
-			context: {
-				missingFields,
-				siteID: current.siteID,
-				wpCredentialsID: current.wpCredentialsID,
-				storeID: current.storeID,
-			},
-		});
+		reportIncompleteSession(missingFields, current);
 		void clearStoreSession().catch((error: unknown) => {
 			// The same failing storage that lost the rows may refuse this write too;
 			// the till is still signed out, it just replays the report next launch.
