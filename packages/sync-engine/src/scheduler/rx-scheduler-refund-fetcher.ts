@@ -70,7 +70,10 @@ export function createRefundsSchedulerFetcher(
 			]);
 			const removed = applied.filter(({ payload }) => {
 				const listed = current.get(payload.parent_id);
-				return Array.isArray(listed) && !listed.includes(payload.id);
+				if (listed !== undefined) return Array.isArray(listed) && !listed.includes(payload.id);
+				return !payload.meta_data?.some(
+					(meta) => meta.key === '_wcpos_session' || meta.key === '_wcpos_register'
+				);
 			});
 			if (removed.length > 0) {
 				await input.repository.removeMany(removed);

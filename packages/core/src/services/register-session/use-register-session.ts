@@ -391,22 +391,22 @@ export function useRegisterSession() {
 							]);
 							if (timedOut || !missingParentKey.current) break;
 							if (pendingParents.current === generation) {
-								// Readiness precedes RxDB's query emission. Wait for accounting to
-								// observe the fetched set (including a still-missing/deleted parent).
+								// Readiness precedes RxDB's query emission. Unrelated accounting
+								// emissions must not end the wait for a changed missing-parent set.
 								const key = missingParentKey.current;
 								let subscription: ReturnType<typeof accountingChanges.subscribe> | undefined;
 								try {
 									await Promise.race([
 										new Promise<void>((resolve) => {
-											subscription = accountingChanges.subscribe(() => resolve());
+											subscription = accountingChanges.subscribe(() => {
+												if (missingParentKey.current !== key) resolve();
+											});
 										}),
 										deadline,
 									]);
 								} finally {
 									subscription?.unsubscribe();
 								}
-								if (missingParentKey.current === key && pendingParents.current === generation)
-									break;
 							}
 							generation = pendingParents.current;
 						} while (!timedOut && generation.length > 0);

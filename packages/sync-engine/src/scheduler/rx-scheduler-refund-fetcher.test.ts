@@ -92,6 +92,21 @@ describe('refund paged upsert-only fetcher', () => {
 		expect(h.coverage.at(-1)?.records).toEqual([]);
 	});
 
+	// Revert the absent-parent confirmation branch: the unstamped orphan remains stored and covered.
+	it.each(['_wcpos_session', '_wcpos_register'])(
+		'removes unstamped refunds when the parent disappears but retains a %s sibling',
+		async (stamp) => {
+			const h = setup([[row(1), row(2, 42, [{ key: stamp, value: 'pos' }])]]);
+			h.heldParentIds
+				.mockResolvedValueOnce(new Map([[42, [1, 2]]]))
+				.mockResolvedValueOnce(new Map());
+			const result = await h.fetcher(task());
+			expect(h.documents.map((doc) => doc.payload.id)).toEqual([2]);
+			expect(result).toMatchObject({ documentCount: 1 });
+			expect(h.coverage.at(-1)?.records).toEqual([{ id: 'woo-refund:2' }]);
+		}
+	);
+
 	// Restore held.has(parent_id) admission: the stamped but unlisted row is resurrected.
 	it('uses an explicit held-parent summary before POS stamps, but admits without array authority', async () => {
 		const rows = [row(1, 42, [{ key: '_wcpos_session', value: 'B' }]), row(2)];

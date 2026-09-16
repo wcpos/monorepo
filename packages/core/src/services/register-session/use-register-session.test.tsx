@@ -33,12 +33,19 @@ const mockSessionChanges = new Subject<void>();
 type Hit = { record: { uuid: string; local: { dirty: boolean }; payload: Row } };
 let mockOrders = new BehaviorSubject<Hit[]>([]);
 let mockRefunds = new BehaviorSubject<Hit[]>([]);
+let mockParentOrders: BehaviorSubject<Hit[]> | undefined;
 function mockObserve(
 	_engine: unknown,
 	_locale: string,
 	query: { collection: string; selector: Row }
 ) {
-	return (query.collection === 'refunds' ? mockRefunds : mockOrders).pipe(
+	const source =
+		query.collection === 'refunds'
+			? mockRefunds
+			: query.selector.id && mockParentOrders
+				? mockParentOrders
+				: mockOrders;
+	return source.pipe(
 		map((hits) => ({
 			hits: hits.filter(({ record }) => new Query(query.selector).test(record.payload)),
 		}))
@@ -133,6 +140,7 @@ beforeEach(() => {
 		},
 	];
 	mockOrders = new BehaviorSubject<Hit[]>([]);
+	mockParentOrders = undefined;
 	mockRefunds = new BehaviorSubject<Hit[]>([]);
 	closed = [];
 	closureRows = [];
@@ -697,6 +705,57 @@ it('waits for missing refund parents before computing the closure tender', async
 		await closing;
 	});
 	expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
+});
+
+// Revert to resolving on any accounting emission: an unchanged missing set closes with cash.
+it('ignores an unrelated resident parent emission while awaiting the missing parent tender', async () => {
+	entries = [];
+	const sibling = refundHit('5');
+	sibling.record.uuid = 'refund:21';
+	sibling.record.payload.id = 21;
+	sibling.record.payload.parent_id = 2;
+	const resident = parentHit('old-session', false);
+	resident.record.uuid = 'resident';
+	resident.record.payload.id = 2;
+	mockParentOrders = new BehaviorSubject([resident]);
+	mockRefunds.next([refundHit(), sibling]);
+	let resolve!: () => void;
+	const ready = new Promise<void>((done) => {
+		resolve = done;
+	});
+	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
+	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
+	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
+		const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+		const { readLedger } =
+			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+		const attributed = attributeRefunds(
+			input.session.id,
+			input.orders.flatMap((order) => readLedger(order.payload.meta_data)),
+			input.refundRecords ?? []
+		);
+		return {
+			id: 'closure',
+			counted: {},
+			variance: {},
+			breakdowns: { payment_methods: attributed.byMethod },
+		} as never;
+	});
+	const result = await settled();
+	let closing!: ReturnType<typeof result.current.actions.closeSession>;
+	await act(async () => {
+		closing = result.current.actions.closeSession({ counted: { cash: '100' } });
+	});
+	expect(actions.writeClosure).not.toHaveBeenCalled();
+	await act(async () => resolve());
+	await act(async () => mockParentOrders!.next([{ ...resident }]));
+	const closedEarly = jest.mocked(actions.writeClosure).mock.calls.length > 0;
+	await act(async () => {
+		mockParentOrders!.next([resident, parentHit()]);
+		await closing;
+	});
+	expect(closedEarly).toBe(false);
+	expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000, cash: 50000 });
 });
 
 // Revert the post-ready accounting wait: closure freezes cash before the fetched card parent emits.

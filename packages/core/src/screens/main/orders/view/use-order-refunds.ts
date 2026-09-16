@@ -53,12 +53,15 @@ export function useOrderRefunds(orderId: number) {
 		let handle: RequirementHandle | undefined;
 		const subscription = observeEngineDatabases(engine)
 			.pipe(
-				map((db) => db?.collections.refunds),
-				distinctUntilChanged()
+				map((db) => ({ refunds: db?.collections.refunds, orders: db?.collections.orders })),
+				distinctUntilChanged(
+					(previous, current) =>
+						previous.refunds === current.refunds && previous.orders === current.orders
+				)
 			)
-			.subscribe((collection) => {
+			.subscribe(({ refunds }) => {
 				handle?.release();
-				handle = collection
+				handle = refunds
 					? declareRequirements(engine, [
 							{
 								id: `refunds:order-detail:${orderId}`,

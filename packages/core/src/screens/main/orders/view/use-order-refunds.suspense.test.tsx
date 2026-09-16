@@ -11,7 +11,7 @@ import { useOrderRefunds } from './use-order-refunds';
 let mockLocal = new Subject<{
 	hits: { record: { payload: { id: number; date_created_gmt: string } } }[];
 }>();
-const mockDatabases = new BehaviorSubject({ collections: { refunds: {} } });
+const mockDatabases = new BehaviorSubject({ collections: { refunds: {}, orders: {} } });
 const mockRelease = jest.fn();
 const mockRequire = jest.fn();
 const mockObserve = jest.fn((..._args: unknown[]) => mockLocal);
@@ -234,13 +234,35 @@ describe('local-first live order refunds', () => {
 			silence.mockRestore();
 		}
 	});
+	// Revert to watching only refunds identity: an orders reset never refills cascaded detail rows.
+	it('redeclares a forced by-parent pull when only the orders collection is replaced', async () => {
+		show();
+		await publish([]);
+		const { refunds, orders } = mockDatabases.value.collections;
+		await React.act(async () => mockDatabases.next({ collections: { refunds, orders } }));
+		expect(mockRequire).toHaveBeenCalledTimes(1);
+		await React.act(async () => mockDatabases.next({ collections: { refunds, orders: {} } }));
+		expect(mockRelease).toHaveBeenCalledTimes(1);
+		expect(mockRequire).toHaveBeenCalledTimes(2);
+		expect(mockRequire).toHaveBeenLastCalledWith({
+			id: 'refunds:order-detail:23858',
+			kind: 'refunds-by-parent',
+			collection: 'refunds',
+			parentRemoteId: '23858',
+			forceRefresh: true,
+		});
+	});
 	it('reopening or replacing the refund collection declares a fresh forced pull', async () => {
 		const first = show();
 		await publish([]);
 		first.unmount();
 		show();
 		await publish([]);
-		await React.act(async () => mockDatabases.next({ collections: { refunds: {} } }));
+		await React.act(async () =>
+			mockDatabases.next({
+				collections: { refunds: {}, orders: mockDatabases.value.collections.orders },
+			})
+		);
 		expect(mockRequire).toHaveBeenCalledTimes(3);
 		expect(mockRequire.mock.calls.every(([r]) => r.forceRefresh)).toBe(true);
 	});
