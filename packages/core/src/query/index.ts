@@ -4,7 +4,11 @@ export {
 	useQueryStateActions,
 	useSearchResetNonce,
 } from './query-state-store';
-export { useGuardedExtendLimit, useGuardedExtension } from './use-guarded-extend-limit';
+export {
+	getPagingVerdict,
+	useGuardedExtendLimit,
+	useGuardedExtension,
+} from './use-guarded-extend-limit';
 export {
 	useCollectionBinding,
 	useLogsBinding,

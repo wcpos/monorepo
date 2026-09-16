@@ -12,6 +12,37 @@ const NOT_PENDING$ = of(false);
 const UNKNOWN_EXHAUSTED$ = of(null as boolean | null);
 
 /**
+ * The one paging verdict the guard and the products end footer both read (#1221 lineage).
+ *
+ * A short read (`resultCount < limit`) is the end unless the engine says more may exist
+ * (`exhausted === false`: a filtered or deduped read can be short while the walk continues).
+ * A full read always extends — even past an exhausted lane, which can hold more resident rows
+ * than the limit (1.10.14, frikifunko 2026-09-15). While a declaration is pending neither
+ * answer is final: `mayExtend` and `atEnd` are both false. `reason` is render state, not copy.
+ */
+export function getPagingVerdict(
+	resultCount: number,
+	limit: number,
+	pending: boolean,
+	exhausted: boolean | null
+): {
+	mayExtend: boolean;
+	atEnd: boolean;
+	reason: 'pending' | 'full-window' | 'more-possible' | 'short-read';
+} {
+	if (pending) {
+		return { mayExtend: false, atEnd: false, reason: 'pending' };
+	}
+	if (resultCount >= limit) {
+		return { mayExtend: true, atEnd: false, reason: 'full-window' };
+	}
+	if (exhausted === false) {
+		return { mayExtend: true, atEnd: false, reason: 'more-possible' };
+	}
+	return { mayExtend: false, atEnd: true, reason: 'short-read' };
+}
+
+/**
  * End-reached → extendLimit, guarded (#1221).
  *
  * A result shorter than the current limit means one of two things, and both forbid another
@@ -60,11 +91,9 @@ export function useGuardedExtension(
 	}, [limit]);
 	const pending = engine?.pending ?? false;
 	const exhausted = engine?.exhausted ?? null;
+	// Primitive input changes re-arm settled empty lists through callback identity.
 	return React.useCallback(() => {
-		if (pending) return;
-		// A short read is the end unless the engine says more may exist (`false`); a full read
-		// always extends — even past an exhausted lane, which can hold more than the limit.
-		if (resultCount < limit && exhausted !== false) return;
+		if (!getPagingVerdict(resultCount, limit, pending, exhausted).mayExtend) return;
 		if (extensionScheduled.current) return;
 		extensionScheduled.current = true;
 		extendLimit();

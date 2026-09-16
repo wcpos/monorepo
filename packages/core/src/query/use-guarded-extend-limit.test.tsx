@@ -4,13 +4,109 @@
 /* eslint-disable react-compiler/react-compiler */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
 import { BehaviorSubject, of } from 'rxjs';
 
 import { QueryStateProvider, useQueryState, useQueryStateActions } from './query-state-store';
-import { useGuardedExtendLimit } from './use-guarded-extend-limit';
+import { getPagingVerdict, useGuardedExtendLimit } from './use-guarded-extend-limit';
 
 import type { QueryBinding } from './query-bindings';
+
+describe('getPagingVerdict', () => {
+	it.each`
+		count | exhausted | pending  | expected
+		${4}  | ${true}   | ${false} | ${{ mayExtend: false, atEnd: true, reason: 'short-read' }}
+		${4}  | ${false}  | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'more-possible' }}
+		${4}  | ${null}   | ${false} | ${{ mayExtend: false, atEnd: true, reason: 'short-read' }}
+		${10} | ${true}   | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
+		${10} | ${false}  | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
+		${10} | ${null}   | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
+		${13} | ${true}   | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
+		${13} | ${false}  | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
+		${13} | ${null}   | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
+		${4}  | ${true}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${4}  | ${false}  | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${4}  | ${null}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${10} | ${true}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${10} | ${false}  | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${10} | ${null}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${13} | ${true}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${13} | ${false}  | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${13} | ${null}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${0}  | ${true}   | ${false} | ${{ mayExtend: false, atEnd: true, reason: 'short-read' }}
+		${0}  | ${false}  | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'more-possible' }}
+		${0}  | ${null}   | ${false} | ${{ mayExtend: false, atEnd: true, reason: 'short-read' }}
+		${0}  | ${true}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${0}  | ${false}  | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${0}  | ${null}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+	`(
+		'count=$count limit=10 exhausted=$exhausted pending=$pending',
+		({ count, exhausted, pending, expected }) => {
+			expect(getPagingVerdict(count, 10, pending, exhausted)).toEqual(expected);
+		}
+	);
+});
+
+describe('paging callback identity', () => {
+	function wrapper({ children }: { children: React.ReactNode }) {
+		return (
+			<QueryStateProvider
+				collection="products"
+				initialPageSize={10}
+				initialSort={{ field: 'name', direction: 'asc' }}
+			>
+				{children}
+			</QueryStateProvider>
+		);
+	}
+
+	it('retains the callback for unchanged primitives and a recreated binding wrapper', () => {
+		const extendLimit = jest.fn();
+		const binding = { pending$: of(false), exhausted$: of(true) };
+		const { result, rerender } = renderHook(
+			(props) => useGuardedExtendLimit(extendLimit, 10, props.binding),
+			{ initialProps: { binding }, wrapper }
+		);
+		const initial = result.current;
+		rerender({ binding });
+		expect(result.current).toBe(initial);
+		rerender({ binding: { ...binding } });
+		expect(result.current).toBe(initial);
+	});
+
+	it('re-arms a pending empty search when it settles and extends once', () => {
+		const extendLimit = jest.fn();
+		const pending$ = new BehaviorSubject(true);
+		const binding = { pending$, exhausted$: of(false) };
+		const { result } = renderHook(() => useGuardedExtendLimit(extendLimit, 0, binding), {
+			wrapper,
+		});
+		const pending = result.current;
+		act(() => pending());
+		expect(extendLimit).not.toHaveBeenCalled();
+		act(() => pending$.next(false));
+		expect(result.current).not.toBe(pending);
+		act(() => {
+			result.current();
+			result.current();
+		});
+		expect(extendLimit).toHaveBeenCalledTimes(1);
+	});
+
+	it('changes identity from full to overfull even when permission is unchanged', () => {
+		const extendLimit = jest.fn();
+		const binding = { pending$: of(false), exhausted$: of(true) };
+		const { result, rerender } = renderHook(
+			({ count }) => useGuardedExtendLimit(extendLimit, count, binding),
+			{ initialProps: { count: 10 }, wrapper }
+		);
+		const full = result.current;
+		rerender({ count: 13 });
+		expect(result.current).not.toBe(full);
+		act(() => result.current());
+		expect(extendLimit).toHaveBeenCalledTimes(1);
+	});
+});
 
 describe('useGuardedExtendLimit (#1221)', () => {
 	let fire: (() => void) | undefined;

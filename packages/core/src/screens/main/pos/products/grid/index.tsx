@@ -54,8 +54,8 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 	const result = useObservableSuspense(binding.resource);
 	const deferredResult = React.useDeferredValue(result);
 
-	// Guarded (#1221): search paging follows the engine's exhaustion verdict, not the shorter
-	// locally merged product rows, while pending demand still blocks duplicate extensions.
+	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
+	// Short local reads stop unless the engine says more may exist.
 	const handleEndReached = useGuardedExtendLimit(
 		actions.extendLimit,
 		deferredResult.hits.length,
@@ -131,7 +131,13 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 					estimatedItemSize={200}
 					onEndReachedThreshold={0.1}
 					onEndReached={handleEndReached}
-					ListFooterComponent={<ProductGridFooter binding={binding} count={renderedCount} />}
+					ListFooterComponent={
+						<ProductGridFooter
+							binding={binding}
+							count={renderedCount}
+							resultCount={deferredResult.hits.length}
+						/>
+					}
 					ListEmptyComponent={() => (
 						<View className="items-center justify-center p-4">
 							{/* "No products found" may only ever mean the search ANSWERED with
