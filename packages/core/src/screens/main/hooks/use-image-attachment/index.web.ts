@@ -5,6 +5,7 @@ import { defer, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import type { ImageAttachmentSource } from './types';
 type HttpGet = ReturnType<typeof useHttpClient>['get'];
@@ -51,10 +52,15 @@ async function fetchImageBlob(
 	// wcposHeaders: false prevents X-WCPOS header which triggers CORS preflight on external URLs.
 	// quietErrors: a missing/blocked image is decorative — log a warning, not an
 	// error (the component falls back to a placeholder).
+	// failureCode: this URL is outside the REST namespace, so the client's
+	// status table has no meaning for it — a missing upload would otherwise be
+	// logged as AUTH311 "store route unavailable". The registered meaning of a
+	// failure here is PRODUCT201: the image is unavailable, the product still sells.
 	const response = await get(imageUrl, {
 		responseType: 'arraybuffer',
 		wcposHeaders: false,
 		quietErrors: true,
+		failureCode: ERROR_CODES.PRODUCT_IMAGE_UNAVAILABLE,
 	});
 
 	if (!response || response.status !== 200) {

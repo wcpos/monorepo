@@ -251,6 +251,76 @@ describe('useHttpClient network audit logs', () => {
 		);
 	});
 
+	it('logs a request-owned failureCode instead of reading a non-REST 404 as a missing REST route', async () => {
+		// WordPress answers a missing upload with its HTML 404 page; as an
+		// arraybuffer it carries no WP error code, so without the request-owned
+		// code the status table would attribute it to AUTH311 (REST route missing).
+		const failure = Object.assign(new Error('Request failed with status code 404'), {
+			response: { status: 404, data: new ArrayBuffer(8) },
+		});
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/2016/03/product-300x300.jpg', {
+				quietErrors: true,
+				failureCode: 'PRODUCT201',
+			})
+		).rejects.toBe(failure);
+
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+		expect(loggerMock.__warn).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/2016/03/product-300x300.jpg',
+			{
+				code: 'PRODUCT201',
+				context: expect.objectContaining({ status: 404 }),
+			}
+		);
+		expect(loggerMock.__warn.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
+	});
+
+	it('logs a request-owned failureCode for a transport failure instead of the CLIENT999 fallback', async () => {
+		const failure = new Error('Network Error');
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/product.jpg', {
+				quietErrors: true,
+				failureCode: 'PRODUCT201',
+			})
+		).rejects.toBe(failure);
+
+		expect(loggerMock.__warn).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/product.jpg',
+			{
+				code: 'PRODUCT201',
+				context: expect.objectContaining({ status: 0 }),
+			}
+		);
+		expect(loggerMock.__warn.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
+	});
+
+	it('lets a WordPress error body outrank the request-owned failureCode', async () => {
+		const failure = Object.assign(new Error('request failed'), {
+			response: {
+				status: 401,
+				data: { code: 'rest_forbidden', message: 'Sorry', data: { status: 401 } },
+			},
+		});
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/product.jpg', { failureCode: 'PRODUCT201' })
+		).rejects.toBe(failure);
+
+		expect(loggerMock.__error).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/product.jpg',
+			expect.objectContaining({ code: expect.not.stringMatching(/^PRODUCT201$/) })
+		);
+	});
+
 	it.each([false, true])(
 		'logs handler failure only for a replacement error (%s)',
 		async (replace) => {
