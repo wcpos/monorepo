@@ -267,9 +267,12 @@ describeBench('catalogue search scale', () => {
 					await instance.pipeline.awaitIdle();
 					const buildMs = performance.now() - buildStart;
 					global.gc?.();
-					const heapDelta = (process.memoryUsage().heapUsed - heapBefore) / 1024 ** 2;
+					// Without a forced collection the delta is garbage-timing noise, not a measurement.
+					const heapDelta = global.gc
+						? `${((process.memoryUsage().heapUsed - heapBefore) / 1024 ** 2).toFixed(2)} MB`
+						: 'n/a (run with NODE_OPTIONS=--expose-gc)';
 					progress(
-						`N=${n}: seed=${seedMs.toFixed(2)} ms; build=${buildMs.toFixed(2)} ms; heap delta=${heapDelta.toFixed(2)} MB; avg row bytes=${(rowBytes / n).toFixed(2)}; avg UTF-8 bytes=${(utf8Bytes / n).toFixed(2)}; dir bytes after seed=${dirBytes}; split=${JSON.stringify(split)}`
+						`N=${n}: seed=${seedMs.toFixed(2)} ms; build=${buildMs.toFixed(2)} ms; heap delta=${heapDelta}; avg row bytes=${(rowBytes / n).toFixed(2)}; avg UTF-8 bytes=${(utf8Bytes / n).toFixed(2)}; dir bytes after seed=${dirBytes}; split=${JSON.stringify(split)}`
 					);
 					const reset = () => {
 						products._queryCache._map.clear();
