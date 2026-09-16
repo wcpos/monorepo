@@ -728,11 +728,18 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						censusCollectionFromQueryKey(request.queryKey) === null
 							? QUERY_TOTAL_FRESH_FOR_MS
 							: deps.censusFreshForMs,
+					// Nine per_page=1 probes are the sweep's cheapest requests, already
+					// exempt from pressure deferral for forced ticks in the lane gate above.
 					maxRequests:
-						forced !== undefined || (tick.starvation && !tick.forceAllCensus)
+						forced !== undefined
 							? 1
-							: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
+							: tick.starvation && !tick.forceAllCensus
+								? SUPPORTED_CENSUS_COLLECTIONS.length
+								: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
 					...(forced !== undefined ? { forceQueryKey: censusQueryKey(forced) } : {}),
+					...(forced === undefined && tick.starvation && !tick.forceAllCensus
+						? { onlyQueryKeys: censusQueryKeys }
+						: {}),
 					...(tick.forceAllCensus
 						? { onlyQueryKeys: censusQueryKeys, ignoreFreshQueryKeys: censusQueryKeys }
 						: {}),

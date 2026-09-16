@@ -141,6 +141,40 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		});
 	});
 
+	it('notifies status subscribers on pressure and recovery in manual mode', async () => {
+		let now = 0;
+		let status = 200;
+		const engine = engineWith({
+			now: () => now,
+			fetcher: async () =>
+				new Response('[]', { status, headers: status === 429 ? { 'Retry-After': '60' } : {} }),
+		});
+		await engine.ready;
+		const statuses: EngineStatus[] = [];
+		engine.statusChanges((value) => statuses.push(value));
+		try {
+			status = 429;
+			await engine.hostTransport().fetcher(SYNC_BASE);
+			await vi.waitFor(() =>
+				expect(statuses.at(-1)?.serverPressure).toEqual({
+					multiplier: 2,
+					retryAfterUntilMs: 60_000,
+				})
+			);
+			now = 60_001;
+			status = 200;
+			for (let index = 0; index < 10; index += 1) await engine.hostTransport().fetcher(SYNC_BASE);
+			await vi.waitFor(() =>
+				expect(statuses.at(-1)?.serverPressure).toEqual({
+					multiplier: 1,
+					retryAfterUntilMs: null,
+				})
+			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('publishes current and coalesced status changes, then unsubscribes', async () => {
 		const engine = engineWith();
 		const statuses: EngineStatus[] = [];
@@ -148,6 +182,10 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 
 		expect(statuses).toHaveLength(1);
 		expect(statuses[0]).toEqual(engine.status());
+		expect(statuses[0]?.serverPressure).toEqual({
+			multiplier: 1,
+			retryAfterUntilMs: null,
+		});
 
 		await engine.ready;
 		await vi.waitFor(() => expect(statuses.at(-1)?.activeScopeId).not.toBeNull());

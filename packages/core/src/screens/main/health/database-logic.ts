@@ -210,3 +210,14 @@ export function stuckCountsByRow(
 	}
 	return counts;
 }
+
+/** Back-off is time-dependent (a Retry-After window expires without a status push), so derive it against the page clock. */
+export function isServerBackingOff(
+	pressure: { multiplier: number; retryAfterUntilMs: number | null },
+	nowMs: number
+): boolean {
+	return (
+		pressure.multiplier > 1 ||
+		(pressure.retryAfterUntilMs !== null && pressure.retryAfterUntilMs > nowMs)
+	);
+}

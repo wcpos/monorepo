@@ -4,7 +4,7 @@ export const LANE_REGISTRY = [
 	// Follow-up: these demand/cashier paths do not yet have a request ceiling.
 	{ laneName: 'change-signal', intervalKey: 'changeSignalPollMs', defaultMs: 10_000, targetKey: 'changeSignal', owner: 'facade', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: null, maxRequestsPerTick: null, runsWhileHidden: true },
 	{ laneName: 'write-drain', intervalKey: 'writeDrainPollMs', defaultMs: 10_000, targetKey: 'writeDrain', owner: 'facade', collections: [], manualSync: true, seedRetickOrder: null, rebaselineOrder: null, timerOrder: 1, maxRequestsPerTick: null, runsWhileHidden: true },
-	// Seed ticks only enqueue. Reconcile is 3 scan ports × 3 gap-skipping pages + 2 drill-downs; query-total is 9 census probes + 1 due request.
+	// Seed ticks only enqueue. Reconcile is 3 scan ports × 3 gap-skipping pages + 2 drill-downs; query-total is 9 census probes + 1 due request (9 requests under starvation).
 	// scheduler-drain executes DEMAND tasks (require-plane + seed enqueues) — per-task budgets exist
 	// (maxRequestsPerTask) but a per-tick total would throttle cashier-driven fetches, so its bound is
 	// null like the other demand lanes until the follow-up rules on a demand-side budget (codex r3760800564).

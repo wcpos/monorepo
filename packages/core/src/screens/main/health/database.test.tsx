@@ -22,6 +22,7 @@ const mockDeadLetterStuck: StuckRecord[] = [];
 let mockConflictedKeys = new Set<string>();
 let lastAttentionStuck: StuckRecord[] = [];
 let mockLogStats: { stuck: StuckRecord[] } = { stuck: [] };
+let mockBackingOff = false;
 const mockSync = jest.fn();
 const mockCheckCollection = jest.fn();
 const defaultStorageFootprint = {
@@ -213,6 +214,10 @@ jest.mock('../hooks/use-census-totals', () => ({
 jest.mock('../hooks/use-engine-monitor', () => ({
 	useCollectionCounts: () => ({ products: 1 }),
 	useEngineStatus: () => ({
+		serverPressure: {
+			multiplier: mockBackingOff ? 2 : 1,
+			retryAfterUntilMs: null,
+		},
 		bootstrapFailed: {},
 		connectivity: 'online',
 		gatedBy: null,
@@ -240,6 +245,7 @@ jest.mock('./use-relative-time', () => ({
 
 describe('DatabaseScreen coverage', () => {
 	afterEach(() => {
+		mockBackingOff = false;
 		mockSync.mockReset();
 		mockCheckCollection.mockReset();
 		mockMutationCounts.needsDecision = 0;
@@ -264,6 +270,18 @@ describe('DatabaseScreen coverage', () => {
 		const rowText = getAllByTestId('db-row-products')[0].textContent ?? '';
 		expect(rowText).toContain('203');
 		expect(rowText).toContain('checking…');
+		expect(getAllByTestId('db-row-sm-products')[0].textContent).toContain('checking…');
+	});
+
+	it('explains server pressure on stale rows and the census freshness line', () => {
+		mockBackingOff = true;
+		mockCensusTotals = {
+			products: { total: 203, updatedAtMs: 100, freshUntilMs: 400, fresh: false },
+		};
+		const { getAllByTestId, getByText } = render(<DatabaseScreen />);
+		expect(getAllByTestId('db-row-products')[0].textContent).toContain('server busy…');
+		expect(getAllByTestId('db-row-sm-products')[0].textContent).toContain('server busy…');
+		expect(getByText(/Server totals updated/).textContent).toContain('server is busy');
 	});
 
 	it('spins only the checked row and disables manual controls while its check runs', async () => {

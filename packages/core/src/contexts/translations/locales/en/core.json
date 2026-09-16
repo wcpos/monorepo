@@ -1164,6 +1164,8 @@
 	"health.database.window_ready": "open + recent ready",
 	"health.database.window_short": "open + recent",
 	"health.database.checking": "checking…",
+	"health.database.checking_busy": "server busy…",
+	"health.database.totals_server_busy": "Server totals updated {ago} ago · your server is busy, so checks are spaced out",
 	"health.database.all_local": "✓ all",
 	"health.database.all_n_local": "all {count} on device",
 	"health.database.redownloading": "Re-downloading…",
