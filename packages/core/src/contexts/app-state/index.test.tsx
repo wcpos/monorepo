@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
@@ -30,6 +30,8 @@ jest.mock('@wcpos/utils/platform', () => ({
 	Platform: { isWeb: false },
 }));
 
+// eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
+import { hydrateUserSession } from './hydration-steps';
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
 import {
 	type AppState,
@@ -148,6 +150,52 @@ describe('useStoreSession', () => {
 
 		const { result } = renderHook(() => useStoreSession(), { wrapper });
 		expect(result.current.site).toBe(site);
+	});
+});
+
+describe('login', () => {
+	it('refuses to persist a pointer to an incomplete session', async () => {
+		const base = sessionBase(null);
+		mockHydration.context = { ...base };
+		(hydrateUserSession as jest.Mock).mockResolvedValueOnce({
+			storeDB,
+			store,
+			extraData,
+			site: null,
+			wpCredentials: null,
+		});
+		const { result } = renderHook(() => useAppState(), { wrapper: AppStateProvider });
+
+		await expect(
+			result.current.login({ siteID: 'site-1', wpCredentialsID: 'creds-1', storeID: 'store-1' })
+		).rejects.toThrow('Store session incomplete: missing site, wpCredentials');
+
+		expect(base.appState.set).not.toHaveBeenCalled();
+		expect(hasStoreSession(result.current)).toBe(false);
+	});
+
+	it('persists the pointer once the hydrated session is complete', async () => {
+		const base = sessionBase(null);
+		mockHydration.context = { ...base };
+		(hydrateUserSession as jest.Mock).mockResolvedValueOnce({
+			storeDB,
+			store,
+			extraData,
+			site,
+			wpCredentials,
+		});
+		const { result } = renderHook(() => useAppState(), { wrapper: AppStateProvider });
+
+		await act(async () => {
+			await result.current.login({
+				siteID: 'site-1',
+				wpCredentialsID: 'creds-1',
+				storeID: 'store-1',
+			});
+		});
+
+		expect(base.appState.set).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(hasStoreSession(result.current)).toBe(true));
 	});
 });
 

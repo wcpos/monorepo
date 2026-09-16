@@ -15,6 +15,7 @@ import { Platform } from '@wcpos/utils/platform';
 import { useHydrationSuspense } from './use-hydration-suspense';
 import { getEngineScopeSwitcher } from './engine-scope-port';
 import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
+import { assertStoreSession, missingStoreSessionFields } from './store-session';
 
 import type {
 	CurrentSessionIDs,
@@ -50,34 +51,13 @@ export interface StoreSessionState extends AppState {
 	extraData: ExtraDataState;
 }
 
-/**
- * The five fields an active store session consists of. Login and store-switch
- * write them together; `hasStoreSession` is the one predicate every gate reads
- * (the root `Stack.Protected`, the auth redirect, `useStoreSession`), so a
- * session that hydrated with only some of them mounts nothing that assumes the
- * rest (#2112).
- */
-export const STORE_SESSION_FIELDS = [
-	'storeDB',
-	'store',
-	'site',
-	'wpCredentials',
-	'extraData',
-] as const;
-
-export type StoreSessionField = (typeof STORE_SESSION_FIELDS)[number];
-
-type SessionFields = Partial<Record<StoreSessionField, unknown>>;
-
-/** The session fields that are absent or null, in `STORE_SESSION_FIELDS` order. */
-export function missingStoreSessionFields(state: SessionFields): StoreSessionField[] {
-	return STORE_SESSION_FIELDS.filter((field) => !state[field]);
-}
-
-/** True when every field of an active store session is present. */
-export function hasStoreSession(state: SessionFields): boolean {
-	return missingStoreSessionFields(state).length === 0;
-}
+export {
+	assertStoreSession,
+	hasStoreSession,
+	missingStoreSessionFields,
+	STORE_SESSION_FIELDS,
+	type StoreSessionField,
+} from './store-session';
 
 /** The React-state half of signing out: every session field cleared. */
 const SIGNED_OUT_SESSION: Partial<HydrationContext> = {
@@ -129,21 +109,22 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 			wpCredentialsID: string;
 			storeID: string;
 		}) => {
-			// Update database state
+			// Hydrate first and refuse an incomplete session BEFORE the pointer is
+			// persisted: a pointer to rows that are not there would only replay the
+			// #2112 recovery on the next launch.
+			const sessionData = await hydrateUserSession(state.userDB!, {
+				siteID,
+				wpCredentialsID,
+				storeID,
+			});
+			assertStoreSession(sessionData);
+
 			await state.appState!.set('current', () => ({
 				siteID,
 				wpCredentialsID,
 				storeID,
 			}));
 
-			// Hydrate session data from database
-			const sessionData = await hydrateUserSession(state.userDB!, {
-				siteID,
-				wpCredentialsID,
-				storeID,
-			});
-
-			// Update React state
 			updateAppState(sessionData);
 		},
 		[state.appState, state.userDB, updateAppState]

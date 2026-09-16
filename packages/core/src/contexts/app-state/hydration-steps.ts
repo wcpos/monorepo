@@ -33,6 +33,7 @@ import {
 } from '../../utils/merge-stores';
 import { upsertSiteData } from '../../utils/site-writes';
 import { initialProps } from './initial-props';
+import { assertStoreSession } from './store-session';
 
 import type { RxState } from 'rxdb';
 import type { InitialProps } from './initial-props.types';
@@ -781,6 +782,9 @@ export async function switchUserSessionStore(
 	const current = await appState.get('current');
 	const newState = { ...current, storeID: storeLocalID };
 	const sessionData = await hydrateUserSession(userDB, newState);
+	// A store whose rows are not all there is refused here, before the engine
+	// is moved or the pointer persisted: the current session stays intact.
+	assertStoreSession(sessionData);
 
 	// The engine must reach the new scope BEFORE the session is committed — a
 	// failed engine transition aborts the switch with durable state untouched.
