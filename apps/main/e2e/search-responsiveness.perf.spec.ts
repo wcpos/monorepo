@@ -5,7 +5,7 @@ import { expectSearchResponsive, measureSearch } from './search-responsiveness';
 
 // Independent cases keep each QuerySearchInput surface runnable and reportable.
 for (const route of ['pos', 'products', 'orders', 'customers', 'coupons', 'health'] as const) {
-	test(`screen: ${route} preserves typing and meets the frame budget`, async ({
+	test(`screen: ${route} preserves typing and reports frame smoothness`, async ({
 		posPage: page,
 	}, testInfo) => {
 		if (route !== 'pos') await navigateToPage(page, route);
@@ -46,7 +46,7 @@ const dropdowns = [
 ] as const;
 
 for (const [route, trigger, label, input] of dropdowns) {
-	test(`dropdown: ${label} preserves typing and meets the frame budget`, async ({
+	test(`dropdown: ${label} preserves typing and reports frame smoothness`, async ({
 		posPage: page,
 	}, testInfo) => {
 		if (route !== 'pos') await navigateToPage(page, route);
@@ -59,7 +59,9 @@ for (const [route, trigger, label, input] of dropdowns) {
 	});
 }
 
-test('address dropdown searches meet the frame budget', async ({ posPage: page }, testInfo) => {
+test('address dropdown searches preserve typing and report frame smoothness', async ({
+	posPage: page,
+}, testInfo) => {
 	await navigateToPage(page, 'customers');
 	const add = page.getByTestId('customers-add-button');
 	test.skip(

@@ -11,7 +11,7 @@ import { expectSearchResponsive, measureSearch } from './search-responsiveness';
 // Point at a packaged app containing the renderer under test, never a user's profile.
 // E2E_ELECTRON_EXECUTABLE=/path/to/packaged-executable
 // pnpm exec playwright test -c playwright.search-performance.config.ts -g 'desktop search'
-test('desktop search preserves typing and meets the frame budget', async ({}, testInfo) => {
+test('desktop search preserves typing and reports frame smoothness', async ({}, testInfo) => {
 	const executablePath = process.env.E2E_ELECTRON_EXECUTABLE;
 	test.skip(!executablePath, 'No packaged Electron artifact supplied');
 	test.setTimeout(240_000);

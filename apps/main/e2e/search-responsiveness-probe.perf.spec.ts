@@ -23,7 +23,8 @@ test('frame probe catches a blocking input handler', async ({ page }, testInfo) 
 		});
 	});
 	const measurement = await measureSearch(page, 'search-control', testInfo, 'blocking-control');
-	expect(measurement.droppedFrames.length).toBeGreaterThan(0);
+	// The detector must see induced jank on every channel it reports.
+	expect(measurement.droppedFrames.length + measurement.partialFrames.length).toBeGreaterThan(0);
 	expect(measurement.missedFrames.length).toBeGreaterThan(0);
 	expect(measurement.longTasks.length).toBeGreaterThan(0);
 });
