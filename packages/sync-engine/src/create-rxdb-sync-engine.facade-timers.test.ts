@@ -141,6 +141,76 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		});
 	});
 
+	it('notifies status subscribers on pressure and recovery in manual mode', async () => {
+		let now = 0;
+		let status = 200;
+		const engine = engineWith({
+			now: () => now,
+			fetcher: async () =>
+				new Response('[]', { status, headers: status === 429 ? { 'Retry-After': '60' } : {} }),
+		});
+		await engine.ready;
+		const statuses: EngineStatus[] = [];
+		engine.statusChanges((value) => statuses.push(value));
+		try {
+			status = 429;
+			await engine.hostTransport().fetcher(SYNC_BASE);
+			await vi.waitFor(() =>
+				expect(statuses.at(-1)?.serverPressure).toEqual({
+					multiplier: 2,
+					retryAfterUntilMs: 60_000,
+					reported: null,
+					signal: 'rate-limited',
+				})
+			);
+			now = 60_001;
+			status = 200;
+			for (let index = 0; index < 10; index += 1) await engine.hostTransport().fetcher(SYNC_BASE);
+			await vi.waitFor(() =>
+				expect(statuses.at(-1)?.serverPressure).toEqual({
+					multiplier: 1,
+					retryAfterUntilMs: null,
+					reported: null,
+					signal: null,
+				})
+			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('notifies status subscribers when the reported pressure bucket changes without a back-off', async () => {
+		let pressure: string | null = null;
+		const engine = engineWith({
+			fetcher: async () =>
+				new Response('[]', {
+					status: 200,
+					headers: pressure === null ? {} : { 'X-WCPOS-Pressure': pressure },
+				}),
+		});
+		await engine.ready;
+		const statuses: EngineStatus[] = [];
+		engine.statusChanges((value) => statuses.push(value));
+		try {
+			pressure = 'high';
+			await engine.hostTransport().fetcher(SYNC_BASE);
+			// One fast "high" response is advisory: no back-off, but the read-out moved.
+			await vi.waitFor(() =>
+				expect(statuses.at(-1)?.serverPressure).toEqual({
+					multiplier: 1,
+					retryAfterUntilMs: null,
+					reported: 'high',
+					signal: null,
+				})
+			);
+			pressure = 'low';
+			await engine.hostTransport().fetcher(SYNC_BASE);
+			await vi.waitFor(() => expect(statuses.at(-1)?.serverPressure.reported).toBe('low'));
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('publishes current and coalesced status changes, then unsubscribes', async () => {
 		const engine = engineWith();
 		const statuses: EngineStatus[] = [];
@@ -148,6 +218,12 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 
 		expect(statuses).toHaveLength(1);
 		expect(statuses[0]).toEqual(engine.status());
+		expect(statuses[0]?.serverPressure).toEqual({
+			multiplier: 1,
+			retryAfterUntilMs: null,
+			reported: null,
+			signal: null,
+		});
 
 		await engine.ready;
 		await vi.waitFor(() => expect(statuses.at(-1)?.activeScopeId).not.toBeNull());

@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
+import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { StoreScopeManager, type SyncEvent } from '@wcpos/sync-core';
 
 import { createMaintenanceLanes } from './maintenance-lanes';
 import { censusTotalsFromCache } from '../scheduler';
+import { createEngineHarness } from '../testing';
+import { RxQueryTotalRequestStateRepository } from '../rx-query-total-request-state-repository';
 
 import type { LocalCoverage } from '../local-coverage/local-coverage';
+
+setPremiumFlag();
 
 const emptyReconcileSummary = {
 	buckets: 0,
@@ -16,10 +21,11 @@ const emptyReconcileSummary = {
 	skippedDirty: 0,
 };
 
-async function starvationHarness() {
+async function starvationHarness(censusDatabase?: object) {
 	let nowMs = 1_000;
 	let pressure = false;
 	let retryAfterActive = false;
+	const fetchWooQueryTotal = vi.fn(async (_input: { request: { queryKey: string } }) => 40);
 	const database = {
 		listCollections: () => [],
 		resetCollection: async () => undefined,
@@ -38,7 +44,7 @@ async function starvationHarness() {
 	const diagnostics: SyncEvent[] = [];
 	const lanes = createMaintenanceLanes({
 		manager,
-		databaseFor: () => database as never,
+		databaseFor: () => (censusDatabase ?? database) as never,
 		coverageFor: () => coverage,
 		syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
 		fetcher: async () => Response.json({}),
@@ -46,6 +52,7 @@ async function starvationHarness() {
 		diagnostics: (event) => diagnostics.push(event),
 		ownerId: () => 'owner',
 		censusFreshForMs: 60_000,
+		queryTotal: { fetchWooQueryTotal },
 		customerTrickleStateFor: () => ({
 			get: async () => null,
 			set: async () => undefined,
@@ -72,6 +79,7 @@ async function starvationHarness() {
 
 	return {
 		lanes,
+		fetchWooQueryTotal,
 		primeManifest,
 		reconcilePass,
 		diagnostics,
@@ -88,6 +96,54 @@ async function starvationHarness() {
 }
 
 describe('maintenance lane starvation ceiling (mono#1159)', () => {
+	it('runs all nine census probes on a starvation tick, but not a tenth due request', async () => {
+		const { engine } = await createEngineHarness({ mode: 'manual' });
+		await engine.ready;
+		try {
+			const database = engine.active()!.database;
+			const states = new RxQueryTotalRequestStateRepository(database as never);
+			await states.upsert({
+				queryKey: 'orders:due',
+				status: 'failed',
+				ownerId: null,
+				claimedUntilMs: null,
+				attempt: 0,
+				retryAfterMs: 0,
+				updatedAtMs: 0,
+				request: {
+					queryKey: 'orders:due',
+					method: 'GET',
+					endpoint: '/orders',
+					params: {},
+					totalHeader: 'X-WP-Total',
+				},
+			});
+			const context = await starvationHarness(database);
+			context.setPressure(true);
+			await expect(context.lanes.queryTotalRetry!.tick()).resolves.toMatchObject({
+				status: 'skipped',
+			});
+			context.advance(60_000);
+			await expect(context.lanes.queryTotalRetry!.tick()).resolves.toMatchObject({ status: 'ran' });
+			expect(
+				context.fetchWooQueryTotal.mock.calls.map(([{ request }]) => request.queryKey)
+			).toEqual([
+				'census:brands',
+				'census:categories',
+				'census:coupons',
+				'census:customers',
+				'census:orders',
+				'census:products',
+				'census:tags',
+				'census:taxRates',
+				'census:variations',
+			]);
+			expect((await states.readForQueryKeys(['orders:due']))[0]?.attempt).toBe(0);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('starts bounded existence work on the first pressured tick and keeps normal cadence', async () => {
 		const context = await starvationHarness();
 		context.setPressure(true);

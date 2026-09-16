@@ -49,6 +49,9 @@ const SCHEMA = {
  * them as a JSON array, takes element 0 and feeds it to
  * `changeDocumentPosition` -> `getIndexableString` for every index. It returns
  * `false` while it is still relocating documents, matching the real contract.
+ * (Since `patch-rxdb-premium-cleanup-compaction-batch.mjs` the real function
+ * relocates a whole batch per call and bakes the indexes in the same round; the
+ * simulation models one relocation, which is all the damage shapes need.)
  *
  * A row whose bytes are whitespace parses to `[]`, so element 0 is `undefined`
  * and the index-key derivation throws `TypeError: Cannot read properties of

@@ -27,6 +27,14 @@ import { authenticatedTest as test } from './fixtures';
  * Measured 2026-09-15 on dev-free (359-product fixture store, published 1.10.15 and 1.10.16
  * bundles): 400 committed searches, heap 70 → plateau 150–225 MB, 1 long task (124 ms) in
  * total, post-GC 174 MB. The ceilings below are 2–3× those readings.
+ *
+ * The trend gate compares the MINIMUM heap in each window, not the mean. Since #2092 (search
+ * answered from a folded-text blob, hits materialised through `findByIds`) the per-search
+ * sawtooth is taller and V8's major-collection period no longer fits inside a 5-cycle window, so
+ * two window means differ by GC phase alone: on 2026-09-16 first attempts read 1.33–1.51 while the
+ * retained-after-GC gate sat at ~1.15 in every run and the window troughs were flat. A leak per
+ * committed search raises the troughs; collection timing only moves peaks and means. The windows
+ * are sized to hold a whole sawtooth period so each minimum is a real trough (see PLATEAU_WINDOW).
  */
 const WORD = 'brake';
 const KEY_GAP_MS = 400; // > the 250 ms debounce, so each key is its own committed search
@@ -35,10 +43,15 @@ const SETTLE_MS = 800;
 const WARM_UP_CYCLES = 5;
 /** Cycles after the harness collection before the plateau is read, so it reads a re-warmed heap, not a freshly swept one. */
 const REWARM_CYCLES = 2;
-const PLATEAU_WINDOW = 5;
+/**
+ * A window must span at least one full major-collection period or its minimum is a mid-flank
+ * reading, not a trough. Measured 2026-09-16 (#2106 run 35085499762): the sawtooth repeats every
+ * ~10 cycles with 70–90 MB of amplitude, so a 5-cycle window could sit entirely on a rising flank.
+ */
+const PLATEAU_WINDOW = 10;
 /** Fewer cycles than this and the plateau and tail windows overlap, which reads a trend as flat. */
 const MIN_CYCLES = WARM_UP_CYCLES + REWARM_CYCLES + 2 * PLATEAU_WINDOW;
-const CYCLES = Number(process.env.SEARCH_HEAP_CYCLES ?? 20);
+const CYCLES = Number(process.env.SEARCH_HEAP_CYCLES ?? 30);
 if (!Number.isInteger(CYCLES) || CYCLES < MIN_CYCLES) {
 	throw new Error(
 		`SEARCH_HEAP_CYCLES=${process.env.SEARCH_HEAP_CYCLES} — need an integer ≥ ${MIN_CYCLES} so the plateau and tail windows are disjoint`
@@ -46,7 +59,7 @@ if (!Number.isInteger(CYCLES) || CYCLES < MIN_CYCLES) {
 }
 /** Absolute ceiling on the heap at any sample — a renderer dies near 4 GB, a healthy tab sits ~200 MB. */
 const HEAP_CEILING_BYTES = 768 * 1024 * 1024;
-/** Tail mean over plateau mean: a leak per committed search reads as a rising tail. */
+/** Tail floor over plateau floor (window minima): a leak per committed search reads as rising troughs. */
 const MAX_TAIL_OVER_PLATEAU = 1.25;
 /** Post-GC heap over the collected baseline: what a forced collection cannot reclaim is retained. */
 const MAX_RETAINED_OVER_BASELINE = 1.25;
@@ -66,6 +79,7 @@ type Sample = {
 };
 
 const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+const min = (values: number[]) => Math.min(...values);
 const mb = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
 
 test('committed searches neither retain per keystroke nor block the main thread', async ({
@@ -153,10 +167,16 @@ test('committed searches neither retain per keystroke nor block the main thread'
 	const plateauFrom = WARM_UP_CYCLES + REWARM_CYCLES;
 	const plateau = cycles.slice(plateauFrom, plateauFrom + PLATEAU_WINDOW);
 	const tail = cycles.slice(-PLATEAU_WINDOW);
-	const plateauHeap = mean(plateau.map((s) => s.heapUsed));
-	const tailHeap = mean(tail.map((s) => s.heapUsed));
+	// Floors gate the trend (see the header); the means are printed alongside so this run's line
+	// compares with every run logged before the gate changed.
+	const plateauHeap = min(plateau.map((s) => s.heapUsed));
+	const tailHeap = min(tail.map((s) => s.heapUsed));
+	const plateauMean = mean(plateau.map((s) => s.heapUsed));
+	const tailMean = mean(tail.map((s) => s.heapUsed));
 	const plateauNodes = mean(plateau.map((s) => s.nodes));
 	const maxHeap = Math.max(...samples.map((s) => s.heapUsed));
+	/** Per-cycle heapUsed in MB: the sawtooth a red run needs to show, not two summary numbers. */
+	const heapSeries = cycles.map((s) => (s.heapUsed / 1048576).toFixed(1)).join(' ');
 
 	const csv = [
 		'label,heapUsed,heapTotal,nodes,listeners,longTasks,longTaskMs',
@@ -169,18 +189,21 @@ test('committed searches neither retain per keystroke nor block the main thread'
 	// project logger prints only warn/error outside dev builds, so a measurement routed through it
 	// never reaches a CI log (search-latency's line never has); stdout and the annotation carry it.
 	const summary =
-		`cycles=${CYCLES} commits=${CYCLES * WORD.length * 2} plateau=${mb(plateauHeap)} ` +
-		`tail=${mb(tailHeap)} max=${mb(maxHeap)} baselineCollected=${mb(collectedBaseline.heapUsed)} ` +
+		`cycles=${CYCLES} commits=${CYCLES * WORD.length * 2} plateauFloor=${mb(plateauHeap)} ` +
+		`tailFloor=${mb(tailHeap)} plateauMean=${mb(plateauMean)} tailMean=${mb(tailMean)} ` +
+		`max=${mb(maxHeap)} baselineCollected=${mb(collectedBaseline.heapUsed)} ` +
 		`afterGc=${mb(afterGc.heapUsed)} nodes plateau=${plateauNodes.toFixed(0)} end=${afterGc.nodes} ` +
 		`longTasks=${lastCycle.longTasks} longTaskMs=${searchLongTaskMs.toFixed(0)} ` +
 		`(harness GC ${harnessLongTaskMs.toFixed(0)})`;
 	testInfo.annotations.push({ type: 'search-heap', description: summary });
 	console.log(`[search-heap] ${summary}`);
+	process.stdout.write(`[search-heap] heapUsed/cycle (MB): ${heapSeries}\n`);
 
 	expect(maxHeap, `heap peaked at ${mb(maxHeap)}`).toBeLessThanOrEqual(HEAP_CEILING_BYTES);
 	expect(
 		tailHeap / plateauHeap,
-		`tail ${mb(tailHeap)} over plateau ${mb(plateauHeap)}: the heap is trending up per committed search`
+		`tail floor ${mb(tailHeap)} over plateau floor ${mb(plateauHeap)}: the heap is trending up per committed search ` +
+			`(means ${mb(tailMean)} / ${mb(plateauMean)}; heapUsed/cycle MB: ${heapSeries})`
 	).toBeLessThanOrEqual(MAX_TAIL_OVER_PLATEAU);
 	expect(
 		afterGc.heapUsed / collectedBaseline.heapUsed,
