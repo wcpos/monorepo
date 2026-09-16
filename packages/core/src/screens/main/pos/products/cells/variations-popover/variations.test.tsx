@@ -158,7 +158,9 @@ jest.mock('./select', () => ({ VariationSelect: () => null }));
 // What the resolved variation's stock reads as; tests set it unsellable to probe the button.
 const mockStock = { status: 'instock', quantity: null as number | null, sellable: true };
 jest.mock('./stock-status', () => ({
-	useVariationStock: () => ({ ...mockStock }),
+	useVariationStock: (..._args: Parameters<typeof import('./stock-status').useVariationStock>) => ({
+		...mockStock,
+	}),
 	VariationStockBadge: () => null,
 }));
 jest.mock('../../../../../../contexts/translations', () => ({

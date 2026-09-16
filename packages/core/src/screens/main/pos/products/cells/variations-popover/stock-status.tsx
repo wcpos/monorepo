@@ -16,22 +16,41 @@ export type {
 /**
  * Resolve the sellability of a single variation.
  *
- * When the variation manages its own stock, quantity + backorders decide and
- * stock_status is ignored (WooCommerce derives it). Otherwise (including
- * parent-managed stock) the stock_status flag governs and no quantity is shown.
+ * The badge, popover Add to Cart gate and cart guard must agree on the stock
+ * owner: the variation when self-managed, otherwise the managed parent.
+ * The journal keeps that parent record fresh, not the child's inherited status.
+ * When neither manages stock, the child's stock_status governs.
  */
-export function useVariationStock(variation: EngineRecord<'variations'>): ResolvedStock {
+export function useVariationStock(
+	variation: EngineRecord<'variations'>,
+	parent: EngineRecord<'products'>
+): ResolvedStock {
 	const manageStock = useRecordField(variation, (record) => record.payload.manage_stock);
 	const stockQuantity = useRecordField(variation, (record) => record.payload.stock_quantity);
 	const stockStatus = useRecordField(variation, (record) => record.payload.stock_status);
 	const backorders = useRecordField(variation, (record) => record.payload.backorders);
+	const parentManageStock = useRecordField(parent, (record) => record.payload.manage_stock);
+	const parentStockQuantity = useRecordField(parent, (record) => record.payload.stock_quantity);
+	const parentStockStatus = useRecordField(parent, (record) => record.payload.stock_status);
+	const parentBackorders = useRecordField(parent, (record) => record.payload.backorders);
 
-	return resolveStock({
-		manage_stock: manageStock,
-		stock_quantity: stockQuantity,
-		stock_status: stockStatus,
-		backorders,
-	});
+	const variationOwnsStock = manageStock === true;
+	const parentOwnsStock = !variationOwnsStock && parentManageStock === true;
+	return resolveStock(
+		parentOwnsStock
+			? {
+					manage_stock: true,
+					stock_quantity: parentStockQuantity,
+					stock_status: parentStockStatus,
+					backorders: parentBackorders,
+				}
+			: {
+					manage_stock: manageStock,
+					stock_quantity: stockQuantity,
+					stock_status: stockStatus,
+					backorders,
+				}
+	);
 }
 
 /**
