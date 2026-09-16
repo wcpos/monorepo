@@ -122,8 +122,23 @@ product document in the storage anyway. That is the fixed per-keystroke cost the
 row measures (~265 ms on the desktop engine at 20,000 × 2 KB rows), and it is paid whichever search
 structure sits in front of it. The fix is independent of the index question: resolve ids with
 `findByIds` (point reads through the storage's id map, as the premium plugin's own `find()` does) and
-apply the panel's selector to those documents, instead of handing the storage an `$in`. Marked
-"from source, proxy number" — measure it on a real store before acting.
+apply the panel's selector to those documents, instead of handing the storage an `$in`.
+
+**Measured directly** (probe: 20,000 rows of ~2 KB with random v4 uuids, `stockStatus` and `price`
+indexed, medians of 5, RxQuery cache evicted per run). The executor runs a `find` AND a `count` on
+the same selector, so a keystroke pays both:
+
+| 20,000 rows | `$and` + `$in`, find limit 20 sorted | `$and` + `$in`, count | `$in` merged top-level, find | `findByIds` |
+|---|---:|---:|---:|---:|
+| memory, 20 hits | 32 ms | 30 ms | 0.1 ms | 0.0 ms |
+| memory, 1,600 hits | 9 ms | **660 ms** | 53 ms | 0.6 ms |
+| **filesystem-node**, 20 hits | **188 ms** | **193 ms** | 0.2 ms | 0.0 ms |
+| **filesystem-node**, 1,600 hits | **677 ms** | **683 ms** | 49 ms | 0.9 ms |
+
+So on the desktop engine a common word costs ~1.4 s of storage time per keystroke after the index
+has answered, and even a rare one ~0.4 s. Merging the `$in` to top level is not enough (the min–max
+range still spans random uuids at 1,600 hits); point reads are. Fix shipped separately for the
+1.10.x patch train — see the PR linked from #2073.
 
 Consequence: a folded column stored *inside* the product document costs a parse of every product
 **payload** — description, images, meta_data — per query. The searchable text is ~50 bytes of a
