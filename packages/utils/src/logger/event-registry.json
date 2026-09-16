@@ -856,6 +856,13 @@
 		"introducedIn": "2.0.0"
 	},
 	{
+		"type": "render.error",
+		"domain": "CLIENT",
+		"label": "Part of the screen failed to load",
+		"description": "A screen or panel hit an error while drawing and was replaced by an error message. Close the message to retry; reload the app if it comes back.",
+		"introducedIn": "1.10.21"
+	},
+	{
 		"type": "signal.cursor",
 		"domain": "SYNC",
 		"label": "Sync position moved unexpectedly",

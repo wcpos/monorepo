@@ -49,6 +49,10 @@ export const EVENT_SOURCE_ROOTS = [
 	// from the same registry: session/outbox/audit and device binding.
 	'packages/core/src/services/register-session',
 	'packages/core/src/services/register',
+	// The shared ErrorBoundary writes one `render.error` row per caught render
+	// throw (#2112), titled by the Logs UI like every other event. Scoped to its
+	// own directory for the same reason as the two above.
+	'packages/components/src/error-boundary',
 ];
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);

@@ -265,6 +265,16 @@ describe('RowDetail', () => {
 		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
 	});
 
+	it('pairs the local-data warning with the per-code action on a local-only code', () => {
+		render(<RowDetail row={{ ...row, code: 'AUTH131' }} kind="error" />);
+
+		expect(
+			screen.getByText(
+				'Data on this device may be affected — contact support before clearing it. Choose the store again to sign back in. If the site had to be added again, contact support before clearing local data.'
+			)
+		).not.toBeNull();
+	});
+
 	it('pairs the data-at-risk warning with the local repair step on a repair-local code', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC111' }} kind="error" />);
 

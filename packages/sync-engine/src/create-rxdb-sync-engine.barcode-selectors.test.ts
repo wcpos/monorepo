@@ -54,7 +54,12 @@ describe('scope-open barcode selector hydration', () => {
 				},
 				storage: memoryEngineStorage(),
 				mode: 'manual',
-				fetcher: async (_url, init) => {
+				fetcher: async (url, init) => {
+					// The change-signal head prime also rides the scope open (before the
+					// hydrate); it is not the hydrate→seed ordering under test.
+					if (new URL(url).pathname.endsWith('/changes/sequence-log')) {
+						return Response.json({ checkpoint: { head: 0 } });
+					}
 					order.push('hydrate');
 					expect(init?.signal).toBeDefined();
 					return configResponse();
@@ -216,7 +221,10 @@ describe('scope-open barcode selector hydration', () => {
 				},
 				storage: memoryEngineStorage(),
 				mode: 'manual',
-				fetcher: async () => {
+				fetcher: async (url) => {
+					if (new URL(url).pathname.endsWith('/changes/sequence-log')) {
+						return Response.json({ checkpoint: { head: 0 } });
+					}
 					configRequests += 1;
 					if (configRequests === 1) return configResponse();
 					throw new Error('config unavailable');

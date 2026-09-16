@@ -1,6 +1,6 @@
 import { use } from 'react';
 
-import { getLogger } from '@wcpos/utils/logger';
+import { getLogger, markErrorReported } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { type HydrationContext, hydrationSteps } from './hydration-steps';
@@ -70,6 +70,8 @@ function getOrCreateHydrationPromise(
 					},
 				});
 				if (!step.failSoft) {
+					// The root ErrorBoundary catches this next; it is already reported.
+					markErrorReported(error);
 					throw error;
 				}
 				// Fail-soft step: keep booting from the context accumulated so far.

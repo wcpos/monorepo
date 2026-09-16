@@ -1,4 +1,4 @@
-import { getLogger } from '@wcpos/utils/logger';
+import { getLogger, markErrorReported } from '@wcpos/utils/logger';
 
 import { hydrationSteps } from './hydration-steps';
 import { useHydrationSuspense } from './use-hydration-suspense';
@@ -63,6 +63,8 @@ it('serializes a failed hydration error in both logger contexts', async () => {
 	expect(hydrationLogger.debug).toHaveBeenCalledWith('Hydration promise cleared after failure', {
 		context: { error: serializedError },
 	});
+	// The root ErrorBoundary catches this rethrow next; it must not report it again.
+	expect(markErrorReported).toHaveBeenCalledWith(rejection);
 });
 
 it('continues past a failed fail-soft step instead of rejecting the boot', async () => {
@@ -97,6 +99,8 @@ it('continues past a failed fail-soft step instead of rejecting the boot', async
 	// Boot completed on the surviving steps.
 	expect(context).toEqual({ user: 'user-1' });
 	expect(mockSetProgress).toHaveBeenCalledWith(100);
+	// Nothing was rethrown, so nothing needs marking for the boundary.
+	expect(markErrorReported).not.toHaveBeenCalled();
 
 	// The failure is still reported loudly, and the cache was NOT cleared.
 	expect(hydrationLogger.error).toHaveBeenCalledWith(

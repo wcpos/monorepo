@@ -59,11 +59,52 @@ describe('sentry-sink.web', () => {
 		expect(Sentry.setUser).toHaveBeenCalledWith({ id: 'new-install-id' });
 	});
 
-	it('does not capture errors before tracking is allowed', () => {
+	it('does not capture errors before tracking is allowed, and discards them when it is denied', () => {
 		captureLoggedError({ message: 'Checkout failed' });
 
 		expect(Sentry.captureException).not.toHaveBeenCalled();
 		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+
+		setTelemetryConsent('denied');
+		setTelemetryConsent('allowed');
+		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+	});
+
+	it('holds errors logged before consent is known and sends them once it is allowed', () => {
+		// The #2112 timing: a render error in the first commit, before the root
+		// layout's effect has read the store's consent and initialised the sink.
+		const thrown = new Error('useStoreSession must be called within an active store session');
+		captureLoggedError({
+			message: `Render failed: ${thrown.message}`,
+			code: 'CLIENT151',
+			context: { type: 'render.error', error: thrown, message: thrown.message },
+		});
+		captureLoggedError({ message: 'Second, uncoded' });
+		expect(Sentry.captureException).not.toHaveBeenCalled();
+
+		setTelemetryConsent('allowed');
+
+		expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+		expect(Sentry.captureException).toHaveBeenCalledWith(
+			thrown,
+			expect.objectContaining({ fingerprint: ['CLIENT151', thrown.message] })
+		);
+		expect(Sentry.captureMessage).toHaveBeenCalledWith('Second, uncoded', expect.anything());
+		// Sent once: a later re-consent must not replay them.
+		setTelemetryConsent('undecided');
+		setTelemetryConsent('allowed');
+		expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps only the newest held captures', () => {
+		for (let index = 0; index < 25; index += 1) {
+			captureLoggedError({ message: `held ${index}` });
+		}
+		setTelemetryConsent('allowed');
+
+		expect(Sentry.captureMessage).toHaveBeenCalledTimes(20);
+		expect(jest.mocked(Sentry.captureMessage).mock.calls[0][0]).toBe('held 5');
+		expect(jest.mocked(Sentry.captureMessage).mock.calls[19][0]).toBe('held 24');
 	});
 
 	it('closes Sentry and forgets the install id when tracking is denied', () => {
@@ -220,6 +261,67 @@ describe('sentry-sink.web', () => {
 		expect(emailA).not.toEqual(coupon);
 		// A bare 5xx with no server reason still groups by collection + status.
 		expect(push('orders', '3599cd24', 503)).toEqual(['SYNC201', 'orders', '503', '']);
+	});
+
+	it('groups a boundary-caught render error by its message, not by the screen that threw', () => {
+		const message = 'useStoreSession must be called within an active store session';
+		const capture = (componentStack: string) =>
+			buildCaptureOptions({
+				message: `Render failed: ${message}`,
+				code: 'CLIENT151',
+				context: { type: 'render.error', message, componentStack },
+			});
+		const appLayout = capture('\n    at AppLayout\n    at RootStack');
+		const header = capture('\n    at Header\n    at PosScreen');
+
+		expect(appLayout.fingerprint).toEqual(['CLIENT151', message]);
+		expect(appLayout.fingerprint).toEqual(header.fingerprint);
+		// The stack lands where Sentry renders it, as well as in `extra`.
+		expect(appLayout.contexts).toEqual({
+			react: { componentStack: '\n    at AppLayout\n    at RootStack' },
+		});
+	});
+
+	it('keeps quoted identifiers in a render-error fingerprint but folds record noise', () => {
+		const render = (message: string) =>
+			buildCaptureOptions({
+				message: `Render failed: ${message}`,
+				code: 'CLIENT151',
+				context: { type: 'render.error', message },
+			}).fingerprint;
+
+		// A property name is the bug's identity; the shared template would fold
+		// every undefined-property read in the app into one issue.
+		expect(render("Cannot read properties of undefined (reading 'name')")).not.toEqual(
+			render("Cannot read properties of undefined (reading 'price')")
+		);
+		expect(render("Cannot read properties of undefined (reading 'price')")).toEqual([
+			'CLIENT151',
+			"Cannot read properties of undefined (reading 'price')",
+		]);
+		// Merchant data in quotes is per-record noise and must never be a grouping key.
+		expect(render("Customer 'jane@example.com' has no orders")).toEqual(
+			render("Customer 'Bob Smith' has no orders")
+		);
+		expect(render('Order 12 has no line 3')).toEqual(render('Order 99 has no line 4'));
+		expect(render('Fetch https://a.example.com/x failed')).toEqual(
+			render('Fetch https://b.example.org/x failed')
+		);
+	});
+
+	it('scrubs merchant origins out of the React component stack, in both places it is sent', () => {
+		const componentStack = '\n    at Header (https://shop.example.com/wp-content/pos.js:10:5)';
+		const event = scrubEvent({
+			contexts: { react: { componentStack } },
+			extra: { message: 'Render failed: x', context: { type: 'render.error', componentStack } },
+		});
+		expect(event.contexts).toEqual({
+			react: { componentStack: '\n    at Header ({}/wp-content/pos.js:10:5)' },
+		});
+		expect(event.extra?.context).toEqual({
+			type: 'render.error',
+			componentStack: '\n    at Header ({}/wp-content/pos.js:10:5)',
+		});
 	});
 
 	it('captures Error context as an exception', () => {

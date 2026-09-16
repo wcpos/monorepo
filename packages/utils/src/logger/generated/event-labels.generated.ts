@@ -137,6 +137,7 @@ export const SYNC_EVENT_TYPES = [
 	'register.upload-refused',
 	'register.variance-over-threshold',
 	'register.x-report-printed',
+	'render.error',
 	'signal.cursor',
 	'signal.cycle',
 	'signal.log',
@@ -1241,6 +1242,16 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.register_x_report_printed',
 		description: 'A mid-shift summary of the register was printed. The register stayed open.',
 		introducedIn: '2.0.0',
+	},
+	'render.error': {
+		type: 'render.error',
+		domain: 'CLIENT',
+		key: 'health.logs.event.render_error',
+		label: 'Part of the screen failed to load',
+		descriptionKey: 'health.logs.event_description.render_error',
+		description:
+			'A screen or panel hit an error while drawing and was replaced by an error message. Close the message to retry; reload the app if it comes back.',
+		introducedIn: '1.10.21',
 	},
 	'signal.cursor': {
 		type: 'signal.cursor',

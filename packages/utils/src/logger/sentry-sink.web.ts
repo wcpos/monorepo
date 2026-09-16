@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/browser';
 
 import { AppInfo } from '../app-info';
-import { buildCaptureOptions, scrubEvent, SENTRY_DSN } from './sentry-core';
+import { buildCaptureOptions, createPendingCaptures, scrubEvent, SENTRY_DSN } from './sentry-core';
 
 import type { SentryCaptureInput, TelemetryConsent } from './sentry-core';
 export { buildCaptureOptions, messageTemplate, scrubEvent } from './sentry-core';
@@ -9,6 +9,7 @@ export type { SentryCaptureInput, TelemetryConsent } from './sentry-core';
 
 let telemetryConsent: TelemetryConsent = 'undecided';
 let isInitialized = false;
+const pendingCaptures = createPendingCaptures();
 
 function getInstallId(): string | undefined {
 	const electronInstallId = (window as unknown as { electron?: { installId?: unknown } }).electron
@@ -33,9 +34,7 @@ function getInstallId(): string | undefined {
 	}
 }
 
-export function captureLoggedError(input: SentryCaptureInput): void {
-	if (!isInitialized) return;
-
+function send(input: SentryCaptureInput): void {
 	try {
 		const error =
 			input.context !== null && typeof input.context === 'object' && 'error' in input.context
@@ -50,6 +49,16 @@ export function captureLoggedError(input: SentryCaptureInput): void {
 	} catch {
 		// Diagnostics must never interfere with the logger.
 	}
+}
+
+export function captureLoggedError(input: SentryCaptureInput): void {
+	if (!isInitialized) {
+		// Consent not known yet (boot, before the store document is read): hold
+		// it. Decided-but-uninitialised (denied, or a development build) drops it.
+		if (telemetryConsent === 'undecided') pendingCaptures.hold(input);
+		return;
+	}
+	send(input);
 }
 
 /**
@@ -101,7 +110,10 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 	telemetryConsent = consent;
 
 	if (consent === 'allowed') {
-		if (isDevelopment || typeof window === 'undefined') return;
+		if (isDevelopment || typeof window === 'undefined') {
+			pendingCaptures.drain();
+			return;
+		}
 		Sentry.init({
 			dsn: SENTRY_DSN,
 			release: `wcpos-app@${AppInfo.version}`,
@@ -115,6 +127,7 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 		const installId = getInstallId();
 		if (installId) Sentry.setUser({ id: installId });
 		isInitialized = true;
+		for (const input of pendingCaptures.drain()) send(input);
 		return;
 	}
 
@@ -122,6 +135,8 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 		void Sentry.close();
 		isInitialized = false;
 	}
+	// Denied: what was held before the answer never leaves the device.
+	if (consent === 'denied') pendingCaptures.drain();
 
 	if (consent === 'denied') {
 		try {

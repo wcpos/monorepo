@@ -63,6 +63,8 @@ function scriptedServer() {
 		sequenceLogFetches: 0,
 		sequenceLogSince: [] as number[],
 		headFetches: 0,
+		/** When set, the scope-open head prime waits on it before answering. */
+		holdHeadFetch: null as Promise<void> | null,
 		products: new Map<number, Record<string, unknown>>([
 			[
 				9,
@@ -105,7 +107,10 @@ function scriptedServer() {
 			}
 			const since = Number(u.searchParams.get('since') ?? '0');
 			state.sequenceLogSince.push(since);
-			if (since === 0 && u.searchParams.get('limit') === '1') state.headFetches += 1;
+			if (since === 0 && u.searchParams.get('limit') === '1') {
+				state.headFetches += 1;
+				if (state.holdHeadFetch) await state.holdHeadFetch;
+			}
 			const rows = state.rows.filter((row) => row.sequence > since);
 			const maxSeen = rows.reduce((max, row) => Math.max(max, row.sequence), since);
 			return json({
@@ -498,6 +503,86 @@ describe('sync("change-signal") through the public handle', () => {
 		await engine.dispose();
 	});
 
+	it('primes the cursor at scope open so a record changed before the first poll is still pulled', async () => {
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		try {
+			await engine.ready;
+			expect(server.state.headFetches).toBe(1);
+			await engine
+				.active()!
+				.database.collections.products.bulkUpsert([
+					materializeGreedyPrunable(server.state.products.get(9)!).storedDocument,
+				]);
+			server.state.products.get(9)!.stock_status = 'outofstock';
+			server.state.rows.push({
+				sequence: 6,
+				id: 9,
+				deleted: 0,
+				collection: 'products',
+				modified_gmt: '2026-07-10T00:00:01',
+			});
+			server.state.head = 6;
+			server.state.sequenceLogSince = [];
+			expect((await engine.sync('change-signal')).status).toBe('ran');
+			expect(server.state.sequenceLogSince[0]).toBe(5);
+			expect(server.state.productIncludes).toContainEqual([9]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('holds a requirement issued during a later switch until that scope is primed', async () => {
+		// A non-initial switch publishes the new scope before its open completes;
+		// a browse the new UI issues meanwhile must not pull before the prime has
+		// put a cursor under it.
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		try {
+			await engine.ready;
+			let releaseHead!: () => void;
+			server.state.holdHeadFetch = new Promise<void>((resolve) => {
+				releaseHead = resolve;
+			});
+			const pullsBefore = server.state.productPulls;
+			// The requirement is issued from INSIDE the db$ emission for the new
+			// scope — the earliest moment a UI can react to the switch, before the
+			// lifecycle op has resumed past switchTo.
+			let browse!: ReturnType<typeof engine.require>;
+			const initialDb = engine.active()!.database;
+			const unsubscribe = engine.db$((db) => {
+				if (db === null || db === initialDb || browse !== undefined) return;
+				browse = engine.require({
+					id: 'browse-during-prime',
+					collection: 'products',
+					kind: 'product-browse',
+					limit: 10,
+				});
+			});
+			const switching = engine.scope.switch(freshIdentity());
+			await vi.waitFor(() => expect(server.state.headFetches).toBe(2));
+			expect(browse).toBeDefined();
+			unsubscribe();
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			expect(server.state.productPulls).toBe(pullsBefore);
+			releaseHead();
+			await switching;
+			await expect(browse.ready).resolves.toMatchObject({ action: 'fetched' });
+			expect(server.state.productPulls).toBeGreaterThan(pullsBefore);
+			browse.release();
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('primes to head, applies a fresh signal, persists the cursor across engines', async () => {
 		const server = scriptedServer();
 		const storage = memoryEngineStorage();
@@ -506,7 +591,7 @@ describe('sync("change-signal") through the public handle', () => {
 		const engine = engineWith({ storage, fetch: server.fetch, identity });
 		await engine.ready;
 
-		// Tick 1: cold start primes AT head (5) — the historical backlog is never drained.
+		// Scope open primed AT head (5) — the first tick never drains the historical backlog.
 		const first = await engine.sync('change-signal');
 		expect(first.status).toBe('ran');
 		expect(server.state.headFetches).toBe(1);
@@ -1176,7 +1261,9 @@ describe('sync("change-signal") through the public handle', () => {
 		const started = new Promise<void>((resolve) => {
 			markStarted = resolve;
 		});
-		const fetch = async (_url: string, init?: RequestInit): Promise<Response> => {
+		const server = scriptedServer();
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (url.includes('since=0&limit=1')) return server.fetch(url);
 			requestSignal = init?.signal ?? undefined;
 			markStarted();
 			return new Promise((_resolve, reject) =>
