@@ -291,21 +291,13 @@ export async function switchAppEngineScope(session: {
 	// never opened is a no-op, so the early add is safe on rejection too.
 	entry.databaseNames.add(scopeDatabaseName(scope));
 
-	// The store header must already name the INCOMING store while the switch's
-	// open runs: the barcode-selector hydrate, the POS bootstrap seed and the
-	// change-signal head prime all fetch INSIDE `scope.switch`, and a header
-	// still naming the outgoing store would seed store A's view into store B's
-	// scope. Committing it before the await also covers the window between a
-	// settled switch and the next render, where a stale header would divert a
-	// price edit into the OUTGOING store's meta (pro#425). A rejection restores
-	// the committed store, exactly as the render path's fallback does.
-	entry.fetcherScope.storeId = storeId;
-	try {
-		await entry.engine.scope.switch(scope);
-	} catch (error) {
-		entry.fetcherScope.storeId = entry.committed.storeId;
-		throw error;
-	}
+	// The store header is NOT committed here: it follows the engine's own
+	// activation (the db$ subscription in createAppSyncEngine), which lands
+	// after the outgoing scope's ticket is aborted and before the incoming
+	// open's hydrate, seed and prime fetch. A rejection has nothing to revert,
+	// and overlapping switches settle FIFO with each activation setting it —
+	// the stale-header window pro#425 hit is closed by the same subscription.
+	await entry.engine.scope.switch(scope);
 
 	entry.key = targetKey;
 	entry.databaseName = scopeDatabaseName(scope);
@@ -378,7 +370,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		entry.fetcherOptions.useRestRouteParam = options.useRestRouteParam;
 		entry.fetcherOptions.bareAuthParam = options.bareAuthParam;
 		entry.fetcherOptions.useProtocolHeaders = options.useProtocolHeaders;
-		entry.fetcherScope.storeId = options.scope.storeId;
+		// fetcherScope.storeId follows the engine's activation (db$ subscription).
 		entry.clockSkew.generation += 1;
 		entry.clockSkew.evaluated = false;
 		void switching.then(
@@ -409,7 +401,6 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 					entry.fetcherOptions.useRestRouteParam = committed.fetcherOptions.useRestRouteParam;
 					entry.fetcherOptions.bareAuthParam = committed.fetcherOptions.bareAuthParam;
 					entry.fetcherOptions.useProtocolHeaders = committed.fetcherOptions.useProtocolHeaders;
-					entry.fetcherScope.storeId = committed.storeId;
 					entry.clockSkew.generation += 1;
 					entry.clockSkew.evaluated = previousClockSkewEvaluated;
 				}
@@ -628,6 +619,17 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		options.scope
 	);
 	engineSelf = engine;
+	// The store header follows the ENGINE's active scope, never the app's
+	// intent. The engine flips scopes after it has aborted the outgoing scope's
+	// ticket and before the incoming open's barcode hydrate, bootstrap seed and
+	// change-signal prime run, so this is the one point at which neither an
+	// outgoing lane nor an incoming open can fetch under the other store's
+	// header. Committing it before an awaited switch mis-scoped outgoing ticks
+	// during a slow open; committing it after mis-scoped the open itself.
+	engine.db$(() => {
+		const active = engine.active();
+		if (active) fetcherScope.storeId = active.identity.storeId;
+	});
 	cachedEngine = {
 		key: cacheKey,
 		site: siteKey,
