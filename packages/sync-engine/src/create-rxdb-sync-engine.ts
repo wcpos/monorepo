@@ -997,6 +997,12 @@ export function createRxdbSyncEngine(
 		});
 	};
 	let disposed = false;
+	let scopePrimeAbort: AbortController | null = null;
+	/** Settles with the scope-open prime (or its deadline). A non-initial switch
+	 * publishes the new scope before its lifecycle op returns, so a requirement
+	 * issued by the new UI must wait here or it could pull a record the prime
+	 * has not yet put a cursor under. */
+	let scopePrimeSettled: Promise<void> = Promise.resolve();
 	const collectionActivity = new Map<SyncCollectionName, number>(
 		SYNC_COLLECTION_NAMES.map((collection) => [collection, 0])
 	);
@@ -1598,86 +1604,129 @@ export function createRxdbSyncEngine(
 		const scopeId = scopeKeyFor(identity);
 		identityByScopeId.set(scopeId, identity);
 		return enqueueLifecycle(async () => {
-			setLifecyclePhase('scope-open');
-			await manager.switchTo(scopeId);
-			if (!bootstrappedScopes.has(scopeId)) {
-				const database = databaseByScopeId.get(scopeId);
-				if (!database) throw new Error(`Scope ${scopeId} opened without a database`);
-				setLifecyclePhase('barcode-selector-hydrate');
-				// The carriers land on THIS scope, so a failed hydration leaves this
-				// scope empty (online-fallback scans) without touching any other
-				// scope's — no reset, and nothing another engine could inherit.
-				const barcodeSelectors = barcodeSelectorsOf(scopeId);
-				// Each ATTEMPT starts from empty. This block re-runs whenever the scope
-				// has not bootstrapped yet (a failed seed leaves it so), and carriers a
-				// previous attempt resolved must not outlive an attempt that fails —
-				// the site's barcode setting may have changed in between.
-				barcodeSelectors.beginHydrationAttempt();
-				const hydrationAbort = new AbortController();
-				const hydrationTimeout = setTimeout(() => hydrationAbort.abort(), 5_000);
-				try {
-					await Promise.race([
-						hydrateBarcodeSelectors({
-							fetcher,
-							syncBaseUrl: ports.site.syncBaseUrl,
-							publishBarcodeSelectors: (collection, selectors) =>
-								barcodeSelectors.publish(collection, selectors),
-							signal: hydrationAbort.signal,
-						}),
-						new Promise<never>((_, reject) =>
-							hydrationAbort.signal.addEventListener(
-								'abort',
-								() => reject(new Error('barcode selector hydration timed out')),
-								{ once: true }
-							)
-						),
-					]);
-				} catch (error) {
-					// Bootstrap seeds (and pulls) into this scope with no carriers, so
-					// its documents carry no barcode until the recovery re-pulls them.
-					barcodeSelectors.noteHydrationFailed();
-					diagnostics({
-						type: 'engine.barcode-selector-hydrate-failed',
-						level: 'debug',
-						message: error instanceof Error ? error.message : String(error),
-						fields: { scopeId },
-					});
-				} finally {
-					clearTimeout(hydrationTimeout);
-				}
-				setLifecyclePhase('pos-bootstrap-seed');
-				try {
-					await seedPosBootstrapLanes({
-						database: database,
-						...(ports.now !== undefined ? { nowMs: ports.now() } : {}),
-					});
-					bootstrappedScopes.add(scopeId);
-					bootstrapFailures.delete(scopeId);
-					scheduleStatusChange();
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					bootstrapFailures.set(scopeId, message);
-					scheduleStatusChange();
-					diagnostics({
-						type: 'engine.pos-bootstrap-error',
-						level: 'warn',
-						message: `POS bootstrap seed failed: ${message}`,
-						fields: { scopeId },
-					});
-					emitEngineEvent({
-						type: 'bootstrap-failed',
-						scopeId,
-						detail: message,
-					});
-				}
-			}
-			diagnostics({
-				type: 'engine.scope-switched',
-				level: 'info',
-				message: `active scope: ${scopeId}`,
+			// Armed BEFORE the scope is published: switchTo emits `switched` (and so
+			// db$) synchronously, and a subscriber may require() from inside that
+			// emission. Released once the prime has settled, and on every exit path.
+			let releasePrimeBarrier: () => void = () => undefined;
+			scopePrimeSettled = new Promise<void>((resolve) => {
+				releasePrimeBarrier = resolve;
 			});
-			setLifecyclePhase('idle');
-			return activeScopeOf(scopeId);
+			try {
+				setLifecyclePhase('scope-open');
+				await manager.switchTo(scopeId);
+				if (!bootstrappedScopes.has(scopeId)) {
+					const database = databaseByScopeId.get(scopeId);
+					if (!database) throw new Error(`Scope ${scopeId} opened without a database`);
+					// Prime the change-signal cursor BEFORE any catalogue pull of this scope, so a
+					// record fetched by the bootstrap seed or the cashier's first browse and then
+					// changed on the server before the first poll still sits ABOVE the cursor.
+					// Best-effort: a failed or offline prime leaves the lane's lazy first-tick
+					// prime as the fallback (with the first-minute gap this closes).
+					const primeAbort = (scopePrimeAbort = new AbortController());
+					if (disposed) primeAbort.abort();
+					const primeTimeout = setTimeout(() => primeAbort.abort(), 5_000);
+					try {
+						const primeRace = Promise.race([
+							changeSignalLane.prime(primeAbort.signal),
+							new Promise<never>((_, reject) => {
+								// A disposal that landed before this block aborted the controller
+								// already; abort events are not replayed to late listeners.
+								const abort = () => reject(new Error('change-signal prime aborted'));
+								if (primeAbort.signal.aborted) abort();
+								else primeAbort.signal.addEventListener('abort', abort, { once: true });
+							}),
+						]);
+						await primeRace;
+					} catch (error) {
+						diagnostics({
+							type: 'signal.log',
+							level: 'warn',
+							message: `change-signal: prime at scope open failed — the first tick primes lazily: ${error instanceof Error ? error.message : String(error)}`,
+							fields: { scopeId },
+						});
+					} finally {
+						clearTimeout(primeTimeout);
+						scopePrimeAbort = null;
+					}
+					releasePrimeBarrier();
+					setLifecyclePhase('barcode-selector-hydrate');
+					// The carriers land on THIS scope, so a failed hydration leaves this
+					// scope empty (online-fallback scans) without touching any other
+					// scope's — no reset, and nothing another engine could inherit.
+					const barcodeSelectors = barcodeSelectorsOf(scopeId);
+					// Each ATTEMPT starts from empty. This block re-runs whenever the scope
+					// has not bootstrapped yet (a failed seed leaves it so), and carriers a
+					// previous attempt resolved must not outlive an attempt that fails —
+					// the site's barcode setting may have changed in between.
+					barcodeSelectors.beginHydrationAttempt();
+					const hydrationAbort = new AbortController();
+					const hydrationTimeout = setTimeout(() => hydrationAbort.abort(), 5_000);
+					try {
+						await Promise.race([
+							hydrateBarcodeSelectors({
+								fetcher,
+								syncBaseUrl: ports.site.syncBaseUrl,
+								publishBarcodeSelectors: (collection, selectors) =>
+									barcodeSelectors.publish(collection, selectors),
+								signal: hydrationAbort.signal,
+							}),
+							new Promise<never>((_, reject) =>
+								hydrationAbort.signal.addEventListener(
+									'abort',
+									() => reject(new Error('barcode selector hydration timed out')),
+									{ once: true }
+								)
+							),
+						]);
+					} catch (error) {
+						// Bootstrap seeds (and pulls) into this scope with no carriers, so
+						// its documents carry no barcode until the recovery re-pulls them.
+						barcodeSelectors.noteHydrationFailed();
+						diagnostics({
+							type: 'engine.barcode-selector-hydrate-failed',
+							level: 'debug',
+							message: error instanceof Error ? error.message : String(error),
+							fields: { scopeId },
+						});
+					} finally {
+						clearTimeout(hydrationTimeout);
+					}
+					setLifecyclePhase('pos-bootstrap-seed');
+					try {
+						await seedPosBootstrapLanes({
+							database: database,
+							...(ports.now !== undefined ? { nowMs: ports.now() } : {}),
+						});
+						bootstrappedScopes.add(scopeId);
+						bootstrapFailures.delete(scopeId);
+						scheduleStatusChange();
+					} catch (error) {
+						const message = error instanceof Error ? error.message : String(error);
+						bootstrapFailures.set(scopeId, message);
+						scheduleStatusChange();
+						diagnostics({
+							type: 'engine.pos-bootstrap-error',
+							level: 'warn',
+							message: `POS bootstrap seed failed: ${message}`,
+							fields: { scopeId },
+						});
+						emitEngineEvent({
+							type: 'bootstrap-failed',
+							scopeId,
+							detail: message,
+						});
+					}
+				}
+				diagnostics({
+					type: 'engine.scope-switched',
+					level: 'info',
+					message: `active scope: ${scopeId}`,
+				});
+				setLifecyclePhase('idle');
+				return activeScopeOf(scopeId);
+			} finally {
+				releasePrimeBarrier();
+			}
 		});
 	};
 
@@ -1710,7 +1759,8 @@ export function createRxdbSyncEngine(
 	const requirePlane = createRequirePlane({
 		// Lazy: readySettledForSync is created after `ready` below; requirements
 		// enqueued before then await the settled initial open, never 'no active scope'.
-		awaitReady: () => readySettledForSync,
+		// …and, on a later switch, the scope-open prime in flight (see scopePrimeSettled).
+		awaitReady: () => scopePrimeSettled.then(() => readySettledForSync),
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
@@ -2514,6 +2564,7 @@ export function createRxdbSyncEngine(
 			// each sees the prior outcome), so dispose's turn sees every scope a
 			// pending switch opened.
 			disposed = true;
+			scopePrimeAbort?.abort();
 			// Detach from the cross-tab bridge synchronously (#1209): the host owns
 			// the channel and may keep it for the successor engine, so a stale
 			// subscription would fan a peer's outcome into a disposed instance's
