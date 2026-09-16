@@ -97,12 +97,17 @@ export const engineKvSchema = {
 	required: ['key', 'value'],
 } as const;
 
-export type CollectionCreator = { schema: unknown; migrationStrategies?: unknown };
+export type CollectionCreator = {
+	schema: unknown;
+	migrationStrategies?: unknown;
+	options?: Record<string, unknown>;
+};
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
 	orders: { schema: orderSchema },
-	products: { schema: productSchema },
-	variations: { schema: variationSchema },
+	// #2073: full-token indexes used 143 MiB at 20k rows; catalogue search uses a folded blob.
+	products: { schema: productSchema, options: { searchIndex: false } },
+	variations: { schema: variationSchema, options: { searchIndex: false } },
 	customers: { schema: customerSchema },
 	taxRates: { schema: taxRateSchema },
 	categories: { schema: categorySchema },
