@@ -315,9 +315,14 @@ describe('useHttpClient network audit logs', () => {
 			result.current.get('/wp-content/uploads/product.jpg', { failureCode: 'PRODUCT201' })
 		).rejects.toBe(failure);
 
+		// rest_forbidden maps directly to AUTH201; asserting that exact code (rather
+		// than "not PRODUCT201") also rules out the status fallback winning.
 		expect(loggerMock.__error).toHaveBeenCalledWith(
 			'HTTP request failed: GET /wp-content/uploads/product.jpg',
-			expect.objectContaining({ code: expect.not.stringMatching(/^PRODUCT201$/) })
+			expect.objectContaining({
+				code: 'AUTH201',
+				context: expect.objectContaining({ serverCode: 'rest_forbidden' }),
+			})
 		);
 	});
 
