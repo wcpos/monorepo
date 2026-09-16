@@ -1,14 +1,12 @@
 import * as React from 'react';
 
-import { endOfDay, startOfDay } from 'date-fns';
-
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 
 import { ReportsProvider } from './context';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
-import { convertLocalDateToUTCString } from '../../../hooks/use-local-date';
+import { useStoreDay } from '../../../hooks/use-store-day';
 import { useUISettings } from '../contexts/ui-settings';
 import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../query';
 
@@ -65,15 +63,12 @@ function ReportsScreenContent() {
 export function ReportsScreen() {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
-	const today = React.useMemo(() => new Date(), []);
+	const { presets, rangeToFilter } = useStoreDay();
 	const cashierScopeID = String(wpCredentials?.id);
 	const storeScopeID = store?.id ? String(store.id) : 'woocommerce-pos';
 	const initialFilters: Partial<FiltersOf<'orders'>> = {
 		status: 'completed',
-		dateRange: {
-			from: convertLocalDateToUTCString(startOfDay(today)),
-			to: convertLocalDateToUTCString(endOfDay(today)),
-		},
+		dateRange: rangeToFilter(presets().today),
 		cashier: cashierScopeID,
 		store: storeScopeID,
 	};

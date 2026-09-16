@@ -1,10 +1,10 @@
 import * as React from 'react';
 
-import { endOfDay, startOfDay } from 'date-fns';
 import { useObservableSuspense } from 'observable-hooks';
 
 import type { EngineRecord } from '@wcpos/query';
 
+import { useStoreDay } from '../../../hooks/use-store-day';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useQueryState } from '../../../query';
 
@@ -92,6 +92,7 @@ interface ReportsProviderProps {
  */
 export function ReportsProvider({ binding, children }: ReportsProviderProps) {
 	const result = useObservableSuspense(binding.resource);
+	const { presets } = useStoreDay();
 	const [unselectedRowIds, setUnselectedRowIds] = React.useState<RowSelectionState>({});
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
@@ -101,8 +102,8 @@ export function ReportsProvider({ binding, children }: ReportsProviderProps) {
 	 * Convert the selector's date range to Date objects
 	 */
 	const dateRange = React.useMemo<DateRange>(() => {
-		const today = new Date();
-		const defaultRange = { start: startOfDay(today), end: endOfDay(today) };
+		const { from, to } = presets().today;
+		const defaultRange = { start: from, end: to };
 
 		if (!selectedDateRange) {
 			return defaultRange;
@@ -116,7 +117,7 @@ export function ReportsProvider({ binding, children }: ReportsProviderProps) {
 				? convertUTCStringToLocalDate(selectedDateRange.to)
 				: defaultRange.end,
 		};
-	}, [selectedDateRange]);
+	}, [selectedDateRange, presets]);
 
 	/**
 	 *

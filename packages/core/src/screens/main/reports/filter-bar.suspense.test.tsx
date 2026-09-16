@@ -47,6 +47,11 @@ jest.mock('../../../query', () => ({
 	useQueryStateActions: () => ({ setFilter: jest.fn() }),
 }));
 jest.mock('@wcpos/query', () => ({
+	// The store-day hook reads zone fields through it; a plain test record is read directly.
+	useDocField: (
+		source: Record<string, unknown> | undefined,
+		select: (v: Record<string, unknown>) => unknown
+	) => (source ? select(source) : undefined),
 	useQueryRuntime: () => ({}),
 }));
 jest.mock('@wcpos/sync-core', () => ({
@@ -57,6 +62,7 @@ jest.mock('../orders/force-refresh-filter-customer', () => ({
 }));
 jest.mock('../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials }),
+	useAppState: () => ({ site: { timezone_string: 'UTC', gmt_offset: '0' }, store: {} }),
 }));
 jest.mock('../../../hooks/use-local-date', () => ({
 	convertLocalDateToUTCString: (date: Date) => date.toISOString(),

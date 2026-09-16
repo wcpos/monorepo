@@ -44,6 +44,9 @@ jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({
 		store: {
 			id: 9,
+			// The period label is printed in the store's zone (Madrid is UTC+2 in July),
+			// whatever zone the test machine runs in.
+			timezone: 'Europe/Madrid',
 			name$: new BehaviorSubject('Madrid'),
 			price_num_decimals$: new BehaviorSubject(2),
 		},
@@ -97,10 +100,10 @@ describe('ZReport query-state dates', () => {
 
 		// Print Text does not forward testID; these existing date lines remain text-selected.
 		expect(screen.getByText(/reports.report_period_start/).textContent).toContain(
-			'2026-07-01T08:00:00.000Z'
+			'2026-07-01T10:00:00.000+02:00'
 		);
 		expect(screen.getByText(/reports.report_period_end/).textContent).toContain(
-			'2026-07-02T18:00:00.000Z'
+			'2026-07-02T20:00:00.000+02:00'
 		);
 	});
 });

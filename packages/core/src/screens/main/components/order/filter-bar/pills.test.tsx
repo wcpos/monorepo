@@ -4,6 +4,7 @@
 import * as React from 'react';
 
 import { endOfDay, startOfDay } from 'date-fns';
+import { utc } from '@date-fns/utc';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { of } from 'rxjs';
@@ -26,6 +27,9 @@ const mockSetCashierSearch = jest.fn();
 const mockCashierResource = { kind: 'cashier-search-resource' };
 let mockCustomerListProps: Record<string, unknown> = {};
 
+jest.mock('../../../../../contexts/app-state', () => ({
+	useAppState: () => ({ site: { timezone_string: 'UTC', gmt_offset: '0' }, store: {} }),
+}));
 jest.mock('../../../../../query', () => {
 	const actual = jest.requireActual('../../../../../query');
 	return {
@@ -223,8 +227,8 @@ describe('order filter pills', () => {
 		fireEvent.click(screen.getByTestId('select-date-range'));
 		expect(filters()).toEqual({
 			dateRange: {
-				from: startOfDay(new Date(2026, 6, 1, 12)).toISOString(),
-				to: endOfDay(new Date(2026, 6, 3, 12)).toISOString(),
+				from: startOfDay(new Date(2026, 6, 1, 12), { in: utc }).toISOString(),
+				to: endOfDay(new Date(2026, 6, 3, 12), { in: utc }).toISOString(),
 			},
 		});
 		fireEvent.click(screen.getByTestId('clear-filter'));

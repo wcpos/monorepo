@@ -4,6 +4,7 @@
 import * as React from 'react';
 
 import { endOfDay, startOfDay } from 'date-fns';
+import { utc } from '@date-fns/utc';
 import { render } from '@testing-library/react';
 import { of } from 'rxjs';
 
@@ -31,6 +32,11 @@ jest.mock('../../../query', () => {
 	};
 });
 jest.mock('@wcpos/query', () => ({
+	// The store-day hook reads zone fields through it; a plain test record is read directly.
+	useDocField: (
+		source: Record<string, unknown> | undefined,
+		select: (v: Record<string, unknown>) => unknown
+	) => (source ? select(source) : undefined),
 	useQuery: () => {
 		throw new Error('legacy useQuery reached');
 	},
@@ -48,6 +54,7 @@ jest.mock('./reports', () => ({ Reports: () => null }));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
 		wpCredentials: { id: 7 },
+		site: { timezone_string: 'UTC', gmt_offset: '0' },
 		store: mockStoreID === undefined ? undefined : { id: mockStoreID },
 	}),
 }));
@@ -88,8 +95,8 @@ describe('ReportsScreen query-state wiring', () => {
 			filters: {
 				status: 'completed',
 				dateRange: {
-					from: startOfDay(today).toISOString(),
-					to: endOfDay(today).toISOString(),
+					from: startOfDay(today, { in: utc }).toISOString(),
+					to: endOfDay(today, { in: utc }).toISOString(),
 				},
 				cashier: '7',
 				store: '9',

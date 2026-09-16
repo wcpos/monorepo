@@ -4,6 +4,7 @@
 import * as React from 'react';
 
 import { endOfDay, startOfDay } from 'date-fns';
+import { utc } from '@date-fns/utc';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { QueryStateProvider, useQueryState } from '../../../../query';
@@ -15,6 +16,9 @@ import type { FiltersOf } from '../../../../query';
 
 let mockSelectedOption = { value: 'publish', label: 'coupons.publish' };
 
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ site: { timezone_string: 'UTC', gmt_offset: '0' }, store: {} }),
+}));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonPill: ({ children, onRemove }: { children: React.ReactNode; onRemove?: () => void }) => (
 		<div>
@@ -124,8 +128,8 @@ describe('coupon filter pills', () => {
 		fireEvent.click(screen.getByTestId('select-date-range'));
 		expect(filters()).toEqual({
 			dateRange: {
-				from: startOfDay(new Date(2026, 6, 1, 12)).toISOString(),
-				to: endOfDay(new Date(2026, 6, 3, 12)).toISOString(),
+				from: startOfDay(new Date(2026, 6, 1, 12), { in: utc }).toISOString(),
+				to: endOfDay(new Date(2026, 6, 3, 12), { in: utc }).toISOString(),
 			},
 		});
 

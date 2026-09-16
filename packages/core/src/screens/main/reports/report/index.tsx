@@ -21,6 +21,7 @@ import { useRegisterNames } from '../../../../services/register/use-register-nam
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
+import { inZone, useStoreDay } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
@@ -47,6 +48,7 @@ export function Report() {
 	const { format: formatName } = useCustomerNameFormat();
 	const { format: formatNumber } = useNumberFormat();
 	const { formatDate } = useLocalDate();
+	const { timezone } = useStoreDay();
 
 	/**
 	 * Calculate totals from selected orders
@@ -73,18 +75,19 @@ export function Report() {
 			? convertUTCStringToLocalDate(selectedDateRange.to)
 			: new Date();
 
+		// The period is the store's day, so it is labelled in the store's zone, not the till's.
 		return {
-			from: formatDate(from, 'yyyy-M-dd HH:mm:ss'),
-			to: formatDate(to, 'yyyy-M-dd HH:mm:ss'),
+			from: formatDate(inZone(timezone, from), 'yyyy-M-dd HH:mm:ss'),
+			to: formatDate(inZone(timezone, to), 'yyyy-M-dd HH:mm:ss'),
 		};
-	}, [formatDate, selectedDateRange]);
+	}, [formatDate, selectedDateRange, timezone]);
 
 	/**
 	 * Generate report timestamp
 	 */
 	const reportGenerated = React.useMemo(
-		() => formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'),
-		[formatDate]
+		() => formatDate(inZone(timezone, new Date()), 'yyyy-M-dd HH:mm:ss'),
+		[formatDate, timezone]
 	);
 
 	/**

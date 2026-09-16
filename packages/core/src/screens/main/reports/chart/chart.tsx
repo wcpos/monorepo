@@ -7,6 +7,7 @@ import { useCSSVariable } from 'uniwind';
 import { CartesianChart, StackedBar } from 'victory-native';
 
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { useStoreDay } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useReportsData } from '../context';
 import { aggregateData } from './utils';
@@ -58,6 +59,7 @@ function findClosestPointIndex(points: PointWithPosition[], touchX: number): num
 
 export default function Chart() {
 	const { selectedOrders, dateRange } = useReportsData();
+	const { timezone } = useStoreDay();
 	const { format } = useCurrencyFormat();
 	const { dateFnsLocale, formatDate } = useLocalDate();
 	const font = useFont(require('../../../../assets/fonts/Inter-Medium.ttf'), 12);
@@ -73,8 +75,8 @@ export default function Chart() {
 		]).map(String);
 
 	const data = React.useMemo<ChartDataPoint[]>(
-		() => aggregateData(selectedOrders, dateRange, dateFnsLocale) as ChartDataPoint[],
-		[selectedOrders, dateRange, dateFnsLocale]
+		() => aggregateData(selectedOrders, dateRange, dateFnsLocale, timezone) as ChartDataPoint[],
+		[selectedOrders, dateRange, dateFnsLocale, timezone]
 	);
 	// Max is subtotal + tax = total (the actual order total)
 	const maxTotal = Math.max(...data.map((d) => d.total), 0);
