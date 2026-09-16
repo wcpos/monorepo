@@ -8,6 +8,7 @@ import {
 	finalize,
 	map,
 	of,
+	Subject,
 	switchMap,
 	tap,
 	timer,
@@ -42,6 +43,8 @@ const logger = getLogger(['wcpos', 'registerSession']);
 const REFUND_PARENT_WAIT_MS = 15_000;
 
 export function useRegisterSession() {
+	const missingParentKey = React.useRef('');
+	const [accountingChanges] = React.useState(() => new Subject<void>());
 	const pendingParents = React.useRef<RequirementHandle[]>([]);
 	const latestAccounting = React.useRef<Pick<
 		Parameters<typeof actions.writeClosure>[0],
@@ -128,6 +131,7 @@ export function useRegisterSession() {
 											.filter((id) => !held.has(id))
 											.sort((a, b) => a - b);
 										const key = missing.join(',');
+										missingParentKey.current = key;
 										if (key === missingKey) return;
 										missingKey = key;
 										parentRequirements.forEach((handle) => handle.release());
@@ -166,6 +170,7 @@ export function useRegisterSession() {
 							orders: accounting.orders.hits.map(({ record }) => record),
 							refundRecords: accounting.refundRecords,
 						};
+						accountingChanges.next();
 					}),
 					concatMap(async (accounting) => {
 						const allocations = accounting.orders.hits
@@ -213,7 +218,16 @@ export function useRegisterSession() {
 				closureRows,
 			}))
 		);
-	}, [sessions, movements, closures, binding.registerId, sessionsOn, engine, locale]);
+	}, [
+		sessions,
+		movements,
+		closures,
+		binding.registerId,
+		sessionsOn,
+		engine,
+		locale,
+		accountingChanges,
+	]);
 	const observed = useObservableState(source, null);
 	const data =
 		observed?.sessions === sessions && observed?.registerId === binding.registerId && sessionsOn
@@ -375,7 +389,25 @@ export function useRegisterSession() {
 								Promise.allSettled(generation.map((handle) => handle.ready)),
 								deadline,
 							]);
-							if (pendingParents.current === generation) break;
+							if (timedOut || !missingParentKey.current) break;
+							if (pendingParents.current === generation) {
+								// Readiness precedes RxDB's query emission. Wait for accounting to
+								// observe the fetched set (including a still-missing/deleted parent).
+								const key = missingParentKey.current;
+								let subscription: ReturnType<typeof accountingChanges.subscribe> | undefined;
+								try {
+									await Promise.race([
+										new Promise<void>((resolve) => {
+											subscription = accountingChanges.subscribe(() => resolve());
+										}),
+										deadline,
+									]);
+								} finally {
+									subscription?.unsubscribe();
+								}
+								if (missingParentKey.current === key && pendingParents.current === generation)
+									break;
+							}
 							generation = pendingParents.current;
 						} while (!timedOut && generation.length > 0);
 					} finally {

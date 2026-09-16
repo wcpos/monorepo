@@ -12,6 +12,7 @@ import {
 	withOrderColumns,
 	wooIdOf,
 } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { stripOrderManifestDigest } from '../local-coverage/existence-manifest-population';
 import {
@@ -208,8 +209,19 @@ export class EngineOrderRepository {
 				await this.db.refunds.bulkRemove(removeIds),
 				'engine-order-repository refund reconciliation'
 			);
-		for (const parentRemoteId of missingParents)
-			await seedRefundParentLane({ database: this.db, parentRemoteId });
+		for (const parentRemoteId of missingParents) {
+			try {
+				// A summary can announce a refund after an active walk's last request.
+				await seedRefundParentLane({ database: this.db, parentRemoteId, coalesceInFlight: true });
+			} catch (error) {
+				getLogger(['wcpos', 'sync', 'orders']).warn(
+					'Refund parent seed failed after order ingestion',
+					{
+						context: { parentRemoteId, error: String(error) },
+					}
+				);
+			}
+		}
 		return applicable;
 	}
 

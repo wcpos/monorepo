@@ -1,6 +1,10 @@
 /** Only an explicit parent summary is authoritative; a partial payload is not a deletion. */
 export function reconcileRefundIds(summary: unknown, heldIds: readonly number[]) {
-	if (!Array.isArray(summary)) return { remove: [], missing: [] };
+	if (
+		!Array.isArray(summary) ||
+		summary.some((row) => !Number.isSafeInteger(row?.id) || row.id <= 0)
+	)
+		return { remove: [], missing: [] };
 	const listed = new Set<number>(summary.map((row) => row.id));
 	const held = new Set(heldIds);
 	return {

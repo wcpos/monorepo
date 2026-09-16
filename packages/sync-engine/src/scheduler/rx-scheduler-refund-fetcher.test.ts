@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildCoverageDocumentsFromQueryResult } from './query-coverage-writes';
 import { createRefundsSchedulerFetcher } from './rx-scheduler-refund-fetcher';
 
 import type { FetchTask } from './replication-policy';
@@ -62,6 +63,23 @@ function setup(
 }
 
 describe('refund paged upsert-only fetcher', () => {
+	// Restore cumulative per-page recordCoverage: the first page's coverage rows are written three times.
+	it('writes each refund coverage row once across three pages and completes the cumulative lane once', async () => {
+		const h = setup([[row(1)], [row(2)], []]);
+		const request = { ...task(), limit: 1 };
+		await h.fetcher(request);
+		await h.fetcher(request);
+		await h.fetcher(request);
+		const writes = h.coverage.map(buildCoverageDocumentsFromQueryResult);
+		expect(writes.flatMap((write) => write.records.map((record) => record.documentId))).toEqual([
+			'woo-refund:1',
+			'woo-refund:2',
+		]);
+		expect(writes.flatMap((write) => write.lanes).filter((lane) => lane.complete)).toEqual([
+			expect.objectContaining({ expectedRecordIds: ['woo-refund:1', 'woo-refund:2'] }),
+		]);
+	});
+
 	// Remove the post-upsert parent confirmation: the stale page resurrects refund 1.
 	it('removes written refunds dropped by the parent between admission and upsert', async () => {
 		const h = setup([[row(1)]], new Map([[42, [1]]]));
@@ -113,7 +131,9 @@ describe('refund paged upsert-only fetcher', () => {
 			queryKey: 'refunds:history:days=92',
 			complete: true,
 		});
-		expect(h.coverage.at(-1)?.records).toHaveLength(101);
+		expect(
+			buildCoverageDocumentsFromQueryResult(h.coverage.at(-1)!).lanes[0].expectedRecordIds
+		).toHaveLength(101);
 	});
 	it('admits held parents or POS metadata but not a UUID alone', async () => {
 		const h = setup([

@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintRemoteId } from '@wcpos/sync-core';
 
 import { createEngineHarness } from './testing';
-import { materializeLocalOnly } from './materialization/record-materialization';
+import { materializeLocalOnly, materializeRefund } from './materialization/record-materialization';
 import { seedRefundParentLane } from './scheduler/rx-refund-scheduler-task-seeder';
+import { runEngineSchedulerDrain } from './scheduler/engine-scheduler-drain';
+import { createLocalCoverage } from './local-coverage/local-coverage';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 
 import type { LocalRefundDocument } from './collections/refund-schema';
@@ -111,6 +113,115 @@ async function readRefunds(h: Awaited<ReturnType<typeof harness>>, parentId?: nu
 }
 
 describe('refund requirements', () => {
+	// Revert the disposal guard: a completed reset throws when its refill calls require.
+	it('resolves an orders reset while disposal is queued', async () => {
+		const h = await harness();
+		await h.engine.whenActive();
+		let resume!: () => void;
+		let entered!: () => void;
+		const started = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const gate = new Promise<void>((resolve) => {
+			resume = resolve;
+		});
+		const reset = h.engine.scope.resetCollection('orders', {
+			beforeDrop: async () => {
+				entered();
+				await gate;
+			},
+		});
+		await started;
+		const disposal = h.engine.dispose();
+		resume();
+		await expect(reset).resolves.toBe('reset');
+		await disposal;
+	});
+
+	// Revert to unconditional ran: releasing the history handle claims a fetch that did not finish.
+	it('reports an aborted refund check drain as skipped', async () => {
+		const { setPremiumFlag } = await import('rxdb-premium/plugins/shared');
+		setPremiumFlag();
+		const h = await createEngineHarness({
+			site: 'https://refund-check.test',
+			connectivity: 'offline',
+		});
+		let release!: () => void;
+		const ready = new Promise((resolve) => {
+			release = () => resolve({ action: 'released' });
+		});
+		const require = vi.spyOn(h.engine, 'require').mockReturnValue({ ready, release } as never);
+		const controller = new AbortController();
+		const check = h.engine.checkCollection('refunds', { signal: controller.signal });
+		await vi.waitFor(() => expect(require).toHaveBeenCalled());
+		controller.abort();
+		expect((await check).status).toBe('skipped');
+	});
+
+	// Revert to captured parent ids: retry after the first successful drop leaves unstamped orphans.
+	it('retries the reset cascade without parents and preserves both POS stamp kinds', async () => {
+		const h = await harness(() => Response.json([]));
+		const scope = await h.engine.whenActive();
+		await new EngineOrderRepository(scope.database.collections as never).upsertMany([parent(42)]);
+		for (const [id, meta_data] of [
+			[1, []],
+			[2, [{ key: '_wcpos_session', value: 'B' }]],
+			[3, [{ key: '_wcpos_register', value: 'R' }]],
+			[4, []],
+		] as const) {
+			await h.collection('refunds').insert(
+				materializeRefund({
+					...row(id),
+					parent_id: id === 4 ? 99 : 42,
+					meta_data: [...meta_data],
+				}).storedDocument
+			);
+		}
+		const remove = vi
+			.spyOn(scope.database.collections.refunds, 'bulkRemove')
+			.mockRejectedValueOnce(new Error('cascade failed'));
+		await expect(h.engine.scope.resetCollection('orders')).rejects.toThrow('cascade failed');
+		expect(await scope.database.collections.orders.find().exec()).toHaveLength(0);
+		expect(await readRefunds(h)).toHaveLength(4);
+		await expect(h.engine.scope.resetCollection('orders')).resolves.toBe('reset');
+		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([2, 3]);
+		remove.mockRestore();
+	});
+
+	// Revert to MAX_SAFE_INTEGER: a misbehaving 2001-page history incorrectly completes.
+	it('fails at the finite refund walk ceiling with a walk-stopped diagnostic', async () => {
+		const h = await harness(() => Response.json([], { headers: { 'X-WP-TotalPages': '2001' } }));
+		await expect(refresh(h)).rejects.toThrow(/scheduler drain failed/i);
+		expect(h.requests).toHaveLength(2000);
+		expect(h.diagnostics).toContainEqual(
+			expect.objectContaining({ message: expect.stringContaining('refunds.walk-stopped') })
+		);
+	}, 30000);
+
+	// Revert the explicit-input precedence: the refund lane ignores this two-request bound.
+	it('honours an explicit refund drain request limit', async () => {
+		const h = await harness();
+		const scope = await h.engine.whenActive();
+		await seedRefundParentLane({
+			database: scope.database,
+			parentRemoteId: mintRemoteId(42, 'test'),
+		});
+		const fetcher = vi.fn(async () => Response.json([], { headers: { 'X-WP-TotalPages': '3' } }));
+		const result = await runEngineSchedulerDrain({
+			db: scope.database as never,
+			coverage: createLocalCoverage({ database: scope.database as never, freshForMs: 1000 }),
+			baseUrl: 'https://refunds.example.test',
+			ownerId: 'limit-test',
+			fetcher,
+			taskId: 'refunds:parent:42:greedy',
+			maxRequestsPerTask: 2,
+		});
+		expect(result.tasks).toContainEqual(
+			expect.objectContaining({ collection: 'refunds', kind: 'failed' })
+		);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+	});
+
 	// Remove the forced history requirement after the cascade: reset never refills refunds.
 	it('refreshes refund history after an orders reset even after a completed history walk', async () => {
 		const h = await harness();
@@ -143,12 +254,11 @@ describe('refund requirements', () => {
 			return Response.json([row(1)]);
 		});
 		const scope = await h.engine.whenActive();
+		vi.spyOn(Date, 'now').mockReturnValue(h.clock.now());
 		signal = () =>
-			seedRefundParentLane({
-				database: scope.database,
-				parentRemoteId: mintRemoteId(42, 'test'),
-				nowMs: h.clock.now(),
-			});
+			new EngineOrderRepository(scope.database.collections as never).upsertMany([
+				parent(42, [{ id: 1 }]),
+			]);
 		await refresh(h, 42);
 		await h.engine.sync('scheduler-drain');
 		await h.engine.sync('scheduler-drain');
@@ -167,7 +277,7 @@ describe('refund requirements', () => {
 
 	// Move the cascade back into beforeDrop: a failed orders drop loses its resident children.
 	it('preserves children on a failed orders reset and removes them only after a successful reset', async () => {
-		const h = await harness();
+		const h = await harness(() => Response.json([{ ...row(1), meta_data: [] }]));
 		const scope = await h.engine.whenActive();
 		await new EngineOrderRepository(scope.database.collections as never).upsertMany([
 			parent(42, [{ id: 1 }]),
@@ -180,7 +290,7 @@ describe('refund requirements', () => {
 		expect(await scope.database.collections.orders.find().exec()).toHaveLength(1);
 		expect(await readRefunds(h, 42)).toHaveLength(1);
 		remove.mockRestore();
-		h.setPages(0); // Keep this test focused on the cascade, not its asynchronous refill.
+		// The unheld, unstamped response cannot be readmitted after the parent drops.
 		await expect(h.engine.scope.resetCollection('orders')).resolves.toBe('reset');
 		expect(await readRefunds(h, 42)).toEqual([]);
 	});
@@ -347,7 +457,7 @@ describe('refund requirements', () => {
 		expect(h.requests.filter((u) => u.searchParams.get('parent') === '42')).toHaveLength(2);
 		expect(h.requests.at(-1)?.searchParams.has('after')).toBe(false);
 	});
-	it('walks beyond the ordinary 100-call drain cap', async () => {
+	it('walks beyond 100 pages below the refund ceiling and retains complete lane membership', async () => {
 		const h = await harness();
 		// One row per page: the walk is proven by request count, not by ten thousand documents.
 		h.setPages(101, 1);
@@ -363,6 +473,15 @@ describe('refund requirements', () => {
 			documents: 101,
 		});
 		expect(h.requests.at(-1)?.searchParams.get('page')).toBe('101');
+		const scope = await h.engine.whenActive();
+		const lanes = await scope.database.collections.coverageLanes
+			.find({ selector: { queryKey: 'refunds:history:days=92' } })
+			.exec();
+		expect(lanes[0].toJSON()).toMatchObject({
+			complete: true,
+			expectedRecordIds: expect.arrayContaining(['woo-refund:1', 'woo-refund:101']),
+		});
+		expect(lanes[0].toJSON().expectedRecordIds).toHaveLength(101);
 		handle.release();
 	}, 30000);
 	it('rejects failed walks and emits a warning instead of reporting completion', async () => {

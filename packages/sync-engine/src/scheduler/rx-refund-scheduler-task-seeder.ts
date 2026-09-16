@@ -1,18 +1,18 @@
 import type { RemoteId } from '@wcpos/sync-core';
 
 import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
-import {
-	parseRefundLaneQueryKey,
-	refundHistoryQueryKey,
-	refundParentQueryKey,
-} from './refund-lane-descriptor';
+import { refundHistoryQueryKey, refundParentQueryKey } from './refund-lane-descriptor';
 import { seedPersistedSchedulerTasks } from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
 
 import type { SeedPosBootstrapLanesInput } from './rx-pos-bootstrap-seeder';
 
-function seedRefundLane(queryKey: string, input: SeedPosBootstrapLanesInput) {
+function seedRefundLane(
+	queryKey: string,
+	input: SeedPosBootstrapLanesInput,
+	coalesceInFlight = false
+) {
 	return withSchedulerSeedLedgerRecovery({
 		database: input.database,
 		run: () =>
@@ -31,8 +31,7 @@ function seedRefundLane(queryKey: string, input: SeedPosBootstrapLanesInput) {
 				],
 				nowMs: input.nowMs ?? Date.now(),
 				completedDedupeForMs: input.completedDedupeForMs ?? 0,
-				// A parent summary can announce a refund after an active walk's last request.
-				coalesceInFlight: parseRefundLaneQueryKey(queryKey)?.kind === 'parent',
+				coalesceInFlight,
 			}),
 	});
 }
@@ -40,5 +39,5 @@ function seedRefundLane(queryKey: string, input: SeedPosBootstrapLanesInput) {
 export const seedRefundWindowLane = (input: SeedPosBootstrapLanesInput) =>
 	seedRefundLane(refundHistoryQueryKey(), input);
 export const seedRefundParentLane = (
-	input: SeedPosBootstrapLanesInput & { parentRemoteId: RemoteId }
-) => seedRefundLane(refundParentQueryKey(input.parentRemoteId), input);
+	input: SeedPosBootstrapLanesInput & { parentRemoteId: RemoteId; coalesceInFlight?: boolean }
+) => seedRefundLane(refundParentQueryKey(input.parentRemoteId), input, input.coalesceInFlight);

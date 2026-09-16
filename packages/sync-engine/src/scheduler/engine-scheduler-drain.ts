@@ -73,6 +73,9 @@ import type { FetchTask, FetchTaskResult } from './replication-policy';
 export const ORDER_SCHEDULER_LEASE_FOR_MS = 30 * 1_000;
 export const ORDER_SCHEDULER_RETRY_AFTER_MS = 30 * 1_000;
 export const ORDER_SCHEDULER_MAX_REQUESTS = 100;
+// 200,000 refunds at 100 a page: a walk that long is a misbehaving server.
+// The runner marks it failed so the walk-stopped diagnostic fires.
+export const REFUND_WALK_MAX_REQUESTS = 2_000;
 export const ORDER_SCHEDULER_COVERAGE_FRESH_FOR_MS = 5 * 60 * 1_000;
 
 // ---------------------------------------------------------------------------
@@ -600,7 +603,9 @@ export async function runEngineSchedulerDrain(
 				retryAfterMs: ORDER_SCHEDULER_RETRY_AFTER_MS,
 				// A history/parent walk is exhausted, not capped at the ordinary 100 pages.
 				maxRequestsForTask: (task) =>
-					task.collection === 'refunds' ? Number.MAX_SAFE_INTEGER : undefined,
+					task.collection === 'refunds'
+						? (input.maxRequestsPerTask ?? REFUND_WALK_MAX_REQUESTS)
+						: undefined,
 				maxRequestsPerTask: input.maxRequestsPerTask ?? ORDER_SCHEDULER_MAX_REQUESTS,
 				...(input.onProgress !== undefined ? { onProgress: input.onProgress } : {}),
 				...(input.signal !== undefined ? { signal: input.signal } : {}),

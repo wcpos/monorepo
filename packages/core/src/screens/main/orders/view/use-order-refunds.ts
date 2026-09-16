@@ -36,15 +36,20 @@ export function useOrderRefunds(orderId: number) {
 	const [resource, setResource] = React.useState(() => new ObservableResource<WCRefund[]>(NEVER));
 	const heldResource = React.useRef(resource);
 
-	// The surface owns the demand and local subscription, including scope/collection replacement.
-	React.useEffect(() => {
+	// Replace the local resource before paint so an order switch cannot expose old refunds.
+	React.useLayoutEffect(() => {
 		const current = heldResource.current.isDestroyed
 			? new ObservableResource(local$)
 			: heldResource.current;
 		if (current === heldResource.current) current.reload(local$);
 		heldResource.current = current;
-		// eslint-disable-next-line react-you-might-not-need-an-effect/no-adjust-state-on-prop-change, react-you-might-not-need-an-effect/no-external-store-subscription -- Suspense resource replacement must follow effect cleanup, not render.
+
 		setResource(current);
+		return () => current.destroy();
+	}, [local$]);
+
+	// The surface owns remote demand, including scope/collection replacement.
+	React.useEffect(() => {
 		let handle: RequirementHandle | undefined;
 		const subscription = observeEngineDatabases(engine)
 			.pipe(
@@ -68,8 +73,7 @@ export function useOrderRefunds(orderId: number) {
 		return () => {
 			subscription.unsubscribe();
 			handle?.release();
-			current.destroy();
 		};
-	}, [engine, orderId, local$]);
+	}, [engine, orderId]);
 	return resource;
 }

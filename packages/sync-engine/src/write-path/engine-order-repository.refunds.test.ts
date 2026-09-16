@@ -10,6 +10,7 @@ import {
 	applyOrderSnapshot,
 	createOrdersSchedulerFetcher,
 } from '../scheduler/rx-scheduler-order-fetcher';
+import * as refundSeeder from '../scheduler/rx-refund-scheduler-task-seeder';
 import { EngineOrderRepository } from './engine-order-repository';
 
 import type { LocalRefundDocument } from '../collections/refund-schema';
@@ -58,6 +59,27 @@ async function harness() {
 	};
 }
 describe('order refund reconciliation', () => {
+	// Remove the per-parent catch: one failed scheduler write rejects already-applied orders and skips 44.
+	it('continues seeding later parents after one seed rejects without rejecting applied writes', async () => {
+		const h = await harness();
+		const seed = vi
+			.spyOn(refundSeeder, 'seedRefundParentLane')
+			.mockRejectedValueOnce(new Error('seed failed'));
+		try {
+			await expect(
+				h.repo.upsertMany([parent(42, [{ id: 9 }]), parent(44, [{ id: 10 }])])
+			).resolves.toHaveLength(2);
+			expect(await h.collection('orders').find().exec()).toHaveLength(2);
+			expect(
+				(await h.scope.database.collections.schedulerTaskStates.find().exec()).map(
+					(doc) => doc.toJSON().queryKey
+				)
+			).toContain('refunds:parent:44');
+		} finally {
+			seed.mockRestore();
+		}
+	});
+
 	// Move the child cascade before parent removal: a failed delete destroys live refunds.
 	it.each(['delete', 'resync'] as const)(
 		'preserves children when %s parent removal fails',
@@ -332,7 +354,7 @@ describe('order refund reconciliation', () => {
 		await h.repo.upsertMany([parent(42, [])]);
 		expect(await h.ids()).toEqual([3]);
 	});
-	it.each(['delete', 'resync', 'ack', 'reset'] as const)(
+	it.each(['delete', 'resync', 'ack'] as const)(
 		'cascades %s without deleting unrelated refunds',
 		async (action) => {
 			const h = await harness();
@@ -343,7 +365,6 @@ describe('order refund reconciliation', () => {
 				await writeFacetFor('orders')!.onDeleteAck(h.scope.database, {
 					recordId: parent(42).uuid,
 				} as never);
-			if (action === 'reset') await h.engine.scope.resetCollection('orders');
 			expect(await h.ids()).toEqual([3]);
 		}
 	);

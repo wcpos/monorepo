@@ -6,6 +6,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import { ViewOrderModal } from './modal';
+import { useOrderRefunds } from './use-order-refunds';
 
 let mockLocal = new Subject<{
 	hits: { record: { payload: { id: number; date_created_gmt: string } } }[];
@@ -118,6 +119,33 @@ const publish = async (ids: number[]) =>
 	});
 
 describe('local-first live order refunds', () => {
+	// Revert resource ownership to a passive effect: the new order commits the old order's rows.
+	it('replaces an in-place order resource before layout can expose previous rows', async () => {
+		const committed: number[][] = [];
+		function Probe({ orderId }: { orderId: number }) {
+			const resource = useOrderRefunds(orderId);
+			React.useLayoutEffect(() => {
+				try {
+					if (!resource.isDestroyed) committed.push(resource.read().map((row) => row.id));
+				} catch {
+					/* suspended or destroyed */
+				}
+			});
+			return null;
+		}
+		const view = render(<Probe orderId={42} />);
+		await publish([1]);
+		view.rerender(<Probe orderId={42} />);
+		expect(committed).toContainEqual([1]);
+		committed.length = 0;
+		mockLocal = new Subject();
+		view.rerender(<Probe orderId={43} />);
+		expect(committed).not.toContainEqual([1]);
+		await publish([2]);
+		view.rerender(<Probe orderId={43} />);
+		expect(committed).toContainEqual([2]);
+	});
+
 	// Keep the destroyed memoized resource on replay: the section never receives these rows.
 	it('keeps yielding live refunds after StrictMode effect replay without a destroyed error', async () => {
 		const errors = jest.spyOn(console, 'error').mockImplementation(() => {});

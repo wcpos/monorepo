@@ -56,7 +56,6 @@ import type {
 } from '@wcpos/sync-core';
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
-import { removeRefundChildren } from './write-path/refund-children';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
 	ENGINE_KV_COLLECTION,
@@ -2320,25 +2319,33 @@ export function createRxdbSyncEngine(
 						);
 					}
 					const beforeDrop = opts?.beforeDrop;
-					let parentIds: (string | null)[] = [];
 					const outcome = await manager.resetCollection(scopeId, name, {
 						...(opts?.confirmDestroyQueue !== undefined
 							? { confirmDestroyQueue: opts.confirmDestroyQueue }
 							: {}),
 						beforeDrop: async () => {
 							await beforeDrop?.(activeScopeOf(scopeId));
-							if (name === 'orders') {
-								const db = activeScopeOf(scopeId).database;
-								const parents = await db.collections.orders.find().exec();
-								parentIds = parents.map((doc) => doc.toJSON().remoteId);
-							}
 						},
 					});
 					if (name === 'orders' && outcome === 'reset') {
-						await removeRefundChildren(
-							activeScopeOf(scopeId).database.collections.refunds,
-							parentIds
-						);
+						// No parents survive a reset. Repeating this after a failed cascade
+						// needs no pre-drop ids; independently POS-stamped refunds stay held.
+						const refunds = activeScopeOf(scopeId).database.collections.refunds;
+						const held = await refunds.find().exec();
+						const orphanIds = held
+							.filter(
+								(doc) =>
+									!doc
+										.toJSON()
+										.payload.meta_data?.some(
+											({ key }: { key: string }) =>
+												key === '_wcpos_session' || key === '_wcpos_register'
+										)
+							)
+							.map((doc) => doc.toJSON().uuid);
+						if (orphanIds.length > 0)
+							assertBulkSuccess(await refunds.bulkRemove(orphanIds), 'orders reset refund cascade');
+						if (disposed) return outcome;
 						const handle = engine.require({
 							id: 'orders-reset:refund-history',
 							kind: 'refresh',
@@ -2429,8 +2436,11 @@ export function createRxdbSyncEngine(
 				const release = () => handle.release();
 				options?.signal?.addEventListener('abort', release, { once: true });
 				try {
-					await handle.ready;
-					reports.push({ lane: 'scheduler-drain', status: 'ran' });
+					const result = await handle.ready;
+					reports.push({
+						lane: 'scheduler-drain',
+						status: result.action === 'released' ? 'skipped' : 'ran',
+					});
 				} catch (error) {
 					reports.push({
 						lane: 'scheduler-drain',

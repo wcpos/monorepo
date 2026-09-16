@@ -628,6 +628,63 @@ it('waits for missing refund parents before computing the closure tender', async
 	expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
 });
 
+// Revert the post-ready accounting wait: closure freezes cash before the fetched card parent emits.
+it.each([false, true])(
+	'waits for the parent emission after readiness, with same-parent replacement %s',
+	async (replace) => {
+		entries = [];
+		mockRefunds.next([refundHit()]);
+		let resolve!: () => void;
+		const ready = new Promise<void>((done) => {
+			resolve = done;
+		});
+		mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
+		jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
+		jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
+			const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+			const { readLedger } =
+				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+			const attributed = attributeRefunds(
+				input.session.id,
+				input.orders.flatMap((order) => readLedger(order.payload.meta_data)),
+				input.refundRecords ?? []
+			);
+			return {
+				id: 'closure',
+				counted: {},
+				variance: {},
+				breakdowns: { payment_methods: attributed.byMethod },
+			} as never;
+		});
+		const result = await settled();
+		let closing!: ReturnType<typeof result.current.actions.closeSession>;
+		await act(async () => {
+			closing = result.current.actions.closeSession({ counted: { cash: '100' } });
+		});
+		expect(actions.writeClosure).not.toHaveBeenCalled();
+		await act(async () => resolve());
+		expect(actions.writeClosure).not.toHaveBeenCalled();
+		let resolveReplacement = () => {};
+		if (replace) {
+			// Revert generation confirmation: an unchanged key from new, unfetched handles closes early.
+			const replacementReady = new Promise<void>((done) => {
+				resolveReplacement = done;
+			});
+			mockDeclareRequirements.mockReturnValueOnce([
+				{ release: mockReleaseParents, ready: replacementReady },
+			]);
+			await act(async () => mockRefunds.next([refundHit()]));
+			expect(actions.writeClosure).not.toHaveBeenCalled();
+		}
+		await act(async () => {
+			mockOrders.next([parentHit()]);
+			resolveReplacement();
+			await closing;
+		});
+		expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
+	}
+);
+
 // Revert to a single-generation wait: releasing the old handles closes before the replacement fetch.
 it('follows replacement refund parent handles before computing the closure tender', async () => {
 	entries = [];

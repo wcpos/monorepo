@@ -772,6 +772,9 @@ importers:
       jest:
         specifier: ^30.4.2
         version: 30.4.2(@types/node@25.9.3)
+      mingo:
+        specifier: 7.2.2
+        version: 7.2.2
       react-native:
         specifier: 0.86.2
         version: 0.86.2(@babel/core@7.29.7)(@react-native/jest-preset@0.86.2(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
