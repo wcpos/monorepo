@@ -314,7 +314,10 @@ export function createServerPressureMonitor(
 		multiplier: effectiveMultiplier,
 		retryAfterUntilMs: () => retryAfterUntilMs,
 		reported: () => lastReported,
-		signal: () => lastSignal,
+		// The soft-load machine raises the effective multiplier without stepUp(),
+		// so it has no recorded signal of its own: while it alone holds the
+		// cadence at x2, the reason IS reported server load.
+		signal: () => lastSignal ?? (softLoadActive ? 'server-pressure' : null),
 
 		setMaxMultiplier(next) {
 			maxMultiplier = Math.max(1, next);

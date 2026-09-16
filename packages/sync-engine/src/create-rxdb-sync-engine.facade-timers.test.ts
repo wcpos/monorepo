@@ -159,6 +159,8 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 				expect(statuses.at(-1)?.serverPressure).toEqual({
 					multiplier: 2,
 					retryAfterUntilMs: 60_000,
+					reported: null,
+					signal: 'rate-limited',
 				})
 			);
 			now = 60_001;
@@ -168,8 +170,42 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 				expect(statuses.at(-1)?.serverPressure).toEqual({
 					multiplier: 1,
 					retryAfterUntilMs: null,
+					reported: null,
+					signal: null,
 				})
 			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('notifies status subscribers when the reported pressure bucket changes without a back-off', async () => {
+		let pressure: string | null = null;
+		const engine = engineWith({
+			fetcher: async () =>
+				new Response('[]', {
+					status: 200,
+					headers: pressure === null ? {} : { 'X-WCPOS-Pressure': pressure },
+				}),
+		});
+		await engine.ready;
+		const statuses: EngineStatus[] = [];
+		engine.statusChanges((value) => statuses.push(value));
+		try {
+			pressure = 'high';
+			await engine.hostTransport().fetcher(SYNC_BASE);
+			// One fast "high" response is advisory: no back-off, but the read-out moved.
+			await vi.waitFor(() =>
+				expect(statuses.at(-1)?.serverPressure).toEqual({
+					multiplier: 1,
+					retryAfterUntilMs: null,
+					reported: 'high',
+					signal: null,
+				})
+			);
+			pressure = 'low';
+			await engine.hostTransport().fetcher(SYNC_BASE);
+			await vi.waitFor(() => expect(statuses.at(-1)?.serverPressure.reported).toBe('low'));
 		} finally {
 			await engine.dispose();
 		}
@@ -185,6 +221,8 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		expect(statuses[0]?.serverPressure).toEqual({
 			multiplier: 1,
 			retryAfterUntilMs: null,
+			reported: null,
+			signal: null,
 		});
 
 		await engine.ready;

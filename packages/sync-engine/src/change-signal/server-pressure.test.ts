@@ -651,6 +651,20 @@ describe('reported() and signal() — the Health page read-out', () => {
 		expect(monitor.reported()).toBe('low');
 	});
 
+	it('names reported server load as the signal while the soft-load machine alone holds x2', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 1, ...OK, serverLoad1m: 1 });
+		monitor.observe({ atMs: 2, ...OK, serverLoad1m: 1 });
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.signal()).toBe('server-pressure');
+		// Load back under 1.25x the learned baseline for two samples ends the soft back-off.
+		monitor.observe({ atMs: 3, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 4, ...OK, serverLoad1m: 0.4 });
+		expect(monitor.multiplier()).toBe(1);
+		expect(monitor.signal()).toBeNull();
+	});
+
 	it('records a server-named pause as the signal even when the ladder cannot move', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 1 });
 		monitor.observe({ atMs: 0, status: 503, durationMs: 40, retryAfter: '30' });
