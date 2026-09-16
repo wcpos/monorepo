@@ -50,6 +50,12 @@ const TIER_COLLECTIONS = [
 ] as const;
 
 describe('engine scope recipe: the scheduler/coverage tier', () => {
+	it('opts catalogue collections out of persisted search indexes', () => {
+		const creators = engineCollectionCreators();
+		expect(creators.products.options).toEqual({ searchIndex: false });
+		expect(creators.variations.options).toEqual({ searchIndex: false });
+	});
+
 	it('hard-whitelists only the five derivable ledger collections', async () => {
 		expect(DERIVABLE_METADATA_COLLECTIONS).toEqual([
 			'coverageRecords',
