@@ -371,6 +371,10 @@ export function useRegisterSession() {
 				return row;
 			},
 			closeSession: async (input: { counted: Record<string, string> }) => {
+				const closed =
+					session!.status === 'closed'
+						? session!
+						: await actions.closeSession(sessions!, session!.id, input);
 				const handles = pendingParents.current;
 				if (handles.length > 0) {
 					let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -414,14 +418,15 @@ export function useRegisterSession() {
 						clearTimeout(timeout);
 					}
 				}
-				const closed =
-					session!.status === 'closed'
-						? session!
-						: await actions.closeSession(sessions!, session!.id, input);
 				const accounting = latestAccounting.current;
+				const latestSession = session!.getLatest();
+				const refundRecords = accounting?.refundRecords ?? data?.refundRecords;
 				const closure = await actions.writeClosure({
 					closures: closures!,
-					tillExpected: !localPending && session!.server_expected ? expected : undefined,
+					tillExpected:
+						!localPending && latestSession.server_expected && !refundRecords?.length
+							? latestSession.server_expected
+							: undefined,
 					userDB,
 					siteUuid: site.uuid!,
 					session: closed,
@@ -431,7 +436,7 @@ export function useRegisterSession() {
 					),
 					movements: entries,
 					orders: accounting?.orders ?? accountingOrders.map(({ record }) => record),
-					refundRecords: accounting?.refundRecords ?? data?.refundRecords,
+					refundRecords,
 				});
 				logger.info('Register session closed', {
 					actor,
