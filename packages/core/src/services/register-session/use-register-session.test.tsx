@@ -691,74 +691,87 @@ it.each([false, true])(
 	}
 );
 
-// Revert to the render-time anchor or omit the refund-record guard: the frozen till misses the refund.
-it('derives the closure from a refund emitted immediately before close while anchor clearing is pending', async () => {
-	addRxPlugin(RxDBLocalDocumentsPlugin);
-	const db: StoreDatabase = await createRxDatabase({
-		name: `lateclosure${Math.random().toString(36).slice(2)}`,
-		storage: getRxStorageMemory(),
-		multiInstance: false,
-	});
-	const userDB: UserDatabase = await createRxDatabase({
-		name: `lateuser${Math.random().toString(36).slice(2)}`,
-		storage: getRxStorageMemory(),
-		localDocuments: true,
-		multiInstance: false,
-	});
-	let releasePatch!: () => void;
-	const patchPending = new Promise<void>((resolve) => {
-		releasePatch = resolve;
-	});
-	try {
-		await db.addCollections({ closures: { schema: closuresLiteral } });
-		await ensureRegister(userDB);
-		entries = [];
-		active = [
-			{
-				...active[0],
-				incrementalPatch: async (patch: Row) => {
-					await patchPending;
-					active = [{ ...active[0], ...patch }];
-					mockSessionChanges.next();
-					return active[0];
+// Revert the refund-record or pending-invalidation guard: close freezes the stale server anchor.
+it.each([false, true])(
+	'derives the closure before anchor clearing settles, allocation-only %s',
+	async (allocationOnly) => {
+		addRxPlugin(RxDBLocalDocumentsPlugin);
+		const db: StoreDatabase = await createRxDatabase({
+			name: `lateclosure${Math.random().toString(36).slice(2)}`,
+			storage: getRxStorageMemory(),
+			multiInstance: false,
+		});
+		const userDB: UserDatabase = await createRxDatabase({
+			name: `lateuser${Math.random().toString(36).slice(2)}`,
+			storage: getRxStorageMemory(),
+			localDocuments: true,
+			multiInstance: false,
+		});
+		let releasePatch!: () => void;
+		const patchPending = new Promise<void>((resolve) => {
+			releasePatch = resolve;
+		});
+		try {
+			await db.addCollections({ closures: { schema: closuresLiteral } });
+			await ensureRegister(userDB);
+			entries = [];
+			active = [
+				{
+					...active[0],
+					incrementalPatch: async (patch: Row) => {
+						await patchPending;
+						active = [{ ...active[0], ...patch }];
+						mockSessionChanges.next();
+						return active[0];
+					},
 				},
-			},
-		];
-		mockOrders.next([parentHit()]);
-		jest.mocked(actions.closeSession).mockResolvedValueOnce({
-			...session,
-			status: 'closed',
-			closed_at_gmt: '2026-09-15T11:00:00',
-		} as never);
-		const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
-		jest
-			.mocked(actions.writeClosure)
-			.mockImplementationOnce((input) => writeClosure({ ...input, closures: db.closures, userDB }));
-		const result = await settled();
-		expect(result.current.expected).toEqual({ cash: '100' });
-		let closing!: ReturnType<typeof result.current.actions.closeSession>;
-		await act(async () => {
-			mockRefunds.next([refundHit()]);
-			closing = result.current.actions.closeSession({ counted: { cash: '100' } });
-			await closing;
-		});
-		expect(active[0].server_expected).toEqual({ cash: '100' });
-		expect((await closing).toJSON()).toMatchObject({
-			period_refunds_total: '20.0000',
-			till_expected: { cash: '100.0000', stripe: '-20.0000' },
-			breakdowns: {
-				refund_count: 1,
-				payment_methods: { stripe: { sales: '0', refunds: '20.0000' } },
-			},
-		});
-	} finally {
-		await act(async () => {
-			releasePatch();
-		});
-		await db.remove();
-		await userDB.remove();
+			];
+			mockOrders.next([allocationOnly ? parentHit('session', false, '2026-09-15') : parentHit()]);
+			jest.mocked(actions.closeSession).mockResolvedValueOnce({
+				...session,
+				status: 'closed',
+				closed_at_gmt: '2026-09-15T11:00:00',
+			} as never);
+			const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
+			jest
+				.mocked(actions.writeClosure)
+				.mockImplementationOnce((input) =>
+					writeClosure({ ...input, closures: db.closures, userDB })
+				);
+			const result = await settled();
+			expect(result.current.expected).toEqual({ cash: '100' });
+			let closing!: ReturnType<typeof result.current.actions.closeSession>;
+			await act(async () => {
+				if (allocationOnly) {
+					// The close already wrote the session, but its closure still needs recovery.
+					Object.assign(active[0], { status: 'closed', closed_at_gmt: '2026-09-15T11:00:00' });
+					mockOrders.next([parentHit('session', true, '2026-09-15')]);
+				} else {
+					mockRefunds.next([refundHit()]);
+				}
+				closing = result.current.actions.closeSession({ counted: { cash: '100' } });
+				await closing;
+			});
+			expect(active[0].server_expected).toEqual({ cash: '100' });
+			expect((await closing).toJSON()).toMatchObject({
+				period_refunds_total: '20.0000',
+				till_expected: { cash: '100.0000', stripe: allocationOnly ? '80.0000' : '-20.0000' },
+				breakdowns: {
+					refund_count: 1,
+					payment_methods: {
+						stripe: { sales: allocationOnly ? '100.0000' : '0', refunds: '20.0000' },
+					},
+				},
+			});
+		} finally {
+			await act(async () => {
+				releasePatch();
+			});
+			await db.remove();
+			await userDB.remove();
+		}
 	}
-});
+);
 
 // Remove the parent wait or use the pre-wait accounting: the closure records cash instead of card.
 it('waits for missing refund parents before computing the closure tender', async () => {

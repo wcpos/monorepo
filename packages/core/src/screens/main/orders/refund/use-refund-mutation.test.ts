@@ -117,7 +117,9 @@ describe('useRefundMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockPost.mockResolvedValue({ data: { refund_id: 123 } });
-		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		mockEngineRequire
+			.mockReset()
+			.mockImplementation(() => ({ ready: Promise.resolve(), release: jest.fn() }));
 	});
 
 	it('posts the stable refund payload with an idempotency header and refreshes the order', async () => {
@@ -157,6 +159,61 @@ describe('useRefundMutation', () => {
 		});
 		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 	});
+
+	// Revert the by-parent declaration/await: a successful refund resolves before its record exists.
+	it.each([false, true])(
+		'awaits the refund record after the parent refresh, rejection %s',
+		async (rejectRefresh) => {
+			let resolveParent!: () => void;
+			let resolveRefund!: () => void;
+			let rejectRefund!: (error: Error) => void;
+			const parentReady = new Promise<void>((resolve) => {
+				resolveParent = resolve;
+			});
+			const refundReady = new Promise<void>((resolve, reject) => {
+				resolveRefund = resolve;
+				rejectRefund = reject;
+			});
+			const releaseParent = jest.fn();
+			const releaseRefund = jest.fn();
+			mockEngineRequire
+				.mockReturnValueOnce({ ready: parentReady, release: releaseParent })
+				.mockReturnValueOnce({ ready: refundReady, release: releaseRefund });
+			const { result } = renderHook(() => useRefundMutation());
+			let finished = false;
+			const mutation = result
+				.current({
+					order: makeOrder(77) as never,
+					amount: '10.00',
+					reason: 'Counter refund',
+					lineItems: [],
+					refundDestination: 'cash',
+				})
+				.then((response) => {
+					finished = true;
+					return response;
+				});
+			await act(async () => {});
+			expect(mockEngineRequire).toHaveBeenCalledTimes(1);
+			await act(async () => resolveParent());
+			expect(mockEngineRequire).toHaveBeenNthCalledWith(2, {
+				id: 'refund:record-refresh:77',
+				kind: 'refunds-by-parent',
+				collection: 'refunds',
+				parentRemoteId: '77',
+				forceRefresh: true,
+			});
+			expect(releaseParent).toHaveBeenCalledTimes(1);
+			expect(finished).toBe(false);
+			await act(async () => {
+				if (rejectRefresh) rejectRefund(new Error('refund_refresh_failed'));
+				else resolveRefund();
+				await expect(mutation).resolves.toEqual({ refund_id: 123 });
+			});
+			expect(releaseRefund).toHaveBeenCalledTimes(1);
+			expect(mockPost).toHaveBeenCalledTimes(1);
+		}
+	);
 
 	it('resolves when engine.require itself throws synchronously — the refund already succeeded', async () => {
 		const order = makeOrder(78);

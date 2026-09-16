@@ -44,6 +44,7 @@ const REFUND_PARENT_WAIT_MS = 15_000;
 
 export function useRegisterSession() {
 	const missingParentKey = React.useRef('');
+	const anchorInvalidationPending = React.useRef(false);
 	const [accountingChanges] = React.useState(() => new Subject<void>());
 	const pendingParents = React.useRef<RequirementHandle[]>([]);
 	const latestAccounting = React.useRef<Pick<
@@ -166,13 +167,6 @@ export function useRegisterSession() {
 						);
 					}),
 					tap((accounting) => {
-						latestAccounting.current = {
-							orders: accounting.orders.hits.map(({ record }) => record),
-							refundRecords: accounting.refundRecords,
-						};
-						accountingChanges.next();
-					}),
-					concatMap(async (accounting) => {
 						const allocations = accounting.orders.hits
 							.flatMap(({ record }) => readLedger(record.payload.meta_data))
 							.filter((row) => row.refunds?.length || toMinor(row.refunded_amount, 4) > 0)
@@ -191,9 +185,21 @@ export function useRegisterSession() {
 								? accounting.refundRecords.length > 0
 								: signature !== previousRefunds;
 						previousRefunds = signature;
-						// Null the persisted anchor before publishing changed money; session refresh can re-anchor it later.
-						if (changed && current.getLatest().server_expected) {
-							await current.getLatest().incrementalPatch({ server_expected: null });
+						if (changed) anchorInvalidationPending.current = true;
+						latestAccounting.current = {
+							orders: accounting.orders.hits.map(({ record }) => record),
+							refundRecords: accounting.refundRecords,
+						};
+						accountingChanges.next();
+					}),
+					concatMap(async (accounting) => {
+						// Close must derive while the persisted anchor is still being cleared.
+						try {
+							if (anchorInvalidationPending.current && current.getLatest().server_expected) {
+								await current.getLatest().incrementalPatch({ server_expected: null });
+							}
+						} finally {
+							anchorInvalidationPending.current = false;
 						}
 						return accounting;
 					})
@@ -424,7 +430,10 @@ export function useRegisterSession() {
 				const closure = await actions.writeClosure({
 					closures: closures!,
 					tillExpected:
-						!localPending && latestSession.server_expected && !refundRecords?.length
+						!localPending &&
+						!anchorInvalidationPending.current &&
+						latestSession.server_expected &&
+						!refundRecords?.length
 							? latestSession.server_expected
 							: undefined,
 					userDB,

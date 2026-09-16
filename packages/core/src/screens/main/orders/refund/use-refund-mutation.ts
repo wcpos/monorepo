@@ -3,7 +3,7 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { mintRemoteId, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
@@ -127,6 +127,25 @@ export function useRefundMutation() {
 				});
 			} finally {
 				handle?.release();
+			}
+
+			let refundHandle;
+			try {
+				refundHandle = runtime.engine.require({
+					id: `refund:record-refresh:${orderId}`,
+					kind: 'refunds-by-parent',
+					collection: 'refunds',
+					parentRemoteId: mintRemoteId(orderId, 'refund parent'),
+					forceRefresh: true,
+				});
+				await refundHandle.ready;
+			} catch (error) {
+				// As with the parent refresh, the money has already moved; never invite a retry.
+				refundLogger.warn('Refund succeeded but the local refund record refresh failed', {
+					context: { orderId, error: getErrorMessage(error) },
+				});
+			} finally {
+				refundHandle?.release();
 			}
 
 			return response?.data;
