@@ -138,13 +138,6 @@ export function observeCoverage(
 	);
 }
 
-function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): LegacyMangoSelector {
-	const searchSelector = { uuid: { $in: ids } } as LegacyMangoSelector;
-	return Object.keys(selector).length === 0
-		? searchSelector
-		: ({ $and: [selector, searchSelector] } as LegacyMangoSelector);
-}
-
 /**
  * The fallback answer when the index cannot answer: match the query directly
  * against the documents: products/variations require every term, including short ones;
@@ -176,15 +169,15 @@ function matchingSelectors$(
 	database: AdapterDatabase,
 	descriptor: EngineQueryDescriptor,
 	locale: string
-): Observable<LegacyMangoSelector> {
+): Observable<{ selector: LegacyMangoSelector; hitIds: string[] | null }> {
 	const selector = descriptor.selector ?? {};
 	const search = (descriptor.read?.search ?? descriptor.search)?.trim() ?? '';
-	if (!search) return of(selector);
+	if (!search) return of({ selector, hitIds: null });
 
 	const collectionName = engineCollectionNameFor(descriptor.collection);
 	const collection = database.collections[collectionName] as unknown as
 		SearchableCollection | undefined;
-	if (!collection?.initSearch) return of(withSearchSelector(selector, []));
+	if (!collection?.initSearch) return of({ selector, hitIds: [] });
 	const documentSnapshot = (document: EngineRxDocument): Record<string, unknown> =>
 		legacySearchSnapshot(descriptor.collection, document);
 
@@ -193,7 +186,7 @@ function matchingSelectors$(
 	// scan path with the typed NFC "Cè" (#1732). A query that folds away entirely
 	// (only combining marks) matches everything, like WooCommerce's ai_ci LIKE would.
 	const foldedSearch = foldSearchText(search);
-	if (!foldedSearch) return of(selector);
+	if (!foldedSearch) return of({ selector, hitIds: null });
 	const phraseSearch =
 		descriptor.collection === 'products' || descriptor.collection === 'variations';
 	const terms = phraseSearch ? searchTerms(search) : null;
@@ -213,20 +206,18 @@ function matchingSelectors$(
 		return collection.$.pipe(
 			startWith(null),
 			switchMap(() => from(collection.find().exec())),
-			map((documents) =>
-				withSearchSelector(
-					selector,
-					documents
-						.filter((document) => {
-							const snapshot = documentSnapshot(document);
-							const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-							return terms
-								? fieldsMatchAllTerms(fields, terms)
-								: fieldsMatchShortPrefix(fields, prefix);
-						})
-						.map((document) => document.primary)
-				)
-			)
+			map((documents) => ({
+				selector,
+				hitIds: documents
+					.filter((document) => {
+						const snapshot = documentSnapshot(document);
+						const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
+						return terms
+							? fieldsMatchAllTerms(fields, terms)
+							: fieldsMatchShortPrefix(fields, prefix);
+					})
+					.map((document) => document.primary),
+			}))
 		);
 	}
 	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
@@ -372,21 +363,19 @@ function matchingSelectors$(
 			})
 		);
 	}).pipe(
-		map((documents) =>
-			withSearchSelector(
-				selector,
-				documents
-					.filter(
-						(document) =>
-							!terms ||
-							fieldsMatchAllTerms(
-								searchFields.map((field) => String(get(documentSnapshot(document), field) ?? '')),
-								terms
-							)
-					)
-					.map((document) => document.primary)
-			)
-		)
+		map((documents) => ({
+			selector,
+			hitIds: documents
+				.filter(
+					(document) =>
+						!terms ||
+						fieldsMatchAllTerms(
+							searchFields.map((field) => String(get(documentSnapshot(document), field) ?? '')),
+							terms
+						)
+				)
+				.map((document) => document.primary),
+		}))
 	);
 }
 
@@ -428,11 +417,12 @@ export function observeEngineQuery(
 				return of(search ? pendingSearchResult() : emptyResult());
 			}
 			return matchingSelectors$(database, descriptor, locale).pipe(
-				switchMap((selector) =>
+				switchMap(({ selector, hitIds }) =>
 					executeAdapterQuery({
 						database,
 						collection: descriptor.collection,
 						selector,
+						hitIds,
 						sort: descriptor.sort,
 						skip: descriptor.skip,
 						limit: descriptor.limit,

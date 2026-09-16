@@ -1,4 +1,5 @@
-import { combineLatest, Observable } from 'rxjs';
+import { getQueryMatcher, getSortComparator, normalizeMangoQuery } from 'rxdb';
+import { combineLatest, map, Observable, of } from 'rxjs';
 
 import { compareRemoteIds, remoteIdOrNull } from '@wcpos/sync-core';
 
@@ -11,11 +12,13 @@ import {
 } from './collection-map';
 import { type LegacyMangoSelector, translateSelector } from './translate-selector';
 
-import type { MangoQuerySelector, MangoQuerySortPart, RxDocument } from 'rxdb';
+import type { MangoQuerySelector, MangoQuerySortPart, RxDocument, RxJsonSchema } from 'rxdb';
 
 export type EngineRxDocument = RxDocument<EngineDocument>;
 
 type AdapterCollection = {
+	schema: { jsonSchema: RxJsonSchema<EngineDocument> };
+	findByIds(ids: string[]): { $: Observable<Map<string, EngineRxDocument>> };
 	find(query: {
 		selector: MangoQuerySelector<EngineDocument>;
 		sort?: MangoQuerySortPart<EngineDocument>[];
@@ -63,6 +66,7 @@ export type ExecuteAdapterQueryOptions = {
 	skip?: number;
 	limit?: number;
 	read?: CompiledQueryRead;
+	hitIds?: string[] | null;
 };
 
 function comparableValue(
@@ -213,6 +217,7 @@ export function executeAdapterQuery({
 	skip = 0,
 	limit,
 	read,
+	hitIds,
 }: ExecuteAdapterQueryOptions): Observable<AdapterQueryResult> {
 	const compiledWithSearch = read && Object.keys(selector).length > 0;
 	const selectorRead =
@@ -248,6 +253,58 @@ export function executeAdapterQuery({
 			subscriber.next({ hits: [], count: 0 });
 		});
 	}
+	function projectDocuments(
+		documents: EngineRxDocument[],
+		storageOrder?: (left: EngineDocument, right: EngineDocument) => number
+	): AdapterQueryResult {
+		const matching = complete
+			? documents
+			: documents.filter((document) => residual(document as EngineDocument));
+		const ordered = storageOrder
+			? [...matching].sort((left, right) => storageOrder(left.toJSON(true), right.toJSON(true)))
+			: read
+				? sortCompiledDocuments(matching, read.sort)
+				: sortDocuments(collection, matching, sort);
+		const offset = Math.max(0, effectiveSkip);
+		const hits =
+			effectiveLimit === undefined
+				? ordered.slice(offset)
+				: ordered.slice(offset, offset + Math.max(0, effectiveLimit));
+		return {
+			hits,
+			count: matching.length,
+		};
+	}
+	if (Array.isArray(hitIds)) {
+		if (hitIds.length === 0) return of({ hits: [], count: 0 });
+		const schema = engineCollection.schema.jsonSchema;
+		const matcher =
+			Object.keys(prefilter).length > 0
+				? getQueryMatcher(schema, normalizeMangoQuery(schema, { selector: prefilter }))
+				: undefined;
+		// A pushable sort was the STORAGE's order before this path existed (code-unit
+		// order on the index string, 'Zoo' before 'apple'); keep it byte-for-byte so a
+		// panel never orders differently with and without a search term. Non-pushable
+		// sorts already went through the JS sorters below.
+		const storageOrder =
+			complete && engineSort.pushable
+				? getSortComparator(
+						schema,
+						normalizeMangoQuery(schema, {
+							selector: prefilter,
+							sort: engineSort.sort.length > 0 ? engineSort.sort : [{ uuid: 'asc' }],
+						})
+					)
+				: undefined;
+		return engineCollection.findByIds(hitIds).$.pipe(
+			map((documents) =>
+				projectDocuments(
+					[...documents.values()].filter((document) => !matcher || matcher(document.toJSON(true))),
+					storageOrder
+				)
+			)
+		);
+	}
 	if (complete && engineSort.pushable) {
 		const query = engineCollection.find({
 			selector: prefilter,
@@ -276,21 +333,7 @@ export function executeAdapterQuery({
 	return new Observable<AdapterQueryResult>((subscriber) => {
 		const subscription = query.$.subscribe({
 			next: (documents) => {
-				const matching = complete
-					? documents
-					: documents.filter((document) => residual(document as EngineDocument));
-				const ordered = read
-					? sortCompiledDocuments(matching, read.sort)
-					: sortDocuments(collection, matching, sort);
-				const offset = Math.max(0, effectiveSkip);
-				const hits =
-					effectiveLimit === undefined
-						? ordered.slice(offset)
-						: ordered.slice(offset, offset + Math.max(0, effectiveLimit));
-				subscriber.next({
-					hits,
-					count: matching.length,
-				});
+				subscriber.next(projectDocuments(documents));
 			},
 			error: (error: unknown) => subscriber.error(error),
 			complete: () => subscriber.complete(),
