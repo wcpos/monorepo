@@ -1,9 +1,14 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { isolatedVariationMatrixTest as test, variationMatrixProbe } from './checkout-probe';
+import {
+	isolatedVariationMatrixTest as test,
+	variationMatrixProbe,
+	workerStoreUrl,
+} from './checkout-probe';
 import { becomesVisible } from './fixtures';
 import { ensureGridView } from './pos-view-mode';
 import { searchAndWaitForServer } from './search-probe';
+import { readPreventOverselling } from './visibility-probe';
 
 /**
  * The variation popover's button states.
@@ -149,19 +154,44 @@ test.describe('POS variation popover option states', () => {
 		await expect(addToCart).toBeVisible();
 	});
 
-	test('offers an unsellable combination but refuses to add it', async ({ posPage: page }) => {
+	test('offers an unsellable combination; Add to Cart follows Avoid overselling', async ({
+		posPage: page,
+		productProbeRequest,
+		productWriter,
+	}, workerInfo) => {
 		const probe = variationMatrixProbe(page)!;
+		// The store decides whether an out-of-stock line may be sold. Read it rather than assume
+		// it: before 2026-09-16 this spec asserted `toBeDisabled()` unconditionally, which passed
+		// only because the popover ignored the setting — the very bug two stores reported (an
+		// out-of-stock SIMPLE product sold fine with the switch off; a variation never could).
+		const preventOverselling = await readPreventOverselling(
+			productProbeRequest,
+			workerStoreUrl(workerInfo),
+			productWriter
+		);
 		// Cleared, so the out-of-stock combination is in view and reachable.
 		await clearStockStatusPill(page);
 		const dialog = await openMatrixPopover(page, probe.id);
 
 		// Red/Large exists and is out of stock. Resolving to it is allowed — the cashier is
-		// entitled to see the price and the stock badge — but Add to Cart must refuse.
+		// entitled to see the price and the stock badge either way.
 		await dialog.getByTestId('variation-option-Red').click();
 		await dialog.getByTestId('variation-option-Large').click();
 
 		const addToCart = page.getByTestId('variation-popover-add-to-cart');
 		await expect(addToCart).toBeVisible({ timeout: 20_000 });
-		await expect(addToCart).toBeDisabled();
+		await expect(dialog.getByTestId('variation-popover-stock-badge')).toBeVisible();
+
+		if (preventOverselling) {
+			// Avoid overselling ON: the popover refuses up front, as the cart guard would.
+			await expect(addToCart).toBeDisabled();
+			return;
+		}
+
+		// Avoid overselling OFF: the variation sells exactly like an out-of-stock simple product.
+		await expect(addToCart).toBeEnabled();
+		await addToCart.click();
+		await expect(page.getByTestId('success-toast').first()).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 	});
 });

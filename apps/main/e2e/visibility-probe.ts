@@ -55,7 +55,7 @@ const POS_ONLY_PRODUCTS_KEY = 'pos_only_products';
 const DEFAULT_SCOPE = 'default';
 
 type VisibilitySection = 'products' | 'variations';
-type SettingsSection = 'general' | 'visibility';
+type SettingsSection = 'general' | 'visibility' | 'checkout';
 
 type IdList = { ids?: unknown };
 type ScopeEntry = { pos_only?: IdList; online_only?: IdList };
@@ -291,6 +291,23 @@ export async function revealProductToPos(
 }
 
 /** Whether the store currently hides this product from the POS — the server's own answer. */
+/**
+ * The store's "Avoid overselling" switch (Checkout section, `prevent_overselling`), read
+ * as the writer identity. A spec asserting whether the POS lets an out-of-stock item into
+ * the cart must branch on THIS rather than assume either state: the value is store-global
+ * and a dev store's setting is not the spec's to flip (a write would race every
+ * concurrent run's carts). Throws when the section cannot be read — a declared writer
+ * that cannot read settings is a broken environment, not a skip.
+ */
+export async function readPreventOverselling(
+	request: APIRequestContext,
+	storeUrl: string,
+	authorization: StoreAuthorization | null
+): Promise<boolean> {
+	const checkout = await readSection(request, storeUrl, 'checkout', authorization);
+	return checkout.prevent_overselling === true;
+}
+
 export async function isProductHiddenFromPos(
 	request: APIRequestContext,
 	storeUrl: string,

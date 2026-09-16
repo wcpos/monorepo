@@ -169,7 +169,8 @@ export const parseAttributes = (
  * sellable, so the old sellability test passed it) and left every `instock` colour selectable
  * under an `outofstock` pill, both of which the table hides.
  *
- * An unset filter disables nothing; Add to Cart still refuses an unsellable variation on its own.
+ * An unset filter disables nothing; Add to Cart refuses an unsellable variation on its own
+ * while the store prevents overselling, and sells it (like a simple product) when it does not.
  */
 export function getDisabledVariationOptions(
 	attribute: NonNullable<ProductDocument['attributes']>[number],
