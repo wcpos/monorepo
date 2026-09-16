@@ -7,7 +7,11 @@ import type { FetchTask } from './replication-policy';
 import type { LocalRefundDocument } from '../collections/refund-schema';
 import type { BuildCoverageDocumentsFromQueryResultInput } from './query-coverage-writes';
 
-const row = (id: number, parent_id = 42, meta_data: { key: string; value: string }[] = []) => ({
+const row = (
+	id: number,
+	parent_id = 42,
+	meta_data: { key: string; value: string | number }[] = []
+) => ({
 	id,
 	parent_id,
 	amount: '20.0000',
@@ -26,7 +30,8 @@ const task = (queryKey = 'refunds:history:days=92'): FetchTask => ({
 });
 function setup(
 	pages: ReturnType<typeof row>[][],
-	held = new Map<number, number[] | null>([[42, null]])
+	held = new Map<number, number[] | null>([[42, null]]),
+	scope?: { storeId?: string | number }
 ) {
 	const documents: LocalRefundDocument[] = [];
 	const requests: URL[] = [];
@@ -38,15 +43,17 @@ function setup(
 		for (let i = documents.length - 1; i >= 0; i -= 1)
 			if (ids.includes(documents[i].uuid)) documents.splice(i, 1);
 	});
+	const upsertMany = vi.fn(async (rows: LocalRefundDocument[]) => {
+		documents.push(...rows);
+	});
 	const fetcher = createRefundsSchedulerFetcher({
 		baseUrl: 'https://example.test/wp-json/wcpos/v2',
+		scope,
 		nowMs: () => now,
 		heldParentIds,
 		repository: {
 			removeMany,
-			upsertMany: async (rows) => {
-				documents.push(...rows);
-			},
+			upsertMany,
 		},
 		coverageRepository: {
 			recordQueryResult: async (value) => {
@@ -59,10 +66,48 @@ function setup(
 			return new Response(JSON.stringify(pages[requests.length - 1]), { status: 200 });
 		},
 	});
-	return { fetcher, documents, requests, coverage, heldParentIds };
+	return { fetcher, documents, requests, coverage, heldParentIds, upsertMany };
 }
 
 describe('refund paged upsert-only fetcher', () => {
+	// Revert scoped admission: store 2 is written when this till belongs to store 1.
+	it('admits only matching stores when scoped, and all POS stores when unscoped', async () => {
+		const rows = [
+			row(1, 99, [{ key: '_pos_store', value: 2 }]),
+			row(2, 99, [{ key: '_pos_store', value: '1' }]),
+			row(3, 99, [{ key: '_pos_user', value: '7' }]),
+		];
+		const scoped = setup([rows], new Map(), { storeId: ' 1 ' });
+		expect(await scoped.fetcher(task())).toMatchObject({ documentCount: 2 });
+		expect(scoped.upsertMany.mock.calls[0][0].map((doc) => doc.payload.id)).toEqual([2, 3]);
+		expect(scoped.documents.map((doc) => doc.payload.id)).toEqual([2, 3]);
+		expect(scoped.coverage.at(-1)?.records).toEqual([
+			{ id: 'woo-refund:2' },
+			{ id: 'woo-refund:3' },
+		]);
+		const unscoped = setup([rows], new Map());
+		expect(await unscoped.fetcher(task())).toMatchObject({ documentCount: 3 });
+		expect(unscoped.documents.map((doc) => doc.payload.id)).toEqual([1, 2, 3]);
+	});
+
+	// Revert scoped confirmation: the foreign refund survives after its held parent disappears.
+	it('removes a foreign store refund after upsert when its parent disappears', async () => {
+		const h = setup(
+			[
+				[
+					row(1, 42, [{ key: '_pos_store', value: '2' }]),
+					row(2, 42, [{ key: '_pos_store', value: 1 }]),
+				],
+			],
+			new Map([[42, null]]),
+			{ storeId: 1 }
+		);
+		h.heldParentIds.mockResolvedValueOnce(new Map([[42, null]])).mockResolvedValueOnce(new Map());
+		expect(await h.fetcher(task())).toMatchObject({ documentCount: 1 });
+		expect(h.documents.map((doc) => doc.payload.id)).toEqual([2]);
+		expect(h.coverage.at(-1)?.records).toEqual([{ id: 'woo-refund:2' }]);
+	});
+
 	// Restore cumulative per-page recordCoverage: the first page's coverage rows are written three times.
 	it('writes each refund coverage row once across three pages and completes the cumulative lane once', async () => {
 		const h = setup([[row(1)], [row(2)], []]);
@@ -93,7 +138,8 @@ describe('refund paged upsert-only fetcher', () => {
 	});
 
 	// Revert the absent-parent confirmation branch: the unstamped orphan remains stored and covered.
-	it.each(['_wcpos_session', '_wcpos_register'])(
+	// Revert confirmation to session/register-only stamps: the Pro-stamped sibling is removed.
+	it.each(['_wcpos_session', '_wcpos_register', '_pos_user', '_pos_store'])(
 		'removes unstamped refunds when the parent disappears but retains a %s sibling',
 		async (stamp) => {
 			const h = setup([[row(1), row(2, 42, [{ key: stamp, value: 'pos' }])]]);
@@ -150,6 +196,17 @@ describe('refund paged upsert-only fetcher', () => {
 			buildCoverageDocumentsFromQueryResult(h.coverage.at(-1)!).lanes[0].expectedRecordIds
 		).toHaveLength(101);
 	});
+	// Revert either provenance check to session/register-only: the absent-parent Pro refund is lost.
+	it.each(['_pos_user', '_pos_store'])(
+		'admits a %s-only refund without a held parent',
+		async (key) => {
+			const h = setup([[row(1, 99, [{ key, value: 'pos' }])]]);
+			expect(await h.fetcher(task())).toMatchObject({ documentCount: 1 });
+			expect(h.documents.map((doc) => doc.payload.id)).toEqual([1]);
+			expect(h.coverage.at(-1)?.records).toEqual([{ id: 'woo-refund:1' }]);
+		}
+	);
+
 	it('admits held parents or POS metadata but not a UUID alone', async () => {
 		const h = setup([
 			[

@@ -3,6 +3,7 @@
 
 import {
 	assertBulkSuccess,
+	hasPosRefundStamp,
 	normalizeCheckpoint,
 	type OrderDocument,
 	POS_META_KEYS,
@@ -312,10 +313,7 @@ export class EngineOrderRepository {
 		const orphanIds = held
 			.filter(
 				(doc) =>
-					!residentIds.has(doc.payload.parent_id) &&
-					!doc.payload.meta_data?.some(
-						({ key }) => key === '_wcpos_session' || key === '_wcpos_register'
-					)
+					!residentIds.has(doc.payload.parent_id) && !hasPosRefundStamp(doc.payload.meta_data)
 			)
 			.map((doc) => doc.uuid);
 		if (orphanIds.length > 0)

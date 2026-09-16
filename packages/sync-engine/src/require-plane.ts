@@ -263,6 +263,7 @@ export type RequirePlaneDeps = {
 	awaitReady: () => Promise<void>;
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
+	storeIdFor?: (scopeId: string) => string | number | undefined;
 	coverageFor: (scopeId: string) => LocalCoverage | null;
 	fetcher: EngineSourceFetcher;
 	syncBaseUrl: string;
@@ -818,6 +819,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 			/** One drain tick carrying the require-plane's invariant arguments. */
 			const drainScheduler = (overrides: RequirementDrainOverrides = {}) =>
 				runEngineSchedulerDrain({
+					scope: { storeId: deps.storeIdFor?.(bound.scopeId) },
 					db: schedulerDb,
 					coverage,
 					baseUrl: deps.syncBaseUrl,

@@ -116,6 +116,20 @@ async function readRefunds(h: Awaited<ReturnType<typeof harness>>, parentId?: nu
 }
 
 describe('refund requirements', () => {
+	// Remove scope forwarding through the require-plane/drain: the foreign refund reaches storage.
+	it('uses the active store scope to reject foreign POS refunds without held parents', async () => {
+		const h = await harness(() =>
+			Response.json(
+				[1, 3].map((storeId) => ({
+					...row(storeId),
+					meta_data: [{ key: '_pos_store', value: storeId }],
+				}))
+			)
+		);
+		await refresh(h);
+		expect((await readRefunds(h)).map((doc) => doc.payload.id)).toEqual([3]);
+	});
+
 	// Revert the protected-parent guard: stale empty summaries reject both incoming rows.
 	it.each([
 		{ dirty: true, pendingMutationIds: [] },
@@ -219,7 +233,8 @@ describe('refund requirements', () => {
 	});
 
 	// Revert to captured parent ids: retry after the first successful drop leaves unstamped orphans.
-	it('retries the reset cascade without parents and preserves both POS stamp kinds', async () => {
+	// Revert to session/register-only stamps: reset deletes the Pro-stamped refunds 5 and 6.
+	it('retries the reset cascade without parents and preserves all POS stamp kinds', async () => {
 		const h = await harness(() => Response.json([]));
 		const scope = await h.engine.whenActive();
 		await new EngineOrderRepository(scope.database.collections as never).upsertMany([parent(42)]);
@@ -228,6 +243,8 @@ describe('refund requirements', () => {
 			[2, [{ key: '_wcpos_session', value: 'B' }]],
 			[3, [{ key: '_wcpos_register', value: 'R' }]],
 			[4, []],
+			[5, [{ key: '_pos_store', value: 'store' }]],
+			[6, [{ key: '_pos_user', value: 'user' }]],
 		] as const) {
 			await h.collection('refunds').insert(
 				materializeRefund({
@@ -242,9 +259,9 @@ describe('refund requirements', () => {
 			.mockRejectedValueOnce(new Error('cascade failed'));
 		await expect(h.engine.scope.resetCollection('orders')).rejects.toThrow('cascade failed');
 		expect(await scope.database.collections.orders.find().exec()).toHaveLength(0);
-		expect(await readRefunds(h)).toHaveLength(4);
+		expect(await readRefunds(h)).toHaveLength(6);
 		await expect(h.engine.scope.resetCollection('orders')).resolves.toBe('reset');
-		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([2, 3]);
+		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([2, 3, 5, 6]);
 		remove.mockRestore();
 	});
 

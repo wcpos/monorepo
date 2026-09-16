@@ -103,12 +103,15 @@ describe('order refund reconciliation', () => {
 	);
 
 	// Revert to cascading removed parent ids: retry cannot remove the now-orphaned children.
+	// Revert to session/register-only stamps: resync deletes the Pro-stamped refunds 6 and 7.
 	it('retries resync cleanup after parents are gone, preserving protected children and POS stamps', async () => {
 		const h = await harness();
 		await h.repo.upsertMany([parent(42, [{ id: 1 }, { id: 2 }]), parent(43, [{ id: 3 }])]);
 		for (const [id, key] of [
 			[4, '_wcpos_session'],
 			[5, '_wcpos_register'],
+			[6, '_pos_store'],
+			[7, '_pos_user'],
 		] as const) {
 			await h.collection('refunds').insert(
 				materializeRefund({
@@ -126,9 +129,9 @@ describe('order refund reconciliation', () => {
 		try {
 			await expect(h.repo.resetForResync(pending)).rejects.toThrow('child remove failed');
 			expect(await h.collection('orders').findOne(parent(42).uuid).exec()).toBeNull();
-			expect(await h.ids()).toEqual([1, 2, 3, 4, 5]);
+			expect(await h.ids()).toEqual([1, 2, 3, 4, 5, 6, 7]);
 			await h.repo.resetForResync(pending);
-			expect(await h.ids()).toEqual([3, 4, 5]);
+			expect(await h.ids()).toEqual([3, 4, 5, 6, 7]);
 			expect(await h.collection('orders').findOne(parent(43).uuid).exec()).not.toBeNull();
 		} finally {
 			remove.mockRestore();
