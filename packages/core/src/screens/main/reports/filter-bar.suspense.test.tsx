@@ -57,6 +57,7 @@ jest.mock('../orders/force-refresh-filter-customer', () => ({
 }));
 jest.mock('../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials }),
+	useAppState: () => ({ site: { timezone_string: 'UTC', gmt_offset: '0' }, store: {} }),
 }));
 jest.mock('../../../hooks/use-local-date', () => ({
 	convertLocalDateToUTCString: (date: Date) => date.toISOString(),

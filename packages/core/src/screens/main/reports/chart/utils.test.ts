@@ -31,6 +31,8 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (dateString: string) => new Date(dateString),
 }));
 
+const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 describe('Chart Utils', () => {
 	describe('getNiceMinuteInterval', () => {
 		it('should return 30 for spans <= 6 hours (360 min / 12 = 30)', () => {
@@ -141,7 +143,7 @@ describe('Chart Utils', () => {
 				end: new Date('2023-01-01T23:59:59'),
 			};
 
-			const result = getEffectiveDailyRange(dateRange, []);
+			const result = getEffectiveDailyRange(dateRange, [], zone);
 
 			expect(result.start).toEqual(new Date('2023-01-01T00:00:00'));
 			expect(result.end.getHours()).toBe(23);
@@ -158,7 +160,7 @@ describe('Chart Utils', () => {
 				end: new Date('2023-01-01T23:59:59'),
 			};
 
-			const result = getEffectiveDailyRange(dateRange, orders);
+			const result = getEffectiveDailyRange(dateRange, orders, zone);
 
 			// Should expand to 10:00 - 15:00 (hour boundaries: start of earliest hour, 1hr after latest hour)
 			expect(result.start).toEqual(new Date('2023-01-01T10:00:00'));
@@ -229,14 +231,14 @@ describe('Chart Utils', () => {
 		it('should generate all months between two dates', () => {
 			const startDate = new Date(2023, 0, 1);
 			const endDate = new Date(2023, 2, 1);
-			const dates = generateAllDates(startDate, endDate, 'months');
+			const dates = generateAllDates(startDate, endDate, 'months', undefined, zone);
 			expect(dates.map((d) => format(d, 'yyyy-MM'))).toEqual(['2023-01', '2023-02', '2023-03']);
 		});
 
 		it('should generate all days between two dates', () => {
 			const startDate = new Date(2023, 0, 1);
 			const endDate = new Date(2023, 0, 3);
-			const dates = generateAllDates(startDate, endDate, 'days');
+			const dates = generateAllDates(startDate, endDate, 'days', undefined, zone);
 			expect(dates.map((d) => format(d, 'yyyy-MM-dd'))).toEqual([
 				'2023-01-01',
 				'2023-01-02',
@@ -247,7 +249,7 @@ describe('Chart Utils', () => {
 		it('should generate 30-minute intervals', () => {
 			const startDate = new Date(2023, 0, 1, 10, 0);
 			const endDate = new Date(2023, 0, 1, 12, 0);
-			const dates = generateAllDates(startDate, endDate, 'minutes', 30);
+			const dates = generateAllDates(startDate, endDate, 'minutes', 30, zone);
 			// Uses < condition, so endpoint is excluded
 			expect(dates.map((d) => format(d, 'HH:mm'))).toEqual(['10:00', '10:30', '11:00', '11:30']);
 		});
@@ -255,7 +257,7 @@ describe('Chart Utils', () => {
 		it('should generate 60-minute (hourly) intervals', () => {
 			const startDate = new Date(2023, 0, 1, 10, 0);
 			const endDate = new Date(2023, 0, 1, 14, 0);
-			const dates = generateAllDates(startDate, endDate, 'minutes', 60);
+			const dates = generateAllDates(startDate, endDate, 'minutes', 60, zone);
 			// Uses < condition, so endpoint is excluded
 			expect(dates.map((d) => format(d, 'HH:mm'))).toEqual(['10:00', '11:00', '12:00', '13:00']);
 		});
@@ -263,7 +265,7 @@ describe('Chart Utils', () => {
 		it('should generate 120-minute (2 hour) intervals', () => {
 			const startDate = new Date(2023, 0, 1, 0, 0);
 			const endDate = new Date(2023, 0, 1, 8, 0);
-			const dates = generateAllDates(startDate, endDate, 'minutes', 120);
+			const dates = generateAllDates(startDate, endDate, 'minutes', 120, zone);
 			// Uses < condition, so endpoint is excluded
 			expect(dates.map((d) => format(d, 'HH:mm'))).toEqual(['00:00', '02:00', '04:00', '06:00']);
 		});
@@ -283,7 +285,7 @@ describe('Chart Utils', () => {
 				end: new Date('2023-03-31'),
 			};
 
-			const result = aggregateData(orders, dateRange);
+			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(3);
 			expect(result[0]).toMatchObject({
@@ -320,7 +322,7 @@ describe('Chart Utils', () => {
 				end: new Date('2023-03-31'),
 			};
 
-			const result = aggregateData(orders, dateRange);
+			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(3);
 			expect(result[0]).toMatchObject({ key: '2023-01', total: 100, order_count: 1 });
@@ -341,7 +343,7 @@ describe('Chart Utils', () => {
 				end: new Date('2023-01-10'),
 			};
 
-			const result = aggregateData(orders, dateRange);
+			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(10);
 			expect(result[0]).toMatchObject({
@@ -376,7 +378,7 @@ describe('Chart Utils', () => {
 				end: new Date('2023-01-04'),
 			};
 
-			const result = aggregateData(orders, dateRange);
+			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(3);
 			expect(result[0]).toMatchObject({ key: '2023-01-02', label: 'Mon 2 Jan', total: 100 });
@@ -395,7 +397,7 @@ describe('Chart Utils', () => {
 				end: new Date('2023-01-03'),
 			};
 
-			const result = aggregateData(orders, dateRange);
+			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(3);
 			expect(result[0]).toMatchObject({ key: '2023-01-01', total: 100, order_count: 1 });
@@ -417,7 +419,7 @@ describe('Chart Utils', () => {
 					end: new Date('2023-01-01T23:59:59'),
 				};
 
-				const result = aggregateData(orders, dateRange);
+				const result = aggregateData(orders, dateRange, undefined, zone);
 
 				// Orders span 10:15 to 13:45
 				// - effectiveStart: 10:00 (start of hour containing first order)
@@ -441,7 +443,7 @@ describe('Chart Utils', () => {
 					end: new Date('2023-01-01T23:59:59'),
 				};
 
-				const result = aggregateData(orders, dateRange);
+				const result = aggregateData(orders, dateRange, undefined, zone);
 
 				// Find the 10:00 bucket (should have orders at 10:00 and 10:20)
 				const bucket1000 = result.find((d) => d.label === '10:00');
@@ -467,7 +469,7 @@ describe('Chart Utils', () => {
 					end: new Date('2023-01-01T23:59:59'),
 				};
 
-				const result = aggregateData(orders, dateRange);
+				const result = aggregateData(orders, dateRange, undefined, zone);
 
 				// 8:00 to 19:00 = 11 hours = 660 minutes
 				// 660 / 12 = 55 -> rounds up to 60 minute intervals
@@ -489,7 +491,7 @@ describe('Chart Utils', () => {
 					end: new Date('2023-01-01T23:59:59'),
 				};
 
-				const result = aggregateData(orders, dateRange);
+				const result = aggregateData(orders, dateRange, undefined, zone);
 
 				// Full day = 24 hours = 1440 minutes
 				// 1440 / 12 = 120 -> 2 hour intervals
@@ -508,7 +510,7 @@ describe('Chart Utils', () => {
 				end: new Date('2023-01-03'),
 			};
 
-			const result = aggregateData(orders, dateRange);
+			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			// Should still return the date range filled with zeros
 			expect(result).toHaveLength(3);
@@ -527,7 +529,7 @@ describe('Chart Utils', () => {
 				end: new Date('2023-01-03'),
 			};
 
-			const result = aggregateData(orders, dateRange);
+			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(3);
 			expect(result[0]).toMatchObject({ key: '2023-01-01', total: 0, order_count: 0 });
@@ -556,7 +558,7 @@ describe('Chart Utils', () => {
 					end: new Date('2023-01-01T23:59:59'),
 				};
 
-				const result = aggregateData(orders, dateRange);
+				const result = aggregateData(orders, dateRange, undefined, zone);
 
 				// Order should be found and aggregated correctly
 				const orderBucket = result.find((d) => d.order_count > 0);
@@ -575,7 +577,7 @@ describe('Chart Utils', () => {
 					end: new Date('2023-01-03'),
 				};
 
-				const result = aggregateData(orders, dateRange);
+				const result = aggregateData(orders, dateRange, undefined, zone);
 
 				// Multi-day uses daily buckets
 				const day1 = result.find((d) => d.key === '2023-01-01');
@@ -596,11 +598,38 @@ describe('Chart Utils', () => {
 					end: new Date('2023-01-01T23:59:59'),
 				};
 
-				const result = aggregateData(orders, dateRange);
+				const result = aggregateData(orders, dateRange, undefined, zone);
 
 				// Single-day reports use time-based labels like "14:00", not date labels like "Sun 1"
 				expect(result[0].label).toMatch(/^\d{2}:\d{2}$/);
 			});
 		});
+	});
+});
+
+describe('store-zone chart ranges', () => {
+	const london = 'Europe/London';
+	const start = new Date('2026-09-16T23:00:00Z');
+	const end = new Date('2026-09-19T22:59:59.999Z');
+
+	it('generates London midnights and retains late-UTC sales in the store day bucket', () => {
+		const dates = generateAllDates(start, end, 'days', undefined, london);
+		expect(dates.map((date) => new Date(date).toISOString())).toEqual([
+			'2026-09-16T23:00:00.000Z',
+			'2026-09-17T23:00:00.000Z',
+			'2026-09-18T23:00:00.000Z',
+		]);
+		const orders = [{ date_created_gmt: '2026-09-16T23:30:00Z', total: '10' }] as OrderPayload[];
+		const data = aggregateData(orders, { start, end }, undefined, london);
+		expect(data.find((bucket) => bucket.key === '2026-09-17')).toMatchObject({
+			order_count: 1,
+			total: 10,
+		});
+	});
+
+	it('uses the whole London day for an empty single-day chart', () => {
+		const range = getEffectiveDailyRange({ start, end: start }, [], london);
+		expect(new Date(range.start).toISOString()).toBe('2026-09-16T23:00:00.000Z');
+		expect(new Date(range.end).toISOString()).toBe('2026-09-17T22:59:59.999Z');
 	});
 });

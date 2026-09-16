@@ -4,6 +4,7 @@
 import * as React from 'react';
 
 import { endOfDay, startOfDay } from 'date-fns';
+import { utc } from '@date-fns/utc';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { of } from 'rxjs';
@@ -36,7 +37,11 @@ jest.mock('../hooks/use-engine-document', () => ({
 		mockUseEngineRecordByWooId(collection, wooId),
 }));
 jest.mock('../../../contexts/app-state', () => {
-	const useAppState = () => ({ wpCredentials: { populate$: () => of([]) } });
+	const useAppState = () => ({
+		wpCredentials: { populate$: () => of([]) },
+		site: { timezone_string: 'UTC', gmt_offset: '0' },
+		store: {},
+	});
 	return { useAppState, useStoreSession: useAppState };
 });
 jest.mock('../hooks/use-guest-customer', () => ({
@@ -138,8 +143,8 @@ describe('reports FilterBar bindings', () => {
 		const today = new Date(2026, 6, 15, 12);
 		expect(JSON.parse(screen.getByTestId('filters').textContent ?? '{}')).toEqual({
 			dateRange: {
-				from: startOfDay(today).toISOString(),
-				to: endOfDay(today).toISOString(),
+				from: startOfDay(today, { in: utc }).toISOString(),
+				to: endOfDay(today, { in: utc }).toISOString(),
 			},
 		});
 	});
