@@ -397,9 +397,22 @@ function ackBookkeeping(options: {
 			const doc = (await db.collections[collection]
 				.findOne(mutation.recordId)
 				.exec()) as AckDoc | null;
-			if (!doc || signal?.aborted) return; // already removed, or the scope switched
-			const remoteId = doc.toJSON().remoteId as string | null;
-			await doc.remove();
+			if (signal?.aborted) return;
+			// Delete mutations carry only the UUID, and the existence manifest has no UUID map.
+			// RxDB retains the removed row: recover its remoteId when a prior cascade failed.
+			const data =
+				doc?.toJSON() ??
+				(collection === 'orders'
+					? (
+							await db.collections.orders.storageInstance.findDocumentsById(
+								[mutation.recordId],
+								true
+							)
+						)[0]
+					: undefined);
+			if (signal?.aborted) return;
+			const remoteId = (data?.remoteId as string | null | undefined) ?? null;
+			if (doc) await doc.remove();
 			if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
 		},
 	};

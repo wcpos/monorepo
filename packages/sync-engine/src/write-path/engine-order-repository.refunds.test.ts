@@ -113,6 +113,27 @@ describe('order refund reconciliation', () => {
 		expect(await h.ids()).toEqual([3]);
 	});
 
+	// Revert to returning when the parent is absent: retry leaves its refund children orphaned.
+	it('retries the delete acknowledgement cascade after parent removal succeeded', async () => {
+		const h = await harness();
+		await h.repo.upsertMany([parent(42, [{ id: 1 }, { id: 2 }])]);
+		const mutation = { mutationId: 'delete-parent', recordId: parent(42).uuid };
+		const remove = vi
+			.spyOn(h.collection('refunds'), 'bulkRemove')
+			.mockRejectedValueOnce(new Error('child remove failed'));
+		try {
+			await expect(
+				writeFacetFor('orders')!.onDeleteAck(h.scope.database, mutation)
+			).rejects.toThrow('child remove failed');
+			expect(await h.collection('orders').findOne(mutation.recordId).exec()).toBeNull();
+			expect(await h.ids()).toEqual([1, 2, 3]);
+			await writeFacetFor('orders')!.onDeleteAck(h.scope.database, mutation);
+			expect(await h.ids()).toEqual([3]);
+		} finally {
+			remove.mockRestore();
+		}
+	});
+
 	// Revert the current-parent reread: the older empty summary deletes refund 1.
 	it('keeps a refund listed by the current parent after two upserts interleave', async () => {
 		const h = await harness();

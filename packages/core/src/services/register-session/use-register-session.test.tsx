@@ -627,3 +627,89 @@ it('waits for missing refund parents before computing the closure tender', async
 	});
 	expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
 });
+
+// Revert to a single-generation wait: releasing the old handles closes before the replacement fetch.
+it('follows replacement refund parent handles before computing the closure tender', async () => {
+	entries = [];
+	mockRefunds.next([refundHit()]);
+	let releaseFirst!: () => void;
+	const firstReady = new Promise<void>((done) => {
+		releaseFirst = done;
+	});
+	mockDeclareRequirements.mockReturnValueOnce([
+		{ release: jest.fn(releaseFirst), ready: firstReady },
+	]);
+	let resolve!: () => void;
+	const ready = new Promise<void>((done) => {
+		resolve = done;
+	});
+	mockDeclareRequirements.mockReturnValueOnce([{ release: mockReleaseParents, ready }]);
+	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
+	jest.mocked(actions.writeClosure).mockImplementationOnce(async (input) => {
+		const { attributeRefunds } = jest.requireActual<typeof import('./expected')>('./expected');
+		const { readLedger } =
+			jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+		const attributed = attributeRefunds(
+			input.session.id,
+			input.orders.flatMap((order) => readLedger(order.payload.meta_data)),
+			input.refundRecords ?? []
+		);
+		return {
+			id: 'closure',
+			counted: {},
+			variance: {},
+			breakdowns: { payment_methods: attributed.byMethod },
+		} as never;
+	});
+	const result = await settled();
+	let closing!: ReturnType<typeof result.current.actions.closeSession>;
+	await act(async () => {
+		closing = result.current.actions.closeSession({ counted: { cash: '100' } });
+	});
+	expect(actions.writeClosure).not.toHaveBeenCalled();
+	const replacementRefund = refundHit();
+	replacementRefund.record.payload.parent_id = 2;
+	await act(async () => mockRefunds.next([replacementRefund]));
+	expect(actions.writeClosure).not.toHaveBeenCalled();
+	const replacementParent = parentHit();
+	replacementParent.record.payload.id = 2;
+	await act(async () => {
+		mockOrders.next([replacementParent]);
+		resolve();
+		await closing;
+	});
+	expect((await closing).breakdowns.payment_methods).toEqual({ stripe: 200000 });
+});
+
+// Restart the deadline for a replacement generation: closing remains blocked beyond the original window.
+it('shares one close deadline across replacement refund parent handles', async () => {
+	mockRefunds.next([refundHit()]);
+	let releaseFirst!: () => void;
+	const ready = new Promise<void>((resolve) => {
+		releaseFirst = resolve;
+	});
+	mockDeclareRequirements
+		.mockReturnValueOnce([{ release: jest.fn(releaseFirst), ready }])
+		.mockReturnValueOnce([{ release: mockReleaseParents, ready: new Promise<void>(() => {}) }]);
+	jest.mocked(actions.closeSession).mockResolvedValue({ ...session, status: 'closed' } as never);
+	jest.mocked(actions.writeClosure).mockResolvedValueOnce({ id: 'closure' } as never);
+	const result = await settled();
+	jest.useFakeTimers();
+	try {
+		let closing!: ReturnType<typeof result.current.actions.closeSession>;
+		await act(async () => {
+			closing = result.current.actions.closeSession({ counted: { cash: '100' } });
+			await jest.advanceTimersByTimeAsync(10_000);
+		});
+		const replacement = refundHit();
+		replacement.record.payload.parent_id = 2;
+		await act(async () => mockRefunds.next([replacement]));
+		await act(async () => jest.advanceTimersByTimeAsync(4_999));
+		expect(actions.writeClosure).not.toHaveBeenCalled();
+		await act(async () => jest.advanceTimersByTimeAsync(1));
+		expect(actions.writeClosure).toHaveBeenCalledTimes(1);
+		await closing;
+	} finally {
+		jest.useRealTimers();
+	}
+});

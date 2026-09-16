@@ -360,16 +360,24 @@ export function useRegisterSession() {
 				const handles = pendingParents.current;
 				if (handles.length > 0) {
 					let timeout: ReturnType<typeof setTimeout> | undefined;
+					let timedOut = false;
+					const deadline = new Promise<void>((resolve) => {
+						timeout = setTimeout(() => {
+							timedOut = true;
+							logger.warn('Refund parent wait timed out; closing with available accounting');
+							resolve();
+						}, REFUND_PARENT_WAIT_MS);
+					});
 					try {
-						await Promise.race([
-							Promise.allSettled(handles.map((handle) => handle.ready)),
-							new Promise<void>((resolve) => {
-								timeout = setTimeout(() => {
-									logger.warn('Refund parent wait timed out; closing with available accounting');
-									resolve();
-								}, REFUND_PARENT_WAIT_MS);
-							}),
-						]);
+						let generation = handles;
+						do {
+							await Promise.race([
+								Promise.allSettled(generation.map((handle) => handle.ready)),
+								deadline,
+							]);
+							if (pendingParents.current === generation) break;
+							generation = pendingParents.current;
+						} while (!timedOut && generation.length > 0);
 					} finally {
 						clearTimeout(timeout);
 					}
