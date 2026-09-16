@@ -9,7 +9,7 @@ import { Uniwind, useUniwind } from 'uniwind';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
-import { useAppState } from '@wcpos/core/contexts/app-state';
+import { hasStoreSession, useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
 import { useT } from '@wcpos/core/contexts/translations';
@@ -80,7 +80,8 @@ function useToastTheme(): 'light' | 'dark' {
 }
 
 function RootStack() {
-	const { storeDB, store } = useAppState();
+	const appState = useAppState();
+	const { store } = appState;
 	const { isThemeReady } = useThemeRestorer();
 	useTelemetryConsent();
 	const t = useT();
@@ -98,7 +99,10 @@ function RootStack() {
 
 	return (
 		<Stack screenOptions={{ headerShown: false }}>
-			<Stack.Protected guard={!!storeDB}>
+			{/* The whole session, not just the store database: the (app) stack calls
+			    useStoreSession on its first render, and a partially hydrated session
+			    used to mount it and throw (#2112). */}
+			<Stack.Protected guard={hasStoreSession(appState)}>
 				<Stack.Screen name="(app)" />
 			</Stack.Protected>
 			<Stack.Screen name="(auth)" />

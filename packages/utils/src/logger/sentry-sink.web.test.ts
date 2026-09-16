@@ -222,6 +222,44 @@ describe('sentry-sink.web', () => {
 		expect(push('orders', '3599cd24', 503)).toEqual(['SYNC201', 'orders', '503', '']);
 	});
 
+	it('groups a boundary-caught render error by its message, not by the screen that threw', () => {
+		const message = 'useStoreSession must be called within an active store session';
+		const capture = (componentStack: string) =>
+			buildCaptureOptions({
+				message: `Render failed: ${message}`,
+				code: 'CLIENT151',
+				context: { type: 'render.error', errorMessage: message, componentStack },
+			});
+		const appLayout = capture('\n    at AppLayout\n    at RootStack');
+		const header = capture('\n    at Header\n    at PosScreen');
+
+		expect(appLayout.fingerprint).toEqual(['CLIENT151', message]);
+		expect(appLayout.fingerprint).toEqual(header.fingerprint);
+		// The stack lands where Sentry renders it, as well as in `extra`.
+		expect(appLayout.contexts).toEqual({
+			react: { componentStack: '\n    at AppLayout\n    at RootStack' },
+		});
+	});
+
+	it('keeps quoted names in a render-error fingerprint but folds record noise', () => {
+		const render = (errorMessage: string) =>
+			buildCaptureOptions({
+				message: `Render failed: ${errorMessage}`,
+				code: 'CLIENT151',
+				context: { type: 'render.error', errorMessage },
+			}).fingerprint;
+
+		// A property name is the bug's identity; the shared template would fold
+		// every undefined-property read in the app into one issue.
+		expect(render("Cannot read properties of undefined (reading 'name')")).not.toEqual(
+			render("Cannot read properties of undefined (reading 'price')")
+		);
+		expect(render('Order 12 has no line 3')).toEqual(render('Order 99 has no line 4'));
+		expect(render('Fetch https://a.example.com/x failed')).toEqual(
+			render('Fetch https://b.example.org/x failed')
+		);
+	});
+
 	it('captures Error context as an exception', () => {
 		setTelemetryConsent('allowed');
 		const error = new Error('Checkout failed');

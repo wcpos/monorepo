@@ -6,7 +6,7 @@ import { useUniwind } from 'uniwind';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
-import { useAppState } from '@wcpos/core/contexts/app-state';
+import { hasStoreSession, useAppState } from '@wcpos/core/contexts/app-state';
 
 import { useNavigationBackground } from '../../components/use-navigation-background';
 
@@ -32,9 +32,11 @@ function ThemedSystemBars() {
 
 export default function AuthLayout() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB } = useAppState();
+	const appState = useAppState();
 
-	if (storeDB) {
+	// Same predicate as the root Stack.Protected guard, or the two would disagree
+	// on a partial session and bounce between stacks.
+	if (hasStoreSession(appState)) {
 		return <Redirect href="/(app)/(drawer)/(pos)" />;
 	}
 

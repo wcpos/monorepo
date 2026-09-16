@@ -8,6 +8,8 @@ import type {
 	UserDocument,
 	WPCredentialsDocument,
 } from '@wcpos/database';
+import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
@@ -46,6 +48,37 @@ export interface StoreSessionState extends AppState {
 	storeDB: StoreDatabase;
 	extraData: ExtraDataState;
 }
+
+/**
+ * The five fields an active store session consists of. Login and store-switch
+ * write them together; `hasStoreSession` is the one predicate every gate reads
+ * (the root `Stack.Protected`, the auth redirect, `useStoreSession`), so a
+ * session that hydrated with only some of them mounts nothing that assumes the
+ * rest (#2112).
+ */
+export const STORE_SESSION_FIELDS = [
+	'storeDB',
+	'store',
+	'site',
+	'wpCredentials',
+	'extraData',
+] as const;
+
+export type StoreSessionField = (typeof STORE_SESSION_FIELDS)[number];
+
+type SessionFields = Partial<Record<StoreSessionField, unknown>>;
+
+/** The session fields that are absent or null, in `STORE_SESSION_FIELDS` order. */
+export function missingStoreSessionFields(state: SessionFields): StoreSessionField[] {
+	return STORE_SESSION_FIELDS.filter((field) => !state[field]);
+}
+
+/** True when every field of an active store session is present. */
+export function hasStoreSession(state: SessionFields): boolean {
+	return missingStoreSessionFields(state).length === 0;
+}
+
+const sessionLogger = getLogger(['wcpos', 'app-state', 'session']);
 
 export const AppStateContext = React.createContext<AppState | undefined>(undefined);
 
@@ -150,6 +183,54 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 		[state.appState, state.userDB, updateAppState]
 	);
 
+	/**
+	 * A store database without the site, credential or store rows beside it is
+	 * not a session the till can run: the `(app)` stack would throw on its first
+	 * render and strand the cashier on a red banner over a blank window (#2112 —
+	 * the rows went missing when the user database's storage failed,
+	 * wcpos/electron#459). Report which fields were missing, then do what logout
+	 * does: clear the persisted pointer so the next launch starts at the store
+	 * list instead of replaying the failure, and sign the React state out so the
+	 * auth stack shows now. The store's own database and its sales are untouched.
+	 */
+	const incompleteSession = state.storeDB ? missingStoreSessionFields(state).join(',') : '';
+	/* eslint-disable react-you-might-not-need-an-effect/no-event-handler -- the session arrives through render (Suspense hydration, or setState from login/switchStore); there is no handler to move this into, and the toast needs the mounted tree. */
+	React.useEffect(() => {
+		if (!incompleteSession) return;
+		const missingFields = incompleteSession.split(',');
+		const appStateStore = state.appState;
+		void (async () => {
+			const current = await appStateStore?.get('current').catch(() => undefined);
+			sessionLogger.error(`Store session incomplete: missing ${missingFields.join(', ')}`, {
+				code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
+				showToast: true,
+				context: {
+					missingFields,
+					siteID: current?.siteID,
+					wpCredentialsID: current?.wpCredentialsID,
+					storeID: current?.storeID,
+				},
+			});
+			try {
+				await appStateStore?.set('current', () => null);
+			} catch (error) {
+				// The same failing storage that lost the rows may refuse this write too;
+				// the till is still signed out below, it just replays the report next launch.
+				sessionLogger.warn('Could not clear the incomplete session pointer', {
+					context: { error: getErrorMessage(error) },
+				});
+			}
+			updateAppState({
+				site: undefined,
+				wpCredentials: undefined,
+				store: undefined,
+				storeDB: undefined,
+				extraData: undefined,
+			});
+		})();
+	}, [incompleteSession, state.appState, updateAppState]);
+	/* eslint-enable react-you-might-not-need-an-effect/no-event-handler */
+
 	const value = React.useMemo<AppState>(() => {
 		return {
 			...state,
@@ -186,14 +267,11 @@ export const useAppState = (): AppState => {
  */
 export const useStoreSession = (): StoreSessionState => {
 	const context = useAppState();
-	if (
-		!context.storeDB ||
-		!context.store ||
-		!context.site ||
-		!context.wpCredentials ||
-		!context.extraData
-	) {
-		throw new Error(`useStoreSession must be called within an active store session`);
+	const missing = missingStoreSessionFields(context);
+	if (missing.length > 0) {
+		throw new Error(
+			`useStoreSession must be called within an active store session (missing: ${missing.join(', ')})`
+		);
 	}
 
 	return context as StoreSessionState;

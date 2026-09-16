@@ -84,7 +84,9 @@ export type ErrorCode =
 	| 'CLIENT143'
 	| 'CLIENT144'
 	| 'CHECKOUT411'
-	| 'CHECKOUT421';
+	| 'CHECKOUT421'
+	| 'CLIENT151'
+	| 'AUTH131';
 export type ErrorDomain =
 	'AUTH' | 'SYNC' | 'CHECKOUT' | 'PAYMENT' | 'PRINT' | 'PRODUCT' | 'LICENSE' | 'CLIENT' | 'HOST';
 export type ErrorSeverity = 'info' | 'warn' | 'error';
@@ -874,6 +876,24 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'order-safe',
 		summary: 'This order refers to a tax rate your store no longer has, so its tax may be wrong.',
 	},
+	CLIENT151: {
+		code: 'CLIENT151',
+		symbol: 'SCREEN_RENDER_FAILED',
+		domain: 'CLIENT',
+		severity: 'error',
+		actionHint: 'Close the error message to retry; if it comes back, reload the app.',
+		dataSafety: 'no-impact',
+		summary: 'Part of the screen failed to load and was replaced by an error message.',
+	},
+	AUTH131: {
+		code: 'AUTH131',
+		symbol: 'STORE_SESSION_INCOMPLETE',
+		domain: 'AUTH',
+		severity: 'error',
+		actionHint: 'Choose the store again to sign back in.',
+		dataSafety: 'local-only',
+		summary: 'The saved store session was incomplete, so WCPOS returned to the store list.',
+	},
 };
 
 export const ERROR_CODES = {
@@ -961,4 +981,6 @@ export const ERROR_CODES = {
 	SEARCH_INDEX_REBUILD_FAILED: 'CLIENT144',
 	CART_LINE_PRICE_BASIS_UNREADABLE: 'CHECKOUT411',
 	ORDER_TAX_RATE_UNKNOWN: 'CHECKOUT421',
+	SCREEN_RENDER_FAILED: 'CLIENT151',
+	STORE_SESSION_INCOMPLETE: 'AUTH131',
 } as const satisfies Record<string, ErrorCode>;
