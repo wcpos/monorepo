@@ -45,8 +45,9 @@ interface VariationsPopoverProps {
 	 * provider — including the products QueryStateProvider — is an ancestor of this
 	 * component, and reading it here crashes. The pill governs here exactly as it does
 	 * in the expanded table: a colour leading only to variations outside the filter is
-	 * greyed out. With the pill cleared every colour is selectable and the disabled
-	 * Add to Cart button carries the stock news instead.
+	 * greyed out. With the pill cleared every colour is selectable and the stock badge
+	 * carries the stock news instead; Add to Cart disables on it only while the store
+	 * prevents overselling (see `VariationAddToCart`).
 	 */
 	stockStatus?: string;
 }
