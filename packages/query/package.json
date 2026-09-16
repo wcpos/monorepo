@@ -34,11 +34,11 @@
 		"uuid": "^14.0.1"
 	},
 	"devDependencies": {
-		"@testing-library/react": "^16.3.2",
+		"@testing-library/react": "^16.3.3",
 		"@types/jest": "^30.0.0",
 		"@types/lodash": "^4.17.25",
-		"jest": "^30.4.2",
-		"jest-environment-jsdom": "^30.4.1",
+		"jest": "^30.5.1",
+		"jest-environment-jsdom": "^30.5.1",
 		"rxjs-marbles": "^7.0.1",
 		"ts-jest": "^29.4.12"
 	}
