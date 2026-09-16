@@ -40,7 +40,7 @@ export function CustomerSelect({
 	 */
 	return (
 		<Combobox {...props}>
-			<ComboboxTrigger disabled={disabled}>
+			<ComboboxTrigger testID="customer-select-trigger" disabled={disabled}>
 				<ComboboxValue placeholder={t('common.select_customer')} />
 			</ComboboxTrigger>
 			<ComboboxContent>

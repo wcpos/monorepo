@@ -171,7 +171,7 @@ export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormP
 					/>
 				</HStack>
 				<Collapsible>
-					<CollapsibleTrigger>
+					<CollapsibleTrigger testID="customer-billing-address-toggle">
 						<Text>{t('common.billing_address')}</Text>
 					</CollapsibleTrigger>
 					<CollapsibleContent>

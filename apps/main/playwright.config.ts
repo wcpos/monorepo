@@ -106,6 +106,8 @@ const LIVE_SPEC = /\.live\.spec\.ts$/;
 export default defineConfig<WcposTestOptions>({
 	globalSetup: './e2e/global-setup.ts',
 	testDir: './e2e',
+	// Frame budgets run alone, without competing suites (playwright.search-performance.config.ts).
+	testIgnore: /\.perf\.spec\.ts$/,
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
@@ -162,6 +164,7 @@ export default defineConfig<WcposTestOptions>({
 							// posPage fixture has hydrated a context (three hydrations per shard
 							// for three skips, run 33617749219). Exclude at collection instead.
 							/server-created-visibility\.spec\.ts/,
+							/\.perf\.spec\.ts$/,
 							COLD_SPEC,
 							LIVE_SPEC,
 						],
@@ -198,6 +201,7 @@ export default defineConfig<WcposTestOptions>({
 				/auth\.spec\.ts/,
 				/rest-route-transport\.spec\.ts/,
 				/host-blocked-errors\.spec\.ts/,
+				/\.perf\.spec\.ts$/,
 				COLD_SPEC,
 				LIVE_SPEC,
 			],

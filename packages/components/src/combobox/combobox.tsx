@@ -251,6 +251,7 @@ function ComboboxInput({ onChangeText, ...props }: ComboboxInputProps) {
 
 	return (
 		<Input
+			testID="combobox-search"
 			autoFocus
 			value={inputValue}
 			onChangeText={handleChange}
