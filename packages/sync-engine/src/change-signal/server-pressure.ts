@@ -304,7 +304,12 @@ export function createServerPressureMonitor(
 		setMaxMultiplier(next) {
 			maxMultiplier = Math.max(1, next);
 			// A slower tier has a shorter ladder; never leave the multiplier above its top.
-			if (multiplier > maxMultiplier) multiplier = maxMultiplier;
+			if (multiplier > maxMultiplier) {
+				multiplier = maxMultiplier;
+				// A forced drop to ×1 skips the recovery branch, so settle the header
+				// marker here or the clamp stays disabled for the life of the monitor.
+				if (multiplier === 1) headerStartedBackoff = false;
+			}
 		},
 
 		observe(observation) {

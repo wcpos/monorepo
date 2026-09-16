@@ -473,6 +473,23 @@ describe('server pressure monitor', () => {
 		});
 	});
 
+	it('re-arms the header clamp when a tier change forces the multiplier back to 1', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		const fastHigh = { status: 200, durationMs: 100, pressure: 'high' as const };
+		for (let index = 0; index < 10; index += 1) {
+			monitor.observe({ atMs: index, ...fastHigh });
+		}
+		expect(monitor.multiplier()).toBe(2);
+		// A slower tier clamps the ladder to ×1 without passing through recovery.
+		monitor.setMaxMultiplier(1);
+		expect(monitor.multiplier()).toBe(1);
+		monitor.setMaxMultiplier(8);
+		for (let index = 0; index < 10; index += 1) {
+			monitor.observe({ atMs: 1_000 + index, ...fastHigh });
+		}
+		expect(monitor.multiplier()).toBe(2);
+	});
+
 	it('does not read a non-429 4xx as either distress or health', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		for (let index = 0; index < 30; index += 1) {
