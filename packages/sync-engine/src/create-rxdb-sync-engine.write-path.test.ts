@@ -71,8 +71,6 @@ function engineWith(input: {
 				fingerprints: {},
 				...(input.barcodeFields ? { barcode_fields: input.barcodeFields } : {}),
 			},
-			// The scope-open change-signal head prime: answered here so the fake fetch below only ever sees its own catalogue traffic.
-			'/changes/sequence-log': { checkpoint: { head: 0 } },
 		},
 		ports: {
 			...(input.uuid ? { uuid: input.uuid } : {}),

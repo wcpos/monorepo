@@ -7,7 +7,7 @@ import { scopeKeyFor, type StoreScopeIdentity } from '@wcpos/sync-core';
 import { createEngineHarness, memoryStringStore, remoteId } from './testing';
 import { LANE_REGISTRY } from './maintenance/lane-registry';
 
-import type { EngineHarness } from './engine-harness';
+import type { EngineHarness, EngineHarnessRequest } from './engine-harness';
 
 setPremiumFlag();
 
@@ -79,7 +79,6 @@ function defaultResponse(url: string): Response {
 	if (path.endsWith('/changes/sequence-log')) {
 		return json({ changes: [], checkpoint: { since: 9_000, head: 9_000 }, complete: true });
 	}
-	if (path.endsWith('/changes/range-checksum')) return json({ changes: [], complete: true });
 	if (path.endsWith('/integrity/scan')) return json(scanEnvelope(url));
 	if (path.endsWith('/integrity/bucket')) {
 		return json({ ids: [{ id: 1, digest: '1', object_type: 'product' }] });
@@ -101,6 +100,7 @@ async function autoRebaselineHarness(): Promise<EngineHarness> {
 		mode: 'auto',
 		checkpoints,
 		captureTimers: true,
+		routes: { '/changes/sequence-log': ({ url }: EngineHarnessRequest) => defaultResponse(url) },
 		fetch: async (url) => defaultResponse(url),
 	});
 	await vi.waitFor(() =>
@@ -217,34 +217,36 @@ describe('maintenance politeness contracts', () => {
 		let harness!: EngineHarness;
 		let injectPressure = true;
 		const bucketRequests: number[] = [];
+		const fetch = async (url: string) => {
+			const parsed = new URL(url);
+			if (parsed.pathname.endsWith('/integrity/scan')) {
+				const envelope = scanEnvelope(url) as Record<string, unknown>;
+				envelope['changes'] = [0, 1, 2].map((bucket) => ({
+					bucket,
+					stored_count: 1,
+					current_count: 1,
+					stored_digest: '1',
+					current_digest: '2',
+					match: false,
+				}));
+				return json(envelope);
+			}
+			if (parsed.pathname.endsWith('/integrity/bucket')) {
+				bucketRequests.push(Number(parsed.searchParams.get('bucket')));
+				if (injectPressure) {
+					injectPressure = false;
+					await harness.engine.hostTransport().fetcher(`${SITE}/pressure`);
+				}
+				return json({ ids: [{ id: bucketRequests.at(-1)! * 1_000 + 1, digest: '1' }] });
+			}
+			if (parsed.pathname.endsWith('/pressure')) return new Response(null, { status: 429 });
+			return defaultResponse(url);
+		};
 		harness = await createEngineHarness({
 			site: SITE,
 			mode: 'manual',
-			fetch: async (url) => {
-				const parsed = new URL(url);
-				if (parsed.pathname.endsWith('/integrity/scan')) {
-					const envelope = scanEnvelope(url) as Record<string, unknown>;
-					envelope['changes'] = [0, 1, 2].map((bucket) => ({
-						bucket,
-						stored_count: 1,
-						current_count: 1,
-						stored_digest: '1',
-						current_digest: '2',
-						match: false,
-					}));
-					return json(envelope);
-				}
-				if (parsed.pathname.endsWith('/integrity/bucket')) {
-					bucketRequests.push(Number(parsed.searchParams.get('bucket')));
-					if (injectPressure) {
-						injectPressure = false;
-						await harness.engine.hostTransport().fetcher(`${SITE}/pressure`);
-					}
-					return json({ ids: [{ id: bucketRequests.at(-1)! * 1_000 + 1, digest: '1' }] });
-				}
-				if (parsed.pathname.endsWith('/pressure')) return new Response(null, { status: 429 });
-				return defaultResponse(url);
-			},
+			routes: { '/changes/sequence-log': ({ url }: EngineHarnessRequest) => fetch(url) },
+			fetch,
 		});
 		try {
 			await harness.seed(
@@ -295,6 +297,7 @@ describe('maintenance politeness contracts', () => {
 					return 0;
 				},
 			},
+			routes: { '/changes/sequence-log': ({ url }: EngineHarnessRequest) => defaultResponse(url) },
 			fetch: async (url) => defaultResponse(url),
 		});
 		try {

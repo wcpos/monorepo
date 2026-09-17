@@ -3,10 +3,11 @@ import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { type SyncEvent } from '@wcpos/sync-core';
 
-import { createRxdbSyncEngine } from './create-rxdb-sync-engine';
 import { materializeTargeted } from './materialization/record-materialization';
-import { memoryEngineStorage } from './testing';
+import { createEngineHarness, memoryEngineStorage } from './testing';
 
+import type { RxdbSyncEngine } from './create-rxdb-sync-engine';
+import type { EngineHarnessRequest } from './engine-harness';
 import type { RxDatabase } from 'rxdb';
 import type { SeedPosBootstrapLanesInput } from './scheduler/rx-pos-bootstrap-seeder';
 
@@ -39,34 +40,30 @@ describe('scope-open barcode selector hydration', () => {
 	it('hydrates selectors before bootstrap seeding', async () => {
 		const order: string[] = [];
 		const selectorsAtSeed: unknown[] = [];
-		let engineUnderTest: ReturnType<typeof createRxdbSyncEngine> | undefined;
+		let engineUnderTest: RxdbSyncEngine | undefined;
 		seedPosBootstrapLanes.mockImplementation(async () => {
 			order.push('seed');
 			// The seed runs INSIDE the scope open, so the carriers it will
 			// materialize by must already be on the scope by now.
 			selectorsAtSeed.push(engineUnderTest?.active()?.barcodeSelectors);
 		});
-		const engine = createRxdbSyncEngine(
-			{
-				site: {
-					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-					wpJsonRoot: 'https://example.test/wp-json',
-				},
-				storage: memoryEngineStorage(),
-				mode: 'manual',
-				fetcher: async (url, init) => {
-					// The change-signal head prime also rides the scope open (before the
-					// hydrate); it is not the hydrate→seed ordering under test.
-					if (new URL(url).pathname.endsWith('/changes/sequence-log')) {
-						return Response.json({ checkpoint: { head: 0 } });
-					}
+		const engine = createEngineHarness({
+			awaitReady: false,
+			identity: { site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` },
+			site: {
+				syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+				wpJsonRoot: 'https://example.test/wp-json',
+			},
+			storage: memoryEngineStorage(),
+			mode: 'manual',
+			routes: {
+				'/changes/config-fingerprint': async ({ init }: EngineHarnessRequest) => {
 					order.push('hydrate');
 					expect(init?.signal).toBeDefined();
 					return configResponse();
 				},
 			},
-			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
-		);
+		}).engine;
 		engineUnderTest = engine;
 
 		await engine.ready;
@@ -84,21 +81,22 @@ describe('scope-open barcode selector hydration', () => {
 
 	it('continues bootstrap and leaves the scope carrier-less when hydration fails', async () => {
 		const diagnostics: SyncEvent[] = [];
-		const engine = createRxdbSyncEngine(
-			{
-				site: {
-					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-					wpJsonRoot: 'https://example.test/wp-json',
-				},
-				storage: memoryEngineStorage(),
-				mode: 'manual',
-				fetcher: async () => {
+		const engine = createEngineHarness({
+			awaitReady: false,
+			identity: { site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` },
+			site: {
+				syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+				wpJsonRoot: 'https://example.test/wp-json',
+			},
+			storage: memoryEngineStorage(),
+			mode: 'manual',
+			routes: {
+				'/changes/config-fingerprint': async () => {
 					throw new Error('config unavailable');
 				},
-				diagnostics: (event) => diagnostics.push(event),
 			},
-			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
-		);
+			diagnostics: (event) => diagnostics.push(event),
+		}).engine;
 
 		await expect(engine.whenActive()).resolves.toBeDefined();
 		expect(seedPosBootstrapLanes).toHaveBeenCalledOnce();
@@ -142,50 +140,38 @@ describe('scope-open barcode selector hydration', () => {
 		let configRequests = 0;
 		let productPulls = 0;
 		const diagnostics: SyncEvent[] = [];
-		const engine = createRxdbSyncEngine(
-			{
-				site: {
-					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-					wpJsonRoot: 'https://example.test/wp-json',
-				},
-				storage: memoryEngineStorage(),
-				mode: 'manual',
-				fetcher: async (url) => {
-					const path = new URL(url).pathname;
-					if (path.endsWith('/changes/config-fingerprint')) {
-						configRequests += 1;
-						if (configRequests === 1) throw new Error('config unavailable');
-						return configResponse();
-					}
-					if (path.endsWith('/changes/tick')) {
-						return new Response(null, { status: 404 });
-					}
-					if (path.endsWith('/changes/sequence-log')) {
-						return Response.json({
-							changes: [],
-							checkpoint: { since: 0, head: 0 },
-							complete: true,
-						});
-					}
-					if (path.endsWith('/integrity/scan')) {
-						return Response.json({ changes: [], checkpoint: { after_id: 0 }, complete: true });
-					}
-					if (path.endsWith('/changes/range-checksum')) {
-						return Response.json({ changes: [], complete: true });
-					}
-					if (path.endsWith('/products')) {
-						productPulls += 1;
-						if (productPulls === 1) {
-							return Response.json({ code: 'temporary_failure' }, { status: 503 });
-						}
-						return Response.json([remoteProduct]);
-					}
-					throw new Error(`unexpected request: ${url}`);
-				},
-				diagnostics: (event) => diagnostics.push(event),
+		const engine = createEngineHarness({
+			awaitReady: false,
+			identity: { site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` },
+			site: {
+				syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+				wpJsonRoot: 'https://example.test/wp-json',
 			},
-			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
-		);
+			storage: memoryEngineStorage(),
+			mode: 'manual',
+			routes: {
+				'/changes/config-fingerprint': () => {
+					configRequests += 1;
+					if (configRequests === 1) throw new Error('config unavailable');
+					return configResponse();
+				},
+			},
+			fetch: async (url) => {
+				const path = new URL(url).pathname;
+				if (path.endsWith('/integrity/scan')) {
+					return Response.json({ changes: [], checkpoint: { after_id: 0 }, complete: true });
+				}
+				if (path.endsWith('/products')) {
+					productPulls += 1;
+					if (productPulls === 1) {
+						return Response.json({ code: 'temporary_failure' }, { status: 503 });
+					}
+					return Response.json([remoteProduct]);
+				}
+				throw new Error(`unexpected request: ${url}`);
+			},
+			diagnostics: (event) => diagnostics.push(event),
+		}).engine;
 
 		await engine.ready;
 		const products = engine.active()!.database.collections.products;
@@ -213,25 +199,23 @@ describe('scope-open barcode selector hydration', () => {
 		// materializing by none (which falls back to the online resolve).
 		let configRequests = 0;
 		seedPosBootstrapLanes.mockRejectedValue(new Error('seed unavailable'));
-		const engine = createRxdbSyncEngine(
-			{
-				site: {
-					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-					wpJsonRoot: 'https://example.test/wp-json',
-				},
-				storage: memoryEngineStorage(),
-				mode: 'manual',
-				fetcher: async (url) => {
-					if (new URL(url).pathname.endsWith('/changes/sequence-log')) {
-						return Response.json({ checkpoint: { head: 0 } });
-					}
+		const engine = createEngineHarness({
+			awaitReady: false,
+			identity: { site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` },
+			site: {
+				syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+				wpJsonRoot: 'https://example.test/wp-json',
+			},
+			storage: memoryEngineStorage(),
+			mode: 'manual',
+			routes: {
+				'/changes/config-fingerprint': async () => {
 					configRequests += 1;
 					if (configRequests === 1) return configResponse();
 					throw new Error('config unavailable');
 				},
 			},
-			{ site: 'https://example.test', storeId: 1, cashierId: `hydrate-${identity}` }
-		);
+		}).engine;
 
 		// Attempt 1: hydration succeeds, the bootstrap seed fails.
 		await engine.ready;
@@ -256,18 +240,20 @@ describe('scope-open barcode selector hydration', () => {
 
 	it('gives each engine its own carriers — a later engine inherits nothing', async () => {
 		const engineFor = (input: { cashierId: string; fetcher: typeof fetch }) =>
-			createRxdbSyncEngine(
-				{
-					site: {
-						syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
-						wpJsonRoot: 'https://example.test/wp-json',
-					},
-					storage: memoryEngineStorage(),
-					mode: 'manual',
-					fetcher: input.fetcher as never,
+			createEngineHarness({
+				awaitReady: false,
+				identity: { site: 'https://example.test', storeId: 1, cashierId: input.cashierId },
+				site: {
+					syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+					wpJsonRoot: 'https://example.test/wp-json',
 				},
-				{ site: 'https://example.test', storeId: 1, cashierId: input.cashierId }
-			);
+				storage: memoryEngineStorage(),
+				mode: 'manual',
+				routes: {
+					'/changes/config-fingerprint': ({ url, init }: EngineHarnessRequest) =>
+						input.fetcher(url, init),
+				},
+			}).engine;
 
 		const first = engineFor({
 			cashierId: `hydrate-${identity}-a`,

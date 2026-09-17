@@ -6,6 +6,8 @@ import { createEngineHarness, remoteId, scriptedConnectivity } from './testing';
 import { type RxdbSyncEnginePorts, type StoreScopeIdentity } from './create-rxdb-sync-engine';
 import { EngineOrderRepository } from './write-path/engine-order-repository';
 
+import type { EngineHarnessRequest } from './engine-harness';
+
 setPremiumFlag();
 
 const SITE = 'https://existence.example.test';
@@ -61,7 +63,6 @@ function engine(
 		identity: identity(),
 		mode: 'manual',
 		fetch: (url, init) => fetcher?.(url, init) ?? Promise.reject(new Error(`unexpected ${url}`)),
-		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
 		now,
 		diagnostics,
 		connectivitySignal: connectivity,
@@ -92,28 +93,35 @@ describe('existence maintenance lanes through the public facade', () => {
 			const visible = { id: 24022, digest: '24022', object_type: 'product' };
 			const highPressure = (body: unknown) =>
 				Response.json(body, { headers: { 'X-WCPOS-Pressure': 'high' } });
+			const fetch = async (url: string) => {
+				const parsed = new URL(url);
+				nowMs += 1_000; // Real requests take time; timers remain start-to-start.
+				if (parsed.pathname.endsWith('/digests')) {
+					const ids = (parsed.searchParams.get('include') ?? '').split(',').map(Number);
+					return highPressure({
+						digests: ids.map((id) => (id === visible.id ? visible : { id, deleted: true })),
+					});
+				}
+				if (parsed.pathname.endsWith('/integrity/scan')) {
+					return highPressure(scanEnvelope(url, [visible]));
+				}
+				if (parsed.pathname.endsWith('/integrity/bucket')) {
+					expect(parsed.searchParams.get('status')).toBe('publish');
+					return highPressure({ ids: [] });
+				}
+				return highPressure({ changes: [], complete: true, documents: [] });
+			};
 			const harness = await createEngineHarness({
 				mode: 'auto',
 				now: () => nowMs,
 				captureTimers: true,
-				fetch: async (url) => {
-					const parsed = new URL(url);
-					nowMs += 1_000; // Real requests take time; timers remain start-to-start.
-					if (parsed.pathname.endsWith('/digests')) {
-						const ids = (parsed.searchParams.get('include') ?? '').split(',').map(Number);
-						return highPressure({
-							digests: ids.map((id) => (id === visible.id ? visible : { id, deleted: true })),
-						});
-					}
-					if (parsed.pathname.endsWith('/integrity/scan')) {
-						return highPressure(scanEnvelope(url, [visible]));
-					}
-					if (parsed.pathname.endsWith('/integrity/bucket')) {
-						expect(parsed.searchParams.get('status')).toBe('publish');
-						return highPressure({ ids: [] });
-					}
-					return highPressure({ changes: [], complete: true, documents: [] });
+				routes: {
+					'/changes/config-fingerprint': ({ url }: EngineHarnessRequest) => fetch(url),
+					'/changes/sequence-log': ({ url }: EngineHarnessRequest) => fetch(url),
+					'/changes/tick': ({ url }: EngineHarnessRequest) => fetch(url),
+					'/changes/range-checksum': ({ url }: EngineHarnessRequest) => fetch(url),
 				},
+				fetch,
 			});
 			try {
 				const product = (id: number, dirty = false) => ({
