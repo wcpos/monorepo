@@ -7,7 +7,7 @@ export const sessionOutboxProperties = {
 } as const;
 export const registerSessionsLiteral = {
 	title: 'Register sessions',
-	version: 0,
+	version: 1,
 	type: 'object',
 	primaryKey: 'id',
 	properties: {

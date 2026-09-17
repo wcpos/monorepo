@@ -94,6 +94,7 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../jest/translate').createTestT(),
 }));
 jest.mock('../../../hooks/use-local-date', () => ({
+	useLocalDate: () => ({ formatDate: require('date-fns').format }),
 	convertLocalDateToUTCString: (d: Date) => d.toISOString(),
 }));
 let isPro = false;
@@ -200,4 +201,17 @@ it('keeps both custom endpoints inside retained history', () => {
 	expect(change).toHaveBeenCalledWith(
 		expect.objectContaining({ from: '2026-06-16', to: '2026-06-16' })
 	);
+});
+
+// Revert: print ISO boundaries instead of locale-formatted calendar dates.
+it('formats custom period titles', () => {
+	render(
+		<PageBar
+			room="closures"
+			onRoomChange={room}
+			onScopeChange={change}
+			scope={{ from: '2026-09-01', to: '2026-09-04', registerId: 'r', storeId: 1 }}
+		/>
+	);
+	expect(screen.getByTestId('reports-period').textContent).toBe('1 Sep – 4 Sep');
 });

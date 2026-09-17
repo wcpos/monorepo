@@ -33,8 +33,8 @@ beforeEach(async () => {
 		multiInstance: false,
 	});
 	await db.addCollections({
-		closures: { schema: closuresLiteral },
-		register_sessions: { schema: registerSessionsLiteral },
+		closures: { schema: closuresLiteral, autoMigrate: false },
+		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
 		cash_movements: { schema: cashMovementsLiteral },
 	});
 	await ensureRegister(userDB);
@@ -294,4 +294,25 @@ it('copies the opening business day unchanged when closing on a later day', asyn
 		closed_by: 7,
 		breakdowns: { register_name: 'Front', closed_by_name: 'Pat' },
 	});
+});
+// Revert: discard session actors and movement timestamps before their source rows are pruned.
+it('retains the actor and movement data needed by the local closure document', async () => {
+	const input = await seed();
+	const row = await writeClosure(input);
+	expect(row.breakdowns.opened_by).toBe(7);
+	const movements = row.breakdowns.movements as Record<string, unknown>[];
+	expect(movements[0]).toMatchObject({ created_by: 7, created_at_gmt: expect.any(String) });
+	const { buildClosureDocument } = await import('./closure-document');
+	const doc = buildClosureDocument(row.toMutableJSON(), {
+		store: { name: 'Shop' },
+		currency: 'USD',
+		timezone: 'UTC',
+		locale: 'en-US',
+		printedAt: '2026-09-17T12:00:00Z',
+		formatMoney: (v) => v,
+		i18n: {},
+	});
+	expect(doc.closure).toMatchObject({ opened_by: 7, closed_by: 7 });
+	expect(doc.closure.breakdowns.payment_methods.length).toBeGreaterThan(0);
+	expect(doc.closure.breakdowns.movements[0].created_at.datetime).not.toBe('');
 });

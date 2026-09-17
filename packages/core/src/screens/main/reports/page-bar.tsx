@@ -17,6 +17,7 @@ import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
+import { useLocalDate } from '../../../hooks/use-local-date';
 import { useStoreDay, zoneOptions } from '../../../hooks/use-store-day';
 import { useRegisterBinding } from '../../../services/register/use-register-binding';
 import { HeaderLeft } from '../components/header/left';
@@ -32,6 +33,7 @@ export type PageBarProps = {
 };
 export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarProps) {
 	const t = useT();
+	const { formatDate } = useLocalDate();
 	const { top } = useSafeAreaInsets();
 	const { store, site, wpCredentials } = useStoreSession();
 	const binding = useRegisterBinding();
@@ -144,7 +146,9 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 				>
 					<PopoverTrigger asChild>
 						<Button testID="reports-period" variant="ghost" className="min-h-12 flex-1">
-							{selected ? labels[selected] : `${scope.from} – ${scope.to}`}
+							{selected
+								? labels[selected]
+								: `${formatDate(parseISO(scope.from), 'd MMM')} – ${formatDate(parseISO(scope.to), 'd MMM')}`}
 						</Button>
 					</PopoverTrigger>
 					<PopoverContent>

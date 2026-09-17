@@ -18,9 +18,11 @@ import type { useReceiptDocument } from './use-receipt-document';
 export function ReceiptBody({
 	doc,
 	selectsInline,
+	hideSelects,
 }: {
 	doc: ReturnType<typeof useReceiptDocument>;
 	selectsInline?: boolean;
+	hideSelects?: boolean;
 }) {
 	const t = useT();
 	const {
@@ -67,7 +69,7 @@ export function ReceiptBody({
 		<ErrorBoundary>
 			<VStack className="min-h-0 flex-1 gap-2">
 				<SyncingBadge isSyncing={isSyncing} />
-				{selectsInline ? (
+				{hideSelects ? null : selectsInline ? (
 					<HStack className="gap-2">
 						<VStack className="flex-1">{templateSwitcher}</VStack>
 						<VStack className="flex-1">{printerSwitcher}</VStack>

@@ -306,6 +306,8 @@ export async function writeClosure({
 		print_count: 0,
 		breakdowns: {
 			...labels,
+			opened_by: session.opened_by ?? null,
+			approved_by: session.approved_by ?? null,
 			payment_methods,
 			tax_rates,
 			opening_float: {
@@ -313,14 +315,18 @@ export async function writeClosure({
 				counted: session.counted_float,
 				variance: session.opening_variance ?? null,
 			},
-			movements: entries.map(({ id, type, amount, reason, voids, voided_by }) => ({
-				id,
-				type,
-				amount,
-				reason,
-				voids: voids ?? null,
-				voided_by: voided_by ?? null,
-			})),
+			movements: entries.map(
+				({ id, type, amount, reason, voids, voided_by, created_at_gmt, created_by }) => ({
+					id,
+					type,
+					amount,
+					reason,
+					voids: voids ?? null,
+					created_at_gmt,
+					created_by,
+					voided_by: voided_by ?? null,
+				})
+			),
 			transaction_count: bound.filter((order) =>
 				readLedger(order.payload.meta_data).some(
 					(row) => row.session_id === session.id && row.status === 'captured'

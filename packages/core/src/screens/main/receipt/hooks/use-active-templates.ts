@@ -17,7 +17,10 @@ import { useTemplatesSync } from './use-templates-sync';
  * Pro + store has active_templates: returns only those templates, in assigned sort order.
  * Otherwise: returns all published + virtual templates, sorted by menu_order.
  */
-export function useActiveTemplates(type: 'receipt' | 'report' = 'receipt'): TemplateDocument[] {
+export function useActiveTemplates(
+	type: 'receipt' | 'report' | 'closure' = 'receipt',
+	storeId?: number
+): TemplateDocument[] {
 	const { store, storeDB } = useStoreSession();
 	const { license } = useAppInfo();
 	const isPro = !!license?.isPro;
@@ -26,7 +29,7 @@ export function useActiveTemplates(type: 'receipt' | 'report' = 'receipt'): Temp
 	// endpoint returns the full set in a single response (posts_per_page=-1) and
 	// ignores include/exclude, so greedy pagination is unnecessary and would loop
 	// forever re-fetching the same set. A single sync pass per poll is enough.
-	useTemplatesSync();
+	useTemplatesSync(type, storeId ?? store.id);
 
 	// Read per-store template assignments (will be empty until store schema v5)
 	type TemplateAssignment = { template_id: string | number; sort_order: number };

@@ -48,8 +48,11 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
 	useStoreSession: () => ({ site: { populateResource: () => null } }),
 }));
+jest.mock('../../../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'UTC' }) }));
+jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: () => [{ id: 7, display_name: 'Alex' }],
 }));

@@ -636,7 +636,7 @@ it.each([false, true])(
 			multiInstance: false,
 		});
 		try {
-			await db.addCollections({ closures: { schema: closuresLiteral } });
+			await db.addCollections({ closures: { schema: closuresLiteral, autoMigrate: false } });
 			await ensureRegister(userDB);
 			entries = [];
 			active = [{ ...active[0], server_expected: null }];
@@ -723,7 +723,7 @@ it.each([false, true])(
 			releasePatch = resolve;
 		});
 		try {
-			await db.addCollections({ closures: { schema: closuresLiteral } });
+			await db.addCollections({ closures: { schema: closuresLiteral, autoMigrate: false } });
 			await ensureRegister(userDB);
 			entries = [];
 			active = [

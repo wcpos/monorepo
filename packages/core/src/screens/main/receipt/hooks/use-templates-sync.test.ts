@@ -183,3 +183,40 @@ describe('syncTemplates', () => {
 		expect(docs).toHaveLength(0);
 	});
 });
+
+// Revert: deduplicate by collection alone or omit type/store request parameters.
+it('syncs closure/store requests without suppressing concurrent receipt sync', async () => {
+	const http = {
+		get: jest.fn(
+			async (
+				_url: string,
+				config: { params: { posts_per_page: number; type?: string; store_id?: number } }
+			) => ({
+				data:
+					config.params.type === 'closure'
+						? [
+								{
+									...serverPayload[0],
+									id: 'closure-core',
+									uuid: '00000000-0000-4000-8000-000000000099',
+									type: 'closure',
+								},
+							]
+						: serverPayload,
+			})
+		),
+	};
+	await Promise.all([
+		syncTemplates(db.collections.templates, http),
+		syncTemplates(db.collections.templates, http, 'closure', 7),
+	]);
+	expect(http.get).toHaveBeenCalledWith('templates', {
+		params: { posts_per_page: -1, type: 'closure', store_id: 7 },
+	});
+	expect(
+		await db.collections.templates.find({ selector: { type: 'closure' } }).exec()
+	).toHaveLength(1);
+	expect(
+		await db.collections.templates.find({ selector: { type: 'receipt' } }).exec()
+	).toHaveLength(serverPayload.length);
+});

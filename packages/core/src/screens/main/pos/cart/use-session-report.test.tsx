@@ -6,8 +6,12 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 
 jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
 	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
 }));
+jest.mock('../../../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'UTC' }) }));
+jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
+// Revert: route till reports through the report fallback instead of the shared closure envelope.
 const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
 let mockAutoOpen = false;
@@ -40,7 +44,7 @@ jest.mock('../../hooks/use-currency-format', () => ({
 }));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
-		session: { id: 's', register_id: 'r' },
+		session: { id: 's', register_id: 'r', opened_by: 8 },
 		expected: { cash: '155' },
 		blind: false,
 		binding: { registerName: 'Front' },
@@ -64,7 +68,18 @@ it('routes X to the session document with the panel figures as offline data', as
 		expect.objectContaining({
 			document: 'xreport:s',
 			localReport: expect.objectContaining({
-				line_items: [expect.objectContaining({ total: '155' })],
+				closure: expect.objectContaining({
+					expected: { cash: '155' },
+					breakdowns: expect.objectContaining({
+						labels: expect.objectContaining({ opened_by_name: '8' }),
+					}),
+				}),
+				i18n: expect.objectContaining({ x_report: 'X-report', closure: 'Closure' }),
+				fiscal: expect.objectContaining({
+					document_type: 'xreport',
+					receipt_number: '',
+					is_closure_document: true,
+				}),
 			}),
 		})
 	);
@@ -99,7 +114,9 @@ it('prints the persisted closure and marks its time only after successful printi
 		expect.objectContaining({
 			document: 'closure:s',
 			documentReady: false,
-			localReport: expect.objectContaining({ footer: expect.stringContaining('Unsynced') }),
+			localReport: expect.objectContaining({
+				closure: expect.objectContaining({ unsynced_count: 2 }),
+			}),
 		})
 	);
 });
@@ -124,7 +141,10 @@ it('loads a superseded closure from its authoritative server document', () => {
 		expect.objectContaining({
 			document: 'closure:winner',
 			documentReady: true,
-			localReport: expect.objectContaining({ order_number: 'Z-report 4' }),
+			templateType: 'closure',
+			localReport: expect.objectContaining({
+				fiscal: expect.objectContaining({ receipt_number: '4' }),
+			}),
 		})
 	);
 });

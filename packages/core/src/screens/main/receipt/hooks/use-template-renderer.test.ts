@@ -7,7 +7,7 @@ import { BehaviorSubject } from 'rxjs';
 import { renderOfflineTemplatePreview, useTemplateRenderer } from './use-template-renderer';
 
 const mockUseReceiptData = jest.fn();
-const mockUseActiveTemplates = jest.fn(() => []);
+const mockUseActiveTemplates = jest.fn((..._args: unknown[]) => []);
 const createStore = (dp = 2) => ({
 	name: 'Test Store',
 	wc_price_decimals$: new BehaviorSubject(dp),
@@ -39,7 +39,7 @@ jest.mock('./use-receipt-data', () => ({
 }));
 
 jest.mock('./use-active-templates', () => ({
-	useActiveTemplates: () => mockUseActiveTemplates(),
+	useActiveTemplates: (...args: unknown[]) => mockUseActiveTemplates(...args),
 }));
 
 jest.mock('../../contexts/tax-rates', () => ({
@@ -576,3 +576,79 @@ it.each(['https://store.test/receipt/42?foo=bar#preview', '/receipt/42?foo=bar#p
 		expect(count).not.toHaveBeenCalled();
 	}
 );
+
+// Revert: feed the closure through the order normalizer (which drops its fields), or select report templates.
+it('renders the orderless closure envelope unchanged through its closure template online and offline', () => {
+	const local = {
+		closure: { number: 4 },
+		order: { currency: 'USD' },
+		fiscal: { document_type: 'closure' },
+	};
+	const remote = { ...local, closure: { number: 9 } };
+	mockUseActiveTemplates.mockReturnValue([
+		{
+			id: 'closure-core',
+			engine: 'logicless',
+			offline_capable: true,
+			content: '<b>{{closure.number}}</b>',
+		},
+	] as never);
+	mockUseReceiptData.mockReturnValue({ data: remote, hasResponded: true, isLoading: false });
+	mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+	const { result, rerender } = renderHook(() =>
+		useTemplateRenderer({
+			...defaultOptions,
+			orderId: undefined,
+			order: undefined,
+			document: 'closure:uuid',
+			localReport: local,
+			templateType: 'closure',
+			storeId: 7,
+		})
+	);
+	expect(mockUseActiveTemplates).toHaveBeenLastCalledWith('closure', 7);
+	expect(mockUseReceiptData).toHaveBeenLastCalledWith({
+		orderId: undefined,
+		mode: 'fiscal',
+		document: 'closure:uuid',
+	});
+	expect(result.current.renderedHtml).toBe('<b>9</b>');
+	mockUseOnlineStatus.mockReturnValue({ status: 'offline' });
+	rerender();
+	expect(result.current.renderedHtml).toBe('<b>4</b>');
+	expect(mockUseReceiptData).toHaveBeenLastCalledWith({
+		orderId: undefined,
+		mode: 'fiscal',
+		document: undefined,
+	});
+});
+// Revert: require an order-derived URL for a merchant's PHP closure template.
+it('addresses the orderless legacy closure page without an order', () => {
+	mockUseAppState.mockReturnValue({
+		store: createStore(),
+		site: { url: 'https://shop.test/subdir/' },
+	} as never);
+	mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+	mockUseReceiptData.mockReturnValue({
+		data: { closure: { number: 9 } },
+		hasResponded: true,
+		isLoading: false,
+	});
+	mockUseActiveTemplates.mockReturnValue([
+		{ id: 77, engine: 'legacy-php', offline_capable: false },
+	] as never);
+	const { result } = renderHook(() =>
+		useTemplateRenderer({
+			...defaultOptions,
+			orderId: undefined,
+			order: undefined,
+			document: 'closure:uuid',
+			templateType: 'closure',
+		})
+	);
+	const url = new URL(result.current.receiptUrl!);
+	expect(url.pathname).toBe('/subdir/');
+	expect(url.searchParams.get('wcpos-receipt')).toBe('0');
+	expect(url.searchParams.get('document')).toBe('closure:uuid');
+	expect(url.searchParams.get('template')).toBe('77');
+});

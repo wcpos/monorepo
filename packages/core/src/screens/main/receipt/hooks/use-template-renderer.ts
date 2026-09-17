@@ -51,6 +51,8 @@ export function renderOfflineTemplatePreview({
 }
 
 interface UseTemplateRendererOptions {
+	templateType?: 'receipt' | 'report' | 'closure';
+	storeId?: number;
 	orderId: number | undefined;
 	baseReceiptURL: string | undefined;
 	mode: ReceiptMode;
@@ -63,6 +65,7 @@ interface UseTemplateRendererOptions {
 }
 
 interface TemplateRendererResult {
+	serverReceiptData: Record<string, unknown> | null;
 	templates: TemplateDocument[];
 	selectedTemplateId: string | number | null;
 	setSelectedTemplateId: (id: string | number) => void;
@@ -89,8 +92,13 @@ export function useTemplateRenderer({
 	localReport,
 	formatReport,
 	order,
+	templateType,
+	storeId,
 }: UseTemplateRendererOptions): TemplateRendererResult {
-	const templates = useActiveTemplates(localReport ? 'report' : 'receipt');
+	const templates = useActiveTemplates(
+		templateType ?? (localReport ? 'report' : 'receipt'),
+		storeId
+	);
 	const mode = document ? 'fiscal' : requestedMode;
 	const { store, site } = useAppState();
 	const register = useRegister();
@@ -107,6 +115,11 @@ export function useTemplateRenderer({
 		Record<string, string> | undefined;
 	const { status } = useOnlineStatus();
 	const isOffline = status !== 'online-website-available';
+	if (templateType === 'closure' && !isOffline && site?.url) {
+		const url = new URL(site.url);
+		url.searchParams.set('wcpos-receipt', '0');
+		baseReceiptURL = url.toString();
+	}
 	const { getLabel: getStatusLabel } = useOrderStatusLabel();
 
 	// Fetch receipt data from API (when online)
@@ -262,9 +275,10 @@ export function useTemplateRenderer({
 		}
 	}
 
-	const reportContent = localReport
-		? '<h1>{{title}}</h1><p>{{order_number}}</p>{{#line_items}}<p>{{name}}: {{amount}}</p>{{/line_items}}<p>{{footer}}</p>'
-		: undefined;
+	const reportContent =
+		localReport && templateType !== 'closure'
+			? '<h1>{{title}}</h1><p>{{order_number}}</p>{{#line_items}}<p>{{name}}: {{amount}}</p>{{/line_items}}<p>{{footer}}</p>'
+			: undefined;
 	if (!renderedHtml && reportContent && receiptData)
 		renderedHtml = Mustache.render(reportContent, receiptData);
 	const preparePrintContent = async (nextLocalPrintCount: () => Promise<number>) => {
@@ -311,6 +325,7 @@ export function useTemplateRenderer({
 
 	return {
 		preparePrintContent,
+		serverReceiptData: isOffline ? null : apiReceiptData,
 		templates,
 		selectedTemplateId,
 		setSelectedTemplateId,
@@ -319,12 +334,12 @@ export function useTemplateRenderer({
 		receiptData,
 		selectedTemplateEngine: selectedTemplate?.offline_capable
 			? (selectedTemplate.engine ?? null)
-			: localReport
+			: reportContent
 				? 'thermal'
 				: (selectedTemplate?.engine ?? null),
 		selectedTemplateContent: selectedTemplate?.offline_capable
 			? (selectedTemplate.content ?? null)
-			: localReport
+			: reportContent
 				? '<receipt><text>{{store.name}}</text><text>{{order.number}}</text>{{#lines}}<text>{{name}}</text>{{/lines}}<text>{{order.customer_note}}</text><feed lines="3"/><cut/></receipt>'
 				: (selectedTemplate?.content ?? null),
 		isOffline,

@@ -607,7 +607,10 @@ const receipt_email_queue: RxCollectionCreator<ReceiptEmailQueueDocumentType> = 
 export type ClosureRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof closuresLiteral>;
 export type ClosureDocument = RxDocument<ClosureRow>;
 export type ClosureCollection = RxCollection<ClosureRow>;
-const closures: RxCollectionCreator<ClosureRow> = { schema: closuresLiteral };
+const closures: RxCollectionCreator<ClosureRow> = {
+	schema: closuresLiteral,
+	migrationStrategies: { 1: (oldDoc) => oldDoc },
+};
 
 export type RegisterSessionRow = ExtractDocumentTypeFromTypedRxJsonSchema<
 	typeof registerSessionsLiteral
@@ -616,6 +619,7 @@ export type RegisterSessionDocument = RxDocument<RegisterSessionRow>;
 export type RegisterSessionCollection = RxCollection<RegisterSessionRow>;
 const register_sessions: RxCollectionCreator<RegisterSessionRow> = {
 	schema: registerSessionsLiteral,
+	migrationStrategies: { 1: (oldDoc) => oldDoc },
 };
 export type CashMovementRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof cashMovementsLiteral>;
 export type CashMovementDocument = RxDocument<CashMovementRow>;

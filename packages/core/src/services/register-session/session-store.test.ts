@@ -25,7 +25,7 @@ beforeEach(async () => {
 		multiInstance: false,
 	});
 	await db.addCollections({
-		register_sessions: { schema: registerSessionsLiteral },
+		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
 		cash_movements: { schema: cashMovementsLiteral },
 	});
 });

@@ -43,8 +43,8 @@ beforeEach(async () => {
 	});
 	await ensureRegister(userDB);
 	await db.addCollections({
-		closures: { schema: closuresLiteral },
-		register_sessions: { schema: registerSessionsLiteral },
+		closures: { schema: closuresLiteral, autoMigrate: false },
+		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
 		cash_movements: { schema: cashMovementsLiteral },
 	});
 });

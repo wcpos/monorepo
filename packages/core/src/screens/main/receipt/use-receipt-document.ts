@@ -26,7 +26,11 @@ export function useReceiptDocument({
 	documentReady,
 	localReport,
 	formatReport,
+	templateType,
+	storeId,
 }: {
+	templateType?: 'receipt' | 'report' | 'closure';
+	storeId?: number;
 	order?: EngineRecord<'orders'>;
 	autoPrintAllowed: boolean;
 	document?: string;
@@ -63,6 +67,7 @@ export function useReceiptDocument({
 		setSelectedTemplateId,
 		renderedHtml,
 		receiptData,
+		serverReceiptData,
 		receiptUrl: templateReceiptUrl,
 		selectedTemplateEngine,
 		selectedTemplateContent,
@@ -72,6 +77,8 @@ export function useReceiptDocument({
 		preparePrintContent,
 	} = useTemplateRenderer({
 		orderId,
+		templateType,
+		storeId,
 		baseReceiptURL,
 		mode: 'live',
 		document,
@@ -308,6 +315,8 @@ export function useReceiptDocument({
 		(isSyncing || (hasDocument && frameState !== 'loaded'));
 
 	return {
+		receiptData,
+		serverReceiptData,
 		...(document ? { document } : {}),
 		autoPrintPending,
 		templates,

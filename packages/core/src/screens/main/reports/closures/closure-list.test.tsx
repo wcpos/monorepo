@@ -1,14 +1,17 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { ClosureRow } from '@wcpos/database';
 
 import { ClosureList } from './closure-list';
 import { selectClosureRows } from './use-closure-rows';
 
-jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
+jest.mock('@wcpos/components/text', () => ({
+	Text: require('react-native').Text,
+	TextClassContext: require('react').createContext(undefined),
+}));
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
@@ -57,6 +60,10 @@ function row(id: string, changes: Partial<ClosureRow> = {}): ClosureRow {
 		...changes,
 	};
 }
+beforeEach(() => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-10-01T12:00:00Z'));
+});
+afterEach(() => jest.useRealTimers());
 const scope = { from: '2026-09-15', to: '2026-09-17', registerId: 'r', storeId: 1 };
 // Revert: group/sort on closed_at instead of the persisted business_day (or use UTC fallback).
 it('groups stamped opening days newest first, falling back to the store day for legacy rows', () => {
@@ -74,8 +81,8 @@ it('groups stamped opening days newest first, falling back to the store day for 
 	);
 	render(<ClosureList rows={rows} />);
 	expect(screen.getAllByTestId(/^closure-day-/).map((n) => n.textContent)).toEqual([
-		'2026-09-16',
-		'2026-09-15',
+		'Wednesday, 16 Sep 2026',
+		'Tuesday, 15 Sep 2026',
 	]);
 	expect(screen.getAllByTestId(/^closure-row-/).map((n) => n.getAttribute('data-testid'))).toEqual([
 		'closure-row-3',
@@ -118,4 +125,26 @@ it('shows only Unsynced before Corrected, and puts the drawer result last', () =
 it('filters by the closer', () => {
 	const rows = [row('1', { closed_by: 7 }), row('2', { closed_by: 8 })];
 	expect(selectClosureRows(rows, { ...scope, cashier: 7 }, 'UTC').map((r) => r.id)).toEqual(['1']);
+});
+
+// Revert: leave rows inert instead of opening the selected document.
+it('opens the tapped closure', () => {
+	const onSelect = jest.fn();
+	const record = row('1');
+	render(<ClosureList rows={[record]} onSelect={onSelect} />);
+	fireEvent.click(screen.getByTestId('closure-row-1'));
+	expect(onSelect).toHaveBeenCalledWith(record);
+});
+
+// Revert: compare with the device/UTC day instead of the store's current calendar day.
+it('labels Today and Yesterday in store time', () => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-09-17T01:00:00Z'));
+	render(
+		<ClosureList
+			rows={[row('1', { business_day: '2026-09-16' }), row('2', { business_day: '2026-09-15' })]}
+		/>
+	);
+	expect(screen.getByTestId('closure-day-2026-09-16').textContent).toBe('Today');
+	expect(screen.getByTestId('closure-day-2026-09-15').textContent).toBe('Yesterday');
+	jest.useRealTimers();
 });

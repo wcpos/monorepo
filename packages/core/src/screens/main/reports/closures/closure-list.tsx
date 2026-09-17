@@ -1,21 +1,38 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { format as formatDate } from 'date-fns';
+import { format as formatDate, parseISO, subDays } from 'date-fns';
 
+import { Badge } from '@wcpos/components/badge';
 import { Text } from '@wcpos/components/text';
 import type { ClosureRow } from '@wcpos/database';
 
+import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useT } from '../../../../contexts/translations';
-import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
+import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
-export function ClosureList({ rows }: { rows: readonly ClosureRow[] }) {
+export function ClosureList({
+	rows,
+	onSelect,
+}: {
+	rows: readonly ClosureRow[];
+	onSelect?: (row: ClosureRow) => void;
+}) {
 	const t = useT();
 	const { format } = useCurrencyFormat();
 	const { timezone } = useStoreDay();
 	const names = useRegisterNames();
+	const { formatDate: displayDate } = useLocalDate();
+	const today = formatDate(new Date(), 'yyyy-MM-dd', zoneOptions(timezone));
+	const yesterday = formatDate(subDays(inZone(timezone, new Date()), 1), 'yyyy-MM-dd');
+	const heading = (day: string) =>
+		day === today
+			? t('common.today')
+			: day === yesterday
+				? t('common.yesterday')
+				: displayDate(parseISO(day), 'EEEE, d MMM yyyy');
 	const time = (value: string) => formatDate(new Date(value), 'HH:mm', zoneOptions(timezone));
 	return (
 		<View className="bg-card rounded-md border">
@@ -34,12 +51,14 @@ export function ClosureList({ rows }: { rows: readonly ClosureRow[] }) {
 								testID={`closure-day-${row.business_day}`}
 								className="bg-table-header px-4 py-2"
 							>
-								{row.business_day}
+								{row.business_day ? heading(row.business_day) : ''}
 							</Text>
 						)}
-						<View
+						<Pressable
+							onPress={() => onSelect?.(row)}
+							accessibilityRole="button"
 							testID={`closure-row-${row.id}`}
-							className="min-h-14 flex-row items-center gap-3 border-t p-3"
+							className="active:bg-muted min-h-14 flex-row items-center gap-3 border-t p-3"
 						>
 							<View className="min-w-0 flex-1 gap-1">
 								<Text>
@@ -55,9 +74,14 @@ export function ClosureList({ rows }: { rows: readonly ClosureRow[] }) {
 									{String(row.breakdowns.closed_by_name || t('register.unknown_cashier'))}
 								</Text>
 								{badge && (
-									<Text testID={`closure-badge-${row.id}`} className="text-muted-foreground">
-										{badge}
-									</Text>
+									<Badge
+										testID={`closure-badge-${row.id}`}
+										variant="muted"
+										size="lg"
+										className="self-start"
+									>
+										<Text>{badge}</Text>
+									</Badge>
 								)}
 							</View>
 							<Text testID={`closure-counted-${row.id}`} className="tabular-nums">
@@ -68,7 +92,7 @@ export function ClosureList({ rows }: { rows: readonly ClosureRow[] }) {
 									? `${format(Math.abs(variance))} ${t(variance < 0 ? 'register.short' : 'register.over')}`
 									: t('reports.exact')}
 							</Text>
-						</View>
+						</Pressable>
 					</React.Fragment>
 				);
 			})}
