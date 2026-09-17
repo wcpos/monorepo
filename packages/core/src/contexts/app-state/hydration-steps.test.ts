@@ -453,6 +453,9 @@ describe('HYDRATE_USER_SESSION', () => {
 			const database = Object.assign(context.userDB!, {
 				addState: async () => context.appState,
 				users: documentLookup(context.user),
+				// CREATE_USER_DB also ensures the register document on this lane; an existing
+				// one keeps ensureRegister from inserting.
+				getLocal: async () => ({ toJSON: () => ({ data: { id: 'register-1', sites: {} } }) }),
 			});
 			jest.requireMock('@wcpos/database').createUserDB.mockResolvedValue(database);
 			jest.requireMock('./initial-props').initialProps = context.initialProps;
