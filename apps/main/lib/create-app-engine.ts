@@ -203,7 +203,8 @@ async function requestScope(
 		await entry.engine.scope.switch(scope);
 	} finally {
 		const latest = entry.requests.at(-1) === request;
-		entry.requests.splice(entry.requests.indexOf(request), 1);
+		const index = entry.requests.indexOf(request);
+		if (index >= 0) entry.requests.splice(index, 1);
 		if (latest) {
 			const active = entry.engine.active();
 			entry.renderKey = active ? scopeCacheKey(active.identity) : null;
@@ -214,7 +215,11 @@ async function requestScope(
 function disposeCachedEngine(entry: CachedEngine): void {
 	const active = entry.engine.active();
 	const disposalKey = active ? scopeCacheKey(active.identity) : entry.allocationKey;
-	const priorDisposal = pendingDisposals.get(disposalKey);
+	const disposalKeys = new Set([disposalKey, ...entry.requests.map((request) => request.key)]);
+	if (entry.renderKey) disposalKeys.add(entry.renderKey);
+	const priorDisposal = [...disposalKeys]
+		.map((key) => pendingDisposals.get(key))
+		.find((pending) => pending !== undefined);
 	let disposal: Promise<void>;
 	try {
 		disposal = priorDisposal
@@ -258,12 +263,12 @@ function disposeCachedEngine(entry: CachedEngine): void {
 			resolve();
 		});
 	});
-	pendingDisposals.set(disposalKey, bounded);
+	for (const key of disposalKeys) pendingDisposals.set(key, bounded);
 	void bounded.then(() => {
 		entry.writeLeader?.current?.dispose();
 		entry.writeOutcomeBridge?.close();
-		if (pendingDisposals.get(disposalKey) === bounded) {
-			pendingDisposals.delete(disposalKey);
+		for (const key of disposalKeys) {
+			if (pendingDisposals.get(key) === bounded) pendingDisposals.delete(key);
 		}
 	});
 }
@@ -294,7 +299,12 @@ export async function switchAppEngineScope(session: {
 	if (canonicalSite(site) !== entry.site) return;
 	const scope: StoreScopeIdentity = { site, storeId, cashierId };
 	const active = entry.engine.active();
-	if (!entry.requests.length && active && scopeCacheKey(active.identity) === scopeCacheKey(scope))
+	const key = scopeCacheKey(scope);
+	const latest = entry.requests.at(-1);
+	if (
+		latest?.key === key ||
+		(!latest && (active ? scopeCacheKey(active.identity) : entry.allocationKey) === key)
+	)
 		return;
 	await requestScope(entry, scope);
 }
@@ -307,16 +317,22 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		const entry = cachedEngine;
 		const active = entry.engine.active();
 		const activeKey = active ? scopeCacheKey(active.identity) : null;
-		const pending = entry.requests.find((request) => request.key === cacheKey);
+		const latest = entry.requests.at(-1);
+		const pending = entry.requests.filter((request) => request.key === cacheKey).at(-1);
 		const projected = projectFetcherOptions(options);
 		if (pending) pending.options = projected;
-		if (activeKey === cacheKey) Object.assign(entry.fetcherOptions, projected);
-		// Awaited switches leave outgoing render intent in place until settlement.
-		// A stale render must not switch back or replace the incoming scope's auth.
 		if (
-			pending ||
+			activeKey === cacheKey ||
+			(activeKey === null && cacheKey === entry.allocationKey && !latest)
+		) {
+			Object.assign(entry.fetcherOptions, projected);
+		}
+		// Unchanged render intent stays inert during an awaited switch or initial open.
+		// B → C → B still enqueues the return because renderKey has moved to C.
+		if (
+			latest?.key === cacheKey ||
 			entry.renderKey === cacheKey ||
-			(!entry.requests.length && activeKey === cacheKey)
+			(!latest && activeKey === cacheKey)
 		) {
 			return entry.engine;
 		}
@@ -365,7 +381,7 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 			);
 		},
 	};
-	const fetcherScope: EngineFetcherScope = { storeId: null };
+	const fetcherScope: EngineFetcherScope = { storeId: options.scope.storeId };
 	const clockSkew = { generation: 0, evaluated: false };
 	const e2eEngineLedgerObserver = createE2eEngineLedgerObserver();
 	const webLocksAvailable =
@@ -464,9 +480,12 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 	const writeOutcomeBridge: ScopedWriteOutcomeBridge | undefined = isWeb
 		? createWriteOutcomeBridge()
 		: undefined;
+	writeOutcomeBridge?.moveTo(writeOutcomeChannelName(scopeDatabaseName(options.scope)));
 	const writeLeader: WriteLeaderState | undefined = isWeb
 		? {
-				current: null,
+				current: electWriteLeader(`wcpos-write-leader:${scopeDatabaseName(options.scope)}`, {
+					onUnavailable: onWriteLeaderUnavailable,
+				}),
 				onUnavailable: onWriteLeaderUnavailable,
 			}
 		: undefined;
@@ -556,20 +575,23 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),
 	};
 	cachedEngine = entry;
-	let publishedKey: string | null = null;
+	let publishedKey: string | null = cacheKey;
+	let hasActivated = false;
 	engine.db$(() => {
 		if (cachedEngine !== entry) return;
 		const active = engine.active();
+		// db$ immediately emits null during boot; retain the allocation's seed.
+		if (!active && !hasActivated) return;
+		hasActivated = true;
 		const key = active ? scopeCacheKey(active.identity) : null;
-		if (key === publishedKey) return;
-		publishedKey = key;
 		const pending = entry.requests.find((request) => request.key === key);
 		if (pending?.options) Object.assign(fetcherOptions, pending.options);
+		if (key === publishedKey) return;
 		fetcherScope.storeId = active?.identity.storeId ?? null;
 		clockSkew.generation += 1;
 		clockSkew.evaluated = false;
-		if (!active) return;
-		moveWriteLeader(entry, scopeDatabaseName(active.identity));
+		if (active) moveWriteLeader(entry, scopeDatabaseName(active.identity));
+		publishedKey = key;
 	});
 	return engine;
 }
