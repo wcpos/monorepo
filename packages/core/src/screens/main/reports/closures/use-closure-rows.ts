@@ -208,6 +208,7 @@ export function useClosureRows(requested: ClosureScope) {
 	return {
 		scope,
 		rows,
+		localRows: local,
 		loadMore,
 		refreshRow,
 		hasMore: needsServer && page.more && page.status === 'ready',

@@ -35,11 +35,15 @@ export function Closures({
 	scope: ClosureScope;
 	initialClosureId?: string;
 }) {
-	const { rows, scope, status, hasMore, loadMore, refreshRow, unavailableIds } =
+	const { rows, localRows, scope, status, hasMore, loadMore, refreshRow, unavailableIds } =
 		useClosureRows(requested);
 	const [selected, setSelected] = React.useState<string | null>(initialClosureId ?? null);
+	const selectedLocal = localRows.find((row) => row.id === selected);
+	const selectedId = selectedLocal?.server_closure_id ?? selected;
 	const row = rows.find(
-		(row) => row.id === selected && !unavailableIds.has(row.server_closure_id ?? row.id)
+		(row) =>
+			(row.server_closure_id ?? row.id) === selectedId &&
+			!unavailableIds.has(row.server_closure_id ?? row.id)
 	);
 	const { store } = useStoreSession();
 	const binding = useRegisterBinding();

@@ -279,7 +279,7 @@ export function useReceiptDocument({
 		(reportSystemDialog ? undefined : resolvedPrinter?.name) ?? t('receipt.print_dialog');
 	const print = React.useCallback(async () => {
 		if (
-			document?.startsWith('closure:') &&
+			(document?.startsWith('closure:') || document?.startsWith('xreport:')) &&
 			(!selectedTemplate?.offline_capable || !selectedTemplate.content)
 		)
 			throw new Error(t('reports.closure_template_required'));

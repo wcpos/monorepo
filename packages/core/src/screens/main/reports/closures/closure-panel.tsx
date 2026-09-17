@@ -245,6 +245,7 @@ export function ClosurePanel({
 			{recounting && (
 				<RecountSheet
 					row={row}
+					corrections={corrections}
 					onSaved={() => {
 						doc.refetch();
 						onRecountSaved?.();

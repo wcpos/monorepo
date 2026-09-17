@@ -179,6 +179,7 @@ const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockHttp = { get: mockGet, post: mockPost };
 let mockOnline = true;
+const mockGenericPrint = jest.fn().mockResolvedValue(undefined);
 const mockThermalPrint = jest.fn().mockResolvedValue(undefined);
 const mockHtmlPrint = jest.fn().mockResolvedValue(undefined);
 const mockCloudPrint = jest.fn().mockResolvedValue(undefined);
@@ -203,6 +204,7 @@ jest.mock('@wcpos/printer/raster/rasterize-provider', () => ({ useOptionalRaster
 jest.mock('@wcpos/printer/printer-service', () => ({
 	PrinterService: jest.fn(() => ({
 		setCloudEnqueueFactory: jest.fn(),
+		printReceipt: mockGenericPrint,
 		printThermalTemplateForPrint: mockThermalPrint,
 		printHtml: mockHtmlPrint,
 		printOrderViaCloud: mockCloudPrint,
@@ -230,6 +232,7 @@ describe('print intent through checkout and reprint receipt documents', () => {
 				},
 			})
 		);
+		mockGenericPrint.mockClear();
 		mockThermalPrint.mockClear();
 		mockHtmlPrint.mockClear();
 		mockCloudPrint.mockClear();
@@ -389,26 +392,33 @@ describe('print intent through checkout and reprint receipt documents', () => {
 
 	// Revert: let legacy URL printing bypass copy marking or print a generic order receipt without a closure template.
 	it.each([
-		{ templates: [] },
-		{ templates: [{ id: 7, engine: 'legacy-php', offline_capable: false }] },
-	])('refuses closure printing without a renderable selected template', async ({ templates }) => {
-		jest
-			.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
-			.mockReturnValue(templates);
-		const { result } = renderHook(() =>
-			useReceiptDocument({
-				autoPrintAllowed: false,
-				document: 'closure:c',
-				templateType: 'closure',
-				localReport: { order: { currency: 'USD' }, closure: { number: 1 } },
-			})
-		);
-		await act(async () => {
-			await expect(result.current.print()).rejects.toThrow('reports.closure_template_required');
-		});
-		expect(mockPost).not.toHaveBeenCalled();
-		expect(mockThermalPrint).not.toHaveBeenCalled();
-	});
+		{ document: 'closure:c', templates: [] },
+		{ document: 'closure:c', templates: [{ id: 7, engine: 'legacy-php', offline_capable: false }] },
+		{ document: 'xreport:s', templates: [] },
+		{ document: 'xreport:s', templates: [{ id: 7, engine: 'legacy-php', offline_capable: false }] },
+	])(
+		'refuses $document printing without a renderable selected template',
+		async ({ document, templates }) => {
+			jest
+				.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+				.mockReturnValue(templates);
+			const { result } = renderHook(() =>
+				useReceiptDocument({
+					autoPrintAllowed: false,
+					document,
+					templateType: 'closure',
+					localReport: { order: { currency: 'USD' }, closure: { number: 1 } },
+				})
+			);
+			await act(async () => {
+				await expect(result.current.print()).rejects.toThrow('reports.closure_template_required');
+			});
+			expect(mockPost).not.toHaveBeenCalled();
+			expect(mockThermalPrint).not.toHaveBeenCalled();
+			expect(mockGenericPrint).not.toHaveBeenCalled();
+			expect(result.current.printedTo).toBeNull();
+		}
+	);
 
 	// Revert: mark the close-session flow's very first print as a copy.
 	it('keeps the first close-session print original while counting it locally', async () => {

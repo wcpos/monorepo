@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { Closures } from './index';
 const scope = { from: '2026-09-17', to: '2026-09-17', registerId: 'r', storeId: 1 };
-const rows = [
+const localRows = [
 	{
 		id: 'c',
 		server_closure_id: 'server',
@@ -17,6 +17,7 @@ const rows = [
 		register_id: 'r',
 	},
 ];
+let rows = localRows;
 const share = jest.fn(async () => undefined);
 jest.mock('./save-or-share-csv', () => ({
 	saveOrShareCsv: (...args: unknown[]) => share(...(args as [])),
@@ -27,6 +28,7 @@ const loadMore = jest.fn();
 jest.mock('./use-closure-rows', () => ({
 	useClosureRows: () => ({
 		rows,
+		localRows,
 		scope,
 		status,
 		loadMore,
@@ -137,3 +139,13 @@ it('does not open an unavailable server-identified closure', () => {
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 
 jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
+
+// Revert: match only row.id, losing local route UUIDs when paging selects the server copy.
+it('keeps a local deep link open after historical paging replaces the row', () => {
+	const view = render(<Closures scope={scope} initialClosureId="c" />);
+	expect(screen.getByTestId('selected-closure').textContent).toBe('c');
+	rows = [{ ...localRows[0], id: 'server' }];
+	view.rerender(<Closures scope={scope} initialClosureId="c" />);
+	expect(screen.getByTestId('selected-closure').textContent).toBe('server');
+	rows = localRows;
+});

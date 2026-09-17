@@ -21,16 +21,22 @@ import { RegisterAmount } from '../../pos/cart/movement-sheet';
 import { DenominationTile } from '../../pos/cart/register-count';
 import { denominations } from '../../pos/cart/register-count.denominations';
 import { denominationTotal, validAmount } from '../../pos/cart/register-count.helpers';
+import {
+	type Correction,
+	deriveSettled,
+} from '../../../../services/register-session/settled-figures';
 
 // Closures_Controller caps a correction reason at 500 characters.
 const RECOUNT_REASON_LIMIT = 500;
 
 export function RecountSheet({
 	row,
+	corrections = [],
 	onSaved,
 	onOpenChange,
 }: {
 	row: ClosureRow;
+	corrections?: readonly Correction[];
 	onSaved: () => void;
 	onOpenChange: (open: boolean) => void;
 }) {
@@ -51,9 +57,12 @@ export function RecountSheet({
 	const manager = capabilities?.includes('manage_woocommerce_pos_closures');
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { screenSize } = useTheme();
-	const [counted, setCounted] = React.useState<Record<string, string>>(() =>
-		Object.fromEntries(Object.keys({ cash: '', ...row.counted }).map((key) => [key, '']))
-	);
+	const [counted, setCounted] = React.useState<Record<string, string>>(() => {
+		const { settled } = deriveSettled(row, corrections);
+		return Object.fromEntries(
+			Object.keys({ cash: '', ...settled.expected, ...settled.counted }).map((key) => [key, ''])
+		);
+	});
 	const [pieces, setPieces] = React.useState<Record<string, number>>({});
 	const [notesOpen, setNotesOpen] = React.useState(false);
 	const [reason, setReason] = React.useState('');
@@ -107,7 +116,11 @@ export function RecountSheet({
 				if (!busy) onOpenChange(open);
 			}}
 		>
-			<DialogContent side={screenSize === 'sm' ? 'bottom' : 'right'} testID="recount-sheet">
+			<DialogContent
+				side={screenSize === 'sm' ? 'bottom' : 'right'}
+				testID="recount-sheet"
+				closeButtonProps={{ testID: 'recount-close' }}
+			>
 				<DialogTitle>{t('reports.recount')}</DialogTitle>
 				<ScrollView contentContainerClassName="gap-3">
 					{!online && <Text testID="recount-offline">{t('reports.recount_offline')}</Text>}

@@ -3,7 +3,10 @@ import { View } from 'react-native';
 
 import { useLocalSearchParams } from 'expo-router';
 import { format, parseISO } from 'date-fns';
+import { useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
 
+import type { StoreDocument } from '@wcpos/database';
 import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -14,7 +17,13 @@ import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { withProAccess } from '../components/pro-guard';
 import { useRegisterBinding } from '../../../services/register/use-register-binding';
-import { calendarDate, useStoreDay, zoneOptions } from '../../../hooks/use-store-day';
+import {
+	calendarDate,
+	resolveDayTimezone,
+	storeDayBounds,
+	useStoreDay,
+	zoneOptions,
+} from '../../../hooks/use-store-day';
 import { HeaderLeft } from '../components/header/left';
 import { PageBar } from './page-bar';
 import { Closures } from './closures';
@@ -71,7 +80,16 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	const binding = useCollectionBinding('orders', state);
-	const { presets, timezone, dayBounds, rangeToFilter } = useStoreDay();
+	const storeId = Number.isFinite(Number(state.filters.store))
+		? Number(state.filters.store)
+		: undefined;
+	const { presets, timezone, rangeToFilter } = useStoreDay(storeId);
+	const { wpCredentials, store, site } = useAppState();
+	const storesSource = React.useMemo(
+		() => wpCredentials?.populate$('stores') ?? of([]),
+		[wpCredentials]
+	);
+	const stores = useObservableState(storesSource, []) as StoreDocument[];
 	const range = state.filters.dateRange;
 	const day = (value: string | undefined, fallback: Date) =>
 		format(
@@ -83,15 +101,23 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 		from: day(range?.from, presets().today.from),
 		to: day(range?.to, presets().today.to),
 		registerId: state.filters.register ?? '',
-		storeId: Number.isFinite(Number(state.filters.store)) ? Number(state.filters.store) : undefined,
+		storeId,
 		cashier: state.filters.cashier === undefined ? undefined : Number(state.filters.cashier),
 	};
 	const select = (next: ClosureScope) => {
+		const nextStoreId = next.storeId ?? storeId;
+		const nextStore =
+			nextStoreId === undefined || nextStoreId === store?.id
+				? store
+				: stores.find((row) => row.id === nextStoreId);
+		// A store switch must use the new zone before the query rerenders useStoreDay.
+		const { timezone: nextZone } = resolveDayTimezone(nextStore, site);
+		const dayBounds = (value: string) => storeDayBounds(calendarDate(parseISO(value)), nextZone);
 		actions.setFilter(
 			'dateRange',
 			rangeToFilter({
-				from: dayBounds(calendarDate(parseISO(next.from))).from,
-				to: dayBounds(calendarDate(parseISO(next.to))).to,
+				from: dayBounds(next.from).from,
+				to: dayBounds(next.to).to,
 			})
 		);
 		actions.setFilter('register', next.registerId || undefined);

@@ -6,6 +6,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { createTestT } from '../../../../../jest/translate';
 import { RecountSheet } from './recount-sheet';
+
+import type { Correction } from '../../../../services/register-session/settled-figures';
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 const viewedStores = of([
 	{
@@ -92,12 +94,16 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ testID }: { testID?: string }) => <span data-testid={testID} />,
 }));
+const dialogContent = jest.fn();
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
 		open ? <>{children}</> : null,
-	DialogContent: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
+	DialogContent: (
+		props: React.PropsWithChildren<{ testID?: string; closeButtonProps?: { testID?: string } }>
+	) => {
+		dialogContent(props);
+		return <div data-testid={props.testID}>{props.children}</div>;
+	},
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
 const post = jest.fn(),
@@ -132,6 +138,12 @@ const row = {
 	store_id: 1,
 	server_closure_id: 'server-closure',
 	counted: { cash: '99', card: '3' },
+	expected: { cash: '100', card: '3' },
+	variance: { cash: '-1', card: '0' },
+	period_sales_total: '3',
+	period_refunds_total: '0',
+	perpetual_sales_total: '3',
+	perpetual_refunds_total: '0',
 	sync_status: 'synced',
 };
 const done = jest.fn();
@@ -256,5 +268,63 @@ it('counts and formats euro denominations for a euro closure on a dollar till', 
 			'closures/server-closure/recount',
 			expect.objectContaining({ counted: { cash: '0.20', card: '4' } })
 		)
+	);
+});
+
+// Revert: seed only cash and counted keys, excluding omitted and correction-only tenders.
+it('submits expected, counted, and correction-only tenders in a recount', async () => {
+	const corrections: Correction[] = [
+		{
+			id: 1,
+			type: 'late_sale',
+			created_at: '2026-09-17T12:00:00Z',
+			actor: { id: 7, name: 'Cashier' },
+			approver: null,
+			reason: '',
+			figures: { expected_delta: { voucher: '5' } },
+		},
+		{
+			id: 2,
+			type: 'recount',
+			created_at: '2026-09-17T13:00:00Z',
+			actor: { id: 7, name: 'Cashier' },
+			approver: null,
+			reason: 'Found tender',
+			figures: { counted: { custom: '6' } },
+		},
+	];
+	// Spread allows the new corrections input to reach the real component in the red run.
+	render(
+		<RecountSheet
+			{...{ row: { ...row, expected: { cash: '100', cheque: '8' } } as never, corrections }}
+			onSaved={done}
+			onOpenChange={close}
+		/>
+	);
+	fillCount();
+	for (const [tender, value] of [
+		['cheque', '8'],
+		['voucher', '5'],
+		['custom', '6'],
+	]) {
+		fireEvent.change(screen.getByTestId(`recount-${tender}`), { target: { value } });
+	}
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() =>
+		expect(post).toHaveBeenCalledWith('closures/server-closure/recount', {
+			id: 'client-uuid',
+			counted: { cash: '101.25', card: '4', cheque: '8', voucher: '5', custom: '6' },
+			reason: 'Found notes',
+		})
+	);
+});
+
+// Revert: omit closeButtonProps.testID, leaving the generated close control untargetable.
+it('gives the dialog-generated close control its stable testID', () => {
+	mount();
+	expect(dialogContent).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			closeButtonProps: expect.objectContaining({ testID: 'recount-close' }),
+		})
 	);
 });

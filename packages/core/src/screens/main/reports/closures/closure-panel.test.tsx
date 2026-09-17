@@ -242,6 +242,12 @@ it('shows settled figures below the server document and retains its baseline/cor
 	expect(screen.getByTestId('closure-correction-1').textContent).toContain('Pat');
 	expect(screen.getByTestId('closure-correction-1').textContent).toContain('Alex');
 	expect(screen.getByTestId('closure-correction-1').textContent).toContain('Second count');
+	fireEvent.click(screen.getByTestId('closure-recount'));
+	expect(mockRecount).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			corrections: (mockRemote.closure as { corrections: unknown }).corrections,
+		})
+	);
 	await waitFor(() => expect(mockPatch).toHaveBeenCalled());
 	const snapshot = mockPatch.mock.calls[0][0] as { receipt_snapshot: string };
 	view.unmount();

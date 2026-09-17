@@ -32,6 +32,11 @@ jest.mock('../../../hooks/use-app-info', () => ({
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 const mockBarScope = jest.fn();
+let mockNextStoreID = 9;
+const mockViewedStores = of([
+	{ id: 9, timezone: 'UTC' },
+	{ id: 21, timezone: 'America/New_York' },
+]);
 jest.mock('./page-bar', () => ({
 	PageBar: ({
 		onRoomChange,
@@ -50,7 +55,12 @@ jest.mock('./page-bar', () => ({
 				<button
 					data-testid="past-scope"
 					onClick={() =>
-						onScopeChange({ from: '2026-07-14', to: '2026-07-14', storeId: 9, registerId: 'other' })
+						onScopeChange({
+							from: '2026-07-14',
+							to: '2026-07-14',
+							storeId: mockNextStoreID,
+							registerId: 'other',
+						})
 					}
 				/>
 			</>
@@ -116,7 +126,7 @@ jest.mock('./reports', () => ({
 }));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({
-		wpCredentials: { id: 7, capabilities: mockCapabilities },
+		wpCredentials: { id: 7, capabilities: mockCapabilities, populate$: () => mockViewedStores },
 		site: { timezone_string: 'UTC', gmt_offset: '0' },
 		store: mockStoreID === undefined ? undefined : { id: mockStoreID },
 	}),
@@ -204,6 +214,26 @@ describe('ReportsScreen query-state wiring', () => {
 	});
 });
 
+// Revert: convert a newly selected store's days using the bound till's UTC midnight.
+it('uses the viewed store midnight for Sales immediately on a cross-store selection', () => {
+	mockStoreID = 9;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	mockNextStoreID = 21;
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('past-scope'));
+	expect(latestState().filters).toMatchObject({
+		store: '21',
+		dateRange: {
+			from: '2026-07-14T04:00:00.000Z',
+			to: '2026-07-15T03:59:59.999Z',
+		},
+	});
+	expect(mockBarScope).toHaveBeenLastCalledWith(
+		expect.objectContaining({ storeId: 21, from: '2026-07-14', to: '2026-07-14' })
+	);
+	mockNextStoreID = 9;
+});
+
 // Revert: leave the orders provider mounted around both rooms.
 it('unmounts the Sales binding in Closures and remounts it only on returning to Sales', () => {
 	render(<ReportsScreen />);
@@ -211,7 +241,8 @@ it('unmounts the Sales binding in Closures and remounts it only on returning to 
 	fireEvent.click(screen.getByTestId('room-closures'));
 	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('room-sales'));
-	expect(mockUseCollectionBinding).toHaveBeenCalledTimes(1);
+	// The viewed-store directory can emit after mount; both renders use the Sales binding.
+	expect(mockUseCollectionBinding).toHaveBeenCalledWith('orders', expect.any(Object));
 });
 
 // Revert: remove the capability boundary before local report readers mount.
