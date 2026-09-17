@@ -503,3 +503,30 @@ it('patches the local UUID document when refreshing its merged server row', asyn
 	expect(persisted.corrections_count).toBe(2);
 	expect(persisted.id).toBe('local-uuid');
 });
+
+// Revert: preserve ready/next after reconnect instead of reloading the current scope's page 1.
+it.each(['pending', 'failed'] as const)(
+	'refreshes page 1 on reconnect preserving %s local rows',
+	async (sync_status) => {
+		const local = row('local', {
+			server_closure_id: 'canonical',
+			sync_status,
+			counted: { cash: '9' },
+		});
+		source.next([{ toMutableJSON: () => local }]);
+		get.mockResolvedValueOnce({ data: [row('old')] });
+		const { result, rerender } = renderHook(() => useClosureRows(scope));
+		await waitFor(() => expect(result.current.status).toBe('ready'));
+		online = false;
+		rerender();
+		expect(result.current.rows.some((r) => r.id === 'old')).toBe(true);
+		get.mockResolvedValueOnce({ data: [row('new'), row('canonical', { counted: { cash: '1' } })] });
+		online = true;
+		rerender();
+		await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+		expect(get.mock.calls[1][1].params.page).toBe(1);
+		await waitFor(() => expect(result.current.status).toBe('ready'));
+		expect(result.current.rows.map((r) => r.id).sort()).toEqual(['local', 'new']);
+		expect(result.current.rows.find((r) => r.id === 'local')).toEqual(local);
+	}
+);

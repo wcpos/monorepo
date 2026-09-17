@@ -294,19 +294,20 @@ describe('print intent through checkout and reprint receipt documents', () => {
 			printed_at: '2026-09-17T12:00:00.000Z',
 			counted: { cash: '99' },
 		});
-		// A higher local marker must not decrease, and the first printed timestamp stays frozen.
+		// Revert: ignore the higher local counter when projecting a copy or mirroring its dispatch.
 		localRow.print_count = 5;
 		await act(async () => {
 			expect(await result.current.print()).toBe(true);
 		});
-		expect(localRow.print_count).toBe(5);
+		expect(localRow.print_count).toBe(6);
+		expect(mockHtmlPrint.mock.calls[1][0]).toContain('Selected COPY 5');
 		expect(localRow.printed_at).toBe('2026-09-17T12:00:00.000Z');
 		mockPost.mockRejectedValueOnce(new Error('refused'));
 		await act(async () => {
 			expect(await result.current.print()).toBe(true);
 		});
 		expect(mockPost).toHaveBeenCalledTimes(3);
-		expect(localRow.print_count).toBe(5);
+		expect(localRow.print_count).toBe(6);
 		expect(mockHtmlPrint).toHaveBeenCalledTimes(3);
 		expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'refused' }));
 		mockOnline = false;
@@ -314,8 +315,8 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		await act(async () => {
 			expect(await result.current.print()).toBe(true);
 		});
-		expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain('Selected COPY 5');
-		expect(localRow.print_count).toBe(6);
+		expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain('Selected COPY 6');
+		expect(localRow.print_count).toBe(7);
 		expect(mockPost).toHaveBeenCalledTimes(3);
 	});
 	// Revert: drop useReceiptData.error at either renderer or document-hook boundary.

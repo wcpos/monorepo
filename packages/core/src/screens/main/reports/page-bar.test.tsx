@@ -635,3 +635,43 @@ it.each(['sm', 'md'])(
 		}
 	}
 );
+
+// Revert: keep room tabs in the phone title row instead of a separate row.
+it.each(['sm', 'md', 'lg'])('places room tabs separately only on %s phones', (size) => {
+	mockScreenSize = size;
+	try {
+		draw();
+		const titleRow = screen.getByTestId('reports-title-row');
+		const tabs = screen.getByTestId('reports-room-sales');
+		expect(titleRow.contains(screen.getByTestId('reports-title'))).toBe(true);
+		if (size === 'sm') {
+			expect(screen.getByTestId('reports-tabs-row').contains(tabs)).toBe(true);
+			expect(titleRow.contains(tabs)).toBe(false);
+		} else {
+			expect(titleRow.contains(tabs)).toBe(true);
+			expect(screen.queryByTestId('reports-tabs-row')).toBeNull();
+		}
+	} finally {
+		mockScreenSize = 'sm';
+	}
+});
+
+// Revert: switch storeId without clamping the period to the destination store day.
+it.each([
+	['2026-09-18', '2026-09-18', '2026-09-17', '2026-09-17'],
+	['2026-06-01', '2026-09-18', '2026-06-17', '2026-09-17'],
+])('normalises %s–%s before emitting the destination store scope', (from, to, start, end) => {
+	isPro = true;
+	jest.setSystemTime(new Date('2026-09-18T01:00:00Z'));
+	render(
+		<PageBar
+			room="closures"
+			onRoomChange={room}
+			onScopeChange={change}
+			scope={{ ...scope, storeId: 2, from, to }}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('reports-scope'));
+	fireEvent.click(screen.getByTestId('reports-store-1'));
+	expect(change).toHaveBeenLastCalledWith({ ...scope, from: start, to: end });
+});

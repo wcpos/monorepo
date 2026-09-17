@@ -69,6 +69,7 @@ export function TemplateSwitcher({
 						return (
 							<SelectItem
 								testID={`receipt-template-${stringId}`}
+								className="min-h-12"
 								key={stringId}
 								value={stringId}
 								label={label}

@@ -38,21 +38,31 @@ export function SessionCards({
 	React.useEffect(() => {
 		if (!online || !registerIds) return;
 		const ids = registerIds.split(',');
-		const subscription = defer(() => {
+		const subscription = defer(async () => {
 			setCards({});
-			return http.get('sessions', {
-				params: { store_id: storeId || null, status: 'all', per_page: SESSION_PAGE_SIZE },
-			});
+			const sessions = new Map<string, SessionSummary>();
+			let page = 1;
+			let full: boolean;
+			do {
+				const { data } = await http.get('sessions', {
+					params: { store_id: storeId || null, status: 'all', per_page: SESSION_PAGE_SIZE, page },
+				});
+				for (const session of data as SessionSummary[]) {
+					// Pages are newest first: keep the first summary for each register.
+					if (!sessions.has(session.register_id)) sessions.set(session.register_id, session);
+				}
+				full = data.length === SESSION_PAGE_SIZE;
+				page++;
+			} while (full && ids.some((id) => !sessions.has(id)));
+			return sessions;
 		})
 			.pipe(
-				mergeMap((response) => {
-					const sessions = response.data as SessionSummary[];
+				mergeMap((sessions) => {
 					return from(ids).pipe(
 						mergeMap(async (id) => {
-							const session = sessions.find((row) => row.register_id === id);
+							const session = sessions.get(id);
 							const card: SessionCardData = { ...loading, status: 'ready' };
 							if (session && session.status !== 'closed') card.session = session;
-							else if (!session && sessions.length === SESSION_PAGE_SIZE) card.status = 'error';
 							else {
 								try {
 									card.closure = (

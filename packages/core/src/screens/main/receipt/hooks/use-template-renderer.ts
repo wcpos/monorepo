@@ -54,6 +54,7 @@ export function renderOfflineTemplatePreview({
 }
 
 interface UseTemplateRendererOptions {
+	nextLocalClosureCount?: () => Promise<number>;
 	isReprint?: boolean;
 	templateType?: 'receipt' | 'report' | 'closure';
 	storeId?: number;
@@ -91,6 +92,7 @@ interface TemplateRendererResult {
 }
 
 export function useTemplateRenderer({
+	nextLocalClosureCount,
 	orderId,
 	baseReceiptURL,
 	mode: requestedMode,
@@ -142,6 +144,7 @@ export function useTemplateRenderer({
 		fetchForPrint,
 		commitPrint,
 	} = useReceiptData({
+		nextLocalCount: nextLocalClosureCount,
 		orderId: isOffline ? undefined : orderId,
 		mode,
 		isReprint,

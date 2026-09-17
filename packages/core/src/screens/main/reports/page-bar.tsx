@@ -17,17 +17,17 @@ import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { useTheme } from '../../../contexts/theme';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useLocalDate } from '../../../hooks/use-local-date';
-import { useStoreDay, zoneOptions } from '../../../hooks/use-store-day';
+import { resolveDayTimezone, useStoreDay, zoneOptions } from '../../../hooks/use-store-day';
 import {
 	useRegisterBinding,
 	useRegisterDirectory,
 } from '../../../services/register/use-register-binding';
 import { HeaderLeft } from '../components/header/left';
 import { HeaderRight } from '../components/header/right';
-
-import type { ClosureScope } from './closures/use-closure-rows';
+import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
 
 export type PageBarProps = {
 	room: string;
@@ -49,6 +49,8 @@ export function PageBar({
 	const { formatDate } = useLocalDate();
 	const { top } = useSafeAreaInsets();
 	const { width } = useWindowDimensions();
+	const { screenSize } = useTheme();
+	const phone = screenSize === 'sm';
 	const { store, site, wpCredentials } = useStoreSession();
 	const binding = useRegisterBinding();
 	const { license } = useAppInfo();
@@ -100,7 +102,15 @@ export function PageBar({
 		setHistoryLimit(false);
 		setMenu('');
 		setCustom(false);
-		onScopeChange({ ...scope, ...changes });
+		const next = { ...scope, ...changes };
+		const destination =
+			next.storeId === store.id ? store : stores.find((row) => row.id === next.storeId);
+		const destinationZone = resolveDayTimezone(destination, site).timezone;
+		onScopeChange(
+			changes.storeId === undefined
+				? next
+				: clampClosureScope(next, format(new Date(), 'yyyy-MM-dd', zoneOptions(destinationZone)))
+		);
 		return true;
 	};
 	const period = (from: string, to: string, name: string) => {
@@ -149,37 +159,45 @@ export function PageBar({
 			{locked && <Icon name="lock" className="text-muted-foreground" />}
 		</Button>
 	);
+	const tabs = (
+		<Tabs value={room} onValueChange={onRoomChange}>
+			<TabsList className="flex-row gap-2">
+				{['sales', 'closures'].map((value) => (
+					<TabsTrigger
+						key={value}
+						value={value}
+						testID={`reports-room-${value}`}
+						className={`min-h-12 ${phone ? 'min-w-0 flex-1' : ''}`}
+					>
+						<Text numberOfLines={phone ? 1 : undefined}>{t(`reports.${value}`)}</Text>
+					</TabsTrigger>
+				))}
+			</TabsList>
+		</Tabs>
+	);
 	return (
 		<View
 			testID="reports-page-bar"
 			className="bg-card gap-2 border-b p-2"
 			style={{ paddingTop: top + 8 }}
 		>
-			<View className="flex-row items-center gap-2">
+			<View testID="reports-title-row" className="flex-row items-center gap-2">
 				<View className="bg-sidebar shrink-0 rounded-md">
 					<HeaderLeft className="h-12 min-w-12 shrink-0" />
 				</View>
-				<Text testID="reports-title" className="text-lg font-semibold">
+				<Text
+					testID="reports-title"
+					numberOfLines={phone ? 1 : undefined}
+					className={`text-lg font-semibold ${phone ? 'min-w-0 shrink' : ''}`}
+				>
 					{t('common.reports')}
 				</Text>
-				<Tabs value={room} onValueChange={onRoomChange}>
-					<TabsList className="flex-row gap-2">
-						{['sales', 'closures'].map((value) => (
-							<TabsTrigger
-								key={value}
-								value={value}
-								testID={`reports-room-${value}`}
-								className="min-h-12"
-							>
-								<Text>{t(`reports.${value}`)}</Text>
-							</TabsTrigger>
-						))}
-					</TabsList>
-				</Tabs>
-				<View className="ml-auto">
+				{!phone && tabs}
+				<View className="ml-auto shrink-0">
 					<HeaderRight />
 				</View>
 			</View>
+			{phone && <View testID="reports-tabs-row">{tabs}</View>}
 			<View className="flex-row items-center gap-2">
 				<Popover
 					onOpenChange={(open) => {

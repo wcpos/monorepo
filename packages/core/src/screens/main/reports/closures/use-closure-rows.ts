@@ -110,7 +110,10 @@ export function useClosureRows(requested: ClosureScope) {
 		more: true,
 		status: 'idle',
 	});
-	if (page.key !== key) setPage({ key, rows: [], next: 1, target: 0, more: true, status: 'idle' });
+	const [wasOnline, setWasOnline] = React.useState(online);
+	if (wasOnline !== online) setWasOnline(online);
+	if (page.key !== key || (online && !wasOnline))
+		setPage({ key, rows: [], next: 1, target: 0, more: true, status: 'idle' });
 	const source = React.useMemo(
 		() => (collection ? collection.find().$.pipe(map((rows) => ({ collection, rows }))) : of(null)),
 		[collection]

@@ -95,6 +95,10 @@ export function useReceiptDocument({
 		localReport,
 		formatReport,
 		order: orderData,
+		nextLocalClosureCount: async () => {
+			const closure = await getLocalClosure?.();
+			return closure ? closure.getLatest().print_count + 1 : 0;
+		},
 	});
 
 	// Build template info for routing
@@ -220,7 +224,7 @@ export function useReceiptDocument({
 						if (marker && closure) {
 							await closure.incrementalModify((row) => ({
 								...row,
-								print_count: Math.max(row.print_count, marker.print_count),
+								print_count: Math.max(row.print_count + 1, marker.print_count),
 								printed_at:
 									row.printed_at ??
 									convertUTCStringToLocalDate(marker.last_printed_at_gmt).toISOString(),

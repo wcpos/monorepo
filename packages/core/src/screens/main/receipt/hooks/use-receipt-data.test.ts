@@ -184,3 +184,24 @@ it('ignores legacy print intent on closure preview and print reads', async () =>
 	expect(mockGet.mock.calls.every(([, options]) => !options.params.intent)).toBe(true);
 	expect(mockPost).not.toHaveBeenCalled();
 });
+
+// Revert: derive the online copy number from server count minus the original print.
+it.each([
+	[5, 2],
+	[2, 5],
+])('numbers local %s/server %s as copy 6', async (local, server) => {
+	mockGet.mockResolvedValue({ data: { data: { closure: { print_count: server }, fiscal: {} } } });
+	const { result } = renderHook(() =>
+		useReceiptData({
+			orderId: undefined,
+			document: 'closure:c',
+			nextLocalCount: async () => local + 1,
+		})
+	);
+	await waitFor(() => expect(result.current.hasResponded).toBe(true));
+	let printed;
+	await act(async () => {
+		printed = await result.current.fetchForPrint();
+	});
+	expect(printed).toMatchObject({ closure: { print_count: 6 }, fiscal: { reprint_count: 5 } });
+});

@@ -385,7 +385,7 @@ it('batches all-register sessions and limits closed-register reads to three conc
 	expect(get.mock.calls.filter(([url]) => url === 'sessions')).toHaveLength(1);
 	await waitFor(() => expect(complete).toHaveLength(3));
 	expect(get).toHaveBeenCalledWith('sessions', {
-		params: { store_id: 2, status: 'all', per_page: 100 },
+		params: { store_id: 2, status: 'all', per_page: 100, page: 1 },
 	});
 	expect(screen.getAllByTestId('reports-session-card')).toHaveLength(16);
 	// Missing summary figures are unknown, not zero sales or a zero drawer.
@@ -408,21 +408,51 @@ it('batches all-register sessions and limits closed-register reads to three conc
 	}
 });
 
-// Revert: treat an absent register in a full history page as definitely closed.
-it('does not offer a stale closure when the single sessions page cannot establish register state', async () => {
-	get.mockImplementation(async (url) => ({
-		data:
-			url === 'sessions'
-				? Array.from({ length: 100 }, (_, index) => ({
-						id: `old${index}`,
-						register_id: 'r0',
-						status: 'closed',
-					}))
-				: { id: 'old-closure' },
-	}));
+// Revert: stop at the first full sessions page; Retry repeats that same incomplete read.
+it.each([false, true])('resolves a register on page 2 (retry: %s)', async (retry) => {
+	let fail = retry;
+	get.mockImplementation(async (url, config) => {
+		if (url !== 'sessions') return { data: { id: 'old-closure' } };
+		if ((config.params.page ?? 1) === 1)
+			return {
+				data: Array.from({ length: 100 }, (_, index) => ({
+					id: `old${index}`,
+					register_id: 'r0',
+					status: 'closed',
+				})),
+			};
+		if (fail) {
+			fail = false;
+			throw new Error('temporarily unavailable');
+		}
+		return {
+			data: [
+				{
+					id: 'active-r19',
+					register_id: 'r19',
+					status: 'open',
+					opened_at_gmt: '2026-09-17 09:00:00',
+					opened_by: 7,
+				},
+			],
+		};
+	});
 	render(<Closures scope={{ from: '2026-09-17', to: '2026-09-17', storeId: 2, registerId: '' }} />);
-	await waitFor(() => expect(screen.getByTestId('session-retry-r19')).toBeTruthy());
+	if (retry) {
+		await waitFor(() => expect(screen.getByTestId('session-retry-r19')).toBeTruthy());
+		fireEvent.click(screen.getByTestId('session-retry-r19'));
+	}
+	await waitFor(() =>
+		expect(screen.getByTestId('remote-session-r19').textContent).toContain('Print X-report')
+	);
+	expect(
+		get.mock.calls.filter(([url]) => url === 'sessions').map(([, config]) => config.params.page)
+	).toEqual(retry ? [1, 2, 1, 2] : [1, 2]);
+	expect(documentHook).toHaveBeenCalledWith(
+		expect.objectContaining({ document: 'xreport:active-r19' })
+	);
 	expect(get).not.toHaveBeenCalledWith('closures/last', {
 		params: { store_id: 2, register_id: 'r19' },
 	});
+	await waitFor(() => expect(screen.getAllByTestId('reports-session-card')).toHaveLength(20));
 });

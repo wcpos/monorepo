@@ -41,6 +41,7 @@ interface UseReceiptDataResult {
 }
 
 interface UseReceiptDataOptions {
+	nextLocalCount?: () => Promise<number>;
 	orderId: number | undefined;
 	mode?: ReceiptMode;
 	intent?: 'print';
@@ -61,6 +62,7 @@ type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint' |
  * the API returns a 404.
  */
 export function useReceiptData({
+	nextLocalCount,
 	orderId,
 	mode: requestedMode = 'live',
 	intent,
@@ -87,7 +89,10 @@ export function useReceiptData({
 		if (document?.startsWith('closure:')) {
 			const data = (await fetchData()).data;
 			const marker = {
-				print_count: Number((data.closure as { print_count?: number })?.print_count ?? 0) + 1,
+				print_count: Math.max(
+					Number((data.closure as { print_count?: number })?.print_count ?? 0) + 1,
+					(await nextLocalCount?.()) ?? 0
+				),
 				last_printed_at_gmt: new Date().toISOString(),
 			};
 			return {
@@ -105,7 +110,7 @@ export function useReceiptData({
 			};
 		}
 		return (await fetchData(document?.startsWith('xreport:') ? undefined : 'print')).data ?? null;
-	}, [orderId, document, fetchData, isReprint]);
+	}, [orderId, document, fetchData, isReprint, nextLocalCount]);
 	const commitPrint = React.useCallback(async () => {
 		if (!document?.startsWith('closure:')) return;
 		const response = await http.post(`closures/${document.slice(8)}/print`, {});
