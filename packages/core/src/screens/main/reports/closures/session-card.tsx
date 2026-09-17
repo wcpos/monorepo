@@ -16,6 +16,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
+import { useClosureCollection } from '../../../../services/register-session/use-register-session-collections';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
@@ -36,7 +37,12 @@ export function SessionCard(batch: BatchProps) {
 	const { store } = useStoreSession();
 	const data = useRegisterSession();
 	const active = data.session?.status === 'open' || data.session?.status === 'counting';
-	const { print } = useSessionReport(active ? undefined : data.lastClosure, !active);
+	const { print } = useSessionReport(
+		active ? undefined : data.lastClosure,
+		!active,
+		undefined,
+		!batch.summary
+	);
 	if (!active && data.binding.registerId) {
 		return (
 			<RemoteSessionCard
@@ -185,6 +191,19 @@ export function RemoteSessionCard({
 		status: 'idle',
 	});
 	const data = summary ?? localData;
+	const collection = useClosureCollection();
+	const closureId = data.closure?.server_closure_id ?? data.closure?.id;
+	const getLocalClosure = React.useCallback(
+		async () =>
+			closureId
+				? ((await collection
+						?.findOne({
+							selector: { $or: [{ id: closureId }, { server_closure_id: closureId }] },
+						})
+						.exec()) ?? null)
+				: null,
+		[collection, closureId]
+	);
 	const load = React.useCallback(async () => {
 		if (!online) return;
 		setData((d) => ({ ...d, status: 'loading' }));
@@ -222,10 +241,12 @@ export function RemoteSessionCard({
 	const document = data.session
 		? `xreport:${data.session.id}`
 		: data.closure
-			? `closure:${data.closure.id}`
+			? `closure:${closureId}`
 			: undefined;
 	const report = useReceiptDocument({
 		document,
+		getLocalClosure,
+		previewEnabled: !summary,
 		documentReady: !!document && online,
 		templateType: 'closure',
 		storeId,

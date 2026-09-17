@@ -12,6 +12,14 @@ import type { Correction } from '../../../../services/register-session/settled-f
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 const viewedStores = of([
 	{
+		id: 0,
+		currency: 'USD',
+		currency_pos: 'left',
+		price_num_decimals: 2,
+		price_decimal_sep: '.',
+		price_thousand_sep: ',',
+	},
+	{
 		id: 2,
 		currency: 'EUR',
 		currency_pos: 'right_space',
@@ -356,25 +364,25 @@ it.each([
 	expect(input.parentElement?.children).toHaveLength(2);
 });
 
-// Revert: pass 0 for a null store, selecting default denominations instead of the current GBP store.
-it('uses current-store currency and denominations for a null-store recount', async () => {
+// Revert: pass undefined for a null store, selecting bound GBP denominations instead of store zero.
+it('uses store zero currency and denominations for a null-store recount', async () => {
 	currentCurrency = 'GBP';
 	render(
 		<RecountSheet row={{ ...row, store_id: null } as never} onSaved={done} onOpenChange={close} />
 	);
 	fillCount();
 	fireEvent.click(screen.getByTestId('recount-denominations'));
-	expect(screen.queryByTestId('den-tile-100')).toBeNull();
-	expect(screen.queryByTestId('den-tile-0.25')).toBeNull();
-	const coin = screen.getByTestId('den-tile-0.20');
-	expect(coin.textContent).toContain('£0.20');
-	expect(screen.getByTestId('recount-cash').parentElement?.textContent).toContain('£');
+	expect(screen.getByTestId('den-tile-100')).toBeTruthy();
+	expect(screen.queryByTestId('den-tile-0.20')).toBeNull();
+	const coin = screen.getByTestId('den-tile-0.25');
+	expect(coin.textContent).toContain('$0.25');
+	expect(screen.getByTestId('recount-cash').parentElement?.textContent).toContain('$');
 	fireEvent.click(coin);
 	fireEvent.click(screen.getByTestId('recount-save'));
 	await waitFor(() =>
 		expect(post).toHaveBeenCalledWith(
 			'closures/server-closure/recount',
-			expect.objectContaining({ counted: { cash: '0.20', card: '4' } })
+			expect.objectContaining({ counted: { cash: '0.25', card: '4' } })
 		)
 	);
 });

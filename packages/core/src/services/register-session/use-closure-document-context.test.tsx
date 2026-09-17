@@ -57,3 +57,17 @@ it('formats the viewed store document in that store language', () => {
 	expect(result.current.locale).toBe('de');
 	expect(renderHook(() => useClosureDocumentContext(1)).result.current.locale).toBe('en-US');
 });
+
+// Revert: drop the documented store-zero fallback when the credential list has no zero entry.
+it.each([0, 5])('uses the bound store for store zero without a list match (bound: %s)', (id) => {
+	const previous = session.store.id;
+	session.store.id = id;
+	try {
+		const { result } = renderHook(() => useClosureDocumentContext(0));
+		expect(result.current.currency).toBe('USD');
+		expect(result.current.timezone).toBe('UTC');
+		expect(result.current.formatMoney('12')).toBe('$12.00');
+	} finally {
+		session.store.id = previous;
+	}
+});

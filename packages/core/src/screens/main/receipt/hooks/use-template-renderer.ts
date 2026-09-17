@@ -58,6 +58,7 @@ interface UseTemplateRendererOptions {
 	isReprint?: boolean;
 	templateType?: 'receipt' | 'report' | 'closure';
 	storeId?: number;
+	previewEnabled?: boolean;
 	orderId: number | undefined;
 	baseReceiptURL: string | undefined;
 	mode: ReceiptMode;
@@ -104,6 +105,7 @@ export function useTemplateRenderer({
 	order,
 	templateType,
 	storeId,
+	previewEnabled = true,
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const templates = useActiveTemplates(
 		templateType ?? (localReport ? 'report' : 'receipt'),
@@ -145,6 +147,7 @@ export function useTemplateRenderer({
 		commitPrint,
 	} = useReceiptData({
 		nextLocalCount: nextLocalClosureCount,
+		previewEnabled,
 		orderId: isOffline ? undefined : orderId,
 		mode,
 		isReprint,

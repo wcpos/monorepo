@@ -58,7 +58,8 @@ const mockSession = {
 	store: { id: 0, currency: 'USD', name: 'Shop', timezone: 'UTC' },
 	site: { url: 'https://shop.test' },
 	wpCredentials: {
-		populate$: () => of([{ id: 2, currency: 'JPY', name: 'Tokyo', timezone: 'Asia/Tokyo' }]),
+		populate$: () =>
+			of([0, 2].map((id) => ({ id, currency: 'JPY', name: 'Tokyo', timezone: 'Asia/Tokyo' }))),
 	},
 };
 jest.mock('../../../../contexts/app-state', () => ({
@@ -406,28 +407,39 @@ it('bounds the tablet panel beneath the bar with a contained body and separate f
 	}
 });
 
-// Revert: call the document context without row.store_id.
-it('formats settled amounts and correction timestamps in the closure store', () => {
-	mockRemote = {
-		closure: {
-			...row,
-			corrections: [
-				{
-					id: 1,
-					type: 'recount',
-					actor: { name: 'Pat' },
-					approver: null,
-					reason: 'Count',
-					created_at: '2026-09-11 18:00:00',
-					figures: { counted: { cash: '101' } },
+// Revert: call the document context without row.store_id or coerce null to undefined.
+it.each([2, null])(
+	'formats settled amounts and correction timestamps in closure store %s',
+	(storeId) => {
+		const previous = mockSession.store;
+		mockSession.store = { id: 5, currency: 'GBP', name: 'Till', timezone: 'Europe/London' };
+		try {
+			mockRemote = {
+				closure: {
+					...row,
+					corrections: [
+						{
+							id: 1,
+							type: 'recount',
+							actor: { name: 'Pat' },
+							approver: null,
+							reason: 'Count',
+							created_at: '2026-09-11 18:00:00',
+							figures: { counted: { cash: '101' } },
+						},
+					],
 				},
-			],
-		},
-	};
-	render(<ClosurePanel row={{ ...row, store_id: 2 }} onClose={() => {}} />);
-	expect(screen.getByTestId('closure-settled').textContent).toContain('¥99 → ¥101');
-	expect(screen.getByTestId('closure-correction-1').textContent).toContain('Sep 12, 2026, 3:00 AM');
-});
+			};
+			render(<ClosurePanel row={{ ...row, store_id: storeId }} onClose={() => {}} />);
+			expect(screen.getByTestId('closure-settled').textContent).toContain('¥99 → ¥101');
+			expect(screen.getByTestId('closure-correction-1').textContent).toContain(
+				'Sep 12, 2026, 3:00 AM'
+			);
+		} finally {
+			mockSession.store = previous;
+		}
+	}
+);
 
 // Revert: render a stale fallback as current after an online document GET failure, or omit Retry.
 it('replaces the online fallback with a document error and a manual retry', () => {
@@ -468,18 +480,18 @@ it('resolves the local closure behind a server-listed drill-in', async () => {
 	});
 });
 
-// Revert: coerce a null store to 0 for the document context or receipt/template hooks.
-it('uses the current store context and receipt scope for a null-store closure', () => {
+// Revert: coerce a null store to undefined for the document context or receipt/template hooks.
+it('uses store zero context and receipt scope for a null-store closure from another till', () => {
 	const previous = mockSession.store;
-	mockSession.store = { id: 1, currency: 'GBP', name: 'Current shop', timezone: 'Europe/London' };
+	mockSession.store = { id: 5, currency: 'GBP', name: 'Current shop', timezone: 'Europe/London' };
 	try {
 		render(<ClosurePanel row={{ ...row, store_id: null }} onClose={jest.fn()} />);
 		expect(mockDocument).toHaveBeenLastCalledWith(
 			expect.objectContaining({
-				storeId: undefined,
+				storeId: 0,
 				localReport: expect.objectContaining({
-					store: expect.objectContaining({ name: 'Current shop' }),
-					order: expect.objectContaining({ currency: 'GBP' }),
+					store: expect.objectContaining({ name: 'Tokyo' }),
+					order: expect.objectContaining({ currency: 'JPY' }),
 				}),
 			})
 		);

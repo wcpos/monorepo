@@ -1,8 +1,12 @@
 /** @jest-environment jsdom */
-import { act, renderHook, waitFor } from '@testing-library/react';
+import * as React from 'react';
+
+import { of } from 'rxjs';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import { resetCheckoutMode } from '../pos/checkout/checkout-mode';
 import { useReceiptDocument } from './use-receipt-document';
+import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card';
 
 const mockPrint = jest.fn<Promise<boolean>, []>();
 let mockFinal = true;
@@ -45,11 +49,47 @@ jest.mock('./components/receipt-preview-viewport', () => ({
 }));
 jest.mock('../hooks/use-cloud-enqueue', () => ({ createCloudEnqueueFactory: () => jest.fn() }));
 jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
+const mockCashiers = of([]);
+const mockSession = {
+	store: { id: 5, currency: 'USD', wc_price_decimals: 2, name: 'Shop', timezone: 'UTC' },
+	site: { wcpos_version: 'plugin', populate$: () => mockCashiers },
+	wpCredentials: { capabilities: [], populate$: () => mockCashiers },
+};
 jest.mock('../../../contexts/app-state', () => ({
-	useAppState: () => ({
-		store: { wc_price_decimals: 2, name: 'Shop' },
-		site: { wcpos_version: 'plugin' },
+	useAppState: () => mockSession,
+	useStoreSession: () => mockSession,
+}));
+jest.mock('../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({
+		session: null,
+		lastClosure: null,
+		blind: false,
+		binding: { registerId: 'front', registerName: 'Front' },
 	}),
+}));
+jest.mock('../../../services/register-session/use-session-report', () => ({
+	useSessionReport: () => ({ print: jest.fn() }),
+}));
+const mockFindClosure = jest.fn();
+jest.mock('../../../services/register-session/use-register-session-collections', () => ({
+	useClosureCollection: () => ({ findOne: mockFindClosure }),
+}));
+jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		onPress,
+		testID,
+		disabled,
+		children,
+	}: React.PropsWithChildren<{
+		onPress: () => void;
+		testID: string;
+		disabled?: boolean;
+	}>) => (
+		<button data-testid={testID} disabled={disabled} onClick={onPress}>
+			{children}
+		</button>
+	),
 }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../contexts/ui-settings', () => ({
@@ -246,6 +286,111 @@ describe('print intent through checkout and reprint receipt documents', () => {
 	afterEach(() => {
 		jest.restoreAllMocks();
 		mockOnline = true;
+	});
+
+	// Revert: omit the authoritative card's getter or look up only its local id, not the server alias.
+	it.each([false, true])(
+		'mirrors a ready bound-card reprint into its matching local row (alias: %s)',
+		async (alias) => {
+			let localRow = { id: 'local', server_closure_id: 'server', print_count: 5, printed_at: null };
+			const closure = {
+				getLatest: () => localRow,
+				incrementalModify: async (update: (row: typeof localRow) => typeof localRow) => {
+					localRow = update(localRow);
+				},
+			};
+			mockFindClosure.mockImplementation((query) => ({
+				exec: async () =>
+					query.selector.$or.some(
+						(match: { id?: string; server_closure_id?: string }) =>
+							match.id === localRow.id || match.server_closure_id === localRow.server_closure_id
+					)
+						? closure
+						: null,
+			}));
+			const receiptGet = mockGet.getMockImplementation()!;
+			mockGet.mockImplementation((url, options) => {
+				if (url === 'sessions') return Promise.resolve({ data: [] });
+				if (url === 'closures/last')
+					return Promise.resolve({
+						data: alias ? { id: 'losing-local', server_closure_id: 'server' } : { id: 'server' },
+					});
+				return receiptGet(url, options);
+			});
+			render(<SessionCard />);
+			await waitFor(() => expect(screen.getByTestId('reports-session-print')).toBeTruthy());
+			fireEvent.click(screen.getByTestId('reports-session-print'));
+			await waitFor(() => expect(mockPost).toHaveBeenCalledWith('closures/server/print', {}));
+			await waitFor(() => expect(localRow.print_count).toBe(6));
+			expect(mockThermalPrint).toHaveBeenCalledTimes(1);
+		}
+	);
+
+	// Revert: eagerly fetch hidden card documents or disable fetchForPrint with the preview.
+	it('mounts multiple hidden receipt cards without fetching and fetches once on Print', async () => {
+		const session = {
+			id: 'bound',
+			register_id: 'front',
+			store_id: 5,
+			status: 'open',
+			opened_at_gmt: '2026-09-17 09:00:00',
+			opened_by: 7,
+		};
+		jest
+			.spyOn(
+				jest.requireMock('../../../services/register-session/use-register-session'),
+				'useRegisterSession'
+			)
+			.mockReturnValue({
+				session,
+				lastClosure: null,
+				blind: false,
+				expected: {},
+				salesCount: 0,
+				binding: { registerId: 'front', registerName: 'Front' },
+				movements: [],
+			});
+		jest
+			.spyOn(
+				jest.requireMock('../../../services/register-session/use-session-report'),
+				'useSessionReport'
+			)
+			.mockImplementation(
+				jest.requireActual('../../../services/register-session/use-session-report').useSessionReport
+			);
+		render(
+			<>
+				<SessionCard summary={{ session: session as never, closure: null, status: 'ready' }} />
+				{['a', 'b', 'c'].map((id, index) => (
+					<RemoteSessionCard
+						key={id}
+						register={{ id, name: id }}
+						storeId={5}
+						summary={{
+							status: 'ready',
+							session:
+								index === 0
+									? null
+									: ({
+											id,
+											status: 'open',
+											opened_at_gmt: '2026-09-17 09:00:00',
+											opened_by: 7,
+										} as never),
+							closure: index === 0 ? ({ id } as never) : null,
+						}}
+					/>
+				))}
+			</>
+		);
+		await act(async () => {});
+		expect(mockGet).not.toHaveBeenCalled();
+		fireEvent.click(screen.getAllByTestId('reports-session-print')[1]);
+		await waitFor(() => expect(mockThermalPrint).toHaveBeenCalledTimes(1));
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('/receipts/0', {
+			params: { document: 'closure:a', mode: 'fiscal' },
+		});
 	});
 
 	// Revert: print a default/unmarked template, also count via intent, or hide a mutation failure.

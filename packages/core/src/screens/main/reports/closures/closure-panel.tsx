@@ -47,7 +47,7 @@ export function ClosurePanel({
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
 	const { bottom } = useSafeAreaInsets();
-	const context = useClosureDocumentContext(row.store_id ?? undefined);
+	const context = useClosureDocumentContext(row.store_id ?? 0);
 	const collection = useClosureCollection();
 	const getLocalClosure = React.useCallback(
 		async () =>
@@ -72,7 +72,7 @@ export function ClosurePanel({
 		document: `closure:${row.server_closure_id ?? row.id}`,
 		documentReady: row.sync_status === 'synced' || row.sync_status === 'superseded',
 		templateType: 'closure',
-		storeId: row.store_id ?? undefined,
+		storeId: row.store_id ?? 0,
 		localReport: local ?? buildClosureDocument(row, context),
 	});
 	const remote = doc.serverReceiptData;

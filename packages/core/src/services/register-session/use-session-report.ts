@@ -21,7 +21,8 @@ const REPORT_TEMPLATE = { id: 'register-session', output_type: 'escpos', paper_w
 export function useSessionReport(
 	closure?: ClosureDocument | null,
 	isReprint = false,
-	knownClosure?: ClosureRow
+	knownClosure?: ClosureRow,
+	previewEnabled = true
 ) {
 	const actor = useRegisterActor();
 	const { site } = useStoreSession();
@@ -52,6 +53,7 @@ export function useSessionReport(
 			: undefined;
 	const report = useReceiptDocument({
 		autoPrintAllowed: false,
+		previewEnabled,
 		isReprint,
 		getLocalClosure: snapshot
 			? async () => closure ?? (await collection?.findOne(snapshot.id).exec()) ?? null

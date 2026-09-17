@@ -150,7 +150,9 @@ export function useViewedStore(storeId?: number) {
 	const stores = useObservableState(source, emptyViewedStores) as StoreDocument[];
 	return storeId === undefined || storeId === store?.id
 		? store
-		: stores.find((row) => row.id === storeId);
+		: (stores.find((row) => row.id === storeId) ??
+				// Legacy credentials may omit store zero; the bound store is the last resort.
+				(storeId === 0 ? store : undefined));
 }
 
 export function useStoreDay(storeId?: number) {

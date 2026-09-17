@@ -32,11 +32,13 @@ export function useReceiptDocument({
 	formatReport,
 	templateType,
 	storeId,
+	previewEnabled = true,
 }: {
 	getLocalClosure?: () => Promise<ClosureDocument | null>;
 	isReprint?: boolean;
 	templateType?: 'receipt' | 'report' | 'closure';
 	storeId?: number;
+	previewEnabled?: boolean;
 	order?: EngineRecord<'orders'>;
 	autoPrintAllowed: boolean;
 	document?: string;
@@ -90,6 +92,7 @@ export function useReceiptDocument({
 		storeId,
 		baseReceiptURL,
 		mode: 'live',
+		previewEnabled,
 		document,
 		documentReady,
 		localReport,

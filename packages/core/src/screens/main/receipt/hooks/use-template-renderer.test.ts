@@ -611,6 +611,7 @@ it('renders the orderless closure envelope unchanged through its closure templat
 	);
 	expect(mockUseActiveTemplates).toHaveBeenLastCalledWith('closure', 7);
 	expect(mockUseReceiptData).toHaveBeenLastCalledWith({
+		previewEnabled: true,
 		orderId: undefined,
 		mode: 'fiscal',
 		document: 'closure:uuid',
@@ -621,6 +622,7 @@ it('renders the orderless closure envelope unchanged through its closure templat
 	rerender();
 	expect(result.current.renderedHtml).toBe('<b>4</b>');
 	expect(mockUseReceiptData).toHaveBeenLastCalledWith({
+		previewEnabled: true,
 		orderId: undefined,
 		mode: 'fiscal',
 		document: undefined,

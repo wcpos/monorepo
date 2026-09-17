@@ -41,6 +41,7 @@ interface UseReceiptDataResult {
 }
 
 interface UseReceiptDataOptions {
+	previewEnabled?: boolean;
 	nextLocalCount?: () => Promise<number>;
 	orderId: number | undefined;
 	mode?: ReceiptMode;
@@ -63,6 +64,7 @@ type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint' |
  */
 export function useReceiptData({
 	nextLocalCount,
+	previewEnabled = true,
 	orderId,
 	mode: requestedMode = 'live',
 	intent,
@@ -134,9 +136,8 @@ export function useReceiptData({
 	}, []);
 
 	React.useEffect(() => {
-		if (!orderId && !document) {
-			// No order: nothing to fetch. The empty result is derived below, so no
-			// setState is needed here.
+		if (!previewEnabled || (!orderId && !document)) {
+			// Hidden cards fetch only through fetchForPrint; previews need an order or document.
 			return;
 		}
 
@@ -196,7 +197,7 @@ export function useReceiptData({
 		return () => {
 			cancelled = true;
 		};
-	}, [fetchData, orderId, mode, fetchKey, document]);
+	}, [fetchData, orderId, mode, fetchKey, document, previewEnabled]);
 
 	// When there's no order the result is the empty state regardless of any
 	// previously-fetched data (derived rather than reset via setState).
