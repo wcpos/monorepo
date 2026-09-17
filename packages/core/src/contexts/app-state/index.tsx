@@ -13,9 +13,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
-import { getEngineScopeSwitcher } from './engine-scope-port';
 import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
 import {
+	clearStoreSession as clearPersistedStoreSession,
 	commitStoreSession,
 	IncompleteStoreSessionError,
 	missingStoreSessionFields,
@@ -162,7 +162,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	 * recovery below, so anything added to signing out reaches both.
 	 */
 	const clearStoreSession = React.useCallback(async () => {
-		updateAppState(await commitStoreSession(state.appState!, null));
+		updateAppState(await clearPersistedStoreSession(state.appState!));
 	}, [state.appState, updateAppState]);
 
 	const logout = React.useCallback(async () => {
@@ -190,9 +190,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
 			let sessionData;
 			try {
-				sessionData = await switchUserSessionStore(state.userDB!, state.appState!, store.localID!, {
-					switchEngineScope: getEngineScopeSwitcher() ?? undefined,
-				});
+				sessionData = await switchUserSessionStore(state.userDB!, state.appState!, store.localID!);
 			} catch (error) {
 				if (error instanceof IncompleteStoreSessionError) {
 					// The target store's rows are not all present. The aborted switch

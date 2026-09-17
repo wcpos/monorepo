@@ -51,6 +51,10 @@ import {
 	switchUserSessionStore,
 	testAuthorizationMethod,
 } from './hydration-steps';
+// eslint-disable-next-line import/first -- Register the real engine port for session commits.
+import { registerEngineScopeSwitcher } from './engine-scope-port';
+
+afterEach(() => registerEngineScopeSwitcher(null));
 
 const documentLookup = (document: unknown) => ({
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => document) })),
@@ -170,6 +174,7 @@ describe('switchUserSessionStore', () => {
 			set: jest.fn(),
 		};
 		const switchEngineScope = jest.fn();
+		registerEngineScopeSwitcher(switchEngineScope);
 
 		await expect(
 			switchUserSessionStore(
@@ -180,8 +185,7 @@ describe('switchUserSessionStore', () => {
 					stores: documentLookup({ localID: 'store-2' }),
 				} as any,
 				appState as any,
-				'store-2',
-				{ switchEngineScope }
+				'store-2'
 			)
 		).rejects.toThrow('Store session incomplete: missing site');
 
@@ -203,6 +207,7 @@ describe('switchUserSessionStore', () => {
 		const switchEngineScope = jest.fn(async () => {
 			throw error;
 		});
+		registerEngineScopeSwitcher(switchEngineScope);
 
 		await expect(
 			switchUserSessionStore(
@@ -212,8 +217,7 @@ describe('switchUserSessionStore', () => {
 					stores: documentLookup({ localID: 'store-2' }),
 				} as any,
 				appState as any,
-				'store-2',
-				{ switchEngineScope }
+				'store-2'
 			)
 		).rejects.toBe(error);
 
@@ -239,6 +243,7 @@ describe('switchUserSessionStore', () => {
 			order.push('engine');
 			expect(session.store).toBe(store);
 		});
+		registerEngineScopeSwitcher(switchEngineScope);
 
 		await switchUserSessionStore(
 			{
@@ -247,8 +252,7 @@ describe('switchUserSessionStore', () => {
 				stores: documentLookup(store),
 			} as any,
 			appState as any,
-			'store-2',
-			{ switchEngineScope }
+			'store-2'
 		);
 
 		expect(order).toEqual(['engine', 'persist']);
@@ -354,7 +358,7 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		]);
 	});
 
-	it('PROCESS_INITIAL_PROPS does not persist a selected session whose hydration is incomplete', async () => {
+	it('reports AUTH131 and preserves the previous pointer for an incomplete selection', async () => {
 		const previous = { siteID: 'old-site', storeID: 'old-store' };
 		const site = { uuid: 'new-site' };
 		const credentials = { uuid: 'new-credentials', patch: jest.fn() };
@@ -378,13 +382,73 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		} as unknown as HydrationContext;
 		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
 		expect(step.failSoft).toBe(true);
-		await expect(step.execute(context)).rejects.toThrow('Store session incomplete');
+		await expect(step.execute(context)).resolves.not.toHaveProperty('session');
+		expect(mockAppLogger.error).toHaveBeenCalledWith(
+			'Store session incomplete: missing storeDB, store, site, extraData',
+			{
+				code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
+				context: {
+					missingFields: ['storeDB', 'store', 'site', 'extraData'],
+					siteID: 'new-site',
+					wpCredentialsID: 'new-credentials',
+					storeID: '0123456789',
+				},
+			}
+		);
 		expect(appState.set).not.toHaveBeenCalled();
-		expect(appState.get()).toBe(previous);
 	});
 });
 
 describe('HYDRATE_USER_SESSION', () => {
+	it("reuses the boot step's session without a second open", async () => {
+		createStoreDBMock.mockClear();
+		const storeDB = { addState: jest.fn(async () => ({})) };
+		createStoreDBMock.mockResolvedValue(storeDB);
+		const site = { uuid: 'site-1' };
+		const credentials = { uuid: 'credentials-1', patch: jest.fn() };
+		const store = { localID: '0123456789' };
+		let current: { siteID?: string; wpCredentialsID?: string; storeID?: string } | null = null;
+		const context = {
+			appState: {
+				get: () => current,
+				set: async (_key: string, update: () => typeof current) => {
+					current = update();
+				},
+			},
+			user: { uuid: 'user-1' },
+			userDB: {
+				sites: {
+					findOne: jest
+						.fn()
+						.mockReturnValueOnce({ exec: async () => null })
+						.mockReturnValue({ exec: async () => site }),
+					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+					incrementalUpsert: async () => site,
+				},
+				wp_credentials: { ...documentLookup(credentials), upsert: async () => credentials },
+				stores: {
+					findOne: jest
+						.fn()
+						.mockReturnValueOnce({ exec: async () => null })
+						.mockReturnValue({ exec: async () => store }),
+					bulkInsert: jest.fn(),
+				},
+			},
+			initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
+		} as unknown as HydrationContext;
+		const bootStep = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
+		const hydrateStep = hydrationSteps.find(({ name }) => name === 'HYDRATE_USER_SESSION')!;
+		const boot = await bootStep.execute(context);
+		const hydrated = await hydrateStep.execute({ ...context, ...boot });
+		expect(createStoreDBMock).toHaveBeenCalledTimes(1);
+		expect(hydrated).toBe(boot.session);
+		expect(hydrated.storeDB).toBe(storeDB);
+
+		current = { siteID: site.uuid, wpCredentialsID: credentials.uuid, storeID: 'another-store' };
+		await hydrateStep.execute({ ...context, ...boot });
+		expect(createStoreDBMock).toHaveBeenCalledTimes(2);
+	});
+
 	it('returns incomplete persisted hydration for provider recovery rather than committing or throwing a presence assertion', async () => {
 		const credentials = { uuid: 'credentials-1' };
 		const appState = {

@@ -1,4 +1,6 @@
+import { registerEngineScopeSwitcher } from './engine-scope-port';
 import {
+	clearStoreSession,
 	commitStoreSession,
 	IncompleteStoreSessionError,
 	SIGNED_OUT_SESSION,
@@ -23,22 +25,21 @@ function pointerState() {
 	return { appState: { set } as unknown as SessionAppState, set, current: () => current };
 }
 
+afterEach(() => registerEngineScopeSwitcher(null));
+
 describe('commitStoreSession', () => {
 	it('incomplete session rejects before engine invocation and persistence', async () => {
 		const state = pointerState();
 		const switchEngineScope = jest.fn();
+		registerEngineScopeSwitcher(switchEngineScope);
 		await expect(
-			commitStoreSession(
-				state.appState,
-				{ ids, session: { ...session, store: undefined } },
-				switchEngineScope
-			)
+			commitStoreSession(state.appState, { ids, session: { ...session, store: undefined } })
 		).rejects.toBeInstanceOf(IncompleteStoreSessionError);
 		expect(switchEngineScope).not.toHaveBeenCalled();
 		expect(state.set).not.toHaveBeenCalled();
 	});
 
-	it('complete session commits only after the supplied engine transition resolves', async () => {
+	it('complete session commits only after the registered engine transition resolves', async () => {
 		const state = pointerState();
 		let resolveEngine!: () => void;
 		const switchEngineScope = jest.fn(
@@ -47,7 +48,8 @@ describe('commitStoreSession', () => {
 					resolveEngine = resolve;
 				})
 		);
-		const committing = commitStoreSession(state.appState, { ids, session }, switchEngineScope);
+		registerEngineScopeSwitcher(switchEngineScope);
+		const committing = commitStoreSession(state.appState, { ids, session });
 		expect(switchEngineScope).toHaveBeenCalledWith(session);
 		expect(state.set).not.toHaveBeenCalled();
 		resolveEngine();
@@ -59,11 +61,10 @@ describe('commitStoreSession', () => {
 		const state = pointerState();
 		const previous = state.current();
 		const error = new Error('engine rejected');
-		await expect(
-			commitStoreSession(state.appState, { ids, session }, async () => {
-				throw error;
-			})
-		).rejects.toBe(error);
+		registerEngineScopeSwitcher(async () => {
+			throw error;
+		});
+		await expect(commitStoreSession(state.appState, { ids, session })).rejects.toBe(error);
 		expect(state.set).not.toHaveBeenCalled();
 		expect(state.current()).toBe(previous);
 	});
@@ -85,12 +86,11 @@ describe('commitStoreSession', () => {
 		expect(state.current()).toEqual(ids);
 	});
 
-	it('null commit clears the pointer and returns every signed-out field without invoking the engine', async () => {
+	it('clearStoreSession clears the pointer without invoking the engine', async () => {
 		const state = pointerState();
 		const switchEngineScope = jest.fn();
-		await expect(commitStoreSession(state.appState, null, switchEngineScope)).resolves.toBe(
-			SIGNED_OUT_SESSION
-		);
+		registerEngineScopeSwitcher(switchEngineScope);
+		await expect(clearStoreSession(state.appState)).resolves.toBe(SIGNED_OUT_SESSION);
 		expect(SIGNED_OUT_SESSION).toStrictEqual({
 			site: undefined,
 			wpCredentials: undefined,
@@ -98,6 +98,7 @@ describe('commitStoreSession', () => {
 			storeDB: undefined,
 			extraData: undefined,
 		});
+		expect(Object.isFrozen(SIGNED_OUT_SESSION)).toBe(true);
 		expect(state.current()).toBeNull();
 		expect(switchEngineScope).not.toHaveBeenCalled();
 	});
