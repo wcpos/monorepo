@@ -268,14 +268,29 @@ describe('createTokenRefreshHandler', () => {
 				(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
 
 				// A relative URL the preamble module cannot compose: the retry must not
-				// manufacture metadata for it (Codex review on #2132).
-				const ctx = makeContext({ originalConfig: { url: '/test', headers: {} } });
+				// manufacture metadata for it (Codex review on #2132). It carries a stale
+				// credential on BOTH channels; the retry must keep only the fresh one.
+				const ctx = makeContext({
+					originalConfig: {
+						url: '/test?authorization=old&per_page=10',
+						headers: { authorization: 'Bearer old' },
+						params: { authorization: 'old', page: '2' },
+					},
+				});
 				const result = await handler.handle(ctx);
 
 				expect(result).toEqual({ data: 'ok', status: 200 });
 				const retried = ctx.retryRequest.mock.calls[0][0];
 				expect(retried.wcposPreamble).toBeUndefined();
 				expect(retried).toMatchObject(expected);
+				if ('params' in expected) {
+					expect(retried.headers.authorization).toBeUndefined();
+					expect(retried.headers.Authorization).toBeUndefined();
+					expect(retried.params.page).toBe('2');
+				} else {
+					expect(retried.params).toEqual({ page: '2' });
+					expect(retried.url).toBe('/test?per_page=10');
+				}
 			}
 		);
 

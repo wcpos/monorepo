@@ -221,6 +221,10 @@ function withRefreshedCredential(
 			},
 		};
 	}
+	// A bare retry mirrors the module: the fresh token replaces its channel AND clears the
+	// other one, since the server reads the header first (a stale header beside a fresh
+	// query token 401s the retry) and a stale query token would linger in URL logs.
+	const headers = withoutHeader(originalConfig.headers, 'authorization');
 	if (site.use_jwt_as_param) {
 		const authorization = formatAuthorizationParam(
 			token,
@@ -230,14 +234,46 @@ function withRefreshedCredential(
 			// Spreading URLSearchParams drops its entries; clone and set instead.
 			const params = new URLSearchParams(originalConfig.params);
 			params.set('authorization', authorization);
-			return { ...originalConfig, params };
+			return { ...originalConfig, headers, params };
 		}
-		return { ...originalConfig, params: { ...originalConfig.params, authorization } };
+		return { ...originalConfig, headers, params: { ...originalConfig.params, authorization } };
 	}
 	return {
 		...originalConfig,
-		headers: { ...originalConfig.headers, Authorization: `Bearer ${token}` },
+		url: withoutQueryParam(originalConfig.url, 'authorization'),
+		params: withoutParam(originalConfig.params, 'authorization'),
+		headers: { ...headers, Authorization: `Bearer ${token}` },
 	};
+}
+
+function withoutHeader(
+	headers: WcposRequestConfig['headers'],
+	name: string
+): WcposRequestConfig['headers'] {
+	if (!headers) return undefined;
+	const copy: Record<string, unknown> = { ...(headers as Record<string, unknown>) };
+	for (const key of Object.keys(copy)) if (key.toLowerCase() === name) delete copy[key];
+	return copy as WcposRequestConfig['headers'];
+}
+
+function withoutParam(params: WcposRequestConfig['params'], name: string) {
+	if (!params) return params;
+	if (params instanceof URLSearchParams) {
+		const copy = new URLSearchParams(params);
+		copy.delete(name);
+		return copy;
+	}
+	const { [name]: _dropped, ...rest } = params as Record<string, unknown>;
+	return rest;
+}
+
+function withoutQueryParam(url: string | undefined, name: string): string | undefined {
+	if (!url || !url.includes('?')) return url;
+	const [path, query] = url.split('?', 2);
+	const search = new URLSearchParams(query);
+	search.delete(name);
+	const rest = search.toString();
+	return rest ? `${path}?${rest}` : path;
 }
 
 function getResponseStatus(error: unknown): number | undefined {
