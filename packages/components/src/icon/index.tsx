@@ -11,9 +11,12 @@ import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 import { TextClassContext } from '../text';
-import * as Svgs from './components/fontawesome/solid';
+import * as FontAwesome from './components/fontawesome/solid';
+import { SvgLock } from './components/lock';
 
 import type { SvgProps } from 'react-native-svg';
+
+const Svgs = { ...FontAwesome, lock: SvgLock };
 
 export type IconName = Extract<keyof typeof Svgs, string>;
 

@@ -12,10 +12,12 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { getLogger } from '@wcpos/utils/logger';
+import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
 
 import { ensureRegister } from '../register/register-document';
 import * as actions from './session-store';
 import { useRegisterSession } from './use-register-session';
+import { buildClosureDocument } from './closure-document';
 
 Object.assign(globalThis, { TextEncoder });
 Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
@@ -84,7 +86,13 @@ const mockStoreSession = {
 	store: { id: 1 },
 	wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
 	userDB: {},
-	site: { uuid: 'site' },
+	site: {
+		uuid: 'site',
+		populate: async () => [
+			{ id: 8, display_name: 'Alex' },
+			{ id: 9, display_name: 'Sam' },
+		],
+	},
 };
 
 jest.mock('./use-register-session-collections', () => ({
@@ -97,6 +105,7 @@ jest.mock('../register/use-register-binding', () => ({
 }));
 jest.mock('../../contexts/app-state', () => ({
 	useStoreSession: () => mockStoreSession,
+	useAppState: () => ({ ...mockStoreSession, store: { timezone: 'America/Los_Angeles' } }),
 }));
 jest.mock('@wcpos/query', () => ({
 	declareRequirements: (...args: unknown[]) => mockDeclareRequirements(...args),
@@ -635,7 +644,7 @@ it.each([false, true])(
 			multiInstance: false,
 		});
 		try {
-			await db.addCollections({ closures: { schema: closuresLiteral } });
+			await db.addCollections({ closures: { schema: closuresLiteral, autoMigrate: false } });
 			await ensureRegister(userDB);
 			entries = [];
 			active = [{ ...active[0], server_expected: null }];
@@ -722,7 +731,7 @@ it.each([false, true])(
 			releasePatch = resolve;
 		});
 		try {
-			await db.addCollections({ closures: { schema: closuresLiteral } });
+			await db.addCollections({ closures: { schema: closuresLiteral, autoMigrate: false } });
 			await ensureRegister(userDB);
 			entries = [];
 			active = [
@@ -1056,3 +1065,123 @@ it('queries refunds by the promoted session field and referenced ids', async () 
 		})
 	);
 });
+
+// Revert: stop passing useStoreDay().today() to the create action.
+it('passes the store opening day across the session writer boundary', async () => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-09-17T01:00:00Z'));
+	try {
+		jest
+			.mocked(actions.openSession)
+			.mockResolvedValueOnce({ id: 'session', register_id: 'register' } as never);
+		const { result } = renderHook(() => useRegisterSession());
+		await result.current.actions.openSession({ expectedFloat: null, countedFloat: '100' });
+		expect(actions.openSession).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ businessDay: { year: 2026, month: 9, day: 16 } })
+		);
+	} finally {
+		jest.useRealTimers();
+	}
+});
+
+// Revert: persist only the closer label, losing opener/approver identities offline.
+it.each([
+	{ opened_by: 8, approved_by: 9, opener: 'Alex', approver: 'Sam', recovered: false },
+	// Revert: label a recovered close with the current credential instead of closed_by.
+	{ opened_by: 8, approved_by: 9, opener: 'Alex', approver: 'Sam', recovered: true },
+	{ opened_by: 7, approved_by: 7, opener: 'Pat', approver: 'Pat' },
+	{ opened_by: 99, approved_by: null, opener: '', approver: '' },
+])(
+	'persists closure actor names for opener $opened_by and approver $approved_by (recovered: $recovered)',
+	async ({ opened_by, approved_by, opener, approver, recovered = false }) => {
+		addRxPlugin(RxDBLocalDocumentsPlugin);
+		const db: StoreDatabase = await createRxDatabase({
+			name: `actornames${Math.random().toString(36).slice(2)}`,
+			storage: getRxStorageMemory(),
+			multiInstance: false,
+		});
+		const userDB: UserDatabase = await createRxDatabase({
+			name: `actoruser${Math.random().toString(36).slice(2)}`,
+			storage: getRxStorageMemory(),
+			localDocuments: true,
+			multiInstance: false,
+		});
+		try {
+			await db.addCollections({ closures: { schema: closuresLiteral, autoMigrate: false } });
+			await ensureRegister(userDB);
+			if (!recovered)
+				jest.mocked(actions.closeSession).mockResolvedValueOnce({
+					...session,
+					opened_by,
+					approved_by,
+					closed_by: 7,
+					status: 'closed',
+					closed_at_gmt: '2026-09-17T12:00:00Z',
+				} as never);
+			const { writeClosure } = jest.requireActual<typeof actions>('./session-store');
+			jest
+				.mocked(actions.writeClosure)
+				.mockImplementationOnce((input) =>
+					writeClosure({ ...input, closures: db.closures, userDB })
+				);
+			mockOrders.next(
+				[7, 8, 99].map((id) => ({
+					record: {
+						uuid: `order-${id}`,
+						local: { dirty: true },
+						payload: {
+							id,
+							date_modified_gmt: '2026-09-17T11:00:00Z',
+							meta_data: [
+								{ key: '_wcpos_session', value: 'session' },
+								{ key: '_pos_user', value: String(id) },
+							],
+						},
+					},
+				}))
+			);
+			const result = await settled();
+			if (recovered)
+				Object.assign(active[0], {
+					opened_by,
+					approved_by,
+					closed_by: 8,
+					status: 'closed',
+					closed_at_gmt: '2026-09-17T12:00:00Z',
+				});
+			await result.current.actions.closeSession({ counted: { cash: '120' } });
+			const saved = await db.closures.findOne('session').exec();
+			expect(saved?.breakdowns).toMatchObject({
+				opened_by_name: opener,
+				approved_by_name: approver,
+				closed_by_name: recovered ? 'Alex' : 'Pat',
+				cashiers: [
+					{ id: 7, name: 'Pat' },
+					{ id: 8, name: 'Alex' },
+					{ id: 99, name: '99' },
+				],
+			});
+			// Revert: persist transaction cashier ids instead of credential display names.
+			const document = buildClosureDocument(saved!.toMutableJSON(), {
+				store: {},
+				currency: 'USD',
+				timezone: 'UTC',
+				locale: 'en-US',
+				printedAt: '2026-09-17T12:00:00Z',
+				formatMoney: (value) => value,
+				i18n: {},
+			});
+			expect(document.closure.breakdowns.labels.closed_by_name).toBe(recovered ? 'Alex' : 'Pat');
+			expect(saved?.sync_status).toBe('pending');
+			expect(
+				renderLogiclessTemplate(
+					'{{#closure.breakdowns.cashiers}}{{name}};{{/closure.breakdowns.cashiers}}',
+					document
+				)
+			).toBe('Pat;Alex;99;');
+		} finally {
+			await db.close();
+			await userDB.close();
+		}
+	}
+);

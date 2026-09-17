@@ -33,8 +33,8 @@ beforeEach(async () => {
 		multiInstance: false,
 	});
 	await db.addCollections({
-		closures: { schema: closuresLiteral },
-		register_sessions: { schema: registerSessionsLiteral },
+		closures: { schema: closuresLiteral, autoMigrate: false },
+		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
 		cash_movements: { schema: cashMovementsLiteral },
 	});
 	await ensureRegister(userDB);
@@ -49,6 +49,7 @@ async function seed() {
 		expectedFloat: '100',
 		countedFloat: '100',
 		openedBy: 7,
+		businessDay: { year: 2026, month: 9, day: 16 },
 	});
 	for (const [type, amount] of [
 		['paid_in', '20'],
@@ -64,7 +65,10 @@ async function seed() {
 		});
 		if (amount === '7') await voidMovement(db.cash_movements, row.id, 7);
 	}
-	session = await closeSession(db.register_sessions, session.id, { counted: { cash: '150' } });
+	session = await closeSession(db.register_sessions, session.id, {
+		counted: { cash: '150' },
+		closedBy: 7,
+	});
 	const orders = [
 		{
 			uuid: 'order',
@@ -146,7 +150,7 @@ it('freezes the count figures and breakdowns; retries reuse one number and one p
 			opening_float: { expected: '100', counted: '100', variance: '0.0000' },
 			transaction_count: 1,
 			refund_count: 1,
-			cashiers: ['7'],
+			cashiers: [{ id: 7, name: '7' }],
 			payment_methods: {
 				cash: { sales: '50.0000', refunds: '10.0000' },
 				card: { sales: '30.0000', refunds: '0.0000' },
@@ -276,4 +280,54 @@ it('counts distinct legacy refund identities across tenders', async () => {
 	const row = await writeClosure({ ...input, orders, movements: [] });
 	expect(row.period_refunds_total).toBe('10.0000');
 	expect(row.breakdowns.refund_count).toBe(1);
+});
+
+// Revert: omit business_day, closed_by, or snapshot labels when writeClosure builds its draft.
+it('copies the opening business day unchanged when closing on a later day', async () => {
+	const input = await seed();
+	const closure = await writeClosure({
+		...input,
+		labels: { register_name: 'Front', closed_by_name: 'Pat' },
+	});
+	expect(closure.toJSON()).toMatchObject({
+		business_day: '2026-09-16',
+		closed_by: 7,
+		breakdowns: { register_name: 'Front', closed_by_name: 'Pat' },
+	});
+});
+// Revert: discard session actors and movement timestamps before their source rows are pruned.
+it('retains the actor and movement data needed by the local closure document', async () => {
+	const input = await seed();
+	const row = await writeClosure(input);
+	expect(row.breakdowns.opened_by).toBe(7);
+	const movements = row.breakdowns.movements as Record<string, unknown>[];
+	expect(movements[0]).toMatchObject({ created_by: 7, created_at_gmt: expect.any(String) });
+	const { buildClosureDocument } = await import('./closure-document');
+	const doc = buildClosureDocument(row.toMutableJSON(), {
+		store: { name: 'Shop' },
+		currency: 'USD',
+		timezone: 'UTC',
+		locale: 'en-US',
+		printedAt: '2026-09-17T12:00:00Z',
+		formatMoney: (v) => v,
+		i18n: {},
+	});
+	expect(doc.closure).toMatchObject({ opened_by: 7, closed_by: 7 });
+	expect(doc.closure.breakdowns.payment_methods.length).toBeGreaterThan(0);
+	expect(doc.closure.breakdowns.movements[0].created_at.datetime).not.toBe('');
+});
+
+// Revert: omit business_day when writing a closure for an already-closed legacy session.
+it('derives a legacy closure day from opening in store time', async () => {
+	const input = await seed();
+	const closure = await writeClosure({
+		...input,
+		session: {
+			...input.session.toJSON(),
+			business_day: undefined,
+			opened_at_gmt: '2026-09-17T02:00:00Z',
+		},
+		...{ timezone: 'America/Los_Angeles' },
+	});
+	expect(closure.business_day).toBe('2026-09-16');
 });

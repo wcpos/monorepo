@@ -167,6 +167,7 @@ function ThemedDrawer({
 				name="reports"
 				options={{
 					title: t('common.reports'),
+					headerShown: false,
 					drawerLabel: t('common.reports'),
 					drawerIcon: ({ focused }) => (
 						<Icon

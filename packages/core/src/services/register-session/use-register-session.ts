@@ -14,7 +14,6 @@ import {
 	timer,
 } from 'rxjs';
 
-import type { RefundDocumentType } from '@wcpos/database';
 import {
 	declareRequirements,
 	observeEngineQuery,
@@ -24,8 +23,10 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { readLedger, toMinor } from '@wcpos/order-math';
 import { mintRemoteId } from '@wcpos/sync-core';
+import type { RefundDocumentType, WPCredentialsDocument } from '@wcpos/database';
 import type { RequirementHandle } from '@wcpos/sync-engine';
 
+import { useStoreDay } from '../../hooks/use-store-day';
 import { attempt, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
@@ -53,6 +54,7 @@ export function useRegisterSession() {
 	> | null>(null);
 	const { store, wpCredentials, userDB, site } = useStoreSession();
 	const actor = useRegisterActor();
+	const { today, timezone } = useStoreDay();
 	const { engine, locale } = useQueryRuntime();
 	const binding = useRegisterBinding();
 	const sessions = useRegisterSessionCollection();
@@ -338,6 +340,7 @@ export function useRegisterSession() {
 					...input,
 					registerId: binding.registerId!,
 					openedBy: wpCredentials.id ?? 0,
+					businessDay: today(),
 					storeId: store.id,
 				});
 				logger.info('Register session opened', {
@@ -383,7 +386,11 @@ export function useRegisterSession() {
 				const closed =
 					session!.status === 'closed'
 						? session!
-						: await actions.closeSession(sessions!, session!.id, input);
+						: await actions.closeSession(sessions!, session!.id, {
+								...input,
+								closedBy: wpCredentials.id,
+								timezone,
+							});
 				const handles = pendingParents.current;
 				if (handles.length > 0) {
 					let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -427,11 +434,23 @@ export function useRegisterSession() {
 						clearTimeout(timeout);
 					}
 				}
+				const cashiers: WPCredentialsDocument[] = await site.populate('wp_credentials');
+				const actorName = (id: number | null | undefined) =>
+					(id === wpCredentials.id ? wpCredentials : cashiers.find((row) => row.id === id))
+						?.display_name ?? '';
 				const accounting = latestAccounting.current;
 				const latestSession = session!.getLatest();
 				const refundRecords = accounting?.refundRecords ?? data?.refundRecords;
 				const closure = await actions.writeClosure({
 					closures: closures!,
+					resolveCashierName: actorName,
+					timezone,
+					labels: {
+						register_name: binding.registerName ?? '',
+						closed_by_name: actorName(closed.closed_by),
+						opened_by_name: actorName(closed.opened_by),
+						approved_by_name: actorName(closed.approved_by),
+					},
 					tillExpected:
 						!localPending &&
 						!anchorInvalidationPending.current &&

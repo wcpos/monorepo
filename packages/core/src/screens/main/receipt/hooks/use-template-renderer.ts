@@ -7,6 +7,9 @@ import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encode
 import type { TemplateDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
+import { useLocale } from '../../../../hooks/use-locale';
+import { useStoreDay } from '../../../../hooks/use-store-day';
+import { formatClosureDate } from '../../../../services/register-session/closure-document';
 import { useRegister } from '../../../../services/register/use-register';
 import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
@@ -17,7 +20,7 @@ import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
 import type { ReceiptData } from '../utils/build-receipt-data';
-import type { ReceiptMode } from './use-receipt-data';
+import type { ClosurePrintMarker, ReceiptMode } from './use-receipt-data';
 
 // Bounds how long auto-print and the syncing state may wait for the receipts API —
 // a hung fetch must never leave the cashier unable to print.
@@ -51,6 +54,11 @@ export function renderOfflineTemplatePreview({
 }
 
 interface UseTemplateRendererOptions {
+	nextLocalClosureCount?: () => Promise<number>;
+	isReprint?: boolean;
+	templateType?: 'receipt' | 'report' | 'closure';
+	storeId?: number;
+	previewEnabled?: boolean;
 	orderId: number | undefined;
 	baseReceiptURL: string | undefined;
 	mode: ReceiptMode;
@@ -63,6 +71,9 @@ interface UseTemplateRendererOptions {
 }
 
 interface TemplateRendererResult {
+	documentError: Error | null;
+	refetch: () => void;
+	serverReceiptData: Record<string, unknown> | null;
 	templates: TemplateDocument[];
 	selectedTemplateId: string | number | null;
 	setSelectedTemplateId: (id: string | number) => void;
@@ -77,22 +88,33 @@ interface TemplateRendererResult {
 	preparePrintContent: (nextLocalPrintCount: () => Promise<number>) => Promise<{
 		receiptData: ReceiptData | Record<string, unknown>;
 		html?: string;
+		commit?: () => Promise<ClosurePrintMarker | undefined>;
 	}>;
 }
 
 export function useTemplateRenderer({
+	nextLocalClosureCount,
 	orderId,
 	baseReceiptURL,
 	mode: requestedMode,
 	document,
 	documentReady = true,
+	isReprint = false,
 	localReport,
 	formatReport,
 	order,
+	templateType,
+	storeId,
+	previewEnabled = true,
 }: UseTemplateRendererOptions): TemplateRendererResult {
-	const templates = useActiveTemplates(localReport ? 'report' : 'receipt');
+	const templates = useActiveTemplates(
+		templateType ?? (localReport ? 'report' : 'receipt'),
+		storeId
+	);
 	const mode = document ? 'fiscal' : requestedMode;
 	const { store, site } = useAppState();
+	const { timezone } = useStoreDay(storeId);
+	const { code: locale } = useLocale();
 	const register = useRegister();
 	const pluginVersion = useDocField(site, (value) => value.wcpos_version);
 	const taxRates = useTaxSettingsOptional();
@@ -107,17 +129,28 @@ export function useTemplateRenderer({
 		Record<string, string> | undefined;
 	const { status } = useOnlineStatus();
 	const isOffline = status !== 'online-website-available';
+	if (templateType === 'closure' && !isOffline && site?.url) {
+		const url = new URL(site.url);
+		url.searchParams.set('wcpos-receipt', '0');
+		baseReceiptURL = url.toString();
+	}
 	const { getLabel: getStatusLabel } = useOrderStatusLabel();
 
 	// Fetch receipt data from API (when online)
 	const {
 		data: apiReceiptData,
+		error: documentError,
 		hasResponded,
+		refetch,
 		isLoading,
 		fetchForPrint,
+		commitPrint,
 	} = useReceiptData({
+		nextLocalCount: nextLocalClosureCount,
+		previewEnabled,
 		orderId: isOffline ? undefined : orderId,
 		mode,
+		isReprint,
 		document: isOffline || !documentReady ? undefined : document,
 	});
 	// The deadline record is kept together with the order it was armed for; a
@@ -262,9 +295,10 @@ export function useTemplateRenderer({
 		}
 	}
 
-	const reportContent = localReport
-		? '<h1>{{title}}</h1><p>{{order_number}}</p>{{#line_items}}<p>{{name}}: {{amount}}</p>{{/line_items}}<p>{{footer}}</p>'
-		: undefined;
+	const reportContent =
+		localReport && templateType !== 'closure'
+			? '<h1>{{title}}</h1><p>{{order_number}}</p>{{#line_items}}<p>{{name}}: {{amount}}</p>{{/line_items}}<p>{{footer}}</p>'
+			: undefined;
 	if (!renderedHtml && reportContent && receiptData)
 		renderedHtml = Mustache.render(reportContent, receiptData);
 	const preparePrintContent = async (nextLocalPrintCount: () => Promise<number>) => {
@@ -285,17 +319,51 @@ export function useTemplateRenderer({
 			try {
 				const remote = await fetchForPrint();
 				data = remote && formatReport ? formatReport(remote) : remote;
-			} catch {
+			} catch (error) {
+				if (document?.startsWith('closure:')) throw error;
 				data = null;
 			}
 		}
+		if (!data && localReport && document?.startsWith('xreport:')) {
+			data = {
+				...localReport,
+				order: {
+					...(localReport.order as object),
+					printed: formatClosureDate(new Date().toISOString(), { timezone, locale }),
+				},
+			};
+		}
 		if (document && !data && ((documentReady && !isOffline) || !localReport))
 			throw new Error('receipt_document_requires_store');
+		if (!data && localReport && document?.startsWith('closure:')) {
+			const count = await nextLocalPrintCount();
+			const printedAt = new Date().toISOString();
+			data = {
+				...localReport,
+				order: {
+					...(localReport.order as object),
+					printed: formatClosureDate(printedAt, { timezone, locale }),
+				},
+				closure: {
+					...(localReport.closure as object),
+					print_count: count,
+					last_printed_at_gmt: printedAt,
+				},
+				fiscal: {
+					...(localReport.fiscal as object),
+					is_reprint: isReprint || count > 1,
+					reprint_count: Math.max(0, count - 1),
+				},
+			};
+		}
 		data ??= localReport ?? null;
 		data ??= await buildLocal();
 		if (!data) throw new Error('No receipt data available for printing');
 		return {
 			receiptData: data,
+			...(!isOffline && documentReady && document?.startsWith('closure:')
+				? { commit: commitPrint }
+				: {}),
 			html:
 				selectedTemplate?.offline_capable && selectedTemplate.content
 					? renderOfflineTemplatePreview({
@@ -310,7 +378,10 @@ export function useTemplateRenderer({
 	};
 
 	return {
+		documentError,
+		refetch,
 		preparePrintContent,
+		serverReceiptData: isOffline ? null : apiReceiptData,
 		templates,
 		selectedTemplateId,
 		setSelectedTemplateId,
@@ -319,12 +390,12 @@ export function useTemplateRenderer({
 		receiptData,
 		selectedTemplateEngine: selectedTemplate?.offline_capable
 			? (selectedTemplate.engine ?? null)
-			: localReport
+			: reportContent
 				? 'thermal'
 				: (selectedTemplate?.engine ?? null),
 		selectedTemplateContent: selectedTemplate?.offline_capable
 			? (selectedTemplate.content ?? null)
-			: localReport
+			: reportContent
 				? '<receipt><text>{{store.name}}</text><text>{{order.number}}</text>{{#lines}}<text>{{name}}</text>{{/lines}}<text>{{order.customer_note}}</text><feed lines="3"/><cut/></receipt>'
 				: (selectedTemplate?.content ?? null),
 		isOffline,

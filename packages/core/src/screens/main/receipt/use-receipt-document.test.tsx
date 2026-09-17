@@ -1,8 +1,12 @@
 /** @jest-environment jsdom */
-import { act, renderHook, waitFor } from '@testing-library/react';
+import * as React from 'react';
+
+import { of } from 'rxjs';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import { resetCheckoutMode } from '../pos/checkout/checkout-mode';
 import { useReceiptDocument } from './use-receipt-document';
+import { RemoteSessionCard, SessionCard } from '../reports/closures/session-card';
 
 const mockPrint = jest.fn<Promise<boolean>, []>();
 let mockFinal = true;
@@ -45,11 +49,47 @@ jest.mock('./components/receipt-preview-viewport', () => ({
 }));
 jest.mock('../hooks/use-cloud-enqueue', () => ({ createCloudEnqueueFactory: () => jest.fn() }));
 jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => mockHttp }));
+const mockCashiers = of([]);
+const mockSession = {
+	store: { id: 5, currency: 'USD', wc_price_decimals: 2, name: 'Shop', timezone: 'UTC' },
+	site: { wcpos_version: 'plugin', populate$: () => mockCashiers },
+	wpCredentials: { capabilities: [], populate$: () => mockCashiers },
+};
 jest.mock('../../../contexts/app-state', () => ({
-	useAppState: () => ({
-		store: { wc_price_decimals: 2, name: 'Shop' },
-		site: { wcpos_version: 'plugin' },
+	useAppState: () => mockSession,
+	useStoreSession: () => mockSession,
+}));
+jest.mock('../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({
+		session: null,
+		lastClosure: null,
+		blind: false,
+		binding: { registerId: 'front', registerName: 'Front' },
 	}),
+}));
+jest.mock('../../../services/register-session/use-session-report', () => ({
+	useSessionReport: () => ({ print: jest.fn() }),
+}));
+const mockFindClosure = jest.fn();
+jest.mock('../../../services/register-session/use-register-session-collections', () => ({
+	useClosureCollection: () => ({ findOne: mockFindClosure }),
+}));
+jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		onPress,
+		testID,
+		disabled,
+		children,
+	}: React.PropsWithChildren<{
+		onPress: () => void;
+		testID: string;
+		disabled?: boolean;
+	}>) => (
+		<button data-testid={testID} disabled={disabled} onClick={onPress}>
+			{children}
+		</button>
+	),
 }));
 jest.mock('../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../contexts/ui-settings', () => ({
@@ -176,8 +216,10 @@ it('starts a new order on the same hook instance unattempted and unloaded', asyn
 });
 
 const mockGet = jest.fn();
-const mockHttp = { get: mockGet };
+const mockPost = jest.fn();
+const mockHttp = { get: mockGet, post: mockPost };
 let mockOnline = true;
+const mockGenericPrint = jest.fn().mockResolvedValue(undefined);
 const mockThermalPrint = jest.fn().mockResolvedValue(undefined);
 const mockHtmlPrint = jest.fn().mockResolvedValue(undefined);
 const mockCloudPrint = jest.fn().mockResolvedValue(undefined);
@@ -202,6 +244,7 @@ jest.mock('@wcpos/printer/raster/rasterize-provider', () => ({ useOptionalRaster
 jest.mock('@wcpos/printer/printer-service', () => ({
 	PrinterService: jest.fn(() => ({
 		setCloudEnqueueFactory: jest.fn(),
+		printReceipt: mockGenericPrint,
 		printThermalTemplateForPrint: mockThermalPrint,
 		printHtml: mockHtmlPrint,
 		printOrderViaCloud: mockCloudPrint,
@@ -212,11 +255,15 @@ describe('print intent through checkout and reprint receipt documents', () => {
 	beforeEach(() => {
 		mockOnline = true;
 		mockAutoPrint = false;
+		mockPost
+			.mockReset()
+			.mockResolvedValue({ data: { print_count: 2, last_printed_at_gmt: '2026-09-17 12:00:00' } });
 		mockGet.mockReset().mockImplementation((_url, options) =>
 			Promise.resolve({
 				data: {
 					data: {
 						order: { id: 42, number: '42', currency: 'USD' },
+						closure: { print_count: 1 },
 						fiscal: {
 							is_reprint: options.params.intent === 'print',
 							reprint_count: options.params.intent === 'print' ? 1 : 0,
@@ -225,6 +272,7 @@ describe('print intent through checkout and reprint receipt documents', () => {
 				},
 			})
 		);
+		mockGenericPrint.mockClear();
 		mockThermalPrint.mockClear();
 		mockHtmlPrint.mockClear();
 		mockCloudPrint.mockClear();
@@ -240,6 +288,316 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		mockOnline = true;
 	});
 
+	// Revert: omit the authoritative card's getter or look up only its local id, not the server alias.
+	it.each([false, true])(
+		'mirrors a ready bound-card reprint into its matching local row (alias: %s)',
+		async (alias) => {
+			let localRow = { id: 'local', server_closure_id: 'server', print_count: 5, printed_at: null };
+			const closure = {
+				getLatest: () => localRow,
+				incrementalModify: async (update: (row: typeof localRow) => typeof localRow) => {
+					localRow = update(localRow);
+				},
+			};
+			mockFindClosure.mockImplementation((query) => ({
+				exec: async () =>
+					query.selector.$or.some(
+						(match: { id?: string; server_closure_id?: string }) =>
+							match.id === localRow.id || match.server_closure_id === localRow.server_closure_id
+					)
+						? closure
+						: null,
+			}));
+			const receiptGet = mockGet.getMockImplementation()!;
+			mockGet.mockImplementation((url, options) => {
+				if (url === 'sessions') return Promise.resolve({ data: [] });
+				if (url === 'closures/last')
+					return Promise.resolve({
+						data: alias ? { id: 'losing-local', server_closure_id: 'server' } : { id: 'server' },
+					});
+				return receiptGet(url, options);
+			});
+			render(<SessionCard />);
+			await waitFor(() => expect(screen.getByTestId('reports-session-print')).toBeTruthy());
+			fireEvent.click(screen.getByTestId('reports-session-print'));
+			await waitFor(() => expect(mockPost).toHaveBeenCalledWith('closures/server/print', {}));
+			await waitFor(() => expect(localRow.print_count).toBe(6));
+			expect(mockThermalPrint).toHaveBeenCalledTimes(1);
+		}
+	);
+
+	// Revert: eagerly fetch hidden card documents or disable fetchForPrint with the preview.
+	it('mounts multiple hidden receipt cards without fetching and fetches once on Print', async () => {
+		const session = {
+			id: 'bound',
+			register_id: 'front',
+			store_id: 5,
+			status: 'open',
+			opened_at_gmt: '2026-09-17 09:00:00',
+			opened_by: 7,
+		};
+		jest
+			.spyOn(
+				jest.requireMock('../../../services/register-session/use-register-session'),
+				'useRegisterSession'
+			)
+			.mockReturnValue({
+				session,
+				lastClosure: null,
+				blind: false,
+				expected: {},
+				salesCount: 0,
+				binding: { registerId: 'front', registerName: 'Front' },
+				movements: [],
+			});
+		jest
+			.spyOn(
+				jest.requireMock('../../../services/register-session/use-session-report'),
+				'useSessionReport'
+			)
+			.mockImplementation(
+				jest.requireActual('../../../services/register-session/use-session-report').useSessionReport
+			);
+		render(
+			<>
+				<SessionCard summary={{ session: session as never, closure: null, status: 'ready' }} />
+				{['a', 'b', 'c'].map((id, index) => (
+					<RemoteSessionCard
+						key={id}
+						register={{ id, name: id }}
+						storeId={5}
+						summary={{
+							status: 'ready',
+							session:
+								index === 0
+									? null
+									: ({
+											id,
+											status: 'open',
+											opened_at_gmt: '2026-09-17 09:00:00',
+											opened_by: 7,
+										} as never),
+							closure: index === 0 ? ({ id } as never) : null,
+						}}
+					/>
+				))}
+			</>
+		);
+		await act(async () => {});
+		expect(mockGet).not.toHaveBeenCalled();
+		fireEvent.click(screen.getAllByTestId('reports-session-print')[1]);
+		await waitFor(() => expect(mockThermalPrint).toHaveBeenCalledTimes(1));
+		expect(mockGet).toHaveBeenCalledTimes(1);
+		expect(mockGet).toHaveBeenCalledWith('/receipts/0', {
+			params: { document: 'closure:a', mode: 'fiscal' },
+		});
+	});
+
+	// Revert: print a default/unmarked template, also count via intent, or hide a mutation failure.
+	it('prints the selected closure template with one server mutation and surfaces failure without retry', async () => {
+		jest
+			.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+			.mockReturnValue([
+				{ id: 7, offline_capable: true, engine: 'logicless', content: '<b>Default</b>' },
+				{
+					id: 8,
+					offline_capable: true,
+					engine: 'logicless',
+					content:
+						'<b>Selected {{#fiscal.is_reprint}}COPY {{fiscal.reprint_count}}{{/fiscal.is_reprint}}</b>',
+				},
+			]);
+		jest
+			.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
+			.mockReturnValue({ useSystemDialog: true });
+		let localRow = { print_count: 0, printed_at: null as string | null, counted: { cash: '99' } };
+		const localClosure = {
+			getLatest: () => localRow,
+			incrementalModify: async (update: (row: typeof localRow) => typeof localRow) => {
+				localRow = update(localRow);
+			},
+		};
+		const { result, rerender } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				getLocalClosure: async () => localClosure as never,
+				templateType: 'closure',
+				localReport: { order: { currency: 'USD' }, closure: { number: 1 } },
+			})
+		);
+		await act(async () => result.current.setSelectedTemplateId(8));
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(mockPost).toHaveBeenCalledTimes(1);
+		expect(mockPost).toHaveBeenCalledWith('closures/c/print', {});
+		expect(mockGet.mock.calls.every(([, options]) => !options.params.intent)).toBe(true);
+		expect(mockHtmlPrint.mock.calls[0][0]).toContain('Selected COPY 1');
+		expect(localRow).toEqual({
+			print_count: 2,
+			printed_at: '2026-09-17T12:00:00.000Z',
+			counted: { cash: '99' },
+		});
+		// Revert: ignore the higher local counter when projecting a copy or mirroring its dispatch.
+		localRow.print_count = 5;
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(localRow.print_count).toBe(6);
+		expect(mockHtmlPrint.mock.calls[1][0]).toContain('Selected COPY 5');
+		expect(localRow.printed_at).toBe('2026-09-17T12:00:00.000Z');
+		mockPost.mockRejectedValueOnce(new Error('refused'));
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(mockPost).toHaveBeenCalledTimes(3);
+		expect(localRow.print_count).toBe(6);
+		expect(mockHtmlPrint).toHaveBeenCalledTimes(3);
+		expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'refused' }));
+		mockOnline = false;
+		rerender();
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain('Selected COPY 6');
+		expect(localRow.print_count).toBe(7);
+		expect(mockPost).toHaveBeenCalledTimes(3);
+	});
+	// Revert: drop useReceiptData.error at either renderer or document-hook boundary.
+	it('exposes an authoritative document GET failure and clears it on manual retry', async () => {
+		mockGet.mockRejectedValueOnce(new Error('document unavailable'));
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+				localReport: { order: { currency: 'USD' }, closure: { number: 1 } },
+			})
+		);
+		await waitFor(() =>
+			expect(
+				(result.current as typeof result.current & { documentError?: Error }).documentError?.message
+			).toBe('document unavailable')
+		);
+		act(() => result.current.refetch());
+		await waitFor(() => expect(result.current.serverReceiptData).not.toBeNull());
+		expect(
+			(result.current as typeof result.current & { documentError?: Error | null }).documentError
+		).toBeNull();
+	});
+	// Revert: POST the closure count before printer dispatch succeeds.
+	it('does not count a closure when dispatch fails', async () => {
+		mockThermalPrint.mockRejectedValueOnce(new Error('printer unavailable'));
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+			})
+		);
+		await act(async () => {
+			await expect(result.current.print()).rejects.toThrow('printer unavailable');
+		});
+		expect(mockPost).not.toHaveBeenCalled();
+	});
+	// Revert: skip local closure counting, mutate recorded figures, or post offline.
+	it('marks offline closure copies and commits only the local count after dispatch', async () => {
+		mockOnline = false;
+		let row = { print_count: 1, printed_at: 'first', counted: { cash: '99' } };
+		const closure = {
+			getLatest: () => row,
+			incrementalModify: async (fn: (r: typeof row) => typeof row) => {
+				row = fn(row);
+			},
+		};
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+				...{ getLocalClosure: async () => closure as never },
+				localReport: {
+					order: { currency: 'USD' },
+					closure: { number: 1, counted: { cash: '99' } },
+					fiscal: { document_type: 'closure' },
+				},
+			})
+		);
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(mockThermalPrint.mock.calls[0][0].fiscal).toMatchObject({
+			is_reprint: true,
+			reprint_count: 1,
+		});
+		expect(row).toEqual({ print_count: 2, printed_at: 'first', counted: { cash: '99' } });
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(mockGet).not.toHaveBeenCalled();
+	});
+
+	// Revert: let legacy URL printing bypass copy marking or print a generic order receipt without a closure template.
+	it.each([
+		{ document: 'closure:c', templates: [] },
+		{ document: 'closure:c', templates: [{ id: 7, engine: 'legacy-php', offline_capable: false }] },
+		{ document: 'xreport:s', templates: [] },
+		{ document: 'xreport:s', templates: [{ id: 7, engine: 'legacy-php', offline_capable: false }] },
+	])(
+		'refuses $document printing without a renderable selected template',
+		async ({ document, templates }) => {
+			jest
+				.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+				.mockReturnValue(templates);
+			const { result } = renderHook(() =>
+				useReceiptDocument({
+					autoPrintAllowed: false,
+					document,
+					templateType: 'closure',
+					localReport: { order: { currency: 'USD' }, closure: { number: 1 } },
+				})
+			);
+			await act(async () => {
+				await expect(result.current.print()).rejects.toThrow('reports.closure_template_required');
+			});
+			expect(mockPost).not.toHaveBeenCalled();
+			expect(mockThermalPrint).not.toHaveBeenCalled();
+			expect(mockGenericPrint).not.toHaveBeenCalled();
+			expect(result.current.printedTo).toBeNull();
+		}
+	);
+
+	// Revert: mark the close-session flow's very first print as a copy.
+	it('keeps the first close-session print original while counting it locally', async () => {
+		mockOnline = false;
+		let row = { print_count: 0, printed_at: null as string | null };
+		const closure = {
+			getLatest: () => row,
+			incrementalModify: async (fn: (r: typeof row) => typeof row) => {
+				row = fn(row);
+			},
+		};
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+				getLocalClosure: async () => closure as never,
+				localReport: {
+					order: { currency: 'USD' },
+					closure: { number: 1 },
+					fiscal: { document_type: 'closure' },
+				},
+			})
+		);
+		await act(async () => {
+			await result.current.print();
+		});
+		expect(mockThermalPrint.mock.calls[0][0].fiscal).toMatchObject({
+			is_reprint: false,
+			reprint_count: 0,
+		});
+		expect(row.print_count).toBe(1);
+	});
 	it.each([true, false])(
 		'fetches print intent and prints its returned marking (checkout=%s)',
 		async (autoPrintAllowed) => {
@@ -304,9 +662,14 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		expect(mockGet.mock.calls.map(([, options]) => options.params)).toEqual([{ mode: 'live' }]);
 	});
 
-	it.each(['epson-sdp', 'printnode', 'star-cloudprnt'])(
-		'prints orderless reports via system HTML instead of %s cloud',
-		async (cloudProvider) => {
+	// Revert: require localReport before treating remote closure templates as reports.
+	it.each(
+		['epson-sdp', 'printnode', 'star-cloudprnt'].flatMap((provider) =>
+			[true, false].map((local) => [provider, local] as const)
+		)
+	)(
+		'prints orderless reports via system HTML instead of %s cloud (local=%s)',
+		async (cloudProvider, local) => {
 			jest
 				.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
 				.mockReturnValue({
@@ -318,13 +681,16 @@ describe('print intent through checkout and reprint receipt documents', () => {
 						autoPrintAllowed: false,
 						document,
 						documentReady: true,
-						localReport: { title: 'Report' },
+						localReport: local ? { title: 'Report' } : undefined,
+						templateType: 'closure',
 					})
 				);
 				await act(async () => {
 					await view.result.current.print();
 				});
-				expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain('COPY 1');
+				expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain(
+					document.startsWith('closure:') ? 'COPY 1' : '<html'
+				);
 				expect(view.result.current.printedTo).toBe('receipt.print_dialog');
 				view.unmount();
 			}
@@ -534,4 +900,27 @@ it('returns an explicit success signal after print dispatch', async () => {
 	await act(async () => {
 		await expect(result.current.print()).resolves.toBe(true);
 	});
+});
+
+// Revert: only suppress automatic drawer opening when a local report fallback exists.
+it('never opens the till drawer for an online-only remote session report', () => {
+	const printer = jest
+		.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
+		.mockReturnValue({ resolvedPrinter: { name: 'Till', autoOpenDrawer: true } });
+	const dispatch = jest
+		.spyOn(jest.requireMock('@wcpos/printer'), 'usePrint')
+		.mockReturnValue({ print: mockPrint, isPrinting: false });
+	renderHook(() =>
+		useReceiptDocument({
+			autoPrintAllowed: false,
+			document: 'xreport:remote',
+			documentReady: true,
+			templateType: 'closure',
+		})
+	);
+	expect(dispatch).toHaveBeenCalledWith(
+		expect.objectContaining({ printerProfile: expect.objectContaining({ autoOpenDrawer: false }) })
+	);
+	printer.mockRestore();
+	dispatch.mockRestore();
 });

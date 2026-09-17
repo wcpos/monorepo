@@ -2,6 +2,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { of } from 'rxjs';
 
 import { RegisterPanel } from './register-panel';
 
@@ -9,6 +10,7 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 let blind = false;
+let capabilities: string[] | undefined;
 let movements: Record<string, unknown>[] = [];
 let refusedMovements: Record<string, unknown>[] = [];
 let currentSession: Record<string, unknown> | null = null;
@@ -32,6 +34,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		movements,
 		refusedMovements,
 		lastClosure: {
+			id: 'c',
 			number: 1,
 			server_number: serverNumber,
 			sync_status: syncStatus,
@@ -40,6 +43,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			counted: { cash: '570' },
 			till_expected: { cash: '570' },
 			variance: { cash: '0' },
+			opened_at: '2026-09-09T23:00:00Z',
 			closed_at: '2026-09-10T17:00:00Z',
 			synced_rows_at: syncedRowsAt,
 			server_findings: { gap: true },
@@ -47,10 +51,21 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		actions: { voidMovement, recordMovement, retryMovement, startCounting },
 	}),
 }));
+const mockSite = {
+	populateResource: () => null,
+	populate$: () => of([{ id: 7, display_name: 'Alex' }]),
+};
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ site: { populateResource: () => null } }),
+	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
+	useStoreSession: () => ({ site: mockSite, wpCredentials: { capabilities } }),
 }));
+jest.mock('../../../../hooks/use-store-day', () => ({
+	useStoreDay: () => ({ timezone: 'UTC' }),
+	useViewedStore: () => ({ name: 'Shop', currency: 'GBP' }),
+}));
+jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
 jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
 	useObservableSuspense: () => [{ id: 7, display_name: 'Alex' }],
 }));
 jest.mock('../../../../contexts/translations', () => ({
@@ -124,6 +139,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
 	blind = false;
+	capabilities = ['view_woocommerce_pos_reports'];
 	currentSession = {
 		id: 'session',
 		status: 'open',
@@ -144,6 +160,13 @@ it('hides every amount and the X report for blind cashiers', () => {
 	expect(screen.getByTestId('register-panel-amount').textContent).toBe('Front');
 	expect(screen.getByTestId('register-panel').textContent).not.toMatch(/£|155|570/);
 	expect(screen.queryByTestId('register-panel-print')).toBeNull();
+});
+// Revert: stringify the session-report failure instead of translating it in this caller too.
+it('translates a failed X-report dispatch in the register panel', async () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-movements'));
+	fireEvent.click(screen.getByTestId('register-panel-print'));
+	await waitFor(() => expect(screen.getByText('reports.reprint_failed')).toBeTruthy());
 });
 it('records paid out and Undo inserts a void', async () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
@@ -323,3 +346,54 @@ it('shows the dead-lettered closure movement error', () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('closure-sync-error').textContent).toBe('movement_refused');
 });
+
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+// Revert: navigate to Sales, omit the selected closure, or leave the register overlay open.
+it('opens the last closure in Reports Closures and dismisses the register panel', () => {
+	const onOpenChange = jest.fn();
+	render(<RegisterPanel open onOpenChange={onOpenChange} />);
+	fireEvent.click(screen.getByTestId('register-panel-open-closure'));
+	expect(mockPush).toHaveBeenCalledWith({
+		pathname: '/reports',
+		params: expect.objectContaining({ closureId: 'c', openedAt: '2026-09-09T23:00:00Z' }),
+	});
+	expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+
+// Revert: leave the disabled closure control unexplained for blind cashiers.
+it('explains the closure restriction only while blind counting is enabled', () => {
+	blind = true;
+	capabilities = [];
+	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect((screen.getByTestId('register-panel-open-closure') as HTMLButtonElement).disabled).toBe(
+		true
+	);
+	expect(screen.getByTestId('register-panel-closure-restricted').textContent).toBe(
+		'register.closure_blind_restricted'
+	);
+	blind = false;
+	capabilities = ['view_woocommerce_pos_reports'];
+	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('register-panel-closure-restricted')).toBeNull();
+	expect((screen.getByTestId('register-panel-open-closure') as HTMLButtonElement).disabled).toBe(
+		false
+	);
+});
+
+// Revert: use blind counting, rather than a known capability denial, to disable the link.
+it.each([[undefined], [[]], [['view_woocommerce_pos_reports']]])(
+	'keeps unknown report capabilities navigable, but hides blind amounts (%j)',
+	(capabilitiesValue) => {
+		blind = true;
+		capabilities = capabilitiesValue;
+		const denied = capabilitiesValue?.length === 0;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		const link = screen.getByTestId('register-panel-open-closure') as HTMLButtonElement;
+		expect(link.disabled).toBe(denied);
+		expect(link.textContent).not.toContain('£570');
+		expect(screen.getByTestId('register-panel-closure-restricted')).toBeTruthy();
+		fireEvent.click(link);
+		expect(mockPush).toHaveBeenCalledTimes(denied ? 0 : 1);
+	}
+);

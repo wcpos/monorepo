@@ -99,13 +99,17 @@ jest.mock('@wcpos/components/webview', () => ({
 	WebView: ({
 		onContentSizeChange,
 		onLoad,
+		testID,
+		srcDoc,
 	}: {
 		onContentSizeChange?: (event: ContentSizeEvent) => void;
 		onLoad?: () => void;
+		testID?: string;
+		srcDoc?: string;
 	}) => {
 		if (onContentSizeChange) capturedContentSizeHandlers.push(onContentSizeChange);
 		if (onLoad) capturedLoadHandlers.push(onLoad);
-		return <iframe title="receipt-preview-frame" />;
+		return <iframe title="receipt-preview-frame" data-testid={testID} srcDoc={srcDoc} />;
 	},
 }));
 
@@ -121,7 +125,7 @@ jest.mock('./components/receipt-preview-viewport', () => ({
 			{children}
 		</div>
 	),
-	getReceiptPreviewPaperWidth: () => 80,
+	getReceiptPreviewPaperWidth: () => '80mm',
 }));
 
 jest.mock('./email', () => ({
@@ -216,6 +220,14 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 describe('Receipt preview content size', () => {
+	// Revert: remove the frame-specific testID so the viewport is mistaken for its iframe.
+	it('addresses rendered receipt HTML through a distinct frame testID', () => {
+		render(<Receipt resource={{} as never} />);
+		expect(screen.getByTestId('receipt-preview-frame').getAttribute('srcdoc')).toBe(
+			defaultTemplateRenderer.renderedHtml
+		);
+	});
+
 	beforeEach(() => {
 		jest.clearAllMocks();
 		capturedContentSizeHandlers.length = 0;

@@ -1,12 +1,14 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
+import { useDocField } from '@wcpos/query';
 import type { WPCredentialsDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -14,7 +16,8 @@ import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePOSOverlaySide } from '../contexts/overlay-side';
-import { MovementSheet, useSessionReport } from './movement-sheet';
+import { MovementSheet } from './movement-sheet';
+import { useSessionReport } from '../../../../services/register-session/use-session-report';
 
 function Opener({ id }: { id?: number | null }) {
 	const { site } = useStoreSession();
@@ -53,14 +56,22 @@ export function RegisterPanel({
 	const [error, setError] = React.useState('');
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
-	const { print: reprint } = useSessionReport(lastClosure);
+	const { print: reprint } = useSessionReport(lastClosure, true);
 	const t = useT();
+	const { wpCredentials } = useStoreSession();
+	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
+	const reportsDenied = !!capabilities && !capabilities.includes('view_woocommerce_pos_reports');
+	const router = useRouter();
 	const side = usePOSOverlaySide();
 	const attempt = async (action: () => Promise<unknown>) => {
 		try {
 			await action();
 		} catch (e) {
-			setError(String(e));
+			setError(
+				e instanceof Error && e.message === 'reports.reprint_failed'
+					? t('reports.reprint_failed')
+					: String(e)
+			);
 		}
 	};
 	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
@@ -186,12 +197,34 @@ export function RegisterPanel({
 					)}
 					{lastClosure && (
 						<View testID="register-panel-last-closure" className="gap-2">
-							<Text>
+							<Button
+								testID="register-panel-open-closure"
+								variant="ghost"
+								className="min-h-12"
+								disabled={reportsDenied}
+								onPress={() => {
+									router.push({
+										pathname: '/reports',
+										params: {
+											closureId: lastClosure.id,
+											businessDay: lastClosure.business_day,
+											openedAt: lastClosure.opened_at,
+											registerId: lastClosure.register_id,
+										},
+									});
+									onOpenChange(false);
+								}}
+							>
 								{t('register.closure_written_n', {
 									n: lastClosure.server_number ?? lastClosure.number,
 								})}
 								{blind ? '' : ` · ${format(Number(lastClosure.counted.cash))}`}
-							</Text>
+							</Button>
+							{blind && (
+								<Text testID="register-panel-closure-restricted" className="text-muted-foreground">
+									{t('register.closure_blind_restricted')}
+								</Text>
+							)}
 							{!lastClosure.synced_rows_at ? (
 								<Text testID="closure-unsynced" className="text-muted-foreground">
 									{t('register.unsynced')}

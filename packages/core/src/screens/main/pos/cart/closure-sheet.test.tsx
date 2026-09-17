@@ -10,7 +10,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 const closure = { number: 1, unsynced_count: 2, printed_at: null } as never;
 const print = jest.fn(async () => '2026-09-12T10:00:00Z');
-jest.mock('./movement-sheet', () => ({
+jest.mock('../../../../services/register-session/use-session-report', () => ({
 	useSessionReport: () => ({ print, previewProps: {}, isOffline: true }),
 }));
 jest.mock('../../receipt/receipt-body', () => ({

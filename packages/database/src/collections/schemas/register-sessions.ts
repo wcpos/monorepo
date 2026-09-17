@@ -7,7 +7,7 @@ export const sessionOutboxProperties = {
 } as const;
 export const registerSessionsLiteral = {
 	title: 'Register sessions',
-	version: 0,
+	version: 1,
 	type: 'object',
 	primaryKey: 'id',
 	properties: {
@@ -15,6 +15,7 @@ export const registerSessionsLiteral = {
 		register_id: { type: 'string', maxLength: 36 },
 		store_id: { type: ['number', 'null'] },
 		status: { type: 'string', enum: ['open', 'counting', 'closed'], maxLength: 8 },
+		business_day: { type: 'string', maxLength: 10 },
 		opened_at_gmt: { type: 'string' },
 		opened_by: { type: ['number', 'null'] },
 		expected_float: { type: ['string', 'null'] },

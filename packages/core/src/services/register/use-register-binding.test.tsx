@@ -8,7 +8,11 @@ import { getLogger } from '@wcpos/utils/logger';
 import type { UserDatabase } from '@wcpos/database';
 
 import { bindRegister, ensureRegister, readBoundRegister, readRegister } from './register-document';
-import { useRegisterBinding, useRegisterBindingSession } from './use-register-binding';
+import {
+	useRegisterBinding,
+	useRegisterBindingSession,
+	useRegisterDirectory,
+} from './use-register-binding';
 import { useRegisterNames } from './use-register-names';
 
 let mockStatus = 'online-website-available';
@@ -164,12 +168,12 @@ it('rebinds the site pointer when the store changes', async () => {
 	expect(mockHttp.get).toHaveBeenLastCalledWith('registers/b');
 });
 
-it('requests without a store filter for the default store', async () => {
+it('clears the inherited store filter for the default store', async () => {
 	mockStoreId = 0;
 	mockHttp.get.mockResolvedValue({ data: [] });
 	const view = mount();
 	await waitFor(() => expect(view.result.current.status).toBe('none'));
-	expect(mockHttp.get).toHaveBeenCalledWith('registers', undefined);
+	expect(mockHttp.get).toHaveBeenCalledWith('registers', { params: { store_id: null } });
 });
 
 it('does not expose another store pointer offline, even before hydration', async () => {
@@ -248,4 +252,22 @@ it('logs an automatic switch only when the previous binding differs', async () =
 			},
 		],
 	]);
+});
+
+// Revert: inherit the physical till store filter, include other stores in the global directory, or rebind while browsing.
+it('reads the default-store directory without rebinding the physical till', async () => {
+	await bindRegister(mockDB, mockSite, { id: 'physical', name: 'Physical' }, 2);
+	mockHttp.get.mockResolvedValue({
+		data: [
+			{ id: 'remote', name: 'Remote', status: 'active', store_id: null },
+			{ id: 'physical', name: 'Physical', status: 'active', store_id: 2 },
+		],
+	});
+	const { result } = renderHook(() => useRegisterDirectory(0));
+	await waitFor(() => expect(result.current.registers).toHaveLength(1));
+	expect(mockHttp.get).toHaveBeenCalledWith('registers', { params: { store_id: null } });
+	expect(await readBoundRegister(mockDB, mockSite, 2)).toEqual({
+		id: 'physical',
+		name: 'Physical',
+	});
 });

@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import type { ClosureDocument } from '@wcpos/database';
 import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
@@ -12,6 +13,7 @@ import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { useResolvedPrinter } from './hooks/use-resolved-printer';
 import { createCloudEnqueueFactory } from '../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { claimReceiptAutoPrint } from '../pos/checkout/checkout-mode';
@@ -22,11 +24,21 @@ import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num
 export function useReceiptDocument({
 	order,
 	autoPrintAllowed,
+	getLocalClosure,
+	isReprint,
 	document,
 	documentReady,
 	localReport,
 	formatReport,
+	templateType,
+	storeId,
+	previewEnabled = true,
 }: {
+	getLocalClosure?: () => Promise<ClosureDocument | null>;
+	isReprint?: boolean;
+	templateType?: 'receipt' | 'report' | 'closure';
+	storeId?: number;
+	previewEnabled?: boolean;
 	order?: EngineRecord<'orders'>;
 	autoPrintAllowed: boolean;
 	document?: string;
@@ -58,11 +70,14 @@ export function useReceiptDocument({
 
 	// Template renderer — provides template list, selection, and rendered output
 	const {
+		documentError,
+		refetch,
 		templates,
 		selectedTemplateId,
 		setSelectedTemplateId,
 		renderedHtml,
 		receiptData,
+		serverReceiptData,
 		receiptUrl: templateReceiptUrl,
 		selectedTemplateEngine,
 		selectedTemplateContent,
@@ -72,13 +87,21 @@ export function useReceiptDocument({
 		preparePrintContent,
 	} = useTemplateRenderer({
 		orderId,
+		isReprint,
+		templateType,
+		storeId,
 		baseReceiptURL,
 		mode: 'live',
+		previewEnabled,
 		document,
 		documentReady,
 		localReport,
 		formatReport,
 		order: orderData,
+		nextLocalClosureCount: async () => {
+			const closure = await getLocalClosure?.();
+			return closure ? closure.getLatest().print_count + 1 : 0;
+		},
 	});
 
 	// Build template info for routing
@@ -152,12 +175,26 @@ export function useReceiptDocument({
 	} = useResolvedPrinter({ template: templateInfo });
 
 	// Order-only cloud jobs cannot name X/Z documents; use the existing HTML print contract.
+	const sessionReport = !!localReport || templateType === 'closure';
 	const reportSystemDialog =
-		!!localReport && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
+		sessionReport && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
 			let commit: (() => Promise<void>) | undefined;
 			const prepared = await preparePrintContent(async () => {
+				if (getLocalClosure) {
+					const closure = await getLocalClosure();
+					if (!closure) throw new Error('Local closure unavailable');
+					const count = closure.getLatest().print_count + 1;
+					commit = async () => {
+						await closure.incrementalModify((row) => ({
+							...row,
+							print_count: Math.max(row.print_count, count),
+							printed_at: row.printed_at ?? new Date().toISOString(),
+						}));
+					};
+					return count;
+				}
 				if (!order) return 0;
 				const local = order.getLatest().local as NonNullable<typeof order>['local'] & {
 					receiptPrintCount?: number;
@@ -181,7 +218,30 @@ export function useReceiptDocument({
 				};
 				return count;
 			});
-			return { ...prepared, ...(commit ? { commit } : {}) };
+			if (prepared.commit) {
+				const recordPrint = prepared.commit;
+				commit = async () => {
+					try {
+						const marker = await recordPrint();
+						const closure = marker && getLocalClosure ? await getLocalClosure() : null;
+						if (marker && closure) {
+							await closure.incrementalModify((row) => ({
+								...row,
+								print_count: Math.max(row.print_count + 1, marker.print_count),
+								printed_at:
+									row.printed_at ??
+									convertUTCStringToLocalDate(marker.last_printed_at_gmt).toISOString(),
+							}));
+						}
+					} catch (error) {
+						Toast.show({
+							title: error instanceof Error ? error.message : t('reports.reprint_failed'),
+						});
+						throw error;
+					}
+				};
+			}
+			return { ...prepared, commit };
 		},
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
@@ -190,7 +250,7 @@ export function useReceiptDocument({
 			useSystemDialog || reportSystemDialog
 				? undefined
 				: resolvedPrinter
-					? { ...resolvedPrinter, ...(localReport ? { autoOpenDrawer: false } : {}) }
+					? { ...resolvedPrinter, ...(sessionReport ? { autoOpenDrawer: false } : {}) }
 					: undefined,
 		paperWidth: selectedTemplate?.paper_width ?? undefined,
 		decimals: dp,
@@ -225,10 +285,15 @@ export function useReceiptDocument({
 	const printDestination =
 		(reportSystemDialog ? undefined : resolvedPrinter?.name) ?? t('receipt.print_dialog');
 	const print = React.useCallback(async () => {
+		if (
+			(document?.startsWith('closure:') || document?.startsWith('xreport:')) &&
+			(!selectedTemplate?.offline_capable || !selectedTemplate.content)
+		)
+			throw new Error(t('reports.closure_template_required'));
 		const dispatched = (await printReceipt()) === true;
 		if (dispatched) setPrintedTo(printDestination);
 		return dispatched;
-	}, [printReceipt, printDestination]);
+	}, [printReceipt, printDestination, document, selectedTemplate, t]);
 
 	/**
 	 * Allow auto print for checkout
@@ -308,6 +373,10 @@ export function useReceiptDocument({
 		(isSyncing || (hasDocument && frameState !== 'loaded'));
 
 	return {
+		documentError,
+		refetch,
+		receiptData,
+		serverReceiptData,
 		...(document ? { document } : {}),
 		autoPrintPending,
 		templates,

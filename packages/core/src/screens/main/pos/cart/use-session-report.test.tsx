@@ -1,13 +1,27 @@
 /** @jest-environment jsdom */
+import { of } from 'rxjs';
 import { renderHook } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { useSessionReport } from './movement-sheet';
+import { useSessionReport } from '../../../../services/register-session/use-session-report';
+
+const mockSite = { populate$: () => of([{ id: 8, display_name: 'Alex' }]) };
+let mockOpenedBy = 8;
 
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
+	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
+	useStoreSession: () => ({
+		site: mockSite,
+		wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
+	}),
 }));
+jest.mock('../../../../hooks/use-store-day', () => ({
+	useStoreDay: () => ({ timezone: 'UTC' }),
+	useViewedStore: () => undefined,
+}));
+jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
+// Revert: route till reports through the report fallback instead of the shared closure envelope.
 const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
 let mockAutoOpen = false;
@@ -38,9 +52,12 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `£${value.toFixed(2)}` }),
 }));
+jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
+	useClosureCollection: () => undefined,
+}));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
-		session: { id: 's', register_id: 'r' },
+		session: { id: 's', register_id: 'r', opened_by: mockOpenedBy },
 		expected: { cash: '155' },
 		blind: false,
 		binding: { registerName: 'Front' },
@@ -49,6 +66,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 beforeEach(() => {
 	jest.clearAllMocks();
 	mockAutoOpen = false;
+	mockOpenedBy = 8;
 });
 it('routes X to the session document with the panel figures as offline data', async () => {
 	const view = renderHook(() => useSessionReport());
@@ -64,12 +82,24 @@ it('routes X to the session document with the panel figures as offline data', as
 		expect.objectContaining({
 			document: 'xreport:s',
 			localReport: expect.objectContaining({
-				line_items: [expect.objectContaining({ total: '155' })],
+				closure: expect.objectContaining({
+					expected: { cash: '155' },
+					breakdowns: expect.objectContaining({
+						labels: expect.objectContaining({ opened_by_name: 'Alex' }),
+					}),
+				}),
+				i18n: expect.objectContaining({ x_report: 'X-report', closure: 'Closure' }),
+				fiscal: expect.objectContaining({
+					document_type: 'xreport',
+					receipt_number: '',
+					is_closure_document: true,
+				}),
 			}),
 		})
 	);
 });
-it('prints the persisted closure and marks its time only after successful printing', async () => {
+// Revert: count in the till wrapper as well as the document print path.
+it('prints the persisted closure without duplicating the document print bookkeeping', async () => {
 	let data = {
 		id: 's',
 		number: 1,
@@ -93,23 +123,26 @@ it('prints the persisted closure and marks its time only after successful printi
 	await expect(view.result.current.print()).rejects.toThrow('paper');
 	expect(data.printed_at).toBeNull();
 	const at = await view.result.current.print();
-	expect(data).toMatchObject({ printed_at: at, print_count: 1 });
+	expect(at).toEqual(expect.any(String));
+	expect(data).toMatchObject({ printed_at: null, print_count: 0 });
 	expect(logger.info).not.toHaveBeenCalled();
 	expect(documentHook).toHaveBeenLastCalledWith(
 		expect.objectContaining({
 			document: 'closure:s',
 			documentReady: false,
-			localReport: expect.objectContaining({ footer: expect.stringContaining('Unsynced') }),
+			localReport: expect.objectContaining({
+				closure: expect.objectContaining({ unsynced_count: 2 }),
+			}),
 		})
 	);
 });
 
-it('returns print success even when the local marker write fails', async () => {
+it('does not write an additional local marker after the document path succeeds', async () => {
 	const incrementalModify = jest.fn().mockRejectedValue(new Error('disk write'));
 	const closure = { id: 's', number: 1, print_count: 0, incrementalModify };
 	const view = renderHook(() => useSessionReport(closure as never));
 	await expect(view.result.current.print()).resolves.toEqual(expect.any(String));
-	expect(incrementalModify).toHaveBeenCalledTimes(1);
+	expect(incrementalModify).not.toHaveBeenCalled();
 });
 it('loads a superseded closure from its authoritative server document', () => {
 	const closure = {
@@ -124,7 +157,10 @@ it('loads a superseded closure from its authoritative server document', () => {
 		expect.objectContaining({
 			document: 'closure:winner',
 			documentReady: true,
-			localReport: expect.objectContaining({ order_number: 'Z-report 4' }),
+			templateType: 'closure',
+			localReport: expect.objectContaining({
+				fiscal: expect.objectContaining({ receipt_number: '4' }),
+			}),
 		})
 	);
 });
@@ -155,12 +191,13 @@ it('does not report an X-report when dispatch fails', async () => {
 	expect(logger.info).not.toHaveBeenCalled();
 });
 
+// Revert: throw hard-coded English instead of the print-failure translation key.
 it.each([false, undefined])(
 	'does not log an X-report without explicit dispatch success (%s)',
 	async (outcome) => {
 		const view = renderHook(() => useSessionReport());
 		print.mockResolvedValueOnce(outcome);
-		await expect(view.result.current.print()).rejects.toThrow('Print was not dispatched');
+		await expect(view.result.current.print()).rejects.toThrow('reports.reprint_failed');
 		expect(logger.info).not.toHaveBeenCalled();
 	}
 );
@@ -170,7 +207,45 @@ it('does not mark a closure printed when the print layer silently fails', async 
 	const closure = { id: 's', number: 1, print_count: 0, incrementalModify };
 	const view = renderHook(() => useSessionReport(closure as never));
 	print.mockResolvedValueOnce(undefined);
-	await expect(view.result.current.print()).rejects.toThrow('Print was not dispatched');
+	await expect(view.result.current.print()).rejects.toThrow('reports.reprint_failed');
 	expect(incrementalModify).not.toHaveBeenCalled();
 	expect(logger.info).not.toHaveBeenCalled();
+});
+
+// Revert: treat a loaded closure row without an RxDocument as an X-report.
+it('uses the same closure print path for a loaded history row', async () => {
+	const row = require('../../../../services/register-session/__fixtures__/closure-local-row.json');
+	const view = renderHook(() => useSessionReport(null, true, row));
+	await view.result.current.print();
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			document: `closure:${row.server_closure_id ?? row.id}`,
+			isReprint: true,
+			localReport: expect.objectContaining({
+				fiscal: expect.objectContaining({ document_type: 'closure' }),
+			}),
+		})
+	);
+	expect(logger.info).not.toHaveBeenCalled();
+});
+
+// Revert: skip the credential directory, or lose the unknown opener's id.
+it.each([
+	[8, 'Alex'],
+	[7, 'Pat'],
+	[99, '99'],
+])('uses the original opener label %s in the offline X-report', (openedBy, name) => {
+	mockOpenedBy = Number(openedBy);
+	renderHook(() => useSessionReport());
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			localReport: expect.objectContaining({
+				closure: expect.objectContaining({
+					breakdowns: expect.objectContaining({
+						labels: expect.objectContaining({ opened_by_name: name }),
+					}),
+				}),
+			}),
+		})
+	);
 });

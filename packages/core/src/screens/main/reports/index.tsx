@@ -1,14 +1,44 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { format, parseISO } from 'date-fns';
+import { useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import type { StoreDocument } from '@wcpos/database';
+import { Text } from '@wcpos/components/text';
+import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 
+import { useAppInfo } from '../../../hooks/use-app-info';
+import { useT } from '../../../contexts/translations';
+import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
+import { withProAccess } from '../components/pro-guard';
+import { useRegisterBinding } from '../../../services/register/use-register-binding';
+import {
+	calendarDate,
+	resolveDayTimezone,
+	storeDayBounds,
+	useStoreDay,
+	zoneOptions,
+} from '../../../hooks/use-store-day';
+import { HeaderLeft } from '../components/header/left';
+import { PageBar } from './page-bar';
+import { Closures } from './closures';
 import { ReportsProvider } from './context';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
-import { useStoreDay } from '../../../hooks/use-store-day';
 import { useUISettings } from '../contexts/ui-settings';
-import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../query';
+import {
+	QueryStateProvider,
+	useCollectionBinding,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../query';
+import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
 
 import type { FiltersOf, QueryStateOf } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
@@ -46,21 +76,76 @@ function getInitialReportSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-function ReportsScreenContent() {
+const GuardedReports = withProAccess(Reports, 'reports');
+function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) => void }) {
 	const state = useQueryState<'orders'>();
+	const actions = useQueryStateActions<'orders'>();
 	const binding = useCollectionBinding('orders', state);
-
+	const storeId = Number.isFinite(Number(state.filters.store))
+		? Number(state.filters.store)
+		: undefined;
+	const { presets, timezone, rangeToFilter } = useStoreDay(storeId);
+	const { wpCredentials, store, site } = useAppState();
+	const storesSource = React.useMemo(
+		() => wpCredentials?.populate$('stores') ?? of([]),
+		[wpCredentials]
+	);
+	const stores = useObservableState(storesSource, []) as StoreDocument[];
+	const range = state.filters.dateRange;
+	const day = (value: string | undefined, fallback: Date) =>
+		format(
+			value ? convertUTCStringToLocalDate(value) : fallback,
+			'yyyy-MM-dd',
+			zoneOptions(timezone)
+		);
+	const scope = {
+		from: day(range?.from, presets().today.from),
+		to: day(range?.to, presets().today.to),
+		registerId: state.filters.register ?? '',
+		storeId,
+		cashier: state.filters.cashier === undefined ? undefined : Number(state.filters.cashier),
+	};
+	const select = (next: ClosureScope) => {
+		const nextStoreId = next.storeId ?? storeId;
+		const nextStore =
+			nextStoreId === undefined || nextStoreId === store?.id
+				? store
+				: stores.find((row) => row.id === nextStoreId);
+		// A store switch must use the new zone before the query rerenders useStoreDay.
+		const { timezone: nextZone } = resolveDayTimezone(nextStore, site);
+		const dayBounds = (value: string) => storeDayBounds(calendarDate(parseISO(value)), nextZone);
+		actions.setFilter(
+			'dateRange',
+			rangeToFilter({
+				from: dayBounds(next.from).from,
+				to: dayBounds(next.to).to,
+			})
+		);
+		actions.setFilter('register', next.registerId || undefined);
+		actions.setFilter(
+			'store',
+			next.storeId === undefined ? state.filters.store : String(next.storeId || 'woocommerce-pos')
+		);
+		actions.setFilter('cashier', next.cashier === undefined ? undefined : String(next.cashier));
+	};
 	return (
-		<ReportsProvider binding={binding}>
-			<Reports />
-		</ReportsProvider>
+		<>
+			<PageBar room="sales" onRoomChange={onRoomChange} scope={scope} onScopeChange={select} />
+			<View className="min-h-0 flex-1">
+				<Suspense>
+					<ReportsProvider binding={binding}>
+						<GuardedReports />
+					</ReportsProvider>
+				</Suspense>
+			</View>
+		</>
 	);
 }
 
 /**
  *
  */
-export function ReportsScreen() {
+function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void }) {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
 	const { presets, rangeToFilter } = useStoreDay();
@@ -84,9 +169,96 @@ export function ReportsScreen() {
 		>
 			<ErrorBoundary>
 				<Suspense>
-					<ReportsScreenContent />
+					<ReportsScreenContent onRoomChange={onRoomChange} />
 				</Suspense>
 			</ErrorBoundary>
 		</QueryStateProvider>
+	);
+}
+
+function ReportsShell() {
+	const router = useRouter();
+	const params = useLocalSearchParams<{
+		closureId?: string;
+		businessDay?: string;
+		openedAt?: string;
+		registerId?: string;
+	}>();
+	const [room, setRoom] = React.useState(params.closureId ? 'closures' : 'sales');
+	const [selection, setSelection] = React.useState<ClosureScope | null>(null);
+	const { store, wpCredentials } = useAppState();
+	const binding = useRegisterBinding();
+	const { presets, timezone } = useStoreDay();
+	const today = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
+	const { license } = useAppInfo();
+	const closureDay =
+		params.businessDay ??
+		(params.openedAt
+			? format(convertUTCStringToLocalDate(params.openedAt), 'yyyy-MM-dd', zoneOptions(timezone))
+			: today);
+	const lockedClosure = !!params.closureId && !license?.isPro && closureDay !== today;
+	const initialScope = clampClosureScope(
+		{
+			from: license?.isPro ? closureDay : today,
+			to: license?.isPro ? closureDay : today,
+			registerId: (license?.isPro && params.registerId) || binding.registerId || 'unbound',
+			storeId: store?.id,
+			cashier: room === 'sales' ? wpCredentials?.id : undefined,
+		},
+		today
+	);
+	const outsideHistory = !!params.closureId && !!license?.isPro && initialScope.from !== closureDay;
+	const scope = license?.isPro
+		? (selection ?? initialScope)
+		: { ...initialScope, cashier: selection?.cashier };
+	return (
+		<View className="flex-1">
+			<ErrorBoundary>
+				<Suspense>
+					{room === 'sales' ? (
+						<SalesScreen onRoomChange={setRoom} />
+					) : (
+						<>
+							<PageBar
+								room={room}
+								initialLockedPeriod={lockedClosure}
+								initialHistoryLimit={outsideHistory}
+								onRoomChange={setRoom}
+								scope={scope}
+								onScopeChange={setSelection}
+							/>
+							<Closures
+								scope={scope}
+								initialClosureId={lockedClosure || outsideHistory ? undefined : params.closureId}
+								onClose={() => router.setParams({ closureId: undefined })}
+							/>
+						</>
+					)}
+				</Suspense>
+			</ErrorBoundary>
+		</View>
+	);
+}
+
+export function ReportsScreen() {
+	const { top } = useSafeAreaInsets();
+	const { closureId } = useLocalSearchParams<{ closureId?: string }>();
+	// Clearing a consumed link keeps the current room; a new link resets its selection.
+	const [link, setLink] = React.useState({ closureId, key: 0 });
+	if (link.closureId !== closureId) {
+		setLink({ closureId, key: closureId ? link.key + 1 : link.key });
+	}
+	const { wpCredentials } = useAppState();
+	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
+	const t = useT();
+	return !capabilities || capabilities.includes('view_woocommerce_pos_reports') ? (
+		<ReportsShell key={link.key} />
+	) : (
+		<View className="flex-1" style={{ paddingTop: top + 8 }}>
+			<View className="bg-sidebar self-start rounded-md p-2">
+				<HeaderLeft />
+			</View>
+			<Text testID="reports-denied">{t('reports.no_access')}</Text>
+		</View>
 	);
 }

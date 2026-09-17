@@ -43,8 +43,8 @@ beforeEach(async () => {
 	});
 	await ensureRegister(userDB);
 	await db.addCollections({
-		closures: { schema: closuresLiteral },
-		register_sessions: { schema: registerSessionsLiteral },
+		closures: { schema: closuresLiteral, autoMigrate: false },
+		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
 		cash_movements: { schema: cashMovementsLiteral },
 	});
 });
@@ -58,6 +58,7 @@ const open = () =>
 		expectedFloat: null,
 		countedFloat: '100',
 		openedBy: 7,
+		businessDay: { year: 2026, month: 9, day: 16 },
 	});
 const drain = () =>
 	drainRegisterSessionQueue({
@@ -81,7 +82,12 @@ it('acknowledges a create, never resends it, and shares the in-flight drain', as
 	expect(http.post).toHaveBeenCalledTimes(1);
 	expect(http.post).toHaveBeenCalledWith(
 		'sessions',
-		expect.objectContaining({ id: row.id, opened_at: row.opened_at_gmt })
+		// Revert: omit business_day from the session-create POST.
+		expect.objectContaining({
+			id: row.id,
+			opened_at: row.opened_at_gmt,
+			business_day: '2026-09-16',
+		})
 	);
 });
 it('marks a losing create failed and adopts the server session', async () => {

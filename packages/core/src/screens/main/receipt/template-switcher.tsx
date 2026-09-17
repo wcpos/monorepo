@@ -13,6 +13,7 @@ import type { TemplateDocument } from '@wcpos/database';
 import { useT } from '../../../contexts/translations';
 
 interface TemplateSwitcherProps {
+	alwaysVisible?: boolean;
 	templates: TemplateDocument[];
 	selectedId: string | number | null;
 	onSelect: (id: string | number) => void;
@@ -29,10 +30,11 @@ export function TemplateSwitcher({
 	selectedId,
 	onSelect,
 	isOffline,
+	alwaysVisible = false,
 }: TemplateSwitcherProps) {
 	const t = useT();
 
-	if (templates.length <= 1) {
+	if (templates.length <= 1 && !alwaysVisible) {
 		return null;
 	}
 
@@ -54,7 +56,7 @@ export function TemplateSwitcher({
 				onSelect(id);
 			}}
 		>
-			<SelectTrigger>
+			<SelectTrigger testID="receipt-template-select" className="min-h-12">
 				<SelectValue placeholder={t('receipt.select_template')} />
 			</SelectTrigger>
 			<SelectContent>
@@ -64,7 +66,16 @@ export function TemplateSwitcher({
 						const disabled = isOffline && !tmpl.offline_capable;
 						const label = buildLabel(tmpl);
 
-						return <SelectItem key={stringId} value={stringId} label={label} disabled={disabled} />;
+						return (
+							<SelectItem
+								testID={`receipt-template-${stringId}`}
+								className="min-h-12"
+								key={stringId}
+								value={stringId}
+								label={label}
+								disabled={disabled}
+							/>
+						);
 					})}
 				</SelectGroup>
 			</SelectContent>

@@ -1,10 +1,12 @@
 import { sessionOutboxProperties } from './register-sessions';
 
+// Bound one last-known receipt projection per closure; never merge it into recorded figures.
+export const CLOSURE_DOCUMENT_LIMIT = 262144;
 const money = { type: 'string' } as const;
 const tenders = { type: 'object', additionalProperties: money } as const;
 export const closuresLiteral = {
 	title: 'Register closures',
-	version: 0,
+	version: 1,
 	type: 'object',
 	primaryKey: 'id',
 	properties: {
@@ -12,6 +14,10 @@ export const closuresLiteral = {
 		session_id: { type: 'string', maxLength: 36 },
 		register_id: { type: 'string', maxLength: 36 },
 		store_id: { type: ['number', 'null'] },
+		business_day: { type: 'string', maxLength: 10 },
+		closed_by: { type: ['number', 'null'] },
+		receipt_snapshot: { type: 'string', maxLength: CLOSURE_DOCUMENT_LIMIT },
+		corrections_count: { type: 'number' },
 		number: { type: 'number' },
 		opened_at: { type: 'string' },
 		closed_at: { type: 'string' },

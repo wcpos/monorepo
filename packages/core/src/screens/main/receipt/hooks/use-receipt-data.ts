@@ -22,7 +22,13 @@ interface ReceiptApiResponse {
 	data: Record<string, unknown>;
 }
 
+export interface ClosurePrintMarker {
+	print_count: number;
+	last_printed_at_gmt: string;
+}
+
 interface UseReceiptDataResult {
+	commitPrint: () => Promise<ClosurePrintMarker | undefined>;
 	data: Record<string, unknown> | null;
 	mode: ReceiptMode;
 	hasSnapshot: boolean;
@@ -35,13 +41,16 @@ interface UseReceiptDataResult {
 }
 
 interface UseReceiptDataOptions {
+	previewEnabled?: boolean;
+	nextLocalCount?: () => Promise<number>;
 	orderId: number | undefined;
 	mode?: ReceiptMode;
 	intent?: 'print';
 	document?: string;
+	isReprint?: boolean;
 }
 
-type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint'> & {
+type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint' | 'commitPrint'> & {
 	orderId: number | undefined;
 	document?: string;
 };
@@ -54,9 +63,12 @@ type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint'> 
  * the API returns a 404.
  */
 export function useReceiptData({
+	nextLocalCount,
+	previewEnabled = true,
 	orderId,
 	mode: requestedMode = 'live',
 	intent,
+	isReprint = false,
 	document,
 }: UseReceiptDataOptions): UseReceiptDataResult {
 	const http = useRestHttpClient();
@@ -67,7 +79,7 @@ export function useReceiptData({
 				params: {
 					mode,
 					...(document ? { document } : {}),
-					...(requestIntent ? { intent: requestIntent } : {}),
+					...(requestIntent && !document?.startsWith('closure:') ? { intent: requestIntent } : {}),
 				},
 			});
 			return response?.data as ReceiptApiResponse;
@@ -76,8 +88,36 @@ export function useReceiptData({
 	);
 	const fetchForPrint = React.useCallback(async () => {
 		if (!orderId && !document) return null;
-		return (await fetchData('print')).data ?? null;
-	}, [orderId, document, fetchData]);
+		if (document?.startsWith('closure:')) {
+			const data = (await fetchData()).data;
+			const marker = {
+				print_count: Math.max(
+					Number((data.closure as { print_count?: number })?.print_count ?? 0) + 1,
+					(await nextLocalCount?.()) ?? 0
+				),
+				last_printed_at_gmt: new Date().toISOString(),
+			};
+			return {
+				...data,
+				closure: {
+					...(data.closure as object),
+					print_count: marker.print_count,
+					last_printed_at_gmt: marker.last_printed_at_gmt,
+				},
+				fiscal: {
+					...(data.fiscal as object),
+					is_reprint: isReprint || marker.print_count > 1,
+					reprint_count: Math.max(0, marker.print_count - 1),
+				},
+			};
+		}
+		return (await fetchData(document?.startsWith('xreport:') ? undefined : 'print')).data ?? null;
+	}, [orderId, document, fetchData, isReprint, nextLocalCount]);
+	const commitPrint = React.useCallback(async () => {
+		if (!document?.startsWith('closure:')) return;
+		const response = await http.post(`closures/${document.slice(8)}/print`, {});
+		return response.data as ClosurePrintMarker;
+	}, [document, http]);
 	const [fetchKey, setFetchKey] = React.useState(0);
 	const [state, setState] = React.useState<ReceiptDataState>({
 		orderId,
@@ -96,9 +136,8 @@ export function useReceiptData({
 	}, []);
 
 	React.useEffect(() => {
-		if (!orderId && !document) {
-			// No order: nothing to fetch. The empty result is derived below, so no
-			// setState is needed here.
+		if (!previewEnabled || (!orderId && !document)) {
+			// Hidden cards fetch only through fetchForPrint; previews need an order or document.
 			return;
 		}
 
@@ -158,7 +197,7 @@ export function useReceiptData({
 		return () => {
 			cancelled = true;
 		};
-	}, [fetchData, orderId, mode, fetchKey, document]);
+	}, [fetchData, orderId, mode, fetchKey, document, previewEnabled]);
 
 	// When there's no order the result is the empty state regardless of any
 	// previously-fetched data (derived rather than reset via setState).
@@ -173,9 +212,10 @@ export function useReceiptData({
 			error: null,
 			refetch,
 			fetchForPrint,
+			commitPrint,
 		};
 	}
 
 	const { orderId: _requestOrderId, document: _requestDocument, ...currentState } = state;
-	return { ...currentState, refetch, fetchForPrint };
+	return { ...currentState, refetch, fetchForPrint, commitPrint };
 }

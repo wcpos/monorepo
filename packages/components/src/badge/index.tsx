@@ -74,6 +74,7 @@ export interface BadgeProps extends ViewProps, VariantProps<typeof badgeVariants
  */
 export function Badge({
 	count,
+	children,
 	max = 99,
 	dot = false,
 	variant,
@@ -82,7 +83,7 @@ export function Badge({
 	...props
 }: BadgeProps) {
 	// Don't render if count is 0 or undefined (unless dot mode)
-	if (!dot && (!count || count <= 0)) {
+	if (!children && !dot && (!count || count <= 0)) {
 		return null;
 	}
 
@@ -102,7 +103,7 @@ export function Badge({
 			    never collides with the badge's own unprefixed colour and wins on hover
 			    instead — a red badge with dark blue digits (#1369). */}
 			<TextClassContext.Provider value={undefined}>
-				<Text className={badgeTextVariants({ variant, size })}>{displayCount}</Text>
+				<Text className={badgeTextVariants({ variant, size })}>{children ?? displayCount}</Text>
 			</TextClassContext.Provider>
 		</View>
 	);

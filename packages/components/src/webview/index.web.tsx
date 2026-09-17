@@ -168,6 +168,7 @@ function WebView({
 		<View className={cn('relative', className)}>
 			<iframe
 				ref={composedRef}
+				data-testid={props.testID}
 				src={(source && 'uri' in source ? source.uri : undefined) || src}
 				srcDoc={srcDoc}
 				onLoad={handleLoaded}

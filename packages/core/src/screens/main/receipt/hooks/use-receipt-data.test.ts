@@ -8,7 +8,8 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useReceiptData } from './use-receipt-data';
 
 const mockGet = jest.fn();
-const mockHttp = { get: mockGet };
+const mockPost = jest.fn();
+const mockHttp = { get: mockGet, post: mockPost };
 
 jest.mock('../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => mockHttp,
@@ -135,19 +136,72 @@ it('forces fiscal mode and preserves the refund selector for preview, print, and
 	});
 });
 
-it('fetches an orderless closure preview and counts only print intent', async () => {
-	mockGet.mockResolvedValue({ data: { data: { number: 1 } } });
+// Revert: mutate the server count while preparing rather than after dispatch.
+it('projects closure copy metadata and defers the mutation until commit', async () => {
+	jest.clearAllMocks();
+	mockGet.mockResolvedValue({
+		data: {
+			data: { closure: { number: 1, print_count: 2 }, fiscal: { document_type: 'closure' } },
+		},
+	});
+	mockPost.mockResolvedValue({
+		data: { print_count: 3, last_printed_at_gmt: '2026-09-17 12:00:00' },
+	});
 	const { result } = renderHook(() =>
 		useReceiptData({ orderId: undefined, document: 'closure:session' })
 	);
-	await waitFor(() => expect(result.current.data).toEqual({ number: 1 }));
-	expect(mockGet).toHaveBeenLastCalledWith('/receipts/0', {
-		params: { mode: 'fiscal', document: 'closure:session' },
-	});
+	await waitFor(() => expect(result.current.hasResponded).toBe(true));
+	let printed;
 	await act(async () => {
-		await result.current.fetchForPrint();
+		printed = await result.current.fetchForPrint();
 	});
-	expect(mockGet).toHaveBeenLastCalledWith('/receipts/0', {
-		params: { mode: 'fiscal', document: 'closure:session', intent: 'print' },
+	expect(mockPost).not.toHaveBeenCalled();
+	await result.current.commitPrint();
+	expect(mockPost).toHaveBeenCalledTimes(1);
+	expect(mockPost).toHaveBeenCalledWith('closures/session/print', {});
+	expect(mockGet.mock.calls.every(([, options]) => !options.params.intent)).toBe(true);
+	expect(printed).toEqual({
+		closure: { number: 1, print_count: 3, last_printed_at_gmt: expect.any(String) },
+		fiscal: { document_type: 'closure', is_reprint: true, reprint_count: 2 },
 	});
+	mockPost.mockClear();
+	mockPost.mockRejectedValueOnce(new Error('refused'));
+	await expect(result.current.commitPrint()).rejects.toThrow('refused');
+	expect(mockPost).toHaveBeenCalledTimes(1);
+});
+
+// Revert: let the old intent option double-count closure copies.
+it('ignores legacy print intent on closure preview and print reads', async () => {
+	jest.clearAllMocks();
+	mockGet.mockResolvedValue({ data: { data: { closure: {}, fiscal: {} } } });
+	mockPost.mockResolvedValue({ data: { print_count: 2 } });
+	const { result } = renderHook(() =>
+		useReceiptData({ orderId: undefined, document: 'closure:c', intent: 'print' })
+	);
+	await waitFor(() => expect(result.current.hasResponded).toBe(true));
+	expect(mockPost).not.toHaveBeenCalled();
+	await result.current.fetchForPrint();
+	expect(mockGet.mock.calls.every(([, options]) => !options.params.intent)).toBe(true);
+	expect(mockPost).not.toHaveBeenCalled();
+});
+
+// Revert: derive the online copy number from server count minus the original print.
+it.each([
+	[5, 2],
+	[2, 5],
+])('numbers local %s/server %s as copy 6', async (local, server) => {
+	mockGet.mockResolvedValue({ data: { data: { closure: { print_count: server }, fiscal: {} } } });
+	const { result } = renderHook(() =>
+		useReceiptData({
+			orderId: undefined,
+			document: 'closure:c',
+			nextLocalCount: async () => local + 1,
+		})
+	);
+	await waitFor(() => expect(result.current.hasResponded).toBe(true));
+	let printed;
+	await act(async () => {
+		printed = await result.current.fetchForPrint();
+	});
+	expect(printed).toMatchObject({ closure: { print_count: 6 }, fiscal: { reprint_count: 5 } });
 });

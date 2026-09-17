@@ -218,12 +218,14 @@ function DialogContent({
 	side = 'center',
 	children,
 	portalHost,
+	closeButtonProps,
 	onOpenAutoFocus,
 	...props
 }: DialogPrimitive.ContentProps &
 	Omit<VariantProps<typeof dialogContentVariants>, 'side'> & {
 		side?: DialogSide;
 		portalHost?: string;
+		closeButtonProps?: Omit<React.ComponentProps<typeof IconButton>, 'name'>;
 	}) {
 	const { open } = DialogPrimitive.useRootContext();
 	const container = usePortalContainer(portalHost);
@@ -266,7 +268,7 @@ function DialogContent({
 							className="web:transition-opacity web:hover:opacity-100 opacity-70"
 							asChild
 						>
-							<IconButton name="xmark" />
+							<IconButton name="xmark" {...closeButtonProps} />
 						</DialogClose>
 					</View>
 				</DialogPrimitive.Content>

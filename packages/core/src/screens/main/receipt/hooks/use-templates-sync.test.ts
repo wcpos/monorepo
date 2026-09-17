@@ -183,3 +183,76 @@ describe('syncTemplates', () => {
 		expect(docs).toHaveLength(0);
 	});
 });
+
+// Revert: deduplicate by collection alone or omit type/store request parameters.
+it('syncs closure/store requests without suppressing concurrent receipt sync', async () => {
+	const http = {
+		get: jest.fn(
+			async (
+				_url: string,
+				config: { params: { posts_per_page: number; type?: string; store_id?: number } }
+			) => ({
+				data:
+					config.params.type === 'closure'
+						? [
+								{
+									...serverPayload[0],
+									id: 'closure-core',
+									uuid: '00000000-0000-4000-8000-000000000099',
+									type: 'closure',
+								},
+							]
+						: serverPayload,
+			})
+		),
+	};
+	await Promise.all([
+		syncTemplates(db.collections.templates, http),
+		syncTemplates(db.collections.templates, http, 'closure', 7),
+	]);
+	expect(http.get).toHaveBeenCalledWith('templates', {
+		params: { posts_per_page: -1, type: 'closure', store_id: 7 },
+	});
+	expect(
+		await db.collections.templates.find({ selector: { type: 'closure' } }).exec()
+	).toHaveLength(1);
+	expect(
+		await db.collections.templates.find({ selector: { type: 'receipt' } }).exec()
+	).toHaveLength(serverPayload.length);
+});
+
+// Revert: upsert every store's closure templates under the same unscoped UUID.
+it('keeps closure template sets separate and removes omitted assignments only in that store', async () => {
+	const collection = db.collections.templates;
+	const payload = serverPayload.map((row) => ({ ...row, type: 'closure' }));
+	await syncTemplates(collection, fakeHttpClient(payload.slice(0, 2)), 'closure', 1);
+	await syncTemplates(collection, fakeHttpClient(payload.slice(1, 3)), 'closure', 2);
+	const rows = await collection.find().exec();
+	expect(rows).toHaveLength(4);
+	await syncTemplates(collection, fakeHttpClient(payload.slice(2, 3)), 'closure', 2);
+	expect(
+		(await collection.find().exec()).map((row) => [row.get('closure_store_id'), row.id])
+	).toEqual(
+		expect.arrayContaining([
+			[1, 'plugin-core'],
+			[1, 64965],
+			[2, 64966],
+		])
+	);
+	expect(await collection.count().exec()).toBe(3);
+	await syncTemplates(collection, fakeHttpClient([]), 'closure', 2);
+	expect(await collection.count().exec()).toBe(2);
+});
+
+// Revert: send store_id=0 for the global scope, or change its local closure_store_id cache key.
+it('omits the global store request parameter while caching closure templates under store zero', async () => {
+	const http = fakeHttpClient([{ ...serverPayload[0], type: 'closure' }]);
+	await syncTemplates(db.collections.templates, http, 'closure', 0);
+	expect(http.get).toHaveBeenCalledWith('templates', {
+		params: { posts_per_page: -1, type: 'closure' },
+	});
+	const docs = await db.collections.templates.find().exec();
+	expect(docs).toHaveLength(1);
+	expect(docs[0].get('closure_store_id')).toBe(0);
+	expect(docs[0].uuid).toBe(`0:${serverPayload[0].uuid}`);
+});

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform } from 'react-native';
 
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { CalendarProps, Calendar as RNCalendar } from 'react-native-calendars';
 import { useCSSVariable } from 'uniwind';
 
@@ -19,7 +19,7 @@ interface Props extends CalendarProps {
 	locale?: string;
 }
 
-export function Calendar({ dateRange, onDateRangeChange, locale, ...props }: Props) {
+export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props }: Props) {
 	// Theme colors via CSS variables
 	const [
 		primaryColor,
@@ -57,7 +57,7 @@ export function Calendar({ dateRange, onDateRangeChange, locale, ...props }: Pro
 		if (!dateRange) return {};
 
 		const result: Record<string, any> = {};
-		const maxDateObj = props.maxDate ? new Date(props.maxDate) : null;
+		const maxDateObj = props.maxDate ? parseISO(props.maxDate) : null;
 
 		// Perform sanity check on the date range against maxDate
 		const effectiveRange = {
@@ -97,8 +97,9 @@ export function Calendar({ dateRange, onDateRangeChange, locale, ...props }: Pro
 	const handleDayPress = (day: { dateString: string }) => {
 		if (!onDateRangeChange || !dateRange) return;
 
-		const selectedDate = new Date(day.dateString);
-		const maxDateObj = props.maxDate ? new Date(props.maxDate) : null;
+		// Picker days are local calendar dates, not UTC instants.
+		const selectedDate = parseISO(day.dateString);
+		const maxDateObj = props.maxDate ? parseISO(props.maxDate) : null;
 
 		// If maxDate is set and selected date is after maxDate, ignore the selection
 		if (maxDateObj && selectedDate > maxDateObj) return;
@@ -173,6 +174,7 @@ export function Calendar({ dateRange, onDateRangeChange, locale, ...props }: Pro
 						},
 					},
 				} as Record<string, unknown>),
+				...theme,
 			}}
 			{...props}
 		/>

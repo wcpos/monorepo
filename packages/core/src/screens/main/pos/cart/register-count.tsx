@@ -14,7 +14,7 @@ import {
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
-import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
 import { ApproveSheet } from './approve-sheet';
 import { RegisterAmount } from './movement-sheet';
 import { denominations } from './register-count.denominations';
@@ -28,16 +28,18 @@ import {
 
 import type { ClosureCount } from './closure-sheet';
 
-function DenominationTile({
+export function DenominationTile({
+	currencyOptions,
 	value,
 	count,
 	add,
 }: {
+	currencyOptions?: CurrencyFormatOptions;
 	value: string;
 	count: number;
 	add: (pieces: number) => void;
 }) {
-	const { format } = useCurrencyFormat();
+	const { format } = useCurrencyFormat(currencyOptions);
 	const held = React.useRef(false);
 	const timer = React.useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 	const stop = () => clearInterval(timer.current);

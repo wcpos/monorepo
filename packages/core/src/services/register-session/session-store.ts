@@ -1,3 +1,8 @@
+import { tz } from '@date-fns/tz';
+import { format, parseISO } from 'date-fns';
+
+import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
+import { AppInfo } from '@wcpos/utils/app-info';
 import type {
 	CashMovementCollection,
 	CashMovementRow,
@@ -9,8 +14,6 @@ import type {
 	RegisterSessionRow,
 	UserDatabase,
 } from '@wcpos/database';
-import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
-import { AppInfo } from '@wcpos/utils/app-info';
 
 import {
 	advancePerpetual,
@@ -55,9 +58,11 @@ export function openSession(
 		expectedFloat: string | null;
 		countedFloat: string;
 		openedBy: number;
+		businessDay: { year: number; month: number; day: number };
 		storeId?: number | null;
 	}
 ) {
+	const { year, month, day } = input.businessDay;
 	return sessions.insert({
 		id: uuid(),
 		register_id: input.registerId,
@@ -65,6 +70,7 @@ export function openSession(
 		status: 'open',
 		opened_at_gmt: new Date().toISOString(),
 		opened_by: input.openedBy,
+		business_day: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
 		expected_float: input.expectedFloat,
 		counted_float: input.countedFloat,
 		opening_variance:
@@ -97,15 +103,28 @@ export const startCounting = (sessions: RegisterSessionCollection, id: string) =
 	transition(sessions, id, 'counting');
 export const backToSelling = (sessions: RegisterSessionCollection, id: string) =>
 	transition(sessions, id, 'open');
-export const closeSession = (
+export const closeSession = async (
 	sessions: RegisterSessionCollection,
 	id: string,
-	input: { counted: Record<string, string> }
-) =>
-	transition(sessions, id, 'closed', {
+	input: { counted: Record<string, string>; closedBy?: number; timezone?: string }
+) => {
+	const session = await sessions.findOne(id).exec();
+	if (!session) throw new RegisterSessionRequiredError();
+	return transition(sessions, id, 'closed', {
+		business_day:
+			session.business_day ||
+			format(
+				parseISO(
+					session.opened_at_gmt.endsWith('Z') ? session.opened_at_gmt : `${session.opened_at_gmt}Z`
+				),
+				'yyyy-MM-dd',
+				{ in: input.timezone && input.timezone !== 'device' ? tz(input.timezone) : undefined }
+			),
 		counted: input.counted,
+		closed_by: input.closedBy ?? null,
 		closure_id: id,
 	});
+};
 /**
  * Put a refused movement back in the outbox. The row is the only record of cash that has
  * physically moved, so the cashier needs a way to send it again once whatever the server
@@ -179,7 +198,11 @@ export async function writeClosure({
 	orders,
 	tillExpected,
 	refundRecords = [],
+	labels,
+	resolveCashierName,
+	timezone = 'device',
 }: {
+	timezone?: string;
 	closures: ClosureCollection;
 	userDB: UserDatabase;
 	siteUuid: string;
@@ -190,6 +213,13 @@ export async function writeClosure({
 	orders: readonly ClosureOrder[];
 	tillExpected?: Record<string, string>;
 	refundRecords?: readonly RefundDocumentType[];
+	resolveCashierName?: (id: number) => string;
+	labels?: {
+		register_name: string;
+		closed_by_name: string;
+		opened_by_name?: string;
+		approved_by_name?: string;
+	};
 }) {
 	const existing = await closures.findOne(session.id).exec();
 	if (existing) {
@@ -265,6 +295,16 @@ export async function writeClosure({
 		store_id: session.store_id ?? null,
 		number: 0,
 		opened_at: session.opened_at_gmt,
+		business_day:
+			session.business_day ||
+			format(
+				parseISO(
+					session.opened_at_gmt.endsWith('Z') ? session.opened_at_gmt : `${session.opened_at_gmt}Z`
+				),
+				'yyyy-MM-dd',
+				{ in: timezone === 'device' ? undefined : tz(timezone) }
+			),
+		closed_by: session.closed_by ?? null,
 		closed_at: session.closed_at_gmt!,
 		till_expected,
 		expected: till_expected,
@@ -297,6 +337,9 @@ export async function writeClosure({
 		printed_at: null,
 		print_count: 0,
 		breakdowns: {
+			...labels,
+			opened_by: session.opened_by ?? null,
+			approved_by: session.approved_by ?? null,
 			payment_methods,
 			tax_rates,
 			opening_float: {
@@ -304,14 +347,18 @@ export async function writeClosure({
 				counted: session.counted_float,
 				variance: session.opening_variance ?? null,
 			},
-			movements: entries.map(({ id, type, amount, reason, voids, voided_by }) => ({
-				id,
-				type,
-				amount,
-				reason,
-				voids: voids ?? null,
-				voided_by: voided_by ?? null,
-			})),
+			movements: entries.map(
+				({ id, type, amount, reason, voids, voided_by, created_at_gmt, created_by }) => ({
+					id,
+					type,
+					amount,
+					reason,
+					voids: voids ?? null,
+					created_at_gmt,
+					created_by,
+					voided_by: voided_by ?? null,
+				})
+			),
 			transaction_count: bound.filter((order) =>
 				readLedger(order.payload.meta_data).some(
 					(row) => row.session_id === session.id && row.status === 'captured'
@@ -326,7 +373,7 @@ export async function writeClosure({
 						)
 						.filter(Boolean)
 				),
-			],
+			].map((id) => ({ id: Number(id), name: resolveCashierName?.(Number(id)) || id })),
 		},
 		order_ids: bound.map((order) => order.uuid),
 		movement_ids: entries.map((row) => row.id),
