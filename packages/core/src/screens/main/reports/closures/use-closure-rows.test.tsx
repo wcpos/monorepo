@@ -1,13 +1,14 @@
 /** @jest-environment jsdom */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
+import { Query } from 'mingo';
 
 import type { ClosureRow } from '@wcpos/database';
 
 import { useClosureRows } from './use-closure-rows';
 
 const source = new BehaviorSubject<{ toMutableJSON: () => ClosureRow }[]>([]);
-const collection = { find: () => ({ $: source }), findOne: () => ({ exec: async () => null }) };
+const collection = { find: () => ({ $: source }), findOne: jest.fn() };
 const get = jest.fn();
 const http = { get };
 let online = true;
@@ -48,6 +49,7 @@ const row = (id: string, changes: Partial<ClosureRow> = {}) =>
 		...changes,
 	}) as ClosureRow;
 beforeEach(() => {
+	collection.findOne.mockReset().mockReturnValue({ exec: async () => null });
 	get.mockReset().mockResolvedValue({ data: [] });
 	source.next([]);
 	online = true;
@@ -375,4 +377,31 @@ it('preserves the local cached document and printed number on the merged server 
 		counted: { cash: '99' },
 	});
 	expect([...result.current.unavailableIds]).toEqual([]);
+});
+
+// Revert: find the persisted closure by row.id alone after the server row wins the merge.
+it('patches the local UUID document when refreshing its merged server row', async () => {
+	const persisted = row('local-uuid', { server_closure_id: '9', corrections_count: 0 });
+	const local = {
+		toMutableJSON: () => ({ ...persisted }),
+		incrementalPatch: async (patch: Partial<ClosureRow>) => Object.assign(persisted, patch),
+	};
+	collection.findOne.mockImplementation(
+		(query: string | { selector: Record<string, unknown> }) => ({
+			exec: async () =>
+				new Query(typeof query === 'string' ? { id: query } : query.selector).test(persisted)
+					? local
+					: null,
+		})
+	);
+	source.next([local]);
+	get.mockResolvedValueOnce({ data: [row('9', { corrections_count: 0 })] });
+	const { result } = renderHook(() => useClosureRows({ ...scope, from: '2026-09-16' }));
+	await waitFor(() => expect(result.current.status).toBe('ready'));
+	expect(result.current.rows.map((row) => row.id)).toEqual(['9']);
+	get.mockResolvedValueOnce({ data: row('9', { corrections_count: 2 }) });
+	await act(() => result.current.refreshRow(result.current.rows[0]));
+	expect(get).toHaveBeenLastCalledWith('closures/9');
+	expect(persisted.corrections_count).toBe(2);
+	expect(persisted.id).toBe('local-uuid');
 });

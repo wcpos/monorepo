@@ -243,3 +243,16 @@ it('keeps closure template sets separate and removes omitted assignments only in
 	await syncTemplates(collection, fakeHttpClient([]), 'closure', 2);
 	expect(await collection.count().exec()).toBe(2);
 });
+
+// Revert: send store_id=0 for the global scope, or change its local closure_store_id cache key.
+it('omits the global store request parameter while caching closure templates under store zero', async () => {
+	const http = fakeHttpClient([{ ...serverPayload[0], type: 'closure' }]);
+	await syncTemplates(db.collections.templates, http, 'closure', 0);
+	expect(http.get).toHaveBeenCalledWith('templates', {
+		params: { posts_per_page: -1, type: 'closure' },
+	});
+	const docs = await db.collections.templates.find().exec();
+	expect(docs).toHaveLength(1);
+	expect(docs[0].get('closure_store_id')).toBe(0);
+	expect(docs[0].uuid).toBe(`0:${serverPayload[0].uuid}`);
+});

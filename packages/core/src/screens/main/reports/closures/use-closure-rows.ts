@@ -180,7 +180,11 @@ export function useClosureRows(requested: ClosureScope) {
 						}
 					: p
 			);
-			const local = await collection?.findOne(row.id).exec();
+			const local = await collection
+				?.findOne({
+					selector: { $or: [{ id: identity(row) }, { server_closure_id: identity(row) }] },
+				})
+				.exec();
 			await local?.incrementalPatch({ corrections_count: updated.corrections_count });
 		};
 		try {

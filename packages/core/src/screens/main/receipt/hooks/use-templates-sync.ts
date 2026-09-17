@@ -64,7 +64,7 @@ export function syncTemplates(
 				params: {
 					posts_per_page: -1,
 					...(type !== 'receipt' ? { type } : {}),
-					...(storeId != null ? { store_id: storeId } : {}),
+					...(storeId != null && storeId !== 0 ? { store_id: storeId } : {}),
 				},
 			});
 			const data = response?.data;
