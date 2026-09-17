@@ -25,6 +25,8 @@ jest.mock('@wcpos/utils/logger', () => {
 	};
 });
 
+jest.mock('./refresh-access-token', () => ({ refreshAccessToken: jest.fn(async () => 'fresh') }));
+
 jest.mock('./http', () => ({
 	http: { request: jest.fn(), isCancel: jest.fn(() => false) },
 }));
@@ -43,6 +45,7 @@ jest.mock('./request-state-manager', () => ({
 
 /* eslint-disable import/first -- mocks must precede the code under test */
 import { http } from './http';
+import { createTokenRefreshHandler } from './create-token-refresh-handler';
 import { requestStateManager } from './request-state-manager';
 import { useHttpClient, type WcposRequestConfig } from './use-http-client';
 
@@ -496,33 +499,38 @@ describe('request preamble dispatch seam', () => {
 		}
 	);
 	it.each([false, true])(
-		'fresh-token retry starts from canonical config (query auth: %s)',
+		'first try and post-refresh retry differ only in token (query auth: %s)',
 		async (query) => {
 			const config = {
 				...canonical,
+				...(query
+					? { params: { authorization: 'Bearer old' } }
+					: { headers: { Authorization: 'Bearer old' } }),
 				wcposPreamble: {
 					...canonical.wcposPreamble!,
 					site: { ...canonical.wcposPreamble!.site, use_jwt_as_param: query },
 				},
 			};
-			const handler: HttpErrorHandler = {
-				name: 'retry',
-				canHandle: () => true,
-				handle: async ({ originalConfig, retryRequest }) => {
-					expect(originalConfig).toBe(config);
-					expect(originalConfig.baseURL).toBe(canonical.baseURL);
-					return retryRequest({
-						...originalConfig,
-						...(query
-							? { params: { authorization: 'Bearer fresh' } }
-							: { headers: { Authorization: 'Bearer fresh' } }),
-					});
+			const handler = createTokenRefreshHandler({
+				site: config.wcposPreamble.site,
+				wpUser: {
+					getLatest() {
+						return this;
+					},
+					incrementalPatch: jest.fn(),
 				},
-			};
+				getHttpClient: jest.fn(),
+			});
 			(http.request as jest.Mock).mockRejectedValueOnce({ response: { status: 401 } });
 			const { result } = renderHook(() => useHttpClient([handler]));
 			await result.current.request(config);
+			const first = (http.request as jest.Mock).mock.calls[0][0];
 			const sent = (http.request as jest.Mock).mock.calls[1][0];
+			expect({ url: sent.url, headers: sent.headers }).toEqual({
+				url: query ? first.url.replace('Bearer+old', 'Bearer+fresh') : first.url,
+				headers: query ? first.headers : { ...first.headers, authorization: 'Bearer fresh' },
+			});
+			expect(sent).not.toHaveProperty('wcposPreamble');
 			expect(
 				query ? new URL(sent.url).searchParams.get('authorization') : sent.headers.authorization
 			).toBe('Bearer fresh');

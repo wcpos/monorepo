@@ -1,3 +1,5 @@
+import 'whatwg-fetch';
+
 import { createTokenRefreshHandler } from './create-token-refresh-handler';
 import { resetRefreshCooldown } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
@@ -58,7 +60,7 @@ const makeError = (status = 401) => {
 
 const makeContext = (overrides: any = {}) => ({
 	error: makeError(401),
-	originalConfig: { url: '/test', headers: {} },
+	originalConfig: { url: '/test', headers: {}, wcposPreamble: { purpose: 'rest', site: {} } },
 	retryRequest: jest.fn().mockResolvedValue({ data: 'ok', status: 200 }),
 	retryCount: 0,
 	...overrides,
@@ -211,7 +213,7 @@ describe('createTokenRefreshHandler', () => {
 			expect(result).toEqual(retryResponse);
 		});
 
-		it('should set token as query param when use_jwt_as_param is true', async () => {
+		it('passes the refreshed token as metadata without authoring credentials', async () => {
 			const handler = createTokenRefreshHandler({
 				site: makeSite({ use_jwt_as_param: true }),
 				wpUser: makeWpUser(),
@@ -233,11 +235,116 @@ describe('createTokenRefreshHandler', () => {
 
 			expect(ctx.retryRequest).toHaveBeenCalledWith(
 				expect.objectContaining({
-					params: expect.objectContaining({
-						authorization: 'Bearer new-token',
+					headers: {},
+					wcposPreamble: expect.objectContaining({
+						refreshedAccessToken: 'new-token',
 					}),
 				})
 			);
+		});
+
+		it.each([
+			['header', {}, { headers: { Authorization: 'Bearer new-token' } }],
+			[
+				'query',
+				{ use_jwt_as_param: true, wcpos_version: '1.10.0' },
+				{ params: { authorization: 'new-token' } },
+			],
+		])(
+			'a bare config without preamble metadata retries with the credential on the config (%s)',
+			async (_channel, siteOverrides, expected) => {
+				const handler = createTokenRefreshHandler({
+					site: makeSite(siteOverrides),
+					wpUser: makeWpUser(),
+					getHttpClient,
+				});
+				mockPost.mockResolvedValue({
+					data: { access_token: 'new-token', expires_at: Date.now() + 3600000 },
+					status: 200,
+				});
+				(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+					await fn();
+				});
+				(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+
+				// A relative URL the preamble module cannot compose: the retry must not
+				// manufacture metadata for it (Codex review on #2132). It carries a stale
+				// credential on BOTH channels; the retry must keep only the fresh one.
+				const ctx = makeContext({
+					originalConfig: {
+						url: '/test?authorization=old&per_page=10',
+						headers: { authorization: 'Bearer old' },
+						params: { authorization: 'old', page: '2' },
+					},
+				});
+				const result = await handler.handle(ctx);
+
+				expect(result).toEqual({ data: 'ok', status: 200 });
+				const retried = ctx.retryRequest.mock.calls[0][0];
+				expect(retried.wcposPreamble).toBeUndefined();
+				expect(retried).toMatchObject(expected);
+				if ('params' in expected) {
+					expect(retried.headers.authorization).toBeUndefined();
+					expect(retried.headers.Authorization).toBeUndefined();
+					expect(retried.params.page).toBe('2');
+				} else {
+					expect(retried.params).toEqual({ page: '2' });
+					expect(retried.url).toBe('/test?per_page=10');
+				}
+			}
+		);
+
+		it('a bare config with URLSearchParams keeps its existing query parameters on retry', async () => {
+			const handler = createTokenRefreshHandler({
+				site: makeSite({ use_jwt_as_param: true, wcpos_version: '1.10.0' }),
+				wpUser: makeWpUser(),
+				getHttpClient,
+			});
+			mockPost.mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: Date.now() + 3600000 },
+				status: 200,
+			});
+			(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+				await fn();
+			});
+			(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+
+			// Spreading URLSearchParams drops its entries (CodeRabbit on #2132).
+			const params = new URLSearchParams({ per_page: '10', authorization: 'old' });
+			const ctx = makeContext({ originalConfig: { url: '/test', params } });
+			await handler.handle(ctx);
+
+			const retried = ctx.retryRequest.mock.calls[0][0];
+			expect(retried.params).toBeInstanceOf(URLSearchParams);
+			expect(retried.params.get('per_page')).toBe('10');
+			expect(retried.params.get('authorization')).toBe('new-token');
+		});
+
+		it('partial preamble site metadata is filled from the handler site', async () => {
+			const handler = createTokenRefreshHandler({
+				site: makeSite({ use_jwt_as_param: true, wcpos_version: '1.10.0' }),
+				wpUser: makeWpUser(),
+				getHttpClient,
+			});
+			mockPost.mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: Date.now() + 3600000 },
+				status: 200,
+			});
+			(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+				await fn();
+			});
+			(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+
+			// A caller that sent `site: {}` must still retry on the site's query channel.
+			const ctx = makeContext({
+				originalConfig: { url: '/test', wcposPreamble: { purpose: 'rest', site: {} } },
+			});
+			await handler.handle(ctx);
+
+			const retried = ctx.retryRequest.mock.calls[0][0];
+			expect(retried.wcposPreamble.site.use_jwt_as_param).toBe(true);
+			expect(retried.wcposPreamble.site.wcpos_version).toBe('1.10.0');
+			expect(retried.wcposPreamble.refreshedAccessToken).toBe('new-token');
 		});
 
 		it('should throw if refresh response has no access_token', async () => {

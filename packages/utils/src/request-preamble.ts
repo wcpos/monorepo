@@ -11,7 +11,16 @@ import {
 	SYNC_PROTOCOL_VERSION,
 } from './sync-protocol';
 
-export type RequestPurpose = 'sync' | 'rest' | 'cashier';
+export type RequestPurpose =
+	| 'sync'
+	| 'rest'
+	| 'cashier'
+	| 'refresh'
+	| 'probe-header'
+	| 'probe-param'
+	| 'probe-echo'
+	| 'probe-cache'
+	| 'probe-bare';
 export interface PreambleSite {
 	wp_api_url?: string;
 	use_rest_route_param?: boolean;
@@ -35,17 +44,27 @@ export function toPreambleSite(site: PreambleSite): PreambleSite {
 		wcpos_version,
 	};
 }
+// Probes measure individual channels, never persisted transport/protocol preferences.
+const PROBE_POLICY = {
+	clientHeaders: 'none',
+	markerParam: false,
+	overwriteAuth: true,
+	scope: 'none',
+	rewriteUrl: false,
+} as const;
 const POLICY: Record<
 	RequestPurpose,
 	{
-		clientHeaders: 'always' | 'unless-head-or-opted-out';
+		clientHeaders: 'always' | 'unless-head-or-opted-out' | 'marker' | 'none';
+		auth: 'site' | 'none' | 'header' | 'param' | 'echo';
 		markerParam: boolean;
 		overwriteAuth: boolean;
-		scope: 'sync' | 'rest' | 'none';
+		scope: 'sync' | 'rest' | 'none' | 'fixture';
 		rewriteUrl: boolean;
 	}
 > = {
 	sync: {
+		auth: 'site',
 		clientHeaders: 'always',
 		markerParam: true,
 		overwriteAuth: true,
@@ -53,19 +72,41 @@ const POLICY: Record<
 		rewriteUrl: true,
 	},
 	rest: {
+		auth: 'site',
 		clientHeaders: 'unless-head-or-opted-out',
 		markerParam: false,
 		overwriteAuth: false,
 		scope: 'rest',
 		rewriteUrl: true,
 	},
+	refresh: {
+		auth: 'none',
+		clientHeaders: 'always',
+		// out-R4 finding 6: adding wcpos=1 to refresh is a separate behavior change.
+		markerParam: false,
+		overwriteAuth: false,
+		scope: 'none',
+		rewriteUrl: true,
+	},
 	cashier: {
+		auth: 'site',
 		clientHeaders: 'unless-head-or-opted-out',
 		markerParam: true,
 		overwriteAuth: false,
 		scope: 'none',
 		rewriteUrl: true,
 	},
+	'probe-header': { ...PROBE_POLICY, clientHeaders: 'marker', auth: 'header' },
+	'probe-param': { ...PROBE_POLICY, clientHeaders: 'marker', auth: 'param' },
+	'probe-echo': {
+		...PROBE_POLICY,
+		clientHeaders: 'marker',
+		auth: 'echo',
+		markerParam: true,
+		scope: 'fixture',
+	},
+	'probe-cache': { ...PROBE_POLICY, auth: 'header', markerParam: true, scope: 'fixture' },
+	'probe-bare': { ...PROBE_POLICY, auth: 'none', markerParam: true },
 };
 export interface RequestPreambleContext {
 	purpose: RequestPurpose;
@@ -76,6 +117,7 @@ export interface RequestPreambleContext {
 		userAgentHeader: Readonly<Record<string, string>>;
 	};
 	accessToken?: string;
+	refreshedAccessToken?: string;
 	storeId?: number | string | null;
 	wpJsonRoot?: string;
 	bareAuthParam?: boolean;
@@ -133,18 +175,26 @@ export function buildRequestPreamble(
 ): PreparedRequest {
 	const { purpose, site = {}, client } = context;
 	const policy = POLICY[purpose];
-	const headers = buildClientHeaders(
-		client,
-		site,
-		policy.clientHeaders === 'always'
-			? { ...request, method: undefined, wcposHeaders: true }
-			: request
-	);
+	const clientSignals =
+		policy.clientHeaders === 'always' || policy.clientHeaders === 'unless-head-or-opted-out';
+	const headers = clientSignals
+		? buildClientHeaders(
+				client,
+				site,
+				policy.clientHeaders === 'always'
+					? { ...request, method: undefined, wcposHeaders: true }
+					: request
+			)
+		: new Headers(request.headers);
+	if (policy.clientHeaders === 'marker') headers.set('X-WCPOS', '1');
 	const clientSignal = formatClientSignal(client.platform, client.version);
 
+	// Refresh may rewrite only with a WordPress root, never a namespace-derived root.
 	const root = context.wpJsonRoot ?? deriveSyntheticPathRoot(site.wp_api_url ?? '');
 	const url = new URL(
-		policy.rewriteUrl && resolveRestTransport(site) === 'query'
+		policy.rewriteUrl &&
+			(purpose !== 'refresh' || !!site.wp_api_url) &&
+			resolveRestTransport(site) === 'query'
 			? toRestRouteUrl(request.url, root)
 			: request.url
 	);
@@ -152,32 +202,55 @@ export function buildRequestPreamble(
 	const setParam = (name: string, value: string) => {
 		if (policy.overwriteAuth || !url.searchParams.has(name)) url.searchParams.set(name, value);
 	};
-	// Retry handlers supply fresh credentials on the request: non-sync preserves an
-	// existing Authorization header or authorization param; only sync overwrites.
-	const token = context.accessToken;
-	// Parity, not intent: origin/main wrote auth without a token for REST/cashier; only sync guards it.
-	if (token || !policy.overwriteAuth) {
-		if (site.use_jwt_as_param) {
-			if (policy.overwriteAuth || !url.searchParams.has('authorization')) {
+	// Explicit retry credentials replace the selected channel; ordinary REST caller overrides survive.
+	const token = context.refreshedAccessToken ?? context.accessToken;
+	const overwriteAuth = policy.overwriteAuth || context.refreshedAccessToken !== undefined;
+	if (policy.auth !== 'none' && token) {
+		const queryAuth =
+			policy.auth === 'param' ||
+			policy.auth === 'echo' ||
+			(policy.auth === 'site' && site.use_jwt_as_param);
+		if (queryAuth) {
+			if (overwriteAuth || !url.searchParams.has('authorization')) {
+				// The echo probe's URL must never carry the real token: query strings persist in
+				// server/proxy/telemetry logs and this probe runs every boot. Masking char-for-char
+				// keeps what a WAF keys on (Bearer prefix decision, JWT charset and dots, LENGTH);
+				// the Authorization HEADER below keeps the real token, since header arrival is the
+				// channel being measured.
+				const paramToken = policy.auth === 'echo' ? token.replace(/[A-Za-z0-9]/g, 'x') : token;
 				url.searchParams.set(
 					'authorization',
 					formatAuthorizationParam(
-						String(token),
+						paramToken,
 						context.bareAuthParam ?? bareAuthParamSupported(site.wcpos_version)
 					)
 				);
 			}
-		} else if (policy.overwriteAuth || !headers.has('Authorization')) {
+		}
+		if (
+			(!queryAuth || policy.auth === 'echo') &&
+			(overwriteAuth || !headers.has('Authorization'))
+		) {
 			headers.set('Authorization', `Bearer ${token}`);
+		}
+		// A refreshed credential replaces the OTHER channel too: the server reads the header
+		// first, so a stale header beside a fresh query token would 401 the retry (and the
+		// reverse leaves a stale token in URL logs). The echo probe deliberately sends both.
+		if (context.refreshedAccessToken !== undefined && policy.auth !== 'echo') {
+			if (queryAuth) headers.delete('Authorization');
+			else url.searchParams.delete('authorization');
 		}
 	}
 	// wcpos=1 is the marker twin that survives header-stripping proxies (B7, wcpos-infra#72).
 	if (policy.markerParam) setParam('wcpos', '1');
-	if (sendsProtocolQueryTwins(client.platform, site.use_protocol_headers)) {
+	if (clientSignals && sendsProtocolQueryTwins(client.platform, site.use_protocol_headers)) {
 		setParam(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
 		setParam(CLIENT_QUERY_PARAM, clientSignal);
 	}
-	if (policy.scope === 'sync') {
+	if (policy.scope === 'fixture') {
+		setParam('store_id', '1');
+		if (policy.auth === 'echo') headers.set('X-WCPOS-Store', '1');
+	} else if (policy.scope === 'sync') {
 		const scope = normalizeStoreScope(context.storeId);
 		if (scope !== null) {
 			headers.set('X-WCPOS-Store', scope);

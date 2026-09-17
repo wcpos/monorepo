@@ -69,15 +69,11 @@ it.each([
 	{ purpose: 'sync', accessToken: undefined },
 	{ purpose: 'rest', accessToken: undefined },
 	{ purpose: 'cashier', accessToken: undefined },
-] as const)('pins no-token parity for $purpose', (overrides) => {
+] as const)('authors no credential without a token for $purpose', (overrides) => {
 	const header = prepare(overrides);
-	expect(header.headers.get('Authorization')).toBe(
-		overrides.purpose === 'sync' ? null : 'Bearer undefined'
-	);
+	expect(header.headers.get('Authorization')).toBeNull();
 	const query = prepare({ ...overrides, site: { use_jwt_as_param: true }, bareAuthParam: true });
-	expect(new URL(query.url).searchParams.get('authorization')).toBe(
-		overrides.purpose === 'sync' ? null : 'undefined'
-	);
+	expect(new URL(query.url).searchParams.get('authorization')).toBeNull();
 });
 it.each([
 	[undefined, undefined, 'Bearer token'],
@@ -184,4 +180,74 @@ it('unrelated headers and parameters survive and input objects are unchanged', (
 it('header-only requests do not author authentication', () => {
 	const headers = buildClientHeaders(context.client, {}, { url: '/image?raw=%20' });
 	expect(headers.has('Authorization')).toBe(false);
+});
+
+it('REST preserves a caller credential without a context token', () => {
+	const result = buildRequestPreamble(
+		{ ...context, purpose: 'rest', accessToken: undefined },
+		{ url, headers: { Authorization: 'Bearer fresh' } }
+	);
+	expect(result.headers.get('Authorization')).toBe('Bearer fresh');
+});
+
+it('refresh authors no access-token authentication or scope even with context credentials', () => {
+	const result = prepare({ purpose: 'refresh', storeId: 9 });
+	expect(result.headers.has('Authorization')).toBe(false);
+	expect(result.headers.has('X-WCPOS-Store')).toBe(false);
+	for (const param of ['authorization', 'store_id', 'wcpos']) {
+		expect(new URL(result.url).searchParams.has(param)).toBe(false);
+	}
+});
+it.each(['probe-header', 'probe-param', 'probe-echo', 'probe-cache', 'probe-bare'] as const)(
+	'%s ignores site transport and protocol capability and never authors a product UA',
+	(purpose) => {
+		const result = prepare({
+			purpose,
+			client: {
+				...context.client,
+				platform: 'android',
+				userAgentHeader: { 'User-Agent': 'WCPOS/test' },
+			},
+			site: {
+				use_rest_route_param: true,
+				use_protocol_headers: true,
+				wp_api_url: 'https://shop.test/blog/wp-json/',
+			},
+		});
+		expect(new URL(result.url).pathname).toBe(new URL(url).pathname);
+		for (const header of ['X-WCPOS-Protocol', 'X-WCPOS-Client', 'User-Agent']) {
+			expect(result.headers.has(header)).toBe(false);
+		}
+		for (const param of ['wcpos_protocol', 'wcpos_client', 'rest_route']) {
+			expect(new URL(result.url).searchParams.has(param)).toBe(false);
+		}
+	}
+);
+
+it.each([
+	[
+		'query auth drops the stale header',
+		{ use_jwt_as_param: true, wcpos_version: '1.10.0' },
+		'new',
+		null,
+	],
+	['header auth drops the stale query token', { use_jwt_as_param: false }, null, 'Bearer new'],
+])('a refreshed retry replaces the other channel too (%s)', (_name, site, param, header) => {
+	// The server reads the header first: a stale header beside a fresh query token 401s the
+	// retry; the reverse leaves a stale token in URL logs (CodeRabbit on #2132).
+	const result = buildRequestPreamble(
+		{ ...context, purpose: 'rest', site, accessToken: 'old', refreshedAccessToken: 'new' },
+		{ url: `${url}?authorization=old`, headers: { Authorization: 'Bearer old' } }
+	);
+	expect(new URL(result.url).searchParams.get('authorization')).toBe(param);
+	expect(result.headers.get('Authorization')).toBe(header);
+});
+
+it('the echo probe keeps both channels on a refreshed token', () => {
+	const result = prepare(
+		{ purpose: 'probe-echo', accessToken: 'old', refreshedAccessToken: 'abc.def' },
+		{ url }
+	);
+	expect(new URL(result.url).searchParams.get('authorization')).toBe('Bearer xxx.xxx');
+	expect(result.headers.get('Authorization')).toBe('Bearer abc.def');
 });
