@@ -252,9 +252,14 @@ it('cold subscribers see service start, changes and stop; both resume hooks trac
 	expect(view.result.current?.phase).toBe('polling');
 	view.rerender();
 	expect(service.getSnapshot().size).toBe(2);
+	const outcomes: (string | null)[] = [];
+	const unsubscribe = service.subscribe(() => outcomes.push(service.get('one')?.outcome ?? null));
 	await act(() => jest.advanceTimersByTimeAsync(0));
-	expect(view.result.current?.outcome).toBe('captured');
+	// The captured outcome is published, then the service retires the finished sale's leg.
+	expect(outcomes).toContain('captured');
+	expect(view.result.current).toBeNull();
 	expect(mockHttp.post).not.toHaveBeenCalled();
+	unsubscribe();
 	act(() => stopTerminalPaymentsService());
 	expect(view.result.current).toBeNull();
 	view.unmount();
