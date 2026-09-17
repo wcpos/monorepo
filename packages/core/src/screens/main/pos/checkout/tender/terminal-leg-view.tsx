@@ -12,11 +12,14 @@ import Animated, {
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { toMinor } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
+import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { Platform } from '@wcpos/utils/platform';
 
 import { failureReasonLabel, providerErrorMessage } from './labels';
@@ -152,6 +155,33 @@ export function TerminalLegView({
 			});
 		}
 	};
+	if (leg.outcome === 'captured' && leg.settlement?.finishingError) {
+		return (
+			<VStack testID="checkout-terminal-finishing-error" className="bg-sidebar flex-1 gap-4 p-4">
+				<Text className="text-destructive">{t('pos_checkout.paid_but_order_not_finished')}</Text>
+				<Collapsible>
+					<CollapsibleTrigger
+						testID="checkout-terminal-finishing-details-toggle"
+						className="min-h-12 justify-center"
+					>
+						<Text>{t('settings.support_details')}</Text>
+					</CollapsibleTrigger>
+					<CollapsibleContent>
+						<Text testID="checkout-terminal-finishing-details" selectable>
+							{leg.settlement.finishingError}
+						</Text>
+					</CollapsibleContent>
+				</Collapsible>
+				<DocsLink
+					testID="checkout-terminal-finishing-help"
+					className="min-h-12"
+					href={getErrorCodeDocURL(ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED)}
+				>
+					{t('settings.having_trouble')}
+				</DocsLink>
+			</VStack>
+		);
+	}
 	if (leg.outcome === 'captured') return null; // The flow consumes this external outcome and opens the receipt.
 	return (
 		<ScrollView

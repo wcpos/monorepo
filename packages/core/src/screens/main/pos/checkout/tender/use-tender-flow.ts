@@ -179,7 +179,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	useResumeTerminalLegs(order);
 	const terminalLeg = useTerminalLeg(order.uuid);
 	const service = getTerminalPaymentsService();
-	const displayedError = React.useRef<string | undefined>(undefined);
 	const displayedRow = React.useRef<string | null>(null);
 	const { uiSettings } = useUISettings('pos-cart');
 	const { setCurrentOrderID } = useCurrentOrderActions();
@@ -860,14 +859,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				intentRow.current = null;
 			}
 			const settled = leg.settlement;
-			if (
-				settled?.outcome === 'captured' &&
-				settled.finishingError &&
-				displayedError.current !== settled.finishingError
-			) {
-				displayedError.current = settled.finishingError;
-				Toast.show({ type: 'error', title: t('pos_checkout.paid_but_order_not_finished') });
-			}
 			if (!settled || displayedRow.current === leg.row.id) return;
 			displayedRow.current = leg.row.id;
 			if (settled.outcome === 'failed' && ownTake)

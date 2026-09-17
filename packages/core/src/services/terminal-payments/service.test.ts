@@ -120,6 +120,31 @@ it('readers only include live legs, and dismiss only removes final legs', async 
 	c.service.dismiss('order');
 	expect(c.service.get('order')).toBeNull();
 });
+it('publishes final state and releases the reader when a dismissed settlement is resumed', async () => {
+	const c = setup();
+	const pending = { ...row, provider_refs: { reader: 'reader' } };
+	c.mirror.mockRejectedValue(new Error('local write failed'));
+	c.http.get.mockResolvedValue({
+		data: { payment: { ...pending, status: 'captured' }, order: c.summary },
+	});
+	const info = getLogger([]).info as jest.Mock;
+	info.mockClear();
+	c.service.resume({ ...input, row: pending });
+	await jest.advanceTimersByTimeAsync(0);
+	c.service.dismiss('order');
+	expect(c.service.get('order')).toBeNull();
+	const resumed = c.service.resume({ ...input, row: pending })!;
+	expect(c.service.readersInUse().has('reader')).toBe(true);
+	await jest.advanceTimersByTimeAsync(0);
+	expect(resumed.getState().phase).toBe('final');
+	expect(c.service.get('order')?.phase).toBe('final');
+	expect(c.service.readersInUse().has('reader')).toBe(false);
+	expect(c.completeOrder).toHaveBeenCalledTimes(1);
+	expect(
+		info.mock.calls.filter(([, options]) => options.context?.type === 'payment.captured')
+	).toHaveLength(1);
+	c.service.stop();
+});
 it('a resumed leg names the reader the server recorded on the row', () => {
 	const c = setup();
 	c.service.resume({

@@ -316,8 +316,13 @@ export class TerminalPaymentsService {
 		finishingError?: string
 	) {
 		const { row, outcome, order } = state;
-		if (this.settlements.has(row.id) || this.legs.get(orderUuid)?.leg.getState().row.id !== row.id)
+		if (
+			this.settlements.has(row.id) ||
+			this.legs.get(orderUuid)?.leg.getState().row.id !== row.id
+		) {
+			this.publish();
 			return;
+		}
 		this.settlements.set(row.id, undefined);
 		const actor = this.options.getActor?.();
 		const result: TerminalSettlement = {
@@ -378,6 +383,7 @@ export class TerminalPaymentsService {
 		if (result.finishingError && outcome === 'captured') {
 			logger.error('Payment recorded but order could not be finished', {
 				code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
+				showToast: true,
 				terminal: { operationId: row.id },
 				context: { ...context, error: result.finishingError },
 			});

@@ -1261,6 +1261,66 @@ describe('server tender', () => {
 		expect(mockRelease).toHaveBeenCalledTimes(1);
 		expect(mockCapture).toHaveBeenCalledTimes(1);
 	});
+	it.each([false, true])(
+		'requests one finishing warning after receipt entry (checkout unmounted=%s)',
+		async (unmounted) => {
+			const { TerminalPaymentsService } = jest.requireActual<
+				typeof import('../../../../../services/terminal-payments/service')
+			>('../../../../../services/terminal-payments/service');
+			let rejectCompletion!: (error: Error) => void;
+			const captured = payment({ capture_mode: 'server', method_id: 'terminal' });
+			const completeOrder = jest.fn(
+				() =>
+					new Promise<void>((_resolve, reject) => {
+						rejectCompletion = reject;
+					})
+			);
+			const service = new TerminalPaymentsService({
+				http: {
+					get: async () => ({
+						data: {
+							payment: captured,
+							order: {
+								status: 'completed',
+								total: '92.95',
+								paid: '92.95',
+								balance: '0.00',
+								payment_method: 'terminal',
+								payment_method_title: 'Card',
+							},
+						},
+					}),
+					post: jest.fn(),
+				},
+				mirror: async () => {},
+				completeOrder,
+			});
+			mockRealService = service;
+			const hook = renderHook(() => useTenderFlow(order));
+			try {
+				await act(async () => {
+					const leg = service.resume({
+						orderUuid: 'order-1',
+						orderId: 42,
+						orderNumber: '42',
+						row: { ...captured, status: 'pending' },
+					})!;
+					await leg.checkNow();
+				});
+				expect(getCheckoutModeSnapshot().receiptOrders.has('order-1')).toBe(true);
+				expect(completeOrder).toHaveBeenCalledTimes(1);
+				if (unmounted) hook.unmount();
+				await act(async () => rejectCompletion(new Error('completion failed')));
+				const warnings = mockError.mock.calls.filter(([, options]) => options.showToast);
+				expect(warnings.length + (Toast.show as jest.Mock).mock.calls.length).toBe(1);
+				expect(service.get('order-1')?.settlement?.finishingError).toBe('completion failed');
+			} finally {
+				hook.unmount();
+				service.stop();
+				mockRealService = null;
+			}
+		}
+	);
 	it.each(['before-response', 'during-recording', 'receipt-entry'] as const)(
 		'real bridge records once when checkout unmounts %s, before refresh finishes',
 		async (when) => {
@@ -1932,7 +1992,7 @@ it('does not present a raw final leg until the service records its settlement', 
 	hook.unmount();
 });
 
-it('shows a late local finishing error without narrating again or offering another collection', async () => {
+it('retains a late finishing error without duplicating the service warning or offering another collection', async () => {
 	jest.clearAllMocks();
 	mockLeg = terminalState({ phase: 'final', outcome: 'captured' });
 	mockLeg.settlement = { payment: mockLeg.row, outcome: 'captured', saleComplete: true };
@@ -1943,11 +2003,8 @@ it('shows a late local finishing error without narrating again or offering anoth
 	};
 	hook.rerender();
 	await act(async () => {});
-	expect(Toast.show).toHaveBeenCalledTimes(1);
-	expect(Toast.show).toHaveBeenCalledWith({
-		type: 'error',
-		title: 'pos_checkout.paid_but_order_not_finished',
-	});
+	expect(Toast.show).not.toHaveBeenCalled();
+	expect(hook.result.current.terminalLeg?.settlement?.finishingError).toBe('local write failed');
 	expect(mockError).not.toHaveBeenCalled();
 	expect(mockBegin).not.toHaveBeenCalled();
 	hook.unmount();
@@ -1966,10 +2023,7 @@ it('keeps a captured partial payment with a failed mirror out of the Take pane',
 	await act(async () => {});
 	expect(mockDismiss).not.toHaveBeenCalled();
 	expect(hook.result.current.terminalLeg?.outcome).toBe('captured');
-	expect(Toast.show).toHaveBeenCalledWith({
-		type: 'error',
-		title: 'pos_checkout.paid_but_order_not_finished',
-	});
+	expect(Toast.show).not.toHaveBeenCalled();
 	hook.unmount();
 });
 
