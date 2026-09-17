@@ -125,7 +125,7 @@ jest.mock('./components/receipt-preview-viewport', () => ({
 			{children}
 		</div>
 	),
-	getReceiptPreviewPaperWidth: () => 80,
+	getReceiptPreviewPaperWidth: () => '80mm',
 }));
 
 jest.mock('./email', () => ({
