@@ -7,6 +7,7 @@ import { of } from 'rxjs';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 
 import { PageBar } from './page-bar';
+import { ReportsScreen } from './index';
 
 import type { ClosureScope } from './closures/use-closure-rows';
 
@@ -348,4 +349,86 @@ it('uses the viewed store day for presets and custom history bounds', () => {
 		minDate: '2026-06-17',
 		maxDate: '2026-09-17',
 	});
+});
+
+let mockRoute: Record<string, string> = {};
+jest.mock('expo-router', () => ({
+	useLocalSearchParams: () => mockRoute,
+	useRouter: () => ({ setParams: jest.fn() }),
+}));
+jest.mock('../components/pro-guard', () => ({ withProAccess: (component: unknown) => component }));
+jest.mock('../contexts/ui-settings', () => ({ useUISettings: () => ({ uiSettings: {} }) }));
+jest.mock('./reports', () => ({ Reports: () => null }));
+jest.mock('./context', () => ({
+	ReportsProvider: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('@wcpos/components/suspense', () => ({
+	Suspense: ({ children }: React.PropsWithChildren) => children,
+}));
+jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({}),
+}));
+jest.mock('./closures/closure-list', () => ({ ClosureList: () => null }));
+jest.mock('./closures/session-card', () => ({ SessionCard: () => null }));
+jest.mock('./closures/save-or-share-csv', () => ({ saveOrShareCsv: jest.fn() }));
+jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
+jest.mock('./closures/closure-panel', () => ({
+	ClosurePanel: ({ row }: { row: { id: string } }) => (
+		<div data-testid="selected-closure">{row.id}</div>
+	),
+}));
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: ({ children }: React.PropsWithChildren) => children,
+	DropdownMenuContent: () => null,
+	DropdownMenuTrigger: ({ children }: React.PropsWithChildren) => children,
+}));
+const mockClosureRows = jest.fn((scope: ClosureScope) => ({
+	scope,
+	rows: [
+		{ id: 'historical', business_day: '2026-09-15' },
+		{ id: 'last-closure', business_day: '2026-09-16' },
+	].filter((row) => row.business_day >= scope.from && row.business_day <= scope.to),
+	localRows: [],
+	status: 'ready',
+	hasMore: false,
+	unavailableIds: new Set(),
+}));
+jest.mock('./closures/use-closure-rows', () => ({
+	useClosureRows: (scope: ClosureScope) => mockClosureRows(scope),
+}));
+
+// Revert: silently discard a Free historical link's day but keep its selection, or block today's link too.
+it.each([
+	['2026-09-15', true],
+	['2026-09-16', false],
+])('handles a Free last-closure link for %s in the store day', (businessDay, locked) => {
+	mockRoute = { closureId: locked ? 'historical' : 'last-closure', businessDay, registerId: 'r' };
+	try {
+		render(<ReportsScreen />);
+		expect(mockClosureRows).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				from: '2026-09-16',
+				to: '2026-09-16',
+				registerId: 'r',
+				storeId: 1,
+			})
+		);
+		expect(screen.getByTestId('reports-period').textContent).toBe('Today');
+		if (locked) {
+			expect(screen.queryByTestId('selected-closure')).toBeNull();
+			expect(screen.getByTestId('reports-lock-hint').textContent).toBe(
+				'Earlier closures are in WCPOS Pro'
+			);
+			expect(screen.getAllByTestId('reports-see-pro')).toHaveLength(1);
+		} else {
+			expect(screen.getByTestId('selected-closure').textContent).toBe('last-closure');
+			expect(screen.queryByTestId('reports-lock-hint')).toBeNull();
+		}
+	} finally {
+		mockRoute = {};
+	}
 });

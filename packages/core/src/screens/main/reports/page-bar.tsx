@@ -34,8 +34,15 @@ export type PageBarProps = {
 	onRoomChange: (room: string) => void;
 	scope: ClosureScope;
 	onScopeChange: (scope: ClosureScope) => void;
+	initialLockedPeriod?: boolean;
 };
-export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarProps) {
+export function PageBar({
+	room,
+	onRoomChange,
+	scope,
+	onScopeChange,
+	initialLockedPeriod = false,
+}: PageBarProps) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const { top } = useSafeAreaInsets();
@@ -55,7 +62,9 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 		license?.isPro && stores.some((row) => row.id === scope.storeId) ? scope.storeId : store.id
 	);
 	const cashiers = useObservableState(sources.cashiers, []) as WPCredentialsDocument[];
-	const [locked, setLocked] = React.useState('');
+	const [locked, setLocked] = React.useState(
+		initialLockedPeriod ? t('reports.earlier_closures') : ''
+	);
 	const [menu, setMenu] = React.useState('');
 	const periodTrigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
 	const scopeTrigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
@@ -100,7 +109,7 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 		([, range]) =>
 			day(range.from) === scope.from && (day(range.to) > today ? today : day(range.to)) === scope.to
 	)?.[0] as keyof typeof labels | undefined;
-	const hint = locked && (
+	const hint = !!locked && (
 		<View className="gap-2 border-t p-2">
 			<Text testID="reports-lock-hint">{t('reports.pro_scope', { scope: locked })}</Text>
 			<Button
@@ -300,6 +309,7 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 					</PopoverContent>
 				</Popover>
 			</View>
+			{!menu && hint}
 		</View>
 	);
 }

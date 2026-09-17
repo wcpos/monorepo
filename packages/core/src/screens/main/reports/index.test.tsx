@@ -11,6 +11,7 @@ import { of } from 'rxjs';
 import { ReportsScreen } from './index';
 
 import type { QueryStateOf } from '../../../query';
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 44 }) }));
 jest.mock('../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),
 }));
@@ -382,6 +383,19 @@ it('lets a denied cashier return to the drawer without mounting report readers',
 	expect(mockOpenDrawer).toHaveBeenCalledTimes(1);
 	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
 	expect(mockClosureScope).not.toHaveBeenCalled();
+});
+
+// Revert: render denied navigation without PageBar's top safe-area padding.
+it('places denied navigation below the phone safe area', () => {
+	mockCapabilities = [];
+	render(<ReportsScreen />);
+	expect(screen.getByTestId('reports-denied').parentElement?.style.paddingTop).toBe('52px');
+	expect(
+		screen
+			.getByTestId('reports-denied')
+			.parentElement?.contains(screen.getByTestId('drawer-open-button'))
+	).toBe(true);
+	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
 
 // Revert: treat an absent legacy capability payload as an explicit denial.

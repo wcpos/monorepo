@@ -103,10 +103,11 @@ export function useClosureRows(requested: ClosureScope) {
 		key,
 		rows: [] as ClosureRow[],
 		next: 1,
+		target: 0,
 		more: true,
 		status: 'idle',
 	});
-	if (page.key !== key) setPage({ key, rows: [], next: 1, more: true, status: 'idle' });
+	if (page.key !== key) setPage({ key, rows: [], next: 1, target: 0, more: true, status: 'idle' });
 	const source = React.useMemo(
 		() => (collection ? collection.find().$.pipe(map((rows) => ({ collection, rows }))) : of(null)),
 		[collection]
@@ -119,13 +120,39 @@ export function useClosureRows(requested: ClosureScope) {
 		scope,
 		timezone
 	);
+	const merged = new Map(page.rows.map((row) => [row.server_closure_id ?? row.id, row]));
+	for (const row of local) {
+		const pending = !row.synced_rows_at || ['pending', 'failed'].includes(row.sync_status);
+		const id = row.server_closure_id ?? row.id;
+		const server = merged.get(id);
+		if (!server || pending) merged.set(id, row);
+		else {
+			// Keep device-only document data without replacing authoritative server figures.
+			merged.set(id, {
+				...server,
+				receipt_snapshot: row.receipt_snapshot,
+				printed_number: row.printed_number,
+			});
+		}
+	}
+	const rows = selectClosureRows([...merged.values()], scope, timezone);
+	const fillCashierPage =
+		scope.cashier !== undefined &&
+		rows.length < page.target &&
+		page.more &&
+		page.status === 'ready';
 	const needsServer =
 		!!license?.isPro &&
 		(scope.storeId !== store.id || scope.registerId !== binding.registerId || scope.from < today);
 	const loadMore = React.useCallback(async () => {
 		if (!online || !needsServer || !page.more || ['loading', 'denied'].includes(page.status))
 			return;
-		setPage((p) => ({ ...p, status: 'loading' }));
+		setPage((p) => ({
+			...p,
+			status: 'loading',
+			// Continuation belongs to the same load; only a new load sets a new target.
+			target: fillCashierPage ? p.target : rows.length + PAGE_SIZE,
+		}));
 		try {
 			const { data } = await http.get('closures', {
 				params: {
@@ -142,7 +169,7 @@ export function useClosureRows(requested: ClosureScope) {
 				p.key !== key
 					? p
 					: {
-							key,
+							...p,
 							rows: [...p.rows, ...rows],
 							next: page.next + 1,
 							more: data.length === PAGE_SIZE,
@@ -156,7 +183,19 @@ export function useClosureRows(requested: ClosureScope) {
 					: { ...p, status: get(error, 'response.status') === 403 ? 'denied' : 'error' }
 			);
 		}
-	}, [online, needsServer, page, key, http, scope.registerId, scope.storeId, scope.from, scope.to]);
+	}, [
+		online,
+		needsServer,
+		page,
+		key,
+		http,
+		scope.registerId,
+		scope.storeId,
+		scope.from,
+		scope.to,
+		fillCashierPage,
+		rows.length,
+	]);
 	const refreshRow = async (row: ClosureRow) => {
 		const identity = (r: ClosureRow) => r.server_closure_id ?? r.id;
 		const update = async (updated: ClosureRow) => {
@@ -196,24 +235,6 @@ export function useClosureRows(requested: ClosureScope) {
 			log.warn('Closure row refresh failed', { context: { error: String(error) } });
 		}
 	};
-	const merged = new Map(page.rows.map((row) => [row.server_closure_id ?? row.id, row]));
-	for (const row of local) {
-		const pending = !row.synced_rows_at || ['pending', 'failed'].includes(row.sync_status);
-		const id = row.server_closure_id ?? row.id;
-		const server = merged.get(id);
-		if (!server || pending) merged.set(id, row);
-		else {
-			// Keep device-only document data without replacing authoritative server figures.
-			merged.set(id, {
-				...server,
-				receipt_snapshot: row.receipt_snapshot,
-				printed_number: row.printed_number,
-			});
-		}
-	}
-	const rows = selectClosureRows([...merged.values()], scope, timezone);
-	const fillCashierPage =
-		scope.cashier !== undefined && rows.length < PAGE_SIZE && page.more && page.status === 'ready';
 	// The REST API cannot filter cashiers; fill the filtered page before ending loading.
 	React.useEffect(() => {
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- External scope read and filtered-page continuation; failed reads remain user-driven.

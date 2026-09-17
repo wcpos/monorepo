@@ -333,6 +333,43 @@ it.each([1, 50])('automatically finds %s cashier closures beyond page one', asyn
 	expect(result.current.hasMore).toBe(matches === 50);
 });
 
+// Revert: use the absolute PAGE_SIZE threshold, or reset the target on each continued request.
+it.each([1, 50])(
+	'fills another cashier page per Load more with %s new matches',
+	async (matches) => {
+		const statuses: string[] = [];
+		get.mockImplementation(async (_url, config) => ({
+			data:
+				config.params.page <= 3
+					? Array.from({ length: 50 }, (_, i) =>
+							row(`${config.params.page}-${i}`, {
+								register_id: 'other',
+								closed_by:
+									config.params.page === 1 || (config.params.page === 3 && i < matches) ? 7 : 8,
+							})
+						)
+					: [],
+		}));
+		const { result } = renderHook(() => {
+			const result = useClosureRows({ ...scope, registerId: 'other', cashier: 7 });
+			statuses.push(result.status);
+			return result;
+		});
+		await waitFor(() => expect(result.current.hasMore).toBe(true));
+		expect(result.current.rows).toHaveLength(50);
+		statuses.length = 0;
+		await act(() => result.current.loadMore());
+		await waitFor(() => expect(result.current.status).toBe('ready'));
+		expect(result.current.rows).toHaveLength(50 + matches);
+		expect(result.current.rows.some((row) => row.id === '3-0')).toBe(true);
+		expect(get.mock.calls.map(([, config]) => config.params.page)).toEqual(
+			matches === 50 ? [1, 2, 3] : [1, 2, 3, 4]
+		);
+		expect(statuses.slice(0, -1)).not.toContain('ready');
+		expect(result.current.hasMore).toBe(matches === 50);
+	}
+);
+
 // Revert: automatically page unfiltered scopes rather than leaving Load more user-driven.
 it('requests only the first page without a cashier filter', async () => {
 	get.mockResolvedValue({

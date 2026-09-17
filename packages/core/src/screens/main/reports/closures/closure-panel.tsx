@@ -23,6 +23,7 @@ import { useClosureCollection } from '../../../../services/register-session/use-
 import { RecountSheet } from './recount-sheet';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
+import { PrinterSwitcher } from '../../receipt/printer-switcher';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 
 // Tablet drawer width; the Reports host already excludes the navigation rail.
@@ -138,13 +139,19 @@ export function ClosurePanel({
 				) : (
 					<DialogTitle className="shrink">{title}</DialogTitle>
 				)}
-				<View className="min-w-0 flex-1">
+				<View className="min-w-0 flex-1 gap-2">
 					<TemplateSwitcher
 						templates={doc.templates}
 						selectedId={doc.selectedTemplateId}
 						onSelect={doc.setSelectedTemplateId}
 						isOffline={doc.isOffline}
 						alwaysVisible
+					/>
+					<PrinterSwitcher
+						printers={doc.allPrinters}
+						printerSelection={doc.printerSelection}
+						resolvedPrinterId={doc.resolvedPrinter?.id ?? null}
+						onSelect={doc.setPrinterSelection}
 					/>
 				</View>
 			</View>

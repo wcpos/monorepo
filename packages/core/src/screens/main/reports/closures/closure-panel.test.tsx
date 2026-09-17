@@ -5,9 +5,17 @@ import { of } from 'rxjs';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type { ClosureRow } from '@wcpos/database';
+import type { PrinterProfile } from '@wcpos/printer';
 import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
 
 import { ClosurePanel } from './closure-panel';
+import { mergeAvailablePrinterProfiles } from '../../settings/printer/available-printer-profiles';
+
+// Keep routing real without loading printer transports/encoders in jsdom.
+jest.mock('@wcpos/printer', () => ({
+	...jest.requireActual('@wcpos/printer/resolve-printer'),
+	...jest.requireActual('@wcpos/printer/detect-mismatch'),
+}));
 
 const mockPatch = jest.fn(async (_patch: { receipt_snapshot: string }) => undefined);
 const mockCollection = {
@@ -30,14 +38,29 @@ jest.mock('../../../../contexts/theme', () => ({
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
+const mockOverrides = of([{ template_id: 'core', printer_profile_id: 'thermal' }]);
+const mockPrinters = mergeAvailablePrinterProfiles([], null);
+mockPrinters.push({
+	...mockPrinters[0],
+	id: 'thermal',
+	name: 'Thermal',
+	connectionType: 'network',
+});
+jest.mock('../../settings/printer/use-available-printer-profiles', () => ({
+	useAvailablePrinterProfiles: () => ({ printers: mockPrinters }),
+}));
 const mockSession = {
+	storeDB: { collections: { template_printer_overrides: { find: () => ({ $: mockOverrides }) } } },
 	store: { id: 0, currency: 'USD', name: 'Shop', timezone: 'UTC' },
 	site: { url: 'https://shop.test' },
 	wpCredentials: {
 		populate$: () => of([{ id: 2, currency: 'JPY', name: 'Tokyo', timezone: 'Asia/Tokyo' }]),
 	},
 };
-jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => mockSession }));
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => mockSession,
+	useStoreSession: () => mockSession,
+}));
 jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-US' }) }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: (options?: { currency?: string }) => ({
@@ -94,19 +117,59 @@ jest.mock('@wcpos/components/dialog', () => ({
 	),
 	DialogTitle: require('react-native').Text,
 }));
-jest.mock('@wcpos/components/select', () => ({
-	Select: ({ children }: { children: React.ReactNode }) => children,
-	SelectTrigger: ({ children, testID }: { children: React.ReactNode; testID: string }) => (
-		<button data-testid={testID}>{children}</button>
-	),
-	SelectValue: () => null,
-	SelectContent: ({ children }: { children: React.ReactNode }) => children,
-	SelectGroup: ({ children }: { children: React.ReactNode }) => children,
-	SelectItem: ({ testID, label }: { testID: string; label: string }) => (
-		<div data-testid={testID}>{label}</div>
-	),
-}));
-const mockPrint = jest.fn(async () => true);
+jest.mock('@wcpos/components/select', () => {
+	const C = React.createContext({
+		value: { label: '' },
+		onValueChange: (_option: { value: string; label: string }) => {},
+	});
+	return {
+		Select: ({
+			children,
+			...props
+		}: React.ComponentProps<typeof C.Provider>['value'] & { children: React.ReactNode }) => (
+			<C.Provider value={props}>{children}</C.Provider>
+		),
+		SelectTrigger: ({
+			children,
+			testID,
+			className,
+		}: {
+			children: React.ReactNode;
+			testID: string;
+			className: string;
+		}) => (
+			<button data-testid={testID} className={className}>
+				{children}
+			</button>
+		),
+		SelectValue: () => React.useContext(C).value?.label,
+		SelectContent: ({ children }: { children: React.ReactNode }) => children,
+		SelectGroup: ({ children }: { children: React.ReactNode }) => children,
+		SelectItem: ({
+			testID,
+			label,
+			value,
+			className,
+		}: {
+			testID: string;
+			label: string;
+			value: string;
+			className: string;
+		}) => {
+			const { onValueChange } = React.useContext(C);
+			return (
+				<button
+					data-testid={testID}
+					className={className}
+					onClick={() => onValueChange({ value, label })}
+				>
+					{label}
+				</button>
+			);
+		},
+	};
+});
+const mockPrint = jest.fn(async (_printer?: PrinterProfile | null) => true);
 const mockRefetch = jest.fn();
 const mockRecount = jest.fn();
 jest.mock('./recount-sheet', () => ({
@@ -139,7 +202,18 @@ const mockDocument = jest.fn((options: { localReport: Record<string, unknown> })
 	},
 }));
 jest.mock('../../receipt/use-receipt-document', () => ({
-	useReceiptDocument: (options: { localReport: Record<string, unknown> }) => mockDocument(options),
+	useReceiptDocument: (options: { localReport: Record<string, unknown> }) => {
+		const routing = jest
+			.requireActual('../../receipt/hooks/use-resolved-printer')
+			.useResolvedPrinter({
+				template: { id: 'core', output_type: 'html', paper_width: 'A4' },
+			});
+		return {
+			...mockDocument(options),
+			...routing,
+			print: () => mockPrint(routing.resolvedPrinter),
+		};
+	},
 }));
 jest.mock('../../receipt/receipt-body', () => ({
 	ReceiptBody: ({
@@ -399,3 +473,33 @@ it('uses the current store context and receipt scope for a null-store closure', 
 		mockSession.store = previous;
 	}
 });
+
+// Revert: hide the printer selector, disconnect its selection, or use undersized header controls.
+it.each([true, false])(
+	'lets the cashier replace a mismatched thermal route with Print Dialog (phone=%s)',
+	async (phone) => {
+		mockPhone = phone;
+		render(<ClosurePanel row={row} onClose={jest.fn()} />);
+		const selector = screen.getByTestId('receipt-printer-select');
+		expect(selector.textContent).toContain('Thermal');
+		expect(selector.className).toContain('min-h-12');
+		const templateSelector = screen.getByTestId('receipt-template-select');
+		expect(templateSelector.parentElement).toBe(selector.parentElement);
+		expect(getComputedStyle(selector.parentElement!).flexDirection).toBe('column');
+		expect(screen.getByTestId('closure-panel-body').contains(selector)).toBe(false);
+		fireEvent.click(screen.getByTestId('closure-reprint'));
+		await waitFor(() =>
+			expect(mockPrint).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'thermal' }))
+		);
+		const systemOption = screen.getByTestId('receipt-printer-system');
+		expect(systemOption.className).toContain('min-h-12');
+		fireEvent.click(systemOption);
+		expect(selector.textContent).toBe('Print Dialog');
+		fireEvent.click(screen.getByTestId('closure-reprint'));
+		await waitFor(() =>
+			expect(mockPrint).toHaveBeenLastCalledWith(
+				expect.objectContaining({ id: 'system', connectionType: 'system' })
+			)
+		);
+	}
+);

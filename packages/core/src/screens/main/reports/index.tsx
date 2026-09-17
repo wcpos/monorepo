@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { StoreDocument } from '@wcpos/database';
 import { Text } from '@wcpos/components/text';
@@ -195,6 +196,7 @@ function ReportsShell() {
 		(params.openedAt
 			? format(convertUTCStringToLocalDate(params.openedAt), 'yyyy-MM-dd', zoneOptions(timezone))
 			: today);
+	const lockedClosure = !!params.closureId && !license?.isPro && closureDay !== today;
 	const initialScope = {
 		from: license?.isPro ? closureDay : today,
 		to: license?.isPro ? closureDay : today,
@@ -215,13 +217,14 @@ function ReportsShell() {
 						<>
 							<PageBar
 								room={room}
+								initialLockedPeriod={lockedClosure}
 								onRoomChange={setRoom}
 								scope={scope}
 								onScopeChange={setSelection}
 							/>
 							<Closures
 								scope={scope}
-								initialClosureId={params.closureId}
+								initialClosureId={lockedClosure ? undefined : params.closureId}
 								onClose={() => router.setParams({ closureId: undefined })}
 							/>
 						</>
@@ -233,6 +236,7 @@ function ReportsShell() {
 }
 
 export function ReportsScreen() {
+	const { top } = useSafeAreaInsets();
 	const { closureId } = useLocalSearchParams<{ closureId?: string }>();
 	// Clearing a consumed link keeps the current room; a new link resets its selection.
 	const [link, setLink] = React.useState({ closureId, key: 0 });
@@ -245,7 +249,7 @@ export function ReportsScreen() {
 	return !capabilities || capabilities.includes('view_woocommerce_pos_reports') ? (
 		<ReportsShell key={link.key} />
 	) : (
-		<View className="flex-1">
+		<View className="flex-1" style={{ paddingTop: top + 8 }}>
 			<View className="bg-sidebar self-start rounded-md p-2">
 				<HeaderLeft />
 			</View>
