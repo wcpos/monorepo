@@ -33,7 +33,7 @@ import {
 } from '../../utils/merge-stores';
 import { upsertSiteData } from '../../utils/site-writes';
 import { initialProps } from './initial-props';
-import { assertStoreSession } from './store-session';
+import { commitStoreSession, IncompleteStoreSessionError } from './store-session';
 
 import type { RxState } from 'rxdb';
 import type { InitialProps } from './initial-props.types';
@@ -772,26 +772,12 @@ export const hydrateUserSession = async (
 export async function switchUserSessionStore(
 	userDB: UserDatabase,
 	appState: SessionAppState,
-	storeLocalID: string,
-	opts?: {
-		switchEngineScope?: (
-			sessionData: Awaited<ReturnType<typeof hydrateUserSession>>
-		) => Promise<void>;
-	}
+	storeLocalID: string
 ) {
 	const current = await appState.get('current');
 	const newState = { ...current, storeID: storeLocalID };
 	const sessionData = await hydrateUserSession(userDB, newState);
-	// A store whose rows are not all there is refused here, before the engine
-	// is moved or the pointer persisted: the current session stays intact.
-	assertStoreSession(sessionData);
-
-	// The engine must reach the new scope BEFORE the session is committed — a
-	// failed engine transition aborts the switch with durable state untouched.
-	await opts?.switchEngineScope?.(sessionData);
-
-	await appState.set('current', () => newState);
-	return sessionData;
+	return commitStoreSession(appState, { ids: newState, session: sessionData });
 }
 
 /**
@@ -829,6 +815,7 @@ export type PreparedStorePayload = ServerStorePayload & { localID: string };
  * the members typed without widening the exception.
  */
 export interface HydrationContext {
+	session?: Awaited<ReturnType<typeof hydrateUserSession>>;
 	userDB?: UserDatabase;
 	/** Session pointer (`current`). */
 	appState?: SessionAppState;
@@ -1016,7 +1003,18 @@ const processInitialPropsStep: HydrationStep = {
 		};
 
 		if (JSON.stringify(oldState) !== JSON.stringify(newState)) {
-			await appState.set('current', () => newState);
+			try {
+				const session = await hydrateUserSession(userDB, newState);
+				// ?store= is already stripped, so reload cannot retry a refused selection.
+				await commitStoreSession(appState, { ids: newState, session });
+				return { stores, storeLocalIDs, session };
+			} catch (error) {
+				if (!(error instanceof IncompleteStoreSessionError)) throw error;
+				appLogger.error(error.message, {
+					code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
+					context: { missingFields: error.missingFields, ...newState },
+				});
+			}
 		}
 
 		return {
@@ -1133,6 +1131,16 @@ const hydrateUserSessionStep: HydrationStep = {
 			throw new Error('Missing userDB or appState in hydration context');
 		}
 		const current = await context.appState.get('current');
+		const { session } = context;
+		if (
+			session &&
+			current &&
+			session.site?.uuid === current.siteID &&
+			session.wpCredentials?.uuid === current.wpCredentialsID &&
+			session.store?.localID === current.storeID
+		) {
+			return session;
+		}
 		return await hydrateUserSession(context.userDB, current || {});
 	},
 };

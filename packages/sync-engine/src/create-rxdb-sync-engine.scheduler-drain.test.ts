@@ -349,13 +349,6 @@ describe('scheduler drain through the public handle', () => {
 		const engine = engineWith(async (url) => {
 			const parsed = new URL(url);
 			if (parsed.pathname.endsWith('/orders')) orderUrls.push(url);
-			if (parsed.pathname.endsWith('/changes/sequence-log')) {
-				return Response.json({
-					changes: [],
-					checkpoint: { since: 0, head: 0 },
-					complete: true,
-				});
-			}
 			return Response.json([]);
 		});
 		await engine.ready;

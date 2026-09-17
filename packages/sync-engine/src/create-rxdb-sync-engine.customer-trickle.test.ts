@@ -83,11 +83,6 @@ function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}, storeIdentity 
 		now,
 		diagnostics,
 		connectivitySignal: connectivity,
-		routes: {
-			'/changes/config-fingerprint': {},
-			// The scope-open change-signal head prime: answered here so the fake fetch below only ever sees its own catalogue traffic.
-			'/changes/sequence-log': { checkpoint: { head: 0 } },
-		},
 		ports,
 		awaitReady: false,
 	}).engine;

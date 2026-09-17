@@ -2,8 +2,8 @@
  * Host port for the sync engine's scope transition. The app that owns the
  * engine (apps/main AppStack) registers a switcher; the store-switch flow
  * awaits it BETWEEN session hydration and the session commit, so an engine
- * that cannot reach the new scope aborts the switch before any durable state
- * changes — engine, persisted session and UI always move together.
+ * that cannot reach the new scope aborts before persistence. Activation can
+ * precede persistence; a later persistence failure does not roll it back.
  */
 export type EngineScopeSwitcher = (session: {
 	site?: { wp_api_url?: string } | null;
