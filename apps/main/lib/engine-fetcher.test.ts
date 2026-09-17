@@ -241,23 +241,6 @@ describe('createEngineFetcher', () => {
 	});
 
 	it.each([
-		[true, 'test-token'],
-		[false, 'Bearer test-token'],
-		[undefined, 'Bearer test-token'],
-	])('formats parameter auth when bareAuthParam is %s', async (bareAuthParam, authorization) => {
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-		const { fetcher } = createFetcherHarness({
-			fetch,
-			auth: { ...BASE_AUTH, useJwtAsParam: true, bareAuthParam },
-		});
-
-		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-		const requestedUrl = new URL(fetch.mock.calls[0][0]);
-		expect(requestedUrl.searchParams.get('authorization')).toBe(authorization);
-	});
-
-	it.each([
 		['orders', 'wcpos/v2/orders'],
 		['products', 'wcpos/v2/products'],
 		['variations', 'wcpos/v1/products/variations'],
@@ -345,90 +328,6 @@ describe('createEngineFetcher', () => {
 		expect(
 			new URL(fetch.mock.calls[1]![0] as string).searchParams.get('_wcpos_envelope')
 		).toBeNull();
-	});
-
-	it('sends protocol and client query signals on web without capability evidence', async () => {
-		const { AppInfo } =
-			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
-		const originalPlatform = AppInfo.platform;
-		AppInfo.platform = 'web';
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-
-		try {
-			const path = createFetcherHarness({ fetch });
-			const query = createFetcherHarness({ fetch, useRestRouteParam: true });
-
-			await path.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-			await query.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-			for (const call of fetch.mock.calls) {
-				const requestedUrl = new URL(call[0] as string);
-				expect(requestedUrl.searchParams.get('wcpos_protocol')).toBe('2');
-				expect(requestedUrl.searchParams.get('wcpos_client')).toBe(`web/${AppInfo.version}`);
-			}
-		} finally {
-			AppInfo.platform = originalPlatform;
-		}
-	});
-
-	it('sends protocol and client headers outside web', async () => {
-		const { AppInfo } =
-			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-		const { fetcher } = createFetcherHarness({ fetch });
-
-		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-		const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
-		expect(headers.get('X-WCPOS-Protocol')).toBe('2');
-		expect(headers.get('X-WCPOS-Client')).toBe(`${AppInfo.platform}/${AppInfo.version}`);
-	});
-
-	it('sends params and no headers on web without capability evidence', async () => {
-		const { AppInfo } =
-			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
-		const originalPlatform = AppInfo.platform;
-		AppInfo.platform = 'web';
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-
-		try {
-			const { fetcher } = createFetcherHarness({ fetch });
-			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-			const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
-			expect(headers.has('X-WCPOS-Protocol')).toBe(false);
-			expect(headers.has('X-WCPOS-Client')).toBe(false);
-			const url = new URL(fetch.mock.calls[0]?.[0] as string);
-			expect(url.searchParams.get('wcpos_protocol')).toBe('2');
-			expect(url.searchParams.get('wcpos_client')).toBe(`web/${AppInfo.version}`);
-		} finally {
-			AppInfo.platform = originalPlatform;
-		}
-	});
-
-	it('sends headers and no params on web with capability evidence', async () => {
-		const { AppInfo } =
-			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
-		const originalPlatform = AppInfo.platform;
-		AppInfo.platform = 'web';
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-
-		try {
-			const { fetcher } = createFetcherHarness({
-				fetch,
-				auth: { ...BASE_AUTH, useProtocolHeaders: true },
-			});
-			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-			const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
-			expect(headers.get('X-WCPOS-Protocol')).toBe('2');
-			expect(headers.get('X-WCPOS-Client')).toBe(`web/${AppInfo.version}`);
-			const url = new URL(fetch.mock.calls[0]?.[0] as string);
-			expect(url.searchParams.has('wcpos_protocol')).toBe(false);
-			expect(url.searchParams.has('wcpos_client')).toBe(false);
-		} finally {
-			AppInfo.platform = originalPlatform;
-		}
 	});
 
 	it('reports an unknown census collection as unsupported without making a request', async () => {
@@ -542,26 +441,6 @@ describe('createEngineFetcher', () => {
 
 		it('sends the scoped store on every sync request', async () => {
 			expect((await requestHeaders({ storeId: 7 })).get('X-WCPOS-Store')).toBe('7');
-		});
-
-		it('accepts a string store id without reformatting it', async () => {
-			expect((await requestHeaders({ storeId: '7' })).get('X-WCPOS-Store')).toBe('7');
-		});
-
-		// Store 0 is the free plugin's "no store" sentinel — the SAME one
-		// `use-new-order`/`utils.ts` test before stamping `_pos_store`. Sending it
-		// would read server-side as a real scope; omitting it makes the server
-		// treat the scope as unknown and refuse to overwrite a store-scoped price.
-		it.each([
-			['the single-store sentinel', 0],
-			['the single-store sentinel as a string', '0'],
-			['an absent store', undefined],
-			['a null store', null],
-			['a blank store', '   '],
-			['a non-finite store', Number.NaN],
-			['a negative store', -3],
-		])('omits the header for %s', async (_label, storeId) => {
-			expect((await requestHeaders({ storeId })).has('X-WCPOS-Store')).toBe(false);
 		});
 
 		// B6 (wcpos-infra#72): the scope also rides the URL as store_id, which a

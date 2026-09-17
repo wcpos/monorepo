@@ -97,31 +97,18 @@ describe('useRestHttpClient methods', () => {
 		});
 	});
 
-	it('composes a query-form axios base URL when query transport is enabled', async () => {
+	it('keeps the canonical path base and query transport metadata', async () => {
 		mockSite.use_rest_route_param = true;
 		const { result } = renderHook(() => useRestHttpClient('orders'));
 
 		await result.current.get('/42', { params: { page: 2 } });
 
 		expect(latestRequest()).toMatchObject({
-			baseURL: 'https://example.com/?rest_route=/wcpos/v2/orders',
+			baseURL: 'https://example.com/wp-json/wcpos/v2/orders',
+			wcposPreamble: { purpose: 'rest', site: { use_rest_route_param: true } },
 			url: '/42',
-			params: { page: 2, wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
-		});
-	});
-
-	it('uses protocol headers and omits protocol params on capable web sites', async () => {
-		mockSite.use_protocol_headers = true;
-		const { result } = renderHook(() => useRestHttpClient('orders'));
-
-		await result.current.get('/42', { params: { page: 2 } });
-
-		expect(latestRequest()).toMatchObject({
-			protocolHeaders: true,
 			params: { page: 2 },
 		});
-		expect(latestRequest().params).not.toHaveProperty('wcpos_protocol');
-		expect(latestRequest().params).not.toHaveProperty('wcpos_client');
 	});
 
 	it('never composes a double slash from a trailing-slash stored base in query mode', async () => {
@@ -134,7 +121,8 @@ describe('useRestHttpClient methods', () => {
 		await result.current.get('/42');
 
 		expect(latestRequest()).toMatchObject({
-			baseURL: 'https://example.com/?rest_route=/wcpos/v2/orders',
+			baseURL: 'https://example.com/wp-json/wcpos/v2/orders',
+			wcposPreamble: { purpose: 'rest', site: { use_rest_route_param: true } },
 			url: '/42',
 		});
 	});
@@ -147,22 +135,10 @@ describe('useRestHttpClient methods', () => {
 		await result.current.get('/42');
 
 		expect(latestRequest()).toMatchObject({
-			baseURL: 'https://example.com/blog/?rest_route=/wcpos/v2/orders',
+			baseURL: 'https://example.com/blog/wp-json/wcpos/v2/orders',
+			wcposPreamble: { site: { wp_api_url: mockSite.wp_api_url } },
 			url: '/42',
 		});
-	});
-
-	it.each([
-		['1.10.0', 'test-token'],
-		['1.9.17', 'Bearer test-token'],
-	])('formats parameter auth for WCPOS %s', async (wcposVersion, authorization) => {
-		mockSite.use_jwt_as_param = true;
-		mockSite.wcpos_version = wcposVersion;
-		const { result } = renderHook(() => useRestHttpClient('orders'));
-
-		await result.current.get('/');
-
-		expect(latestRequest()).toMatchObject({ params: { authorization } });
 	});
 
 	it.each([

@@ -10,26 +10,9 @@ import {
 } from '@wcpos/hooks/use-http-client';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import { AppInfo } from '@wcpos/utils/app-info';
-import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import {
-	deriveSyntheticPathBase,
-	deriveSyntheticPathRoot,
-	resolveRestTransport,
-	toRestRouteUrl,
-} from '@wcpos/utils/rest-transport';
-import {
-	CLIENT_HEADER,
-	CLIENT_QUERY_PARAM,
-	formatClientSignal,
-	PROTOCOL_HEADER,
-	PROTOCOL_QUERY_PARAM,
-	sendsProtocolHeaders,
-	sendsProtocolQueryTwins,
-	SYNC_PROTOCOL_VERSION,
-} from '@wcpos/utils/sync-protocol';
+import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../contexts/app-state';
@@ -181,48 +164,21 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					// Build the endpoint URL
 					const pathApiUrl = deriveSyntheticPathBase(apiUrl);
 					const pathRoot = deriveSyntheticPathRoot(wpApiUrl ?? pathApiUrl);
-					const pathEndpoint = `${pathApiUrl}cashier/${userId}`;
-					const endpoint =
-						resolveRestTransport({
-							wp_api_url: wpApiUrl,
-							use_rest_route_param: useRestRouteParam,
-						}) === 'query'
-							? toRestRouteUrl(pathEndpoint, pathRoot)
-							: pathEndpoint;
-
-					// Prepare request config
-					const requestConfig: any = {
-						params: {
-							wcpos: 1,
-							...(sendsProtocolQueryTwins(AppInfo.platform, useProtocolHeaders)
-								? {
-										[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
-										[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
-									}
-								: {}),
-						},
-						headers: {
-							'X-WCPOS': '1',
-							...(sendsProtocolHeaders(AppInfo.platform, useProtocolHeaders)
-								? {
-										[PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION),
-										[CLIENT_HEADER]: formatClientSignal(AppInfo.platform, AppInfo.version),
-									}
-								: {}),
+					const endpoint = `${pathApiUrl}cashier/${userId}`;
+					const requestConfig: import('axios').AxiosRequestConfig = {
+						wcposPreamble: {
+							purpose: 'cashier',
+							accessToken,
+							wpJsonRoot: pathRoot,
+							site: {
+								wp_api_url: wpApiUrl,
+								use_rest_route_param: useRestRouteParam,
+								use_jwt_as_param: useJwtAsParam,
+								use_protocol_headers: useProtocolHeaders,
+								wcpos_version: wcposVersion,
+							},
 						},
 					};
-
-					// Handle authentication based on site configuration
-					if (useJwtAsParam) {
-						// Use JWT as query parameter
-						requestConfig.params.authorization = formatAuthorizationParam(
-							accessToken,
-							bareAuthParamSupported(wcposVersion)
-						);
-					} else {
-						// Use JWT as Authorization header
-						requestConfig.headers.Authorization = `Bearer ${accessToken}`;
-					}
 
 					appLogger.debug('Validating user credentials', {
 						context: {

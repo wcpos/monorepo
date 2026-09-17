@@ -1,5 +1,7 @@
+import 'whatwg-fetch';
+
 import { renderHook } from '@testing-library/react';
-import { CanceledError, isCancel } from 'axios';
+import { type AxiosRequestConfig, CanceledError, isCancel } from 'axios';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 
@@ -43,6 +45,8 @@ jest.mock('./request-state-manager', () => ({
 import { http } from './http';
 import { requestStateManager } from './request-state-manager';
 import { useHttpClient } from './use-http-client';
+
+import type { HttpErrorHandler } from './types';
 /* eslint-enable import/first */
 
 const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
@@ -76,10 +80,10 @@ describe('useHttpClient network audit logs', () => {
 		});
 
 		const config = (http.request as jest.Mock).mock.calls[0][0];
-		expect(config.headers['X-WCPOS']).toBe(1);
-		expect(config.headers).not.toHaveProperty('X-WCPOS-Protocol');
-		expect(config.headers).not.toHaveProperty('X-WCPOS-Client');
-		expect(config.headers).not.toHaveProperty('User-Agent');
+		expect(config.headers['x-wcpos']).toBe('1');
+		expect(config.headers).not.toHaveProperty('x-wcpos-protocol');
+		expect(config.headers).not.toHaveProperty('x-wcpos-client');
+		expect(config.headers).not.toHaveProperty('user-agent');
 	});
 
 	it('stamps protocol and client headers outside web', async () => {
@@ -92,8 +96,8 @@ describe('useHttpClient network audit logs', () => {
 			await result.current.get('https://example.com/wp-json/wcpos/v2/products');
 
 			const config = (http.request as jest.Mock).mock.calls[0][0];
-			expect(config.headers['X-WCPOS-Protocol']).toBe('2');
-			expect(config.headers['X-WCPOS-Client']).toBe(`electron/${AppInfo.version}`);
+			expect(config.headers['x-wcpos-protocol']).toBe('2');
+			expect(config.headers['x-wcpos-client']).toBe(`electron/${AppInfo.version}`);
 		} finally {
 			AppInfo.platform = webPlatform;
 		}
@@ -110,8 +114,8 @@ describe('useHttpClient network audit logs', () => {
 		} as never);
 
 		const config = (http.request as jest.Mock).mock.calls[0][0];
-		expect(config.headers['X-WCPOS-Protocol']).toBe('2');
-		expect(config.headers['X-WCPOS-Client']).toBe(`web/${AppInfo.version}`);
+		expect(config.headers['x-wcpos-protocol']).toBe('2');
+		expect(config.headers['x-wcpos-client']).toBe(`web/${AppInfo.version}`);
 	});
 
 	it('persists mutating responses with a sanitized searchable endpoint', async () => {
@@ -414,5 +418,96 @@ describe('useHttpClient network audit logs', () => {
 		await result.current.get('/wc/v3/products', { timeout: 0 });
 
 		expect(http.request).toHaveBeenCalledWith(expect.objectContaining({ timeout: 0 }));
+	});
+});
+
+describe('request preamble dispatch seam', () => {
+	const canonical: AxiosRequestConfig = {
+		baseURL: 'https://shop.test/blog/wp-json/wcpos/v2/orders',
+		url: '/42',
+		wcposPreamble: {
+			purpose: 'rest',
+			accessToken: 'old',
+			storeId: 7,
+			site: { wp_api_url: 'https://shop.test/blog/?rest_route=/' },
+		},
+	};
+	beforeEach(() => {
+		jest.clearAllMocks();
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+	});
+	it('composes orders plus /42 before rewriting, serializes once and strips metadata before IPC', async () => {
+		const serialize = jest.fn(() => 'tags=a&tags=b');
+		const { result } = renderHook(() => useHttpClient());
+		await result.current.request({
+			...canonical,
+			params: { tags: ['a', 'b'] },
+			paramsSerializer: { serialize },
+		});
+		const sent = (http.request as jest.Mock).mock.calls[0][0];
+		const url = new URL(sent.url);
+		expect(url.pathname).toBe('/blog/');
+		expect(url.searchParams.get('rest_route')).toBe('/wcpos/v2/orders/42');
+		expect(url.searchParams.getAll('tags')).toEqual(['a', 'b']);
+		expect(url.searchParams.get('store_id')).toBe('7');
+		expect(serialize).toHaveBeenCalledTimes(1);
+		for (const key of ['wcposPreamble', 'baseURL', 'params', 'paramsSerializer']) {
+			expect(sent).not.toHaveProperty(key);
+		}
+	});
+	it.each([false, true])(
+		'fresh-token retry starts from canonical config (query auth: %s)',
+		async (query) => {
+			const config = {
+				...canonical,
+				wcposPreamble: {
+					...canonical.wcposPreamble!,
+					site: { ...canonical.wcposPreamble!.site, use_jwt_as_param: query },
+				},
+			};
+			const handler: HttpErrorHandler = {
+				name: 'retry',
+				canHandle: () => true,
+				handle: async ({ originalConfig, retryRequest }) => {
+					expect(originalConfig).toBe(config);
+					expect(originalConfig.baseURL).toBe(canonical.baseURL);
+					return retryRequest({
+						...originalConfig,
+						...(query
+							? { params: { authorization: 'Bearer fresh' } }
+							: { headers: { Authorization: 'Bearer fresh' } }),
+					});
+				},
+			};
+			(http.request as jest.Mock).mockRejectedValueOnce({ response: { status: 401 } });
+			const { result } = renderHook(() => useHttpClient([handler]));
+			await result.current.request(config);
+			const sent = (http.request as jest.Mock).mock.calls[1][0];
+			expect(
+				query ? new URL(sent.url).searchParams.get('authorization') : sent.headers.authorization
+			).toBe('Bearer fresh');
+			expect(new URL(sent.url).searchParams.get('rest_route')).toBe('/wcpos/v2/orders/42');
+		}
+	);
+	it('header opt-out preserves third-party URL handling and idempotency headers survive', async () => {
+		const { result } = renderHook(() => useHttpClient());
+		await result.current.post(
+			'/image',
+			{ value: 1 },
+			{
+				wcposHeaders: false,
+				headers: { 'Idempotency-Key': 'key' },
+				params: new URLSearchParams('size=2'),
+			}
+		);
+		expect((http.request as jest.Mock).mock.calls[0][0]).toMatchObject({
+			url: '/image',
+			data: { value: 1 },
+			params: new URLSearchParams('size=2'),
+			headers: { 'idempotency-key': 'key' },
+		});
+		expect((http.request as jest.Mock).mock.calls[0][0].headers).not.toHaveProperty('x-wcpos');
+		await result.current.request({ ...canonical, headers: { 'Idempotency-Key': 'key' } });
+		expect((http.request as jest.Mock).mock.calls[1][0].headers['idempotency-key']).toBe('key');
 	});
 });

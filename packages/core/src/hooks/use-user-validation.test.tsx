@@ -130,7 +130,7 @@ describe('useUserValidation capabilities', () => {
 		renderHook(() => useUserValidation({ site: querySite as never, wpUser: wpUser as never }));
 
 		await waitFor(() => expect(mockGet).toHaveBeenCalled());
-		expect(mockGet.mock.calls[0]?.[0]).toBe('https://example.com/?rest_route=/wcpos/v2/cashier/7');
+		expect(mockGet.mock.calls[0]?.[0]).toBe('https://example.com/wp-json/wcpos/v2/cashier/7');
 	});
 
 	it('validates the cashier through query transport when enabled', async () => {
@@ -145,26 +145,14 @@ describe('useUserValidation capabilities', () => {
 		renderHook(() => useUserValidation({ site: querySite as never, wpUser: wpUser as never }));
 
 		await waitFor(() => expect(mockGet).toHaveBeenCalled());
-		expect(mockGet.mock.calls[0]?.[0]).toBe('https://example.com/?rest_route=/wcpos/v2/cashier/7');
+		expect(mockGet.mock.calls[0]?.[0]).toBe('https://example.com/wp-json/wcpos/v2/cashier/7');
 		expect(mockGet.mock.calls[0]?.[1]).toMatchObject({
-			params: { wcpos: 1, wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
+			wcposPreamble: {
+				purpose: 'cashier',
+				accessToken: 'access-token',
+				site: { wp_api_url: querySite.wp_api_url, use_rest_route_param: true },
+			},
 		});
-		expect(mockGet.mock.calls[0]?.[1].headers).not.toHaveProperty('X-WCPOS-Protocol');
-		expect(mockGet.mock.calls[0]?.[1].headers).not.toHaveProperty('X-WCPOS-Client');
-	});
-
-	it('uses protocol headers and omits protocol params for a capable web site', async () => {
-		mockGet.mockResolvedValue({ status: 200, data: { id: 7, display_name: 'Demo Cashier' } });
-		const wpUser = makeWpUser({ stores: [] });
-		const capableSite = { ...site, use_protocol_headers: true };
-
-		renderHook(() => useUserValidation({ site: capableSite as never, wpUser: wpUser as never }));
-
-		await waitFor(() => expect(mockGet).toHaveBeenCalled());
-		const config = mockGet.mock.calls[0]?.[1];
-		expect(config.params).toEqual({ wcpos: 1 });
-		expect(config.headers['X-WCPOS-Protocol']).toBe('2');
-		expect(config.headers['X-WCPOS-Client']).toBe('web/0.0.0');
 	});
 });
 

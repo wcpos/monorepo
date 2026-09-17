@@ -6,23 +6,9 @@ import merge from 'lodash/merge';
 import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { AppInfo } from '@wcpos/utils/app-info';
-import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import {
-	deriveSyntheticPathBase,
-	deriveSyntheticPathRoot,
-	resolveRestTransport,
-	toRestRouteUrl,
-} from '@wcpos/utils/rest-transport';
-import {
-	CLIENT_QUERY_PARAM,
-	formatClientSignal,
-	PROTOCOL_QUERY_PARAM,
-	sendsProtocolQueryTwins,
-	SYNC_PROTOCOL_VERSION,
-} from '@wcpos/utils/sync-protocol';
+import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { reportUpdateRequired, type UpdateRequiredState } from '@wcpos/utils/update-required-gate';
 
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -247,8 +233,6 @@ export const useRestHttpClient = (endpoint = '') => {
 				['initialProps', 'site', 'use_jwt_as_param'],
 				site.use_jwt_as_param
 			);
-			const useProtocolHeaders = site.use_protocol_headers ?? false;
-			const wcposVersion = site.wcpos_version;
 
 			let apiURL = site.wcpos_api_url;
 			const pathFormRoot = deriveSyntheticPathRoot(site.wp_api_url!).replace(/\/?$/, '/');
@@ -266,35 +250,23 @@ export const useRestHttpClient = (endpoint = '') => {
 			// joining so the composed path never carries `//`. Pretty routing
 			// tolerated the double slash, but rest_route matching is strict.
 			const pathFormBaseURL = apiURL.replace(/\/+$/, '') + '/' + endpoint;
-			const defaultConfig = {
-				baseURL:
-					resolveRestTransport(site) === 'query'
-						? toRestRouteUrl(pathFormBaseURL, pathFormRoot)
-						: pathFormBaseURL,
-				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
-				// The interceptor owns the platform rule (sendsProtocolHeaders); this
-				// just relays the per-site verdict — inert on native, where the
-				// interceptor sends the headers regardless.
-				protocolHeaders: useProtocolHeaders ? true : undefined,
-				params: sendsProtocolQueryTwins(AppInfo.platform, useProtocolHeaders)
-					? {
-							[PROTOCOL_QUERY_PARAM]: SYNC_PROTOCOL_VERSION,
-							[CLIENT_QUERY_PARAM]: formatClientSignal(AppInfo.platform, AppInfo.version),
-						}
-					: {},
+			const defaultConfig: RequestConfig = {
+				baseURL: pathFormBaseURL,
+				headers: {},
+				params: {},
+				wcposPreamble: {
+					purpose: 'rest',
+					site: {
+						wp_api_url: site.wp_api_url,
+						use_rest_route_param: site.use_rest_route_param,
+						use_jwt_as_param: shouldUseJwtAsParam,
+						use_protocol_headers: site.use_protocol_headers,
+						wcpos_version: site.wcpos_version,
+					},
+					accessToken: jwt,
+					storeId: store.id,
+				},
 			};
-
-			if (shouldUseJwtAsParam) {
-				const params = {
-					authorization: formatAuthorizationParam(jwt!, bareAuthParamSupported(wcposVersion)),
-				};
-				defaultConfig.params = merge(params, defaultConfig.params);
-			}
-
-			if (store.id !== 0) {
-				const params = { store_id: store.id };
-				defaultConfig.params = merge(params, defaultConfig.params);
-			}
 
 			if ((reqConfig.method ?? 'GET').toUpperCase() === 'GET') {
 				// Axios lane's single envelope opt-in point, mirroring apps/main/lib/engine-fetcher.ts.
