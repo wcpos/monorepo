@@ -287,6 +287,8 @@ describe('createTokenRefreshHandler', () => {
 					expect(retried.headers.authorization).toBeUndefined();
 					expect(retried.headers.Authorization).toBeUndefined();
 					expect(retried.params.page).toBe('2');
+					// Axios appends params to an existing query: the stale URL token must go too.
+					expect(retried.url).toBe('/test?per_page=10');
 				} else {
 					expect(retried.params).toEqual({ page: '2' });
 					expect(retried.url).toBe('/test?per_page=10');

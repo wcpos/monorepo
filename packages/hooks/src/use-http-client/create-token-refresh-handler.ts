@@ -230,13 +230,21 @@ function withRefreshedCredential(
 			token,
 			bareAuthParamSupported(site.wcpos_version)
 		);
+		// A stale token in the URL string would ride beside the fresh param (Axios appends
+		// `params` to an existing query) and linger in URL logs.
+		const url = withoutQueryParam(originalConfig.url, 'authorization');
 		if (originalConfig.params instanceof URLSearchParams) {
 			// Spreading URLSearchParams drops its entries; clone and set instead.
 			const params = new URLSearchParams(originalConfig.params);
 			params.set('authorization', authorization);
-			return { ...originalConfig, headers, params };
+			return { ...originalConfig, url, headers, params };
 		}
-		return { ...originalConfig, headers, params: { ...originalConfig.params, authorization } };
+		return {
+			...originalConfig,
+			url,
+			headers,
+			params: { ...originalConfig.params, authorization },
+		};
 	}
 	return {
 		...originalConfig,
