@@ -23,14 +23,15 @@ jest.mock('@wcpos/query', () => ({
 	observeEngineQuery: () => of({ hits: [] }),
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
-jest.mock('../../contexts/app-state', () => ({
-	useStoreSession: () => ({
+jest.mock('../../contexts/app-state', () => {
+	const session = () => ({
 		userDB,
 		site,
 		store: { id: 1, register_sessions: true },
 		wpCredentials: { capabilities: [] },
-	}),
-}));
+	});
+	return { useStoreSession: session, useAppState: session };
+});
 jest.mock('../register/register-document', () => ({ readRegister: async () => ({ sites: {} }) }));
 const movements = sessions;
 const http = {};
