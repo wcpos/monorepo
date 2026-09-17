@@ -70,13 +70,15 @@ jest.mock('@wcpos/components/dialog', () => ({
 		side,
 		portalHost,
 		closeButtonProps,
+		style,
 	}: {
 		children: React.ReactNode;
 		side: string;
 		portalHost?: string;
+		style?: React.CSSProperties;
 		closeButtonProps?: { testID?: string; onPress?: () => void };
 	}) => (
-		<div data-testid={`dialog-${side}`} data-host={portalHost}>
+		<div data-testid={`dialog-${side}`} data-host={portalHost} style={style}>
 			{children}
 			<button data-testid={closeButtonProps?.testID} onClick={closeButtonProps?.onPress} />
 		</div>
@@ -264,4 +266,31 @@ it('hosts the tablet panel in Reports with a full-width document and close actio
 	expect(screen.getByTestId('document').getAttribute('data-full-width')).toBe('true');
 	expect(screen.getByTestId('closure-close')).toBeTruthy();
 	expect(screen.queryByTestId('closure-back')).toBeNull();
+});
+
+// Revert: let the nested dialog wrapper place/size the panel instead of pinning its edges.
+it('bounds the tablet panel beneath the bar with a contained body and separate footer', () => {
+	mockPhone = false;
+	const previous = { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
+	Object.assign(window, { innerWidth: 1024, innerHeight: 768 });
+	try {
+		render(<ClosurePanel row={row} onClose={() => {}} />);
+		const panel = screen.getByTestId('dialog-right');
+		expect(panel.style.position).toBe('absolute');
+		expect(panel.style.right).toBe('0px');
+		expect(panel.style.top).toBe('0px');
+		expect(panel.style.height).toBe('100%');
+		expect(panel.style.width).toBe('480px');
+		// The Reports host spans viewport minus rail; the panel cannot exceed that host.
+		expect(panel.style.maxWidth).toBe('100%');
+		const body = screen.getByTestId('closure-panel-body');
+		expect(getComputedStyle(body).overflowX).toBe('hidden');
+		expect(getComputedStyle(body.firstElementChild as HTMLElement).overflowX).toBe('hidden');
+		const footer = screen.getByTestId('closure-panel-footer');
+		expect(body.contains(footer)).toBe(false);
+		expect(panel.contains(footer)).toBe(true);
+		expect(footer.contains(screen.getByTestId('closure-reprint'))).toBe(true);
+	} finally {
+		Object.assign(window, previous);
+	}
 });

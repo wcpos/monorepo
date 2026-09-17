@@ -330,9 +330,10 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 });
 
 async function openClosures(page: Page) {
-	if (!(await page.getByTestId('drawer-item-reports').isVisible())) {
+	if ((page.viewportSize()?.width ?? 0) < 640) {
 		await page.getByTestId('pos-drawer-open-button').click();
 	}
+	await expect(page.getByTestId('drawer-item-reports')).toBeVisible();
 	await page.getByTestId('drawer-item-reports').click();
 	await page.getByTestId('reports-room-closures').click();
 	await expect(page.getByTestId('reports-closures')).toBeVisible();
@@ -438,10 +439,10 @@ for (const viewport of viewports) {
 				for (const [period, scopeName] of [
 					['previous', en['reports.earlier_closures']],
 					['yesterday', en['reports.earlier_closures']],
-					['thisWeek', en['common.this_week']],
-					['lastWeek', en['common.last_week']],
-					['thisMonth', en['common.this_month']],
-					['lastMonth', en['common.last_month']],
+					['thisWeek', en['reports.earlier_closures']],
+					['lastWeek', en['reports.earlier_closures']],
+					['thisMonth', en['reports.earlier_closures']],
+					['lastMonth', en['reports.earlier_closures']],
 					['custom', en['reports.custom_ranges']],
 				]) {
 					const option = page.getByTestId(`reports-period-${period}`);

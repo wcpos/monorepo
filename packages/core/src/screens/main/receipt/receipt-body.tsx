@@ -8,6 +8,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 
 import { ReceiptPreviewViewport } from './components/receipt-preview-viewport';
+import { PAPER_DIMENSIONS } from './components/receipt-preview-viewport-utils';
 import { MismatchBadge } from './mismatch-badge';
 import { PrinterSwitcher } from './printer-switcher';
 import { SyncingBadge } from './syncing-badge';
@@ -31,6 +32,7 @@ export function ReceiptBody({
 	fullWidth?: boolean;
 }) {
 	const t = useT();
+	const [flowWidth, setFlowWidth] = React.useState(0);
 	const {
 		templates,
 		selectedTemplateId,
@@ -55,6 +57,11 @@ export function ReceiptBody({
 		handleError,
 		handleContentSizeChange,
 	} = doc.previewProps;
+	// Keep the iframe at paper size, then scale its canvas just like the modal preview.
+	const paper = PAPER_DIMENSIONS[previewPaperWidth];
+	const canvasWidth = contentSize?.width ?? paper.width;
+	const canvasHeight = contentSize?.height ?? paper.height;
+	const flowScale = Math.min(1, flowWidth / canvasWidth);
 	const frame = (
 		<WebView
 			testID="receipt-preview-frame"
@@ -113,12 +120,24 @@ export function ReceiptBody({
 					<View
 						key={previewKey}
 						testID="receipt-flow-preview"
+						onLayout={(event) => setFlowWidth(event.nativeEvent.layout.width)}
 						style={{
 							width: '100%',
-							height: Math.max(MIN_FLOW_PREVIEW_HEIGHT, contentSize?.height ?? 0),
+							height: Math.max(MIN_FLOW_PREVIEW_HEIGHT, canvasHeight * flowScale),
+							overflow: 'hidden',
 						}}
 					>
-						{frame}
+						<View
+							testID="receipt-flow-canvas"
+							style={{
+								width: canvasWidth,
+								height: canvasHeight,
+								transform: [{ scale: flowScale }],
+								transformOrigin: 'top left',
+							}}
+						>
+							{frame}
+						</View>
 					</View>
 				) : (
 					<ReceiptPreviewViewport

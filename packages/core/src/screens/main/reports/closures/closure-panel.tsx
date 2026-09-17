@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 
 import get from 'lodash/get';
 
@@ -83,7 +83,7 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 	};
 	const title = t('reports.closure_n', { n: recorded.number });
 	const content = (
-		<View testID="closure-panel" className="bg-card min-h-0 flex-1">
+		<View testID="closure-panel" className="bg-card min-h-0 min-w-0 flex-1 overflow-hidden">
 			{phone && (
 				<Button
 					testID="closure-back"
@@ -114,6 +114,7 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 				testID="closure-panel-body"
 				className="min-h-0 flex-1"
 				contentContainerClassName="gap-4 p-4"
+				contentContainerStyle={{ overflow: 'hidden' }}
 			>
 				<ReceiptBody doc={doc} hideSelects fullWidth />
 				{!!corrections.length && touched.size > 0 && (
@@ -204,7 +205,14 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 			<DialogContent
 				side="right"
 				portalHost="reports"
-				className="bg-card h-full w-[460px] flex-col gap-0 overflow-hidden p-0"
+				className="bg-card flex-col gap-0 overflow-hidden p-0"
+				// Pin to the Reports overlay, not the intrinsic-width Radix dialog wrapper.
+				style={{
+					...(Platform.OS === 'web' ? ({ position: 'absolute', top: 0, right: 0 } as const) : {}),
+					width: 480,
+					maxWidth: '100%',
+					height: '100%',
+				}}
 				closeButtonProps={{
 					testID: 'closure-close',
 					accessibilityLabel: t('common.close'),
