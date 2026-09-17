@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { createTestT } from '../../../../../jest/translate';
+import { RegisterAmount } from '../../pos/cart/movement-sheet';
 import { RecountSheet } from './recount-sheet';
 
 import type { Correction } from '../../../../services/register-session/settled-figures';
@@ -27,7 +28,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 		},
 		store: {
 			id: 1,
-			currency: 'USD',
+			currency: currentCurrency,
 			currency_pos: 'left',
 			price_num_decimals: 2,
 			price_decimal_sep: '.',
@@ -38,7 +39,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 		wpCredentials: { id: 7, capabilities: manager ? ['manage_woocommerce_pos_closures'] : [] },
 		store: {
 			id: 1,
-			currency: 'USD',
+			currency: currentCurrency,
 			currency_pos: 'left',
 			price_num_decimals: 2,
 			price_decimal_sep: '.',
@@ -133,6 +134,7 @@ jest.mock('../../../../services/register-session/use-session-report', () => ({
 }));
 const mockMint = jest.fn(() => 'client-uuid');
 let manager = true;
+let currentCurrency = 'USD';
 const row = {
 	id: 'closure',
 	store_id: 1,
@@ -157,6 +159,7 @@ const fillCount = () => {
 beforeEach(() => {
 	jest.clearAllMocks();
 	manager = true;
+	currentCurrency = 'USD';
 	online = 'online-website-available';
 	post.mockResolvedValue({ data: {} });
 });
@@ -326,5 +329,49 @@ it('gives the dialog-generated close control its stable testID', () => {
 		expect.objectContaining({
 			closeButtonProps: expect.objectContaining({ testID: 'recount-close' }),
 		})
+	);
+});
+
+// Revert: render currencySymbol before the input instead of the configured prefix/suffix.
+it.each([
+	['left', '€', ''],
+	['left_space', '€ ', ''],
+	['right', '', '€'],
+	['right_space', '', ' €'],
+])('places the amount symbol for %s', (currencyPosition, prefix, suffix) => {
+	render(
+		<RegisterAmount
+			currencyOptions={{ currency: 'EUR', currencyPosition }}
+			testID="amount"
+			value="10"
+			onChangeText={jest.fn()}
+		/>
+	);
+	const input = screen.getByTestId('amount');
+	expect(input.previousElementSibling?.textContent ?? '').toBe(prefix);
+	expect(input.nextElementSibling?.textContent ?? '').toBe(suffix);
+	expect(input.parentElement?.children).toHaveLength(2);
+});
+
+// Revert: pass 0 for a null store, selecting default denominations instead of the current GBP store.
+it('uses current-store currency and denominations for a null-store recount', async () => {
+	currentCurrency = 'GBP';
+	render(
+		<RecountSheet row={{ ...row, store_id: null } as never} onSaved={done} onOpenChange={close} />
+	);
+	fillCount();
+	fireEvent.click(screen.getByTestId('recount-denominations'));
+	expect(screen.queryByTestId('den-tile-100')).toBeNull();
+	expect(screen.queryByTestId('den-tile-0.25')).toBeNull();
+	const coin = screen.getByTestId('den-tile-0.20');
+	expect(coin.textContent).toContain('£0.20');
+	expect(screen.getByTestId('recount-cash').parentElement?.textContent).toContain('£');
+	fireEvent.click(coin);
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() =>
+		expect(post).toHaveBeenCalledWith(
+			'closures/server-closure/recount',
+			expect.objectContaining({ counted: { cash: '0.20', card: '4' } })
+		)
 	);
 });

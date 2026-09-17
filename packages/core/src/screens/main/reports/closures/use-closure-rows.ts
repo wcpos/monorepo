@@ -196,7 +196,16 @@ export function useClosureRows(requested: ClosureScope) {
 	for (const row of local) {
 		const pending = !row.synced_rows_at || ['pending', 'failed'].includes(row.sync_status);
 		const id = row.server_closure_id ?? row.id;
-		if (!merged.has(id) || pending) merged.set(id, row);
+		const server = merged.get(id);
+		if (!server || pending) merged.set(id, row);
+		else {
+			// Keep device-only document data without replacing authoritative server figures.
+			merged.set(id, {
+				...server,
+				receipt_snapshot: row.receipt_snapshot,
+				printed_number: row.printed_number,
+			});
+		}
 	}
 	const rows = selectClosureRows([...merged.values()], scope, timezone);
 	const fillCashierPage =

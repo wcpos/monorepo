@@ -43,7 +43,7 @@ export function RecountSheet({
 	const t = useT();
 	const http = useRestHttpClient();
 	const { wpCredentials } = useAppState();
-	const store = useViewedStore(row.store_id ?? 0);
+	const store = useViewedStore(row.store_id ?? undefined);
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const settings = useDocField(store, (value) => value);
 	const currency = settings?.currency;

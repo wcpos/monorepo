@@ -212,6 +212,11 @@ export function RegisterPanel({
 								})}
 								{blind ? '' : ` · ${format(Number(lastClosure.counted.cash))}`}
 							</Button>
+							{blind && (
+								<Text testID="register-panel-closure-restricted" className="text-muted-foreground">
+									{t('register.closure_blind_restricted')}
+								</Text>
+							)}
 							{!lastClosure.synced_rows_at ? (
 								<Text testID="closure-unsynced" className="text-muted-foreground">
 									{t('register.unsynced')}

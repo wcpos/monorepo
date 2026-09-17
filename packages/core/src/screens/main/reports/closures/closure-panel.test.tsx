@@ -379,3 +379,23 @@ it('resolves the local closure behind a server-listed drill-in', async () => {
 		selector: { $or: [{ id: 'server' }, { server_closure_id: 'server' }] },
 	});
 });
+
+// Revert: coerce a null store to 0 for the document context or receipt/template hooks.
+it('uses the current store context and receipt scope for a null-store closure', () => {
+	const previous = mockSession.store;
+	mockSession.store = { id: 1, currency: 'GBP', name: 'Current shop', timezone: 'Europe/London' };
+	try {
+		render(<ClosurePanel row={{ ...row, store_id: null }} onClose={jest.fn()} />);
+		expect(mockDocument).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				storeId: undefined,
+				localReport: expect.objectContaining({
+					store: expect.objectContaining({ name: 'Current shop' }),
+					order: expect.objectContaining({ currency: 'GBP' }),
+				}),
+			})
+		);
+	} finally {
+		mockSession.store = previous;
+	}
+});

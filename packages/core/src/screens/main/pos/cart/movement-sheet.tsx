@@ -27,16 +27,17 @@ export function RegisterAmount({
 	testID: string;
 	ref?: React.Ref<TextInput>;
 }) {
-	const { currencySymbol } = useCurrencyFormat(currencyOptions);
+	const { prefix, suffix } = useCurrencyFormat(currencyOptions);
 	return (
 		<View className="flex-row items-center self-start">
-			<Text className="text-[32px] tabular-nums">{currencySymbol}</Text>
+			{!!prefix && <Text className="text-[32px] tabular-nums">{prefix}</Text>}
 			<Input
 				{...props}
 				type="decimal"
 				className="h-14 w-40"
 				inputClassName="text-[32px] tabular-nums"
 			/>
+			{!!suffix && <Text className="text-[32px] tabular-nums">{suffix}</Text>}
 		</View>
 	);
 }

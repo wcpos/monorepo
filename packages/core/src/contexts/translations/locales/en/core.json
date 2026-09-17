@@ -2213,6 +2213,7 @@
 	"register.refused_other": "{count} movements refused by the store",
 	"register.refused_row": "Refused",
 	"register.retry": "Retry",
+	"register.closure_blind_restricted": "Closure details are restricted while blind counting is on",
 	"register.closure_written_n": "Closure {n} written",
 	"register.report_system_print": "This cloud printer requires an order. Opening the system print dialog for this report.",
 	"register.print_z_report": "Print Z-report",

@@ -342,3 +342,37 @@ it('requests only the first page without a cashier filter', async () => {
 	expect(result.current.hasMore).toBe(true);
 	expect(get).toHaveBeenCalledTimes(1);
 });
+
+// Revert: discard device-only snapshot/printed number when the authoritative server row wins.
+it('preserves the local cached document and printed number on the merged server row offline', async () => {
+	const snapshot = JSON.stringify({
+		closure: { corrections: [{ type: 'recount', figures: { counted: { cash: '101' } } }] },
+	});
+	source.next([
+		{
+			toMutableJSON: () =>
+				row('local', {
+					server_closure_id: 'server',
+					receipt_snapshot: snapshot,
+					printed_number: 4,
+					corrections_count: 0,
+				}),
+		},
+	]);
+	get.mockResolvedValue({
+		data: [row('server', { corrections_count: 1, counted: { cash: '99' } })],
+	});
+	const { result, rerender } = renderHook(() => useClosureRows({ ...scope, from: '2026-09-16' }));
+	await waitFor(() => expect(result.current.status).toBe('ready'));
+	online = false;
+	rerender();
+	expect(result.current.rows).toHaveLength(1);
+	expect(result.current.rows[0]).toMatchObject({
+		id: 'server',
+		receipt_snapshot: snapshot,
+		printed_number: 4,
+		corrections_count: 1,
+		counted: { cash: '99' },
+	});
+	expect([...result.current.unavailableIds]).toEqual([]);
+});

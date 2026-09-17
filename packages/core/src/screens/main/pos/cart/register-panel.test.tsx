@@ -345,3 +345,21 @@ it('opens the last closure in Reports Closures and dismisses the register panel'
 	});
 	expect(onOpenChange).toHaveBeenCalledWith(false);
 });
+
+// Revert: leave the disabled closure control unexplained for blind cashiers.
+it('explains the closure restriction only while blind counting is enabled', () => {
+	blind = true;
+	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect((screen.getByTestId('register-panel-open-closure') as HTMLButtonElement).disabled).toBe(
+		true
+	);
+	expect(screen.getByTestId('register-panel-closure-restricted').textContent).toBe(
+		'register.closure_blind_restricted'
+	);
+	blind = false;
+	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('register-panel-closure-restricted')).toBeNull();
+	expect((screen.getByTestId('register-panel-open-closure') as HTMLButtonElement).disabled).toBe(
+		false
+	);
+});
