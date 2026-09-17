@@ -490,7 +490,10 @@ export type TemplateCollection = RxCollection<TemplateDocumentType>;
 const templates: RxCollectionCreator<TemplateDocumentType> = {
 	schema: templateSchema,
 	migrationStrategies: {
-		2: (doc) => doc,
+		2(oldDoc) {
+			// v2: closure templates are keyed by store; unscoped rows are re-synced under the new key.
+			return oldDoc.type === 'closure' ? null : oldDoc;
+		},
 		1(oldDoc) {
 			// v1: Added output_type and paper_width fields — populated on next sync
 			return oldDoc;

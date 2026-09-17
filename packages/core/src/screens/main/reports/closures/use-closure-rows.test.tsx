@@ -225,6 +225,24 @@ it('patches the badge immediately and refetches the recounted closure', async ()
 	expect(result.current.rows[0].corrections_count).toBe(2);
 });
 
+// Revert: let the refreshed server row replace the device's own closure under the server id.
+it('keeps the local identity of a recounted closure this device wrote', async () => {
+	source.next([
+		{ toMutableJSON: () => row('local-uuid', { server_closure_id: '9', corrections_count: 0 }) },
+	]);
+	const { result } = renderHook(() => useClosureRows(scope));
+	await waitFor(() => expect(result.current.rows.map((r) => r.id)).toEqual(['local-uuid']));
+	get.mockResolvedValueOnce({ data: row('9', { corrections_count: 2 }) });
+	await act(() => result.current.refreshRow(result.current.rows[0]));
+	expect(get).toHaveBeenLastCalledWith('closures/9');
+	expect(result.current.rows).toHaveLength(1);
+	expect(result.current.rows[0]).toMatchObject({
+		id: 'local-uuid',
+		server_closure_id: '9',
+		corrections_count: 2,
+	});
+});
+
 // Revert: derive remote legacy days using the bound store timezone.
 it('derives legacy remote business days in the selected store zone', async () => {
 	get.mockResolvedValue({

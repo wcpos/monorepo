@@ -163,9 +163,25 @@ export function useClosureRows(requested: ClosureScope) {
 		if (observed && page.status === 'idle') void loadMore();
 	}, [observed, page.status, loadMore]);
 	const refreshRow = async (row: ClosureRow) => {
+		const identity = (r: ClosureRow) => r.server_closure_id ?? r.id;
 		const update = async (updated: ClosureRow) => {
+			// The refreshed server row keeps the viewed row's identity, so the open panel's
+			// selection (a local uuid for a closure this device wrote) still resolves.
+			const next = {
+				...updated,
+				id: row.id,
+				server_closure_id: row.server_closure_id ?? updated.server_closure_id,
+			};
 			setPage((p) =>
-				p.key === key ? { ...p, rows: [...p.rows.filter((r) => r.id !== updated.id), updated] } : p
+				p.key === key
+					? {
+							...p,
+							rows: [
+								...p.rows.filter((r) => r.id !== next.id && identity(r) !== identity(next)),
+								next,
+							],
+						}
+					: p
 			);
 			const local = await collection?.findOne(row.id).exec();
 			await local?.incrementalPatch({ corrections_count: updated.corrections_count });
