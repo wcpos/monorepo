@@ -70,6 +70,7 @@
  * @see README.md - Full architecture documentation
  */
 
+import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -164,17 +165,7 @@ export const createTokenRefreshHandler = ({
 			});
 
 			try {
-				const config = originalConfig as WcposRequestConfig;
-				const retryConfig: WcposRequestConfig = {
-					...config,
-					wcposPreamble: {
-						purpose: 'rest',
-						site: toPreambleSite(site),
-						...config.wcposPreamble,
-						refreshedAccessToken: freshToken,
-					},
-				};
-				return await retryRequest(retryConfig);
+				return await retryRequest(withRefreshedCredential(originalConfig, freshToken, site));
 			} catch (retryError: unknown) {
 				const retryStatus = getResponseStatus(retryError);
 				if (retryStatus === 401) {
@@ -205,6 +196,44 @@ export const createTokenRefreshHandler = ({
 		},
 	};
 };
+
+/**
+ * Hand the fresh token to the retry. A request that carries preamble metadata (every
+ * production caller: the REST wrapper and cashier validation) gets it on that metadata,
+ * so the same interceptor authors the retry as authored the first try. A bare Axios
+ * config opted out of the preamble and may carry a relative URL the module cannot
+ * compose, so it keeps the pre-#2129 behaviour: the credential goes straight on the
+ * config, in the channel the site uses.
+ */
+function withRefreshedCredential(
+	originalConfig: WcposRequestConfig,
+	token: string,
+	site: RefreshAccessTokenConfig['site']
+): WcposRequestConfig {
+	if (originalConfig.wcposPreamble) {
+		return {
+			...originalConfig,
+			wcposPreamble: {
+				...originalConfig.wcposPreamble,
+				site: originalConfig.wcposPreamble.site ?? toPreambleSite(site),
+				refreshedAccessToken: token,
+			},
+		};
+	}
+	if (site.use_jwt_as_param) {
+		return {
+			...originalConfig,
+			params: {
+				...originalConfig.params,
+				authorization: formatAuthorizationParam(token, bareAuthParamSupported(site.wcpos_version)),
+			},
+		};
+	}
+	return {
+		...originalConfig,
+		headers: { ...originalConfig.headers, Authorization: `Bearer ${token}` },
+	};
+}
 
 function getResponseStatus(error: unknown): number | undefined {
 	if (!error || typeof error !== 'object') return undefined;

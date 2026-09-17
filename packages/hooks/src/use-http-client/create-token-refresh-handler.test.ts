@@ -243,6 +243,42 @@ describe('createTokenRefreshHandler', () => {
 			);
 		});
 
+		it.each([
+			['header', {}, { headers: { Authorization: 'Bearer new-token' } }],
+			[
+				'query',
+				{ use_jwt_as_param: true, wcpos_version: '1.10.0' },
+				{ params: { authorization: 'new-token' } },
+			],
+		])(
+			'a bare config without preamble metadata retries with the credential on the config (%s)',
+			async (_channel, siteOverrides, expected) => {
+				const handler = createTokenRefreshHandler({
+					site: makeSite(siteOverrides),
+					wpUser: makeWpUser(),
+					getHttpClient,
+				});
+				mockPost.mockResolvedValue({
+					data: { access_token: 'new-token', expires_at: Date.now() + 3600000 },
+					status: 200,
+				});
+				(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+					await fn();
+				});
+				(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+
+				// A relative URL the preamble module cannot compose: the retry must not
+				// manufacture metadata for it (Codex review on #2132).
+				const ctx = makeContext({ originalConfig: { url: '/test', headers: {} } });
+				const result = await handler.handle(ctx);
+
+				expect(result).toEqual({ data: 'ok', status: 200 });
+				const retried = ctx.retryRequest.mock.calls[0][0];
+				expect(retried.wcposPreamble).toBeUndefined();
+				expect(retried).toMatchObject(expected);
+			}
+		);
+
 		it('should throw if refresh response has no access_token', async () => {
 			const handler = createTokenRefreshHandler({
 				site: makeSite(),
