@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import { format, parseISO, subDays } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
@@ -48,6 +48,7 @@ export function PageBar({
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const { top } = useSafeAreaInsets();
+	const { width } = useWindowDimensions();
 	const { store, site, wpCredentials } = useStoreSession();
 	const binding = useRegisterBinding();
 	const { license } = useAppInfo();
@@ -183,6 +184,7 @@ export function PageBar({
 				<Popover
 					onOpenChange={(open) => {
 						setMenu(open ? 'period' : '');
+						setCustom(false);
 						setLocked('');
 					}}
 				>
@@ -193,39 +195,46 @@ export function PageBar({
 								: `${formatDate(parseISO(scope.from), 'd MMM')} – ${formatDate(parseISO(scope.to), 'd MMM')}`}
 						</Button>
 					</PopoverTrigger>
-					<PopoverContent className={custom ? 'w-[360px]' : undefined}>
-						{option(
-							'reports-period-previous',
-							'‹',
-							() =>
-								period(
-									format(subDays(parseISO(scope.from), 1), 'yyyy-MM-dd'),
-									format(subDays(parseISO(scope.to), 1), 'yyyy-MM-dd'),
-									t('reports.earlier_closures')
-								),
-							!license?.isPro
-						)}
-						{Object.entries(ranges).map(([key, range]) =>
-							option(
-								`reports-period-${key}`,
-								labels[key as keyof typeof labels],
-								() => period(day(range.from), day(range.to), t('reports.earlier_closures')),
-								!license?.isPro && key !== 'today'
-							)
-						)}
-						{option(
-							'reports-period-custom',
-							t('reports.custom_range'),
-							() => {
-								if (!license?.isPro) {
-									setLocked(t('reports.custom_ranges'));
-									return;
-								}
-								setDraft({ from: parseISO(scope.from), to: parseISO(scope.to) });
-								setSelectingStart(scope.from !== scope.to);
-								setCustom(true);
-							},
-							!license?.isPro
+					<PopoverContent
+						className={custom ? 'p-0' : undefined}
+						style={custom ? { width: Math.min(360, width) } : undefined}
+					>
+						{!custom && (
+							<>
+								{option(
+									'reports-period-previous',
+									'‹',
+									() =>
+										period(
+											format(subDays(parseISO(scope.from), 1), 'yyyy-MM-dd'),
+											format(subDays(parseISO(scope.to), 1), 'yyyy-MM-dd'),
+											t('reports.earlier_closures')
+										),
+									!license?.isPro
+								)}
+								{Object.entries(ranges).map(([key, range]) =>
+									option(
+										`reports-period-${key}`,
+										labels[key as keyof typeof labels],
+										() => period(day(range.from), day(range.to), t('reports.earlier_closures')),
+										!license?.isPro && key !== 'today'
+									)
+								)}
+								{option(
+									'reports-period-custom',
+									t('reports.custom_range'),
+									() => {
+										if (!license?.isPro) {
+											setLocked(t('reports.custom_ranges'));
+											return;
+										}
+										setDraft({ from: parseISO(scope.from), to: parseISO(scope.to) });
+										setSelectingStart(scope.from !== scope.to);
+										setCustom(true);
+									},
+									!license?.isPro
+								)}
+							</>
 						)}
 						{custom && license?.isPro && (
 							<>

@@ -1,6 +1,8 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
+import * as ReactNative from 'react-native';
 
+import { TZDate } from '@date-fns/tz';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 
@@ -68,6 +70,15 @@ jest.mock('@wcpos/components/tabs', () => {
 		},
 	};
 });
+let mockTokyoDevice = false;
+jest.mock('date-fns', () => ({
+	...jest.requireActual('date-fns'),
+	parseISO: (value: string) =>
+		mockTokyoDevice && /^\d{4}-\d{2}-\d{2}$/.test(value)
+			? new TZDate(`${value}T00:00:00+09:00`, 'Asia/Tokyo')
+			: jest.requireActual('date-fns').parseISO(value),
+}));
+const popoverContent = jest.fn();
 jest.mock('@wcpos/components/popover', () => {
 	const C = require('react').createContext({ open: false, change: () => {} });
 	return {
@@ -99,12 +110,18 @@ jest.mock('@wcpos/components/popover', () => {
 			{ children }: { children: React.ReactElement<{ onPress: () => void }> },
 			ref
 		) {
-			const { change } = React.useContext(C) as { change: (value: boolean) => void };
+			const { open, change } = React.useContext(C) as {
+				open: boolean;
+				change: (value: boolean) => void;
+			};
 			React.useImperativeHandle(ref, () => ({ close: () => change(false) }));
-			return React.cloneElement(children, { onPress: () => change(true) });
+			return React.cloneElement(children, { onPress: () => change(!open) });
 		}),
-		PopoverContent: ({ children }: { children: React.ReactNode }) =>
-			(React.useContext(C) as { open: boolean }).open ? children : null,
+		PopoverContent: (props: React.PropsWithChildren) => {
+			const open = (React.useContext(C) as { open: boolean }).open;
+			if (open) popoverContent(props);
+			return open ? props.children : null;
+		},
 	};
 });
 const calendar = jest.fn();
@@ -534,4 +551,67 @@ it('gives custom calendar days at least 44pt targets while retaining the shared 
 	expect(theme['stylesheet.day.basic']?.base?.height ?? 32).toBeGreaterThanOrEqual(44);
 	expect(theme.textDayFontSize).toBe(14);
 	expect(theme['stylesheet.calendar.header']).toBeDefined();
+});
+
+// Revert: serialize custom calendar dates with day(), converting their instant to the store zone.
+it('applies the tapped Tokyo calendar days when viewing a Los Angeles store', () => {
+	isPro = true;
+	jest.setSystemTime(new Date('2026-09-30T12:00:00Z'));
+	mockTokyoDevice = true;
+	try {
+		render(
+			<PageBar
+				room="closures"
+				onRoomChange={room}
+				onScopeChange={change}
+				scope={{ ...scope, from: '2026-09-01', to: '2026-09-30' }}
+			/>
+		);
+		fireEvent.click(screen.getByTestId('reports-period'));
+		fireEvent.click(screen.getByTestId('reports-period-custom'));
+		fireEvent.click(screen.getByTestId('day-2026-09-10'));
+		fireEvent.click(screen.getByTestId('day-2026-09-20'));
+		fireEvent.click(screen.getByTestId('reports-period-apply'));
+		expect(change).toHaveBeenLastCalledWith(
+			expect.objectContaining({ from: '2026-09-10', to: '2026-09-20' })
+		);
+	} finally {
+		mockTokyoDevice = false;
+	}
+});
+
+// Revert: restore the 360pt popover/padding, clipping seven 44pt day cells at 320pt.
+it('bounds the custom picker to a 320pt viewport with room for all days and Done', () => {
+	isPro = true;
+	const dimensions = jest.spyOn(ReactNative, 'useWindowDimensions').mockReturnValue({
+		width: 320,
+		height: 568,
+		scale: 1,
+		fontScale: 1,
+	});
+	try {
+		draw();
+		fireEvent.click(screen.getByTestId('reports-period'));
+		fireEvent.click(screen.getByTestId('reports-period-custom'));
+		const props = popoverContent.mock.calls.at(-1)![0];
+		expect(props.style?.width ?? 360).toBeLessThanOrEqual(320);
+		expect(props.className).toContain('p-0');
+		// Calendar has 5pt padding each side; the popover has a 1pt border.
+		expect(props.style.width - 10 - 2).toBeGreaterThanOrEqual(7 * 44);
+		expect(screen.queryByTestId('reports-period-today')).toBeNull();
+		expect(screen.getByTestId('reports-period-apply')).toBeTruthy();
+	} finally {
+		dimensions.mockRestore();
+	}
+});
+
+// Revert: retain custom mode after dismissal, making the preset choices unreachable on reopening.
+it('returns to period choices after dismissing the custom picker', () => {
+	isPro = true;
+	draw();
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-custom'));
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period'));
+	expect(screen.getByTestId('reports-period-today')).toBeTruthy();
 });

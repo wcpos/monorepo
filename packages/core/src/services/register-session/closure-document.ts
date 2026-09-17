@@ -17,7 +17,10 @@ export type ClosureContext = {
 	breakdowns?: Values;
 };
 // Server Receipt_Date_Formatter keys; absent dates remain empty, not today's date.
-function dateObject(value: string | null | undefined, context: ClosureContext) {
+export function formatClosureDate(
+	value: string | null | undefined,
+	context: Pick<ClosureContext, 'timezone' | 'locale'>
+) {
 	const date = value
 		? new Date(/[Zz]|[+-]\d\d:\d\d$/.test(value) ? value : `${value.replace(' ', 'T')}Z`)
 		: null;
@@ -128,8 +131,8 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 			closed_by: row.closed_by ?? null,
 			approved_by: breakdowns.approved_by ?? null,
 			closed_at_gmt: row.closed_at,
-			opened_at: dateObject(row.opened_at, context),
-			closed_at: dateObject(row.closed_at, context),
+			opened_at: formatClosureDate(row.opened_at, context),
+			closed_at: formatClosureDate(row.closed_at, context),
 			tenders,
 			breakdowns: {
 				...breakdowns,
@@ -143,7 +146,7 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 				]),
 				movements: ((breakdowns.movements ?? []) as Values[]).map((m) => ({
 					...money(m, ['amount']),
-					created_at: dateObject((m.created_at_gmt ?? m.created_at) as string, context),
+					created_at: formatClosureDate((m.created_at_gmt ?? m.created_at) as string, context),
 					type_label: context.i18n[String(m.type)] ?? m.type,
 					voided: !!m.voided_by,
 				})),
@@ -155,7 +158,7 @@ function envelope(row: Partial<ClosureRow>, context: ClosureContext, xreport = f
 		store: context.store,
 		register: { id: row.register_id, name: labels.register_name ?? '' },
 		software: { name: 'WCPOS', plugin_version: row.software_version ?? '' },
-		order: { currency: context.currency, printed: dateObject(context.printedAt, context) },
+		order: { currency: context.currency, printed: formatClosureDate(context.printedAt, context) },
 		fiscal: {
 			immutable_id: '',
 			hash: '',

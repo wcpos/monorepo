@@ -7,6 +7,9 @@ import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encode
 import type { TemplateDocument } from '@wcpos/database';
 import { useDocField } from '@wcpos/query';
 
+import { useLocale } from '../../../../hooks/use-locale';
+import { useStoreDay } from '../../../../hooks/use-store-day';
+import { formatClosureDate } from '../../../../services/register-session/closure-document';
 import { useRegister } from '../../../../services/register/use-register';
 import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
@@ -106,6 +109,8 @@ export function useTemplateRenderer({
 	);
 	const mode = document ? 'fiscal' : requestedMode;
 	const { store, site } = useAppState();
+	const { timezone } = useStoreDay(storeId);
+	const { code: locale } = useLocale();
 	const register = useRegister();
 	const pluginVersion = useDocField(site, (value) => value.wcpos_version);
 	const taxRates = useTaxSettingsOptional();
@@ -317,12 +322,17 @@ export function useTemplateRenderer({
 			throw new Error('receipt_document_requires_store');
 		if (!data && localReport && document?.startsWith('closure:')) {
 			const count = await nextLocalPrintCount();
+			const printedAt = new Date().toISOString();
 			data = {
 				...localReport,
+				order: {
+					...(localReport.order as object),
+					printed: formatClosureDate(printedAt, { timezone, locale }),
+				},
 				closure: {
 					...(localReport.closure as object),
 					print_count: count,
-					last_printed_at_gmt: new Date().toISOString(),
+					last_printed_at_gmt: printedAt,
 				},
 				fiscal: {
 					...(localReport.fiscal as object),

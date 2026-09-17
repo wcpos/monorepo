@@ -8,6 +8,7 @@ import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
+import { useDocField } from '@wcpos/query';
 import type { WPCredentialsDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -57,6 +58,9 @@ export function RegisterPanel({
 	const { print } = useSessionReport();
 	const { print: reprint } = useSessionReport(lastClosure, true);
 	const t = useT();
+	const { wpCredentials } = useStoreSession();
+	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
+	const reportsDenied = !!capabilities && !capabilities.includes('view_woocommerce_pos_reports');
 	const router = useRouter();
 	const side = usePOSOverlaySide();
 	const attempt = async (action: () => Promise<unknown>) => {
@@ -197,7 +201,7 @@ export function RegisterPanel({
 								testID="register-panel-open-closure"
 								variant="ghost"
 								className="min-h-12"
-								disabled={blind}
+								disabled={reportsDenied}
 								onPress={() => {
 									router.push({
 										pathname: '/reports',

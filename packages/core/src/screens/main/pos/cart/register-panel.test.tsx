@@ -10,6 +10,7 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));
 let blind = false;
+let capabilities: string[] | undefined;
 let movements: Record<string, unknown>[] = [];
 let refusedMovements: Record<string, unknown>[] = [];
 let currentSession: Record<string, unknown> | null = null;
@@ -56,7 +57,7 @@ const mockSite = {
 };
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
-	useStoreSession: () => ({ site: mockSite }),
+	useStoreSession: () => ({ site: mockSite, wpCredentials: { capabilities } }),
 }));
 jest.mock('../../../../hooks/use-store-day', () => ({
 	useStoreDay: () => ({ timezone: 'UTC' }),
@@ -138,6 +139,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {
 	blind = false;
+	capabilities = ['view_woocommerce_pos_reports'];
 	currentSession = {
 		id: 'session',
 		status: 'open',
@@ -362,6 +364,7 @@ it('opens the last closure in Reports Closures and dismisses the register panel'
 // Revert: leave the disabled closure control unexplained for blind cashiers.
 it('explains the closure restriction only while blind counting is enabled', () => {
 	blind = true;
+	capabilities = [];
 	const view = render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect((screen.getByTestId('register-panel-open-closure') as HTMLButtonElement).disabled).toBe(
 		true
@@ -370,9 +373,27 @@ it('explains the closure restriction only while blind counting is enabled', () =
 		'register.closure_blind_restricted'
 	);
 	blind = false;
+	capabilities = ['view_woocommerce_pos_reports'];
 	view.rerender(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('register-panel-closure-restricted')).toBeNull();
 	expect((screen.getByTestId('register-panel-open-closure') as HTMLButtonElement).disabled).toBe(
 		false
 	);
 });
+
+// Revert: use blind counting, rather than a known capability denial, to disable the link.
+it.each([[undefined], [[]], [['view_woocommerce_pos_reports']]])(
+	'keeps unknown report capabilities navigable, but hides blind amounts (%j)',
+	(capabilitiesValue) => {
+		blind = true;
+		capabilities = capabilitiesValue;
+		const denied = capabilitiesValue?.length === 0;
+		render(<RegisterPanel open onOpenChange={jest.fn()} />);
+		const link = screen.getByTestId('register-panel-open-closure') as HTMLButtonElement;
+		expect(link.disabled).toBe(denied);
+		expect(link.textContent).not.toContain('£570');
+		expect(screen.getByTestId('register-panel-closure-restricted')).toBeTruthy();
+		fireEvent.click(link);
+		expect(mockPush).toHaveBeenCalledTimes(denied ? 0 : 1);
+	}
+);

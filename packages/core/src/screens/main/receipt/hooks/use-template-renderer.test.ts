@@ -657,3 +657,68 @@ it('addresses the orderless legacy closure page without an order', () => {
 	expect(url.searchParams.get('document')).toBe('closure:uuid');
 	expect(url.searchParams.get('template')).toBe('77');
 });
+
+jest.mock('../../../../hooks/use-store-day', () => ({
+	useStoreDay: () => ({ timezone: 'America/Los_Angeles' }),
+}));
+jest.mock('../../../../hooks/use-locale', () => ({
+	useLocale: () => ({ code: 'en-GB' }),
+}));
+
+// Revert: update only last_printed_at_gmt, leaving the template's order.printed at preview time.
+it.each([
+	['offline', true],
+	['online-website-available', false],
+])(
+	'refreshes the rendered closure print date at dispatch when %s (ready: %s)',
+	async (status, documentReady) => {
+		jest.useFakeTimers().setSystemTime(new Date('2026-09-17T09:00:00Z'));
+		try {
+			mockUseOnlineStatus.mockReturnValue({ status });
+			const fetchForPrint = jest.fn();
+			mockUseReceiptData.mockReturnValue({ data: null, fetchForPrint });
+			mockUseActiveTemplates.mockReturnValue([
+				{
+					id: 'closure',
+					offline_capable: true,
+					engine: 'logicless',
+					content: '<p>{{order.printed.datetime}} / {{order.printed.time}}</p>',
+				},
+			] as never);
+			const localReport = {
+				order: { currency: 'GBP', printed: { datetime: '17 Sept 2026, 02:00', time: '02:00' } },
+				closure: { last_printed_at_gmt: '2026-09-17T09:00:00.000Z' },
+			};
+			const { result } = renderHook(() =>
+				useTemplateRenderer({
+					...defaultOptions,
+					order: undefined,
+					orderId: undefined,
+					document: 'closure:s',
+					templateType: 'closure',
+					documentReady,
+					localReport,
+				})
+			);
+			expect(result.current.renderedHtml).toContain('02:00');
+			jest.setSystemTime(new Date('2026-09-17T10:15:00Z'));
+			const printed = await result.current.preparePrintContent(jest.fn(async () => 2));
+			expect(printed.receiptData).toMatchObject({
+				order: {
+					currency: 'GBP',
+					printed: {
+						datetime: '17 Sept 2026, 03:15',
+						time: '03:15',
+						date_ymd: '2026-09-17',
+					},
+				},
+				closure: { last_printed_at_gmt: '2026-09-17T10:15:00.000Z' },
+			});
+			expect(printed.html).toContain('17 Sept 2026, 03:15 / 03:15');
+			expect(fetchForPrint).not.toHaveBeenCalled();
+			expect(localReport.order.printed.time).toBe('02:00');
+		} finally {
+			jest.useRealTimers();
+		}
+	}
+);
