@@ -39,6 +39,7 @@ interface UseReceiptDataOptions {
 	mode?: ReceiptMode;
 	intent?: 'print';
 	document?: string;
+	isReprint?: boolean;
 }
 
 type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint'> & {
@@ -57,6 +58,7 @@ export function useReceiptData({
 	orderId,
 	mode: requestedMode = 'live',
 	intent,
+	isReprint = false,
 	document,
 }: UseReceiptDataOptions): UseReceiptDataResult {
 	const http = useRestHttpClient();
@@ -67,7 +69,7 @@ export function useReceiptData({
 				params: {
 					mode,
 					...(document ? { document } : {}),
-					...(requestIntent ? { intent: requestIntent } : {}),
+					...(requestIntent && !document?.startsWith('closure:') ? { intent: requestIntent } : {}),
 				},
 			});
 			return response?.data as ReceiptApiResponse;
@@ -76,8 +78,25 @@ export function useReceiptData({
 	);
 	const fetchForPrint = React.useCallback(async () => {
 		if (!orderId && !document) return null;
-		return (await fetchData('print')).data ?? null;
-	}, [orderId, document, fetchData]);
+		if (document?.startsWith('closure:')) {
+			const data = (await fetchData()).data;
+			const { data: marker } = await http.post(`closures/${document.slice(8)}/print`, {});
+			return {
+				...data,
+				closure: {
+					...(data.closure as object),
+					print_count: marker.print_count,
+					last_printed_at_gmt: marker.last_printed_at_gmt,
+				},
+				fiscal: {
+					...(data.fiscal as object),
+					is_reprint: isReprint || marker.print_count > 1,
+					reprint_count: Math.max(0, marker.print_count - 1),
+				},
+			};
+		}
+		return (await fetchData(document?.startsWith('xreport:') ? undefined : 'print')).data ?? null;
+	}, [orderId, document, fetchData, http, isReprint]);
 	const [fetchKey, setFetchKey] = React.useState(0);
 	const [state, setState] = React.useState<ReceiptDataState>({
 		orderId,

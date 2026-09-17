@@ -497,8 +497,11 @@ it.each(['offline', 'online-website-available'])(
 				localReport,
 			})
 		);
-		const printed = await result.current.preparePrintContent(jest.fn());
-		expect(printed.receiptData).toBe(localReport);
+		const printed = await result.current.preparePrintContent(jest.fn(async () => 2));
+		expect(printed.receiptData).toMatchObject({
+			...localReport,
+			fiscal: { is_reprint: true, reprint_count: 1 },
+		});
 		expect(printed.html).toContain('Closure 1');
 		expect(printed.html).toContain('150.00');
 		expect(printed.html).toContain('Unsynced');
@@ -611,6 +614,7 @@ it('renders the orderless closure envelope unchanged through its closure templat
 		orderId: undefined,
 		mode: 'fiscal',
 		document: 'closure:uuid',
+		isReprint: false,
 	});
 	expect(result.current.renderedHtml).toBe('<b>9</b>');
 	mockUseOnlineStatus.mockReturnValue({ status: 'offline' });
@@ -620,6 +624,7 @@ it('renders the orderless closure envelope unchanged through its closure templat
 		orderId: undefined,
 		mode: 'fiscal',
 		document: undefined,
+		isReprint: false,
 	});
 });
 // Revert: require an order-derived URL for a merchant's PHP closure template.

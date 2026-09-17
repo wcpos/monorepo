@@ -176,7 +176,8 @@ it('starts a new order on the same hook instance unattempted and unloaded', asyn
 });
 
 const mockGet = jest.fn();
-const mockHttp = { get: mockGet };
+const mockPost = jest.fn();
+const mockHttp = { get: mockGet, post: mockPost };
 let mockOnline = true;
 const mockThermalPrint = jest.fn().mockResolvedValue(undefined);
 const mockHtmlPrint = jest.fn().mockResolvedValue(undefined);
@@ -212,6 +213,9 @@ describe('print intent through checkout and reprint receipt documents', () => {
 	beforeEach(() => {
 		mockOnline = true;
 		mockAutoPrint = false;
+		mockPost
+			.mockReset()
+			.mockResolvedValue({ data: { print_count: 2, last_printed_at_gmt: '2026-09-17 12:00:00' } });
 		mockGet.mockReset().mockImplementation((_url, options) =>
 			Promise.resolve({
 				data: {
@@ -240,6 +244,136 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		mockOnline = true;
 	});
 
+	// Revert: print a default/unmarked template, also count via intent, or hide a mutation failure.
+	it('prints the selected closure template with one server mutation and surfaces failure without retry', async () => {
+		jest
+			.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+			.mockReturnValue([
+				{ id: 7, offline_capable: true, engine: 'logicless', content: '<b>Default</b>' },
+				{
+					id: 8,
+					offline_capable: true,
+					engine: 'logicless',
+					content:
+						'<b>Selected {{#fiscal.is_reprint}}COPY {{fiscal.reprint_count}}{{/fiscal.is_reprint}}</b>',
+				},
+			]);
+		jest
+			.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
+			.mockReturnValue({ useSystemDialog: true });
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+				localReport: { order: { currency: 'USD' }, closure: { number: 1 } },
+			})
+		);
+		await act(async () => result.current.setSelectedTemplateId(8));
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(mockPost).toHaveBeenCalledTimes(1);
+		expect(mockPost).toHaveBeenCalledWith('closures/c/print', {});
+		expect(mockGet.mock.calls.every(([, options]) => !options.params.intent)).toBe(true);
+		expect(mockHtmlPrint.mock.calls[0][0]).toContain('Selected COPY 1');
+		mockPost.mockRejectedValueOnce(new Error('refused'));
+		await act(async () => {
+			await expect(result.current.print()).rejects.toThrow('refused');
+		});
+		expect(mockPost).toHaveBeenCalledTimes(2);
+		expect(mockHtmlPrint).toHaveBeenCalledTimes(1);
+	});
+	// Revert: skip local closure counting, mutate recorded figures, or post offline.
+	it('marks offline closure copies and commits only the local count after dispatch', async () => {
+		mockOnline = false;
+		let row = { print_count: 1, printed_at: 'first', counted: { cash: '99' } };
+		const closure = {
+			getLatest: () => row,
+			incrementalModify: async (fn: (r: typeof row) => typeof row) => {
+				row = fn(row);
+			},
+		};
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+				...{ getLocalClosure: async () => closure as never },
+				localReport: {
+					order: { currency: 'USD' },
+					closure: { number: 1, counted: { cash: '99' } },
+					fiscal: { document_type: 'closure' },
+				},
+			})
+		);
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(mockThermalPrint.mock.calls[0][0].fiscal).toMatchObject({
+			is_reprint: true,
+			reprint_count: 1,
+		});
+		expect(row).toEqual({ print_count: 2, printed_at: 'first', counted: { cash: '99' } });
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(mockGet).not.toHaveBeenCalled();
+	});
+
+	// Revert: let legacy URL printing bypass copy marking or print a generic order receipt without a closure template.
+	it.each([
+		{ templates: [] },
+		{ templates: [{ id: 7, engine: 'legacy-php', offline_capable: false }] },
+	])('refuses closure printing without a renderable selected template', async ({ templates }) => {
+		jest
+			.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+			.mockReturnValue(templates);
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+				localReport: { order: { currency: 'USD' }, closure: { number: 1 } },
+			})
+		);
+		await act(async () => {
+			await expect(result.current.print()).rejects.toThrow('reports.closure_template_required');
+		});
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(mockThermalPrint).not.toHaveBeenCalled();
+	});
+
+	// Revert: mark the close-session flow's very first print as a copy.
+	it('keeps the first close-session print original while counting it locally', async () => {
+		mockOnline = false;
+		let row = { print_count: 0, printed_at: null as string | null };
+		const closure = {
+			getLatest: () => row,
+			incrementalModify: async (fn: (r: typeof row) => typeof row) => {
+				row = fn(row);
+			},
+		};
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+				getLocalClosure: async () => closure as never,
+				localReport: {
+					order: { currency: 'USD' },
+					closure: { number: 1 },
+					fiscal: { document_type: 'closure' },
+				},
+			})
+		);
+		await act(async () => {
+			await result.current.print();
+		});
+		expect(mockThermalPrint.mock.calls[0][0].fiscal).toMatchObject({
+			is_reprint: false,
+			reprint_count: 0,
+		});
+		expect(row.print_count).toBe(1);
+	});
 	it.each([true, false])(
 		'fetches print intent and prints its returned marking (checkout=%s)',
 		async (autoPrintAllowed) => {
@@ -324,7 +458,9 @@ describe('print intent through checkout and reprint receipt documents', () => {
 				await act(async () => {
 					await view.result.current.print();
 				});
-				expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain('COPY 1');
+				expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain(
+					document.startsWith('closure:') ? 'COPY 1' : '<html'
+				);
 				expect(view.result.current.printedTo).toBe('receipt.print_dialog');
 				view.unmount();
 			}

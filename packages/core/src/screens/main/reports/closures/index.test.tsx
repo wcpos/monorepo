@@ -1,0 +1,92 @@
+/** @jest-environment jsdom */
+import * as React from 'react';
+
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import { Closures } from './index';
+const scope = { from: '2026-09-17', to: '2026-09-17', registerId: 'r', storeId: 1 };
+const rows = [
+	{
+		id: 'c',
+		business_day: '2026-09-17',
+		number: 2,
+		counted: { cash: '99' },
+		variance: { cash: '-1' },
+		breakdowns: {},
+		register_id: 'r',
+	},
+];
+const share = jest.fn(async () => undefined);
+jest.mock('./save-or-share-csv', () => ({
+	saveOrShareCsv: (...args: unknown[]) => share(...(args as [])),
+}));
+jest.mock('./use-closure-rows', () => ({ useClosureRows: () => rows }));
+jest.mock('./closure-list', () => ({ ClosureList: () => null }));
+jest.mock('./session-card', () => ({ SessionCard: () => null }));
+jest.mock('./closure-panel', () => ({
+	ClosurePanel: ({ row }: { row: { id: string } }) => (
+		<div data-testid="selected-closure">{row.id}</div>
+	),
+}));
+jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ store: { id: 1, name: 'Café' } }),
+}));
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
+}));
+jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registerId: 'r' }),
+}));
+jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({ r: 'Front' }),
+}));
+jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children: React.ReactNode;
+		onPress: () => void;
+		testID: string;
+	}) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: ({ children }: React.PropsWithChildren) => children,
+	DropdownMenuContent: ({ children }: React.PropsWithChildren) => children,
+	DropdownMenuTrigger: ({ children }: React.PropsWithChildren) => children,
+	DropdownMenuItem: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children: React.ReactNode;
+		onPress: () => void;
+		testID: string;
+	}) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
+// Revert: export an unscoped collection instead of the exact rows shown.
+it('exports only visible rows from the overflow menu', async () => {
+	render(<Closures scope={scope} />);
+	fireEvent.click(screen.getByTestId('closures-export'));
+	await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+	expect(share).toHaveBeenCalledWith(
+		expect.stringContaining('"2026-09-17","2","Front","Café"'),
+		'closures-2026-09-17-2026-09-17.csv'
+	);
+});
+// Revert: ignore the requested closure when the scoped rows become available.
+it('opens the route-selected row on a phone', () => {
+	render(<Closures scope={scope} initialClosureId="c" />);
+	expect(screen.getByTestId('selected-closure').textContent).toBe('c');
+});

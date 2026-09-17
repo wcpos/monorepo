@@ -32,6 +32,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		movements,
 		refusedMovements,
 		lastClosure: {
+			id: 'c',
 			number: 1,
 			server_number: serverNumber,
 			sync_status: syncStatus,
@@ -325,4 +326,18 @@ it('shows the dead-lettered closure movement error', () => {
 	syncStatus = 'failed';
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('closure-sync-error').textContent).toBe('movement_refused');
+});
+
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
+// Revert: navigate to Sales, omit the selected closure, or leave the register overlay open.
+it('opens the last closure in Reports Closures and dismisses the register panel', () => {
+	const onOpenChange = jest.fn();
+	render(<RegisterPanel open onOpenChange={onOpenChange} />);
+	fireEvent.click(screen.getByTestId('register-panel-open-closure'));
+	expect(mockPush).toHaveBeenCalledWith({
+		pathname: '/reports',
+		params: expect.objectContaining({ closureId: 'c' }),
+	});
+	expect(onOpenChange).toHaveBeenCalledWith(false);
 });

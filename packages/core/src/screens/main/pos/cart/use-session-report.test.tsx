@@ -84,7 +84,8 @@ it('routes X to the session document with the panel figures as offline data', as
 		})
 	);
 });
-it('prints the persisted closure and marks its time only after successful printing', async () => {
+// Revert: count in the till wrapper as well as the document print path.
+it('prints the persisted closure without duplicating the document print bookkeeping', async () => {
 	let data = {
 		id: 's',
 		number: 1,
@@ -108,7 +109,8 @@ it('prints the persisted closure and marks its time only after successful printi
 	await expect(view.result.current.print()).rejects.toThrow('paper');
 	expect(data.printed_at).toBeNull();
 	const at = await view.result.current.print();
-	expect(data).toMatchObject({ printed_at: at, print_count: 1 });
+	expect(at).toEqual(expect.any(String));
+	expect(data).toMatchObject({ printed_at: null, print_count: 0 });
 	expect(logger.info).not.toHaveBeenCalled();
 	expect(documentHook).toHaveBeenLastCalledWith(
 		expect.objectContaining({
@@ -121,12 +123,12 @@ it('prints the persisted closure and marks its time only after successful printi
 	);
 });
 
-it('returns print success even when the local marker write fails', async () => {
+it('does not write an additional local marker after the document path succeeds', async () => {
 	const incrementalModify = jest.fn().mockRejectedValue(new Error('disk write'));
 	const closure = { id: 's', number: 1, print_count: 0, incrementalModify };
 	const view = renderHook(() => useSessionReport(closure as never));
 	await expect(view.result.current.print()).resolves.toEqual(expect.any(String));
-	expect(incrementalModify).toHaveBeenCalledTimes(1);
+	expect(incrementalModify).not.toHaveBeenCalled();
 });
 it('loads a superseded closure from its authoritative server document', () => {
 	const closure = {

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useLocalSearchParams } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 
 import { Text } from '@wcpos/components/text';
@@ -148,17 +149,28 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 }
 
 function ReportsShell() {
-	const [room, setRoom] = React.useState('sales');
+	const params = useLocalSearchParams<{
+		closureId?: string;
+		businessDay?: string;
+		closedAt?: string;
+		registerId?: string;
+	}>();
+	const [room, setRoom] = React.useState(params.closureId ? 'closures' : 'sales');
 	const [selection, setSelection] = React.useState<ClosureScope | null>(null);
 	const { store, wpCredentials } = useAppState();
 	const binding = useRegisterBinding();
 	const { presets, timezone } = useStoreDay();
 	const today = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
 	const { license } = useAppInfo();
+	const closureDay =
+		params.businessDay ??
+		(params.closedAt
+			? format(new Date(params.closedAt), 'yyyy-MM-dd', zoneOptions(timezone))
+			: today);
 	const initialScope = {
-		from: today,
-		to: today,
-		registerId: binding.registerId ?? 'unbound',
+		from: license?.isPro ? closureDay : today,
+		to: license?.isPro ? closureDay : today,
+		registerId: (license?.isPro && params.registerId) || binding.registerId || 'unbound',
 		storeId: store?.id,
 		cashier: room === 'sales' ? wpCredentials?.id : undefined,
 	};
@@ -179,7 +191,7 @@ function ReportsShell() {
 								scope={scope}
 								onScopeChange={setSelection}
 							/>
-							<Closures scope={scope} />
+							<Closures scope={scope} initialClosureId={params.closureId} />
 						</>
 					)}
 				</Suspense>
@@ -189,11 +201,12 @@ function ReportsShell() {
 }
 
 export function ReportsScreen() {
+	const { closureId } = useLocalSearchParams<{ closureId?: string }>();
 	const { wpCredentials } = useAppState();
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const t = useT();
 	return capabilities?.includes('view_woocommerce_pos_reports') ? (
-		<ReportsShell />
+		<ReportsShell key={closureId} />
 	) : (
 		<Text testID="reports-denied">{t('reports.no_access')}</Text>
 	);

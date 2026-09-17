@@ -51,6 +51,7 @@ export function renderOfflineTemplatePreview({
 }
 
 interface UseTemplateRendererOptions {
+	isReprint?: boolean;
 	templateType?: 'receipt' | 'report' | 'closure';
 	storeId?: number;
 	orderId: number | undefined;
@@ -65,6 +66,7 @@ interface UseTemplateRendererOptions {
 }
 
 interface TemplateRendererResult {
+	refetch: () => void;
 	serverReceiptData: Record<string, unknown> | null;
 	templates: TemplateDocument[];
 	selectedTemplateId: string | number | null;
@@ -89,6 +91,7 @@ export function useTemplateRenderer({
 	mode: requestedMode,
 	document,
 	documentReady = true,
+	isReprint = false,
 	localReport,
 	formatReport,
 	order,
@@ -126,11 +129,13 @@ export function useTemplateRenderer({
 	const {
 		data: apiReceiptData,
 		hasResponded,
+		refetch,
 		isLoading,
 		fetchForPrint,
 	} = useReceiptData({
 		orderId: isOffline ? undefined : orderId,
 		mode,
+		isReprint,
 		document: isOffline || !documentReady ? undefined : document,
 	});
 	// The deadline record is kept together with the order it was armed for; a
@@ -299,12 +304,29 @@ export function useTemplateRenderer({
 			try {
 				const remote = await fetchForPrint();
 				data = remote && formatReport ? formatReport(remote) : remote;
-			} catch {
+			} catch (error) {
+				if (document?.startsWith('closure:')) throw error;
 				data = null;
 			}
 		}
 		if (document && !data && ((documentReady && !isOffline) || !localReport))
 			throw new Error('receipt_document_requires_store');
+		if (!data && localReport && document?.startsWith('closure:')) {
+			const count = await nextLocalPrintCount();
+			data = {
+				...localReport,
+				closure: {
+					...(localReport.closure as object),
+					print_count: count,
+					last_printed_at_gmt: new Date().toISOString(),
+				},
+				fiscal: {
+					...(localReport.fiscal as object),
+					is_reprint: isReprint || count > 1,
+					reprint_count: Math.max(0, count - 1),
+				},
+			};
+		}
 		data ??= localReport ?? null;
 		data ??= await buildLocal();
 		if (!data) throw new Error('No receipt data available for printing');
@@ -324,6 +346,7 @@ export function useTemplateRenderer({
 	};
 
 	return {
+		refetch,
 		preparePrintContent,
 		serverReceiptData: isOffline ? null : apiReceiptData,
 		templates,

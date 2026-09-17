@@ -82,7 +82,27 @@ jest.mock('@wcpos/components/select', () => ({
 		<div data-testid={testID}>{label}</div>
 	),
 }));
+const mockPrint = jest.fn(async () => true);
+const mockRefetch = jest.fn();
+const mockRecount = jest.fn();
+jest.mock('./recount-sheet', () => ({
+	RecountSheet: (props: { onSaved: () => void; onOpenChange: (v: boolean) => void }) => {
+		mockRecount(props);
+		return (
+			<button
+				data-testid="save-recount"
+				onClick={() => {
+					props.onSaved();
+					props.onOpenChange(false);
+				}}
+			/>
+		);
+	},
+}));
 const mockDocument = jest.fn((options: { localReport: Record<string, unknown> }) => ({
+	print: mockPrint,
+	refetch: mockRefetch,
+	isPrinting: false,
 	templates: [template],
 	selectedTemplateId: 'core',
 	setSelectedTemplateId: jest.fn(),
@@ -140,15 +160,15 @@ beforeEach(() => {
 	mockPhone = true;
 	jest.clearAllMocks();
 });
-// Revert: use an order/report renderer, hide the sole template, enable unfinished mutations, or omit phone navigation.
-it('opens a template-backed phone page with its single selector and disabled Stage C actions', () => {
+// Revert: use an order/report renderer, hide the sole template, or omit phone navigation.
+it('opens a template-backed phone page with its single selector and available reprint action', () => {
 	const close = jest.fn();
 	render(<ClosurePanel row={row} onClose={close} />);
 	expect(screen.getByTestId('document').textContent).toBe('4');
 	expect(screen.getByTestId('receipt-template-select')).toBeTruthy();
 	expect(screen.getByTestId('receipt-template-core').textContent).toBe('Default');
 	expect(screen.queryByTestId('closure-settled')).toBeNull();
-	expect((screen.getByTestId('closure-reprint') as HTMLButtonElement).disabled).toBe(true);
+	expect((screen.getByTestId('closure-reprint') as HTMLButtonElement).disabled).toBe(false);
 	expect((screen.getByTestId('closure-recount') as HTMLButtonElement).disabled).toBe(true);
 	fireEvent.click(screen.getByTestId('closure-back'));
 	expect(close).toHaveBeenCalledTimes(1);
@@ -195,4 +215,22 @@ it('shows settled figures below the server document and retains its baseline/cor
 	render(<ClosurePanel row={{ ...row, ...snapshot }} onClose={() => {}} />);
 	expect(screen.getByTestId('document').textContent).toBe('9');
 	expect(screen.getByTestId('closure-settled').textContent).toContain('$99.00 → $111.00');
+});
+
+// Revert: leave Reprint disabled, suppress dispatch errors, or reprint automatically after refusal.
+it('dispatches reprint once and shows a failed print without retry', async () => {
+	mockPrint.mockRejectedValueOnce(new Error('refused'));
+	render(<ClosurePanel row={row} onClose={() => {}} />);
+	fireEvent.click(screen.getByTestId('closure-reprint'));
+	await waitFor(() => expect(screen.getByTestId('closure-action-error')).toBeTruthy());
+	expect(mockPrint).toHaveBeenCalledTimes(1);
+});
+// Revert: do not open recount or reload the corrected document after saving.
+it('opens recount online and reloads the closure after success', () => {
+	mockRemote = { closure: row };
+	render(<ClosurePanel row={row} onClose={() => {}} />);
+	fireEvent.click(screen.getByTestId('closure-recount'));
+	expect(mockRecount).toHaveBeenCalledWith(expect.objectContaining({ row }));
+	fireEvent.click(screen.getByTestId('save-recount'));
+	expect(mockRefetch).toHaveBeenCalledTimes(1);
 });

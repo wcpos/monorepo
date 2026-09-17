@@ -20,12 +20,15 @@ import {
 	type RecordedFigures,
 } from '../../../../services/register-session/settled-figures';
 import { useClosureCollection } from '../../../../services/register-session/use-register-session-collections';
+import { RecountSheet } from './recount-sheet';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 
 export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () => void }) {
 	const t = useT();
+	const [recounting, setRecounting] = React.useState(false);
+	const [error, setError] = React.useState('');
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
 	const context = useClosureDocumentContext();
@@ -37,6 +40,8 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 	);
 	const doc = useReceiptDocument({
 		autoPrintAllowed: false,
+		isReprint: true,
+		getLocalClosure: async () => (await collection?.findOne(row.id).exec()) ?? null,
 		document: `closure:${row.server_closure_id ?? row.id}`,
 		documentReady: row.sync_status === 'synced' || row.sync_status === 'superseded',
 		templateType: 'closure',
@@ -148,15 +153,37 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 					</View>
 				))}
 			</ScrollView>
-			<Text className="text-muted-foreground">{t('reports.actions_unavailable')}</Text>
+			{(doc.isOffline || !['synced', 'superseded'].includes(row.sync_status)) && (
+				<Text>{t(doc.isOffline ? 'reports.recount_offline' : 'reports.recount_pending')}</Text>
+			)}
+			{!!error && <Text testID="closure-action-error">{error}</Text>}
 			<View className="flex-row gap-3">
-				<Button testID="closure-recount" variant="outline" className="min-h-12 flex-1" disabled>
+				<Button
+					testID="closure-recount"
+					variant="outline"
+					className="min-h-12 flex-1"
+					disabled={doc.isOffline || !['synced', 'superseded'].includes(row.sync_status)}
+					onPress={() => setRecounting(true)}
+				>
 					{t('reports.recount')}
 				</Button>
-				<Button testID="closure-reprint" className="min-h-12 flex-1" disabled>
+				<Button
+					testID="closure-reprint"
+					className="min-h-12 flex-1"
+					loading={doc.isPrinting}
+					onPress={async () => {
+						setError('');
+						try {
+							if (!(await doc.print())) setError(t('reports.reprint_failed'));
+						} catch (error) {
+							setError(error instanceof Error ? error.message : t('reports.reprint_failed'));
+						}
+					}}
+				>
 					{t('reports.reprint')}
 				</Button>
 			</View>
+			{recounting && <RecountSheet row={row} onSaved={doc.refetch} onOpenChange={setRecounting} />}
 		</View>
 	);
 	return phone ? (

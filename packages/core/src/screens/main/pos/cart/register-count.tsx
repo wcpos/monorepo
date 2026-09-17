@@ -28,7 +28,7 @@ import {
 
 import type { ClosureCount } from './closure-sheet';
 
-function DenominationTile({
+export function DenominationTile({
 	value,
 	count,
 	add,

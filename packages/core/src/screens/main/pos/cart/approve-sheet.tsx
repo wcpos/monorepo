@@ -76,25 +76,7 @@ export function ApproveSheet({
 			<DialogContent side={side} portalHost="pos" testID="approve-sheet">
 				<DialogTitle>{t('register.manager_approval')}</DialogTitle>
 				{!online && <Text testID="approve-offline">{t('register.approve_offline')}</Text>}
-				<Text>{t('register.username')}</Text>
-				<Input
-					testID="approve-username"
-					className="min-h-11"
-					value={username}
-					onChangeText={setUsername}
-					autoCapitalize="none"
-					autoCorrect={false}
-				/>
-				<Text>{t('register.password')}</Text>
-				<Input
-					testID="approve-password"
-					className="min-h-11"
-					value={password}
-					onChangeText={setPassword}
-					secureTextEntry
-					autoCapitalize="none"
-					autoCorrect={false}
-				/>
+				<ApprovalFields {...{ username, password, setUsername, setPassword }} />
 				{!!error && <Text testID="approve-error">{error}</Text>}
 				<Button
 					testID="approve-confirm"
@@ -107,5 +89,42 @@ export function ApproveSheet({
 				</Button>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+export function ApprovalFields({
+	username,
+	password,
+	setUsername,
+	setPassword,
+}: {
+	username: string;
+	password: string;
+	setUsername: (value: string) => void;
+	setPassword: (value: string) => void;
+}) {
+	const t = useT();
+	return (
+		<>
+			<Text>{t('register.username')}</Text>
+			<Input
+				testID="approve-username"
+				className="min-h-11"
+				value={username}
+				onChangeText={setUsername}
+				autoCapitalize="none"
+				autoCorrect={false}
+			/>
+			<Text>{t('register.password')}</Text>
+			<Input
+				testID="approve-password"
+				className="min-h-11"
+				value={password}
+				onChangeText={setPassword}
+				secureTextEntry
+				autoCapitalize="none"
+				autoCorrect={false}
+			/>
+		</>
 	);
 }

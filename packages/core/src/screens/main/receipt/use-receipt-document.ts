@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import type { ClosureDocument } from '@wcpos/database';
 import { isOrderBasedCloudProfile, usePrint } from '@wcpos/printer';
 import { Toast } from '@wcpos/components/toast';
 import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
@@ -22,6 +23,8 @@ import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num
 export function useReceiptDocument({
 	order,
 	autoPrintAllowed,
+	getLocalClosure,
+	isReprint,
 	document,
 	documentReady,
 	localReport,
@@ -29,6 +32,8 @@ export function useReceiptDocument({
 	templateType,
 	storeId,
 }: {
+	getLocalClosure?: () => Promise<ClosureDocument | null>;
+	isReprint?: boolean;
 	templateType?: 'receipt' | 'report' | 'closure';
 	storeId?: number;
 	order?: EngineRecord<'orders'>;
@@ -62,6 +67,7 @@ export function useReceiptDocument({
 
 	// Template renderer — provides template list, selection, and rendered output
 	const {
+		refetch,
 		templates,
 		selectedTemplateId,
 		setSelectedTemplateId,
@@ -77,6 +83,7 @@ export function useReceiptDocument({
 		preparePrintContent,
 	} = useTemplateRenderer({
 		orderId,
+		isReprint,
 		templateType,
 		storeId,
 		baseReceiptURL,
@@ -165,6 +172,19 @@ export function useReceiptDocument({
 		preparePrint: async () => {
 			let commit: (() => Promise<void>) | undefined;
 			const prepared = await preparePrintContent(async () => {
+				if (getLocalClosure) {
+					const closure = await getLocalClosure();
+					if (!closure) throw new Error('Local closure unavailable');
+					const count = closure.getLatest().print_count + 1;
+					commit = async () => {
+						await closure.incrementalModify((row) => ({
+							...row,
+							print_count: Math.max(row.print_count, count),
+							printed_at: row.printed_at ?? new Date().toISOString(),
+						}));
+					};
+					return count;
+				}
 				if (!order) return 0;
 				const local = order.getLatest().local as NonNullable<typeof order>['local'] & {
 					receiptPrintCount?: number;
@@ -232,10 +252,15 @@ export function useReceiptDocument({
 	const printDestination =
 		(reportSystemDialog ? undefined : resolvedPrinter?.name) ?? t('receipt.print_dialog');
 	const print = React.useCallback(async () => {
+		if (
+			document?.startsWith('closure:') &&
+			(!selectedTemplate?.offline_capable || !selectedTemplate.content)
+		)
+			throw new Error(t('reports.closure_template_required'));
 		const dispatched = (await printReceipt()) === true;
 		if (dispatched) setPrintedTo(printDestination);
 		return dispatched;
-	}, [printReceipt, printDestination]);
+	}, [printReceipt, printDestination, document, selectedTemplate, t]);
 
 	/**
 	 * Allow auto print for checkout
@@ -315,6 +340,7 @@ export function useReceiptDocument({
 		(isSyncing || (hasDocument && frameState !== 'loaded'));
 
 	return {
+		refetch,
 		receiptData,
 		serverReceiptData,
 		...(document ? { document } : {}),

@@ -1,6 +1,5 @@
 import { useDocField } from '@wcpos/query';
 import { PrinterService } from '@wcpos/printer';
-import { log } from '@wcpos/utils/logger';
 import type { ClosureDocument } from '@wcpos/database';
 
 import { logDrawerOpened, logXReportPrinted, useRegisterActor } from './audit';
@@ -13,7 +12,7 @@ import { useResolvedPrinter } from '../../screens/main/receipt/hooks/use-resolve
 // Existing register-report printer selection, shared by the till and Reports.
 const REPORT_TEMPLATE = { id: 'register-session', output_type: 'escpos', paper_width: null };
 
-export function useSessionReport(closure?: ClosureDocument | null) {
+export function useSessionReport(closure?: ClosureDocument | null, isReprint = false) {
 	const actor = useRegisterActor();
 	const { session, expected, blind, binding, movements, salesCount } = useRegisterSession();
 	const snapshot = useDocField(closure, (row) => row);
@@ -36,6 +35,8 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 			: undefined;
 	const report = useReceiptDocument({
 		autoPrintAllowed: false,
+		isReprint,
+		getLocalClosure: closure ? async () => closure : undefined,
 		document: closure
 			? `closure:${snapshot?.server_closure_id ?? closure.id}`
 			: session
@@ -60,18 +61,6 @@ export function useSessionReport(closure?: ClosureDocument | null) {
 					registerId: session?.register_id,
 				});
 			const at = new Date().toISOString();
-			try {
-				if (closure)
-					await closure.incrementalModify((row) => ({
-						...row,
-						printed_at: row.printed_at ?? at,
-						print_count: row.print_count + 1,
-					}));
-			} catch (error) {
-				log.warn('Closure print marker write failed after dispatch', {
-					context: { error: String(error) },
-				});
-			}
 			return at;
 		},
 		openDrawer: async () => {

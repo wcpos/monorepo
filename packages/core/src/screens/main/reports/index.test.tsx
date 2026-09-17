@@ -274,3 +274,35 @@ it('can enter local Closures while the Sales workspace is still loading', () => 
 		mockReportsPending = false;
 	}
 });
+
+let mockRoute: Record<string, string> = {};
+jest.mock('expo-router', () => ({ useLocalSearchParams: () => mockRoute }));
+// Revert: ignore the register-panel route selector and mount Sales instead of the requested closure.
+it('opens the requested closure room and business day for Pro', () => {
+	mockPro = true;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	mockRoute = { closureId: 'c', businessDay: '2026-09-16', registerId: 'r' };
+	render(<ReportsScreen />);
+	expect(mockClosureScope).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			initialClosureId: 'c',
+			scope: expect.objectContaining({ from: '2026-09-16', to: '2026-09-16' }),
+		})
+	);
+	mockRoute = {};
+});
+
+// Revert: link an older unstamped closure to Today instead of its store-day fallback.
+it('opens an unstamped last closure on the day used by the local list', () => {
+	mockPro = true;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	mockRoute = { closureId: 'legacy', closedAt: '2026-09-16T17:00:00Z', registerId: 'r' };
+	render(<ReportsScreen />);
+	expect(mockClosureScope).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			initialClosureId: 'legacy',
+			scope: expect.objectContaining({ from: '2026-09-16', to: '2026-09-16' }),
+		})
+	);
+	mockRoute = {};
+});

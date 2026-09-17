@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
@@ -54,8 +55,9 @@ export function RegisterPanel({
 	const [error, setError] = React.useState('');
 	const { format } = useCurrencyFormat();
 	const { print } = useSessionReport();
-	const { print: reprint } = useSessionReport(lastClosure);
+	const { print: reprint } = useSessionReport(lastClosure, true);
 	const t = useT();
+	const router = useRouter();
 	const side = usePOSOverlaySide();
 	const attempt = async (action: () => Promise<unknown>) => {
 		try {
@@ -187,12 +189,29 @@ export function RegisterPanel({
 					)}
 					{lastClosure && (
 						<View testID="register-panel-last-closure" className="gap-2">
-							<Text>
+							<Button
+								testID="register-panel-open-closure"
+								variant="ghost"
+								className="min-h-12"
+								disabled={blind}
+								onPress={() => {
+									router.push({
+										pathname: '/reports',
+										params: {
+											closureId: lastClosure.id,
+											businessDay: lastClosure.business_day,
+											closedAt: lastClosure.closed_at,
+											registerId: lastClosure.register_id,
+										},
+									});
+									onOpenChange(false);
+								}}
+							>
 								{t('register.closure_written_n', {
 									n: lastClosure.server_number ?? lastClosure.number,
 								})}
 								{blind ? '' : ` · ${format(Number(lastClosure.counted.cash))}`}
-							</Text>
+							</Button>
 							{!lastClosure.synced_rows_at ? (
 								<Text testID="closure-unsynced" className="text-muted-foreground">
 									{t('register.unsynced')}

@@ -18,7 +18,7 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 export function SessionCard() {
 	const { session, binding, expected, salesCount, blind, lastClosure } = useRegisterSession();
 	const active = session?.status === 'open' || session?.status === 'counting';
-	const { print } = useSessionReport(active ? undefined : lastClosure);
+	const { print } = useSessionReport(active ? undefined : lastClosure, !active);
 	const { site } = useStoreSession();
 	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
 	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
