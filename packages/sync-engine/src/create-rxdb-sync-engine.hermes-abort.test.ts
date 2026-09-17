@@ -64,11 +64,6 @@ function engineWith(
 		identity: freshIdentity(),
 		mode: 'manual',
 		fetch,
-		routes: {
-			'/changes/config-fingerprint': { fingerprints: {} },
-			// The scope-open change-signal head prime: answered here so the fake fetch below only ever sees its own catalogue traffic.
-			'/changes/sequence-log': { checkpoint: { head: 0 } },
-		},
 		awaitReady: false,
 	}).engine;
 }

@@ -61,7 +61,6 @@ function engine(
 		identity: identity(),
 		mode: 'manual',
 		fetch: (url, init) => fetcher?.(url, init) ?? Promise.reject(new Error(`unexpected ${url}`)),
-		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
 		now,
 		diagnostics,
 		connectivitySignal: connectivity,
@@ -93,6 +92,7 @@ describe('existence maintenance lanes through the public facade', () => {
 			const highPressure = (body: unknown) =>
 				Response.json(body, { headers: { 'X-WCPOS-Pressure': 'high' } });
 			const harness = await createEngineHarness({
+				protocolDefaults: false,
 				mode: 'auto',
 				now: () => nowMs,
 				captureTimers: true,
