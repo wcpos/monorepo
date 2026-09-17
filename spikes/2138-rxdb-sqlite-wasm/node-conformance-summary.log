@@ -1,0 +1,22 @@
+# Node conformance run summary (full rxdb 17.4.0 unit suite minus replication-webrtc, DEFAULT_STORAGE=custom)
+
+
+> rxdb@17.4.0 test:node:custom
+> npm run transpile && cross-env DEFAULT_STORAGE=custom mocha --expose-gc --config ./config/.mocharc.cjs ./test_tmp/unit.test.js --experimental-sqlite --grep replication-webrtc --invert
+
+
+> rxdb@17.4.0 transpile
+> npm run build:version && node scripts/transpile.mjs && cp ./scripts/module_package.json test_tmp/package.json
+
+
+> rxdb@17.4.0 build:version
+> node ./scripts/update-version-variable.mjs
+
+...
+init.test.ts;util.test.js;vector-distance.test.ts;custom-index.test.ts;query-planner.test.js;doc-cache.test.ts;internal-indexes.test.js;rx-storage-implementations.test.ts (implementation: sqlite-wasm-oo1);rx-storage-query-correctness.test.ts;rx-storage-helper.test.ts;instance-of-check.test.js;rx-schema.test.ts;bug-report.test.js;rx-database.test.ts;rx-document.test.js;rx-collection.test.ts;validate.test.js (ajv) ;validate.test.js (z-schema) ;validate.test.js (custom formats) ;rx-query.test.ts;cross-instance.test.js;local-documents.test.ts;change-event-buffer.test.js;reactive-query.test.js;key-compression.test.js;event-reduce.test.js;cache-replacement-policy.test.js;query-builder.test.js;idle-queue.test.js;reactivity.test.ts;reactive-collection.test.js;reactive-document.test.js;cleanup.test.js;hooks.test.js;rx-pipeline.test.js;orm.test.js;replication-protocol.test.ts (implementation: sqlite-wasm-oo1);replication.test.ts;replication-multiinstance.test.ts;replication-graphql.test.ts;replication-websocket.test.ts;encryption.test.ts;rx-state.test.ts (useSchemaValidator: true);rx-state.test.ts (useSchemaValidator: false);migration-schema.test.ts;attachments.test.ts;attachments-compression.test.ts (mode: deflate);attachments-compression.test.ts (mode: gzip);migration-storage.test.ts (prev-major to newest (dexie));migration-storage.test.ts (newest to newest);webmcp.test.ts;crdt.test.ts;population.test.js;leader-election.test.js;backup.test.ts;import-export.test.js;database-lifecycle.ts;plugin.test.js;last.test.ts (sqlite-wasm-oo1);
+
+conformance block ticks: 62
+journal_mode lines: 1505 spike-2138 journal_mode requested/effective: WAL wal
+
+  1416 passing (2m)
+Node suite exit code: 0
