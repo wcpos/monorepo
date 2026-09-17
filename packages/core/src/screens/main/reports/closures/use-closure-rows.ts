@@ -141,9 +141,7 @@ export function useClosureRows(requested: ClosureScope) {
 		rows.length < page.target &&
 		page.more &&
 		page.status === 'ready';
-	const needsServer =
-		!!license?.isPro &&
-		(scope.storeId !== store.id || scope.registerId !== binding.registerId || scope.from < today);
+	const needsServer = !!license?.isPro;
 	const loadMore = React.useCallback(async () => {
 		if (!online || !needsServer || !page.more || ['loading', 'denied'].includes(page.status))
 			return;

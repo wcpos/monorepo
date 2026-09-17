@@ -5,6 +5,7 @@ import { Query } from 'mingo';
 
 import type { ClosureRow } from '@wcpos/database';
 
+import { exportCsv } from './export-csv';
 import { useClosureRows } from './use-closure-rows';
 
 const source = new BehaviorSubject<{ toMutableJSON: () => ClosureRow }[]>([]);
@@ -55,13 +56,55 @@ beforeEach(() => {
 	online = true;
 	isPro = true;
 });
-// Revert: replace the local-first result with an exclusively server-backed list.
-it('shows local rows immediately without requesting current-register today', () => {
+// Revert: enable server reads for Free, or replace the local-first result with a server-only list.
+it('shows local rows immediately without requesting current-register today for Free', async () => {
+	isPro = false;
 	source.next([{ toMutableJSON: () => row('local') }]);
 	const { result } = renderHook(() => useClosureRows(scope));
 	expect(result.current.rows.map((r) => r.id)).toEqual(['local']);
+	await act(() => result.current.loadMore());
 	expect(get).not.toHaveBeenCalled();
 });
+// Revert: exempt bound-register Today from Pro server reads, or let server rows replace pending/failed locals.
+it.each(['pending', 'failed'] as const)(
+	'merges Pro current-register Today into the list and CSV while preserving %s local rows',
+	async (sync_status) => {
+		const local = row('local', {
+			server_closure_id: 'server-local',
+			sync_status,
+			number: 1,
+			counted: { cash: '9' },
+			variance: { cash: '0' },
+			breakdowns: {},
+		});
+		source.next([{ toMutableJSON: () => local }]);
+		get.mockResolvedValue({
+			data: [
+				row('server-local', { counted: { cash: '1' } }),
+				row('another-device', { number: 2, counted: { cash: '20' } }),
+			],
+		});
+		const { result } = renderHook(() => useClosureRows(scope));
+		expect(result.current.rows).toEqual([local]);
+		await waitFor(() => expect(result.current.status).toBe('ready'));
+		expect(result.current.rows.map((r) => r.id).sort()).toEqual(['another-device', 'local']);
+		expect(result.current.rows.find((r) => r.id === 'local')).toEqual(local);
+		expect(get).toHaveBeenCalledTimes(1);
+		expect(get).toHaveBeenCalledWith('closures', {
+			params: {
+				register_id: 'r',
+				store_id: 1,
+				after: '2026-09-17',
+				before: '2026-09-17',
+				page: 1,
+				per_page: 50,
+			},
+		});
+		const csv = exportCsv(result.current.rows, (key) => key);
+		expect(csv.split('\r\n')).toHaveLength(3);
+		expect(csv).toContain('"2026-09-17","2"');
+	}
+);
 // Revert: remove paging, id merge, pending-local precedence, or the short-page stop.
 it('pages another register, dedupes, preserves pending local rows and stops on a short page', async () => {
 	source.next([
