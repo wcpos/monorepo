@@ -157,7 +157,11 @@ export function TerminalLegView({
 	};
 	if (leg.outcome === 'captured' && leg.settlement?.finishingError) {
 		return (
-			<VStack testID="checkout-terminal-finishing-error" className="bg-sidebar flex-1 gap-4 p-4">
+			<ScrollView
+				testID="checkout-terminal-finishing-error"
+				className="bg-sidebar flex-1"
+				contentContainerClassName="gap-4 p-4"
+			>
 				<Text className="text-destructive">{t('pos_checkout.paid_but_order_not_finished')}</Text>
 				<Collapsible>
 					<CollapsibleTrigger
@@ -179,7 +183,7 @@ export function TerminalLegView({
 				>
 					{t('settings.having_trouble')}
 				</DocsLink>
-			</VStack>
+			</ScrollView>
 		);
 	}
 	if (leg.outcome === 'captured') return null; // The flow consumes this external outcome and opens the receipt.
