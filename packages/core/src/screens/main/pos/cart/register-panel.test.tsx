@@ -41,6 +41,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			counted: { cash: '570' },
 			till_expected: { cash: '570' },
 			variance: { cash: '0' },
+			opened_at: '2026-09-09T23:00:00Z',
 			closed_at: '2026-09-10T17:00:00Z',
 			synced_rows_at: syncedRowsAt,
 			server_findings: { gap: true },
@@ -52,7 +53,10 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
 	useStoreSession: () => ({ site: { populateResource: () => null } }),
 }));
-jest.mock('../../../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'UTC' }) }));
+jest.mock('../../../../hooks/use-store-day', () => ({
+	useStoreDay: () => ({ timezone: 'UTC' }),
+	useViewedStore: () => ({ name: 'Shop', currency: 'GBP' }),
+}));
 jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
 jest.mock('observable-hooks', () => ({
 	useObservableSuspense: () => [{ id: 7, display_name: 'Alex' }],
@@ -337,7 +341,7 @@ it('opens the last closure in Reports Closures and dismisses the register panel'
 	fireEvent.click(screen.getByTestId('register-panel-open-closure'));
 	expect(mockPush).toHaveBeenCalledWith({
 		pathname: '/reports',
-		params: expect.objectContaining({ closureId: 'c' }),
+		params: expect.objectContaining({ closureId: 'c', openedAt: '2026-09-09T23:00:00Z' }),
 	});
 	expect(onOpenChange).toHaveBeenCalledWith(false);
 });

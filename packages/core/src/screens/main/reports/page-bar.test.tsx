@@ -125,7 +125,7 @@ jest.mock('../../../hooks/use-local-date', () => ({
 let isPro = false;
 const stores = of([
 	{ id: 1, name: 'Shop' },
-	{ id: 2, name: 'Second' },
+	{ id: 2, name: 'Second', timezone: 'Pacific/Kiritimati' },
 ]);
 const cashiers = of([
 	{ id: 7, display_name: 'Pat' },
@@ -319,4 +319,33 @@ it('seeds Custom from the current scope after selecting another range', () => {
 	expect(change).toHaveBeenLastCalledWith(
 		expect.objectContaining({ from: '2026-09-01', to: '2026-09-04' })
 	);
+});
+
+// Revert: call useStoreDay() without the viewed store id.
+it('uses the viewed store day for presets and custom history bounds', () => {
+	isPro = true;
+	render(
+		<PageBar
+			room="closures"
+			onRoomChange={room}
+			scope={{ ...scope, storeId: 2 }}
+			onScopeChange={change}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-today'));
+	expect(change).toHaveBeenLastCalledWith(
+		expect.objectContaining({ from: '2026-09-17', to: '2026-09-17' })
+	);
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-yesterday'));
+	expect(change).toHaveBeenLastCalledWith(
+		expect.objectContaining({ from: '2026-09-16', to: '2026-09-16' })
+	);
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-custom'));
+	expect(calendar.mock.calls.at(-1)?.[0]).toMatchObject({
+		minDate: '2026-06-17',
+		maxDate: '2026-09-17',
+	});
 });

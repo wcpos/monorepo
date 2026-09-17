@@ -10,8 +10,12 @@ import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template
 import { ClosurePanel } from './closure-panel';
 
 const mockPatch = jest.fn(async (_patch: { receipt_snapshot: string }) => undefined);
-const mockCollection = { findOne: () => ({ exec: async () => ({ incrementalPatch: mockPatch }) }) };
+const mockCollection = {
+	findOne: jest.fn((_query: unknown) => ({ exec: async () => ({ incrementalPatch: mockPatch }) })),
+};
 let mockPhone = true;
+let mockLoadError: Error | null = null;
+let mockOffline: boolean | undefined;
 let mockRemote: Record<string, unknown> | null = null;
 const template = {
 	id: 'core',
@@ -126,7 +130,8 @@ const mockDocument = jest.fn((options: { localReport: Record<string, unknown> })
 	templates: [template],
 	selectedTemplateId: 'core',
 	setSelectedTemplateId: jest.fn(),
-	isOffline: !mockRemote,
+	isOffline: mockOffline ?? !mockRemote,
+	documentError: mockLoadError,
 	receiptData: mockRemote ?? options.localReport,
 	serverReceiptData: mockRemote,
 	previewProps: {
@@ -184,6 +189,8 @@ const row: ClosureRow = {
 };
 beforeEach(() => {
 	mockRemote = null;
+	mockLoadError = null;
+	mockOffline = undefined;
 	mockPhone = true;
 	jest.clearAllMocks();
 });
@@ -326,4 +333,43 @@ it('formats settled amounts and correction timestamps in the closure store', () 
 	render(<ClosurePanel row={{ ...row, store_id: 2 }} onClose={() => {}} />);
 	expect(screen.getByTestId('closure-settled').textContent).toContain('¥99 → ¥101');
 	expect(screen.getByTestId('closure-correction-1').textContent).toContain('Sep 12, 2026, 3:00 AM');
+});
+
+// Revert: render a stale fallback as current after an online document GET failure, or omit Retry.
+it('replaces the online fallback with a document error and a manual retry', () => {
+	mockOffline = false;
+	mockLoadError = new Error('document refused');
+	const view = render(<ClosurePanel row={row} onClose={jest.fn()} />);
+	expect(screen.queryByTestId('document')).toBeNull();
+	expect(screen.getByTestId('closure-document-error').textContent).toContain(
+		'Could not load closures'
+	);
+	fireEvent.click(screen.getByTestId('closure-document-retry'));
+	expect(mockRefetch).toHaveBeenCalledTimes(1);
+	mockLoadError = null;
+	mockRemote = { closure: { ...row, number: 8 } };
+	view.rerender(<ClosurePanel row={row} onClose={jest.fn()} />);
+	expect(screen.queryByTestId('closure-document-error')).toBeNull();
+	expect(screen.getByTestId('document').textContent).toBe('8');
+});
+// Revert: suppress the offline fallback with the online document error state.
+it('keeps the offline document and warning rather than online Retry', () => {
+	mockOffline = true;
+	mockLoadError = new Error('disconnected');
+	render(<ClosurePanel row={row} onClose={jest.fn()} />);
+	expect(screen.getByTestId('document').textContent).toBe('4');
+	expect(screen.queryByTestId('closure-document-retry')).toBeNull();
+	expect(screen.getByText('Connect to recount')).toBeTruthy();
+});
+
+// Revert: find a server-listed closure only by local primary key, losing the offline print record.
+it('resolves the local closure behind a server-listed drill-in', async () => {
+	render(<ClosurePanel row={{ ...row, id: 'server' }} onClose={jest.fn()} />);
+	const options = mockDocument.mock.calls.at(-1)?.[0] as unknown as {
+		getLocalClosure: () => Promise<unknown>;
+	};
+	await options.getLocalClosure();
+	expect(mockCollection.findOne).toHaveBeenCalledWith({
+		selector: { $or: [{ id: 'server' }, { server_closure_id: 'server' }] },
+	});
 });

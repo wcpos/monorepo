@@ -17,7 +17,7 @@ import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
 import type { ReceiptData } from '../utils/build-receipt-data';
-import type { ReceiptMode } from './use-receipt-data';
+import type { ClosurePrintMarker, ReceiptMode } from './use-receipt-data';
 
 // Bounds how long auto-print and the syncing state may wait for the receipts API —
 // a hung fetch must never leave the cashier unable to print.
@@ -66,6 +66,7 @@ interface UseTemplateRendererOptions {
 }
 
 interface TemplateRendererResult {
+	documentError: Error | null;
 	refetch: () => void;
 	serverReceiptData: Record<string, unknown> | null;
 	templates: TemplateDocument[];
@@ -82,7 +83,7 @@ interface TemplateRendererResult {
 	preparePrintContent: (nextLocalPrintCount: () => Promise<number>) => Promise<{
 		receiptData: ReceiptData | Record<string, unknown>;
 		html?: string;
-		commit?: () => Promise<void>;
+		commit?: () => Promise<ClosurePrintMarker | undefined>;
 	}>;
 }
 
@@ -129,6 +130,7 @@ export function useTemplateRenderer({
 	// Fetch receipt data from API (when online)
 	const {
 		data: apiReceiptData,
+		error: documentError,
 		hasResponded,
 		refetch,
 		isLoading,
@@ -351,6 +353,7 @@ export function useTemplateRenderer({
 	};
 
 	return {
+		documentError,
 		refetch,
 		preparePrintContent,
 		serverReceiptData: isOffline ? null : apiReceiptData,

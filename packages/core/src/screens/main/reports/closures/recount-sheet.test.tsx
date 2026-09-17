@@ -1,22 +1,47 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
+import { of } from 'rxjs';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { createTestT } from '../../../../../jest/translate';
 import { RecountSheet } from './recount-sheet';
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
-jest.mock('../../hooks/use-currency-format', () => ({
-	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
-}));
+const viewedStores = of([
+	{
+		id: 2,
+		currency: 'EUR',
+		currency_pos: 'right_space',
+		price_num_decimals: 2,
+		price_decimal_sep: ',',
+		price_thousand_sep: '.',
+	},
+]);
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({
-		wpCredentials: { capabilities: manager ? ['manage_woocommerce_pos_closures'] : [] },
-		store: { currency: 'USD' },
+		wpCredentials: {
+			capabilities: manager ? ['manage_woocommerce_pos_closures'] : [],
+			populate$: () => viewedStores,
+		},
+		store: {
+			id: 1,
+			currency: 'USD',
+			currency_pos: 'left',
+			price_num_decimals: 2,
+			price_decimal_sep: '.',
+			price_thousand_sep: ',',
+		},
 	}),
 	useStoreSession: () => ({
 		wpCredentials: { id: 7, capabilities: manager ? ['manage_woocommerce_pos_closures'] : [] },
-		store: { currency: 'USD' },
+		store: {
+			id: 1,
+			currency: 'USD',
+			currency_pos: 'left',
+			price_num_decimals: 2,
+			price_decimal_sep: '.',
+			price_thousand_sep: ',',
+		},
 	}),
 }));
 jest.mock('../../pos/contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
@@ -104,6 +129,7 @@ const mockMint = jest.fn(() => 'client-uuid');
 let manager = true;
 const row = {
 	id: 'closure',
+	store_id: 1,
 	server_closure_id: 'server-closure',
 	counted: { cash: '99', card: '3' },
 	sync_status: 'synced',
@@ -176,11 +202,6 @@ it('coalesces repeated submit taps and surfaces a refusal without retrying', asy
 	expect(done).not.toHaveBeenCalled();
 });
 
-jest.mock('../../pos/cart/register-count', () => ({
-	DenominationTile: ({ value, add }: { value: string; add: (n: number) => void }) => (
-		<button data-testid={`den-tile-${value}`} onClick={() => add(1)} />
-	),
-}));
 // Revert: use a captured count during a held denomination key and lose repeated increments.
 it('accumulates denomination presses and sends their cash total', async () => {
 	mount();
@@ -215,4 +236,25 @@ it('reuses the recount id until inputs change', async () => {
 	fireEvent.click(screen.getByTestId('recount-save'));
 	await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
 	expect(post.mock.calls[2][1].id).toBe('changed');
+});
+
+// Revert: read denominations from the till or fail to pass the viewed formatter to counting controls.
+it('counts and formats euro denominations for a euro closure on a dollar till', async () => {
+	render(
+		<RecountSheet row={{ ...row, store_id: 2 } as never} onSaved={done} onOpenChange={close} />
+	);
+	fillCount();
+	fireEvent.click(screen.getByTestId('recount-denominations'));
+	expect(screen.queryByTestId('den-tile-0.25')).toBeNull();
+	const coin = screen.getByTestId('den-tile-0.20');
+	expect(coin.textContent).toContain('0,20 €');
+	expect(screen.getByTestId('recount-cash').parentElement?.textContent).toContain('€');
+	fireEvent.click(coin);
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() =>
+		expect(post).toHaveBeenCalledWith(
+			'closures/server-closure/recount',
+			expect.objectContaining({ counted: { cash: '0.20', card: '4' } })
+		)
+	);
 });

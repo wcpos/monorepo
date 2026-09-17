@@ -26,19 +26,37 @@ jest.mock('@wcpos/components/button', () => ({
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
-jest.mock('../../hooks/use-currency-format', () => ({
-	useCurrencyFormat: () => ({ format: (n: number) => `£${n.toFixed(2)}` }),
-}));
-jest.mock('../../../../hooks/use-store-day', () => ({
-	useStoreDay: () => ({ timezone: 'UTC' }),
-	zoneOptions: jest.requireActual('../../../../hooks/use-store-day').zoneOptions,
-}));
 const credentials = of([{ id: 7, display_name: 'Pat' }]);
+const viewedStores = of([
+	{
+		id: 2,
+		timezone: 'Asia/Tokyo',
+		currency: 'JPY',
+		currency_pos: 'left',
+		price_num_decimals: 0,
+		price_decimal_sep: '.',
+		price_thousand_sep: ',',
+	},
+]);
+const appState = () => ({
+	store: {
+		id: 1,
+		timezone: 'UTC',
+		currency: 'GBP',
+		currency_pos: 'left',
+		price_num_decimals: 2,
+		price_decimal_sep: '.',
+		price_thousand_sep: ',',
+	},
+	wpCredentials: {
+		capabilities: blind ? [] : ['view_woocommerce_pos_reports'],
+		populate$: () => viewedStores,
+	},
+	site: { populate$: () => credentials },
+});
 jest.mock('../../../../contexts/app-state', () => ({
-	useStoreSession: () => ({
-		wpCredentials: { capabilities: blind ? [] : ['view_woocommerce_pos_reports'] },
-		site: { populate$: () => credentials },
-	}),
+	useAppState: () => appState(),
+	useStoreSession: () => appState(),
 }));
 let session: { opened_at_gmt: string; opened_by: number; status: string } | null;
 let blind = false;
@@ -104,7 +122,7 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: online ? 'online-website-available' : 'offline' }),
 }));
 jest.mock('@wcpos/query', () => ({
-	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
+	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => (doc ? pick(doc) : undefined),
 }));
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: (args: unknown) => documentHook(args as never),
@@ -130,16 +148,14 @@ beforeEach(() => {
 					: null,
 	}));
 });
-// Revert: use the physical till session/figures/document for a remotely selected register.
+// Revert: omit storeId in SessionCardContent day/currency hooks or fail to pass the remote store id.
 it('loads a remote counting session and prints its X document, retaining it offline', async () => {
 	const view = render(<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={2} />);
-	await waitFor(() =>
-		expect(screen.getByTestId('session-expected').textContent).toContain('£200.00')
-	);
+	await waitFor(() => expect(screen.getByTestId('session-expected').textContent).toContain('¥200'));
 	expect(screen.getByTestId('reports-session-card').textContent).toContain('12');
 	expect(screen.getByTestId('reports-session-card').textContent).toContain('Back');
 	// Revert: parse the server SQL UTC opening time as device-local time.
-	expect(screen.getByTestId('reports-session-card').textContent).toContain('09:00');
+	expect(screen.getByTestId('reports-session-card').textContent).toContain('18:00');
 	expect(get).toHaveBeenCalledWith(
 		'sessions',
 		expect.objectContaining({
@@ -151,7 +167,7 @@ it('loads a remote counting session and prints its X document, retaining it offl
 	);
 	online = false;
 	view.rerender(<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={2} />);
-	expect(screen.getByTestId('session-expected').textContent).toContain('£200.00');
+	expect(screen.getByTestId('session-expected').textContent).toContain('¥200');
 	expect(screen.getByTestId('session-unavailable')).toBeTruthy();
 	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(true);
 });

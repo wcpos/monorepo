@@ -8,6 +8,7 @@ const scope = { from: '2026-09-17', to: '2026-09-17', registerId: 'r', storeId: 
 const rows = [
 	{
 		id: 'c',
+		server_closure_id: 'server',
 		business_day: '2026-09-17',
 		number: 2,
 		counted: { cash: '99' },
@@ -21,6 +22,7 @@ jest.mock('./save-or-share-csv', () => ({
 	saveOrShareCsv: (...args: unknown[]) => share(...(args as [])),
 }));
 let status = 'ready';
+let unavailableIds = new Set<string>();
 const loadMore = jest.fn();
 jest.mock('./use-closure-rows', () => ({
 	useClosureRows: () => ({
@@ -29,7 +31,7 @@ jest.mock('./use-closure-rows', () => ({
 		status,
 		loadMore,
 		hasMore: true,
-		unavailableIds: new Set(),
+		unavailableIds,
 	}),
 }));
 jest.mock('./closure-list', () => ({ ClosureList: () => null }));
@@ -123,3 +125,15 @@ it('loads the next page on demand', () => {
 	fireEvent.click(screen.getByTestId('closures-load-more'));
 	expect(loadMore).toHaveBeenCalled();
 });
+
+// Revert: allow a drill-in whose canonical server id is marked unavailable.
+it('does not open an unavailable server-identified closure', () => {
+	unavailableIds = new Set(['server']);
+	render(<Closures scope={scope} initialClosureId="c" />);
+	expect(screen.queryByTestId('selected-closure')).toBeNull();
+	unavailableIds = new Set();
+});
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+
+jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));

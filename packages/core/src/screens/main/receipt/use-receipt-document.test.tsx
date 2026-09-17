@@ -262,10 +262,18 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		jest
 			.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
 			.mockReturnValue({ useSystemDialog: true });
-		const { result } = renderHook(() =>
+		let localRow = { print_count: 0, printed_at: null as string | null, counted: { cash: '99' } };
+		const localClosure = {
+			getLatest: () => localRow,
+			incrementalModify: async (update: (row: typeof localRow) => typeof localRow) => {
+				localRow = update(localRow);
+			},
+		};
+		const { result, rerender } = renderHook(() =>
 			useReceiptDocument({
 				autoPrintAllowed: false,
 				document: 'closure:c',
+				getLocalClosure: async () => localClosure as never,
 				templateType: 'closure',
 				localReport: { order: { currency: 'USD' }, closure: { number: 1 } },
 			})
@@ -278,13 +286,56 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		expect(mockPost).toHaveBeenCalledWith('closures/c/print', {});
 		expect(mockGet.mock.calls.every(([, options]) => !options.params.intent)).toBe(true);
 		expect(mockHtmlPrint.mock.calls[0][0]).toContain('Selected COPY 1');
+		expect(localRow).toEqual({
+			print_count: 2,
+			printed_at: '2026-09-17T12:00:00.000Z',
+			counted: { cash: '99' },
+		});
+		// A higher local marker must not decrease, and the first printed timestamp stays frozen.
+		localRow.print_count = 5;
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(localRow.print_count).toBe(5);
+		expect(localRow.printed_at).toBe('2026-09-17T12:00:00.000Z');
 		mockPost.mockRejectedValueOnce(new Error('refused'));
 		await act(async () => {
 			expect(await result.current.print()).toBe(true);
 		});
-		expect(mockPost).toHaveBeenCalledTimes(2);
-		expect(mockHtmlPrint).toHaveBeenCalledTimes(2);
+		expect(mockPost).toHaveBeenCalledTimes(3);
+		expect(localRow.print_count).toBe(5);
+		expect(mockHtmlPrint).toHaveBeenCalledTimes(3);
 		expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'refused' }));
+		mockOnline = false;
+		rerender();
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(mockHtmlPrint.mock.calls.at(-1)?.[0]).toContain('Selected COPY 5');
+		expect(localRow.print_count).toBe(6);
+		expect(mockPost).toHaveBeenCalledTimes(3);
+	});
+	// Revert: drop useReceiptData.error at either renderer or document-hook boundary.
+	it('exposes an authoritative document GET failure and clears it on manual retry', async () => {
+		mockGet.mockRejectedValueOnce(new Error('document unavailable'));
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+				localReport: { order: { currency: 'USD' }, closure: { number: 1 } },
+			})
+		);
+		await waitFor(() =>
+			expect(
+				(result.current as typeof result.current & { documentError?: Error }).documentError?.message
+			).toBe('document unavailable')
+		);
+		act(() => result.current.refetch());
+		await waitFor(() => expect(result.current.serverReceiptData).not.toBeNull());
+		expect(
+			(result.current as typeof result.current & { documentError?: Error | null }).documentError
+		).toBeNull();
 	});
 	// Revert: POST the closure count before printer dispatch succeeds.
 	it('does not count a closure when dispatch fails', async () => {

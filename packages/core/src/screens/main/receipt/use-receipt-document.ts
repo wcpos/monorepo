@@ -13,6 +13,7 @@ import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { useResolvedPrinter } from './hooks/use-resolved-printer';
 import { createCloudEnqueueFactory } from '../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { claimReceiptAutoPrint } from '../pos/checkout/checkout-mode';
@@ -67,6 +68,7 @@ export function useReceiptDocument({
 
 	// Template renderer — provides template list, selection, and rendered output
 	const {
+		documentError,
 		refetch,
 		templates,
 		selectedTemplateId,
@@ -213,7 +215,17 @@ export function useReceiptDocument({
 				const recordPrint = prepared.commit;
 				commit = async () => {
 					try {
-						await recordPrint();
+						const marker = await recordPrint();
+						const closure = marker && getLocalClosure ? await getLocalClosure() : null;
+						if (marker && closure) {
+							await closure.incrementalModify((row) => ({
+								...row,
+								print_count: Math.max(row.print_count, marker.print_count),
+								printed_at:
+									row.printed_at ??
+									convertUTCStringToLocalDate(marker.last_printed_at_gmt).toISOString(),
+							}));
+						}
 					} catch (error) {
 						Toast.show({
 							title: error instanceof Error ? error.message : t('reports.reprint_failed'),
@@ -222,7 +234,7 @@ export function useReceiptDocument({
 					}
 				};
 			}
-			return { ...prepared, ...(commit ? { commit } : {}) };
+			return { ...prepared, commit };
 		},
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
@@ -354,6 +366,7 @@ export function useReceiptDocument({
 		(isSyncing || (hasDocument && frameState !== 'loaded'));
 
 	return {
+		documentError,
 		refetch,
 		receiptData,
 		serverReceiptData,

@@ -11,6 +11,7 @@ import { useDocField } from '@wcpos/query';
 import { fromMinor } from '@wcpos/order-math';
 
 import { useAppState } from '../../../../contexts/app-state';
+import { useViewedStore } from '../../../../hooks/use-store-day';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { mintUuid } from '../../../../services/register/register-document';
@@ -35,9 +36,18 @@ export function RecountSheet({
 }) {
 	const t = useT();
 	const http = useRestHttpClient();
-	const { wpCredentials, store } = useAppState();
+	const { wpCredentials } = useAppState();
+	const store = useViewedStore(row.store_id ?? 0);
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
-	const currency = useDocField(store, (value) => value.currency);
+	const settings = useDocField(store, (value) => value);
+	const currency = settings?.currency;
+	const currencyOptions = {
+		currency,
+		currencyPosition: settings?.currency_pos,
+		decimalScale: settings?.price_num_decimals,
+		decimalSeparator: settings?.price_decimal_sep,
+		thousandSeparator: settings?.price_thousand_sep,
+	};
 	const manager = capabilities?.includes('manage_woocommerce_pos_closures');
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { screenSize } = useTheme();
@@ -105,6 +115,7 @@ export function RecountSheet({
 						<View key={method} testID={`recount-tender-${method}`} className="gap-2">
 							<Text>{t('register.tender_counted', { method })}</Text>
 							<RegisterAmount
+								currencyOptions={currencyOptions}
 								testID={`recount-${method}`}
 								value={value}
 								onChangeText={(amount) => {
@@ -129,6 +140,7 @@ export function RecountSheet({
 									const face = faces[index * 4 + column];
 									return face ? (
 										<DenominationTile
+											currencyOptions={currencyOptions}
 											key={face}
 											value={face}
 											count={pieces[face] ?? 0}

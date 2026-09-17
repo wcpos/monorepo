@@ -313,11 +313,16 @@ it('opens the requested closure room and business day for Pro', () => {
 	mockRoute = {};
 });
 
-// Revert: link an older unstamped closure to Today instead of its store-day fallback.
+// Revert: derive an unstamped closure route from closedAt instead of openedAt.
 it('opens an unstamped last closure on the day used by the local list', () => {
 	mockPro = true;
 	mockCapabilities = ['view_woocommerce_pos_reports'];
-	mockRoute = { closureId: 'legacy', closedAt: '2026-09-16T17:00:00Z', registerId: 'r' };
+	mockRoute = {
+		closureId: 'legacy',
+		openedAt: '2026-09-16T23:00:00Z',
+		closedAt: '2026-09-17T01:00:00Z',
+		registerId: 'r',
+	};
 	render(<ReportsScreen />);
 	expect(mockClosureScope).toHaveBeenLastCalledWith(
 		expect.objectContaining({

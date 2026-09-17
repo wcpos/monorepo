@@ -14,7 +14,7 @@ import type { ClosureRow, RegisterSessionRow, WPCredentialsDocument } from '@wcp
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
+import { useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -41,6 +41,7 @@ function SessionCardContent({
 	lastClosure,
 	print,
 	unavailable = false,
+	storeId,
 }: {
 	session: Pick<RegisterSessionRow, 'status' | 'opened_at_gmt' | 'opened_by'> | null;
 	binding: { registerName: string | null };
@@ -50,13 +51,22 @@ function SessionCardContent({
 	lastClosure: unknown;
 	print: () => Promise<unknown>;
 	unavailable?: boolean;
+	storeId?: number;
 }) {
 	const active = session?.status === 'open' || session?.status === 'counting';
 	const { site } = useStoreSession();
 	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
 	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
-	const { timezone } = useStoreDay();
-	const { format } = useCurrencyFormat();
+	const { timezone } = useStoreDay(storeId);
+	const viewedStore = useViewedStore(storeId);
+	const settings = useDocField(viewedStore, (value) => value);
+	const { format } = useCurrencyFormat({
+		currency: settings?.currency,
+		currencyPosition: settings?.currency_pos,
+		decimalScale: settings?.price_num_decimals,
+		decimalSeparator: settings?.price_decimal_sep,
+		thousandSeparator: settings?.price_thousand_sep,
+	});
 	const t = useT();
 	const [error, setError] = React.useState('');
 	const [busy, setBusy] = React.useState(false);
@@ -185,6 +195,7 @@ export function RemoteSessionCard({
 		<View testID={`remote-session-${register.id}`} className={!online ? 'opacity-50' : ''}>
 			{data.status === 'ready' ? (
 				<SessionCardContent
+					storeId={storeId}
 					session={data.session}
 					binding={{ registerName: register.name }}
 					expected={data.session?.expected ?? {}}

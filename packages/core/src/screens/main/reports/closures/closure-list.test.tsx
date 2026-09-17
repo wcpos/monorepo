@@ -30,9 +30,7 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
-jest.mock('../../hooks/use-currency-format', () => ({
-	useCurrencyFormat: () => ({ format: (n: number) => `£${n.toFixed(2)}` }),
-}));
+
 jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({ r: 'Front' }),
 }));
@@ -42,10 +40,31 @@ jest.mock('../../../../services/register-session/use-register-session-collection
 let storeTimezone = 'America/Los_Angeles';
 const mockSession = {
 	get store() {
-		return { id: 1, timezone: storeTimezone };
+		return {
+			id: 1,
+			timezone: storeTimezone,
+			currency: 'GBP',
+			currency_pos: 'left',
+			price_num_decimals: 2,
+			price_decimal_sep: '.',
+			price_thousand_sep: ',',
+		};
 	},
 	site: {},
-	wpCredentials: { populate$: () => of([{ id: 2, timezone: 'Pacific/Kiritimati' }]) },
+	wpCredentials: {
+		populate$: () =>
+			of([
+				{
+					id: 2,
+					timezone: 'Pacific/Kiritimati',
+					currency: 'EUR',
+					currency_pos: 'right_space',
+					price_num_decimals: 3,
+					price_decimal_sep: ',',
+					price_thousand_sep: '.',
+				},
+			]),
+	},
 };
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => mockSession,
@@ -56,7 +75,9 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 }));
 jest.mock('../../../../hooks/use-app-info', () => ({ useAppInfo: jest.fn() }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
-jest.mock('@wcpos/query', () => ({ useDocField: () => undefined }));
+jest.mock('@wcpos/query', () => ({
+	useDocField: <T,>(source: T, select: (v: T) => unknown) => (source ? select(source) : undefined),
+}));
 
 function row(id: string, changes: Partial<ClosureRow> = {}): ClosureRow {
 	return {
@@ -268,4 +289,30 @@ it('shows remote times and Today using the selected store timezone', () => {
 	);
 	expect(screen.getByTestId('closure-day-2026-09-18').textContent).toBe('Today');
 	expect(screen.getByTestId('closure-row-remote').textContent).toContain('02:00 → 03:00');
+});
+
+// Revert: keep useCurrencyFormat bound to the till instead of the viewed store settings.
+it('formats counted and variance using the viewed currency, precision and separators', () => {
+	render(
+		<ClosureList
+			storeId={2}
+			rows={[row('euro', { counted: { cash: '1234.567' }, variance: { cash: '-2.345' } })]}
+		/>
+	);
+	expect(screen.getByTestId('closure-counted-euro').textContent).toBe('1.234,567 €');
+	expect(screen.getByTestId('closure-result-euro').textContent).toBe('2,345 € short');
+});
+// Revert: check unavailableIds using row.id instead of server_closure_id.
+it('disables a server-identified unavailable row', () => {
+	const select = jest.fn();
+	render(
+		<ClosureList
+			rows={[row('local', { server_closure_id: 'server' })]}
+			unavailableIds={new Set(['server'])}
+			onSelect={select}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('closure-row-local'));
+	expect(select).not.toHaveBeenCalled();
+	expect(screen.getByTestId('closure-unavailable-local')).toBeTruthy();
 });

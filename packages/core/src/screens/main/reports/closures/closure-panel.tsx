@@ -44,6 +44,17 @@ export function ClosurePanel({
 	const phone = screenSize === 'sm';
 	const context = useClosureDocumentContext(row.store_id ?? 0);
 	const collection = useClosureCollection();
+	const getLocalClosure = React.useCallback(
+		async () =>
+			(await collection
+				?.findOne({
+					selector: {
+						$or: [{ id: row.id }, { server_closure_id: row.server_closure_id ?? row.id }],
+					},
+				})
+				.exec()) ?? null,
+		[collection, row.id, row.server_closure_id]
+	);
 	const local = React.useMemo(
 		() =>
 			row.receipt_snapshot ? (JSON.parse(row.receipt_snapshot) as Record<string, unknown>) : null,
@@ -52,7 +63,7 @@ export function ClosurePanel({
 	const doc = useReceiptDocument({
 		autoPrintAllowed: false,
 		isReprint: true,
-		getLocalClosure: async () => (await collection?.findOne(row.id).exec()) ?? null,
+		getLocalClosure,
 		document: `closure:${row.server_closure_id ?? row.id}`,
 		documentReady: row.sync_status === 'synced' || row.sync_status === 'superseded',
 		templateType: 'closure',
@@ -69,14 +80,13 @@ export function ClosurePanel({
 			return;
 		}
 		if (receipt_snapshot === row.receipt_snapshot) return;
-		void collection
-			.findOne(row.id)
-			.exec()
+		void getLocalClosure()
 			.then((record) => record?.incrementalPatch({ receipt_snapshot }))
 			.catch((error) =>
 				log.warn('Closure history could not be saved', { context: { error: String(error) } })
 			);
-	}, [remote, collection, row.id, row.receipt_snapshot]);
+	}, [remote, collection, getLocalClosure, row.receipt_snapshot]);
+	const documentError = doc.documentError && !doc.isOffline;
 	const recorded = get(doc.receiptData, 'closure', row) as RecordedFigures & {
 		number: number;
 		corrections?: Correction[];
@@ -144,8 +154,22 @@ export function ClosurePanel({
 				contentContainerClassName="gap-4 p-4"
 				contentContainerStyle={{ overflow: 'hidden' }}
 			>
-				<ReceiptBody doc={doc} hideSelects fullWidth />
-				{!!corrections.length && touched.size > 0 && (
+				{documentError ? (
+					<View className="gap-3">
+						<Text testID="closure-document-error">{t('reports.load_failed')}</Text>
+						<Button
+							testID="closure-document-retry"
+							variant="outline"
+							className="min-h-12"
+							onPress={doc.refetch}
+						>
+							{t('common.retry')}
+						</Button>
+					</View>
+				) : (
+					<ReceiptBody doc={doc} hideSelects fullWidth />
+				)}
+				{!documentError && !!corrections.length && touched.size > 0 && (
 					<View testID="closure-settled" className="gap-2 border-t pt-3">
 						<Text className="font-semibold">{t('reports.recorded_settled')}</Text>
 						{[...touched].map((field) => (
@@ -166,7 +190,7 @@ export function ClosurePanel({
 						))}
 					</View>
 				)}
-				{corrections.map((c) => (
+				{(documentError ? [] : corrections).map((c) => (
 					<View key={c.id} testID={`closure-correction-${c.id}`} className="gap-1 border-t pt-3">
 						<Text className="font-semibold">{t(`reports.${c.type}`)}</Text>
 						<Text>

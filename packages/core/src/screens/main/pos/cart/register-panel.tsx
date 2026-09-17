@@ -200,7 +200,7 @@ export function RegisterPanel({
 										params: {
 											closureId: lastClosure.id,
 											businessDay: lastClosure.business_day,
-											closedAt: lastClosure.closed_at,
+											openedAt: lastClosure.opened_at,
 											registerId: lastClosure.register_id,
 										},
 									});

@@ -204,7 +204,7 @@ export function useClosureRows(requested: ClosureScope) {
 		if (!merged.has(id) || pending) merged.set(id, row);
 	}
 	const rows = selectClosureRows([...merged.values()], scope, timezone);
-	const localIds = new Set(local.map((row) => row.id));
+	const localIds = new Set(local.map((row) => row.server_closure_id ?? row.id));
 	return {
 		scope,
 		rows,
@@ -212,7 +212,11 @@ export function useClosureRows(requested: ClosureScope) {
 		refreshRow,
 		hasMore: needsServer && page.more && page.status === 'ready',
 		unavailableIds: new Set(
-			online ? [] : rows.filter((row) => !localIds.has(row.id)).map((row) => row.id)
+			online
+				? []
+				: rows
+						.filter((row) => !localIds.has(row.server_closure_id ?? row.id))
+						.map((row) => row.server_closure_id ?? row.id)
 		),
 		status: needsServer
 			? !online

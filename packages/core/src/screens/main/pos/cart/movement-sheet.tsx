@@ -14,16 +14,20 @@ import {
 	normalizeAmount,
 } from '../../../../services/register-session/movement-input';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
-import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { type CurrencyFormatOptions, useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePOSOverlaySide } from '../contexts/overlay-side';
 
-export function RegisterAmount(props: {
+export function RegisterAmount({
+	currencyOptions,
+	...props
+}: {
+	currencyOptions?: CurrencyFormatOptions;
 	value: string;
 	onChangeText: (v: string) => void;
 	testID: string;
 	ref?: React.Ref<TextInput>;
 }) {
-	const { currencySymbol } = useCurrencyFormat();
+	const { currencySymbol } = useCurrencyFormat(currencyOptions);
 	return (
 		<View className="flex-row items-center self-start">
 			<Text className="text-[32px] tabular-nums">{currencySymbol}</Text>

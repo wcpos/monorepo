@@ -3,13 +3,14 @@ import { Pressable, View } from 'react-native';
 
 import { format as formatDate, parseISO, subDays } from 'date-fns';
 
+import { useDocField } from '@wcpos/query';
 import { Badge } from '@wcpos/components/badge';
 import { Text } from '@wcpos/components/text';
 import type { ClosureRow } from '@wcpos/database';
 
 import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useT } from '../../../../contexts/translations';
-import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
+import { inZone, useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-store-day';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
@@ -25,7 +26,15 @@ export function ClosureList({
 	onSelect?: (row: ClosureRow) => void;
 }) {
 	const t = useT();
-	const { format } = useCurrencyFormat();
+	const viewedStore = useViewedStore(storeId);
+	const settings = useDocField(viewedStore, (value) => value);
+	const { format } = useCurrencyFormat({
+		currency: settings?.currency,
+		currencyPosition: settings?.currency_pos,
+		decimalScale: settings?.price_num_decimals,
+		decimalSeparator: settings?.price_decimal_sep,
+		thousandSeparator: settings?.price_thousand_sep,
+	});
 	const { timezone } = useStoreDay(storeId);
 	const names = useRegisterNames();
 	const { formatDate: displayDate } = useLocalDate();
@@ -63,11 +72,11 @@ export function ClosureList({
 							</Text>
 						)}
 						<Pressable
-							disabled={unavailableIds?.has(row.id)}
+							disabled={unavailableIds?.has(row.server_closure_id ?? row.id)}
 							onPress={() => onSelect?.(row)}
 							accessibilityRole="button"
 							testID={`closure-row-${row.id}`}
-							className={`active:bg-muted min-h-14 flex-row items-center gap-3 border-t p-3 ${unavailableIds?.has(row.id) ? 'opacity-50' : ''}`}
+							className={`active:bg-muted min-h-14 flex-row items-center gap-3 border-t p-3 ${unavailableIds?.has(row.server_closure_id ?? row.id) ? 'opacity-50' : ''}`}
 						>
 							<View className="min-w-0 flex-1 gap-1">
 								<Text>
@@ -82,7 +91,7 @@ export function ClosureList({
 									{time(row.opened_at)} → {time(row.closed_at)} ·{' '}
 									{String(row.breakdowns.closed_by_name || t('register.unknown_cashier'))}
 								</Text>
-								{unavailableIds?.has(row.id) && (
+								{unavailableIds?.has(row.server_closure_id ?? row.id) && (
 									<Text testID={`closure-unavailable-${row.id}`}>
 										{t('reports.unavailable_offline')}
 									</Text>

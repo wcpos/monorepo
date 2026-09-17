@@ -153,7 +153,7 @@ function ReportsShell() {
 	const params = useLocalSearchParams<{
 		closureId?: string;
 		businessDay?: string;
-		closedAt?: string;
+		openedAt?: string;
 		registerId?: string;
 	}>();
 	const [room, setRoom] = React.useState(params.closureId ? 'closures' : 'sales');
@@ -165,8 +165,8 @@ function ReportsShell() {
 	const { license } = useAppInfo();
 	const closureDay =
 		params.businessDay ??
-		(params.closedAt
-			? format(new Date(params.closedAt), 'yyyy-MM-dd', zoneOptions(timezone))
+		(params.openedAt
+			? format(convertUTCStringToLocalDate(params.openedAt), 'yyyy-MM-dd', zoneOptions(timezone))
 			: today);
 	const initialScope = {
 		from: license?.isPro ? closureDay : today,

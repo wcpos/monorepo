@@ -42,7 +42,7 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 	const { store, site, wpCredentials } = useStoreSession();
 	const binding = useRegisterBinding();
 	const { license } = useAppInfo();
-	const { presets, timezone } = useStoreDay();
+	const { presets, timezone } = useStoreDay(scope.storeId);
 	const sources = React.useMemo(
 		() => ({
 			stores: wpCredentials.populate$('stores'),

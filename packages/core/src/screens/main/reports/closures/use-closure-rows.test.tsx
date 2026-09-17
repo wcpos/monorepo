@@ -288,3 +288,17 @@ it('merges server history even when the device has a closure on the start day', 
 		expect.arrayContaining(['local', 'another-device'])
 	);
 });
+
+// Revert: compare local UUIDs rather than canonical server identities for offline availability.
+it('keeps a server-listed local closure available offline by server id', async () => {
+	source.next([{ toMutableJSON: () => row('local', { server_closure_id: 'server' }) }]);
+	get.mockResolvedValue({
+		data: [row('server'), row('remote-local', { server_closure_id: 'remote-server' })],
+	});
+	const { result, rerender } = renderHook(() => useClosureRows({ ...scope, from: '2026-09-16' }));
+	await waitFor(() => expect(result.current.status).toBe('ready'));
+	online = false;
+	rerender();
+	expect(result.current.rows.map((r) => r.id)).toEqual(['server', 'remote-local']);
+	expect([...result.current.unavailableIds]).toEqual(['remote-server']);
+});

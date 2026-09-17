@@ -38,7 +38,9 @@ export function Closures({
 	const { rows, scope, status, hasMore, loadMore, refreshRow, unavailableIds } =
 		useClosureRows(requested);
 	const [selected, setSelected] = React.useState<string | null>(initialClosureId ?? null);
-	const row = rows.find((row) => row.id === selected && !unavailableIds.has(row.id));
+	const row = rows.find(
+		(row) => row.id === selected && !unavailableIds.has(row.server_closure_id ?? row.id)
+	);
 	const { store } = useStoreSession();
 	const binding = useRegisterBinding();
 	const directory = useRegisterDirectory(scope.storeId);
@@ -47,7 +49,11 @@ export function Closures({
 	const names = useRegisterNames();
 	const [error, setError] = React.useState('');
 	const lastKnownClosure = rows
-		.filter((row) => row.register_id === binding.registerId && !unavailableIds.has(row.id))
+		.filter(
+			(row) =>
+				row.register_id === binding.registerId &&
+				!unavailableIds.has(row.server_closure_id ?? row.id)
+		)
 		.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0];
 	const registerContainer = React.useCallback((node: View | null) => {
 		registerPortalContainer(

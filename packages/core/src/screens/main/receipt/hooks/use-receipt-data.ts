@@ -22,8 +22,13 @@ interface ReceiptApiResponse {
 	data: Record<string, unknown>;
 }
 
+export interface ClosurePrintMarker {
+	print_count: number;
+	last_printed_at_gmt: string;
+}
+
 interface UseReceiptDataResult {
-	commitPrint: () => Promise<void>;
+	commitPrint: () => Promise<ClosurePrintMarker | undefined>;
 	data: Record<string, unknown> | null;
 	mode: ReceiptMode;
 	hasSnapshot: boolean;
@@ -102,8 +107,9 @@ export function useReceiptData({
 		return (await fetchData(document?.startsWith('xreport:') ? undefined : 'print')).data ?? null;
 	}, [orderId, document, fetchData, isReprint]);
 	const commitPrint = React.useCallback(async () => {
-		if (document?.startsWith('closure:'))
-			await http.post(`closures/${document.slice(8)}/print`, {});
+		if (!document?.startsWith('closure:')) return;
+		const response = await http.post(`closures/${document.slice(8)}/print`, {});
+		return response.data as ClosurePrintMarker;
 	}, [document, http]);
 	const [fetchKey, setFetchKey] = React.useState(0);
 	const [state, setState] = React.useState<ReceiptDataState>({
