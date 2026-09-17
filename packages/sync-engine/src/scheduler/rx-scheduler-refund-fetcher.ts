@@ -1,4 +1,4 @@
-import { HISTORY_DAYS } from '@wcpos/sync-core';
+import { hasPosRefundStamp, HISTORY_DAYS } from '@wcpos/sync-core';
 
 import { materializeRefund } from '../materialization/record-materialization';
 import { parseRefundLaneQueryKey } from './refund-lane-descriptor';
@@ -13,6 +13,7 @@ import type { LocalRefundDocument, WooRefundPayload } from '../collections/refun
 import type { SchedulerFetcher } from './replication-policy';
 
 export type RefundSchedulerFetcherInput = CollectionSchedulerInput<LocalRefundDocument> & {
+	scope?: { storeId?: string | number };
 	repository: CollectionSchedulerInput<LocalRefundDocument>['repository'] & {
 		removeMany(documents: LocalRefundDocument[]): Promise<void>;
 	};
@@ -58,9 +59,7 @@ export function createRefundsSchedulerFetcher(
 			.filter((row) => {
 				const listed = held.get(row.parent_id);
 				if (listed !== undefined) return listed === null || listed.includes(row.id);
-				return row.meta_data?.some(
-					(meta) => meta.key === '_wcpos_session' || meta.key === '_wcpos_register'
-				);
+				return hasPosRefundStamp(row.meta_data, input.scope);
 			})
 			.map((raw) => materializeRefund(raw).storedDocument);
 		let applied = (await input.repository.upsertMany(documents)) ?? documents;
@@ -71,9 +70,7 @@ export function createRefundsSchedulerFetcher(
 			const removed = applied.filter(({ payload }) => {
 				const listed = current.get(payload.parent_id);
 				if (listed !== undefined) return Array.isArray(listed) && !listed.includes(payload.id);
-				return !payload.meta_data?.some(
-					(meta) => meta.key === '_wcpos_session' || meta.key === '_wcpos_register'
-				);
+				return !hasPosRefundStamp(payload.meta_data, input.scope);
 			});
 			if (removed.length > 0) {
 				await input.repository.removeMany(removed);

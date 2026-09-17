@@ -104,3 +104,4 @@ export {
 export { HISTORY_DAYS } from './history-policy';
 
 export { reconcileRefundIds } from './refund-reconciliation';
+export { hasPosRefundStamp } from './refund-provenance';

@@ -39,6 +39,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import {
 	assertBulkSuccess,
 	canonicalSiteKey,
+	hasPosRefundStamp,
 	mintRemoteId,
 	MUTATION_QUEUE_COLLECTION,
 	normalizeCheckpoint,
@@ -1778,6 +1779,7 @@ export function createRxdbSyncEngine(
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const requirePlane = createRequirePlane({
+		storeIdFor: (scopeId) => identityByScopeId.get(scopeId)?.storeId,
 		// Lazy: readySettledForSync is created after `ready` below; requirements
 		// enqueued before then await the settled initial open, never 'no active scope'.
 		// …and, on a later switch, the scope-open prime in flight (see scopePrimeSettled).
@@ -1918,6 +1920,7 @@ export function createRxdbSyncEngine(
 	// --- The maintenance lanes --------------------------------------
 	let maintenanceOwnerId: string | null = null;
 	const maintenanceLanes = createMaintenanceLanes({
+		storeIdFor: (scopeId) => identityByScopeId.get(scopeId)?.storeId,
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
@@ -2383,15 +2386,7 @@ export function createRxdbSyncEngine(
 						const refunds = activeScopeOf(scopeId).database.collections.refunds;
 						const held = await refunds.find().exec();
 						const orphanIds = held
-							.filter(
-								(doc) =>
-									!doc
-										.toJSON()
-										.payload.meta_data?.some(
-											({ key }: { key: string }) =>
-												key === '_wcpos_session' || key === '_wcpos_register'
-										)
-							)
+							.filter((doc) => !hasPosRefundStamp(doc.toJSON().payload.meta_data))
 							.map((doc) => doc.toJSON().uuid);
 						if (orphanIds.length > 0)
 							assertBulkSuccess(await refunds.bulkRemove(orphanIds), 'orders reset refund cascade');

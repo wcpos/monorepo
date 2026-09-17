@@ -282,6 +282,7 @@ export function adoptOrderSnapshot(
 }
 
 export type RunEngineSchedulerDrainInput = {
+	scope?: { storeId?: string | number };
 	db: SchedulerDrainDatabase;
 	coverage: LocalCoverage;
 	baseUrl: string;
@@ -338,6 +339,7 @@ export type RunEngineSchedulerDrainInput = {
 
 export type RunEngineSchedulerTaskInput = Pick<
 	RunEngineSchedulerDrainInput,
+	| 'scope'
 	| 'db'
 	| 'coverage'
 	| 'baseUrl'
@@ -354,6 +356,7 @@ export type RunEngineSchedulerTaskInput = Pick<
 function createEngineSchedulerFetcherRegistry(
 	input: Pick<
 		RunEngineSchedulerDrainInput,
+		| 'scope'
 		| 'db'
 		| 'coverage'
 		| 'baseUrl'
@@ -450,6 +453,7 @@ function createEngineSchedulerFetcherRegistry(
 				hasNoTargetedIds(task) &&
 				parseRefundLaneQueryKey(task.queryKey) !== null,
 			fetcher: createRefundsSchedulerFetcher({
+				scope: input.scope,
 				...shared,
 				repository: collectionSchedulerRepository(db.refunds),
 				heldParentIds: async (ids) => {

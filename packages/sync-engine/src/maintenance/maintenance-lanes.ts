@@ -135,6 +135,7 @@ export const COVERAGE_COMPACTION_MIN_EXPIRED_DOCUMENTS = 1;
 type MaintenanceLaneDeps = {
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
+	storeIdFor?: (scopeId: string) => string | number | undefined;
 	coverageFor: (scopeId: string) => LocalCoverage | null;
 	/** The per-scope barcode carriers a scheduler pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
@@ -510,6 +511,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				? undefined
 				: () => deps.barcodeSelectorsFor!(_scopeId) ?? undefined;
 		const result = await runEngineSchedulerDrain({
+			scope: { storeId: deps.storeIdFor?.(_scopeId) },
 			db: db as unknown as SchedulerDrainDatabase,
 			coverage,
 			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
