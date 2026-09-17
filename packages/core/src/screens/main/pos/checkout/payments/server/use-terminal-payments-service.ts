@@ -17,7 +17,6 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { completionMeta } from '../../provenance/stamp-completion';
-import { reportProvenanceGap } from '../../provenance/provenance-gap';
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
 	getTerminalPaymentsService,
@@ -31,8 +30,8 @@ import {
 } from '../../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
-import { enterReceipt, getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
-import { reconcileCompletedOrder } from '../../hooks/reconcile-completed-order';
+import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
+import { completeRecordedOrder } from '../../hooks/reconcile-completed-order';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -163,7 +162,7 @@ export function useTerminalPaymentsService(): void {
 						if (!patched) throw new Error('provenance_save_failed');
 					}
 				} catch (error) {
-					// Ledger failures must reach the leg so it resumes polling instead of finalising.
+					// The leg preserves a known capture even when its local mirror fails.
 					if (!mirrored) throw error;
 					logger.error('Checkout failed', {
 						code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
@@ -172,55 +171,27 @@ export function useTerminalPaymentsService(): void {
 					});
 				}
 			},
-			onCaptured: (orderUuid, order, row, narrate) => {
-				// A capture can land with checkout unmounted — the cashier moved on, or the
-				// leg was resumed from the open tabs. The action row is the audit trail for
-				// money, so it is written from whichever path sees the outcome first.
-				if (narrate) {
-					logger.info('Card payment taken', {
-						actor: latest.current.actor,
-						terminal: { operationId: row.id },
-						context: {
-							type: row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',
-							orderId: row.order_id || null,
-							orderUUID: orderUuid,
-							paymentId: row.id,
-							amount: row.amount,
-							method: row.method_id,
-						},
-					});
-				}
-				// Never select: the order the cashier is serving stays on screen. When
-				// the captured order IS the current one, the tender flow's own outcome
-				// handler runs the complete-order flow, which selects the receipt.
-				if (!stopped && order && Number(order.balance) === 0) {
-					enterReceipt(orderUuid, { select: false });
-					void findEngineResident(manager, 'orders', orderUuid)
-						.then(async (resident) => {
-							if (stopped || !resident) return;
-							// A completion nobody was watching still reports its gap; the tender
-							// flow reports the one it watched (it holds the narration claim). From
-							// the till's own copy, before the refresh: the tuple was stamped here
-							// and the report must not depend on the network.
-							if (narrate) {
-								const payload = (resident.getLatest?.().payload ??
-									resident.payload) as EngineRecord<'orders'>['payload'];
-								await reportProvenanceGap({
-									userDB,
-									siteUuid: site.uuid!,
-									storeId: store.id,
-									order: { id: payload.id, uuid: orderUuid, meta_data: payload.meta_data },
-								});
-							}
-							if (stopped) return;
-							await reconcileCompletedOrder(manager, resident as unknown as EngineRecord<'orders'>);
-						})
-						.catch((error) => {
-							logger.warn('Background post-payment reconciliation failed', {
-								context: { orderId: orderUuid, error: getErrorMessage(error) },
-							});
-						});
-				}
+			getBalance: async (orderUuid) => {
+				const resident = await findEngineResident(manager, 'orders', orderUuid);
+				if (!resident) throw new Error('Terminal payment order is not resident');
+				const payload = (resident.getLatest?.().payload ??
+					resident.payload) as EngineRecord<'orders'>['payload'];
+				return derive(payload.total, readLedger(payload.meta_data), latest.current.methods, {
+					dp: store.price_num_decimals ?? 2,
+				}).balance;
+			},
+			getActor: () => latest.current.actor,
+			completeOrder: async (orderUuid, actor, refresh) => {
+				const resident = await findEngineResident(manager, 'orders', orderUuid);
+				if (stopped) return;
+				if (!resident) throw new Error('Terminal payment order is not resident');
+				await completeRecordedOrder(
+					manager,
+					resident as unknown as EngineRecord<'orders'>,
+					actor,
+					{ userDB, siteUuid: site.uuid!, storeId: store.id },
+					refresh
+				);
 			},
 		});
 		// Offline-paid orders can be completed and absent from open tabs. Recover their

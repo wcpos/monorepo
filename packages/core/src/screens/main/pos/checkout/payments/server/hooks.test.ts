@@ -200,7 +200,7 @@ describe('background capture reconciliation', () => {
 		}
 	);
 
-	it('catches and warns when reconciliation rejects', async () => {
+	it('retains capture and reports a local finishing failure when reconciliation rejects', async () => {
 		mockFind.mockResolvedValue(resident);
 		requireRefresh.mockImplementationOnce(() => {
 			throw new Error('engine unavailable');
@@ -215,10 +215,19 @@ describe('background capture reconciliation', () => {
 		});
 		await act(() => jest.advanceTimersByTimeAsync(0));
 		expect(requireRefresh).toHaveBeenCalledTimes(1);
-		expect(jest.requireActual('@wcpos/utils/logger').warn).toHaveBeenCalledWith(
+		expect(jest.requireActual('@wcpos/utils/logger').error).toHaveBeenCalledWith(
 			expect.any(String),
-			{ context: { orderId: 'background-order', error: 'engine unavailable' } }
+			expect.objectContaining({
+				context: expect.objectContaining({
+					orderUUID: 'background-order',
+					error: 'engine unavailable',
+				}),
+			})
 		);
+		expect(getTerminalPaymentsService()!.get('background-order')?.settlement).toMatchObject({
+			outcome: 'captured',
+			finishingError: 'engine unavailable',
+		});
 		view.unmount();
 	});
 });

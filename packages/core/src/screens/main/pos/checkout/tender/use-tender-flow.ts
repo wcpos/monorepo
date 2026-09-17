@@ -3,6 +3,7 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useRouter } from 'expo-router';
 
+import { Toast } from '@wcpos/components/toast';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import {
 	derive,
@@ -37,11 +38,14 @@ import { completionMeta } from '../provenance/stamp-completion';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
+import { useUISettings } from '../../../contexts/ui-settings';
+import { useCurrentOrderActions } from '../../contexts/current-order/context';
 import { useTheme } from '../../../../../contexts/theme';
 import {
 	getCheckoutModeSnapshot,
 	leaveCheckout,
 	type OrderSaveState,
+	selectReceipt,
 	setLinesPaidBy,
 	setTenderMethod,
 	setTenderPlan,
@@ -175,6 +179,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	useResumeTerminalLegs(order);
 	const terminalLeg = useTerminalLeg(order.uuid);
 	const service = getTerminalPaymentsService();
+	const displayedError = React.useRef<string | undefined>(undefined);
+	const displayedRow = React.useRef<string | null>(null);
+	const { uiSettings } = useUISettings('pos-cart');
+	const { setCurrentOrderID } = useCurrentOrderActions();
 	const intentRow = React.useRef<string | null>(null);
 	const dp = store.price_num_decimals ?? 2;
 	const { methods, byId, loaded: methodsLoaded, unsupportedSchema } = usePaymentMethods();
@@ -848,98 +856,54 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			// The take that is still in the cashier's hands, as opposed to an outcome that
 			// lands while they are watching the terminal timeline.
 			const ownTake = intentRow.current === leg.row.id;
-			if (ownTake && !['idle', 'creating'].includes(leg.phase)) {
+			if (ownTake && (!['idle', 'creating', 'final'].includes(leg.phase) || leg.settlement)) {
 				intentRow.current = null;
 			}
-			// A decline, an expiry or a failed capture usually settles well after polling
-			// starts, by which point `intentRow` is already null — so gating the LOG on it
-			// kept every settled failure out of the ledger. Nor can it require `leg.error`:
-			// the ordinary asynchronous decline arrives as a 200 whose payment row reads
-			// `failed`, with no error object at all. The row is always written, once per
-			// payment row; only the toast stays with the initial take, because the timeline
-			// already shows a failure the cashier is looking at.
-			if (leg.outcome === 'failed' && service?.claimFailureNarration(leg.row.id)) {
-				logger.error(
-					providerErrorMessage(leg.error) ??
+			const settled = leg.settlement;
+			if (
+				settled?.outcome === 'captured' &&
+				settled.finishingError &&
+				displayedError.current !== settled.finishingError
+			) {
+				displayedError.current = settled.finishingError;
+				Toast.show({ type: 'error', title: t('pos_checkout.paid_but_order_not_finished') });
+			}
+			if (!settled || displayedRow.current === leg.row.id) return;
+			displayedRow.current = leg.row.id;
+			if (settled.outcome === 'failed' && ownTake)
+				Toast.show({
+					type: 'error',
+					title:
+						providerErrorMessage(leg.error) ??
 						leg.row.failure_reason ??
 						t('pos_checkout.payment_not_recorded'),
-					{
-						// A declined or cancelled card is an ordinary outcome with an ordinary
-						// answer — ask for another card. Reporting it as "payment handling hit an
-						// unexpected problem" sends the cashier looking for a fault that is not there.
-						code: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
-						showToast: ownTake,
-						terminal: { operationId: leg.row.id },
-						context: {
-							type: 'payment.declined',
-							orderId: leg.row.order_id || null,
-							orderUUID: order.uuid,
-							paymentId: leg.row.id,
-							amount: leg.row.amount,
-							method: leg.row.method_id,
-							status: leg.row.status,
-							errorCode: leg.error?.code ?? null,
-							reason: leg.row.failure_reason ?? null,
-						},
-					}
-				);
-			}
-			if (leg.outcome !== 'captured') return;
-			service?.dismiss(order.uuid);
-			// The service writes this row too, from its own outcome path, for a capture
-			// that lands after checkout unmounts. Whichever sees it first wins the claim.
-			if (service?.claimCaptureNarration(leg.row.id)) {
-				logger.info('Card payment taken', {
-					actor,
-					terminal: { operationId: leg.row.id },
-					context: {
-						orderId: leg.row.order_id || null,
-						orderUUID: order.uuid,
-						type: leg.row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',
-						paymentId: leg.row.id,
-						amount: leg.row.amount,
-						method: leg.row.method_id,
-					},
 				});
-			}
-			tenderRecorded(leg.row);
-			if (toMinor(leg.order?.balance ?? derived.balance, dp) === 0) {
-				void completeOrderFlow({ refresh: !leg.row.recorded_offline }).catch((error) =>
-					// The card has been charged by this point: the failure is finishing the
-					// order, not taking the money, and saying "payment not recorded" here is
-					// how a captured payment gets taken twice.
-					logger.error(t('pos_checkout.paid_but_order_not_finished'), {
-						// Its own code, not PAYMENT101: with a code and no explicit toast title
-						// the toast shows the CODE's summary and hint, and PAYMENT101's hint is
-						// "No action needed" — the opposite of what this cashier must do.
-						code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
-						showToast: true,
-						terminal: { operationId: leg.row.id },
-						context: {
-							orderId: leg.row.order_id || null,
-							orderUUID: order.uuid,
-							paymentId: leg.row.id,
-							amount: leg.row.amount,
-							method: leg.row.method_id,
-							error: error instanceof Error ? error.message : String(error),
-						},
-					})
-				);
+			if (settled.outcome !== 'captured') return;
+
+			tenderRecorded(settled.payment);
+			if (!settled.saleComplete && !settled.finishingError) service?.dismiss(order.uuid);
+			if (settled.saleComplete) {
+				if (uiSettings.autoShowReceipt) selectReceipt(order.uuid);
+				else {
+					leaveCheckout(order.uuid);
+					setCurrentOrderID('');
+					if (screenSize === 'sm') router.replace({ pathname: '/cart' });
+				}
 			}
 		};
 		const unsubscribe = service?.subscribe(consumeOutcome);
 		consumeOutcome();
 		return unsubscribe;
 	}, [
-		actor,
-		terminalLeg?.outcome,
+		terminalLeg?.settlement,
 		service,
 		order.uuid,
-		derived.balance,
-		dp,
-		completeOrderFlow,
 		t,
 		tenderRecorded,
+		uiSettings.autoShowReceipt,
+		setCurrentOrderID,
+		screenSize,
+		router,
 	]);
 
 	const pickReader = React.useCallback(

@@ -14,6 +14,7 @@ import {
 	offlineProviderRefs,
 } from '../../screens/main/pos/checkout/payments/device/device-leg';
 import { getDriver, listDrivers } from '../payment-drivers/registry';
+import { enterReceipt } from '../../screens/main/pos/checkout/checkout-mode';
 import { createServerLeg } from '../../screens/main/pos/checkout/payments/server/server-leg';
 
 import type { OfflineSettlement } from '../payment-drivers/types';
@@ -45,17 +46,13 @@ export interface TerminalPaymentsServiceOptions {
 	resolveOrderId?: (orderUuid: string) => Promise<number | null>;
 	http: Pick<ServerLegDeps, 'get' | 'post'>;
 	mirror: (orderUuid: string, response: ServerLegResponse) => Promise<void>;
-	/**
-	 * `narrate` is true only for the first caller to see this row settle, so the
-	 * action row is written once whether the capture lands in front of the cashier
-	 * or after checkout has unmounted.
-	 */
-	onCaptured?: (
+	getBalance?: (orderUuid: string) => Promise<string>;
+	getActor?: () => { id: string; name: string };
+	completeOrder?: (
 		orderUuid: string,
-		order: OrderPaymentSummary | undefined,
-		row: PaymentRow,
-		narrate: boolean
-	) => void;
+		actor: { id: string; name: string } | undefined,
+		refresh: boolean
+	) => Promise<void>;
 	/**
 	 * The store's price decimals for resumed legs, read at resume time (a getter, so a
 	 * setting changed mid-session — the store document is patched in place — is honoured).
@@ -80,9 +77,15 @@ interface BeginInput extends ResumeInput {
 	tipEligibleMinor?: number | null;
 }
 type TerminalLeg = ServerLeg | DeviceLeg;
+export interface TerminalSettlement extends ServerLegResponse {
+	outcome: ServerLegState['outcome'];
+	saleComplete: boolean;
+	finishingError?: string;
+}
 export type TerminalLegState = (ServerLegState | DeviceLegState) & {
 	orderNumber: string;
 	reader: string | null;
+	settlement?: TerminalSettlement;
 };
 export class TerminalPaymentsService {
 	private legs = new Map<
@@ -105,15 +108,7 @@ export class TerminalPaymentsService {
 			timer?: ReturnType<typeof setTimeout>;
 		}
 	>();
-	/**
-	 * Payment rows whose settled failure has already been written to the log.
-	 * It lives here, not in the checkout hook, because a final failed leg stays in
-	 * the service after checkout unmounts: a fresh hook would otherwise consume the
-	 * retained leg and write the same row again on every reopen.
-	 */
-	private narratedFailures = new Set<string>();
-	/** As `narratedFailures`, for settled captures. */
-	private narratedCaptures = new Set<string>();
+	private settlements = new Map<string, TerminalSettlement | undefined>();
 	private unsubscribers: (() => void)[] = [];
 	private stopped = false;
 	private flushing: Promise<void> | null = null;
@@ -315,24 +310,80 @@ export class TerminalPaymentsService {
 			}
 		}
 	}
-	/**
-	 * True the first time it is called for a row, false afterwards. The caller
-	 * writes the failure row only when it wins.
-	 */
-	claimFailureNarration(rowId: string): boolean {
-		if (this.narratedFailures.has(rowId)) return false;
-		this.narratedFailures.add(rowId);
-		return true;
-	}
-	/**
-	 * The same, for a settled capture. Two places can see one: the tender flow while
-	 * the cashier is watching, and the service's own outcome path when checkout has
-	 * unmounted. Whichever arrives first writes the row.
-	 */
-	claimCaptureNarration(rowId: string): boolean {
-		if (this.narratedCaptures.has(rowId)) return false;
-		this.narratedCaptures.add(rowId);
-		return true;
+	private async recordSettlement(
+		orderUuid: string,
+		state: ServerLegState | DeviceLegState,
+		finishingError?: string
+	) {
+		const { row, outcome, order } = state;
+		if (this.settlements.has(row.id) || this.legs.get(orderUuid)?.leg.getState().row.id !== row.id)
+			return;
+		this.settlements.set(row.id, undefined);
+		const actor = this.options.getActor?.();
+		const result: TerminalSettlement = {
+			payment: row,
+			outcome,
+			order,
+			saleComplete: outcome === 'captured' && !!order && Number(order.balance) === 0,
+			finishingError,
+		};
+		const context = {
+			orderId: row.order_id || null,
+			orderUUID: orderUuid,
+			paymentId: row.id,
+			amount: row.amount,
+			method: row.method_id,
+		};
+		if (outcome === 'captured')
+			logger.info('Card payment taken', {
+				actor,
+				terminal: { operationId: row.id },
+				context: {
+					...context,
+					type: row.recorded_offline ? 'payment.authorized-offline' : 'payment.captured',
+				},
+			});
+		if (outcome === 'failed')
+			logger.error(state.error?.message ?? row.failure_reason ?? 'Payment refused', {
+				actor,
+				code: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
+				terminal: { operationId: row.id },
+				context: {
+					...context,
+					type: 'payment.declined',
+					status: row.status,
+					errorCode: state.error?.code ?? null,
+					reason: row.failure_reason ?? null,
+				},
+			});
+		if (outcome === 'captured' && !order) {
+			try {
+				result.saleComplete = Number(await this.options.getBalance?.(orderUuid)) === 0;
+			} catch (error) {
+				result.finishingError = getErrorMessage(error);
+			}
+		}
+		if (this.stopped) return;
+		this.settlements.set(row.id, result);
+		// Let the foreground consume navigation before receipt entry can unmount it.
+		this.publish();
+		try {
+			if (result.saleComplete) {
+				enterReceipt(orderUuid, { select: false });
+				await this.options.completeOrder?.(orderUuid, actor, !row.recorded_offline);
+			}
+		} catch (error) {
+			result.finishingError = getErrorMessage(error);
+		}
+		if (result.finishingError && outcome === 'captured') {
+			logger.error('Payment recorded but order could not be finished', {
+				code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
+				terminal: { operationId: row.id },
+				context: { ...context, error: result.finishingError },
+			});
+			this.settlements.set(row.id, { ...result });
+			this.publish();
+		}
 	}
 	begin(input: BeginInput): TerminalLeg {
 		return this.create(input, false);
@@ -356,6 +407,7 @@ export class TerminalPaymentsService {
 		if (existing && existing.getState().phase !== 'final')
 			throw new Error('Order already has a live terminal leg');
 		existing?.dispose();
+		let finishingError: string | undefined;
 		const deps = {
 			...this.options.http,
 			now: this.options.now ?? Date.now,
@@ -367,19 +419,21 @@ export class TerminalPaymentsService {
 			clearTimeout:
 				this.options.clearTimeout ??
 				((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)),
-			mirror: (response: ServerLegResponse) => this.options.mirror(input.orderUuid, response),
+			mirror: async (response: ServerLegResponse) => {
+				try {
+					await this.options.mirror(input.orderUuid, response);
+					finishingError = undefined;
+				} catch (error) {
+					finishingError = getErrorMessage(error);
+					throw error;
+				}
+			},
 			onFinal: (state: ServerLegState | DeviceLegState) => {
 				if (state.row.recorded_offline && state.row.status === 'authorized') {
 					this.trackOffline({ ...input, row: state.row });
 					void this.flushOffline();
 				}
-				if (state.outcome === 'captured')
-					this.options.onCaptured?.(
-						input.orderUuid,
-						state.order,
-						state.row,
-						this.claimCaptureNarration(state.row.id)
-					);
+				void this.recordSettlement(input.orderUuid, state, finishingError);
 			},
 		};
 		const device = input.row.capture_mode === 'device';
@@ -418,7 +472,9 @@ export class TerminalPaymentsService {
 					resume,
 				});
 		this.legs.set(input.orderUuid, { leg, orderNumber: input.orderNumber, reader: input.reader });
-		leg.subscribe(() => this.publish());
+		leg.subscribe(() => {
+			if (leg.getState().phase !== 'final') this.publish();
+		});
 		this.publish();
 		if (!resume || device) void leg.start();
 		return leg;
@@ -461,7 +517,12 @@ export class TerminalPaymentsService {
 		this.snapshot = new Map(
 			[...this.legs].map(([uuid, { leg, orderNumber, reader }]) => [
 				uuid,
-				{ ...leg.getState(), orderNumber, reader },
+				{
+					...leg.getState(),
+					orderNumber,
+					reader,
+					settlement: this.settlements.get(leg.getState().row.id),
+				},
 			])
 		);
 		this.listeners.forEach((listener) => listener());
