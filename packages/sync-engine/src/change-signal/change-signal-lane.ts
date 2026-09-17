@@ -163,7 +163,15 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 	};
 	let chain: Promise<unknown> = Promise.resolve();
 	let lastError: string | null = null;
-	let activation = new Promise<void>(() => undefined);
+	// The initial barrier holds admission until the first activation. It settles only
+	// by activation or by stopActivation: a requirement queued before any scope opened
+	// must REJECT on dispose (as the base did through runGuarded) rather than hang.
+	let rejectInitialActivation: ((error: Error) => void) | null = null;
+	let activation: Promise<void> = new Promise<void>((_, reject) => {
+		rejectInitialActivation = reject;
+	});
+	// Nobody may be waiting when stop rejects it; keep that from surfacing as unhandled.
+	activation.catch(() => undefined);
 	let activationAbort: AbortController | null = null;
 	let activationStopped = false;
 	const timers = deps.timers ?? systemTimers;
@@ -573,6 +581,8 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 		stopActivation: () => {
 			activationStopped = true;
 			activationAbort?.abort();
+			rejectInitialActivation?.(new Error('change-signal: disposed before any scope activated'));
+			rejectInitialActivation = null;
 		},
 		activated: (scopeId) => {
 			const controller = (activationAbort = new AbortController());
@@ -698,6 +708,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			};
 			// Reserve admission before switchTo can publish the database.
 			let release!: () => void;
+			rejectInitialActivation = null;
 			activation = new Promise<void>((resolve) => {
 				release = resolve;
 			});

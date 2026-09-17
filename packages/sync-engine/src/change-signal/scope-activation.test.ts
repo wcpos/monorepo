@@ -618,6 +618,16 @@ it.each([false, true])('failed switch releases admission (outgoing=%s)', async (
 	expect(await h.readBlob('broken', 'checkpoint:change-signal')).toBeNull();
 });
 
+it('a requirement admitted before any activation rejects on stop instead of hanging', async () => {
+	// The base rejected such a requirement through runGuarded ('no active scope') once the
+	// engine was torn down; a never-settling initial barrier would leave it pending forever
+	// after dispose (CodeRabbit on #2130).
+	const h = await setup();
+	const admission = h.lane.admitted();
+	h.lane.stopActivation();
+	await expect(admission).rejects.toThrow('disposed before any scope activated');
+});
+
 it('stop before queued activation needs no abort replay', async () => {
 	// Stopping before a lifecycle queue starts must suppress that later prime too.
 	const h = await setup();
