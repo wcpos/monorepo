@@ -169,7 +169,7 @@ describe('useCompleteOrderFlow', () => {
 		const completion = result.current();
 
 		await act(async () => {
-			jest.advanceTimersByTime(10_000);
+			await jest.advanceTimersByTimeAsync(10_000);
 			await completion;
 		});
 

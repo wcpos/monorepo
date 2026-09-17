@@ -20,6 +20,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { Platform } from '@wcpos/utils/platform';
 
 import { failureReasonLabel, providerErrorMessage } from './labels';
+import { CapturedUnfinishedNotice } from './captured-unfinished-notice';
 import { useDriverStatus } from './use-driver-status';
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { useTheme } from '../../../../../contexts/theme';
@@ -152,6 +153,13 @@ export function TerminalLegView({
 			});
 		}
 	};
+	if (leg.outcome === 'captured' && leg.settlement?.finishingError) {
+		return (
+			<ScrollView className="bg-sidebar flex-1">
+				<CapturedUnfinishedNotice finishingError={leg.settlement.finishingError} />
+			</ScrollView>
+		);
+	}
 	if (leg.outcome === 'captured') return null; // The flow consumes this external outcome and opens the receipt.
 	return (
 		<ScrollView

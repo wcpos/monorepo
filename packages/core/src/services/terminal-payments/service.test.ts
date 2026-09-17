@@ -1,6 +1,8 @@
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { PaymentRow } from '@wcpos/order-math';
 
+import * as checkoutMode from '../../screens/main/pos/checkout/checkout-mode';
 import { createDeviceLeg } from '../../screens/main/pos/checkout/payments/device/device-leg';
 import {
 	method as deviceMethod,
@@ -59,14 +61,14 @@ function setup() {
 		post: jest.fn(async (_url: string, _body: unknown) => ({ data: { payment: row } })),
 	};
 	const mirror = jest.fn(async (_uuid: string, _response: unknown) => {});
-	const onCaptured = jest.fn();
-	const options = { http, mirror, onCaptured };
+	const completeOrder = jest.fn(async () => {});
+	const options = { http, mirror, completeOrder };
 	return {
 		service: new TerminalPaymentsService(options),
 		options,
 		http,
 		mirror,
-		onCaptured,
+		completeOrder,
 		summary,
 	};
 }
@@ -119,6 +121,31 @@ it('readers only include live legs, and dismiss only removes final legs', async 
 	c.service.dismiss('order');
 	expect(c.service.get('order')).toBeNull();
 });
+it('publishes final state and releases the reader when a dismissed settlement is resumed', async () => {
+	const c = setup();
+	const pending = { ...row, provider_refs: { reader: 'reader' } };
+	c.mirror.mockRejectedValue(new Error('local write failed'));
+	c.http.get.mockResolvedValue({
+		data: { payment: { ...pending, status: 'captured' }, order: c.summary },
+	});
+	const info = getLogger([]).info as jest.Mock;
+	info.mockClear();
+	c.service.resume({ ...input, row: pending });
+	await jest.advanceTimersByTimeAsync(0);
+	c.service.dismiss('order');
+	expect(c.service.get('order')).toBeNull();
+	const resumed = c.service.resume({ ...input, row: pending })!;
+	expect(c.service.readersInUse().has('reader')).toBe(true);
+	await jest.advanceTimersByTimeAsync(0);
+	expect(resumed.getState().phase).toBe('final');
+	expect(c.service.get('order')?.phase).toBe('final');
+	expect(c.service.readersInUse().has('reader')).toBe(false);
+	expect(c.completeOrder).toHaveBeenCalledTimes(1);
+	expect(
+		info.mock.calls.filter(([, options]) => options.context?.type === 'payment.captured')
+	).toHaveLength(1);
+	c.service.stop();
+});
 it('a resumed leg names the reader the server recorded on the row', () => {
 	const c = setup();
 	c.service.resume({
@@ -155,19 +182,48 @@ it('captured callback fires once with authoritative summary and a final leg can 
 	const leg = c.service.resume(input)!;
 	await jest.advanceTimersByTimeAsync(0);
 	await leg.checkNow();
-	expect(c.onCaptured).toHaveBeenCalledTimes(1);
-	// The row and the narration claim ride along: a capture that lands with checkout
-	// unmounted has to write its own action row, and the claim is what stops the tender
-	// flow writing a second one when it is on screen.
-	expect(c.onCaptured).toHaveBeenCalledWith(
-		'order',
-		c.summary,
-		expect.objectContaining({ id: row.id, status: 'captured' }),
-		true
-	);
-	expect(c.service.claimCaptureNarration(row.id)).toBe(false);
-	expect(c.service.resume(input)).toBe(leg);
+	expect(c.completeOrder).toHaveBeenCalledTimes(1);
+	expect(c.completeOrder).toHaveBeenCalledWith('order', undefined, true);
+	expect(c.service.get('order')).toBeNull();
 	expect(c.service.begin({ ...input, row: { ...row, id: 'new-leg' } })).not.toBe(leg);
+});
+it('retires a completed capture after receipt entry without forgetting its narration', async () => {
+	const c = setup();
+	const info = getLogger([]).info as jest.Mock;
+	info.mockClear();
+	let finish!: () => void;
+	c.completeOrder.mockImplementation(
+		() =>
+			new Promise<void>((resolve) => {
+				finish = resolve;
+			})
+	);
+	const enterReceipt = jest.spyOn(checkoutMode, 'enterReceipt');
+	c.http.get.mockResolvedValue({
+		data: { payment: { ...row, status: 'captured' }, order: c.summary },
+	});
+	try {
+		c.service.begin(input);
+		expect(c.service.readersInUse().has('reader')).toBe(true);
+		await jest.advanceTimersByTimeAsync(0);
+		expect(enterReceipt).toHaveBeenCalledTimes(1);
+		expect(enterReceipt).toHaveBeenCalledWith('order', { select: false });
+		expect(c.service.get('order')?.settlement?.saleComplete).toBe(true);
+		finish();
+		await jest.advanceTimersByTimeAsync(0);
+		expect(c.service.get('order')).toBeNull();
+		expect(c.service.readersInUse().has('reader')).toBe(false);
+		c.service.resume(input);
+		await jest.advanceTimersByTimeAsync(0);
+		expect(c.completeOrder).toHaveBeenCalledTimes(1);
+		expect(enterReceipt).toHaveBeenCalledTimes(1);
+		expect(
+			info.mock.calls.filter(([, options]) => options.context?.type === 'payment.captured')
+		).toHaveLength(1);
+	} finally {
+		enterReceipt.mockRestore();
+		c.service.stop();
+	}
 });
 it('stop clears every timer but does not void or alter live rows', async () => {
 	const c = setup();
@@ -251,13 +307,8 @@ it('online device capture notifies once without tracking or writing an offline s
 	await jest.advanceTimersByTimeAsync(0);
 	await service.flushOffline();
 	expect(service.get('order')).toBeNull();
-	expect(c.onCaptured).toHaveBeenCalledTimes(1);
-	expect(c.onCaptured).toHaveBeenCalledWith(
-		'order',
-		c.summary,
-		expect.objectContaining({ status: 'captured' }),
-		true
-	);
+	expect(c.completeOrder).toHaveBeenCalledTimes(1);
+	expect(c.completeOrder).toHaveBeenCalledWith('order', undefined, true);
 	expect(trackOffline).not.toHaveBeenCalled();
 	expect(patchAndEnqueue).not.toHaveBeenCalled();
 	expect(c.http.post.mock.calls.map(([url]) => url)).toEqual([
@@ -524,4 +575,281 @@ it('restores transaction references when an already tracked row hydrates', async
 		context: { provider_refs: { transaction_id: 'hydrated' } },
 	});
 	c.service.stop();
+});
+
+it('records an unobserved failure immediately and retains its settlement across subscribers', async () => {
+	const c = setup();
+	const error = getLogger([]).error as jest.Mock;
+	error.mockClear();
+	c.http.get.mockResolvedValue({
+		data: {
+			payment: { ...row, status: 'failed', failure_reason: 'card_declined' },
+			order: c.summary,
+		},
+	});
+	c.service.resume(input);
+	await jest.advanceTimersByTimeAsync(0);
+	expect(error).toHaveBeenCalledTimes(1);
+	expect(error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			code: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
+			context: expect.objectContaining({ type: 'payment.declined', reason: 'card_declined' }),
+		})
+	);
+	expect(c.service.get('order')).toMatchObject({
+		settlement: {
+			outcome: 'failed',
+			payment: { id: 'leg' },
+			saleComplete: false,
+		},
+	});
+	const unsub = c.service.subscribe(jest.fn());
+	c.service.resume(input);
+	unsub();
+	c.service.subscribe(jest.fn());
+	expect(error).toHaveBeenCalledTimes(1);
+});
+
+it('retains capture before refresh, narrates once across duplicate/stale delivery and remounts', async () => {
+	const c = setup();
+	const info = getLogger([]).info as jest.Mock;
+	info.mockClear();
+	const { createServerLeg } =
+		await import('../../screens/main/pos/checkout/payments/server/server-leg');
+	let deliver:
+		| ((
+				state: import('../../screens/main/pos/checkout/payments/server/server-leg').ServerLegState
+		  ) => void)
+		| undefined;
+	let finish!: () => void;
+	const completeOrder = jest.fn(
+		() =>
+			new Promise<void>((resolve) => {
+				finish = resolve;
+			})
+	);
+	let actor = { id: '7', name: 'Pat' };
+	const service = new TerminalPaymentsService({
+		...c.options,
+		completeOrder,
+		getActor: () => actor,
+		factories: {
+			server: (deps, input) => {
+				deliver = deps.onFinal;
+				return createServerLeg(deps, input);
+			},
+		},
+	});
+	c.http.get.mockResolvedValue({
+		data: { payment: { ...row, status: 'captured' }, order: c.summary },
+	});
+	const leg = service.resume(input)!;
+	actor = { id: '9', name: 'Sam' };
+	const first = service.subscribe(jest.fn());
+	service.subscribe(jest.fn());
+	await jest.advanceTimersByTimeAsync(0);
+	const settled = { ...leg.getState(), phase: 'final' as const };
+	const replay = deliver!;
+	expect(service.get('order')?.settlement).toMatchObject({
+		outcome: 'captured',
+		order: c.summary,
+		saleComplete: true,
+	});
+	expect(completeOrder).toHaveBeenCalledWith('order', { id: '9', name: 'Sam' }, true);
+	expect(info).toHaveBeenCalledWith(
+		'Card payment taken',
+		expect.objectContaining({ actor: { id: '9', name: 'Sam' } })
+	);
+	first();
+	service.subscribe(jest.fn());
+	replay(settled);
+	service.dismiss('order');
+	service.resume(input);
+	await jest.advanceTimersByTimeAsync(0);
+	replay(settled);
+	service.begin({ ...input, row: { ...row, id: 'next' } });
+	replay(settled);
+	expect(completeOrder).toHaveBeenCalledTimes(1);
+	expect(
+		info.mock.calls.filter(([, options]) => options.context?.type === 'payment.captured')
+	).toHaveLength(1);
+	finish();
+	await Promise.resolve();
+	service.stop();
+});
+
+it('narrates offline authorization once and completes without refresh, not again at server capture', async () => {
+	const c = setup();
+	const info = getLogger([]).info as jest.Mock;
+	info.mockClear();
+	registerDriver({
+		...createSimulatedDriver(),
+		collect: async () => ({
+			outcome: 'authorized',
+			provider_refs: { transaction: 'offline-tx' },
+			receipt: {},
+			amount: '10.00',
+			transport: 'bluetooth',
+		}),
+	});
+	let online = false;
+	const service = new TerminalPaymentsService({
+		...c.options,
+		isOnline: () => online,
+		patchAndEnqueue: async () => c.summary,
+		getActor: () => ({ id: '7', name: 'Pat' }),
+	});
+	const published = jest.fn();
+	service.subscribe(() => published(service.get('order')?.settlement));
+	service.begin({
+		...input,
+		row: deviceRow,
+		method: deviceMethod,
+		transport: 'bluetooth',
+		offline: true,
+	});
+	await jest.advanceTimersByTimeAsync(0);
+	expect(published).toHaveBeenCalledWith(
+		expect.objectContaining({
+			outcome: 'captured',
+			payment: expect.objectContaining({ status: 'authorized' }),
+			saleComplete: true,
+		})
+	);
+	expect(service.get('order')).toBeNull();
+	expect(c.completeOrder).toHaveBeenCalledWith('order', { id: '7', name: 'Pat' }, false);
+	service.subscribe(jest.fn())();
+	service.subscribe(jest.fn());
+	online = true;
+	c.http.post.mockResolvedValue({ data: { payment: { ...deviceRow, status: 'captured' } } });
+	await service.flushOffline();
+	expect(c.mirror).toHaveBeenCalledWith(
+		'order',
+		expect.objectContaining({ payment: expect.objectContaining({ status: 'captured' }) })
+	);
+	expect(c.completeOrder).toHaveBeenCalledTimes(1);
+	expect(
+		info.mock.calls.filter(([, options]) => options.context?.type === 'payment.authorized-offline')
+	).toHaveLength(1);
+	service.stop();
+});
+
+it.each(['mirror', 'completion'] as const)(
+	'retains known capture and reports a local %s failure without recollection',
+	async (failure) => {
+		const c = setup();
+		const warning = getLogger([]).error as jest.Mock;
+		warning.mockClear();
+		const error = new Error('local write failed');
+		if (failure === 'mirror') c.mirror.mockRejectedValue(error);
+		else c.completeOrder.mockRejectedValue(error);
+		c.http.get.mockResolvedValue({
+			data: { payment: { ...row, status: 'captured' }, order: c.summary },
+		});
+		const leg = c.service.resume(input)!;
+		await jest.advanceTimersByTimeAsync(0);
+		expect(c.service.get('order')?.settlement).toMatchObject({
+			outcome: 'captured',
+			finishingError: 'local write failed',
+		});
+		expect(warning).toHaveBeenCalledTimes(1);
+		expect(warning).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
+				showToast: true,
+			})
+		);
+		await leg.start();
+		await leg.capture();
+		expect(c.http.post).not.toHaveBeenCalled();
+		c.service.stop();
+	}
+);
+
+it.each(['provider_declined', 'wcpos_amount_exceeds_balance', 'expired'])(
+	'records every settled refusal with no display subscribers (%s)',
+	async (code) => {
+		const c = setup();
+		const error = getLogger([]).error as jest.Mock;
+		error.mockClear();
+		c.http.post.mockRejectedValue({
+			response: {
+				status: 400,
+				data: {
+					code: 'wcpos_provider_error',
+					message: 'Refused',
+					data: {
+						detail: { code, message: 'Bank says no' },
+						payment: { ...row, status: 'failed' },
+					},
+				},
+			},
+		});
+		c.service.begin(input);
+		await jest.advanceTimersByTimeAsync(0);
+		expect(error).toHaveBeenCalledTimes(1);
+		expect(error).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				code: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
+				context: expect.objectContaining({ type: 'payment.declined', errorCode: code }),
+			})
+		);
+		expect(c.completeOrder).not.toHaveBeenCalled();
+	}
+);
+
+it('uses the persisted ledger balance when the terminal supplies no order summary', async () => {
+	const c = setup();
+	let read!: (value: string) => void;
+	const options = {
+		...c.options,
+		getBalance: () =>
+			new Promise<string>((resolve) => {
+				read = resolve;
+			}),
+	};
+	const service = new TerminalPaymentsService(options);
+	c.http.post.mockResolvedValue({ data: { payment: { ...row, status: 'captured' } } });
+	const published = jest.fn();
+	service.subscribe(() => published(service.get('order')?.settlement));
+	service.begin(input);
+	await jest.advanceTimersByTimeAsync(0);
+	expect(service.get('order')?.settlement).toBeUndefined();
+	read('0.00');
+	await jest.advanceTimersByTimeAsync(0);
+	expect(published).toHaveBeenCalledWith(
+		expect.objectContaining({
+			saleComplete: true,
+			outcome: 'captured',
+		})
+	);
+	expect(service.get('order')).toBeNull();
+	expect(c.completeOrder).toHaveBeenCalledTimes(1);
+	service.stop();
+});
+
+it('does not enter an old store receipt when a pending local balance read finishes after stop', async () => {
+	const { resetCheckoutMode, getCheckoutModeSnapshot } =
+		await import('../../screens/main/pos/checkout/checkout-mode');
+	resetCheckoutMode();
+	const c = setup();
+	let read!: (value: string) => void;
+	const service = new TerminalPaymentsService({
+		...c.options,
+		getBalance: () =>
+			new Promise<string>((resolve) => {
+				read = resolve;
+			}),
+	});
+	c.http.post.mockResolvedValue({ data: { payment: { ...row, status: 'captured' } } });
+	service.begin(input);
+	await jest.advanceTimersByTimeAsync(0);
+	service.stop();
+	read('0');
+	await jest.advanceTimersByTimeAsync(0);
+	expect(getCheckoutModeSnapshot().receiptOrders.has('order')).toBe(false);
+	expect(c.completeOrder).not.toHaveBeenCalled();
 });

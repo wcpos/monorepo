@@ -21,6 +21,9 @@ const mockRow = {
 };
 const mockResident = {
 	uuid: 'completed-order',
+	getLatest() {
+		return this;
+	},
 	payload: {
 		id: 42,
 		number: '42',
@@ -33,6 +36,7 @@ const mockDocuments = new BehaviorSubject([mockResident]);
 const mockFind = jest.fn(() => ({ $: mockDocuments }));
 const mockRuntime = {
 	engine: {
+		require: jest.fn(() => ({ ready: Promise.resolve(), release: jest.fn() })),
 		db$: (listener: (db: object) => void) => {
 			listener({});
 			return () => {};
@@ -204,32 +208,37 @@ it('names the cashier at the till when a capture lands, not the one who started 
 	);
 	const hook = renderHook(() => useTerminalPaymentsService());
 	try {
-		const options = start.mock.calls[0][0];
-		options.onCaptured!('completed-order', undefined, mockRow, true);
-		expect(mockInfo).toHaveBeenLastCalledWith(
+		const service = getTerminalPaymentsService()!;
+		const settle = async (id: string) => {
+			const payment = {
+				...mockRow,
+				id,
+				capture_mode: 'server' as const,
+				recorded_offline: false,
+				status: 'captured' as const,
+			};
+			mockHttp.get.mockResolvedValue({ data: { payment } });
+			service.resume({
+				orderUuid: 'completed-order',
+				orderId: 42,
+				orderNumber: '42',
+				row: { ...payment, status: 'pending' },
+			});
+			await waitFor(() => expect(service.get('completed-order')).toBeNull());
+		};
+		await settle('first');
+		expect(mockInfo).toHaveBeenCalledWith(
 			'Card payment taken',
-			expect.objectContaining({
-				actor: { id: '7', name: 'Pat' },
-				context: expect.objectContaining({ type: 'payment.authorized-offline' }),
-			})
+			expect.objectContaining({ actor: { id: '7', name: 'Pat' } })
 		);
-
-		// A re-login does not restart the service — its effect keys on store, site
-		// and manager — so a capture that lands afterwards must still name whoever
-		// is at the till now.
 		mockSession.wpCredentials = { id: 9, display_name: 'Sam' };
 		hook.rerender();
 		expect(start).toHaveBeenCalledTimes(1);
-		options.onCaptured!('completed-order', undefined, mockRow, true);
-		expect(mockInfo).toHaveBeenLastCalledWith(
+		await settle('second');
+		expect(mockInfo).toHaveBeenCalledWith(
 			'Card payment taken',
 			expect.objectContaining({ actor: { id: '9', name: 'Sam' } })
 		);
-
-		// The row is written by whichever path claimed it; a lost claim writes nothing.
-		mockInfo.mockClear();
-		options.onCaptured!('completed-order', undefined, mockRow, false);
-		expect(mockInfo).not.toHaveBeenCalled();
 	} finally {
 		hook.unmount();
 		start.mockRestore();
@@ -289,21 +298,26 @@ it('a completion nobody was watching still reports its missing store register', 
 	);
 	const hook = renderHook(() => useTerminalPaymentsService());
 	try {
-		const options = start.mock.calls[0][0];
 		mockWarn.mockClear();
-		options.onCaptured!(
-			'completed-order',
-			{
-				status: 'completed',
-				total: '10.00',
-				paid: '10.00',
-				balance: '0',
-				payment_method: 'device',
-				payment_method_title: 'Reader',
+		mockHttp.get.mockResolvedValue({
+			data: {
+				payment: { ...mockRow, status: 'captured' },
+				order: {
+					status: 'completed',
+					total: '10.00',
+					paid: '10.00',
+					balance: '0',
+					payment_method: 'device',
+					payment_method_title: 'Reader',
+				},
 			},
-			mockRow,
-			true
-		);
+		});
+		getTerminalPaymentsService()!.resume({
+			orderUuid: 'completed-order',
+			orderId: 42,
+			orderNumber: '42',
+			row: { ...mockRow, capture_mode: 'server', recorded_offline: false, status: 'pending' },
+		});
 		await waitFor(() =>
 			expect(mockWarn).toHaveBeenCalledWith(
 				'Sale recorded without register provenance',
@@ -319,4 +333,36 @@ it('a completion nobody was watching still reports its missing store register', 
 		hook.unmount();
 		start.mockRestore();
 	}
+});
+
+it('narrates a terminal refusal with no checkout mounted', async () => {
+	const hook = renderHook(() => useTerminalPaymentsService());
+	mockHttp.get.mockResolvedValue({
+		data: {
+			payment: {
+				...mockRow,
+				recorded_offline: false,
+				status: 'failed',
+				failure_reason: 'card_declined',
+			},
+		},
+	});
+	getTerminalPaymentsService()!.resume({
+		orderUuid: 'completed-order',
+		orderId: 42,
+		orderNumber: '42',
+		row: { ...mockRow, capture_mode: 'server', status: 'pending', recorded_offline: false },
+	});
+	await waitFor(() =>
+		expect(mockMirrorError).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ type: 'payment.declined', reason: 'card_declined' }),
+			})
+		)
+	);
+	expect(
+		mockMirrorError.mock.calls.filter(([, options]) => options.context?.type === 'payment.declined')
+	).toHaveLength(1);
+	hook.unmount();
 });

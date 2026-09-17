@@ -4,6 +4,7 @@ import { AccessibilityInfo } from 'react-native';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
 import { TerminalLegView } from './terminal-leg-view';
@@ -84,6 +85,8 @@ jest.mock('@wcpos/components/collapsible', () => ({
 		<div data-testid={testID}>{children}</div>
 	),
 }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/utils/platform', () => ({ Platform: { isNative: false } }));
 const row = {
 	method_id: 'terminal',
@@ -182,6 +185,26 @@ it.each(cases)('renders the terminal state %j', (changes, status, present) => {
 		expect(screen.getByTestId('checkout-terminal-leg').textContent).toContain(
 			'Connection unstable — still waiting'
 		);
+});
+it('renders retained partial capture finishing errors without offering recollection', () => {
+	renderLeg({
+		phase: 'final',
+		outcome: 'captured',
+		settlement: {
+			payment: row,
+			outcome: 'captured',
+			saleComplete: false,
+			finishingError: 'local write failed',
+		},
+	});
+	expect(screen.queryByTestId('checkout-terminal-finishing-error')).not.toBeNull();
+	expect(screen.getByTestId('checkout-terminal-finishing-details').textContent).toContain(
+		'local write failed'
+	);
+	fireEvent.click(screen.getByTestId('checkout-terminal-finishing-help'));
+	expect(openExternalURL).toHaveBeenCalledWith('https://docs.wcpos.com/error-codes/PAYMENT121');
+	for (const action of actions)
+		expect(screen.queryByTestId(`checkout-terminal-${action}`)).toBeNull();
 });
 it('merges logs oldest first and copies the displayed lines', async () => {
 	const writeText = jest.fn().mockResolvedValue(undefined);

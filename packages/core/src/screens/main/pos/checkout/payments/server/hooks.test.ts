@@ -200,7 +200,7 @@ describe('background capture reconciliation', () => {
 		}
 	);
 
-	it('catches and warns when reconciliation rejects', async () => {
+	it('retains capture and reports a local finishing failure when reconciliation rejects', async () => {
 		mockFind.mockResolvedValue(resident);
 		requireRefresh.mockImplementationOnce(() => {
 			throw new Error('engine unavailable');
@@ -215,10 +215,19 @@ describe('background capture reconciliation', () => {
 		});
 		await act(() => jest.advanceTimersByTimeAsync(0));
 		expect(requireRefresh).toHaveBeenCalledTimes(1);
-		expect(jest.requireActual('@wcpos/utils/logger').warn).toHaveBeenCalledWith(
+		expect(jest.requireActual('@wcpos/utils/logger').error).toHaveBeenCalledWith(
 			expect.any(String),
-			{ context: { orderId: 'background-order', error: 'engine unavailable' } }
+			expect.objectContaining({
+				context: expect.objectContaining({
+					orderUUID: 'background-order',
+					error: 'engine unavailable',
+				}),
+			})
 		);
+		expect(getTerminalPaymentsService()!.get('background-order')?.settlement).toMatchObject({
+			outcome: 'captured',
+			finishingError: 'engine unavailable',
+		});
 		view.unmount();
 	});
 });
@@ -243,9 +252,14 @@ it('cold subscribers see service start, changes and stop; both resume hooks trac
 	expect(view.result.current?.phase).toBe('polling');
 	view.rerender();
 	expect(service.getSnapshot().size).toBe(2);
+	const outcomes: (string | null)[] = [];
+	const unsubscribe = service.subscribe(() => outcomes.push(service.get('one')?.outcome ?? null));
 	await act(() => jest.advanceTimersByTimeAsync(0));
-	expect(view.result.current?.outcome).toBe('captured');
+	// The captured outcome is published, then the service retires the finished sale's leg.
+	expect(outcomes).toContain('captured');
+	expect(view.result.current).toBeNull();
 	expect(mockHttp.post).not.toHaveBeenCalled();
+	unsubscribe();
 	act(() => stopTerminalPaymentsService());
 	expect(view.result.current).toBeNull();
 	view.unmount();

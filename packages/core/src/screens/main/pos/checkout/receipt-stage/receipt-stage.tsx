@@ -23,6 +23,8 @@ import { Platform } from '@wcpos/utils/platform';
 import { useFinishSale } from './use-finish-sale';
 import { finishReceipt } from '../checkout-mode';
 import { useCheckoutBack } from '../column/use-checkout-back';
+import { useTerminalLeg } from '../payments/server/use-terminal-leg';
+import { CapturedUnfinishedNotice } from '../tender/captured-unfinished-notice';
 import { useEngineRecord } from '../../../hooks/use-engine-document';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
@@ -128,6 +130,7 @@ function ReceiptStageDocument({
 	compact: boolean;
 }) {
 	const doc = useReceiptDocument({ order, autoPrintAllowed: true });
+	const leg = useTerminalLeg(order.uuid);
 	const { uiSettings } = useUISettings('pos-cart');
 	const payload = useRecordField(order, (record) => record.payload);
 	const { methods } = usePaymentMethods();
@@ -170,6 +173,9 @@ function ReceiptStageDocument({
 	useCheckoutBack(finishSale, { escape: false });
 	return (
 		<View testID="checkout-receipt-stage" className="flex-1">
+			{leg?.outcome === 'captured' && leg.settlement?.finishingError ? (
+				<CapturedUnfinishedNotice finishingError={leg.settlement.finishingError} />
+			) : null}
 			<PaidMoment>
 				<View testID="checkout-paid-headline">
 					<Text

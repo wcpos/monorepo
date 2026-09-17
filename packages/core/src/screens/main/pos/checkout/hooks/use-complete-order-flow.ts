@@ -2,9 +2,7 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { readLedger } from '@wcpos/order-math';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
@@ -12,10 +10,7 @@ import { enterReceipt, leaveCheckout } from '../checkout-mode';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
-import { reportProvenanceGap } from '../provenance/provenance-gap';
-import { reconcileCompletedOrder } from './reconcile-completed-order';
-
-const logger = getLogger(['wcpos', 'pos', 'checkout']);
+import { completeRecordedOrder } from './reconcile-completed-order';
 
 export interface CompleteOrderFlowOptions {
 	/**
@@ -56,28 +51,14 @@ export function useCompleteOrderFlow(
 			if (receiptHost === 'stage' && uiSettings.autoShowReceipt) {
 				enterReceipt(order.uuid);
 			}
-			await reconcileCompletedOrder(runtime, order, refresh, stockAdjustment);
-			const latest = order.getLatest().payload;
-			await reportProvenanceGap({
-				userDB,
-				siteUuid: site.uuid!,
-				storeId: store.id,
-				order: { id: latest.id, uuid: order.uuid, meta_data: latest.meta_data },
-			});
-			logger.info(`Sale ${order.uuid} completed`, {
+			await completeRecordedOrder(
+				runtime,
+				order,
 				actor,
-				context: {
-					type: 'checkout.completed',
-					orderId: latest.id ?? null,
-					orderUUID: order.uuid,
-					orderNumber: latest.number,
-					total: latest.total,
-					paymentLegs: readLedger(latest.meta_data).filter(
-						(row) =>
-							row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-					).length,
-				},
-			});
+				{ userDB, siteUuid: site.uuid!, storeId: store.id },
+				refresh,
+				stockAdjustment
+			);
 
 			// The pre-tender contract checkout still hosts receipts in a routed modal.
 			if (receiptHost === 'modal') {
