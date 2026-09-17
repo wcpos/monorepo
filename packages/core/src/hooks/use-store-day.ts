@@ -2,7 +2,10 @@ import * as React from 'react';
 
 import { tz, TZDate } from '@date-fns/tz';
 import * as dates from 'date-fns';
+import { useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
 
+import type { StoreDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { useDocField } from '@wcpos/query';
 
@@ -132,8 +135,27 @@ function useLiveField(source: FieldSource | null | undefined, key: string): stri
 const logger = getLogger(['wcpos', 'app', 'store-day']);
 const loggedTimezones = new Set<string>();
 
-export function useStoreDay() {
-	const { site, store } = useAppState();
+const emptyViewedStores: StoreDocument[] = [];
+const noViewedStores = of(emptyViewedStores);
+
+export function useViewedStore(storeId?: number) {
+	const { store, wpCredentials } = useAppState();
+	const source = React.useMemo(
+		() =>
+			storeId !== undefined && storeId !== store?.id && wpCredentials
+				? wpCredentials.populate$('stores')
+				: noViewedStores,
+		[storeId, store?.id, wpCredentials]
+	);
+	const stores = useObservableState(source, emptyViewedStores) as StoreDocument[];
+	return storeId === undefined || storeId === store?.id
+		? store
+		: stores.find((row) => row.id === storeId);
+}
+
+export function useStoreDay(storeId?: number) {
+	const { site } = useAppState();
+	const store = useViewedStore(storeId);
 	const storeTimezone = useLiveField(store as unknown as FieldSource | undefined, 'timezone');
 	const timezone_string = useLiveField(
 		site as unknown as FieldSource | undefined,

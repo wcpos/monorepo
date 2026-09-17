@@ -490,6 +490,7 @@ export type TemplateCollection = RxCollection<TemplateDocumentType>;
 const templates: RxCollectionCreator<TemplateDocumentType> = {
 	schema: templateSchema,
 	migrationStrategies: {
+		2: (doc) => doc,
 		1(oldDoc) {
 			// v1: Added output_type and paper_width fields — populated on next sync
 			return oldDoc;

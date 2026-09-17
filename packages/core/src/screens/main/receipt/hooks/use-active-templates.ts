@@ -41,10 +41,10 @@ export function useActiveTemplates(
 	// Query all receipt templates from RxDB
 	const query = React.useMemo(() => {
 		return storeDB.templates.find({
-			selector: { type },
+			selector: { type, ...(type === 'closure' ? { closure_store_id: storeId ?? store.id } : {}) },
 			sort: [{ menu_order: 'asc' }],
 		});
-	}, [storeDB, type]);
+	}, [storeDB, type, storeId, store.id]);
 
 	const allTemplates$ = React.useMemo(
 		() =>
@@ -59,7 +59,7 @@ export function useActiveTemplates(
 
 	// Apply per-store filtering for Pro users
 	return React.useMemo(() => {
-		if (!isPro || !activeTemplates || activeTemplates.length === 0) {
+		if (type === 'closure' || !isPro || !activeTemplates || activeTemplates.length === 0) {
 			return allTemplates;
 		}
 
@@ -76,5 +76,5 @@ export function useActiveTemplates(
 			});
 
 		return filtered.length > 0 ? filtered : allTemplates;
-	}, [isPro, activeTemplates, allTemplates]);
+	}, [type, isPro, activeTemplates, allTemplates]);
 }

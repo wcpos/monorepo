@@ -33,3 +33,13 @@ it.each(['=cmd', '+cmd', '-cmd', '@cmd'])('neutralizes text starting with %s', (
 		`"'${name}"`
 	);
 });
+
+// Revert: guard only a formula marker at byte zero.
+it.each(['\tname', '\rname', '\nname', ' =cmd', '\u0000+cmd', '\t\r\n @cmd', '\u00a0-cmd'])(
+	'neutralizes control/whitespace prefixes: %j',
+	(name) => {
+		expect(exportCsv([{ ...row, breakdowns: { closed_by_name: name } }], createTestT())).toContain(
+			`"'${name}"`
+		);
+	}
+);

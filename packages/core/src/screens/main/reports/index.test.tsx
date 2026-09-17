@@ -276,7 +276,28 @@ it('can enter local Closures while the Sales workspace is still loading', () => 
 });
 
 let mockRoute: Record<string, string> = {};
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => mockRoute }));
+const mockOpenDrawer = jest.fn();
+jest.mock('expo-router', () => ({
+	useLocalSearchParams: () => mockRoute,
+	useNavigation: () => ({ openDrawer: mockOpenDrawer }),
+}));
+jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		testID,
+		onPress,
+		children,
+	}: {
+		testID: string;
+		onPress: () => void;
+		children: React.ReactNode;
+	}) => (
+		<button data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 // Revert: ignore the register-panel route selector and mount Sales instead of the requested closure.
 it('opens the requested closure room and business day for Pro', () => {
 	mockPro = true;
@@ -305,4 +326,16 @@ it('opens an unstamped last closure on the day used by the local list', () => {
 		})
 	);
 	mockRoute = {};
+});
+
+// Revert: return bare denial text without the phone drawer control.
+it('lets a denied cashier return to the drawer without mounting report readers', () => {
+	mockCapabilities = [];
+	mockUseCollectionBinding.mockClear();
+	mockClosureScope.mockClear();
+	render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('drawer-open-button'));
+	expect(mockOpenDrawer).toHaveBeenCalledTimes(1);
+	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
+	expect(mockClosureScope).not.toHaveBeenCalled();
 });

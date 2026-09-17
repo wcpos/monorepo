@@ -136,11 +136,13 @@ it('forces fiscal mode and preserves the refund selector for preview, print, and
 	});
 });
 
-// Revert: use intent=print for closures, omit POST metadata, or retry a failed mutation.
-it('prints a closure through one mutation and applies its copy metadata without print intent', async () => {
+// Revert: mutate the server count while preparing rather than after dispatch.
+it('projects closure copy metadata and defers the mutation until commit', async () => {
 	jest.clearAllMocks();
 	mockGet.mockResolvedValue({
-		data: { data: { closure: { number: 1 }, fiscal: { document_type: 'closure' } } },
+		data: {
+			data: { closure: { number: 1, print_count: 2 }, fiscal: { document_type: 'closure' } },
+		},
 	});
 	mockPost.mockResolvedValue({
 		data: { print_count: 3, last_printed_at_gmt: '2026-09-17 12:00:00' },
@@ -153,16 +155,18 @@ it('prints a closure through one mutation and applies its copy metadata without 
 	await act(async () => {
 		printed = await result.current.fetchForPrint();
 	});
+	expect(mockPost).not.toHaveBeenCalled();
+	await result.current.commitPrint();
 	expect(mockPost).toHaveBeenCalledTimes(1);
 	expect(mockPost).toHaveBeenCalledWith('closures/session/print', {});
 	expect(mockGet.mock.calls.every(([, options]) => !options.params.intent)).toBe(true);
 	expect(printed).toEqual({
-		closure: { number: 1, print_count: 3, last_printed_at_gmt: '2026-09-17 12:00:00' },
+		closure: { number: 1, print_count: 3, last_printed_at_gmt: expect.any(String) },
 		fiscal: { document_type: 'closure', is_reprint: true, reprint_count: 2 },
 	});
 	mockPost.mockClear();
 	mockPost.mockRejectedValueOnce(new Error('refused'));
-	await expect(result.current.fetchForPrint()).rejects.toThrow('refused');
+	await expect(result.current.commitPrint()).rejects.toThrow('refused');
 	expect(mockPost).toHaveBeenCalledTimes(1);
 });
 
@@ -178,5 +182,5 @@ it('ignores legacy print intent on closure preview and print reads', async () =>
 	expect(mockPost).not.toHaveBeenCalled();
 	await result.current.fetchForPrint();
 	expect(mockGet.mock.calls.every(([, options]) => !options.params.intent)).toBe(true);
-	expect(mockPost).toHaveBeenCalledTimes(1);
+	expect(mockPost).not.toHaveBeenCalled();
 });

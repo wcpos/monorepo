@@ -28,13 +28,21 @@ import { useReceiptDocument } from '../../receipt/use-receipt-document';
 // Tablet drawer width; the Reports host already excludes the navigation rail.
 const PANEL_WIDTH = 480;
 
-export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () => void }) {
+export function ClosurePanel({
+	row,
+	onClose,
+	onRecountSaved,
+}: {
+	row: ClosureRow;
+	onClose: () => void;
+	onRecountSaved?: () => void;
+}) {
 	const t = useT();
 	const [recounting, setRecounting] = React.useState(false);
 	const [error, setError] = React.useState('');
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
-	const context = useClosureDocumentContext();
+	const context = useClosureDocumentContext(row.store_id ?? 0);
 	const collection = useClosureCollection();
 	const local = React.useMemo(
 		() =>
@@ -48,7 +56,7 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 		document: `closure:${row.server_closure_id ?? row.id}`,
 		documentReady: row.sync_status === 'synced' || row.sync_status === 'superseded',
 		templateType: 'closure',
-		storeId: row.store_id ?? undefined,
+		storeId: row.store_id ?? 0,
 		localReport: local ?? buildClosureDocument(row, context),
 	});
 	const remote = doc.serverReceiptData;
@@ -210,7 +218,16 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 					{t('reports.reprint')}
 				</Button>
 			</View>
-			{recounting && <RecountSheet row={row} onSaved={doc.refetch} onOpenChange={setRecounting} />}
+			{recounting && (
+				<RecountSheet
+					row={row}
+					onSaved={() => {
+						doc.refetch();
+						onRecountSaved?.();
+					}}
+					onOpenChange={setRecounting}
+				/>
+			)}
 		</View>
 	);
 	return phone ? (

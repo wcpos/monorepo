@@ -221,6 +221,7 @@ describe('print intent through checkout and reprint receipt documents', () => {
 				data: {
 					data: {
 						order: { id: 42, number: '42', currency: 'USD' },
+						closure: { print_count: 1 },
 						fiscal: {
 							is_reprint: options.params.intent === 'print',
 							reprint_count: options.params.intent === 'print' ? 1 : 0,
@@ -279,10 +280,26 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		expect(mockHtmlPrint.mock.calls[0][0]).toContain('Selected COPY 1');
 		mockPost.mockRejectedValueOnce(new Error('refused'));
 		await act(async () => {
-			await expect(result.current.print()).rejects.toThrow('refused');
+			expect(await result.current.print()).toBe(true);
 		});
 		expect(mockPost).toHaveBeenCalledTimes(2);
-		expect(mockHtmlPrint).toHaveBeenCalledTimes(1);
+		expect(mockHtmlPrint).toHaveBeenCalledTimes(2);
+		expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'refused' }));
+	});
+	// Revert: POST the closure count before printer dispatch succeeds.
+	it('does not count a closure when dispatch fails', async () => {
+		mockThermalPrint.mockRejectedValueOnce(new Error('printer unavailable'));
+		const { result } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				document: 'closure:c',
+				templateType: 'closure',
+			})
+		);
+		await act(async () => {
+			await expect(result.current.print()).rejects.toThrow('printer unavailable');
+		});
+		expect(mockPost).not.toHaveBeenCalled();
 	});
 	// Revert: skip local closure counting, mutate recorded figures, or post offline.
 	it('marks offline closure copies and commits only the local count after dispatch', async () => {

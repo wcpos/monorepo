@@ -99,3 +99,12 @@ it('projects the overnight corrections fixture without changing the recorded doc
 	expect([...result.touched].sort()).toEqual(fixture.touched);
 	expect(JSON.stringify(local)).toBe(before);
 });
+
+// Revert: recalculate variance only for counted tenders.
+it('reports a shortfall for a tender introduced after counting', () => {
+	const result = deriveSettled(recorded, [
+		correction(1, 'late_sale', { expected_delta: { voucher: '12.3400' } }),
+	]);
+	expect(result.settled.variance.voucher).toBe('-12.3400');
+	expect(result.touched.has('variance.voucher')).toBe(true);
+});

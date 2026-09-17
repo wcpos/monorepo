@@ -57,6 +57,9 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 	const cashiers = useObservableState(sources.cashiers, []) as WPCredentialsDocument[];
 	const [locked, setLocked] = React.useState('');
 	const [menu, setMenu] = React.useState('');
+	const periodTrigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
+	const scopeTrigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
+	const cashierTrigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
 	const [custom, setCustom] = React.useState(false);
 	const [draft, setDraft] = React.useState<DateRange>({
 		from: parseISO(scope.from),
@@ -81,11 +84,13 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 		}
 		setLocked('');
 		setMenu('');
+		setCustom(false);
 		onScopeChange({ ...scope, ...changes });
+		return true;
 	};
 	const period = (from: string, to: string, name: string) => {
 		const start = from < min ? min : from > today ? today : from;
-		choose(
+		return choose(
 			{ from: start, to: to < start ? start : to > today ? today : to },
 			from === today && to === today,
 			name
@@ -107,13 +112,19 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 			</Button>
 		</View>
 	);
-	const option = (id: string, label: string, onPress: () => void, locked = false) => (
+	const option = (id: string, label: string, onPress: () => boolean | void, locked = false) => (
 		<Button
 			key={id}
 			testID={id}
 			variant="ghost"
 			className={`min-h-12 ${locked ? 'opacity-50' : ''}`}
-			onPress={onPress}
+			onPress={() => {
+				if (onPress()) {
+					periodTrigger.current?.close();
+					scopeTrigger.current?.close();
+					cashierTrigger.current?.close();
+				}
+			}}
 		>
 			<ButtonText>{label}</ButtonText>
 			{locked && <Icon name="lock" className="text-muted-foreground" />}
@@ -157,7 +168,7 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 						setLocked('');
 					}}
 				>
-					<PopoverTrigger asChild>
+					<PopoverTrigger ref={periodTrigger} asChild>
 						<Button testID="reports-period" variant="ghost" className="min-h-12 flex-1">
 							{selected
 								? labels[selected]
@@ -187,7 +198,14 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 						{option(
 							'reports-period-custom',
 							t('reports.custom_range'),
-							() => (license?.isPro ? setCustom(true) : setLocked(t('reports.custom_ranges'))),
+							() => {
+								if (!license?.isPro) {
+									setLocked(t('reports.custom_ranges'));
+									return;
+								}
+								setDraft({ from: parseISO(scope.from), to: parseISO(scope.to) });
+								setCustom(true);
+							},
 							!license?.isPro
 						)}
 						{custom && license?.isPro && (
@@ -217,7 +235,7 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 						setLocked('');
 					}}
 				>
-					<PopoverTrigger asChild>
+					<PopoverTrigger ref={scopeTrigger} asChild>
 						<Button testID="reports-scope" variant="outline" className="min-h-12 flex-1">
 							<ButtonText numberOfLines={1}>
 								{directory.registers.find((row) => row.id === scope.registerId)?.name ??
@@ -263,8 +281,8 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 						{menu === 'scope' && hint}
 					</PopoverContent>
 				</Popover>
-				<Popover>
-					<PopoverTrigger asChild>
+				<Popover onOpenChange={(open) => setMenu(open ? 'cashier' : '')}>
+					<PopoverTrigger ref={cashierTrigger} asChild>
 						<Button testID="reports-cashier" variant="outline" className="min-h-12">
 							{cashiers?.find((row) => row.id === scope.cashier)?.display_name ??
 								t('common.cashier')}

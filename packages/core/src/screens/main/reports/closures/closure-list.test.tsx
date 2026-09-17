@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
+import { of } from 'rxjs';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { ClosureRow } from '@wcpos/database';
@@ -39,8 +40,15 @@ jest.mock('../../../../services/register-session/use-register-session-collection
 	useClosureCollection: () => undefined,
 }));
 let storeTimezone = 'America/Los_Angeles';
+const mockSession = {
+	get store() {
+		return { id: 1, timezone: storeTimezone };
+	},
+	site: {},
+	wpCredentials: { populate$: () => of([{ id: 2, timezone: 'Pacific/Kiritimati' }]) },
+};
 jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({ store: { timezone: storeTimezone }, site: {} }),
+	useAppState: () => mockSession,
 }));
 jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: jest.fn() }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
@@ -106,8 +114,8 @@ it('groups stamped opening days newest first, falling back to the store day for 
 	]);
 	expect(screen.getAllByTestId(/^closure-row-/).map((n) => n.getAttribute('data-testid'))).toEqual([
 		'closure-row-3',
-		'closure-row-2',
 		'closure-row-1',
+		'closure-row-2',
 	]);
 });
 // Revert: choose Corrected before outstanding named rows; treat the at-close count as current.
@@ -230,4 +238,34 @@ it('distinguishes short, over and exact drawer results with semantic tokens', ()
 		expect(screen.getByTestId(`closure-result-${id}`).className).toContain(token);
 		expect(screen.getByTestId(`closure-result-${id}`).className).toContain('tabular-nums');
 	}
+});
+
+// Revert: derive a legacy closure's day from closing time rather than opening time.
+it('keeps a legacy overnight closure on its opening store day', () => {
+	expect(
+		selectClosureRows(
+			[row('legacy', { opened_at: '2026-09-16T02:00:00Z' })],
+			scope,
+			'America/Los_Angeles'
+		)[0].business_day
+	).toBe('2026-09-15');
+});
+
+// Revert: format selected-store headings and times in the bound timezone.
+it('shows remote times and Today using the selected store timezone', () => {
+	jest.setSystemTime(new Date('2026-09-17T12:00:00Z'));
+	render(
+		<ClosureList
+			rows={[
+				row('remote', {
+					business_day: '2026-09-18',
+					opened_at: '2026-09-17T12:00:00Z',
+					closed_at: '2026-09-17T13:00:00Z',
+				}),
+			]}
+			{...{ storeId: 2 }}
+		/>
+	);
+	expect(screen.getByTestId('closure-day-2026-09-18').textContent).toBe('Today');
+	expect(screen.getByTestId('closure-row-remote').textContent).toContain('02:00 → 03:00');
 });

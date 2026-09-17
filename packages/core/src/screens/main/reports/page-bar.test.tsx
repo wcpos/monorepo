@@ -67,20 +67,42 @@ jest.mock('@wcpos/components/tabs', () => {
 	};
 });
 jest.mock('@wcpos/components/popover', () => {
-	const C = require('react').createContext(() => {});
+	const C = require('react').createContext({ open: false, change: () => {} });
 	return {
 		Popover: ({
 			children,
+			open,
 			onOpenChange,
 		}: {
 			children: React.ReactNode;
+			open?: boolean;
 			onOpenChange?: (open: boolean) => void;
-		}) => <C.Provider value={onOpenChange ?? (() => {})}>{children}</C.Provider>,
-		PopoverTrigger: ({ children }: { children: React.ReactElement<{ onPress: () => void }> }) => {
-			const change = React.useContext(C) as (open: boolean) => void;
-			return React.cloneElement(children, { onPress: () => change(true) });
+		}) => {
+			const [local, setLocal] = React.useState(false);
+			return (
+				<C.Provider
+					value={{
+						open: open ?? local,
+						change: (value: boolean) => {
+							setLocal(value);
+							onOpenChange?.(value);
+						},
+					}}
+				>
+					{children}
+				</C.Provider>
+			);
 		},
-		PopoverContent: ({ children }: { children: React.ReactNode }) => children,
+		PopoverTrigger: React.forwardRef(function MockPopoverTrigger(
+			{ children }: { children: React.ReactElement<{ onPress: () => void }> },
+			ref
+		) {
+			const { change } = React.useContext(C) as { change: (value: boolean) => void };
+			React.useImperativeHandle(ref, () => ({ close: () => change(false) }));
+			return React.cloneElement(children, { onPress: () => change(true) });
+		}),
+		PopoverContent: ({ children }: { children: React.ReactNode }) =>
+			(React.useContext(C) as { open: boolean }).open ? children : null,
 	};
 });
 const calendar = jest.fn();
@@ -164,6 +186,7 @@ it('switches rooms and selects Yesterday in store time', () => {
 	expect(room).toHaveBeenCalledWith('sales');
 	fireEvent.click(screen.getByTestId('reports-room-closures'));
 	expect(room).toHaveBeenCalledWith('closures');
+	fireEvent.click(screen.getByTestId('reports-period'));
 	fireEvent.click(screen.getByTestId('reports-period-yesterday'));
 	expect(change).toHaveBeenCalledWith(
 		expect.objectContaining({ from: '2026-09-15', to: '2026-09-15' })
@@ -195,11 +218,13 @@ it.each([
 it('caps custom history and applies the cashier filter', () => {
 	isPro = true;
 	draw();
+	fireEvent.click(screen.getByTestId('reports-period'));
 	fireEvent.click(screen.getByTestId('reports-period-custom'));
 	const props = calendar.mock.calls.at(-1)?.[0];
 	expect(props.maxDate).toBe('2026-09-16');
 	expect(props.minDate).toBe('2026-06-16');
 	expect(HISTORY_DAYS).toBeGreaterThan(0);
+	fireEvent.click(screen.getByTestId('reports-cashier'));
 	fireEvent.click(screen.getByTestId('reports-cashier-8'));
 	expect(change).toHaveBeenCalledWith(expect.objectContaining({ cashier: 8 }));
 });
@@ -208,6 +233,7 @@ it('caps custom history and applies the cashier filter', () => {
 it('keeps both custom endpoints inside retained history', () => {
 	isPro = true;
 	draw();
+	fireEvent.click(screen.getByTestId('reports-period'));
 	fireEvent.click(screen.getByTestId('reports-period-custom'));
 	act(() =>
 		calendar.mock.calls
@@ -241,8 +267,10 @@ it('offers the selected Pro store registers without rebinding the till', () => {
 		return <PageBar room="closures" onRoomChange={room} scope={selected} onScopeChange={select} />;
 	}
 	render(<Browse />);
+	fireEvent.click(screen.getByTestId('reports-scope'));
 	fireEvent.click(screen.getByTestId('reports-store-2'));
 	expect(screen.queryByTestId('reports-register-other')).toBeNull();
+	fireEvent.click(screen.getByTestId('reports-scope'));
 	fireEvent.click(screen.getByTestId('reports-register-remote'));
 	expect(screen.getByTestId('reports-scope').textContent).toContain('Remote till · Second');
 });
@@ -257,4 +285,38 @@ it('identifies Reports before the room segments', () => {
 			.compareDocumentPosition(screen.getByTestId('reports-room-sales')) &
 			Node.DOCUMENT_POSITION_FOLLOWING
 	).toBeTruthy();
+});
+
+// Revert: clear only the menu marker, leaving the popover root open.
+it.each([
+	['reports-period', 'reports-period-yesterday'],
+	['reports-scope', 'reports-register-other'],
+	['reports-scope', 'reports-store-2'],
+	['reports-cashier', 'reports-cashier-8'],
+])('closes %s after selecting %s', (trigger, option) => {
+	isPro = true;
+	draw();
+	fireEvent.click(screen.getByTestId(trigger));
+	fireEvent.click(screen.getByTestId(option));
+	expect(change).toHaveBeenCalled();
+	expect(screen.queryByTestId(option)).toBeNull();
+});
+// Revert: initialize the custom draft only at mount instead of when Custom opens.
+it('seeds Custom from the current scope after selecting another range', () => {
+	isPro = true;
+	const view = draw();
+	view.rerender(
+		<PageBar
+			room="closures"
+			onRoomChange={room}
+			scope={{ ...scope, from: '2026-09-01', to: '2026-09-04' }}
+			onScopeChange={change}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-custom'));
+	fireEvent.click(screen.getByTestId('reports-period-apply'));
+	expect(change).toHaveBeenLastCalledWith(
+		expect.objectContaining({ from: '2026-09-01', to: '2026-09-04' })
+	);
 });

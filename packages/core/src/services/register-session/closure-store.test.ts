@@ -316,3 +316,18 @@ it('retains the actor and movement data needed by the local closure document', a
 	expect(doc.closure.breakdowns.payment_methods.length).toBeGreaterThan(0);
 	expect(doc.closure.breakdowns.movements[0].created_at.datetime).not.toBe('');
 });
+
+// Revert: omit business_day when writing a closure for an already-closed legacy session.
+it('derives a legacy closure day from opening in store time', async () => {
+	const input = await seed();
+	const closure = await writeClosure({
+		...input,
+		session: {
+			...input.session.toJSON(),
+			business_day: undefined,
+			opened_at_gmt: '2026-09-17T02:00:00Z',
+		},
+		...{ timezone: 'America/Los_Angeles' },
+	});
+	expect(closure.business_day).toBe('2026-09-16');
+});

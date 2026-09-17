@@ -11,7 +11,7 @@ export function exportCsv(
 	];
 	const cell = (value: unknown) => {
 		const text = String(value ?? '');
-		return `"${(/^[=+\-@]/.test(text) ? "'" + text : text).replace(/"/g, '""')}"`;
+		return `"${(/^(?:[\t\r\n]|[\s\x00-\x1f\x7f-\x9f]*[=+\-@])/.test(text) ? "'" + text : text).replace(/"/g, '""')}"`;
 	};
 	const header = ['business_day', 'closure', 'register', 'store', 'opened', 'closed', 'closer'].map(
 		(key) => t(`reports.csv_${key}`)

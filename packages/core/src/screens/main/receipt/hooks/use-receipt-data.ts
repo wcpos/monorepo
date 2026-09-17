@@ -23,6 +23,7 @@ interface ReceiptApiResponse {
 }
 
 interface UseReceiptDataResult {
+	commitPrint: () => Promise<void>;
 	data: Record<string, unknown> | null;
 	mode: ReceiptMode;
 	hasSnapshot: boolean;
@@ -42,7 +43,7 @@ interface UseReceiptDataOptions {
 	isReprint?: boolean;
 }
 
-type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint'> & {
+type ReceiptDataState = Omit<UseReceiptDataResult, 'refetch' | 'fetchForPrint' | 'commitPrint'> & {
 	orderId: number | undefined;
 	document?: string;
 };
@@ -80,7 +81,10 @@ export function useReceiptData({
 		if (!orderId && !document) return null;
 		if (document?.startsWith('closure:')) {
 			const data = (await fetchData()).data;
-			const { data: marker } = await http.post(`closures/${document.slice(8)}/print`, {});
+			const marker = {
+				print_count: Number((data.closure as { print_count?: number })?.print_count ?? 0) + 1,
+				last_printed_at_gmt: new Date().toISOString(),
+			};
 			return {
 				...data,
 				closure: {
@@ -96,7 +100,11 @@ export function useReceiptData({
 			};
 		}
 		return (await fetchData(document?.startsWith('xreport:') ? undefined : 'print')).data ?? null;
-	}, [orderId, document, fetchData, http, isReprint]);
+	}, [orderId, document, fetchData, isReprint]);
+	const commitPrint = React.useCallback(async () => {
+		if (document?.startsWith('closure:'))
+			await http.post(`closures/${document.slice(8)}/print`, {});
+	}, [document, http]);
 	const [fetchKey, setFetchKey] = React.useState(0);
 	const [state, setState] = React.useState<ReceiptDataState>({
 		orderId,
@@ -192,9 +200,10 @@ export function useReceiptData({
 			error: null,
 			refetch,
 			fetchForPrint,
+			commitPrint,
 		};
 	}
 
 	const { orderId: _requestOrderId, document: _requestDocument, ...currentState } = state;
-	return { ...currentState, refetch, fetchForPrint };
+	return { ...currentState, refetch, fetchForPrint, commitPrint };
 }

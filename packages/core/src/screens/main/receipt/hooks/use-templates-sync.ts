@@ -79,7 +79,13 @@ export function syncTemplates(
 				data.map((row: Record<string, unknown>, index) => {
 					// The API array carries the resolved global/store display order;
 					// post menu_order does not. Preserve it for the local sorted query.
-					const orderedRow = { ...row, menu_order: index };
+					const orderedRow = {
+						...row,
+						menu_order: index,
+						...(type === 'closure'
+							? { uuid: `${storeId ?? 0}:${row.uuid}`, closure_store_id: storeId ?? 0 }
+							: {}),
+					};
 					return typeof parse === 'function' ? parse.call(collection, orderedRow) : orderedRow;
 				})
 			);
@@ -103,6 +109,13 @@ export function syncTemplates(
 						},
 					});
 				}
+			}
+			if (type === 'closure') {
+				const ids = new Set(rows.map((row) => row.uuid));
+				const previous = await collection
+					.find({ selector: { type, closure_store_id: storeId ?? 0 } })
+					.exec();
+				await Promise.all(previous.filter((row) => !ids.has(row.uuid)).map((row) => row.remove()));
 			}
 		} catch (error: any) {
 			if (isAsleepBlock(error)) {

@@ -62,9 +62,12 @@ export function deriveSettled(recorded: RecordedFigures, corrections: readonly C
 		}
 	}
 	if (corrections.length)
-		for (const tender of Object.keys(settled.counted)) {
+		for (const tender of new Set([
+			...Object.keys(settled.expected),
+			...Object.keys(settled.counted),
+		])) {
 			settled.variance[tender] = fromMinor(
-				toMinor(settled.counted[tender], 4) - toMinor(settled.expected[tender] ?? '0', 4),
+				toMinor(settled.counted[tender] ?? '0', 4) - toMinor(settled.expected[tender] ?? '0', 4),
 				4
 			);
 		}

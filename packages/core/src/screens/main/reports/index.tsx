@@ -15,6 +15,7 @@ import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { withProAccess } from '../components/pro-guard';
 import { useRegisterBinding } from '../../../services/register/use-register-binding';
 import { calendarDate, useStoreDay, zoneOptions } from '../../../hooks/use-store-day';
+import { HeaderLeft } from '../components/header/left';
 import { PageBar } from './page-bar';
 import { Closures } from './closures';
 import { ReportsProvider } from './context';
@@ -208,6 +209,11 @@ export function ReportsScreen() {
 	return capabilities?.includes('view_woocommerce_pos_reports') ? (
 		<ReportsShell key={closureId} />
 	) : (
-		<Text testID="reports-denied">{t('reports.no_access')}</Text>
+		<View className="flex-1">
+			<View className="bg-sidebar self-start rounded-md p-2">
+				<HeaderLeft />
+			</View>
+			<Text testID="reports-denied">{t('reports.no_access')}</Text>
+		</View>
 	);
 }

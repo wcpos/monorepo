@@ -7,6 +7,7 @@ import get from 'lodash/get';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { HISTORY_DAYS } from '@wcpos/sync-core';
+import { log } from '@wcpos/utils/logger';
 import type { ClosureRow } from '@wcpos/database';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
@@ -33,7 +34,8 @@ export function selectClosureRows(
 		.map((row) => ({
 			...row,
 			business_day:
-				row.business_day || format(new Date(row.closed_at), 'yyyy-MM-dd', zoneOptions(timezone)),
+				row.business_day ||
+				format(convertUTCStringToLocalDate(row.opened_at), 'yyyy-MM-dd', zoneOptions(timezone)),
 		}))
 		.filter(
 			(row) =>
@@ -48,6 +50,32 @@ export function selectClosureRows(
 				b.business_day.localeCompare(a.business_day) || b.closed_at.localeCompare(a.closed_at)
 		);
 }
+function normalizeClosureRow(
+	row: ClosureRow & { opened_at_gmt?: string; closed_at_gmt?: string }
+): ClosureRow[] {
+	const opened = row.opened_at_gmt ?? row.opened_at;
+	const closed = row.closed_at_gmt ?? row.closed_at;
+	if (!opened || !closed) return [];
+	const openedAt = convertUTCStringToLocalDate(opened);
+	const closedAt = convertUTCStringToLocalDate(closed);
+	if (!Number.isFinite(openedAt.getTime()) || !Number.isFinite(closedAt.getTime())) return [];
+	return [
+		{
+			...row,
+			sync_status: 'synced' as const,
+			opened_at: openedAt.toISOString(),
+			closed_at: closedAt.toISOString(),
+			counted: row.counted ?? {},
+			variance: row.variance ?? {},
+			synced_rows_at: row.closed_at_gmt ?? row.closed_at,
+			breakdowns: {
+				...row.breakdowns,
+				...(row.breakdowns?.labels as Record<string, unknown>),
+				store_name: get(row, 'breakdowns.store.name'),
+			},
+		},
+	];
+}
 // Match the REST list default; a full final page costs one extra read, not a totals query.
 const PAGE_SIZE = 50;
 export function useClosureRows(requested: ClosureScope) {
@@ -57,7 +85,7 @@ export function useClosureRows(requested: ClosureScope) {
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const collection = useClosureCollection();
-	const { timezone, presets } = useStoreDay();
+	const { timezone, presets } = useStoreDay(license?.isPro ? requested.storeId : store.id);
 	const today = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
 	const min = format(subDays(parseISO(today), HISTORY_DAYS), 'yyyy-MM-dd');
 	const clamp = (day: string) => (day < min ? min : day > today ? today : day);
@@ -93,9 +121,7 @@ export function useClosureRows(requested: ClosureScope) {
 	);
 	const needsServer =
 		!!license?.isPro &&
-		(scope.storeId !== store.id ||
-			scope.registerId !== binding.registerId ||
-			(scope.from < today && (!local.length || scope.from < local[local.length - 1].business_day)));
+		(scope.storeId !== store.id || scope.registerId !== binding.registerId || scope.from < today);
 	const loadMore = React.useCallback(async () => {
 		if (!online || !needsServer || !page.more || ['loading', 'denied'].includes(page.status))
 			return;
@@ -111,20 +137,7 @@ export function useClosureRows(requested: ClosureScope) {
 					per_page: PAGE_SIZE,
 				},
 			});
-			const rows = (
-				data as (ClosureRow & { opened_at_gmt?: string; closed_at_gmt?: string })[]
-			).map((row) => ({
-				...row,
-				sync_status: 'synced' as const,
-				opened_at: convertUTCStringToLocalDate(row.opened_at_gmt ?? row.opened_at).toISOString(),
-				closed_at: convertUTCStringToLocalDate(row.closed_at_gmt ?? row.closed_at).toISOString(),
-				synced_rows_at: row.closed_at_gmt ?? row.closed_at,
-				breakdowns: {
-					...row.breakdowns,
-					...(row.breakdowns?.labels as Record<string, unknown>),
-					store_name: get(row, 'breakdowns.store.name'),
-				},
-			}));
+			const rows = (data as ClosureRow[]).flatMap(normalizeClosureRow);
 			setPage((p) =>
 				p.key !== key
 					? p
@@ -132,7 +145,7 @@ export function useClosureRows(requested: ClosureScope) {
 							key,
 							rows: [...p.rows, ...rows],
 							next: page.next + 1,
-							more: rows.length === PAGE_SIZE,
+							more: data.length === PAGE_SIZE,
 							status: 'ready',
 						}
 			);
@@ -149,10 +162,28 @@ export function useClosureRows(requested: ClosureScope) {
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- Initial external read for the selected scope; retries are event-driven.
 		if (observed && page.status === 'idle') void loadMore();
 	}, [observed, page.status, loadMore]);
-	const merged = new Map(page.rows.map((row) => [row.id, row]));
+	const refreshRow = async (row: ClosureRow) => {
+		const update = async (updated: ClosureRow) => {
+			setPage((p) =>
+				p.key === key ? { ...p, rows: [...p.rows.filter((r) => r.id !== updated.id), updated] } : p
+			);
+			const local = await collection?.findOne(row.id).exec();
+			await local?.incrementalPatch({ corrections_count: updated.corrections_count });
+		};
+		try {
+			await update({ ...row, corrections_count: (row.corrections_count ?? 0) + 1 });
+			const { data } = await http.get(`closures/${row.server_closure_id ?? row.id}`);
+			const refreshed = normalizeClosureRow(data)[0];
+			if (refreshed) await update(refreshed);
+		} catch (error) {
+			log.warn('Closure row refresh failed', { context: { error: String(error) } });
+		}
+	};
+	const merged = new Map(page.rows.map((row) => [row.server_closure_id ?? row.id, row]));
 	for (const row of local) {
 		const pending = !row.synced_rows_at || ['pending', 'failed'].includes(row.sync_status);
-		if (!merged.has(row.id) || pending) merged.set(row.id, row);
+		const id = row.server_closure_id ?? row.id;
+		if (!merged.has(id) || pending) merged.set(id, row);
 	}
 	const rows = selectClosureRows([...merged.values()], scope, timezone);
 	const localIds = new Set(local.map((row) => row.id));
@@ -160,6 +191,7 @@ export function useClosureRows(requested: ClosureScope) {
 		scope,
 		rows,
 		loadMore,
+		refreshRow,
 		hasMore: needsServer && page.more && page.status === 'ready',
 		unavailableIds: new Set(
 			online ? [] : rows.filter((row) => !localIds.has(row.id)).map((row) => row.id)

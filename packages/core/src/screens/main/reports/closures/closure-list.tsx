@@ -17,14 +17,16 @@ export function ClosureList({
 	rows,
 	onSelect,
 	unavailableIds,
+	storeId,
 }: {
 	rows: readonly ClosureRow[];
+	storeId?: number;
 	unavailableIds?: ReadonlySet<string>;
 	onSelect?: (row: ClosureRow) => void;
 }) {
 	const t = useT();
 	const { format } = useCurrencyFormat();
-	const { timezone } = useStoreDay();
+	const { timezone } = useStoreDay(storeId);
 	const names = useRegisterNames();
 	const { formatDate: displayDate } = useLocalDate();
 	const today = formatDate(new Date(), 'yyyy-MM-dd', zoneOptions(timezone));

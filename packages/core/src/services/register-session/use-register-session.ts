@@ -54,7 +54,7 @@ export function useRegisterSession() {
 	> | null>(null);
 	const { store, wpCredentials, userDB, site } = useStoreSession();
 	const actor = useRegisterActor();
-	const { today } = useStoreDay();
+	const { today, timezone } = useStoreDay();
 	const { engine, locale } = useQueryRuntime();
 	const binding = useRegisterBinding();
 	const sessions = useRegisterSessionCollection();
@@ -389,6 +389,7 @@ export function useRegisterSession() {
 						: await actions.closeSession(sessions!, session!.id, {
 								...input,
 								closedBy: wpCredentials.id,
+								timezone,
 							});
 				const handles = pendingParents.current;
 				if (handles.length > 0) {
@@ -438,6 +439,7 @@ export function useRegisterSession() {
 				const refundRecords = accounting?.refundRecords ?? data?.refundRecords;
 				const closure = await actions.writeClosure({
 					closures: closures!,
+					timezone,
 					labels: {
 						register_name: binding.registerName ?? '',
 						closed_by_name: wpCredentials.display_name ?? '',

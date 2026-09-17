@@ -35,7 +35,8 @@ export function Closures({
 	scope: ClosureScope;
 	initialClosureId?: string;
 }) {
-	const { rows, scope, status, hasMore, loadMore, unavailableIds } = useClosureRows(requested);
+	const { rows, scope, status, hasMore, loadMore, refreshRow, unavailableIds } =
+		useClosureRows(requested);
 	const [selected, setSelected] = React.useState<string | null>(initialClosureId ?? null);
 	const row = rows.find((row) => row.id === selected && !unavailableIds.has(row.id));
 	const { store } = useStoreSession();
@@ -55,7 +56,14 @@ export function Closures({
 		);
 	}, []);
 	if (row && screenSize === 'sm')
-		return <ClosurePanel key={row.id} row={row} onClose={() => setSelected(null)} />;
+		return (
+			<ClosurePanel
+				key={row.id}
+				row={row}
+				onRecountSaved={() => void refreshRow(row)}
+				onClose={() => setSelected(null)}
+			/>
+		);
 	return (
 		<View ref={registerContainer} testID="reports-closures" className="min-h-0 flex-1 flex-row">
 			<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
@@ -123,6 +131,7 @@ export function Closures({
 				)}
 				{(rows.length > 0 || status === 'ready') && (
 					<ClosureList
+						storeId={scope.storeId}
 						rows={rows}
 						unavailableIds={unavailableIds}
 						onSelect={(row) => setSelected(row.id)}
@@ -140,7 +149,12 @@ export function Closures({
 				)}
 			</ScrollView>
 			{row ? (
-				<ClosurePanel key={row.id} row={row} onClose={() => setSelected(null)} />
+				<ClosurePanel
+					key={row.id}
+					row={row}
+					onRecountSaved={() => void refreshRow(row)}
+					onClose={() => setSelected(null)}
+				/>
 			) : (
 				screenSize !== 'sm' && (
 					<View

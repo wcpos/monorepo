@@ -52,6 +52,7 @@ export function RecountSheet({
 	const [busy, setBusy] = React.useState(false);
 	// Duplicate taps must not append two fiscal corrections.
 	const busyRef = React.useRef(false);
+	const request = React.useRef<{ key: string; id: string } | null>(null);
 	const [error, setError] = React.useState('');
 	const faces = denominations[currency ?? ''] ?? denominations.default;
 	const amounts = {
@@ -69,13 +70,16 @@ export function RecountSheet({
 		busyRef.current = true;
 		setBusy(true);
 		setError('');
+		const key = JSON.stringify([row.id, amounts, reason.trim(), username.trim(), password]);
+		if (request.current?.key !== key) request.current = { key, id: mintUuid() };
 		try {
 			await http.post(`closures/${row.server_closure_id ?? row.id}/recount`, {
-				id: mintUuid(),
+				id: request.current.id,
 				counted: amounts,
 				reason: reason.trim(),
 				...(!manager ? { approval: { username: username.trim(), password } } : {}),
 			});
+			request.current = null;
 			setPassword('');
 			onSaved();
 			onOpenChange(false);

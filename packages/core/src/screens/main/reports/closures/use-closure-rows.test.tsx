@@ -7,7 +7,7 @@ import type { ClosureRow } from '@wcpos/database';
 import { useClosureRows } from './use-closure-rows';
 
 const source = new BehaviorSubject<{ toMutableJSON: () => ClosureRow }[]>([]);
-const collection = { find: () => ({ $: source }) };
+const collection = { find: () => ({ $: source }), findOne: () => ({ exec: async () => null }) };
 const get = jest.fn();
 const http = { get };
 let online = true;
@@ -28,11 +28,11 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ store: { id: 1 } }),
 }));
 jest.mock('../../../../hooks/use-store-day', () => ({
-	useStoreDay: () => ({
-		timezone: 'UTC',
+	useStoreDay: (storeId?: number) => ({
+		timezone: storeId === 2 ? 'America/Los_Angeles' : 'UTC',
 		presets: () => ({ today: { from: new Date('2026-09-17T00:00:00Z') } }),
 	}),
-	zoneOptions: () => ({}),
+	zoneOptions: jest.requireActual('../../../../hooks/use-store-day').zoneOptions,
 }));
 const scope = { from: '2026-09-17', to: '2026-09-17', registerId: 'r', storeId: 1 };
 const row = (id: string, changes: Partial<ClosureRow> = {}) =>
@@ -195,4 +195,75 @@ it('reads global-store closures without inheriting the till store filter', async
 		expect.objectContaining({ params: expect.objectContaining({ store_id: null }) })
 	);
 	expect(result.current.rows.map((row) => row.id)).toEqual(['global']);
+});
+
+// Revert: pass invalid REST timestamps and absent money maps through to the list.
+it('rejects invalid timestamps and supplies empty money maps', async () => {
+	get.mockResolvedValue({
+		data: [
+			row('valid', { register_id: 'other' }),
+			row('bad', { register_id: 'other', closed_at: 'invalid' }),
+			row('missing', { register_id: 'other', opened_at: undefined }),
+		],
+	});
+	const { result } = renderHook(() => useClosureRows({ ...scope, registerId: 'other' }));
+	await waitFor(() => expect(result.current.status).toBe('ready'));
+	expect(result.current.rows).toHaveLength(1);
+	expect(result.current.rows[0]).toMatchObject({ id: 'valid', counted: {}, variance: {} });
+});
+
+// Revert: refresh only the receipt document after recount, leaving the list badge stale.
+it('patches the badge immediately and refetches the recounted closure', async () => {
+	get.mockResolvedValueOnce({ data: [row('remote', { register_id: 'other' })] });
+	const { result } = renderHook(() => useClosureRows({ ...scope, registerId: 'other' }));
+	await waitFor(() => expect(result.current.rows).toHaveLength(1));
+	get.mockResolvedValueOnce({
+		data: row('remote', { register_id: 'other', corrections_count: 2 }),
+	});
+	await act(() => result.current.refreshRow(result.current.rows[0]));
+	expect(get).toHaveBeenLastCalledWith('closures/remote');
+	expect(result.current.rows[0].corrections_count).toBe(2);
+});
+
+// Revert: derive remote legacy days using the bound store timezone.
+it('derives legacy remote business days in the selected store zone', async () => {
+	get.mockResolvedValue({
+		data: [
+			row('remote', { store_id: 2, business_day: undefined, opened_at: '2026-09-17T02:00:00Z' }),
+		],
+	});
+	const { result } = renderHook(() =>
+		useClosureRows({ ...scope, storeId: 2, from: '2026-09-16', to: '2026-09-16' })
+	);
+	await waitFor(() => expect(result.current.status).toBe('ready'));
+	expect(result.current.rows.map((row) => row.business_day)).toEqual(['2026-09-16']);
+});
+
+// Revert: merge a superseded local row under its losing UUID instead of its server ID.
+it('merges a superseded closure with its winning server row', async () => {
+	source.next([
+		{
+			toMutableJSON: () =>
+				row('loser', {
+					register_id: 'other',
+					server_closure_id: 'winner',
+					sync_status: 'superseded',
+				}),
+		},
+	]);
+	get.mockResolvedValue({ data: [row('winner', { register_id: 'other' })] });
+	const { result } = renderHook(() => useClosureRows({ ...scope, registerId: 'other' }));
+	await waitFor(() => expect(result.current.status).toBe('ready'));
+	expect(result.current.rows.map((row) => row.id)).toEqual(['winner']);
+});
+
+// Revert: assume any local closure on the start day proves historical completeness.
+it('merges server history even when the device has a closure on the start day', async () => {
+	source.next([{ toMutableJSON: () => row('local', { business_day: '2026-09-16' }) }]);
+	get.mockResolvedValue({ data: [row('another-device', { business_day: '2026-09-16' })] });
+	const { result } = renderHook(() => useClosureRows({ ...scope, from: '2026-09-16' }));
+	await waitFor(() => expect(result.current.rows).toHaveLength(2));
+	expect(result.current.rows.map((row) => row.id)).toEqual(
+		expect.arrayContaining(['local', 'another-device'])
+	);
 });

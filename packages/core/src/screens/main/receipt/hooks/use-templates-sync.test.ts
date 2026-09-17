@@ -220,3 +220,26 @@ it('syncs closure/store requests without suppressing concurrent receipt sync', a
 		await db.collections.templates.find({ selector: { type: 'receipt' } }).exec()
 	).toHaveLength(serverPayload.length);
 });
+
+// Revert: upsert every store's closure templates under the same unscoped UUID.
+it('keeps closure template sets separate and removes omitted assignments only in that store', async () => {
+	const collection = db.collections.templates;
+	const payload = serverPayload.map((row) => ({ ...row, type: 'closure' }));
+	await syncTemplates(collection, fakeHttpClient(payload.slice(0, 2)), 'closure', 1);
+	await syncTemplates(collection, fakeHttpClient(payload.slice(1, 3)), 'closure', 2);
+	const rows = await collection.find().exec();
+	expect(rows).toHaveLength(4);
+	await syncTemplates(collection, fakeHttpClient(payload.slice(2, 3)), 'closure', 2);
+	expect(
+		(await collection.find().exec()).map((row) => [row.get('closure_store_id'), row.id])
+	).toEqual(
+		expect.arrayContaining([
+			[1, 'plugin-core'],
+			[1, 64965],
+			[2, 64966],
+		])
+	);
+	expect(await collection.count().exec()).toBe(3);
+	await syncTemplates(collection, fakeHttpClient([]), 'closure', 2);
+	expect(await collection.count().exec()).toBe(2);
+});

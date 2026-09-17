@@ -82,6 +82,7 @@ interface TemplateRendererResult {
 	preparePrintContent: (nextLocalPrintCount: () => Promise<number>) => Promise<{
 		receiptData: ReceiptData | Record<string, unknown>;
 		html?: string;
+		commit?: () => Promise<void>;
 	}>;
 }
 
@@ -132,6 +133,7 @@ export function useTemplateRenderer({
 		refetch,
 		isLoading,
 		fetchForPrint,
+		commitPrint,
 	} = useReceiptData({
 		orderId: isOffline ? undefined : orderId,
 		mode,
@@ -332,6 +334,9 @@ export function useTemplateRenderer({
 		if (!data) throw new Error('No receipt data available for printing');
 		return {
 			receiptData: data,
+			...(!isOffline && documentReady && document?.startsWith('closure:')
+				? { commit: commitPrint }
+				: {}),
 			html:
 				selectedTemplate?.offline_capable && selectedTemplate.content
 					? renderOfflineTemplatePreview({

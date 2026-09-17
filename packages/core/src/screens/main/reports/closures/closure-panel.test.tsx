@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
+import { of } from 'rxjs';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type { ClosureRow } from '@wcpos/database';
@@ -25,18 +26,22 @@ jest.mock('../../../../contexts/theme', () => ({
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
-jest.mock('../../../../contexts/app-state', () => ({
-	useAppState: () => ({
-		store: { currency: 'USD', name: 'Shop' },
-		site: { url: 'https://shop.test' },
-	}),
-}));
-jest.mock('../../../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'UTC' }) }));
+const mockSession = {
+	store: { id: 0, currency: 'USD', name: 'Shop', timezone: 'UTC' },
+	site: { url: 'https://shop.test' },
+	wpCredentials: {
+		populate$: () => of([{ id: 2, currency: 'JPY', name: 'Tokyo', timezone: 'Asia/Tokyo' }]),
+	},
+};
+jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => mockSession }));
 jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-US' }) }));
 jest.mock('../../hooks/use-currency-format', () => ({
-	useCurrencyFormat: () => ({
+	useCurrencyFormat: (options?: { currency?: string }) => ({
 		format: (n: number) =>
-			new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n),
+			new Intl.NumberFormat('en-US', {
+				style: 'currency',
+				currency: options?.currency ?? 'USD',
+			}).format(n),
 	}),
 }));
 jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
@@ -249,12 +254,14 @@ it('dispatches reprint once and shows a failed print without retry', async () =>
 });
 // Revert: do not open recount or reload the corrected document after saving.
 it('opens recount online and reloads the closure after success', () => {
+	const refreshRow = jest.fn();
 	mockRemote = { closure: row };
-	render(<ClosurePanel row={row} onClose={() => {}} />);
+	render(<ClosurePanel row={row} onClose={() => {}} {...{ onRecountSaved: refreshRow }} />);
 	fireEvent.click(screen.getByTestId('closure-recount'));
 	expect(mockRecount).toHaveBeenCalledWith(expect.objectContaining({ row }));
 	fireEvent.click(screen.getByTestId('save-recount'));
 	expect(mockRefetch).toHaveBeenCalledTimes(1);
+	expect(refreshRow).toHaveBeenCalled();
 });
 
 // Revert: use the unnamed portal, thumbnail preview, or omit the panel close action.
@@ -296,4 +303,27 @@ it('bounds the tablet panel beneath the bar with a contained body and separate f
 	} finally {
 		Object.assign(window, previous);
 	}
+});
+
+// Revert: call the document context without row.store_id.
+it('formats settled amounts and correction timestamps in the closure store', () => {
+	mockRemote = {
+		closure: {
+			...row,
+			corrections: [
+				{
+					id: 1,
+					type: 'recount',
+					actor: { name: 'Pat' },
+					approver: null,
+					reason: 'Count',
+					created_at: '2026-09-11 18:00:00',
+					figures: { counted: { cash: '101' } },
+				},
+			],
+		},
+	};
+	render(<ClosurePanel row={{ ...row, store_id: 2 }} onClose={() => {}} />);
+	expect(screen.getByTestId('closure-settled').textContent).toContain('¥99 → ¥101');
+	expect(screen.getByTestId('closure-correction-1').textContent).toContain('Sep 12, 2026, 3:00 AM');
 });

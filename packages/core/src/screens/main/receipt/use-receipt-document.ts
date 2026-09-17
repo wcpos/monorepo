@@ -209,6 +209,19 @@ export function useReceiptDocument({
 				};
 				return count;
 			});
+			if (prepared.commit) {
+				const recordPrint = prepared.commit;
+				commit = async () => {
+					try {
+						await recordPrint();
+					} catch (error) {
+						Toast.show({
+							title: error instanceof Error ? error.message : t('reports.reprint_failed'),
+						});
+						throw error;
+					}
+				};
+			}
 			return { ...prepared, ...(commit ? { commit } : {}) };
 		},
 		receiptData: receiptData ?? undefined,

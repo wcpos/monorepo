@@ -126,3 +126,17 @@ it('stamps the supplied store day rather than the device UTC day', async () => {
 	const row = await openSession(db.register_sessions, input);
 	expect(row.toJSON()).toMatchObject({ business_day: '2026-09-16' });
 });
+
+// Revert: close a legacy overnight session without stamping its opening store day.
+it('derives the opening business day when closing a legacy session', async () => {
+	const doc = await openSession(db.register_sessions, input);
+	await doc.incrementalModify((value) => {
+		delete value.business_day;
+		return { ...value, opened_at_gmt: '2026-09-17T02:00:00Z' };
+	});
+	await closeSession(db.register_sessions, doc.id, {
+		counted: { cash: '100' },
+		...{ timezone: 'America/Los_Angeles' },
+	});
+	expect(doc.getLatest().business_day).toBe('2026-09-16');
+});

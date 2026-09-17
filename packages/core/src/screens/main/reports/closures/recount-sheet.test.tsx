@@ -95,11 +95,12 @@ jest.mock('@wcpos/query', () => ({
 }));
 jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
 jest.mock('../../../../services/register/register-document', () => ({
-	mintUuid: () => 'client-uuid',
+	mintUuid: () => mockMint(),
 }));
 jest.mock('../../../../services/register-session/use-session-report', () => ({
 	useSessionReport: () => ({}),
 }));
+const mockMint = jest.fn(() => 'client-uuid');
 let manager = true;
 const row = {
 	id: 'closure',
@@ -197,4 +198,21 @@ it('accumulates denomination presses and sends their cash total', async () => {
 			expect.objectContaining({ counted: { cash: '20.00', card: '4' } })
 		)
 	);
+});
+
+// Revert: mint an id for each retry, duplicating an accepted correction after response loss.
+it('reuses the recount id until inputs change', async () => {
+	mockMint.mockReturnValueOnce('first').mockReturnValueOnce('changed');
+	post.mockRejectedValue(new Error('response lost'));
+	mount();
+	fillCount();
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() => expect(screen.getByTestId('recount-error')).toBeTruthy());
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+	expect(post.mock.calls.map(([, body]) => body.id)).toEqual(['first', 'first']);
+	fireEvent.change(screen.getByTestId('recount-reason'), { target: { value: 'Changed reason' } });
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+	expect(post.mock.calls[2][1].id).toBe('changed');
 });

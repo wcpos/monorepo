@@ -1,3 +1,6 @@
+import { tz } from '@date-fns/tz';
+import { format, parseISO } from 'date-fns';
+
 import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
 import { AppInfo } from '@wcpos/utils/app-info';
 import type {
@@ -100,16 +103,28 @@ export const startCounting = (sessions: RegisterSessionCollection, id: string) =
 	transition(sessions, id, 'counting');
 export const backToSelling = (sessions: RegisterSessionCollection, id: string) =>
 	transition(sessions, id, 'open');
-export const closeSession = (
+export const closeSession = async (
 	sessions: RegisterSessionCollection,
 	id: string,
-	input: { counted: Record<string, string>; closedBy?: number }
-) =>
-	transition(sessions, id, 'closed', {
+	input: { counted: Record<string, string>; closedBy?: number; timezone?: string }
+) => {
+	const session = await sessions.findOne(id).exec();
+	if (!session) throw new RegisterSessionRequiredError();
+	return transition(sessions, id, 'closed', {
+		business_day:
+			session.business_day ||
+			format(
+				parseISO(
+					session.opened_at_gmt.endsWith('Z') ? session.opened_at_gmt : `${session.opened_at_gmt}Z`
+				),
+				'yyyy-MM-dd',
+				{ in: input.timezone && input.timezone !== 'device' ? tz(input.timezone) : undefined }
+			),
 		counted: input.counted,
 		closed_by: input.closedBy ?? null,
 		closure_id: id,
 	});
+};
 /**
  * Put a refused movement back in the outbox. The row is the only record of cash that has
  * physically moved, so the cashier needs a way to send it again once whatever the server
@@ -184,7 +199,9 @@ export async function writeClosure({
 	tillExpected,
 	refundRecords = [],
 	labels,
+	timezone = 'device',
 }: {
+	timezone?: string;
 	closures: ClosureCollection;
 	userDB: UserDatabase;
 	siteUuid: string;
@@ -271,7 +288,15 @@ export async function writeClosure({
 		store_id: session.store_id ?? null,
 		number: 0,
 		opened_at: session.opened_at_gmt,
-		...(session.business_day ? { business_day: session.business_day } : {}),
+		business_day:
+			session.business_day ||
+			format(
+				parseISO(
+					session.opened_at_gmt.endsWith('Z') ? session.opened_at_gmt : `${session.opened_at_gmt}Z`
+				),
+				'yyyy-MM-dd',
+				{ in: timezone === 'device' ? undefined : tz(timezone) }
+			),
 		closed_by: session.closed_by ?? null,
 		closed_at: session.closed_at_gmt!,
 		till_expected,
