@@ -1585,6 +1585,76 @@ describe('createAppSyncEngine scope cache', () => {
 		}
 	});
 
+	it('a disposal waits for every matching pending barrier', async () => {
+		let resolveFirstDisposal!: () => void;
+		let resolveSecondDisposal!: () => void;
+		const firstDisposal = new Promise<void>((resolve) => {
+			resolveFirstDisposal = resolve;
+		});
+		const secondDisposal = new Promise<void>((resolve) => {
+			resolveSecondDisposal = resolve;
+		});
+		const target = { ...BASE_OPTIONS, scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' } };
+		const first = createEngineDouble(() => firstDisposal);
+		const second = createEngineDouble(() => secondDisposal);
+		const combined = createEngineDouble(
+			() => Promise.resolve(),
+			() => new Promise(() => undefined)
+		);
+		const engines = [
+			first,
+			createEngineDouble(),
+			second,
+			createEngineDouble(),
+			combined,
+			createEngineDouble(),
+			createEngineDouble(),
+		];
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(() =>
+			engines.shift()!
+		);
+		let databaseOpenBarrier: Promise<void> | undefined;
+		try {
+			// Leave separate closes pending for A and B, then queue B on a new engine active at A.
+			createAppSyncEngine(BASE_OPTIONS);
+			createAppSyncEngine(OTHER_SITE_OPTIONS);
+			createAppSyncEngine(target);
+			createAppSyncEngine(OTHER_SITE_OPTIONS);
+			expect(first.dispose).toHaveBeenCalledTimes(1);
+			expect(second.dispose).toHaveBeenCalledTimes(1);
+			createAppSyncEngine(BASE_OPTIONS);
+			createAppSyncEngine(target);
+			expect(combined.active()?.identity).toEqual(BASE_OPTIONS.scope);
+			createAppSyncEngine(OTHER_SITE_OPTIONS);
+			createAppSyncEngine(target);
+
+			databaseOpenBarrier = createRxdbSyncEngine.mock.calls[6]![0].databaseOpenBarrier;
+			expect(databaseOpenBarrier).toBeDefined();
+			const openDatabase = jest.fn();
+			const open = databaseOpenBarrier!.then(openDatabase);
+			expect(combined.dispose).not.toHaveBeenCalled();
+
+			resolveFirstDisposal();
+			for (let turn = 0; turn < 10; turn += 1) {
+				await Promise.resolve();
+			}
+			expect(combined.dispose).not.toHaveBeenCalled();
+			expect(openDatabase).not.toHaveBeenCalled();
+
+			resolveSecondDisposal();
+			await open;
+			expect(combined.dispose).toHaveBeenCalledTimes(1);
+			expect(openDatabase).toHaveBeenCalledTimes(1);
+			expect(combined.dispose.mock.invocationCallOrder[0]).toBeLessThan(
+				openDatabase.mock.invocationCallOrder[0]
+			);
+		} finally {
+			resolveFirstDisposal();
+			resolveSecondDisposal();
+			await Promise.all([firstDisposal, secondDisposal, databaseOpenBarrier]);
+		}
+	});
+
 	it('force-releases a hung disposal barrier at the deadline', async () => {
 		jest.useFakeTimers();
 		try {

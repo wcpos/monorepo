@@ -224,14 +224,17 @@ function disposeCachedEngine(entry: CachedEngine): void {
 	const disposalKey = active ? scopeCacheKey(active.identity) : entry.allocationKey;
 	const disposalKeys = new Set([disposalKey, ...entry.requests.map((request) => request.key)]);
 	if (entry.renderKey) disposalKeys.add(entry.renderKey);
-	const priorDisposal = [...disposalKeys]
-		.map((key) => pendingDisposals.get(key))
-		.find((pending) => pending !== undefined);
+	const priorDisposals = new Set(
+		[...disposalKeys]
+			.map((key) => pendingDisposals.get(key))
+			.filter((pending): pending is Promise<void> => pending !== undefined)
+	);
 	let disposal: Promise<void>;
 	try {
-		disposal = priorDisposal
-			? priorDisposal.then(() => entry.engine.dispose())
-			: entry.engine.dispose();
+		disposal =
+			priorDisposals.size > 0
+				? Promise.allSettled(priorDisposals).then(() => entry.engine.dispose())
+				: entry.engine.dispose();
 	} catch {
 		disposal = Promise.resolve();
 	}
