@@ -235,8 +235,8 @@ it.each([
 ])('a refreshed retry replaces the other channel too (%s)', (_name, site, param, header) => {
 	// The server reads the header first: a stale header beside a fresh query token 401s the
 	// retry; the reverse leaves a stale token in URL logs (CodeRabbit on #2132).
-	const result = prepare(
-		{ purpose: 'rest', site, accessToken: 'old', refreshedAccessToken: 'new' },
+	const result = buildRequestPreamble(
+		{ ...context, purpose: 'rest', site, accessToken: 'old', refreshedAccessToken: 'new' },
 		{ url: `${url}?authorization=old`, headers: { Authorization: 'Bearer old' } }
 	);
 	expect(new URL(result.url).searchParams.get('authorization')).toBe(param);
