@@ -1,22 +1,8 @@
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import {
-	deriveSyntheticPathBase,
-	deriveSyntheticPathRoot,
-	resolveRestTransport,
-	toRestRouteUrl,
-} from '@wcpos/utils/rest-transport';
-import {
-	CLIENT_HEADER,
-	CLIENT_QUERY_PARAM,
-	formatClientSignal,
-	PROTOCOL_HEADER,
-	PROTOCOL_QUERY_PARAM,
-	sendsProtocolHeaders,
-	sendsProtocolQueryTwins,
-	SYNC_PROTOCOL_VERSION,
-} from '@wcpos/utils/sync-protocol';
+import { buildRequestPreamble } from '@wcpos/utils/request-preamble';
+import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 
 import { pauseQueue, resumeQueue } from './request-queue';
 import { requestStateManager } from './request-state-manager';
@@ -152,41 +138,20 @@ export async function refreshAccessToken({
 		await requestStateManager.startTokenRefresh(async () => {
 			pauseQueue();
 			try {
-				// Rewrite only when wp_api_url can supply the REST root: apiUrl is a
-				// namespace base (…/wcpos/v2/), and deriving a root from it would
-				// strip the wrong segment and emit a malformed home URL.
 				const pathUrl = `${apiUrl}auth/refresh`;
-				const refreshUrl =
-					site.wp_api_url && resolveRestTransport(site) === 'query'
-						? toRestRouteUrl(pathUrl, deriveSyntheticPathRoot(site.wp_api_url))
-						: pathUrl;
-				const signaledRefreshUrl = new URL(refreshUrl);
-				const useProtocolHeaders = site.use_protocol_headers ?? false;
-				if (sendsProtocolQueryTwins(AppInfo.platform, useProtocolHeaders)) {
-					signaledRefreshUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
-					signaledRefreshUrl.searchParams.set(
-						CLIENT_QUERY_PARAM,
-						formatClientSignal(AppInfo.platform, AppInfo.version)
-					);
-				}
-				const response = await getHttpClient().post(
-					signaledRefreshUrl.toString(),
-					{ refresh_token: refreshToken },
-					// The refresh POST is exactly the request class a blank/library UA
-					// gets IP-banned for (B10) — stamp it like every other lane. The
-					// fragment is empty on web, which keeps the browser UA.
+				const prepared = buildRequestPreamble(
 					{
-						headers: {
-							'X-WCPOS': '1',
-							...(sendsProtocolHeaders(AppInfo.platform, useProtocolHeaders)
-								? {
-										[PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION),
-										[CLIENT_HEADER]: formatClientSignal(AppInfo.platform, AppInfo.version),
-									}
-								: {}),
-							...AppInfo.userAgentHeader,
-						},
-					}
+						purpose: 'refresh',
+						site,
+						client: AppInfo,
+						wpJsonRoot: site.wp_api_url ? deriveSyntheticPathRoot(site.wp_api_url) : undefined,
+					},
+					{ url: pathUrl, method: 'POST' }
+				);
+				const response = await getHttpClient().post(
+					prepared.url,
+					{ refresh_token: refreshToken },
+					{ headers: Object.fromEntries(prepared.headers) }
 				);
 
 				const responseData = getResponseData(response);

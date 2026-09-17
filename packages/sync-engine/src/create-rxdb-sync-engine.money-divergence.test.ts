@@ -89,11 +89,6 @@ function engineWith(input: { serialize?: Serialize; diagnostics?: SyncObserver }
 		identity: freshIdentity(),
 		mode: 'manual',
 		fetch: (url, init) => server.fetch(url, init as never),
-		routes: {
-			'/changes/config-fingerprint': { fingerprints: {} },
-			// The scope-open change-signal head prime: answered here so the fake fetch below only ever sees its own catalogue traffic.
-			'/changes/sequence-log': { checkpoint: { head: 0 } },
-		},
 		diagnostics: input.diagnostics,
 		awaitReady: false,
 	}).engine;

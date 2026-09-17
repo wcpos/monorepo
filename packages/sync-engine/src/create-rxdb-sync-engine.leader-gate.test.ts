@@ -19,11 +19,6 @@ function engineWith(writePlaneOwner?: () => boolean) {
 		identity: { site: SITE, storeId: 1, cashierId: `leader-gate-${++scope}` },
 		mode: 'manual',
 		fetch: fetcher,
-		routes: {
-			'/changes/config-fingerprint': { fingerprints: {} },
-			// The scope-open change-signal head prime: answered here so the fake fetch below only ever sees its own catalogue traffic.
-			'/changes/sequence-log': { checkpoint: { head: 0 } },
-		},
 		ports: { writePlaneOwner },
 		awaitReady: false,
 	}).engine;

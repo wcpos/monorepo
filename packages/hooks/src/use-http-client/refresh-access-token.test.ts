@@ -1,3 +1,5 @@
+import 'whatwg-fetch';
+
 import { AppInfo } from '@wcpos/utils/app-info';
 
 import { refreshAccessToken, resetRefreshCooldown } from './refresh-access-token';
@@ -75,13 +77,13 @@ describe('refreshAccessToken', () => {
 		expect(post).toHaveBeenCalledWith(
 			expect.any(String),
 			{ refresh_token: 'refresh-token' },
-			{ headers: { 'X-WCPOS': '1' } }
+			{ headers: { 'x-wcpos': '1' } }
 		);
 		const [refreshUrl, , requestConfig] = post.mock.calls[0];
 		expect(new URL(refreshUrl).searchParams.get('wcpos_protocol')).toBe('2');
 		expect(new URL(refreshUrl).searchParams.get('wcpos_client')).toBe(`web/${AppInfo.version}`);
-		expect(requestConfig.headers).not.toHaveProperty('X-WCPOS-Protocol');
-		expect(requestConfig.headers).not.toHaveProperty('X-WCPOS-Client');
+		expect(requestConfig.headers).not.toHaveProperty('x-wcpos-protocol');
+		expect(requestConfig.headers).not.toHaveProperty('x-wcpos-client');
 		expect(wpUser.incrementalPatch).toHaveBeenCalledWith({
 			access_token: 'new-token',
 			expires_at: 9999,
@@ -92,7 +94,7 @@ describe('refreshAccessToken', () => {
 		const webUserAgentHeader = AppInfo.userAgentHeader;
 		const webPlatform = AppInfo.platform;
 		AppInfo.platform = 'android';
-		AppInfo.userAgentHeader = { 'User-Agent': 'WCPOS/1.2.3 (android; build 45)' };
+		AppInfo.userAgentHeader = { 'user-agent': 'WCPOS/1.2.3 (android; build 45)' };
 		const post = jest.fn().mockResolvedValue({
 			data: { access_token: 'new-token', expires_at: 9999 },
 			status: 200,
@@ -107,10 +109,10 @@ describe('refreshAccessToken', () => {
 				{ refresh_token: 'refresh-token' },
 				{
 					headers: {
-						'X-WCPOS': '1',
-						'X-WCPOS-Protocol': '2',
-						'X-WCPOS-Client': `android/${AppInfo.version}`,
-						'User-Agent': 'WCPOS/1.2.3 (android; build 45)',
+						'x-wcpos': '1',
+						'x-wcpos-protocol': '2',
+						'x-wcpos-client': `android/${AppInfo.version}`,
+						'user-agent': 'WCPOS/1.2.3 (android; build 45)',
 					},
 				}
 			);
@@ -135,8 +137,8 @@ describe('refreshAccessToken', () => {
 		const [refreshUrl, , requestConfig] = post.mock.calls[0];
 		expect(new URL(refreshUrl).searchParams.has('wcpos_protocol')).toBe(false);
 		expect(new URL(refreshUrl).searchParams.has('wcpos_client')).toBe(false);
-		expect(requestConfig.headers['X-WCPOS-Protocol']).toBe('2');
-		expect(requestConfig.headers['X-WCPOS-Client']).toBe(`web/${AppInfo.version}`);
+		expect(requestConfig.headers['x-wcpos-protocol']).toBe('2');
+		expect(requestConfig.headers['x-wcpos-client']).toBe(`web/${AppInfo.version}`);
 	});
 
 	it('returns null and marks authentication failed when refresh fails', async () => {
@@ -261,7 +263,7 @@ describe('refreshAccessToken', () => {
 		expect(post).toHaveBeenCalledWith(
 			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
 			{ refresh_token: 'refresh-token' },
-			{ headers: { 'X-WCPOS': '1' } }
+			{ headers: { 'x-wcpos': '1' } }
 		);
 	});
 
@@ -278,7 +280,7 @@ describe('refreshAccessToken', () => {
 		expect(post).toHaveBeenCalledWith(
 			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
 			{ refresh_token: 'refresh-token' },
-			{ headers: { 'X-WCPOS': '1' } }
+			{ headers: { 'x-wcpos': '1' } }
 		);
 	});
 
@@ -295,7 +297,7 @@ describe('refreshAccessToken', () => {
 		expect(post).toHaveBeenCalledWith(
 			'https://example.test/wp-json/wcpos/v2/auth/refresh?wcpos_protocol=2&wcpos_client=web%2F0.0.0',
 			{ refresh_token: 'refresh-token' },
-			{ headers: { 'X-WCPOS': '1' } }
+			{ headers: { 'x-wcpos': '1' } }
 		);
 	});
 
@@ -466,5 +468,62 @@ describe('refreshAccessToken', () => {
 			expect(loggerCalls.warn.mock.calls[0]?.[1]?.terminal).not.toHaveProperty('operationId');
 			expect(loggerCalls.error).not.toHaveBeenCalled();
 		});
+	});
+});
+
+// Wire fixtures recorded against 7bd1b8abf0 before migrating refresh preparation.
+// Headers are normalized as HTTP fields, not compared as JS dictionary casing/order.
+describe('refresh wire fixtures', () => {
+	it.each([
+		['web', false, false, '?wcpos_protocol=2&wcpos_client=web%2F0.0.0'],
+		['web', true, false, ''],
+		['web', false, true, '&wcpos_protocol=2&wcpos_client=web%2F0.0.0'],
+		['web', true, true, ''],
+		['android', false, false, '?wcpos_protocol=2&wcpos_client=android%2F0.0.0'],
+		['android', true, false, '?wcpos_protocol=2&wcpos_client=android%2F0.0.0'],
+		['android', false, true, '&wcpos_protocol=2&wcpos_client=android%2F0.0.0'],
+		['android', true, true, '&wcpos_protocol=2&wcpos_client=android%2F0.0.0'],
+	] as const)('%s capability=%s query=%s', async (platform, capability, query, suffix) => {
+		const previous = { ...AppInfo };
+		Object.assign(AppInfo, {
+			platform,
+			version: '0.0.0',
+			userAgentHeader: platform === 'web' ? {} : { 'User-Agent': 'WCPOS/test (android)' },
+		});
+		requestStateManager.reset();
+		resetRefreshCooldown();
+		const post = jest.fn().mockResolvedValue({ data: { access_token: 'fresh', expires_at: 99 } });
+		const { config } = makeConfig(post, {
+			wp_api_url: 'https://example.test/blog/wp-json/',
+			wcpos_api_url: 'https://example.test/blog/wp-json/wcpos/v2/',
+			use_rest_route_param: query,
+			use_protocol_headers: capability,
+		});
+		try {
+			await refreshAccessToken(config);
+			const [url, body, options] = post.mock.calls[0];
+			expect({ url, body, headers: Object.fromEntries(new Headers(options.headers)) }).toEqual({
+				url:
+					(query
+						? suffix
+							? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fauth%2Frefresh'
+							: 'https://example.test/blog/?rest_route=/wcpos/v2/auth/refresh'
+						: 'https://example.test/blog/wp-json/wcpos/v2/auth/refresh') + suffix,
+				body: { refresh_token: 'refresh-token' },
+				headers:
+					platform === 'android'
+						? {
+								'x-wcpos': '1',
+								'x-wcpos-protocol': '2',
+								'x-wcpos-client': 'android/0.0.0',
+								'user-agent': 'WCPOS/test (android)',
+							}
+						: capability
+							? { 'x-wcpos': '1', 'x-wcpos-protocol': '2', 'x-wcpos-client': 'web/0.0.0' }
+							: { 'x-wcpos': '1' },
+			});
+		} finally {
+			Object.assign(AppInfo, previous);
+		}
 	});
 });

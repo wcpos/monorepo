@@ -71,13 +71,14 @@
  */
 
 import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
+import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { refreshAccessToken } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
 
-import type { AxiosRequestConfig } from 'axios';
+import type { WcposRequestConfig } from './use-http-client';
 import type { RefreshAccessTokenConfig } from './refresh-access-token';
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
@@ -164,13 +165,7 @@ export const createTokenRefreshHandler = ({
 			});
 
 			try {
-				return await retryWithNewToken(
-					originalConfig,
-					freshToken,
-					site.use_jwt_as_param,
-					bareAuthParamSupported(site.wcpos_version),
-					retryRequest
-				);
+				return await retryRequest(withRefreshedCredential(originalConfig, freshToken, site));
 			} catch (retryError: unknown) {
 				const retryStatus = getResponseStatus(retryError);
 				if (retryStatus === 401) {
@@ -203,30 +198,82 @@ export const createTokenRefreshHandler = ({
 };
 
 /**
- * Retry request with a new access token
+ * Hand the fresh token to the retry. A request that carries preamble metadata (every
+ * production caller: the REST wrapper and cashier validation) gets it on that metadata,
+ * so the same interceptor authors the retry as authored the first try. A bare Axios
+ * config opted out of the preamble and may carry a relative URL the module cannot
+ * compose, so it keeps the pre-#2129 behaviour: the credential goes straight on the
+ * config, in the channel the site uses.
  */
-async function retryWithNewToken(
-	originalConfig: AxiosRequestConfig,
+function withRefreshedCredential(
+	originalConfig: WcposRequestConfig,
 	token: string,
-	useJwtAsParam: boolean | undefined,
-	bareAuthParam: boolean,
-	retryRequest: HttpErrorHandlerContext['retryRequest']
-) {
-	const updatedConfig = { ...originalConfig };
-
-	if (useJwtAsParam) {
-		updatedConfig.params = {
-			...updatedConfig.params,
-			authorization: formatAuthorizationParam(token, bareAuthParam),
-		};
-	} else {
-		updatedConfig.headers = {
-			...updatedConfig.headers,
-			Authorization: `Bearer ${token}`,
+	site: RefreshAccessTokenConfig['site']
+): WcposRequestConfig {
+	if (originalConfig.wcposPreamble) {
+		return {
+			...originalConfig,
+			wcposPreamble: {
+				...originalConfig.wcposPreamble,
+				// Caller metadata wins field by field; the handler's site fills what it left out.
+				site: { ...toPreambleSite(site), ...originalConfig.wcposPreamble.site },
+				refreshedAccessToken: token,
+			},
 		};
 	}
+	// A bare retry mirrors the module: the fresh token replaces its channel AND clears the
+	// other one, since the server reads the header first (a stale header beside a fresh
+	// query token 401s the retry) and a stale query token would linger in URL logs.
+	const headers = withoutHeader(originalConfig.headers, 'authorization');
+	if (site.use_jwt_as_param) {
+		const authorization = formatAuthorizationParam(
+			token,
+			bareAuthParamSupported(site.wcpos_version)
+		);
+		if (originalConfig.params instanceof URLSearchParams) {
+			// Spreading URLSearchParams drops its entries; clone and set instead.
+			const params = new URLSearchParams(originalConfig.params);
+			params.set('authorization', authorization);
+			return { ...originalConfig, headers, params };
+		}
+		return { ...originalConfig, headers, params: { ...originalConfig.params, authorization } };
+	}
+	return {
+		...originalConfig,
+		url: withoutQueryParam(originalConfig.url, 'authorization'),
+		params: withoutParam(originalConfig.params, 'authorization'),
+		headers: { ...headers, Authorization: `Bearer ${token}` },
+	};
+}
 
-	return await retryRequest(updatedConfig);
+function withoutHeader(
+	headers: WcposRequestConfig['headers'],
+	name: string
+): WcposRequestConfig['headers'] {
+	if (!headers) return undefined;
+	const copy: Record<string, unknown> = { ...(headers as Record<string, unknown>) };
+	for (const key of Object.keys(copy)) if (key.toLowerCase() === name) delete copy[key];
+	return copy as WcposRequestConfig['headers'];
+}
+
+function withoutParam(params: WcposRequestConfig['params'], name: string) {
+	if (!params) return params;
+	if (params instanceof URLSearchParams) {
+		const copy = new URLSearchParams(params);
+		copy.delete(name);
+		return copy;
+	}
+	const { [name]: _dropped, ...rest } = params as Record<string, unknown>;
+	return rest;
+}
+
+function withoutQueryParam(url: string | undefined, name: string): string | undefined {
+	if (!url || !url.includes('?')) return url;
+	const [path, query] = url.split('?', 2);
+	const search = new URLSearchParams(query);
+	search.delete(name);
+	const rest = search.toString();
+	return rest ? `${path}?${rest}` : path;
 }
 
 function getResponseStatus(error: unknown): number | undefined {

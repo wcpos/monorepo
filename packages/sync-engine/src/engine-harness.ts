@@ -24,6 +24,7 @@ export type EngineHarnessRequest = {
 	init?: RequestInit;
 	method: string;
 	path: string;
+	scripted?: true;
 };
 
 export type EngineHarnessRoute =
@@ -58,6 +59,9 @@ export type EngineHarnessOptions = {
 	connectivity?: EngineConnectivity;
 	routes?: Record<string, EngineHarnessRoute>;
 	fetch?: EngineFetcher;
+	/** false = this suite's `fetch` owns the whole wire; the harness answers nothing
+	 * by default (explicit `routes` still win). Defaults to true. */
+	protocolDefaults?: boolean;
 	startAtMs?: number;
 	now?: RxdbSyncEnginePorts['now'];
 	diagnostics?: RxdbSyncEnginePorts['diagnostics'];
@@ -88,6 +92,9 @@ export type EngineHarness = {
 
 let nextHarnessIdentity = 0;
 const trackedEngines = new Set<RxdbSyncEngine>();
+// A plugin generation without the lightweight tick: the source latches
+// tickSupport = 'unsupported' and walks the journal.
+const UNSUPPORTED_TICK_RESPONSE = {} as const;
 const ALWAYS_OWNED_PORTS = ['now', 'diagnostics', 'connectivity', 'fetcher'] as const;
 
 function json(value: unknown): Response {
@@ -158,6 +165,26 @@ async function routeResponse(
 	return value instanceof Response ? value : json(value);
 }
 
+function protocolResponse(request: EngineHarnessRequest): Response | undefined {
+	if (request.method !== 'GET') return undefined;
+	if (request.path.endsWith('/changes/config-fingerprint')) {
+		return json({ fingerprints: {} });
+	}
+	if (request.path.endsWith('/changes/sequence-log')) {
+		const { searchParams } = new URL(request.url);
+		if (searchParams.get('since') === '0' && searchParams.get('limit') === '1') {
+			return json({ checkpoint: { head: 0 } });
+		}
+		const since = Number(searchParams.get('since') ?? '0');
+		return json({ changes: [], checkpoint: { since, head: since }, complete: true });
+	}
+	if (request.path.endsWith('/changes/tick')) return json(UNSUPPORTED_TICK_RESPONSE);
+	if (request.path.endsWith('/changes/range-checksum')) {
+		return json({ changes: [], complete: true });
+	}
+	return undefined;
+}
+
 async function disposeTrackedEngines(): Promise<void> {
 	const engines = [...trackedEngines];
 	trackedEngines.clear();
@@ -224,7 +251,9 @@ function createEngineHarnessImpl(
 			method: init?.method ?? 'GET',
 			path: new URL(url).pathname,
 		};
+		requests.push(request);
 		if (scripted !== null) {
+			request.scripted = true;
 			const next = scripted;
 			scripted = null;
 			nowMs += next.elapsedMs;
@@ -233,28 +262,13 @@ function createEngineHarnessImpl(
 		}
 		const route = routeFor(routes, request);
 		if (route !== undefined) {
-			requests.push(request);
 			return routeResponse(route, request);
 		}
+		const protocol = options.protocolDefaults === false ? undefined : protocolResponse(request);
+		if (protocol !== undefined) return protocol;
 		if (options.fetch !== undefined) {
-			requests.push(request);
 			return options.fetch(url, init);
 		}
-		if (request.path.endsWith('/changes/config-fingerprint')) {
-			return json({ fingerprints: {} });
-		}
-		// The scope-open change-signal head prime (`sequence-log?since=0&limit=1`) is
-		// engine plumbing like the fingerprint hydrate above, not catalogue traffic a
-		// test scripted — answer it at head 0, unrecorded. A test that scripts the
-		// journal routes `/changes/sequence-log` (or passes `fetch`) and sees it.
-		if (
-			request.path.endsWith('/changes/sequence-log') &&
-			new URL(url).searchParams.get('since') === '0' &&
-			new URL(url).searchParams.get('limit') === '1'
-		) {
-			return json({ checkpoint: { head: 0 } });
-		}
-		requests.push(request);
 		return json({ changes: [], complete: true, documents: [] });
 	};
 	const engine = createRxdbSyncEngine(

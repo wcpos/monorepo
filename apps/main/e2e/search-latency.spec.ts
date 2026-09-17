@@ -9,7 +9,7 @@ import {
 } from '@wcpos/sync-core/testing';
 import { log } from '@wcpos/utils/logger';
 
-import { authenticatedTest as test, wcposRestRoute } from './fixtures';
+import { authenticatedTest as test, waitForStoreQuiescence, wcposRestRoute } from './fixtures';
 
 // The stub is self-contained: fixture payloads carry every field materialization needs (the
 // server-stamped uuid meta included), so no live request is made inside the measured window.
@@ -75,6 +75,16 @@ test('a single-word search meets the latency budgets on a slow host', async ({
 
 	const input = page.getByTestId('search-products').first();
 	await expect(input).toBeVisible({ timeout: 30_000 });
+	// Measure search, not boot: the input is visible while the boot-time pulls (orders,
+	// coupons, taxes, categories) are still draining through the serial require plane, and
+	// a search typed into that window queues behind them (traces on #2132, 2026-09-17:
+	// the stubbed request left the client ~2 s after the keystroke on every attempt). Wait
+	// for the store traffic to go quiet first; a store still busy after the cap is a
+	// broken environment, not a slow search.
+	expect(
+		await waitForStoreQuiescence(page, { quietMs: 1_500, capMs: 30_000 }),
+		'store traffic did not settle within 30 s before the search'
+	).toBe(true);
 	// The FIRST CORRECT row: any fixture hit by its id-bearing testID in either layout (the grid
 	// virtualizes and sorts by name, so which hit renders first is the layout's business). A
 	// plain tile locator would match the browse rows already on screen and read 2 ms.

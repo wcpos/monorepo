@@ -177,8 +177,8 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 		[patchUI, props.actions]
 	);
 
-	// Guarded (#1221): engine-backed searches extend until their lane is exhausted; bindings
-	// without a search verdict keep the short-page fallback. Only one extension runs at a time.
+	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
+	// Short local reads stop unless the engine says more may exist.
 	const handleEndReached = useGuardedExtendLimit(
 		props.actions.extendLimit,
 		deferredResult.hits.length,

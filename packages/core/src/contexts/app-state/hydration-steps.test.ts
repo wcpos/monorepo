@@ -45,11 +45,16 @@ jest.mock('@wcpos/hooks/platform-fetch', () => ({
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
 import {
 	hydrateUserSession,
+	type HydrationContext,
 	hydrationSteps,
 	runConnectCompatibilityProbes,
 	switchUserSessionStore,
 	testAuthorizationMethod,
 } from './hydration-steps';
+// eslint-disable-next-line import/first -- Register the real engine port for session commits.
+import { registerEngineScopeSwitcher } from './engine-scope-port';
+
+afterEach(() => registerEngineScopeSwitcher(null));
 
 const documentLookup = (document: unknown) => ({
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => document) })),
@@ -169,6 +174,7 @@ describe('switchUserSessionStore', () => {
 			set: jest.fn(),
 		};
 		const switchEngineScope = jest.fn();
+		registerEngineScopeSwitcher(switchEngineScope);
 
 		await expect(
 			switchUserSessionStore(
@@ -179,8 +185,7 @@ describe('switchUserSessionStore', () => {
 					stores: documentLookup({ localID: 'store-2' }),
 				} as any,
 				appState as any,
-				'store-2',
-				{ switchEngineScope }
+				'store-2'
 			)
 		).rejects.toThrow('Store session incomplete: missing site');
 
@@ -202,6 +207,7 @@ describe('switchUserSessionStore', () => {
 		const switchEngineScope = jest.fn(async () => {
 			throw error;
 		});
+		registerEngineScopeSwitcher(switchEngineScope);
 
 		await expect(
 			switchUserSessionStore(
@@ -211,8 +217,7 @@ describe('switchUserSessionStore', () => {
 					stores: documentLookup({ localID: 'store-2' }),
 				} as any,
 				appState as any,
-				'store-2',
-				{ switchEngineScope }
+				'store-2'
 			)
 		).rejects.toBe(error);
 
@@ -238,6 +243,7 @@ describe('switchUserSessionStore', () => {
 			order.push('engine');
 			expect(session.store).toBe(store);
 		});
+		registerEngineScopeSwitcher(switchEngineScope);
 
 		await switchUserSessionStore(
 			{
@@ -246,8 +252,7 @@ describe('switchUserSessionStore', () => {
 				stores: documentLookup(store),
 			} as any,
 			appState as any,
-			'store-2',
-			{ switchEngineScope }
+			'store-2'
 		);
 
 		expect(order).toEqual(['engine', 'persist']);
@@ -274,7 +279,12 @@ describe('hydration step fail modes', () => {
 });
 
 describe('PROCESS_INITIAL_PROPS', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
 	it('merges server-owned fields into existing stores and inserts new stores', async () => {
+		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({})) });
 		const existingStore: any = {
 			id: 1,
 			localID: '0123456789',
@@ -295,15 +305,22 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		const userDB = {
 			sites: {
 				schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-				findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
+				findOne: jest
+					.fn()
+					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
+					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
 				incrementalUpsert: jest.fn(async () => siteDoc),
 			},
-			wp_credentials: { upsert: jest.fn(async () => wpCredentialsDoc) },
+			wp_credentials: {
+				upsert: jest.fn(async () => wpCredentialsDoc),
+				...documentLookup(wpCredentialsDoc),
+			},
 			stores: {
 				findOne: jest
 					.fn()
 					.mockReturnValueOnce({ exec: jest.fn(async () => existingStore) })
-					.mockReturnValueOnce({ exec: jest.fn(async () => null) }),
+					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
+					.mockReturnValue({ exec: jest.fn(async () => existingStore) }),
 				bulkInsert,
 			},
 		};
@@ -330,6 +347,8 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		// calc_taxes is auto-synced; currency is app-editable and must NOT auto-sync
 		expect(existingStore.incrementalPatch).toHaveBeenCalledWith({ calc_taxes: 'yes' });
 		expect(existingStore.theme).toBe('dark');
+		expect(createStoreDBMock).toHaveBeenCalledWith(existingStore.localID);
+		expect(appState.set).toHaveBeenCalledWith('current', expect.any(Function));
 		expect(bulkInsert).toHaveBeenCalledWith([
 			expect.objectContaining({
 				id: 2,
@@ -337,6 +356,176 @@ describe('PROCESS_INITIAL_PROPS', () => {
 				prevent_overselling: false,
 			}),
 		]);
+	});
+
+	it('reports AUTH131 and preserves the previous pointer for an incomplete selection', async () => {
+		const previous = { siteID: 'old-site', storeID: 'old-store' };
+		const site = { uuid: 'new-site' };
+		const credentials = { uuid: 'new-credentials', patch: jest.fn() };
+		const appState = { get: jest.fn(() => previous), set: jest.fn() };
+		const context = {
+			appState,
+			user: { uuid: 'user-1' },
+			userDB: {
+				sites: {
+					...documentLookup(null),
+					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+					incrementalUpsert: jest.fn(async () => site),
+				},
+				wp_credentials: {
+					...documentLookup(credentials),
+					upsert: jest.fn(async () => credentials),
+				},
+				stores: { ...documentLookup(null), bulkInsert: jest.fn() },
+			},
+			initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
+		} as unknown as HydrationContext;
+		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
+		expect(step.failSoft).toBe(true);
+		await expect(step.execute(context)).resolves.not.toHaveProperty('session');
+		expect(mockAppLogger.error).toHaveBeenCalledWith(
+			'Store session incomplete: missing storeDB, store, site, extraData',
+			{
+				code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
+				context: {
+					missingFields: ['storeDB', 'store', 'site', 'extraData'],
+					siteID: 'new-site',
+					wpCredentialsID: 'new-credentials',
+					storeID: '0123456789',
+				},
+			}
+		);
+		expect(appState.set).not.toHaveBeenCalled();
+	});
+});
+
+describe('HYDRATE_USER_SESSION', () => {
+	it.each([true, false])(
+		'refreshes cached documents after authorization sets flags to %s without a second open',
+		async (flag) => {
+			createStoreDBMock.mockClear();
+			const storeDB = { addState: jest.fn(async () => ({})) };
+			createStoreDBMock.mockResolvedValue(storeDB);
+			const site = {
+				uuid: 'site-1',
+				wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+				use_jwt_as_param: !flag,
+				use_rest_route_param: !flag,
+				use_protocol_headers: !flag,
+				getLatest: () => latestSite,
+				incrementalPatch: async (patch: Record<string, unknown>) => {
+					latestSite = { ...latestSite, ...patch };
+					return latestSite;
+				},
+			};
+			let latestSite = site;
+			const credentials = { uuid: 'credentials-1', access_token: 'token', patch: jest.fn() };
+			const store = { localID: '0123456789' };
+			let current: { siteID?: string; wpCredentialsID?: string; storeID?: string } | null = null;
+			const context = {
+				appState: {
+					get: () => current,
+					set: async (_key: string, update: () => typeof current) => {
+						current = update();
+					},
+				},
+				user: { uuid: 'user-1' },
+				userDB: {
+					sites: {
+						findOne: jest
+							.fn()
+							.mockReturnValueOnce({ exec: async () => null })
+							.mockReturnValue({ exec: async () => site }),
+						schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+						incrementalUpsert: async () => site,
+					},
+					wp_credentials: { ...documentLookup(credentials), upsert: async () => credentials },
+					stores: {
+						findOne: jest
+							.fn()
+							.mockReturnValueOnce({ exec: async () => null })
+							.mockReturnValue({ exec: async () => store }),
+						bulkInsert: jest.fn(),
+					},
+				},
+				initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
+			} as unknown as HydrationContext;
+			const database = Object.assign(context.userDB!, {
+				addState: async () => context.appState,
+				users: documentLookup(context.user),
+				// CREATE_USER_DB also ensures the register document on this lane; an existing
+				// one keeps ensureRegister from inserting.
+				getLocal: async () => ({ toJSON: () => ({ data: { id: 'register-1', sites: {} } }) }),
+			});
+			jest.requireMock('@wcpos/database').createUserDB.mockResolvedValue(database);
+			jest.requireMock('./initial-props').initialProps = context.initialProps;
+			const originalFetch = platformFetchRef.fn;
+			platformFetchRef.fn = jest.fn(async (url) => ({
+				status: flag && !String(url).includes('rest_route') ? 404 : 200,
+				ok: !flag || String(url).includes('rest_route'),
+				json: async () => ({
+					v: 1,
+					headers: { authorization: { received: !flag, length: 12 } },
+					cors: { reflects_request_headers: flag },
+					params: { authorization: true, wcpos: true, store_id: true },
+				}),
+			}));
+			try {
+				for (const step of hydrationSteps) {
+					if (!step.shouldExecute || step.shouldExecute(context)) {
+						Object.assign(context, await step.execute(context));
+					}
+				}
+			} finally {
+				platformFetchRef.fn = originalFetch;
+				jest.requireMock('./initial-props').initialProps = null;
+			}
+			expect(context.site).toBe(latestSite);
+			expect(context.site).not.toBe(site);
+			expect(context.site).toMatchObject({
+				use_jwt_as_param: flag,
+				use_rest_route_param: flag,
+				use_protocol_headers: flag,
+			});
+			expect(createStoreDBMock).toHaveBeenCalledTimes(1);
+			expect(context.storeDB).toBe(storeDB);
+			expect(context.extraData).toBe(context.session?.extraData);
+			const hydrateStep = hydrationSteps.find(({ name }) => name === 'HYDRATE_USER_SESSION')!;
+
+			current = { siteID: site.uuid, wpCredentialsID: credentials.uuid, storeID: 'another-store' };
+			await hydrateStep.execute(context);
+			expect(createStoreDBMock).toHaveBeenCalledTimes(2);
+		}
+	);
+
+	it('returns incomplete persisted hydration for provider recovery rather than committing or throwing a presence assertion', async () => {
+		const credentials = { uuid: 'credentials-1' };
+		const appState = {
+			get: jest.fn(() => ({
+				siteID: 'site-1',
+				wpCredentialsID: credentials.uuid,
+				storeID: 'store-1',
+			})),
+			set: jest.fn(),
+		};
+		const step = hydrationSteps.find(({ name }) => name === 'HYDRATE_USER_SESSION')!;
+		await expect(
+			step.execute({
+				appState,
+				userDB: {
+					sites: documentLookup(null),
+					wp_credentials: documentLookup(credentials),
+					stores: documentLookup(null),
+				},
+			} as unknown as HydrationContext)
+		).resolves.toEqual({
+			site: null,
+			wpCredentials: credentials,
+			store: null,
+			storeDB: undefined,
+			extraData: undefined,
+		});
+		expect(appState.set).not.toHaveBeenCalled();
 	});
 });
 
@@ -367,13 +556,23 @@ describe('PROCESS_INITIAL_PROPS display advertisement', () => {
 		};
 		const siteDoc = { uuid: 'site-1' };
 		const wpCredentialsDoc = { uuid: 'credentials-1', patch: jest.fn(async () => undefined) };
+		// The changed pointer is hydrated before it is committed (main #2127): the
+		// existence check sees no site yet, the hydration afterwards finds the upserted
+		// one, the credentials and the store, and opens the store database.
+		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({ id: 'state' })) });
 		const userDB = {
 			sites: {
 				schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-				findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
+				findOne: jest
+					.fn()
+					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
+					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
 				incrementalUpsert: jest.fn(async () => siteDoc),
 			},
-			wp_credentials: { upsert: jest.fn(async () => wpCredentialsDoc) },
+			wp_credentials: {
+				...documentLookup(wpCredentialsDoc),
+				upsert: jest.fn(async () => wpCredentialsDoc),
+			},
 			stores: {
 				findOne: jest.fn(() => ({ exec: jest.fn(async () => existingStore) })),
 				bulkInsert: jest.fn(async () => undefined),
@@ -710,8 +909,8 @@ describe('runConnectCompatibilityProbes', () => {
 		});
 		expect(fetchMock).toHaveBeenCalledTimes(4);
 		expect(fetchMock.mock.calls[2][0]).toBe(fetchMock.mock.calls[3][0]);
-		expect(fetchMock.mock.calls[2][1].headers.Authorization).toHaveLength(24);
-		expect(fetchMock.mock.calls[3][1].headers.Authorization).toHaveLength(36);
+		expect(fetchMock.mock.calls[2][1].headers.authorization).toHaveLength(24);
+		expect(fetchMock.mock.calls[3][1].headers.authorization).toHaveLength(36);
 		expect(mockAppLogger.error).toHaveBeenCalledWith('Shared cache replay detected', {
 			code: ERROR_CODES.CACHE_SHARED_REPLAY,
 			showToast: true,
@@ -765,7 +964,7 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
 		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			headers: {
-				Authorization: 'Bearer token',
+				authorization: 'Bearer token',
 			},
 		});
 	});
@@ -792,7 +991,7 @@ describe('testAuthorizationMethod', () => {
 		expect(String(fetchMock.mock.calls[2][0])).toContain('authorization=Bearer+token');
 		expect(fetchMock.mock.calls[2][1]).toMatchObject({
 			headers: {
-				'X-WCPOS': '1',
+				'x-wcpos': '1',
 			},
 		});
 	});
@@ -810,14 +1009,14 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			headers: {
-				Authorization: 'Bearer token',
-				'X-WCPOS': '1',
+				authorization: 'Bearer token',
+				'x-wcpos': '1',
 			},
 		});
 		expect(String(fetchMock.mock.calls[2][0])).toContain('authorization=Bearer+token');
 		expect(fetchMock.mock.calls[2][1]).toMatchObject({
 			headers: {
-				'X-WCPOS': '1',
+				'x-wcpos': '1',
 			},
 		});
 		expect(mockAppLogger.error).not.toHaveBeenCalled();
@@ -911,13 +1110,13 @@ describe('testAuthorizationMethod', () => {
 		expect(echoUrl).toContain('store_id=1');
 		expect(fetchMock.mock.calls[0][1]).toMatchObject({
 			headers: {
-				Authorization: 'Bearer token',
-				'X-WCPOS': '1',
-				'X-WCPOS-Store': '1',
-				'Idempotency-Key': 'wcpos-echo-probe',
-				'If-Match': '"wcpos-echo-probe"',
-				'If-None-Match': '"wcpos-echo-probe"',
-				'X-WCPOS-Idempotency-Key': 'wcpos-echo-probe',
+				authorization: 'Bearer token',
+				'x-wcpos': '1',
+				'x-wcpos-store': '1',
+				'idempotency-key': 'wcpos-echo-probe',
+				'if-match': '"wcpos-echo-probe"',
+				'if-none-match': '"wcpos-echo-probe"',
+				'x-wcpos-idempotency-key': 'wcpos-echo-probe',
 			},
 		});
 	});
@@ -1379,5 +1578,79 @@ describe('testAuthorizationMethod', () => {
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(String(fetchMock.mock.calls[2][0])).toContain('rest_route=/wcpos/v2/auth/test');
+	});
+});
+
+// Wire fixtures recorded through platformFetch against 7bd1b8abf0, before migration.
+// Only HTTP header names/order are normalized; URL bytes and header values are literal.
+describe('probe wire fixtures', () => {
+	it.each([false, true])('keeps all five experiments unchanged (query=%s)', async (query) => {
+		const previousFetch = platformFetchRef.fn;
+		const fetchMock = jest.fn(async () => ({
+			ok: false,
+			status: 401,
+			json: async () => ({}),
+		}));
+		platformFetchRef.fn = fetchMock;
+		const pathBase = 'https://example.test/blog/wp-json/wcpos/v2/';
+		const base = query ? 'https://example.test/blog/?rest_route=/wcpos/v2/' : pathBase;
+		const wire = () =>
+			fetchMock.mock.calls.map((call) => {
+				const [url, init] = call as unknown as [string, RequestInit];
+				return { url: String(url), headers: Object.fromEntries(new Headers(init.headers)) };
+			});
+		const echoHeaders = {
+			authorization: 'Bearer Ab9._-Cd7',
+			'content-type': 'application/json',
+			'x-wcpos': '1',
+			'x-wcpos-store': '1',
+			'idempotency-key': 'wcpos-echo-probe',
+			'if-match': '"wcpos-echo-probe"',
+			'if-none-match': '"wcpos-echo-probe"',
+			'x-wcpos-idempotency-key': 'wcpos-echo-probe',
+		};
+		try {
+			await testAuthorizationMethod(base, 'Ab9._-Cd7');
+			expect(wire()).toEqual([
+				{
+					url: query
+						? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fecho&authorization=Bearer+xxx._-xxx&wcpos=1&store_id=1'
+						: 'https://example.test/blog/wp-json/wcpos/v2/echo?authorization=Bearer+xxx._-xxx&wcpos=1&store_id=1',
+					headers: echoHeaders,
+				},
+				{ url: `${base}auth/test`, headers: { 'x-wcpos': '1', authorization: 'Bearer Ab9._-Cd7' } },
+				{
+					url: query
+						? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fauth%2Ftest&authorization=Bearer+Ab9._-Cd7'
+						: 'https://example.test/blog/wp-json/wcpos/v2/auth/test?authorization=Bearer+Ab9._-Cd7',
+					headers: { 'x-wcpos': '1' },
+				},
+			]);
+			fetchMock.mockClear();
+			await runConnectCompatibilityProbes({
+				pathBase,
+				pathRoot: 'https://example.test/blog/wp-json/',
+				useRestRouteParam: query,
+			});
+			expect(wire()).toEqual([
+				{ url: `${base}ping${query ? '&' : '?'}wcpos=1`, headers: {} },
+				{
+					url: query
+						? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fping&wcpos=1&s=%C3%9Cnion+select+caf%C3%A9'
+						: 'https://example.test/blog/wp-json/wcpos/v2/ping?wcpos=1&s=%C3%9Cnion+select+caf%C3%A9',
+					headers: {},
+				},
+				{
+					url: `${base}echo${query ? '&' : '?'}wcpos=1&store_id=1`,
+					headers: { authorization: 'Bearer cache.probe.12345' },
+				},
+				{
+					url: `${base}echo${query ? '&' : '?'}wcpos=1&store_id=1`,
+					headers: { authorization: 'Bearer cache.probe.second.token.1234' },
+				},
+			]);
+		} finally {
+			platformFetchRef.fn = previousFetch;
+		}
 	});
 });

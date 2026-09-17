@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type RemoteId, wooIdOf } from '@wcpos/sync-core';
 
 import { type RxdbSyncEngine, type StoreScopeIdentity } from './create-rxdb-sync-engine';
-import { createEngineHarness } from './testing';
+import { createEngineHarness, type EngineHarnessOptions } from './testing';
 
 const SITE = 'https://lab.example.test';
 let uniqueStore = 0;
@@ -85,11 +85,15 @@ function scriptedCatalog(
 	return { state, fetch };
 }
 
-function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response>) {
+function engineWith(
+	fetch: (url: string, init?: RequestInit) => Promise<Response>,
+	routes?: EngineHarnessOptions['routes']
+) {
 	return createEngineHarness({
 		site: SITE,
 		identity: freshIdentity(),
 		fetch,
+		routes,
 		awaitReady: false,
 	}).engine;
 }
@@ -296,18 +300,16 @@ describe('require() for the products browse window', () => {
 			...payload,
 			global_unique_id: `GTIN-${payload.id}`,
 		}));
-		const engine = engineWith(async (url) =>
-			new URL(url).pathname.endsWith('/changes/config-fingerprint')
-				? json({
-						fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
-						barcode_fields: {
-							products: ['global_unique_id'],
-							variations: ['global_unique_id'],
-							tax_rates: [],
-						},
-					})
-				: server.fetch(url)
-		);
+		const engine = engineWith(server.fetch, {
+			'/changes/config-fingerprint': {
+				fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
+				barcode_fields: {
+					products: ['global_unique_id'],
+					variations: ['global_unique_id'],
+					tax_rates: [],
+				},
+			},
+		});
 		await engine.ready;
 		expect(engine.active()!.barcodeSelectors.products).toEqual(['global_unique_id']);
 
