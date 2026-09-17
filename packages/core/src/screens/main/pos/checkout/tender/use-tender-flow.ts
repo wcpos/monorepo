@@ -53,6 +53,7 @@ import {
 } from '../checkout-mode';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useOrderSaveState } from '../use-order-save-state';
+import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast';
 import { useT } from '../../../../../contexts/translations';
 import { usePaymentMethods } from '../../../hooks/use-payment-methods';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -68,7 +69,7 @@ import { useRegisterBinding } from '../../../../../services/register/use-registe
 import { getDriver } from '../../../../../services/payment-drivers/registry';
 import { driverReady, useDriverChanges, useDriverStatus } from './use-driver-status';
 import { useRememberedReader } from './remembered-readers';
-import { disabledReasonKey, providerErrorMessage } from './labels';
+import { disabledReasonKey, failureReasonLabel, providerErrorMessage } from './labels';
 import {
 	activePlan,
 	appliedMinor,
@@ -861,14 +862,23 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const settled = leg.settlement;
 			if (!settled || displayedRow.current === leg.row.id) return;
 			displayedRow.current = leg.row.id;
-			if (settled.outcome === 'failed' && ownTake)
+			if (settled.outcome === 'failed' && ownTake) {
+				// Cashier copy only: the provider's own sentence, a known reason's translation,
+				// else the refusal code's translated summary — never a raw wcpos_* identifier.
+				const reason = leg.row.failure_reason ?? null;
+				const knownReason = failureReasonLabel(reason, t);
+				const specific =
+					providerErrorMessage(leg.error) ??
+					(reason && knownReason !== reason ? knownReason : undefined);
 				Toast.show({
 					type: 'error',
-					title:
-						providerErrorMessage(leg.error) ??
-						leg.row.failure_reason ??
-						t('pos_checkout.payment_not_recorded'),
+					...resolveMerchantToastText(t, {
+						explicitTitle: specific,
+						errorCode: ERROR_CODES.PAYMENT_TERMINAL_REFUSED,
+						logMessage: t('pos_checkout.payment_not_recorded'),
+					}),
 				});
+			}
 			if (settled.outcome !== 'captured') return;
 
 			tenderRecorded(settled.payment);

@@ -1210,12 +1210,22 @@ describe('server tender', () => {
 	});
 
 	it.each([
-		['provider_declined', 'Bank says no', 'Bank says no', false],
-		['wcpos_amount_exceeds_balance', 'Too much', 'pos_checkout.payment_not_recorded', false],
-		['provider_declined', 'Bank says no', 'Bank says no', true],
+		['provider_declined', 'Bank says no', null, 'Bank says no', false],
+		['wcpos_amount_exceeds_balance', 'Too much', null, 'pos_checkout.payment_not_recorded', false],
+		// The leg copies a refusal code into the row; the cashier never reads the identifier.
+		[
+			'wcpos_amount_exceeds_balance',
+			'Too much',
+			'wcpos_amount_exceeds_balance',
+			'pos_checkout.payment_not_recorded',
+			false,
+		],
+		['wcpos_provider_error', 'Bank says no', 'card_declined', 'Bank says no', false],
+		['wcpos_declined', 'declined', 'card_declined', 'pos_checkout.reason_card_declined', false],
+		['provider_declined', 'Bank says no', null, 'Bank says no', true],
 	] as const)(
-		'only displays a toast for the initial Take (%s, polling=%s)',
-		async (code, message, expected, polling) => {
+		'only displays cashier copy for the initial Take (%s, reason %s, polling=%s)',
+		async (code, message, failureReason, expected, polling) => {
 			const { result, rerender } = renderHook(() => useTenderFlow(order));
 			act(() => result.current.pickMethod('terminal'));
 			await act(async () => result.current.takeTender());
@@ -1223,12 +1233,14 @@ describe('server tender', () => {
 				mockLeg = { ...mockLeg!, phase: 'polling' };
 				rerender();
 			}
+			const row = { ...mockLeg!.row, failure_reason: failureReason };
 			mockLeg = {
 				...mockLeg!,
+				row,
 				phase: 'final',
 				outcome: 'failed',
 				error: { code, message },
-				settlement: { payment: mockLeg!.row, outcome: 'failed', saleComplete: false },
+				settlement: { payment: row, outcome: 'failed', saleComplete: false },
 			};
 			rerender();
 			expect(mockError).not.toHaveBeenCalled();
