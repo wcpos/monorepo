@@ -12,9 +12,9 @@ Google Chrome 154.0.8037.44
 > node ./scripts/update-version-variable.mjs
 
 # transpiling.. (this takes some time on first run)
-Successfully compiled 1 file with Babel (291ms).
-Successfully compiled 1 file with Babel (295ms).
-Successfully compiled 1 file with Babel (297ms).
+Successfully compiled 1 file with Babel (128ms).
+Successfully compiled 1 file with Babel (131ms).
+Successfully compiled 1 file with Babel (133ms).
 # transpiling DONE (12 CPUs)
 staticFilesPath: /Users/kilbot/Projects/monorepo-v2/.claude/worktrees/spike-2138-sqlite-wasm/spikes/2138-rxdb-sqlite-wasm/.rxdb-src/docs-src/static/files
 # Use CI settings.
@@ -62,7 +62,7 @@ staticFilesPath: /Users/kilbot/Projects/monorepo-v2/.claude/worktrees/spike-2138
     "mocha": {
       "bail": true,
       "timeout": 120000,
-      "grep": "^(?!.*should clean up all deleted documents when multiple are deleted)(init\\.test\\.ts|rx-storage-implementations)"
+      "grep": "^(?!.*should clean up all deleted documents when multiple are deleted)(?!.*should have cleaned up the deleted document)(init\\.test\\.ts|rx-storage-implementations)"
     },
     "env": "[process.env omitted]"
   },
@@ -84,17 +84,17 @@ staticFilesPath: /Users/kilbot/Projects/monorepo-v2/.claude/worktrees/spike-2138
   }
 }
 Server listening on port: 18001
-[32m17 09 2026 23:03:54.369:INFO [framework.detect-browsers]: [39mThe following browsers will be used: [ 'Chrome' ]
+[32m17 09 2026 23:29:49.092:INFO [framework.detect-browsers]: [39mThe following browsers will be used: [ 'Chrome' ]
 Webpack bundling...
 asset [1m[32mcommons.js[39m[22m 9.79 MiB [1m[32m[emitted][39m[22m (name: commons) (id hint: commons)
 asset [1m[32mruntime.js[39m[22m 9.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
 asset [1m[32munit.test.169410876.js[39m[22m 1.12 KiB [1m[32m[emitted][39m[22m (name: unit.test.169410876)
 Entrypoint [1munit.test.169410876[39m[22m 9.8 MiB = [1m[32mruntime.js[39m[22m 9.7 KiB [1m[32mcommons.js[39m[22m 9.79 MiB [1m[32munit.test.169410876.js[39m[22m 1.12 KiB
-webpack 5.107.2 compiled [1m[32msuccessfully[39m[22m in 1175 ms
-[32m17 09 2026 23:03:56.031:INFO [karma-server]: [39mKarma v6.4.4 server started at http://localhost:9876/
-[32m17 09 2026 23:03:56.031:INFO [launcher]: [39mLaunching browsers Chrome with concurrency 1
-[32m17 09 2026 23:03:56.034:INFO [launcher]: [39mStarting browser Chrome
-[32m17 09 2026 23:03:56.835:INFO [Chrome 154.0.0.0 (Mac OS 10.15.7)]: [39mConnected on socket 3RJZ340DZJ4DUw0HAAAA with id 20239221
+webpack 5.107.2 compiled [1m[32msuccessfully[39m[22m in 1167 ms
+[32m17 09 2026 23:29:50.636:INFO [karma-server]: [39mKarma v6.4.4 server started at http://localhost:9876/
+[32m17 09 2026 23:29:50.636:INFO [launcher]: [39mLaunching browsers Chrome with concurrency 1
+[32m17 09 2026 23:29:50.639:INFO [launcher]: [39mStarting browser Chrome
+[32m17 09 2026 23:29:51.144:INFO [Chrome 154.0.0.0 (Mac OS 10.15.7)]: [39mConnected on socket PS3Lof88b0fIQJsoAAAA with id 89221805
 Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'DEFAULT_STORAGE: custom'[39m
 Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'# use RxStorage: sqlite-wasm-oo1'[39m
 Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'######## init.test.js ########'[39m
@@ -118,7 +118,7 @@ Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'STORAGE: sqlite-wasm-oo1'[39m
     [32m✓ [39minit storage
     [32m✓ [39mclear BroadcastChannel tmp folder
     [32m✓ [39mstart test servers
-(node:33927) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(node:62098) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
 
   rx-storage-implementations.test.ts (implementation: sqlite-wasm-oo1)
@@ -183,7 +183,6 @@ Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'STORAGE: sqlite-wasm-oo1'[39m
         [32m✓ [39m_deleted documents must loose all attachments
         [32m✓ [39mmust be able to load multiple attachments data in parallel
       .cleanup
-        [32m✓ [39mshould have cleaned up the deleted document
         [32m✓ [39mshould at some time return true (when all docs are cleaned up)
       .close()
         [32m✓ [39mclosing multiple times should not error
@@ -201,8 +200,8 @@ Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'STORAGE: sqlite-wasm-oo1'[39m
     migration
       [32m✓ [39mdocuments that are stored on different schema versions, should not interfere
 
-Chrome 154.0.0.0 (Mac OS 10.15.7): Executed 65 of 65[32m SUCCESS[39m (1.919 secs / 1.906 secs)
-[32mTOTAL: 65 SUCCESS[39m
+Chrome 154.0.0.0 (Mac OS 10.15.7): Executed 64 of 64[32m SUCCESS[39m (1.803 secs / 1.79 secs)
+[32mTOTAL: 64 SUCCESS[39m
 
 
 Browser suite exit code: 0

@@ -2,6 +2,11 @@
 set -eu
 SPIKE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SPIKE/../.." && pwd)"
+# The rxdb checkout is gitignored; recreate it at the pinned tag on a fresh clone.
+RXDB_TAG=17.4.0
+if [ ! -d "$SPIKE/.rxdb-src" ]; then
+  git clone --depth 1 --branch "$RXDB_TAG" https://github.com/pubkey/rxdb.git "$SPIKE/.rxdb-src"
+fi
 cd "$SPIKE/.rxdb-src"
 # Keep npm's cache/logs and temporary output within the spike.
 export npm_config_cache="$PWD/.npm-cache"
@@ -64,11 +69,27 @@ if [ "$SUITE" != "browser" ]; then
   npm run test:node:custom -- ${MOCHA_GREP:+--grep "$MOCHA_GREP"} ${MOCHA_INVERT:+--invert} > "$SPIKE/node.log" 2>&1
   node_code=$?
   printf '\nNode suite exit code: %s\n' "$node_code" >> "$SPIKE/node.log"
+  # Refresh the tracked evidence artifact from this run (the full log is gitignored).
+  {
+    echo "# Node conformance run summary (rxdb $RXDB_TAG unit suite, DEFAULT_STORAGE=custom${MOCHA_GREP:+, grep '$MOCHA_GREP'${MOCHA_INVERT:+ inverted}})"
+    echo
+    sed -n 1,12p "$SPIKE/node.log"
+    echo "..."
+    grep -E '^  [a-z-]+\.(test\.)?(ts|js)' "$SPIKE/node.log" | sed 's/^ *//' | tr '\n' ';'
+    echo
+    echo
+    echo "conformance block ticks: $(awk '/rx-storage-implementations.test.ts/{f=1} /rx-storage-query-correctness.test.ts/{f=0} f' "$SPIKE/node.log" | grep -c '✔')"
+    echo "journal_mode lines: $(grep 'journal_mode requested' "$SPIKE/node.log" | sort | uniq -c | sed 's/^ *//')"
+    echo
+    grep -E '^\s+[0-9]+ (passing|failing|pending)|Node suite exit code' "$SPIKE/node.log"
+  } > "$SPIKE/node-conformance-summary.log"
 fi
 if [ "$SUITE" != "node" ]; then
   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version > "$SPIKE/browser.log" 2>&1
   npm run test:browser:custom -- --browsers Chrome >> "$SPIKE/browser.log" 2>&1
   browser_code=$?
   printf '\nBrowser suite exit code: %s\n' "$browser_code" >> "$SPIKE/browser.log"
+  # Refresh the tracked evidence artifact from this run.
+  cp "$SPIKE/browser.log" "$SPIKE/browser-conformance.log"
 fi
 [ "$node_code" -eq 0 ] && [ "$browser_code" -eq 0 ]

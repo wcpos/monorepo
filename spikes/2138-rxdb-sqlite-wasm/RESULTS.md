@@ -14,7 +14,7 @@ self-linked as its own `rxdb` so exactly one rxdb and one rxjs were in the proce
 | Run | Result | Evidence |
 |---|---|---|
 | Node, whole rxdb unit suite (`DEFAULT_STORAGE=custom`, `replication-webrtc` excluded) | **1416 passing, 0 failing, exit 0** (2 min) | `node-conformance-summary.log` |
-| Chrome, dedicated worker, `opfs-sahpool`, `init.test.ts` + `rx-storage-implementations.test.ts` | **65 of 65 SUCCESS, exit 0** (1.9 s), one test excluded for a clock artefact explained below | `browser-conformance.log` |
+| Chrome, dedicated worker, `opfs-sahpool`, `init.test.ts` + `rx-storage-implementations.test.ts` | **64 of 64 SUCCESS, exit 0** (re-taken with the journal-mode assertion in place), two `.cleanup` tests excluded for the clock artefact explained below | `browser-conformance.log` |
 
 Node covered every block of the conformance file (62 tests: creation, bulkWrite, prepareQuery,
 sort comparator, query matcher, query, count, findDocumentsById, getChangedDocumentsSince,
@@ -30,6 +30,10 @@ that one failure had ended the first Node run at 1098 passing (`node-run1.log`).
 worker on the pool VFS — but only after `PRAGMA locking_mode = exclusive`, which must come first.
 Without it the same pragma silently answers `delete` (first Node run). The adapter now sets
 exclusive locking inside `open()`, and the Node log shows `WAL wal` on every one of 1505 opens.
+Since Codex's review the adapter **throws** when the mode read back differs from the one
+requested, so a run can no longer pass on a silent fallback: the browser figures below were
+re-taken with that check in place, and the Playwright probe (whose console capture includes the
+worker) prints `journal_mode requested/effective: WAL wal` from the pool VFS.
 
 ## What had to be worked around — every one is an input to the topology and adapter tickets
 
@@ -53,15 +57,19 @@ exclusive locking inside `open()`, and the Node log shows `WAL wal` on every one
 3. **`storeAttachmentsAsBase64String: true`.** Premium's binary attachment path calls Node's
    `Buffer`, which a browser worker does not have (`Buffer is not defined`,
    `browser-run5-buffer.log`). The documented option fixes it; all six attachment tests pass.
-4. **Cleanup and rxdb's `now()` drift (the one excluded browser test).** "should clean up all
-   deleted documents when multiple are deleted" writes deletes stamped with the page's `now()`,
-   then calls `cleanup(0)` once (premium always returns `true`). Premium's cleanup deletes rows
-   with `lastWriteTime < Date.now() - minimumDeletedTime` evaluated in the worker. rxdb's `now()`
-   advances one millisecond for every 99 calls inside a millisecond, so a fast suite runs it
-   ahead of wall-clock; the probe measured **+50.51 ms after 5,000 calls**, after which a
-   fresh delete survived `cleanup(0)` twice. Not a storage defect and irrelevant at production
-   `minimumDeletedTime` values (minutes), but it is a cross-realm contract quirk worth knowing:
-   lwt is stamped by the caller's realm, cleanup is judged by the worker's.
+4. **Cleanup and rxdb's `now()` drift (the two excluded browser tests).** "should have cleaned
+   up the deleted document" and "should clean up all deleted documents when multiple are
+   deleted" write deletes stamped with the page's `now()`, then call `cleanup(0)` once (premium
+   always returns `true`, so the suite's retry loop never retries). Premium's cleanup deletes
+   rows with `lastWriteTime < Date.now() - minimumDeletedTime` evaluated in the worker. rxdb's
+   `now()` advances one millisecond for every 99 calls inside a millisecond, so a fast suite runs
+   it ahead of wall-clock; the probe measured **+50.51 ms after 5,000 calls**, after which a
+   fresh delete survived `cleanup(0)` twice. Which of the two tests trips depends on how far the
+   page clock has drifted when it runs — one run passed the first and failed the second, the next
+   the reverse. Not a storage defect and irrelevant at production `minimumDeletedTime` values
+   (minutes), but it is a cross-realm contract quirk worth knowing: lwt is stamped by the caller's
+   realm, cleanup is judged by the worker's. (In Node the suite and the storage share one realm
+   and the same tests pass.)
 5. **Harness only, not design:** the rxdb tag ships no lockfile (`npm install`, not `npm ci`);
    the worker bundle must not live under `test/` (babel transpiles that tree and rejects the
    bundle's private class fields); the static server serves `docs-src/static/files`, not
@@ -71,7 +79,7 @@ exclusive locking inside `open()`, and the Node log shows `WAL wal` on every one
 
 ## Adapter
 
-`sqlite-basics-oo1.mjs` (32 lines; the journal-mode `console.info` lines are instrumentation):
+`sqlite-basics-oo1.mjs`, minus its logging and the journal-mode assertion:
 
 ```js
 import { boolParamsToInt } from 'rxdb-premium/plugins/storage-sqlite';
@@ -87,7 +95,7 @@ export function getSQLiteBasicsOo1({ openDb, journalMode }) {
       return db.exec({ sql: q.query, bind: boolParamsToInt(q.params), rowMode: 'object', returnValue: 'resultRows' });
     },
     async run(db, q) { db.exec({ sql: q.query, bind: boolParamsToInt(q.params) }); },
-    async setPragma(db, key, value) { db.exec('PRAGMA ' + key + ' = ' + value); },
+    async setPragma(db, key, value) { db.exec('PRAGMA ' + key + ' = ' + value); }, // + assert journal_mode read-back
     async close(db) { db.close(); },
     journalMode,
   };
@@ -111,10 +119,13 @@ are the blocked tickets; this spike only answers whether the path works at all.
 
 ```
 bash spikes/2138-rxdb-sqlite-wasm/run-conformance.sh node        # ~5 min first time (clone install + build), 2 min after
-MOCHA_GREP='init.test.ts|rx-storage-implementations' bash spikes/2138-rxdb-sqlite-wasm/run-conformance.sh browser
+MOCHA_GREP='^(?!.*should clean up all deleted documents when multiple are deleted)(?!.*should have cleaned up the deleted document)(init\.test\.ts|rx-storage-implementations)' \
+  bash spikes/2138-rxdb-sqlite-wasm/run-conformance.sh browser   # the two exclusions are the clock artefact, see 4 above
 node spikes/2138-rxdb-sqlite-wasm/page-probe.mjs                   # the worker probe, headless Chromium
 ```
 
 Node suite: pass `MOCHA_GREP=replication-webrtc MOCHA_INVERT=1` to skip the unbuilt native addon.
-The rxdb clone lives in `.rxdb-src/` (gitignored); `git clone --depth 1 --branch 17.4.0
-https://github.com/pubkey/rxdb.git .rxdb-src` recreates it.
+The rxdb clone lives in `.rxdb-src/` (gitignored); the runner clones tag 17.4.0 there when it is
+missing. Each run refreshes the tracked evidence files (`browser-conformance.log`,
+`node-conformance-summary.log`) from its own output; the full Node log stays local. The probe exits
+non-zero when any step fails.

@@ -33,5 +33,6 @@ try {
 	console.log('[result]', r);
 } catch (e) {
 	console.log('[probe failed]', e.message.slice(0, 600));
+	process.exitCode = 1;
 }
 await browser.close();

@@ -1,4 +1,4 @@
-# Node conformance run summary (full rxdb 17.4.0 unit suite minus replication-webrtc, DEFAULT_STORAGE=custom)
+# Node conformance run summary (rxdb 17.4.0 unit suite, DEFAULT_STORAGE=custom, grep 'replication-webrtc' inverted)
 
 
 > rxdb@17.4.0 test:node:custom

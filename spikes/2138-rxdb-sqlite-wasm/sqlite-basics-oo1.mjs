@@ -23,7 +23,13 @@ export function getSQLiteBasicsOo1({ openDb, journalMode }) {
     async setPragma(db, key, value) {
       db.exec('PRAGMA ' + key + ' = ' + value);
       if (key === 'journal_mode') {
-        console.info('spike-2138 journal_mode requested/effective:', value, db.selectValue('PRAGMA journal_mode'));
+        // SQLite answers a journal-mode change with the mode actually in effect and never
+        // errors on a refused one, so the verdict must fail loudly when they differ.
+        const effective = String(db.selectValue('PRAGMA journal_mode'));
+        console.info('spike-2138 journal_mode requested/effective:', value, effective);
+        if (effective.toLowerCase() !== String(value).toLowerCase()) {
+          throw new Error('spike-2138: journal_mode ' + value + ' requested but ' + effective + ' in effect');
+        }
       }
     },
     async close(db) { db.close(); },
