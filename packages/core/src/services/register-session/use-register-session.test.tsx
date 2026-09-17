@@ -12,10 +12,12 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import type { StoreDatabase, UserDatabase } from '@wcpos/database';
 import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
 import { getLogger } from '@wcpos/utils/logger';
+import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
 
 import { ensureRegister } from '../register/register-document';
 import * as actions from './session-store';
 import { useRegisterSession } from './use-register-session';
+import { buildClosureDocument } from './closure-document';
 
 Object.assign(globalThis, { TextEncoder });
 Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto });
@@ -1119,6 +1121,22 @@ it.each([
 				.mockImplementationOnce((input) =>
 					writeClosure({ ...input, closures: db.closures, userDB })
 				);
+			mockOrders.next(
+				[7, 8, 99].map((id) => ({
+					record: {
+						uuid: `order-${id}`,
+						local: { dirty: true },
+						payload: {
+							id,
+							date_modified_gmt: '2026-09-17T11:00:00Z',
+							meta_data: [
+								{ key: '_wcpos_session', value: 'session' },
+								{ key: '_pos_user', value: String(id) },
+							],
+						},
+					},
+				}))
+			);
 			const result = await settled();
 			await result.current.actions.closeSession({ counted: { cash: '120' } });
 			const saved = await db.closures.findOne('session').exec();
@@ -1126,7 +1144,29 @@ it.each([
 				opened_by_name: opener,
 				approved_by_name: approver,
 				closed_by_name: 'Pat',
+				cashiers: [
+					{ id: 7, name: 'Pat' },
+					{ id: 8, name: 'Alex' },
+					{ id: 99, name: '99' },
+				],
 			});
+			// Revert: persist transaction cashier ids instead of credential display names.
+			const document = buildClosureDocument(saved!.toMutableJSON(), {
+				store: {},
+				currency: 'USD',
+				timezone: 'UTC',
+				locale: 'en-US',
+				printedAt: '2026-09-17T12:00:00Z',
+				formatMoney: (value) => value,
+				i18n: {},
+			});
+			expect(saved?.sync_status).toBe('pending');
+			expect(
+				renderLogiclessTemplate(
+					'{{#closure.breakdowns.cashiers}}{{name}};{{/closure.breakdowns.cashiers}}',
+					document
+				)
+			).toBe('Pat;Alex;99;');
 		} finally {
 			await db.close();
 			await userDB.close();

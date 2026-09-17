@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
 
 import { RemoteSessionCard, SessionCard } from './session-card';
@@ -94,8 +94,9 @@ it('keeps expected hidden for blind cashiers but retains the opener and sales co
 	expect(screen.getByTestId('reports-session-card').textContent).not.toContain('155');
 });
 // Revert: omit the closed branch or dispatch X rather than the last closure.
-it('offers the last closure Reprint when the register is closed', async () => {
+it('offers the local last closure Reprint offline when the register is closed', async () => {
 	session = null;
+	online = false;
 	render(<SessionCard />);
 	expect(screen.getByTestId('reports-session-card').textContent).toContain('Register closed');
 	fireEvent.click(screen.getByTestId('reports-session-print'));
@@ -220,4 +221,37 @@ it('fetches the actual last closure when the bound closed register has no local 
 	fireEvent.click(screen.getByTestId('reports-session-print'));
 	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
 	expect(reprint).not.toHaveBeenCalled();
+});
+
+// Revert: skip closures/last when a stale local last closure exists.
+it('replaces local A with authoritative B for the bound register card and Reprint', async () => {
+	session = null;
+	lastClosure = { id: 'A' };
+	let resolve!: (value: { data: { id: string; number: number } }) => void;
+	const pending = new Promise((done) => {
+		resolve = done;
+	});
+	get.mockImplementation(async (url) => (url === 'sessions' ? { data: [] } : pending));
+	const view = render(<SessionCard />);
+	expect(screen.getByTestId('reports-session-card').textContent).toContain('Register closed');
+	fireEvent.click(screen.getByTestId('reports-session-print'));
+	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(1));
+	await waitFor(() =>
+		expect(get).toHaveBeenCalledWith('closures/last', {
+			params: { register_id: 'front', store_id: 1 },
+		})
+	);
+	await act(async () => {
+		resolve({ data: { id: 'B', number: 10 } });
+	});
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({ document: 'closure:B', isReprint: true })
+	);
+	fireEvent.click(screen.getByTestId('reports-session-print'));
+	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+	expect(reprint).toHaveBeenCalledTimes(1);
+	online = false;
+	view.rerender(<SessionCard />);
+	fireEvent.click(screen.getByTestId('reports-session-print'));
+	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(2));
 });

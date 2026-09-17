@@ -199,6 +199,7 @@ export async function writeClosure({
 	tillExpected,
 	refundRecords = [],
 	labels,
+	resolveCashierName,
 	timezone = 'device',
 }: {
 	timezone?: string;
@@ -212,6 +213,7 @@ export async function writeClosure({
 	orders: readonly ClosureOrder[];
 	tillExpected?: Record<string, string>;
 	refundRecords?: readonly RefundDocumentType[];
+	resolveCashierName?: (id: number) => string;
 	labels?: {
 		register_name: string;
 		closed_by_name: string;
@@ -371,7 +373,7 @@ export async function writeClosure({
 						)
 						.filter(Boolean)
 				),
-			],
+			].map((id) => ({ id: Number(id), name: resolveCashierName?.(Number(id)) || id })),
 		},
 		order_ids: bound.map((order) => order.uuid),
 		movement_ids: entries.map((row) => row.id),

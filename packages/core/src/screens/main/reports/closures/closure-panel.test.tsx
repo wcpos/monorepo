@@ -21,7 +21,11 @@ const mockPatch = jest.fn(async (_patch: { receipt_snapshot: string }) => undefi
 const mockCollection = {
 	findOne: jest.fn((_query: unknown) => ({ exec: async () => ({ incrementalPatch: mockPatch }) })),
 };
+jest.mock('react-native-safe-area-context', () => ({
+	useSafeAreaInsets: () => ({ bottom: 34 }),
+}));
 let mockPhone = true;
+let mockSyncing = false;
 let mockLoadError: Error | null = null;
 let mockOffline: boolean | undefined;
 let mockRemote: Record<string, unknown> | null = null;
@@ -195,6 +199,7 @@ const mockDocument = jest.fn((options: { localReport: Record<string, unknown> })
 	setSelectedTemplateId: jest.fn(),
 	isOffline: mockOffline ?? !mockRemote,
 	documentError: mockLoadError,
+	isSyncing: mockSyncing,
 	receiptData: mockRemote ?? options.localReport,
 	serverReceiptData: mockRemote,
 	previewProps: {
@@ -263,6 +268,7 @@ const row: ClosureRow = {
 };
 beforeEach(() => {
 	mockRemote = null;
+	mockSyncing = false;
 	mockLoadError = null;
 	mockOffline = undefined;
 	mockPhone = true;
@@ -503,3 +509,29 @@ it.each([true, false])(
 		);
 	}
 );
+
+// Revert: enable Recount based only on connectivity and row sync status.
+it.each(['loading', 'failed', 'refreshing'])(
+	'blocks recount against a stale local document while %s',
+	(state) => {
+		mockOffline = false;
+		mockSyncing = state !== 'failed';
+		mockLoadError = state === 'failed' ? new Error('refused') : null;
+		mockRemote = state === 'refreshing' ? { closure: row } : null;
+		const view = render(<ClosurePanel row={row} onClose={jest.fn()} />);
+		expect((screen.getByTestId('closure-recount') as HTMLButtonElement).disabled).toBe(true);
+		fireEvent.click(screen.getByTestId('closure-recount'));
+		expect(mockRecount).not.toHaveBeenCalled();
+		mockSyncing = false;
+		mockLoadError = null;
+		mockRemote = { closure: row };
+		view.rerender(<ClosurePanel row={row} onClose={jest.fn()} />);
+		expect((screen.getByTestId('closure-recount') as HTMLButtonElement).disabled).toBe(false);
+	}
+);
+
+// Revert: retain only p-4 below the phone actions, ignoring the home indicator.
+it('pads the phone footer above the bottom safe area', () => {
+	render(<ClosurePanel row={row} onClose={jest.fn()} />);
+	expect(screen.getByTestId('closure-panel-footer').style.paddingBottom).toBe('50px');
+});

@@ -57,6 +57,7 @@
 	"reports.reprint": "Reprint",
 	"reports.pro_scope": "{scope} are in WCPOS Pro",
 	"reports.see_pro": "See Pro",
+	"reports.history_limit": "This closure is outside available history",
 	"reports.earlier_closures": "Earlier closures",
 	"reports.custom_range": "Custom range",
 	"reports.custom_ranges": "Custom ranges",

@@ -11,6 +11,7 @@ const localRows = [
 		server_closure_id: 'server',
 		business_day: '2026-09-17',
 		number: 2,
+		expected: {},
 		counted: { cash: '99' },
 		variance: { cash: '-1' },
 		breakdowns: {},

@@ -35,6 +35,7 @@ export type PageBarProps = {
 	scope: ClosureScope;
 	onScopeChange: (scope: ClosureScope) => void;
 	initialLockedPeriod?: boolean;
+	initialHistoryLimit?: boolean;
 };
 export function PageBar({
 	room,
@@ -42,6 +43,7 @@ export function PageBar({
 	scope,
 	onScopeChange,
 	initialLockedPeriod = false,
+	initialHistoryLimit = false,
 }: PageBarProps) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
@@ -65,6 +67,7 @@ export function PageBar({
 	const [locked, setLocked] = React.useState(
 		initialLockedPeriod ? t('reports.earlier_closures') : ''
 	);
+	const [historyLimit, setHistoryLimit] = React.useState(initialHistoryLimit);
 	const [menu, setMenu] = React.useState('');
 	const periodTrigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
 	const scopeTrigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
@@ -92,6 +95,7 @@ export function PageBar({
 			return;
 		}
 		setLocked('');
+		setHistoryLimit(false);
 		setMenu('');
 		setCustom(false);
 		onScopeChange({ ...scope, ...changes });
@@ -109,16 +113,20 @@ export function PageBar({
 		([, range]) =>
 			day(range.from) === scope.from && (day(range.to) > today ? today : day(range.to)) === scope.to
 	)?.[0] as keyof typeof labels | undefined;
-	const hint = !!locked && (
+	const hint = (!!locked || historyLimit) && (
 		<View className="gap-2 border-t p-2">
-			<Text testID="reports-lock-hint">{t('reports.pro_scope', { scope: locked })}</Text>
-			<Button
-				testID="reports-see-pro"
-				className="min-h-12"
-				onPress={() => openExternalURL('https://wcpos.com/pro')}
-			>
-				{t('reports.see_pro')}
-			</Button>
+			<Text testID="reports-lock-hint">
+				{historyLimit ? t('reports.history_limit') : t('reports.pro_scope', { scope: locked })}
+			</Text>
+			{!historyLimit && (
+				<Button
+					testID="reports-see-pro"
+					className="min-h-12"
+					onPress={() => openExternalURL('https://wcpos.com/pro')}
+				>
+					{t('reports.see_pro')}
+				</Button>
+			)}
 		</View>
 	);
 	const option = (id: string, label: string, onPress: () => boolean | void, locked = false) => (

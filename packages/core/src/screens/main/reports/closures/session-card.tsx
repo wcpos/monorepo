@@ -26,12 +26,13 @@ export function SessionCard() {
 	const data = useRegisterSession();
 	const active = data.session?.status === 'open' || data.session?.status === 'counting';
 	const { print } = useSessionReport(active ? undefined : data.lastClosure, !active);
-	if (!active && !data.lastClosure && data.binding.registerId) {
+	if (!active && data.binding.registerId) {
 		return (
 			<RemoteSessionCard
 				key={`${store.id}:${data.binding.registerId}`}
 				register={{ id: data.binding.registerId, name: data.binding.registerName ?? '' }}
 				storeId={store.id}
+				localCard={data.lastClosure ? <SessionCardContent {...data} print={print} /> : undefined}
 			/>
 		);
 	}
@@ -137,9 +138,11 @@ function SessionCardContent({
 export function RemoteSessionCard({
 	register,
 	storeId,
+	localCard,
 }: {
 	register: { id: string; name: string };
 	storeId?: number;
+	localCard?: React.ReactNode;
 }) {
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -198,7 +201,9 @@ export function RemoteSessionCard({
 	});
 	return (
 		<View testID={`remote-session-${register.id}`} className={!online ? 'opacity-50' : ''}>
-			{data.status === 'ready' ? (
+			{localCard && (!online || data.status !== 'ready') ? (
+				localCard
+			) : data.status === 'ready' ? (
 				<SessionCardContent
 					storeId={storeId}
 					session={data.session}

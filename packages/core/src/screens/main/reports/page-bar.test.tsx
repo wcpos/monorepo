@@ -11,6 +11,7 @@ import { ReportsScreen } from './index';
 
 import type { ClosureScope } from './closures/use-closure-rows';
 
+jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
 }));
@@ -398,6 +399,7 @@ const mockClosureRows = jest.fn((scope: ClosureScope) => ({
 	unavailableIds: new Set(),
 }));
 jest.mock('./closures/use-closure-rows', () => ({
+	...jest.requireActual('./closures/use-closure-rows'),
 	useClosureRows: (scope: ClosureScope) => mockClosureRows(scope),
 }));
 
@@ -432,3 +434,33 @@ it.each([
 		mockRoute = {};
 	}
 });
+
+// Revert: clamp only inside the rows hook, leaving the route's old/future heading and selection.
+it.each([
+	['2026-01-01', '2026-06-16', '16 Jun – 16 Jun'],
+	['2026-09-18', '2026-09-16', 'Today'],
+])(
+	'clamps a Pro link for %s before the bar and list, and explains why it cannot open',
+	(businessDay, bound, heading) => {
+		isPro = true;
+		// The target id also exists in the bounded scope: it must not open as an unrelated day.
+		mockRoute = { closureId: 'last-closure', businessDay, registerId: 'r' };
+		try {
+			render(<ReportsScreen />);
+			expect(mockClosureRows).toHaveBeenLastCalledWith(
+				expect.objectContaining({ from: bound, to: bound })
+			);
+			expect(screen.getByTestId('reports-period').textContent).toBe(heading);
+			expect(screen.queryByTestId('selected-closure')).toBeNull();
+			expect(screen.getByTestId('reports-lock-hint').textContent).toBe(
+				'This closure is outside available history'
+			);
+			expect(screen.queryByTestId('reports-see-pro')).toBeNull();
+			fireEvent.click(screen.getByTestId('reports-period'));
+			fireEvent.click(screen.getByTestId('reports-period-today'));
+			expect(screen.queryByTestId('reports-lock-hint')).toBeNull();
+		} finally {
+			mockRoute = {};
+		}
+	}
+);

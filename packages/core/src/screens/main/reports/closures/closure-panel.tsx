@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 
 import get from 'lodash/get';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
@@ -43,6 +44,7 @@ export function ClosurePanel({
 	const [error, setError] = React.useState('');
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
+	const { bottom } = useSafeAreaInsets();
 	const context = useClosureDocumentContext(row.store_id ?? undefined);
 	const collection = useClosureCollection();
 	const getLocalClosure = React.useCallback(
@@ -223,12 +225,22 @@ export function ClosurePanel({
 				<Text>{t(doc.isOffline ? 'reports.recount_offline' : 'reports.recount_pending')}</Text>
 			)}
 			{!!error && <Text testID="closure-action-error">{error}</Text>}
-			<View testID="closure-panel-footer" className="bg-card shrink-0 flex-row gap-3 border-t p-4">
+			<View
+				testID="closure-panel-footer"
+				className="bg-card shrink-0 flex-row gap-3 border-t p-4"
+				style={phone ? { paddingBottom: bottom + 16 } : undefined}
+			>
 				<Button
 					testID="closure-recount"
 					variant="outline"
 					className="min-h-12 flex-1"
-					disabled={doc.isOffline || !['synced', 'superseded'].includes(row.sync_status)}
+					disabled={
+						doc.isOffline ||
+						doc.isSyncing ||
+						!!documentError ||
+						!remote ||
+						!['synced', 'superseded'].includes(row.sync_status)
+					}
 					onPress={() => setRecounting(true)}
 				>
 					{t('reports.recount')}

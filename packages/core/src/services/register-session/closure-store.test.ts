@@ -150,7 +150,7 @@ it('freezes the count figures and breakdowns; retries reuse one number and one p
 			opening_float: { expected: '100', counted: '100', variance: '0.0000' },
 			transaction_count: 1,
 			refund_count: 1,
-			cashiers: ['7'],
+			cashiers: [{ id: 7, name: '7' }],
 			payment_methods: {
 				cash: { sales: '50.0000', refunds: '10.0000' },
 				card: { sales: '30.0000', refunds: '0.0000' },

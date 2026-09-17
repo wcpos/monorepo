@@ -25,6 +25,11 @@ export type ClosureScope = {
 	storeId?: number;
 	cashier?: number;
 };
+export function clampClosureScope(scope: ClosureScope, today: string): ClosureScope {
+	const min = format(subDays(parseISO(today), HISTORY_DAYS), 'yyyy-MM-dd');
+	const clamp = (day: string) => (day < min ? min : day > today ? today : day);
+	return { ...scope, from: clamp(scope.from), to: clamp(scope.to) };
+}
 export function selectClosureRows(
 	rows: readonly ClosureRow[],
 	scope: ClosureScope,
@@ -87,10 +92,8 @@ export function useClosureRows(requested: ClosureScope) {
 	const collection = useClosureCollection();
 	const { timezone, presets } = useStoreDay(license?.isPro ? requested.storeId : store.id);
 	const today = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
-	const min = format(subDays(parseISO(today), HISTORY_DAYS), 'yyyy-MM-dd');
-	const clamp = (day: string) => (day < min ? min : day > today ? today : day);
 	const scope = license?.isPro
-		? { ...requested, from: clamp(requested.from), to: clamp(requested.to) }
+		? clampClosureScope(requested, today)
 		: {
 				from: today,
 				to: today,

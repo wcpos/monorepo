@@ -1,4 +1,5 @@
 import type { ClosureRow } from '@wcpos/database';
+import { fromMinor, toMinor } from '@wcpos/order-math';
 
 export function exportCsv(
 	rows: readonly ClosureRow[],
@@ -7,7 +8,13 @@ export function exportCsv(
 	storeName = ''
 ) {
 	const tenders = [
-		...new Set(rows.flatMap((row) => [...Object.keys(row.counted), ...Object.keys(row.variance)])),
+		...new Set(
+			rows.flatMap((row) => [
+				...Object.keys(row.expected),
+				...Object.keys(row.counted),
+				...Object.keys(row.variance),
+			])
+		),
 	];
 	const cell = (value: unknown) => {
 		const text = String(value ?? '');
@@ -18,6 +25,7 @@ export function exportCsv(
 	);
 	header.push(
 		...tenders.flatMap((method) => [
+			`${t('reports.document.expected')} (${method})`,
 			`${t('register.counted')} (${method})`,
 			`${t('register.variance')} (${method})`,
 		]),
@@ -34,9 +42,16 @@ export function exportCsv(
 			row.closed_at,
 			row.breakdowns.closed_by_name || t('register.unknown_cashier'),
 			...tenders.flatMap((method) => {
-				const value = row.variance[method];
+				const expected = row.expected[method];
+				const counted = row.counted[method] ?? (expected === undefined ? '' : '0');
+				const value =
+					row.variance[method] ??
+					(expected === undefined
+						? undefined
+						: fromMinor(toMinor(counted, 4) - toMinor(expected, 4), 4));
 				return [
-					row.counted[method] ?? '',
+					expected ?? '',
+					counted,
 					value === undefined
 						? ''
 						: `${value.replace(/^-/, '')} ${t(Number(value) < 0 ? 'register.short' : Number(value) > 0 ? 'register.over' : 'reports.exact')}`,

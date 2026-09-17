@@ -45,6 +45,7 @@ const row = (id: string, changes: Partial<ClosureRow> = {}) =>
 		business_day: '2026-09-17',
 		opened_at: '2026-09-17T08:00:00Z',
 		closed_at: '2026-09-17T12:00:00Z',
+		expected: {},
 		sync_status: 'synced',
 		synced_rows_at: '2026-09-17T12:00:00Z',
 		...changes,

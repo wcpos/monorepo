@@ -11,6 +11,8 @@ import { of } from 'rxjs';
 import { ReportsScreen } from './index';
 
 import type { QueryStateOf } from '../../../query';
+jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: jest.fn() }));
+jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 44 }) }));
 jest.mock('../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),

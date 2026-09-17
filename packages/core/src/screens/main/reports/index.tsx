@@ -38,8 +38,8 @@ import {
 	useQueryState,
 	useQueryStateActions,
 } from '../../../query';
+import { clampClosureScope, type ClosureScope } from './closures/use-closure-rows';
 
-import type { ClosureScope } from './closures/use-closure-rows';
 import type { FiltersOf, QueryStateOf } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
@@ -197,13 +197,17 @@ function ReportsShell() {
 			? format(convertUTCStringToLocalDate(params.openedAt), 'yyyy-MM-dd', zoneOptions(timezone))
 			: today);
 	const lockedClosure = !!params.closureId && !license?.isPro && closureDay !== today;
-	const initialScope = {
-		from: license?.isPro ? closureDay : today,
-		to: license?.isPro ? closureDay : today,
-		registerId: (license?.isPro && params.registerId) || binding.registerId || 'unbound',
-		storeId: store?.id,
-		cashier: room === 'sales' ? wpCredentials?.id : undefined,
-	};
+	const initialScope = clampClosureScope(
+		{
+			from: license?.isPro ? closureDay : today,
+			to: license?.isPro ? closureDay : today,
+			registerId: (license?.isPro && params.registerId) || binding.registerId || 'unbound',
+			storeId: store?.id,
+			cashier: room === 'sales' ? wpCredentials?.id : undefined,
+		},
+		today
+	);
+	const outsideHistory = !!params.closureId && !!license?.isPro && initialScope.from !== closureDay;
 	const scope = license?.isPro
 		? (selection ?? initialScope)
 		: { ...initialScope, cashier: selection?.cashier };
@@ -218,13 +222,14 @@ function ReportsShell() {
 							<PageBar
 								room={room}
 								initialLockedPeriod={lockedClosure}
+								initialHistoryLimit={outsideHistory}
 								onRoomChange={setRoom}
 								scope={scope}
 								onScopeChange={setSelection}
 							/>
 							<Closures
 								scope={scope}
-								initialClosureId={lockedClosure ? undefined : params.closureId}
+								initialClosureId={lockedClosure || outsideHistory ? undefined : params.closureId}
 								onClose={() => router.setParams({ closureId: undefined })}
 							/>
 						</>

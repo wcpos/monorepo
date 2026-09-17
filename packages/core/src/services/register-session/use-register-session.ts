@@ -443,6 +443,7 @@ export function useRegisterSession() {
 				const refundRecords = accounting?.refundRecords ?? data?.refundRecords;
 				const closure = await actions.writeClosure({
 					closures: closures!,
+					resolveCashierName: actorName,
 					timezone,
 					labels: {
 						register_name: binding.registerName ?? '',
