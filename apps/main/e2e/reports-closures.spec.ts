@@ -120,6 +120,7 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 				figures: { counted: { cash: '180.0000' }, variance: { cash: '0.0000' } },
 			},
 		];
+		let listedStoreId = serverDocument.closure.store_id;
 		const rows = probe.ids.map((id, index) => ({
 			...serverDocument.closure,
 			id,
@@ -320,19 +321,22 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 						probe.closureRequests.push(request.url());
 						const after = url.searchParams.get('after') ?? '';
 						const before = url.searchParams.get('before') ?? '9999';
+						// The probe rows belong to whichever store the list was asked for; the
+						// detail route below reports the same store, as the real server does.
+						listedStoreId = Number(url.searchParams.get('store_id') ?? 0);
 						return route.fulfill({
 							headers,
 							json: rows
 								.filter((row) => row.business_day >= after && row.business_day <= before)
-								.map((row) => ({
-									...row,
-									store_id: Number(url.searchParams.get('store_id') ?? 0),
-								})),
+								.map((row) => ({ ...row, store_id: listedStoreId })),
 						});
 					}
 					if (path === '/wcpos/v2/closures/last') return route.fulfill({ headers, json: rows[1] });
 					if (path.startsWith('/wcpos/v2/closures/'))
-						return route.fulfill({ headers, json: { ...rows[1], corrections } });
+						return route.fulfill({
+							headers,
+							json: { ...rows[1], store_id: listedStoreId, corrections },
+						});
 					if (
 						path === '/wcpos/v2/receipts/0' &&
 						url.searchParams.get('document')?.startsWith('closure:')
