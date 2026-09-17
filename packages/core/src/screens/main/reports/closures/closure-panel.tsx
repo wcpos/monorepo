@@ -25,6 +25,9 @@ import { ReceiptBody } from '../../receipt/receipt-body';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 
+// Tablet drawer width; the Reports host already excludes the navigation rail.
+const PANEL_WIDTH = 480;
+
 export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () => void }) {
 	const t = useT();
 	const [recounting, setRecounting] = React.useState(false);
@@ -83,7 +86,24 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 	};
 	const title = t('reports.closure_n', { n: recorded.number });
 	const content = (
-		<View testID="closure-panel" className="bg-card min-h-0 min-w-0 flex-1 overflow-hidden">
+		<View
+			testID="closure-panel"
+			className="bg-card min-h-0 min-w-0 flex-1 overflow-hidden"
+			style={
+				!phone && Platform.OS === 'web'
+					? {
+							position: 'absolute',
+							top: 0,
+							bottom: 0,
+							right: 0,
+							left: 'auto',
+							transform: 'none',
+							width: PANEL_WIDTH,
+							maxWidth: '100%',
+						}
+					: undefined
+			}
+		>
 			{phone && (
 				<Button
 					testID="closure-back"
@@ -206,13 +226,12 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 				side="right"
 				portalHost="reports"
 				className="bg-card flex-col gap-0 overflow-hidden p-0"
-				// Pin to the Reports overlay, not the intrinsic-width Radix dialog wrapper.
-				style={{
-					...(Platform.OS === 'web' ? ({ position: 'absolute', top: 0, right: 0 } as const) : {}),
-					width: 480,
-					maxWidth: '100%',
-					height: '100%',
-				}}
+				// Keep Dialog focus/close semantics, but no translated box around the web panel.
+				style={
+					Platform.OS === 'web'
+						? { display: 'contents' }
+						: { width: PANEL_WIDTH, maxWidth: '100%', height: '100%' }
+				}
 				closeButtonProps={{
 					testID: 'closure-close',
 					accessibilityLabel: t('common.close'),

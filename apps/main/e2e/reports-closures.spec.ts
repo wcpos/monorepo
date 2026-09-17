@@ -20,6 +20,33 @@ const now = new Date();
 const businessDays = [10, 11].map((day) =>
 	new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, day)).toISOString().slice(0, 10)
 );
+// Match the server fixture's date tree, rebased to the walk's UTC store and rolling period.
+function receiptDate(day: string, time: string) {
+	const date = new Date(`${day}T${time}:00Z`);
+	const display = (options: Intl.DateTimeFormatOptions) =>
+		new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'UTC', hour12: false }).format(date);
+	return {
+		datetime: display({ dateStyle: 'medium', timeStyle: 'short' }),
+		date: display({ dateStyle: 'medium' }),
+		time,
+		...Object.fromEntries(
+			(['short', 'long', 'full'] as const).flatMap((style) => [
+				[`datetime_${style}`, display({ dateStyle: style, timeStyle: style })],
+				[`date_${style}`, display({ dateStyle: style })],
+			])
+		),
+		date_ymd: day,
+		date_dmy: `${day.slice(8)}/${day.slice(5, 7)}/${day.slice(0, 4)}`,
+		date_mdy: `${day.slice(5, 7)}/${day.slice(8)}/${day.slice(0, 4)}`,
+		weekday_short: display({ weekday: 'short' }),
+		weekday_long: display({ weekday: 'long' }),
+		day: day.slice(8),
+		month: day.slice(5, 7),
+		month_short: display({ month: 'short' }),
+		month_long: display({ month: 'long' }),
+		year: day.slice(0, 4),
+	};
+}
 // Both required layouts run the same financial walk; all writes below stay inside the stub.
 const viewports = [
 	{ name: 'tablet', width: 1024, height: 768 },
@@ -37,6 +64,14 @@ const templateContent = readFileSync(
 	'utf8'
 )
 	.replace('{{i18n.copy}}', '<span data-testid="probe-copy">{{i18n.copy}}</span>')
+	.replace(
+		'{{closure.opened_at.datetime}}',
+		'<span data-testid="probe-opened">{{closure.opened_at.datetime}}</span>'
+	)
+	.replace(
+		'{{closure.closed_at.datetime}}',
+		'<span data-testid="probe-closed">{{closure.closed_at.datetime}}</span>'
+	)
 	.replace(/{{#closure.tenders}}[\s\S]*?{{\/closure.tenders}}/, (tenders) =>
 		tenders.replace(
 			'{{counted_display}}',
@@ -94,13 +129,15 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 			business_day: businessDays[index],
 			opened_at_gmt: `${businessDays[index]} 08:00:00`,
 			closed_at_gmt: `${businessDays[index]} 17:00:00`,
-			opened_at: {
-				...serverDocument.closure.opened_at,
-				datetime: `${businessDays[index]} 08:00 UTC`,
-			},
-			closed_at: {
-				...serverDocument.closure.closed_at,
-				datetime: `${businessDays[index]} 17:00 UTC`,
+			opened_at: receiptDate(businessDays[index], '08:00'),
+			closed_at: receiptDate(businessDays[index], '17:00'),
+			breakdowns: {
+				...serverDocument.closure.breakdowns,
+				movements: serverDocument.closure.breakdowns.movements.map((movement) => ({
+					...movement,
+					created_at_gmt: `${businessDays[index]} 10:00:00`,
+					created_at: receiptDate(businessDays[index], '10:00'),
+				})),
 			},
 			corrections_count: index,
 			print_count: 1,
@@ -331,7 +368,7 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 
 async function openClosures(page: Page) {
 	if ((page.viewportSize()?.width ?? 0) < 640) {
-		await page.getByTestId('pos-drawer-open-button').click();
+		await page.getByTestId('pos-drawer-open-button').first().click();
 	}
 	await expect(page.getByTestId('drawer-item-reports')).toBeVisible();
 	await page.getByTestId('drawer-item-reports').click();
@@ -369,14 +406,21 @@ for (const viewport of viewports) {
 				'Default closure probe'
 			);
 			const preview = page.getByTestId('receipt-preview-frame').contentFrame();
+			// Revert: replace the receipt date objects with raw timestamps; these markers disappear.
+			await expect(preview.getByTestId('probe-opened')).toHaveText(
+				/^[A-Z][a-z]{2} 11, \d{4}, 08:00$/
+			);
+			await expect(preview.getByTestId('probe-closed')).toHaveText(
+				/^[A-Z][a-z]{2} 11, \d{4}, 17:00$/
+			);
 			await expect(preview.getByTestId('probe-recorded-cash')).toHaveText('$178.00');
 			// This testID's deliberate referent is the Recorded → Settled pair, not a label.
 			await expect(page.getByTestId('closure-settled-counted.cash')).toContainText(/178.*→.*180/);
 			await expect(page.getByTestId(`closure-correction-${correctionId}`)).toContainText(
 				'Original probe recount'
 			);
-			await expect(page.getByTestId('closure-recount')).toBeInViewport();
-			await expect(page.getByTestId('closure-reprint')).toBeInViewport();
+			await expect(page.getByTestId('closure-recount')).toBeInViewport({ ratio: 1 });
+			await expect(page.getByTestId('closure-reprint')).toBeInViewport({ ratio: 1 });
 			await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-drill-in.png`) });
 			const printResponse = page.waitForResponse(
 				(response) =>

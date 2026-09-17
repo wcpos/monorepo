@@ -268,18 +268,21 @@ it('hosts the tablet panel in Reports with a full-width document and close actio
 	expect(screen.queryByTestId('closure-back')).toBeNull();
 });
 
-// Revert: let the nested dialog wrapper place/size the panel instead of pinning its edges.
+// Revert: restore the boxed Dialog content or let it position the panel from the centre.
 it('bounds the tablet panel beneath the bar with a contained body and separate footer', () => {
 	mockPhone = false;
 	const previous = { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
 	Object.assign(window, { innerWidth: 1024, innerHeight: 768 });
 	try {
 		render(<ClosurePanel row={row} onClose={() => {}} />);
-		const panel = screen.getByTestId('dialog-right');
+		expect(screen.getByTestId('dialog-right').style.display).toBe('contents');
+		const panel = screen.getByTestId('closure-panel');
 		expect(panel.style.position).toBe('absolute');
 		expect(panel.style.right).toBe('0px');
 		expect(panel.style.top).toBe('0px');
-		expect(panel.style.height).toBe('100%');
+		expect(panel.style.bottom).toBe('0px');
+		expect(panel.style.left).toBe('auto');
+		expect(panel.style.transform).toBe('none');
 		expect(panel.style.width).toBe('480px');
 		// The Reports host spans viewport minus rail; the panel cannot exceed that host.
 		expect(panel.style.maxWidth).toBe('100%');
