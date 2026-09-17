@@ -1,6 +1,7 @@
 import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
+import type { WcposRequestConfig } from './use-http-client';
 
-export type RequestConfig = AxiosRequestConfig;
+export type RequestConfig = WcposRequestConfig;
 
 export interface HttpErrorHandlerContext {
 	/** The original error that occurred */

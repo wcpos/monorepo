@@ -8,20 +8,9 @@ import {
 	type SyncCollectionName,
 } from '@wcpos/sync-engine';
 import { AppInfo } from '@wcpos/utils/app-info';
-import { formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { toRestRouteUrl } from '@wcpos/utils/rest-transport';
-import {
-	CLIENT_HEADER,
-	CLIENT_QUERY_PARAM,
-	formatClientSignal,
-	PROTOCOL_HEADER,
-	PROTOCOL_QUERY_PARAM,
-	sendsProtocolHeaders,
-	sendsProtocolQueryTwins,
-	SYNC_PROTOCOL_VERSION,
-} from '@wcpos/utils/sync-protocol';
+import { buildRequestPreamble } from '@wcpos/utils/request-preamble';
 
 import { evaluateClockSkew } from './clock-skew';
 import {
@@ -92,28 +81,6 @@ export type EngineFetcherScope = {
 	/** The scoped store id, sourced exactly as orders source `_pos_store`. */
 	storeId?: number | string | null;
 };
-
-/** The header carrying the till's store scope to the WCPOS v2 REST surface. */
-export const STORE_SCOPE_HEADER = 'X-WCPOS-Store';
-
-/**
- * Narrow a scope value to a store id worth sending, or null.
- *
- * Store `0` is the free plugin's "no store" default — the SAME sentinel the
- * order lane tests before stamping `_pos_store`, kept identical here on purpose.
- * Sending a placeholder would be worse than sending nothing: the server treats
- * an absent scope as "unknown" and refuses to overwrite a store-scoped price,
- * whereas a bogus `0` would read as a real scope.
- */
-function normalizeStoreScope(storeId: number | string | null | undefined): string | null {
-	if (storeId === null || storeId === undefined) return null;
-	if (typeof storeId === 'number') {
-		return Number.isFinite(storeId) && storeId > 0 ? String(storeId) : null;
-	}
-	const trimmed = storeId.trim();
-	if (trimmed === '' || trimmed === '0') return null;
-	return trimmed;
-}
 
 function isSyncCollectionName(name: string): name is SyncCollectionName {
 	return Object.prototype.hasOwnProperty.call(COLLECTION_VOCABULARY, name);
@@ -194,81 +161,33 @@ export function createEngineFetcher(input: {
 		const performAttempt = async (arcFields?: Record<string, unknown>): Promise<SettledAttempt> => {
 			const token = input.auth.credentials.getLatest().access_token;
 			tokenUsed = token;
-			const headers = new Headers(init?.headers ?? {});
-			// The WCPOS REST namespaces only construct for POS-flagged requests
-			// (woocommerce_pos_request()) — without this header every sync route
-			// answers rest_no_route and the engine stays degraded-empty.
-			headers.set('X-WCPOS', '1');
-			if (sendsProtocolHeaders(AppInfo.platform, input.auth.useProtocolHeaders)) {
-				headers.set(PROTOCOL_HEADER, String(SYNC_PROTOCOL_VERSION));
-				headers.set(CLIENT_HEADER, formatClientSignal(AppInfo.platform, AppInfo.version));
-			}
-			// Explicit product UA on native/Electron (B10, wcpos-infra#72): a blank
-			// or library UA on a POST earns a permanent AIOS IP ban. The fragment is
-			// EMPTY on web — Firefox honours fetch UA overrides, and replacing the
-			// battle-tested browser UA with a product string reads as a bot.
-			for (const [name, value] of Object.entries(AppInfo.userAgentHeader)) {
-				headers.set(name, value);
-			}
-			// Re-read per attempt: a store switch that lands between the absorbed 401
-			// and its retry must send the retry under the NEW scope, never the old one.
-			const storeScope = normalizeStoreScope(input.scope?.storeId);
-			if (storeScope !== null) {
-				headers.set(STORE_SCOPE_HEADER, storeScope);
-			} else {
-				// An unscoped engine must not inherit a stale header from init.
-				headers.delete(STORE_SCOPE_HEADER);
-			}
-			if (input.auth.useRestRouteParam) url = toRestRouteUrl(url, input.wpJsonRoot);
-			let finalUrl = url;
-			if (token) {
-				if (input.auth.useJwtAsParam) {
-					const parsed = new URL(url);
-					parsed.searchParams.set(
-						'authorization',
-						formatAuthorizationParam(token, input.auth.bareAuthParam ?? false)
-					);
-					finalUrl = parsed.toString();
-				} else {
-					headers.set('Authorization', `Bearer ${token}`);
-				}
-			}
-			const parsedUrl = new URL(finalUrl);
+			// Transport now uses resolveRestTransport (=== true); _layout.tsx resolves this flag to a strict boolean.
+			const prepared = buildRequestPreamble(
+				{
+					purpose: 'sync',
+					client: AppInfo,
+					site: {
+						use_jwt_as_param: input.auth.useJwtAsParam,
+						use_rest_route_param: input.auth.useRestRouteParam,
+						use_protocol_headers: input.auth.useProtocolHeaders,
+					},
+					accessToken: token,
+					storeId: input.scope?.storeId,
+					wpJsonRoot: input.wpJsonRoot,
+					bareAuthParam: input.auth.bareAuthParam ?? false,
+				},
+				{ url, method, headers: init?.headers }
+			);
+			const { headers } = prepared;
+			const parsedUrl = new URL(prepared.url);
 			// Plain permalinks carry the REST route in ?rest_route= with pathname
 			// '/', so the push exemption must classify from the route, not the path.
 			const restRoutePath = parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname;
 			const envelopeRequested = !restRoutePath.split('/').includes('push');
-			// Marker parity with the X-WCPOS header set above: hostile proxies
-			// strip custom request headers, and an unmarked request answers
-			// rest_no_route. The query-var twin (`wcpos`, registered in the
-			// plugin's Init::query_vars) rides the URL, which a header-stripping
-			// proxy cannot touch — sent unconditionally, pushes included, so
-			// marker delivery never depends on header survival (B7,
-			// wcpos-infra#72; prerequisite for B12's strict marker gating).
-			parsedUrl.searchParams.set('wcpos', '1');
-			if (sendsProtocolQueryTwins(AppInfo.platform, input.auth.useProtocolHeaders)) {
-				parsedUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
-				parsedUrl.searchParams.set(
-					CLIENT_QUERY_PARAM,
-					formatClientSignal(AppInfo.platform, AppInfo.version)
-				);
-			}
-			// Scope parity with the X-WCPOS-Store header set above: the server
-			// honours the store_id param only when NO header arrived (free#1646 —
-			// a stripping proxy produces absence; a sent header always wins), so
-			// republishing the scope here is a no-op until the header dies in
-			// transit — exactly the hostile case (B6, wcpos-infra#72).
-			if (storeScope !== null) {
-				parsedUrl.searchParams.set('store_id', storeScope);
-			} else {
-				// An unscoped engine must not inherit a stale param from the caller
-				// URL — mirror of the header delete above.
-				parsedUrl.searchParams.delete('store_id');
-			}
 			if (envelopeRequested) {
 				parsedUrl.searchParams.set('_wcpos_envelope', '1');
 			}
-			finalUrl = parsedUrl.toString();
+			const finalUrl = parsedUrl.toString();
 			const path = parsedUrl.pathname;
 			const startedAtMs = now();
 			// Captured at start: a completion after a store switch (epoch bump) is the
