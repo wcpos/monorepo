@@ -88,3 +88,14 @@ it('accepts a complete closure row without inspecting nonfinancial metadata', ()
 	const row = { ...recorded, server_number: null, approved_by: null, corrections: [] };
 	expect([...deriveSettled(row, []).touched]).toEqual([]);
 });
+
+// Revert: apply recount as a delta, trust its old variance, or mutate the recorded template envelope.
+it('projects the overnight corrections fixture without changing the recorded document', () => {
+	const local = require('./__fixtures__/closure-local-row.json');
+	const fixture = require('./__fixtures__/corrections-dst.json');
+	const before = JSON.stringify(local);
+	const result = deriveSettled(local, fixture.corrections);
+	expect(result.settled).toMatchObject(fixture.settled);
+	expect([...result.touched].sort()).toEqual(fixture.touched);
+	expect(JSON.stringify(local)).toBe(before);
+});

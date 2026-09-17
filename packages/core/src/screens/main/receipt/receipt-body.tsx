@@ -99,6 +99,7 @@ export function ReceiptBody({
 						testID="receipt-preview"
 					>
 						<WebView
+							testID="receipt-preview-frame"
 							ref={iframeRef as never}
 							{...(renderedHtml != null
 								? { srcDoc: renderedHtml }

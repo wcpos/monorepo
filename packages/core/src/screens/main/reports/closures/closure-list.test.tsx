@@ -5,6 +5,8 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { ClosureRow } from '@wcpos/database';
 
+import { useStoreDay } from '../../../../hooks/use-store-day';
+import { deriveSettled } from '../../../../services/register-session/settled-figures';
 import { ClosureList } from './closure-list';
 import { selectClosureRows } from './use-closure-rows';
 
@@ -21,14 +23,13 @@ jest.mock('../../hooks/use-currency-format', () => ({
 jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({ r: 'Front' }),
 }));
-jest.mock('../../../../hooks/use-store-day', () => ({
-	...jest.requireActual('../../../../hooks/use-store-day'),
-	useStoreDay: () => ({ timezone: 'America/Los_Angeles' }),
-}));
 jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
 	useClosureCollection: () => undefined,
 }));
-jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({}) }));
+let storeTimezone = 'America/Los_Angeles';
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: { timezone: storeTimezone }, site: {} }),
+}));
 jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: jest.fn() }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: jest.fn(),
@@ -67,6 +68,7 @@ function row(id: string, changes: Partial<ClosureRow> = {}): ClosureRow {
 	};
 }
 beforeEach(() => {
+	storeTimezone = 'America/Los_Angeles';
 	jest.useFakeTimers().setSystemTime(new Date('2026-10-01T12:00:00Z'));
 });
 afterEach(() => jest.useRealTimers());
@@ -163,4 +165,36 @@ it('dims and disables unavailable remote rows while retaining their figures', ()
 	expect(screen.getByTestId('closure-counted-1').textContent).toContain('8.00');
 	fireEvent.click(screen.getByTestId('closure-row-1'));
 	expect(select).not.toHaveBeenCalled();
+});
+
+// Revert: regroup by closing timestamp/current timezone instead of the stamped opening business day.
+it('keeps overnight closures on their stamped days across DST and a later store timezone edit', () => {
+	const base: ClosureRow = require('../../../../services/register-session/__fixtures__/closure-local-row.json');
+	const fixture = require('../../../../services/register-session/__fixtures__/corrections-dst.json');
+	jest.setSystemTime(new Date(fixture.now));
+	// Exercise the real hook's store-zone resolution with a mutable store record.
+	storeTimezone = fixture.timezone;
+	const source = fixture.closures.map((record: Partial<ClosureRow>) => ({ ...base, ...record }));
+	const scope = { from: '2026-10-31', to: '2026-11-01', registerId: base.register_id, storeId: 1 };
+	function List() {
+		const day = useStoreDay();
+		return <ClosureList rows={selectClosureRows(source, scope, day.timezone)} />;
+	}
+	const before = JSON.stringify(source);
+	const settled = deriveSettled(source[0], fixture.corrections);
+	expect(settled.settled).toMatchObject(fixture.settled);
+	const view = render(<List />);
+	const groups = () =>
+		screen.getAllByTestId(/^closure-day-/).map((node) => node.getAttribute('data-testid'));
+	expect(groups()).toEqual(['closure-day-2026-11-01', 'closure-day-2026-10-31']);
+	expect(screen.getByTestId('closure-day-2026-11-01').textContent).toBe('Today');
+	expect(screen.getByTestId('closure-day-2026-10-31').textContent).toBe('Yesterday');
+	// Both closed at 01:30 local, on opposite sides of the repeated hour.
+	for (const id of ['before-fallback', 'after-fallback'])
+		expect(screen.getByTestId(`closure-row-${id}`).textContent).toContain('01:30');
+	storeTimezone = 'Asia/Tokyo';
+	view.rerender(<List />);
+	expect(groups()).toEqual(['closure-day-2026-11-01', 'closure-day-2026-10-31']);
+	expect(screen.getByTestId('closure-counted-before-fallback').textContent).toContain('178.00');
+	expect(JSON.stringify(source)).toBe(before);
 });

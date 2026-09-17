@@ -1,4 +1,8 @@
-import type { ClosureRow } from '@wcpos/database';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import type { ClosureRow, RegisterSessionRow } from '@wcpos/database';
+import { renderLogiclessTemplate } from '@wcpos/receipt-renderer/render-template';
 
 import { buildClosureDocument, buildXReportDocument } from './closure-document';
 // Copied key contract from plugin templates/gallery/preview-data/closure.json (closure-template).
@@ -215,4 +219,76 @@ it('keeps the closure envelope through printer normalization and formatting', ()
 	);
 	expect(html).toContain('42 $250.00');
 	expect(formatted.order.printed).toEqual(doc.order.printed);
+});
+
+// Revert: remove a nested template field or stop transforming local maps into server rows.
+it('matches the local-row fixture to the server fixture key-for-key at every template section', () => {
+	const local: ClosureRow = require('./__fixtures__/closure-local-row.json');
+	const server = JSON.parse(readFileSync(join(__dirname, '__fixtures__/closure.json'), 'utf8'));
+	const doc = buildClosureDocument(local, { ...context, i18n: server.i18n });
+	// These are the objects read by the shipped template; local sync metadata is not its contract.
+	for (const [actual, expected] of [
+		[doc.closure.tenders, server.closure.tenders],
+		[doc.closure.breakdowns.payment_methods, server.closure.breakdowns.payment_methods],
+		[doc.closure.breakdowns.tax_rates, server.closure.breakdowns.tax_rates],
+		[doc.closure.breakdowns.opening_float, server.closure.breakdowns.opening_float],
+		[doc.closure.breakdowns.cashiers, server.closure.breakdowns.cashiers],
+		[doc.software, server.software],
+		[doc.i18n, server.i18n],
+	]) {
+		expect(actual).toEqual(expected);
+	}
+	for (const [actual, expected] of [
+		[doc.closure.opened_at, server.closure.opened_at],
+		[doc.closure.closed_at, server.closure.closed_at],
+		[
+			doc.closure.breakdowns.movements[0].created_at,
+			server.closure.breakdowns.movements[0].created_at,
+		],
+	]) {
+		// Intl punctuation/long timezone labels differ from PHP; the keys and store-local values don't.
+		expect(Object.keys(actual).sort()).toEqual(Object.keys(expected).sort());
+		expect(actual).toMatchObject({ time: expected.time, date_ymd: expected.date_ymd });
+	}
+	// The local labels may also retain register_name; the template reads register.name instead.
+	expect(doc.closure.breakdowns.labels).toMatchObject(server.closure.breakdowns.labels);
+	const { created_at: _date, ...movement } = server.closure.breakdowns.movements[0];
+	expect(doc.closure.breakdowns.movements[0]).toMatchObject(movement);
+	expect(Object.keys(doc.closure.breakdowns.movements[0]).sort()).toEqual(
+		Object.keys(server.closure.breakdowns.movements[0]).sort()
+	);
+	for (const key of Object.keys(server.closure).filter(
+		(key) => key.endsWith('_display') || key.startsWith('has_')
+	))
+		expect(doc.closure).toHaveProperty(key, server.closure[key]);
+	expect(doc.closure).toMatchObject({ number: 42, unsynced_count: 2 });
+	expect(doc.closure.breakdowns).toMatchObject({ transaction_count: 12, refund_count: 2 });
+	expect(doc.register.name).toBe(server.register.name);
+	expect(doc.fiscal).toMatchObject(server.fiscal);
+	const html = readFileSync(join(__dirname, '__fixtures__/closure-default.html'), 'utf8');
+	const rendered = renderLogiclessTemplate(html, doc);
+	for (const value of ['$178.00', '$120.00', 'Alex', 'Main register', '12:00', 'Petty cash'])
+		expect(rendered).toContain(value);
+});
+
+// Revert: pass a closure number/copy flag into X-report or omit the open session's expected tender.
+it('renders the X-report fixture through the shipped template without a closure number or copy', () => {
+	const fixture: {
+		session: RegisterSessionRow;
+		fiscal: Record<string, unknown>;
+		expected_tender: Record<string, string>;
+	} = require('./__fixtures__/x-report.json');
+	const server = require('./__fixtures__/closure.json');
+	const before = JSON.stringify(fixture.session);
+	const doc = buildXReportDocument(fixture.session, { ...context, i18n: server.i18n });
+	expect(doc.fiscal).toMatchObject(fixture.fiscal);
+	expect(doc.closure).not.toHaveProperty('number');
+	expect(doc.closure.tenders).toEqual([expect.objectContaining(fixture.expected_tender)]);
+	const html = readFileSync(join(__dirname, '__fixtures__/closure-default.html'), 'utf8');
+	const rendered = renderLogiclessTemplate(html, doc);
+	expect(rendered).toContain('X-report');
+	expect(rendered).toContain('$180.00');
+	expect(rendered).not.toContain('Closure ');
+	expect(rendered).not.toContain('COPY');
+	expect(JSON.stringify(fixture.session)).toBe(before);
 });
