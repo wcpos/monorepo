@@ -105,14 +105,16 @@ it('offers the local last closure Reprint offline when the register is closed', 
 	expect(get).not.toHaveBeenCalled();
 });
 // Revert: omit the X-report action, its expected drawer, or print failure feedback.
-it('prints the live X-report and reports a failed dispatch', async () => {
-	print.mockRejectedValueOnce(new Error('paper'));
+// Revert: stringify the known failure key, or replace unexpected errors with generic copy.
+it.each([
+	['reports.reprint_failed', 'Printing failed. Try again.'],
+	['paper', 'Error: paper'],
+])('prints the live X-report and displays the %s failure', async (message, expected) => {
+	print.mockRejectedValueOnce(new Error(message));
 	render(<SessionCard />);
 	expect(screen.getByTestId('session-expected').textContent).toContain('£155.00');
 	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() =>
-		expect(screen.getByTestId('session-print-error').textContent).toContain('paper')
-	);
+	await waitFor(() => expect(screen.getByTestId('session-print-error').textContent).toBe(expected));
 });
 
 const get = jest.fn();

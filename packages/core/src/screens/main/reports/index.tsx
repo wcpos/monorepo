@@ -124,7 +124,7 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 		actions.setFilter('register', next.registerId || undefined);
 		actions.setFilter(
 			'store',
-			next.storeId === undefined ? state.filters.store : String(next.storeId)
+			next.storeId === undefined ? state.filters.store : String(next.storeId || 'woocommerce-pos')
 		);
 		actions.setFilter('cashier', next.cashier === undefined ? undefined : String(next.cashier));
 	};

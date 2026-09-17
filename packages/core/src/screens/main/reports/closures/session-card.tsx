@@ -82,7 +82,11 @@ function SessionCardContent({
 		try {
 			await print();
 		} catch (error) {
-			setError(String(error));
+			setError(
+				error instanceof Error && error.message === 'reports.reprint_failed'
+					? t('reports.reprint_failed')
+					: String(error)
+			);
 		} finally {
 			setBusy(false);
 		}

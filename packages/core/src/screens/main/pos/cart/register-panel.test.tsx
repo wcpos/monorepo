@@ -159,6 +159,13 @@ it('hides every amount and the X report for blind cashiers', () => {
 	expect(screen.getByTestId('register-panel').textContent).not.toMatch(/£|155|570/);
 	expect(screen.queryByTestId('register-panel-print')).toBeNull();
 });
+// Revert: stringify the session-report failure instead of translating it in this caller too.
+it('translates a failed X-report dispatch in the register panel', async () => {
+	render(<RegisterPanel open onOpenChange={jest.fn()} />);
+	fireEvent.click(screen.getByTestId('register-panel-movements'));
+	fireEvent.click(screen.getByTestId('register-panel-print'));
+	await waitFor(() => expect(screen.getByText('reports.reprint_failed')).toBeTruthy());
+});
 it('records paid out and Undo inserts a void', async () => {
 	render(<RegisterPanel open onOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-panel-amount').textContent).toBe('£155.00');

@@ -208,6 +208,19 @@ describe('ReportsScreen query-state wiring', () => {
 		expect(latestState().sort).toEqual({ field: 'date_created_gmt', direction: 'desc' });
 	});
 
+	// Revert: stringify store zero as metadata scope "0" rather than the POS source.
+	it('restores the POS source after switching Sales to store 5 and back to store 0', () => {
+		mockStoreID = 0;
+		render(<ReportsScreen />);
+		expect(latestState().filters.store).toBe('woocommerce-pos');
+		mockNextStoreID = 5;
+		fireEvent.click(screen.getByTestId('past-scope'));
+		expect(latestState().filters.store).toBe('5');
+		mockNextStoreID = 0;
+		fireEvent.click(screen.getByTestId('past-scope'));
+		expect(latestState().filters.store).toBe('woocommerce-pos');
+	});
+
 	it('re-initializes report filters when the selected store scope changes', () => {
 		const { rerender } = render(<ReportsScreen />);
 		expect(latestState().filters.store).toBe('9');

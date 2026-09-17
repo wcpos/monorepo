@@ -72,7 +72,7 @@ export function useSessionReport(
 		...report,
 		doc: report,
 		print: async () => {
-			if ((await report.print()) !== true) throw new Error('Print was not dispatched');
+			if ((await report.print()) !== true) throw new Error('reports.reprint_failed');
 			if (!snapshot)
 				logXReportPrinted({
 					actor,

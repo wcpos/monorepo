@@ -63,7 +63,11 @@ export function RegisterPanel({
 		try {
 			await action();
 		} catch (e) {
-			setError(String(e));
+			setError(
+				e instanceof Error && e.message === 'reports.reprint_failed'
+					? t('reports.reprint_failed')
+					: String(e)
+			);
 		}
 	};
 	// Refused cash keeps the pane open on its own: it is the only record that the money moved,
