@@ -1325,6 +1325,8 @@ describe('server tender', () => {
 		'real bridge records once when checkout unmounts %s, before refresh finishes',
 		async (when) => {
 			resetCheckoutMode();
+			const checkoutMode = await import('../checkout-mode');
+			const selectReceipt = jest.spyOn(checkoutMode, 'selectReceipt');
 			let respond!: (value: unknown) => void;
 			let recorded!: () => void;
 			let refreshed!: () => void;
@@ -1367,7 +1369,15 @@ describe('server tender', () => {
 			await act(async () =>
 				respond({
 					data: {
-						payment: payment({ status: 'captured', capture_mode: 'server', method_id: 'terminal' }),
+						payment: payment({
+							status: 'captured',
+							capture_mode: 'server',
+							method_id: 'terminal',
+							kind: 'card',
+							amount: '92.95',
+							tendered: null,
+							change: null,
+						}),
 						order: {
 							status: 'completed',
 							total: '92.95',
@@ -1401,7 +1411,27 @@ describe('server tender', () => {
 			expect(
 				mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.completed')
 			).toHaveLength(1);
-			if (when === 'receipt-entry') host.unmount();
+			if (when === 'receipt-entry') {
+				expect(selectReceipt).toHaveBeenCalledTimes(1);
+				host.unmount();
+				act(() => {
+					checkoutMode.finishReceipt('order-1');
+					enterCheckout('order-1');
+				});
+				// Orders -> Re-open gives the same order a fresh tender flow.
+				mockPayload = { id: 42, number: '42', total: '92.95', meta_data: [] };
+				const reopened = renderHook(() => useTenderFlow(order));
+				await act(async () => {});
+				expect(reopened.result.current.terminalLeg).toBeNull();
+				expect(selectReceipt).toHaveBeenCalledTimes(1);
+				expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBeNull();
+				act(() => reopened.result.current.pickMethod('terminal'));
+				await act(async () => reopened.result.current.takeTender());
+				expect(mockManualPost).toHaveBeenCalledTimes(2);
+				expect(selectReceipt).toHaveBeenCalledTimes(1);
+				reopened.unmount();
+			}
+			selectReceipt.mockRestore();
 			bridge.unmount();
 			mockRealService = null;
 			mockManualPost.mockReset();

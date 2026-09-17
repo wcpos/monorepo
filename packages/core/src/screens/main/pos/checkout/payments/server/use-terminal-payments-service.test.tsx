@@ -224,7 +224,7 @@ it('names the cashier at the till when a capture lands, not the one who started 
 				orderNumber: '42',
 				row: { ...payment, status: 'pending' },
 			});
-			await waitFor(() => expect(service.get('completed-order')?.settlement?.payment.id).toBe(id));
+			await waitFor(() => expect(service.get('completed-order')).toBeNull());
 		};
 		await settle('first');
 		expect(mockInfo).toHaveBeenCalledWith(

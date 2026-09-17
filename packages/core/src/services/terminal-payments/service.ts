@@ -389,6 +389,13 @@ export class TerminalPaymentsService {
 			});
 			this.settlements.set(row.id, { ...result });
 			this.publish();
+		} else if (
+			result.saleComplete &&
+			!result.finishingError &&
+			!this.stopped &&
+			this.legs.get(orderUuid)?.leg.getState().row.id === row.id
+		) {
+			this.dismiss(orderUuid);
 		}
 	}
 	begin(input: BeginInput): TerminalLeg {
