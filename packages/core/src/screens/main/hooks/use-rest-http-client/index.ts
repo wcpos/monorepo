@@ -8,6 +8,7 @@ import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-t
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { reportUpdateRequired, type UpdateRequiredState } from '@wcpos/utils/update-required-gate';
 
@@ -256,13 +257,7 @@ export const useRestHttpClient = (endpoint = '') => {
 				params: {},
 				wcposPreamble: {
 					purpose: 'rest',
-					site: {
-						wp_api_url: site.wp_api_url,
-						use_rest_route_param: site.use_rest_route_param,
-						use_jwt_as_param: shouldUseJwtAsParam,
-						use_protocol_headers: site.use_protocol_headers,
-						wcpos_version: site.wcpos_version,
-					},
+					site: { ...toPreambleSite(site), use_jwt_as_param: shouldUseJwtAsParam },
 					accessToken: jwt,
 					storeId: store.id,
 				},

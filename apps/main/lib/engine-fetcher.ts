@@ -161,6 +161,7 @@ export function createEngineFetcher(input: {
 		const performAttempt = async (arcFields?: Record<string, unknown>): Promise<SettledAttempt> => {
 			const token = input.auth.credentials.getLatest().access_token;
 			tokenUsed = token;
+			// Transport now uses resolveRestTransport (=== true); _layout.tsx resolves this flag to a strict boolean.
 			const prepared = buildRequestPreamble(
 				{
 					purpose: 'sync',

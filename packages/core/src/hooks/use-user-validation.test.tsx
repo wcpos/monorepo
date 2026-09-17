@@ -1,9 +1,31 @@
 /**
  * @jest-environment jsdom
  */
+import 'whatwg-fetch';
+
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { useUserValidation } from './use-user-validation';
+
+const { useHttpClient: useSharedHttpClient } = jest.requireActual<
+	typeof import('@wcpos/hooks/use-http-client/use-http-client')
+>('@wcpos/hooks/use-http-client/use-http-client');
+const { http: sharedHttp } = jest.requireMock('@wcpos/hooks/use-http-client/http') as {
+	http: { request: jest.Mock };
+};
+
+jest.mock('@wcpos/hooks/use-http-client/http', () => ({
+	http: { request: jest.fn(), isCancel: () => false },
+}));
+jest.mock('@wcpos/hooks/use-http-client/request-queue', () => ({
+	scheduleRequest: (request: () => Promise<unknown>) => request(),
+}));
+jest.mock('@wcpos/hooks/use-http-client/request-state-manager', () => ({
+	requestStateManager: {
+		checkCanProceed: () => ({ ok: true }),
+		isTokenRefreshing: () => false,
+	},
+}));
 
 const mockGet = jest.fn();
 const mockIncrementalPatch = jest.fn(async () => undefined);
@@ -12,6 +34,11 @@ const mockBaseHttpClient = {};
 const mockAuthenticatedHttpClient = { get: mockGet };
 const mockRefreshHandler = jest.fn();
 const mockWakeCallbacks: (() => void)[] = [];
+
+jest.mock('@wcpos/utils/logger', () => ({
+	...jest.requireActual('@wcpos/utils/logger'),
+	getDatabaseEpoch: () => 0,
+}));
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -117,7 +144,7 @@ describe('useUserValidation capabilities', () => {
 		expect(mockIncrementalModify).not.toHaveBeenCalled();
 	});
 
-	it('joins the cashier route from a query-shaped base without a trailing slash', async () => {
+	it('passes a canonical cashier path and metadata from a query-shaped base', async () => {
 		mockGet.mockResolvedValue({ status: 200, data: { id: 7, display_name: 'Demo Cashier' } });
 		const wpUser = makeWpUser({ stores: [] });
 		const querySite = {
@@ -131,9 +158,41 @@ describe('useUserValidation capabilities', () => {
 
 		await waitFor(() => expect(mockGet).toHaveBeenCalled());
 		expect(mockGet.mock.calls[0]?.[0]).toBe('https://example.com/wp-json/wcpos/v2/cashier/7');
+		expect(mockGet.mock.calls[0]?.[1]).toMatchObject({
+			wcposPreamble: {
+				purpose: 'cashier',
+				site: { wp_api_url: querySite.wp_api_url, use_rest_route_param: true },
+			},
+		});
 	});
 
-	it('validates the cashier through query transport when enabled', async () => {
+	it('dispatches the cashier query URL through the real shared wrapper', async () => {
+		sharedHttp.request.mockResolvedValueOnce({
+			status: 200,
+			data: { id: 7, display_name: 'Demo Cashier' },
+		});
+		const { result: shared } = renderHook(() => useSharedHttpClient());
+		mockGet.mockImplementation((url, config) => shared.current.get(url, config));
+		const querySite = {
+			...site,
+			wp_api_url: 'https://example.com/?rest_route=/',
+			use_rest_route_param: true,
+		};
+		const wpUser = makeWpUser({ stores: [] });
+
+		const { result } = renderHook(() =>
+			useUserValidation({ site: querySite as never, wpUser: wpUser as never })
+		);
+
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+		expect(result.current.isValid).toBe(true);
+		const sent = sharedHttp.request.mock.calls.at(-1)?.[0];
+		expect(sent.url).toMatch(/^https:\/\/example\.com\/\?rest_route=%2Fwcpos%2Fv2%2Fcashier%2F7&/);
+		expect(new URL(sent.url).searchParams.get('wcpos')).toBe('1');
+		expect(sent).not.toHaveProperty('wcposPreamble');
+	});
+
+	it('passes the canonical cashier path and enabled query transport metadata', async () => {
 		mockGet.mockResolvedValue({ status: 200, data: { id: 7, display_name: 'Demo Cashier' } });
 		const wpUser = makeWpUser({ stores: [] });
 		const querySite = {

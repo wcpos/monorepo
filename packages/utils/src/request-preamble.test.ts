@@ -1,4 +1,8 @@
-import { buildRequestPreamble, type RequestPreambleContext } from './request-preamble';
+import {
+	buildClientHeaders,
+	buildRequestPreamble,
+	type RequestPreambleContext,
+} from './request-preamble';
 
 const url = 'https://shop.test/blog/wp-json/wcpos/v2/orders/42';
 const context: RequestPreambleContext = {
@@ -27,7 +31,7 @@ it.each([
 	);
 });
 
-it.each(['sync', 'rest', 'cashier', 'http'] as const)(
+it.each(['sync', 'rest', 'cashier'] as const)(
 	'purpose %s preserves each marker-channel contract',
 	(purpose) => {
 		const result = prepare({ purpose });
@@ -60,6 +64,20 @@ it.each([{ method: 'HEAD' }, { wcposHeaders: false }])(
 
 it('header authentication uses the supplied token', () => {
 	expect(prepare().headers.get('Authorization')).toBe('Bearer token');
+});
+it.each([
+	{ purpose: 'sync', accessToken: undefined },
+	{ purpose: 'rest', accessToken: undefined },
+	{ purpose: 'cashier', accessToken: undefined },
+] as const)('pins no-token parity for $purpose', (overrides) => {
+	const header = prepare(overrides);
+	expect(header.headers.get('Authorization')).toBe(
+		overrides.purpose === 'sync' ? null : 'Bearer undefined'
+	);
+	const query = prepare({ ...overrides, site: { use_jwt_as_param: true }, bareAuthParam: true });
+	expect(new URL(query.url).searchParams.get('authorization')).toBe(
+		overrides.purpose === 'sync' ? null : 'undefined'
+	);
 });
 it.each([
 	[undefined, undefined, 'Bearer token'],
@@ -163,24 +181,7 @@ it('unrelated headers and parameters survive and input objects are unchanged', (
 	expect(new URL(result.url).searchParams.getAll('tag')).toEqual(['a', 'b']);
 	expect(JSON.stringify({ context, request })).toBe(before);
 });
-it('http preserves relative URLs and header-only behavior', () => {
-	const result = prepare({ purpose: 'http' }, { url: '/image?raw=%20' });
-	expect(result.url).toBe('/image?raw=%20');
-	expect(result.headers.has('Authorization')).toBe(false);
-});
-
-it.each([false, true])('refreshed token replaces the selected retry channel: %s', (query) => {
-	const result = buildRequestPreamble(
-		{
-			...context,
-			purpose: 'rest',
-			refreshedAccessToken: 'fresh',
-			site: { use_jwt_as_param: query },
-		},
-		{ url: `${url}?authorization=old`, headers: { Authorization: 'Bearer old' } }
-	);
-	expect(new URL(result.url).searchParams.get('authorization')).toBe(
-		query ? 'Bearer fresh' : 'old'
-	);
-	expect(result.headers.get('Authorization')).toBe(query ? 'Bearer old' : 'Bearer fresh');
+it('header-only requests do not author authentication', () => {
+	const headers = buildClientHeaders(context.client, {}, { url: '/image?raw=%20' });
+	expect(headers.has('Authorization')).toBe(false);
 });

@@ -7,11 +7,13 @@ import {
 	isAsleepBlock,
 	requestStateManager,
 	useHttpClient,
+	type WcposRequestConfig,
 } from '@wcpos/hooks/use-http-client';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { deriveSyntheticPathBase, deriveSyntheticPathRoot } from '@wcpos/utils/rest-transport';
 import { useDocField } from '@wcpos/query';
 
@@ -165,18 +167,12 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					const pathApiUrl = deriveSyntheticPathBase(apiUrl);
 					const pathRoot = deriveSyntheticPathRoot(wpApiUrl ?? pathApiUrl);
 					const endpoint = `${pathApiUrl}cashier/${userId}`;
-					const requestConfig: import('axios').AxiosRequestConfig = {
+					const requestConfig: WcposRequestConfig = {
 						wcposPreamble: {
 							purpose: 'cashier',
 							accessToken,
 							wpJsonRoot: pathRoot,
-							site: {
-								wp_api_url: wpApiUrl,
-								use_rest_route_param: useRestRouteParam,
-								use_jwt_as_param: useJwtAsParam,
-								use_protocol_headers: useProtocolHeaders,
-								wcpos_version: wcposVersion,
-							},
+							site: toPreambleSite(site),
 						},
 					};
 
@@ -447,7 +443,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		wpUser,
 		userDB,
 		user,
-		site.uuid,
+		site,
 		wakeTick,
 	]);
 

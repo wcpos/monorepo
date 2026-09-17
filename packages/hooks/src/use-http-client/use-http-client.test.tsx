@@ -1,7 +1,7 @@
 import 'whatwg-fetch';
 
 import { renderHook } from '@testing-library/react';
-import { type AxiosRequestConfig, CanceledError, isCancel } from 'axios';
+import { CanceledError, isCancel } from 'axios';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 
@@ -44,7 +44,7 @@ jest.mock('./request-state-manager', () => ({
 /* eslint-disable import/first -- mocks must precede the code under test */
 import { http } from './http';
 import { requestStateManager } from './request-state-manager';
-import { useHttpClient } from './use-http-client';
+import { useHttpClient, type WcposRequestConfig } from './use-http-client';
 
 import type { HttpErrorHandler } from './types';
 /* eslint-enable import/first */
@@ -422,7 +422,7 @@ describe('useHttpClient network audit logs', () => {
 });
 
 describe('request preamble dispatch seam', () => {
-	const canonical: AxiosRequestConfig = {
+	const canonical: WcposRequestConfig = {
 		baseURL: 'https://shop.test/blog/wp-json/wcpos/v2/orders',
 		url: '/42',
 		wcposPreamble: {
@@ -455,6 +455,46 @@ describe('request preamble dispatch seam', () => {
 			expect(sent).not.toHaveProperty(key);
 		}
 	});
+	it('pins the normalized URL for Woo array, status and timestamp parameters', async () => {
+		const { result } = renderHook(() => useHttpClient());
+		await result.current.request({
+			...canonical,
+			params: {
+				include: [1, 2],
+				status: 'wc-completed',
+				after: '2026-01-01T00:00:00',
+				_fields: 'id,status',
+			},
+		});
+		const sent = (http.request as jest.Mock).mock.calls[0][0];
+		expect(sent.url).toBe(
+			'https://shop.test/blog/?rest_route=%2Fwcpos%2Fv2%2Forders%2F42' +
+				'&include%5B%5D=1&include%5B%5D=2&status=wc-completed&after=2026-01-01T00%3A00%3A00&_fields=id%2Cstatus' +
+				`&wcpos_protocol=2&wcpos_client=web%2F${AppInfo.version}&store_id=7`
+		);
+	});
+	it.each(['test', 'development'])(
+		'preserves URLSearchParams on HEAD in %s',
+		async (environment) => {
+			const previous = process.env.NODE_ENV;
+			const params = new URLSearchParams('tag=a&tag=b');
+			try {
+				process.env.NODE_ENV = environment;
+				const { result } = renderHook(() => useHttpClient());
+				await result.current.request({ ...canonical, method: 'HEAD', params });
+				const sent = (http.request as jest.Mock).mock.calls[0][0];
+				const query = new URL(sent.url).searchParams;
+				expect(query.getAll('tag')).toEqual(['a', 'b']);
+				expect(query.get('_method')).toBe('HEAD');
+				expect(query.get('XDEBUG_SESSION')).toBe(environment === 'development' ? 'start' : null);
+				expect(sent.headers).not.toHaveProperty('x-wcpos');
+				expect(params.toString()).toBe('tag=a&tag=b');
+			} finally {
+				if (previous === undefined) delete process.env.NODE_ENV;
+				else process.env.NODE_ENV = previous;
+			}
+		}
+	);
 	it.each([false, true])(
 		'fresh-token retry starts from canonical config (query auth: %s)',
 		async (query) => {
