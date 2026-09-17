@@ -97,8 +97,8 @@ function AppStack() {
 	/**
 	 * The sync engine every fluent read is served from (ADR 0023 increment 1b).
 	 * Bound to the site; store/cashier are scopes within it. Memoized on the
-	 * site + scope identity — store switching via `scope.switch()` is a
-	 * follow-up (increment-3).
+	 * site + scope identity — same-site switches reuse the engine through
+	 * `scope.switch()`; cross-site changes dispose and recreate it.
 	 */
 	const wpApiUrl = useDocField(site, (value) => value.wp_api_url) as string;
 	const wcposApiUrl = useDocField(site, (value) => value.wcpos_api_url) as string;

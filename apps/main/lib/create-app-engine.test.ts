@@ -31,8 +31,8 @@ function createEngineDouble(
 ) {
 	const dbListeners = new Set<(db: unknown) => void>();
 	let active: { identity: ScopeIdentity } | null = null;
-	const activate = (identity: ScopeIdentity) => {
-		active = { identity };
+	const activate = (identity: ScopeIdentity | null) => {
+		active = identity ? { identity } : null;
 		for (const cb of dbListeners) cb({});
 	};
 	return {
@@ -50,7 +50,7 @@ function createEngineDouble(
 		},
 		db$: jest.fn((cb: (db: unknown) => void) => {
 			dbListeners.add(cb);
-			cb(null);
+			cb(active ? {} : null);
 			return () => dbListeners.delete(cb);
 		}),
 		active: jest.fn(() => active),
@@ -61,7 +61,8 @@ function createEngineDouble(
 
 function loadCreateAppEngine(
 	createEngine: () => ReturnType<typeof createEngineDouble> = createEngineDouble,
-	platformIsWeb = false
+	platformIsWeb = false,
+	initiallyActive = true
 ) {
 	jest.resetModules();
 	const appMetricsObserver = jest.fn();
@@ -124,8 +125,12 @@ function loadCreateAppEngine(
 				holdAutomaticTicks?: () => boolean;
 				writeOutcomeBridge?: { moveTo: (name: string | null) => void };
 			},
-			_scope: unknown
-		) => createEngine()
+			scope: ScopeIdentity
+		) => {
+			const engine = createEngine();
+			if (initiallyActive) engine.activate(scope);
+			return engine;
+		}
 	);
 
 	jest.doMock('@wcpos/sync-engine', () => ({
@@ -381,7 +386,7 @@ describe('createAppSyncEngine scope cache', () => {
 		fetch.mockRestore();
 	});
 
-	it('does not let an auth retry adopt a later scope activation', async () => {
+	it('A → B → A invalidates the first A request’s clock-skew generation', async () => {
 		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
 		let resolveRefresh!: (token: string) => void;
 		const refreshAuth = jest.fn(
@@ -418,6 +423,7 @@ describe('createAppSyncEngine scope cache', () => {
 			...BASE_OPTIONS,
 			scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
 		});
+		createAppSyncEngine(BASE_OPTIONS);
 		resolveRefresh('refreshed-token');
 		await priorRequest;
 		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/orders');
@@ -635,7 +641,7 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(createRxdbSyncEngine).toHaveBeenCalledTimes(1);
 	});
 
-	it('the store header flips exactly when the engine activates the incoming scope', async () => {
+	it('publishes header, leadership and outcome channel at activation before switch settlement', async () => {
 		// Before activation the outgoing scope's lanes may still be running and
 		// must keep their own header; after it, the incoming open's hydrate,
 		// seed and prime must carry the new one.
@@ -648,15 +654,24 @@ describe('createAppSyncEngine scope cache', () => {
 		first = createEngineDouble(undefined, async (identity) => {
 			await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/orders');
 			seen.push(storeHeaderOf(fetch.mock.calls.at(-1)!));
+			expect(electWriteLeader).toHaveBeenCalledTimes(1);
 			first.activate(identity);
+			expect(electWriteLeader).toHaveBeenCalledTimes(2);
+			expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenLastCalledWith(
+				`wcpos-write-outcomes:${scopeDatabaseName(identity)}`
+			);
 			await ports.fetcher?.(
 				'https://store.example.test/wp-json/wcpos/v2/changes/config-fingerprint'
 			);
 			seen.push(storeHeaderOf(fetch.mock.calls.at(-1)!));
 		});
-		const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } = loadCreateAppEngine(
-			() => first
-		);
+		const {
+			createAppSyncEngine,
+			switchAppEngineScope,
+			createRxdbSyncEngine,
+			electWriteLeader,
+			writeOutcomeBridges,
+		} = loadCreateAppEngine(() => first, true);
 		try {
 			createAppSyncEngine(BASE_OPTIONS);
 			ports = createRxdbSyncEngine.mock.calls[0]![0];
@@ -672,9 +687,9 @@ describe('createAppSyncEngine scope cache', () => {
 		}
 	});
 
-	it('a same-key render during an awaited switch never rewrites the activated header', async () => {
+	it('a stale outgoing render neither switches back nor replaces activated auth', async () => {
 		// The engine has activated store-2 inside scope.switch but the switch
-		// has not resolved, so entry.key still names store-1. A memo recompute
+		// has not resolved, so render intent still names store-1. A memo recompute
 		// rendering store-1 is a cache hit; it must not put store-1 back on the wire.
 		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
 		const storeHeaderOf = (call: unknown[]) =>
@@ -684,6 +699,12 @@ describe('createAppSyncEngine scope cache', () => {
 		let seen: string | null = null;
 		let first!: ReturnType<typeof createEngineDouble>;
 		first = createEngineDouble(undefined, async (identity) => {
+			expect(first.scope.switch).toHaveBeenCalledTimes(1);
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: identity,
+				credentials: { getLatest: () => ({ access_token: 'incoming-token' }) },
+			});
 			first.activate(identity);
 			render();
 			await ports.fetcher?.(
@@ -705,7 +726,79 @@ describe('createAppSyncEngine scope cache', () => {
 				store: { id: 'store-2' },
 			});
 			expect(seen).toBe('store-2');
+			expect(first.scope.switch).toHaveBeenCalledTimes(1);
+			expect(new Headers(fetch.mock.calls.at(-1)![1]?.headers).get('Authorization')).toBe(
+				'Bearer incoming-token'
+			);
 		} finally {
+			fetch.mockRestore();
+		}
+	});
+
+	it('keeps outgoing auth until activation and adopts the matching pending cashier', async () => {
+		const first = createEngineDouble(undefined, () => new Promise(() => undefined));
+		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(() => first);
+		const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
+		try {
+			createAppSyncEngine(BASE_OPTIONS);
+			const fetcher = createRxdbSyncEngine.mock.calls[0]![0].fetcher!;
+			const incoming = {
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, cashierId: 'cashier-2' },
+				credentials: { getLatest: () => ({ access_token: 'cashier-2' }) },
+			};
+			createAppSyncEngine(incoming);
+			createAppSyncEngine({
+				...BASE_OPTIONS,
+				scope: { ...BASE_OPTIONS.scope, cashierId: 'cashier-3' },
+				credentials: { getLatest: () => ({ access_token: 'cashier-3' }) },
+			});
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/orders');
+			expect(new Headers(fetch.mock.calls.at(-1)![1]?.headers).get('Authorization')).toBe(
+				'Bearer test-token'
+			);
+			createAppSyncEngine({
+				...incoming,
+				credentials: { getLatest: () => ({ access_token: 'refreshed-cashier-2' }) },
+			});
+			expect(first.scope.switch).toHaveBeenCalledTimes(2);
+			first.activate(incoming.scope);
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/orders');
+			expect(new Headers(fetch.mock.calls.at(-1)![1]?.headers).get('Authorization')).toBe(
+				'Bearer refreshed-cashier-2'
+			);
+		} finally {
+			fetch.mockRestore();
+		}
+	});
+
+	it('collection-reset emissions do not re-elect leadership or reset clock-skew evaluation', async () => {
+		const first = createEngineDouble();
+		const {
+			createAppSyncEngine,
+			createRxdbSyncEngine,
+			networkWarn,
+			electWriteLeader,
+			writeOutcomeBridges,
+		} = loadCreateAppEngine(() => first, true);
+		const now = jest.spyOn(Date, 'now').mockReturnValue(0);
+		const fetch = jest
+			.spyOn(globalThis, 'fetch')
+			.mockImplementation(
+				async () =>
+					new Response(null, { status: 200, headers: { Date: 'Thu, 01 Jan 1970 00:03:00 GMT' } })
+			);
+		try {
+			createAppSyncEngine(BASE_OPTIONS);
+			const fetcher = createRxdbSyncEngine.mock.calls[0]![0].fetcher!;
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/orders');
+			first.activate({ ...BASE_OPTIONS.scope, site: 'HTTP://STORE.EXAMPLE.TEST/' });
+			await fetcher('https://store.example.test/wp-json/wcpos/v2/orders');
+			expect(networkWarn).toHaveBeenCalledTimes(1);
+			expect(electWriteLeader).toHaveBeenCalledTimes(1);
+			expect(writeOutcomeBridges[0]?.moveTo).toHaveBeenCalledTimes(1);
+		} finally {
+			now.mockRestore();
 			fetch.mockRestore();
 		}
 	});
@@ -896,7 +989,7 @@ describe('createAppSyncEngine scope cache', () => {
 		}
 	});
 
-	it('restores the fetcher auth options when a render-path switch rejects', async () => {
+	it('never adopts staged auth options when a render-path switch rejects', async () => {
 		const first = createEngineDouble(undefined, () => Promise.reject(new Error('scope refused')));
 		const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(() => first);
 		createAppSyncEngine(BASE_OPTIONS);
@@ -926,7 +1019,8 @@ describe('createAppSyncEngine scope cache', () => {
 	// meta (or, on a store-scoped product, into the global WooCommerce price).
 	describe('store scope header lifecycle', () => {
 		async function sentStoreHeader(
-			createRxdbSyncEngine: ReturnType<typeof loadCreateAppEngine>['createRxdbSyncEngine']
+			createRxdbSyncEngine: ReturnType<typeof loadCreateAppEngine>['createRxdbSyncEngine'],
+			expectedAuth = 'test-token'
 		) {
 			const fetch = jest
 				.spyOn(globalThis, 'fetch')
@@ -934,50 +1028,36 @@ describe('createAppSyncEngine scope cache', () => {
 			try {
 				const fetcher = createRxdbSyncEngine.mock.calls[0]?.[0].fetcher;
 				await fetcher!('https://store.example.test/wp-json/wcpos/v2/push/products');
-				return new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers).get('X-WCPOS-Store');
+				const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
+				expect(headers.get('Authorization')).toBe(`Bearer ${expectedAuth}`);
+				return headers.get('X-WCPOS-Store');
 			} finally {
 				fetch.mockRestore();
 			}
 		}
 
+		it('no activation sends no store header; null activation clears a previously published header', async () => {
+			const first = createEngineDouble();
+			const engines = [first, createEngineDouble()];
+			const { createAppSyncEngine, createRxdbSyncEngine, electWriteLeader, writeOutcomeBridges } =
+				loadCreateAppEngine(() => engines.shift()!, true, false);
+			createAppSyncEngine(BASE_OPTIONS);
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBeNull();
+			expect(createRxdbSyncEngine.mock.calls[0]![0].writePlaneOwner?.()).toBe(false);
+			expect(electWriteLeader).not.toHaveBeenCalled();
+			expect(writeOutcomeBridges[0]?.moveTo).not.toHaveBeenCalled();
+			first.activate(BASE_OPTIONS.scope);
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
+			first.activate(null);
+			expect(await sentStoreHeader(createRxdbSyncEngine)).toBeNull();
+			createAppSyncEngine(OTHER_SITE_OPTIONS);
+			first.activate(BASE_OPTIONS.scope);
+			expect(electWriteLeader).toHaveBeenCalledTimes(1);
+		});
+
 		it('sends the constructed scope store', async () => {
 			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
 			createAppSyncEngine(BASE_OPTIONS);
-
-			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
-		});
-
-		// The awaited store-switch flow. Committing on the next render instead would
-		// leave a window where the engine already pulls/pushes under the new scope
-		// while the header still names the outgoing store.
-		it('commits the new store as soon as the awaited switch settles', async () => {
-			const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } =
-				loadCreateAppEngine();
-			createAppSyncEngine(BASE_OPTIONS);
-
-			await switchAppEngineScope({
-				site: { wp_api_url: BASE_OPTIONS.scope.site },
-				wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
-				store: { id: 'store-2' },
-			});
-
-			// Asserted BEFORE any re-render: no cache hit has refreshed anything yet.
-			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-2');
-		});
-
-		it('keeps the old store when the awaited switch rejects', async () => {
-			const first = createEngineDouble(undefined, () => Promise.reject(new Error('refused')));
-			const { createAppSyncEngine, switchAppEngineScope, createRxdbSyncEngine } =
-				loadCreateAppEngine(() => first);
-			createAppSyncEngine(BASE_OPTIONS);
-
-			await expect(
-				switchAppEngineScope({
-					site: { wp_api_url: BASE_OPTIONS.scope.site },
-					wpCredentials: { id: BASE_OPTIONS.scope.cashierId },
-					store: { id: 'store-2' },
-				})
-			).rejects.toThrow('refused');
 
 			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
 		});
@@ -995,9 +1075,9 @@ describe('createAppSyncEngine scope cache', () => {
 			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-2');
 		});
 
-		// Mirrors the auth-option revert: an engine that never left the old scope
-		// must not keep writing as the store it failed to become.
-		it('restores the previous store when a render-path switch rejects', async () => {
+		// Like staged auth, a target that never activated
+		// must never replace the outgoing store on the wire.
+		it('never adopts the target store when a render-path switch rejects', async () => {
 			const first = createEngineDouble(undefined, () => Promise.reject(new Error('refused')));
 			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(() => first);
 			createAppSyncEngine(BASE_OPTIONS);
@@ -1016,7 +1096,7 @@ describe('createAppSyncEngine scope cache', () => {
 		// restore the snapshot taken at C's start — which was B, a scope the
 		// engine never reached. The engine sits on A while the header claims B,
 		// so a price edit is written against the wrong store.
-		it('falls back to the last ACTIVATED store after chained switch failures', async () => {
+		it('two rejected requests never publish their staged auth or scope', async () => {
 			const first = createEngineDouble(undefined, () => Promise.reject(new Error('refused')));
 			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine(() => first);
 			createAppSyncEngine(BASE_OPTIONS); // store-1 — the only scope ever activated
@@ -1024,10 +1104,12 @@ describe('createAppSyncEngine scope cache', () => {
 			createAppSyncEngine({
 				...BASE_OPTIONS,
 				scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+				credentials: { getLatest: () => ({ access_token: 'cashier-2' }) },
 			});
 			createAppSyncEngine({
 				...BASE_OPTIONS,
 				scope: { ...BASE_OPTIONS.scope, storeId: 'store-3' },
+				credentials: { getLatest: () => ({ access_token: 'cashier-3' }) },
 			});
 			await Promise.resolve();
 			await Promise.resolve();
@@ -1043,7 +1125,7 @@ describe('createAppSyncEngine scope cache', () => {
 		// The interleaving is the whole point: committing a success only while
 		// it is still the active target loses store-2 here, and the fallback
 		// silently rewinds two scopes past where the engine actually sits.
-		it('falls back to a superseded store that did activate', async () => {
+		it('an activated superseded request remains authoritative when its successor fails', async () => {
 			// Both deferred, settled in issue order — the engine serializes its
 			// switches, so a later one cannot settle before an earlier one.
 			let releaseFirstSwitch!: () => void;
@@ -1071,31 +1153,25 @@ describe('createAppSyncEngine scope cache', () => {
 			createAppSyncEngine({
 				...BASE_OPTIONS,
 				scope: { ...BASE_OPTIONS.scope, storeId: 'store-2' },
+				credentials: { getLatest: () => ({ access_token: 'cashier-2' }) },
 			});
 			// store-3 supersedes it as the active target, and will reject.
 			createAppSyncEngine({
 				...BASE_OPTIONS,
 				scope: { ...BASE_OPTIONS.scope, storeId: 'store-3' },
+				credentials: { getLatest: () => ({ access_token: 'cashier-3' }) },
 			});
 			// store-2 lands first: the engine IS on store-2.
 			releaseFirstSwitch();
 			await Promise.resolve();
 			await Promise.resolve();
+			expect(await sentStoreHeader(createRxdbSyncEngine, 'cashier-2')).toBe('store-2');
 			// Then store-3 fails, and must rewind to store-2 — not past it.
 			rejectSecondSwitch(new Error('refused'));
 			await Promise.resolve();
 			await Promise.resolve();
 
-			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-2');
-		});
-
-		it('refreshes the store on a same-scope cache hit', async () => {
-			const { createAppSyncEngine, createRxdbSyncEngine } = loadCreateAppEngine();
-			createAppSyncEngine(BASE_OPTIONS);
-			// Same cache key, re-rendered — the branch that refreshes the auth options.
-			createAppSyncEngine(BASE_OPTIONS);
-
-			expect(await sentStoreHeader(createRxdbSyncEngine)).toBe('store-1');
+			expect(await sentStoreHeader(createRxdbSyncEngine, 'cashier-2')).toBe('store-2');
 		});
 	});
 
@@ -1112,6 +1188,7 @@ describe('createAppSyncEngine scope cache', () => {
 		const target = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
 
 		createAppSyncEngine({ ...BASE_OPTIONS, scope: target });
+		await Promise.resolve();
 		await Promise.resolve();
 		createAppSyncEngine({ ...BASE_OPTIONS, scope: target });
 
