@@ -400,54 +400,100 @@ describe('PROCESS_INITIAL_PROPS', () => {
 });
 
 describe('HYDRATE_USER_SESSION', () => {
-	it("reuses the boot step's session without a second open", async () => {
-		createStoreDBMock.mockClear();
-		const storeDB = { addState: jest.fn(async () => ({})) };
-		createStoreDBMock.mockResolvedValue(storeDB);
-		const site = { uuid: 'site-1' };
-		const credentials = { uuid: 'credentials-1', patch: jest.fn() };
-		const store = { localID: '0123456789' };
-		let current: { siteID?: string; wpCredentialsID?: string; storeID?: string } | null = null;
-		const context = {
-			appState: {
-				get: () => current,
-				set: async (_key: string, update: () => typeof current) => {
-					current = update();
+	it.each([true, false])(
+		'refreshes cached documents after authorization sets flags to %s without a second open',
+		async (flag) => {
+			createStoreDBMock.mockClear();
+			const storeDB = { addState: jest.fn(async () => ({})) };
+			createStoreDBMock.mockResolvedValue(storeDB);
+			const site = {
+				uuid: 'site-1',
+				wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+				use_jwt_as_param: !flag,
+				use_rest_route_param: !flag,
+				use_protocol_headers: !flag,
+				getLatest: () => latestSite,
+				incrementalPatch: async (patch: Record<string, unknown>) => {
+					latestSite = { ...latestSite, ...patch };
+					return latestSite;
 				},
-			},
-			user: { uuid: 'user-1' },
-			userDB: {
-				sites: {
-					findOne: jest
-						.fn()
-						.mockReturnValueOnce({ exec: async () => null })
-						.mockReturnValue({ exec: async () => site }),
-					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-					incrementalUpsert: async () => site,
+			};
+			let latestSite = site;
+			const credentials = { uuid: 'credentials-1', access_token: 'token', patch: jest.fn() };
+			const store = { localID: '0123456789' };
+			let current: { siteID?: string; wpCredentialsID?: string; storeID?: string } | null = null;
+			const context = {
+				appState: {
+					get: () => current,
+					set: async (_key: string, update: () => typeof current) => {
+						current = update();
+					},
 				},
-				wp_credentials: { ...documentLookup(credentials), upsert: async () => credentials },
-				stores: {
-					findOne: jest
-						.fn()
-						.mockReturnValueOnce({ exec: async () => null })
-						.mockReturnValue({ exec: async () => store }),
-					bulkInsert: jest.fn(),
+				user: { uuid: 'user-1' },
+				userDB: {
+					sites: {
+						findOne: jest
+							.fn()
+							.mockReturnValueOnce({ exec: async () => null })
+							.mockReturnValue({ exec: async () => site }),
+						schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+						incrementalUpsert: async () => site,
+					},
+					wp_credentials: { ...documentLookup(credentials), upsert: async () => credentials },
+					stores: {
+						findOne: jest
+							.fn()
+							.mockReturnValueOnce({ exec: async () => null })
+							.mockReturnValue({ exec: async () => store }),
+						bulkInsert: jest.fn(),
+					},
 				},
-			},
-			initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
-		} as unknown as HydrationContext;
-		const bootStep = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
-		const hydrateStep = hydrationSteps.find(({ name }) => name === 'HYDRATE_USER_SESSION')!;
-		const boot = await bootStep.execute(context);
-		const hydrated = await hydrateStep.execute({ ...context, ...boot });
-		expect(createStoreDBMock).toHaveBeenCalledTimes(1);
-		expect(hydrated).toBe(boot.session);
-		expect(hydrated.storeDB).toBe(storeDB);
+				initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
+			} as unknown as HydrationContext;
+			const database = Object.assign(context.userDB!, {
+				addState: async () => context.appState,
+				users: documentLookup(context.user),
+			});
+			jest.requireMock('@wcpos/database').createUserDB.mockResolvedValue(database);
+			jest.requireMock('./initial-props').initialProps = context.initialProps;
+			const originalFetch = platformFetchRef.fn;
+			platformFetchRef.fn = jest.fn(async (url) => ({
+				status: flag && !String(url).includes('rest_route') ? 404 : 200,
+				ok: !flag || String(url).includes('rest_route'),
+				json: async () => ({
+					v: 1,
+					headers: { authorization: { received: !flag, length: 12 } },
+					cors: { reflects_request_headers: flag },
+					params: { authorization: true, wcpos: true, store_id: true },
+				}),
+			}));
+			try {
+				for (const step of hydrationSteps) {
+					if (!step.shouldExecute || step.shouldExecute(context)) {
+						Object.assign(context, await step.execute(context));
+					}
+				}
+			} finally {
+				platformFetchRef.fn = originalFetch;
+				jest.requireMock('./initial-props').initialProps = null;
+			}
+			expect(context.site).toBe(latestSite);
+			expect(context.site).not.toBe(site);
+			expect(context.site).toMatchObject({
+				use_jwt_as_param: flag,
+				use_rest_route_param: flag,
+				use_protocol_headers: flag,
+			});
+			expect(createStoreDBMock).toHaveBeenCalledTimes(1);
+			expect(context.storeDB).toBe(storeDB);
+			expect(context.extraData).toBe(context.session?.extraData);
+			const hydrateStep = hydrationSteps.find(({ name }) => name === 'HYDRATE_USER_SESSION')!;
 
-		current = { siteID: site.uuid, wpCredentialsID: credentials.uuid, storeID: 'another-store' };
-		await hydrateStep.execute({ ...context, ...boot });
-		expect(createStoreDBMock).toHaveBeenCalledTimes(2);
-	});
+			current = { siteID: site.uuid, wpCredentialsID: credentials.uuid, storeID: 'another-store' };
+			await hydrateStep.execute(context);
+			expect(createStoreDBMock).toHaveBeenCalledTimes(2);
+		}
+	);
 
 	it('returns incomplete persisted hydration for provider recovery rather than committing or throwing a presence assertion', async () => {
 		const credentials = { uuid: 'credentials-1' };
