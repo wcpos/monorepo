@@ -225,7 +225,7 @@ it('fetches the actual last closure when the bound closed register has no local 
 	expect(reprint).not.toHaveBeenCalled();
 });
 
-// Revert: skip closures/last when a stale local last closure exists.
+// Revert: show an actionable local card while closures/last is pending, or ignore its server row.
 it('replaces local A with authoritative B for the bound register card and Reprint', async () => {
 	session = null;
 	lastClosure = { id: 'A' };
@@ -236,8 +236,10 @@ it('replaces local A with authoritative B for the bound register card and Reprin
 	get.mockImplementation(async (url) => (url === 'sessions' ? { data: [] } : pending));
 	const view = render(<SessionCard />);
 	expect(screen.getByTestId('reports-session-card').textContent).toContain('Register closed');
+	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(true);
+	expect(screen.getByTestId('session-unavailable').textContent).toContain('Loading');
 	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(1));
+	expect(reprint).not.toHaveBeenCalled();
 	await waitFor(() =>
 		expect(get).toHaveBeenCalledWith('closures/last', {
 			params: { register_id: 'front', store_id: 1 },
@@ -251,9 +253,39 @@ it('replaces local A with authoritative B for the bound register card and Reprin
 	);
 	fireEvent.click(screen.getByTestId('reports-session-print'));
 	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
-	expect(reprint).toHaveBeenCalledTimes(1);
+	expect(reprint).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('session-unavailable')).toBeNull();
 	online = false;
 	view.rerender(<SessionCard />);
 	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(2));
+	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(1));
+});
+
+// Revert: hide the lookup error behind the local card or allow its stale closure to print.
+it('disables the local Reprint after a failed lookup and retries to the server closure', async () => {
+	session = null;
+	lastClosure = { id: 'A' };
+	get.mockImplementation(async (url) => {
+		if (url === 'sessions') return { data: [] };
+		throw new Error('lookup failed');
+	});
+	render(<SessionCard />);
+	await waitFor(() => expect(screen.getByTestId('session-retry-front')).toBeTruthy());
+	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(true);
+	expect(screen.getByTestId('session-unavailable').textContent).toBe('Could not load closures');
+	fireEvent.click(screen.getByTestId('reports-session-print'));
+	expect(reprint).not.toHaveBeenCalled();
+	get.mockImplementation(async (url) => ({
+		data: url === 'sessions' ? [] : { id: 'B', number: 10 },
+	}));
+	fireEvent.click(screen.getByTestId('session-retry-front'));
+	await waitFor(() => expect(screen.queryByTestId('session-unavailable')).toBeNull());
+	expect(screen.queryByTestId('session-retry-front')).toBeNull();
+	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(false);
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({ document: 'closure:B', isReprint: true })
+	);
+	fireEvent.click(screen.getByTestId('reports-session-print'));
+	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+	expect(reprint).not.toHaveBeenCalled();
 });

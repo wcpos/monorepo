@@ -32,7 +32,11 @@ export function SessionCard() {
 				key={`${store.id}:${data.binding.registerId}`}
 				register={{ id: data.binding.registerId, name: data.binding.registerName ?? '' }}
 				storeId={store.id}
-				localCard={data.lastClosure ? <SessionCardContent {...data} print={print} /> : undefined}
+				localCard={
+					data.lastClosure
+						? (reason) => <SessionCardContent {...data} print={print} unavailableReason={reason} />
+						: undefined
+				}
 			/>
 		);
 	}
@@ -47,6 +51,7 @@ function SessionCardContent({
 	lastClosure,
 	print,
 	unavailable = false,
+	unavailableReason,
 	storeId,
 }: {
 	session: Pick<RegisterSessionRow, 'status' | 'opened_at_gmt' | 'opened_by'> | null;
@@ -57,6 +62,7 @@ function SessionCardContent({
 	lastClosure: unknown;
 	print: () => Promise<unknown>;
 	unavailable?: boolean;
+	unavailableReason?: string;
 	storeId?: number;
 }) {
 	const active = session?.status === 'open' || session?.status === 'counting';
@@ -122,13 +128,17 @@ function SessionCardContent({
 					testID="reports-session-print"
 					variant="outline"
 					className="min-h-12 self-start"
-					disabled={busy || unavailable}
+					disabled={busy || unavailable || !!unavailableReason}
 					onPress={dispatch}
 				>
 					{t(active ? 'register.print_x_report' : 'reports.reprint')}
 				</Button>
 			)}
-			{unavailable && <Text testID="session-unavailable">{t('reports.unavailable_offline')}</Text>}
+			{(unavailable || unavailableReason) && (
+				<Text testID="session-unavailable">
+					{unavailableReason ?? t('reports.unavailable_offline')}
+				</Text>
+			)}
 			{!!error && (
 				<Text testID="session-print-error" className="text-destructive">
 					{error}
@@ -146,7 +156,7 @@ export function RemoteSessionCard({
 }: {
 	register: { id: string; name: string };
 	storeId?: number;
-	localCard?: React.ReactNode;
+	localCard?: (unavailableReason?: string) => React.ReactNode;
 }) {
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
@@ -206,7 +216,17 @@ export function RemoteSessionCard({
 	return (
 		<View testID={`remote-session-${register.id}`} className={!online ? 'opacity-50' : ''}>
 			{localCard && (!online || data.status !== 'ready') ? (
-				localCard
+				localCard(
+					online
+						? t(
+								data.status === 'denied'
+									? 'reports.no_access'
+									: data.status === 'error'
+										? 'reports.load_failed'
+										: 'common.loading'
+							)
+						: undefined
+				)
 			) : data.status === 'ready' ? (
 				<SessionCardContent
 					storeId={storeId}
