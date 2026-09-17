@@ -543,7 +543,8 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 	}
 
 	return {
-		tick: (signal) => {
+		tick: async (signal) => {
+			if (activationAbort) await activation;
 			const run = chain.then(
 				() => runTick(signal),
 				() => runTick(signal)
@@ -592,8 +593,6 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			// the prime (see below), abort or not.
 			let writing = false;
 			const run = async () => {
-				await switched;
-				if (!deps.needsPrime(scopeId)) return null;
 				if (signal.aborted) return null;
 				if (deps.connectivity() === 'offline') return null;
 				if (deps.manager.activeScope === null) return null;
@@ -669,29 +668,35 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					throw error;
 				}
 			};
-			const predecessor = chain.then(
-				() => undefined,
-				() => undefined
-			);
-			const queued = chain.then(run, run);
-			// A checkpoint or fetch port that never settles must not wedge the lane
-			// behind this prime: once the caller's deadline aborts, the chain moves
-			// on and later ticks run. Safe while the prime is still READING or
-			// FETCHING — it holds no shared state (own bound fetcher) and writes
-			// nothing once aborted. Once its blob write has begun the chain waits
-			// for it regardless: a late write landing after a tick's persist would
-			// replace that tick's cursor, baselines and ledger with the empty prime.
-			// Only the prime's OWN run is skipped: the chain still waits for whatever
-			// was queued before it, so an abort during an in-flight tick never lets
-			// the next tick overlap that one.
-			const ownRunOrAborted = Promise.race([queued, aborted.then(() => (writing ? queued : null))]);
-			chain = predecessor
-				.then(() => ownRunOrAborted)
-				.then(
+			const queuePrime = () => {
+				const predecessor = chain.then(
 					() => undefined,
 					() => undefined
 				);
-			// Reserve admission AND chain position before switchTo can publish the database.
+				const queued = chain.then(run, run);
+				// A checkpoint or fetch port that never settles must not wedge the lane
+				// behind this prime: once the caller's deadline aborts, the chain moves
+				// on and later ticks run. Safe while the prime is still READING or
+				// FETCHING — it holds no shared state (own bound fetcher) and writes
+				// nothing once aborted. Once its blob write has begun the chain waits
+				// for it regardless: a late write landing after a tick's persist would
+				// replace that tick's cursor, baselines and ledger with the empty prime.
+				// Only the prime's OWN run is skipped: the chain still waits for whatever
+				// was queued before it, so an abort during an in-flight tick never lets
+				// the next tick overlap that one.
+				const ownRunOrAborted = Promise.race([
+					queued,
+					aborted.then(() => (writing ? queued : null)),
+				]);
+				chain = predecessor
+					.then(() => ownRunOrAborted)
+					.then(
+						() => undefined,
+						() => undefined
+					);
+				return queued;
+			};
+			// Reserve admission before switchTo can publish the database.
 			let release!: () => void;
 			activation = new Promise<void>((resolve) => {
 				release = resolve;
@@ -704,6 +709,8 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						rejectSwitch(error);
 					}
 					await switched;
+					if (!deps.needsPrime(scopeId)) return;
+					const queued = queuePrime();
 					const timeout = timers.setTimeout(() => controller.abort(), 5_000);
 					try {
 						await Promise.race([queued, aborted]);

@@ -333,6 +333,45 @@ it('moved scope drops prime', async () => {
 	expect(await h.readBlob('b', 'checkpoint:change-signal')).toBeNull();
 });
 
+it('returning to a bootstrapped scope admits immediately while a tick is in flight', async () => {
+	// Waiting for the tick before checking needsPrime blocks both activation and admission.
+	let needsPrime = true;
+	const h = await setup({ needsPrime: () => needsPrime });
+	await h.lane.activated('a');
+	needsPrime = false;
+	const checkpoint = await h.readBlob('a', 'checkpoint:change-signal');
+	const reading = deferred<void>();
+	const answer = deferred<string | null>();
+	h.readBlob.mockImplementationOnce(() => {
+		reading.resolve();
+		return answer.promise;
+	});
+	let tickSettled = false;
+	const tick = h.lane.tick().then((report) => {
+		tickSettled = true;
+		return report;
+	});
+	await reading.promise;
+	let activated = false;
+	let admittedScope: string | undefined;
+	const activation = h.lane.activated('a').then(() => {
+		activated = true;
+	});
+	const admission = h.lane.admitted().then((bound) => {
+		admittedScope = bound.scopeId;
+	});
+	try {
+		await flushMicrotasks();
+		expect(activated).toBe(true);
+		expect(admittedScope).toBe('a');
+		expect(tickSettled).toBe(false);
+		expect(h.deadlines.size).toBe(0);
+	} finally {
+		answer.resolve(checkpoint);
+		await Promise.all([tick, activation, admission]);
+	}
+});
+
 it('canceled prime retains predecessor', async () => {
 	// Hold the tick's commit, not its poll (the real hybrid serializes polls itself).
 	// Releasing the predecessor early lets a second tick fetch before this write settles.
