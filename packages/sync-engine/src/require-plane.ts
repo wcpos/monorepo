@@ -33,6 +33,7 @@ import {
 	type Fetcher,
 	type RemoteId,
 	remoteIdOrNull,
+	type ScopeBound,
 	type StoreScopeManager,
 	type SyncObserver,
 	wooIdOf,
@@ -110,7 +111,7 @@ const ACTIVE_ORDER_WAIT_TIMEOUT_MS = ORDER_SCHEDULER_LEASE_FOR_MS * 2;
  * ACTIVE_ORDER_WAIT_TIMEOUT_MS (60s) without emitting progress — and far above any healthy
  * execution (0.5–12s observed on the same run). The clock resets on drain progress events
  * AND on every settled demand-path request (the requirementFetcher seam), so a legitimately
- * long multi-page or multi-chunk walk never trips; and it is armed only AFTER awaitReady
+ * long multi-page or multi-chunk walk never trips; and it is armed only AFTER admission
  * settles, so the queue-before-ready startup wait is never counted as a stall.
  */
 export const REQUIRE_STALL_TIMEOUT_MS = 90_000;
@@ -258,9 +259,9 @@ export type RequirementHandle = {
 };
 
 export type RequirePlaneDeps = {
-	/** Settles once the initial scope open settled — require() before ready
+	/** Captures the scope after initial startup and scope activation settle — require() before ready
 	 * must queue, not reject with 'no active scope'. */
-	awaitReady: () => Promise<void>;
+	admitted: () => Promise<ScopeBound>;
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
 	storeIdFor?: (scopeId: string) => string | number | undefined;
@@ -743,10 +744,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 
 	async function executeOne(
 		item: QueuedRequirement,
+		bound: ScopeBound,
 		onProgressActivity?: () => void
 	): Promise<CoverageOutcome> {
-		await deps.awaitReady();
-		return deps.manager.runGuarded(async (bound) => {
+		return (async () => {
 			const database = deps.databaseFor(bound.scopeId);
 			if (!database) throw new Error('require: scope database not open');
 			const coverage = deps.coverageFor(bound.scopeId);
@@ -1411,7 +1412,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				missingRecordIds: [],
 				reason: `refreshed ${descriptor.collection}`,
 			};
-		});
+		})();
 	}
 
 	async function pump(): Promise<void> {
@@ -1428,16 +1429,15 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					forgetSearch(next);
 					continue; // release() already resolved it — just drop the entry.
 				}
-				// The queue-before-ready contract (RequirePlaneDeps.awaitReady): a requirement
-				// declared before the initial scope open settles QUEUES. That wait is startup,
-				// not a stall, so it happens BEFORE the watchdog is armed — a >90s database
-				// open/migration must never reject queued requirements as stalled. A stalled
-				// BOOT has its own watchdog (readiness-watchdog.ts / engine.ready-stalled). A
-				// rejection here is surfaced per-entry by executeOne's own awaitReady instead.
+				// Startup/activation waits are not stalls. Admission failures use the
+				// same per-entry settlement path as execution errors below.
+				let bound: ScopeBound | undefined;
+				let admissionError: unknown;
 				try {
-					await deps.awaitReady();
-				} catch {
-					/* executeOne rejects this entry through the normal error path below */
+					// Await admission before arming the stall watchdog: a >90 s database open belongs to engine.ready-stalled.
+					bound = await deps.admitted();
+				} catch (error) {
+					admissionError = error;
 				}
 				if (next.released) {
 					forgetSearch(next);
@@ -1463,7 +1463,9 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					onStall: declareStalled,
 				});
 				watchdog.reset();
-				const execution = executeOne(next, watchdog.reset);
+				const execution = bound
+					? executeOne(next, bound, watchdog.reset)
+					: Promise.reject<CoverageOutcome>(admissionError);
 				const raced = await Promise.race([
 					execution.then(
 						(outcome) => ({ outcome }) as const,

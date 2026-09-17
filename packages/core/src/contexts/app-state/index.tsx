@@ -13,9 +13,14 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
-import { getEngineScopeSwitcher } from './engine-scope-port';
 import { hydrateUserSession, switchUserSessionStore } from './hydration-steps';
-import { IncompleteStoreSessionError, missingStoreSessionFields } from './store-session';
+import {
+	clearStoreSession as clearPersistedStoreSession,
+	commitStoreSession,
+	IncompleteStoreSessionError,
+	missingStoreSessionFields,
+	SIGNED_OUT_SESSION,
+} from './store-session';
 
 import type {
 	CurrentSessionIDs,
@@ -58,15 +63,6 @@ export {
 	STORE_SESSION_FIELDS,
 	type StoreSessionField,
 } from './store-session';
-
-/** The React-state half of signing out: every session field cleared. */
-const SIGNED_OUT_SESSION: Partial<HydrationContext> = {
-	site: undefined,
-	wpCredentials: undefined,
-	store: undefined,
-	storeDB: undefined,
-	extraData: undefined,
-};
 
 const sessionLogger = getLogger(['wcpos', 'app-state', 'session']);
 
@@ -142,19 +138,20 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 				wpCredentialsID,
 				storeID,
 			});
-			const missing = missingStoreSessionFields(sessionData);
-			if (missing.length > 0) {
-				reportIncompleteSession(missing, { siteID, wpCredentialsID, storeID });
-				return;
+			try {
+				updateAppState(
+					await commitStoreSession(state.appState!, {
+						ids: { siteID, wpCredentialsID, storeID },
+						session: sessionData,
+					})
+				);
+			} catch (error) {
+				if (error instanceof IncompleteStoreSessionError) {
+					reportIncompleteSession(error.missingFields, { siteID, wpCredentialsID, storeID });
+					return;
+				}
+				throw error;
 			}
-
-			await state.appState!.set('current', () => ({
-				siteID,
-				wpCredentialsID,
-				storeID,
-			}));
-
-			updateAppState(sessionData);
 		},
 		[state.appState, state.userDB, updateAppState]
 	);
@@ -165,8 +162,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	 * recovery below, so anything added to signing out reaches both.
 	 */
 	const clearStoreSession = React.useCallback(async () => {
-		await state.appState!.set('current', () => null);
-		updateAppState(SIGNED_OUT_SESSION);
+		updateAppState(await clearPersistedStoreSession(state.appState!));
 	}, [state.appState, updateAppState]);
 
 	const logout = React.useCallback(async () => {
@@ -194,9 +190,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
 			let sessionData;
 			try {
-				sessionData = await switchUserSessionStore(state.userDB!, state.appState!, store.localID!, {
-					switchEngineScope: getEngineScopeSwitcher() ?? undefined,
-				});
+				sessionData = await switchUserSessionStore(state.userDB!, state.appState!, store.localID!);
 			} catch (error) {
 				if (error instanceof IncompleteStoreSessionError) {
 					// The target store's rows are not all present. The aborted switch

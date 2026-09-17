@@ -232,6 +232,7 @@ function engineWith(input: {
 	checkpoints?: EngineStringStore;
 }): RxdbSyncEngine {
 	return createEngineHarness({
+		protocolDefaults: false,
 		site: SITE,
 		identity: input.identity,
 		storage: input.storage,
@@ -845,6 +846,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.head = 9_000;
 
 		const harness = createEngineHarness({
+			protocolDefaults: false,
 			site: SITE,
 			identity,
 			storage: memoryEngineStorage(),

@@ -553,11 +553,15 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 
 	it('sync() without a lane ticks every registered lane in the documented order', async () => {
 		let now = 1_000;
-		const engine = engineWith({
+		const engine = createEngineHarness({
+			site: SITE,
+			identity: freshIdentities().a,
 			mode: 'manual',
 			now: () => ++now,
-			fetcher: async () => new Response('{}', { status: 500 }),
-		});
+			fetch: async () => new Response('{}', { status: 500 }),
+			protocolDefaults: false,
+			awaitReady: false,
+		}).engine;
 		await engine.ready;
 
 		await engine.sync();
@@ -581,11 +585,15 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 
 	it('gate2 #516 item 6: the seed lanes tick BEFORE the scheduler drain in a full sync() — no self-seeded work left pending', async () => {
 		let now = 1_000;
-		const engine = engineWith({
+		const engine = createEngineHarness({
+			site: SITE,
+			identity: freshIdentities().a,
 			mode: 'manual',
 			now: () => ++now,
-			fetcher: async () => new Response('{}', { status: 500 }),
-		});
+			fetch: async () => new Response('{}', { status: 500 }),
+			protocolDefaults: false,
+			awaitReady: false,
+		}).engine;
 		await engine.ready;
 
 		await engine.sync();

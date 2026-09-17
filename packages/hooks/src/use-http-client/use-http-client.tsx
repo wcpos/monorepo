@@ -1,19 +1,17 @@
 import * as React from 'react';
 
+import axios, { AxiosHeaders, type RawAxiosHeaders } from 'axios';
 import set from 'lodash/set';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getDatabaseEpoch, getLogger, mapExceptionToCode } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
-	CLIENT_HEADER,
-	formatClientSignal,
-	parseUpdateRequiredBody,
-	PROTOCOL_HEADER,
-	sendsProtocolHeaders,
-	SYNC_PROTOCOL_VERSION,
-	type UpdateRequiredDetails,
-} from '@wcpos/utils/sync-protocol';
+	buildClientHeaders,
+	buildRequestPreamble,
+	type RequestPreambleContext,
+} from '@wcpos/utils/request-preamble';
+import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
 import { http } from './http';
 import { mapToInternalCode, parseWpError } from './parse-wp-error';
@@ -45,6 +43,13 @@ declare module 'axios' {
 		failureCode?: ErrorCode;
 	}
 }
+export type WcposRequestConfig = AxiosRequestConfig & {
+	wcposPreamble?: Omit<RequestPreambleContext, 'client'>;
+	wcposHeaders?: boolean;
+	protocolHeaders?: boolean;
+	quietErrors?: boolean;
+	failureCode?: ErrorCode;
+};
 
 const httpLogger = getLogger(['wcpos', 'http', 'client']);
 
@@ -54,6 +59,33 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 type AxiosRequestConfig = import('axios').AxiosRequestConfig;
 type AxiosError = import('axios').AxiosError;
 type AxiosResponse = import('axios').AxiosResponse;
+
+/** Serializes once: clear baseURL/params/paramsSerializer so dispatch cannot compose them again. */
+export function applyPreambleToAxiosConfig(config: WcposRequestConfig): AxiosRequestConfig {
+	const { wcposPreamble, ...dispatchConfig } = config;
+	const site = {
+		...wcposPreamble?.site,
+		use_protocol_headers: wcposPreamble?.site?.use_protocol_headers ?? config.protocolHeaders,
+	};
+	const preambleRequest = {
+		url: wcposPreamble ? axios.getUri(dispatchConfig) : (config.url ?? ''),
+		method: config.method,
+		wcposHeaders: config.wcposHeaders,
+		headers: AxiosHeaders.from(config.headers as RawAxiosHeaders).toJSON(true),
+	};
+	const prepared = wcposPreamble
+		? buildRequestPreamble({ ...wcposPreamble, client: AppInfo, site }, preambleRequest)
+		: { headers: buildClientHeaders(AppInfo, site, preambleRequest), url: config.url };
+	// Lowercase names/string values are intentional and wire-neutral: HTTP is case-insensitive; Axios and Electron net.fetch normalize.
+	dispatchConfig.headers = Object.fromEntries(prepared.headers);
+	if (wcposPreamble) {
+		dispatchConfig.url = prepared.url;
+		delete dispatchConfig.baseURL;
+		delete dispatchConfig.params;
+		delete dispatchConfig.paramsSerializer;
+	}
+	return dispatchConfig;
+}
 
 /**
  * Process multiple error handlers in order of priority
@@ -217,7 +249,7 @@ export const useHttpClient = (
 	/**
 	 * Make the actual HTTP request
 	 */
-	const makeRequest = React.useCallback(async (config: AxiosRequestConfig) => {
+	const makeRequest = React.useCallback(async (config: WcposRequestConfig) => {
 		// Pre-flight check: ensure request can proceed based on global state
 		const canProceed = requestStateManager.checkCanProceed() as any;
 		if (!canProceed.ok) {
@@ -265,42 +297,32 @@ export const useHttpClient = (
 			processedConfig.timeout = DEFAULT_REQUEST_TIMEOUT_MS;
 		}
 
-		if (
-			processedConfig.method?.toLowerCase() !== 'head' &&
-			processedConfig.wcposHeaders !== false
-		) {
-			set(processedConfig, ['headers', 'X-WCPOS'], 1);
-			if (sendsProtocolHeaders(AppInfo.platform, processedConfig.protocolHeaders)) {
-				set(processedConfig, ['headers', PROTOCOL_HEADER], String(SYNC_PROTOCOL_VERSION));
-				set(
-					processedConfig,
-					['headers', CLIENT_HEADER],
-					formatClientSignal(AppInfo.platform, AppInfo.version)
-				);
-			}
-			// Explicit product UA on native/Electron (B10, wcpos-infra#72): a blank
-			// or library UA on a POST earns a permanent AIOS IP ban. The fragment is
-			// EMPTY on web — Firefox honours fetch UA overrides, and replacing the
-			// battle-tested browser UA with a product string reads as a bot.
-			for (const [name, value] of Object.entries(AppInfo.userAgentHeader)) {
-				set(processedConfig, ['headers', name], value);
-			}
-		}
-
 		if (processedConfig.method?.toLowerCase() === 'head') {
 			set(processedConfig, 'decompress', false);
-			set(processedConfig, ['params', '_method'], 'HEAD');
+			if (processedConfig.params instanceof URLSearchParams) {
+				processedConfig.params = new URLSearchParams(processedConfig.params);
+				processedConfig.params.set('_method', 'HEAD');
+			} else {
+				processedConfig.params = { ...processedConfig.params, _method: 'HEAD' };
+			}
 		}
 
 		if (process.env.NODE_ENV === 'development') {
-			set(processedConfig, ['params', 'XDEBUG_SESSION'], 'start');
+			if (processedConfig.params instanceof URLSearchParams) {
+				processedConfig.params = new URLSearchParams(processedConfig.params);
+				processedConfig.params.set('XDEBUG_SESSION', 'start');
+			} else {
+				processedConfig.params = { ...processedConfig.params, XDEBUG_SESSION: 'start' };
+			}
 		}
+
+		const dispatchConfig = applyPreambleToAxiosConfig(processedConfig);
 
 		const method = (processedConfig.method ?? 'GET').toUpperCase();
 		const endpoint = processedConfig.url
 			? new URL(processedConfig.url, 'http://localhost').pathname
 			: 'unknown';
-		const response = await scheduleRequest(() => http.request(processedConfig));
+		const response = await scheduleRequest(() => http.request(dispatchConfig));
 		if (method !== 'GET' && method !== 'HEAD' && databaseEpoch === getDatabaseEpoch()) {
 			httpLogger.info('HTTP request completed', {
 				context: { method, endpoint, status: response.status },
@@ -313,7 +335,7 @@ export const useHttpClient = (
 	 * Main request function with error handling
 	 */
 	const request = React.useCallback(
-		async (reqConfig: AxiosRequestConfig = {}) => {
+		async (reqConfig: WcposRequestConfig = {}) => {
 			const databaseEpoch = getDatabaseEpoch();
 			try {
 				const response = await makeRequest(reqConfig);
@@ -426,22 +448,22 @@ export const useHttpClient = (
 	return React.useMemo(
 		() => ({
 			request,
-			get(url: string, config: AxiosRequestConfig = {}) {
+			get(url: string, config: WcposRequestConfig = {}) {
 				return request({ ...config, method: 'GET', url });
 			},
-			post(url: string, data: any, config: AxiosRequestConfig = {}) {
+			post(url: string, data: any, config: WcposRequestConfig = {}) {
 				return request({ ...config, method: 'POST', url, data });
 			},
-			put(url: string, data: any, config: AxiosRequestConfig = {}) {
+			put(url: string, data: any, config: WcposRequestConfig = {}) {
 				return request({ ...config, method: 'PUT', url, data });
 			},
-			patch(url: string, data: any, config: AxiosRequestConfig = {}) {
+			patch(url: string, data: any, config: WcposRequestConfig = {}) {
 				return request({ ...config, method: 'PATCH', url, data });
 			},
-			delete(url: string, config: AxiosRequestConfig = {}) {
+			delete(url: string, config: WcposRequestConfig = {}) {
 				return request({ ...config, method: 'DELETE', url });
 			},
-			head(url: string, config: AxiosRequestConfig = {}) {
+			head(url: string, config: WcposRequestConfig = {}) {
 				return request({ ...config, method: 'HEAD', url });
 			},
 		}),
