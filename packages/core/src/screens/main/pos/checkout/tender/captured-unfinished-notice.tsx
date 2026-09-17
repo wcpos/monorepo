@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { DocsLink } from '@wcpos/components/docs-link';
@@ -21,9 +21,12 @@ export function CapturedUnfinishedNotice({ finishingError }: { finishingError: s
 					<Text>{t('settings.support_details')}</Text>
 				</CollapsibleTrigger>
 				<CollapsibleContent>
-					<Text testID="checkout-terminal-finishing-details" selectable>
-						{finishingError}
-					</Text>
+					{/* Diagnostics can run long; bound them so the help link and the pane's actions stay reachable. */}
+					<ScrollView className="max-h-40" nestedScrollEnabled>
+						<Text testID="checkout-terminal-finishing-details" selectable>
+							{finishingError}
+						</Text>
+					</ScrollView>
 				</CollapsibleContent>
 			</Collapsible>
 			<DocsLink
