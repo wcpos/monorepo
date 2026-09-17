@@ -2,7 +2,7 @@
 import * as React from 'react';
 
 import { of } from 'rxjs';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type { ClosureRow } from '@wcpos/database';
 import type { PrinterProfile } from '@wcpos/printer';
@@ -175,15 +175,22 @@ jest.mock('@wcpos/components/select', () => {
 });
 const mockPrint = jest.fn(async (_printer?: PrinterProfile | null) => true);
 const mockRefetch = jest.fn();
+const mockGet = jest.fn();
+jest.mock('../../hooks/use-rest-http-client', () => ({
+	useRestHttpClient: () => ({ get: mockGet }),
+}));
 const mockRecount = jest.fn();
 jest.mock('./recount-sheet', () => ({
-	RecountSheet: (props: { onSaved: () => void; onOpenChange: (v: boolean) => void }) => {
+	RecountSheet: (props: {
+		onSaved: () => void | Promise<void>;
+		onOpenChange: (v: boolean) => void;
+	}) => {
 		mockRecount(props);
 		return (
 			<button
 				data-testid="save-recount"
-				onClick={() => {
-					props.onSaved();
+				onClick={async () => {
+					await props.onSaved();
 					props.onOpenChange(false);
 				}}
 			/>
@@ -273,6 +280,7 @@ beforeEach(() => {
 	mockOffline = undefined;
 	mockPhone = true;
 	jest.clearAllMocks();
+	mockGet.mockImplementation(async () => ({ data: { data: mockRemote } }));
 });
 // Revert: use an order/report renderer, hide the sole template, or omit phone navigation.
 it('opens a template-backed phone page with its single selector and available reprint action', () => {
@@ -346,15 +354,15 @@ it('dispatches reprint once and shows a failed print without retry', async () =>
 	expect(mockPrint).toHaveBeenCalledTimes(1);
 });
 // Revert: do not open recount or reload the corrected document after saving.
-it('opens recount online and reloads the closure after success', () => {
+it('opens recount online and reloads the closure after success', async () => {
 	const refreshRow = jest.fn();
 	mockRemote = { closure: row };
 	render(<ClosurePanel row={row} onClose={() => {}} {...{ onRecountSaved: refreshRow }} />);
 	fireEvent.click(screen.getByTestId('closure-recount'));
 	expect(mockRecount).toHaveBeenCalledWith(expect.objectContaining({ row }));
 	fireEvent.click(screen.getByTestId('save-recount'));
+	await waitFor(() => expect(refreshRow).toHaveBeenCalled());
 	expect(mockRefetch).toHaveBeenCalledTimes(1);
-	expect(refreshRow).toHaveBeenCalled();
 });
 
 // Revert: use the unnamed portal, thumbnail preview, or omit the panel close action.
@@ -534,4 +542,60 @@ it.each(['loading', 'failed', 'refreshing'])(
 it('pads the phone footer above the bottom safe area', () => {
 	render(<ClosurePanel row={row} onClose={jest.fn()} />);
 	expect(screen.getByTestId('closure-panel-footer').style.paddingBottom).toBe('50px');
+});
+
+// Revert: only schedule refetch, or complete onSaved before its refreshed snapshot write finishes.
+it('persists the recounted document before completion even when the panel immediately unmounts', async () => {
+	const correction = {
+		id: 2,
+		type: 'recount',
+		actor: { id: 7, name: 'Pat' },
+		approver: null,
+		reason: 'Found notes',
+		created_at: '2026-09-17T12:00:00Z',
+		figures: { counted: { cash: '105' } },
+	};
+	mockRemote = { closure: { ...row, corrections: [] } };
+	const refreshed = { closure: { ...row, corrections: [correction] } };
+	const localRow = { ...row, receipt_snapshot: JSON.stringify(mockRemote) };
+	let respond!: (response: { data: { data: typeof refreshed } }) => void;
+	mockGet.mockReturnValueOnce(
+		new Promise((resolve) => {
+			respond = resolve;
+		})
+	);
+	const completed = jest.fn(() => view.unmount());
+	const view = render(
+		<ClosurePanel row={localRow} onClose={jest.fn()} onRecountSaved={completed} />
+	);
+	let finishWrite!: () => void;
+	mockPatch.mockImplementationOnce(async (patch) => {
+		await new Promise<void>((resolve) => {
+			finishWrite = resolve;
+		});
+		Object.assign(localRow, patch);
+	});
+	fireEvent.click(screen.getByTestId('closure-recount'));
+	const { onSaved } = mockRecount.mock.calls.at(-1)![0];
+	let saving!: Promise<void>;
+	act(() => {
+		saving = onSaved();
+	});
+	expect(completed).not.toHaveBeenCalled();
+	expect(mockGet).toHaveBeenCalledWith('/receipts/0', {
+		params: { mode: 'fiscal', document: 'closure:c' },
+	});
+	await act(async () => {
+		respond({ data: { data: refreshed } });
+	});
+	expect(completed).not.toHaveBeenCalled();
+	await act(async () => {
+		finishWrite();
+		await saving;
+	});
+	expect(completed).toHaveBeenCalledTimes(1);
+	expect(JSON.parse(localRow.receipt_snapshot).closure.corrections).toEqual([correction]);
+	mockRemote = null;
+	render(<ClosurePanel row={localRow} onClose={jest.fn()} />);
+	expect(screen.getByTestId('closure-settled').textContent).toContain('$99.00 → $105.00');
 });

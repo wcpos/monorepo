@@ -37,7 +37,7 @@ export function RecountSheet({
 }: {
 	row: ClosureRow;
 	corrections?: readonly Correction[];
-	onSaved: () => void;
+	onSaved: () => void | Promise<void>;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const t = useT();
@@ -78,11 +78,12 @@ export function RecountSheet({
 		...counted,
 		cash: Object.keys(pieces).length ? fromMinor(denominationTotal(pieces), 2) : counted.cash,
 	};
+	const reasonTooLong = [...reason.trim()].length > RECOUNT_REASON_LIMIT;
 	const invalid =
 		!online ||
 		Object.values(amounts).some((value) => !validAmount(value)) ||
 		!reason.trim() ||
-		[...reason.trim()].length > RECOUNT_REASON_LIMIT ||
+		reasonTooLong ||
 		(!manager && (!username.trim() || !password));
 	const save = async () => {
 		if (invalid || busyRef.current) return;
@@ -98,9 +99,9 @@ export function RecountSheet({
 				reason: reason.trim(),
 				...(!manager ? { approval: { username: username.trim(), password } } : {}),
 			});
+			await onSaved();
 			request.current = null;
 			setPassword('');
-			onSaved();
 			onOpenChange(false);
 		} catch {
 			setError(t('reports.recount_failed'));
@@ -173,6 +174,7 @@ export function RecountSheet({
 					<Text>{t('reports.recount_reason')}</Text>
 					<Input
 						testID="recount-reason"
+						maxLength={RECOUNT_REASON_LIMIT}
 						className="min-h-12"
 						value={reason}
 						onChangeText={setReason}
@@ -185,6 +187,11 @@ export function RecountSheet({
 					)}
 					{!!error && <Text testID="recount-error">{error}</Text>}
 				</ScrollView>
+				{reasonTooLong && (
+					<Text testID="recount-reason-error" className="text-destructive">
+						{t('reports.recount_reason_too_long', { limit: RECOUNT_REASON_LIMIT })}
+					</Text>
+				)}
 				<Button
 					testID="recount-save"
 					className="min-h-14"

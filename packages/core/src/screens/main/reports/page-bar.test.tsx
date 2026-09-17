@@ -108,6 +108,7 @@ jest.mock('@wcpos/components/popover', () => {
 	};
 });
 const calendar = jest.fn();
+const nativeCalendar = jest.fn();
 jest.mock('@wcpos/components/calendar', () => ({
 	Calendar: (props: unknown) => {
 		calendar(props);
@@ -117,19 +118,23 @@ jest.mock('@wcpos/components/calendar', () => ({
 }));
 jest.mock('uniwind', () => ({ useCSSVariable: () => [] }));
 jest.mock('react-native-calendars', () => ({
-	Calendar: ({ onDayPress }: { onDayPress: (day: { dateString: string }) => void }) => (
-		<>
-			{['2026-09-10', '2026-09-20'].map((day) => (
-				<button
-					key={day}
-					data-testid={`day-${day}`}
-					onClick={() => onDayPress({ dateString: day })}
-				>
-					{day}
-				</button>
-			))}
-		</>
-	),
+	Calendar: (props: { onDayPress: (day: { dateString: string }) => void }) => {
+		nativeCalendar(props);
+		const { onDayPress } = props;
+		return (
+			<>
+				{['2026-09-10', '2026-09-20'].map((day) => (
+					<button
+						key={day}
+						data-testid={`day-${day}`}
+						onClick={() => onDayPress({ dateString: day })}
+					>
+						{day}
+					</button>
+				))}
+			</>
+		);
+	},
 }));
 jest.mock('../components/header/left', () => ({ HeaderLeft: () => null }));
 jest.mock('../components/header/right', () => ({ HeaderRight: () => null }));
@@ -516,4 +521,17 @@ it('keeps a single-day seed when selecting the custom end', () => {
 	expect(change).toHaveBeenLastCalledWith(
 		expect.objectContaining({ from: '2026-09-16', to: '2026-09-20' })
 	);
+});
+
+// Revert: remove the custom day override (or let it replace the shared semantic theme).
+it('gives custom calendar days at least 44pt targets while retaining the shared theme', () => {
+	isPro = true;
+	draw();
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-custom'));
+	const { theme } = nativeCalendar.mock.calls.at(-1)![0];
+	expect(theme['stylesheet.day.basic']?.base?.width ?? 32).toBeGreaterThanOrEqual(44);
+	expect(theme['stylesheet.day.basic']?.base?.height ?? 32).toBeGreaterThanOrEqual(44);
+	expect(theme.textDayFontSize).toBe(14);
+	expect(theme['stylesheet.calendar.header']).toBeDefined();
 });

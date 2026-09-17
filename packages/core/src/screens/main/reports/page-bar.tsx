@@ -193,7 +193,7 @@ export function PageBar({
 								: `${formatDate(parseISO(scope.from), 'd MMM')} – ${formatDate(parseISO(scope.to), 'd MMM')}`}
 						</Button>
 					</PopoverTrigger>
-					<PopoverContent>
+					<PopoverContent className={custom ? 'w-[360px]' : undefined}>
 						{option(
 							'reports-period-previous',
 							'‹',
@@ -231,6 +231,14 @@ export function PageBar({
 							<>
 								<Calendar
 									testID="reports-calendar"
+									// Keep the shared day behavior and theme, with touch-sized targets.
+									theme={{
+										...({
+											'stylesheet.day.basic': {
+												base: { width: 44, height: 44, alignItems: 'center' },
+											},
+										} as Record<string, unknown>),
+									}}
 									minDate={min}
 									maxDate={today}
 									dateRange={draft}

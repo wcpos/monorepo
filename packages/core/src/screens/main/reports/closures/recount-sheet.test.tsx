@@ -73,14 +73,17 @@ jest.mock('@wcpos/components/input', () => ({
 		onChangeText,
 		testID,
 		secureTextEntry,
+		maxLength,
 	}: {
 		value: string;
 		onChangeText: (v: string) => void;
 		testID: string;
 		secureTextEntry?: boolean;
+		maxLength?: number;
 	}) => (
 		<input
 			type={secureTextEntry ? 'password' : 'text'}
+			maxLength={maxLength}
 			data-testid={testID}
 			value={value}
 			onChange={(e) => onChangeText(e.target.value)}
@@ -374,4 +377,44 @@ it('uses current-store currency and denominations for a null-store recount', asy
 			expect.objectContaining({ counted: { cash: '0.20', card: '4' } })
 		)
 	);
+});
+
+// Revert: omit the input limit, permitting ordinary typing beyond the server contract.
+it('caps the reason input at the server limit', () => {
+	mount();
+	expect((screen.getByTestId('recount-reason') as HTMLInputElement).maxLength).toBe(500);
+});
+
+// Revert: silently disable Save for an over-limit value that bypasses the input cap.
+it('explains an over-limit reason beside Save and clears the message after editing', () => {
+	mount();
+	fillCount();
+	fireEvent.change(screen.getByTestId('recount-reason'), { target: { value: 'x'.repeat(501) } });
+	const save = screen.getByTestId('recount-save') as HTMLButtonElement;
+	expect(save.disabled).toBe(true);
+	expect(save.previousElementSibling?.textContent).toBe('Keep the reason to 500 characters');
+	fireEvent.change(screen.getByTestId('recount-reason'), { target: { value: 'x'.repeat(500) } });
+	expect(save.disabled).toBe(false);
+	expect(screen.queryByTestId('recount-reason-error')).toBeNull();
+});
+
+// Revert: call onSaved without awaiting its durable write, closing before offline history is saved.
+it('keeps the sheet busy until the refreshed snapshot is saved', async () => {
+	let finish!: () => void;
+	const saved = jest.fn(
+		() =>
+			new Promise<void>((resolve) => {
+				finish = resolve;
+			})
+	);
+	render(<RecountSheet row={row as never} onSaved={saved} onOpenChange={close} />);
+	fillCount();
+	fireEvent.click(screen.getByTestId('recount-save'));
+	await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
+	expect(close).not.toHaveBeenCalled();
+	expect((screen.getByTestId('recount-save') as HTMLButtonElement).disabled).toBe(true);
+	await act(async () => {
+		finish();
+	});
+	expect(close).toHaveBeenCalledWith(false);
 });

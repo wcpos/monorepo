@@ -16,6 +16,7 @@
 	"reports.recount_offline": "Connect to recount",
 	"reports.recount_pending": "Sync this closure to recount",
 	"reports.recount_reason": "Reason for recount",
+	"reports.recount_reason_too_long": "Keep the reason to {limit} characters",
 	"reports.recount_save": "Save recount",
 	"reports.recount_failed": "Recount failed. Try again.",
 	"reports.reprint_failed": "Printing failed. Try again.",

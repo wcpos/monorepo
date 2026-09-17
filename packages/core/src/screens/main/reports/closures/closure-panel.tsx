@@ -21,6 +21,7 @@ import {
 	type RecordedFigures,
 } from '../../../../services/register-session/settled-figures';
 import { useClosureCollection } from '../../../../services/register-session/use-register-session-collections';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { RecountSheet } from './recount-sheet';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { TemplateSwitcher } from '../../receipt/template-switcher';
@@ -40,6 +41,7 @@ export function ClosurePanel({
 	onRecountSaved?: () => void;
 }) {
 	const t = useT();
+	const http = useRestHttpClient();
 	const [recounting, setRecounting] = React.useState(false);
 	const [error, setError] = React.useState('');
 	const { screenSize } = useTheme();
@@ -74,21 +76,26 @@ export function ClosurePanel({
 		localReport: local ?? buildClosureDocument(row, context),
 	});
 	const remote = doc.serverReceiptData;
+	const persistSnapshot = React.useCallback(
+		async (document: Record<string, unknown>) => {
+			const receipt_snapshot = JSON.stringify(document);
+			if (receipt_snapshot.length > CLOSURE_DOCUMENT_LIMIT) {
+				log.warn('Closure document too large for offline history');
+				return;
+			}
+			if (receipt_snapshot === row.receipt_snapshot) return;
+			const record = await getLocalClosure();
+			await record?.incrementalPatch({ receipt_snapshot });
+		},
+		[getLocalClosure, row.receipt_snapshot]
+	);
 	// Retain the authoritative baseline WITH its corrections, without touching the frozen/outbox fields.
 	React.useEffect(() => {
-		if (!remote || !collection) return;
-		const receipt_snapshot = JSON.stringify(remote);
-		if (receipt_snapshot.length > CLOSURE_DOCUMENT_LIMIT) {
-			log.warn('Closure document too large for offline history');
-			return;
-		}
-		if (receipt_snapshot === row.receipt_snapshot) return;
-		void getLocalClosure()
-			.then((record) => record?.incrementalPatch({ receipt_snapshot }))
-			.catch((error) =>
-				log.warn('Closure history could not be saved', { context: { error: String(error) } })
-			);
-	}, [remote, collection, getLocalClosure, row.receipt_snapshot]);
+		if (!remote) return;
+		void persistSnapshot(remote).catch((error) =>
+			log.warn('Closure history could not be saved', { context: { error: String(error) } })
+		);
+	}, [remote, persistSnapshot]);
 	const documentError = doc.documentError && !doc.isOffline;
 	const recorded = get(doc.receiptData, 'closure', row) as RecordedFigures & {
 		number: number;
@@ -265,7 +272,11 @@ export function ClosurePanel({
 				<RecountSheet
 					row={row}
 					corrections={corrections}
-					onSaved={() => {
+					onSaved={async () => {
+						const response = await http.get('/receipts/0', {
+							params: { mode: 'fiscal', document: `closure:${row.server_closure_id ?? row.id}` },
+						});
+						await persistSnapshot(response.data.data);
 						doc.refetch();
 						onRecountSaved?.();
 					}}
