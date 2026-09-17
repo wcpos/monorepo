@@ -15,6 +15,13 @@
  * still need a live pass on the device/web hosts.
  */
 
+import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
+import {
+	refreshAccessToken,
+	type RefreshAccessTokenConfig,
+} from '@wcpos/hooks/use-http-client/refresh-access-token';
+import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
+import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { defaultConfig } from '@wcpos/database/adapters/default';
 import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
@@ -180,7 +187,36 @@ function scopeCacheKey(scope: StoreScopeIdentity): string {
 	]);
 }
 
-function projectFetcherOptions(options: CreateAppSyncEngineOptions): MutableFetcherOptions {
+/** Shared by render and awaited session commits, including the incoming cashier's refresh. */
+export function createSessionFetcherOptions(
+	site: RefreshAccessTokenConfig['site'],
+	wpCredentials: RefreshAccessTokenConfig['wpUser'] & CreateAppSyncEngineOptions['credentials'],
+	sessionRenewedMessage: string
+): MutableFetcherOptions {
+	return {
+		credentials: wpCredentials,
+		useJwtAsParam: site.use_jwt_as_param,
+		useRestRouteParam: resolveRestTransport(site) === 'query',
+		bareAuthParam: bareAuthParamSupported(site.wcpos_version),
+		useProtocolHeaders: site.use_protocol_headers,
+		refreshAuth: (context) =>
+			refreshAccessToken({
+				site: {
+					wcpos_api_url: site.wcpos_api_url,
+					wp_api_url: site.wp_api_url,
+					use_jwt_as_param: site.use_jwt_as_param,
+					use_rest_route_param: site.use_rest_route_param,
+					use_protocol_headers: site.use_protocol_headers,
+				},
+				wpUser: wpCredentials,
+				getHttpClient: createRefreshHttpClient,
+				sessionRenewedMessage,
+				operationId: context?.operationId,
+			}),
+	};
+}
+
+function projectFetcherOptions(options: MutableFetcherOptions): MutableFetcherOptions {
 	return {
 		credentials: options.credentials,
 		refreshAuth: options.refreshAuth,
@@ -295,11 +331,14 @@ function disposeCachedEngine(entry: CachedEngine): void {
  * createAppSyncEngine. Relies on the AppStack invariant that the engine's
  * scope.site IS the site's wp_api_url.
  */
-export async function switchAppEngineScope(session: {
-	site?: { wp_api_url?: string } | null;
-	wpCredentials?: { id?: number | string } | null;
-	store?: { id?: number | string } | null;
-}): Promise<void> {
+export async function switchAppEngineScope(
+	session: {
+		site?: { wp_api_url?: string } | null;
+		wpCredentials?: { id?: number | string } | null;
+		store?: { id?: number | string } | null;
+	},
+	options?: MutableFetcherOptions
+): Promise<void> {
 	const entry = cachedEngine;
 	if (!entry) return;
 	const site = session.site?.wp_api_url;
@@ -316,7 +355,7 @@ export async function switchAppEngineScope(session: {
 		return;
 	}
 	if (!latest && (active ? scopeCacheKey(active.identity) : entry.allocationKey) === key) return;
-	await requestScope(entry, scope);
+	await requestScope(entry, scope, options && projectFetcherOptions(options));
 }
 
 /** Create or reuse the app sync engine for the requested store scope. */

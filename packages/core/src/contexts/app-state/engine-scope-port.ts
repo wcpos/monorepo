@@ -1,3 +1,5 @@
+import type { hydrateUserSession } from './hydration-steps';
+
 /**
  * Host port for the sync engine's scope transition. The app that owns the
  * engine (apps/main AppStack) registers a switcher; the store-switch flow
@@ -5,11 +7,9 @@
  * that cannot reach the new scope aborts before persistence. Activation can
  * precede persistence; a later persistence failure does not roll it back.
  */
-export type EngineScopeSwitcher = (session: {
-	site?: { wp_api_url?: string } | null;
-	wpCredentials?: { id?: number | string } | null;
-	store?: { id?: number | string } | null;
-}) => Promise<void>;
+export type EngineScopeSwitcher = (
+	session: Awaited<ReturnType<typeof hydrateUserSession>>
+) => Promise<void>;
 
 let engineScopeSwitcher: EngineScopeSwitcher | null = null;
 

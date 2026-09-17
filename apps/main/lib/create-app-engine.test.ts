@@ -174,10 +174,11 @@ function loadCreateAppEngine(
 		getMetricsEpoch: jest.fn(() => 0),
 	}));
 
-	const { createAppSyncEngine, switchAppEngineScope } =
+	const { createAppSyncEngine, switchAppEngineScope, createSessionFetcherOptions } =
 		jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
 	return {
 		createAppSyncEngine,
+		createSessionFetcherOptions,
 		switchAppEngineScope,
 		createRxdbSyncEngine,
 		appMetricsObserver,
@@ -745,6 +746,118 @@ describe('createAppSyncEngine scope cache', () => {
 			fetch.mockRestore();
 		}
 	});
+
+	it.each([false, true])(
+		'awaited cashier switch stages incoming auth before settlement (same store: %s)',
+		async (sameStore) => {
+			let ports: {
+				fetcher?: (url: string) => Promise<Response>;
+				holdAutomaticTicks?: () => boolean;
+			} = {};
+			const observations: { token: string | null; store: string | null }[] = [];
+			let beforeSettlement: (() => Promise<void>) | undefined;
+			const first = createEngineDouble(undefined, async (identity) => {
+				await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/orders');
+				first.activate(identity);
+				await beforeSettlement?.();
+			});
+			const {
+				createAppSyncEngine,
+				switchAppEngineScope,
+				createRxdbSyncEngine,
+				createSessionFetcherOptions,
+			} = loadCreateAppEngine(() => first);
+			const { requestStateManager } = jest.requireActual<
+				typeof import('@wcpos/hooks/use-http-client')
+			>('@wcpos/hooks/use-http-client');
+			const makeCredentials = (id: number) => {
+				const doc = {
+					id,
+					access_token: `cashier-${id}`,
+					refresh_token: `refresh-${id}`,
+					getLatest: () => doc,
+					incrementalPatch: async (patch: { access_token: string }) => {
+						Object.assign(doc, patch);
+					},
+				};
+				return doc;
+			};
+			const a = makeCredentials(1);
+			const b = makeCredentials(2);
+			const refreshed: string[] = [];
+			const refreshHttp = jest.requireActual<
+				typeof import('@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client')
+			>('@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client');
+			const httpClient = jest.spyOn(refreshHttp, 'createRefreshHttpClient').mockReturnValue({
+				post: async (_url, data: { refresh_token: string }) => {
+					refreshed.push(data.refresh_token);
+					if (sameStore && data.refresh_token === 'refresh-1')
+						throw new Error('HTTP 401: Unauthorized');
+					return {
+						data: {
+							access_token: data.refresh_token.replace('refresh', 'renewed'),
+							expires_at: 9999999999,
+						},
+						status: 200,
+						statusText: 'OK',
+					};
+				},
+			});
+			const options = (credentials: typeof a) =>
+				createSessionFetcherOptions(
+					{ wp_api_url: BASE_OPTIONS.wpApiUrl },
+					credentials,
+					'Session renewed'
+				);
+
+			let demandRefresh = false;
+			const fetch = jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+				const headers = new Headers(init?.headers);
+				const token = headers.get('Authorization');
+				observations.push({ token, store: headers.get('X-WCPOS-Store') });
+				return new Response(null, {
+					status: demandRefresh && !token?.includes('renewed') ? 401 : 200,
+				});
+			});
+			const incoming = {
+				...BASE_OPTIONS,
+				...options(b),
+				scope: { ...BASE_OPTIONS.scope, cashierId: 2, storeId: sameStore ? 'store-1' : 'store-2' },
+			};
+			try {
+				createAppSyncEngine({ ...BASE_OPTIONS, ...options(a) });
+				ports = createRxdbSyncEngine.mock.calls[0]![0];
+				beforeSettlement = async () => {
+					demandRefresh = true;
+					await ports.fetcher?.('https://store.example.test/wp-json/wcpos/v2/orders');
+					if (sameStore) {
+						// The render that follows commit cannot undo a poisoned refresh latch.
+						createAppSyncEngine(incoming);
+						expect(requestStateManager.isAuthFailed()).toBe(false);
+						expect(ports.holdAutomaticTicks?.()).toBe(false);
+					}
+					expect(observations[0]).toEqual({ token: 'Bearer cashier-1', store: 'store-1' });
+					expect(observations[1]).toEqual({
+						token: 'Bearer cashier-2',
+						store: incoming.scope.storeId,
+					});
+					expect(refreshed).toEqual(['refresh-2']);
+					expect(observations.at(-1)?.token).toBe('Bearer renewed-2');
+				};
+				await switchAppEngineScope(
+					{
+						site: { wp_api_url: incoming.scope.site },
+						wpCredentials: b,
+						store: { id: incoming.scope.storeId },
+					},
+					incoming
+				);
+			} finally {
+				fetch.mockRestore();
+				httpClient.mockRestore();
+			}
+		}
+	);
 
 	it('keeps outgoing auth until activation and adopts the matching pending cashier', async () => {
 		const first = createEngineDouble(undefined, () => new Promise(() => undefined));
