@@ -1,0 +1,207 @@
+Google Chrome 154.0.8037.44 
+
+> rxdb@17.4.0 test:browser:custom
+> npm run transpile && cross-env CI=true DEFAULT_STORAGE=custom  karma start ./config/karma.conf.cjs --single-run --browsers Chrome
+
+
+> rxdb@17.4.0 transpile
+> npm run build:version && node scripts/transpile.mjs && cp ./scripts/module_package.json test_tmp/package.json
+
+
+> rxdb@17.4.0 build:version
+> node ./scripts/update-version-variable.mjs
+
+# transpiling.. (this takes some time on first run)
+Successfully compiled 1 file with Babel (128ms).
+Successfully compiled 1 file with Babel (131ms).
+Successfully compiled 1 file with Babel (133ms).
+# transpiling DONE (12 CPUs)
+staticFilesPath: /Users/kilbot/Projects/monorepo-v2/.claude/worktrees/spike-2138-sqlite-wasm/spikes/2138-rxdb-sqlite-wasm/.rxdb-src/docs-src/static/files
+# Use CI settings.
+# Karma effective config: {
+  "basePath": "",
+  "frameworks": [
+    "mocha",
+    "webpack",
+    "detectBrowsers"
+  ],
+  "webpack": "[webpack config omitted]",
+  "preprocessors": {
+    "../test_tmp/unit.test.js": [
+      "webpack",
+      "sourcemap"
+    ]
+  },
+  "files": [
+    "../test_tmp/unit.test.js"
+  ],
+  "port": 9876,
+  "colors": true,
+  "autoWatch": false,
+  "proxies": {
+    "/files": "http://localhost:18001/files"
+  },
+  "detectBrowsers": {
+    "enabled": true,
+    "usePhantomJS": false,
+    "postDetection": "[function]"
+  },
+  "plugins": [
+    "karma-mocha",
+    "karma-webpack",
+    "karma-chrome-launcher",
+    "karma-safari-launcher",
+    "karma-firefox-launcher",
+    "karma-ie-launcher",
+    "karma-opera-launcher",
+    "karma-detect-browsers",
+    "karma-spec-reporter",
+    "karma-sourcemap-loader"
+  ],
+  "client": {
+    "mocha": {
+      "bail": true,
+      "timeout": 120000,
+      "grep": "^(?!.*should clean up all deleted documents when multiple are deleted)(?!.*should have cleaned up the deleted document)(init\\.test\\.ts|rx-storage-implementations)"
+    },
+    "env": "[process.env omitted]"
+  },
+  "browserDisconnectTimeout": 300000,
+  "browserDisconnectTolerance": 4,
+  "browserNoActivityTimeout": 300000,
+  "captureTimeout": 300000,
+  "processKillTimeout": 120000,
+  "singleRun": true,
+  "reporters": [
+    "spec"
+  ],
+  "concurrency": 1,
+  "retryLimit": 3,
+  "browserConsoleLogOptions": {
+    "level": "debug",
+    "format": "%b %T: %m",
+    "terminal": true
+  }
+}
+Server listening on port: 18001
+[32m17 09 2026 23:29:49.092:INFO [framework.detect-browsers]: [39mThe following browsers will be used: [ 'Chrome' ]
+Webpack bundling...
+asset [1m[32mcommons.js[39m[22m 9.79 MiB [1m[32m[emitted][39m[22m (name: commons) (id hint: commons)
+asset [1m[32mruntime.js[39m[22m 9.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+asset [1m[32munit.test.169410876.js[39m[22m 1.12 KiB [1m[32m[emitted][39m[22m (name: unit.test.169410876)
+Entrypoint [1munit.test.169410876[39m[22m 9.8 MiB = [1m[32mruntime.js[39m[22m 9.7 KiB [1m[32mcommons.js[39m[22m 9.79 MiB [1m[32munit.test.169410876.js[39m[22m 1.12 KiB
+webpack 5.107.2 compiled [1m[32msuccessfully[39m[22m in 1167 ms
+[32m17 09 2026 23:29:50.636:INFO [karma-server]: [39mKarma v6.4.4 server started at http://localhost:9876/
+[32m17 09 2026 23:29:50.636:INFO [launcher]: [39mLaunching browsers Chrome with concurrency 1
+[32m17 09 2026 23:29:50.639:INFO [launcher]: [39mStarting browser Chrome
+[32m17 09 2026 23:29:51.144:INFO [Chrome 154.0.0.0 (Mac OS 10.15.7)]: [39mConnected on socket PS3Lof88b0fIQJsoAAAA with id 89221805
+Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'DEFAULT_STORAGE: custom'[39m
+Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'# use RxStorage: sqlite-wasm-oo1'[39m
+Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'######## init.test.js ########'[39m
+Chrome 154.0.0.0 (Mac OS 10.15.7) WARN LOG: [36m'-------------- RxDB dev-mode warning -------------------------------
+you are seeing this because you use the RxDB dev-mode plugin https://rxdb.info/dev-mode.html?console=dev-mode 
+This is great in development mode, because it will run many checks to ensure
+that you use RxDB correct. If you see this in production mode,
+you did something wrong because the dev-mode plugin will decrease the performance.
+
+🤗 Hint: To get the most out of RxDB, check out the Premium Plugins
+to get access to faster storages and more professional features: https://rxdb.info/premium/?console=dev-mode 
+
+You can disable this warning by calling disableWarnings() from the dev-mode plugin.
+---------------------------------------------------------------------'[39m
+Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'###### PLATFORM: ######'[39m
+Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'USER-AGENT: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36'[39m
+Chrome 154.0.0.0 (Mac OS 10.15.7) LOG LOG: [36m'STORAGE: sqlite-wasm-oo1'[39m
+
+  init.test.ts
+    [32m✓ [39mensure dev-mode is activated
+    [32m✓ [39minit storage
+    [32m✓ [39mclear BroadcastChannel tmp folder
+    [32m✓ [39mstart test servers
+(node:62098) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+  rx-storage-implementations.test.ts (implementation: sqlite-wasm-oo1)
+    RxStorageInstance
+      creation
+        [32m✓ [39mopen and close
+        [32m✓ [39mopen many instances on the same database name
+        [32m✓ [39mmust throw if keyCompression is set but no key-compression plugin is used
+        [32m✓ [39mmust throw if encryption is defined in schema is set but no encryption plugin is used
+      .bulkWrite()
+        [32m✓ [39mshould write the document
+        [32m✓ [39mshould error on conflict
+        [32m✓ [39mwhen inserting the same document at the same time, the first call must succeed while the second has a conflict
+        [32m✓ [39mshould not find the deleted document when findDocumentsById(false)
+        [32m✓ [39mshould NOT be able to overwrite a deleted the document
+        [32m✓ [39mshould be able to update the state of a deleted document
+        [32m✓ [39mshould be able to unset a property
+        [32m✓ [39mshould be able to store a complex document with key compression
+        [32m✓ [39mshould be able to do a write where only _meta fields are changed
+        [32m✓ [39mshould be able to create another instance after a write
+        [32m✓ [39mshould be able to jump more than 1 revision height in a single write operation
+        [32m✓ [39mmust be able create multiple storage instances on the same database and write documents
+        [32m✓ [39mwrite and read with umlauts
+        [32m✓ [39mthe plain storage should throw when overwriting a deleted doc with an insert without passing the previous
+      .prepareQuery()
+        [32m✓ [39mmust not crash
+        [32m✓ [39mmust not mutate the input
+      .getSortComparator()
+        [32m✓ [39mshould sort in the correct order
+        [32m✓ [39mshould still sort in correct order when docs do not match the selector
+        [32m✓ [39mshould work with a more complex query
+      .getQueryMatcher()
+        [32m✓ [39mshould match the right docs
+        [32m✓ [39mshould also match deleted documents
+        [32m✓ [39mshould match the nested document
+      .query()
+        [32m✓ [39mshould find all documents
+        [32m✓ [39mshould sort in the correct order
+        [32m✓ [39mmust find deleted documents
+        [32m✓ [39mshould have the same deterministic order of .query() and .getSortComparator()
+        [32m✓ [39mshould be able to search over a nested object
+        [32m✓ [39mquerying many documents should work
+      .count()
+        [32m✓ [39mshould count the correct amount
+      .findDocumentsById()
+        [32m✓ [39mshould find the documents
+        [32m✓ [39mshould find deleted documents
+        [32m✓ [39mif withDeleted=true then even the non-deleted document must be found
+        [32m✓ [39mshould be able to insert and fetch many documents
+      .getChangedDocumentsSince()
+        [32m✓ [39mshould get the latest change
+        [32m✓ [39mshould return the correct amount of documents
+        [32m✓ [39mshould be able to correctly iterate over the checkpoints
+      .changeStream()
+        [32m✓ [39mshould emit exactly one event on write
+        [32m✓ [39mshould emit all events
+        [32m✓ [39mit should not emit an empty eventBulk when the write had only errors
+      attachments
+        [32m✓ [39mshould be able to store and retrieve an attachment
+        [32m✓ [39mshould return the correct attachment object on all document fetch methods
+        [32m✓ [39mshould be able to add multiple attachments, one each write
+        [32m✓ [39m_deleted documents must loose all attachments
+        [32m✓ [39mmust be able to load multiple attachments data in parallel
+      .cleanup
+        [32m✓ [39mshould at some time return true (when all docs are cleaned up)
+      .close()
+        [32m✓ [39mclosing multiple times should not error
+      .remove()
+        [32m✓ [39mshould have deleted all data
+        [32m✓ [39mshould throw on call to .remove() after .close()
+        [32m✓ [39mshould NOT throw on call to .close() after .remove()
+    multiInstance
+      [32m✓ [39mshould update the state on the other instance
+      [32m✓ [39mshould be able to write and read documents
+      [32m✓ [39mshould be able to finish a query even when the leading instance gets closed
+      [32m✓ [39mshould not mix up documents stored with different schema versions
+      [32m✓ [39mshould not mix up documents stored in a different database name
+      [32m✓ [39mshould emit events from one instance to the other
+    migration
+      [32m✓ [39mdocuments that are stored on different schema versions, should not interfere
+
+Chrome 154.0.0.0 (Mac OS 10.15.7): Executed 64 of 64[32m SUCCESS[39m (1.803 secs / 1.79 secs)
+[32mTOTAL: 64 SUCCESS[39m
+
+
+Browser suite exit code: 0
