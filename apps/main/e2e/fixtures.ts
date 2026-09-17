@@ -485,13 +485,19 @@ async function waitForCatalogueQuiescence(
 export const STORE_REQUEST = /(\/wcpos\/v2\/|rest_route=(%2F|\/)wcpos(%2F|\/)v2(%2F|\/))/;
 
 /**
- * Wait until the app has sent no request matching `matcher` for `quietMs`.
+ * Wait until no request matching `matcher` is in flight AND none has started or
+ * finished for `quietMs`.
  *
  * Resolves `true` once quiet, `false` if `capMs` passes first (the caller decides
  * whether a still-busy store is a failure). A latency measurement that starts while
  * the boot-time pulls (orders, coupons, taxes, categories) are still draining reads
  * their contention, not the thing it measures: the require plane serves demand
  * serially, so a search typed into that window queues behind them.
+ *
+ * In-flight tracking matters: a pull slower than `quietMs` emits no `request` event
+ * while it runs, so start-only counting would declare quiet under it. A request that
+ * was already in flight when this attached never shows a start either, but its
+ * finish does, and that finish resets the quiet timer.
  */
 export async function waitForStoreQuiescence(
 	page: Page,
@@ -503,19 +509,31 @@ export async function waitForStoreQuiescence(
 	}: { quietMs?: number; capMs?: number; matcher?: RegExp; pollMs?: number } = {}
 ): Promise<boolean> {
 	let lastActivity = Date.now();
+	let inFlight = 0;
 	const onRequest = (request: { url(): string }) => {
-		if (matcher.test(request.url())) lastActivity = Date.now();
+		if (!matcher.test(request.url())) return;
+		inFlight += 1;
+		lastActivity = Date.now();
+	};
+	const onSettled = (request: { url(): string }) => {
+		if (!matcher.test(request.url())) return;
+		inFlight = Math.max(0, inFlight - 1);
+		lastActivity = Date.now();
 	};
 	page.on('request', onRequest);
+	page.on('requestfinished', onSettled);
+	page.on('requestfailed', onSettled);
 	try {
 		const start = Date.now();
-		while (Date.now() - lastActivity < quietMs) {
+		while (inFlight > 0 || Date.now() - lastActivity < quietMs) {
 			if (Date.now() - start >= capMs) return false;
 			await page.waitForTimeout(pollMs);
 		}
 		return true;
 	} finally {
 		page.off('request', onRequest);
+		page.off('requestfinished', onSettled);
+		page.off('requestfailed', onSettled);
 	}
 }
 
