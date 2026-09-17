@@ -1132,7 +1132,12 @@ const hydrateUserSessionStep: HydrationStep = {
 			session.wpCredentials?.uuid === current.wpCredentialsID &&
 			session.store?.localID === current.storeID
 		) {
-			return session;
+			return {
+				...session,
+				site: session.site?.getLatest?.() ?? session.site,
+				wpCredentials: session.wpCredentials?.getLatest?.() ?? session.wpCredentials,
+				store: session.store?.getLatest?.() ?? session.store,
+			};
 		}
 		return await hydrateUserSession(context.userDB, current || {});
 	},
