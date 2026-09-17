@@ -134,8 +134,8 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 					ListFooterComponent={
 						<ProductGridFooter
 							binding={binding}
-							count={renderedCount}
-							resultCount={deferredResult.hits.length}
+							renderedCount={renderedCount}
+							hitCount={deferredResult.hits.length}
 						/>
 					}
 					ListEmptyComponent={() => (

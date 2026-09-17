@@ -6,9 +6,11 @@ export {
 } from './query-state-store';
 export {
 	getPagingVerdict,
+	usePagingVerdict,
 	useGuardedExtendLimit,
 	useGuardedExtension,
 } from './use-guarded-extend-limit';
+export type { PagingVerdict } from './use-guarded-extend-limit';
 export {
 	useCollectionBinding,
 	useLogsBinding,

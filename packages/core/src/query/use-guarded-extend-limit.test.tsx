@@ -15,34 +15,36 @@ import type { QueryBinding } from './query-bindings';
 describe('getPagingVerdict', () => {
 	it.each`
 		count | exhausted | pending  | expected
-		${4}  | ${true}   | ${false} | ${{ mayExtend: false, atEnd: true, reason: 'short-read' }}
-		${4}  | ${false}  | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'more-possible' }}
-		${4}  | ${null}   | ${false} | ${{ mayExtend: false, atEnd: true, reason: 'short-read' }}
-		${10} | ${true}   | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
-		${10} | ${false}  | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
-		${10} | ${null}   | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
-		${13} | ${true}   | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
-		${13} | ${false}  | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
-		${13} | ${null}   | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'full-window' }}
-		${4}  | ${true}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${4}  | ${false}  | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${4}  | ${null}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${10} | ${true}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${10} | ${false}  | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${10} | ${null}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${13} | ${true}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${13} | ${false}  | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${13} | ${null}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${0}  | ${true}   | ${false} | ${{ mayExtend: false, atEnd: true, reason: 'short-read' }}
-		${0}  | ${false}  | ${false} | ${{ mayExtend: true, atEnd: false, reason: 'more-possible' }}
-		${0}  | ${null}   | ${false} | ${{ mayExtend: false, atEnd: true, reason: 'short-read' }}
-		${0}  | ${true}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${0}  | ${false}  | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
-		${0}  | ${null}   | ${true}  | ${{ mayExtend: false, atEnd: false, reason: 'pending' }}
+		${4}  | ${true}   | ${false} | ${'end'}
+		${4}  | ${false}  | ${false} | ${'extend'}
+		${4}  | ${null}   | ${false} | ${'end'}
+		${10} | ${true}   | ${false} | ${'extend'}
+		${10} | ${false}  | ${false} | ${'extend'}
+		${10} | ${null}   | ${false} | ${'extend'}
+		${13} | ${true}   | ${false} | ${'extend'}
+		${13} | ${false}  | ${false} | ${'extend'}
+		${13} | ${null}   | ${false} | ${'extend'}
+		${4}  | ${true}   | ${true}  | ${'pending'}
+		${4}  | ${false}  | ${true}  | ${'pending'}
+		${4}  | ${null}   | ${true}  | ${'pending'}
+		${10} | ${true}   | ${true}  | ${'pending'}
+		${10} | ${false}  | ${true}  | ${'pending'}
+		${10} | ${null}   | ${true}  | ${'pending'}
+		${13} | ${true}   | ${true}  | ${'pending'}
+		${13} | ${false}  | ${true}  | ${'pending'}
+		${13} | ${null}   | ${true}  | ${'pending'}
+		${0}  | ${true}   | ${false} | ${'end'}
+		${0}  | ${false}  | ${false} | ${'extend'}
+		${0}  | ${null}   | ${false} | ${'end'}
+		${0}  | ${true}   | ${true}  | ${'pending'}
+		${0}  | ${false}  | ${true}  | ${'pending'}
+		${0}  | ${null}   | ${true}  | ${'pending'}
 	`(
 		'count=$count limit=10 exhausted=$exhausted pending=$pending',
 		({ count, exhausted, pending, expected }) => {
-			expect(getPagingVerdict(count, 10, pending, exhausted)).toEqual(expected);
+			expect(getPagingVerdict({ hitCount: count, limit: 10, pending, exhausted })).toEqual(
+				expected
+			);
 		}
 	);
 });

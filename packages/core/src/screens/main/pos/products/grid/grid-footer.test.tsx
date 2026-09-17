@@ -23,9 +23,9 @@ jest.mock('react-native', () => ({
 }));
 
 function renderFooter(
-	count: number,
+	renderedCount: number,
 	binding: { pending$: BehaviorSubject<boolean>; exhausted$: BehaviorSubject<boolean | null> },
-	resultCount = count
+	hitCount = renderedCount
 ) {
 	return render(
 		<QueryStateProvider
@@ -33,7 +33,7 @@ function renderFooter(
 			initialPageSize={10}
 			initialSort={{ field: 'name', direction: 'asc' }}
 		>
-			<ProductGridFooter binding={binding} count={count} resultCount={resultCount} />
+			<ProductGridFooter binding={binding} renderedCount={renderedCount} hitCount={hitCount} />
 		</QueryStateProvider>
 	);
 }
@@ -98,6 +98,13 @@ describe('ProductGridFooter', () => {
 		renderFooter(0, binding, 10);
 		expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
 		expect(screen.queryByTestId('pos-products-grid-end')).toBeNull();
+	});
+
+	it('says nothing under an empty rendered grid with a settled full exhausted read', () => {
+		const binding = settled();
+		binding.exhausted$.next(true);
+		const { container } = renderFooter(0, binding, 10);
+		expect(container.firstChild).toBeNull();
 	});
 
 	it('shows nothing while the engine says more may exist, even under a short page', () => {

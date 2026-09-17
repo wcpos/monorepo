@@ -44,10 +44,10 @@ jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('./grid-footer', () => ({
-	ProductGridFooter: ({ count, resultCount }: { count: number; resultCount: number }) => (
+	ProductGridFooter: ({ renderedCount, hitCount }: { renderedCount: number; hitCount: number }) => (
 		<>
-			<span data-testid="product-grid-footer-count">{count}</span>
-			<span data-testid="product-grid-footer-result-count">{resultCount}</span>
+			<span data-testid="product-grid-footer-count">{renderedCount}</span>
+			<span data-testid="product-grid-footer-result-count">{hitCount}</span>
 		</>
 	),
 }));

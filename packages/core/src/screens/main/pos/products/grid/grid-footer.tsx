@@ -1,24 +1,20 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
-
 import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../contexts/translations';
-import { getPagingVerdict, useQueryState } from '../../../../../query';
+import { usePagingVerdict } from '../../../../../query';
 
 import type { QueryBinding } from '../../../../../query';
-
-const selectLimit = (state: { limit: number }): number => state.limit;
 
 interface ProductGridFooterProps {
 	binding: Pick<QueryBinding, 'pending$' | 'exhausted$'>;
 	/** Rendered product rows — the footer says nothing under an empty grid. */
-	count: number;
+	renderedCount: number;
 	/** Local query hits before stale-hit suppression, matching the paging guard. */
-	resultCount: number;
+	hitCount: number;
 }
 
 /**
@@ -31,23 +27,19 @@ interface ProductGridFooterProps {
  * exist. A full local read is never terminal, matching the paging guard. The footer's
  * "Showing X of Y" is untouched: Y is the store's census by ruling.
  */
-export function ProductGridFooter({ binding, count, resultCount }: ProductGridFooterProps) {
+export function ProductGridFooter({ binding, renderedCount, hitCount }: ProductGridFooterProps) {
 	const t = useT();
-	const limit = useQueryState(selectLimit);
-	const { pending$, exhausted$ } = binding;
-	const pending = useObservableState(pending$, false);
-	const exhausted = useObservableState(exhausted$, null);
-	const { atEnd, reason } = getPagingVerdict(resultCount, limit, pending, exhausted);
+	const { verdict, pending } = usePagingVerdict(hitCount, binding);
 
-	if (count === 0) return null;
-	if (reason === 'pending') {
+	if (renderedCount === 0) return null;
+	if (pending) {
 		return (
 			<View className="items-center justify-center p-3" testID="pos-products-grid-loading">
 				<Loader />
 			</View>
 		);
 	}
-	if (!atEnd) return null;
+	if (verdict !== 'end') return null;
 	return (
 		<View className="items-center justify-center p-3" testID="pos-products-grid-end">
 			<Text className="text-muted-foreground text-sm">{t('pos_products.no_more_products')}</Text>
