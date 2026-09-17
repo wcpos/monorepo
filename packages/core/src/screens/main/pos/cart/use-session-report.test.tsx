@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { useSessionReport } from './movement-sheet';
+import { useSessionReport } from '../../../../services/register-session/use-session-report';
 
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),

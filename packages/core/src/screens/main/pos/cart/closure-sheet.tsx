@@ -4,13 +4,13 @@ import { View } from 'react-native';
 import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 
 import { useDocField } from '@wcpos/query';
-import type { ClosureDocument } from '@wcpos/database';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import type { ClosureDocument } from '@wcpos/database';
 
-import { useSessionReport } from './movement-sheet';
+import { useSessionReport } from '../../../../services/register-session/use-session-report';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';

@@ -32,7 +32,13 @@ beforeEach(async () => {
 afterEach(async () => {
 	await db.remove();
 });
-const input = { registerId: 'register', expectedFloat: '100', countedFloat: '100', openedBy: 7 };
+const input = {
+	registerId: 'register',
+	expectedFloat: '100',
+	countedFloat: '100',
+	openedBy: 7,
+	businessDay: { year: 2026, month: 9, day: 16 },
+};
 it('opens pending and retains the pending transition through each local state', async () => {
 	const doc = await openSession(db.register_sessions, input);
 	expect(doc).toMatchObject({ status: 'open', sync_status: 'pending', counted_float: '100' });
@@ -113,4 +119,10 @@ it('re-queues a refused movement so the outbox will send it again', async () => 
 		sync_error: null,
 		amount: '20',
 	});
+});
+
+// Revert: remove business_day from openSession's inserted row.
+it('stamps the supplied store day rather than the device UTC day', async () => {
+	const row = await openSession(db.register_sessions, input);
+	expect(row.toJSON()).toMatchObject({ business_day: '2026-09-16' });
 });

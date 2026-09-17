@@ -14,7 +14,8 @@ import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePOSOverlaySide } from '../contexts/overlay-side';
-import { MovementSheet, useSessionReport } from './movement-sheet';
+import { MovementSheet } from './movement-sheet';
+import { useSessionReport } from '../../../../services/register-session/use-session-report';
 
 function Opener({ id }: { id?: number | null }) {
 	const { site } = useStoreSession();

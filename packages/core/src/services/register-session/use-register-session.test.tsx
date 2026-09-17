@@ -97,6 +97,7 @@ jest.mock('../register/use-register-binding', () => ({
 }));
 jest.mock('../../contexts/app-state', () => ({
 	useStoreSession: () => mockStoreSession,
+	useAppState: () => ({ ...mockStoreSession, store: { timezone: 'America/Los_Angeles' } }),
 }));
 jest.mock('@wcpos/query', () => ({
 	declareRequirements: (...args: unknown[]) => mockDeclareRequirements(...args),
@@ -1055,4 +1056,22 @@ it('queries refunds by the promoted session field and referenced ids', async () 
 			selector: { $or: [{ session_id: 'session' }, { id: { $in: [20] } }] },
 		})
 	);
+});
+
+// Revert: stop passing useStoreDay().today() to the create action.
+it('passes the store opening day across the session writer boundary', async () => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-09-17T01:00:00Z'));
+	try {
+		jest
+			.mocked(actions.openSession)
+			.mockResolvedValueOnce({ id: 'session', register_id: 'register' } as never);
+		const { result } = renderHook(() => useRegisterSession());
+		await result.current.actions.openSession({ expectedFloat: null, countedFloat: '100' });
+		expect(actions.openSession).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ businessDay: { year: 2026, month: 9, day: 16 } })
+		);
+	} finally {
+		jest.useRealTimers();
+	}
 });

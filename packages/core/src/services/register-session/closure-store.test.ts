@@ -49,6 +49,7 @@ async function seed() {
 		expectedFloat: '100',
 		countedFloat: '100',
 		openedBy: 7,
+		businessDay: { year: 2026, month: 9, day: 16 },
 	});
 	for (const [type, amount] of [
 		['paid_in', '20'],
@@ -64,7 +65,10 @@ async function seed() {
 		});
 		if (amount === '7') await voidMovement(db.cash_movements, row.id, 7);
 	}
-	session = await closeSession(db.register_sessions, session.id, { counted: { cash: '150' } });
+	session = await closeSession(db.register_sessions, session.id, {
+		counted: { cash: '150' },
+		closedBy: 7,
+	});
 	const orders = [
 		{
 			uuid: 'order',
@@ -276,4 +280,18 @@ it('counts distinct legacy refund identities across tenders', async () => {
 	const row = await writeClosure({ ...input, orders, movements: [] });
 	expect(row.period_refunds_total).toBe('10.0000');
 	expect(row.breakdowns.refund_count).toBe(1);
+});
+
+// Revert: omit business_day, closed_by, or snapshot labels when writeClosure builds its draft.
+it('copies the opening business day unchanged when closing on a later day', async () => {
+	const input = await seed();
+	const closure = await writeClosure({
+		...input,
+		labels: { register_name: 'Front', closed_by_name: 'Pat' },
+	});
+	expect(closure.toJSON()).toMatchObject({
+		business_day: '2026-09-16',
+		closed_by: 7,
+		breakdowns: { register_name: 'Front', closed_by_name: 'Pat' },
+	});
 });

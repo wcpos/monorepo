@@ -1,3 +1,5 @@
+import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
+import { AppInfo } from '@wcpos/utils/app-info';
 import type {
 	CashMovementCollection,
 	CashMovementRow,
@@ -9,8 +11,6 @@ import type {
 	RegisterSessionRow,
 	UserDatabase,
 } from '@wcpos/database';
-import { fromMinor, readLedger, toMinor } from '@wcpos/order-math';
-import { AppInfo } from '@wcpos/utils/app-info';
 
 import {
 	advancePerpetual,
@@ -55,9 +55,11 @@ export function openSession(
 		expectedFloat: string | null;
 		countedFloat: string;
 		openedBy: number;
+		businessDay: { year: number; month: number; day: number };
 		storeId?: number | null;
 	}
 ) {
+	const { year, month, day } = input.businessDay;
 	return sessions.insert({
 		id: uuid(),
 		register_id: input.registerId,
@@ -65,6 +67,7 @@ export function openSession(
 		status: 'open',
 		opened_at_gmt: new Date().toISOString(),
 		opened_by: input.openedBy,
+		business_day: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
 		expected_float: input.expectedFloat,
 		counted_float: input.countedFloat,
 		opening_variance:
@@ -100,10 +103,11 @@ export const backToSelling = (sessions: RegisterSessionCollection, id: string) =
 export const closeSession = (
 	sessions: RegisterSessionCollection,
 	id: string,
-	input: { counted: Record<string, string> }
+	input: { counted: Record<string, string>; closedBy?: number }
 ) =>
 	transition(sessions, id, 'closed', {
 		counted: input.counted,
+		closed_by: input.closedBy ?? null,
 		closure_id: id,
 	});
 /**
@@ -179,6 +183,7 @@ export async function writeClosure({
 	orders,
 	tillExpected,
 	refundRecords = [],
+	labels,
 }: {
 	closures: ClosureCollection;
 	userDB: UserDatabase;
@@ -190,6 +195,7 @@ export async function writeClosure({
 	orders: readonly ClosureOrder[];
 	tillExpected?: Record<string, string>;
 	refundRecords?: readonly RefundDocumentType[];
+	labels?: { register_name: string; closed_by_name: string };
 }) {
 	const existing = await closures.findOne(session.id).exec();
 	if (existing) {
@@ -265,6 +271,8 @@ export async function writeClosure({
 		store_id: session.store_id ?? null,
 		number: 0,
 		opened_at: session.opened_at_gmt,
+		...(session.business_day ? { business_day: session.business_day } : {}),
+		closed_by: session.closed_by ?? null,
 		closed_at: session.closed_at_gmt!,
 		till_expected,
 		expected: till_expected,
@@ -297,6 +305,7 @@ export async function writeClosure({
 		printed_at: null,
 		print_count: 0,
 		breakdowns: {
+			...labels,
 			payment_methods,
 			tax_rates,
 			opening_float: {

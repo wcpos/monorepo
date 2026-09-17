@@ -1,15 +1,33 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
+import { format, parseISO } from 'date-fns';
+
+import { Text } from '@wcpos/components/text';
+import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 
+import { useAppInfo } from '../../../hooks/use-app-info';
+import { useT } from '../../../contexts/translations';
+import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
+import { withProAccess } from '../components/pro-guard';
+import { useRegisterBinding } from '../../../services/register/use-register-binding';
+import { calendarDate, useStoreDay, zoneOptions } from '../../../hooks/use-store-day';
+import { PageBar } from './page-bar';
+import { Closures } from './closures';
 import { ReportsProvider } from './context';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
-import { useStoreDay } from '../../../hooks/use-store-day';
 import { useUISettings } from '../contexts/ui-settings';
-import { QueryStateProvider, useCollectionBinding, useQueryState } from '../../../query';
+import {
+	QueryStateProvider,
+	useCollectionBinding,
+	useQueryState,
+	useQueryStateActions,
+} from '../../../query';
 
+import type { ClosureScope } from './closures/use-closure-rows';
 import type { FiltersOf, QueryStateOf } from '../../../query';
 import type { SortFieldsByCollection } from '../../../query/query-state-types';
 
@@ -46,21 +64,59 @@ function getInitialReportSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-function ReportsScreenContent() {
+const GuardedReports = withProAccess(Reports, 'reports');
+function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) => void }) {
 	const state = useQueryState<'orders'>();
+	const actions = useQueryStateActions<'orders'>();
 	const binding = useCollectionBinding('orders', state);
-
+	const { presets, timezone, dayBounds, rangeToFilter } = useStoreDay();
+	const range = state.filters.dateRange;
+	const day = (value: string | undefined, fallback: Date) =>
+		format(
+			value ? convertUTCStringToLocalDate(value) : fallback,
+			'yyyy-MM-dd',
+			zoneOptions(timezone)
+		);
+	const scope = {
+		from: day(range?.from, presets().today.from),
+		to: day(range?.to, presets().today.to),
+		registerId: state.filters.register ?? '',
+		storeId: Number.isFinite(Number(state.filters.store)) ? Number(state.filters.store) : undefined,
+		cashier: state.filters.cashier === undefined ? undefined : Number(state.filters.cashier),
+	};
+	const select = (next: ClosureScope) => {
+		actions.setFilter(
+			'dateRange',
+			rangeToFilter({
+				from: dayBounds(calendarDate(parseISO(next.from))).from,
+				to: dayBounds(calendarDate(parseISO(next.to))).to,
+			})
+		);
+		actions.setFilter('register', next.registerId || undefined);
+		actions.setFilter(
+			'store',
+			next.storeId === undefined ? state.filters.store : String(next.storeId)
+		);
+		actions.setFilter('cashier', next.cashier === undefined ? undefined : String(next.cashier));
+	};
 	return (
-		<ReportsProvider binding={binding}>
-			<Reports />
-		</ReportsProvider>
+		<>
+			<PageBar room="sales" onRoomChange={onRoomChange} scope={scope} onScopeChange={select} />
+			<View className="min-h-0 flex-1">
+				<Suspense>
+					<ReportsProvider binding={binding}>
+						<GuardedReports />
+					</ReportsProvider>
+				</Suspense>
+			</View>
+		</>
 	);
 }
 
 /**
  *
  */
-export function ReportsScreen() {
+function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void }) {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
 	const { presets, rangeToFilter } = useStoreDay();
@@ -84,9 +140,61 @@ export function ReportsScreen() {
 		>
 			<ErrorBoundary>
 				<Suspense>
-					<ReportsScreenContent />
+					<ReportsScreenContent onRoomChange={onRoomChange} />
 				</Suspense>
 			</ErrorBoundary>
 		</QueryStateProvider>
+	);
+}
+
+function ReportsShell() {
+	const [room, setRoom] = React.useState('sales');
+	const [selection, setSelection] = React.useState<ClosureScope | null>(null);
+	const { store, wpCredentials } = useAppState();
+	const binding = useRegisterBinding();
+	const { presets, timezone } = useStoreDay();
+	const today = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
+	const { license } = useAppInfo();
+	const initialScope = {
+		from: today,
+		to: today,
+		registerId: binding.registerId ?? 'unbound',
+		storeId: store?.id,
+		cashier: room === 'sales' ? wpCredentials?.id : undefined,
+	};
+	const scope = license?.isPro
+		? (selection ?? initialScope)
+		: { ...initialScope, cashier: selection?.cashier };
+	return (
+		<View className="flex-1">
+			<ErrorBoundary>
+				<Suspense>
+					{room === 'sales' ? (
+						<SalesScreen onRoomChange={setRoom} />
+					) : (
+						<>
+							<PageBar
+								room={room}
+								onRoomChange={setRoom}
+								scope={scope}
+								onScopeChange={setSelection}
+							/>
+							<Closures scope={scope} />
+						</>
+					)}
+				</Suspense>
+			</ErrorBoundary>
+		</View>
+	);
+}
+
+export function ReportsScreen() {
+	const { wpCredentials } = useAppState();
+	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
+	const t = useT();
+	return capabilities?.includes('view_woocommerce_pos_reports') ? (
+		<ReportsShell />
+	) : (
+		<Text testID="reports-denied">{t('reports.no_access')}</Text>
 	);
 }

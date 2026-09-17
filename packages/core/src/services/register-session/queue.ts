@@ -1,3 +1,8 @@
+import {
+	ERROR_CATALOGUE,
+	ERROR_CODES,
+	type ErrorCode,
+} from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { EngineCollection } from '@wcpos/query';
 import type {
 	CashMovementCollection,
@@ -11,11 +16,6 @@ import type {
 	RegisterSessionRow,
 	UserDatabase,
 } from '@wcpos/database';
-import {
-	ERROR_CATALOGUE,
-	ERROR_CODES,
-	type ErrorCode,
-} from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	adoptCounters,
@@ -348,6 +348,7 @@ async function drain({
 				id: row.id,
 				register_id: row.register_id,
 				opened_at: row.opened_at_gmt,
+				business_day: row.business_day,
 				expected_float: row.expected_float ?? null,
 				counted_float: row.counted_float,
 			});
