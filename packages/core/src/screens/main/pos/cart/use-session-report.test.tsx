@@ -9,7 +9,10 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
 	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
 }));
-jest.mock('../../../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'UTC' }) }));
+jest.mock('../../../../hooks/use-store-day', () => ({
+	useStoreDay: () => ({ timezone: 'UTC' }),
+	useViewedStore: () => undefined,
+}));
 jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
 // Revert: route till reports through the report fallback instead of the shared closure envelope.
 const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
