@@ -39,6 +39,7 @@ jest.mock('./use-closure-rows', () => ({
 	}),
 }));
 jest.mock('./closure-list', () => ({ ClosureList: () => null }));
+jest.mock('./session-cards', () => ({ SessionCards: () => null }));
 const sessionCard = jest.fn();
 jest.mock('./session-card', () => ({
 	SessionCard: (props: unknown) => {

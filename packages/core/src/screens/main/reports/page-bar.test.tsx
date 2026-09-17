@@ -25,17 +25,19 @@ jest.mock('@wcpos/components/button', () => ({
 		testID,
 		children,
 		disabled,
+		className,
 	}: {
 		onPress: () => void;
 		testID: string;
 		children: React.ReactNode;
 		disabled?: boolean;
+		className?: string;
 	}) => {
 		// The real Button wraps a single string only; sibling text crashes native Pressable.
 		if (Array.isArray(children) && children.some((child) => typeof child === 'string'))
 			throw new Error('Native Button requires text children to be wrapped');
 		return (
-			<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			<button data-testid={testID} onClick={onPress} disabled={disabled} className={className}>
 				{children}
 			</button>
 		);
@@ -153,7 +155,6 @@ jest.mock('react-native-calendars', () => ({
 		);
 	},
 }));
-jest.mock('../components/header/left', () => ({ HeaderLeft: () => null }));
 jest.mock('../components/header/right', () => ({ HeaderRight: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
 jest.mock('../../../contexts/translations', () => ({
@@ -394,6 +395,7 @@ it('uses the viewed store day for presets and custom history bounds', () => {
 let mockRoute: Record<string, string> = {};
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => mockRoute,
+	useNavigation: () => ({ openDrawer: jest.fn() }),
 	useRouter: () => ({ setParams: jest.fn() }),
 }));
 jest.mock('../components/pro-guard', () => ({ withProAccess: (component: unknown) => component }));
@@ -408,7 +410,8 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 jest.mock('@wcpos/components/suspense', () => ({
 	Suspense: ({ children }: React.PropsWithChildren) => children,
 }));
-jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+let mockScreenSize = 'sm';
+jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: mockScreenSize }) }));
 jest.mock('../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({}),
 }));
@@ -615,3 +618,20 @@ it('returns to period choices after dismissing the custom picker', () => {
 	fireEvent.click(screen.getByTestId('reports-period'));
 	expect(screen.getByTestId('reports-period-today')).toBeTruthy();
 });
+
+// Revert: leave HeaderLeft at the default 40pt height or let its container shrink.
+it.each(['sm', 'md'])(
+	'keeps the %s page-bar drawer target at least 48pt and non-shrinking',
+	(size) => {
+		mockScreenSize = size;
+		try {
+			draw();
+			const button = screen.getByTestId('drawer-open-button');
+			expect(button.className).toContain('h-12');
+			expect(button.className).toContain('min-w-12');
+			expect(button.className).toContain('shrink-0');
+		} finally {
+			mockScreenSize = 'sm';
+		}
+	}
+);

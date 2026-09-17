@@ -318,6 +318,15 @@ export function useTemplateRenderer({
 				data = null;
 			}
 		}
+		if (!data && localReport && document?.startsWith('xreport:')) {
+			data = {
+				...localReport,
+				order: {
+					...(localReport.order as object),
+					printed: formatClosureDate(new Date().toISOString(), { timezone, locale }),
+				},
+			};
+		}
 		if (document && !data && ((documentReady && !isOffline) || !localReport))
 			throw new Error('receipt_document_requires_store');
 		if (!data && localReport && document?.startsWith('closure:')) {

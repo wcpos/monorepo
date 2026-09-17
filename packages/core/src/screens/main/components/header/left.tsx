@@ -13,7 +13,7 @@ import { useT } from '../../../../contexts/translations';
  * Header left button - uses sidebar-foreground for icons/text since
  * the header has a dark sidebar background in all themes.
  */
-export function HeaderLeft() {
+export function HeaderLeft({ className = '' }: { className?: string }) {
 	const { screenSize } = useTheme();
 	const navigation = useNavigation();
 	const t = useT();
@@ -41,7 +41,7 @@ export function HeaderLeft() {
 				variant="sidebar"
 				testID="drawer-open-button"
 				onPress={handleOpenDrawer}
-				className="px-3"
+				className={`px-3 ${className}`}
 			>
 				<Icon name="bars" className="text-sidebar-foreground" />
 			</Button>
@@ -56,7 +56,7 @@ export function HeaderLeft() {
 			variant="sidebar"
 			testID="drawer-open-button"
 			onPress={handleOpenDrawer}
-			className="px-3"
+			className={`px-3 ${className}`}
 		>
 			<HStack className="gap-2">
 				<Icon name="bars" className="text-sidebar-foreground" />

@@ -26,6 +26,7 @@ import { saveOrShareCsv } from './save-or-share-csv';
 import { ClosurePanel } from './closure-panel';
 import { ClosureList } from './closure-list';
 import { RemoteSessionCard, SessionCard } from './session-card';
+import { SessionCards } from './session-cards';
 import { type ClosureScope, useClosureRows } from './use-closure-rows';
 
 export function Closures({
@@ -108,21 +109,33 @@ export function Closures({
 					</DropdownMenuContent>
 				</DropdownMenu>
 				{!!error && <Text testID="closures-export-error">{error}</Text>}
-				{scope.storeId === store.id &&
-					(!scope.registerId || scope.registerId === binding.registerId) && <SessionCard />}
-				{directory.registers
-					.filter(
-						(register) =>
-							(!scope.registerId || register.id === scope.registerId) &&
-							!(scope.storeId === store.id && register.id === binding.registerId)
-					)
-					.map((register) => (
-						<RemoteSessionCard
-							key={`${scope.storeId}:${register.id}`}
-							register={register}
-							storeId={scope.storeId}
-						/>
-					))}
+				{!scope.registerId ? (
+					<SessionCards
+						key={scope.storeId}
+						registers={directory.registers}
+						storeId={scope.storeId}
+						localRegisterId={scope.storeId === store.id ? binding.registerId : undefined}
+					/>
+				) : (
+					<>
+						{scope.storeId === store.id &&
+							(!scope.registerId || scope.registerId === binding.registerId) && <SessionCard />}
+						{directory.registers
+							.filter(
+								(register) =>
+									(!scope.registerId || register.id === scope.registerId) &&
+									!(scope.storeId === store.id && register.id === binding.registerId)
+							)
+							.map((register) => (
+								<RemoteSessionCard
+									key={`${scope.storeId}:${register.id}`}
+									register={register}
+									storeId={scope.storeId}
+								/>
+							))}
+					</>
+				)}
+
 				{status !== 'ready' && (
 					<Text testID={`closures-${status}`}>
 						{t(

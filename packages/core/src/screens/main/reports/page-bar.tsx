@@ -156,8 +156,8 @@ export function PageBar({
 			style={{ paddingTop: top + 8 }}
 		>
 			<View className="flex-row items-center gap-2">
-				<View className="bg-sidebar rounded-md">
-					<HeaderLeft />
+				<View className="bg-sidebar shrink-0 rounded-md">
+					<HeaderLeft className="h-12 min-w-12 shrink-0" />
 				</View>
 				<Text testID="reports-title" className="text-lg font-semibold">
 					{t('common.reports')}

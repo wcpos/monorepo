@@ -21,7 +21,18 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
-export function SessionCard() {
+export type SessionSummary = RegisterSessionRow & {
+	expected?: Record<string, string>;
+	sales_count?: number;
+};
+export type SessionCardData = {
+	session: SessionSummary | null;
+	closure: ClosureRow | null;
+	status: string;
+};
+type BatchProps = { summary?: SessionCardData; reload?: () => void };
+
+export function SessionCard(batch: BatchProps) {
 	const { store } = useStoreSession();
 	const data = useRegisterSession();
 	const active = data.session?.status === 'open' || data.session?.status === 'counting';
@@ -29,6 +40,7 @@ export function SessionCard() {
 	if (!active && data.binding.registerId) {
 		return (
 			<RemoteSessionCard
+				{...batch}
 				key={`${store.id}:${data.binding.registerId}`}
 				register={{ id: data.binding.registerId, name: data.binding.registerName ?? '' }}
 				storeId={store.id}
@@ -56,8 +68,8 @@ function SessionCardContent({
 }: {
 	session: Pick<RegisterSessionRow, 'status' | 'opened_at_gmt' | 'opened_by'> | null;
 	binding: { registerName: string | null };
-	expected: Record<string, string>;
-	salesCount: number;
+	expected?: Record<string, string>;
+	salesCount?: number;
 	blind: boolean;
 	lastClosure: unknown;
 	print: () => Promise<unknown>;
@@ -115,8 +127,10 @@ function SessionCardContent({
 						{cashiers?.find((row) => row.id === session.opened_by)?.display_name ??
 							t('register.unknown_cashier')}
 					</Text>
-					<Text>{t('register.sales_count', { count: salesCount })}</Text>
-					{!blind && (
+					{salesCount !== undefined && (
+						<Text>{t('register.sales_count', { count: salesCount })}</Text>
+					)}
+					{!blind && expected && (
 						<Text testID="session-expected" className="text-2xl tabular-nums">
 							{t('register.expected', { amount: format(Number(expected.cash ?? 0)) })}
 						</Text>
@@ -153,7 +167,9 @@ export function RemoteSessionCard({
 	register,
 	storeId,
 	localCard,
-}: {
+	summary,
+	reload,
+}: BatchProps & {
 	register: { id: string; name: string };
 	storeId?: number;
 	localCard?: (unavailableReason?: string) => React.ReactNode;
@@ -163,12 +179,12 @@ export function RemoteSessionCard({
 	const { wpCredentials } = useStoreSession();
 	const capabilities = useDocField(wpCredentials, (row) => row.capabilities);
 	const t = useT();
-	type Session = RegisterSessionRow & { expected?: Record<string, string>; sales_count?: number };
-	const [data, setData] = React.useState<{
-		session: Session | null;
-		closure: ClosureRow | null;
-		status: string;
-	}>({ session: null, closure: null, status: 'idle' });
+	const [localData, setData] = React.useState<SessionCardData>({
+		session: null,
+		closure: null,
+		status: 'idle',
+	});
+	const data = summary ?? localData;
 	const load = React.useCallback(async () => {
 		if (!online) return;
 		setData((d) => ({ ...d, status: 'loading' }));
@@ -179,12 +195,12 @@ export function RemoteSessionCard({
 					http.get('sessions', { params: { ...params, status } })
 				)
 			);
-			const session = lists.flatMap((result) => result.data as Session[])[0];
+			const session = lists.flatMap((result) => result.data as SessionSummary[])[0];
 			const detail = await http.get(session ? `sessions/${session.id}` : 'closures/last', {
 				params,
 			});
 			setData({
-				session: session ? (detail.data as Session) : null,
+				session: session ? (detail.data as SessionSummary) : null,
 				closure: session ? null : (detail.data as ClosureRow | null),
 				status: 'ready',
 			});
@@ -195,11 +211,14 @@ export function RemoteSessionCard({
 			}));
 		}
 	}, [http, online, register.id, storeId]);
-	// Read once on activation. Disconnect retains the card; failed reads require the Retry action.
+	const wasOnline = React.useRef(false);
+	// External connectivity changes refresh stale remote cards; failures still use Retry.
 	React.useEffect(() => {
-		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- Initial external read on mount, not a state-change event.
-		if (data.status === 'idle') void load();
-	}, [data.status, load]);
+		const reconnected = online && !wasOnline.current;
+		wasOnline.current = online;
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- Activation/reconnect reads external server state.
+		if (!summary && (data.status === 'idle' || reconnected)) void load();
+	}, [data.status, load, online, summary]);
 	const document = data.session
 		? `xreport:${data.session.id}`
 		: data.closure
@@ -232,8 +251,8 @@ export function RemoteSessionCard({
 					storeId={storeId}
 					session={data.session}
 					binding={{ registerName: register.name }}
-					expected={data.session?.expected ?? {}}
-					salesCount={data.session?.sales_count ?? 0}
+					expected={data.session?.expected ?? (summary ? undefined : {})}
+					salesCount={data.session?.sales_count ?? (summary ? undefined : 0)}
 					blind={!capabilities?.includes('view_woocommerce_pos_reports')}
 					lastClosure={data.closure}
 					unavailable={!online}
@@ -259,7 +278,7 @@ export function RemoteSessionCard({
 					testID={`session-retry-${register.id}`}
 					variant="outline"
 					className="min-h-12"
-					onPress={load}
+					onPress={reload ?? load}
 				>
 					{t('common.retry')}
 				</Button>

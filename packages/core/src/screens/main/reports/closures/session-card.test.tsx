@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { of } from 'rxjs';
 
 import { RemoteSessionCard, SessionCard } from './session-card';
+import { Closures } from './index';
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -288,4 +289,140 @@ it('disables the local Reprint after a failed lookup and retries to the server c
 	fireEvent.click(screen.getByTestId('reports-session-print'));
 	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
 	expect(reprint).not.toHaveBeenCalled();
+});
+
+// Revert: load only idle cards, retaining the old authoritative closure after reconnect.
+it('reloads a ready remote card on reconnect and replaces its Reprint document', async () => {
+	get.mockImplementation(async (url) => ({ data: url === 'sessions' ? [] : { id: 'A' } }));
+	const view = render(<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={2} />);
+	await waitFor(() =>
+		expect(documentHook).toHaveBeenLastCalledWith(
+			expect.objectContaining({ document: 'closure:A' })
+		)
+	);
+	online = false;
+	view.rerender(<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={2} />);
+	expect((screen.getByTestId('reports-session-print') as HTMLButtonElement).disabled).toBe(true);
+	get
+		.mockClear()
+		.mockImplementation(async (url) => ({ data: url === 'sessions' ? [] : { id: 'B' } }));
+	online = true;
+	view.rerender(<RemoteSessionCard register={{ id: 'back', name: 'Back' }} storeId={2} />);
+	await waitFor(() =>
+		expect(documentHook).toHaveBeenLastCalledWith(
+			expect.objectContaining({ document: 'closure:B' })
+		)
+	);
+	expect(get).toHaveBeenCalledTimes(3);
+	fireEvent.click(screen.getByTestId('reports-session-print'));
+	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+});
+
+const allRegisters = Array.from({ length: 20 }, (_, index) => ({
+	id: `r${index}`,
+	name: `Register ${index}`,
+	status: 'active',
+}));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({ registerId: 'front' }),
+	useRegisterDirectory: () => ({ registers: allRegisters }),
+}));
+jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({}),
+}));
+jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+jest.mock('./closure-panel', () => ({ ClosurePanel: () => null }));
+jest.mock('./closure-list', () => ({ ClosureList: () => null }));
+jest.mock('./save-or-share-csv', () => ({ saveOrShareCsv: jest.fn() }));
+jest.mock('./use-closure-rows', () => ({
+	useClosureRows: (scope: unknown) => ({
+		scope,
+		rows: [],
+		localRows: [],
+		status: 'ready',
+		unavailableIds: new Set(),
+	}),
+}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
+jest.mock('@wcpos/components/dropdown-menu', () => {
+	const Pass = ({ children }: React.PropsWithChildren) => children;
+	return {
+		DropdownMenu: Pass,
+		DropdownMenuContent: Pass,
+		DropdownMenuItem: Pass,
+		DropdownMenuTrigger: Pass,
+	};
+});
+
+// Revert: mount independently loading cards, issuing two session reads and a detail per register.
+// Revert: dispatch every closed-register detail at once instead of sharing three workers.
+it('batches all-register sessions and limits closed-register reads to three concurrent requests', async () => {
+	const summaries = allRegisters.slice(0, 16).map((register, index) => ({
+		id: `s${index}`,
+		register_id: register.id,
+		status: index % 2 ? 'counting' : 'open',
+		opened_at_gmt: '2026-09-17 09:00:00',
+		opened_by: 7,
+	}));
+	let active = 0;
+	let peak = 0;
+	const complete: (() => void)[] = [];
+	get.mockImplementation(async (url, config) => {
+		if (url === 'sessions') return { data: summaries };
+		if (url !== 'closures/last') throw new Error(`Unexpected detail: ${url}`);
+		active++;
+		peak = Math.max(peak, active);
+		return new Promise((resolve) =>
+			complete.push(() => {
+				active--;
+				resolve({ data: { id: `last-${config.params.register_id}` } });
+			})
+		);
+	});
+	render(<Closures scope={{ from: '2026-09-17', to: '2026-09-17', storeId: 2, registerId: '' }} />);
+	await waitFor(() => expect(get).toHaveBeenCalled());
+	expect(get.mock.calls.filter(([url]) => url === 'sessions')).toHaveLength(1);
+	await waitFor(() => expect(complete).toHaveLength(3));
+	expect(get).toHaveBeenCalledWith('sessions', {
+		params: { store_id: 2, status: 'all', per_page: 100 },
+	});
+	expect(screen.getAllByTestId('reports-session-card')).toHaveLength(16);
+	// Missing summary figures are unknown, not zero sales or a zero drawer.
+	expect(screen.queryByTestId('session-expected')).toBeNull();
+	expect(screen.getAllByTestId('reports-session-card')[0].textContent).not.toContain('0 sales');
+	await act(async () => {
+		complete[0]();
+	});
+	await waitFor(() => expect(complete).toHaveLength(4));
+	expect(peak).toBe(3);
+	await act(async () => {
+		complete.slice(1).forEach((done) => done());
+	});
+	await waitFor(() => expect(screen.getAllByTestId('reports-session-card')).toHaveLength(20));
+	expect(get).toHaveBeenCalledTimes(5);
+	for (const index of [16, 17, 18, 19]) {
+		expect(get).toHaveBeenCalledWith('closures/last', {
+			params: { store_id: 2, register_id: `r${index}` },
+		});
+	}
+});
+
+// Revert: treat an absent register in a full history page as definitely closed.
+it('does not offer a stale closure when the single sessions page cannot establish register state', async () => {
+	get.mockImplementation(async (url) => ({
+		data:
+			url === 'sessions'
+				? Array.from({ length: 100 }, (_, index) => ({
+						id: `old${index}`,
+						register_id: 'r0',
+						status: 'closed',
+					}))
+				: { id: 'old-closure' },
+	}));
+	render(<Closures scope={{ from: '2026-09-17', to: '2026-09-17', storeId: 2, registerId: '' }} />);
+	await waitFor(() => expect(screen.getByTestId('session-retry-r19')).toBeTruthy());
+	expect(get).not.toHaveBeenCalledWith('closures/last', {
+		params: { store_id: 2, register_id: 'r19' },
+	});
 });
