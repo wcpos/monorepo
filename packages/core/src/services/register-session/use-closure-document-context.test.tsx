@@ -24,6 +24,7 @@ const session = {
 					currency: 'JPY',
 					currency_pos: 'right',
 					timezone: 'Asia/Tokyo',
+					locale: 'de_DE',
 					price_num_decimals: 0,
 					price_decimal_sep: '.',
 					price_thousand_sep: ',',
@@ -36,7 +37,10 @@ jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(row: T, select: (value: T) => unknown) => (row ? select(row) : undefined),
 }));
 jest.mock('../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-US' }) }));
+jest.mock('../../hooks/use-locale', () => ({
+	...jest.requireActual('../../hooks/use-locale'),
+	useLocale: () => ({ code: 'en-US' }),
+}));
 
 // Revert: build the closure detail's currency/timezone context from the bound store.
 it('uses the viewed store currency, precision and timezone without rebinding the till', () => {
@@ -45,4 +49,11 @@ it('uses the viewed store currency, precision and timezone without rebinding the
 	expect(result.current.timezone).toBe('Asia/Tokyo');
 	expect(result.current.formatMoney('1200.0000')).toBe('1,200¥');
 	expect(session.store.id).toBe(1);
+});
+
+// Revert: format a viewed store's document in the bound store's language.
+it('formats the viewed store document in that store language', () => {
+	const { result } = renderHook(() => useClosureDocumentContext(2));
+	expect(result.current.locale).toBe('de');
+	expect(renderHook(() => useClosureDocumentContext(1)).result.current.locale).toBe('en-US');
 });

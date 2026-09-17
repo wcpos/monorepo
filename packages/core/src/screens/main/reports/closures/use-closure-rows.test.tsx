@@ -292,6 +292,23 @@ it('keeps the local identity of a recounted closure this device wrote', async ()
 	});
 });
 
+// Revert: let a failed local patch abort the authoritative refresh.
+it('still refetches the recounted closure when the local patch fails', async () => {
+	get.mockResolvedValueOnce({ data: [row('remote', { register_id: 'other' })] });
+	collection.findOne.mockReturnValue({
+		exec: async () => ({ incrementalPatch: async () => Promise.reject(new Error('locked')) }),
+	});
+	const { result } = renderHook(() => useClosureRows({ ...scope, registerId: 'other' }));
+	await waitFor(() => expect(result.current.rows).toHaveLength(1));
+	get.mockResolvedValueOnce({
+		data: row('remote', { register_id: 'other', corrections_count: 4 }),
+	});
+	await act(() => result.current.refreshRow(result.current.rows[0]));
+	expect(get).toHaveBeenLastCalledWith('closures/remote');
+	expect(result.current.rows[0].corrections_count).toBe(4);
+	collection.findOne.mockReset();
+});
+
 // Revert: derive remote legacy days using the bound store timezone.
 it('derives legacy remote business days in the selected store zone', async () => {
 	get.mockResolvedValue({

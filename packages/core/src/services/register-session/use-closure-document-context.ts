@@ -1,7 +1,7 @@
 import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../contexts/translations';
-import { useLocale } from '../../hooks/use-locale';
+import { languageForStoreLocale, useLocale } from '../../hooks/use-locale';
 import { useStoreDay, useViewedStore } from '../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../screens/main/hooks/use-currency-format';
 import { labelKeys } from '../../screens/main/reports/closures/document-labels';
@@ -13,6 +13,8 @@ export function useClosureDocumentContext(storeId?: number): ClosureContext {
 	const data = useDocField(store, (value) => value);
 	const { timezone } = useStoreDay(storeId);
 	const { code } = useLocale();
+	// A viewed store's own language setting formats its document, as the server copy does.
+	const locale = data?.locale ? languageForStoreLocale(data.locale as string).code : code;
 	const { format } = useCurrencyFormat({
 		currency: data?.currency,
 		currencyPosition: data?.currency_pos,
@@ -34,7 +36,7 @@ export function useClosureDocumentContext(storeId?: number): ClosureContext {
 		},
 		currency: data?.currency ?? '',
 		timezone,
-		locale: code,
+		locale,
 		printedAt: new Date().toISOString(),
 		formatMoney: (value) => (value === '' ? '' : format(Number(value))),
 		i18n: {

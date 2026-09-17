@@ -220,12 +220,17 @@ export function useClosureRows(requested: ClosureScope) {
 						}
 					: p
 			);
-			const local = await collection
-				?.findOne({
-					selector: { $or: [{ id: identity(row) }, { server_closure_id: identity(row) }] },
-				})
-				.exec();
-			await local?.incrementalPatch({ corrections_count: updated.corrections_count });
+			// A failed local patch must not stop the authoritative detail read that follows.
+			try {
+				const local = await collection
+					?.findOne({
+						selector: { $or: [{ id: identity(row) }, { server_closure_id: identity(row) }] },
+					})
+					.exec();
+				await local?.incrementalPatch({ corrections_count: updated.corrections_count });
+			} catch (error) {
+				log.warn('Closure row could not be patched locally', { context: { error: String(error) } });
+			}
 		};
 		try {
 			await update({ ...row, corrections_count: (row.corrections_count ?? 0) + 1 });
