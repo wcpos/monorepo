@@ -1,3 +1,6 @@
+import type { EngineScopeSwitcher } from './engine-scope-port';
+import type { CurrentSessionIDs, hydrateUserSession, SessionAppState } from './hydration-steps';
+
 /**
  * The five fields an active store session consists of. Login and store-switch
  * write them together; `hasStoreSession` is the one predicate every gate reads
@@ -55,3 +58,36 @@ export function assertStoreSession(state: SessionFields): void {
 		throw new IncompleteStoreSessionError(missing);
 	}
 }
+
+type HydratedStoreSession = Awaited<ReturnType<typeof hydrateUserSession>>;
+
+/**
+ * The one place the durable session pointer is committed, in the one order that keeps a
+ * cashier off a partial store: refuse an incomplete session (AUTH131 at the caller), move the
+ * engine to the new scope (a failed transition aborts with durable state untouched), THEN
+ * persist the pointer. `null` signs out: the pointer is cleared and the sessionless state
+ * returned; the engine is not touched. Login and embedded boot pass no engine switcher because
+ * they run before the engine port exists (#2112). Persistence failure after activation
+ * propagates; there is no rollback.
+ */
+export async function commitStoreSession(
+	appState: SessionAppState,
+	next: { ids: CurrentSessionIDs; session: HydratedStoreSession } | null,
+	switchEngineScope?: EngineScopeSwitcher
+): Promise<HydratedStoreSession> {
+	if (next) {
+		assertStoreSession(next.session);
+		await switchEngineScope?.(next.session);
+	}
+	await appState.set('current', () => next?.ids ?? null);
+	return next?.session ?? SIGNED_OUT_SESSION;
+}
+
+
+export const SIGNED_OUT_SESSION: HydratedStoreSession = {
+	site: undefined,
+	wpCredentials: undefined,
+	store: undefined,
+	storeDB: undefined,
+	extraData: undefined,
+};

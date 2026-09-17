@@ -45,6 +45,7 @@ jest.mock('@wcpos/hooks/platform-fetch', () => ({
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
 import {
 	hydrateUserSession,
+	type HydrationContext,
 	hydrationSteps,
 	runConnectCompatibilityProbes,
 	switchUserSessionStore,
@@ -274,7 +275,12 @@ describe('hydration step fail modes', () => {
 });
 
 describe('PROCESS_INITIAL_PROPS', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
 	it('merges server-owned fields into existing stores and inserts new stores', async () => {
+		createStoreDBMock.mockResolvedValue({ addState: jest.fn(async () => ({})) });
 		const existingStore: any = {
 			id: 1,
 			localID: '0123456789',
@@ -295,15 +301,22 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		const userDB = {
 			sites: {
 				schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
-				findOne: jest.fn(() => ({ exec: jest.fn(async () => null) })),
+				findOne: jest
+					.fn()
+					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
+					.mockReturnValue({ exec: jest.fn(async () => siteDoc) }),
 				incrementalUpsert: jest.fn(async () => siteDoc),
 			},
-			wp_credentials: { upsert: jest.fn(async () => wpCredentialsDoc) },
+			wp_credentials: {
+				upsert: jest.fn(async () => wpCredentialsDoc),
+				...documentLookup(wpCredentialsDoc),
+			},
 			stores: {
 				findOne: jest
 					.fn()
 					.mockReturnValueOnce({ exec: jest.fn(async () => existingStore) })
-					.mockReturnValueOnce({ exec: jest.fn(async () => null) }),
+					.mockReturnValueOnce({ exec: jest.fn(async () => null) })
+					.mockReturnValue({ exec: jest.fn(async () => existingStore) }),
 				bulkInsert,
 			},
 		};
@@ -330,6 +343,8 @@ describe('PROCESS_INITIAL_PROPS', () => {
 		// calc_taxes is auto-synced; currency is app-editable and must NOT auto-sync
 		expect(existingStore.incrementalPatch).toHaveBeenCalledWith({ calc_taxes: 'yes' });
 		expect(existingStore.theme).toBe('dark');
+		expect(createStoreDBMock).toHaveBeenCalledWith(existingStore.localID);
+		expect(appState.set).toHaveBeenCalledWith('current', expect.any(Function));
 		expect(bulkInsert).toHaveBeenCalledWith([
 			expect.objectContaining({
 				id: 2,
@@ -337,6 +352,67 @@ describe('PROCESS_INITIAL_PROPS', () => {
 				prevent_overselling: false,
 			}),
 		]);
+	});
+
+	it('PROCESS_INITIAL_PROPS does not persist a selected session whose hydration is incomplete', async () => {
+		const previous = { siteID: 'old-site', storeID: 'old-store' };
+		const site = { uuid: 'new-site' };
+		const credentials = { uuid: 'new-credentials', patch: jest.fn() };
+		const appState = { get: jest.fn(() => previous), set: jest.fn() };
+		const context = {
+			appState,
+			user: { uuid: 'user-1' },
+			userDB: {
+				sites: {
+					...documentLookup(null),
+					schema: { primaryPath: 'uuid', jsonSchema: { properties: { uuid: {} } } },
+					incrementalUpsert: jest.fn(async () => site),
+				},
+				wp_credentials: {
+					...documentLookup(credentials),
+					upsert: jest.fn(async () => credentials),
+				},
+				stores: { ...documentLookup(null), bulkInsert: jest.fn() },
+			},
+			initialProps: { site, wp_credentials: credentials, stores: [{ id: 1 }] },
+		} as unknown as HydrationContext;
+		const step = hydrationSteps.find(({ name }) => name === 'PROCESS_INITIAL_PROPS')!;
+		expect(step.failSoft).toBe(true);
+		await expect(step.execute(context)).rejects.toThrow('Store session incomplete');
+		expect(appState.set).not.toHaveBeenCalled();
+		expect(appState.get()).toBe(previous);
+	});
+});
+
+describe('HYDRATE_USER_SESSION', () => {
+	it('returns incomplete persisted hydration for provider recovery rather than committing or throwing a presence assertion', async () => {
+		const credentials = { uuid: 'credentials-1' };
+		const appState = {
+			get: jest.fn(() => ({
+				siteID: 'site-1',
+				wpCredentialsID: credentials.uuid,
+				storeID: 'store-1',
+			})),
+			set: jest.fn(),
+		};
+		const step = hydrationSteps.find(({ name }) => name === 'HYDRATE_USER_SESSION')!;
+		await expect(
+			step.execute({
+				appState,
+				userDB: {
+					sites: documentLookup(null),
+					wp_credentials: documentLookup(credentials),
+					stores: documentLookup(null),
+				},
+			} as unknown as HydrationContext)
+		).resolves.toEqual({
+			site: null,
+			wpCredentials: credentials,
+			store: null,
+			storeDB: undefined,
+			extraData: undefined,
+		});
+		expect(appState.set).not.toHaveBeenCalled();
 	});
 });
 
