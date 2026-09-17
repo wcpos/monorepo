@@ -165,9 +165,11 @@ export function useClosureRows(requested: ClosureScope) {
 	const refreshRow = async (row: ClosureRow) => {
 		const identity = (r: ClosureRow) => r.server_closure_id ?? r.id;
 		const update = async (updated: ClosureRow) => {
-			// The refreshed server row keeps the viewed row's identity, so the open panel's
-			// selection (a local uuid for a closure this device wrote) still resolves.
+			// The refresh overlays the server's current fields on the viewed row and keeps its
+			// identity, so the open panel's selection (a local uuid for a closure this device
+			// wrote) still resolves and a field the detail response omits cannot drop the row.
 			const next = {
+				...row,
 				...updated,
 				id: row.id,
 				server_closure_id: row.server_closure_id ?? updated.server_closure_id,

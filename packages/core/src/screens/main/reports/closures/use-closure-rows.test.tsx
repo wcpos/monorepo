@@ -232,13 +232,16 @@ it('keeps the local identity of a recounted closure this device wrote', async ()
 	]);
 	const { result } = renderHook(() => useClosureRows(scope));
 	await waitFor(() => expect(result.current.rows.map((r) => r.id)).toEqual(['local-uuid']));
-	get.mockResolvedValueOnce({ data: row('9', { corrections_count: 2 }) });
+	// The detail response omits store_id, as a scope-agnostic server row may.
+	const { store_id: _omitted, ...detail } = row('9', { corrections_count: 2 });
+	get.mockResolvedValueOnce({ data: detail });
 	await act(() => result.current.refreshRow(result.current.rows[0]));
 	expect(get).toHaveBeenLastCalledWith('closures/9');
 	expect(result.current.rows).toHaveLength(1);
 	expect(result.current.rows[0]).toMatchObject({
 		id: 'local-uuid',
 		server_closure_id: '9',
+		store_id: 1,
 		corrections_count: 2,
 	});
 });
