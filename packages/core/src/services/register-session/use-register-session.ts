@@ -23,7 +23,7 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { readLedger, toMinor } from '@wcpos/order-math';
 import { mintRemoteId } from '@wcpos/sync-core';
-import type { RefundDocumentType } from '@wcpos/database';
+import type { RefundDocumentType, WPCredentialsDocument } from '@wcpos/database';
 import type { RequirementHandle } from '@wcpos/sync-engine';
 
 import { useStoreDay } from '../../hooks/use-store-day';
@@ -434,6 +434,10 @@ export function useRegisterSession() {
 						clearTimeout(timeout);
 					}
 				}
+				const cashiers: WPCredentialsDocument[] = await site.populate('wp_credentials');
+				const actorName = (id: number | null | undefined) =>
+					(id === wpCredentials.id ? wpCredentials : cashiers.find((row) => row.id === id))
+						?.display_name ?? '';
 				const accounting = latestAccounting.current;
 				const latestSession = session!.getLatest();
 				const refundRecords = accounting?.refundRecords ?? data?.refundRecords;
@@ -443,6 +447,8 @@ export function useRegisterSession() {
 					labels: {
 						register_name: binding.registerName ?? '',
 						closed_by_name: wpCredentials.display_name ?? '',
+						opened_by_name: actorName(closed.opened_by),
+						approved_by_name: actorName(closed.approved_by),
 					},
 					tillExpected:
 						!localPending &&

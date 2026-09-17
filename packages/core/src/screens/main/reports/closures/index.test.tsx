@@ -18,6 +18,7 @@ const localRows = [
 	},
 ];
 let rows = localRows;
+let screenSize = 'sm';
 const share = jest.fn(async () => undefined);
 jest.mock('./save-or-share-csv', () => ({
 	saveOrShareCsv: (...args: unknown[]) => share(...(args as [])),
@@ -37,10 +38,19 @@ jest.mock('./use-closure-rows', () => ({
 	}),
 }));
 jest.mock('./closure-list', () => ({ ClosureList: () => null }));
-jest.mock('./session-card', () => ({ SessionCard: () => null }));
+const sessionCard = jest.fn();
+jest.mock('./session-card', () => ({
+	SessionCard: (props: unknown) => {
+		sessionCard(props);
+		return null;
+	},
+}));
 jest.mock('./closure-panel', () => ({
-	ClosurePanel: ({ row }: { row: { id: string } }) => (
-		<div data-testid="selected-closure">{row.id}</div>
+	ClosurePanel: ({ row, onClose }: { row: { id: string }; onClose: () => void }) => (
+		<div data-testid="selected-closure">
+			{row.id}
+			<button data-testid="close-panel" onClick={onClose} />
+		</div>
 	),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
@@ -49,7 +59,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 jest.mock('../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../jest/translate').createTestT(),
 }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize }) }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'r' }),
 	useRegisterDirectory: () => ({ registers: [] }),
@@ -148,4 +158,21 @@ it('keeps a local deep link open after historical paging replaces the row', () =
 	view.rerender(<Closures scope={scope} initialClosureId="c" />);
 	expect(screen.getByTestId('selected-closure').textContent).toBe('server');
 	rows = localRows;
+});
+
+// Revert: dismiss local selection without notifying the host to consume the deep link.
+it.each(['sm', 'lg'])('consumes the deep link when the %s panel closes', (size) => {
+	screenSize = size;
+	const onClose = jest.fn();
+	render(<Closures scope={scope} initialClosureId="c" {...{ onClose }} />);
+	fireEvent.click(screen.getByTestId('close-panel'));
+	expect(screen.queryByTestId('selected-closure')).toBeNull();
+	expect(onClose).toHaveBeenCalledTimes(1);
+	screenSize = 'sm';
+});
+
+// Revert: feed date/cashier-filtered rows to the current register's last-closure action.
+it('does not substitute scoped history for the register last closure', () => {
+	render(<Closures scope={scope} />);
+	expect(sessionCard).toHaveBeenLastCalledWith({});
 });

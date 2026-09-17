@@ -302,3 +302,43 @@ it('keeps a server-listed local closure available offline by server id', async (
 	expect(result.current.rows.map((r) => r.id)).toEqual(['server', 'remote-local']);
 	expect([...result.current.unavailableIds]).toEqual(['remote-server']);
 });
+
+// Revert: finish after an unfiltered page instead of filling the cashier-filtered page.
+it.each([1, 50])('automatically finds %s cashier closures beyond page one', async (matches) => {
+	const statuses: string[] = [];
+	get.mockImplementation(async (_url, config) => ({
+		data:
+			config.params.page <= 2
+				? Array.from({ length: 50 }, (_, i) =>
+						row(`${config.params.page}-${i}`, {
+							register_id: 'other',
+							closed_by: config.params.page === 2 && i < matches ? 7 : 8,
+						})
+					)
+				: [],
+	}));
+	const { result } = renderHook(() => {
+		const result = useClosureRows({ ...scope, registerId: 'other', cashier: 7 });
+		statuses.push(result.status);
+		return result;
+	});
+	await waitFor(() => expect(result.current.status).toBe('ready'));
+	expect(result.current.rows).toHaveLength(matches);
+	expect(get.mock.calls.map(([, config]) => config.params.page)).toEqual(
+		matches === 50 ? [1, 2] : [1, 2, 3]
+	);
+	expect(statuses.slice(0, -1)).not.toContain('ready');
+	expect(result.current.hasMore).toBe(matches === 50);
+});
+
+// Revert: automatically page unfiltered scopes rather than leaving Load more user-driven.
+it('requests only the first page without a cashier filter', async () => {
+	get.mockResolvedValue({
+		data: Array.from({ length: 50 }, (_, i) => row(String(i), { register_id: 'other' })),
+	});
+	const { result } = renderHook(() => useClosureRows({ ...scope, registerId: 'other' }));
+	await waitFor(() => expect(result.current.status).toBe('ready'));
+	expect(result.current.rows).toHaveLength(50);
+	expect(result.current.hasMore).toBe(true);
+	expect(get).toHaveBeenCalledTimes(1);
+});

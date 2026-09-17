@@ -69,7 +69,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		blind,
 		expected: { cash: '155' },
 		salesCount: 3,
-		binding: { registerName: 'Front' },
+		binding: { registerId: 'front', registerName: 'Front' },
 		lastClosure,
 	}),
 }));
@@ -101,6 +101,7 @@ it('offers the last closure Reprint when the register is closed', async () => {
 	fireEvent.click(screen.getByTestId('reports-session-print'));
 	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(1));
 	expect(print).not.toHaveBeenCalled();
+	expect(get).not.toHaveBeenCalled();
 });
 // Revert: omit the X-report action, its expected drawer, or print failure feedback.
 it('prints the live X-report and reports a failed dispatch', async () => {
@@ -201,13 +202,22 @@ it.each([0, 2])(
 	}
 );
 
-// Revert: ignore the room's already-loaded closure when session history is empty.
-it('reprints the latest loaded closure when the closed register has no persisted session history', async () => {
+// Revert: choose a scope-filtered historical row or omit the bound register's last-closure read.
+it('fetches the actual last closure when the bound closed register has no local closure', async () => {
 	session = null;
 	lastClosure = null;
-	const row = require('../../../../services/register-session/__fixtures__/closure-local-row.json');
-	render(<SessionCard lastKnownClosure={row} />);
+	get.mockImplementation(async (url) => ({
+		data: url === 'sessions' ? [] : { id: 'latest', number: 9 },
+	}));
+	render(<SessionCard />);
+	await waitFor(() => expect(screen.getByTestId('reports-session-print')).toBeTruthy());
+	expect(get).toHaveBeenCalledWith('closures/last', {
+		params: { register_id: 'front', store_id: 1 },
+	});
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({ document: 'closure:latest', isReprint: true })
+	);
 	fireEvent.click(screen.getByTestId('reports-session-print'));
-	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(1));
-	expect(print).not.toHaveBeenCalled();
+	await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+	expect(reprint).not.toHaveBeenCalled();
 });

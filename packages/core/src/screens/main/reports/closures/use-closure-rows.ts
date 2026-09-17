@@ -157,11 +157,6 @@ export function useClosureRows(requested: ClosureScope) {
 			);
 		}
 	}, [online, needsServer, page, key, http, scope.registerId, scope.storeId, scope.from, scope.to]);
-	// Load the selected server scope once; failed reads and later pages are user-driven.
-	React.useEffect(() => {
-		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- Initial external read for the selected scope; retries are event-driven.
-		if (observed && page.status === 'idle') void loadMore();
-	}, [observed, page.status, loadMore]);
 	const refreshRow = async (row: ClosureRow) => {
 		const identity = (r: ClosureRow) => r.server_closure_id ?? r.id;
 		const update = async (updated: ClosureRow) => {
@@ -204,6 +199,13 @@ export function useClosureRows(requested: ClosureScope) {
 		if (!merged.has(id) || pending) merged.set(id, row);
 	}
 	const rows = selectClosureRows([...merged.values()], scope, timezone);
+	const fillCashierPage =
+		scope.cashier !== undefined && rows.length < PAGE_SIZE && page.more && page.status === 'ready';
+	// The REST API cannot filter cashiers; fill the filtered page before ending loading.
+	React.useEffect(() => {
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- External scope read and filtered-page continuation; failed reads remain user-driven.
+		if (observed && (page.status === 'idle' || fillCashierPage)) void loadMore();
+	}, [observed, page.status, fillCashierPage, loadMore]);
 	const localIds = new Set(local.map((row) => row.server_closure_id ?? row.id));
 	return {
 		scope,
@@ -211,7 +213,7 @@ export function useClosureRows(requested: ClosureScope) {
 		localRows: local,
 		loadMore,
 		refreshRow,
-		hasMore: needsServer && page.more && page.status === 'ready',
+		hasMore: needsServer && page.more && page.status === 'ready' && !fillCashierPage,
 		unavailableIds: new Set(
 			online
 				? []
@@ -222,7 +224,7 @@ export function useClosureRows(requested: ClosureScope) {
 		status: needsServer
 			? !online
 				? 'unavailable'
-				: page.status === 'idle'
+				: page.status === 'idle' || fillCashierPage
 					? 'loading'
 					: page.status
 			: observed

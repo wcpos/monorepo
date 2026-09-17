@@ -19,13 +19,15 @@ jest.mock('../components/pro-guard', () => ({
 }));
 const mockClosureScope = jest.fn();
 jest.mock('./closures', () => ({
-	Closures: (props: unknown) => {
+	Closures: (props: { onClose?: () => void; initialClosureId?: string }) => {
 		mockClosureScope(props);
-		return null;
+		return props.initialClosureId ? (
+			<button data-testid="close-closure" onClick={props.onClose} />
+		) : null;
 	},
 }));
 let mockPro = true;
-let mockCapabilities = ['view_woocommerce_pos_reports'];
+let mockCapabilities: string[] | undefined = ['view_woocommerce_pos_reports'];
 jest.mock('../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: mockPro } }),
 }));
@@ -267,6 +269,7 @@ it('constrains a retained Pro scope before mounting Free closures', () => {
 	fireEvent.click(screen.getByTestId('past-scope'));
 	expect(mockClosureScope).toHaveBeenLastCalledWith({
 		scope: expect.objectContaining({ registerId: 'other' }),
+		onClose: expect.any(Function),
 	});
 	mockPro = false;
 	view.rerender(<ReportsScreen />);
@@ -278,6 +281,7 @@ it('constrains a retained Pro scope before mounting Free closures', () => {
 			registerId: 'r',
 			storeId: 9,
 		}),
+		onClose: expect.any(Function),
 	});
 	mockPro = true;
 	jest.useRealTimers();
@@ -306,11 +310,15 @@ it('can enter local Closures while the Sales workspace is still loading', () => 
 	}
 });
 
-let mockRoute: Record<string, string> = {};
+let mockRoute: Record<string, string | undefined> = {};
+const mockSetParams = jest.fn((params) => {
+	mockRoute = { ...mockRoute, ...params };
+});
 const mockOpenDrawer = jest.fn();
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => mockRoute,
-	useNavigation: () => ({ openDrawer: mockOpenDrawer }),
+	useRouter: () => ({ setParams: mockSetParams }),
+	useNavigation: () => ({ openDrawer: mockOpenDrawer, setParams: mockSetParams }),
 }));
 jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
 jest.mock('@wcpos/components/button', () => ({
@@ -374,4 +382,33 @@ it('lets a denied cashier return to the drawer without mounting report readers',
 	expect(mockOpenDrawer).toHaveBeenCalledTimes(1);
 	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
 	expect(mockClosureScope).not.toHaveBeenCalled();
+});
+
+// Revert: treat an absent legacy capability payload as an explicit denial.
+it('keeps Sales and Closures accessible when capabilities are unknown', () => {
+	mockCapabilities = undefined;
+	render(<ReportsScreen />);
+	expect(screen.queryByTestId('reports-denied')).toBeNull();
+	fireEvent.click(screen.getByTestId('room-closures'));
+	expect(mockClosureScope).toHaveBeenCalled();
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+});
+
+// Revert: retain the consumed closureId, or remount the shell when it is cleared.
+it('clears a closed deep link without leaving Closures or reopening it after Sales', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	mockRoute = { closureId: 'c', businessDay: '2026-09-16', registerId: 'r' };
+	const view = render(<ReportsScreen />);
+	fireEvent.click(screen.getByTestId('close-closure'));
+	expect(mockSetParams).toHaveBeenCalledWith({ closureId: undefined });
+	view.rerender(<ReportsScreen />);
+	expect(screen.queryByTestId('legacy-register')).toBeNull();
+	fireEvent.click(screen.getByTestId('room-sales'));
+	fireEvent.click(screen.getByTestId('room-closures'));
+	expect(screen.queryByTestId('close-closure')).toBeNull();
+	// A later visit to the same deep link must still select it.
+	mockRoute = { ...mockRoute, closureId: 'c' };
+	view.rerender(<ReportsScreen />);
+	expect(screen.getByTestId('close-closure')).toBeTruthy();
+	mockRoute = {};
 });

@@ -21,16 +21,21 @@ import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
-export function SessionCard({ lastKnownClosure }: { lastKnownClosure?: ClosureRow } = {}) {
+export function SessionCard() {
+	const { store } = useStoreSession();
 	const data = useRegisterSession();
 	const active = data.session?.status === 'open' || data.session?.status === 'counting';
-	const { print } = useSessionReport(
-		active ? undefined : data.lastClosure,
-		!active,
-		active ? undefined : lastKnownClosure
-	);
-	const lastClosure = data.lastClosure ?? lastKnownClosure;
-	return <SessionCardContent {...data} lastClosure={lastClosure} print={print} />;
+	const { print } = useSessionReport(active ? undefined : data.lastClosure, !active);
+	if (!active && !data.lastClosure && data.binding.registerId) {
+		return (
+			<RemoteSessionCard
+				key={`${store.id}:${data.binding.registerId}`}
+				register={{ id: data.binding.registerId, name: data.binding.registerName ?? '' }}
+				storeId={store.id}
+			/>
+		);
+	}
+	return <SessionCardContent {...data} print={print} />;
 }
 function SessionCardContent({
 	session,

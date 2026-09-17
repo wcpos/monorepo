@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
@@ -176,6 +176,7 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 }
 
 function ReportsShell() {
+	const router = useRouter();
 	const params = useLocalSearchParams<{
 		closureId?: string;
 		businessDay?: string;
@@ -218,7 +219,11 @@ function ReportsShell() {
 								scope={scope}
 								onScopeChange={setSelection}
 							/>
-							<Closures scope={scope} initialClosureId={params.closureId} />
+							<Closures
+								scope={scope}
+								initialClosureId={params.closureId}
+								onClose={() => router.setParams({ closureId: undefined })}
+							/>
 						</>
 					)}
 				</Suspense>
@@ -229,11 +234,16 @@ function ReportsShell() {
 
 export function ReportsScreen() {
 	const { closureId } = useLocalSearchParams<{ closureId?: string }>();
+	// Clearing a consumed link keeps the current room; a new link resets its selection.
+	const [link, setLink] = React.useState({ closureId, key: 0 });
+	if (link.closureId !== closureId) {
+		setLink({ closureId, key: closureId ? link.key + 1 : link.key });
+	}
 	const { wpCredentials } = useAppState();
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const t = useT();
-	return capabilities?.includes('view_woocommerce_pos_reports') ? (
-		<ReportsShell key={closureId} />
+	return !capabilities || capabilities.includes('view_woocommerce_pos_reports') ? (
+		<ReportsShell key={link.key} />
 	) : (
 		<View className="flex-1">
 			<View className="bg-sidebar self-start rounded-md p-2">

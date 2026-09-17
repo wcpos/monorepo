@@ -212,7 +212,12 @@ export async function writeClosure({
 	orders: readonly ClosureOrder[];
 	tillExpected?: Record<string, string>;
 	refundRecords?: readonly RefundDocumentType[];
-	labels?: { register_name: string; closed_by_name: string };
+	labels?: {
+		register_name: string;
+		closed_by_name: string;
+		opened_by_name?: string;
+		approved_by_name?: string;
+	};
 }) {
 	const existing = await closures.findOne(session.id).exec();
 	if (existing) {

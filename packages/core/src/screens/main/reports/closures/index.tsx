@@ -31,13 +31,19 @@ import { type ClosureScope, useClosureRows } from './use-closure-rows';
 export function Closures({
 	scope: requested,
 	initialClosureId,
+	onClose,
 }: {
 	scope: ClosureScope;
 	initialClosureId?: string;
+	onClose?: () => void;
 }) {
 	const { rows, localRows, scope, status, hasMore, loadMore, refreshRow, unavailableIds } =
 		useClosureRows(requested);
 	const [selected, setSelected] = React.useState<string | null>(initialClosureId ?? null);
+	const close = () => {
+		setSelected(null);
+		onClose?.();
+	};
 	const selectedLocal = localRows.find((row) => row.id === selected);
 	const selectedId = selectedLocal?.server_closure_id ?? selected;
 	const row = rows.find(
@@ -52,13 +58,6 @@ export function Closures({
 	const t = useT();
 	const names = useRegisterNames();
 	const [error, setError] = React.useState('');
-	const lastKnownClosure = rows
-		.filter(
-			(row) =>
-				row.register_id === binding.registerId &&
-				!unavailableIds.has(row.server_closure_id ?? row.id)
-		)
-		.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0];
 	const registerContainer = React.useCallback((node: View | null) => {
 		registerPortalContainer(
 			'reports',
@@ -71,7 +70,7 @@ export function Closures({
 				key={row.id}
 				row={row}
 				onRecountSaved={() => void refreshRow(row)}
-				onClose={() => setSelected(null)}
+				onClose={close}
 			/>
 		);
 	return (
@@ -110,9 +109,7 @@ export function Closures({
 				</DropdownMenu>
 				{!!error && <Text testID="closures-export-error">{error}</Text>}
 				{scope.storeId === store.id &&
-					(!scope.registerId || scope.registerId === binding.registerId) && (
-						<SessionCard lastKnownClosure={lastKnownClosure} />
-					)}
+					(!scope.registerId || scope.registerId === binding.registerId) && <SessionCard />}
 				{directory.registers
 					.filter(
 						(register) =>
@@ -163,7 +160,7 @@ export function Closures({
 					key={row.id}
 					row={row}
 					onRecountSaved={() => void refreshRow(row)}
-					onClose={() => setSelected(null)}
+					onClose={close}
 				/>
 			) : (
 				screenSize !== 'sm' && (
