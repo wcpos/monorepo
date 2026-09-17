@@ -1,13 +1,20 @@
 /** @jest-environment jsdom */
+import { of } from 'rxjs';
 import { renderHook } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 
+const mockSite = { populate$: () => of([{ id: 8, display_name: 'Alex' }]) };
+let mockOpenedBy = 8;
+
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
-	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
+	useStoreSession: () => ({
+		site: mockSite,
+		wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' },
+	}),
 }));
 jest.mock('../../../../hooks/use-store-day', () => ({
 	useStoreDay: () => ({ timezone: 'UTC' }),
@@ -50,7 +57,7 @@ jest.mock('../../../../services/register-session/use-register-session-collection
 }));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
-		session: { id: 's', register_id: 'r', opened_by: 8 },
+		session: { id: 's', register_id: 'r', opened_by: mockOpenedBy },
 		expected: { cash: '155' },
 		blind: false,
 		binding: { registerName: 'Front' },
@@ -59,6 +66,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 beforeEach(() => {
 	jest.clearAllMocks();
 	mockAutoOpen = false;
+	mockOpenedBy = 8;
 });
 it('routes X to the session document with the panel figures as offline data', async () => {
 	const view = renderHook(() => useSessionReport());
@@ -77,7 +85,7 @@ it('routes X to the session document with the panel figures as offline data', as
 				closure: expect.objectContaining({
 					expected: { cash: '155' },
 					breakdowns: expect.objectContaining({
-						labels: expect.objectContaining({ opened_by_name: '8' }),
+						labels: expect.objectContaining({ opened_by_name: 'Alex' }),
 					}),
 				}),
 				i18n: expect.objectContaining({ x_report: 'X-report', closure: 'Closure' }),
@@ -218,4 +226,25 @@ it('uses the same closure print path for a loaded history row', async () => {
 		})
 	);
 	expect(logger.info).not.toHaveBeenCalled();
+});
+
+// Revert: skip the credential directory, or lose the unknown opener's id.
+it.each([
+	[8, 'Alex'],
+	[7, 'Pat'],
+	[99, '99'],
+])('uses the original opener label %s in the offline X-report', (openedBy, name) => {
+	mockOpenedBy = Number(openedBy);
+	renderHook(() => useSessionReport());
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			localReport: expect.objectContaining({
+				closure: expect.objectContaining({
+					breakdowns: expect.objectContaining({
+						labels: expect.objectContaining({ opened_by_name: name }),
+					}),
+				}),
+			}),
+		})
+	);
 });

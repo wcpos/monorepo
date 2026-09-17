@@ -73,6 +73,7 @@ export function PageBar({
 	const scopeTrigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
 	const cashierTrigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
 	const [custom, setCustom] = React.useState(false);
+	const [selectingStart, setSelectingStart] = React.useState(false);
 	const [draft, setDraft] = React.useState<DateRange>({
 		from: parseISO(scope.from),
 		to: parseISO(scope.to),
@@ -221,6 +222,7 @@ export function PageBar({
 									return;
 								}
 								setDraft({ from: parseISO(scope.from), to: parseISO(scope.to) });
+								setSelectingStart(scope.from !== scope.to);
 								setCustom(true);
 							},
 							!license?.isPro
@@ -233,6 +235,14 @@ export function PageBar({
 									maxDate={today}
 									dateRange={draft}
 									onDateRangeChange={setDraft}
+									{...(selectingStart && {
+										onDayPress: ({ dateString }: { dateString: string }) => {
+											if (dateString < min || dateString > today) return;
+											const date = parseISO(dateString);
+											setDraft({ from: date, to: date });
+											setSelectingStart(false);
+										},
+									})}
 								/>
 								{option('reports-period-apply', t('common.done'), () =>
 									period(

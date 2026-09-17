@@ -111,8 +111,25 @@ const calendar = jest.fn();
 jest.mock('@wcpos/components/calendar', () => ({
 	Calendar: (props: unknown) => {
 		calendar(props);
-		return null;
+		const RealCalendar = jest.requireActual('@wcpos/components/calendar').Calendar;
+		return <RealCalendar {...(props as React.ComponentProps<typeof RealCalendar>)} />;
 	},
+}));
+jest.mock('uniwind', () => ({ useCSSVariable: () => [] }));
+jest.mock('react-native-calendars', () => ({
+	Calendar: ({ onDayPress }: { onDayPress: (day: { dateString: string }) => void }) => (
+		<>
+			{['2026-09-10', '2026-09-20'].map((day) => (
+				<button
+					key={day}
+					data-testid={`day-${day}`}
+					onClick={() => onDayPress({ dateString: day })}
+				>
+					{day}
+				</button>
+			))}
+		</>
+	),
 }));
 jest.mock('../components/header/left', () => ({ HeaderLeft: () => null }));
 jest.mock('../components/header/right', () => ({ HeaderRight: () => null }));
@@ -464,3 +481,39 @@ it.each([
 		}
 	}
 );
+
+// Revert: let the shared calendar keep the preset start on the first custom tap.
+it('replaces September 1–30 with September 10–20 using two day taps', () => {
+	isPro = true;
+	jest.setSystemTime(new Date('2026-09-30T12:00:00Z'));
+	render(
+		<PageBar
+			room="closures"
+			onRoomChange={room}
+			onScopeChange={change}
+			scope={{ ...scope, from: '2026-09-01', to: '2026-09-30' }}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-custom'));
+	fireEvent.click(screen.getByTestId('day-2026-09-10'));
+	fireEvent.click(screen.getByTestId('day-2026-09-20'));
+	fireEvent.click(screen.getByTestId('reports-period-apply'));
+	expect(change).toHaveBeenLastCalledWith(
+		expect.objectContaining({ from: '2026-09-10', to: '2026-09-20' })
+	);
+});
+
+// Revert: discard the single-day preset when opening Custom.
+it('keeps a single-day seed when selecting the custom end', () => {
+	isPro = true;
+	jest.setSystemTime(new Date('2026-09-30T12:00:00Z'));
+	draw();
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-custom'));
+	fireEvent.click(screen.getByTestId('day-2026-09-20'));
+	fireEvent.click(screen.getByTestId('reports-period-apply'));
+	expect(change).toHaveBeenLastCalledWith(
+		expect.objectContaining({ from: '2026-09-16', to: '2026-09-20' })
+	);
+});

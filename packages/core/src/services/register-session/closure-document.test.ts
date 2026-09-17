@@ -292,3 +292,26 @@ it('renders the X-report fixture through the shipped template without a closure 
 	expect(rendered).not.toContain('COPY');
 	expect(JSON.stringify(fixture.session)).toBe(before);
 });
+
+// Revert: derive has_sales from totals only, hiding offline X-report transactions.
+it.each([0, 3])(
+	'renders the offline X-report transaction count %s through the shipped template',
+	(count) => {
+		const { session } = require('./__fixtures__/x-report.json');
+		const { i18n } = require('./__fixtures__/closure.json');
+		const doc = buildXReportDocument(session, {
+			...context,
+			i18n,
+			breakdowns: { transaction_count: count },
+		});
+		expect(doc.closure.has_sales).toBe(count > 0);
+		const html = readFileSync(join(__dirname, '__fixtures__/closure-default.html'), 'utf8');
+		const rendered = renderLogiclessTemplate(html, doc);
+		if (count > 0) {
+			expect(rendered).toContain(i18n.transactions);
+			expect(rendered).toMatch(/>3</);
+		} else {
+			expect(rendered).not.toContain(i18n.transactions);
+		}
+	}
+);

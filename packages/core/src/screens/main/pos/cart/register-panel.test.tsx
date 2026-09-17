@@ -2,6 +2,7 @@
 import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { of } from 'rxjs';
 
 import { RegisterPanel } from './register-panel';
 
@@ -49,9 +50,13 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 		actions: { voidMovement, recordMovement, retryMovement, startCounting },
 	}),
 }));
+const mockSite = {
+	populateResource: () => null,
+	populate$: () => of([{ id: 7, display_name: 'Alex' }]),
+};
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: { name: 'Shop', currency: 'GBP' }, site: {} }),
-	useStoreSession: () => ({ site: { populateResource: () => null } }),
+	useStoreSession: () => ({ site: mockSite }),
 }));
 jest.mock('../../../../hooks/use-store-day', () => ({
 	useStoreDay: () => ({ timezone: 'UTC' }),
@@ -59,6 +64,7 @@ jest.mock('../../../../hooks/use-store-day', () => ({
 }));
 jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
 jest.mock('observable-hooks', () => ({
+	...jest.requireActual('observable-hooks'),
 	useObservableSuspense: () => [{ id: 7, display_name: 'Alex' }],
 }));
 jest.mock('../../../../contexts/translations', () => ({

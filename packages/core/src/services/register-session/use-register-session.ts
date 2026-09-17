@@ -447,7 +447,7 @@ export function useRegisterSession() {
 					timezone,
 					labels: {
 						register_name: binding.registerName ?? '',
-						closed_by_name: wpCredentials.display_name ?? '',
+						closed_by_name: actorName(closed.closed_by),
 						opened_by_name: actorName(closed.opened_by),
 						approved_by_name: actorName(closed.approved_by),
 					},

@@ -1,7 +1,12 @@
+import * as React from 'react';
+
+import { useObservableState } from 'observable-hooks';
+
 import { useDocField } from '@wcpos/query';
 import { PrinterService } from '@wcpos/printer';
-import type { ClosureDocument, ClosureRow } from '@wcpos/database';
+import type { ClosureDocument, ClosureRow, WPCredentialsDocument } from '@wcpos/database';
 
+import { useStoreSession } from '../../contexts/app-state';
 import { logDrawerOpened, logXReportPrinted, useRegisterActor } from './audit';
 import { useClosureCollection } from './use-register-session-collections';
 import { useRegisterSession } from './use-register-session';
@@ -19,6 +24,9 @@ export function useSessionReport(
 	knownClosure?: ClosureRow
 ) {
 	const actor = useRegisterActor();
+	const { site } = useStoreSession();
+	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
+	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
 	const { session, expected, blind, binding, movements, salesCount } = useRegisterSession();
 	const snapshot = useDocField(closure, (row) => row) ?? knownClosure;
 	const collection = useClosureCollection();
@@ -33,7 +41,10 @@ export function useSessionReport(
 					breakdowns: {
 						register_name: binding.registerName,
 						opened_by_name:
-							String(session.opened_by) === actor.id ? actor.name : String(session.opened_by ?? ''),
+							String(session.opened_by) === actor.id
+								? actor.name
+								: (cashiers.find((row) => row.id === session.opened_by)?.display_name ??
+									String(session.opened_by ?? '')),
 						movements,
 						transaction_count: salesCount,
 					},
