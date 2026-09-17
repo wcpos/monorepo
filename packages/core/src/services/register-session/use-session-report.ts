@@ -7,7 +7,7 @@ import { PrinterService } from '@wcpos/printer';
 import type { ClosureDocument, ClosureRow, WPCredentialsDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../contexts/app-state';
-import { logDrawerOpened, logXReportPrinted, useRegisterActor } from './audit';
+import { recordRegisterFact, useRegisterActor } from './audit';
 import { useClosureCollection } from './use-register-session-collections';
 import { useRegisterSession } from './use-register-session';
 import { buildClosureDocument, buildXReportDocument } from './closure-document';
@@ -76,7 +76,8 @@ export function useSessionReport(
 		print: async () => {
 			if ((await report.print()) !== true) throw new Error('reports.reprint_failed');
 			if (!snapshot)
-				logXReportPrinted({
+				recordRegisterFact({
+					kind: 'x-report-dispatched',
 					actor,
 					sessionId: session?.id,
 					registerId: session?.register_id,
@@ -87,7 +88,8 @@ export function useSessionReport(
 		openDrawer: async () => {
 			if (resolvedPrinter?.autoOpenDrawer) {
 				await new PrinterService().openDrawer(resolvedPrinter);
-				logDrawerOpened({
+				recordRegisterFact({
+					kind: 'drawer-dispatched',
 					actor,
 					sessionId: session?.id,
 					registerId: session?.register_id,

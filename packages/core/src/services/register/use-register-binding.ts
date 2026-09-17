@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { getLogger } from '@wcpos/utils/logger';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 
-import { attempt, useRegisterActor } from '../register-session/audit';
+import { recordRegisterFact, useRegisterActor } from '../register-session/audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
 import {
@@ -37,7 +36,6 @@ type Directory = {
 	loaded: boolean;
 	listeners: Set<() => void>;
 };
-const logger = getLogger(['wcpos', 'register']);
 const directories = new Map<string, Directory>();
 
 function directory(siteUuid: string, storeId: number | undefined): Directory {
@@ -86,11 +84,9 @@ function loadDirectory(
 			// A failed list request leaves the pointer and status unchanged; the next
 			// session (or reconnect) tries again.
 			entry.request = undefined;
-			logger.warn('Register directory unavailable', {
-				context: {
-					type: 'register.directory-unavailable',
-					registerId: entry.value?.registerId ?? null,
-				},
+			recordRegisterFact({
+				kind: 'directory-unavailable',
+				registerId: entry.value?.registerId ?? null,
 			});
 		});
 	return entry.request;
@@ -141,13 +137,11 @@ export function useRegisterBindingSession(): void {
 			if (registers.length === 1) {
 				await adoptServerCounters(registers[0].id);
 				await bindRegister(userDB, site.uuid!, registers[0], store.id);
-				logger.info(bound ? 'Register switched automatically' : 'Register bound automatically', {
-					terminal: { operationId: registers[0].id.replace(/-/g, '') },
-					context: {
-						type: bound ? 'register.switched' : 'register.bound',
-						registerId: registers[0].id,
-						previousRegisterId: bound?.id ?? null,
-					},
+				recordRegisterFact({
+					kind: 'binding-changed',
+					source: 'automatic',
+					registerId: registers[0].id,
+					previousRegisterId: bound?.id ?? null,
 				});
 				publish(entry, {
 					status: 'bound',
@@ -157,9 +151,7 @@ export function useRegisterBindingSession(): void {
 			} else {
 				if (bound) {
 					await unbindRegister(userDB, site.uuid!, store.id);
-					logger.info('Register unbound automatically', {
-						context: { type: 'register.unbound', registerId: bound.id },
-					});
+					recordRegisterFact({ kind: 'binding-removed', registerId: bound.id });
 				}
 				publish(entry, {
 					status: registers.length ? 'choose' : 'none',
@@ -213,18 +205,13 @@ export function useRegisterBinding() {
 			await adoptServerCounters(id);
 			await bindRegister(userDB, site.uuid!, register, store.id);
 			publish(entry, { status: 'bound', registerId: id, registerName: register.name });
-			const switched = previousRegisterId && previousRegisterId !== id;
 			if (previousRegisterId !== id)
-				logger.info(switched ? 'Register switched' : 'Register bound', {
+				recordRegisterFact({
+					kind: 'binding-changed',
+					source: 'manual',
 					actor,
-					// Per attempt, not per destination: A→B, B→A, A→B inside the collapse
-					// window must stay three rows in order.
-					terminal: attempt(),
-					context: {
-						type: switched ? 'register.switched' : 'register.bound',
-						registerId: id,
-						previousRegisterId,
-					},
+					registerId: id,
+					previousRegisterId,
 				});
 		},
 		[actor, entry, http, site.uuid, store.id, userDB]

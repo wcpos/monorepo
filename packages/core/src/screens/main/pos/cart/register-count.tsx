@@ -7,10 +7,7 @@ import { Text } from '@wcpos/components/text';
 import { fromMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
-import {
-	logVarianceOverThreshold,
-	useRegisterActor,
-} from '../../../../services/register-session/audit';
+import { recordRegisterFact, useRegisterActor } from '../../../../services/register-session/audit';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
@@ -246,7 +243,8 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 				}
 				onPress={() => {
 					if (!blind && valid && overThreshold(variance, varianceThreshold))
-						logVarianceOverThreshold({
+						recordRegisterFact({
+							kind: 'variance-over-threshold',
 							actor,
 							sessionId: session?.id,
 							registerId: session?.register_id,

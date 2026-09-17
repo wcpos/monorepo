@@ -3,8 +3,7 @@ import * as React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import { getLogger } from '@wcpos/utils/logger';
-
+import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { ApproveSheet } from './approve-sheet';
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
@@ -14,7 +13,7 @@ jest.mock('../../hooks/use-currency-format', () => ({
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
 }));
-const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
+const recordFact = jest.spyOn(audit, 'recordRegisterFact');
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -104,14 +103,11 @@ it('refused credentials/capability show an error without closing', async () => {
 			'This account cannot approve closes'
 		)
 	);
-	expect(logger.warn).toHaveBeenCalledWith(
-		'Register session approval refused',
-		expect.objectContaining({
-			actor: { id: '7', name: 'Pat' },
-			context: { type: 'register.approval-refused', sessionId: 's', registerId: 'r' },
-		})
-	);
-	expect(JSON.stringify(logger.warn.mock.calls)).not.toMatch(/secret|manager/);
+	expect(recordFact).toHaveBeenCalledWith({
+		actor: { id: '7', name: 'Pat' },
+		...{ kind: 'approval-refused', sessionId: 's', registerId: 'r' },
+	});
+	expect(JSON.stringify(recordFact.mock.calls)).not.toMatch(/secret|manager/);
 	expect(patch).not.toHaveBeenCalled();
 	expect(closeSession).not.toHaveBeenCalled();
 });
@@ -130,19 +126,16 @@ it('approves on the server, persists only approved_by, then closes without a tok
 		sync_error: null,
 	});
 	expect(closeSession).toHaveBeenCalledWith({ counted: props.counted });
-	expect(logger.info).toHaveBeenCalledWith(
-		'Register session approval granted',
-		expect.objectContaining({
-			actor: { id: '7', name: 'Pat' },
-			context: {
-				type: 'register.approval-granted',
-				sessionId: 's',
-				registerId: 'r',
-				approvedBy: 42,
-			},
-		})
-	);
-	expect(JSON.stringify(logger.info.mock.calls)).not.toMatch(/secret|manager/);
+	expect(recordFact).toHaveBeenCalledWith({
+		actor: { id: '7', name: 'Pat' },
+		...{
+			kind: 'approval-granted',
+			sessionId: 's',
+			registerId: 'r',
+			approvedBy: 42,
+		},
+	});
+	expect(JSON.stringify(recordFact.mock.calls)).not.toMatch(/secret|manager/);
 	expect(patch.mock.invocationCallOrder[0]).toBeLessThan(closeSession.mock.invocationCallOrder[0]);
 });
 it.each(['offline', 'online-website-unavailable'])('blocks approval while %s', (status) => {
@@ -168,6 +161,8 @@ it('does not label a failed close as a refused approval', async () => {
 	render(<ApproveSheet {...props} />);
 	fill();
 	await waitFor(() => expect(screen.getByTestId('approve-error')).toBeTruthy());
-	expect(logger.warn).not.toHaveBeenCalled();
-	expect(logger.info).toHaveBeenCalledTimes(1);
+	expect(recordFact).not.toHaveBeenCalledWith(
+		expect.objectContaining({ kind: 'approval-refused' })
+	);
+	expect(recordFact).toHaveBeenCalledTimes(1);
 });

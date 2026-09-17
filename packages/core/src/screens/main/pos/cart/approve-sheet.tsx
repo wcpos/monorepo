@@ -7,11 +7,7 @@ import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import type { ClosureDocument } from '@wcpos/database';
 
-import {
-	logApprovalGranted,
-	logApprovalRefused,
-	useRegisterActor,
-} from '../../../../services/register-session/audit';
+import { recordRegisterFact, useRegisterActor } from '../../../../services/register-session/audit';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -42,7 +38,8 @@ export function ApproveSheet({
 		setError('');
 		try {
 			const response = await http.post(`sessions/${session.id}/approve`, { username, password });
-			logApprovalGranted({
+			recordRegisterFact({
+				kind: 'approval-granted',
 				actor,
 				sessionId: session.id,
 				registerId: session.register_id,
@@ -61,7 +58,8 @@ export function ApproveSheet({
 				(e as { response?: { data?: { code?: string } } }).response?.data?.code ===
 				'wcpos_override_refused';
 			if (refused)
-				logApprovalRefused({
+				recordRegisterFact({
+					kind: 'approval-refused',
 					actor,
 					sessionId: session.id,
 					registerId: session.register_id,

@@ -3,15 +3,14 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import { getLogger } from '@wcpos/utils/logger';
-
+import * as audit from '../../../../services/register-session/audit';
 import { createTestT } from '../../../../../jest/translate';
 import { RegisterCount } from './register-count';
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
-const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
+const recordFact = jest.spyOn(audit, 'recordRegisterFact');
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
@@ -173,19 +172,16 @@ it('requires manager over threshold', () => {
 	fireEvent.click(screen.getByTestId('count-close'));
 	expect(screen.getByTestId('approve-sheet')).toBeTruthy();
 	expect(closeSession).not.toHaveBeenCalled();
-	expect(logger.warn).toHaveBeenCalledWith(
-		'Register count exceeds variance threshold',
-		expect.objectContaining({
-			actor: { id: '7', name: 'Pat' },
-			context: {
-				type: 'register.variance-over-threshold',
-				sessionId: 's',
-				registerId: 'r',
-				variance: '-17.50',
-				threshold: '5',
-			},
-		})
-	);
+	expect(recordFact).toHaveBeenCalledWith({
+		actor: { id: '7', name: 'Pat' },
+		...{
+			kind: 'variance-over-threshold',
+			sessionId: 's',
+			registerId: 'r',
+			variance: '-17.50',
+			threshold: '5',
+		},
+	});
 });
 it('server refusal requires approval even for an exact blind count', () => {
 	blind = true;

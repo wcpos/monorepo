@@ -27,7 +27,7 @@ import type { RefundDocumentType, WPCredentialsDocument } from '@wcpos/database'
 import type { RequirementHandle } from '@wcpos/sync-engine';
 
 import { useStoreDay } from '../../hooks/use-store-day';
-import { attempt, useRegisterActor } from './audit';
+import { recordRegisterFact, useRegisterActor } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { useRegisterBinding } from '../register/use-register-binding';
 import { deriveExpected } from './expected';
@@ -343,42 +343,33 @@ export function useRegisterSession() {
 					businessDay: today(),
 					storeId: store.id,
 				});
-				logger.info('Register session opened', {
+				recordRegisterFact({
+					kind: 'session-opened',
 					actor,
-					terminal: { operationId: row.id.replace(/-/g, '') },
-					context: {
-						type: 'register.session-opened',
-						sessionId: row.id,
-						registerId: row.register_id,
-						amount: row.counted_float,
-						variance: row.opening_variance,
-					},
+					sessionId: row.id,
+					registerId: row.register_id,
+					amount: row.counted_float,
+					variance: row.opening_variance,
 				});
 				return row;
 			},
 			startCounting: async () => {
 				const row = await actions.startCounting(sessions!, session!.id);
-				logger.info('Register session counting started', {
+				recordRegisterFact({
+					kind: 'counting-started',
 					actor,
-					terminal: attempt(),
-					context: {
-						type: 'register.counting-started',
-						sessionId: row.id,
-						registerId: row.register_id,
-					},
+					sessionId: row.id,
+					registerId: row.register_id,
 				});
 				return row;
 			},
 			backToSelling: async () => {
 				const row = await actions.backToSelling(sessions!, session!.id);
-				logger.info('Register session counting abandoned', {
+				recordRegisterFact({
+					kind: 'counting-abandoned',
 					actor,
-					terminal: attempt(),
-					context: {
-						type: 'register.counting-abandoned',
-						sessionId: row.id,
-						registerId: row.register_id,
-					},
+					sessionId: row.id,
+					registerId: row.register_id,
 				});
 				return row;
 			},
@@ -469,17 +460,14 @@ export function useRegisterSession() {
 					orders: accounting?.orders ?? accountingOrders.map(({ record }) => record),
 					refundRecords,
 				});
-				logger.info('Register session closed', {
+				recordRegisterFact({
+					kind: 'session-closed',
 					actor,
-					terminal: { operationId: closure.id.replace(/-/g, '') },
-					context: {
-						type: 'register.session-closed',
-						sessionId: closed.id,
-						registerId: closed.register_id,
-						closureId: closure.id,
-						counted: closure.counted,
-						variance: closure.variance,
-					},
+					sessionId: closed.id,
+					registerId: closed.register_id,
+					closureId: closure.id,
+					counted: closure.counted,
+					variance: closure.variance,
 				});
 				return closure;
 			},
@@ -494,65 +482,40 @@ export function useRegisterSession() {
 					sessionId: id!,
 					actor: wpCredentials.id ?? 0,
 				});
-				if (row.type === 'no_sale') {
-					// A no-sale is an action the cashier is audited on even when no drawer
-					// kick is configured or the kick fails, so it has its own row here rather
-					// than riding on `register.drawer-opened`.
-					logger.info('Register no-sale recorded', {
-						actor,
-						terminal: { operationId: row.id.replace(/-/g, '') },
-						context: {
-							type: 'register.no-sale-recorded',
-							sessionId: row.session_id,
-							registerId: binding.registerId,
-							movementId: row.id,
-						},
-					});
-					return row;
-				}
-				logger.info('Register cash movement recorded', {
+				recordRegisterFact({
+					kind: 'movement-recorded',
 					actor,
-					terminal: { operationId: row.id.replace(/-/g, '') },
-					context: {
-						type: 'register.movement-recorded',
-						sessionId: row.session_id,
-						registerId: binding.registerId,
-						movementId: row.id,
-						movementType: row.type,
-						amount: row.amount,
-					},
+					sessionId: row.session_id,
+					registerId: binding.registerId,
+					movementId: row.id,
+					movementType: row.type,
+					amount: row.amount,
 				});
 				return row;
 			},
 			voidMovement: async (id: string) => {
 				await actions.requireOpenSession(sessions, binding.registerId, true);
 				const row = await actions.voidMovement(movements!, id, wpCredentials.id ?? 0);
-				logger.info('Register cash movement voided', {
+				recordRegisterFact({
+					kind: 'movement-voided',
 					actor,
-					terminal: { operationId: row.id.replace(/-/g, '') },
-					context: {
-						type: 'register.movement-voided',
-						sessionId: row.session_id,
-						registerId: binding.registerId,
-						movementId: row.id,
-						movementType: row.type,
-						amount: row.amount,
-						voids: id,
-					},
+					sessionId: row.session_id,
+					registerId: binding.registerId,
+					movementId: row.id,
+					movementType: row.type,
+					amount: row.amount,
+					voids: id,
 				});
 				return row;
 			},
 			retryMovement: async (id: string) => {
 				const row = await actions.retryMovement(movements!, id);
-				logger.info('Register cash movement retry requested', {
+				recordRegisterFact({
+					kind: 'movement-retry-requested',
 					actor,
-					terminal: attempt(),
-					context: {
-						type: 'register.movement-retrying',
-						sessionId: row.session_id,
-						registerId: binding.registerId,
-						movementId: row.id,
-					},
+					sessionId: row.session_id,
+					registerId: binding.registerId,
+					movementId: row.id,
 				});
 				return row;
 			},

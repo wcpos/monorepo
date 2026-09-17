@@ -25,7 +25,8 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 let db: StoreDatabase;
 let userDB: UserDatabase;
 const http = { post: jest.fn(), get: jest.fn() };
-const logger = { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() };
+jest.mock('../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
+const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
 beforeEach(async () => {
 	jest.clearAllMocks();
 	http.post.mockReset();
@@ -69,7 +70,6 @@ const drain = () =>
 		siteUuid: 'site',
 		orders: null,
 		http,
-		logger,
 	});
 it('acknowledges a create, never resends it, and shares the in-flight drain', async () => {
 	const row = await open();
@@ -118,8 +118,8 @@ it('marks a losing create failed and adopts the server session', async () => {
 		...logger.error.mock.calls,
 	];
 	expect(failures).toHaveLength(1);
-	expect(failures[0][1].terminal).toMatchObject({ outcome: 'recovered' });
-	expect(failures[0][1].context).not.toHaveProperty('type');
+	expect(failures[0][1]?.terminal).toMatchObject({ outcome: 'recovered' });
+	expect(failures[0][1]?.context).not.toHaveProperty('type');
 });
 it('backs off a 5xx without posting dependent movements', async () => {
 	const row = await open();
@@ -352,9 +352,9 @@ it('does not call a local write failure after the store accepted a movement a de
 	await drain();
 	const calls = [...logger.debug.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls];
 	expect(calls).toHaveLength(1);
-	expect(calls[0][1].context).toMatchObject({ endpoint: 'movements', movementId: movement.id });
+	expect(calls[0][1]?.context).toMatchObject({ endpoint: 'movements', movementId: movement.id });
 	// The store has the movement; "trying again" would tell the merchant it did not arrive.
-	expect(calls[0][1].context).not.toHaveProperty('type');
+	expect(calls[0][1]?.context).not.toHaveProperty('type');
 	expect(logger.info).not.toHaveBeenCalledWith(
 		'Register cash movement accepted',
 		expect.anything()
@@ -466,7 +466,7 @@ it('names a refused open and a refused close apart', async () => {
 		expect.objectContaining({ code: 'REGISTER201' })
 	);
 
-	expect(logger.error.mock.calls[0][1].context).toHaveProperty('type', 'register.upload-refused');
+	expect(logger.error.mock.calls[0][1]?.context).toHaveProperty('type', 'register.upload-refused');
 	logger.error.mockClear();
 	const other = await open();
 	await other.incrementalPatch({
@@ -488,7 +488,7 @@ it('names a refused open and a refused close apart', async () => {
 			context: expect.objectContaining({ endpoint: 'sessions/status' }),
 		})
 	);
-	expect(logger.error.mock.calls[0][1].context).toHaveProperty('type', 'register.upload-refused');
+	expect(logger.error.mock.calls[0][1]?.context).toHaveProperty('type', 'register.upload-refused');
 });
 
 it('does not call a refused counting transition a refused close', async () => {
@@ -598,7 +598,7 @@ it('chains outbox attempts on one operation id the ledger can follow', async () 
 	await drain();
 	await row.incrementalPatch({ sync_next_at: null });
 	await drain();
-	const ids = logger.debug.mock.calls.map(([, options]) => options.terminal.operationId);
+	const ids = logger.debug.mock.calls.map(([, options]) => options?.terminal?.operationId);
 	expect(ids).toEqual([ids[0], ids[0]]);
 	// `operationId` is clamped to 32 characters, so a 36-character UUID would truncate.
 	expect(ids[0]).toHaveLength(32);
@@ -745,7 +745,6 @@ it('waits for pending movements and dirty named orders before acknowledging a cl
 			userDB,
 			siteUuid: 'site',
 			http,
-			logger,
 			orders: { findOne: () => ({ exec: async () => order }) } as never,
 		});
 	await drainWithOrder();
@@ -875,11 +874,11 @@ it.each([403, 503])(
 			...logger.error.mock.calls,
 		];
 		expect(calls).toHaveLength(1);
-		expect(calls[0][1].context).toMatchObject({ endpoint: 'closures', closureId: row.id, status });
+		expect(calls[0][1]?.context).toMatchObject({ endpoint: 'closures', closureId: row.id, status });
 		if (status === 403) {
-			expect(calls[0][1].context).toHaveProperty('type', 'register.upload-refused');
+			expect(calls[0][1]?.context).toHaveProperty('type', 'register.upload-refused');
 		} else {
-			expect(calls[0][1].context).not.toHaveProperty('type');
+			expect(calls[0][1]?.context).not.toHaveProperty('type');
 		}
 	}
 );
