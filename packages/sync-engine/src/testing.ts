@@ -28,6 +28,7 @@ export {
 	type CapturedEngineTimers,
 	type EngineHarness,
 	type EngineHarnessOptions,
+	type EngineHarnessRequest,
 } from './engine-harness';
 
 /**

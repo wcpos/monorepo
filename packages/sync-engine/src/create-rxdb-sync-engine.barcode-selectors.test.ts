@@ -7,7 +7,7 @@ import { materializeTargeted } from './materialization/record-materialization';
 import { createEngineHarness, memoryEngineStorage } from './testing';
 
 import type { RxdbSyncEngine } from './create-rxdb-sync-engine';
-import type { EngineHarnessRequest } from './engine-harness';
+import type { EngineHarnessRequest } from './testing';
 import type { RxDatabase } from 'rxdb';
 import type { SeedPosBootstrapLanesInput } from './scheduler/rx-pos-bootstrap-seeder';
 
@@ -150,6 +150,7 @@ describe('scope-open barcode selector hydration', () => {
 			storage: memoryEngineStorage(),
 			mode: 'manual',
 			routes: {
+				'/changes/tick': () => new Response(null, { status: 404 }),
 				'/changes/config-fingerprint': () => {
 					configRequests += 1;
 					if (configRequests === 1) throw new Error('config unavailable');

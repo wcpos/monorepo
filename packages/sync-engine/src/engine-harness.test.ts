@@ -82,6 +82,29 @@ describe('createEngineHarness', () => {
 		expect(new URL(primes[0].url).searchParams.get('limit')).toBe('1');
 	});
 
+	it('protocolDefaults false hands protocol traffic to the suite fetch', async () => {
+		const fetch = vi.fn(async (_url: string, _init?: RequestInit) => {
+			throw new Error('unexpected scenario fetch');
+		});
+		const harness = await createEngineHarness({
+			protocolDefaults: false,
+			fetch,
+			routes: {
+				'/changes/config-fingerprint': {
+					fingerprints: {},
+					barcode_fields: { products: ['sku'], variations: ['global_unique_id'] },
+				},
+			},
+		});
+		expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+			`${harness.site.syncBaseUrl}/changes/sequence-log?collection=all&since=0&limit=1`,
+		]);
+		expect(harness.engine.active()?.barcodeSelectors).toEqual({
+			products: ['sku'],
+			variations: ['global_unique_id'],
+		});
+	});
+
 	it('explicit routes override protocol defaults', async () => {
 		const journal = vi.fn(() => Response.json({ checkpoint: { head: 37 } }));
 		const fingerprint = vi.fn(() =>
@@ -180,7 +203,11 @@ describe('createEngineHarness', () => {
 		await harness.respond(Response.json({}));
 		expect(tick).not.toHaveBeenCalled();
 		expect(harness.requests.slice(before)).toEqual([
-			expect.objectContaining({ method: 'GET', path: '/wp-json/wcpos/v2/changes/tick' }),
+			expect.objectContaining({
+				method: 'GET',
+				path: '/wp-json/wcpos/v2/changes/tick',
+				scripted: true,
+			}),
 		]);
 	});
 

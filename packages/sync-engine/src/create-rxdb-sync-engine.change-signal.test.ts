@@ -27,7 +27,6 @@ import {
 } from './create-rxdb-sync-engine';
 import { materializeGreedyPrunable } from './materialization/record-materialization';
 
-import type { EngineHarnessRequest } from './engine-harness';
 import type { RxStorage } from 'rxdb';
 
 setPremiumFlag();
@@ -92,7 +91,7 @@ function scriptedServer() {
 			headers: { 'content-type': 'application/json' },
 		});
 
-	const fetch = async (url: string, _init?: RequestInit): Promise<Response> => {
+	const fetch = async (url: string): Promise<Response> => {
 		const u = new URL(url);
 		const path = u.pathname;
 		if (path.endsWith('/changes/tick')) {
@@ -126,6 +125,9 @@ function scriptedServer() {
 				checkpoint: { after_id: Number(u.searchParams.get('after_id') ?? '0') },
 				complete: true,
 			});
+		}
+		if (path.endsWith('/changes/range-checksum')) {
+			return json({ changes: [], complete: true });
 		}
 		if (path.endsWith('/changes/config-fingerprint')) {
 			return json({
@@ -231,14 +233,13 @@ function engineWith(input: {
 	checkpoints?: EngineStringStore;
 }): RxdbSyncEngine {
 	return createEngineHarness({
+		protocolDefaults: false,
 		site: SITE,
 		identity: input.identity,
 		storage: input.storage,
 		mode: 'manual',
 		fetch: input.fetch,
 		routes: {
-			'/changes/sequence-log': ({ url, init }: EngineHarnessRequest) => input.fetch(url, init),
-			'/changes/tick': ({ url, init }: EngineHarnessRequest) => input.fetch(url, init),
 			'/changes/config-fingerprint': {
 				fingerprints: { products: 'fp-1', variations: 'fp-1', tax_rates: 'fp-1' },
 				barcode_fields: { products: ['sku'], variations: ['sku'], tax_rates: [] },
@@ -846,16 +847,11 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.head = 9_000;
 
 		const harness = createEngineHarness({
+			protocolDefaults: false,
 			site: SITE,
 			identity,
 			storage: memoryEngineStorage(),
 			fetch: server.fetch,
-			routes: {
-				'/changes/config-fingerprint': ({ url, init }: EngineHarnessRequest) =>
-					server.fetch(url, init),
-				'/changes/sequence-log': ({ url, init }: EngineHarnessRequest) => server.fetch(url, init),
-				'/changes/tick': ({ url, init }: EngineHarnessRequest) => server.fetch(url, init),
-			},
 			checkpoints,
 			mode: 'auto',
 			random: () => 0.5,
