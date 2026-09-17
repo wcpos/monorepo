@@ -123,7 +123,7 @@ type CachedEngine = {
 	renderKey: string | null;
 	site: string;
 	allocationKey: string;
-	requests: { key: string; options?: MutableFetcherOptions }[];
+	requests: { key: string; options?: MutableFetcherOptions; settled: Promise<void> }[];
 	/** Every scope database this engine opened (same-site switches retain the
 	 * prior scope's database) — a timed-out disposal must terminally fail ALL
 	 * of them, not just the last active one. */
@@ -196,11 +196,14 @@ async function requestScope(
 	scope: StoreScopeIdentity,
 	options?: MutableFetcherOptions
 ): Promise<void> {
-	const request = { key: scopeCacheKey(scope), options };
 	entry.databaseNames.add(scopeDatabaseName(scope));
+	// Registered BEFORE the engine is asked: activation can be published synchronously inside
+	// scope.switch, and the subscriber must find the request (and its staged auth) already there.
+	const request = { key: scopeCacheKey(scope), options, settled: Promise.resolve() };
 	entry.requests.push(request);
+	request.settled = entry.engine.scope.switch(scope);
 	try {
-		await entry.engine.scope.switch(scope);
+		await request.settled;
 	} finally {
 		const latest = entry.requests.at(-1) === request;
 		const index = entry.requests.indexOf(request);
@@ -301,11 +304,8 @@ export async function switchAppEngineScope(session: {
 	const active = entry.engine.active();
 	const key = scopeCacheKey(scope);
 	const latest = entry.requests.at(-1);
-	if (
-		latest?.key === key ||
-		(!latest && (active ? scopeCacheKey(active.identity) : entry.allocationKey) === key)
-	)
-		return;
+	if (latest?.key === key) return latest.settled;
+	if (!latest && (active ? scopeCacheKey(active.identity) : entry.allocationKey) === key) return;
 	await requestScope(entry, scope);
 }
 

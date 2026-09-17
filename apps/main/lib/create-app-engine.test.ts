@@ -898,7 +898,57 @@ describe('createAppSyncEngine scope cache', () => {
 		expect(createRxdbSyncEngine).toHaveBeenCalledTimes(1);
 	});
 
-	it('awaited switches dedupe only the latest outstanding target', async () => {
+	it.each(['rejects', 'resolves'] as const)(
+		"a second awaited switch to a pending target shares the first's outcome: %s",
+		async (outcome) => {
+			let resolveSwitch!: () => void;
+			let rejectSwitch!: (error: Error) => void;
+			const pending = new Promise<void>((resolve, reject) => {
+				resolveSwitch = resolve;
+				rejectSwitch = reject;
+			});
+			const first = createEngineDouble(undefined, () => pending);
+			const { createAppSyncEngine, switchAppEngineScope } = loadCreateAppEngine(() => first);
+			createAppSyncEngine(BASE_OPTIONS);
+			const target = { ...BASE_OPTIONS.scope, storeId: 'store-2' };
+			const session = {
+				site: { wp_api_url: target.site },
+				wpCredentials: { id: target.cashierId },
+				store: { id: target.storeId },
+			};
+			const resolved = jest.fn(() => first.active()?.identity);
+			const rejected = jest.fn();
+			const switches = [switchAppEngineScope(session), switchAppEngineScope(session)];
+			const observed = switches.map((switched) => switched.then(resolved, rejected));
+			for (let turn = 0; turn < 5; turn += 1) {
+				await Promise.resolve();
+			}
+
+			expect(first.scope.switch).toHaveBeenCalledTimes(1);
+			expect(first.scope.switch).toHaveBeenCalledWith(target);
+			expect(first.active()?.identity).toEqual(BASE_OPTIONS.scope);
+			expect(resolved).not.toHaveBeenCalled();
+			expect(rejected).not.toHaveBeenCalled();
+
+			if (outcome === 'rejects') {
+				const error = new Error('scope refused');
+				rejectSwitch(error);
+				await Promise.all(observed);
+				expect(rejected.mock.calls).toEqual([[error], [error]]);
+				expect(resolved).not.toHaveBeenCalled();
+				expect(first.active()?.identity).toEqual(BASE_OPTIONS.scope);
+			} else {
+				first.activate(target);
+				resolveSwitch();
+				await Promise.all(observed);
+				expect(resolved).toHaveBeenCalledTimes(2);
+				expect(resolved.mock.results.map(({ value }) => value)).toEqual([target, target]);
+				expect(rejected).not.toHaveBeenCalled();
+			}
+		}
+	);
+
+	it('awaited switches dedupe only the latest outstanding target', () => {
 		const first = createEngineDouble(undefined, () => new Promise(() => undefined));
 		const { createAppSyncEngine, switchAppEngineScope } = loadCreateAppEngine(() => first);
 		createAppSyncEngine(BASE_OPTIONS);
@@ -908,11 +958,11 @@ describe('createAppSyncEngine scope cache', () => {
 			store: { id: storeId },
 		});
 		void switchAppEngineScope(session('store-2'));
-		await switchAppEngineScope(session('store-2'));
+		void switchAppEngineScope(session('store-2'));
 		expect(first.scope.switch).toHaveBeenCalledTimes(1);
 		void switchAppEngineScope(session('store-3'));
 		void switchAppEngineScope(session('store-2'));
-		await switchAppEngineScope(session('store-2'));
+		void switchAppEngineScope(session('store-2'));
 		expect(first.scope.switch).toHaveBeenCalledTimes(3);
 		expect(first.scope.switch).toHaveBeenLastCalledWith({
 			...BASE_OPTIONS.scope,
