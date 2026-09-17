@@ -42,7 +42,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 let session: { opened_at_gmt: string; opened_by: number; status: string } | null;
 let blind = false;
-const lastClosure = { id: 'c' };
+let lastClosure: { id: string } | null = { id: 'c' };
 const print = jest.fn(async () => true);
 const reprint = jest.fn(async () => true);
 jest.mock('../../../../services/register-session/use-register-session', () => ({
@@ -56,11 +56,14 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 	}),
 }));
 jest.mock('../../../../services/register-session/use-session-report', () => ({
-	useSessionReport: (closure?: unknown) => ({ print: closure ? reprint : print }),
+	useSessionReport: (closure?: unknown, _isReprint?: boolean, known?: unknown) => ({
+		print: closure || known ? reprint : print,
+	}),
 }));
 beforeEach(() => {
 	jest.clearAllMocks();
 	blind = false;
+	lastClosure = { id: 'c' };
 	session = { opened_at_gmt: '2026-09-17T09:00:00Z', opened_by: 7, status: 'open' };
 });
 // Revert: render expected cash without the reports capability, or omit the card's session metadata.
@@ -181,3 +184,14 @@ it.each([0, 2])(
 		);
 	}
 );
+
+// Revert: ignore the room's already-loaded closure when session history is empty.
+it('reprints the latest loaded closure when the closed register has no persisted session history', async () => {
+	session = null;
+	lastClosure = null;
+	const row = require('../../../../services/register-session/__fixtures__/closure-local-row.json');
+	render(<SessionCard lastKnownClosure={row} />);
+	fireEvent.click(screen.getByTestId('reports-session-print'));
+	await waitFor(() => expect(reprint).toHaveBeenCalledTimes(1));
+	expect(print).not.toHaveBeenCalled();
+});

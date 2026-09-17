@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import {
@@ -8,6 +8,9 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
+import { Icon } from '@wcpos/components/icon';
+import { PortalHost } from '@wcpos/components/portal';
+import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { Text } from '@wcpos/components/text';
 
 import { useTheme } from '../../../../contexts/theme';
@@ -42,15 +45,29 @@ export function Closures({
 	const t = useT();
 	const names = useRegisterNames();
 	const [error, setError] = React.useState('');
+	const lastKnownClosure = rows
+		.filter((row) => row.register_id === binding.registerId && !unavailableIds.has(row.id))
+		.sort((a, b) => b.closed_at.localeCompare(a.closed_at))[0];
+	const registerContainer = React.useCallback((node: View | null) => {
+		registerPortalContainer(
+			'reports',
+			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
+		);
+	}, []);
 	if (row && screenSize === 'sm')
 		return <ClosurePanel key={row.id} row={row} onClose={() => setSelected(null)} />;
 	return (
-		<View testID="reports-closures" className="flex-1 flex-row">
+		<View ref={registerContainer} testID="reports-closures" className="min-h-0 flex-1 flex-row">
 			<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button testID="closures-overflow" variant="ghost" className="min-h-12 self-end">
-							{t('reports.more')}
+						<Button
+							testID="closures-overflow"
+							accessibilityLabel={t('reports.more')}
+							variant="ghost"
+							className="h-12 w-12 self-end p-0"
+						>
+							<Icon name="ellipsisVertical" />
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
@@ -75,7 +92,9 @@ export function Closures({
 				</DropdownMenu>
 				{!!error && <Text testID="closures-export-error">{error}</Text>}
 				{scope.storeId === store.id &&
-					(!scope.registerId || scope.registerId === binding.registerId) && <SessionCard />}
+					(!scope.registerId || scope.registerId === binding.registerId) && (
+						<SessionCard lastKnownClosure={lastKnownClosure} />
+					)}
 				{directory.registers
 					.filter(
 						(register) =>
@@ -132,6 +151,7 @@ export function Closures({
 					</View>
 				)
 			)}
+			<PortalHost name="reports" />
 		</View>
 	);
 }

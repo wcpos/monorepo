@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
@@ -15,14 +16,19 @@ import { useT } from '../../../contexts/translations';
 
 import type { useReceiptDocument } from './use-receipt-document';
 
+// Keep the document visible while the WebView measures its content.
+const MIN_FLOW_PREVIEW_HEIGHT = 384;
+
 export function ReceiptBody({
 	doc,
 	selectsInline,
 	hideSelects,
+	fullWidth = false,
 }: {
 	doc: ReturnType<typeof useReceiptDocument>;
 	selectsInline?: boolean;
 	hideSelects?: boolean;
+	fullWidth?: boolean;
 }) {
 	const t = useT();
 	const {
@@ -49,6 +55,20 @@ export function ReceiptBody({
 		handleError,
 		handleContentSizeChange,
 	} = doc.previewProps;
+	const frame = (
+		<WebView
+			testID="receipt-preview-frame"
+			ref={iframeRef as never}
+			{...(renderedHtml != null
+				? { srcDoc: renderedHtml }
+				: { src: receiptUrl || baseReceiptURL || '' })}
+			onLoad={handleLoad}
+			onError={handleError}
+			onMessage={() => {}}
+			onContentSizeChange={handleContentSizeChange}
+			className="h-full w-full"
+		/>
+	);
 	const templateSwitcher = (
 		<TemplateSwitcher
 			templates={templates}
@@ -67,7 +87,7 @@ export function ReceiptBody({
 	);
 	return (
 		<ErrorBoundary>
-			<VStack className="min-h-0 flex-1 gap-2">
+			<VStack className={fullWidth ? 'w-full gap-2' : 'min-h-0 flex-1 gap-2'}>
 				<SyncingBadge isSyncing={isSyncing} />
 				{hideSelects ? null : selectsInline ? (
 					<HStack className="gap-2">
@@ -89,6 +109,17 @@ export function ReceiptBody({
 							{t('receipt.preview_unavailable')}
 						</Text>
 					</VStack>
+				) : fullWidth ? (
+					<View
+						key={previewKey}
+						testID="receipt-flow-preview"
+						style={{
+							width: '100%',
+							height: Math.max(MIN_FLOW_PREVIEW_HEIGHT, contentSize?.height ?? 0),
+						}}
+					>
+						{frame}
+					</View>
 				) : (
 					<ReceiptPreviewViewport
 						key={previewKey}
@@ -98,18 +129,7 @@ export function ReceiptBody({
 						zoomOutLabel={t('receipt.zoom_out')}
 						testID="receipt-preview"
 					>
-						<WebView
-							testID="receipt-preview-frame"
-							ref={iframeRef as never}
-							{...(renderedHtml != null
-								? { srcDoc: renderedHtml }
-								: { src: receiptUrl || baseReceiptURL || '' })}
-							onLoad={handleLoad}
-							onError={handleError}
-							onMessage={() => {}}
-							onContentSizeChange={handleContentSizeChange}
-							className="h-full w-full"
-						/>
+						{frame}
 					</ReceiptPreviewViewport>
 				)}
 			</VStack>

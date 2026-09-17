@@ -1,8 +1,9 @@
 import { useDocField } from '@wcpos/query';
 import { PrinterService } from '@wcpos/printer';
-import type { ClosureDocument } from '@wcpos/database';
+import type { ClosureDocument, ClosureRow } from '@wcpos/database';
 
 import { logDrawerOpened, logXReportPrinted, useRegisterActor } from './audit';
+import { useClosureCollection } from './use-register-session-collections';
 import { useRegisterSession } from './use-register-session';
 import { buildClosureDocument, buildXReportDocument } from './closure-document';
 import { useClosureDocumentContext } from './use-closure-document-context';
@@ -12,10 +13,15 @@ import { useResolvedPrinter } from '../../screens/main/receipt/hooks/use-resolve
 // Existing register-report printer selection, shared by the till and Reports.
 const REPORT_TEMPLATE = { id: 'register-session', output_type: 'escpos', paper_width: null };
 
-export function useSessionReport(closure?: ClosureDocument | null, isReprint = false) {
+export function useSessionReport(
+	closure?: ClosureDocument | null,
+	isReprint = false,
+	knownClosure?: ClosureRow
+) {
 	const actor = useRegisterActor();
 	const { session, expected, blind, binding, movements, salesCount } = useRegisterSession();
-	const snapshot = useDocField(closure, (row) => row);
+	const snapshot = useDocField(closure, (row) => row) ?? knownClosure;
+	const collection = useClosureCollection();
 	const { resolvedPrinter } = useResolvedPrinter({ template: REPORT_TEMPLATE });
 	const context = useClosureDocumentContext();
 	const localReport = snapshot
@@ -36,13 +42,15 @@ export function useSessionReport(closure?: ClosureDocument | null, isReprint = f
 	const report = useReceiptDocument({
 		autoPrintAllowed: false,
 		isReprint,
-		getLocalClosure: closure ? async () => closure : undefined,
-		document: closure
-			? `closure:${snapshot?.server_closure_id ?? closure.id}`
+		getLocalClosure: snapshot
+			? async () => closure ?? (await collection?.findOne(snapshot.id).exec()) ?? null
+			: undefined,
+		document: snapshot
+			? `closure:${snapshot.server_closure_id ?? snapshot.id}`
 			: session
 				? `xreport:${session.id}`
 				: undefined,
-		documentReady: closure
+		documentReady: snapshot
 			? snapshot?.sync_status === 'synced' || snapshot?.sync_status === 'superseded'
 			: !!session,
 		localReport,
@@ -54,7 +62,7 @@ export function useSessionReport(closure?: ClosureDocument | null, isReprint = f
 		doc: report,
 		print: async () => {
 			if ((await report.print()) !== true) throw new Error('Print was not dispatched');
-			if (!closure)
+			if (!snapshot)
 				logXReportPrinted({
 					actor,
 					sessionId: session?.id,

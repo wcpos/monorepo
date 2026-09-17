@@ -83,7 +83,7 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 	};
 	const title = t('reports.closure_n', { n: recorded.number });
 	const content = (
-		<View testID="closure-panel" className="bg-card min-h-0 flex-1 gap-3 p-4">
+		<View testID="closure-panel" className="bg-card min-h-0 flex-1">
 			{phone && (
 				<Button
 					testID="closure-back"
@@ -94,22 +94,28 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 					{t('common.back')}
 				</Button>
 			)}
-			{phone ? (
-				<Text className="text-lg font-semibold">{title}</Text>
-			) : (
-				<DialogTitle>{title}</DialogTitle>
-			)}
-			<TemplateSwitcher
-				templates={doc.templates}
-				selectedId={doc.selectedTemplateId}
-				onSelect={doc.setSelectedTemplateId}
-				isOffline={doc.isOffline}
-				alwaysVisible
-			/>
-			<ScrollView className="flex-1" contentContainerClassName="gap-4">
-				<View className="min-h-96">
-					<ReceiptBody doc={doc} hideSelects />
+			<View className={`shrink-0 flex-row items-center gap-3 border-b p-3 ${phone ? '' : 'pr-16'}`}>
+				{phone ? (
+					<Text className="shrink text-lg font-semibold">{title}</Text>
+				) : (
+					<DialogTitle className="shrink">{title}</DialogTitle>
+				)}
+				<View className="min-w-0 flex-1">
+					<TemplateSwitcher
+						templates={doc.templates}
+						selectedId={doc.selectedTemplateId}
+						onSelect={doc.setSelectedTemplateId}
+						isOffline={doc.isOffline}
+						alwaysVisible
+					/>
 				</View>
+			</View>
+			<ScrollView
+				testID="closure-panel-body"
+				className="min-h-0 flex-1"
+				contentContainerClassName="gap-4 p-4"
+			>
+				<ReceiptBody doc={doc} hideSelects fullWidth />
 				{!!corrections.length && touched.size > 0 && (
 					<View testID="closure-settled" className="gap-2 border-t pt-3">
 						<Text className="font-semibold">{t('reports.recorded_settled')}</Text>
@@ -157,7 +163,7 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 				<Text>{t(doc.isOffline ? 'reports.recount_offline' : 'reports.recount_pending')}</Text>
 			)}
 			{!!error && <Text testID="closure-action-error">{error}</Text>}
-			<View className="flex-row gap-3">
+			<View testID="closure-panel-footer" className="bg-card shrink-0 flex-row gap-3 border-t p-4">
 				<Button
 					testID="closure-recount"
 					variant="outline"
@@ -195,7 +201,16 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 				if (!open) onClose();
 			}}
 		>
-			<DialogContent side="right" size="xl">
+			<DialogContent
+				side="right"
+				portalHost="reports"
+				className="bg-card h-full w-[460px] flex-col gap-0 overflow-hidden p-0"
+				closeButtonProps={{
+					testID: 'closure-close',
+					accessibilityLabel: t('common.close'),
+					className: 'h-12 w-12 items-center justify-center',
+				}}
+			>
 				{content}
 			</DialogContent>
 		</Dialog>

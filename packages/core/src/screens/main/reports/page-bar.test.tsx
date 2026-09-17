@@ -10,6 +10,9 @@ import { PageBar } from './page-bar';
 
 import type { ClosureScope } from './closures/use-closure-rows';
 
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+}));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: require('react-native').Text,
@@ -169,7 +172,10 @@ it('switches rooms and selects Yesterday in store time', () => {
 // Revert: apply a locked selection before checking Pro, or give every locked edge generic copy.
 it.each([
 	['reports-period-yesterday', 'Earlier closures'],
-	['reports-period-thisWeek', 'This Week'],
+	['reports-period-thisWeek', 'Earlier closures'],
+	['reports-period-lastWeek', 'Earlier closures'],
+	['reports-period-thisMonth', 'Earlier closures'],
+	['reports-period-lastMonth', 'Earlier closures'],
 	['reports-period-previous', 'Earlier closures'],
 	['reports-period-custom', 'Custom ranges'],
 	['reports-register-other', 'Other registers'],
@@ -178,7 +184,9 @@ it.each([
 	draw();
 	fireEvent.click(screen.getByTestId(id.includes('period') ? 'reports-period' : 'reports-scope'));
 	fireEvent.click(screen.getByTestId(id));
-	expect(screen.getByTestId('reports-lock-hint').textContent).toContain(label);
+	expect(screen.getByTestId('reports-lock-hint').textContent).toBe(`${label} are in WCPOS Pro`);
+	expect(screen.getByTestId(id).textContent).not.toContain('Locked');
+	expect(screen.getByTestId(id).querySelector('[data-icon="lock"]')).toBeTruthy();
 	expect(screen.getAllByTestId('reports-see-pro')).toHaveLength(1);
 	expect(change).not.toHaveBeenCalled();
 	expect(get).not.toHaveBeenCalled();
@@ -237,4 +245,16 @@ it('offers the selected Pro store registers without rebinding the till', () => {
 	expect(screen.queryByTestId('reports-register-other')).toBeNull();
 	fireEvent.click(screen.getByTestId('reports-register-remote'));
 	expect(screen.getByTestId('reports-scope').textContent).toContain('Remote till · Second');
+});
+
+// Revert: omit the page identity ahead of the room control.
+it('identifies Reports before the room segments', () => {
+	draw();
+	expect(screen.getByTestId('reports-title').textContent).toBe('Reports');
+	expect(
+		screen
+			.getByTestId('reports-title')
+			.compareDocumentPosition(screen.getByTestId('reports-room-sales')) &
+			Node.DOCUMENT_POSITION_FOLLOWING
+	).toBeTruthy();
 });

@@ -331,7 +331,7 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 
 async function openClosures(page: Page) {
 	if (!(await page.getByTestId('drawer-item-reports').isVisible())) {
-		await page.getByTestId('drawer-open-button').click();
+		await page.getByTestId('pos-drawer-open-button').click();
 	}
 	await page.getByTestId('drawer-item-reports').click();
 	await page.getByTestId('reports-room-closures').click();
@@ -358,6 +358,7 @@ for (const viewport of viewports) {
 			await page.keyboard.press('Escape');
 			for (const day of businessDays)
 				await expect(page.getByTestId(`closure-day-${day}`)).toBeVisible();
+			await expect(page.getByTestId('reports-session-print')).toBeVisible();
 			await expect(page.getByTestId(`closure-badge-${probe.ids[1]}`)).toBeVisible();
 			await expect(page.getByTestId(`closure-badge-${probe.ids[0]}`)).toHaveCount(0);
 			await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-list.png`) });
@@ -373,6 +374,8 @@ for (const viewport of viewports) {
 			await expect(page.getByTestId(`closure-correction-${correctionId}`)).toContainText(
 				'Original probe recount'
 			);
+			await expect(page.getByTestId('closure-recount')).toBeInViewport();
+			await expect(page.getByTestId('closure-reprint')).toBeInViewport();
 			await page.screenshot({ path: testInfo.outputPath(`${viewport.name}-drill-in.png`) });
 			const printResponse = page.waitForResponse(
 				(response) =>

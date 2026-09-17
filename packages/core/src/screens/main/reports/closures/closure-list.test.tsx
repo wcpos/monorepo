@@ -11,7 +11,19 @@ import { ClosureList } from './closure-list';
 import { selectClosureRows } from './use-closure-rows';
 
 jest.mock('@wcpos/components/text', () => ({
-	Text: require('react-native').Text,
+	Text: ({
+		testID,
+		className,
+		children,
+	}: {
+		testID?: string;
+		className?: string;
+		children: React.ReactNode;
+	}) => (
+		<span data-testid={testID} className={className}>
+			{children}
+		</span>
+	),
 	TextClassContext: require('react').createContext(undefined),
 }));
 jest.mock('../../../../contexts/translations', () => ({
@@ -197,4 +209,25 @@ it('keeps overnight closures on their stamped days across DST and a later store 
 	expect(groups()).toEqual(['closure-day-2026-11-01', 'closure-day-2026-10-31']);
 	expect(screen.getByTestId('closure-counted-before-fallback').textContent).toContain('178.00');
 	expect(JSON.stringify(source)).toBe(before);
+});
+
+// Revert: omit semantic money colours or colour exact as a discrepancy.
+it('distinguishes short, over and exact drawer results with semantic tokens', () => {
+	render(
+		<ClosureList
+			rows={[
+				row('1'),
+				row('2', { variance: { cash: '3' } }),
+				row('3', { variance: { cash: '0' } }),
+			]}
+		/>
+	);
+	for (const [id, token] of [
+		['1', 'text-destructive'],
+		['2', 'text-success'],
+		['3', 'text-muted-foreground'],
+	]) {
+		expect(screen.getByTestId(`closure-result-${id}`).className).toContain(token);
+		expect(screen.getByTestId(`closure-result-${id}`).className).toContain('tabular-nums');
+	}
 });

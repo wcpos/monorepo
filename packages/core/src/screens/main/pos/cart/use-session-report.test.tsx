@@ -42,6 +42,9 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => `£${value.toFixed(2)}` }),
 }));
+jest.mock('../../../../services/register-session/use-register-session-collections', () => ({
+	useClosureCollection: () => undefined,
+}));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({
 		session: { id: 's', register_id: 'r', opened_by: 8 },
@@ -194,5 +197,22 @@ it('does not mark a closure printed when the print layer silently fails', async 
 	print.mockResolvedValueOnce(undefined);
 	await expect(view.result.current.print()).rejects.toThrow('Print was not dispatched');
 	expect(incrementalModify).not.toHaveBeenCalled();
+	expect(logger.info).not.toHaveBeenCalled();
+});
+
+// Revert: treat a loaded closure row without an RxDocument as an X-report.
+it('uses the same closure print path for a loaded history row', async () => {
+	const row = require('../../../../services/register-session/__fixtures__/closure-local-row.json');
+	const view = renderHook(() => useSessionReport(null, true, row));
+	await view.result.current.print();
+	expect(documentHook).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			document: `closure:${row.server_closure_id ?? row.id}`,
+			isReprint: true,
+			localReport: expect.objectContaining({
+				fiscal: expect.objectContaining({ document_type: 'closure' }),
+			}),
+		})
+	);
 	expect(logger.info).not.toHaveBeenCalled();
 });

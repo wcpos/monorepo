@@ -6,6 +6,7 @@ import { useObservableState } from 'observable-hooks';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { Icon } from '@wcpos/components/icon';
 import { Calendar, type DateRange } from '@wcpos/components/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
@@ -114,7 +115,8 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 			className={`min-h-12 ${locked ? 'opacity-50' : ''}`}
 			onPress={onPress}
 		>
-			{`${label}${locked ? ` · ${t('reports.locked')}` : ''}`}
+			<ButtonText>{label}</ButtonText>
+			{locked && <Icon name="lock" className="text-muted-foreground" />}
 		</Button>
 	);
 	return (
@@ -123,10 +125,13 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 			className="bg-card gap-2 border-b p-2"
 			style={{ paddingTop: top + 8 }}
 		>
-			<View className="flex-row items-center justify-between gap-2">
+			<View className="flex-row items-center gap-2">
 				<View className="bg-sidebar rounded-md">
 					<HeaderLeft />
 				</View>
+				<Text testID="reports-title" className="text-lg font-semibold">
+					{t('common.reports')}
+				</Text>
 				<Tabs value={room} onValueChange={onRoomChange}>
 					<TabsList className="flex-row gap-2">
 						{['sales', 'closures'].map((value) => (
@@ -141,7 +146,9 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 						))}
 					</TabsList>
 				</Tabs>
-				<HeaderRight />
+				<View className="ml-auto">
+					<HeaderRight />
+				</View>
 			</View>
 			<View className="flex-row items-center gap-2">
 				<Popover
@@ -173,14 +180,7 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 							option(
 								`reports-period-${key}`,
 								labels[key as keyof typeof labels],
-								() =>
-									period(
-										day(range.from),
-										day(range.to),
-										key === 'yesterday'
-											? t('reports.earlier_closures')
-											: labels[key as keyof typeof labels]
-									),
+								() => period(day(range.from), day(range.to), t('reports.earlier_closures')),
 								!license?.isPro && key !== 'today'
 							)
 						)}
@@ -226,6 +226,7 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 									? ` · ${stores?.find((row) => row.id === scope.storeId)?.name ?? store.name}`
 									: ''}
 							</ButtonText>
+							{!license?.isPro && <Icon name="lock" className="text-muted-foreground opacity-50" />}
 						</Button>
 					</PopoverTrigger>
 					<PopoverContent>

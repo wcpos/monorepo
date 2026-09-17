@@ -65,8 +65,21 @@ jest.mock('@wcpos/components/button', () => ({
 }));
 jest.mock('@wcpos/components/dialog', () => ({
 	Dialog: ({ children }: { children: React.ReactNode }) => children,
-	DialogContent: ({ children, side }: { children: React.ReactNode; side: string }) => (
-		<div data-testid={`dialog-${side}`}>{children}</div>
+	DialogContent: ({
+		children,
+		side,
+		portalHost,
+		closeButtonProps,
+	}: {
+		children: React.ReactNode;
+		side: string;
+		portalHost?: string;
+		closeButtonProps?: { testID?: string; onPress?: () => void };
+	}) => (
+		<div data-testid={`dialog-${side}`} data-host={portalHost}>
+			{children}
+			<button data-testid={closeButtonProps?.testID} onClick={closeButtonProps?.onPress} />
+		</div>
 	),
 	DialogTitle: require('react-native').Text,
 }));
@@ -117,9 +130,16 @@ jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: (options: { localReport: Record<string, unknown> }) => mockDocument(options),
 }));
 jest.mock('../../receipt/receipt-body', () => ({
-	ReceiptBody: ({ doc }: { doc: { previewProps: { renderedHtml: string } } }) => (
+	ReceiptBody: ({
+		doc,
+		fullWidth,
+	}: {
+		doc: { previewProps: { renderedHtml: string } };
+		fullWidth?: boolean;
+	}) => (
 		<div
 			data-testid="document"
+			data-full-width={fullWidth}
 			dangerouslySetInnerHTML={{ __html: doc.previewProps.renderedHtml }}
 		/>
 	),
@@ -233,4 +253,15 @@ it('opens recount online and reloads the closure after success', () => {
 	expect(mockRecount).toHaveBeenCalledWith(expect.objectContaining({ row }));
 	fireEvent.click(screen.getByTestId('save-recount'));
 	expect(mockRefetch).toHaveBeenCalledTimes(1);
+});
+
+// Revert: use the unnamed portal, thumbnail preview, or omit the panel close action.
+it('hosts the tablet panel in Reports with a full-width document and close action', () => {
+	mockPhone = false;
+	const close = jest.fn();
+	render(<ClosurePanel row={row} onClose={close} />);
+	expect(screen.getByTestId('dialog-right').getAttribute('data-host')).toBe('reports');
+	expect(screen.getByTestId('document').getAttribute('data-full-width')).toBe('true');
+	expect(screen.getByTestId('closure-close')).toBeTruthy();
+	expect(screen.queryByTestId('closure-back')).toBeNull();
 });

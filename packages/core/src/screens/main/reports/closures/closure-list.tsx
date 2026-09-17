@@ -99,7 +99,10 @@ export function ClosureList({
 							<Text testID={`closure-counted-${row.id}`} className="tabular-nums">
 								{format(Number(row.counted.cash ?? 0))}
 							</Text>
-							<Text testID={`closure-result-${row.id}`} className="w-24 text-right tabular-nums">
+							<Text
+								testID={`closure-result-${row.id}`}
+								className={`w-24 text-right tabular-nums ${variance < 0 ? 'text-destructive' : variance > 0 ? 'text-success' : 'text-muted-foreground'}`}
+							>
 								{variance
 									? `${format(Math.abs(variance))} ${t(variance < 0 ? 'register.short' : 'register.over')}`
 									: t('reports.exact')}
