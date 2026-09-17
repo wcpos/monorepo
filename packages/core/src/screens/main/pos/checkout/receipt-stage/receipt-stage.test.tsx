@@ -7,9 +7,16 @@ import { withDelay, withTiming } from 'react-native-reanimated';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { Platform } from '@wcpos/utils/platform';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { enterReceipt, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
+import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { ReceiptStage } from './receipt-stage';
+
+jest.mock('../payments/server/use-terminal-leg', () => ({ useTerminalLeg: jest.fn() }));
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
+// The unused asChild path imports untranspiled JSX; keep the real collapsible behavior.
+jest.mock('@rn-primitives/slot', () => ({ Slot: () => null }));
 
 const mockReplace = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
@@ -65,6 +72,7 @@ jest.mock('../column/use-checkout-back', () => ({
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('@wcpos/components/text', () => ({
+	TextClassContext: React.createContext(''),
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
 	),
@@ -125,6 +133,7 @@ jest.mock('@wcpos/components/button', () => ({
 
 beforeEach(() => {
 	jest.clearAllMocks();
+	jest.mocked(useTerminalLeg).mockReturnValue(null);
 	resetCheckoutMode();
 	enterReceipt('paid');
 	mockPrintedTo = null;
@@ -154,6 +163,45 @@ beforeEach(() => {
 	] as never;
 });
 afterEach(() => jest.restoreAllMocks());
+it('shows a retained capture finishing error above the paid headline and still finishes the sale', async () => {
+	const leg = {
+		outcome: 'captured',
+		settlement: { finishingError: 'local write failed' },
+	} as NonNullable<ReturnType<typeof useTerminalLeg>>;
+	jest
+		.mocked(useTerminalLeg)
+		.mockImplementation((orderUuid) => (orderUuid === 'paid' ? leg : null));
+	await act(async () => {
+		render(<ReceiptStage orderUuid="paid" compact={false} />);
+	});
+	const notice = screen.getByTestId('checkout-terminal-finishing-error');
+	expect(screen.getAllByTestId('checkout-terminal-finishing-error')).toHaveLength(1);
+	expect(notice.compareDocumentPosition(screen.getByTestId('checkout-paid-headline'))).toBe(
+		Node.DOCUMENT_POSITION_FOLLOWING
+	);
+	expect(screen.queryByTestId('checkout-terminal-finishing-details')).toBeNull();
+	fireEvent.click(screen.getByTestId('checkout-terminal-finishing-details-toggle'));
+	expect(screen.getByTestId('checkout-terminal-finishing-details').textContent).toBe(
+		'local write failed'
+	);
+	fireEvent.click(screen.getByTestId('checkout-terminal-finishing-help'));
+	expect(openExternalURL).toHaveBeenCalledWith('https://docs.wcpos.com/error-codes/PAYMENT121');
+	fireEvent.click(screen.getByTestId('receipt-new-sale'));
+	expect(getCheckoutModeSnapshot().receiptOrders.has('paid')).toBe(false);
+});
+it.each([
+	null,
+	{ outcome: 'captured' },
+	{ outcome: 'captured', settlement: {} },
+	{ outcome: 'failed', settlement: { finishingError: 'local write failed' } },
+])('omits the finishing notice without a captured finishing error: %j', async (leg) => {
+	jest.mocked(useTerminalLeg).mockReturnValue(leg as ReturnType<typeof useTerminalLeg>);
+	await act(async () => {
+		render(<ReceiptStage orderUuid="paid" compact={false} />);
+	});
+	expect(screen.queryByTestId('checkout-terminal-finishing-error')).toBeNull();
+	expect(screen.queryByTestId('checkout-terminal-finishing-help')).toBeNull();
+});
 it('shows the change headline and cash tendered sub-line', () => {
 	render(<ReceiptStage orderUuid="paid" compact={false} />);
 	expect(screen.getByTestId('receipt-paid-banner').textContent).toContain('$92.95');
