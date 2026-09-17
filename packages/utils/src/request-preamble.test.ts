@@ -223,3 +223,31 @@ it.each(['probe-header', 'probe-param', 'probe-echo', 'probe-cache', 'probe-bare
 		}
 	}
 );
+
+it.each([
+	[
+		'query auth drops the stale header',
+		{ use_jwt_as_param: true, wcpos_version: '1.10.0' },
+		'new',
+		null,
+	],
+	['header auth drops the stale query token', { use_jwt_as_param: false }, null, 'Bearer new'],
+])('a refreshed retry replaces the other channel too (%s)', (_name, site, param, header) => {
+	// The server reads the header first: a stale header beside a fresh query token 401s the
+	// retry; the reverse leaves a stale token in URL logs (CodeRabbit on #2132).
+	const result = prepare(
+		{ purpose: 'rest', site, accessToken: 'old', refreshedAccessToken: 'new' },
+		{ url: `${url}?authorization=old`, headers: { Authorization: 'Bearer old' } }
+	);
+	expect(new URL(result.url).searchParams.get('authorization')).toBe(param);
+	expect(result.headers.get('Authorization')).toBe(header);
+});
+
+it('the echo probe keeps both channels on a refreshed token', () => {
+	const result = prepare(
+		{ purpose: 'probe-echo', accessToken: 'old', refreshedAccessToken: 'abc.def' },
+		{ url }
+	);
+	expect(new URL(result.url).searchParams.get('authorization')).toBe('Bearer xxx.xxx');
+	expect(result.headers.get('Authorization')).toBe('Bearer abc.def');
+});

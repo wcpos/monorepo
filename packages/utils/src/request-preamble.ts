@@ -233,6 +233,13 @@ export function buildRequestPreamble(
 		) {
 			headers.set('Authorization', `Bearer ${token}`);
 		}
+		// A refreshed credential replaces the OTHER channel too: the server reads the header
+		// first, so a stale header beside a fresh query token would 401 the retry (and the
+		// reverse leaves a stale token in URL logs). The echo probe deliberately sends both.
+		if (context.refreshedAccessToken !== undefined && policy.auth !== 'echo') {
+			if (queryAuth) headers.delete('Authorization');
+			else url.searchParams.delete('authorization');
+		}
 	}
 	// wcpos=1 is the marker twin that survives header-stripping proxies (B7, wcpos-infra#72).
 	if (policy.markerParam) setParam('wcpos', '1');

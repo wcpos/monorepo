@@ -215,19 +215,24 @@ function withRefreshedCredential(
 			...originalConfig,
 			wcposPreamble: {
 				...originalConfig.wcposPreamble,
-				site: originalConfig.wcposPreamble.site ?? toPreambleSite(site),
+				// Caller metadata wins field by field; the handler's site fills what it left out.
+				site: { ...toPreambleSite(site), ...originalConfig.wcposPreamble.site },
 				refreshedAccessToken: token,
 			},
 		};
 	}
 	if (site.use_jwt_as_param) {
-		return {
-			...originalConfig,
-			params: {
-				...originalConfig.params,
-				authorization: formatAuthorizationParam(token, bareAuthParamSupported(site.wcpos_version)),
-			},
-		};
+		const authorization = formatAuthorizationParam(
+			token,
+			bareAuthParamSupported(site.wcpos_version)
+		);
+		if (originalConfig.params instanceof URLSearchParams) {
+			// Spreading URLSearchParams drops its entries; clone and set instead.
+			const params = new URLSearchParams(originalConfig.params);
+			params.set('authorization', authorization);
+			return { ...originalConfig, params };
+		}
+		return { ...originalConfig, params: { ...originalConfig.params, authorization } };
 	}
 	return {
 		...originalConfig,
