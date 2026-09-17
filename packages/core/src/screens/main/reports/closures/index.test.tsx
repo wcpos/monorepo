@@ -20,7 +20,18 @@ const share = jest.fn(async () => undefined);
 jest.mock('./save-or-share-csv', () => ({
 	saveOrShareCsv: (...args: unknown[]) => share(...(args as [])),
 }));
-jest.mock('./use-closure-rows', () => ({ useClosureRows: () => rows }));
+let status = 'ready';
+const loadMore = jest.fn();
+jest.mock('./use-closure-rows', () => ({
+	useClosureRows: () => ({
+		rows,
+		scope,
+		status,
+		loadMore,
+		hasMore: true,
+		unavailableIds: new Set(),
+	}),
+}));
 jest.mock('./closure-list', () => ({ ClosureList: () => null }));
 jest.mock('./session-card', () => ({ SessionCard: () => null }));
 jest.mock('./closure-panel', () => ({
@@ -37,6 +48,7 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'r' }),
+	useRegisterDirectory: () => ({ registers: [] }),
 }));
 jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNames: () => ({ r: 'Front' }),
@@ -89,4 +101,25 @@ it('exports only visible rows from the overflow menu', async () => {
 it('opens the route-selected row on a phone', () => {
 	render(<Closures scope={scope} initialClosureId="c" />);
 	expect(screen.getByTestId('selected-closure').textContent).toBe('c');
+});
+
+// Revert: leave failed pages with no list Retry, or collapse loading/unavailable/denied into empty.
+it.each(['loading', 'unavailable', 'denied', 'error'])(
+	'exposes the distinct %s list state',
+	(state) => {
+		status = state;
+		render(<Closures scope={scope} />);
+		expect(screen.getByTestId(`closures-${state}`)).toBeTruthy();
+		if (state === 'error') {
+			fireEvent.click(screen.getByTestId('closures-retry'));
+			expect(loadMore).toHaveBeenCalled();
+		}
+		status = 'ready';
+	}
+);
+// Revert: never expose the next-page action.
+it('loads the next page on demand', () => {
+	render(<Closures scope={scope} />);
+	fireEvent.click(screen.getByTestId('closures-load-more'));
+	expect(loadMore).toHaveBeenCalled();
 });

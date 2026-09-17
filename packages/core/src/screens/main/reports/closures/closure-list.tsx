@@ -16,8 +16,10 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 export function ClosureList({
 	rows,
 	onSelect,
+	unavailableIds,
 }: {
 	rows: readonly ClosureRow[];
+	unavailableIds?: ReadonlySet<string>;
 	onSelect?: (row: ClosureRow) => void;
 }) {
 	const t = useT();
@@ -36,7 +38,11 @@ export function ClosureList({
 	const time = (value: string) => formatDate(new Date(value), 'HH:mm', zoneOptions(timezone));
 	return (
 		<View className="bg-card rounded-md border">
-			{!rows.length && <Text className="p-4">{t('reports.no_closures')}</Text>}
+			{!rows.length && (
+				<Text testID="closures-empty" className="p-4">
+					{t('reports.no_closures')}
+				</Text>
+			)}
 			{rows.map((row, index) => {
 				const variance = Number(row.variance.cash ?? 0);
 				const badge = !row.synced_rows_at
@@ -55,10 +61,11 @@ export function ClosureList({
 							</Text>
 						)}
 						<Pressable
+							disabled={unavailableIds?.has(row.id)}
 							onPress={() => onSelect?.(row)}
 							accessibilityRole="button"
 							testID={`closure-row-${row.id}`}
-							className="active:bg-muted min-h-14 flex-row items-center gap-3 border-t p-3"
+							className={`active:bg-muted min-h-14 flex-row items-center gap-3 border-t p-3 ${unavailableIds?.has(row.id) ? 'opacity-50' : ''}`}
 						>
 							<View className="min-w-0 flex-1 gap-1">
 								<Text>
@@ -73,6 +80,11 @@ export function ClosureList({
 									{time(row.opened_at)} → {time(row.closed_at)} ·{' '}
 									{String(row.breakdowns.closed_by_name || t('register.unknown_cashier'))}
 								</Text>
+								{unavailableIds?.has(row.id) && (
+									<Text testID={`closure-unavailable-${row.id}`}>
+										{t('reports.unavailable_offline')}
+									</Text>
+								)}
 								{badge && (
 									<Badge
 										testID={`closure-badge-${row.id}`}

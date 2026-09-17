@@ -21,6 +21,7 @@ type Register = {
 	id: string;
 	name: string;
 	status: string;
+	store_id?: number | null;
 	default_float?: string | null;
 	counters?: RegisterCounters;
 };
@@ -72,11 +73,13 @@ function loadDirectory(
 	storeId: number | undefined
 ): Promise<void> {
 	entry.request ??= http
-		.get('registers', storeId && storeId > 0 ? { params: { store_id: storeId } } : undefined)
+		.get('registers', { params: { store_id: storeId || null } })
 		.then((response) => {
 			entry.loaded = true;
 			publish(entry, {
-				registers: (response.data as Register[]).filter((row) => row.status === 'active'),
+				registers: (response.data as Register[]).filter(
+					(row) => row.status === 'active' && (storeId !== 0 || !row.store_id)
+				),
 			});
 		})
 		.catch(() => {
@@ -170,16 +173,16 @@ export function useRegisterBindingSession(): void {
 	}, [entry, http, online, site.uuid, store.id, userDB]);
 }
 
-export function useRegisterBinding() {
-	const { userDB, site, store } = useStoreSession();
-	const actor = useRegisterActor();
+/** Read another store's directory without changing the physical till binding. */
+export function useRegisterDirectory(storeId: number | undefined) {
+	const { site } = useStoreSession();
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
-	const entry = directory(site.uuid!, store.id);
+	const entry = directory(site.uuid!, storeId);
 	// A reader mounted before (or without) the session hook still gets the directory.
 	React.useEffect(() => {
-		if (online && !entry.loaded) void loadDirectory(entry, http, store.id);
-	}, [entry, http, online, store.id]);
+		if (online && !entry.loaded) void loadDirectory(entry, http, storeId);
+	}, [entry, http, online, storeId]);
 	const subscribe = React.useCallback(
 		(notify: () => void) => {
 			entry.listeners.add(notify);
@@ -191,6 +194,15 @@ export function useRegisterBinding() {
 	);
 	const snapshot = React.useCallback(() => entry.value, [entry]);
 	const value = React.useSyncExternalStore(subscribe, snapshot, snapshot);
+	return value;
+}
+
+export function useRegisterBinding() {
+	const { userDB, site, store } = useStoreSession();
+	const actor = useRegisterActor();
+	const http = useRestHttpClient();
+	const value = useRegisterDirectory(store.id);
+	const entry = directory(site.uuid!, store.id);
 	const bind = React.useCallback(
 		async (id: string) => {
 			const register = entry.value.registers.find((row) => row.id === id);

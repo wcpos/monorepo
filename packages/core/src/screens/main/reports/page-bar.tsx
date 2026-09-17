@@ -19,7 +19,10 @@ import { useT } from '../../../contexts/translations';
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useLocalDate } from '../../../hooks/use-local-date';
 import { useStoreDay, zoneOptions } from '../../../hooks/use-store-day';
-import { useRegisterBinding } from '../../../services/register/use-register-binding';
+import {
+	useRegisterBinding,
+	useRegisterDirectory,
+} from '../../../services/register/use-register-binding';
 import { HeaderLeft } from '../components/header/left';
 import { HeaderRight } from '../components/header/right';
 
@@ -47,6 +50,9 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 		[wpCredentials, site]
 	);
 	const stores = useObservableState(sources.stores, []) as StoreDocument[];
+	const directory = useRegisterDirectory(
+		license?.isPro && stores.some((row) => row.id === scope.storeId) ? scope.storeId : store.id
+	);
 	const cashiers = useObservableState(sources.cashiers, []) as WPCredentialsDocument[];
 	const [locked, setLocked] = React.useState('');
 	const [menu, setMenu] = React.useState('');
@@ -214,7 +220,7 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 					<PopoverTrigger asChild>
 						<Button testID="reports-scope" variant="outline" className="min-h-12 flex-1">
 							<ButtonText numberOfLines={1}>
-								{binding.registers.find((row) => row.id === scope.registerId)?.name ??
+								{directory.registers.find((row) => row.id === scope.registerId)?.name ??
 									(scope.registerId ? binding.registerName : t('reports.all_registers'))}
 								{(stores?.length ?? 0) > 1
 									? ` · ${stores?.find((row) => row.id === scope.storeId)?.name ?? store.name}`
@@ -223,7 +229,7 @@ export function PageBar({ room, onRoomChange, scope, onScopeChange }: PageBarPro
 						</Button>
 					</PopoverTrigger>
 					<PopoverContent>
-						{[{ id: '', name: t('reports.all_registers') }, ...binding.registers].map((row) =>
+						{[{ id: '', name: t('reports.all_registers') }, ...directory.registers].map((row) =>
 							option(
 								`reports-register-${row.id || 'all'}`,
 								row.name,

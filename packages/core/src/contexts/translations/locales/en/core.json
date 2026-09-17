@@ -1,4 +1,7 @@
 {
+	"reports.unavailable_offline": "Unavailable offline",
+	"reports.load_failed": "Could not load closures",
+	"reports.load_more": "Load more",
 	"reports.closure_template_required": "Choose a logicless or thermal closure template to print",
 	"reports.csv_business_day": "Business day",
 	"reports.csv_closure": "Closure",

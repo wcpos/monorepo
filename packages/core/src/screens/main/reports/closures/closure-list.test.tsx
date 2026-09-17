@@ -29,6 +29,12 @@ jest.mock('../../../../services/register-session/use-register-session-collection
 	useClosureCollection: () => undefined,
 }));
 jest.mock('../../../../contexts/app-state', () => ({ useAppState: () => ({}) }));
+jest.mock('../../hooks/use-rest-http-client', () => ({ useRestHttpClient: jest.fn() }));
+jest.mock('../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: jest.fn(),
+}));
+jest.mock('../../../../hooks/use-app-info', () => ({ useAppInfo: jest.fn() }));
+jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() }));
 jest.mock('@wcpos/query', () => ({ useDocField: () => undefined }));
 
 function row(id: string, changes: Partial<ClosureRow> = {}): ClosureRow {
@@ -147,4 +153,14 @@ it('labels Today and Yesterday in store time', () => {
 	expect(screen.getByTestId('closure-day-2026-09-16').textContent).toBe('Today');
 	expect(screen.getByTestId('closure-day-2026-09-15').textContent).toBe('Yesterday');
 	jest.useRealTimers();
+});
+
+// Revert: make remote offline rows disappear or remain interactive without unavailable marking.
+it('dims and disables unavailable remote rows while retaining their figures', () => {
+	const select = jest.fn();
+	render(<ClosureList rows={[row('1')]} onSelect={select} unavailableIds={new Set(['1'])} />);
+	expect(screen.getByTestId('closure-unavailable-1').textContent).toBe('Unavailable offline');
+	expect(screen.getByTestId('closure-counted-1').textContent).toContain('8.00');
+	fireEvent.click(screen.getByTestId('closure-row-1'));
+	expect(select).not.toHaveBeenCalled();
 });

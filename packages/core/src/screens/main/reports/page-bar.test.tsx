@@ -117,6 +117,15 @@ jest.mock('../../../contexts/app-state', () => ({
 }));
 jest.mock('../../../hooks/use-app-info', () => ({ useAppInfo: () => ({ license: { isPro } }) }));
 jest.mock('../../../services/register/use-register-binding', () => ({
+	useRegisterDirectory: (id: number) => ({
+		registers:
+			id === 2
+				? [{ id: 'remote', name: 'Remote till' }]
+				: [
+						{ id: 'r', name: 'Front' },
+						{ id: 'other', name: 'Back' },
+					],
+	}),
 	useRegisterBinding: () => ({
 		registerId: 'r',
 		registerName: 'Front',
@@ -214,4 +223,18 @@ it('formats custom period titles', () => {
 		/>
 	);
 	expect(screen.getByTestId('reports-period').textContent).toBe('1 Sep – 4 Sep');
+});
+
+// Revert: keep reading the bound store directory after changing the browsing store.
+it('offers the selected Pro store registers without rebinding the till', () => {
+	isPro = true;
+	function Browse() {
+		const [selected, select] = React.useState(scope);
+		return <PageBar room="closures" onRoomChange={room} scope={selected} onScopeChange={select} />;
+	}
+	render(<Browse />);
+	fireEvent.click(screen.getByTestId('reports-store-2'));
+	expect(screen.queryByTestId('reports-register-other')).toBeNull();
+	fireEvent.click(screen.getByTestId('reports-register-remote'));
+	expect(screen.getByTestId('reports-scope').textContent).toContain('Remote till · Second');
 });

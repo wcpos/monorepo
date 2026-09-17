@@ -166,8 +166,9 @@ export function useReceiptDocument({
 	} = useResolvedPrinter({ template: templateInfo });
 
 	// Order-only cloud jobs cannot name X/Z documents; use the existing HTML print contract.
+	const sessionReport = !!localReport || templateType === 'closure';
 	const reportSystemDialog =
-		!!localReport && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
+		sessionReport && isOrderBasedCloudProfile(resolvedPrinter ?? undefined);
 	const { print: printReceipt, isPrinting } = usePrint({
 		preparePrint: async () => {
 			let commit: (() => Promise<void>) | undefined;
@@ -217,7 +218,7 @@ export function useReceiptDocument({
 			useSystemDialog || reportSystemDialog
 				? undefined
 				: resolvedPrinter
-					? { ...resolvedPrinter, ...(localReport ? { autoOpenDrawer: false } : {}) }
+					? { ...resolvedPrinter, ...(sessionReport ? { autoOpenDrawer: false } : {}) }
 					: undefined,
 		paperWidth: selectedTemplate?.paper_width ?? undefined,
 		decimals: dp,

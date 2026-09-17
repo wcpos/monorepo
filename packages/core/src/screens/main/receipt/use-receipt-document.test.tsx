@@ -438,9 +438,14 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		expect(mockGet.mock.calls.map(([, options]) => options.params)).toEqual([{ mode: 'live' }]);
 	});
 
-	it.each(['epson-sdp', 'printnode', 'star-cloudprnt'])(
-		'prints orderless reports via system HTML instead of %s cloud',
-		async (cloudProvider) => {
+	// Revert: require localReport before treating remote closure templates as reports.
+	it.each(
+		['epson-sdp', 'printnode', 'star-cloudprnt'].flatMap((provider) =>
+			[true, false].map((local) => [provider, local] as const)
+		)
+	)(
+		'prints orderless reports via system HTML instead of %s cloud (local=%s)',
+		async (cloudProvider, local) => {
 			jest
 				.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
 				.mockReturnValue({
@@ -452,7 +457,8 @@ describe('print intent through checkout and reprint receipt documents', () => {
 						autoPrintAllowed: false,
 						document,
 						documentReady: true,
-						localReport: { title: 'Report' },
+						localReport: local ? { title: 'Report' } : undefined,
+						templateType: 'closure',
 					})
 				);
 				await act(async () => {
@@ -670,4 +676,27 @@ it('returns an explicit success signal after print dispatch', async () => {
 	await act(async () => {
 		await expect(result.current.print()).resolves.toBe(true);
 	});
+});
+
+// Revert: only suppress automatic drawer opening when a local report fallback exists.
+it('never opens the till drawer for an online-only remote session report', () => {
+	const printer = jest
+		.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
+		.mockReturnValue({ resolvedPrinter: { name: 'Till', autoOpenDrawer: true } });
+	const dispatch = jest
+		.spyOn(jest.requireMock('@wcpos/printer'), 'usePrint')
+		.mockReturnValue({ print: mockPrint, isPrinting: false });
+	renderHook(() =>
+		useReceiptDocument({
+			autoPrintAllowed: false,
+			document: 'xreport:remote',
+			documentReady: true,
+			templateType: 'closure',
+		})
+	);
+	expect(dispatch).toHaveBeenCalledWith(
+		expect.objectContaining({ printerProfile: expect.objectContaining({ autoOpenDrawer: false }) })
+	);
+	printer.mockRestore();
+	dispatch.mockRestore();
 });

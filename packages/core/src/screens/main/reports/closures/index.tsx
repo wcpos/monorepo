@@ -13,27 +13,31 @@ import { Text } from '@wcpos/components/text';
 import { useTheme } from '../../../../contexts/theme';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useRegisterBinding } from '../../../../services/register/use-register-binding';
+import {
+	useRegisterBinding,
+	useRegisterDirectory,
+} from '../../../../services/register/use-register-binding';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { exportCsv } from './export-csv';
 import { saveOrShareCsv } from './save-or-share-csv';
 import { ClosurePanel } from './closure-panel';
 import { ClosureList } from './closure-list';
-import { SessionCard } from './session-card';
+import { RemoteSessionCard, SessionCard } from './session-card';
 import { type ClosureScope, useClosureRows } from './use-closure-rows';
 
 export function Closures({
-	scope,
+	scope: requested,
 	initialClosureId,
 }: {
 	scope: ClosureScope;
 	initialClosureId?: string;
 }) {
-	const rows = useClosureRows(scope);
+	const { rows, scope, status, hasMore, loadMore, unavailableIds } = useClosureRows(requested);
 	const [selected, setSelected] = React.useState<string | null>(initialClosureId ?? null);
-	const row = rows.find((row) => row.id === selected);
+	const row = rows.find((row) => row.id === selected && !unavailableIds.has(row.id));
 	const { store } = useStoreSession();
 	const binding = useRegisterBinding();
+	const directory = useRegisterDirectory(scope.storeId);
 	const { screenSize } = useTheme();
 	const t = useT();
 	const names = useRegisterNames();
@@ -72,7 +76,49 @@ export function Closures({
 				{!!error && <Text testID="closures-export-error">{error}</Text>}
 				{scope.storeId === store.id &&
 					(!scope.registerId || scope.registerId === binding.registerId) && <SessionCard />}
-				<ClosureList rows={rows} onSelect={(row) => setSelected(row.id)} />
+				{directory.registers
+					.filter(
+						(register) =>
+							(!scope.registerId || register.id === scope.registerId) &&
+							!(scope.storeId === store.id && register.id === binding.registerId)
+					)
+					.map((register) => (
+						<RemoteSessionCard
+							key={`${scope.storeId}:${register.id}`}
+							register={register}
+							storeId={scope.storeId}
+						/>
+					))}
+				{status !== 'ready' && (
+					<Text testID={`closures-${status}`}>
+						{t(
+							status === 'unavailable'
+								? 'reports.unavailable_offline'
+								: status === 'denied'
+									? 'reports.no_access'
+									: status === 'error'
+										? 'reports.load_failed'
+										: 'common.loading'
+						)}
+					</Text>
+				)}
+				{(rows.length > 0 || status === 'ready') && (
+					<ClosureList
+						rows={rows}
+						unavailableIds={unavailableIds}
+						onSelect={(row) => setSelected(row.id)}
+					/>
+				)}
+				{(status === 'error' || hasMore) && (
+					<Button
+						testID={status === 'error' ? 'closures-retry' : 'closures-load-more'}
+						variant="outline"
+						className="min-h-12"
+						onPress={loadMore}
+					>
+						{t(status === 'error' ? 'common.retry' : 'reports.load_more')}
+					</Button>
+				)}
 			</ScrollView>
 			{row ? (
 				<ClosurePanel key={row.id} row={row} onClose={() => setSelected(null)} />
