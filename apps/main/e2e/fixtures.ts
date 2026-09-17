@@ -467,24 +467,53 @@ async function waitForCatalogueQuiescence(
 	page: Page,
 	{ quietMs = 10_000, capMs = 300_000 }: { quietMs?: number; capMs?: number } = {}
 ): Promise<void> {
-	const catalogueRequest =
-		/(\/wcpos\/v2\/|rest_route=(%2F|\/)wcpos(%2F|\/)v2(%2F|\/))(products|variations|customers)/;
+	const settled = await waitForStoreQuiescence(page, {
+		quietMs,
+		capMs,
+		matcher:
+			/(\/wcpos\/v2\/|rest_route=(%2F|\/)wcpos(%2F|\/)v2(%2F|\/))(products|variations|customers)/,
+		pollMs: 1_000,
+	});
+	if (!settled) {
+		console.warn(
+			`[auth] catalogue sync still active after ${capMs}ms; exporting a partial snapshot`
+		);
+	}
+}
+
+/** Any request to the store's WCPOS REST namespace, under either permalink style. */
+export const STORE_REQUEST = /(\/wcpos\/v2\/|rest_route=(%2F|\/)wcpos(%2F|\/)v2(%2F|\/))/;
+
+/**
+ * Wait until the app has sent no request matching `matcher` for `quietMs`.
+ *
+ * Resolves `true` once quiet, `false` if `capMs` passes first (the caller decides
+ * whether a still-busy store is a failure). A latency measurement that starts while
+ * the boot-time pulls (orders, coupons, taxes, categories) are still draining reads
+ * their contention, not the thing it measures: the require plane serves demand
+ * serially, so a search typed into that window queues behind them.
+ */
+export async function waitForStoreQuiescence(
+	page: Page,
+	{
+		quietMs = 1_500,
+		capMs = 30_000,
+		matcher = STORE_REQUEST,
+		pollMs = 250,
+	}: { quietMs?: number; capMs?: number; matcher?: RegExp; pollMs?: number } = {}
+): Promise<boolean> {
 	let lastActivity = Date.now();
 	const onRequest = (request: { url(): string }) => {
-		if (catalogueRequest.test(request.url())) lastActivity = Date.now();
+		if (matcher.test(request.url())) lastActivity = Date.now();
 	};
 	page.on('request', onRequest);
 	try {
 		const start = Date.now();
 		while (Date.now() - lastActivity < quietMs) {
-			if (Date.now() - start >= capMs) {
-				console.warn(
-					`[auth] catalogue sync still active after ${capMs}ms; exporting a partial snapshot`
-				);
-				return;
-			}
-			await page.waitForTimeout(1_000);
+			if (Date.now() - start >= capMs) return false;
+			await page.waitForTimeout(pollMs);
 		}
+		return true;
 	} finally {
 		page.off('request', onRequest);
 	}
