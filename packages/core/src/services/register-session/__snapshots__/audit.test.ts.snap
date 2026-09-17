@@ -1,0 +1,89 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`preserves the legacy merchant-facing helper rows 1`] = `
+[
+  {
+    "actor": {
+      "id": "7",
+      "name": "Pat",
+    },
+    "context": {
+      "approvedBy": 8,
+      "registerId": "r",
+      "sessionId": "s",
+      "type": "register.approval-granted",
+    },
+    "level": "info",
+    "message": "Register session approval granted",
+    "terminal": {
+      "operationId": "<attempt>",
+    },
+  },
+  {
+    "actor": {
+      "id": "7",
+      "name": "Pat",
+    },
+    "context": {
+      "registerId": "r",
+      "sessionId": "s",
+      "type": "register.x-report-printed",
+    },
+    "level": "info",
+    "message": "Register X-report print dispatched",
+    "terminal": {
+      "operationId": "<attempt>",
+    },
+  },
+  {
+    "actor": {
+      "id": "7",
+      "name": "Pat",
+    },
+    "context": {
+      "registerId": "r",
+      "sessionId": "s",
+      "type": "register.drawer-opened",
+    },
+    "level": "info",
+    "message": "Register drawer kick dispatched",
+    "terminal": {
+      "operationId": "<attempt>",
+    },
+  },
+  {
+    "actor": {
+      "id": "7",
+      "name": "Pat",
+    },
+    "context": {
+      "registerId": "r",
+      "sessionId": "s",
+      "type": "register.approval-refused",
+    },
+    "level": "warn",
+    "message": "Register session approval refused",
+    "terminal": {
+      "operationId": "<attempt>",
+    },
+  },
+  {
+    "actor": {
+      "id": "7",
+      "name": "Pat",
+    },
+    "context": {
+      "registerId": "r",
+      "sessionId": "s",
+      "threshold": "5",
+      "type": "register.variance-over-threshold",
+      "variance": "-10.00",
+    },
+    "level": "warn",
+    "message": "Register count exceeds variance threshold",
+    "terminal": {
+      "operationId": "<attempt>",
+    },
+  },
+]
+`;

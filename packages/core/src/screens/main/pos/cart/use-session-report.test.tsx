@@ -2,8 +2,7 @@
 import { of } from 'rxjs';
 import { renderHook } from '@testing-library/react';
 
-import { getLogger } from '@wcpos/utils/logger';
-
+import * as audit from '../../../../services/register-session/audit';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 
 const mockSite = { populate$: () => of([{ id: 8, display_name: 'Alex' }]) };
@@ -22,7 +21,7 @@ jest.mock('../../../../hooks/use-store-day', () => ({
 }));
 jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en-GB' }) }));
 // Revert: route till reports through the report fallback instead of the shared closure envelope.
-const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
+const recordFact = jest.spyOn(audit, 'recordRegisterFact');
 jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
 let mockAutoOpen = false;
 const mockOpenDrawer = jest.fn(async () => undefined);
@@ -71,13 +70,10 @@ beforeEach(() => {
 it('routes X to the session document with the panel figures as offline data', async () => {
 	const view = renderHook(() => useSessionReport());
 	await view.result.current.print();
-	expect(logger.info).toHaveBeenCalledWith(
-		'Register X-report print dispatched',
-		expect.objectContaining({
-			actor: { id: '7', name: 'Pat' },
-			context: { type: 'register.x-report-printed', sessionId: 's', registerId: 'r' },
-		})
-	);
+	expect(recordFact).toHaveBeenCalledWith({
+		actor: { id: '7', name: 'Pat' },
+		...{ kind: 'x-report-dispatched', sessionId: 's', registerId: 'r' },
+	});
 	expect(documentHook).toHaveBeenLastCalledWith(
 		expect.objectContaining({
 			document: 'xreport:s',
@@ -125,7 +121,7 @@ it('prints the persisted closure without duplicating the document print bookkeep
 	const at = await view.result.current.print();
 	expect(at).toEqual(expect.any(String));
 	expect(data).toMatchObject({ printed_at: null, print_count: 0 });
-	expect(logger.info).not.toHaveBeenCalled();
+	expect(recordFact).not.toHaveBeenCalled();
 	expect(documentHook).toHaveBeenLastCalledWith(
 		expect.objectContaining({
 			document: 'closure:s',
@@ -168,27 +164,24 @@ it('loads a superseded closure from its authoritative server document', () => {
 it('logs the no-sale drawer kick only when dispatched successfully', async () => {
 	const view = renderHook(() => useSessionReport());
 	await view.result.current.openDrawer();
-	expect(logger.info).not.toHaveBeenCalled();
+	expect(recordFact).not.toHaveBeenCalled();
 	mockAutoOpen = true;
 	view.rerender();
 	mockOpenDrawer.mockRejectedValueOnce(new Error('printer'));
 	await expect(view.result.current.openDrawer()).rejects.toThrow('printer');
-	expect(logger.info).not.toHaveBeenCalled();
+	expect(recordFact).not.toHaveBeenCalled();
 	await view.result.current.openDrawer();
-	expect(logger.info).toHaveBeenCalledWith(
-		'Register drawer kick dispatched',
-		expect.objectContaining({
-			actor: { id: '7', name: 'Pat' },
-			context: { type: 'register.drawer-opened', sessionId: 's', registerId: 'r' },
-		})
-	);
+	expect(recordFact).toHaveBeenCalledWith({
+		actor: { id: '7', name: 'Pat' },
+		...{ kind: 'drawer-dispatched', sessionId: 's', registerId: 'r' },
+	});
 });
 
 it('does not report an X-report when dispatch fails', async () => {
 	const view = renderHook(() => useSessionReport());
 	print.mockRejectedValueOnce(new Error('paper'));
 	await expect(view.result.current.print()).rejects.toThrow('paper');
-	expect(logger.info).not.toHaveBeenCalled();
+	expect(recordFact).not.toHaveBeenCalled();
 });
 
 // Revert: throw hard-coded English instead of the print-failure translation key.
@@ -198,7 +191,7 @@ it.each([false, undefined])(
 		const view = renderHook(() => useSessionReport());
 		print.mockResolvedValueOnce(outcome);
 		await expect(view.result.current.print()).rejects.toThrow('reports.reprint_failed');
-		expect(logger.info).not.toHaveBeenCalled();
+		expect(recordFact).not.toHaveBeenCalled();
 	}
 );
 
@@ -209,7 +202,7 @@ it('does not mark a closure printed when the print layer silently fails', async 
 	print.mockResolvedValueOnce(undefined);
 	await expect(view.result.current.print()).rejects.toThrow('reports.reprint_failed');
 	expect(incrementalModify).not.toHaveBeenCalled();
-	expect(logger.info).not.toHaveBeenCalled();
+	expect(recordFact).not.toHaveBeenCalled();
 });
 
 // Revert: treat a loaded closure row without an RxDocument as an X-report.
@@ -226,7 +219,7 @@ it('uses the same closure print path for a loaded history row', async () => {
 			}),
 		})
 	);
-	expect(logger.info).not.toHaveBeenCalled();
+	expect(recordFact).not.toHaveBeenCalled();
 });
 
 // Revert: skip the credential directory, or lose the unknown opener's id.

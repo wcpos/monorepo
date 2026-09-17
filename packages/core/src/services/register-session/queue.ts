@@ -1,8 +1,4 @@
-import {
-	ERROR_CATALOGUE,
-	ERROR_CODES,
-	type ErrorCode,
-} from '@wcpos/utils/logger/generated/error-codes.generated';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { EngineCollection } from '@wcpos/query';
 import type {
 	CashMovementCollection,
@@ -26,6 +22,7 @@ import {
 } from '../register/register-document';
 import { backoffMs, MAX_SEND_ATTEMPTS } from '../../screens/main/receipt/email-queue/queue';
 import { failureFacts } from './failure-facts';
+import { recordRegisterFact } from './audit';
 
 export type SessionHttp = {
 	get: (
@@ -33,28 +30,6 @@ export type SessionHttp = {
 		options?: { params: Record<string, string | number> }
 	) => Promise<{ data: unknown }>;
 	post: (url: string, body: unknown) => Promise<{ data: unknown }>;
-};
-/**
- * The three levels the outbox is entitled to write. It sees a whole attempt, so it can name the
- * terminal outcome of a permanent refusal, but a retryable failure is mid-arc and stays forensic
- * — see packages/utils/src/logger/LEVELS.md.
- */
-export type SessionLogger = {
-	debug: (message: string, options?: SessionLogOptions) => void;
-	info: (message: string, options?: SessionLogOptions) => void;
-	warn: (message: string, options?: SessionLogOptions) => void;
-	error: (message: string, options: SessionLogOptions & { code: ErrorCode }) => void;
-};
-type SessionLogOptions = {
-	code?: ErrorCode;
-	showToast?: boolean;
-	context?: Record<string, unknown>;
-	terminal?: {
-		operationId?: string;
-		operationType?: string;
-		attempt?: number;
-		outcome?: 'ok' | 'recovered' | 'failed' | 'rejected' | 'cancelled' | 'unknown';
-	};
 };
 type Deps = {
 	closures: ClosureCollection;
@@ -64,10 +39,7 @@ type Deps = {
 	sessions: RegisterSessionCollection;
 	movements: CashMovementCollection;
 	http: SessionHttp;
-	logger: SessionLogger;
 };
-/** `operationId` is clamped to 32 characters, so a 36-character UUID would truncate. */
-const operationId = (id: string) => id.replace(/-/g, '').slice(0, 32);
 /**
  * Which registered code a settled refusal is. The outcomes differ in what the merchant has to
  * DO about them, which is what the code carries: refused cash is money in the drawer the store
@@ -153,16 +125,7 @@ export function drainRegisterSessionQueue(deps: Deps): Promise<void> {
 	inFlight.set(deps.sessions, promise);
 	return promise;
 }
-async function drain({
-	sessions,
-	movements,
-	closures,
-	userDB,
-	siteUuid,
-	orders,
-	http,
-	logger,
-}: Deps) {
+async function drain({ sessions, movements, closures, userDB, siteUuid, orders, http }: Deps) {
 	async function send(
 		doc: RegisterSessionDocument | CashMovementDocument | ClosureDocument,
 		endpoint: string,
@@ -223,22 +186,13 @@ async function drain({
 				// A refused override is recovered, not failed — the count is intact and the session is
 				// back at counting — but repeated failed overrides on a short till are exactly the
 				// pattern worth seeing, and this branch left no record of them whatsoever.
-				logger.warn('Register session close approval refused', {
-					code: ERROR_CODES.REGISTER_APPROVAL_REFUSED,
-					context: {
-						type: 'register.approval-refused',
-						endpoint,
-						status,
-						errorCode,
-						documentId: doc.getLatest().id,
-						sessionId: doc.getLatest().id,
-						registerId: (doc as RegisterSessionDocument).register_id,
-					},
-					terminal: {
-						operationId: operationId(doc.getLatest().id),
-						operationType: 'register.outbox',
-						outcome: 'rejected',
-					},
+				recordRegisterFact({
+					kind: 'outbox-approval-refused',
+					endpoint,
+					status,
+					errorCode,
+					sessionId: doc.getLatest().id,
+					registerId: (doc as RegisterSessionDocument).register_id,
 				});
 				return;
 			}
@@ -258,71 +212,41 @@ async function drain({
 			// makes that `recovered`, and calling it `failed` would put a broken-looking row in
 			// front of a merchant whose till is working.
 			const takeover = code === ERROR_CODES.REGISTER_TAKEN_OVER;
-			// The cashier's typed reason is deliberately absent: `error` forwards its whole context
-			// to Sentry, and a free-text field is the one thing that must not ride along.
-			const options = {
-				context: {
-					// A retryable non-movement failure is mid-arc and stays untitled; the
-					// permanent refusal of a session or closure upload has its own event.
-					...(endpoint === 'movements'
-						? persist
-							? {}
-							: { type: retry ? 'register.movement-retrying' : 'register.movement-rejected' }
-						: retry || takeover
-							? {}
-							: { type: 'register.upload-refused' }),
-					sessionId: 'session_id' in before ? before.session_id : before.id,
-					...('register_id' in before
-						? { registerId: before.register_id }
-						: registerId
-							? { registerId }
-							: {}),
-					...('type' in before ? { movementId: before.id } : {}),
-					...(endpoint === 'closures' ? { closureId: before.id } : {}),
-					endpoint,
-					status,
-					errorCode,
-					field,
-					message,
-					documentId: before.id,
-					// `context.type` is the field the Logs UI titles a row from, and it is
-					// looked up in the event registry. A movement type ('paid_in', 'void')
-					// is not an event type, so writing it there produced no title and
-					// squatted a reserved key. It rides under its own name instead.
-					...('type' in before ? { movementType: before.type, amount: before.amount } : {}),
-				},
-				terminal: {
-					operationId: operationId(before.id),
-					operationType: 'register.outbox',
-					attempt: attempts,
-					...(retry ? {} : { outcome: takeover ? ('recovered' as const) : ('failed' as const) }),
-				},
-			};
-			// Retryable means the arc has not settled, so it stays forensic. A 4xx is the server's
-			// final answer, and the registry decides how loud that is: refused cash needs the
-			// cashier now and is an `error` with a toast; a refused reversal or a takeover is a
-			// `warn`. The level follows the code so the two can never drift apart.
-			if (retry) logger.debug('Register session outbox request failed', options);
-			else if (ERROR_CATALOGUE[code].severity === 'error') {
-				logger.error('Register session outbox request permanently refused', {
-					...options,
-					code,
-					showToast: ERROR_CATALOGUE[code].dataSafety === 'money-moved',
-				});
-			} else {
-				logger.warn('Register session outbox request permanently refused', { ...options, code });
-			}
+			recordRegisterFact({
+				kind: 'outbox-request-failed',
+				endpoint,
+				status,
+				errorCode,
+				field,
+				message,
+				document:
+					'type' in before
+						? {
+								id: before.id,
+								session_id: before.session_id,
+								type: before.type,
+								amount: before.amount,
+							}
+						: {
+								id: before.id,
+								register_id: before.register_id,
+								...('session_id' in before ? { session_id: before.session_id } : {}),
+							},
+				registerId,
+				retry,
+				persist,
+				takeover,
+				code,
+				attempts,
+			});
 			if (status === 409 && body?.code === 'wcpos_session_already_open' && body.data?.session_id) {
 				const server = (await http.get(`sessions/${body.data.session_id}`))
 					.data as RegisterSessionRow;
 				await adoptSession(sessions, server);
-				logger.info('Register session adopted', {
-					terminal: { operationId: operationId(server.id) },
-					context: {
-						type: 'register.session-adopted',
-						sessionId: server.id,
-						registerId: server.register_id,
-					},
+				recordRegisterFact({
+					kind: 'session-adopted',
+					sessionId: server.id,
+					registerId: server.register_id,
 				});
 			}
 		}
@@ -434,16 +358,13 @@ async function drain({
 						stage: 'persist',
 					});
 				}
-				logger.info('Register cash movement accepted', {
-					terminal: { operationId: operationId(row.id) },
-					context: {
-						type: 'register.movement-accepted',
-						sessionId: row.session_id,
-						registerId: session.register_id,
-						movementId: row.id,
-						movementType: row.type,
-						amount: row.amount,
-					},
+				recordRegisterFact({
+					kind: 'movement-accepted',
+					sessionId: row.session_id,
+					registerId: session.register_id,
+					movementId: row.id,
+					movementType: row.type,
+					amount: row.amount,
 				});
 			},
 			false,

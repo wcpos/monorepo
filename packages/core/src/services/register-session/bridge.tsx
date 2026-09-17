@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { engineCollection, useQueryRuntime } from '@wcpos/query';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { getLogger } from '@wcpos/utils/logger';
 
+import { recordRegisterFact } from './audit';
 import { useStoreSession } from '../../contexts/app-state';
 import { readRegister } from '../register/register-document';
 import { writeClosure } from './session-store';
@@ -18,7 +18,6 @@ import {
 	useRegisterSessionCollection,
 } from './use-register-session-collections';
 
-const logger = getLogger(['wcpos', 'registerSession']);
 export function RegisterSessionBridge() {
 	const { userDB, site, store } = useStoreSession();
 	const { engine } = useQueryRuntime();
@@ -77,7 +76,6 @@ export function RegisterSessionBridge() {
 					siteUuid: site.uuid!,
 					orders: engineCollection(engine.active()?.database, 'orders'),
 					http,
-					logger,
 				})
 			);
 			if (registerId)
@@ -89,23 +87,15 @@ export function RegisterSessionBridge() {
 			const { status, errorCode, message } = failureFacts(error);
 			const stage = (error as { stage?: string })?.stage ?? 'refresh';
 			const failures = (consecutiveFailures.current += 1);
-			// No `endpoint`: a drain rejection can come from any of three routes or from local
-			// storage, and the refresh stage spans both the list GET and a per-session detail GET.
-			// Naming one route for all of them would be a confident, wrong diagnostic — the
-			// per-request rows written inside the outbox carry the real endpoint.
-			const options = {
-				context: {
-					...(stage === 'refresh' ? { type: 'register.session-refresh-failed' } : {}),
-					registerId,
-					stage,
-					status,
-					errorCode,
-					message: message ?? String(error),
-					consecutiveFailures: failures,
-				},
-			};
-			if (failures > 1) logger.warn('Register session refresh/drain still failing', options);
-			else logger.debug('Register session refresh/drain failed', options);
+			recordRegisterFact({
+				kind: 'bridge-cycle-failed',
+				registerId,
+				stage,
+				status,
+				errorCode,
+				message: message ?? String(error),
+				consecutiveFailures: failures,
+			});
 		};
 		const cycle = () =>
 			sync().then(() => {
