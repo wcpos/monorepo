@@ -88,7 +88,7 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 	const content = (
 		<View
 			testID="closure-panel"
-			className="bg-card min-h-0 min-w-0 flex-1 overflow-hidden"
+			className="bg-card relative z-50 min-h-0 min-w-0 flex-1 overflow-hidden"
 			style={
 				!phone && Platform.OS === 'web'
 					? {
@@ -225,7 +225,7 @@ export function ClosurePanel({ row, onClose }: { row: ClosureRow; onClose: () =>
 			<DialogContent
 				side="right"
 				portalHost="reports"
-				className="bg-card flex-col gap-0 overflow-hidden p-0"
+				className="bg-card z-50 flex-col gap-0 overflow-hidden p-0"
 				// Keep Dialog focus/close semantics, but no translated box around the web panel.
 				style={
 					Platform.OS === 'web'
