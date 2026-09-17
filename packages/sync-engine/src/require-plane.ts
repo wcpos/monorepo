@@ -1397,6 +1397,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				let bound: ScopeBound | undefined;
 				let admissionError: unknown;
 				try {
+					// Await admission before arming the stall watchdog: a >90 s database open belongs to engine.ready-stalled.
 					bound = await deps.admitted();
 				} catch (error) {
 					admissionError = error;

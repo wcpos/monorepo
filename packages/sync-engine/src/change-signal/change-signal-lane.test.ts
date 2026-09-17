@@ -49,6 +49,8 @@ describe('change-signal cursor observability', () => {
 		const diagnostics = vi.fn();
 		const fetcher = vi.fn(async () => new Response(null, { status: 401 }));
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher,
@@ -83,6 +85,8 @@ describe('change-signal cursor observability', () => {
 		const diagnostics = vi.fn();
 		const fetcher = vi.fn(async () => new Response(null, { status: 401 }));
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher,
@@ -130,6 +134,8 @@ describe('change-signal cursor observability', () => {
 		};
 		mocks.poll.mockResolvedValueOnce(outcome);
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher: vi.fn(),
@@ -206,6 +212,8 @@ describe('config change events', () => {
 		}) as never);
 		const emitEvent = vi.fn();
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher: vi.fn(),
@@ -290,6 +298,8 @@ describe('hydration-miss recovery accounting', () => {
 		).toEqual(['products', 'variations']);
 
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher: vi.fn(),
@@ -351,6 +361,8 @@ describe('cold-start priming', () => {
 		} as HybridPollOutcome);
 		vi.mocked(createHybridChangeSignalEngine).mockClear();
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher: primingFetcher(checkpoint),
@@ -492,6 +504,8 @@ describe('census expiry on applied changes', () => {
 		const emitEvent = vi.fn();
 		const diagnostics = vi.fn();
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => database,
 			fetcher: vi.fn(),

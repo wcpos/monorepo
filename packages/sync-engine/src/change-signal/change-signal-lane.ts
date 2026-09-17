@@ -100,11 +100,9 @@ export type ChangeSignalReport = {
 	rebaselined?: boolean;
 };
 
-type Head = Readonly<{ head: number; epoch?: string }> | null;
-
 export type ChangeSignalLaneDeps = {
-	awaitInitialReady?: () => Promise<void>;
-	needsPrime?: (scopeId: string) => boolean;
+	awaitInitialReady: () => Promise<void>;
+	needsPrime: (scopeId: string) => boolean;
 	timers?: EngineTimers;
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
@@ -134,8 +132,8 @@ export type ChangeSignalLaneDeps = {
 };
 
 export type ChangeSignalLane = {
-	/** Activation replay checkpoint, not proof that synchronization completed. */
-	activated(scopeId: string): Promise<Head>;
+	/** Completes scope activation, not synchronization. */
+	activated(scopeId: string): Promise<void>;
 	admitted(): Promise<ScopeBound>;
 	stopActivation(): void;
 	/** One deterministic tick (serialized — concurrent calls queue). */
@@ -165,24 +163,10 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 	};
 	let chain: Promise<unknown> = Promise.resolve();
 	let lastError: string | null = null;
-	let activation: Promise<void> = Promise.resolve();
+	let activation = new Promise<void>(() => undefined);
 	let activationAbort: AbortController | null = null;
 	let activationStopped = false;
 	const timers = deps.timers ?? systemTimers;
-
-	function replayHead(
-		state: NonNullable<ReturnType<typeof deserializeChangeSignalState>>,
-		scopeId: string
-	): Head {
-		const own = primedAtOpen.get(scopeId);
-		return {
-			head:
-				own !== undefined && own.epoch === state.epoch && own.head < state.initialCursor.sequence
-					? own.head
-					: state.initialCursor.sequence,
-			...(state.epoch !== undefined ? { epoch: state.epoch } : {}),
-		};
-	}
 
 	/** Cold-start baseline: jump the cursor to the server's sequence head in ONE
 	 * request (checkpoint.head) — a fresh scope must never drain the whole
@@ -571,8 +555,15 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			return run;
 		},
 		admitted: async () => {
-			await deps.awaitInitialReady?.();
-			for (;;) {
+			await deps.awaitInitialReady();
+			for (let attempt = 0; ; attempt++) {
+				if (attempt > 0) {
+					deps.diagnostics({
+						type: 'signal.log',
+						level: 'debug',
+						message: 'activation superseded while admitting; waiting for the new one',
+					});
+				}
 				const current = activation;
 				await current;
 				if (current === activation) return deps.manager.runGuarded(async (bound) => bound);
@@ -583,10 +574,6 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 			activationAbort?.abort();
 		},
 		activated: (scopeId) => {
-			let release!: () => void;
-			activation = new Promise<void>((resolve) => {
-				release = resolve;
-			});
 			const controller = (activationAbort = new AbortController());
 			const signal = controller.signal;
 			let onAbort!: () => void;
@@ -595,13 +582,18 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 				signal.addEventListener('abort', onAbort, { once: true });
 			});
 			if (activationStopped) controller.abort();
-			let switched: ReturnType<StoreScopeManager['switchTo']>;
+			let resolveSwitch!: () => void;
+			let rejectSwitch!: (error: unknown) => void;
+			const switched = new Promise<void>((resolve, reject) => {
+				resolveSwitch = resolve;
+				rejectSwitch = reject;
+			});
 			// Flips once the blob write has begun: from then on the chain waits for
 			// the prime (see below), abort or not.
 			let writing = false;
-			const run = async (): Promise<Head> => {
+			const run = async () => {
 				await switched;
-				if (deps.needsPrime?.(scopeId) === false) return null;
+				if (!deps.needsPrime(scopeId)) return null;
 				if (signal.aborted) return null;
 				if (deps.connectivity() === 'offline') return null;
 				if (deps.manager.activeScope === null) return null;
@@ -610,11 +602,10 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					return await deps.manager.runGuarded(async (bound) => {
 						const scopeId = bound.scopeId;
 						primeScopeId = scopeId;
-						if (engines.has(scopeId)) return primedAtOpen.get(scopeId) ?? null;
+						if (engines.has(scopeId)) return null;
 						const blob = await deps.readBlob(scopeId, CHANGE_SIGNAL_STATE_KEY);
 						const restored = blob === null ? null : deserializeChangeSignalState(blob);
-						if (signal.aborted || !bound.isCurrent()) return null;
-						if (restored) return replayHead(restored, scopeId);
+						if (restored) return null;
 						// The activation deadline may pass while a port that ignores its signal
 						// is still answering. Once the caller has moved on to the bootstrap
 						// pulls, a late head would sit ABOVE their changes — exactly the gap
@@ -630,8 +621,9 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						if (signal.aborted || !bound.isCurrent()) return null;
 						// Another instance (a second tab on the same fresh scope) may have
 						// primed while our head fetch was in flight. Its head is never above
-						// a change it has yet to fetch, and ours may be — so the first VALID checkpoint
-						// observed on the re-read wins (not an atomic first-writer guarantee). The write itself is a guarded scope write:
+						// a change it has yet to fetch, and ours may be — so the first VALID
+						// checkpoint observed on the re-read wins (not an atomic first-writer
+						// guarantee). The write itself is a guarded scope write:
 						// a switch or dispose landing meanwhile drops it instead of letting a
 						// slow checkpoint port overwrite a successor's state.
 						const raced = await deps.readBlob(scopeId, CHANGE_SIGNAL_STATE_KEY);
@@ -642,7 +634,7 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 						const racedState = raced === null ? null : deserializeChangeSignalState(raced);
 						if (racedState) {
 							primedAtOpen.set(scopeId, { head, ...(epoch ? { epoch } : {}) });
-							return replayHead(racedState, scopeId);
+							return null;
 						}
 						writing = true;
 						const wrote = await bound.guardWrite(() =>
@@ -657,8 +649,9 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 								})
 							)
 						);
-						if (wrote === 'dropped' || signal.aborted || !bound.isCurrent()) return null;
+						if (wrote === 'dropped') return null;
 						primedAtOpen.set(scopeId, { head, ...(epoch ? { epoch } : {}) });
+						if (signal.aborted) return null;
 						deps.diagnostics({
 							type: 'signal.log',
 							level: 'debug',
@@ -699,15 +692,22 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 					() => undefined
 				);
 			// Reserve admission AND chain position before switchTo can publish the database.
-			switched = deps.manager.switchTo(scopeId);
+			let release!: () => void;
+			activation = new Promise<void>((resolve) => {
+				release = resolve;
+			});
 			return (async () => {
 				try {
+					try {
+						void deps.manager.switchTo(scopeId).then(resolveSwitch, rejectSwitch);
+					} catch (error) {
+						rejectSwitch(error);
+					}
 					await switched;
 					const timeout = timers.setTimeout(() => controller.abort(), 5_000);
 					try {
-						const head = await Promise.race([queued, aborted]);
+						await Promise.race([queued, aborted]);
 						if (signal.aborted) throw new Error('change-signal prime aborted');
-						return head;
 					} catch (error) {
 						deps.diagnostics({
 							type: 'signal.log',
@@ -715,7 +715,6 @@ export function createChangeSignalLane(deps: ChangeSignalLaneDeps): ChangeSignal
 							message: `change-signal: prime at scope open failed — the first tick primes lazily: ${error instanceof Error ? error.message : String(error)}`,
 							fields: { scopeId },
 						});
-						return null;
 					} finally {
 						timers.clearTimeout(timeout);
 					}

@@ -47,7 +47,7 @@ export {
 	type StoreScopeIdentity,
 } from './storeScopeIdentity';
 // prettier-ignore
-export { MUTATION_QUEUE_COLLECTION, StoreScopeManager, type Fetcher, type ScopeDatabase, type ScopeEvent } from './storeScopeManager';
+export { MUTATION_QUEUE_COLLECTION, StoreScopeManager, type Fetcher, type ScopeBound, type ScopeDatabase, type ScopeEvent } from './storeScopeManager';
 // prettier-ignore
 export {
 	checkpointInstantMs, finiteOrNull, normalizeCheckpoint,

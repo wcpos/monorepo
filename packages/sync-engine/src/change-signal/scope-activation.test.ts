@@ -135,7 +135,7 @@ async function setup(overrides: Partial<ChangeSignalLaneDeps> = {}, store = memo
 
 it('fresh head and epoch survive first tick', async () => {
 	const h = await setup();
-	expect(await h.lane.activated('a')).toEqual({ head: 40, epoch: 'first' });
+	await h.lane.activated('a');
 	const tick = await h.lane.tick();
 	expect(tick.status).toBe('ran');
 	expect(tick.rebaselined).not.toBe(true);
@@ -156,16 +156,40 @@ it('existing checkpoint avoids fetch/write', async () => {
 			epoch: 'first',
 		})
 	);
-	expect(await h.lane.activated('a')).toEqual({ head: 5, epoch: 'first' });
+	await h.lane.activated('a');
 	expect(h.fetcher).not.toHaveBeenCalled();
 	expect(h.writeBlob).not.toHaveBeenCalled();
+	expect(await h.lane.tick()).toMatchObject({ status: 'ran' });
+	expect(h.since).toEqual([5]);
 });
 
 it('offline activation defers', async () => {
 	const h = await setup({ connectivity: () => 'offline' });
-	expect(await h.lane.activated('a')).toBeNull();
+	await h.lane.activated('a');
 	expect(h.fetcher).not.toHaveBeenCalled();
 	expect(h.writeBlob).not.toHaveBeenCalled();
+});
+
+it('a synchronous switchTo throw rejects activation and releases admission', async () => {
+	// Missing release leaves admission pending forever, with no deadline to fire.
+	const h = await setup();
+	const error = new Error('switch failed synchronously');
+	vi.spyOn(h.manager, 'switchTo').mockImplementationOnce(() => {
+		throw error;
+	});
+	await expect(Promise.resolve().then(() => h.lane.activated('a'))).rejects.toBe(error);
+	let settled = false;
+	void h.lane.admitted().then(
+		() => {
+			settled = true;
+		},
+		() => {
+			settled = true;
+		}
+	);
+	await flushMicrotasks();
+	expect(h.deadlines.size).toBe(0);
+	expect(settled).toBe(true);
 });
 
 it('late head after deadline writes nothing', async () => {
@@ -180,7 +204,7 @@ it('late head after deadline writes nothing', async () => {
 	const activation = h.lane.activated('a');
 	await entered.promise;
 	await h.expire();
-	expect(await activation).toBeNull();
+	await activation;
 	const admitted = await h.lane.admitted();
 	const bootstrap = vi.fn(async () => undefined);
 	expect(await admitted.guardWrite(bootstrap)).toBe('applied');
@@ -198,7 +222,7 @@ it('failed activation permits lazy tick recovery', async () => {
 	// A rejected fetch must neither seed a checkpoint nor disable later ticks.
 	const h = await setup();
 	h.fetcher.mockRejectedValueOnce(new Error('transport unavailable'));
-	expect(await h.lane.activated('a')).toBeNull();
+	await h.lane.activated('a');
 	expect(await h.readBlob('a', 'checkpoint:change-signal')).toBeNull();
 	expect((await h.lane.admitted()).scopeId).toBe('a');
 	expect(await h.lane.tick()).toMatchObject({ status: 'ran' });
@@ -223,9 +247,9 @@ it('first observed checkpoint wins', async () => {
 	const second = b.lane.activated('a');
 	await entered.promise;
 	a.server.head = 5;
-	expect(await a.lane.activated('a')).toEqual({ head: 5, epoch: 'first' });
+	await a.lane.activated('a');
 	answer.resolve(headResponse(6));
-	expect(await second).toEqual({ head: 5, epoch: 'first' });
+	await second;
 	expect(b.writeBlob).not.toHaveBeenCalled();
 	expect(JSON.parse((await b.readBlob('a', 'checkpoint:change-signal'))!)).toMatchObject({
 		cursor: { sequence: 5 },
@@ -251,7 +275,7 @@ it('own floor survives failed tick until commit', async () => {
 	const second = b.lane.activated('a');
 	await writing.promise;
 	a.server.head = 5;
-	expect(await a.lane.activated('a')).toEqual({ head: 5, epoch: 'first' });
+	await a.lane.activated('a');
 	finish.resolve();
 	await second;
 	a.server.head = 6;
@@ -279,7 +303,7 @@ it('hung read releases own reservation', async () => {
 	const activation = h.lane.activated('a');
 	await reading.promise;
 	await h.expire();
-	expect(await activation).toBeNull();
+	await activation;
 	expect((await h.lane.admitted()).scopeId).toBe('a');
 	expect(await h.lane.tick()).toMatchObject({ status: 'ran' });
 	expect(h.since).toEqual([40]);
@@ -303,7 +327,7 @@ it('moved scope drops prime', async () => {
 	await entered.promise;
 	await h.manager.switchTo('b');
 	answer.resolve(headResponse());
-	expect(await activation).toBeNull();
+	await activation;
 	expect(h.writeBlob).not.toHaveBeenCalled();
 	expect(await h.readBlob('a', 'checkpoint:change-signal')).toBeNull();
 	expect(await h.readBlob('b', 'checkpoint:change-signal')).toBeNull();
@@ -328,7 +352,7 @@ it('canceled prime retains predecessor', async () => {
 	await writing.promise;
 	const activation = h.lane.activated('a');
 	await h.expire();
-	expect(await activation).toBeNull();
+	await activation;
 	h.server.head = 42;
 	h.server.sequence = 42;
 	const requestsBefore = h.fetcher.mock.calls.length;
@@ -358,7 +382,7 @@ it('started write retains reservation', async () => {
 	const activation = h.lane.activated('a');
 	await writing.promise;
 	await h.expire();
-	expect(await activation).toBeNull();
+	await activation;
 	const callback = vi.fn(async () => undefined);
 	await (await h.lane.admitted()).guardWrite(callback);
 	expect(callback).toHaveBeenCalledOnce();
@@ -374,6 +398,41 @@ it('started write retains reservation', async () => {
 	expect(JSON.parse((await h.readBlob('a', 'checkpoint:change-signal'))!)).toMatchObject({
 		cursor: { sequence: 41 },
 	});
+});
+
+it('a write that commits after the deadline still installs the own-head floor', async () => {
+	// Losing the late write's floor makes the first poll skip from our 40 to the peer's 60.
+	const store = memoryStringStore();
+	const a = await setup({}, store);
+	const b = await setup({}, store);
+	const writing = deferred<void>();
+	const finish = deferred<void>();
+	const write = a.writeBlob.getMockImplementation()!;
+	a.writeBlob.mockImplementationOnce(async (scope, key, value) => {
+		writing.resolve();
+		await finish.promise;
+		await write(scope, key, value);
+	});
+	const activation = a.lane.activated('a');
+	await writing.promise;
+	await a.expire();
+	await activation;
+	finish.resolve();
+	await flushMicrotasks();
+	expect(JSON.parse((await a.readBlob('a', 'checkpoint:change-signal'))!)).toMatchObject({
+		cursor: { sequence: 40 },
+	});
+	await b.lane.activated('a');
+	b.server.head = 60;
+	b.server.sequence = 60;
+	expect(await b.lane.tick()).toMatchObject({ status: 'ran' });
+	expect(JSON.parse((await b.readBlob('a', 'checkpoint:change-signal'))!)).toMatchObject({
+		cursor: { sequence: 60 },
+	});
+	a.server.head = 60;
+	a.server.sequence = 60;
+	expect(await a.lane.tick()).toMatchObject({ status: 'ran' });
+	expect(a.since).toEqual([40]);
 });
 
 it('canceled re-read writes nothing', async () => {
@@ -432,7 +491,7 @@ it('HTTP failure warns without checkpointing', async () => {
 	// HTTP failures must not manufacture a successful head or escape admission.
 	const h = await setup();
 	h.fetcher.mockResolvedValueOnce(new Response(null, { status: 401 }));
-	expect(await h.lane.activated('a')).toBeNull();
+	await h.lane.activated('a');
 	expect(h.diagnostics).toHaveBeenCalledWith(
 		expect.objectContaining({
 			type: 'signal.log',
@@ -452,12 +511,14 @@ it('initial startup does not self-deadlock', async () => {
 	const h = await setup({ awaitInitialReady: () => ready.promise });
 	const callback = vi.fn();
 	const admission = h.lane.admitted().then(callback);
-	expect(await h.lane.activated('a')).toEqual({ head: 40, epoch: 'first' });
+	await h.lane.activated('a');
 	await flushMicrotasks();
 	expect(callback).not.toHaveBeenCalled();
 	ready.resolve();
 	await admission;
 	expect(callback).toHaveBeenCalledWith(expect.objectContaining({ scopeId: 'a' }));
+	expect(await h.lane.tick()).toMatchObject({ status: 'ran' });
+	expect(h.since).toEqual([40]);
 });
 
 it('immediate publication cannot bypass activation', async () => {
@@ -525,7 +586,7 @@ it('stop before queued activation needs no abort replay', async () => {
 	const lifecycle = queued.promise.then(() => h.lane.activated('a'));
 	h.lane.stopActivation();
 	queued.resolve();
-	expect(await lifecycle).toBeNull();
+	await lifecycle;
 	expect((await h.lane.admitted()).scopeId).toBe('a');
 	expect(h.fetcher).not.toHaveBeenCalled();
 	expect(h.writeBlob).not.toHaveBeenCalled();
