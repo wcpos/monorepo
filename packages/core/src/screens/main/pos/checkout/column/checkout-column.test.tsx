@@ -66,6 +66,8 @@ jest.mock('../../../../../contexts/theme', () => ({
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
+// The receipt stage's finishing-error notice links to docs; keep expo-linking out of jsdom.
+jest.mock('@wcpos/utils/open-external-url', () => ({ openExternalURL: jest.fn() }));
 jest.mock('../../contexts/current-order/context', () => ({ useCurrentOrder: jest.fn() }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
