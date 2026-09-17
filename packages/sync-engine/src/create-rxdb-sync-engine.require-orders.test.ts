@@ -286,7 +286,7 @@ describe('require() for orders (the durable path)', () => {
 		};
 		const diagnostics = vi.fn();
 		const plane = createRequirePlane({
-			awaitReady: async () => undefined,
+			admitted: async () => bound as never,
 			manager: {
 				runGuarded: async (operation: (captured: typeof bound) => Promise<unknown>) =>
 					operation(bound),
