@@ -790,8 +790,8 @@ describe('runConnectCompatibilityProbes', () => {
 		});
 		expect(fetchMock).toHaveBeenCalledTimes(4);
 		expect(fetchMock.mock.calls[2][0]).toBe(fetchMock.mock.calls[3][0]);
-		expect(fetchMock.mock.calls[2][1].headers.Authorization).toHaveLength(24);
-		expect(fetchMock.mock.calls[3][1].headers.Authorization).toHaveLength(36);
+		expect(fetchMock.mock.calls[2][1].headers.authorization).toHaveLength(24);
+		expect(fetchMock.mock.calls[3][1].headers.authorization).toHaveLength(36);
 		expect(mockAppLogger.error).toHaveBeenCalledWith('Shared cache replay detected', {
 			code: ERROR_CODES.CACHE_SHARED_REPLAY,
 			showToast: true,
@@ -845,7 +845,7 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock.mock.calls[1][0]).toBe('https://example.com/wp-json/wcpos/v2/auth/test');
 		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			headers: {
-				Authorization: 'Bearer token',
+				authorization: 'Bearer token',
 			},
 		});
 	});
@@ -872,7 +872,7 @@ describe('testAuthorizationMethod', () => {
 		expect(String(fetchMock.mock.calls[2][0])).toContain('authorization=Bearer+token');
 		expect(fetchMock.mock.calls[2][1]).toMatchObject({
 			headers: {
-				'X-WCPOS': '1',
+				'x-wcpos': '1',
 			},
 		});
 	});
@@ -890,14 +890,14 @@ describe('testAuthorizationMethod', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(fetchMock.mock.calls[1][1]).toMatchObject({
 			headers: {
-				Authorization: 'Bearer token',
-				'X-WCPOS': '1',
+				authorization: 'Bearer token',
+				'x-wcpos': '1',
 			},
 		});
 		expect(String(fetchMock.mock.calls[2][0])).toContain('authorization=Bearer+token');
 		expect(fetchMock.mock.calls[2][1]).toMatchObject({
 			headers: {
-				'X-WCPOS': '1',
+				'x-wcpos': '1',
 			},
 		});
 		expect(mockAppLogger.error).not.toHaveBeenCalled();
@@ -991,13 +991,13 @@ describe('testAuthorizationMethod', () => {
 		expect(echoUrl).toContain('store_id=1');
 		expect(fetchMock.mock.calls[0][1]).toMatchObject({
 			headers: {
-				Authorization: 'Bearer token',
-				'X-WCPOS': '1',
-				'X-WCPOS-Store': '1',
-				'Idempotency-Key': 'wcpos-echo-probe',
-				'If-Match': '"wcpos-echo-probe"',
-				'If-None-Match': '"wcpos-echo-probe"',
-				'X-WCPOS-Idempotency-Key': 'wcpos-echo-probe',
+				authorization: 'Bearer token',
+				'x-wcpos': '1',
+				'x-wcpos-store': '1',
+				'idempotency-key': 'wcpos-echo-probe',
+				'if-match': '"wcpos-echo-probe"',
+				'if-none-match': '"wcpos-echo-probe"',
+				'x-wcpos-idempotency-key': 'wcpos-echo-probe',
 			},
 		});
 	});
@@ -1459,5 +1459,79 @@ describe('testAuthorizationMethod', () => {
 
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(String(fetchMock.mock.calls[2][0])).toContain('rest_route=/wcpos/v2/auth/test');
+	});
+});
+
+// Wire fixtures recorded through platformFetch against 7bd1b8abf0, before migration.
+// Only HTTP header names/order are normalized; URL bytes and header values are literal.
+describe('probe wire fixtures', () => {
+	it.each([false, true])('keeps all five experiments unchanged (query=%s)', async (query) => {
+		const previousFetch = platformFetchRef.fn;
+		const fetchMock = jest.fn(async () => ({
+			ok: false,
+			status: 401,
+			json: async () => ({}),
+		}));
+		platformFetchRef.fn = fetchMock;
+		const pathBase = 'https://example.test/blog/wp-json/wcpos/v2/';
+		const base = query ? 'https://example.test/blog/?rest_route=/wcpos/v2/' : pathBase;
+		const wire = () =>
+			fetchMock.mock.calls.map((call) => {
+				const [url, init] = call as unknown as [string, RequestInit];
+				return { url: String(url), headers: Object.fromEntries(new Headers(init.headers)) };
+			});
+		const echoHeaders = {
+			authorization: 'Bearer Ab9._-Cd7',
+			'content-type': 'application/json',
+			'x-wcpos': '1',
+			'x-wcpos-store': '1',
+			'idempotency-key': 'wcpos-echo-probe',
+			'if-match': '"wcpos-echo-probe"',
+			'if-none-match': '"wcpos-echo-probe"',
+			'x-wcpos-idempotency-key': 'wcpos-echo-probe',
+		};
+		try {
+			await testAuthorizationMethod(base, 'Ab9._-Cd7');
+			expect(wire()).toEqual([
+				{
+					url: query
+						? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fecho&authorization=Bearer+xxx._-xxx&wcpos=1&store_id=1'
+						: 'https://example.test/blog/wp-json/wcpos/v2/echo?authorization=Bearer+xxx._-xxx&wcpos=1&store_id=1',
+					headers: echoHeaders,
+				},
+				{ url: `${base}auth/test`, headers: { 'x-wcpos': '1', authorization: 'Bearer Ab9._-Cd7' } },
+				{
+					url: query
+						? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fauth%2Ftest&authorization=Bearer+Ab9._-Cd7'
+						: 'https://example.test/blog/wp-json/wcpos/v2/auth/test?authorization=Bearer+Ab9._-Cd7',
+					headers: { 'x-wcpos': '1' },
+				},
+			]);
+			fetchMock.mockClear();
+			await runConnectCompatibilityProbes({
+				pathBase,
+				pathRoot: 'https://example.test/blog/wp-json/',
+				useRestRouteParam: query,
+			});
+			expect(wire()).toEqual([
+				{ url: `${base}ping${query ? '&' : '?'}wcpos=1`, headers: {} },
+				{
+					url: query
+						? 'https://example.test/blog/?rest_route=%2Fwcpos%2Fv2%2Fping&wcpos=1&s=%C3%9Cnion+select+caf%C3%A9'
+						: 'https://example.test/blog/wp-json/wcpos/v2/ping?wcpos=1&s=%C3%9Cnion+select+caf%C3%A9',
+					headers: {},
+				},
+				{
+					url: `${base}echo${query ? '&' : '?'}wcpos=1&store_id=1`,
+					headers: { authorization: 'Bearer cache.probe.12345' },
+				},
+				{
+					url: `${base}echo${query ? '&' : '?'}wcpos=1&store_id=1`,
+					headers: { authorization: 'Bearer cache.probe.second.token.1234' },
+				},
+			]);
+		} finally {
+			platformFetchRef.fn = previousFetch;
+		}
 	});
 });

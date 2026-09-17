@@ -70,14 +70,14 @@
  * @see README.md - Full architecture documentation
  */
 
-import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
+import { toPreambleSite } from '@wcpos/utils/request-preamble';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { refreshAccessToken } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
 
-import type { AxiosRequestConfig } from 'axios';
+import type { WcposRequestConfig } from './use-http-client';
 import type { RefreshAccessTokenConfig } from './refresh-access-token';
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
@@ -164,13 +164,17 @@ export const createTokenRefreshHandler = ({
 			});
 
 			try {
-				return await retryWithNewToken(
-					originalConfig,
-					freshToken,
-					site.use_jwt_as_param,
-					bareAuthParamSupported(site.wcpos_version),
-					retryRequest
-				);
+				const config = originalConfig as WcposRequestConfig;
+				const retryConfig: WcposRequestConfig = {
+					...config,
+					wcposPreamble: {
+						purpose: 'rest',
+						site: toPreambleSite(site),
+						...config.wcposPreamble,
+						refreshedAccessToken: freshToken,
+					},
+				};
+				return await retryRequest(retryConfig);
 			} catch (retryError: unknown) {
 				const retryStatus = getResponseStatus(retryError);
 				if (retryStatus === 401) {
@@ -201,33 +205,6 @@ export const createTokenRefreshHandler = ({
 		},
 	};
 };
-
-/**
- * Retry request with a new access token
- */
-async function retryWithNewToken(
-	originalConfig: AxiosRequestConfig,
-	token: string,
-	useJwtAsParam: boolean | undefined,
-	bareAuthParam: boolean,
-	retryRequest: HttpErrorHandlerContext['retryRequest']
-) {
-	const updatedConfig = { ...originalConfig };
-
-	if (useJwtAsParam) {
-		updatedConfig.params = {
-			...updatedConfig.params,
-			authorization: formatAuthorizationParam(token, bareAuthParam),
-		};
-	} else {
-		updatedConfig.headers = {
-			...updatedConfig.headers,
-			Authorization: `Bearer ${token}`,
-		};
-	}
-
-	return await retryRequest(updatedConfig);
-}
 
 function getResponseStatus(error: unknown): number | undefined {
 	if (!error || typeof error !== 'object') return undefined;

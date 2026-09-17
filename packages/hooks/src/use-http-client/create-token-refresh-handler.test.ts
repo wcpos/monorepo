@@ -1,3 +1,5 @@
+import 'whatwg-fetch';
+
 import { createTokenRefreshHandler } from './create-token-refresh-handler';
 import { resetRefreshCooldown } from './refresh-access-token';
 import { requestStateManager } from './request-state-manager';
@@ -58,7 +60,7 @@ const makeError = (status = 401) => {
 
 const makeContext = (overrides: any = {}) => ({
 	error: makeError(401),
-	originalConfig: { url: '/test', headers: {} },
+	originalConfig: { url: '/test', headers: {}, wcposPreamble: { purpose: 'rest', site: {} } },
 	retryRequest: jest.fn().mockResolvedValue({ data: 'ok', status: 200 }),
 	retryCount: 0,
 	...overrides,
@@ -211,7 +213,7 @@ describe('createTokenRefreshHandler', () => {
 			expect(result).toEqual(retryResponse);
 		});
 
-		it('should set token as query param when use_jwt_as_param is true', async () => {
+		it('passes the refreshed token as metadata without authoring credentials', async () => {
 			const handler = createTokenRefreshHandler({
 				site: makeSite({ use_jwt_as_param: true }),
 				wpUser: makeWpUser(),
@@ -233,8 +235,9 @@ describe('createTokenRefreshHandler', () => {
 
 			expect(ctx.retryRequest).toHaveBeenCalledWith(
 				expect.objectContaining({
-					params: expect.objectContaining({
-						authorization: 'Bearer new-token',
+					headers: {},
+					wcposPreamble: expect.objectContaining({
+						refreshedAccessToken: 'new-token',
 					}),
 				})
 			);
