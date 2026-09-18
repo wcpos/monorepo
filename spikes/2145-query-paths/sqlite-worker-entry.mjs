@@ -39,7 +39,7 @@ async function measure(fn) {
 		active = false;
 	}
 }
-// Deliberately only the brief's fixed ASCII predicates; not a production Mango translator.
+// Only the operators the two production selectors use; not a general Mango translator.
 function predicate(selector, params) {
 	return (
 		'(' +
@@ -49,8 +49,15 @@ function predicate(selector, params) {
 					return value.map((s) => predicate(s, params)).join(field === '$and' ? ' AND ' : ' OR ');
 				const column = field === '_deleted' ? 'deleted' : `JSON_EXTRACT(data, '$.${field}')`;
 				if (value.$regex !== undefined) {
-					params.push(value.$options === 'i' ? `%${value.$regex}%` : `*${value.$regex}*`);
-					return `${column} ${value.$options === 'i' ? 'LIKE' : 'GLOB'} ?`;
+					// buildScanSearchSelector regex-escapes the typed term (`0\.4`, `K\-2`): undo that,
+					// then escape the SQL wildcards so the pattern is a literal substring match.
+					const term = value.$regex.replace(/\\(.)/g, '$1');
+					if (value.$options === 'i') {
+						params.push('%' + term.replace(/[\\%_]/g, '\\$&') + '%');
+						return `${column} LIKE ? ESCAPE '\\'`;
+					}
+					params.push('*' + term.replace(/[*?[]/g, '[$&]') + '*');
+					return `${column} GLOB ?`;
 				}
 				if (value.$elemMatch) {
 					params.push(...[value.$elemMatch.key, value.$elemMatch.value].map((v) => v.$eq ?? v));

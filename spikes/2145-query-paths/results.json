@@ -2,95 +2,283 @@
   "cells": [
     {
       "query": "logs-1",
-      "operation": "find50",
+      "operation": "find20",
       "mode": "fallback",
       "samples": [
         {
-          "allMs": 16530.100000083447,
-          "calls": 50,
-          "rows": 2500,
-          "workerMs": 16535.400000035763,
-          "pageMs": 16535.600000023842,
-          "matches": 50
+          "allMs": 6577.1000000834465,
+          "calls": 20,
+          "rows": 1000,
+          "workerMs": 6579.699999988079,
+          "pageMs": 6579.900000035763,
+          "matches": 20
         },
         {
-          "allMs": 16496.99999988079,
-          "calls": 50,
-          "rows": 2500,
-          "workerMs": 16501,
-          "pageMs": 16501.399999976158,
-          "matches": 50
+          "allMs": 6557.400000095367,
+          "calls": 20,
+          "rows": 1000,
+          "workerMs": 6560,
+          "pageMs": 6560,
+          "matches": 20
         },
         {
-          "allMs": 16477.19999986887,
-          "calls": 50,
-          "rows": 2500,
-          "workerMs": 16482,
-          "pageMs": 16482.19999998808,
-          "matches": 50
+          "allMs": 6585.799999773502,
+          "calls": 20,
+          "rows": 1000,
+          "workerMs": 6587.800000011921,
+          "pageMs": 6587.900000035763,
+          "matches": 20
         },
         {
-          "allMs": 16510.200000166893,
-          "calls": 50,
-          "rows": 2500,
-          "workerMs": 16514.80000001192,
-          "pageMs": 16515.19999998808,
-          "matches": 50
+          "allMs": 6545.899999797344,
+          "calls": 20,
+          "rows": 1000,
+          "workerMs": 6547.399999976158,
+          "pageMs": 6547.600000023842,
+          "matches": 20
         },
         {
-          "allMs": 16497.300000071526,
-          "calls": 50,
-          "rows": 2500,
-          "workerMs": 16501.80000001192,
-          "pageMs": 16503.200000047684,
-          "matches": 50
+          "allMs": 6529.299999892712,
+          "calls": 20,
+          "rows": 1000,
+          "workerMs": 6531.099999964237,
+          "pageMs": 6531.300000011921,
+          "matches": 20
         }
       ]
     },
     {
       "query": "logs-1",
-      "operation": "find50",
+      "operation": "find20",
       "mode": "direct",
       "samples": [
         {
-          "allMs": 5.599999964237213,
+          "allMs": 2.600000023841858,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 5.599999964237213,
-          "pageMs": 5.899999976158142,
-          "matches": 50
+          "rows": 20,
+          "workerMs": 2.600000023841858,
+          "pageMs": 2.600000023841858,
+          "matches": 20
         },
         {
-          "allMs": 5.600000023841858,
+          "allMs": 2.300000011920929,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 5.600000023841858,
-          "pageMs": 5.700000047683716,
-          "matches": 50
+          "rows": 20,
+          "workerMs": 2.399999976158142,
+          "pageMs": 2.399999976158142,
+          "matches": 20
         },
         {
-          "allMs": 5.399999976158142,
+          "allMs": 2.300000011920929,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 5.399999976158142,
-          "pageMs": 5.5,
-          "matches": 50
+          "rows": 20,
+          "workerMs": 2.300000011920929,
+          "pageMs": 2.300000011920929,
+          "matches": 20
         },
         {
-          "allMs": 5.599999964237213,
+          "allMs": 2.399999976158142,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 5.599999964237213,
-          "pageMs": 5.699999988079071,
-          "matches": 50
+          "rows": 20,
+          "workerMs": 2.399999976158142,
+          "pageMs": 2.5,
+          "matches": 20
         },
         {
-          "allMs": 5.399999976158142,
+          "allMs": 2.299999952316284,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 5.5,
-          "pageMs": 5.5,
-          "matches": 50
+          "rows": 20,
+          "workerMs": 2.299999952316284,
+          "pageMs": 2.299999952316284,
+          "matches": 20
+        }
+      ]
+    },
+    {
+      "query": "logs-1",
+      "operation": "find60",
+      "mode": "fallback",
+      "samples": [
+        {
+          "allMs": 19647.00000011921,
+          "calls": 60,
+          "rows": 3000,
+          "workerMs": 19651.599999964237,
+          "pageMs": 19651.80000001192,
+          "matches": 60
+        },
+        {
+          "allMs": 19706.499999523163,
+          "calls": 60,
+          "rows": 3000,
+          "workerMs": 19711.600000023842,
+          "pageMs": 19713.19999998808,
+          "matches": 60
+        },
+        {
+          "allMs": 19734.600000083447,
+          "calls": 60,
+          "rows": 3000,
+          "workerMs": 19740.799999952316,
+          "pageMs": 19742.30000001192,
+          "matches": 60
+        },
+        {
+          "allMs": 19677.100000083447,
+          "calls": 60,
+          "rows": 3000,
+          "workerMs": 19682.100000023842,
+          "pageMs": 19683.5,
+          "matches": 60
+        },
+        {
+          "allMs": 19666.900000035763,
+          "calls": 60,
+          "rows": 3000,
+          "workerMs": 19672.80000001192,
+          "pageMs": 19674.5,
+          "matches": 60
+        }
+      ]
+    },
+    {
+      "query": "logs-1",
+      "operation": "find60",
+      "mode": "direct",
+      "samples": [
+        {
+          "allMs": 6.699999988079071,
+          "calls": 1,
+          "rows": 60,
+          "workerMs": 6.699999988079071,
+          "pageMs": 6.799999952316284,
+          "matches": 60
+        },
+        {
+          "allMs": 6.600000023841858,
+          "calls": 1,
+          "rows": 60,
+          "workerMs": 6.600000023841858,
+          "pageMs": 6.800000011920929,
+          "matches": 60
+        },
+        {
+          "allMs": 6.599999964237213,
+          "calls": 1,
+          "rows": 60,
+          "workerMs": 6.599999964237213,
+          "pageMs": 6.699999988079071,
+          "matches": 60
+        },
+        {
+          "allMs": 6.599999964237213,
+          "calls": 1,
+          "rows": 60,
+          "workerMs": 6.599999964237213,
+          "pageMs": 6.800000011920929,
+          "matches": 60
+        },
+        {
+          "allMs": 6.599999964237213,
+          "calls": 1,
+          "rows": 60,
+          "workerMs": 6.599999964237213,
+          "pageMs": 6.800000011920929,
+          "matches": 60
+        }
+      ]
+    },
+    {
+      "query": "logs-1",
+      "operation": "find100",
+      "mode": "fallback",
+      "samples": [
+        {
+          "allMs": 33198.60000026226,
+          "calls": 100,
+          "rows": 5000,
+          "workerMs": 33207.19999998808,
+          "pageMs": 33207.5,
+          "matches": 100
+        },
+        {
+          "allMs": 32862.80000025034,
+          "calls": 100,
+          "rows": 5000,
+          "workerMs": 32871.89999997616,
+          "pageMs": 32872.19999998808,
+          "matches": 100
+        },
+        {
+          "allMs": 32909.60000002384,
+          "calls": 100,
+          "rows": 5000,
+          "workerMs": 32917.59999996424,
+          "pageMs": 32917.89999997616,
+          "matches": 100
+        },
+        {
+          "allMs": 32957.30000072718,
+          "calls": 100,
+          "rows": 5000,
+          "workerMs": 32966.59999996424,
+          "pageMs": 32966.90000003576,
+          "matches": 100
+        },
+        {
+          "allMs": 32881.90000003576,
+          "calls": 100,
+          "rows": 5000,
+          "workerMs": 32890.5,
+          "pageMs": 32891.700000047684,
+          "matches": 100
+        }
+      ]
+    },
+    {
+      "query": "logs-1",
+      "operation": "find100",
+      "mode": "direct",
+      "samples": [
+        {
+          "allMs": 10.699999988079071,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 10.800000011920929,
+          "pageMs": 11,
+          "matches": 100
+        },
+        {
+          "allMs": 10.699999988079071,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 10.699999988079071,
+          "pageMs": 10.799999952316284,
+          "matches": 100
+        },
+        {
+          "allMs": 10.800000011920929,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 10.900000035762787,
+          "pageMs": 11,
+          "matches": 100
+        },
+        {
+          "allMs": 10.699999988079071,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 10.699999988079071,
+          "pageMs": 10.800000011920929,
+          "matches": 100
+        },
+        {
+          "allMs": 10.700000047683716,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 10.800000011920929,
+          "pageMs": 10.900000035762787,
+          "matches": 100
         }
       ]
     },
@@ -100,27 +288,27 @@
       "mode": "fallback",
       "samples": [
         {
-          "allMs": 309717.8000006676,
+          "allMs": 107460.10000020266,
           "calls": 921,
           "rows": 46000,
-          "workerMs": 309803.89999997616,
-          "pageMs": 309804.39999997616,
+          "workerMs": 107526.80000001192,
+          "pageMs": 107527,
           "matches": 920
         },
         {
-          "allMs": 308193.1999999285,
+          "allMs": 108601.90000009537,
           "calls": 921,
           "rows": 46000,
-          "workerMs": 308278,
-          "pageMs": 308278.39999997616,
+          "workerMs": 108677,
+          "pageMs": 108677.30000001192,
           "matches": 920
         },
         {
-          "allMs": 310489.7000015974,
+          "allMs": 108070.29999917746,
           "calls": 921,
           "rows": 46000,
-          "workerMs": 310563.90000003576,
-          "pageMs": 310564.09999996424,
+          "workerMs": 108143.69999998808,
+          "pageMs": 108143.80000001192,
           "matches": 920
         }
       ]
@@ -131,591 +319,607 @@
       "mode": "direct",
       "samples": [
         {
-          "allMs": 391.10000002384186,
+          "allMs": 378.19999998807907,
           "calls": 1,
           "rows": 1,
-          "workerMs": 391.19999998807907,
-          "pageMs": 391.19999998807907,
+          "workerMs": 378.19999998807907,
+          "pageMs": 378.4000000357628,
           "matches": 920
         },
         {
-          "allMs": 384.60000002384186,
+          "allMs": 377,
           "calls": 1,
           "rows": 1,
-          "workerMs": 384.60000002384186,
-          "pageMs": 384.69999998807907,
+          "workerMs": 377,
+          "pageMs": 377.10000002384186,
           "matches": 920
         },
         {
-          "allMs": 385.80000001192093,
+          "allMs": 377.60000002384186,
           "calls": 1,
           "rows": 1,
-          "workerMs": 385.80000001192093,
-          "pageMs": 386,
+          "workerMs": 377.60000002384186,
+          "pageMs": 377.7000000476837,
           "matches": 920
         },
         {
-          "allMs": 386.2000000476837,
+          "allMs": 383.5,
           "calls": 1,
           "rows": 1,
-          "workerMs": 386.2000000476837,
-          "pageMs": 386.2000000476837,
+          "workerMs": 383.5,
+          "pageMs": 383.5,
           "matches": 920
         },
         {
-          "allMs": 383.30000001192093,
+          "allMs": 381.80000001192093,
           "calls": 1,
           "rows": 1,
-          "workerMs": 383.30000001192093,
-          "pageMs": 383.39999997615814,
+          "workerMs": 381.80000001192093,
+          "pageMs": 382,
           "matches": 920
         }
       ]
     },
     {
       "query": "logs-2",
-      "operation": "find50",
+      "operation": "find20",
       "mode": "fallback",
       "samples": [
         {
-          "allMs": 33617.59999972582,
-          "calls": 100,
-          "rows": 5000,
-          "workerMs": 33626.60000002384,
-          "pageMs": 33627.90000003576,
-          "matches": 50
+          "allMs": 13408.500000178814,
+          "calls": 40,
+          "rows": 2000,
+          "workerMs": 13412.699999988079,
+          "pageMs": 13414,
+          "matches": 20
         },
         {
-          "allMs": 33667.399999439716,
-          "calls": 100,
-          "rows": 5000,
-          "workerMs": 33676.40000003576,
-          "pageMs": 33676.69999998808,
-          "matches": 50
+          "allMs": 13115.699999809265,
+          "calls": 40,
+          "rows": 2000,
+          "workerMs": 13119.300000011921,
+          "pageMs": 13119.699999988079,
+          "matches": 20
         },
         {
-          "allMs": 33870.89999997616,
-          "calls": 100,
-          "rows": 5000,
-          "workerMs": 33879.80000001192,
-          "pageMs": 33880.19999998808,
-          "matches": 50
+          "allMs": 13329.700000405312,
+          "calls": 40,
+          "rows": 2000,
+          "workerMs": 13332.800000011921,
+          "pageMs": 13332.900000035763,
+          "matches": 20
         },
         {
-          "allMs": 31612.89999973774,
-          "calls": 100,
-          "rows": 5000,
-          "workerMs": 31621.5,
-          "pageMs": 31621.700000047684,
-          "matches": 50
+          "allMs": 13121.599999964237,
+          "calls": 40,
+          "rows": 2000,
+          "workerMs": 13125.199999988079,
+          "pageMs": 13125.399999976158,
+          "matches": 20
         },
         {
-          "allMs": 32586.700000226498,
-          "calls": 100,
-          "rows": 5000,
-          "workerMs": 32595.80000001192,
-          "pageMs": 32597.5,
-          "matches": 50
+          "allMs": 13302.000000298023,
+          "calls": 40,
+          "rows": 2000,
+          "workerMs": 13306.099999964237,
+          "pageMs": 13306.300000011921,
+          "matches": 20
         }
       ]
     },
     {
       "query": "logs-2",
-      "operation": "find50",
+      "operation": "find20",
       "mode": "direct",
       "samples": [
         {
-          "allMs": 11.400000035762787,
+          "allMs": 4.700000047683716,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 11.5,
-          "pageMs": 11.699999988079071,
-          "matches": 50
+          "rows": 20,
+          "workerMs": 4.800000011920929,
+          "pageMs": 4.800000011920929,
+          "matches": 20
         },
         {
-          "allMs": 11.599999964237213,
+          "allMs": 4.599999964237213,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 11.599999964237213,
-          "pageMs": 11.800000011920929,
-          "matches": 50
+          "rows": 20,
+          "workerMs": 4.599999964237213,
+          "pageMs": 4.800000011920929,
+          "matches": 20
         },
         {
-          "allMs": 11.700000047683716,
+          "allMs": 4.5,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 11.700000047683716,
-          "pageMs": 11.800000011920929,
-          "matches": 50
+          "rows": 20,
+          "workerMs": 4.5,
+          "pageMs": 4.599999964237213,
+          "matches": 20
         },
         {
-          "allMs": 11.300000011920929,
+          "allMs": 4.5,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 11.300000011920929,
-          "pageMs": 11.399999976158142,
-          "matches": 50
+          "rows": 20,
+          "workerMs": 4.5,
+          "pageMs": 4.5,
+          "matches": 20
         },
         {
-          "allMs": 11.400000035762787,
+          "allMs": 4.5,
           "calls": 1,
-          "rows": 50,
-          "workerMs": 11.400000035762787,
-          "pageMs": 11.5,
-          "matches": 50
-        }
-      ]
-    },
-    {
-      "query": "logs-2",
-      "operation": "count",
-      "mode": "fallback",
-      "samples": [
-        {
-          "allMs": 309386.099999845,
-          "calls": 921,
-          "rows": 46000,
-          "workerMs": 309465,
-          "pageMs": 309465.5,
-          "matches": 460
-        },
-        {
-          "allMs": 308070.30000013113,
-          "calls": 921,
-          "rows": 46000,
-          "workerMs": 308147.2999999523,
-          "pageMs": 308147.59999996424,
-          "matches": 460
-        },
-        {
-          "allMs": 308179.6000004411,
-          "calls": 921,
-          "rows": 46000,
-          "workerMs": 308254.2999999523,
-          "pageMs": 308254.8000000119,
-          "matches": 460
+          "rows": 20,
+          "workerMs": 4.5,
+          "pageMs": 4.5,
+          "matches": 20
         }
       ]
     },
     {
       "query": "logs-2",
       "operation": "count",
-      "mode": "direct",
-      "samples": [
-        {
-          "allMs": 378.5,
-          "calls": 1,
-          "rows": 1,
-          "workerMs": 378.5,
-          "pageMs": 378.60000002384186,
-          "matches": 460
-        },
-        {
-          "allMs": 386.2999999523163,
-          "calls": 1,
-          "rows": 1,
-          "workerMs": 386.2999999523163,
-          "pageMs": 386.39999997615814,
-          "matches": 460
-        },
-        {
-          "allMs": 376.80000001192093,
-          "calls": 1,
-          "rows": 1,
-          "workerMs": 376.80000001192093,
-          "pageMs": 377,
-          "matches": 460
-        },
-        {
-          "allMs": 386.39999997615814,
-          "calls": 1,
-          "rows": 1,
-          "workerMs": 386.39999997615814,
-          "pageMs": 386.60000002384186,
-          "matches": 460
-        },
-        {
-          "allMs": 381.89999997615814,
-          "calls": 1,
-          "rows": 1,
-          "workerMs": 381.89999997615814,
-          "pageMs": 381.89999997615814,
-          "matches": 460
-        }
-      ]
-    },
-    {
-      "query": "orders-all",
-      "operation": "find50",
       "mode": "fallback",
       "samples": [
         {
-          "allMs": 928.8000000715256,
-          "calls": 4,
-          "rows": 200,
-          "workerMs": 929.2000000476837,
-          "pageMs": 929.6999999880791,
-          "matches": 50
+          "allMs": 107903.79999876022,
+          "calls": 921,
+          "rows": 46000,
+          "workerMs": 107969.60000002384,
+          "pageMs": 107971,
+          "matches": 460
         },
         {
-          "allMs": 933.5,
-          "calls": 4,
-          "rows": 200,
-          "workerMs": 934.0999999642372,
-          "pageMs": 934.3999999761581,
-          "matches": 50
+          "allMs": 107732.19999945164,
+          "calls": 921,
+          "rows": 46000,
+          "workerMs": 107798.90000003576,
+          "pageMs": 107799.19999998808,
+          "matches": 460
         },
         {
-          "allMs": 900.6000000238419,
-          "calls": 4,
-          "rows": 200,
-          "workerMs": 901.1999999880791,
-          "pageMs": 901.8999999761581,
-          "matches": 50
-        },
-        {
-          "allMs": 917.1999999880791,
-          "calls": 4,
-          "rows": 200,
-          "workerMs": 917.7000000476837,
-          "pageMs": 918.0999999642372,
-          "matches": 50
-        },
-        {
-          "allMs": 934.5,
-          "calls": 4,
-          "rows": 200,
-          "workerMs": 934.8999999761581,
-          "pageMs": 935.1999999880791,
-          "matches": 50
+          "allMs": 108010.70000112057,
+          "calls": 921,
+          "rows": 46000,
+          "workerMs": 108078.80000001192,
+          "pageMs": 108078.89999997616,
+          "matches": 460
         }
       ]
     },
     {
-      "query": "orders-all",
-      "operation": "find50",
-      "mode": "direct",
-      "samples": [
-        {
-          "allMs": 1.300000011920929,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.399999976158142,
-          "pageMs": 1.600000023841858,
-          "matches": 50
-        },
-        {
-          "allMs": 1.2999999523162842,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.2999999523162842,
-          "pageMs": 1.5,
-          "matches": 50
-        },
-        {
-          "allMs": 1.2999999523162842,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.2999999523162842,
-          "pageMs": 1.5999999642372131,
-          "matches": 50
-        },
-        {
-          "allMs": 1.199999988079071,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.199999988079071,
-          "pageMs": 1.4000000357627869,
-          "matches": 50
-        },
-        {
-          "allMs": 1.2000000476837158,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.300000011920929,
-          "pageMs": 1.5999999642372131,
-          "matches": 50
-        }
-      ]
-    },
-    {
-      "query": "orders-all",
-      "operation": "count",
-      "mode": "fallback",
-      "samples": [
-        {
-          "allMs": 95513.70000010729,
-          "calls": 401,
-          "rows": 20000,
-          "workerMs": 95550.30000001192,
-          "pageMs": 95550.79999995232,
-          "matches": 5000
-        },
-        {
-          "allMs": 94624.7999998331,
-          "calls": 401,
-          "rows": 20000,
-          "workerMs": 94662.5,
-          "pageMs": 94662.89999997616,
-          "matches": 5000
-        },
-        {
-          "allMs": 94516.49999982119,
-          "calls": 401,
-          "rows": 20000,
-          "workerMs": 94549.89999997616,
-          "pageMs": 94550.30000001192,
-          "matches": 5000
-        }
-      ]
-    },
-    {
-      "query": "orders-all",
+      "query": "logs-2",
       "operation": "count",
       "mode": "direct",
       "samples": [
         {
-          "allMs": 708.8999999761581,
+          "allMs": 382.80000001192093,
           "calls": 1,
           "rows": 1,
-          "workerMs": 708.8999999761581,
-          "pageMs": 708.8999999761581,
-          "matches": 5000
+          "workerMs": 382.80000001192093,
+          "pageMs": 382.9000000357628,
+          "matches": 460
         },
         {
-          "allMs": 718.2999999523163,
+          "allMs": 379.60000002384186,
           "calls": 1,
           "rows": 1,
-          "workerMs": 718.2999999523163,
-          "pageMs": 718.2999999523163,
-          "matches": 5000
+          "workerMs": 379.60000002384186,
+          "pageMs": 379.60000002384186,
+          "matches": 460
         },
         {
-          "allMs": 705.8000000119209,
+          "allMs": 379,
           "calls": 1,
           "rows": 1,
-          "workerMs": 705.8000000119209,
-          "pageMs": 705.8999999761581,
-          "matches": 5000
+          "workerMs": 379,
+          "pageMs": 379.10000002384186,
+          "matches": 460
         },
         {
-          "allMs": 697.1999999880791,
+          "allMs": 377.60000002384186,
           "calls": 1,
           "rows": 1,
-          "workerMs": 697.1999999880791,
-          "pageMs": 697.3000000119209,
-          "matches": 5000
+          "workerMs": 377.60000002384186,
+          "pageMs": 377.80000001192093,
+          "matches": 460
         },
         {
-          "allMs": 705.6999999880791,
+          "allMs": 377.5,
           "calls": 1,
           "rows": 1,
-          "workerMs": 705.6999999880791,
-          "pageMs": 705.8000000119209,
-          "matches": 5000
+          "workerMs": 377.5,
+          "pageMs": 377.7999999523163,
+          "matches": 460
         }
       ]
     },
     {
-      "query": "orders-open",
+      "query": "orders",
+      "operation": "find10",
+      "mode": "fallback",
+      "samples": [
+        {
+          "allMs": 454.10000002384186,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 454.4000000357628,
+          "pageMs": 454.5,
+          "matches": 10
+        },
+        {
+          "allMs": 454.89999997615814,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 455.0999999642372,
+          "pageMs": 455.30000001192093,
+          "matches": 10
+        },
+        {
+          "allMs": 464.2000000476837,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 464.5,
+          "pageMs": 464.69999998807907,
+          "matches": 10
+        },
+        {
+          "allMs": 458.69999998807907,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 459.0999999642372,
+          "pageMs": 459.19999998807907,
+          "matches": 10
+        },
+        {
+          "allMs": 458.10000002384186,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 458.5999999642372,
+          "pageMs": 459.0999999642372,
+          "matches": 10
+        }
+      ]
+    },
+    {
+      "query": "orders",
+      "operation": "find10",
+      "mode": "direct",
+      "samples": [
+        {
+          "allMs": 0.699999988079071,
+          "calls": 1,
+          "rows": 10,
+          "workerMs": 0.699999988079071,
+          "pageMs": 0.800000011920929,
+          "matches": 10
+        },
+        {
+          "allMs": 0.5999999642372131,
+          "calls": 1,
+          "rows": 10,
+          "workerMs": 0.5999999642372131,
+          "pageMs": 0.5999999642372131,
+          "matches": 10
+        },
+        {
+          "allMs": 0.5999999642372131,
+          "calls": 1,
+          "rows": 10,
+          "workerMs": 0.5999999642372131,
+          "pageMs": 0.5999999642372131,
+          "matches": 10
+        },
+        {
+          "allMs": 0.6000000238418579,
+          "calls": 1,
+          "rows": 10,
+          "workerMs": 0.6000000238418579,
+          "pageMs": 0.800000011920929,
+          "matches": 10
+        },
+        {
+          "allMs": 0.6000000238418579,
+          "calls": 1,
+          "rows": 10,
+          "workerMs": 0.6000000238418579,
+          "pageMs": 0.699999988079071,
+          "matches": 10
+        }
+      ]
+    },
+    {
+      "query": "orders",
       "operation": "find50",
       "mode": "fallback",
       "samples": [
         {
-          "allMs": 1649.0999999642372,
-          "calls": 7,
-          "rows": 350,
-          "workerMs": 1650,
-          "pageMs": 1650.3999999761581,
+          "allMs": 1852.9999999403954,
+          "calls": 8,
+          "rows": 400,
+          "workerMs": 1854.1000000238419,
+          "pageMs": 1854.300000011921,
           "matches": 50
         },
         {
-          "allMs": 1652.5000000596046,
-          "calls": 7,
-          "rows": 350,
-          "workerMs": 1653.3999999761581,
-          "pageMs": 1653.699999988079,
+          "allMs": 1845.4000000357628,
+          "calls": 8,
+          "rows": 400,
+          "workerMs": 1846.5,
+          "pageMs": 1846.800000011921,
           "matches": 50
         },
         {
-          "allMs": 1619.6000000238419,
-          "calls": 7,
-          "rows": 350,
-          "workerMs": 1620.6000000238419,
-          "pageMs": 1620.800000011921,
+          "allMs": 1827.2000001072884,
+          "calls": 8,
+          "rows": 400,
+          "workerMs": 1828.2999999523163,
+          "pageMs": 1828.5999999642372,
           "matches": 50
         },
         {
-          "allMs": 1690.0999999046326,
-          "calls": 7,
-          "rows": 350,
-          "workerMs": 1690.9000000357628,
-          "pageMs": 1691.2999999523163,
+          "allMs": 2077.9000000953674,
+          "calls": 8,
+          "rows": 400,
+          "workerMs": 2079.199999988079,
+          "pageMs": 2079.5,
           "matches": 50
         },
         {
-          "allMs": 1633.6000000238419,
-          "calls": 7,
-          "rows": 350,
-          "workerMs": 1634.300000011921,
-          "pageMs": 1634.5999999642372,
+          "allMs": 1831.5,
+          "calls": 8,
+          "rows": 400,
+          "workerMs": 1832.4000000357628,
+          "pageMs": 1833.3999999761581,
           "matches": 50
         }
       ]
     },
     {
-      "query": "orders-open",
+      "query": "orders",
       "operation": "find50",
       "mode": "direct",
       "samples": [
         {
-          "allMs": 1.2999999523162842,
+          "allMs": 2.699999988079071,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.399999976158142,
-          "pageMs": 1.699999988079071,
+          "workerMs": 2.800000011920929,
+          "pageMs": 2.900000035762787,
           "matches": 50
         },
         {
-          "allMs": 1.4000000357627869,
+          "allMs": 2.600000023841858,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.5,
-          "pageMs": 1.699999988079071,
+          "workerMs": 2.600000023841858,
+          "pageMs": 2.899999976158142,
           "matches": 50
         },
         {
-          "allMs": 1.300000011920929,
+          "allMs": 2.599999964237213,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.4000000357627869,
-          "pageMs": 1.5,
+          "workerMs": 2.599999964237213,
+          "pageMs": 2.699999988079071,
           "matches": 50
         },
         {
-          "allMs": 1.399999976158142,
+          "allMs": 2.600000023841858,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.399999976158142,
-          "pageMs": 1.5999999642372131,
+          "workerMs": 2.699999988079071,
+          "pageMs": 2.800000011920929,
           "matches": 50
         },
         {
-          "allMs": 1.399999976158142,
+          "allMs": 2.5,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.5,
-          "pageMs": 1.699999988079071,
+          "workerMs": 2.5,
+          "pageMs": 2.700000047683716,
           "matches": 50
         }
       ]
     },
     {
-      "query": "orders-open",
+      "query": "orders",
+      "operation": "find100",
+      "mode": "fallback",
+      "samples": [
+        {
+          "allMs": 3658,
+          "calls": 16,
+          "rows": 800,
+          "workerMs": 3659.899999976158,
+          "pageMs": 3660.900000035763,
+          "matches": 100
+        },
+        {
+          "allMs": 3680.7999999523163,
+          "calls": 16,
+          "rows": 800,
+          "workerMs": 3682.5,
+          "pageMs": 3682.800000011921,
+          "matches": 100
+        },
+        {
+          "allMs": 3684.1999999284744,
+          "calls": 16,
+          "rows": 800,
+          "workerMs": 3686,
+          "pageMs": 3687.100000023842,
+          "matches": 100
+        },
+        {
+          "allMs": 3673.300000011921,
+          "calls": 16,
+          "rows": 800,
+          "workerMs": 3674.5,
+          "pageMs": 3675,
+          "matches": 100
+        },
+        {
+          "allMs": 3665.599999964237,
+          "calls": 16,
+          "rows": 800,
+          "workerMs": 3667.300000011921,
+          "pageMs": 3668.5,
+          "matches": 100
+        }
+      ]
+    },
+    {
+      "query": "orders",
+      "operation": "find100",
+      "mode": "direct",
+      "samples": [
+        {
+          "allMs": 4.799999952316284,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 4.899999976158142,
+          "pageMs": 5.300000011920929,
+          "matches": 100
+        },
+        {
+          "allMs": 4.899999976158142,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 5,
+          "pageMs": 5.300000011920929,
+          "matches": 100
+        },
+        {
+          "allMs": 4.800000011920929,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 4.900000035762787,
+          "pageMs": 5.199999988079071,
+          "matches": 100
+        },
+        {
+          "allMs": 4.899999976158142,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 5,
+          "pageMs": 5.399999976158142,
+          "matches": 100
+        },
+        {
+          "allMs": 4.800000011920929,
+          "calls": 1,
+          "rows": 100,
+          "workerMs": 4.900000035762787,
+          "pageMs": 5.200000047683716,
+          "matches": 100
+        }
+      ]
+    },
+    {
+      "query": "orders",
       "operation": "count",
       "mode": "fallback",
       "samples": [
         {
-          "allMs": 94134.10000097752,
+          "allMs": 29241.399999976158,
           "calls": 401,
           "rows": 20000,
-          "workerMs": 94176.80000001192,
-          "pageMs": 94177.20000004768,
-          "matches": 3000
+          "workerMs": 29273.600000023842,
+          "pageMs": 29274.69999998808,
+          "matches": 2500
         },
         {
-          "allMs": 94120.59999972582,
+          "allMs": 29171.099999904633,
           "calls": 401,
           "rows": 20000,
-          "workerMs": 94162.5,
-          "pageMs": 94163.70000004768,
-          "matches": 3000
+          "workerMs": 29201.19999998808,
+          "pageMs": 29201.19999998808,
+          "matches": 2500
         },
         {
-          "allMs": 94118.2000002265,
+          "allMs": 29254.799999952316,
           "calls": 401,
           "rows": 20000,
-          "workerMs": 94162.30000001192,
-          "pageMs": 94163.5,
-          "matches": 3000
+          "workerMs": 29285.400000035763,
+          "pageMs": 29285.80000001192,
+          "matches": 2500
         }
       ]
     },
     {
-      "query": "orders-open",
+      "query": "orders",
       "operation": "count",
       "mode": "direct",
       "samples": [
         {
-          "allMs": 452.0999999642372,
+          "allMs": 715.8999999761581,
           "calls": 1,
           "rows": 1,
-          "workerMs": 452.0999999642372,
-          "pageMs": 452.19999998807907,
-          "matches": 3000
+          "workerMs": 715.8999999761581,
+          "pageMs": 716,
+          "matches": 2500
         },
         {
-          "allMs": 450.60000002384186,
+          "allMs": 724.5999999642372,
           "calls": 1,
           "rows": 1,
-          "workerMs": 450.60000002384186,
-          "pageMs": 450.69999998807907,
-          "matches": 3000
+          "workerMs": 724.5999999642372,
+          "pageMs": 724.6999999880791,
+          "matches": 2500
         },
         {
-          "allMs": 456.0999999642372,
+          "allMs": 714.8999999761581,
           "calls": 1,
           "rows": 1,
-          "workerMs": 456.0999999642372,
-          "pageMs": 456.0999999642372,
-          "matches": 3000
+          "workerMs": 714.8999999761581,
+          "pageMs": 715.7000000476837,
+          "matches": 2500
         },
         {
-          "allMs": 453.10000002384186,
+          "allMs": 706.3999999761581,
           "calls": 1,
           "rows": 1,
-          "workerMs": 453.10000002384186,
-          "pageMs": 453.19999998807907,
-          "matches": 3000
+          "workerMs": 706.3999999761581,
+          "pageMs": 706.6000000238419,
+          "matches": 2500
         },
         {
-          "allMs": 457.5,
+          "allMs": 703.3999999761581,
           "calls": 1,
           "rows": 1,
-          "workerMs": 457.5,
-          "pageMs": 457.69999998807907,
-          "matches": 3000
+          "workerMs": 703.3999999761581,
+          "pageMs": 703.3999999761581,
+          "matches": 2500
         }
       ]
     },
     {
       "query": "logs-1",
-      "operation": "find50",
+      "operation": "find20",
       "mode": "modifier",
       "samples": [
         {
           "allMs": 5.800000011920929,
           "calls": 1,
           "rows": 50,
-          "workerMs": 6.100000023841858,
-          "pageMs": 6.100000023841858,
-          "matches": 50
+          "workerMs": 6.099999964237213,
+          "pageMs": 6.099999964237213,
+          "matches": 20
         },
         {
-          "allMs": 5.699999988079071,
+          "allMs": 5.599999964237213,
           "calls": 1,
           "rows": 50,
-          "workerMs": 5.899999976158142,
-          "pageMs": 6,
-          "matches": 50
+          "workerMs": 5.800000011920929,
+          "pageMs": 5.800000011920929,
+          "matches": 20
         },
         {
-          "allMs": 5.699999988079071,
+          "allMs": 5.5,
           "calls": 1,
           "rows": 50,
-          "workerMs": 5.899999976158142,
-          "pageMs": 5.899999976158142,
-          "matches": 50
+          "workerMs": 5.699999988079071,
+          "pageMs": 5.699999988079071,
+          "matches": 20
         },
         {
           "allMs": 5.5,
@@ -723,15 +927,109 @@
           "rows": 50,
           "workerMs": 5.699999988079071,
           "pageMs": 5.800000011920929,
-          "matches": 50
+          "matches": 20
         },
         {
-          "allMs": 5.600000023841858,
+          "allMs": 5.5,
           "calls": 1,
           "rows": 50,
-          "workerMs": 5.699999988079071,
-          "pageMs": 5.699999988079071,
-          "matches": 50
+          "workerMs": 5.600000023841858,
+          "pageMs": 5.800000011920929,
+          "matches": 20
+        }
+      ]
+    },
+    {
+      "query": "logs-1",
+      "operation": "find60",
+      "mode": "modifier",
+      "samples": [
+        {
+          "allMs": 16.599999964237213,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 17,
+          "pageMs": 17,
+          "matches": 60
+        },
+        {
+          "allMs": 16.100000023841858,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 16.399999976158142,
+          "pageMs": 16.399999976158142,
+          "matches": 60
+        },
+        {
+          "allMs": 16.099999964237213,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 16.30000001192093,
+          "pageMs": 16.5,
+          "matches": 60
+        },
+        {
+          "allMs": 16.30000001192093,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 16.5,
+          "pageMs": 16.69999998807907,
+          "matches": 60
+        },
+        {
+          "allMs": 16.299999952316284,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 16.5,
+          "pageMs": 16.69999998807907,
+          "matches": 60
+        }
+      ]
+    },
+    {
+      "query": "logs-1",
+      "operation": "find100",
+      "mode": "modifier",
+      "samples": [
+        {
+          "allMs": 15.899999976158142,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 16.19999998807907,
+          "pageMs": 16.399999976158142,
+          "matches": 100
+        },
+        {
+          "allMs": 16.099999964237213,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 16.400000035762787,
+          "pageMs": 16.5,
+          "matches": 100
+        },
+        {
+          "allMs": 16.099999964237213,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 16.400000035762787,
+          "pageMs": 16.5,
+          "matches": 100
+        },
+        {
+          "allMs": 16.30000001192093,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 16.30000001192093,
+          "pageMs": 16.5,
+          "matches": 100
+        },
+        {
+          "allMs": 16.19999998807907,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 16.19999998807907,
+          "pageMs": 16.400000035762787,
+          "matches": 100
         }
       ]
     },
@@ -741,91 +1039,91 @@
       "mode": "modifier",
       "samples": [
         {
-          "allMs": 4062.200000166893,
+          "allMs": 7466.099999964237,
           "calls": 20,
           "rows": 920,
-          "workerMs": 4063.899999976158,
-          "pageMs": 4064,
+          "workerMs": 7467.600000023842,
+          "pageMs": 7467.799999952316,
           "matches": 920
         },
         {
-          "allMs": 4210.000000059605,
+          "allMs": 7492.900000154972,
           "calls": 20,
           "rows": 920,
-          "workerMs": 4211.5,
-          "pageMs": 4211.599999964237,
+          "workerMs": 7494.399999976158,
+          "pageMs": 7495.899999976158,
           "matches": 920
         },
         {
-          "allMs": 4010.6999999284744,
+          "allMs": 7750.3999999165535,
           "calls": 20,
           "rows": 920,
-          "workerMs": 4012.5,
-          "pageMs": 4012.599999964237,
+          "workerMs": 7751.899999976158,
+          "pageMs": 7752.700000047684,
           "matches": 920
         },
         {
-          "allMs": 4021.800000011921,
+          "allMs": 7493.899999976158,
           "calls": 20,
           "rows": 920,
-          "workerMs": 4023.199999988079,
-          "pageMs": 4023.399999976158,
+          "workerMs": 7495.699999988079,
+          "pageMs": 7495.899999976158,
           "matches": 920
         },
         {
-          "allMs": 4038.300000190735,
+          "allMs": 7482.3999999165535,
           "calls": 20,
           "rows": 920,
-          "workerMs": 4039.899999976158,
-          "pageMs": 4040.599999964237,
+          "workerMs": 7483.600000023842,
+          "pageMs": 7483.800000011921,
           "matches": 920
         }
       ]
     },
     {
       "query": "logs-2",
-      "operation": "find50",
+      "operation": "find20",
       "mode": "modifier",
       "samples": [
         {
+          "allMs": 11.399999976158142,
+          "calls": 1,
+          "rows": 50,
+          "workerMs": 11.5,
+          "pageMs": 11.600000023841858,
+          "matches": 20
+        },
+        {
+          "allMs": 11.199999988079071,
+          "calls": 1,
+          "rows": 50,
+          "workerMs": 11.400000035762787,
+          "pageMs": 11.5,
+          "matches": 20
+        },
+        {
+          "allMs": 10.899999976158142,
+          "calls": 1,
+          "rows": 50,
+          "workerMs": 11.100000023841858,
+          "pageMs": 11.200000047683716,
+          "matches": 20
+        },
+        {
           "allMs": 11.099999964237213,
           "calls": 1,
           "rows": 50,
           "workerMs": 11.199999988079071,
-          "pageMs": 11.300000011920929,
-          "matches": 50
-        },
-        {
-          "allMs": 10.900000035762787,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 11,
-          "pageMs": 11.099999964237213,
-          "matches": 50
-        },
-        {
-          "allMs": 11.099999964237213,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 11.199999988079071,
-          "pageMs": 11.300000011920929,
-          "matches": 50
+          "pageMs": 11.299999952316284,
+          "matches": 20
         },
         {
           "allMs": 11,
           "calls": 1,
           "rows": 50,
-          "workerMs": 11.099999964237213,
-          "pageMs": 11.199999988079071,
-          "matches": 50
-        },
-        {
-          "allMs": 10.900000035762787,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 11.099999964237213,
-          "pageMs": 11.300000011920929,
-          "matches": 50
+          "workerMs": 11.200000047683716,
+          "pageMs": 11.200000047683716,
+          "matches": 20
         }
       ]
     },
@@ -835,239 +1133,239 @@
       "mode": "modifier",
       "samples": [
         {
-          "allMs": 2535.800000011921,
+          "allMs": 4141.400000035763,
           "calls": 11,
           "rows": 460,
-          "workerMs": 2537.199999988079,
-          "pageMs": 2537.899999976158,
+          "workerMs": 4142.100000023842,
+          "pageMs": 4142.200000047684,
           "matches": 460
         },
         {
-          "allMs": 2517.2999999523163,
+          "allMs": 4152.299999952316,
           "calls": 11,
           "rows": 460,
-          "workerMs": 2517.599999964237,
-          "pageMs": 2517.800000011921,
+          "workerMs": 4153.5,
+          "pageMs": 4154.199999988079,
           "matches": 460
         },
         {
-          "allMs": 2525.2999999523163,
+          "allMs": 4335.19999986887,
           "calls": 11,
           "rows": 460,
-          "workerMs": 2526.5,
-          "pageMs": 2527.2999999523163,
+          "workerMs": 4336.199999988079,
+          "pageMs": 4336.400000035763,
           "matches": 460
         },
         {
-          "allMs": 2537.500000178814,
+          "allMs": 4135.500000178814,
           "calls": 11,
           "rows": 460,
-          "workerMs": 2538.300000011921,
-          "pageMs": 2538.600000023842,
+          "workerMs": 4136.699999988079,
+          "pageMs": 4137,
           "matches": 460
         },
         {
-          "allMs": 2688.5000000596046,
+          "allMs": 4125.300000071526,
           "calls": 11,
           "rows": 460,
-          "workerMs": 2689.600000023842,
-          "pageMs": 2690.2999999523163,
+          "workerMs": 4126.300000011921,
+          "pageMs": 4126.300000011921,
           "matches": 460
         }
       ]
     },
     {
-      "query": "orders-all",
+      "query": "orders",
+      "operation": "find10",
+      "mode": "modifier",
+      "samples": [
+        {
+          "allMs": 2.699999988079071,
+          "calls": 1,
+          "rows": 50,
+          "workerMs": 3,
+          "pageMs": 3,
+          "matches": 10
+        },
+        {
+          "allMs": 2.600000023841858,
+          "calls": 1,
+          "rows": 50,
+          "workerMs": 2.799999952316284,
+          "pageMs": 3,
+          "matches": 10
+        },
+        {
+          "allMs": 2.699999988079071,
+          "calls": 1,
+          "rows": 50,
+          "workerMs": 2.899999976158142,
+          "pageMs": 2.899999976158142,
+          "matches": 10
+        },
+        {
+          "allMs": 2.600000023841858,
+          "calls": 1,
+          "rows": 50,
+          "workerMs": 2.600000023841858,
+          "pageMs": 2.800000011920929,
+          "matches": 10
+        },
+        {
+          "allMs": 2.5,
+          "calls": 1,
+          "rows": 50,
+          "workerMs": 2.699999988079071,
+          "pageMs": 2.800000011920929,
+          "matches": 10
+        }
+      ]
+    },
+    {
+      "query": "orders",
       "operation": "find50",
       "mode": "modifier",
       "samples": [
         {
-          "allMs": 1.199999988079071,
+          "allMs": 2.5,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.399999976158142,
-          "pageMs": 1.600000023841858,
+          "workerMs": 2.599999964237213,
+          "pageMs": 2.699999988079071,
           "matches": 50
         },
         {
-          "allMs": 1.199999988079071,
+          "allMs": 2.400000035762787,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.2999999523162842,
-          "pageMs": 1.5,
+          "workerMs": 2.699999988079071,
+          "pageMs": 2.800000011920929,
           "matches": 50
         },
         {
-          "allMs": 1.199999988079071,
+          "allMs": 2.599999964237213,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.399999976158142,
-          "pageMs": 1.5999999642372131,
+          "workerMs": 2.599999964237213,
+          "pageMs": 2.799999952316284,
           "matches": 50
         },
         {
-          "allMs": 1.199999988079071,
+          "allMs": 2.399999976158142,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.300000011920929,
-          "pageMs": 1.5,
+          "workerMs": 2.700000047683716,
+          "pageMs": 2.800000011920929,
           "matches": 50
         },
         {
-          "allMs": 1.199999988079071,
+          "allMs": 2.399999976158142,
           "calls": 1,
           "rows": 50,
-          "workerMs": 1.300000011920929,
-          "pageMs": 1.4000000357627869,
+          "workerMs": 2.5,
+          "pageMs": 2.699999988079071,
           "matches": 50
         }
       ]
     },
     {
-      "query": "orders-all",
+      "query": "orders",
+      "operation": "find100",
+      "mode": "modifier",
+      "samples": [
+        {
+          "allMs": 7.099999964237213,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 7.300000011920929,
+          "pageMs": 7.599999964237213,
+          "matches": 100
+        },
+        {
+          "allMs": 7.199999988079071,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 7.199999988079071,
+          "pageMs": 7.5,
+          "matches": 100
+        },
+        {
+          "allMs": 7,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 7.299999952316284,
+          "pageMs": 7.5,
+          "matches": 100
+        },
+        {
+          "allMs": 7.000000059604645,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 7.300000011920929,
+          "pageMs": 7.699999988079071,
+          "matches": 100
+        },
+        {
+          "allMs": 7.099999964237213,
+          "calls": 2,
+          "rows": 100,
+          "workerMs": 7.199999988079071,
+          "pageMs": 7.599999964237213,
+          "matches": 100
+        }
+      ]
+    },
+    {
+      "query": "orders",
       "operation": "count",
       "mode": "modifier",
       "samples": [
         {
-          "allMs": 13497.599999845028,
-          "calls": 101,
-          "rows": 5000,
-          "workerMs": 13506.699999988079,
-          "pageMs": 13508.399999976158,
-          "matches": 5000
+          "allMs": 15645.899999976158,
+          "calls": 51,
+          "rows": 2500,
+          "workerMs": 15651,
+          "pageMs": 15652.300000011921,
+          "matches": 2500
         },
         {
-          "allMs": 13437.00000011921,
-          "calls": 101,
-          "rows": 5000,
-          "workerMs": 13446,
-          "pageMs": 13446.5,
-          "matches": 5000
+          "allMs": 15338.199999988079,
+          "calls": 51,
+          "rows": 2500,
+          "workerMs": 15344.700000047684,
+          "pageMs": 15344.800000011921,
+          "matches": 2500
         },
         {
-          "allMs": 13426.300000011921,
-          "calls": 101,
-          "rows": 5000,
-          "workerMs": 13435,
-          "pageMs": 13435.5,
-          "matches": 5000
+          "allMs": 15537.300000011921,
+          "calls": 51,
+          "rows": 2500,
+          "workerMs": 15542.600000023842,
+          "pageMs": 15543.799999952316,
+          "matches": 2500
         },
         {
-          "allMs": 13953.899999916553,
-          "calls": 101,
-          "rows": 5000,
-          "workerMs": 13962.399999976158,
-          "pageMs": 13962.899999976158,
-          "matches": 5000
+          "allMs": 15333.799999713898,
+          "calls": 51,
+          "rows": 2500,
+          "workerMs": 15338.899999976158,
+          "pageMs": 15339.199999988079,
+          "matches": 2500
         },
         {
-          "allMs": 13599.699999988079,
-          "calls": 101,
-          "rows": 5000,
-          "workerMs": 13609.300000011921,
-          "pageMs": 13609.899999976158,
-          "matches": 5000
-        }
-      ]
-    },
-    {
-      "query": "orders-open",
-      "operation": "find50",
-      "mode": "modifier",
-      "samples": [
-        {
-          "allMs": 1.600000023841858,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.7000000476837158,
-          "pageMs": 1.9000000357627869,
-          "matches": 50
-        },
-        {
-          "allMs": 1.399999976158142,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.5999999642372131,
-          "pageMs": 1.800000011920929,
-          "matches": 50
-        },
-        {
-          "allMs": 1.5,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.5999999642372131,
-          "pageMs": 1.899999976158142,
-          "matches": 50
-        },
-        {
-          "allMs": 1.399999976158142,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.5999999642372131,
-          "pageMs": 1.899999976158142,
-          "matches": 50
-        },
-        {
-          "allMs": 1.5,
-          "calls": 1,
-          "rows": 50,
-          "workerMs": 1.7000000476837158,
-          "pageMs": 1.9000000357627869,
-          "matches": 50
-        }
-      ]
-    },
-    {
-      "query": "orders-open",
-      "operation": "count",
-      "mode": "modifier",
-      "samples": [
-        {
-          "allMs": 7526.099999904633,
-          "calls": 61,
-          "rows": 3000,
-          "workerMs": 7532.399999976158,
-          "pageMs": 7533.600000023842,
-          "matches": 3000
-        },
-        {
-          "allMs": 7468.900000035763,
-          "calls": 61,
-          "rows": 3000,
-          "workerMs": 7474.199999988079,
-          "pageMs": 7475.299999952316,
-          "matches": 3000
-        },
-        {
-          "allMs": 7336.400000452995,
-          "calls": 61,
-          "rows": 3000,
-          "workerMs": 7343.599999964237,
-          "pageMs": 7344.899999976158,
-          "matches": 3000
-        },
-        {
-          "allMs": 7491.699999988079,
-          "calls": 61,
-          "rows": 3000,
-          "workerMs": 7498.200000047684,
-          "pageMs": 7499.5,
-          "matches": 3000
-        },
-        {
-          "allMs": 7315.100000202656,
-          "calls": 61,
-          "rows": 3000,
-          "workerMs": 7320.700000047684,
-          "pageMs": 7321.800000011921,
-          "matches": 3000
+          "allMs": 15536.400000035763,
+          "calls": 51,
+          "rows": 2500,
+          "workerMs": 15540.800000011921,
+          "pageMs": 15541,
+          "matches": 2500
         }
       ]
     }
   ],
   "plans": {
-    "logs-1/find50": {
-      "query": "SELECT data FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 50",
+    "logs-1/find20": {
+      "query": "SELECT data FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\\')) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 20",
       "params": [
         "*quartz*",
         "%quartz%",
@@ -1081,7 +1379,57 @@
           "id": 5,
           "parent": 0,
           "notused": 62,
-          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-fbcqiflrgbzf_logs_0__deleted_timestamp_id_idx (deleted=?)"
+          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?)"
+        },
+        {
+          "id": 51,
+          "parent": 0,
+          "notused": 0,
+          "detail": "USE TEMP B-TREE FOR LAST TERM OF ORDER BY"
+        }
+      ]
+    },
+    "logs-1/find60": {
+      "query": "SELECT data FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\\')) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 60",
+      "params": [
+        "*quartz*",
+        "%quartz%",
+        "%quartz%",
+        "%quartz%",
+        "%quartz%",
+        false
+      ],
+      "plan": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 62,
+          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?)"
+        },
+        {
+          "id": 51,
+          "parent": 0,
+          "notused": 0,
+          "detail": "USE TEMP B-TREE FOR LAST TERM OF ORDER BY"
+        }
+      ]
+    },
+    "logs-1/find100": {
+      "query": "SELECT data FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\\')) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 100",
+      "params": [
+        "*quartz*",
+        "%quartz%",
+        "%quartz%",
+        "%quartz%",
+        "%quartz%",
+        false
+      ],
+      "plan": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 62,
+          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?)"
         },
         {
           "id": 51,
@@ -1092,7 +1440,7 @@
       ]
     },
     "logs-1/count": {
-      "query": "SELECT COUNT(1) AS count FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND deleted = ?)",
+      "query": "SELECT COUNT(1) AS count FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\\')) AND deleted = ?)",
       "params": [
         "*quartz*",
         "%quartz%",
@@ -1106,23 +1454,23 @@
           "id": 4,
           "parent": 0,
           "notused": 62,
-          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-fbcqiflrgbzf_logs_0__deleted_timestamp_id_idx (deleted=?)"
+          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?)"
         }
       ]
     },
-    "logs-2/find50": {
-      "query": "SELECT data FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND ((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 50",
+    "logs-2/find20": {
+      "query": "SELECT data FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\\')) AND ((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\\')) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 20",
       "params": [
         "*quartz*",
         "%quartz%",
         "%quartz%",
         "%quartz%",
         "%quartz%",
-        "*cobalt*",
-        "%cobalt%",
-        "%cobalt%",
-        "%cobalt%",
-        "%cobalt%",
+        "*co-balt*",
+        "%co-balt%",
+        "%co-balt%",
+        "%co-balt%",
+        "%co-balt%",
         false
       ],
       "plan": [
@@ -1130,7 +1478,7 @@
           "id": 5,
           "parent": 0,
           "notused": 62,
-          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-fbcqiflrgbzf_logs_0__deleted_timestamp_id_idx (deleted=?)"
+          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?)"
         },
         {
           "id": 71,
@@ -1141,18 +1489,18 @@
       ]
     },
     "logs-2/count": {
-      "query": "SELECT COUNT(1) AS count FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND ((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND deleted = ?)",
+      "query": "SELECT COUNT(1) AS count FROM \"logs-0\" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\\')) AND ((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\\')) AND deleted = ?)",
       "params": [
         "*quartz*",
         "%quartz%",
         "%quartz%",
         "%quartz%",
         "%quartz%",
-        "*cobalt*",
-        "%cobalt%",
-        "%cobalt%",
-        "%cobalt%",
-        "%cobalt%",
+        "*co-balt*",
+        "%co-balt%",
+        "%co-balt%",
+        "%co-balt%",
+        "%co-balt%",
         false
       ],
       "plan": [
@@ -1160,110 +1508,142 @@
           "id": 4,
           "parent": 0,
           "notused": 62,
-          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-fbcqiflrgbzf_logs_0__deleted_timestamp_id_idx (deleted=?)"
+          "detail": "SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?)"
         }
       ]
     },
-    "orders-all/find50": {
-      "query": "SELECT data FROM \"orders-0\" WHERE (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 50",
+    "orders/find10": {
+      "query": "SELECT data FROM \"orders-0\" WHERE ((EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 10",
       "params": [
         "_pos_user",
+        "1",
+        "_pos_store",
         "1",
         false
       ],
       "plan": [
         {
-          "id": 7,
+          "id": 9,
           "parent": 0,
           "notused": 62,
-          "detail": "SEARCH orders-0 USING INDEX rxdbspike2145-fallback-hwoyfgmqkglh_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?)"
+          "detail": "SEARCH orders-0 USING INDEX rxdbspike2145-fallback-ftqkwzqzatmg_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?)"
         },
         {
-          "id": 15,
+          "id": 17,
           "parent": 0,
           "notused": 0,
           "detail": "SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:"
         },
         {
-          "id": 47,
+          "id": 29,
+          "parent": 0,
+          "notused": 0,
+          "detail": "SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:"
+        },
+        {
+          "id": 63,
           "parent": 0,
           "notused": 0,
           "detail": "USE TEMP B-TREE FOR LAST TERM OF ORDER BY"
         }
       ]
     },
-    "orders-all/count": {
-      "query": "SELECT COUNT(1) AS count FROM \"orders-0\" WHERE (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?) AND deleted = ?)",
+    "orders/find50": {
+      "query": "SELECT data FROM \"orders-0\" WHERE ((EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 50",
       "params": [
         "_pos_user",
+        "1",
+        "_pos_store",
         "1",
         false
       ],
       "plan": [
         {
-          "id": 6,
+          "id": 9,
           "parent": 0,
           "notused": 62,
-          "detail": "SEARCH orders-0 USING INDEX rxdbspike2145-fallback-hwoyfgmqkglh_orders_0__deleted_status_dateCreatedGmt_uuid_idx (deleted=?)"
+          "detail": "SEARCH orders-0 USING INDEX rxdbspike2145-fallback-ftqkwzqzatmg_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?)"
         },
         {
-          "id": 14,
-          "parent": 0,
-          "notused": 0,
-          "detail": "SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:"
-        }
-      ]
-    },
-    "orders-open/find50": {
-      "query": "SELECT data FROM \"orders-0\" WHERE (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?) AND JSON_EXTRACT(data, '$.status') IN (?,?,?) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 50",
-      "params": [
-        "_pos_user",
-        "1",
-        "pos-open",
-        "pos-partial",
-        "pending",
-        false
-      ],
-      "plan": [
-        {
-          "id": 7,
-          "parent": 0,
-          "notused": 62,
-          "detail": "SEARCH orders-0 USING INDEX rxdbspike2145-fallback-hwoyfgmqkglh_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?)"
-        },
-        {
-          "id": 35,
+          "id": 17,
           "parent": 0,
           "notused": 0,
           "detail": "SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:"
         },
         {
-          "id": 67,
+          "id": 29,
+          "parent": 0,
+          "notused": 0,
+          "detail": "SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:"
+        },
+        {
+          "id": 63,
           "parent": 0,
           "notused": 0,
           "detail": "USE TEMP B-TREE FOR LAST TERM OF ORDER BY"
         }
       ]
     },
-    "orders-open/count": {
-      "query": "SELECT COUNT(1) AS count FROM \"orders-0\" WHERE (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?) AND JSON_EXTRACT(data, '$.status') IN (?,?,?) AND deleted = ?)",
+    "orders/find100": {
+      "query": "SELECT data FROM \"orders-0\" WHERE ((EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 100",
       "params": [
         "_pos_user",
         "1",
-        "pos-open",
-        "pos-partial",
-        "pending",
+        "_pos_store",
+        "1",
         false
       ],
       "plan": [
         {
-          "id": 6,
+          "id": 9,
           "parent": 0,
           "notused": 62,
-          "detail": "SEARCH orders-0 USING INDEX rxdbspike2145-fallback-hwoyfgmqkglh_orders_0__deleted_status_dateCreatedGmt_uuid_idx (deleted=? AND <expr>=?)"
+          "detail": "SEARCH orders-0 USING INDEX rxdbspike2145-fallback-ftqkwzqzatmg_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?)"
         },
         {
-          "id": 33,
+          "id": 17,
+          "parent": 0,
+          "notused": 0,
+          "detail": "SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:"
+        },
+        {
+          "id": 29,
+          "parent": 0,
+          "notused": 0,
+          "detail": "SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:"
+        },
+        {
+          "id": 63,
+          "parent": 0,
+          "notused": 0,
+          "detail": "USE TEMP B-TREE FOR LAST TERM OF ORDER BY"
+        }
+      ]
+    },
+    "orders/count": {
+      "query": "SELECT COUNT(1) AS count FROM \"orders-0\" WHERE ((EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND deleted = ?)",
+      "params": [
+        "_pos_user",
+        "1",
+        "_pos_store",
+        "1",
+        false
+      ],
+      "plan": [
+        {
+          "id": 8,
+          "parent": 0,
+          "notused": 62,
+          "detail": "SEARCH orders-0 USING INDEX rxdbspike2145-fallback-ftqkwzqzatmg_orders_0__deleted_status_dateCreatedGmt_uuid_idx (deleted=?)"
+        },
+        {
+          "id": 16,
+          "parent": 0,
+          "notused": 0,
+          "detail": "SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:"
+        },
+        {
+          "id": 28,
           "parent": 0,
           "notused": 0,
           "detail": "SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:"
@@ -1438,13 +1818,13 @@
   },
   "terms": [
     "quartz",
-    "cobalt"
+    "co-balt"
   ],
-  "open": [
-    "pos-open",
-    "pos-partial",
-    "pending"
-  ],
+  "totals": {
+    "logs-1": 920,
+    "logs-2": 460,
+    "orders": 2500
+  },
   "environment": {
     "chrome": "154.0.8037.44",
     "node": "v24.14.0",
@@ -1456,7 +1836,7 @@
       "@sqlite.org/sqlite-wasm": "3.53.4-build1",
       "esbuild": "0.28.2"
     },
-    "measuredAt": "2026-09-17T23:58:39.265Z",
+    "measuredAt": "2026-09-18T00:43:03.794Z",
     "vfs": "opfs-sahpool",
     "journal": "WAL"
   }

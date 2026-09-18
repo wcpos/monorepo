@@ -6,106 +6,128 @@ premium `getRxStorageSQLite` in a dedicated worker, driven through premium's wor
 headless page. 46,000 logs rows of 500 B and 20,000 engine-shaped orders of ~850 B. Ticket:
 [#2145](https://github.com/wcpos/monorepo/issues/2145).
 
+The queries are the ones the screens issue: the Logs grid's `buildScanSearchSelector` (five `$regex`
+arms per term, terms regex-escaped) sorted by timestamp, and the Orders screen's default scope —
+cashier **and** store, one `$elemMatch` each, joined by `$and` (`orders/index.tsx` always sets both;
+`wooMetaCarrier.identityFilter`) — sorted by date. `find` windows are the grids' real cumulative
+limits (Logs starts at 20 rows, Orders at 10; scrolling adds a page each time), and `count` is the
+engine's `count({ selector })`, which RxQuery normalizes to primary-key order.
+
 ## Verdict
 
-**As shipped, both paths are unusable on this stack, the documented `queryModifier` fixes the grid
-page completely and the count only partly, and a small premium patch reaches the floor.**
+**Both paths are unusable on premium SQLite as shipped, and the documented `queryModifier` alone
+fixes neither screen: it brings every grid window to milliseconds but leaves the `count()` both
+screens wait on at 7.5 s (logs) and 15.5 s (orders). A ~20-line premium patch that runs a fully
+translated query and count as one statement brings a Logs keystroke to 0.38 s and an Orders pill
+change to 0.72 s — and those are still full scans, which only indexed columns can remove.**
 
-| Query | As shipped (fallback) | With `queryModifier` | One statement (floor) |
+Screen-visible latency — both screens render only when `find` **and** `count` have answered, and one
+worker serves both (`use-local-query.ts` `combineLatest([documents$, total$])`; `execute-query.ts`
+`combineLatest([query.$, count.$])`):
+
+| Screen action | As shipped (fallback) | With `queryModifier` | Patched (one statement) |
 |---|---:|---:|---:|
-| Logs search, grid page of 50 (one term) | **16.5 s** | 5.9 ms | 5.6 ms |
-| Logs search, grid page of 50 (two terms) | **33.6 s** | 11.1 ms | 11.5 ms |
-| Logs search, count (one term, 920 hits) | **310 s** | 4.0 s | 386 ms |
-| Orders cashier pill, grid page of 50 | **929 ms** | 1.3 ms | 1.3 ms |
-| Orders cashier pill + open statuses, grid page | **1.65 s** | 1.6 ms | 1.4 ms |
-| Orders cashier pill, count (5,000 hits) | **94.7 s** | 13.5 s | 706 ms |
-| Orders cashier pill + open statuses, count (3,000 hits) | **94.2 s** | 7.5 s | 453 ms |
+| Logs: keystroke, first window of 20 (one term) | **115 s** | 7.5 s | 0.38 s |
+| Logs: keystroke, two terms | **121 s** | 4.2 s | 0.38 s |
+| Logs: scroll to 100 rows | **141 s** | 7.5 s | 0.39 s |
+| Orders: pill change, first window of 10 | **29.7 s** | 15.5 s | 0.72 s |
+| Orders: scroll to 100 rows | **32.9 s** | 15.5 s | 0.72 s |
 
-Medians, timed inside the worker around premium's `query()`/`count()`. The page-side round trip
-through premium's worker RPC adds under 2 ms to any cell (1.4 ms on the 16.5 s logs page, 0.3 ms on
-the 1.3 ms orders page). Full tables, plans and the SQL are in the generated section below.
+The two halves (median ms in the worker, five runs, three for the fallback counts):
+
+| Query | Operation | Fallback | Modifier | One statement |
+|---|---|---:|---:|---:|
+| Logs, one term | find 20 / 60 / 100 | 6,560 / 19,682 / 32,918 | 5.7 / 16.5 / 16.3 | 2.4 / 6.6 / 10.8 |
+| Logs, one term | count (920 hits) | 108,144 | 7,494 | 378 |
+| Logs, two terms (`co-balt`) | find 20 | 13,306 | 11.2 | 4.5 |
+| Logs, two terms | count (460 hits) | 107,970 | 4,142 | 379 |
+| Orders, cashier + store | find 10 / 50 / 100 | 459 / 1,847 / 3,675 | 2.8 / 2.6 / 7.3 | 0.6 / 2.6 / 4.9 |
+| Orders, cashier + store | count (2,500 hits) | 29,274 | 15,541 | 715 |
+
+Page-side round trips through premium's RPC add under 2 ms to any cell. Full tables, `EXPLAIN`
+output and the SQL are in the generated section below.
 
 ## What the mechanism costs, not just the time
 
-- **A fallback page costs ~330 ms on logs and ~230 ms on orders**, whatever the page. The
-  WHERE-less statement premium issues is `SELECT data FROM t INDEXED BY idx ORDER BY
-  JSON_EXTRACT(data,'$.timestamp') DESC, id ASC LIMIT 50 OFFSET n`; with the leading `deleted`
-  column unconstrained the index cannot supply the order, so every page sorts the whole table in a
-  temp b-tree (§18 of the research measured that same shape natively at 4 ms). **wasm + the
-  opfs-sahpool VFS makes that page ~80x dearer than native.** The multiplier the ticket asked for is
-  therefore two numbers: ~80x per page over native, and pages × 330 ms over the pushed query.
-- **A grid page needs about `1 / hit-rate` fallback pages.** Each fetched page of 50 rows yields
-  `50 × h` matches, so 50 results take `1 / h` pages: logs at 1 hit in 50 rows needs 50 pages (2,500
-  rows parsed in JS); two terms need 100. Orders at 1 hit in 4 needs 4 pages, 7 with the status
-  filter. Every page is a full sort of the table, so the grid page costs `(1 / h) × table-sort`.
+- **A fallback `find` page costs ~330 ms on logs and ~230 ms on orders**, whatever the offset. The
+  WHERE-less statement premium issues keeps `INDEXED BY idx` and the grid's `ORDER BY
+  JSON_EXTRACT(data,'$.timestamp') DESC, id ASC LIMIT 50 OFFSET n`; with the index's leading
+  `deleted` column unconstrained it cannot supply the order, so every page sorts the whole table in a
+  temp b-tree. §18 of the research measured that same statement natively at 4 ms: **wasm + the
+  opfs-sahpool VFS makes it ~80x dearer.**
+- **A fallback `count` page costs ~117 ms on logs and ~73 ms on orders.** RxQuery normalizes a count
+  to primary-key order, so its pages are `ORDER BY id LIMIT 50 OFFSET n` on the primary key — no
+  sort, but SQLite still walks `n` rows to honour the offset, so the 921 pages of a 46k-row count
+  cost 108 s and the 401 pages of a 20k-row count 29 s. (An earlier run of this harness imposed the
+  grid's sort on the counts and read 310 s / 95 s; superseded.)
+- **A grid window needs about `1 / hit-rate` fallback pages.** Each fetched page of 50 rows yields
+  `50 × h` matches: logs at 1 hit in 50 needs a page per result (20 pages for the first window,
+  100 for a 100-row window, 1,000–5,000 rows parsed in JS); two terms at 1 in 100 need two pages per
+  result. Orders at 1 hit in 8 need 2, 8 and 16 pages for windows of 10, 50 and 100.
 - **A count pages the entire table**: 921 pages and 46,000 `JSON.parse`s on logs, 401 and 20,000 on
-  orders, regardless of the term or the hit rate (the one- and two-term counts are within 1%).
-- **The modifier makes the first page the last page for a grid query**: the injected WHERE returns
-  50 matches in one statement and premium's loop stops (`r.length >= skip+limit`). Rows to JS drop
-  from 2,500 to 50. That is why the grid cells reach parity with the floor.
-- **The modifier cannot rescue a count.** premium still pages with `OFFSET`, so a count of `m`
-  matches issues `m/50 + 1` statements, each a filtered scan that SQLite must walk far enough to skip
-  the offset: 20 statements for 920 logs hits (4.0 s), 101 for 5,000 orders hits (13.5 s). Cost is
-  roughly `pages × half a table scan`, i.e. it grows with matches × table size — the worst shape for
-  the default orders view, where the cashier pill matches most rows.
-- **Even the floor is a scan.** The direct count is 386 ms on logs and 706 ms on orders because
-  neither predicate has an index to use: `LIKE`/`GLOB` on JSON text, and `json_each` over every row's
-  `meta_data` (the plan says `SCAN json_each EXISTS VIRTUAL TABLE`). The declared RxDB index is used
-  only for the `deleted = ?` prefix and the sort.
+  orders, regardless of the term or the hit rate (one- and two-term counts agree within 0.2%).
+- **With the modifier a grid window is one statement up to 50 rows and two up to 100.** The injected
+  WHERE makes each 50-row page return only matches, and premium's loop stops once it holds
+  `skip + limit` rows: 1.5–2.5x the floor, all in milliseconds, at every window the grids use.
+- **With the modifier a count is `matches / 50 + 1` full filtered scans.** premium still pages with
+  `OFFSET` and `count()` still routes through `query()`, so each statement re-walks the table far
+  enough to skip the offset: 20 statements × ~375 ms for 920 logs hits (7.5 s, 20x the floor), 51 ×
+  ~305 ms for 2,500 orders hits (15.5 s, 22x). It grows with matches × table size, and the Orders
+  default view is exactly the query whose matches grow with the store's history.
+- **Even the one-statement floor is a full scan.** 378 ms on logs and 715 ms on orders because neither
+  predicate can use an index: `GLOB`/`LIKE` over JSON text, and `json_each` over every row's
+  `meta_data` (plan: `SCAN json_each EXISTS VIRTUAL TABLE`). The declared RxDB index serves only the
+  `deleted = ?` prefix and the sort.
 
 ## Answers
 
-**1. The multiplier over the pushed query, on the real VFS.** Grid page: **2,900x** for logs search
-(16.5 s vs 5.6 ms), **700–1,200x** for the orders pill (929 ms / 1.65 s vs 1.3 ms). Count: **800x**
-for logs (310 s vs 386 ms), **130–210x** for orders (94 s vs 0.7 / 0.45 s). §18's native figure of
-~200x was indeed a floor: the per-page statement is ~80x dearer on wasm + opfs-sahpool than on
-native sqlite3, and the grid page pays it 50 times over on logs. Either production path as shipped
-is a multi-second stall for the grid and a multi-minute stall for a count, in the storage worker,
-per keystroke or pill change.
+**1. The multiplier over the pushed query, on the real VFS.** Grid windows: **2,700–3,050x** for logs
+search (6.6 s vs 2.4 ms at 20 rows; 32.9 s vs 10.8 ms at 100), **650–760x** for the orders scope
+(459 ms vs 0.6 ms at 10 rows; 3.7 s vs 4.9 ms at 100). Counts: **285x** for logs (108 s vs 378 ms),
+**41x** for orders (29.3 s vs 715 ms). Per statement, the sorted fallback page is ~80x its native
+cost (§18's 4 ms) and the primary-key page ~30x. What the user sees is the sum of both halves: **115 s
+for a Logs keystroke and 30 s for an Orders pill change**, in the storage worker, as shipped.
 
-**2. `queryModifier` is enough for the grid page and not for the count.** With the predicate
-rewritten to SQL (`GLOB` for the fold-space arm, `LIKE` for the four case-insensitive raw arms;
-`EXISTS (SELECT 1 FROM json_each(…))` for `$elemMatch`) every `find` with a limit reaches the
-single-statement floor: 5.9 ms, 11.1 ms, 1.3 ms, 1.6 ms. Counts stay **6.6–19x** off the floor
-because the fallback loop itself survives the modifier: 4.0 s and 2.5 s for logs, 13.5 s and 7.5 s
-for the orders default view. The modifier is a real fix for typing in the Logs screen and for paging
-the orders grid; it is not a fix for `count()`, which the orders grid calls on every pill change
-(the engine already flags this path `allowSlowCount`).
+**2. `queryModifier` alone is not enough for either screen.** With the predicate rewritten to SQL
+(`GLOB` for the fold-space arm; `LIKE … ESCAPE '\'` for the four case-insensitive raw arms; `EXISTS
+(SELECT 1 FROM json_each(…))` per `$elemMatch`; the regex-escaped term unescaped first — verified
+against the shipped fallback on the punctuation term `co-balt`), every grid window lands within
+1.5–2.5x of the floor, in milliseconds. But the count survives the loop and the screens wait for it:
+**7.5 s per Logs keystroke, 15.5 s per Orders pill change**. That is an order of magnitude better
+than shipped and still a stall on every interaction.
 
-**3. What a full fix buys and costs.** A patch that lets the modifier declare "fully translated" and
-then (a) runs `query()` as one statement without the paging loop and (b) runs `count()` as
-`SELECT COUNT(1) … WHERE <modified>` collapses the counts from 4.0 s → 386 ms (logs) and
-13.5 s → 706 ms (orders): **10–19x** over the modifier alone, and every `JSON.parse` of a
-non-returned row disappears. It is a ~20-line change in `sqlite-storage-instance.js` (`query()` and
-`count()` both branch on `nonImplementedOperator`; the branch needs a second condition), in a package
-this repo already patches. Two things the patch does not buy, and which belong to the engine
-migration (#2150) and the topology grilling (#2146): (i) the counts are still full scans at
-0.4–0.7 s per 20–46k rows because the predicates are unindexable as written — the durable fix for
-the orders pill is to **promote `_pos_user`/`_pos_store` to top-level engine columns at write time
-and index them**, which turns the default orders view into an index seek and removes `$elemMatch`
-from the hot path entirely; (ii) the logs rewrite needs an `ESCAPE` clause for `%`/`_` (LIKE) and
-`*`/`?`/`[` (GLOB) in user input, and `LIKE`'s case folding is ASCII-only — acceptable for the raw
-arms, whose production comment already says "ASCII-faithful, best effort", exact for the fold arm.
+**3. A full fix.** A ~20-line patch to premium's `sqlite-storage-instance.js` — let the modifier
+declare the selector fully translated, then (a) run `query()` as one statement without the paging
+loop and (b) run `count()` as `SELECT COUNT(1) … WHERE <modified>` — collapses the screen-visible
+figures to **0.38 s (logs) and 0.72 s (orders)**: 20x over the modifier alone, 300x / 40x over
+shipped, and every `JSON.parse` of a non-returned row disappears. This repo already patches premium.
+Two things the patch does not buy, and which belong to the engine migration (#2150) and the topology
+grilling (#2146): (i) the counts remain full scans at 0.4–0.7 s per 20–46k rows because the predicates
+are unindexable as written — the durable fix for the Orders scope is to **promote `_pos_user` and
+`_pos_store` to top-level engine columns at write time and index them**, which makes the default view
+an index seek and removes `$elemMatch` from the hot path; (ii) `LIKE`'s case folding is ASCII-only,
+which matches the raw arms' documented "ASCII-faithful, best effort" contract, and the fold arm is
+exact under `GLOB`.
 
 ## Not measured here (deliberately)
 
 Native sqlite3 or Node comparisons (§18 has the native shape); Firefox/Safari; a patched premium
 build (the `direct` mode is the same statement through the same adapter and is the proxy the ticket
-asked for); cold-cache latency; Unicode or wildcard equivalence of the rewrite; the current OPFS
-engine's cost for the same queries (that is the benchmark ticket, #2143).
+asked for); cold-cache latency; Unicode equivalence of the rewrite; the current OPFS engine's cost
+for the same queries (that is the benchmark ticket, #2143).
 
 ## Method and limits
-- 46,000 logs, padded toward 500 JSON bytes; deterministic pseudo-random background words. `quartz` appears in fold every 50 rows, `cobalt` co-occurs every 100: 920/460 matches. Fixed ASCII terms need no regex escaping. Five search arms match the production selector; raw fields use case-insensitive LIKE, fold uses case-exact GLOB. This is not proof of Unicode or wildcard rewrite equivalence.
-- 20,000 engine-shaped orders; 6–10 metadata entries, four cashiers, `_pos_store` always present. Cashier `1` matches 5,000; combining with `pos-open`, `pos-partial`, `pending` matches 3,000. Five evenly distributed statuses are independent of cashier. Both cashier-only and open-set queries are reported; open set copied from `use-open-orders-resource.ts`.
-- Schemas declare timestamp or date/status-date indexes; RxDB adds deleted/primary-key fields. Normalized queries include `_deleted=false` and a primary-key sort tiebreaker. Raw schemas and direct EXPLAIN plans are retained in JSON. No index is forced; the report names observed index use, including temporary sorts.
-- Runs are serial: fallback and direct share one worker/dataset; modifier gets an identical seed in its own worker/pool. Fresh database names, 1,000-row writes, one warm-up then five samples per cell (three for a fallback count, which pages the whole table at ~5 min a sample); instances close and workers terminate. No app observers, retention deletes, or background sync. Warm-cache measurements, not cold-start/production latency.
-- Worker time wraps storage query/count (nested query counted once); `all() ms` sums adapter call time. Calls and rows-to-JS count every returned SQLite row, including the count scalar and final empty fallback page. They do not count SQLite's internal row visits. Seeding, EXPLAIN, validation, and metrics retrieval are untimed.
-- Page timing covers premium worker RPC for fallback/modifier; direct uses a separate type-tagged message on the same worker and returns equivalent documents/count. Direct worker time includes one statement and document JSON parsing, no paging/matcher; all() time isolates the SQL/row-transfer floor. RPC envelopes differ: compare worker ratios first. No genuinely pushed Mango control or patched premium engine was run; direct is the requested proxy, not proof of patch performance.
-- Each sample checks exact ordered IDs/count across modes and known cardinality. Current fixtures put matches in fold, not raw-only fields. Broader semantic coverage, mode-order bias, variance beyond five samples, and failure-retry machinery are outside this measurement spike.
-
+- 46,000 logs, padded toward 500 JSON bytes; deterministic pseudo-random background words. `quartz` appears in `context.fold` every 50 rows and `co-balt` with it every 100: 920 / 460 matches. Terms go through the same `escapeRegex` as `buildScanSearchSelector` (so the second term reaches the modifier as `co\-balt`), five arms per term as in production; raw fields use case-insensitive `LIKE … ESCAPE '\'`, the fold arm case-exact `GLOB` with `[…]`-escaped wildcards. Matches live in the fold field, as they do for every row written since it existed; the raw-field arms are exercised but never the sole hit. This is not proof of Unicode equivalence.
+- 20,000 engine-shaped orders with 6–10 `meta_data` entries; four cashiers, two stores, `_pos_user` and `_pos_store` on every row. The selector is the Orders screen's default scope — cashier 1 **and** store 1, one `$elemMatch` each under `$and` — which matches 2,500 rows (1 in 8). `status` is seeded (five values) but not queried: the open-orders resource queries status alone, which SQL translates natively, and filters cashier/store in JS, so it never enters the fallback.
+- Schemas declare the timestamp or date/status-date indexes; RxDB adds `deleted`/primary-key fields. `find` queries carry the grid's sort (`timestamp`/`dateCreatedGmt` desc) and its cumulative limit (20/60/100 logs, 10/50/100 orders); `count` queries are normalized as `RxQuery` does for `op === 'count'` (no sort → primary-key order). Every query includes `_deleted = false`. Raw schemas and the direct `EXPLAIN` plans are kept in `results.json`.
+- Runs are serial: fallback and direct share one worker/dataset; modifier gets an identical seed in its own worker and pool. Fresh database names, 1,000-row writes, one warm-up then five samples per cell (three for a fallback count, ~1.8 min a sample on logs); instances close and workers terminate. No app observers, retention deletes or background sync. Warm-cache measurements, not cold-start latency.
+- Worker time wraps the storage instance's `query()`/`count()` (a nested query is counted once); `all() ms` sums adapter call time. Calls and rows-to-JS count every row SQLite returned, including the count scalar and the final empty fallback page; they do not count SQLite's internal row visits. Seeding, `EXPLAIN`, validation and metrics retrieval are untimed.
+- Page timing covers premium's worker RPC for fallback/modifier; direct uses a separate type-tagged message on the same worker and returns equivalent documents/count. Direct worker time is one statement plus document `JSON.parse`, no paging, no matcher. No patched premium build was run; direct is the proxy the ticket asked for, not a measurement of a patch.
+- Every sample checks exact ordered ids / count across all three modes and the expected cardinality, so the modifier's rewrite (including the unescaping) is verified against the shipped matcher on every cell. The screen-visible table sums the median find and median count of the same mode; the two requests are issued together and serialize on the one worker.
+- An earlier run of this harness (superseded, kept in the PR history) used a cashier-only orders selector, an open-status variant that is not a fallback path, a fixed limit of 50, and the grid sort on counts; it read 310 s / 95 s for the counts. Those figures are withdrawn.
 
 <!-- generated:start -->
-Environment: `{"chrome":"154.0.8037.44","node":"v24.14.0","os":"darwin 25.6.0 arm64","cpu":"Apple M4 Pro","versions":{"rxdb":"17.4.0","rxdb-premium":"17.4.0","@sqlite.org/sqlite-wasm":"3.53.4-build1","esbuild":"0.28.2"},"measuredAt":"2026-09-17T23:58:39.265Z","vfs":"opfs-sahpool","journal":"WAL"}`
+Environment: `{"chrome":"154.0.8037.44","node":"v24.14.0","os":"darwin 25.6.0 arm64","cpu":"Apple M4 Pro","versions":{"rxdb":"17.4.0","rxdb-premium":"17.4.0","@sqlite.org/sqlite-wasm":"3.53.4-build1","esbuild":"0.28.2"},"measuredAt":"2026-09-18T00:43:03.794Z","vfs":"opfs-sahpool","journal":"WAL"}`
 
 Rows: {"logs":46000,"orders":20000}; mean JSON bytes: {"logs":500,"orders":851.9762}.
 
@@ -115,103 +137,130 @@ All timing/count cells are median / max of five runs after one discarded warm-up
 
 | Operation | Mode | Worker ms | all() ms | Page ms | all() calls | Rows to JS | Matches | Worker / direct | Page / direct |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| find50 | fallback | 16501.80 / 16535.40 | 16497.30 / 16530.10 | 16503.20 / 16535.60 | 50.00 / 50.00 | 2500.00 / 2500.00 | 50.00 / 50.00 | 2946.75× | 2895.30× |
-| find50 | direct | 5.60 / 5.60 | 5.60 / 5.60 | 5.70 / 5.90 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 1.00× | 1.00× |
-| count | fallback | 309803.90 / 310563.90 | 309717.80 / 310489.70 | 309804.40 / 310564.10 | 921.00 / 921.00 | 46000.00 / 46000.00 | 920.00 / 920.00 | 803.02× | 802.60× |
-| count | direct | 385.80 / 391.20 | 385.80 / 391.10 | 386.00 / 391.20 | 1.00 / 1.00 | 1.00 / 1.00 | 920.00 / 920.00 | 1.00× | 1.00× |
-| find50 | modifier | 5.90 / 6.10 | 5.70 / 5.80 | 5.90 / 6.10 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 1.05× | 1.04× |
-| count | modifier | 4039.90 / 4211.50 | 4038.30 / 4210.00 | 4040.60 / 4211.60 | 20.00 / 20.00 | 920.00 / 920.00 | 920.00 / 920.00 | 10.47× | 10.47× |
+| find20 | fallback | 6560.00 / 6587.80 | 6557.40 / 6585.80 | 6560.00 / 6587.90 | 20.00 / 20.00 | 1000.00 / 1000.00 | 20.00 / 20.00 | 2733.33× | 2733.33× |
+| find20 | direct | 2.40 / 2.60 | 2.30 / 2.60 | 2.40 / 2.60 | 1.00 / 1.00 | 20.00 / 20.00 | 20.00 / 20.00 | 1.00× | 1.00× |
+| find60 | fallback | 19682.10 / 19740.80 | 19677.10 / 19734.60 | 19683.50 / 19742.30 | 60.00 / 60.00 | 3000.00 / 3000.00 | 60.00 / 60.00 | 2982.14× | 2894.63× |
+| find60 | direct | 6.60 / 6.70 | 6.60 / 6.70 | 6.80 / 6.80 | 1.00 / 1.00 | 60.00 / 60.00 | 60.00 / 60.00 | 1.00× | 1.00× |
+| find100 | fallback | 32917.60 / 33207.20 | 32909.60 / 33198.60 | 32917.90 / 33207.50 | 100.00 / 100.00 | 5000.00 / 5000.00 | 100.00 / 100.00 | 3047.93× | 3019.99× |
+| find100 | direct | 10.80 / 10.90 | 10.70 / 10.80 | 10.90 / 11.00 | 1.00 / 1.00 | 100.00 / 100.00 | 100.00 / 100.00 | 1.00× | 1.00× |
+| count | fallback | 108143.70 / 108677.00 | 108070.30 / 108601.90 | 108143.80 / 108677.30 | 921.00 / 921.00 | 46000.00 / 46000.00 | 920.00 / 920.00 | 285.94× | 285.79× |
+| count | direct | 378.20 / 383.50 | 378.20 / 383.50 | 378.40 / 383.50 | 1.00 / 1.00 | 1.00 / 1.00 | 920.00 / 920.00 | 1.00× | 1.00× |
+| find20 | modifier | 5.70 / 6.10 | 5.50 / 5.80 | 5.80 / 6.10 | 1.00 / 1.00 | 50.00 / 50.00 | 20.00 / 20.00 | 2.38× | 2.42× |
+| find60 | modifier | 16.50 / 17.00 | 16.30 / 16.60 | 16.70 / 17.00 | 2.00 / 2.00 | 100.00 / 100.00 | 60.00 / 60.00 | 2.50× | 2.46× |
+| find100 | modifier | 16.30 / 16.40 | 16.10 / 16.30 | 16.50 / 16.50 | 2.00 / 2.00 | 100.00 / 100.00 | 100.00 / 100.00 | 1.51× | 1.51× |
+| count | modifier | 7494.40 / 7751.90 | 7492.90 / 7750.40 | 7495.90 / 7752.70 | 20.00 / 20.00 | 920.00 / 920.00 | 920.00 / 920.00 | 19.82× | 19.81× |
 
 ### logs-2
 
 | Operation | Mode | Worker ms | all() ms | Page ms | all() calls | Rows to JS | Matches | Worker / direct | Page / direct |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| find50 | fallback | 33626.60 / 33879.80 | 33617.60 / 33870.90 | 33627.90 / 33880.20 | 100.00 / 100.00 | 5000.00 / 5000.00 | 50.00 / 50.00 | 2924.05× | 2874.18× |
-| find50 | direct | 11.50 / 11.70 | 11.40 / 11.70 | 11.70 / 11.80 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 1.00× | 1.00× |
-| count | fallback | 308254.30 / 309465.00 | 308179.60 / 309386.10 | 308254.80 / 309465.50 | 921.00 / 921.00 | 46000.00 / 46000.00 | 460.00 / 460.00 | 807.16× | 807.16× |
-| count | direct | 381.90 / 386.40 | 381.90 / 386.40 | 381.90 / 386.60 | 1.00 / 1.00 | 1.00 / 1.00 | 460.00 / 460.00 | 1.00× | 1.00× |
-| find50 | modifier | 11.10 / 11.20 | 11.00 / 11.10 | 11.30 / 11.30 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 0.97× | 0.97× |
-| count | modifier | 2537.20 / 2689.60 | 2535.80 / 2688.50 | 2537.90 / 2690.30 | 11.00 / 11.00 | 460.00 / 460.00 | 460.00 / 460.00 | 6.64× | 6.65× |
+| find20 | fallback | 13306.10 / 13412.70 | 13302.00 / 13408.50 | 13306.30 / 13414.00 | 40.00 / 40.00 | 2000.00 / 2000.00 | 20.00 / 20.00 | 2956.91× | 2892.67× |
+| find20 | direct | 4.50 / 4.80 | 4.50 / 4.70 | 4.60 / 4.80 | 1.00 / 1.00 | 20.00 / 20.00 | 20.00 / 20.00 | 1.00× | 1.00× |
+| count | fallback | 107969.60 / 108078.80 | 107903.80 / 108010.70 | 107971.00 / 108078.90 | 921.00 / 921.00 | 46000.00 / 46000.00 | 460.00 / 460.00 | 284.88× | 284.81× |
+| count | direct | 379.00 / 382.80 | 379.00 / 382.80 | 379.10 / 382.90 | 1.00 / 1.00 | 1.00 / 1.00 | 460.00 / 460.00 | 1.00× | 1.00× |
+| find20 | modifier | 11.20 / 11.50 | 11.10 / 11.40 | 11.30 / 11.60 | 1.00 / 1.00 | 50.00 / 50.00 | 20.00 / 20.00 | 2.49× | 2.46× |
+| count | modifier | 4142.10 / 4336.20 | 4141.40 / 4335.20 | 4142.20 / 4336.40 | 11.00 / 11.00 | 460.00 / 460.00 | 460.00 / 460.00 | 10.93× | 10.93× |
 
-### orders-all
-
-| Operation | Mode | Worker ms | all() ms | Page ms | all() calls | Rows to JS | Matches | Worker / direct | Page / direct |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| find50 | fallback | 929.20 / 934.90 | 928.80 / 934.50 | 929.70 / 935.20 | 4.00 / 4.00 | 200.00 / 200.00 | 50.00 / 50.00 | 714.77× | 581.06× |
-| find50 | direct | 1.30 / 1.40 | 1.30 / 1.30 | 1.60 / 1.60 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 1.00× | 1.00× |
-| count | fallback | 94662.50 / 95550.30 | 94624.80 / 95513.70 | 94662.90 / 95550.80 | 401.00 / 401.00 | 20000.00 / 20000.00 | 5000.00 / 5000.00 | 134.12× | 134.10× |
-| count | direct | 705.80 / 718.30 | 705.80 / 718.30 | 705.90 / 718.30 | 1.00 / 1.00 | 1.00 / 1.00 | 5000.00 / 5000.00 | 1.00× | 1.00× |
-| find50 | modifier | 1.30 / 1.40 | 1.20 / 1.20 | 1.50 / 1.60 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 1.00× | 0.94× |
-| count | modifier | 13506.70 / 13962.40 | 13497.60 / 13953.90 | 13508.40 / 13962.90 | 101.00 / 101.00 | 5000.00 / 5000.00 | 5000.00 / 5000.00 | 19.14× | 19.14× |
-
-### orders-open
+### orders
 
 | Operation | Mode | Worker ms | all() ms | Page ms | all() calls | Rows to JS | Matches | Worker / direct | Page / direct |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| find50 | fallback | 1650.00 / 1690.90 | 1649.10 / 1690.10 | 1650.40 / 1691.30 | 7.00 / 7.00 | 350.00 / 350.00 | 50.00 / 50.00 | 1178.57× | 970.82× |
-| find50 | direct | 1.40 / 1.50 | 1.40 / 1.40 | 1.70 / 1.70 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 1.00× | 1.00× |
-| count | fallback | 94162.50 / 94176.80 | 94120.60 / 94134.10 | 94163.70 / 94177.20 | 401.00 / 401.00 | 20000.00 / 20000.00 | 3000.00 / 3000.00 | 207.82× | 207.78× |
-| count | direct | 453.10 / 457.50 | 453.10 / 457.50 | 453.20 / 457.70 | 1.00 / 1.00 | 1.00 / 1.00 | 3000.00 / 3000.00 | 1.00× | 1.00× |
-| find50 | modifier | 1.60 / 1.70 | 1.50 / 1.60 | 1.90 / 1.90 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 1.14× | 1.12× |
-| count | modifier | 7474.20 / 7532.40 | 7468.90 / 7526.10 | 7475.30 / 7533.60 | 61.00 / 61.00 | 3000.00 / 3000.00 | 3000.00 / 3000.00 | 16.50× | 16.49× |
+| find10 | fallback | 458.60 / 464.50 | 458.10 / 464.20 | 459.10 / 464.70 | 2.00 / 2.00 | 100.00 / 100.00 | 10.00 / 10.00 | 764.33× | 655.86× |
+| find10 | direct | 0.60 / 0.70 | 0.60 / 0.70 | 0.70 / 0.80 | 1.00 / 1.00 | 10.00 / 10.00 | 10.00 / 10.00 | 1.00× | 1.00× |
+| find50 | fallback | 1846.50 / 2079.20 | 1845.40 / 2077.90 | 1846.80 / 2079.50 | 8.00 / 8.00 | 400.00 / 400.00 | 50.00 / 50.00 | 710.19× | 659.57× |
+| find50 | direct | 2.60 / 2.80 | 2.60 / 2.70 | 2.80 / 2.90 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 1.00× | 1.00× |
+| find100 | fallback | 3674.50 / 3686.00 | 3673.30 / 3684.20 | 3675.00 / 3687.10 | 16.00 / 16.00 | 800.00 / 800.00 | 100.00 / 100.00 | 749.90× | 693.40× |
+| find100 | direct | 4.90 / 5.00 | 4.80 / 4.90 | 5.30 / 5.40 | 1.00 / 1.00 | 100.00 / 100.00 | 100.00 / 100.00 | 1.00× | 1.00× |
+| count | fallback | 29273.60 / 29285.40 | 29241.40 / 29254.80 | 29274.70 / 29285.80 | 401.00 / 401.00 | 20000.00 / 20000.00 | 2500.00 / 2500.00 | 40.95× | 40.90× |
+| count | direct | 714.90 / 724.60 | 714.90 / 724.60 | 715.70 / 724.70 | 1.00 / 1.00 | 1.00 / 1.00 | 2500.00 / 2500.00 | 1.00× | 1.00× |
+| find10 | modifier | 2.80 / 3.00 | 2.60 / 2.70 | 2.90 / 3.00 | 1.00 / 1.00 | 50.00 / 50.00 | 10.00 / 10.00 | 4.67× | 4.14× |
+| find50 | modifier | 2.60 / 2.70 | 2.40 / 2.60 | 2.80 / 2.80 | 1.00 / 1.00 | 50.00 / 50.00 | 50.00 / 50.00 | 1.00× | 1.00× |
+| find100 | modifier | 7.30 / 7.30 | 7.10 / 7.20 | 7.60 / 7.70 | 2.00 / 2.00 | 100.00 / 100.00 | 100.00 / 100.00 | 1.49× | 1.43× |
+| count | modifier | 15540.80 / 15651.00 | 15536.40 / 15645.90 | 15541.00 / 15652.30 | 51.00 / 51.00 | 2500.00 / 2500.00 | 2500.00 / 2500.00 | 21.74× | 21.71× |
+
+### Screen-visible latency: find + count on one worker (median ms)
+
+| Query | Window | Fallback | Modifier | One statement |
+|---|---|---:|---:|---:|
+| logs-1 | find20 | 114703.7 | 7500.1 | 380.6 |
+| logs-1 | find60 | 127825.8 | 7510.9 | 384.8 |
+| logs-1 | find100 | 141061.3 | 7510.7 | 389.0 |
+| logs-2 | find20 | 121275.7 | 4153.3 | 383.5 |
+| orders | find10 | 29732.2 | 15543.6 | 715.5 |
+| orders | find50 | 31120.1 | 15543.4 | 717.5 |
+| orders | find100 | 32948.1 | 15548.1 | 719.8 |
 
 ### Direct query plans (observed)
 
-- **logs-1/find50** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-fbcqiflrgbzf_logs_0__deleted_timestamp_id_idx (deleted=?); USE TEMP B-TREE FOR LAST TERM OF ORDER BY
+- **logs-1/find20** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?); USE TEMP B-TREE FOR LAST TERM OF ORDER BY
 
 ```sql
-SELECT data FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 50
+SELECT data FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\')) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 20
 ```
 Parameters: `["*quartz*","%quartz%","%quartz%","%quartz%","%quartz%",false]`
 
-- **logs-1/count** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-fbcqiflrgbzf_logs_0__deleted_timestamp_id_idx (deleted=?)
+- **logs-1/find60** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?); USE TEMP B-TREE FOR LAST TERM OF ORDER BY
 
 ```sql
-SELECT COUNT(1) AS count FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND deleted = ?)
+SELECT data FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\')) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 60
 ```
 Parameters: `["*quartz*","%quartz%","%quartz%","%quartz%","%quartz%",false]`
 
-- **logs-2/find50** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-fbcqiflrgbzf_logs_0__deleted_timestamp_id_idx (deleted=?); USE TEMP B-TREE FOR LAST TERM OF ORDER BY
+- **logs-1/find100** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?); USE TEMP B-TREE FOR LAST TERM OF ORDER BY
 
 ```sql
-SELECT data FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND ((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 50
+SELECT data FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\')) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 100
 ```
-Parameters: `["*quartz*","%quartz%","%quartz%","%quartz%","%quartz%","*cobalt*","%cobalt%","%cobalt%","%cobalt%","%cobalt%",false]`
+Parameters: `["*quartz*","%quartz%","%quartz%","%quartz%","%quartz%",false]`
 
-- **logs-2/count** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-fbcqiflrgbzf_logs_0__deleted_timestamp_id_idx (deleted=?)
+- **logs-1/count** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?)
 
 ```sql
-SELECT COUNT(1) AS count FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND ((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ?) OR (JSON_EXTRACT(data, '$.context.error') LIKE ?) OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ?) OR (JSON_EXTRACT(data, '$.context.search') LIKE ?)) AND deleted = ?)
+SELECT COUNT(1) AS count FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\')) AND deleted = ?)
 ```
-Parameters: `["*quartz*","%quartz%","%quartz%","%quartz%","%quartz%","*cobalt*","%cobalt%","%cobalt%","%cobalt%","%cobalt%",false]`
+Parameters: `["*quartz*","%quartz%","%quartz%","%quartz%","%quartz%",false]`
 
-- **orders-all/find50** — declared RxDB index mentioned: **yes**. SEARCH orders-0 USING INDEX rxdbspike2145-fallback-hwoyfgmqkglh_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?); SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:; USE TEMP B-TREE FOR LAST TERM OF ORDER BY
+- **logs-2/find20** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?); USE TEMP B-TREE FOR LAST TERM OF ORDER BY
 
 ```sql
-SELECT data FROM "orders-0" WHERE (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 50
+SELECT data FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\')) AND ((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\')) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.timestamp') desc,id asc LIMIT 20
 ```
-Parameters: `["_pos_user","1",false]`
+Parameters: `["*quartz*","%quartz%","%quartz%","%quartz%","%quartz%","*co-balt*","%co-balt%","%co-balt%","%co-balt%","%co-balt%",false]`
 
-- **orders-all/count** — declared RxDB index mentioned: **yes**. SEARCH orders-0 USING INDEX rxdbspike2145-fallback-hwoyfgmqkglh_orders_0__deleted_status_dateCreatedGmt_uuid_idx (deleted=?); SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:
+- **logs-2/count** — declared RxDB index mentioned: **yes**. SEARCH logs-0 USING INDEX rxdbspike2145-fallback-xvmbmhpgzrpn_logs_0__deleted_timestamp_id_idx (deleted=?)
 
 ```sql
-SELECT COUNT(1) AS count FROM "orders-0" WHERE (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?) AND deleted = ?)
+SELECT COUNT(1) AS count FROM "logs-0" WHERE (((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\')) AND ((JSON_EXTRACT(data, '$.context.fold') GLOB ?) OR (JSON_EXTRACT(data, '$.message') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.error') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.errorCode') LIKE ? ESCAPE '\') OR (JSON_EXTRACT(data, '$.context.search') LIKE ? ESCAPE '\')) AND deleted = ?)
 ```
-Parameters: `["_pos_user","1",false]`
+Parameters: `["*quartz*","%quartz%","%quartz%","%quartz%","%quartz%","*co-balt*","%co-balt%","%co-balt%","%co-balt%","%co-balt%",false]`
 
-- **orders-open/find50** — declared RxDB index mentioned: **yes**. SEARCH orders-0 USING INDEX rxdbspike2145-fallback-hwoyfgmqkglh_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?); SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:; USE TEMP B-TREE FOR LAST TERM OF ORDER BY
+- **orders/find10** — declared RxDB index mentioned: **yes**. SEARCH orders-0 USING INDEX rxdbspike2145-fallback-ftqkwzqzatmg_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?); SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:; SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:; USE TEMP B-TREE FOR LAST TERM OF ORDER BY
 
 ```sql
-SELECT data FROM "orders-0" WHERE (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?) AND JSON_EXTRACT(data, '$.status') IN (?,?,?) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 50
+SELECT data FROM "orders-0" WHERE ((EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 10
 ```
-Parameters: `["_pos_user","1","pos-open","pos-partial","pending",false]`
+Parameters: `["_pos_user","1","_pos_store","1",false]`
 
-- **orders-open/count** — declared RxDB index mentioned: **yes**. SEARCH orders-0 USING INDEX rxdbspike2145-fallback-hwoyfgmqkglh_orders_0__deleted_status_dateCreatedGmt_uuid_idx (deleted=? AND <expr>=?); SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:
+- **orders/find50** — declared RxDB index mentioned: **yes**. SEARCH orders-0 USING INDEX rxdbspike2145-fallback-ftqkwzqzatmg_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?); SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:; SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:; USE TEMP B-TREE FOR LAST TERM OF ORDER BY
 
 ```sql
-SELECT COUNT(1) AS count FROM "orders-0" WHERE (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?) AND JSON_EXTRACT(data, '$.status') IN (?,?,?) AND deleted = ?)
+SELECT data FROM "orders-0" WHERE ((EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 50
 ```
-Parameters: `["_pos_user","1","pos-open","pos-partial","pending",false]`
+Parameters: `["_pos_user","1","_pos_store","1",false]`
+
+- **orders/find100** — declared RxDB index mentioned: **yes**. SEARCH orders-0 USING INDEX rxdbspike2145-fallback-ftqkwzqzatmg_orders_0__deleted_dateCreatedGmt_uuid_idx (deleted=?); SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:; SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:; USE TEMP B-TREE FOR LAST TERM OF ORDER BY
+
+```sql
+SELECT data FROM "orders-0" WHERE ((EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND deleted = ?) ORDER BY JSON_EXTRACT(data, '$.dateCreatedGmt') desc,id asc LIMIT 100
+```
+Parameters: `["_pos_user","1","_pos_store","1",false]`
+
+- **orders/count** — declared RxDB index mentioned: **yes**. SEARCH orders-0 USING INDEX rxdbspike2145-fallback-ftqkwzqzatmg_orders_0__deleted_status_dateCreatedGmt_uuid_idx (deleted=?); SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:; SCAN json_each EXISTS VIRTUAL TABLE INDEX 1:
+
+```sql
+SELECT COUNT(1) AS count FROM "orders-0" WHERE ((EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND (EXISTS (SELECT 1 FROM json_each(JSON_EXTRACT(data, '$.payload.meta_data')) WHERE json_extract(value,'$.key') = ? AND json_extract(value,'$.value') = ?)) AND deleted = ?)
+```
+Parameters: `["_pos_user","1","_pos_store","1",false]`
 
 <!-- generated:end -->
 
@@ -230,7 +279,7 @@ Parameters: `["_pos_user","1","pos-open","pos-partial","pending",false]`
 ## Reproduce
 
 ```
-bash spikes/2145-query-paths/run.sh        # ~70 min: the eight fallback counts are ~5 min a sample
+bash spikes/2145-query-paths/run.sh        # ~50 min: the fallback counts are ~1.8 min a sample
 node spikes/2145-query-paths/report.mjs    # tables only, from results.json
 ```
 

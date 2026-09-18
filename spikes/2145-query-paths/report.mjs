@@ -13,7 +13,7 @@ const lines = [
 	'',
 ];
 if (
-	result.cells.length !== 24 ||
+	result.cells.length !== 30 ||
 	result.cells.some(
 		(c) => c.samples.length !== (c.mode === 'fallback' && c.operation === 'count' ? 3 : 5)
 	)
@@ -36,7 +36,27 @@ for (const query of [...new Set(result.cells.map((c) => c.query))]) {
 	}
 	lines.push('');
 }
-lines.push('### Direct query plans (observed)', '');
+// Both screens wait on find AND count before they render (use-local-query.ts combineLatest of
+// documents$/total$; execute-query.ts combineLatest of query.$/count.$), and one worker serves
+// both, so the user-visible latency of a search keystroke or pill change is the sum.
+lines.push(
+	'### Screen-visible latency: find + count on one worker (median ms)',
+	'',
+	'| Query | Window | Fallback | Modifier | One statement |',
+	'|---|---|---:|---:|---:|'
+);
+for (const query of [...new Set(result.cells.map((c) => c.query))]) {
+	const count = (mode) =>
+		med(result.cells.find((c) => c.query === query && c.operation === 'count' && c.mode === mode), 'workerMs');
+	for (const op of [...new Set(result.cells.filter((c) => c.query === query && c.operation !== 'count').map((c) => c.operation))]) {
+		const find = (mode) =>
+			med(result.cells.find((c) => c.query === query && c.operation === op && c.mode === mode), 'workerMs');
+		lines.push(
+			`| ${query} | ${op} | ${(find('fallback') + count('fallback')).toFixed(1)} | ${(find('modifier') + count('modifier')).toFixed(1)} | ${(find('direct') + count('direct')).toFixed(1)} |`
+		);
+	}
+}
+lines.push('', '### Direct query plans (observed)', '');
 for (const [key, p] of Object.entries(result.plans)) {
 	const details = p.plan.map((r) => r.detail).join('; ');
 	lines.push(

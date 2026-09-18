@@ -6,33 +6,52 @@ import {
 	randomToken,
 } from 'rxdb/plugins/core';
 
-const terms = ['quartz', 'cobalt'],
-	open = ['pos-open', 'pos-partial', 'pending'];
+// The second term carries punctuation on purpose: buildScanSearchSelector regex-escapes it
+// (`co\-balt`), so the modifier's unescaping is exercised by the cross-mode equality check.
+const terms = ['quartz', 'co-balt'];
+const open = ['pos-open', 'pos-partial', 'pending'];
 const fields = ['context.fold', 'message', 'context.error', 'context.errorCode', 'context.search'];
+// Same escape as packages/sync-core/src/scanSearchSelector.ts.
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
 const search = (n) => ({
 	$and: terms.slice(0, n).map((t) => ({
-		$or: fields.map((f, i) => ({ [f]: { $regex: t, ...(i ? { $options: 'i' } : {}) } })),
+		$or: fields.map((f, i) => ({
+			[f]: { $regex: escapeRegex(t), ...(i ? { $options: 'i' } : {}) },
+		})),
 	})),
 });
-const cashier = { 'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '1' } } };
-// count() IS the unlimited query plus .length (premium routes count through query() on the fallback path),
-// so the unlimited cell is not measured separately: at ~340 ms per fallback page it would double a run that already takes an hour.
-const cases = [1, 2].flatMap((n) =>
-	['find50', 'count'].map((op) => ({
-		name: `logs-${n}`,
+// The Orders screen always scopes by cashier AND store (orders/index.tsx: the store scope falls
+// back to 'woocommerce-pos'), and compileQuery's `metadata` operator emits one $elemMatch per stamp
+// through wooMetaCarrier.identityFilter, which joins them with $and.
+const ordersDefault = {
+	$and: [
+		{ 'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '1' } } },
+		{ 'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '1' } } },
+	],
+};
+// Grid windows: the Logs grid starts at 20 rows and the Orders grid at 10 (LOGS_PAGE_SIZE,
+// ORDERS_PAGE_SIZE); every scroll extension adds a page, so limits grow past premium's 50-row
+// fallback batch. count() is the engine's `count({ selector })`, which RxDB normalizes to
+// primary-key order (rx-query.ts: `normalizeMangoQuery(schema, query, op === 'count')`).
+const cases = [
+	...[20, 60, 100].map((limit) => ({
+		name: 'logs-1',
 		collection: 'logs',
-		op,
-		selector: search(n),
-	}))
-);
-for (const scoped of [false, true])
-	for (const op of ['find50', 'count'])
-		cases.push({
-			name: scoped ? 'orders-open' : 'orders-all',
-			collection: 'orders',
-			op,
-			selector: { ...cashier, ...(scoped ? { status: { $in: open } } : {}) },
-		});
+		limit,
+		selector: search(1),
+	})),
+	{ name: 'logs-1', collection: 'logs', selector: search(1) },
+	{ name: 'logs-2', collection: 'logs', limit: 20, selector: search(2) },
+	{ name: 'logs-2', collection: 'logs', selector: search(2) },
+	...[10, 50, 100].map((limit) => ({
+		name: 'orders',
+		collection: 'orders',
+		limit,
+		selector: ordersDefault,
+	})),
+	{ name: 'orders', collection: 'orders', selector: ordersDefault },
+].map((c) => ({ ...c, op: c.limit ? `find${c.limit}` : 'count' }));
+const totals = { 'logs-1': 920, 'logs-2': 460, orders: 2500 };
 const schemaFor = (collection) => {
 	const logs = collection === 'logs',
 		primaryKey = logs ? 'id' : 'uuid',
@@ -68,6 +87,8 @@ function document(collection, i) {
 				(Math.imul(i + 1, 1664525 + j * 2) >>> 0) % 7
 			]
 	).join(' ');
+	// logs: 'quartz' in 1 row of 50, 'co-balt' with it in 1 of 100.
+	// orders: four cashiers, two stores; cashier 1 + store 1 is 1 row in 8.
 	const row =
 		collection === 'logs'
 			? {
@@ -76,7 +97,7 @@ function document(collection, i) {
 					level: 'warn',
 					message: words,
 					context: {
-						fold: i % 50 ? words : `quartz ${i % 100 ? words : 'cobalt'}`,
+						fold: i % 50 ? words : `quartz ${i % 100 ? words : 'co-balt'}`,
 						error: '',
 						errorCode: 'SYNC331',
 						search: words,
@@ -93,7 +114,7 @@ function document(collection, i) {
 					payload: {
 						meta_data: [
 							{ id: 1, key: '_pos_user', value: String((i % 4) + 1) },
-							{ id: 2, key: '_pos_store', value: '1' },
+							{ id: 2, key: '_pos_store', value: String((Math.floor(i / 4) % 2) + 1) },
 							...Array.from({ length: 4 + (i % 5) }, (_, j) => ({
 								id: j + 3,
 								key: `extra_${j}`,
@@ -174,11 +195,17 @@ globalThis.runBench = async () => {
 			for (const c of cases) {
 				const instance = instances[c.collection],
 					date = c.collection === 'logs' ? 'timestamp' : 'dateCreatedGmt';
-				const query = normalizeMangoQuery(instance.schema, {
-					selector: { ...c.selector, _deleted: { $eq: false } },
-					sort: [{ [date]: 'desc' }],
-					...(c.op === 'find50' ? { limit: 50 } : {}),
-				});
+				const selector = { ...c.selector, _deleted: { $eq: false } };
+				// A count is normalized the way RxQuery does it (skipSort → primary-key order); a
+				// find carries the grid's sort and its cumulative limit.
+				const query =
+					c.op === 'count'
+						? normalizeMangoQuery(instance.schema, { selector }, true)
+						: normalizeMangoQuery(instance.schema, {
+								selector,
+								sort: [{ [date]: 'desc' }],
+								limit: c.limit,
+							});
 				const prepared = prepareQuery(instance.schema, query),
 					extra = { collection: c.collection, query, count: c.op === 'count' },
 					key = `${c.name}/${c.op}`;
@@ -187,7 +214,7 @@ globalThis.runBench = async () => {
 					console.info('EXPLAIN', key, JSON.stringify(plans[key]));
 				}
 				for (const path of mode === 'fallback' ? ['fallback', 'direct'] : ['modifier']) {
-					// A fallback count pages the whole table (920 pages at 46k logs, ~5 min a sample): three samples there, five elsewhere.
+					// A fallback count pages the whole table: three samples there, five elsewhere.
 					const samples = [],
 						wanted = path === 'fallback' && c.op === 'count' ? 3 : 5;
 					for (let run = -1; run < wanted; run++) {
@@ -205,15 +232,7 @@ globalThis.runBench = async () => {
 						if (expected.get(key) !== signature)
 							throw new Error(`Different result: ${path}/${key}`);
 						const matches = result.documents?.length ?? result.count;
-						const total =
-							c.collection === 'logs'
-								? c.name === 'logs-1'
-									? 920
-									: 460
-								: c.name === 'orders-all'
-									? 5000
-									: 3000;
-						if (matches !== (c.op === 'find50' ? 50 : total))
+						if (matches !== (c.limit ?? totals[c.name]))
 							throw new Error(`Wrong cardinality: ${key}: ${matches}`);
 						if (run >= 0) samples.push({ ...metrics, pageMs, matches });
 					}
@@ -229,5 +248,5 @@ globalThis.runBench = async () => {
 			}
 		}
 	}
-	return { cells, plans, schemas, seedBytes, rows: { logs: 46000, orders: 20000 }, terms, open };
+	return { cells, plans, schemas, seedBytes, rows: { logs: 46000, orders: 20000 }, terms, totals };
 };
