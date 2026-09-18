@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 import { VoidButton } from './void';
 
 /** Scripted result for one awaitWriteOutcome call, consumed in order. */
@@ -261,6 +263,22 @@ describe('VoidButton', () => {
 
 		expect(mockPatchAndEnqueueEngineResident).not.toHaveBeenCalled();
 		query.awaitWriteOutcome = original;
+	});
+
+	it('surfaces an error toast and no success toast when the delete write fails', async () => {
+		mockEngine.write.mockRejectedValueOnce(new Error('delete enqueue failed'));
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() =>
+			expect(mockCartLogger.error).toHaveBeenCalledWith('Failed to void order', {
+				showToast: true,
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+				context: { orderId: 'order-1', error: 'delete enqueue failed' },
+			})
+		);
+		expect(mockCartLogger.success).not.toHaveBeenCalled();
+		expect(mockAwaitCalls).toHaveLength(0);
 	});
 
 	it('surfaces an error toast and no success toast when the fallback enqueue fails', async () => {
