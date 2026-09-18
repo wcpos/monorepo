@@ -512,7 +512,12 @@ jobs:
     steps: &gallery-steps
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # The update job must sit on the PR head so it can push baselines to the
+          # branch. The read-only shoot takes the default merge ref, so a PR opened
+          # before the gallery landed on its base is still shot with the gallery
+          # (on 2026-09-18 #2176's head predated it and the compare step had no
+          # config to run).
+          ref: ${{ github.job == 'gallery-update' && github.event.pull_request.head.sha || '' }}
           submodules: false
       - name: Setup monorepo
         uses: ./.github/actions/setup-monorepo
