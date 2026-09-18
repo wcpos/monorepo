@@ -34,7 +34,7 @@ export async function recordCompletionAttempt(
 ) {
 	const doc = await journal(storeDB);
 	await doc.incrementalModify((data) => {
-		data.pending[orderUuid] ??= { ...facts, at: new Date().toISOString(), attempts: 0 };
+		data.pending[orderUuid] = { ...facts, at: new Date().toISOString(), attempts: 0 };
 		return data;
 	});
 }

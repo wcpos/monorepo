@@ -29,24 +29,49 @@ it('reads an empty journal without creating a document', async () => {
 	expect(await pendingCompletions(db)).toEqual({});
 	expect(await db.getLocal('sale-completions')).toBeNull();
 });
-it('records idempotently, preserving time, source, payment and failure history', async () => {
-	await Promise.all([recordCompletionAttempt(db, attempt), recordCompletionAttempt(db, attempt)]);
+it('a new attempt replaces the facts and counters', async () => {
+	const timestamp = jest.spyOn(Date.prototype, 'toISOString');
+	try {
+		timestamp.mockReturnValue('2026-09-18T10:00:00.000Z');
+		await recordCompletionAttempt(db, { ...attempt, actor: { id: 'a', name: 'Cashier A' } });
+		await failCompletionAttempt(db, 'order', new Error('finish failed'), {
+			missingStart: true,
+			unpaidStart: true,
+		});
+		expect((await pendingCompletions(db)).order).toMatchObject({
+			attempts: 1,
+			missingStarts: 1,
+			unpaidStarts: 1,
+			lastError: 'finish failed',
+		});
+		timestamp.mockReturnValue('2026-09-18T11:00:00.000Z');
+		await recordCompletionAttempt(db, {
+			orderUuid: 'order',
+			source: 'terminal',
+			paymentId: 'payment-b',
+			actor: { id: 'b', name: 'Cashier B' },
+		});
+		expect((await pendingCompletions(db)).order).toEqual({
+			source: 'terminal',
+			paymentId: 'payment-b',
+			actor: { id: 'b', name: 'Cashier B' },
+			at: '2026-09-18T11:00:00.000Z',
+			attempts: 0,
+		});
+	} finally {
+		timestamp.mockRestore();
+	}
+});
+it('failure increments attempts and keeps the recorded facts', async () => {
+	await recordCompletionAttempt(db, attempt);
 	const first = (await pendingCompletions(db)).order;
-	expect(first).toEqual({
-		source: 'manual',
-		paymentId: 'payment',
-		at: expect.any(String),
-		attempts: 0,
-	});
 	await failCompletionAttempt(db, 'order', new Error('finish failed'));
-	await recordCompletionAttempt(db, { orderUuid: 'order', source: 'replay' });
+	await failCompletionAttempt(db, 'order', 'again');
 	expect((await pendingCompletions(db)).order).toEqual({
 		...first,
-		attempts: 1,
-		lastError: 'finish failed',
+		attempts: 2,
+		lastError: 'again',
 	});
-	await failCompletionAttempt(db, 'order', 'again');
-	expect((await pendingCompletions(db)).order).toMatchObject({ attempts: 2, lastError: 'again' });
 });
 it('resolves only the named order and never resurrects it on late failure', async () => {
 	await recordCompletionAttempt(db, attempt);
