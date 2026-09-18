@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
+import { filter, take } from 'rxjs';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -130,11 +131,13 @@ export function PaymentWebview({
 	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { userDB, site, store } = useStoreSession();
-	const { status: bindingStatus } = useRegisterBinding();
+	const { status: bindingStatus, registerId } = useRegisterBinding();
+	const [sessionRetry, setSessionRetry] = React.useState(0);
 	const siteUuid = site.uuid!;
 	const [preparation, setPreparation] = React.useState<{
 		uuid: string;
 		status: 'ready' | 'failed';
+		sessionRequired?: boolean;
 	} | null>(null);
 	// Sessions require preparation even offline: a stale probe may hide a reachable
 	// pay page. Online also waits for provenance; failed preparation stays closed.
@@ -214,13 +217,18 @@ export function PaymentWebview({
 				}
 				await persistSaleProvenance(ctx, {
 					order: currentOrder,
+					source: 'gateway-snapshot',
 					sessionId: prepared.sessionId,
 					online,
 				});
 				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready' });
 			} catch (error) {
 				if (!active) return;
-				setPreparation({ uuid: currentOrder.uuid, status: 'failed' });
+				setPreparation({
+					uuid: currentOrder.uuid,
+					status: 'failed',
+					sessionRequired: error instanceof RegisterSessionRequiredError,
+				});
 				setFrameStatus('stalled');
 				if (error instanceof RegisterSessionRequiredError) {
 					presentSessionRequired(orderLogger, t);
@@ -245,9 +253,22 @@ export function PaymentWebview({
 		online,
 		rawPaymentURL,
 		retryToken,
+		sessionRetry,
 		bindingStatus,
 		sessionsOn,
 	]);
+
+	// Only a session refusal observes reopening; other failures still need the existing retry.
+	React.useEffect(() => {
+		if (preparation?.uuid !== order.uuid || !preparation?.sessionRequired || !sessionsOn) return;
+		const subscription = ctx.sessions
+			?.findOne({
+				selector: { register_id: registerId ?? '', status: 'open', sync_status: { $ne: 'failed' } },
+			})
+			.$.pipe(filter(Boolean), take(1))
+			.subscribe(() => setSessionRetry((value) => value + 1));
+		return () => subscription?.unsubscribe();
+	}, [ctx.sessions, registerId, order.uuid, preparation, sessionsOn]);
 
 	/**
 	 *

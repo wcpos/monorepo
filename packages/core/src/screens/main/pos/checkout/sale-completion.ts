@@ -1,5 +1,6 @@
 import type { RegisterSessionCollection, StoreDatabase, UserDatabase } from '@wcpos/database';
 import {
+	isCompletingStatus,
 	type MetaDataEntry,
 	type OrderPaymentSummary,
 	type PaymentRow,
@@ -41,7 +42,7 @@ export interface SaleContext {
 	stockAdjustment?: Parameters<typeof reconcileCompletedOrder>[3];
 }
 
-/** Before money: refuse only the completing leg; gateways deliberately have no session gate. */
+/** Before money: require a session when the route requests it; gate completing sales on binding. */
 export async function prepareSale(
 	ctx: SaleContext,
 	input: {
@@ -81,9 +82,27 @@ export async function persistSaleProvenance(
 		order: EngineRecord<'orders'>;
 		sessionId?: string | null;
 		online: boolean;
+		source?: SaleOutcome['source'];
 		extraMeta?: MetaDataEntry[];
 	}
 ): Promise<void> {
+	const latest = input.order.getLatest().payload;
+	// Tender legs already took money in their first session; only unpaid gateways can move.
+	if (
+		input.online &&
+		(input.source === 'gateway-contract' || input.source === 'gateway-snapshot') &&
+		input.sessionId &&
+		!isCompletingStatus(latest.status ?? '') &&
+		!readLedger(latest.meta_data).some((row) => row.status === 'captured')
+	) {
+		// The counter is the order's identity for the day; the session is where the money will land.
+		input = {
+			...input,
+			extraMeta: withMetaReplaced(input.extraMeta, [
+				{ key: '_wcpos_session', value: input.sessionId },
+			]),
+		};
+	}
 	if (input.online) return persistProvenance({ ...ctx, ...input });
 	if (!input.extraMeta) return;
 	const patched = await ctx.localPatch({

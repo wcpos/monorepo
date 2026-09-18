@@ -4,10 +4,11 @@
 import * as React from 'react';
 
 import { act, render, waitFor } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { persistSaleProvenance } from '../sale-completion';
+import { persistSaleProvenance, prepareSale } from '../sale-completion';
 import { recordCompletionAttempt } from '../completion-journal';
 import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview';
 
@@ -97,7 +98,10 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
 
-const makeOrder = (href = 'https://shop.example.com/wcpos-checkout/order-pay/42') => {
+const makeOrder = (
+	href = 'https://shop.example.com/wcpos-checkout/order-pay/42',
+	meta_data: { key: string; value: string }[] = []
+) => {
 	const order = {
 		uuid: 'uuid-42',
 		payload: {
@@ -106,6 +110,7 @@ const makeOrder = (href = 'https://shop.example.com/wcpos-checkout/order-pay/42'
 			status: 'pos-open',
 			links: { payment: [{ href }] },
 			line_items: [],
+			meta_data,
 		},
 		getLatest: () => order,
 	};
@@ -1169,6 +1174,7 @@ jest.mock('../completion-journal', () => ({
 }));
 
 let mockSessionsOn = false;
+const mockOpenSession = new BehaviorSubject<{ id: string } | null>(null);
 const mockSessions = { findOne: jest.fn() };
 describe('pay-page session gate', () => {
 	beforeEach(() => {
@@ -1179,7 +1185,8 @@ describe('pay-page session gate', () => {
 		webViewMounts = 0;
 		webViewProps = {};
 		mockLocalPatch.mockResolvedValue(true);
-		mockSessions.findOne.mockReturnValue({ exec: async () => null });
+		mockOpenSession.next(null);
+		mockSessions.findOne.mockReturnValue({ exec: async () => null, $: mockOpenSession });
 		jest
 			.mocked(persistSaleProvenance)
 			.mockImplementation(jest.requireActual('../sale-completion').persistSaleProvenance);
@@ -1189,6 +1196,70 @@ describe('pay-page session gate', () => {
 		mockOnlineStatus = 'offline';
 		jest.mocked(persistSaleProvenance).mockReset();
 	});
+	it('opening a session recovers the legacy frame exactly once without a retryToken', async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const setFrameStatus = jest.fn();
+		render(
+			<PaymentWebview
+				order={makeOrder(undefined, [
+					{ key: '_wcpos_sale_counter', value: '7' },
+					{ key: '_wcpos_session', value: 'session-A' },
+				])}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		await act(async () => {});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+		expect(logger.info).toHaveBeenCalledWith(
+			'pos_checkout.open_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(webViewMounts).toBe(0);
+		expect(prepareSale).toHaveBeenCalledTimes(1);
+		const session = { id: 'session-B', incrementalPatch: async () => undefined };
+		mockSessions.findOne.mockReturnValue({ exec: async () => session, $: mockOpenSession });
+		await act(async () => mockOpenSession.next(session));
+		expect(prepareSale).toHaveBeenCalledTimes(2);
+		expect(webViewMounts).toBe(1);
+		expect(webViewProps.src).toContain('/order-pay/42');
+		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+			key: '_wcpos_session',
+			value: 'session-B',
+		});
+		await act(async () => mockOpenSession.next({ ...session }));
+		expect(prepareSale).toHaveBeenCalledTimes(2);
+	});
+	it.each(['choose-register', 'provenance-push'])(
+		'opening a session does not retry %s failure',
+		async (failure) => {
+			if (failure === 'choose-register') mockBindingStatus = 'choose';
+			else {
+				mockSessions.findOne.mockReturnValue({
+					exec: async () => ({ id: 'session-A', incrementalPatch: async () => undefined }),
+					$: mockOpenSession,
+				});
+				mockPushDocument.mockRejectedValueOnce(new Error('push failed'));
+			}
+			const setFrameStatus = jest.fn();
+			const view = render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+				/>
+			);
+			await act(async () => {});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+			await act(async () => mockOpenSession.next({ id: 'session-B' }));
+			expect(prepareSale).toHaveBeenCalledTimes(1);
+			expect(webViewMounts).toBe(0);
+			view.unmount();
+			mockBindingStatus = 'bound';
+		}
+	);
 	it.each(['offline', 'online-website-unavailable'])(
 		'%s at mount without an open session: toasts, stalls and never exposes the frame',
 		async (status) => {
@@ -1242,6 +1313,7 @@ describe('pay-page session gate', () => {
 		expect(webViewProps.src).toContain('/order-pay/42');
 		expect(persistSaleProvenance).toHaveBeenCalledWith(expect.anything(), {
 			order: props.order,
+			source: 'gateway-snapshot',
 			sessionId: 'session-42',
 			online: false,
 		});

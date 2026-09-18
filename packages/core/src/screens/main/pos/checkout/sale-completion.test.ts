@@ -5,6 +5,8 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
+import { type MetaDataEntry, withLedger } from '@wcpos/order-math';
+
 import {
 	pendingCompletions,
 	recordCompletionAttempt,
@@ -33,6 +35,8 @@ const mockBound = jest.fn(),
 	mockInfo = jest.fn();
 jest.mock('../../../../services/register/register-document', () => ({
 	readBoundRegister: (...args: unknown[]) => mockBound(...args),
+	readRegister: async () => ({ sites: { site: { register_id: 'register-A' } } }),
+	nextSaleCounter: async () => 7,
 }));
 jest.mock('../../../../services/register-session/session-store', () => ({
 	requireOpenSession: (...args: unknown[]) => mockSession(...args),
@@ -564,3 +568,64 @@ it.each([false, true])(
 		}
 	}
 );
+
+// Use the real first-stamp helper: a mock that always restamps would hide this regression.
+describe('gateway session attribution on retry', () => {
+	beforeEach(() => {
+		mockStamp.mockImplementation(
+			jest.requireActual('./provenance/stamp-completion').completionMeta
+		);
+	});
+	const original = [
+		{ key: '_wcpos_sale_counter', value: '7' },
+		{ key: '_wcpos_sale_time', value: '2026-09-18T08:00:00Z' },
+		{ key: '_wcpos_register', value: 'register-A' },
+		{ key: '_wcpos_session', value: 'session-A' },
+	];
+	const persist = async (meta: MetaDataEntry[], status: string, source?: SaleOutcome['source']) => {
+		const current = {
+			uuid: 'retry-order',
+			getLatest: () => ({ payload: { status, meta_data: meta } }),
+		};
+		const input = { order: current as never, sessionId: 'session-B', online: true, source };
+		await persistSaleProvenance(ctx, input);
+		return (
+			jest.mocked(ctx.localPatch).mock.calls.at(-1)![0].data as { meta_data: MetaDataEntry[] }
+		).meta_data;
+	};
+	it.each(['gateway-contract', 'gateway-snapshot'] as const)(
+		'%s retry in B replaces only session A',
+		async (source) => {
+			const stamped = await completionMetaFor(ctx, [], { sessionId: 'session-A' });
+			const meta = await persist(stamped, 'pos-open', source);
+			expect(meta).toEqual([
+				...stamped.filter(({ key }) => key !== '_wcpos_session'),
+				{ key: '_wcpos_session', value: 'session-B' },
+			]);
+		}
+	);
+	it.each(['gateway-contract', 'gateway-snapshot'] as const)(
+		'%s pre-change counter without session gains B',
+		async (source) => {
+			const preChange = original.filter(({ key }) => key !== '_wcpos_session');
+			expect(await persist(preChange, 'failed', source)).toEqual([
+				...preChange,
+				{ key: '_wcpos_session', value: 'session-B' },
+			]);
+		}
+	);
+	it.each(['completed', 'processing', 'on-hold'])(
+		'paid %s order retains session A',
+		async (status) => {
+			expect(await persist(original, status, 'gateway-contract')).toEqual(original);
+		}
+	);
+	it('captured leg retains session A even before completing status', async () => {
+		const meta = withLedger(original, [{ ...row, status: 'captured', session_id: 'session-A' }]);
+		expect(await persist(meta, 'pos-partial', 'gateway-snapshot')).toEqual(meta);
+	});
+	it('tender provenance retains session A', async () => {
+		expect(await persist(original, 'pos-open')).toEqual(original);
+		expect(await completionMetaFor(ctx, original, { sessionId: 'session-B' })).toEqual(original);
+	});
+});

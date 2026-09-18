@@ -643,6 +643,28 @@ describe('contract session gate', () => {
 		expect(result.current.loading).toBe(false);
 		expect(mockCheckoutError).not.toHaveBeenCalled();
 	});
+	it('retrying a pre-stamped unpaid contract order attributes it to the newly open session', async () => {
+		const retryOrder = makeOrder();
+		const identity = [
+			{ key: '_wcpos_sale_counter', value: '7' },
+			{ key: '_wcpos_sale_time', value: '2026-09-18T08:00:00Z' },
+			{ key: '_wcpos_register', value: 'register-A' },
+		];
+		Object.assign(retryOrder.payload, {
+			status: 'failed',
+			meta_data: [...identity, { key: '_wcpos_session', value: 'session-A' }],
+		});
+		mockSessions.findOne.mockReturnValue({
+			exec: async () => ({ id: 'session-B', incrementalPatch: async () => undefined }),
+		});
+		const { result } = renderHook(() => useCheckoutSession(retryOrder as never));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => result.current.startCheckout());
+		expect(mockProvenancePatch.mock.calls[0][0].data.meta_data).toEqual([
+			...identity,
+			{ key: '_wcpos_session', value: 'session-B' },
+		]);
+	});
 	it.each([true, false])(
 		'stamps the open session only with sessions enabled: %s',
 		async (enabled) => {

@@ -186,7 +186,12 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 					return;
 				}
 				if (online)
-					await persistSaleProvenance(ctx, { order, sessionId: prepared.sessionId, online: true });
+					await persistSaleProvenance(ctx, {
+						order,
+						source: 'gateway-contract',
+						sessionId: prepared.sessionId,
+						online: true,
+					});
 			} catch (error) {
 				if (error instanceof RegisterSessionRequiredError) {
 					presentSessionRequired(checkoutLogger, t);
