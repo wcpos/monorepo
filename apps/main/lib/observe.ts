@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Observe } from 'expo-observe';
+import { AppMetrics, Observe } from 'expo-observe';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { DEFAULT_APP_SCHEME } from '@wcpos/utils/app-info/scheme';
@@ -40,9 +40,11 @@ const DISPATCH_FROM_NON_STORE_BUILDS = false;
 const REPORTING_BUILD = DISPATCH_FROM_NON_STORE_BUILDS || AppInfo.scheme === DEFAULT_APP_SCHEME;
 
 /**
- * Every dynamic segment under apps/main/app. The dashboard groups by the route
- * PATTERN (`orders/(modals)/view/[orderId]`), which survives filtering; the ids
- * are a merchant's records and add nothing to a timing.
+ * Every dynamic segment under apps/main/app, plus the query-string ids the app
+ * navigates with (`?closureId=&registerId=` into Reports, `?store=` on web).
+ * The dashboard groups by the route PATTERN (`orders/(modals)/view/[orderId]`),
+ * which survives filtering; the ids are a merchant's records and add nothing
+ * to a timing. A filtered key also hides the resolved URL.
  */
 const FILTERED_ROUTE_PARAMS = [
 	'orderId',
@@ -50,6 +52,9 @@ const FILTERED_ROUTE_PARAMS = [
 	'productId',
 	'variationId',
 	'couponId',
+	'closureId',
+	'registerId',
+	'store',
 	'id',
 	'component',
 ];
@@ -75,12 +80,42 @@ function configure(nextDispatchingEnabled: boolean): void {
 configure(false);
 
 /**
+ * Drops every metric and error still stored on the device. Switching
+ * `dispatchingEnabled` off does NOT: the SDK discards pending events only when
+ * a dispatch runs while disabled, so what a store that said no collected would
+ * otherwise upload the moment a store that said yes takes over the till.
+ */
+function discardStoredEvents(): Promise<void> {
+	return AppMetrics.clearStoredEntries().catch(() => {
+		// Diagnostics must never interrupt the app.
+	});
+}
+
+let appliedConsent: TelemetryConsent | null = null;
+
+/**
  * Applies the merchant's telemetry preference. `null` is boot, before the
  * session has restored (see `useTelemetryConsent`): no opinion, nothing changes.
  */
 export function setObserveConsent(consent: TelemetryConsent | null): void {
-	if (consent === null) return;
-	configure(REPORTING_BUILD && consent === 'allowed');
+	if (consent === null || consent === appliedConsent) return;
+	const leavingDenied = appliedConsent === 'denied';
+	appliedConsent = consent;
+
+	if (consent === 'denied') {
+		// Off first, then drop what was held: what the merchant refused never leaves.
+		configure(false);
+		void discardStoredEvents();
+		return;
+	}
+
+	const dispatch = REPORTING_BUILD && consent === 'allowed';
+	if (leavingDenied) {
+		// Everything collected under the refusal goes BEFORE dispatching can resume.
+		void discardStoredEvents().then(() => configure(dispatch));
+		return;
+	}
+	configure(dispatch);
 }
 
 export function useObserveConsent(consent: TelemetryConsent | null): void {

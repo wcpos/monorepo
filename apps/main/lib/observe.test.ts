@@ -7,11 +7,15 @@ type ObserveModule = typeof import('./observe');
 type ConfigureCall = { dispatchingEnabled?: boolean; dispatchInDebug?: boolean };
 
 const mockConfigure = jest.fn<void, [ConfigureCall]>();
+const mockClearStoredEntries = jest.fn<Promise<void>, []>(() => Promise.resolve());
 let mockScheme = 'wcpos';
 
 jest.mock('expo-observe', () => ({
 	Observe: { configure: (config: ConfigureCall) => mockConfigure(config) },
+	AppMetrics: { clearStoredEntries: () => mockClearStoredEntries() },
 }));
+
+const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
 jest.mock('@wcpos/utils/app-info', () => ({
 	AppInfo: {
 		get scheme() {
@@ -32,6 +36,7 @@ function lastDispatching(): boolean | undefined {
 describe('EAS Observe gates', () => {
 	beforeEach(() => {
 		mockConfigure.mockClear();
+		mockClearStoredEntries.mockClear();
 		mockScheme = 'wcpos';
 	});
 
@@ -44,7 +49,16 @@ describe('EAS Observe gates', () => {
 				dispatchingEnabled: false,
 				dispatchInDebug: false,
 				integrations: {
-					'expo-router': { filteredParams: expect.arrayContaining(['orderId', 'customerId']) },
+					'expo-router': {
+						// Path segments AND the query-string ids the app navigates with.
+						filteredParams: expect.arrayContaining([
+							'orderId',
+							'customerId',
+							'closureId',
+							'registerId',
+							'store',
+						]),
+					},
 				},
 			})
 		);
@@ -65,6 +79,33 @@ describe('EAS Observe gates', () => {
 
 		setObserveConsent('denied');
 		expect(lastDispatching()).toBe(false);
+		expect(mockClearStoredEntries).toHaveBeenCalledTimes(1);
+	});
+
+	it('drops what a store that said no collected, before dispatching resumes', async () => {
+		const { setObserveConsent } = loadObserve();
+
+		setObserveConsent('denied');
+		expect(mockClearStoredEntries).toHaveBeenCalledTimes(1);
+		expect(lastDispatching()).toBe(false);
+
+		// Another store takes over the till: the refusal's events are dropped first,
+		// and dispatching resumes only once that has completed.
+		setObserveConsent('allowed');
+		expect(mockClearStoredEntries).toHaveBeenCalledTimes(2);
+		expect(lastDispatching()).toBe(false);
+		await flushPromises();
+		expect(lastDispatching()).toBe(true);
+	});
+
+	it('keeps a logged-out till silent without dropping what an allowed store collected', () => {
+		const { setObserveConsent } = loadObserve();
+
+		setObserveConsent('allowed');
+		setObserveConsent('undecided');
+
+		expect(lastDispatching()).toBe(false);
+		expect(mockClearStoredEntries).not.toHaveBeenCalled();
 	});
 
 	it('never dispatches from the dev client or an ad-hoc build', () => {
@@ -84,7 +125,7 @@ describe('EAS Observe gates', () => {
 		const { setObserveConsent } = loadObserve();
 
 		setObserveConsent('undecided');
-		setObserveConsent('denied');
+		setObserveConsent('undecided');
 		expect(mockConfigure).toHaveBeenCalledTimes(1);
 
 		setObserveConsent('allowed');
