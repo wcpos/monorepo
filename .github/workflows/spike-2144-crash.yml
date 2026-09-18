@@ -3,8 +3,6 @@ name: Spike 2144 crash harness
 # add a temporary `push: { branches: [<branch>] }` trigger (as spike 2143 did).
 on:
   workflow_dispatch:
-  push:
-    branches: [spike/2144-crash-harness] # TEMPORARY: remove before merge (workflow_dispatch only resolves on the default branch)
 permissions:
   contents: read
 jobs:
