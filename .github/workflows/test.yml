@@ -499,8 +499,8 @@ jobs:
           node scripts/check-dep-duplicates.mjs
           node scripts/check-android-aar-compile-sdk.mjs
 
-  gallery:
-    name: Gallery
+  gallery-shoot:
+    name: Gallery shoot
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: changes
@@ -564,3 +564,26 @@ jobs:
     permissions:
       contents: write
     steps: *gallery-steps
+
+  # The one check name the merge gate requires ("Gallery"): the gate script takes
+  # the first check with a matching name, so the two mutually exclusive jobs above
+  # report through this aggregator instead of sharing a name. Skipped when both
+  # were skipped (path filter or draft), which the gate counts as a pass.
+  gallery:
+    name: Gallery
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [gallery-shoot, gallery-update]
+    if: >-
+      always() &&
+      (needs.gallery-shoot.result != 'skipped' || needs.gallery-update.result != 'skipped')
+    steps:
+      - name: Aggregate
+        env:
+          SHOOT: ${{ needs.gallery-shoot.result }}
+          UPDATE: ${{ needs.gallery-update.result }}
+        run: |
+          echo "shoot=$SHOOT update=$UPDATE"
+          for r in "$SHOOT" "$UPDATE"; do
+            case "$r" in success|skipped) ;; *) echo "::error::gallery job result: $r"; exit 1;; esac
+          done

@@ -215,6 +215,10 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 					) ||
 					[
 						'apps/main/global.css',
+						'apps/main/package.json',
+						'packages/components/package.json',
+						'pnpm-lock.yaml',
+						'pnpm-workspace.yaml',
 						'apps/main/app/_layout.tsx',
 						'apps/main/metro.config.js',
 						'apps/main/playwright.gallery.config.ts',

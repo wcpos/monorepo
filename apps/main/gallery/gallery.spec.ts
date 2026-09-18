@@ -1,3 +1,6 @@
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { expect, test } from '@playwright/test';
 
 test('gallery cells', async ({ page }, testInfo) => {
@@ -19,6 +22,7 @@ test('gallery cells', async ({ page }, testInfo) => {
 		nodes.map((node) => node.getAttribute('data-gallery-component')!)
 	);
 	let count = 0;
+	const shot = new Set<string>();
 	for (const component of components) {
 		for (const theme of ['light', 'dark']) {
 			await page.goto(`/gallery/${component}?theme=${theme}`);
@@ -32,10 +36,19 @@ test('gallery cells', async ({ page }, testInfo) => {
 				if (smoke)
 					await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
 				else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
+				shot.add(`${id}-${theme}-linux.png`);
 				count++;
 			}
 		}
 	}
 	expect(count).toBeGreaterThan(0);
+	if (!smoke && testInfo.config.updateSnapshots === 'none') {
+		// The inventory is the baseline set: a story or component that silently disappears
+		// leaves orphaned PNGs behind, and an orphan fails the job (review, roadmap#355).
+		const onDisk = readdirSync(join(testInfo.project.testDir, 'gallery.spec.ts-snapshots'))
+			.filter((name) => name.endsWith('.png'))
+			.sort();
+		expect(onDisk).toEqual([...shot].sort());
+	}
 	process.stdout.write(`Gallery cells found: ${count}\n`);
 });
