@@ -3,14 +3,13 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { prContext, readBlob, readEvent } from '../../../scripts/check-test-removal.mjs';
-
 import {
-	ROOT,
-	scanSource,
-	scanRepository,
+	animationTokens,
 	countSites,
 	ratchetErrors,
-	animationTokens,
+	ROOT,
+	scanRepository,
+	scanSource,
 } from './uniwind-scanner.mjs';
 
 const allowlist = JSON.parse(
