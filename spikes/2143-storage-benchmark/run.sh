@@ -10,6 +10,8 @@ done
 mkdir -p "$BUILD" "$SPIKE/.deps"
 # Deliberately pinned to the brief's SQLite build, not the newest registry release.
 if [ ! -d "$SPIKE/.deps/node_modules/@sqlite.org/sqlite-wasm" ]; then
+  # Without its own package.json npm walks up to the repo root and installs THERE (CI run 35326895260).
+  [ -f "$SPIKE/.deps/package.json" ] || printf '{"name":"spike-2143-deps","private":true}\n' > "$SPIKE/.deps/package.json"
   (cd "$SPIKE/.deps" && npm install --no-save --no-package-lock @sqlite.org/sqlite-wasm@3.53.4-build1)
 fi
 for ENTRY in worker-sqlite worker-indexeddb bench-entry; do
