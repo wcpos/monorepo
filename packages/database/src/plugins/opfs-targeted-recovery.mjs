@@ -137,7 +137,16 @@ async function repairDocument(
       oldEnd,
     );
     if (pastEof && !dropPastEof) return "range-past-eof";
-    if (pastEof || isBlankBytes(damagedBytes)) {
+    if (pastEof) {
+      // The write-path exemption drops by IDENTITY, not by range: the known
+      // damage shape leaves two ids on one range, and the retry carries only
+      // the written document — a range-wide delete would lose the other one.
+      await dropIndexRowsById(state, runState, documentId, {
+        includePrimary: true,
+      });
+      return "hollow-row-dropped";
+    }
+    if (isBlankBytes(damagedBytes)) {
       await dropIndexRowsForRange(state, runState, oldStart, oldEnd);
       return "hollow-row-dropped";
     }
@@ -210,6 +219,25 @@ async function readRange(accessHandle, start, end) {
   const pastEof =
     isBlankBytes(bytes) && end > (await accessHandle.getSize());
   return { bytes, pastEof };
+}
+
+// A stale SECONDARY row proves this instance's indexes are stale just as a
+// primary one does, and the per-id paths see only the primary row. Rows are
+// matched by identity (the primary key inside the indexable string), never by
+// offsets, so a range a sibling happens to share is not mistaken for this id's.
+async function idHasRowPastEof(state, accessHandle, documentId) {
+  const keyLength = state.firstIdx.primaryKeyLength;
+  for (const indexState of state.indexStates) {
+    for (const row of indexState.rows) {
+      if (
+        getPrimaryKeyFromIndexableString(row[0], keyLength) !== documentId
+      )
+        continue;
+      const { pastEof } = await readRange(accessHandle, row[1], row[2]);
+      if (pastEof) return true;
+    }
+  }
+  return false;
 }
 
 // A blank range is whitespace (compaction's own fill) or NUL (a Windows
@@ -330,7 +358,12 @@ async function dropHollowRows(
       }
       const [, start, end] = primaryRow;
       const { bytes, pastEof } = await readRange(accessHandle, start, end);
-      if (pastEof && !dropPastEof) {
+      // The primary row can still point inside the file while one of this
+      // id's secondary rows is past EOF; that too means the indexes are stale.
+      if (
+        (pastEof || (await idHasRowPastEof(state, accessHandle, documentId))) &&
+        !dropPastEof
+      ) {
         outcomes.set(documentId, "range-past-eof");
         stale = true;
         continue;
@@ -351,13 +384,20 @@ async function dropHollowRows(
 
     for (const { documentId, start, end, foreign } of candidates) {
       // Re-read immediately before the drop: another process can compact or
-      // truncate between the classification above and here.
+      // truncate between the classification above and here. A write keeps its
+      // exemption here too, or it would reject instead of reinserting.
       const { bytes, pastEof } = await readRange(accessHandle, start, end);
-      if (pastEof || (!foreign && !isBlankBytes(bytes))) {
-        outcomes.set(documentId, pastEof ? "range-past-eof" : "range-changed");
+      if (pastEof && !dropPastEof) {
+        outcomes.set(documentId, "range-past-eof");
         continue;
       }
-      if (foreign) {
+      if (!pastEof && !foreign && !isBlankBytes(bytes)) {
+        outcomes.set(documentId, "range-changed");
+        continue;
+      }
+      if (foreign || pastEof) {
+        // By identity: the range is either another document's bytes, or gone
+        // from the file and possibly shared with a second id.
         await dropIndexRowsById(state, runState, documentId, {
           includePrimary: true,
         });
@@ -381,10 +421,8 @@ async function batchHasPastEofRow(instance, documentIds) {
   return instance.taskQueue.runCleanup(async (runState) => {
     const accessHandle = await documentsAccessHandle(state, runState);
     for (const documentId of documentIds) {
-      const row = state.firstIdx.metaIdMap?.get(documentId);
-      if (!row) continue;
-      const { pastEof } = await readRange(accessHandle, row[1], row[2]);
-      if (pastEof) return true;
+      if (!state.firstIdx.metaIdMap.has(documentId)) continue;
+      if (await idHasRowPastEof(state, accessHandle, documentId)) return true;
     }
     return false;
   });
