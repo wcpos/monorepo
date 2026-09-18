@@ -31,11 +31,11 @@ for (const report of reports) {
       [t.quotaFailure?.statement, t.quotaFailure?.message ?? t.error?.message].filter(Boolean).join(': '), JSON.stringify(t.quotaFailure?.hookFailures ?? []), t.outcome])));
     const groups = new Map();
     for (const trial of cells) { const k = key(trial); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(trial); }
-    output.push(table(['Row', 'Journal', 'Cache', 'Boundary', 'Trials', 'ok', 'ok-with-inflight-present', 'ok-with-inflight-absent', 'lost', 'partial', 'integrity-failed', 'open-failed', 'Median reacquire ms', 'Median reopen ms'],
+    output.push(table(['Row', 'Journal', 'Cache', 'Boundary', 'Trials', 'ok', 'ok-with-inflight-present', 'ok-with-inflight-absent', 'lost', 'partial', 'integrity-failed', 'open-failed', 'Median reopen attempts', 'Median reacquire ms', 'Median reopen ms'],
       [...groups].map(([k, group]) => [...JSON.parse(k), group.length, group.filter(t => t.outcome === 'ok').length,
         group.filter(t => t.outcome === 'ok' && t.inflightPresent === true).length, group.filter(t => t.outcome === 'ok' && t.inflightPresent === false).length,
         ...['lost', 'partial', 'integrity-failed', 'open-failed'].map(outcome => group.filter(t => t.outcome === outcome).length),
-        median(group.map(t => t.reacquireMs)), median(group.map(t => t.reopenMs))])));
+        median(group.map(t => t.reopenAttempts)), median(group.map(t => t.reacquireMs)), median(group.map(t => t.reopenMs))])));
     if (cell === 'pool-exhaustion') output.push('\n' + table(['Trial', 'Opened DBs', 'Clean CANTOPEN + pool-full message', 'addCapacity recovered', 'Error'], cells.map(t => [t.trial, t.openedDatabases, t.cleanFailure, t.capacityRecovered, JSON.stringify(t.failure ?? t.error)])));
   }
 }

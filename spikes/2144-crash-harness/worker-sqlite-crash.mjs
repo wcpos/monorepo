@@ -56,21 +56,14 @@ async function init(input) {
     for (;;) Atomics.wait(flag, 0, 1);
   });
   sqlite = await sqlite3InitModule();
+  // One attempt per worker. Retrying inside a worker whose first acquisition partially succeeded
+  // leaves late-resolving access handles orphaned (sahpool acquires with Promise.all and releases on
+  // the first rejection), so the PAGE retries with a fresh worker instead (recover() in harness-entry).
   const start = performance.now();
-  for (;;) {
-    try {
-      util = await sqlite.installOpfsSAHPoolVfs({ name: 'spike-2144', directory: '/' + spec.pool,
-        initialCapacity: spec.capacity ?? 12, forceReinitIfPreviouslyFailed: true });
-      break;
-    } catch (e) { if (performance.now() - start >= 10000) throw e; await sleep(50); }
-  }
+  util = await sqlite.installOpfsSAHPoolVfs({ name: 'spike-2144', directory: '/' + spec.pool, initialCapacity: spec.capacity ?? 12 });
   const reacquireMs = performance.now() - start;
   if (spec.poolOnly) return { reacquireMs };
-  const openStart = performance.now();
-  for (;;) {
-    try { db = open(spec.name, !spec.reopen); break; }
-    catch (e) { if (performance.now() - openStart >= 10000) throw e; await sleep(50); }
-  }
+  db = open(spec.name, !spec.reopen);
   return { reacquireMs, ...effective };
 }
 async function poolTrial() {

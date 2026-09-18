@@ -91,15 +91,31 @@ function base(spec) {
 const failed = e => ({ outcome: 'open-failed', error: errorInfo(e) });
 async function cleanup(spec, record) {
   if (spec.row !== 'sqlite-sahpool') return; // Control uses its own opaque directory layout; never guess it.
-  try { await (await navigator.storage.getDirectory()).removeEntry(spec.pool, { recursive: true }); }
-  catch (e) { record.cleanupError = errorInfo(e); }
+  const start = performance.now(), root = await navigator.storage.getDirectory();
+  for (;;) { // the just-terminated worker may still hold the directory's handles for ~2 s
+    try { await root.removeEntry(spec.pool, { recursive: true }); record.cleanupMs = performance.now() - start; return; }
+    catch (e) { if (e.name === 'NotFoundError') return; if (performance.now() - start >= 10000) { record.cleanupError = errorInfo(e); return; } await sleep(100); }
+  }
 }
+// Reopen budget after a stop. A stopped worker's access handles are released only when the browser
+// has torn it down (Chrome grants a terminated worker ~2 s to finish its task first), so each attempt
+// uses a FRESH worker; the app's equivalent is a reload. Time to the first successful open is reported.
+const REOPEN_BUDGET_MS = 30000, REOPEN_RETRY_MS = 250;
 async function recover(spec, snapshot) {
-  const s = new Session({ ...spec, reopen: true }), start = performance.now();
+  const start = performance.now(); let s, attempts = 0, lastError;
+  for (;;) {
+    s = new Session({ ...spec, reopen: true }); attempts++;
+    try { await s.open(); break; }
+    catch (e) {
+      lastError = e; const logs = s.logs, workerErrors = s.errors; s.terminate();
+      if (performance.now() - start >= REOPEN_BUDGET_MS) return { ...failed(e), reopenAttempts: attempts, reopenMs: performance.now() - start, logs, workerErrors };
+      await sleep(REOPEN_RETRY_MS);
+    }
+  }
   try {
-    await s.open(); const read = await s.read();
-    return { ...s.metrics, reopenMs: performance.now() - start, ...score(snapshot, read), logs: s.logs, workerErrors: s.errors };
-  } catch (e) { return { ...s.metrics, ...failed(e), reopenMs: performance.now() - start, logs: s.logs, workerErrors: s.errors }; }
+    const read = await s.read();
+    return { ...s.metrics, reacquireMs: performance.now() - start, reopenAttempts: attempts, reopenMs: performance.now() - start, ...score(snapshot, read), logs: s.logs, workerErrors: s.errors, lastReopenError: lastError && errorInfo(lastError) };
+  } catch (e) { return { ...s.metrics, ...failed(e), reopenAttempts: attempts, reopenMs: performance.now() - start, logs: s.logs, workerErrors: s.errors }; }
   finally { await s.close().catch(() => {}); }
 }
 async function seed(s) {
@@ -120,7 +136,7 @@ async function boundaryTrial(spec, n) {
     const k = last ? 1 + Math.floor(random() * last) : null;
     if (['wal-mid-checkpoint', 'db-mid-commit', 'db-after-write-before-flush'].includes(spec.boundary) && !last) throw new Error('Dry run observed no commit/checkpoint main writes');
     const flag = new Int32Array(new SharedArrayBuffer(8)); s = new Session({ ...spec, flag: flag.buffer });
-    await s.open(); await seed(s); Object.assign(record, s.metrics, { k, dryMainWrites: last, dryTrace: dry.trace });
+    await s.open(); await seed(s); Object.assign(record, { ...s.metrics, reacquireMs: undefined, firstOpenMs: s.metrics.reacquireMs }, { k, dryMainWrites: last, dryTrace: dry.trace });
     const start = performance.now(); let completed = false, writeError;
     const writing = s.write(1, n, { arm: { boundary: spec.boundary, k, last }, checkpoint: true })
       .then(() => { completed = true; }, e => { writeError = e; });
