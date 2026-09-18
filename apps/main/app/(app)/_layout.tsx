@@ -20,6 +20,7 @@ import { RegisterSessionBridge } from '@wcpos/core/services/register-session/bri
 import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
+import { SaleCompletionBridge } from '@wcpos/core/screens/main/pos/checkout/completion-journal-bridge';
 import { TerminalPaymentsBridge } from '@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge';
 import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
 import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
@@ -193,6 +194,7 @@ function AppStack() {
 				    screen and a finished leg reaches its receipt unattended (#154). */}
 				<StripeTerminalDriverRegistration key={`${wpApiUrl}:${storeID}:${cashierID}`} />
 				<TerminalPaymentsBridge />
+				<SaleCompletionBridge />
 				{/* A variable product's price range is recomputed from its children on
 				    every read, so an acknowledged variation write leaves the parent's row
 				    stale with nothing to pull it (#1495). Here, not on the Products

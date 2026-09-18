@@ -1,6 +1,15 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { addRxPlugin, createRxDatabase } from 'rxdb';
+import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
+import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+
+import {
+	pendingCompletions,
+	recordCompletionAttempt,
+	resolveCompletionAttempt,
+} from './completion-journal';
 import { row } from './payments/device/fixtures.test-utils';
 import {
 	completeSale,
@@ -63,7 +72,17 @@ const manual = {
 	preLegBalanceMinor: 100,
 	amountMinor: 100,
 } as const;
-beforeEach(() => {
+addRxPlugin(RxDBLocalDocumentsPlugin);
+afterEach(async () => {
+	await ctx.storeDB.remove();
+});
+beforeEach(async () => {
+	ctx.storeDB = await createRxDatabase({
+		name: `owner${Math.random().toString(36).slice(2)}`,
+		storage: getRxStorageMemory(),
+		localDocuments: true,
+		multiInstance: false,
+	});
 	jest.clearAllMocks();
 	mockBound.mockResolvedValue({ id: 'register' });
 	mockSession.mockResolvedValue('session');
@@ -98,7 +117,16 @@ it.each(['choose', 'bound', 'none'] as const)('prepares %s truth table', async (
 		for (const sessionRule of ['require', 'none'] as const) {
 			mockSession.mockClear();
 			mockBound.mockClear();
-			const result = await prepareSale(ctx, { order, completing, bindingStatus, sessionRule });
+			const result = await prepareSale(ctx, {
+				order,
+				completing,
+				bindingStatus,
+				sessionRule,
+				source: 'manual',
+			});
+			expect(!!(await pendingCompletions(ctx.storeDB)).order).toBe(
+				completing && bindingStatus !== 'choose'
+			);
 			const blocked = bindingStatus === 'choose' && completing;
 			expect(result.ok).toBe(!blocked);
 			expect(mockSession).toHaveBeenCalledTimes(!blocked && sessionRule === 'require' ? 1 : 0);
@@ -108,7 +136,13 @@ it.each(['choose', 'bound', 'none'] as const)('prepares %s truth table', async (
 it('propagates session refusal before writes', async () => {
 	mockSession.mockRejectedValueOnce(new Error('register_session_not_open'));
 	await expect(
-		prepareSale(ctx, { order, completing: false, bindingStatus: 'none', sessionRule: 'require' })
+		prepareSale(ctx, {
+			order,
+			completing: false,
+			bindingStatus: 'none',
+			sessionRule: 'require',
+			source: 'manual',
+		})
 	).rejects.toThrow('register_session_not_open');
 	expect(ctx.localPatch).not.toHaveBeenCalled();
 });
@@ -250,4 +284,116 @@ it('offline provenance without a split does not write or allocate metadata', asy
 	expect(mockStamp).not.toHaveBeenCalled();
 	expect(ctx.localPatch).not.toHaveBeenCalled();
 	expect(ctx.pushDocument).not.toHaveBeenCalled();
+});
+
+it('awaits the journal before returning preparation to the money caller', async () => {
+	const insert = jest.spyOn(ctx.storeDB, 'insertLocal');
+	await prepareSale(ctx, {
+		order,
+		completing: true,
+		source: 'manual',
+		bindingStatus: 'none',
+		sessionRule: 'require',
+	});
+	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
+		source: 'manual',
+		attempts: 0,
+	});
+	expect(insert).toHaveBeenCalled();
+});
+it('refuses preparation if the journal cannot be written', async () => {
+	jest.spyOn(ctx.storeDB, 'insertLocal').mockRejectedValueOnce(new Error('disk full'));
+	await expect(
+		prepareSale(ctx, {
+			order,
+			completing: true,
+			source: 'manual',
+			bindingStatus: 'none',
+			sessionRule: 'none',
+		})
+	).rejects.toThrow('disk full');
+});
+it.each([
+	[manual, 'completed'],
+	[{ ...manual, amountMinor: 50 }, 'partial'],
+	[{ source: 'gateway-contract', status: 'failed' }, 'not-completed'],
+] as const)('clears a decided %s only after the audit call', async (outcome, result) => {
+	await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
+	let atAudit: ReturnType<typeof pendingCompletions> | undefined;
+	mockInfo.mockImplementationOnce(() => {
+		atAudit = pendingCompletions(ctx.storeDB);
+	});
+	expect(await completeSale(ctx, order, outcome, { host: 'background' })).toBe(result);
+	if (result === 'completed') expect((await atAudit)?.order).toBeDefined();
+	expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+});
+it('retains a thrown completion with lastError and propagates the original error', async () => {
+	await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'manual' });
+	const error = new Error('finish failed');
+	mockReconcile.mockRejectedValueOnce(error);
+	await expect(completeSale(ctx, order, manual, { host: 'background' })).rejects.toBe(error);
+	expect((await pendingCompletions(ctx.storeDB)).order).toMatchObject({
+		attempts: 1,
+		lastError: 'finish failed',
+	});
+	expect(mockInfo).not.toHaveBeenCalled();
+});
+it.each([42, 0])(
+	'replay refreshes only a remote order (%s), marks the audit and clears',
+	async (id) => {
+		const resident = { uuid: 'order', getLatest: () => ({ payload: { ...payload, id } }) } as never;
+		await recordCompletionAttempt(ctx.storeDB, { orderUuid: 'order', source: 'terminal' });
+		expect(await completeSale(ctx, resident, { source: 'replay' }, { host: 'background' })).toBe(
+			'completed'
+		);
+		expect(mockReconcile).toHaveBeenCalledWith(ctx.runtime, resident, !!id, ctx.stockAdjustment);
+		expect(mockInfo).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ type: 'checkout.completed', replayed: true }),
+			})
+		);
+		expect(mockReceipt).toHaveBeenCalledWith('order', { select: false });
+		expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+	}
+);
+it.each([
+	['completed', true],
+	['on-hold', true],
+	['cancelled', false],
+	['pos-open', false],
+	['pos-partial', false],
+	['pending', false],
+	['failed', false],
+	['', false],
+] as const)('replay accepts only paid statuses for %s', (status, expected) => {
+	expect(isSaleComplete({ source: 'replay' }, 2, { ...payload, status } as never)).toBe(expected);
+});
+
+it('recreates a concurrently cleared attempt when finishing throws, with source and actor', async () => {
+	const actor = { id: 'A', name: 'Cashier A' };
+	const context = { ...ctx, actor };
+	await prepareSale(context, {
+		order,
+		completing: true,
+		source: 'manual',
+		bindingStatus: 'none',
+		sessionRule: 'none',
+	});
+	const error = new Error('finish failed after another tab cleared');
+	mockReconcile.mockImplementationOnce(async () => {
+		await resolveCompletionAttempt(ctx.storeDB, 'order');
+		throw error;
+	});
+	const before = Date.now();
+	await expect(completeSale(context, order, manual, { host: 'background' })).rejects.toBe(error);
+	const attempt = (await pendingCompletions(ctx.storeDB)).order;
+	expect(attempt).toMatchObject({
+		source: 'manual',
+		actor,
+		attempts: 1,
+		lastError: error.message,
+	});
+	expect(Date.parse(attempt.at)).toBeGreaterThanOrEqual(before);
+	expect(Date.parse(attempt.at)).toBeLessThanOrEqual(Date.now());
 });

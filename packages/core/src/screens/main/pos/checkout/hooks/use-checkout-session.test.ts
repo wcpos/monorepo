@@ -7,9 +7,12 @@ import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { recordCompletionAttempt } from '../completion-journal';
 import { useCheckoutSession } from './use-checkout-session';
 
+const mockCheckoutError = jest.fn();
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockReplace = jest.fn();
@@ -51,7 +54,12 @@ jest.mock('../../hooks/use-cart-stock-guard', () => ({
 	useCartStockGuard: () => ({ resolveStockOwnerId: mockResolveStockOwnerId }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ info: jest.fn(), success: jest.fn(), warn: jest.fn(), error: jest.fn() }),
+	getLogger: () => ({
+		info: jest.fn(),
+		success: jest.fn(),
+		warn: jest.fn(),
+		error: (...args: unknown[]) => mockCheckoutError(...args),
+	}),
 }));
 
 const makeOrder = (paymentMethod = 'stripe_terminal_for_woocommerce') => {
@@ -447,6 +455,26 @@ describe('contract provenance preparation', () => {
 			expect.anything(),
 			expect.anything()
 		);
+		expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+			mockProvenancePatch.mock.invocationCallOrder[0]
+		);
+	});
+	it('reports a journal failure without rejecting or posting checkout', async () => {
+		jest.mocked(recordCompletionAttempt).mockRejectedValueOnce(new Error('journal unavailable'));
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => {
+			await expect(result.current.startCheckout()).resolves.toBeUndefined();
+		});
+		expect(result.current.error).toBe('pos_cart.checkout_failed');
+		expect(result.current.loading).toBe(false);
+		expect(mockCheckoutError).toHaveBeenCalledWith('pos_cart.checkout_failed', {
+			code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+			showToast: true,
+		});
+		expect(mockProvenancePatch).not.toHaveBeenCalled();
+		expect(mockProvenancePush).not.toHaveBeenCalled();
+		expect(mockPost).not.toHaveBeenCalled();
 	});
 	it.each(['patch', 'push'])('posts nothing if the provenance %s fails', async (failure) => {
 		if (failure === 'patch') mockProvenancePatch.mockResolvedValueOnce(undefined as never);
@@ -518,16 +546,7 @@ jest.mock('../sale-completion', () => {
 				if (input.online) await ctx.pushDocument(input.order);
 			}
 		),
-		prepareSale: jest.fn(
-			async (
-				_ctx: import('../sale-completion').SaleContext,
-				input: Parameters<typeof actual.prepareSale>[1]
-			) => {
-				if (input.completing && input.bindingStatus === 'choose')
-					return { ok: false, reason: 'choose_register' };
-				return { ok: true, registerId: null, sessionId: null };
-			}
-		),
+		prepareSale: jest.fn(actual.prepareSale),
 	};
 });
 
@@ -542,4 +561,11 @@ jest.mock('../hooks/use-sale-context', () => ({
 		pushDocument: mockProvenancePush,
 		stockAdjustment: mockStockAdjustment,
 	}),
+}));
+
+// Journal storage is exercised against RxDB in the owner/journal suites.
+jest.mock('../completion-journal', () => ({
+	recordCompletionAttempt: jest.fn(async () => {}),
+	resolveCompletionAttempt: jest.fn(async () => {}),
+	failCompletionAttempt: jest.fn(async () => {}),
 }));

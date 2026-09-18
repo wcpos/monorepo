@@ -254,3 +254,10 @@ jest.mock('./use-sale-context', () => ({
 		actor: { id: '7', name: 'pat' },
 	}),
 }));
+
+// Journal storage is exercised against RxDB in the owner/journal suites.
+jest.mock('../completion-journal', () => ({
+	recordCompletionAttempt: jest.fn(async () => {}),
+	resolveCompletionAttempt: jest.fn(async () => {}),
+	failCompletionAttempt: jest.fn(async () => {}),
+}));

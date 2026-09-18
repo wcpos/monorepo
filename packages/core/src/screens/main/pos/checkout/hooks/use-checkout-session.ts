@@ -155,21 +155,6 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const startCheckout = React.useCallback(async () => {
 		if (!orderId || !gatewayResolved) return;
 		if (blockIfDegraded('process-payment', { orderId: orderId })) return;
-		// A gateway sale completes the whole balance, so a store with several registers
-		// and none chosen cannot start one; the picker is on the cart.
-		if (
-			!(
-				await prepareSale(ctx, {
-					order,
-					completing: true,
-					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-					sessionRule: 'none',
-				})
-			).ok
-		) {
-			checkoutLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
-			return;
-		}
 		setLoading(true);
 		setError(null);
 
@@ -184,18 +169,29 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		}
 
 		try {
-			if (online) {
-				try {
-					await persistSaleProvenance(ctx, { order, online: true });
-				} catch {
-					const message = t('pos_cart.checkout_failed');
-					setError(message);
-					checkoutLogger.error(message, {
-						code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
-						showToast: true,
-					});
+			try {
+				// A gateway sale completes the whole balance, so a store with several registers
+				// and none chosen cannot start one; the picker is on the cart.
+				const prepared = await prepareSale(ctx, {
+					order,
+					source: 'gateway-contract',
+					completing: true,
+					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+					sessionRule: 'none',
+				});
+				if (!prepared.ok) {
+					checkoutLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
 					return;
 				}
+				if (online) await persistSaleProvenance(ctx, { order, online: true });
+			} catch {
+				const message = t('pos_cart.checkout_failed');
+				setError(message);
+				checkoutLogger.error(message, {
+					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					showToast: true,
+				});
+				return;
 			}
 			if (!checkoutAttemptIdRef.current) {
 				checkoutAttemptIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;

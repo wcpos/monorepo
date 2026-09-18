@@ -539,7 +539,7 @@
 		"dataSafety": "money-moved",
 		"escalation": "none",
 		"summary": "The card was charged, but the order did not finish.",
-		"docsBody": "The terminal captured the payment and the store has it, but the step that completes the order afterwards failed. The customer has paid. Charging again would take the money twice; the order simply needs finishing.",
+		"docsBody": "The terminal captured the payment and the store has it, but the step that completes the order afterwards failed. The customer has paid. Charging again would take the money twice; the order simply needs finishing. The app finishes the order by itself the next time this store is opened on this device; if this notice is still showing after a restart, contact support.",
 		"troubleshooting": [
 			"Do not take the payment again — the card was charged.",
 			"Open the order from the orders list and complete it.",

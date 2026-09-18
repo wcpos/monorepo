@@ -515,6 +515,12 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		try {
 			const prepared = await prepareSale(ctx, {
 				order,
+				source:
+					balanceMinor === 0
+						? 'zero-balance'
+						: method?.capture.mode === 'manual'
+							? 'manual'
+							: 'terminal',
 				completing: entryAppliedMinor === balanceMinor,
 				bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 				sessionRule: 'require',

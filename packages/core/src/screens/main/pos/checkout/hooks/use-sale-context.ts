@@ -11,7 +11,7 @@ import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import type { SaleContext } from '../sale-completion';
 
 export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext['actor']> } {
-	const { userDB, site, store, wpCredentials } = useStoreSession();
+	const { userDB, storeDB, site, store, wpCredentials } = useStoreSession();
 	const sessions = useRegisterSessionCollection();
 	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	const runtime = useQueryRuntime();
@@ -28,6 +28,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 	return React.useMemo(
 		() => ({
 			userDB,
+			storeDB,
 			siteUuid: site.uuid!,
 			storeId: store.id,
 			sessions,
@@ -41,6 +42,7 @@ export function useSaleContext(): SaleContext & { actor: NonNullable<SaleContext
 		}),
 		[
 			userDB,
+			storeDB,
 			site.uuid,
 			store.id,
 			store.price_num_decimals,
