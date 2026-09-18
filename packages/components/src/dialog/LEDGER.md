@@ -1,0 +1,20 @@
+# Behaviour ledger: `dialog`
+
+Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.md` on `research/component-ledger` (wcpos/roadmap#285) by wcpos/roadmap#345. Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
+
+**Job:** A composable modal dialog supporting centered content, side panels, bottom sheets, and separate scrolling bodies and footers.
+
+**Base:** `@rn-primitives/dialog`, `@rn-primitives/slot`, `react-native`, `react-native-reanimated`, `react-native-safe-area-context`, and the local keyboard-controller wrapper. No platform-suffixed files; `index.tsx` uses `"Platform.select({ web: DialogOverlayWeb, default: DialogOverlayNative })"`, `"Platform.OS !== 'web' || side === 'center' || !open || !node"`, and `"Platform.OS === 'web' && side !== 'center'"`.
+
+## Lines
+
+1. Native overlays account for safe-area insets and keyboard padding — evidence: `10f397594c 2025-03-24 Fix transparent modals`, code: "keyboardVerticalOffset={insets.bottom}" in `packages/components/src/dialog/index.tsx:160`.
+2. Dialog content uses z-60 following the modal stacking fix — evidence: `941db52f6a 2025-03-28 Use containedTransparentModal to fix stacking issue`, code: "bg-card z-60 max-h-full max-w-full" in `packages/components/src/dialog/index.tsx:189`.
+3. Keyboard avoidance imports through the web-compatible local wrapper — evidence: `60f77d4098 2025-04-04 add keyboard-controller wrapper for web`, code: "import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';" in `packages/components/src/dialog/index.tsx:19`.
+4. Side presentations use directional motion with a flexible scrolling body and pinned footer — evidence: `daf8fca838 2026-09-11 feat(ui): overlay batch 3 — Dialog gains side presentation; full-form dialogs open as right panels`, code: "side !== 'center' && 'flex-1'" in `packages/components/src/dialog/index.tsx:333`.
+5. Web side panels flatten Radix’s intermediate wrapper so percentage heights resolve against the overlay — evidence: `ae4d1fae09 2026-09-11 fix(dialog): directional web exit for side panels, flatten the Radix wrapper`, PR #1977, code: "side !== 'center' && '[&>[role=dialog]]:contents'" in `packages/components/src/dialog/index.tsx:83`.
+6. Web side panels exit toward their presentation edge rather than only fading — evidence: `ae4d1fae09 2026-09-11 fix(dialog): directional web exit for side panels, flatten the Radix wrapper`, PR #1977, code: "cn('web:animate-out web:fade-out-0', exitSlide[side])" in `packages/components/src/dialog/index.tsx:258`.
+7. Named portal hosts also resolve to DOM containers so web POS panels do not cover the navigation drawer — evidence: `a49db27e0b 2026-09-11 feat(pos): overlays slide in from the products side, opposite the cart (#1985)`, PR #1985, code: "<DialogPortal hostName={portalHost} container={container}>" in `packages/components/src/dialog/index.tsx:234`.
+8. Web side-panel autofocus waits until the slide finishes and prevents scrolling, with a non-focusable scrim and reduced-motion timer — evidence: `c6e0a7b979 2026-09-11 fix(dialog): side panels focus after the slide, without scrolling the POS (#1989)`, PR #1989, code: "target.focus({ preventScroll: true });" in `packages/components/src/dialog/index.tsx:123`.
+9. Headers reserve space for the close button — evidence: code: "NOTE: extra space on right for the close button" in `packages/components/src/dialog/index.tsx:279`.
+10. Titles supply themed foreground text through the text context — evidence: code: "DialogTitle with proper text color for all themes" in `packages/components/src/dialog/index.tsx:314`.

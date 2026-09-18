@@ -1,0 +1,14 @@
+# Behaviour ledger: `calendar`
+
+Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.md` on `research/component-ledger` (wcpos/roadmap#285) by wcpos/roadmap#345. Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
+
+**Job:** A themed calendar adapted for selecting and displaying a date range.
+
+**Base:** `react-native-calendars`, `date-fns`, and Uniwind’s `useCSSVariable`, with `react-native` Platform. No platform-specific files; `index.tsx` branches on `"Platform.OS === 'web'"` for weekday-header font size.
+
+## Lines
+
+1. Clamps the highlighted range end to maxDate and ignores selections beyond maxDate — evidence: `323b415688 2025-04-04 update calendar component`, code: `"to: maxDateObj && dateRange.to > maxDateObj ? maxDateObj : dateRange.to,"` in `packages/components/src/calendar/index.tsx:65`, code: `"if (maxDateObj && selectedDate > maxDateObj) return;"` in `packages/components/src/calendar/index.tsx:104`.
+2. Moves the range start backward while retaining the previous start as the end when an earlier day is selected — evidence: `323b415688 2025-04-04 update calendar component`, code: `"onDateRangeChange({ from: selectedDate, to: dateRange.from });"` in `packages/components/src/calendar/index.tsx:108`.
+3. Refreshes calendar month/day names when the supplied locale changes — evidence: `323b415688 2025-04-04 update calendar component`, code: `"// Update locale configuration when language changes"` in `packages/components/src/calendar/index.tsx:40`.
+4. Uses larger weekday-header text on native than web — evidence: `323b415688 2025-04-04 update calendar component`, code: `"textDayHeaderFontSize: Platform.OS === 'web' ? 12 : 14,"` in `packages/components/src/calendar/index.tsx:156`.
