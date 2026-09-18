@@ -31,6 +31,7 @@ describe('web storage', () => {
 			client: 'worker-client',
 			args: {
 				workerInput: '/opfs.worker.js',
+				workerOptions: { name: expect.stringMatching(/^wcpos\.repair-ownership:.+/) },
 			},
 		});
 	});
