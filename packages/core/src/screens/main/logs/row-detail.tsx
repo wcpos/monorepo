@@ -227,7 +227,7 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 		<VStack testID={`logs-detail-${row.logId}`} className="relative py-2 pl-4 md:ml-42 md:pl-0">
 			{/* The row's occurrence count on its own: the logger folds repeats within a window
 			    into one row, so an exactly-once assertion must read this, not the row count. */}
-			<Text testID={`logs-detail-attempts-${row.logId}`} className="hidden">
+			<Text testID={`logs-attempts-${row.logId}`} className="hidden">
 				{detail.attempts?.count ?? 1}
 			</Text>
 			{isProblem ? (
