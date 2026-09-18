@@ -358,6 +358,14 @@ export async function addCheckoutProbeProductAgain(page: Page): Promise<void> {
 	await ensureRegisterOpen(page);
 	const probe = probes?.[0] ?? null;
 	if (probe && probe.rowTestId) {
+		// A new order starts on the unfiltered grid, where a run-private probe is one row in
+		// hundreds: search for it again exactly as the first add did (measured live 2026-09-18).
+		await searchAndWaitForServer(
+			page,
+			page.getByTestId('search-products'),
+			'products',
+			probe.token
+		);
 		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
 		const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
 		const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
