@@ -1,0 +1,22 @@
+# Behaviour ledger: `form`
+
+Seeded 2026-09-18 from `.claude/research/2026-09-12-component-behaviour-ledger.md` on `research/component-ledger` (wcpos/roadmap#285) by wcpos/roadmap#345. Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
+
+**Job:** React Hook Form adapters providing field controls, labels, validation messages, accessibility references, and debounced persistence.
+
+**Base:** `react-hook-form`, `react-native`, `react-native-reanimated`, lodash `get`/`debounce`, and local input, selection, and toggle components; no split.
+
+## Lines
+
+1. Re-rendering a settings form no longer replaces its debounced writer and cancels a pending edit — evidence: `96a2689c1b 2026-09-02 fix(form): a re-render no longer cancels a pending settings write`, referenced PR #1483, code: "One debounced writer per delay, held in a ref so a re-render never replaces it." in `packages/components/src/form/use-form-change-handler.ts:70`.
+2. Unmounting flushes a pending edit instead of losing a just-selected setting — evidence: `96a2689c1b 2026-09-02 fix(form): a re-render no longer cancels a pending settings write`, referenced PR #1483, code: "debounced.flush();" in `packages/components/src/form/use-form-change-handler.ts:82`.
+3. Queued edits retain their edit-time persistence callback instead of being redirected after a store switch — evidence: `f3f92ecf59 2026-09-02 fix(form): bind each queued write to its edit-time onChange; type the test doubles`, PR #1766, code: "debounced(changes, onChangeRef.current);" in `packages/components/src/form/use-form-change-handler.ts:112`.
+4. Form-level resets cancel pending debounced writes rather than persisting stale edits — evidence: `bf4403a2ea 2026-05-22 fix: address remaining PR blockers`, code: "debounced?.cancel();" in `packages/components/src/form/use-form-change-handler.ts:103`.
+5. Select and Combobox clears normalize to an empty string so serialization preserves the clear operation — evidence: `27dbf55153 2026-08-23 fix(components): converge FormSelect and FormCombobox on '' when cleared (#1501)`, PR #1501, issue #1482, code: "return option?.value ?? '';" in `packages/components/src/form/option-value.ts:21`.
+6. Accessibility references are emitted only for labels, descriptions, and error messages actually rendered — evidence: `97cdf4c26a 2026-07-15 fix(components): omit dangling toggle group ARIA references`, code: "Each id is emitted only when the node it names exists." in `packages/components/src/form/aria.ts:7`.
+7. Segmented form controls retain ToggleGroup semantics instead of exposing tabs without tab panels — evidence: `68ae0d1d98 2026-07-15 fix(components): keep ToggleGroup semantics in FormToggleGroup, style as segmented control`, PR #645, code: "keeping ToggleGroup selection semantics for assistive technology." in `packages/components/src/form/toggle-group.tsx:19`.
+8. Disabled segmented controls disable their individual options — evidence: `68ae0d1d98 2026-07-15 fix(components): keep ToggleGroup semantics in FormToggleGroup, style as segmented control`, PR #645, code: "disabled={disabled}" in `packages/components/src/form/toggle-group.tsx:58`.
+9. Pressing the selected segmented option again leaves the form value unchanged — evidence: code: "the selected item again is a no-op (a form field must always hold a value)." in `packages/components/src/form/toggle-group.tsx:20`.
+10. Numeric input modes normalize display values and emit numbers for controls such as Numpad — evidence: code: "in these cases we should take and emit a number, this prevents confusion with numeric strings" in `packages/components/src/form/input.tsx:43`.
+11. Tree selection integrates hierarchical multi-selection with field validation and trigger-width matching — evidence: `254447a933 2026-03-26 feat: composable TreeCombobox with category tree filtering`, code: "matchWidth" in `packages/components/src/form/tree-combobox.tsx:84`.
+12. Select and Combobox custom-control props remain typed for controls with additional caller-specific properties — evidence: code: "Generic over the rendered control so that `customComponent` types the rest of the" in `packages/components/src/form/option-control.tsx:24`.
