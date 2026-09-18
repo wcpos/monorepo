@@ -1,0 +1,39 @@
+name: Spike 2143 storage benchmark
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+      - run: bash spikes/2143-storage-benchmark/run.sh --build-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spike-2143-bundles
+          include-hidden-files: true
+          path: |
+            spikes/2143-storage-benchmark/.build/
+            spikes/2143-storage-benchmark/bench.mjs
+  bench-windows:
+    runs-on: windows-latest
+    needs: bundle
+    timeout-minutes: 120
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: spike-2143-bundles
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Root package.json has no Playwright entry; matches installed and template-studio pin.
+      - run: npm install --no-save playwright@1.62.1
+      - run: node bench.mjs --browser chrome --bundles .build --out results.windows-chrome.json --scale both
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spike-2143-results-windows
+          path: results.windows-chrome.json
