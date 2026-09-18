@@ -375,6 +375,15 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			// fetch, then captures; its server-side transient survives a browser reload.
 			// takeTerminal awaits the intent response and the visible leg: reload NOW.
 			await takeTerminal(page, orderId, 'sim-approve');
+			// The reload must land while capture is still pending, or this exercises a plain
+			// restart, not the journal: a live leg still shows its cancel control, and the store
+			// has not captured yet (sim-approve captures on the second status poll, ~2 s later).
+			await expect(page.getByTestId('checkout-terminal-cancel')).toBeVisible();
+			const beforeReload = await readOrder(request, testInfo, authorization, orderId);
+			expect(
+				ledgerRows(beforeReload).map((row) => row.status),
+				'capture landed before the reload; the runner was too slow to hit the window'
+			).not.toContain('captured');
 			await page.reload();
 			// Page listeners survive reload: keep coverage during boot, then re-register
 			// without resetting the pre-reload count or double-registering the listener.

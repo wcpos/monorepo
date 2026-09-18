@@ -137,7 +137,6 @@ export async function tryAddProductBySku(
 ): Promise<'added' | 'unavailable' | 'add_failed'> {
 	// `waitFor`, not `isVisible` — `isVisible()` samples the DOM once and returns
 	// immediately, so it would report "missing" on anything still rendering.
-	await ensureRegisterOpen(page);
 	const search = page.getByTestId('search-products');
 	if (!(await becomesVisible(search, 30_000))) {
 		log.info('[product] search unavailable — falling back to first catalogue product');
