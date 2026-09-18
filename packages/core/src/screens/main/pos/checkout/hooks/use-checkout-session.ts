@@ -7,6 +7,11 @@ import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import {
+	RegisterSessionRequiredError,
+	requireOpenSession,
+} from '../../../../../services/register-session/session-store';
+import { presentSessionRequired } from '../session-required';
 import { persistSaleProvenance, prepareSale } from '../sale-completion';
 import { useSaleContext } from './use-sale-context';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
@@ -169,6 +174,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		}
 
 		try {
+			let registerId: string | null = null;
+			let sessionId: string | null = null;
 			try {
 				// A gateway sale completes the whole balance, so a store with several registers
 				// and none chosen cannot start one; the picker is on the cart.
@@ -177,14 +184,26 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 					source: 'gateway-contract',
 					completing: true,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-					sessionRule: 'none',
+					sessionRule: 'require',
 				});
 				if (!prepared.ok) {
 					checkoutLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
 					return;
 				}
-				if (online) await persistSaleProvenance(ctx, { order, online: true });
-			} catch {
+				registerId = prepared.registerId;
+				sessionId = prepared.sessionId;
+				if (online)
+					await persistSaleProvenance(ctx, {
+						order,
+						source: 'gateway-contract',
+						sessionId: prepared.sessionId,
+						online: true,
+					});
+			} catch (error) {
+				if (error instanceof RegisterSessionRequiredError) {
+					presentSessionRequired(checkoutLogger, t);
+					return;
+				}
 				const message = t('pos_cart.checkout_failed');
 				setError(message);
 				checkoutLogger.error(message, {
@@ -201,6 +220,9 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				context: { order_id: orderId },
 			});
 
+			// Recheck after bootstrap without resetting the completion journal via prepareSale.
+			if ((await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn)) !== sessionId)
+				throw new RegisterSessionRequiredError();
 			// Last point at which no money has moved (#163 ruling R5). The gateway
 			// refetch and the bootstrap POST above are both awaits the worker can die
 			// under, so re-read the latch here rather than trusting the check made
@@ -267,6 +289,9 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 
 			throw new Error(state.status || 'checkout_failed');
 		} catch (err) {
+			if (err instanceof RegisterSessionRequiredError) {
+				return presentSessionRequired(checkoutLogger, t);
+			}
 			if (handleStockRejection(err)) return;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);

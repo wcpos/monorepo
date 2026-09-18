@@ -9,10 +9,12 @@ import {
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { persistSaleProvenance } from '../sale-completion';
 import { recordCompletionAttempt } from '../completion-journal';
 import { useCheckoutSession } from './use-checkout-session';
 
 const mockCheckoutError = jest.fn();
+const mockCheckoutInfo = jest.fn();
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockReplace = jest.fn();
@@ -56,7 +58,7 @@ jest.mock('../../hooks/use-cart-stock-guard', () => ({
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		debug: jest.fn(),
-		info: jest.fn(),
+		info: (...args: unknown[]) => mockCheckoutInfo(...args),
 		success: jest.fn(),
 		warn: jest.fn(),
 		error: (...args: unknown[]) => mockCheckoutError(...args),
@@ -417,7 +419,12 @@ describe('useCheckoutSession', () => {
 	});
 });
 
-const mockProvenancePatch = jest.fn(async () => ({ document: order }));
+const mockProvenancePatch = jest.fn(
+	async (_input: {
+		document: unknown;
+		data: { meta_data: { key: string; value: unknown }[] };
+	}) => ({ document: order })
+);
 const mockProvenancePush = jest.fn(async (_order: unknown): Promise<void> => undefined);
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockProvenancePatch }),
@@ -578,7 +585,9 @@ jest.mock('../sale-completion', () => {
 
 jest.mock('../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
-		userDB: {},
+		userDB: { getLocal: async () => null },
+		sessionsOn: mockSessionsOn,
+		sessions: mockSessions,
 		siteUuid: 'site',
 		storeId: 1,
 		runtime: { engine: { require: mockEngineRequire } },
@@ -595,3 +604,153 @@ jest.mock('../completion-journal', () => ({
 	resolveCompletionAttempt: jest.fn(async () => {}),
 	failCompletionAttempt: jest.fn(async () => {}),
 }));
+
+let mockSessionsOn = false;
+const mockSessions = { findOne: jest.fn() };
+describe('contract session gate', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		mockSessionsOn = true;
+		mockSessions.findOne.mockReturnValue({ exec: async () => null });
+		mockGet.mockReset().mockResolvedValue({
+			data: [{ id: 'stripe_terminal_for_woocommerce', capabilities: { supports_checkout: true } }],
+		});
+		mockPost.mockReset().mockResolvedValue({ data: { status: 'awaiting_customer' } });
+		jest
+			.mocked(persistSaleProvenance)
+			.mockImplementationOnce(jest.requireActual('../sale-completion').persistSaleProvenance);
+	});
+	afterEach(() => {
+		mockSessionsOn = false;
+		// A refused preparation leaves the one-shot provenance implementation unused.
+		jest.mocked(persistSaleProvenance).mockReset();
+	});
+	it('no open session: toasts without POST, provenance, generic error or stuck loading', async () => {
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => {
+			await expect(result.current.startCheckout()).resolves.toBeUndefined();
+		});
+		expect(mockCheckoutInfo).toHaveBeenCalledWith(
+			'pos_checkout.open_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(mockProvenancePatch).not.toHaveBeenCalled();
+		expect(mockProvenancePush).not.toHaveBeenCalled();
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+		expect(result.current.error).toBeNull();
+		expect(result.current.loading).toBe(false);
+		expect(mockCheckoutError).not.toHaveBeenCalled();
+	});
+	it('session closes during bootstrap: refuses the payment POST with a toast and no second journal write', async () => {
+		mockSessions.findOne.mockReturnValue({
+			exec: async () => ({ id: 'session-A', incrementalPatch: async () => undefined }),
+		});
+		mockPost.mockImplementationOnce(async () => {
+			mockSessions.findOne.mockReturnValue({ exec: async () => null });
+			return { data: { status: 'ready' } };
+		});
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => result.current.startCheckout());
+		expect(mockPost.mock.calls.map(([url]) => url)).toEqual([
+			'payment-gateways/stripe_terminal_for_woocommerce/bootstrap',
+		]);
+		expect(mockCheckoutInfo).toHaveBeenCalledTimes(1);
+		expect(mockCheckoutInfo).toHaveBeenCalledWith(
+			'pos_checkout.open_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(recordCompletionAttempt).toHaveBeenCalledTimes(1);
+		expect(result.current.error).toBeNull();
+		expect(result.current.loading).toBe(false);
+		expect(mockCheckoutError).not.toHaveBeenCalled();
+	});
+	it.each(['session-B', 'session-A'])(
+		'bootstrap recheck returns %s: only the stamped session may POST',
+		async (sessionId) => {
+			mockSessions.findOne.mockReturnValue({
+				exec: async () => ({ id: 'session-A', incrementalPatch: async () => undefined }),
+			});
+			mockPost.mockImplementationOnce(async () => {
+				mockSessions.findOne.mockReturnValue({
+					exec: async () => ({ id: sessionId, incrementalPatch: async () => undefined }),
+				});
+				return { data: { status: 'ready' } };
+			});
+			const { result } = renderHook(() => useCheckoutSession(order));
+			await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+			await act(async () => result.current.startCheckout());
+			const same = sessionId === 'session-A';
+			expect(mockPost.mock.calls.map(([url]) => url)).toEqual([
+				'payment-gateways/stripe_terminal_for_woocommerce/bootstrap',
+				...(same ? ['orders/42/checkout'] : []),
+			]);
+			expect(mockProvenancePatch.mock.calls[0][0].data.meta_data).toContainEqual({
+				key: '_wcpos_session',
+				value: 'session-A',
+			});
+			expect(mockProvenancePatch).toHaveBeenCalledTimes(1);
+			expect(recordCompletionAttempt).toHaveBeenCalledTimes(1);
+			expect(mockCheckoutInfo).toHaveBeenCalledTimes(same ? 0 : 1);
+			if (!same) {
+				expect(mockCheckoutInfo).toHaveBeenCalledWith(
+					'pos_checkout.open_register_first',
+					expect.objectContaining({ showToast: true })
+				);
+				expect(result.current.error).toBeNull();
+			}
+			expect(result.current.loading).toBe(false);
+			expect(mockCheckoutError).not.toHaveBeenCalled();
+		}
+	);
+	it('retrying a pre-stamped unpaid contract order attributes it to the newly open session', async () => {
+		const retryOrder = makeOrder();
+		const identity = [
+			{ key: '_wcpos_sale_counter', value: '7' },
+			{ key: '_wcpos_sale_time', value: '2026-09-18T08:00:00Z' },
+			{ key: '_wcpos_register', value: 'register-A' },
+		];
+		Object.assign(retryOrder.payload, {
+			status: 'failed',
+			meta_data: [...identity, { key: '_wcpos_session', value: 'session-A' }],
+		});
+		mockSessions.findOne.mockReturnValue({
+			exec: async () => ({ id: 'session-B', incrementalPatch: async () => undefined }),
+		});
+		const { result } = renderHook(() => useCheckoutSession(retryOrder as never));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => result.current.startCheckout());
+		expect(mockProvenancePatch.mock.calls[0][0].data.meta_data).toEqual([
+			...identity,
+			{ key: '_wcpos_session', value: 'session-B' },
+		]);
+	});
+	it.each([true, false])(
+		'stamps the open session only with sessions enabled: %s',
+		async (enabled) => {
+			mockSessionsOn = enabled;
+			mockSessions.findOne.mockReturnValue({
+				exec: async () => ({ id: 'session-42', incrementalPatch: async () => undefined }),
+			});
+			const { result } = renderHook(() => useCheckoutSession(order));
+			await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+			await act(async () => result.current.startCheckout());
+			const meta = mockProvenancePatch.mock.calls[0][0].data.meta_data;
+			expect(meta.filter(({ key }) => key === '_wcpos_session')).toEqual(
+				enabled ? [{ key: '_wcpos_session', value: 'session-42' }] : []
+			);
+			expect(mockPost).toHaveBeenCalledWith(
+				'orders/42/checkout',
+				expect.anything(),
+				expect.anything()
+			);
+			expect(mockCheckoutInfo).not.toHaveBeenCalledWith(
+				'pos_checkout.open_register_first',
+				expect.anything()
+			);
+			expect(result.current.loading).toBe(false);
+		}
+	);
+});

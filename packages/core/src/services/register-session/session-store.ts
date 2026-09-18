@@ -35,6 +35,7 @@ export class RegisterSessionRequiredError extends Error {
 		this.name = 'RegisterSessionRequiredError';
 	}
 }
+export const openSessionSelector = { status: 'open', sync_status: { $ne: 'failed' } } as const;
 export async function requireOpenSession(
 	sessions: RegisterSessionCollection | undefined,
 	registerId: string | null,
@@ -43,7 +44,7 @@ export async function requireOpenSession(
 	if (!enabled) return null;
 	const session = await sessions
 		?.findOne({
-			selector: { register_id: registerId ?? '', status: 'open', sync_status: { $ne: 'failed' } },
+			selector: { register_id: registerId ?? '', ...openSessionSelector },
 		})
 		.exec();
 	if (!session) throw new RegisterSessionRequiredError();

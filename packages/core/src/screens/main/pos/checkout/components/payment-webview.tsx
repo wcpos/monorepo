@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
+import { filter, take } from 'rxjs';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -10,6 +11,11 @@ import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import {
+	openSessionSelector,
+	RegisterSessionRequiredError,
+} from '../../../../../services/register-session/session-store';
+import { presentSessionRequired } from '../session-required';
 import { isSaleComplete, persistSaleProvenance, prepareSale } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
@@ -122,23 +128,29 @@ export function PaymentWebview({
 }: PaymentWebviewProps) {
 	const router = useRouter();
 	const ctx = useSaleContext();
+	const { sessionsOn } = ctx;
 	const completeOrderFlow = useCompleteOrderFlow(order, 'modal');
 	const orderData = useRecordField(order, (record) => record.payload);
 	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { userDB, site, store } = useStoreSession();
-	const { status: bindingStatus } = useRegisterBinding();
+	const { status: bindingStatus, registerId } = useRegisterBinding();
+	const [sessionRetry, setSessionRetry] = React.useState(0);
 	const siteUuid = site.uuid!;
+	const preparationKey = `${order.uuid}:${registerId}`;
 	const [preparation, setPreparation] = React.useState<{
-		uuid: string;
+		key: string;
 		status: 'ready' | 'failed';
+		sessionRequired?: boolean;
+		sessionId?: string | null;
 	} | null>(null);
-	// Online, the pay page is exposed only once this order's provenance is persisted
-	// (the effect below), and a failed save keeps it closed even if connectivity then
-	// drops; offline with no attempt made, the page cannot complete a sale anyway.
-	const prepared = preparation?.uuid === order.uuid ? preparation.status : null;
+	// Sessions require preparation even offline: a stale probe may hide a reachable
+	// pay page. Online also waits for provenance; failed preparation stays closed.
+	const prepared = preparation?.key === preparationKey ? preparation.status : null;
 	const paymentURL =
-		(online && prepared !== 'ready') || prepared === 'failed' ? undefined : rawPaymentURL;
+		((online || sessionsOn) && prepared !== 'ready') || prepared === 'failed'
+			? undefined
+			: rawPaymentURL;
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
 	const { wpCredentials } = useAppState();
@@ -185,11 +197,11 @@ export function PaymentWebview({
 	React.useEffect(() => {
 		collaborators.current = { order, ctx, setFrameStatus, orderLogger, t };
 	});
-	// Mounting the external pay page can complete the sale: persist attribution before
-	// exposing its URL. Bind to order identity, not revisions emitted by our own write.
+	// Mounting the external pay page can complete the sale: prepare before exposing
+	// its URL, persisting attribution online. Key on order identity, not our writes.
 	// Cleanup only suppresses an obsolete view's readiness update.
 	React.useEffect(() => {
-		if (!online || !rawPaymentURL) return;
+		if ((!online && !sessionsOn) || !rawPaymentURL) return;
 		const { order: currentOrder, ctx, setFrameStatus, orderLogger, t } = collaborators.current;
 		let active = true;
 		void (async () => {
@@ -199,21 +211,35 @@ export function PaymentWebview({
 					source: 'gateway-snapshot',
 					completing: true,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-					sessionRule: 'none',
+					sessionRule: 'require',
 				});
 				if (!active) return;
 				if (!prepared.ok) {
-					setPreparation({ uuid: currentOrder.uuid, status: 'failed' });
+					setPreparation({ key: preparationKey, status: 'failed' });
 					setFrameStatus('stalled');
 					orderLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
 					return;
 				}
-				await persistSaleProvenance(ctx, { order: currentOrder, online: true });
-				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready' });
+				const { sessionId } = prepared;
+				await persistSaleProvenance(ctx, {
+					order: currentOrder,
+					source: 'gateway-snapshot',
+					sessionId,
+					online,
+				});
+				if (active) setPreparation({ key: preparationKey, status: 'ready', sessionId });
 			} catch (error) {
 				if (!active) return;
-				setPreparation({ uuid: currentOrder.uuid, status: 'failed' });
+				setPreparation({
+					key: preparationKey,
+					status: 'failed',
+					sessionRequired: error instanceof RegisterSessionRequiredError,
+				});
 				setFrameStatus('stalled');
+				if (error instanceof RegisterSessionRequiredError) {
+					presentSessionRequired(orderLogger, t);
+					return;
+				}
 				orderLogger.error('Checkout failed', {
 					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 					showToast: true,
@@ -225,7 +251,44 @@ export function PaymentWebview({
 		return () => {
 			active = false;
 		};
-	}, [order.uuid, userDB, siteUuid, store.id, online, rawPaymentURL, retryToken, bindingStatus]);
+	}, [
+		preparationKey,
+		userDB,
+		siteUuid,
+		store.id,
+		online,
+		rawPaymentURL,
+		retryToken,
+		sessionRetry,
+		bindingStatus,
+		sessionsOn,
+	]);
+
+	// Readiness follows the prepared row; only a session refusal observes reopening.
+	React.useEffect(() => {
+		if (preparation?.key !== preparationKey || !sessionsOn) return;
+		const sessionId = preparation.status === 'ready' ? preparation.sessionId : null;
+		if (!sessionId && !preparation.sessionRequired) return;
+		const id = registerId ?? '';
+		const selector = {
+			...openSessionSelector,
+			...(sessionId ? { id: sessionId } : { register_id: id }),
+		};
+		const subscription = ctx.sessions
+			?.findOne({ selector })
+			.$.pipe(
+				filter((session) => (sessionId ? !session : !!session)),
+				take(1)
+			)
+			.subscribe(() => {
+				if (!sessionId) return setSessionRetry((value) => value + 1);
+				setPreparation({ key: preparationKey, status: 'failed', sessionRequired: true });
+				const { setFrameStatus, orderLogger, t } = collaborators.current;
+				setFrameStatus('stalled');
+				presentSessionRequired(orderLogger, t);
+			});
+		return () => subscription?.unsubscribe();
+	}, [ctx.sessions, registerId, preparationKey, preparation, sessionsOn]);
 
 	/**
 	 *
@@ -622,9 +685,9 @@ export function PaymentWebview({
 	React.useLayoutEffect(() => {
 		loadCountRef.current = 0;
 		frameSettledRef.current = false;
-		setFrameStatus('loading');
+		setFrameStatus(prepared === 'failed' ? 'stalled' : 'loading');
 		return () => setFrameStatus('loading');
-	}, [paymentURLWithToken, frameKey, setFrameStatus]);
+	}, [paymentURLWithToken, frameKey, prepared, setFrameStatus]);
 
 	/**
 	 * The load watchdog. Runs for every navigation of the first document (a new
