@@ -15,7 +15,7 @@ import { preparePatch as batchPatch } from './patch-rxdb-premium-cleanup-compact
 
 const require = createRequire(import.meta.url);
 const premiumRoot = dirname(require.resolve('rxdb-premium/package.json'));
-const { fillWithDefaultSettings } = require('rxdb');
+const { fillWithDefaultSettings, prepareQuery } = require('rxdb');
 const schema = fillWithDefaultSettings({
 	version: 0,
 	primaryKey: 'id',
@@ -257,9 +257,21 @@ for (const scenario of [
 				// stale instance fails loudly and the baked index stays authoritative.
 				await assert.rejects(boot.cleanup(0), /range-past-eof/);
 				await boot.taskQueue.awaitIdle();
-				// A read must not serve the live row as absent either: that is the
-				// logout. It fails the same way until the instance restarts.
+				// No read may serve the live row as absent: that is the logout. Every
+				// read API fails the same way until the instance restarts. The
+				// index-driven ones (query, getChangedDocumentsSince) reach it through
+				// their malformed-JSON catch: a past-EOF range is read as blank bytes
+				// that do not parse, never as an empty result set.
 				await assert.rejects(boot.findDocumentsById(['login'], false), /range-past-eof/);
+				await boot.taskQueue.awaitIdle();
+				const everything = prepareQuery(schema, {
+					selector: {},
+					skip: 0,
+					sort: [{ id: 'asc' }],
+				});
+				await assert.rejects(boot.query(everything), /range-past-eof/);
+				await boot.taskQueue.awaitIdle();
+				await assert.rejects(boot.getChangedDocumentsSince(100, undefined), /range-past-eof/);
 				await boot.taskQueue.awaitIdle();
 				const kinds = events.map((e) => `${e.kind}:${e.reason ?? ''}`).join(' ');
 				assert.ok(
