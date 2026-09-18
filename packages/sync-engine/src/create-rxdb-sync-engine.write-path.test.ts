@@ -1430,6 +1430,63 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		await engine.dispose();
 	});
 
+	it('a 401 emits write-deferred, not write-rejected, and leaves the order queued', async () => {
+		const server = createFakeWriteServer();
+		const bridge = {
+			publish: vi.fn(),
+			subscribe: () => () => {},
+			publishDrainNudge: vi.fn(),
+			subscribeDrainNudge: () => () => {},
+		};
+		const engine = engineWith({
+			ports: { writeOutcomeBridge: bridge },
+			fetch: (url, init) =>
+				init?.method === 'POST'
+					? Promise.resolve(
+							new Response(JSON.stringify({ code: 'woocommerce_pos_rest_unauthorized' }), {
+								status: 401,
+							})
+						)
+					: server.fetch(url, init as never),
+		});
+		try {
+			await engine.ready;
+			const events: EngineEvent[] = [];
+			engine.events((event) => events.push(event));
+			await insertBornLocalOrder(engine, UUID_A);
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: {
+					status: 'pos-open',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: UUID_A }],
+				},
+			});
+
+			expect(await engine.sync('write-drain')).toMatchObject({
+				status: 'ran',
+				failed: 1,
+				rejected: 0,
+			});
+			expect(events.filter((event) => event.type === 'write-deferred')).toEqual([
+				{
+					type: 'write-deferred',
+					collection: 'orders',
+					recordId: UUID_A,
+					mutationId: receipt.mutationId,
+					status: 401,
+					reason: 'woocommerce_pos_rest_unauthorized',
+				},
+			]);
+			expect(events.some((event) => event.type === 'write-rejected')).toBe(false);
+			expect(engine.status().queueDepth).toBe(1);
+			expect(bridge.publish).not.toHaveBeenCalled();
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('a permanent 4xx dead-letters: write-rejected event, queue drained of it', async () => {
 		const server = createFakeWriteServer();
 		server.script(() => ({ kind: 'identity_ambiguous' as const }));

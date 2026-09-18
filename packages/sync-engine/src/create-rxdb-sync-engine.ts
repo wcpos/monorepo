@@ -459,6 +459,14 @@ export type EngineEvent =
 			currentRevision: string | null;
 	  }
 	| {
+			type: 'write-deferred';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			status?: number;
+			reason?: string;
+	  }
+	| {
 			type: 'write-rejected';
 			collection: string;
 			recordId: string;
@@ -500,6 +508,13 @@ export type EngineStatus = {
 	scopesOpen: number;
 	guards: { wrongScopeWrites: number; lateResponsesDropped: number };
 	gatedBy: 'offline' | 'lifecycle' | 'bootstrap-failed' | null;
+	/**
+	 * The host is holding automatic ticks because the store refuses the session (a
+	 * refreshed token still answers 401, or the refresh token itself was rejected).
+	 * A write enqueued under this hold cannot reach the store until the cashier signs
+	 * in again, so a waiter may settle on it without a drain telling it so.
+	 */
+	authRequired: boolean;
 	lanes: Record<
 		Exclude<EngineLane, 'all'>,
 		{
@@ -1776,7 +1791,7 @@ export function createRxdbSyncEngine(
 			// slow or broken channel can never delay this window's own feedback, and
 			// only for outcomes THIS instance produced — a bridged event never comes
 			// back through here.
-			ports.writeOutcomeBridge?.publish(event);
+			if (event.type !== 'write-deferred') ports.writeOutcomeBridge?.publish(event);
 			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
 				return;
 			}
@@ -2200,6 +2215,7 @@ export function createRxdbSyncEngine(
 						: manager.activeScope !== null && bootstrapFailures.has(manager.activeScope)
 							? 'bootstrap-failed'
 							: null,
+			authRequired: ports.holdAutomaticTicks?.() === true,
 			bootstrapFailed: Object.fromEntries(bootstrapFailures),
 			activeScopeId: disposed ? null : manager.activeScope,
 			scopesOpen: stats.scopesOpen,

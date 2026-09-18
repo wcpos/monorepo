@@ -83,6 +83,7 @@ describe('drainMutationQueue', () => {
 			held: 0,
 			conflicts: [],
 			failed: 0,
+			failures: [],
 			deferred: 0,
 			rejected: [],
 		});
@@ -111,6 +112,79 @@ describe('drainMutationQueue', () => {
 		expect((await q.pending()).map((m) => m.mutationId)).toEqual(['m1']);
 	});
 
+	it('keeps a 401 pending with backoff, reports it the moment it happens, and reports the rows FIFO-blocked behind it', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'm1', recordId: 'rec-A' }),
+			mut({ mutationId: 'm2', recordId: 'rec-A' }),
+			mut({ mutationId: 'm3', recordId: 'rec-B' })
+		);
+		const now = Date.parse('2026-06-26T00:00:00.000Z');
+		// One ordered trace of pushes and failure reports: a waiter on m1 must be
+		// told BEFORE the drain moves on to rec-B, not after the whole queue ran.
+		const trace: string[] = [];
+		const result = await drainMutationQueue({
+			queue: q,
+			now: () => now,
+			push: async (mutation) => {
+				trace.push(`push:${mutation.mutationId}`);
+				if (mutation.recordId === 'rec-A') {
+					throw new RecordPushError(mutation, 401, 'woocommerce_pos_rest_unauthorized');
+				}
+				return ok(mutation);
+			},
+			onRetryableFailure: ({ mutation }) => trace.push(`deferred:${mutation.mutationId}`),
+		});
+
+		expect(trace).toEqual(['push:m1', 'deferred:m1', 'deferred:m2', 'push:m3']);
+		expect(result).toMatchObject({ pushed: 1, failed: 1, rejected: [] });
+		expect(result.failures).toEqual([
+			{
+				mutation: expect.objectContaining({ mutationId: 'm1' }),
+				status: 401,
+				reason: 'woocommerce_pos_rest_unauthorized',
+			},
+			// m2 was never pushed (FIFO behind m1) but a waiter on it needs the same verdict.
+			{
+				mutation: expect.objectContaining({ mutationId: 'm2' }),
+				status: 401,
+				reason: 'woocommerce_pos_rest_unauthorized',
+			},
+		]);
+		const pending = await q.pending();
+		expect(pending.map((m) => m.mutationId)).toEqual(['m1', 'm2']);
+		expect(pending[0]).toMatchObject({ status: 'pending', attempts: 1 });
+		expect(Date.parse(pending[0]!.nextAttemptAt!)).toBeGreaterThan(now);
+		// The blocked successor was never attempted, so it carries no backoff of its own.
+		expect(pending[1]!.attempts ?? 0).toBe(0);
+	});
+
+	it('blocks and reports per COLLECTION+record, so a 401 on one collection does not stop the same id in another', async () => {
+		// A recordId is unique within its collection, not across them. Keying the
+		// drain's per-record sets on the id alone let an order's refusal block — and
+		// report its 401 against — an unrelated product carrying the same id.
+		const q = await queueWith(
+			mut({ mutationId: 'm1', collectionName: 'orders', recordId: 'shared-id' }),
+			mut({ mutationId: 'm2', collectionName: 'products', recordId: 'shared-id' })
+		);
+		const pushed: string[] = [];
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async (mutation) => {
+				pushed.push(`${mutation.collectionName}:${mutation.mutationId}`);
+				if (mutation.collectionName === 'orders') {
+					throw new RecordPushError(mutation, 401, 'woocommerce_pos_rest_unauthorized');
+				}
+				return ok(mutation);
+			},
+		});
+
+		// The product was pushed, not swept up by the order's wall.
+		expect(pushed).toEqual(['orders:m1', 'products:m2']);
+		expect(result).toMatchObject({ pushed: 1, failed: 1 });
+		expect(result.failures.map(({ mutation }) => mutation.mutationId)).toEqual(['m1']);
+		expect((await q.pending()).map((m) => m.mutationId)).toEqual(['m1']);
+	});
+
 	it('dead-letters a non-retryable 4xx (e.g. unsupported collection) instead of retrying forever', async () => {
 		const q = await queueWith(mut({ mutationId: 'm1', recordId: 'rec-A' }));
 		const err = Object.assign(new Error('unknown collection'), { status: 400 });
@@ -124,6 +198,7 @@ describe('drainMutationQueue', () => {
 		});
 		expect(result.rejected.map(({ mutation }) => mutation.mutationId)).toEqual(['m1']);
 		expect(result.failed).toBe(0);
+		expect((await q.all())[0]).toMatchObject({ status: 'rejected' });
 		expect(await q.pending()).toEqual([]); // dead-lettered (removed), NOT left to retry forever
 		expect(events.some((e) => e.type === 'push.rejected' && e.fields?.status === 400)).toBe(true);
 	});

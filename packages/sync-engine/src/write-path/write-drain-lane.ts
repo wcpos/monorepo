@@ -207,6 +207,14 @@ export type WriteOutcomeEvent =
 			currentRevision: string | null;
 	  }
 	| {
+			type: 'write-deferred';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			status?: number;
+			reason?: string;
+	  }
+	| {
 			type: 'write-rejected';
 			collection: string;
 			recordId: string;
@@ -646,6 +654,19 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									currentRevision: pushResult.currentRevision,
 								});
 							},
+							// A deferral stays queued, so it is not subject to the acknowledgement
+							// gate below and is emitted AS the drain meets it: a waiter on a 401
+							// (and on any row queued behind that record) must not wait for the
+							// rest of the queue to be tried first.
+							onRetryableFailure: ({ mutation, status, reason }) =>
+								deps.emitWriteEvent({
+									type: 'write-deferred',
+									collection: mutation.collectionName,
+									recordId: mutation.recordId,
+									mutationId: mutation.mutationId,
+									status,
+									reason,
+								}),
 							observe: deps.diagnostics,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),

@@ -51,6 +51,7 @@ function followerTab(bridge: WriteOutcomeBridge) {
 			return () => listeners.delete(callback);
 		},
 		// A follower's drain tick is a no-op (#1057) — that is the whole problem.
+		status: () => ({ authRequired: false }),
 		sync: jest.fn().mockResolvedValue({ lane: 'write-drain', status: 'ran', pushed: 0 }),
 	} as unknown as RxdbSyncEngine;
 	return { engine };

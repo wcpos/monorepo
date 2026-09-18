@@ -1,5 +1,5 @@
 import { TERMINAL_WRITE_EVENT_TYPES } from '@wcpos/sync-engine';
-import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 type AwaitedWriteOutcome = 'success' | 'success-local';
 
@@ -22,8 +22,20 @@ export class WriteOutcomeError extends Error {
 	}
 }
 
+export class WriteDeferredError extends Error {
+	status?: number;
+	reason?: string;
+
+	constructor(mutationId: string, status?: number, reason?: string) {
+		super(`write-deferred (${status}) for mutation "${mutationId}"`);
+		this.name = 'WriteDeferredError';
+		this.status = status;
+		this.reason = reason;
+	}
+}
+
 export function awaitWriteOutcome(
-	engine: Pick<RxdbSyncEngine, 'events' | 'sync'>,
+	engine: Pick<RxdbSyncEngine, 'events' | 'status' | 'sync'>,
 	mutationId: string,
 	options: { timeoutMs?: number } = {}
 ): Promise<AwaitedWriteOutcome> {
@@ -48,7 +60,7 @@ export function awaitWriteOutcome(
 			(event) => {
 				if (
 					// The engine is the producer of this set, so it is imported, not mirrored.
-					!TERMINAL_WRITE_EVENT_TYPES.has(event.type) ||
+					(!TERMINAL_WRITE_EVENT_TYPES.has(event.type) && event.type !== 'write-deferred') ||
 					!('mutationId' in event) ||
 					event.mutationId !== mutationId
 				) {
@@ -56,6 +68,11 @@ export function awaitWriteOutcome(
 				}
 
 				switch (event.type) {
+					case 'write-deferred':
+						if (event.status === 401) {
+							finish(() => reject(new WriteDeferredError(mutationId, event.status, event.reason)));
+						}
+						break;
 					case 'write-acknowledged':
 					case 'write-ack-rematerialized':
 						finish(() => resolve('success'));
@@ -76,7 +93,18 @@ export function awaitWriteOutcome(
 		);
 		// The replay fires synchronously inside events(), so `settled` may already
 		// be true here — this is what releases the subscription in that case.
-		if (settled) unsubscribe();
+		if (settled) {
+			unsubscribe();
+			return;
+		}
+
+		// A standing auth hold is the 401 verdict known up front. A retry enqueued behind
+		// a held row is FIFO-blocked in the backoff window, where no drain reports it, so
+		// without this it would wait out the clock to learn what the engine already knows.
+		if (engine.status().authRequired) {
+			finish(() => reject(new WriteDeferredError(mutationId, 401, 'auth-required')));
+			return;
+		}
 
 		void engine.sync('write-drain').catch((error) => finish(() => reject(error)));
 	});

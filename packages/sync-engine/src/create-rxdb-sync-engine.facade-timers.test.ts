@@ -305,6 +305,19 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		await engine.dispose();
 	});
 
+	it('status().authRequired mirrors the host auth hold', async () => {
+		let held = true;
+		const engine = engineWith({ mode: 'manual', holdAutomaticTicks: () => held });
+		try {
+			await engine.ready;
+			expect(engine.status().authRequired).toBe(true);
+			held = false;
+			expect(engine.status().authRequired).toBe(false);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('holds automatic ticks for auth, but not manual sync, and resumes when cleared', async () => {
 		const captured = captureTimers();
 		let held = true;

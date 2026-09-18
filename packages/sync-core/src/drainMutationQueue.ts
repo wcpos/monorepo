@@ -92,6 +92,8 @@ export type DrainResult = {
 	conflicts: PushResult[];
 	/** Mutations whose push threw a RETRYABLE error (5xx, network, in-progress) — left queued to retry. */
 	failed: number;
+	/** Retryable first-push failures; conflict/precondition re-pushes are not included. */
+	failures: { mutation: QueuedMutation; status?: number; reason?: string }[];
 	/** Mutations skipped this drain because their backoff window has not yet elapsed (ADR 0012). */
 	deferred: number;
 	/**
@@ -108,8 +110,21 @@ export type DrainResult = {
 	}[];
 };
 
+// A 401 is a session failure, not a payload verdict; the queue drains after re-auth.
+const SESSION_EXPIRED_STATUS = 401;
+
+/**
+ * The queue's record identity: a recordId is unique within its collection, not across
+ * them, so every per-record set in a drain keys on both. Keying on recordId alone let
+ * an orders row block — and, since the deferral work, mis-report — a products row that
+ * happened to carry the same id.
+ */
+function recordKey(mutation: Pick<QueuedMutation, 'collectionName' | 'recordId'>): string {
+	return `${mutation.collectionName}\u0000${mutation.recordId}`;
+}
+
 /** 4xx codes that ARE worth retrying — timeout, conflict/in-progress, too-early, rate-limit. */
-const RETRYABLE_4XX = new Set([408, 409, 425, 429]);
+const RETRYABLE_4XX = new Set([SESSION_EXPIRED_STATUS, 408, 409, 425, 429]);
 
 /**
  * A thrown push error that will never succeed by retrying: either the adapter explicitly
@@ -186,7 +201,7 @@ async function annihilateNeverPushedChains(input: {
 	const pending = await input.queue.pending();
 	const byRecord = new Map<string, QueuedMutation[]>();
 	for (const row of pending) {
-		const key = `${row.collectionName}\u0000${row.recordId}`;
+		const key = recordKey(row);
 		const bucket = byRecord.get(key);
 		if (bucket) bucket.push(row);
 		else byRecord.set(key, [row]);
@@ -278,6 +293,13 @@ export async function drainMutationQueue(input: {
 	removeResident?: (mutation: QueuedMutation, signal?: AbortSignal) => Promise<void>;
 	/** Leaves matching mutations pending without claiming, retrying, or backing off. */
 	shouldHold?: (mutation: QueuedMutation) => Promise<boolean>;
+	/**
+	 * Called the moment a push fails retryably — before the drain moves on to the
+	 * next row — and again for every later row of the same record this drain then
+	 * skips behind it (FIFO), carrying the head's status. A waiter on a 401 must
+	 * hear about it now, not after the rest of the queue has been tried.
+	 */
+	onRetryableFailure?: (failure: DrainResult['failures'][number]) => void;
 	/**
 	 * This drain instance's id + how long its claim lease lasts (task 43 follow-up).
 	 * With both set, a claim carries a stealable lease so two windows draining
@@ -377,9 +399,17 @@ export async function drainMutationQueue(input: {
 			.filter(
 				(mutation) => mutation.status === 'conflicted' || mutation.status === 'needs-revision'
 			)
-			.map((mutation) => mutation.recordId)
+			.map(recordKey)
 	);
 	const rejected: DrainResult['rejected'] = [];
+	const failures: DrainResult['failures'] = [];
+	// Records whose head failed retryably THIS drain, with that failure: later rows of
+	// the record are FIFO-blocked behind it and are reported with the same verdict.
+	const blockedByFailure = new Map<string, { status?: number; reason?: string }>();
+	const reportFailure = (failure: DrainResult['failures'][number]): void => {
+		failures.push(failure);
+		input.onRetryableFailure?.(failure);
+	};
 	let pushed = 0;
 	let held = 0;
 	let failed = 0;
@@ -446,7 +476,7 @@ export async function drainMutationQueue(input: {
 			collection: mutation.collectionName,
 			fields: { recordId: mutation.recordId, mutationId: mutation.mutationId },
 		});
-		blockedRecords.add(mutation.recordId);
+		blockedRecords.add(recordKey(mutation));
 	};
 
 	const deadLetter = async (mutation: QueuedMutation, error: unknown): Promise<void> => {
@@ -525,7 +555,7 @@ export async function drainMutationQueue(input: {
 			failed += 1;
 			await applyBackoff(mutation);
 		}
-		blockedRecords.add(mutation.recordId);
+		blockedRecords.add(recordKey(mutation));
 	};
 
 	// A drainable release row — an explicit mutation or a delete — must drain its
@@ -536,25 +566,27 @@ export async function drainMutationQueue(input: {
 	const releaseRecords = new Set<string>(
 		batch
 			.filter((mutation) => mutation.explicit === true || mutation.operation === 'delete')
-			.map((mutation) => mutation.recordId)
+			.map(recordKey)
 	);
 	for (const mutation of batch) {
 		if (input.signal?.aborted) {
 			break;
 		}
-		if (blockedRecords.has(mutation.recordId)) {
+		if (blockedRecords.has(recordKey(mutation))) {
+			const wall = blockedByFailure.get(recordKey(mutation));
+			if (wall) reportFailure({ mutation, ...wall });
 			continue;
 		}
-		if (!releaseRecords.has(mutation.recordId) && (await input.shouldHold?.(mutation))) {
+		if (!releaseRecords.has(recordKey(mutation)) && (await input.shouldHold?.(mutation))) {
 			held += 1;
-			blockedRecords.add(mutation.recordId);
+			blockedRecords.add(recordKey(mutation));
 			continue;
 		}
 		// Backoff gate (ADR 0012): a mutation rescheduled after an earlier failure must wait until
 		// its window elapses. Skip it AND hold later edits to the same record (FIFO ordering).
 		if (mutation.nextAttemptAt && Date.parse(mutation.nextAttemptAt) > now()) {
 			deferred += 1;
-			blockedRecords.add(mutation.recordId);
+			blockedRecords.add(recordKey(mutation));
 			continue;
 		}
 		// `limit` caps push ATTEMPTS; the deferred/blocked rows handled above cost nothing against it.
@@ -610,7 +642,7 @@ export async function drainMutationQueue(input: {
 				current.claimedBy !== input.drainInstanceId &&
 				(current.claimedUntil ? Date.parse(current.claimedUntil) : 0) > now()
 			) {
-				blockedRecords.add(mutation.recordId);
+				blockedRecords.add(recordKey(mutation));
 			}
 			continue;
 		}
@@ -645,7 +677,7 @@ export async function drainMutationQueue(input: {
 						break;
 					}
 					failed += 1;
-					blockedRecords.add(mutation.recordId);
+					blockedRecords.add(recordKey(mutation));
 					await applyBackoff({ ...draining, status: 'pending' });
 					continue;
 				}
@@ -668,7 +700,7 @@ export async function drainMutationQueue(input: {
 							continue;
 						} else {
 							failed += 1;
-							blockedRecords.add(mutation.recordId);
+							blockedRecords.add(recordKey(mutation));
 							await applyBackoff({ ...restamped, status: 'pending' });
 							continue;
 						}
@@ -690,7 +722,13 @@ export async function drainMutationQueue(input: {
 			} else {
 				// The push adapter already emitted push.error. Leave it queued; bump + back off (ADR 0012).
 				failed += 1;
-				blockedRecords.add(mutation.recordId);
+				const detail = error as { status?: number; reason?: string } | null;
+				reportFailure({ mutation: draining, status: detail?.status, reason: detail?.reason });
+				blockedByFailure.set(recordKey(mutation), {
+					status: detail?.status,
+					reason: detail?.reason,
+				});
+				blockedRecords.add(recordKey(mutation));
 				await applyBackoff({ ...draining, status: 'pending' });
 				continue;
 			}
@@ -746,7 +784,7 @@ export async function drainMutationQueue(input: {
 								break;
 							}
 							failed += 1;
-							blockedRecords.add(mutation.recordId);
+							blockedRecords.add(recordKey(mutation));
 							await applyBackoff({ ...reanchored, status: 'pending' });
 							continue;
 						}
@@ -771,7 +809,7 @@ export async function drainMutationQueue(input: {
 								await deadLetter(restamped, refreshedError);
 							} else {
 								failed += 1;
-								blockedRecords.add(mutation.recordId);
+								blockedRecords.add(recordKey(mutation));
 								await applyBackoff({ ...restamped, status: 'pending' });
 							}
 							continue;
@@ -782,7 +820,7 @@ export async function drainMutationQueue(input: {
 						continue;
 					} else {
 						failed += 1;
-						blockedRecords.add(mutation.recordId);
+						blockedRecords.add(recordKey(mutation));
 						await applyBackoff({ ...reanchored, status: 'pending' });
 						continue;
 					}
@@ -855,7 +893,7 @@ export async function drainMutationQueue(input: {
 					collection: mutation.collectionName,
 					fields: { recordId: mutation.recordId, mutationId: mutation.mutationId },
 				});
-				blockedRecords.add(mutation.recordId); // hold later edits to this record until it's resolved
+				blockedRecords.add(recordKey(mutation)); // hold later edits to this record until it's resolved
 				continue;
 			}
 		}
@@ -888,7 +926,7 @@ export async function drainMutationQueue(input: {
 			// later links, and back it off so we don't hammer. An abort here is a scope switch, not a
 			// failure, so skip the backoff.
 			failed += 1;
-			blockedRecords.add(mutation.recordId);
+			blockedRecords.add(recordKey(mutation));
 			if (!input.signal?.aborted) {
 				await applyBackoff({ ...draining, status: 'pending' });
 			}
@@ -917,6 +955,7 @@ export async function drainMutationQueue(input: {
 		held,
 		conflicts,
 		failed,
+		failures,
 		deferred,
 		rejected,
 	};

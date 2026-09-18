@@ -34,6 +34,7 @@ import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
+import { pushFailureCode } from '../../contexts/push-failure-code';
 import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -164,7 +165,7 @@ export function EditOrderForm({ order }: Props) {
 				const errorMessage = getErrorMessage(error);
 				mutationLogger.error('Failed to save order', {
 					showToast: true,
-					code: ERROR_CODES.SYNC_UNEXPECTED,
+					code: pushFailureCode(error),
 					toast: { title: t('common.failed_to_save_order') },
 					context: {
 						orderId: order.getLatest().payload.id,

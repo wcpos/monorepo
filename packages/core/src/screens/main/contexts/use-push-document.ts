@@ -9,9 +9,9 @@ import {
 	type WriteableCollection,
 } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../contexts/translations';
+import { pushFailureCode } from './push-failure-code';
 import { documentRecordId, findEngineResident } from '../hooks/mutations/use-local-mutation';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'push']);
@@ -85,7 +85,7 @@ export const usePushDocument = () => {
 				const message = getErrorMessage(error);
 				syncLogger.error('Failed to send document to server', {
 					showToast: true,
-					code: ERROR_CODES.SYNC_UNEXPECTED,
+					code: pushFailureCode(error),
 					toast: { title: t('common.failed_to_send_to_server') },
 					context: {
 						documentId: recordId,
