@@ -196,7 +196,7 @@
       
       /* Accent - subtle hover/focus states */
       --accent: var(--muted);
-      --accent-foreground: var(--muted-foreground);
+      --accent-foreground: var(--foreground);
       
       /* Semantic colors */
       --destructive: oklch(0.55 0.22 25);
@@ -296,7 +296,7 @@
       
       /* Accent */
       --accent: var(--muted);
-      --accent-foreground: var(--muted-foreground);
+      --accent-foreground: var(--foreground);
       
       /* Semantic colors */
       --destructive: oklch(0.62 0.2 25);
@@ -394,7 +394,7 @@
       
       /* Accent - interactive hover states */
       --accent: var(--muted);
-      --accent-foreground: var(--muted-foreground);
+      --accent-foreground: var(--foreground);
       
       /* Semantic colors; legacy filled-surface partners retain their values */
       --destructive: oklch(0.62 0.2 25);
@@ -492,7 +492,7 @@
       
       /* Accent - interactive hover states */
       --accent: var(--muted);
-      --accent-foreground: var(--muted-foreground);
+      --accent-foreground: var(--foreground);
       
       /* Semantic colors; legacy filled-surface partners retain their values */
       --destructive: oklch(0.62 0.2 20);
@@ -588,7 +588,7 @@
       
       /* Accent - interactive hover states */
       --accent: var(--muted);
-      --accent-foreground: var(--muted-foreground);
+      --accent-foreground: var(--foreground);
       
       /* Semantic colors; legacy filled-surface partners retain their values */
       --destructive: oklch(0.62 0.2 25);

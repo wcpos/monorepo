@@ -31,7 +31,7 @@ const newColors = [
 const aliases = {
 	sidebar: 'rail', 'sidebar-foreground': 'rail-foreground', 'sidebar-border': 'rail-border',
 	success: 'ok', warning: 'warn', attention: 'warn',
-	accent: 'muted', 'accent-foreground': 'muted-foreground',
+	accent: 'muted', 'accent-foreground': 'foreground',
 	popover: 'card', 'popover-foreground': 'card-foreground', input: 'card',
 	'card-header': 'muted', footer: 'muted', 'table-header': 'muted',
 	'table-row': 'card', 'table-row-alt': 'background',
