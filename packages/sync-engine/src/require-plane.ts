@@ -1248,8 +1248,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				// scheduler drain completes, so a crash mid-fetch never loses the
 				// requirement (the drain lane finishes it later). Presence gate first.
 				//
-				// This one does NOT go through `runSeedDrain`, deliberately: its verdict is
-				// RESIDENCY, not the drain tick. It re-checks the records after every tick,
+				// This one does NOT go through `runSeedDrain`: presence requests use RESIDENCY;
+				// forced refreshes also reject owned failures. It re-checks after every tick,
 				// waits out another owner's active claim with a bounded backoff instead of
 				// releasing on it, and reports the ids it pulled — so it shares the drain
 				// arguments (`drainScheduler`) and nothing else.
@@ -1313,6 +1313,11 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					}
 					if (item.abortController.signal.aborted) return releasedOutcome();
 					remaining = await missingRemoteIds(database, orderWooIdLookup, remaining);
+					if (item.requirement.forceRefresh && failed > 0) {
+						throw new Error(
+							`require: forced refresh failed ${failed} task(s) for ${remoteIds.length - remaining.length} resident order(s)`
+						);
+					}
 					if (remaining.length === 0) break;
 					if (failed > 0) {
 						throw new Error(

@@ -1,7 +1,7 @@
 import type { EngineRecord } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
-import { reconcileCompletedOrder } from './reconcile-completed-order';
+import { reconcileCompletedOrder, refreshOrderRecord } from './reconcile-completed-order';
 
 type QueryRuntime = ReturnType<typeof import('@wcpos/query').useQueryRuntime>;
 
@@ -165,6 +165,20 @@ it('rejects refresh for an unpersisted order without adjusting stock', async () 
 		'checkout_refresh_requires_persisted_order'
 	);
 	expect(c.requireRefresh).not.toHaveBeenCalled();
+});
+
+it('propagates synchronous refresh admission failure without adjusting stock', async () => {
+	const c = setup();
+	const error = new Error('engine_disposed');
+	c.requireRefresh.mockReset().mockImplementation(() => {
+		throw error;
+	});
+	const adjustStock = jest.fn();
+	expect(() => refreshOrderRecord(c.runtime, 42)).toThrow(error);
+	await expect(reconcileCompletedOrder(c.runtime, c.order, true, adjustStock)).rejects.toBe(error);
+	expect(adjustStock).not.toHaveBeenCalled();
+	expect(c.release).not.toHaveBeenCalled();
+	expect(jest.getTimerCount()).toBe(0);
 });
 
 it('skips the order refresh but still adjusts local stock when refresh is false', async () => {
