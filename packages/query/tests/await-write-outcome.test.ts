@@ -6,16 +6,17 @@ import {
 	WriteOutcomeError,
 } from '../src/await-write-outcome';
 
-function createEngine() {
+function createEngine(options: { authRequired?: boolean } = {}) {
 	let listener: ((event: EngineEvent) => void) | undefined;
 	const unsubscribe = jest.fn();
 	const sync = jest.fn().mockResolvedValue({ status: 'ok' });
+	const status = jest.fn(() => ({ authRequired: options.authRequired ?? false }));
 	const events = jest.fn((callback: (event: EngineEvent) => void) => {
 		listener = callback;
 		return unsubscribe;
 	});
 	return {
-		engine: { events, sync } as unknown as RxdbSyncEngine,
+		engine: { events, status, sync } as unknown as RxdbSyncEngine,
 		emit: (event: EngineEvent) => listener?.(event),
 		events,
 		sync,
@@ -118,6 +119,17 @@ describe('awaitWriteOutcome', () => {
 		expect(unsubscribe).toHaveBeenCalledTimes(1);
 	});
 
+	it('rejects at once under a standing auth hold, without draining', async () => {
+		const { engine, sync, unsubscribe } = createEngine({ authRequired: true });
+		const outcome = awaitWriteOutcome(engine, 'mutation-1', { timeoutMs: 100 });
+
+		const error = await outcome.catch((caught: unknown) => caught);
+		expect(error).toBeInstanceOf(WriteDeferredError);
+		expect(error).toMatchObject({ status: 401, reason: 'auth-required' });
+		expect(sync).not.toHaveBeenCalled();
+		expect(unsubscribe).toHaveBeenCalledTimes(1);
+	});
+
 	it('ignores a 503 deferral and a different mutation 401 until a matching ack', async () => {
 		const { engine, emit, unsubscribe } = createEngine();
 		const outcome = awaitWriteOutcome(engine, 'mutation-1', { timeoutMs: 100 });
@@ -168,6 +180,7 @@ describe('awaitWriteOutcome', () => {
 				listener = callback;
 				return jest.fn();
 			},
+			status: () => ({ authRequired: false }),
 			sync: jest.fn(() => {
 				calls.push('sync');
 				listener?.({

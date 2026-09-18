@@ -35,7 +35,7 @@ export class WriteDeferredError extends Error {
 }
 
 export function awaitWriteOutcome(
-	engine: Pick<RxdbSyncEngine, 'events' | 'sync'>,
+	engine: Pick<RxdbSyncEngine, 'events' | 'status' | 'sync'>,
 	mutationId: string,
 	options: { timeoutMs?: number } = {}
 ): Promise<AwaitedWriteOutcome> {
@@ -93,7 +93,18 @@ export function awaitWriteOutcome(
 		);
 		// The replay fires synchronously inside events(), so `settled` may already
 		// be true here — this is what releases the subscription in that case.
-		if (settled) unsubscribe();
+		if (settled) {
+			unsubscribe();
+			return;
+		}
+
+		// A standing auth hold is the 401 verdict known up front. A retry enqueued behind
+		// a held row is FIFO-blocked in the backoff window, where no drain reports it, so
+		// without this it would wait out the clock to learn what the engine already knows.
+		if (engine.status().authRequired) {
+			finish(() => reject(new WriteDeferredError(mutationId, 401, 'auth-required')));
+			return;
+		}
 
 		void engine.sync('write-drain').catch((error) => finish(() => reject(error)));
 	});
