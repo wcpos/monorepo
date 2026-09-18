@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 17,
+	version: 18,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -598,6 +598,14 @@ export const storesLiteral = {
 			description: 'The visual theme for the app (system, light, dark, ocean, sunset, monochrome)',
 			type: 'string',
 			default: 'light',
+		},
+		scale: {
+			title: 'App Scale',
+			description:
+				'The density step for the app. Auto follows the window size; the three steps override it. Device-local beside the theme, never server-owned.',
+			type: 'string',
+			enum: ['auto', 'compact', 'regular', 'spacious'],
+			default: 'auto',
 		},
 		date_created_gmt: {
 			type: 'string',

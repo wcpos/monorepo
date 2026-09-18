@@ -133,7 +133,7 @@ function ComboboxValue({
 	return (
 		<View
 			className={cn(
-				'border-border bg-card web:ring-offset-background h-10 w-full flex-row items-center rounded-md border px-2',
+				'border-border bg-card web:ring-offset-background h-ctl w-full flex-row items-center rounded-lg border px-2',
 				className
 			)}
 		>

@@ -1,4 +1,7 @@
 /* eslint-disable import/first */
+import * as fs from 'fs';
+import * as path from 'path';
+
 import * as React from 'react';
 
 const mockPlatform = { OS: 'ios' };
@@ -280,5 +283,23 @@ describe('ComboboxValue', () => {
 		);
 
 		expect(screen.getByText('Select a category')).not.toBeNull();
+	});
+});
+
+/**
+ * A class assertion has to read the source: `react-native` is mapped to
+ * `react-native-web` here, whose `View` drops `className` before it reaches the
+ * DOM (the probe rendered `class=""`), so the tree cannot be asked for it.
+ */
+describe('Combobox control height', () => {
+	const source = fs.readFileSync(path.join(__dirname, 'combobox.tsx'), 'utf8');
+
+	// The box the merchant presses is `ComboboxValue` — `ComboboxTrigger` is the
+	// bare popover trigger and carries no height. It is one control tall from the
+	// floored scale token, not a literal 40 px (roadmap#357).
+	it('sizes the trigger box on the control token, not h-10', () => {
+		expect(source).toContain('h-ctl');
+		expect(source).not.toContain('h-10');
+		expect(source).toContain('rounded-lg');
 	});
 });

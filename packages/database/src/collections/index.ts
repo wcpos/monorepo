@@ -216,6 +216,11 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.expected_close_time = '';
 			return oldDoc;
 		},
+		18(oldDoc: StoreDocumentType) {
+			// v18 adds the optional `scale` override beside `theme`. Absent means
+			// Auto — resolveStep falls back to the window — so nothing is written.
+			return oldDoc;
+		},
 	},
 };
 

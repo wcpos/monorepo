@@ -13,10 +13,11 @@ import { Loader } from '../loader';
 import { TextClassContext } from '../text';
 import * as FontAwesome from './components/fontawesome/solid';
 import { SvgLock } from './components/lock';
+import * as Tabler from './components/tabler';
 
 import type { SvgProps } from 'react-native-svg';
 
-const Svgs = { ...FontAwesome, lock: SvgLock };
+const Svgs = { ...FontAwesome, ...Tabler, lock: SvgLock };
 
 export type IconName = Extract<keyof typeof Svgs, string>;
 

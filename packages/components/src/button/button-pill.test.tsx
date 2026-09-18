@@ -104,4 +104,17 @@ describe('Button variants', () => {
 		expect(buttonVariants({ size: 'compact' })).toContain('h-9');
 		expect(buttonTextVariants({ size: 'compact' })).toContain('text-xs');
 	});
+
+	// The control core rides the floored scale tokens (roadmap#357): the default
+	// size is one control tall and xl/key are one tile tall, so Compact on a
+	// finger still gets 44. A literal h-10/h-14 here would ignore the step.
+	it('sizes the default on the control token and xl/key on the tile token', () => {
+		expect(buttonVariants({ size: 'default' })).toContain('h-ctl');
+		expect(buttonVariants({ size: 'default' })).not.toContain('h-10');
+		expect(buttonVariants({ size: 'xl' })).toContain('h-tile');
+		expect(buttonVariants({ size: 'key' })).toContain('h-tile');
+		expect(buttonVariants({ size: 'xl' })).not.toContain('h-14');
+		expect(buttonVariants({ size: 'key' })).not.toContain('h-14');
+		expect(buttonVariants({})).toContain('rounded-lg');
+	});
 });

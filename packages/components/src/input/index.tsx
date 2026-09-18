@@ -6,6 +6,7 @@ import { useControllableState } from '@rn-primitives/hooks';
 import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 
 import { IconButton } from '../icon-button';
+import { MAX_FONT_SCALE } from '../lib/scale';
 import { cn } from '../lib/utils';
 
 interface InputContextValue {
@@ -36,7 +37,7 @@ function Root({ children, className, disabled = false }: RootProps) {
 		<InputContext.Provider value={{ isFocused, setIsFocused }}>
 			<View
 				className={cn(
-					'border-border bg-input web:ring-offset-background h-10 w-full flex-row items-center rounded-md border',
+					'border-border bg-input web:ring-offset-background h-ctl w-full flex-row items-center rounded-lg border',
 					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
 					disabled && 'web:cursor-not-allowed opacity-50',
 					className
@@ -75,6 +76,9 @@ function InputField({
 	placeholderTextColor,
 	type = 'text',
 	editable = true,
+	// Field type is capped at 1.3x for the same reason `Text` is: a larger OS
+	// text size must not break a form row. A caller's prop still wins.
+	maxFontSizeMultiplier = MAX_FONT_SCALE,
 	...props
 }: InputFieldProps) {
 	const { setIsFocused } = useInputContext();
@@ -158,6 +162,7 @@ function InputField({
 			// placeholderTextColor={placeholderTextColor || 'text-muted-foreground'}
 			keyboardType={keyboardType}
 			inputMode={inputMode}
+			maxFontSizeMultiplier={maxFontSizeMultiplier}
 			{...props}
 			onFocus={(e) => {
 				setIsFocused(true);
