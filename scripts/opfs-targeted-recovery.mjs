@@ -221,41 +221,59 @@ async function dropWhitespaceRows(instance, target, ownsRepairs = () => true) {
   return instance.taskQueue.runCleanup(async (runState) => {
     const refusal = ownsRepairs() ? undefined : "multi-instance";
     const accessHandle = await documentsAccessHandle(state, runState);
-    // Any row past EOF, in any index, means this instance's rows are stale;
-    // the caller must not retry a cleanup that would bake them.
-    let stale = false;
+    const primaryKeyOf = (indexState, row) =>
+      getPrimaryKeyFromIndexableString(row[0], indexState.primaryKeyLength);
+    const refusePastEof = (indexState, row) => {
+      if (indexState === state.firstIdx)
+        report("hollow-row-refused", {
+          target,
+          reason: "range-past-eof",
+          id: primaryKeyOf(indexState, row),
+        });
+      return "range-past-eof";
+    };
+
+    // Classify every row BEFORE dropping any of them. A stale instance can
+    // hold an in-file blank range (the other process's compaction fill over
+    // bytes it has already moved) as well as a range past EOF; dropping the
+    // first as soon as it is found would delete a live document's row before
+    // the second proved the whole index stale, and a broadcast delete cannot
+    // be taken back. Any row past EOF, in any index, means the rows are stale:
+    // nothing is dropped and the caller must not retry a cleanup that would
+    // bake them.
+    const blank = [];
+    let stale;
     for (const indexState of state.indexStates) {
       let position = indexState.rows.length;
       while (position--) {
         const row = indexState.rows[position];
         const { bytes, pastEof } = await readRange(accessHandle, row[1], row[2]);
         if (pastEof) {
-          stale = true;
-          if (indexState === state.firstIdx)
-            report("hollow-row-refused", {
-              target,
-              reason: "range-past-eof",
-              id: getPrimaryKeyFromIndexableString(
-                row[0],
-                indexState.primaryKeyLength,
-              ),
-            });
+          stale = refusePastEof(indexState, row);
           continue;
         }
-        if (!isBlankBytes(bytes)) continue;
-        if (!refusal) await dropIndexRow(state, runState, indexState, position);
-        if (indexState === state.firstIdx)
-          report(refusal ? "hollow-row-refused" : "hollow-row-dropped", {
-            target,
-            ...(refusal ? { reason: refusal } : {}),
-            id: getPrimaryKeyFromIndexableString(
-              row[0],
-              indexState.primaryKeyLength,
-            ),
-          });
+        if (isBlankBytes(bytes)) blank.push({ indexState, position, row });
       }
     }
-    return stale ? "range-past-eof" : refusal;
+    if (stale) return stale;
+
+    // Positions are descending within each index, so each drop leaves the
+    // ones still to come valid. Each range is re-read immediately before its
+    // drop: the other process shares no task queue with this one and can
+    // compact or truncate between the scan and here.
+    for (const { indexState, position, row } of blank) {
+      const { bytes, pastEof } = await readRange(accessHandle, row[1], row[2]);
+      if (pastEof) return refusePastEof(indexState, row);
+      if (!isBlankBytes(bytes)) continue;
+      if (!refusal) await dropIndexRow(state, runState, indexState, position);
+      if (indexState === state.firstIdx)
+        report(refusal ? "hollow-row-refused" : "hollow-row-dropped", {
+          target,
+          ...(refusal ? { reason: refusal } : {}),
+          id: primaryKeyOf(indexState, row),
+        });
+    }
+    return refusal;
   });
 }
 

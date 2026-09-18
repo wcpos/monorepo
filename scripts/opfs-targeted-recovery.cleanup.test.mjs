@@ -668,3 +668,79 @@ test("a row truncated past EOF between its blank read and the drop is refused, a
     "the failed round is reported, not retried into a bake of stale rows",
   );
 });
+
+// Index order and file order differ, so the scan meets a droppable blank row
+// BEFORE the row that proves the index stale. Dropping as it goes would delete
+// a live document's row and broadcast it; the refusal that follows cannot undo
+// that. The whole scan is classified first, so nothing is dropped.
+test("no row is dropped when a later row in the scan is past EOF", async () => {
+  const documents = [
+    // File order: the blank one first (compaction's fill over bytes the other
+    // process already moved), the row that ends past EOF last.
+    { id: "xxx", name: "z", _deleted: false, _meta: { lwt: 100 } },
+    { id: "yyy", name: "a", _deleted: false, _meta: { lwt: 200 } },
+    { id: "zzz", name: "b", _deleted: false, _meta: { lwt: 300 } },
+  ];
+  const { instance, indexStates, changelogOperations } = createFakeOpfsInstance({
+    documents,
+    corruptId: "xxx",
+    gapBefore: "xxx",
+  });
+  const state = await instance.internals.statePromise;
+  const inner = await state.documentFileHandle.createAccessHandle();
+  const fullSize = await inner.getSize();
+  // The other process compacted and truncated by one byte: this instance's
+  // last row now ends past EOF.
+  const truncatedSize = fullSize - 1;
+  state.documentFileHandle.createAccessHandle = async () => ({
+    read: async (start, end) => inner.read(start, end),
+    getSize: async () => truncatedSize,
+  });
+
+  // Premise: index 0 is sorted by name, so the scan (descending) reaches the
+  // blank row before the past-EOF one.
+  const scan = [];
+  for (let position = indexStates[0].rows.length - 1; position >= 0; position -= 1) {
+    const [, start, end] = indexStates[0].rows[position];
+    const bytes = await inner.read(start, end);
+    scan.push({
+      position,
+      blank: bytes.every((byte) => byte === 0x20),
+      pastEof: end > truncatedSize,
+    });
+  }
+  const firstBlank = scan.findIndex((entry) => entry.blank);
+  const firstPastEof = scan.findIndex((entry) => entry.pastEof);
+  assert.ok(firstBlank !== -1 && firstPastEof !== -1, "the fixture holds both shapes");
+  assert.ok(
+    firstBlank < firstPastEof,
+    `the droppable row must be scanned first: ${JSON.stringify(scan)}`,
+  );
+
+  const events = [];
+  const previousHook = globalThis.__wcposOnStorageRecovery;
+  globalThis.__wcposOnStorageRecovery = (event) => events.push(event);
+  try {
+    const recovering = await withTargetedOpfsRecovery({
+      createStorageInstance: async () => instance,
+    }).createStorageInstance({ multiInstance: false });
+    await assert.rejects(() => recovering.cleanup(0), /range-past-eof/);
+  } finally {
+    globalThis.__wcposOnStorageRecovery = previousHook;
+  }
+  for (const indexState of indexStates) {
+    assert.equal(indexState.rows.length, 3, "every row survives the refused scan");
+  }
+  assert.deepEqual(changelogOperations, [], "nothing is broadcast");
+  assert.deepEqual(
+    events.filter((event) => event.kind === "hollow-row-dropped"),
+    [],
+  );
+  assert.ok(
+    events.some(
+      (event) =>
+        event.kind === "hollow-row-refused" && event.reason === "range-past-eof",
+    ),
+    "the refusal is reported by reason",
+  );
+});
