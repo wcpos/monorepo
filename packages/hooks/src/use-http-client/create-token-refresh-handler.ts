@@ -230,13 +230,21 @@ function withRefreshedCredential(
 			token,
 			bareAuthParamSupported(site.wcpos_version)
 		);
+		// A stale token in the URL string would ride beside the fresh param (Axios appends
+		// `params` to an existing query) and linger in URL logs.
+		const url = withoutQueryParam(originalConfig.url, 'authorization');
 		if (originalConfig.params instanceof URLSearchParams) {
 			// Spreading URLSearchParams drops its entries; clone and set instead.
 			const params = new URLSearchParams(originalConfig.params);
 			params.set('authorization', authorization);
-			return { ...originalConfig, headers, params };
+			return { ...originalConfig, url, headers, params };
 		}
-		return { ...originalConfig, headers, params: { ...originalConfig.params, authorization } };
+		return {
+			...originalConfig,
+			url,
+			headers,
+			params: { ...originalConfig.params, authorization },
+		};
 	}
 	return {
 		...originalConfig,
@@ -269,11 +277,16 @@ function withoutParam(params: WcposRequestConfig['params'], name: string) {
 
 function withoutQueryParam(url: string | undefined, name: string): string | undefined {
 	if (!url || !url.includes('?')) return url;
-	const [path, query] = url.split('?', 2);
+	// The fragment is never sent, but fed to the query parser it would be promoted into
+	// request data; split it off first and put it back untouched.
+	const hashAt = url.indexOf('#');
+	const fragment = hashAt === -1 ? '' : url.slice(hashAt);
+	const withoutFragment = hashAt === -1 ? url : url.slice(0, hashAt);
+	const [path, query] = withoutFragment.split('?', 2);
 	const search = new URLSearchParams(query);
 	search.delete(name);
 	const rest = search.toString();
-	return rest ? `${path}?${rest}` : path;
+	return `${rest ? `${path}?${rest}` : path}${fragment}`;
 }
 
 function getResponseStatus(error: unknown): number | undefined {
