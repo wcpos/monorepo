@@ -49,7 +49,7 @@ test('a nonexistent allowlist entry is rejected, not a licence for future violat
 });
 
 test('removing a live entry rejects its still-present violation', () => {
-	assert.deepEqual(ratchetErrors(['existing.tsx:1:hover:'], {}), [
+	assert.deepEqual(ratchetErrors(['existing.tsx:1:1:hover:'], {}), [
 		'New violation: existing.tsx:hover: (1 > 0) at lines 1',
 	]);
 	assert.deepEqual(ratchetErrors([], {}, {}), []); // The ratchet can reach zero.
@@ -57,10 +57,10 @@ test('removing a live entry rejects its still-present violation', () => {
 
 test('counts sites per path and construct with sorted keys, retaining construct colons', () => {
 	const counts = countSites([
-		'z.tsx:10:truncate',
-		'a.tsx:3:truncate',
-		'a.tsx:2:hover:',
-		'a.tsx:12:hover:',
+		'z.tsx:10:1:truncate',
+		'a.tsx:3:1:truncate',
+		'a.tsx:2:1:hover:',
+		'a.tsx:12:1:hover:',
 	]);
 	assert.deepEqual(counts, { 'a.tsx': { 'hover:': 2, truncate: 1 }, 'z.tsx': { truncate: 1 } });
 	assert.deepEqual(Object.keys(counts), ['a.tsx', 'z.tsx']);
@@ -77,8 +77,19 @@ test('bare hover above the allowed count reports the current lines', () => {
 	]);
 });
 
+test('counts each token on one line without recounting a shared class constant', () => {
+	const live = scanSource(
+		'const styles = cn("w-[8px] w-[8px]"); <View className={styles} />; <View className={styles} />;',
+		'existing.tsx'
+	);
+	assert.deepEqual(countSites(live), { 'existing.tsx': { 'arbitrary-px': 2 } });
+	assert.deepEqual(ratchetErrors(live, { 'existing.tsx': { 'arbitrary-px': 1 } }), [
+		'New violation: existing.tsx:arbitrary-px (2 > 1) at lines 1, 1',
+	]);
+});
+
 test('removing a violation requires lowering its allowed count', () => {
-	const live = ['existing.tsx:7:hover:'];
+	const live = ['existing.tsx:7:1:hover:'];
 	const prior = { 'existing.tsx': { 'hover:': 2 } };
 	assert.deepEqual(ratchetErrors(live, prior), [
 		'Stale allowlist entry: existing.tsx:hover: (2 > 1)',
@@ -113,6 +124,14 @@ const constructs = [
 	['data-[pointer=fine]:p-2', 'data-axis'],
 	['max-h-[300px]', 'arbitrary-px'],
 	['w-[-1.5px]', 'arbitrary-px'],
+	['[font-size:10px]', 'arbitrary-px'],
+	['[width:calc(100%-8px)]', 'arbitrary-px'],
+	['w-[calc(100%-8px)]', 'arbitrary-px'],
+	['shadow-[0_0_.5px_1px_black]', 'arbitrary-px'],
+	['duration-200', 'duration-literal'],
+	['web:duration-200', 'duration-literal'],
+	['duration-[250ms]', 'duration-literal'],
+	['web:focus:duration-[var(--beat)]', 'duration-literal'],
 ];
 for (const [token, construct] of constructs) {
 	test(`class scanner catches ${token} in JSX, cn, and cva`, () => {
@@ -122,7 +141,7 @@ for (const [token, construct] of constructs) {
 			`cva('p-2', { variants: { size: { sm: \`${token}\` } } })`,
 			`<View className={\`p-2 \${active ? '${token}' : ''}\`} />`,
 		])
-			assert.ok(scanSource(source, path).includes(`${path}:1:${construct}`), source);
+			assert.equal(countSites(scanSource(source, path))[path]?.[construct], 1, source);
 	});
 }
 
@@ -142,15 +161,28 @@ test('does not lint prose, comments, safe web hover, side selectors, or outline 
 
 test('reports real multiline class positions and template segments', () => {
 	assert.deepEqual(scanSource('<View className={`p-2\nhover:bg-card ${x}\ntruncate`} />', path), [
-		`${path}:2:hover:`,
-		`${path}:3:truncate`,
+		`${path}:2:1:hover:`,
+		`${path}:3:1:truncate`,
 	]);
+});
+
+test('allows named durations and arbitrary values without pixel lengths', () => {
+	assert.deepEqual(
+		scanSource(
+			'<View className="web:duration-fast duration-(--beat) w-[2rem] [width:50%] w-[var(--px)]" />',
+			path
+		),
+		[]
+	);
 });
 
 test('bare Suspense is scoped to screen index files and accepts a real fallback', () => {
 	const source =
 		'<><Suspense /><React.Suspense fallback={null} /><Suspense fallback={<Loading />} /></>';
-	assert.deepEqual(scanSource(source, path), [`${path}:1:bare-Suspense`]);
+	assert.deepEqual(scanSource(source, path), [
+		`${path}:1:15:bare-Suspense`,
+		`${path}:1:3:bare-Suspense`,
+	]);
 	assert.deepEqual(scanSource(source, 'packages/components/src/example/index.tsx'), []);
 });
 
@@ -166,7 +198,7 @@ test('duration literals are caught without matching comments, strings, or named 
 	`,
 			path
 		),
-		[`${path}:4:duration-literal`, `${path}:5:duration-literal`]
+		[`${path}:4:19:duration-literal`, `${path}:5:3:duration-literal`]
 	);
 });
 
@@ -175,7 +207,7 @@ test('web animations resolve imported tokens and reject missing names, including
 	assert.ok(tokens.has('spin') && tokens.has('in') && tokens.has('accordion-down'));
 	assert.deepEqual(
 		scanSource('<View className="web:animate-spin web:group-hover:animate-typo" />', path, tokens),
-		[`${path}:1:group-*`, `${path}:1:missing-animation:typo`]
+		[`${path}:1:35:group-*`, `${path}:1:35:missing-animation:typo`]
 	);
 });
 
@@ -189,18 +221,18 @@ test('follows local class constants without linting unrelated string constants',
 	`,
 			path
 		),
-		[`${path}:3:hover:`]
+		[`${path}:3:19:hover:`]
 	);
 });
 
 test('adding a real violation together with its allowlist entry still fails', () => {
-	const added = `${path}:1:hover:`;
+	const added = `${path}:1:1:hover:`;
 	assert.deepEqual(ratchetErrors([added], { [path]: { 'hover:': 1 } }, {}), [
 		`Allowlist grew: ${path}:hover: (1 > 0)`,
 	]);
 	assert.deepEqual(
 		ratchetErrors(
-			[added, `${path}:8:hover:`],
+			[added, `${path}:8:1:hover:`],
 			{ [path]: { 'hover:': 2 } },
 			{ [path]: { 'hover:': 1 } }
 		),

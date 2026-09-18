@@ -24,7 +24,7 @@ const rules = {
 	'grid/grid-cols-*': /(?:^|:)(?:grid|grid-cols-[^:]+)$/,
 	'outline-focus-ring': /(?:^|:)focus(?:-visible|-within)?:outline(?:$|-(?!none$|hidden$)[^:]+$)/,
 	'data-axis': /data-\[(?:theme|scale|pointer)(?:[=\]~|^$*])/,
-	'arbitrary-px': /-\[-?(?:\d+(?:\.\d+)?|\.\d+)px\]/,
+	'arbitrary-px': /\[[^\]]*(?:\d+(?:\.\d+)?|\.\d+)px(?![a-zA-Z0-9])[^\]]*\]/,
 };
 
 export function animationTokens() {
@@ -52,8 +52,10 @@ export function scanSource(text, path, tokens = new Set()) {
 	const checker = ts.createProgram([path], { noLib: true, noResolve: true }, host).getTypeChecker();
 	const followed = new Set();
 	const sites = new Set();
-	const report = (position, construct) =>
-		sites.add(`${path}:${source.getLineAndCharacterOfPosition(position).line + 1}:${construct}`);
+	const report = (position, construct) => {
+		const { line, character } = source.getLineAndCharacterOfPosition(position);
+		sites.add(`${path}:${line + 1}:${character + 1}:${construct}`);
+	};
 	function classes(node) {
 		const start = node.getStart(source) + 1;
 		for (const match of node.text.matchAll(/\S+/g)) {
@@ -61,6 +63,7 @@ export function scanSource(text, path, tokens = new Set()) {
 			const position = start + match.index;
 			const variants = token.split(/:(?![^\[]*\])/);
 			const utility = variants.pop();
+			if (/^duration-(?:\d+(?:\.\d+)?|\[.+\])$/.test(utility)) report(position, 'duration-literal');
 			if (variants.includes('hover') && !variants.includes('web')) report(position, 'hover:');
 			for (const [name, pattern] of Object.entries(rules))
 				if (pattern.test(token)) report(position, name);
@@ -143,7 +146,7 @@ export function scanRepository() {
 function groupSites(sites) {
 	const grouped = {};
 	for (const site of sites) {
-		const [, path, line, construct] = site.match(/^(.*):(\d+):(.*)$/);
+		const [, path, line, construct] = site.match(/^(.*):(\d+):\d+:(.*)$/);
 		((grouped[path] ??= {})[construct] ??= []).push(Number(line));
 	}
 	return grouped;

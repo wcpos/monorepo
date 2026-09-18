@@ -1,7 +1,10 @@
 {
   "packages/components/src/accordion/index.tsx": {
-    "duration-literal": 4,
-    "focus-visible:": 1
+    "duration-literal": 5,
+    "focus-visible:": 3
+  },
+  "packages/components/src/alert-dialog/index.tsx": {
+    "duration-literal": 1
   },
   "packages/components/src/avatar/index.tsx": {
     "arbitrary-px": 2
@@ -10,33 +13,34 @@
     "arbitrary-px": 1
   },
   "packages/components/src/button/index.tsx": {
-    "focus-visible:": 1,
-    "group-*": 23,
+    "focus-visible:": 4,
+    "group-*": 34,
     "truncate": 1,
     "whitespace-nowrap": 1
   },
   "packages/components/src/checkbox/index.tsx": {
-    "focus-visible:": 1
+    "focus-visible:": 4
   },
   "packages/components/src/combobox/combobox.tsx": {
     "arbitrary-px": 1,
     "group-*": 2
   },
   "packages/components/src/dnd/web/drop-indicator.tsx": {
-    "arbitrary-px": 7,
-    "before:/after:": 7
+    "arbitrary-px": 13,
+    "before:/after:": 14
   },
   "packages/components/src/dnd/web/sortable-item.tsx": {
-    "hover:": 1
+    "duration-literal": 1,
+    "hover:": 2
   },
   "packages/components/src/dropdown-menu/item.tsx": {
-    "group-*": 2
+    "group-*": 3
   },
   "packages/components/src/form/common.tsx": {
     "duration-literal": 1
   },
   "packages/components/src/icon-button/index.tsx": {
-    "focus-visible:": 1
+    "focus-visible:": 4
   },
   "packages/components/src/input/index.tsx": {
     "focus-visible:": 1
@@ -44,16 +48,20 @@
   "packages/components/src/loader/index.tsx": {
     "duration-literal": 1
   },
+  "packages/components/src/modal/index.tsx": {
+    "duration-literal": 2
+  },
   "packages/components/src/numpad/index.tsx": {
-    "grid/grid-cols-*": 2
+    "grid/grid-cols-*": 4
   },
   "packages/components/src/panels/index.tsx": {
-    "group-*": 3,
+    "duration-literal": 1,
+    "group-*": 10,
     "missing-animation:fadeIn": 1
   },
   "packages/components/src/radio-group/index.tsx": {
-    "arbitrary-px": 1,
-    "focus-visible:": 1,
+    "arbitrary-px": 2,
+    "focus-visible:": 3,
     "grid/grid-cols-*": 1
   },
   "packages/components/src/select/index.tsx": {
@@ -67,24 +75,24 @@
   },
   "packages/components/src/switch/index.tsx": {
     "duration-literal": 1,
-    "focus-visible:": 1
+    "focus-visible:": 5
   },
   "packages/components/src/table/pulse-row.tsx": {
     "duration-literal": 3
   },
   "packages/components/src/tabs/index.tsx": {
-    "focus-visible:": 2,
+    "focus-visible:": 8,
     "whitespace-nowrap": 1
   },
   "packages/components/src/text/index.tsx": {
     "group-*": 1
   },
   "packages/components/src/textarea/index.tsx": {
-    "focus-visible:": 1
+    "focus-visible:": 4
   },
   "packages/components/src/toggle-group/index.tsx": {
-    "focus-visible:": 1,
-    "group-*": 2
+    "focus-visible:": 4,
+    "group-*": 3
   },
   "packages/components/src/tree-combobox/tree-combobox.tsx": {
     "arbitrary-px": 1
@@ -159,7 +167,7 @@
     "arbitrary-px": 1
   },
   "packages/core/src/screens/main/pos/cart/cells/fee-name.tsx": {
-    "grid/grid-cols-*": 1
+    "grid/grid-cols-*": 2
   },
   "packages/core/src/screens/main/pos/cart/closure-sheet.tsx": {
     "arbitrary-px": 1,
@@ -175,7 +183,7 @@
     "arbitrary-px": 1
   },
   "packages/core/src/screens/main/pos/checkout/column/checkout-column.tsx": {
-    "arbitrary-px": 1
+    "arbitrary-px": 2
   },
   "packages/core/src/screens/main/pos/checkout/receipt-stage/receipt-stage.tsx": {
     "arbitrary-px": 1,
@@ -185,8 +193,8 @@
     "arbitrary-px": 1
   },
   "packages/core/src/screens/main/pos/checkout/tender/terminal-leg-view.tsx": {
-    "arbitrary-px": 4,
-    "duration-literal": 1
+    "arbitrary-px": 5,
+    "duration-literal": 2
   },
   "packages/core/src/screens/main/pos/products/cells/variations-popover/index.tsx": {
     "bare-Suspense": 1
@@ -211,7 +219,7 @@
   },
   "packages/core/src/screens/main/receipt/components/receipt-preview-viewport.web.tsx": {
     "arbitrary-px": 1,
-    "hover:": 1
+    "hover:": 2
   },
   "packages/core/src/screens/main/reports/index.tsx": {
     "bare-Suspense": 3
