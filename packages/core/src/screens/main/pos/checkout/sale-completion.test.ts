@@ -5,7 +5,11 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { pendingCompletions, recordCompletionAttempt } from './completion-journal';
+import {
+	pendingCompletions,
+	recordCompletionAttempt,
+	resolveCompletionAttempt,
+} from './completion-journal';
 import { row } from './payments/device/fixtures.test-utils';
 import {
 	completeSale,
@@ -364,4 +368,32 @@ it.each([
 	['', false],
 ] as const)('replay accepts only paid statuses for %s', (status, expected) => {
 	expect(isSaleComplete({ source: 'replay' }, 2, { ...payload, status } as never)).toBe(expected);
+});
+
+it('recreates a concurrently cleared attempt when finishing throws, with source and actor', async () => {
+	const actor = { id: 'A', name: 'Cashier A' };
+	const context = { ...ctx, actor };
+	await prepareSale(context, {
+		order,
+		completing: true,
+		source: 'manual',
+		bindingStatus: 'none',
+		sessionRule: 'none',
+	});
+	const error = new Error('finish failed after another tab cleared');
+	mockReconcile.mockImplementationOnce(async () => {
+		await resolveCompletionAttempt(ctx.storeDB, 'order');
+		throw error;
+	});
+	const before = Date.now();
+	await expect(completeSale(context, order, manual, { host: 'background' })).rejects.toBe(error);
+	const attempt = (await pendingCompletions(ctx.storeDB)).order;
+	expect(attempt).toMatchObject({
+		source: 'manual',
+		actor,
+		attempts: 1,
+		lastError: error.message,
+	});
+	expect(Date.parse(attempt.at)).toBeGreaterThanOrEqual(before);
+	expect(Date.parse(attempt.at)).toBeLessThanOrEqual(Date.now());
 });

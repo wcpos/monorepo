@@ -8,6 +8,7 @@ import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import * as journal from './completion-journal';
 import { pendingCompletions, recordCompletionAttempt } from './completion-journal';
 import { SaleCompletionBridge } from './completion-journal-bridge';
 import * as owner from './sale-completion';
@@ -21,6 +22,19 @@ const mockReceipt = jest.fn();
 const mockInfo = jest.fn();
 const mockDebug = jest.fn();
 const mockWarn = jest.fn();
+let mockStartVersion = 0;
+const mockStartListeners = new Set<() => void>();
+const startService = () => {
+	mockStartVersion++;
+	mockStartListeners.forEach((listener) => listener());
+};
+jest.mock('../../../../services/terminal-payments', () => ({
+	getTerminalPaymentsServiceStartVersion: () => mockStartVersion,
+	subscribeTerminalPaymentsServiceStart: (listener: () => void) => {
+		mockStartListeners.add(listener);
+		return () => mockStartListeners.delete(listener);
+	},
+}));
 let mockManager = {};
 let mockContext: SaleContext;
 jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => mockManager }));
@@ -58,6 +72,7 @@ const drain = () =>
 addRxPlugin(RxDBLocalDocumentsPlugin);
 beforeEach(async () => {
 	jest.resetAllMocks();
+	mockStartVersion = 0;
 	mockManager = {};
 	mockContext = {
 		storeDB: await createRxDatabase({
@@ -107,18 +122,54 @@ it('finishes a resident completed order once in the background, marks its audit,
 	);
 });
 
-it('clears a confirmed unpaid resident after one refresh, without completing', async () => {
+it.each([42, undefined])(
+	'keeps an unpaid resident for two starts and clears on the third (id=%s)',
+	async (id) => {
+		await record();
+		mockFind.mockResolvedValue({
+			uuid: 'order',
+			getLatest: () => ({ payload: { id, status: 'pos-open' } }),
+		});
+		const view = render(<SaleCompletionBridge />);
+		for (const count of [1, 2]) {
+			await waitFor(async () =>
+				expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+					unpaidStarts: count,
+				})
+			);
+			expect(owner.completeSale).not.toHaveBeenCalled();
+			expect(mockCatchUp).toHaveBeenCalledTimes(id ? count : 0);
+			expect(mockDebug).toHaveBeenLastCalledWith(
+				expect.any(String),
+				expect.objectContaining({ context: { orderUUID: 'order', reason: 'unpaid', count } })
+			);
+			mockManager = {};
+			view.rerender(<SaleCompletionBridge />);
+		}
+		await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+		expect(mockDebug).toHaveBeenLastCalledWith(
+			expect.any(String),
+			expect.objectContaining({ context: { orderUUID: 'order', reason: 'unpaid', count: 3 } })
+		);
+		expect(owner.completeSale).not.toHaveBeenCalled();
+		expect(mockRefresh).not.toHaveBeenCalled();
+		expect(mockCatchUp).toHaveBeenCalledTimes(id ? 3 : 0);
+	}
+);
+
+it('finishes on the second start when the normal pull has made the unpaid resident completed', async () => {
 	await record();
 	mockFind.mockResolvedValue(resident('order', 'pos-open'));
-	render(<SaleCompletionBridge />);
-	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
-	expect(mockDebug).toHaveBeenCalledWith(
-		expect.any(String),
-		expect.objectContaining({ context: expect.objectContaining({ orderUUID: 'order' }) })
-	);
+	const view = render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockDebug).toHaveBeenCalled());
 	expect(owner.completeSale).not.toHaveBeenCalled();
-	expect(mockRefresh).not.toHaveBeenCalled();
+	mockFind.mockResolvedValue(resident());
+	mockManager = {};
+	view.rerender(<SaleCompletionBridge />);
+	await waitFor(() => expect(owner.completeSale).toHaveBeenCalledTimes(1));
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
 	expect(mockCatchUp).toHaveBeenCalledTimes(1);
+	expect(mockRefresh).toHaveBeenCalledTimes(1);
 });
 
 it('counts missing orders once per session and abandons with one warning on the third start', async () => {
@@ -332,7 +383,7 @@ it('clears a cancelled contract attempt without completing, receipt, or audit', 
 	expect(mockReceipt).not.toHaveBeenCalled();
 	expect(mockInfo).not.toHaveBeenCalled();
 	expect(mockDebug).toHaveBeenCalled();
-	expect(mockCatchUp).toHaveBeenCalledTimes(1);
+	expect(mockCatchUp).not.toHaveBeenCalled();
 });
 
 it.each([{ id: 'A', name: 'Cashier A' }, undefined])(
@@ -354,3 +405,35 @@ it.each([{ id: 'A', name: 'Cashier A' }, undefined])(
 		expect(mockInfo).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ actor }));
 	}
 );
+
+it('replays again when the service starts with the same database and runtime', async () => {
+	await record();
+	mockRefresh.mockRejectedValueOnce(new Error('finish failed'));
+	render(<SaleCompletionBridge />);
+	await waitFor(async () =>
+		expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({ attempts: 1 })
+	);
+	expect(owner.completeSale).toHaveBeenCalledTimes(1);
+	act(startService);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).toHaveBeenCalledTimes(2);
+});
+
+it('reads the service version in the effect after the preceding bridge starts, without a second run', async () => {
+	function StartingBridge() {
+		React.useEffect(startService, []);
+		return null;
+	}
+	await record();
+	const readPending = jest.spyOn(journal, 'pendingCompletions');
+	render(
+		<>
+			<StartingBridge />
+			<SaleCompletionBridge />
+		</>
+	);
+	await waitFor(() => expect(mockInfo).toHaveBeenCalledTimes(1));
+	await drain();
+	expect(readPending).toHaveBeenCalledTimes(1);
+	expect(owner.completeSale).toHaveBeenCalledTimes(1);
+});

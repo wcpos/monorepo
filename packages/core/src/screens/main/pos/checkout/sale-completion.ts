@@ -210,7 +210,7 @@ async function finishSale(
 }
 
 export async function completeSale(...args: Parameters<typeof finishSale>) {
-	const [ctx, order] = args;
+	const [ctx, order, outcome] = args;
 	try {
 		const result = await finishSale(...args);
 		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
@@ -218,7 +218,9 @@ export async function completeSale(...args: Parameters<typeof finishSale>) {
 		return result;
 	} catch (error) {
 		try {
-			await failCompletionAttempt(ctx.storeDB, order.uuid, error);
+			await failCompletionAttempt(ctx.storeDB, order.uuid, error, {
+				facts: { source: outcome.source, ...(ctx.actor ? { actor: ctx.actor } : {}) },
+			});
 		} finally {
 			throw error;
 		}

@@ -8,6 +8,7 @@ type Attempt = {
 	at: string;
 	attempts: number;
 	missingStarts?: number;
+	unpaidStarts?: number;
 	actor?: SaleContext['actor'];
 	lastError?: string;
 };
@@ -50,14 +51,21 @@ export async function failCompletionAttempt(
 	storeDB: StoreDatabase,
 	orderUuid: string,
 	error: unknown,
-	missingStart = false
+	options: {
+		missingStart?: boolean;
+		unpaidStart?: boolean;
+		facts?: Pick<Attempt, 'source' | 'actor'>;
+	} = {}
 ) {
-	const doc = await storeDB.getLocal<Journal>(ID);
+	const doc = options.facts ? await journal(storeDB) : await storeDB.getLocal<Journal>(ID);
 	await doc?.incrementalModify((data) => {
+		if (options.facts)
+			data.pending[orderUuid] ??= { ...options.facts, at: new Date().toISOString(), attempts: 0 };
 		const entry = data.pending[orderUuid];
 		if (entry) {
 			entry.attempts += 1;
-			if (missingStart) entry.missingStarts = (entry.missingStarts ?? 0) + 1;
+			if (options.missingStart) entry.missingStarts = (entry.missingStarts ?? 0) + 1;
+			if (options.unpaidStart) entry.unpaidStarts = (entry.unpaidStarts ?? 0) + 1;
 			entry.lastError = error instanceof Error ? error.message : String(error);
 		}
 		return data;
