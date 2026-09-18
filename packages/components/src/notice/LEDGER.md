@@ -12,3 +12,4 @@ Seeded 2026-09-18 by wcpos/roadmap#358 from the feedback-states page (wcpos/road
 2. `bad` is the only red surface in the app — evidence: wcpos/roadmap#308 §6; wcpos/roadmap#358.
 3. Always text, never icon-only; colour is never the only signal — evidence: wcpos/roadmap#308 §7, guideline 6; wcpos/roadmap#358.
 4. At most two actions and one docs link — evidence: component map §5; wcpos/roadmap#358.
+5. The text column keeps a wrapping basis of twelve units so the actions wrap beneath it before the text narrows to a sliver — evidence: Codex review on wcpos/monorepo#2182 (a 300 px pane produced a 600 px-tall message column with `flex-1 min-w-0` alone); wcpos/roadmap#358.

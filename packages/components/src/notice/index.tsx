@@ -49,7 +49,7 @@ export function Notice({
 			)}
 		>
 			<Icon name={icon ?? style.icon} className={style.color} />
-			<VStack className="min-w-0 flex-1">
+			<VStack className="min-w-0 flex-1 basis-48">
 				<Text testID={id('title')} className="text-foreground font-medium">
 					{title}
 				</Text>
