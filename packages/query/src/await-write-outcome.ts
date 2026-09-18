@@ -1,5 +1,5 @@
 import { TERMINAL_WRITE_EVENT_TYPES } from '@wcpos/sync-engine';
-import type { EngineEvent, RxdbSyncEngine } from '@wcpos/sync-engine';
+import type { RxdbSyncEngine } from '@wcpos/sync-engine';
 
 type AwaitedWriteOutcome = 'success' | 'success-local';
 
@@ -17,6 +17,18 @@ export class WriteOutcomeError extends Error {
 		super(`${eventType} for mutation "${mutationId}"`);
 		this.name = 'WriteOutcomeError';
 		this.eventType = eventType;
+		this.status = status;
+		this.reason = reason;
+	}
+}
+
+export class WriteDeferredError extends Error {
+	status?: number;
+	reason?: string;
+
+	constructor(mutationId: string, status?: number, reason?: string) {
+		super(`write-deferred (${status}) for mutation "${mutationId}"`);
+		this.name = 'WriteDeferredError';
 		this.status = status;
 		this.reason = reason;
 	}
@@ -48,7 +60,7 @@ export function awaitWriteOutcome(
 			(event) => {
 				if (
 					// The engine is the producer of this set, so it is imported, not mirrored.
-					!TERMINAL_WRITE_EVENT_TYPES.has(event.type) ||
+					(!TERMINAL_WRITE_EVENT_TYPES.has(event.type) && event.type !== 'write-deferred') ||
 					!('mutationId' in event) ||
 					event.mutationId !== mutationId
 				) {
@@ -56,6 +68,11 @@ export function awaitWriteOutcome(
 				}
 
 				switch (event.type) {
+					case 'write-deferred':
+						if (event.status === 401) {
+							finish(() => reject(new WriteDeferredError(mutationId, event.status, event.reason)));
+						}
+						break;
 					case 'write-acknowledged':
 					case 'write-ack-rematerialized':
 						finish(() => resolve('success'));

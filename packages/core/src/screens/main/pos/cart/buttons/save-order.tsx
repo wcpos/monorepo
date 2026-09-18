@@ -3,9 +3,9 @@ import { View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
+import { pushFailureCode } from '../../../contexts/push-failure-code';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
@@ -57,7 +57,7 @@ export function SaveButton() {
 			const errorMessage = getErrorMessage(error);
 			cartLogger.error('Failed to save order', {
 				showToast: true,
-				code: ERROR_CODES.SYNC_UNEXPECTED,
+				code: pushFailureCode(error),
 				toast: { title: t('common.failed_to_save_order') },
 				context: {
 					orderId: currentOrderRecord.payload.id,

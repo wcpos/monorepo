@@ -207,6 +207,14 @@ export type WriteOutcomeEvent =
 			currentRevision: string | null;
 	  }
 	| {
+			type: 'write-deferred';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			status?: number;
+			reason?: string;
+	  }
+	| {
 			type: 'write-rejected';
 			collection: string;
 			recordId: string;
@@ -650,6 +658,17 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
+						// Deferrals stay queued; they are not subject to the acknowledgement gate.
+						for (const { mutation, status, reason } of result.failures) {
+							deps.emitWriteEvent({
+								type: 'write-deferred',
+								collection: mutation.collectionName,
+								recordId: mutation.recordId,
+								mutationId: mutation.mutationId,
+								status,
+								reason,
+							});
+						}
 						const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));
 						for (const ack of ackCandidates) {
 							if (stillPending.has(ack.mutationId)) continue;

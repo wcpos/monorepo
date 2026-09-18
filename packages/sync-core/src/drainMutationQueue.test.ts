@@ -83,6 +83,7 @@ describe('drainMutationQueue', () => {
 			held: 0,
 			conflicts: [],
 			failed: 0,
+			failures: [],
 			deferred: 0,
 			rejected: [],
 		});
@@ -111,6 +112,30 @@ describe('drainMutationQueue', () => {
 		expect((await q.pending()).map((m) => m.mutationId)).toEqual(['m1']);
 	});
 
+	it('keeps a 401 pending with backoff and reports the retryable push failure', async () => {
+		const q = await queueWith(mut());
+		const now = Date.parse('2026-06-26T00:00:00.000Z');
+		const result = await drainMutationQueue({
+			queue: q,
+			now: () => now,
+			push: async (mutation) => {
+				throw new RecordPushError(mutation, 401, 'woocommerce_pos_rest_unauthorized');
+			},
+		});
+
+		expect(result).toMatchObject({ pushed: 0, failed: 1, rejected: [] });
+		expect(result.failures).toEqual([
+			{
+				mutation: expect.objectContaining({ mutationId: 'm1' }),
+				status: 401,
+				reason: 'woocommerce_pos_rest_unauthorized',
+			},
+		]);
+		const [pending] = await q.pending();
+		expect(pending).toMatchObject({ mutationId: 'm1', status: 'pending', attempts: 1 });
+		expect(Date.parse(pending.nextAttemptAt!)).toBeGreaterThan(now);
+	});
+
 	it('dead-letters a non-retryable 4xx (e.g. unsupported collection) instead of retrying forever', async () => {
 		const q = await queueWith(mut({ mutationId: 'm1', recordId: 'rec-A' }));
 		const err = Object.assign(new Error('unknown collection'), { status: 400 });
@@ -124,6 +149,7 @@ describe('drainMutationQueue', () => {
 		});
 		expect(result.rejected.map(({ mutation }) => mutation.mutationId)).toEqual(['m1']);
 		expect(result.failed).toBe(0);
+		expect((await q.all())[0]).toMatchObject({ status: 'rejected' });
 		expect(await q.pending()).toEqual([]); // dead-lettered (removed), NOT left to retry forever
 		expect(events.some((e) => e.type === 'push.rejected' && e.fields?.status === 400)).toBe(true);
 	});

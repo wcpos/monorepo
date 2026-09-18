@@ -459,6 +459,14 @@ export type EngineEvent =
 			currentRevision: string | null;
 	  }
 	| {
+			type: 'write-deferred';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			status?: number;
+			reason?: string;
+	  }
+	| {
 			type: 'write-rejected';
 			collection: string;
 			recordId: string;
@@ -1776,7 +1784,7 @@ export function createRxdbSyncEngine(
 			// slow or broken channel can never delay this window's own feedback, and
 			// only for outcomes THIS instance produced — a bridged event never comes
 			// back through here.
-			ports.writeOutcomeBridge?.publish(event);
+			if (event.type !== 'write-deferred') ports.writeOutcomeBridge?.publish(event);
 			if (event.type !== 'write-rejected' || !AUTO_REVERT_COLLECTIONS.has(event.collection)) {
 				return;
 			}

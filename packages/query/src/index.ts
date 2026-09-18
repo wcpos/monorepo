@@ -13,7 +13,7 @@ export {
 } from './use-local-collection';
 export type { LocalCollectionReset, LocalDatabaseWithReset } from './use-local-collection';
 export { useLocalQuery } from './use-local-query';
-export { awaitWriteOutcome, WriteOutcomeError } from './await-write-outcome';
+export { awaitWriteOutcome, WriteDeferredError, WriteOutcomeError } from './await-write-outcome';
 export type { QueryResult } from './query-result';
 export {
 	adapterDerivedFieldsFor,

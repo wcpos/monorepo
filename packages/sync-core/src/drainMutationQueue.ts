@@ -92,6 +92,8 @@ export type DrainResult = {
 	conflicts: PushResult[];
 	/** Mutations whose push threw a RETRYABLE error (5xx, network, in-progress) — left queued to retry. */
 	failed: number;
+	/** Retryable first-push failures; conflict/precondition re-pushes are not included. */
+	failures: { mutation: QueuedMutation; status?: number; reason?: string }[];
 	/** Mutations skipped this drain because their backoff window has not yet elapsed (ADR 0012). */
 	deferred: number;
 	/**
@@ -108,8 +110,11 @@ export type DrainResult = {
 	}[];
 };
 
+// A 401 is a session failure, not a payload verdict; the queue drains after re-auth.
+const SESSION_EXPIRED_STATUS = 401;
+
 /** 4xx codes that ARE worth retrying — timeout, conflict/in-progress, too-early, rate-limit. */
-const RETRYABLE_4XX = new Set([408, 409, 425, 429]);
+const RETRYABLE_4XX = new Set([SESSION_EXPIRED_STATUS, 408, 409, 425, 429]);
 
 /**
  * A thrown push error that will never succeed by retrying: either the adapter explicitly
@@ -380,6 +385,7 @@ export async function drainMutationQueue(input: {
 			.map((mutation) => mutation.recordId)
 	);
 	const rejected: DrainResult['rejected'] = [];
+	const failures: DrainResult['failures'] = [];
 	let pushed = 0;
 	let held = 0;
 	let failed = 0;
@@ -690,6 +696,8 @@ export async function drainMutationQueue(input: {
 			} else {
 				// The push adapter already emitted push.error. Leave it queued; bump + back off (ADR 0012).
 				failed += 1;
+				const detail = error as { status?: number; reason?: string } | null;
+				failures.push({ mutation: draining, status: detail?.status, reason: detail?.reason });
 				blockedRecords.add(mutation.recordId);
 				await applyBackoff({ ...draining, status: 'pending' });
 				continue;
@@ -917,6 +925,7 @@ export async function drainMutationQueue(input: {
 		held,
 		conflicts,
 		failed,
+		failures,
 		deferred,
 		rejected,
 	};
