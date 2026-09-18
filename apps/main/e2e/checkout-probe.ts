@@ -358,17 +358,20 @@ export async function addCheckoutProbeProductAgain(page: Page): Promise<void> {
 	await ensureRegisterOpen(page);
 	const probe = probes?.[0] ?? null;
 	if (probe && probe.rowTestId) {
+		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
+		const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
+		const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
 		// A new order starts on the unfiltered grid, where a run-private probe is one row in
-		// hundreds: search for it again exactly as the first add did (measured live 2026-09-18).
+		// hundreds: search for it again (measured live 2026-09-18). The first add already
+		// satisfied this demand, so the engine may answer locally with no wire request: the
+		// rendered row stands in for the response (`localResult`), as the helper documents.
 		await searchAndWaitForServer(
 			page,
 			page.getByTestId('search-products'),
 			'products',
-			probe.token
+			probe.token,
+			tile.or(tableButton).first()
 		);
-		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
-		const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
-		const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
 		await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
 		if (await tile.isVisible()) await tile.click();
 		else await tableButton.click();
