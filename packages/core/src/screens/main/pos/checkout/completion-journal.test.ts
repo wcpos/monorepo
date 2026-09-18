@@ -80,6 +80,32 @@ it('resolves only the named order and never resurrects it on late failure', asyn
 	await failCompletionAttempt(db, 'order', 'late');
 	expect(Object.keys(await pendingCompletions(db))).toEqual(['other']);
 });
+it('resolve with a stale expectAt leaves the replacement attempt untouched', async () => {
+	await recordCompletionAttempt(db, attempt);
+	const pending = await pendingCompletions(db);
+	await resolveCompletionAttempt(db, 'order', 'stale-at');
+	expect(await pendingCompletions(db)).toEqual(pending);
+	await resolveCompletionAttempt(db, 'order', pending.order.at);
+	expect(await pendingCompletions(db)).toEqual({});
+});
+it('fail with a stale expectAt bumps nothing on the replacement attempt', async () => {
+	await recordCompletionAttempt(db, attempt);
+	const pending = await pendingCompletions(db);
+	const options = { missingStart: true, unpaidStart: true };
+	await failCompletionAttempt(db, 'order', 'stale failure', { ...options, expectAt: 'stale-at' });
+	expect(await pendingCompletions(db)).toEqual(pending);
+	await failCompletionAttempt(db, 'order', 'current failure', {
+		...options,
+		expectAt: pending.order.at,
+	});
+	expect((await pendingCompletions(db)).order).toEqual({
+		...pending.order,
+		attempts: 1,
+		missingStarts: 1,
+		unpaidStarts: 1,
+		lastError: 'current failure',
+	});
+});
 it('serializes concurrent record and resolve without losing unrelated entries', async () => {
 	await recordCompletionAttempt(db, attempt);
 	await Promise.all([

@@ -157,6 +157,39 @@ it.each([42, undefined])(
 	}
 );
 
+it.each([true, false])(
+	'guards the third unpaid replay against a replacement during refresh (replace=%s)',
+	async (replace) => {
+		const timestamp = jest.spyOn(Date.prototype, 'toISOString');
+		timestamp.mockReturnValue('2026-09-18T10:00:00.000Z');
+		await record();
+		for (let i = 0; i < 2; i++)
+			await journal.failCompletionAttempt(mockContext.storeDB, 'order', 'unpaid', {
+				unpaidStart: true,
+			});
+		mockFind.mockResolvedValue(resident('order', 'pos-open'));
+		let release!: (result: string) => void;
+		mockCatchUp.mockImplementationOnce(
+			() =>
+				new Promise<string>((resolve) => {
+					release = resolve;
+				})
+		);
+		render(<SaleCompletionBridge />);
+		await waitFor(() => expect(mockCatchUp).toHaveBeenCalledTimes(1));
+		if (replace) {
+			timestamp.mockReturnValue('2026-09-18T11:00:00.000Z');
+			await record();
+		}
+		await act(async () => release('refreshed'));
+		await waitFor(() => expect(mockDebug).toHaveBeenCalled());
+		expect(await pendingCompletions(mockContext.storeDB)).toEqual(
+			replace ? { order: { source: 'terminal', at: '2026-09-18T11:00:00.000Z', attempts: 0 } } : {}
+		);
+		expect(owner.completeSale).not.toHaveBeenCalled();
+	}
+);
+
 it('finishes on the second start when the normal pull has made the unpaid resident completed', async () => {
 	await record();
 	mockFind.mockResolvedValue(resident('order', 'pos-open'));

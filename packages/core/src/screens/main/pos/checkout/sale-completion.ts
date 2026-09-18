@@ -211,6 +211,8 @@ async function finishSale(
 
 export async function completeSale(...args: Parameters<typeof finishSale>) {
 	const [ctx, order, outcome] = args;
+	// No entry snapshot: resolve/fail unconditionally belong to the current attempt, even in replay.
+	// A paid order cannot start a new completing attempt while its finish is running.
 	try {
 		const result = await finishSale(...args);
 		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.

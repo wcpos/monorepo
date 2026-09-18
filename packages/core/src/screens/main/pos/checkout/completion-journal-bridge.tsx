@@ -70,11 +70,12 @@ export function SaleCompletionBridge(): null {
 					if (current.stopped) return;
 					if (!resident) {
 						await failCompletionAttempt(storeDB, uuid, 'order_not_resident', {
+							expectAt: attempt.at,
 							missingStart: true,
 						});
 						if (current.stopped) return;
 						if ((attempt.missingStarts ?? 0) + 1 >= 3) {
-							await resolveCompletionAttempt(storeDB, uuid);
+							await resolveCompletionAttempt(storeDB, uuid, attempt.at);
 							logger.warn('Pending sale completion abandoned: order not resident', {
 								code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
 								context: {
@@ -99,7 +100,7 @@ export function SaleCompletionBridge(): null {
 								throw new Error('completion_refresh_timed_out');
 							refreshed = true;
 						} catch (error) {
-							await failCompletionAttempt(storeDB, uuid, error);
+							await failCompletionAttempt(storeDB, uuid, error, { expectAt: attempt.at });
 							continue;
 						}
 						if (current.stopped) return;
@@ -110,8 +111,11 @@ export function SaleCompletionBridge(): null {
 						// A resident refresh can report success after HTTP failure. Give the normal
 						// orders pull between starts time to reveal payment before deciding unpaid.
 						if (!cancelled)
-							await failCompletionAttempt(storeDB, uuid, 'unpaid', { unpaidStart: true });
-						if (cancelled || count >= 3) await resolveCompletionAttempt(storeDB, uuid);
+							await failCompletionAttempt(storeDB, uuid, 'unpaid', {
+								expectAt: attempt.at,
+								unpaidStart: true,
+							});
+						if (cancelled || count >= 3) await resolveCompletionAttempt(storeDB, uuid, attempt.at);
 						logger.debug('Sale completion replay skipped: order is not completing', {
 							context: { orderUUID: uuid, reason: cancelled ? 'cancelled' : 'unpaid', count },
 						});

@@ -39,9 +39,14 @@ export async function recordCompletionAttempt(
 	});
 }
 
-export async function resolveCompletionAttempt(storeDB: StoreDatabase, orderUuid: string) {
+export async function resolveCompletionAttempt(
+	storeDB: StoreDatabase,
+	orderUuid: string,
+	expectAt?: string
+) {
 	const doc = await storeDB.getLocal<Journal>(ID);
 	await doc?.incrementalModify((data) => {
+		if (expectAt !== undefined && data.pending[orderUuid]?.at !== expectAt) return data;
 		delete data.pending[orderUuid];
 		return data;
 	});
@@ -52,6 +57,7 @@ export async function failCompletionAttempt(
 	orderUuid: string,
 	error: unknown,
 	options: {
+		expectAt?: string;
 		missingStart?: boolean;
 		unpaidStart?: boolean;
 		facts?: Pick<Attempt, 'source' | 'actor'>;
@@ -59,6 +65,8 @@ export async function failCompletionAttempt(
 ) {
 	const doc = options.facts ? await journal(storeDB) : await storeDB.getLocal<Journal>(ID);
 	await doc?.incrementalModify((data) => {
+		if (options.expectAt !== undefined && data.pending[orderUuid]?.at !== options.expectAt)
+			return data;
 		if (options.facts)
 			data.pending[orderUuid] ??= { ...options.facts, at: new Date().toISOString(), attempts: 0 };
 		const entry = data.pending[orderUuid];
