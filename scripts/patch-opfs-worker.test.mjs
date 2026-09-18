@@ -164,7 +164,12 @@ test('shipped OPFS worker contains changelog identity protection exactly once', 
 	assert.equal(source.match(/WCPOS_CHANGELOG_INDEX_STATES_PATCH/g)?.length, 1);
 	// esbuild renames the link helper, so find it by its body (the property it
 	// assigns survives minification) and require one definition plus one call site.
-	const helper = /function (\w+)\(\w+\)\{for\(var \w+=0;[^}]*__wcposIndexStates=/.exec(source);
+	// A minified name can contain `$` — esbuild picked `$s` once the bundle grew
+	// — so the identifier class is [\w$], and the call sites are bounded by a
+	// lookbehind rather than \b, which does not hold before a leading `$`.
+	const helper =
+		/function ([\w$]+)\([\w$]+\)\{for\(var [\w$]+=0;[^}]*__wcposIndexStates=/.exec(source);
 	assert.ok(helper, 'link helper definition present in the shipped worker');
-	assert.equal(source.match(new RegExp(`\\b${helper[1]}\\(`, 'g'))?.length, 2);
+	const name = helper[1].replace(/[$]/g, '\\$');
+	assert.equal(source.match(new RegExp(`(?<![\\w$])${name}\\(`, 'g'))?.length, 2);
 });
