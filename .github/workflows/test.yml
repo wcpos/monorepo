@@ -2,7 +2,7 @@ name: Test
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review]
+    types: [opened, synchronize, ready_for_review, labeled]
   push:
     branches: [main, next]
 
@@ -18,6 +18,7 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
+      gallery: ${{ steps.plan.outputs.gallery }}
       lint: ${{ steps.plan.outputs.lint }}
       unit: ${{ steps.plan.outputs.unit }}
       reason: ${{ steps.plan.outputs.reason }}
@@ -497,3 +498,92 @@ jobs:
           node scripts/check-expo-alignment.mjs
           node scripts/check-dep-duplicates.mjs
           node scripts/check-android-aar-compile-sdk.mjs
+
+  gallery-shoot:
+    name: Gallery shoot
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: changes
+    if: >-
+      needs.changes.outputs.gallery == 'true' &&
+      (github.event.pull_request.draft == false || github.event_name == 'push') &&
+      !(contains(github.event.pull_request.labels.*.name, 'gallery:update-baselines') &&
+        github.event.pull_request.head.repo.full_name == github.repository)
+    steps: &gallery-steps
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+      - name: Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          skip-install-scripts: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
+      - name: Install Chromium
+        working-directory: apps/main
+        run: npx playwright install --with-deps chromium
+      - name: Build gallery
+        working-directory: apps/main
+        run: EXPO_PUBLIC_WCPOS_GALLERY=1 npx expo export --platform web --output-dir ./gallery-build
+      - name: Update baselines
+        if: github.job == 'gallery-update'
+        working-directory: apps/main
+        run: npx playwright test -c playwright.gallery.config.ts --update-snapshots
+      - name: Commit baselines
+        if: github.job == 'gallery-update'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- apps/main/gallery/*-snapshots/*.png
+          if ! git diff --cached --quiet; then
+            git commit -m "test: update gallery baselines (run $GITHUB_RUN_ID)"
+            git push origin "HEAD:$GITHUB_HEAD_REF"
+          fi
+      - name: Compare baselines
+        working-directory: apps/main
+        run: npx playwright test -c playwright.gallery.config.ts
+      - name: Upload gallery report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: gallery-report
+          path: apps/main/playwright-report/
+          retention-days: 7
+
+  # Permissions cannot be conditional: only the label-selected job receives write.
+  gallery-update:
+    name: Gallery (update baselines)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: changes
+    if: >-
+      needs.changes.outputs.gallery == 'true' && github.event.pull_request.draft == false &&
+      contains(github.event.pull_request.labels.*.name, 'gallery:update-baselines') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+    steps: *gallery-steps
+
+  # The one check name the merge gate requires ("Gallery"): the gate script takes
+  # the first check with a matching name, so the two mutually exclusive jobs above
+  # report through this aggregator instead of sharing a name. Skipped when both
+  # were skipped (path filter or draft), which the gate counts as a pass.
+  gallery:
+    name: Gallery
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [gallery-shoot, gallery-update]
+    if: >-
+      always() &&
+      (needs.gallery-shoot.result != 'skipped' || needs.gallery-update.result != 'skipped')
+    steps:
+      - name: Aggregate
+        env:
+          SHOOT: ${{ needs.gallery-shoot.result }}
+          UPDATE: ${{ needs.gallery-update.result }}
+        run: |
+          echo "shoot=$SHOOT update=$UPDATE"
+          for r in "$SHOOT" "$UPDATE"; do
+            case "$r" in success|skipped) ;; *) echo "::error::gallery job result: $r"; exit 1;; esac
+          done

@@ -44,7 +44,11 @@ jobs:
           # workflow and seed — owner ruling 2026-09-03) and on every push to
           # main; it is DELIBERATELY not required. Plain app JS is covered on
           # the PR by the web suite and on main by the device suites.
-          MERGE_GATE_REQUIRED_CHECKS: 🧹 Lint|🧪 Unit Tests|🎭 E2E Tests
+          # "Gallery" is test.yml's aggregator over the read-only shoot and the
+          # label-driven baseline update (mutually exclusive); SKIPPED when the
+          # gallery path filter did not fire. Required so a baseline mismatch
+          # blocks the merge (roadmap#355, DoD C).
+          MERGE_GATE_REQUIRED_CHECKS: 🧹 Lint|🧪 Unit Tests|🎭 E2E Tests|Gallery
           # 140 × 30s ≈ 70 min: covers deploy (~7 min) plus the slower of a
           # web shard (~12 min) and a native run (~32 min), with one retry.
           MERGE_GATE_MAX_ATTEMPTS: '140'

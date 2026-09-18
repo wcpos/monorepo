@@ -46,3 +46,6 @@ playwright-report/
 test-results/
 blob-report/
 test-results.json
+
+# Gallery export (baselines stay tracked beside the spec)
+gallery-build/
