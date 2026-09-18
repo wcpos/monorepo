@@ -124,6 +124,7 @@ export function PaymentWebview({
 }: PaymentWebviewProps) {
 	const router = useRouter();
 	const ctx = useSaleContext();
+	const { sessionsOn } = ctx;
 	const completeOrderFlow = useCompleteOrderFlow(order, 'modal');
 	const orderData = useRecordField(order, (record) => record.payload);
 	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
@@ -135,12 +136,13 @@ export function PaymentWebview({
 		uuid: string;
 		status: 'ready' | 'failed';
 	} | null>(null);
-	// Online, the pay page is exposed only once this order's provenance is persisted
-	// (the effect below), and a failed save keeps it closed even if connectivity then
-	// drops; offline with no attempt made, the page cannot complete a sale anyway.
+	// Sessions require preparation even offline: a stale probe may hide a reachable
+	// pay page. Online also waits for provenance; failed preparation stays closed.
 	const prepared = preparation?.uuid === order.uuid ? preparation.status : null;
 	const paymentURL =
-		(online && prepared !== 'ready') || prepared === 'failed' ? undefined : rawPaymentURL;
+		((online || sessionsOn) && prepared !== 'ready') || prepared === 'failed'
+			? undefined
+			: rawPaymentURL;
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
 	const { wpCredentials } = useAppState();
@@ -187,11 +189,11 @@ export function PaymentWebview({
 	React.useEffect(() => {
 		collaborators.current = { order, ctx, setFrameStatus, orderLogger, t };
 	});
-	// Mounting the external pay page can complete the sale: persist attribution before
-	// exposing its URL. Bind to order identity, not revisions emitted by our own write.
+	// Mounting the external pay page can complete the sale: prepare before exposing
+	// its URL, persisting attribution online. Key on order identity, not our writes.
 	// Cleanup only suppresses an obsolete view's readiness update.
 	React.useEffect(() => {
-		if (!online || !rawPaymentURL) return;
+		if ((!online && !sessionsOn) || !rawPaymentURL) return;
 		const { order: currentOrder, ctx, setFrameStatus, orderLogger, t } = collaborators.current;
 		let active = true;
 		void (async () => {
@@ -213,7 +215,7 @@ export function PaymentWebview({
 				await persistSaleProvenance(ctx, {
 					order: currentOrder,
 					sessionId: prepared.sessionId,
-					online: true,
+					online,
 				});
 				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready' });
 			} catch (error) {
@@ -235,7 +237,17 @@ export function PaymentWebview({
 		return () => {
 			active = false;
 		};
-	}, [order.uuid, userDB, siteUuid, store.id, online, rawPaymentURL, retryToken, bindingStatus]);
+	}, [
+		order.uuid,
+		userDB,
+		siteUuid,
+		store.id,
+		online,
+		rawPaymentURL,
+		retryToken,
+		bindingStatus,
+		sessionsOn,
+	]);
 
 	/**
 	 *

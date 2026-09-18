@@ -1081,6 +1081,7 @@ it.each([false, true])(
 describe('PaymentWebview register gate', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		webViewProps = {};
 		mockOnlineStatus = 'online-website-available';
 		mockLocalPatch.mockResolvedValue(true);
 	});
@@ -1103,7 +1104,7 @@ describe('PaymentWebview register gate', () => {
 		await waitFor(() => expect(setFrameStatus).toHaveBeenCalledWith('stalled'));
 		// The pay page completes the whole balance: no provenance write, no URL.
 		expect(mockLocalPatch).not.toHaveBeenCalled();
-		expect(webViewProps.source).toBeUndefined();
+		expect(webViewProps.src).toBeUndefined();
 	});
 });
 
@@ -1172,6 +1173,7 @@ const mockSessions = { findOne: jest.fn() };
 describe('pay-page session gate', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		jest.mocked(recordCompletionAttempt).mockReset().mockResolvedValue(undefined);
 		mockSessionsOn = true;
 		mockOnlineStatus = 'online-website-available';
 		webViewMounts = 0;
@@ -1180,12 +1182,99 @@ describe('pay-page session gate', () => {
 		mockSessions.findOne.mockReturnValue({ exec: async () => null });
 		jest
 			.mocked(persistSaleProvenance)
-			.mockImplementationOnce(jest.requireActual('../sale-completion').persistSaleProvenance);
+			.mockImplementation(jest.requireActual('../sale-completion').persistSaleProvenance);
 	});
 	afterEach(() => {
 		mockSessionsOn = false;
 		mockOnlineStatus = 'offline';
 		jest.mocked(persistSaleProvenance).mockReset();
+	});
+	it.each(['offline', 'online-website-unavailable'])(
+		'%s at mount without an open session: toasts, stalls and never exposes the frame',
+		async (status) => {
+			mockOnlineStatus = status;
+			const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+			const setFrameStatus = jest.fn();
+			render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+				/>
+			);
+			expect(webViewMounts).toBe(0);
+			await act(async () => {});
+			expect(logger.info).toHaveBeenCalledWith(
+				'pos_checkout.open_register_first',
+				expect.objectContaining({ showToast: true })
+			);
+			expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+			expect(webViewProps.src).toBeUndefined();
+			expect(webViewMounts).toBe(0);
+			expect(persistSaleProvenance).not.toHaveBeenCalled();
+			expect(mockLocalPatch).not.toHaveBeenCalled();
+			expect(mockPushDocument).not.toHaveBeenCalled();
+		}
+	);
+	it('website unavailable with an open session: waits for preparation, pushes the session stamp only online', async () => {
+		mockOnlineStatus = 'online-website-unavailable';
+		mockSessions.findOne.mockReturnValue({
+			exec: async () => ({ id: 'session-42', incrementalPatch: async () => undefined }),
+		});
+		let finish!: () => void;
+		const pendingPreparation = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		jest.mocked(recordCompletionAttempt).mockReturnValueOnce(pendingPreparation);
+		const props = {
+			order: makeOrder(),
+			setLoading: jest.fn(),
+			setFrameStatus: jest.fn(),
+			onStockRejection: () => false,
+		};
+		const view = render(<PaymentWebview {...props} />);
+		await act(async () => {});
+		expect(webViewMounts).toBe(0);
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		await act(async () => finish());
+		expect(webViewMounts).toBe(1);
+		expect(webViewProps.src).toContain('/order-pay/42');
+		expect(persistSaleProvenance).toHaveBeenCalledWith(expect.anything(), {
+			order: props.order,
+			sessionId: 'session-42',
+			online: false,
+		});
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		// Offline preparation does not push provenance; reconnection stamps the session.
+		mockOnlineStatus = 'online-website-available';
+		view.rerender(<PaymentWebview {...props} />);
+		await act(async () => {});
+		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+			key: '_wcpos_session',
+			value: 'session-42',
+		});
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+	});
+	it('offline with sessions off: exposes the frame immediately without preparation or a toast', async () => {
+		mockSessionsOn = false;
+		mockOnlineStatus = 'offline';
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		expect(webViewMounts).toBe(1);
+		expect(webViewProps.src).toContain('/order-pay/42');
+		await act(async () => {});
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).info).not.toHaveBeenCalled();
 	});
 	it('no open session: toasts, stalls and keeps failed preparation closed even offline', async () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
@@ -1209,7 +1298,7 @@ describe('pay-page session gate', () => {
 		expect(logger.error).not.toHaveBeenCalled();
 		expect(webViewMounts).toBe(0);
 		mockOnlineStatus = 'offline';
-		view.rerender(<PaymentWebview {...props} />);
+		await act(async () => view.rerender(<PaymentWebview {...props} />));
 		expect(webViewMounts).toBe(0);
 	});
 	it.each([true, false])(
