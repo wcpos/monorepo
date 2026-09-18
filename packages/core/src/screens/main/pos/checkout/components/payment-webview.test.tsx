@@ -4,7 +4,7 @@
 import * as React from 'react';
 
 import { act, render, waitFor } from '@testing-library/react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, map, take } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -104,11 +104,12 @@ jest.mock('@wcpos/query', () => ({
 	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
+let mockRegisterId: string | null = null;
 let mockBindingStatus: 'bound' | 'choose' | 'none' | 'unknown' = 'bound';
 jest.mock('../../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({
 		status: mockBindingStatus,
-		registerId: null,
+		registerId: mockRegisterId,
 		registerName: null,
 		registers: [],
 		bind: jest.fn(),
@@ -1183,7 +1184,16 @@ jest.mock('../sale-completion', () => {
 
 jest.mock('../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
-		userDB: { getLocal: async () => null },
+		userDB: {
+			getLocal: async () =>
+				mockRegisterId
+					? {
+							toJSON: () => ({
+								data: { sites: { site: { register_id: mockRegisterId, register_store_id: 1 } } },
+							}),
+						}
+					: null,
+		},
 		sessionsOn: mockSessionsOn,
 		sessions: mockSessions,
 		siteUuid: 'site',
@@ -1212,6 +1222,37 @@ jest.mock('../completion-journal', () => ({
 let mockSessionsOn = false;
 const mockOpenSession = new BehaviorSubject<{ id: string; status?: string } | null>(null);
 const mockSessions = { findOne: jest.fn() };
+type SessionFixture = {
+	id: string;
+	register_id: string;
+	status: string;
+	sync_status: string;
+	incrementalPatch: () => Promise<void>;
+};
+function observeSessions(rows: BehaviorSubject<SessionFixture[]>) {
+	mockSessions.findOne.mockImplementation(
+		(query: string | { selector: Record<string, unknown> }) => {
+			const selector = typeof query === 'string' ? { id: query } : query.selector;
+			const selected = rows.pipe(
+				map(
+					(values) =>
+						values.find((row) =>
+							Object.entries(selector).every(([key, value]) => {
+								const actual = row[key as keyof SessionFixture];
+								return typeof value === 'object' && value !== null && '$ne' in value
+									? actual !== value.$ne
+									: actual === value;
+							})
+						) ?? null
+				)
+			);
+			return {
+				$: selected,
+				exec: async () => new Promise((resolve) => selected.pipe(take(1)).subscribe(resolve)),
+			};
+		}
+	);
+}
 describe('pay-page session gate', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -1229,18 +1270,128 @@ describe('pay-page session gate', () => {
 	});
 	afterEach(() => {
 		mockSessionsOn = false;
+		mockRegisterId = null;
 		mockOnlineStatus = 'offline';
 		jest.mocked(persistSaleProvenance).mockReset();
 	});
+	it('sync rejection hides and stalls ready A once, then re-prepares and stamps B', async () => {
+		mockRegisterId = 'register-A';
+		const sessionA = {
+			id: 'session-A',
+			register_id: 'register-A',
+			status: 'open',
+			sync_status: 'pending',
+			incrementalPatch: async () => undefined,
+		};
+		const rows = new BehaviorSubject<SessionFixture[]>([sessionA]);
+		observeSessions(rows);
+		const props = {
+			order: makeOrder(undefined, [{ key: '_wcpos_sale_counter', value: '7' }]),
+			setLoading: jest.fn(),
+			setFrameStatus: jest.fn(),
+			onStockRejection: () => false,
+		};
+		const view = render(<PaymentWebview {...props} />);
+		await act(async () => {});
+		act(() => webViewProps.onLoad({}));
+		expect(props.setFrameStatus).toHaveBeenLastCalledWith('ready');
+		mockLocalPatch.mockClear();
+		await act(async () => rows.next([{ ...sessionA, sync_status: 'failed' }]));
+		expect(webViewProps.src).toBeUndefined();
+		expect(props.setFrameStatus).toHaveBeenLastCalledWith('stalled');
+		await act(async () => rows.next([{ ...sessionA, sync_status: 'failed' }]));
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		expect(logger.info).toHaveBeenCalledTimes(1);
+		expect(logger.info).toHaveBeenCalledWith(
+			'pos_checkout.open_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		await act(async () =>
+			rows.next([...rows.value, { ...sessionA, id: 'session-B', sync_status: 'synced' }])
+		);
+		expect(prepareSale).toHaveBeenCalledTimes(2);
+		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+			key: '_wcpos_session',
+			value: 'session-B',
+		});
+		expect(webViewProps.src).toContain('/order-pay/42');
+		expect(logger.info).toHaveBeenCalledTimes(1);
+		view.unmount();
+		expect(rows.observed).toBe(false);
+	});
+	it.each([false, true])(
+		'switching bound A to B invalidates A before preparing B (open: %s)',
+		async (open) => {
+			mockRegisterId = 'register-A';
+			const sessionA = {
+				id: 'session-A',
+				register_id: 'register-A',
+				status: 'open',
+				sync_status: 'synced',
+				incrementalPatch: async () => undefined,
+			};
+			const sessionB = { ...sessionA, id: 'session-B', register_id: 'register-B' };
+			const rows = new BehaviorSubject<SessionFixture[]>(open ? [sessionA, sessionB] : [sessionA]);
+			observeSessions(rows);
+			const props = {
+				order: makeOrder(undefined, [{ key: '_wcpos_sale_counter', value: '7' }]),
+				setLoading: jest.fn(),
+				setFrameStatus: jest.fn(),
+				onStockRejection: () => false,
+			};
+			const view = render(<PaymentWebview {...props} />);
+			await act(async () => {});
+			act(() => webViewProps.onLoad({}));
+			expect(props.setFrameStatus).toHaveBeenLastCalledWith('ready');
+			mockLocalPatch.mockClear();
+			let finish!: () => void;
+			const pending = new Promise<void>((resolve) => {
+				finish = resolve;
+			});
+			jest.mocked(recordCompletionAttempt).mockReturnValueOnce(pending);
+			mockRegisterId = 'register-B';
+			view.rerender(<PaymentWebview {...props} />);
+			expect(webViewProps.src).toBeUndefined();
+			expect(props.setFrameStatus).toHaveBeenLastCalledWith('loading');
+			await act(async () => {});
+			const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+			if (!open) {
+				expect(props.setFrameStatus).toHaveBeenLastCalledWith('stalled');
+				expect(logger.info).toHaveBeenCalledTimes(1);
+				expect(logger.info).toHaveBeenCalledWith(
+					'pos_checkout.open_register_first',
+					expect.objectContaining({ showToast: true })
+				);
+				expect(mockLocalPatch).not.toHaveBeenCalled();
+				await act(async () => rows.next([sessionA, sessionB]));
+			}
+			expect(webViewProps.src).toBeUndefined();
+			await act(async () => finish());
+			expect(prepareSale).toHaveBeenCalledTimes(open ? 2 : 3);
+			expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+				key: '_wcpos_session',
+				value: 'session-B',
+			});
+			expect(webViewProps.src).toContain('/order-pay/42');
+			expect(logger.info).toHaveBeenCalledTimes(open ? 0 : 1);
+			view.unmount();
+			expect(rows.observed).toBe(false);
+		}
+	);
 	it.each(['counting', 'closed', 'missing'])(
 		'ready session A becomes %s: hides and stalls once, then re-prepares in B',
 		async (status) => {
 			const sessionA = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
 			const preparedSession = new BehaviorSubject<typeof sessionA | null>(sessionA);
 			mockOpenSession.next(sessionA);
-			mockSessions.findOne.mockImplementation((query: unknown) =>
-				typeof query === 'string'
-					? { $: preparedSession }
+			mockSessions.findOne.mockImplementation((query: string | { selector: { id?: string } }) =>
+				typeof query === 'string' || query.selector.id
+					? {
+							$: preparedSession.pipe(
+								map((session) => (session?.status === 'open' ? session : null))
+							),
+						}
 					: { exec: async () => mockOpenSession.value, $: mockOpenSession }
 			);
 			const order = makeOrder(undefined, [
@@ -1286,7 +1437,9 @@ describe('pay-page session gate', () => {
 			});
 			expect(prepareSale).toHaveBeenCalledTimes(2);
 			expect(persistSaleProvenance).toHaveBeenCalledTimes(1);
-			expect(mockSessions.findOne).toHaveBeenCalledWith('session-B');
+			expect(mockSessions.findOne).toHaveBeenCalledWith({
+				selector: { id: 'session-B', status: 'open', sync_status: { $ne: 'failed' } },
+			});
 			expect(webViewProps.src).toContain('/order-pay/42');
 			expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
 				key: '_wcpos_session',
@@ -1302,9 +1455,13 @@ describe('pay-page session gate', () => {
 		const session = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
 		const preparedSession = new BehaviorSubject(session);
 		mockOpenSession.next(session);
-		mockSessions.findOne.mockImplementation((query: unknown) =>
-			typeof query === 'string'
-				? { $: preparedSession }
+		mockSessions.findOne.mockImplementation((query: string | { selector: { id?: string } }) =>
+			typeof query === 'string' || query.selector.id
+				? {
+						$: preparedSession.pipe(
+							map((session) => (session?.status === 'open' ? session : null))
+						),
+					}
 				: { exec: async () => mockOpenSession.value, $: mockOpenSession }
 		);
 		const view = render(

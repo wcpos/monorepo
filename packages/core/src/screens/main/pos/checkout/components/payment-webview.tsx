@@ -11,7 +11,10 @@ import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
+import {
+	openSessionSelector,
+	RegisterSessionRequiredError,
+} from '../../../../../services/register-session/session-store';
 import { presentSessionRequired } from '../session-required';
 import { isSaleComplete, persistSaleProvenance, prepareSale } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
@@ -134,15 +137,16 @@ export function PaymentWebview({
 	const { status: bindingStatus, registerId } = useRegisterBinding();
 	const [sessionRetry, setSessionRetry] = React.useState(0);
 	const siteUuid = site.uuid!;
+	const preparationKey = `${order.uuid}:${registerId}`;
 	const [preparation, setPreparation] = React.useState<{
-		uuid: string;
+		key: string;
 		status: 'ready' | 'failed';
 		sessionRequired?: boolean;
 		sessionId?: string | null;
 	} | null>(null);
 	// Sessions require preparation even offline: a stale probe may hide a reachable
 	// pay page. Online also waits for provenance; failed preparation stays closed.
-	const prepared = preparation?.uuid === order.uuid ? preparation.status : null;
+	const prepared = preparation?.key === preparationKey ? preparation.status : null;
 	const paymentURL =
 		((online || sessionsOn) && prepared !== 'ready') || prepared === 'failed'
 			? undefined
@@ -211,7 +215,7 @@ export function PaymentWebview({
 				});
 				if (!active) return;
 				if (!prepared.ok) {
-					setPreparation({ uuid: currentOrder.uuid, status: 'failed' });
+					setPreparation({ key: preparationKey, status: 'failed' });
 					setFrameStatus('stalled');
 					orderLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
 					return;
@@ -223,11 +227,11 @@ export function PaymentWebview({
 					sessionId,
 					online,
 				});
-				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready', sessionId });
+				if (active) setPreparation({ key: preparationKey, status: 'ready', sessionId });
 			} catch (error) {
 				if (!active) return;
 				setPreparation({
-					uuid: currentOrder.uuid,
+					key: preparationKey,
 					status: 'failed',
 					sessionRequired: error instanceof RegisterSessionRequiredError,
 				});
@@ -248,7 +252,7 @@ export function PaymentWebview({
 			active = false;
 		};
 	}, [
-		order.uuid,
+		preparationKey,
 		userDB,
 		siteUuid,
 		store.id,
@@ -262,26 +266,29 @@ export function PaymentWebview({
 
 	// Readiness follows the prepared row; only a session refusal observes reopening.
 	React.useEffect(() => {
-		if (preparation?.uuid !== order.uuid || !sessionsOn) return;
+		if (preparation?.key !== preparationKey || !sessionsOn) return;
 		const sessionId = preparation.status === 'ready' ? preparation.sessionId : null;
 		if (!sessionId && !preparation.sessionRequired) return;
 		const id = registerId ?? '';
-		const open = { register_id: id, status: 'open', sync_status: { $ne: 'failed' } } as const;
+		const selector = {
+			...openSessionSelector,
+			...(sessionId ? { id: sessionId } : { register_id: id }),
+		};
 		const subscription = ctx.sessions
-			?.findOne(sessionId ?? { selector: open })
+			?.findOne({ selector })
 			.$.pipe(
-				filter((session) => (sessionId ? session?.status !== 'open' : !!session)),
+				filter((session) => (sessionId ? !session : !!session)),
 				take(1)
 			)
 			.subscribe(() => {
 				if (!sessionId) return setSessionRetry((value) => value + 1);
-				setPreparation({ uuid: order.uuid, status: 'failed', sessionRequired: true });
+				setPreparation({ key: preparationKey, status: 'failed', sessionRequired: true });
 				const { setFrameStatus, orderLogger, t } = collaborators.current;
 				setFrameStatus('stalled');
 				presentSessionRequired(orderLogger, t);
 			});
 		return () => subscription?.unsubscribe();
-	}, [ctx.sessions, registerId, order.uuid, preparation, sessionsOn]);
+	}, [ctx.sessions, registerId, preparationKey, preparation, sessionsOn]);
 
 	/**
 	 *

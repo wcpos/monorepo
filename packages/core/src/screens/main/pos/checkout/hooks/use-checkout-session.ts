@@ -175,6 +175,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 
 		try {
 			let registerId: string | null = null;
+			let sessionId: string | null = null;
 			try {
 				// A gateway sale completes the whole balance, so a store with several registers
 				// and none chosen cannot start one; the picker is on the cart.
@@ -190,6 +191,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 					return;
 				}
 				registerId = prepared.registerId;
+				sessionId = prepared.sessionId;
 				if (online)
 					await persistSaleProvenance(ctx, {
 						order,
@@ -219,7 +221,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			});
 
 			// Recheck after bootstrap without resetting the completion journal via prepareSale.
-			await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
+			if ((await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn)) !== sessionId)
+				throw new RegisterSessionRequiredError();
 			// Last point at which no money has moved (#163 ruling R5). The gateway
 			// refetch and the bootstrap POST above are both awaits the worker can die
 			// under, so re-read the latch here rather than trusting the check made
