@@ -38,7 +38,7 @@ export function TaxBasedOn() {
 				) : (
 					<HStack space="xs">
 						<Icon size="sm" variant="error" name="triangleExclamation" />
-						<Text variant="link" className="text-error text-xs" numberOfLines={1}>
+						<Text variant="link" className="text-destructive text-xs" numberOfLines={1}>
 							{taxBasedOnLabel}
 						</Text>
 					</HStack>

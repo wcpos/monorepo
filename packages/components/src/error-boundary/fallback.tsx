@@ -32,12 +32,12 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 		return (
 			<HStack
 				testID="error-boundary-fallback"
-				className="bg-error items-start justify-between p-2"
+				className="bg-destructive items-start justify-between p-2"
 				onLayout={handleLayout}
 			>
 				<Tooltip>
 					<TooltipTrigger>
-						<Icon name="triangleExclamation" size="4xl" className="text-error-foreground" />
+						<Icon name="triangleExclamation" size="4xl" className="text-destructive-foreground" />
 					</TooltipTrigger>
 					<TooltipContent>
 						<VStack className="w-full flex-1 gap-1">
@@ -57,13 +57,13 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 	return (
 		<HStack
 			testID="error-boundary-fallback"
-			className="bg-error w-full items-start p-2"
+			className="bg-destructive w-full items-start p-2"
 			onLayout={handleLayout}
 		>
-			<Icon name="triangleExclamation" size="4xl" className="text-error-foreground" />
+			<Icon name="triangleExclamation" size="4xl" className="text-destructive-foreground" />
 			<VStack className="w-full flex-1 gap-1">
-				<Text className="text-error-foreground font-bold">Something went wrong:</Text>
-				<Text className="text-error-foreground">{errorMessage}</Text>
+				<Text className="text-destructive-foreground font-bold">Something went wrong:</Text>
+				<Text className="text-destructive-foreground">{errorMessage}</Text>
 			</VStack>
 			<IconButton
 				name="xmark"

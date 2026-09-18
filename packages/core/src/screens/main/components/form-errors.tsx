@@ -30,9 +30,9 @@ export function FormErrors() {
 
 	return (
 		<View>
-			<Text className="text-error">{t('common.please_fix_the_following_errors')}</Text>
+			<Text className="text-destructive">{t('common.please_fix_the_following_errors')}</Text>
 			{errorMessages.map((error, index) => (
-				<Text className="text-error" key={index}>
+				<Text className="text-destructive" key={index}>
 					{'\u2022'} {error.path}: {error.message}
 				</Text>
 			))}
