@@ -38,6 +38,8 @@ const mockSubscribeUISettings = (listener: () => void) => {
 };
 
 jest.mock('expo-router', () => ({ useSegments: () => [] }));
+// The EAS Observe marker needs the native module; the route's layout is what is under test.
+jest.mock('expo-observe', () => ({ ObserveInteractiveMarker: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
 jest.mock('@wcpos/core/contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
 jest.mock('@wcpos/query', () => {
