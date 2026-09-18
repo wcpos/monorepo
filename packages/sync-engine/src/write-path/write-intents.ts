@@ -377,6 +377,30 @@ export async function enqueueWriteIntent(input: {
 			} else {
 				const baseRevision = intent.baseRevision ?? storedRevision;
 				if (!baseRevision && !createAhead) {
+					const payloadId = stored?.payload?.id;
+					if (!storedRevision && (payloadId === 0 || typeof payloadId !== 'number')) {
+						// A rejected create was refused by the server, so void only discards
+						// local state. Zero is the born-local payload's placeholder id.
+						const deadLetters = (await queue.all()).filter(
+							(row) =>
+								row.collectionName === intent.collection &&
+								row.recordId === intent.recordId &&
+								row.status === 'rejected'
+						);
+						await queue.remove(deadLetters.map((row) => row.mutationId));
+						await doc.remove();
+						input.observe?.({
+							type: 'queue.write.annihilate',
+							level: 'info',
+							collection: intent.collection,
+							fields: {
+								recordId: intent.recordId,
+								removed: deadLetters.length,
+								deadLetters: deadLetters.length,
+							},
+						});
+						return { mutationId: input.mintUuid(), recordId: intent.recordId, annihilated: true };
+					}
 					throw new Error(
 						'write(delete): a baseRevision is required — the server 428s an unconditional delete'
 					);

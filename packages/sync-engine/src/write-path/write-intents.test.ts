@@ -1,6 +1,6 @@
 import { serialize as structuredSerialize } from 'node:v8';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createFakeMutationCollection } from '@wcpos/sync-core/testing';
 import type { QueuedMutation, RxRecordMutationCollection } from '@wcpos/sync-core';
@@ -116,6 +116,69 @@ async function enqueueCatalogPayload(
 }
 
 describe('enqueueWriteIntent', () => {
+	it.each([
+		{ name: 'rejected born-local create', id: 0, rejected: true, annihilated: true },
+		{ name: 'born-local record with no queue rows', id: 0, rejected: false, annihilated: true },
+		{ name: 'server record with no revision', id: 42, rejected: false, annihilated: false },
+	])('deletes $name only when it is born-local', async ({ id, rejected, annihilated }) => {
+		const mutationCollection = createFakeMutationCollection();
+		if (rejected) {
+			await mutationCollection.bulkUpsert([
+				{
+					mutationId: 'create-1',
+					collectionName: 'orders',
+					recordId: 'order-1',
+					operation: 'create',
+					origin: 'minted',
+					payload: { id: 0, status: 'pos-open' },
+					baseRevision: null,
+					queuedAt: '2026-09-18T00:00:00.000Z',
+					status: 'rejected',
+					attempts: 1,
+				},
+			]);
+		}
+		let removed = false;
+		const resident = {
+			toJSON: () => ({ payload: { id, status: 'pos-open' }, sync: {} }),
+			remove: async () => {
+				removed = true;
+			},
+		};
+		const orders = { findOne: () => ({ exec: async () => (removed ? null : resident) }) };
+		const db = {
+			collections: { orders, recordMutations: mutationCollection },
+		} as unknown as RxDatabase;
+		const observe = vi.fn();
+		const result = enqueueWriteIntent({
+			db,
+			intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+			mintUuid: () => 'delete-1',
+			now: () => '2026-09-18T00:00:01.000Z',
+			observe,
+		});
+
+		if (annihilated) {
+			await expect(result).resolves.toEqual({
+				mutationId: 'delete-1',
+				recordId: 'order-1',
+				annihilated: true,
+			});
+			expect(await orders.findOne().exec()).toBeNull();
+			expect(observe).toHaveBeenCalledWith({
+				type: 'queue.write.annihilate',
+				level: 'info',
+				collection: 'orders',
+				fields: { recordId: 'order-1', removed: rejected ? 1 : 0, deadLetters: rejected ? 1 : 0 },
+			});
+		} else {
+			await expect(result).rejects.toThrow('baseRevision is required');
+			expect(await orders.findOne().exec()).toBe(resident);
+			expect(observe).not.toHaveBeenCalled();
+		}
+		expect(mutationCollection.store.size).toBe(0);
+	});
+
 	it('carries an own `__proto__` payload key through as ordinary data', async () => {
 		// `sanitize_key` keeps `_`, so a Woo payload key literally spelled `__proto__`
 		// survives parsing and reaches the queue — JSON.parse mints it as an OWN data
