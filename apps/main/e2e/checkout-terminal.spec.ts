@@ -417,6 +417,9 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			const detail = logs.getByTestId(/^logs-detail-/);
 			await expect(detail).toContainText('checkout.completed');
 			await expect(detail).toContainText(uuid);
+			// The logger folds identical rows within its repeat window into one row with a
+			// count, so one row is not exactly-once: the row's own occurrence count must be 1.
+			await expect(logs.getByTestId(/^logs-detail-attempts-/)).toHaveText('1');
 			expect(intents.filter((sent) => terminalRoute(sent, orderId, 'intent'))).toHaveLength(1);
 		}
 	);
