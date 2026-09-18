@@ -9,12 +9,23 @@ import { row } from '../payments/device/fixtures.test-utils';
 import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
 
+import type { RegisterDocument } from '../../../../../services/register/register-document';
+
 const mockInfo = jest.fn();
 const mockWarn = jest.fn();
-let mockBound: { id: string; name: string } | null = null;
-jest.mock('../../../../../services/register/register-document', () => ({
-	readBoundRegister: async () => mockBound,
-}));
+let mockRegister: RegisterDocument;
+const mockUserDB = {
+	getLocal: async () => ({ toJSON: () => ({ data: mockRegister }) }),
+};
+beforeEach(() => {
+	mockRegister = {
+		id: 'device',
+		name: 'Till',
+		platform: 'web',
+		created_at: '2026-09-18T00:00:00.000Z',
+		sites: {},
+	};
+});
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		debug: jest.fn(),
@@ -25,7 +36,7 @@ jest.mock('@wcpos/utils/logger', () => ({
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
 		wpCredentials: { id: 7, username: 'pat' },
-		userDB: {},
+		userDB: mockUserDB,
 		site: { uuid: 'site' },
 		store: { id: 1 },
 	}),
@@ -209,7 +220,6 @@ it.each([true, false])(
 describe('useCompleteOrderFlow provenance gap', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		mockBound = null;
 		resetCheckoutMode();
 		enterCheckout('uuid-42');
 		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
@@ -230,7 +240,12 @@ describe('useCompleteOrderFlow provenance gap', () => {
 		});
 	});
 	it('names the reason when the till is bound to a register of another store', async () => {
-		mockBound = { id: 'elsewhere', name: 'Other' };
+		mockRegister.sites.site = {
+			sale_counter: 0,
+			register_id: 'elsewhere',
+			register_name: 'Other',
+			register_store_id: 2,
+		};
 		const { record } = makeOrder();
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
@@ -245,7 +260,7 @@ describe('useCompleteOrderFlow provenance gap', () => {
 
 jest.mock('./use-sale-context', () => ({
 	useSaleContext: () => ({
-		userDB: {},
+		userDB: mockUserDB,
 		siteUuid: 'site',
 		storeId: 1,
 		dp: 2,

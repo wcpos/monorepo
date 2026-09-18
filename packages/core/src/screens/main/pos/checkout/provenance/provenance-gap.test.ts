@@ -2,18 +2,28 @@ import type { UserDatabase } from '@wcpos/database';
 
 import { reportProvenanceGap } from './provenance-gap';
 
+import type { RegisterDocument } from '../../../../../services/register/register-document';
+
 const mockWarn = jest.fn();
-let mockBound: { id: string; name: string } | null = null;
+let mockRegister: RegisterDocument;
+const mockUserDB = {
+	getLocal: async () => ({ toJSON: () => ({ data: mockRegister }) }),
+};
+beforeEach(() => {
+	mockRegister = {
+		id: 'device',
+		name: 'Till',
+		platform: 'web',
+		created_at: '2026-09-18T00:00:00.000Z',
+		sites: {},
+	};
+});
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({ warn: (...args: unknown[]) => mockWarn(...args) }),
 }));
-jest.mock('../../../../../services/register/register-document', () => ({
-	readBoundRegister: async () => mockBound,
-}));
-const deps = { userDB: {} as UserDatabase, siteUuid: 'site', storeId: 1 };
+const deps = { userDB: mockUserDB as unknown as UserDatabase, siteUuid: 'site', storeId: 1 };
 beforeEach(() => {
 	mockWarn.mockClear();
-	mockBound = null;
 });
 it('stays silent for a sale that carries its store register', async () => {
 	await reportProvenanceGap({
@@ -36,7 +46,12 @@ it('names the sale and the reason when no store register is bound', async () => 
 	});
 });
 it('tells a register bound in another store apart from none, and never names order 0', async () => {
-	mockBound = { id: 'elsewhere', name: 'Other' };
+	mockRegister.sites.site = {
+		sale_counter: 0,
+		register_id: 'elsewhere',
+		register_name: 'Other',
+		register_store_id: 2,
+	};
 	await reportProvenanceGap({ ...deps, order: { id: 0, uuid: 'order-0', meta_data: [] } });
 	expect(mockWarn).toHaveBeenCalledWith(
 		expect.any(String),
