@@ -382,8 +382,10 @@ test('a multi-line git error still emits one line per output key', () => {
 	});
 	rmSync(repo, { recursive: true, force: true });
 	const lines = result.stdout.split('\n').filter(Boolean);
-	assert.equal(lines.length, 7, result.stdout);
-	assert.ok(lines.every((line) => /^(lint|unit|web|only_specs|native|self|reason)=/.test(line)));
+	assert.equal(lines.length, 8, result.stdout);
+	assert.ok(
+		lines.every((line) => /^(lint|unit|web|only_specs|native|self|gallery|reason)=/.test(line))
+	);
 	const output = outputOf(result);
 	assert.equal(output.web, 'full');
 	assert.match(output.reason, /git diff against/);
