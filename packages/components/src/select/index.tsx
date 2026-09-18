@@ -17,7 +17,7 @@ import {
 import { Button } from '../button';
 import { Icon } from '../icon';
 import { useLayoutWidth } from '../lib/use-layout-width';
-import { POPOVER_FADE_MS } from '../lib/overlay-motion';
+import { POPOVER_FADE } from '../lib/motion';
 import { cn } from '../lib/utils';
 
 import type { ButtonProps } from '../button';
@@ -175,8 +175,8 @@ function SelectSingleContent({
 				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
 				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
 				<Animated.View
-					entering={Platform.OS !== 'web' ? FadeIn.duration(POPOVER_FADE_MS) : undefined}
-					exiting={Platform.OS !== 'web' ? FadeOut.duration(POPOVER_FADE_MS) : undefined}
+					entering={Platform.OS !== 'web' ? FadeIn.duration(POPOVER_FADE) : undefined}
+					exiting={Platform.OS !== 'web' ? FadeOut.duration(POPOVER_FADE) : undefined}
 					pointerEvents="box-none"
 					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
 				>

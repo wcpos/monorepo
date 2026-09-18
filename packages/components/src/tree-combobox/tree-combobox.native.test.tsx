@@ -33,6 +33,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => ({
+	Easing: { bezier: () => (value: number) => value },
 	__esModule: true,
 	default: {
 		View: ({ children, ...props }: any) => <div {...props}>{children}</div>,

@@ -93,9 +93,22 @@
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
 
-  /* Custom animations (web-only - React Native uses Reanimated) */
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
+  /* motion:start */
+  --duration-press: 80ms;
+  --duration-overlay-fade: 150ms;
+  --duration-crossfade: 200ms;
+  --duration-popover-fade: 200ms;
+  --duration-sheet-rise: 200ms;
+  --duration-beat: 220ms;
+  --duration-panel-slide: 250ms;
+  --duration-panel-slide-out: 200ms;
+  --duration-pane: 280ms;
+  --duration-stamp: 380ms;
+  --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-beat: cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  --animate-accordion-down: accordion-down 200ms ease-out;
+  --animate-accordion-up: accordion-up 200ms ease-out;
+  /* motion:end */
 }
 
 /* Web-only keyframes for accordion animations */
@@ -630,4 +643,20 @@
   display: none !important;
   width: 0 !important;
   height: 0 !important;
+}
+
+/* Web only: Uniwind must not apply an unsupported preference query on native.
+ * Named functional waits keep moving; the indeterminate class is reserved for its rebuild. */
+@supports selector(div > div) {
+  @media (prefers-reduced-motion: reduce) {
+    *:not(.web\:animate-spin):not(.web\:animate-indeterminate),
+    *:not(.web\:animate-spin):not(.web\:animate-indeterminate)::before,
+    *:not(.web\:animate-spin):not(.web\:animate-indeterminate)::after {
+      --tw-animation-duration: 0ms !important;
+      animation-duration: 0ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0ms !important;
+      transition-delay: 0ms !important;
+    }
+  }
 }

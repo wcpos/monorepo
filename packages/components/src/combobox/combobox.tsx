@@ -19,10 +19,10 @@ import {
 	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
 import { defaultFilter } from './utils/filter';
-import { POPOVER_FADE_MS } from '../lib/overlay-motion';
+import { POPOVER_FADE } from '../lib/motion';
 import { PhoneSheetShell } from '../lib/phone-sheet';
 import { cn } from '../lib/utils';
-import { useIsPhone } from '../lib/use-is-phone';
+import { useIsPhone } from '../lib/device';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
 import { Text, TextClassContext } from '../text';
 import { Icon } from '../icon';
@@ -204,8 +204,8 @@ function ComboboxContent({
 					/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
 					   a11y prunes out-of-bounds children — see popover/index.tsx. */
 					<Animated.View
-						entering={FadeIn.duration(POPOVER_FADE_MS)}
-						exiting={FadeOut.duration(POPOVER_FADE_MS)}
+						entering={FadeIn.duration(POPOVER_FADE)}
+						exiting={FadeOut.duration(POPOVER_FADE)}
 						pointerEvents="box-none"
 						style={isNative ? StyleSheet.absoluteFill : undefined}
 					>

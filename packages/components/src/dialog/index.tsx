@@ -20,7 +20,7 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
-import { OVERLAY_FADE_MS, PANEL_SLIDE_MS, PANEL_SLIDE_OUT_MS } from '../lib/overlay-motion';
+import { OVERLAY_FADE, PANEL_SLIDE, PANEL_SLIDE_OUT } from '../lib/motion';
 import { usePortalContainer } from '../lib/portal-container';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
@@ -49,16 +49,16 @@ const exitSlide = {
 	bottom: 'web:slide-out-to-bottom',
 };
 const entering = {
-	center: FadeIn.duration(OVERLAY_FADE_MS),
-	right: SlideInRight.duration(PANEL_SLIDE_MS),
-	left: SlideInLeft.duration(PANEL_SLIDE_MS),
-	bottom: SlideInDown.duration(PANEL_SLIDE_MS),
+	center: FadeIn.duration(OVERLAY_FADE),
+	right: SlideInRight.duration(PANEL_SLIDE),
+	left: SlideInLeft.duration(PANEL_SLIDE),
+	bottom: SlideInDown.duration(PANEL_SLIDE),
 };
 const exiting = {
-	center: FadeOut.duration(OVERLAY_FADE_MS),
-	right: SlideOutRight.duration(PANEL_SLIDE_OUT_MS),
-	left: SlideOutLeft.duration(PANEL_SLIDE_OUT_MS),
-	bottom: SlideOutDown.duration(PANEL_SLIDE_OUT_MS),
+	center: FadeOut.duration(OVERLAY_FADE),
+	right: SlideOutRight.duration(PANEL_SLIDE_OUT),
+	left: SlideOutLeft.duration(PANEL_SLIDE_OUT),
+	bottom: SlideOutDown.duration(PANEL_SLIDE_OUT),
 };
 
 /**
@@ -127,7 +127,7 @@ function useFocusAfterSlideIn(node: HTMLElement | null, open: boolean, side: Dia
 		};
 		node.addEventListener('animationend', onAnimationEnd);
 		// Reduced-motion or a missing keyframe never fires animationend; the timer covers it.
-		const timer = setTimeout(focusFirst, PANEL_SLIDE_MS + 50);
+		const timer = setTimeout(focusFirst, PANEL_SLIDE + 50);
 		return () => {
 			done = true;
 			clearTimeout(timer);

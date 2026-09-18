@@ -7,7 +7,7 @@ import { Slot } from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Button, type ButtonProps } from '../button';
-import { OVERLAY_FADE_MS } from '../lib/overlay-motion';
+import { OVERLAY_FADE } from '../lib/motion';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -46,8 +46,8 @@ function AlertDialogOverlayNative({
 			asChild
 		>
 			<Animated.View
-				entering={FadeIn.duration(OVERLAY_FADE_MS)}
-				exiting={FadeOut.duration(OVERLAY_FADE_MS)}
+				entering={FadeIn.duration(OVERLAY_FADE)}
+				exiting={FadeOut.duration(OVERLAY_FADE)}
 			>
 				{children}
 			</Animated.View>

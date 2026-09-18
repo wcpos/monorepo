@@ -1,0 +1,231 @@
+{
+  "packages/components/src/accordion/index.tsx": {
+    "duration-literal": 4,
+    "focus-visible:": 1
+  },
+  "packages/components/src/avatar/index.tsx": {
+    "arbitrary-px": 2
+  },
+  "packages/components/src/badge/index.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/components/src/button/index.tsx": {
+    "focus-visible:": 1,
+    "group-*": 23,
+    "truncate": 1,
+    "whitespace-nowrap": 1
+  },
+  "packages/components/src/checkbox/index.tsx": {
+    "focus-visible:": 1
+  },
+  "packages/components/src/combobox/combobox.tsx": {
+    "arbitrary-px": 1,
+    "group-*": 2
+  },
+  "packages/components/src/dnd/web/drop-indicator.tsx": {
+    "arbitrary-px": 7,
+    "before:/after:": 7
+  },
+  "packages/components/src/dnd/web/sortable-item.tsx": {
+    "hover:": 1
+  },
+  "packages/components/src/dropdown-menu/item.tsx": {
+    "group-*": 2
+  },
+  "packages/components/src/form/common.tsx": {
+    "duration-literal": 1
+  },
+  "packages/components/src/icon-button/index.tsx": {
+    "focus-visible:": 1
+  },
+  "packages/components/src/input/index.tsx": {
+    "focus-visible:": 1
+  },
+  "packages/components/src/loader/index.tsx": {
+    "duration-literal": 1
+  },
+  "packages/components/src/numpad/index.tsx": {
+    "grid/grid-cols-*": 2
+  },
+  "packages/components/src/panels/index.tsx": {
+    "group-*": 3,
+    "missing-animation:fadeIn": 1
+  },
+  "packages/components/src/radio-group/index.tsx": {
+    "arbitrary-px": 1,
+    "focus-visible:": 1,
+    "grid/grid-cols-*": 1
+  },
+  "packages/components/src/select/index.tsx": {
+    "group-*": 1
+  },
+  "packages/components/src/select/select-multi.tsx": {
+    "group-*": 1
+  },
+  "packages/components/src/status-badge/index.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/components/src/switch/index.tsx": {
+    "duration-literal": 1,
+    "focus-visible:": 1
+  },
+  "packages/components/src/table/pulse-row.tsx": {
+    "duration-literal": 3
+  },
+  "packages/components/src/tabs/index.tsx": {
+    "focus-visible:": 2,
+    "whitespace-nowrap": 1
+  },
+  "packages/components/src/text/index.tsx": {
+    "group-*": 1
+  },
+  "packages/components/src/textarea/index.tsx": {
+    "focus-visible:": 1
+  },
+  "packages/components/src/toggle-group/index.tsx": {
+    "focus-visible:": 1,
+    "group-*": 2
+  },
+  "packages/components/src/tree-combobox/tree-combobox.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/auth/connect.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/components/data-table/index.tsx": {
+    "bare-Suspense": 1
+  },
+  "packages/core/src/screens/main/components/header/user-menu.tsx": {
+    "duration-literal": 1
+  },
+  "packages/core/src/screens/main/components/product/filter-bar/index.tsx": {
+    "bare-Suspense": 2
+  },
+  "packages/core/src/screens/main/components/product/variable-product-row/index.tsx": {
+    "bare-Suspense": 1
+  },
+  "packages/core/src/screens/main/components/product/variable-product-row/variations/index.tsx": {
+    "bare-Suspense": 1
+  },
+  "packages/core/src/screens/main/coupons/cells/actions.tsx": {
+    "group-*": 1
+  },
+  "packages/core/src/screens/main/coupons/edit/index.tsx": {
+    "bare-Suspense": 1
+  },
+  "packages/core/src/screens/main/customers/cells/actions.tsx": {
+    "group-*": 1
+  },
+  "packages/core/src/screens/main/customers/edit/index.tsx": {
+    "bare-Suspense": 1
+  },
+  "packages/core/src/screens/main/health/components/callout.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/health/components/code-chip.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/health/components/pill.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/health/components/repeat-chip.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/hooks/barcodes/too-short-feedback.ts": {
+    "duration-literal": 2
+  },
+  "packages/core/src/screens/main/logs/row-detail.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/orders/cells/actions.tsx": {
+    "group-*": 1
+  },
+  "packages/core/src/screens/main/orders/view/sections/_section.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/orders/view/sections/customer.tsx": {
+    "arbitrary-px": 2
+  },
+  "packages/core/src/screens/main/orders/view/sections/header.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/orders/view/sections/line-items.tsx": {
+    "arbitrary-px": 3
+  },
+  "packages/core/src/screens/main/orders/view/sections/refunds.tsx": {
+    "arbitrary-px": 5
+  },
+  "packages/core/src/screens/main/orders/view/sections/totals.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/pos/cart/cells/fee-name.tsx": {
+    "grid/grid-cols-*": 1
+  },
+  "packages/core/src/screens/main/pos/cart/closure-sheet.tsx": {
+    "arbitrary-px": 1,
+    "duration-literal": 1
+  },
+  "packages/core/src/screens/main/pos/cart/index.tsx": {
+    "bare-Suspense": 1
+  },
+  "packages/core/src/screens/main/pos/cart/movement-sheet.tsx": {
+    "arbitrary-px": 3
+  },
+  "packages/core/src/screens/main/pos/cart/register-panel.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/pos/checkout/column/checkout-column.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/pos/checkout/receipt-stage/receipt-stage.tsx": {
+    "arbitrary-px": 1,
+    "duration-literal": 2
+  },
+  "packages/core/src/screens/main/pos/checkout/tender/tender-pane.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/pos/checkout/tender/terminal-leg-view.tsx": {
+    "arbitrary-px": 4,
+    "duration-literal": 1
+  },
+  "packages/core/src/screens/main/pos/products/cells/variations-popover/index.tsx": {
+    "bare-Suspense": 1
+  },
+  "packages/core/src/screens/main/pos/products/index.tsx": {
+    "bare-Suspense": 1
+  },
+  "packages/core/src/screens/main/pos/products/scan-sound-themes.ts": {
+    "duration-literal": 10
+  },
+  "packages/core/src/screens/main/products/cells/actions.tsx": {
+    "group-*": 1
+  },
+  "packages/core/src/screens/main/products/cells/variation-actions.tsx": {
+    "group-*": 1
+  },
+  "packages/core/src/screens/main/products/index.tsx": {
+    "bare-Suspense": 2
+  },
+  "packages/core/src/screens/main/receipt/components/receipt-preview-viewport.tsx": {
+    "arbitrary-px": 1
+  },
+  "packages/core/src/screens/main/receipt/components/receipt-preview-viewport.web.tsx": {
+    "arbitrary-px": 1,
+    "hover:": 1
+  },
+  "packages/core/src/screens/main/reports/index.tsx": {
+    "bare-Suspense": 3
+  },
+  "packages/core/src/screens/main/settings/barcode-scanning/input-sources.tsx": {
+    "duration-literal": 3
+  },
+  "packages/core/src/screens/main/settings/index.tsx": {
+    "bare-Suspense": 1
+  },
+  "packages/core/src/screens/main/settings/printing/printer-row.tsx": {
+    "group-*": 1
+  },
+  "packages/core/src/screens/main/tax-rates/index.tsx": {
+    "bare-Suspense": 1
+  }
+}

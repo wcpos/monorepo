@@ -6,7 +6,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { DropdownMenuItem } from './item';
 import { Icon } from '../icon';
-import { OVERLAY_FADE_MS } from '../lib/overlay-motion';
+import { OVERLAY_FADE } from '../lib/motion';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
@@ -103,8 +103,8 @@ function DropdownMenuContent({
 				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
 				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
 				<Animated.View
-					entering={Platform.OS !== 'web' ? FadeIn.duration(OVERLAY_FADE_MS) : undefined}
-					exiting={Platform.OS !== 'web' ? FadeOut.duration(OVERLAY_FADE_MS) : undefined}
+					entering={Platform.OS !== 'web' ? FadeIn.duration(OVERLAY_FADE) : undefined}
+					exiting={Platform.OS !== 'web' ? FadeOut.duration(OVERLAY_FADE) : undefined}
 					pointerEvents="box-none"
 					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
 				>
