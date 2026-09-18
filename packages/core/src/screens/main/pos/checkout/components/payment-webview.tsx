@@ -10,6 +10,8 @@ import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
+import { presentSessionRequired } from '../session-required';
 import { isSaleComplete, persistSaleProvenance, prepareSale } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
@@ -199,7 +201,7 @@ export function PaymentWebview({
 					source: 'gateway-snapshot',
 					completing: true,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-					sessionRule: 'none',
+					sessionRule: 'require',
 				});
 				if (!active) return;
 				if (!prepared.ok) {
@@ -208,12 +210,20 @@ export function PaymentWebview({
 					orderLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
 					return;
 				}
-				await persistSaleProvenance(ctx, { order: currentOrder, online: true });
+				await persistSaleProvenance(ctx, {
+					order: currentOrder,
+					sessionId: prepared.sessionId,
+					online: true,
+				});
 				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready' });
 			} catch (error) {
 				if (!active) return;
 				setPreparation({ uuid: currentOrder.uuid, status: 'failed' });
 				setFrameStatus('stalled');
+				if (error instanceof RegisterSessionRequiredError) {
+					presentSessionRequired(orderLogger, t);
+					return;
+				}
 				orderLogger.error('Checkout failed', {
 					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
 					showToast: true,

@@ -27,6 +27,7 @@ import {
 	getTerminalPaymentsService,
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
+import { presentSessionRequired } from '../session-required';
 import { completionMetaFor, persistSaleProvenance, prepareSale } from '../sale-completion';
 import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
@@ -728,7 +729,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				context: { ...orderContext, method: method.id },
 			});
 		} catch (error) {
-			if (error instanceof RegisterSessionRequiredError) throw error;
+			if (error instanceof RegisterSessionRequiredError) {
+				presentSessionRequired(logger, t, orderContext);
+				return;
+			}
 			if (error instanceof RecordManualPaymentMirrorError) {
 				const { outcome } = error;
 				// A refusal that could not be mirrored is NOT money the store holds: the

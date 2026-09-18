@@ -7,6 +7,8 @@ import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
+import { presentSessionRequired } from '../session-required';
 import { persistSaleProvenance, prepareSale } from '../sale-completion';
 import { useSaleContext } from './use-sale-context';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
@@ -177,14 +179,19 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 					source: 'gateway-contract',
 					completing: true,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
-					sessionRule: 'none',
+					sessionRule: 'require',
 				});
 				if (!prepared.ok) {
 					checkoutLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
 					return;
 				}
-				if (online) await persistSaleProvenance(ctx, { order, online: true });
-			} catch {
+				if (online)
+					await persistSaleProvenance(ctx, { order, sessionId: prepared.sessionId, online: true });
+			} catch (error) {
+				if (error instanceof RegisterSessionRequiredError) {
+					presentSessionRequired(checkoutLogger, t);
+					return;
+				}
 				const message = t('pos_cart.checkout_failed');
 				setError(message);
 				checkoutLogger.error(message, {

@@ -2058,7 +2058,11 @@ beforeEach(() => {
 	mockSessionId = 'session';
 });
 
-it('refuses tender with a typed error when sessions are enabled but none is open', async () => {
+it('no open session: toasts without POST, recording a leg or rejecting tender', async () => {
+	jest.clearAllMocks();
+	jest
+		.mocked(provenance.prepareSale)
+		.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
 	mockSessionsOn = true;
 	mockSessionId = null;
 	mockLeg = null;
@@ -2066,10 +2070,18 @@ it('refuses tender with a typed error when sessions are enabled but none is open
 	resetCheckoutMode();
 	const { result } = renderHook(() => useTenderFlow(order));
 	await act(async () => {
-		await expect(result.current.takeTender()).rejects.toMatchObject({
-			name: 'RegisterSessionRequiredError',
-		});
+		await expect(result.current.takeTender()).resolves.toBeUndefined();
 	});
+	expect(mockInfo).toHaveBeenCalledWith(
+		'pos_checkout.open_register_first',
+		expect.objectContaining({ showToast: true })
+	);
+	expect(mockRecordManualPayment).not.toHaveBeenCalled();
+	expect(mockBegin).not.toHaveBeenCalled();
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+	expect(mockPushDocument).not.toHaveBeenCalled();
+	expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+	expect(result.current.busy).toBe(false);
 });
 
 describe('register still to be chosen', () => {
@@ -2224,6 +2236,7 @@ jest.mock('../sale-completion', () => {
 jest.mock('../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
 		userDB: { getLocal: async () => null },
+		sessionsOn: mockSessionsOn,
 		siteUuid: 'site',
 		storeId: 1,
 		runtime: mockRuntime,
