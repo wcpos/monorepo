@@ -4,7 +4,7 @@ import { Platform, Pressable, StyleSheet, View, type ViewProps } from 'react-nat
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 
 import { usePhoneSheetMetrics } from './native-popover-sizing';
-import { PANEL_SLIDE_MS, PANEL_SLIDE_OUT_MS } from './overlay-motion';
+import { PANEL_SLIDE, PANEL_SLIDE_OUT } from './motion';
 import { cn } from './utils';
 
 export function PhoneSheetShell({
@@ -23,8 +23,8 @@ export function PhoneSheetShell({
 				<Pressable className="absolute inset-0 bg-black/50" onPress={onDismiss} />
 			)}
 			<Animated.View
-				entering={SlideInDown.duration(PANEL_SLIDE_MS)}
-				exiting={SlideOutDown.duration(PANEL_SLIDE_OUT_MS)}
+				entering={SlideInDown.duration(PANEL_SLIDE)}
+				exiting={SlideOutDown.duration(PANEL_SLIDE_OUT)}
 				className="justify-end"
 				pointerEvents="box-none"
 				style={StyleSheet.absoluteFill}

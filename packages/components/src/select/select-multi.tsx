@@ -8,7 +8,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Checkbox } from '../checkbox';
 import { getDisplayLabel, getDisplayLabelEllipsis, toggleMultiValue } from '../lib/multi-select';
-import { POPOVER_FADE_MS } from '../lib/overlay-motion';
+import { POPOVER_FADE } from '../lib/motion';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -147,8 +147,8 @@ function SelectMultiContent({
 				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
 				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
 				<Animated.View
-					entering={FadeIn.duration(POPOVER_FADE_MS)}
-					exiting={FadeOut.duration(POPOVER_FADE_MS)}
+					entering={FadeIn.duration(POPOVER_FADE)}
+					exiting={FadeOut.duration(POPOVER_FADE)}
 					pointerEvents="box-none"
 					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
 				>
