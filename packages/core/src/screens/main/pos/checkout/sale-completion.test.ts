@@ -10,6 +10,7 @@ import {
 	recordCompletionAttempt,
 	resolveCompletionAttempt,
 } from './completion-journal';
+import * as journal from './completion-journal';
 import { row } from './payments/device/fixtures.test-utils';
 import {
 	completeSale,
@@ -26,6 +27,8 @@ const mockBound = jest.fn(),
 	mockStamp = jest.fn(),
 	mockGap = jest.fn(),
 	mockReconcile = jest.fn(),
+	mockRefresh = jest.fn(),
+	mockDebug = jest.fn(),
 	mockReceipt = jest.fn(),
 	mockInfo = jest.fn();
 jest.mock('../../../../services/register/register-document', () => ({
@@ -42,12 +45,16 @@ jest.mock('./provenance/provenance-gap', () => ({
 }));
 jest.mock('./hooks/reconcile-completed-order', () => ({
 	reconcileCompletedOrder: (...args: unknown[]) => mockReconcile(...args),
+	refreshOrderRecord: (...args: unknown[]) => mockRefresh(...args),
 }));
 jest.mock('./checkout-mode', () => ({
 	enterReceipt: (...args: unknown[]) => mockReceipt(...args),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ info: (...args: unknown[]) => mockInfo(...args) }),
+	getLogger: () => ({
+		info: (...args: unknown[]) => mockInfo(...args),
+		debug: (...args: unknown[]) => mockDebug(...args),
+	}),
 }));
 const payload = { id: 42, status: 'completed', meta_data: [], line_items: [] };
 const order = { uuid: 'order', getLatest: () => ({ payload }) } as never;
@@ -69,6 +76,7 @@ const manual = {
 	row,
 	order: null,
 	mirrorFailed: false,
+	preparedCompleting: true,
 	preLegBalanceMinor: 100,
 	amountMinor: 100,
 } as const;
@@ -84,6 +92,7 @@ beforeEach(async () => {
 		multiInstance: false,
 	});
 	jest.clearAllMocks();
+	mockRefresh.mockReset();
 	mockBound.mockResolvedValue({ id: 'register' });
 	mockSession.mockResolvedValue('session');
 	mockStamp.mockResolvedValue([{ key: 'stamp', value: 1 }]);
@@ -91,8 +100,30 @@ beforeEach(async () => {
 });
 it.each([
 	['manual online prediction', manual, true],
+	['manual online partial prediction without summary', { ...manual, amountMinor: 50 }, false],
 	['manual offline prediction', { ...manual, via: 'offline', amountMinor: 50 }, false],
+	['manual offline full prediction', { ...manual, via: 'offline' }, true],
+	[
+		'manual online non-zero summary overrides a paid prediction',
+		{ ...manual, order: { balance: '1.00' } },
+		false,
+	],
+	[
+		'manual online zero summary overrides an unpaid prediction',
+		{ ...manual, amountMinor: 50, order: { balance: '0.00' } },
+		true,
+	],
 	['manual mirror recovery', { ...manual, mirrorFailed: true, order: { balance: '1.00' } }, false],
+	[
+		'manual mirror recovery with zero summary',
+		{ ...manual, mirrorFailed: true, amountMinor: 50, order: { balance: '0.00' } },
+		true,
+	],
+	[
+		'manual mirror recovery without summary is never complete (no evidence either side)',
+		{ ...manual, mirrorFailed: true },
+		false,
+	],
 	['terminal summary', { source: 'terminal', row, order: { balance: '0.00' } }, true],
 	['terminal fallback', { source: 'terminal', row, order: null, balance: '0.00' }, true],
 	['contract exact status', { source: 'gateway-contract', status: 'on-hold' }, false],
@@ -397,3 +428,139 @@ it('recreates a concurrently cleared attempt when finishing throws, with source 
 	expect(Date.parse(attempt.at)).toBeGreaterThanOrEqual(before);
 	expect(Date.parse(attempt.at)).toBeLessThanOrEqual(Date.now());
 });
+
+it.each([undefined, '', 'n/a', ' ', 'Infinity', '0x00'])(
+	'manual unusable balance %p falls back only to a successful local prediction',
+	(balance) => {
+		for (const [amountMinor, mirrorFailed, expected] of [
+			[100, false, true],
+			[50, false, false],
+			[100, true, false],
+		] as const) {
+			expect(
+				isSaleComplete(
+					{
+						...manual,
+						amountMinor,
+						mirrorFailed,
+						order: { status: 'completed', balance },
+					} as unknown as SaleOutcome,
+					2
+				)
+			).toBe(expected);
+		}
+	}
+);
+it.each([42, undefined])(
+	'refreshes an unsettled manual summary only with server id %p',
+	async (id) => {
+		const resident = { uuid: 'order', getLatest: () => ({ payload: { ...payload, id } }) } as never;
+		mockRefresh.mockResolvedValueOnce('refreshed');
+		expect(
+			await completeSale(
+				ctx,
+				resident,
+				{ ...manual, order: { balance: '1.00' } } as unknown as SaleOutcome,
+				{
+					host: 'stage',
+					autoShowReceipt: true,
+				}
+			)
+		).toBe('partial');
+		expect(mockRefresh).toHaveBeenCalledTimes(id ? 1 : 0);
+		if (id) expect(mockRefresh).toHaveBeenCalledWith(ctx.runtime, id);
+		expect(mockReconcile).not.toHaveBeenCalled();
+		expect(mockReceipt).not.toHaveBeenCalled();
+		expect(mockInfo).not.toHaveBeenCalled();
+	}
+);
+it('does not refresh an unsettled manual sale when the store agrees with the till', async () => {
+	const resident = {
+		uuid: 'order',
+		getLatest: () => ({ payload: { ...payload, id: 42 } }),
+	} as never;
+	expect(
+		await completeSale(
+			ctx,
+			resident,
+			{
+				...manual,
+				order: { balance: '1.00' },
+				preLegBalanceMinor: 150,
+				amountMinor: 50,
+			} as unknown as SaleOutcome,
+			{ host: 'stage', autoShowReceipt: true }
+		)
+	).toBe('partial');
+	expect(mockRefresh).not.toHaveBeenCalled();
+	expect(mockReconcile).not.toHaveBeenCalled();
+});
+it.each(['timed-out', 'rejected'])(
+	'retains an unsettled manual sale after refresh %s',
+	async (failure) => {
+		if (failure === 'rejected') mockRefresh.mockRejectedValueOnce(new Error('refresh failed'));
+		else mockRefresh.mockResolvedValueOnce('timed-out');
+		expect(
+			await completeSale(
+				ctx,
+				order,
+				{ ...manual, order: { balance: '1.00' } } as unknown as SaleOutcome,
+				{
+					host: 'background',
+				}
+			)
+		).toBe('partial');
+		expect(mockDebug).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ terminal: { outcome: 'recovered', operationId: '42' } })
+		);
+		expect(mockReceipt).not.toHaveBeenCalled();
+		expect(mockInfo).not.toHaveBeenCalled();
+	}
+);
+it.each([false, true])(
+	'journals server settlement before finish without recording twice (prepared %s)',
+	async (preparedCompleting) => {
+		const context = { ...ctx, actor: { id: '7', name: 'Pat' } };
+		const record = jest.spyOn(journal, 'recordCompletionAttempt');
+		try {
+			if (preparedCompleting)
+				await prepareSale(context, {
+					order,
+					completing: true,
+					source: 'manual',
+					bindingStatus: 'none',
+					sessionRule: 'none',
+				});
+			let atReceipt: ReturnType<typeof pendingCompletions> | undefined;
+			mockReceipt.mockImplementationOnce(() => {
+				atReceipt = pendingCompletions(ctx.storeDB);
+			});
+			expect(
+				await completeSale(
+					context,
+					order,
+					{
+						...manual,
+						preparedCompleting,
+						amountMinor: 50,
+						order: { balance: '0.00' },
+					} as unknown as SaleOutcome,
+					{ host: 'background' }
+				)
+			).toBe('completed');
+			expect((await atReceipt)?.order).toMatchObject({
+				source: 'manual',
+				actor: context.actor,
+				attempts: 0,
+			});
+			expect(record).toHaveBeenCalledTimes(1);
+			expect(record.mock.invocationCallOrder[0]).toBeLessThan(
+				mockReceipt.mock.invocationCallOrder[0]
+			);
+			expect(await pendingCompletions(ctx.storeDB)).toEqual({});
+		} finally {
+			record.mockRestore();
+		}
+	}
+);

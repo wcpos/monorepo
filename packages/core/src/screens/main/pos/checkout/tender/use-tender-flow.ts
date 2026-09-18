@@ -457,7 +457,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			const paidAfter = latest.filter(counts).reduce((sum, r) => sum + toMinor(r.amount, dp), 0);
 			const action: TenderAction = {
 				type: 'tender-recorded',
-				balanceMinor: Math.max(0, totalMinor - paidAfter),
+				balanceMinor: Math.max(0, toMinor(order.getLatest().payload.total, dp) - paidAfter),
 				rowsSinceFrom: latest
 					.slice(state.plan?.from ?? latest.length)
 					.filter(
@@ -478,7 +478,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			);
 			if (state.plan?.kind === 'items') setLinesPaidBy(order.uuid, next.linesPaidBy);
 		},
-		[order, state, dp, byId, totalMinor, actor, orderContext]
+		[order, state, dp, byId, actor, orderContext]
 	);
 
 	const takeTender = React.useCallback(async () => {
@@ -702,14 +702,14 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				...(splitMeta ? { extraMeta: splitMeta } : {}),
 			});
 			if (outcome.kind === 'recorded') {
-				tenderRecorded(outcome.row, outcome.via);
 				await completeOrderFlow({
 					source: 'manual',
 					...outcome,
 					mirrorFailed: false,
+					preparedCompleting: entryAppliedMinor === balanceMinor,
 					preLegBalanceMinor: balanceMinor,
 					amountMinor: entryAppliedMinor,
-				});
+				}).finally(() => tenderRecorded(outcome.row, outcome.via));
 				return;
 			}
 			if (outcome.kind === 'refused') {
@@ -761,7 +761,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				// the keypad goes back to the pre-payment balance and cheerfully offers the
 				// whole amount again — the recovery refresh may not have landed, and the
 				// resident order is exactly the copy that failed to save.
-				tenderRecorded(outcome.row, outcome.via);
 				// The store's summary is the only balance worth trusting now. Complete only
 				// when it says the order is settled; otherwise stay on the pane, which is now
 				// showing what is actually left to pay.
@@ -769,9 +768,10 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 					source: 'manual',
 					...outcome,
 					mirrorFailed: true,
+					preparedCompleting: entryAppliedMinor === balanceMinor,
 					preLegBalanceMinor: balanceMinor,
 					amountMinor: entryAppliedMinor,
-				});
+				}).finally(() => tenderRecorded(outcome.row, outcome.via));
 				return;
 			}
 			if (savingProvenance) {
