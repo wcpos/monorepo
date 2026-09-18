@@ -7,6 +7,7 @@ import { act, render, waitFor } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { recordCompletionAttempt } from '../completion-journal';
 import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview';
 
 // Capture the props handed to the (mocked) WebView so the test can drive the
@@ -1050,6 +1051,9 @@ it.each([false, true])(
 				data: { meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
 			});
 			expect(mockPushDocument).toHaveBeenLastCalledWith(order);
+			expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+				mockLocalPatch.mock.invocationCallOrder[0]
+			);
 			expect(webViewMounts).toBe(0);
 			await act(async () => finish());
 			expect(webViewMounts).toBe(fails ? 0 : 1);
@@ -1130,16 +1134,7 @@ jest.mock('../sale-completion', () => {
 				if (input.online) await ctx.pushDocument(input.order);
 			}
 		),
-		prepareSale: jest.fn(
-			async (
-				_ctx: import('../sale-completion').SaleContext,
-				input: Parameters<typeof actual.prepareSale>[1]
-			) => {
-				if (input.completing && input.bindingStatus === 'choose')
-					return { ok: false, reason: 'choose_register' };
-				return { ok: true, registerId: null, sessionId: null };
-			}
-		),
+		prepareSale: jest.fn(actual.prepareSale),
 	};
 });
 
@@ -1160,4 +1155,11 @@ jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSiz
 
 jest.mock('../../contexts/current-order/context', () => ({
 	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
+}));
+
+// Journal storage is exercised against RxDB in the owner/journal suites.
+jest.mock('../completion-journal', () => ({
+	recordCompletionAttempt: jest.fn(async () => {}),
+	resolveCompletionAttempt: jest.fn(async () => {}),
+	failCompletionAttempt: jest.fn(async () => {}),
 }));

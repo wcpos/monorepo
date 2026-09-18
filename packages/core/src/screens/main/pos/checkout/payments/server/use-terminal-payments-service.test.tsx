@@ -388,3 +388,10 @@ jest.mock('../../hooks/use-sale-context', () => ({
 		stockAdjustment: jest.fn(),
 	}),
 }));
+
+// Journal storage is exercised against RxDB in the owner/journal suites.
+jest.mock('../../completion-journal', () => ({
+	recordCompletionAttempt: jest.fn(async () => {}),
+	resolveCompletionAttempt: jest.fn(async () => {}),
+	failCompletionAttempt: jest.fn(async () => {}),
+}));

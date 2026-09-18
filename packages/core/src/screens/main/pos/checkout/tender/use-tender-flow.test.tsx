@@ -11,6 +11,7 @@ import type { StoreDatabase } from '@wcpos/database';
 import type { EngineRecord } from '@wcpos/query';
 import type { PaymentMethodDescriptor, PaymentRow } from '@wcpos/order-math';
 
+import { recordCompletionAttempt } from '../completion-journal';
 import { useTerminalPaymentsService } from '../payments/server/use-terminal-payments-service';
 import { createSimulatedDriver } from '../../../../../services/payment-drivers/simulated-driver';
 import { registerDriver } from '../../../../../services/payment-drivers/registry';
@@ -1655,11 +1656,18 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 }));
 
 it('zero balance writes completion and provenance together exactly once', async () => {
+	jest
+		.mocked(provenance.prepareSale)
+		.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
+	jest.mocked(recordCompletionAttempt).mockClear();
 	mockPayload = { total: '0.00', meta_data: [] };
 	mockLocalPatch.mockClear();
 	mockBlockIfDegraded.mockReturnValue(false);
 	const { result } = renderHook(() => useTenderFlow(order));
 	await act(async () => result.current.takeTender());
+	expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+		mockLocalPatch.mock.invocationCallOrder[0]
+	);
 	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 	expect(mockLocalPatch).toHaveBeenCalledWith({
 		document: order,
@@ -1668,6 +1676,11 @@ it('zero balance writes completion and provenance together exactly once', async 
 });
 
 it('full manual online tender persists provenance before POST and the mirror', async () => {
+	jest.mocked(provenance.completionMetaFor).mockClear();
+	jest
+		.mocked(provenance.prepareSale)
+		.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
+	jest.mocked(recordCompletionAttempt).mockClear();
 	mockUseRealManual = true;
 	mockLocalPatch.mockClear();
 	mockManualMirror.mockClear();
@@ -1680,8 +1693,32 @@ it('full manual online tender persists provenance before POST and the mirror', a
 	const view = renderHook(() => useTenderFlow(order));
 	try {
 		act(() => view.result.current.pickMethod('pos_cash'));
-		await act(async () => view.result.current.takeTender());
+		let release!: () => void;
+		jest.mocked(recordCompletionAttempt).mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				})
+		);
+		let taking!: Promise<void>;
+		await act(async () => {
+			taking = view.result.current.takeTender();
+		});
+		expect(recordCompletionAttempt).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockManualPost).not.toHaveBeenCalled();
+		await act(async () => {
+			release();
+			await taking;
+		});
 		expect(mockManualMirror).toHaveBeenCalledTimes(1);
+		expect(recordCompletionAttempt).toHaveBeenCalledWith(undefined, {
+			orderUuid: order.uuid,
+			source: 'manual',
+		});
+		expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+			jest.mocked(provenance.completionMetaFor).mock.invocationCallOrder[0]
+		);
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
 			mockPushDocument.mock.invocationCallOrder[0]
@@ -1804,6 +1841,10 @@ describe('provider completion provenance before intent', () => {
 		});
 	});
 	it('awaits the explicit tuple write before beginning the server leg', async () => {
+		jest
+			.mocked(provenance.prepareSale)
+			.mockImplementationOnce(jest.requireActual('../sale-completion').prepareSale);
+		jest.mocked(recordCompletionAttempt).mockClear();
 		let finish!: (value: typeof order) => void;
 		mockPushDocument.mockImplementationOnce(
 			() =>
@@ -1833,6 +1874,9 @@ describe('provider completion provenance before intent', () => {
 			await take;
 		});
 		expect(mockBegin).toHaveBeenCalledTimes(1);
+		expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+			mockBegin.mock.invocationCallOrder[0]
+		);
 	});
 	it('does not begin a provider leg after a failed explicit save', async () => {
 		mockPushDocument.mockRejectedValueOnce(new Error('save failed'));
@@ -2178,7 +2222,7 @@ jest.mock('../sale-completion', () => {
 
 jest.mock('../hooks/use-sale-context', () => ({
 	useSaleContext: () => ({
-		userDB: {},
+		userDB: { getLocal: async () => null },
 		siteUuid: 'site',
 		storeId: 1,
 		runtime: mockRuntime,
@@ -2188,4 +2232,11 @@ jest.mock('../hooks/use-sale-context', () => ({
 		actor: { id: '7', name: 'Pat' },
 		stockAdjustment: mockAdjustStock,
 	}),
+}));
+
+// Journal storage is exercised against RxDB in the owner/journal suites.
+jest.mock('../completion-journal', () => ({
+	recordCompletionAttempt: jest.fn(async () => {}),
+	resolveCompletionAttempt: jest.fn(async () => {}),
+	failCompletionAttempt: jest.fn(async () => {}),
 }));

@@ -67,6 +67,7 @@ export function useRecordManualPayment(
 		async (order, method, input) => {
 			const prepared = await prepareSale(ctx, {
 				order,
+				source: 'manual',
 				completing: false,
 				bindingStatus: 'none',
 				sessionRule: 'require',

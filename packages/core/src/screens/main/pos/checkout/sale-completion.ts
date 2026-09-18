@@ -1,5 +1,6 @@
-import type { RegisterSessionCollection, UserDatabase } from '@wcpos/database';
+import type { RegisterSessionCollection, StoreDatabase, UserDatabase } from '@wcpos/database';
 import {
+	isCompletingStatus,
 	type MetaDataEntry,
 	type OrderPaymentSummary,
 	type PaymentRow,
@@ -13,6 +14,11 @@ import { getLogger } from '@wcpos/utils/logger';
 import { readBoundRegister } from '../../../../services/register/register-document';
 import { requireOpenSession } from '../../../../services/register-session/session-store';
 import { stockAdjustment } from '../../hooks/use-stock-adjustment';
+import {
+	failCompletionAttempt,
+	recordCompletionAttempt,
+	resolveCompletionAttempt,
+} from './completion-journal';
 import { enterReceipt } from './checkout-mode';
 import { reconcileCompletedOrder } from './hooks/reconcile-completed-order';
 import { completionMeta } from './provenance/stamp-completion';
@@ -23,6 +29,7 @@ export { refreshOrderRecord } from './hooks/reconcile-completed-order';
 type OrderPayload = EngineRecord<'orders'>['payload'];
 export interface SaleContext {
 	userDB: UserDatabase;
+	storeDB: StoreDatabase;
 	siteUuid: string;
 	storeId?: number;
 	sessions: RegisterSessionCollection | undefined;
@@ -41,6 +48,7 @@ export async function prepareSale(
 	input: {
 		order: EngineRecord<'orders'>;
 		completing: boolean;
+		source: SaleOutcome['source'];
 		bindingStatus: 'bound' | 'choose' | 'none';
 		sessionRule: 'require' | 'none';
 	}
@@ -50,9 +58,19 @@ export async function prepareSale(
 > {
 	if (input.completing && input.bindingStatus === 'choose')
 		return { ok: false, reason: 'choose_register' };
-	if (input.sessionRule === 'none') return { ok: true, registerId: null, sessionId: null };
-	const registerId = (await readBoundRegister(ctx.userDB, ctx.siteUuid, ctx.storeId))?.id ?? null;
-	const sessionId = await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
+	const registerId =
+		input.sessionRule === 'none'
+			? null
+			: ((await readBoundRegister(ctx.userDB, ctx.siteUuid, ctx.storeId))?.id ?? null);
+	const sessionId =
+		input.sessionRule === 'none'
+			? null
+			: await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
+	if (input.completing)
+		await recordCompletionAttempt(ctx.storeDB, {
+			orderUuid: input.order.uuid,
+			source: input.source,
+		});
 	return { ok: true, registerId, sessionId };
 }
 
@@ -109,10 +127,13 @@ export type SaleOutcome =
 	| { source: 'terminal'; row: PaymentRow; order: OrderPaymentSummary | null; balance?: string }
 	| { source: 'gateway-contract'; status: string }
 	| { source: 'gateway-snapshot'; snapshot: OrderPayload }
-	| { source: 'zero-balance' };
+	| { source: 'zero-balance' }
+	| { source: 'replay' };
 
-export function isSaleComplete(outcome: SaleOutcome, dp: number): boolean {
+export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
+		case 'replay': // Replay trusts the resident status, never re-collects money.
+			return isCompletingStatus(payload?.status ?? '');
 		case 'manual': // Normal manual completion predicts locally; mirror recovery trusts only the server.
 			return outcome.mirrorFailed
 				? !!outcome.order && toMinor(outcome.order.balance, dp) === 0
@@ -133,13 +154,13 @@ export type Presentation =
 	{ host: 'stage'; autoShowReceipt: boolean } | { host: 'modal' } | { host: 'background' };
 
 /** Completion is a sale outcome, not a synchronization or exactly-once guarantee. */
-export async function completeSale(
+async function finishSale(
 	ctx: SaleContext,
 	order: EngineRecord<'orders'>,
 	outcome: SaleOutcome,
 	presentation: Presentation
 ): Promise<'completed' | 'partial' | 'not-completed'> {
-	if (!isSaleComplete(outcome, ctx.dp))
+	if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload))
 		return outcome.source === 'manual' || outcome.source === 'terminal'
 			? 'partial'
 			: 'not-completed';
@@ -158,7 +179,9 @@ export async function completeSale(
 			? outcome.via === 'online'
 			: outcome.source === 'terminal'
 				? !outcome.row.recorded_offline
-				: outcome.source === 'gateway-contract';
+				: outcome.source === 'replay'
+					? !!latest.id
+					: outcome.source === 'gateway-contract';
 	if (outcome.source === 'gateway-snapshot') {
 		const reduced = (latest.line_items ?? []).filter((item) =>
 			(item.meta_data as { key: string }[] | undefined)?.some(
@@ -173,6 +196,7 @@ export async function completeSale(
 		actor: ctx.actor,
 		context: {
 			type: 'checkout.completed',
+			...(outcome.source === 'replay' ? { replayed: true } : {}),
 			orderId: latest.id ?? null,
 			orderUUID: order.uuid,
 			orderNumber: latest.number,
@@ -183,4 +207,19 @@ export async function completeSale(
 		},
 	});
 	return 'completed';
+}
+
+export async function completeSale(...args: Parameters<typeof finishSale>) {
+	const [ctx, order] = args;
+	try {
+		const result = await finishSale(...args);
+		await resolveCompletionAttempt(ctx.storeDB, order.uuid);
+		return result;
+	} catch (error) {
+		try {
+			await failCompletionAttempt(ctx.storeDB, order.uuid, error);
+		} finally {
+			throw error;
+		}
+	}
 }

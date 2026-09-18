@@ -196,6 +196,7 @@ export function PaymentWebview({
 			try {
 				const prepared = await prepareSale(ctx, {
 					order: currentOrder,
+					source: 'gateway-snapshot',
 					completing: true,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 					sessionRule: 'none',

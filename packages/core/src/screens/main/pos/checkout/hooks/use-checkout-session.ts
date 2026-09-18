@@ -161,6 +161,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			!(
 				await prepareSale(ctx, {
 					order,
+					source: 'gateway-contract',
 					completing: true,
 					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
 					sessionRule: 'none',
