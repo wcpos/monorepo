@@ -1,19 +1,24 @@
 # Spike 2144 — SQLite / OPFS crash measurements
 
-Measured across Chrome, Firefox, Playwright WebKit and real Safari on macOS (Apple M4 Pro) and
-Chrome on Windows/NTFS (GitHub Actions), 2026-09-18. Headline: on a real process crash, SQLite over
-opfs-sahpool with WAL keeps every acknowledged transaction on all four browsers; the shipped OPFS
-filesystem engine loses acked data on some stops. The only SQLite corruption is confined to DELETE
-(rollback-journal) mode under a mid-commit stop, which WAL avoids. See **Findings** below; the
-generated tables carry every trial. This is a throwaway instrument under `spikes/`; nothing ships.
-Power loss is not simulated (no browser API can); process-kill is scored first, per the ticket.
+Measured on macOS (Apple M4 Pro) across Chrome, Firefox and Playwright WebKit, and on Chrome on
+Windows/NTFS (GitHub Actions), 2026-09-18; real Safari 26.6 was exercised for the in-page and reload
+cells and a single-worker sanity trace only. Headline: on a real process kill, SQLite over
+opfs-sahpool with WAL keeps every acknowledged transaction on all four measured targets (Chrome,
+Firefox, Playwright WebKit and Windows Chrome), while the shipped OPFS filesystem engine loses acked
+data on some stops. Real Safari's process-kill durability was **not scored directly** (its
+external-stop script was not run); it is inferred from the shared WebKit engine result plus the
+single-worker trace — see Finding 5. The only SQLite corruption is confined to DELETE
+(rollback-journal) mode under a mid-commit stop, which WAL avoids; quota exhaustion is survived in
+both journal modes (Finding 3). See **Findings** below; the generated tables carry every trial. This
+is a throwaway instrument under `spikes/`; nothing ships. Power loss is not simulated (no browser API
+can); process-kill is scored first, per the ticket.
 
 ## Environments measured (2026-09-18)
 
 All rows: rxdb 17.4.0, rxdb-premium 17.4.0, @sqlite.org/sqlite-wasm 3.53.4-build1, esbuild 0.28.2, playwright 1.62.1.
 
 - **Chrome 154.0.8037.44** — macOS (darwin 25.6.0 arm64), Apple M4 Pro, Node v24.14.0. `results.chrome.json`.
-- **Firefox 153.0** — macOS (darwin 25.6.0 arm64), Apple M4 Pro, Node v24.14.0. `results.firefox.json` (cell D stopped after 4 of 6 trials, see its `skips`).
+- **Firefox 153.0** — macOS (darwin 25.6.0 arm64), Apple M4 Pro, Node v24.14.0. `results.firefox.json` (quota cell skipped — its pref-based quota reset is unreliable; see its `skips` and Finding 3).
 - **Playwright WebKit 26.5** — macOS (darwin 25.6.0 arm64), Apple M4 Pro, Node v24.14.0. `results.webkit-process.json` (process-stop only; see the WebKit note below).
 - **Real Safari 26.6.2** — macOS, 8 logical CPUs (page cannot read the exact chip). `results.safari.json` (in-page A,B,E,F), `results.safari-reload.json` (cell G), `results.safari-diag.json` (sanity trace).
 - **Windows Chrome 152.0.7977.83** — Windows (win32 10.0.26100 x64, NTFS), AMD EPYC 9V74, Node v22.23.2, GitHub Actions `windows-latest`. `results.windows-chrome.json`.
@@ -96,6 +101,16 @@ The Ubuntu job builds; the Windows job needs only Node and Playwright and runs e
   failure. No retries disguise a failed trial. Unscorable storage trials are `open-failed`.
 - Main bundles/WASM/shipped worker must exceed 10,000 bytes. The two dependency-free utility
   workers are checked nonempty instead; padding them would not test build completeness.
+- Cell G (reload) reloads the page between items, which re-seeds the module-scope PRNG (`rng(2144)`),
+  so successive reload items draw correlated stop-timing and boundary offsets rather than independent
+  ones. This narrows only cell G's sampling diversity; it does not affect the process-stop, boundary
+  or quota cells (which run in one page load or use the Node-side RNG), and it does not change cell G's
+  conclusion (Safari's 0% is the browsing-context poisoning of Finding 5, confirmed by the diagnostic
+  independent of timing). Left as a known limitation of this throwaway instrument, not fixed.
+- Quota recovery closes the original session and opens a fresh one before reopening; Chrome/Windows
+  raise the quota on the new session via CDP, so the reopen is a true post-quota recovery. Firefox has
+  no CDP quota override, and pref-file reset does not reliably restore quota on relaunch, so its quota
+  cell is skipped (see Finding 3) rather than reported under residual pressure.
 - Nothing ships, and no production code, dependency tree, patches, or application worker is changed.
 
 <!-- generated:start -->
@@ -178,24 +193,20 @@ The Ubuntu job builds; the Windows job needs only Node and Playwright and runs e
 
 | Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | -16384 | — | in-page | 10 | 10 | 5 | 5 | 0 | 0 | 0 | 0 | — | 1.0 | 156.7 | 156.7 |
-| sqlite-sahpool | DELETE | -16384 | — | in-page | 10 | 10 | 7 | 3 | 0 | 0 | 0 | 0 | — | 1.0 | 95.4 | 95.4 |
-| opfs-shipped | control | default | — | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 238.4 | 238.4 |
+| sqlite-sahpool | WAL | -16384 | — | process-relaunch | 10 | 10 | 5 | 5 | 0 | 0 | 0 | 0 | — | 1.0 | 156.7 | 156.7 |
+| sqlite-sahpool | DELETE | -16384 | — | process-relaunch | 10 | 10 | 7 | 3 | 0 | 0 | 0 | 0 | — | 1.0 | 95.4 | 95.4 |
+| opfs-shipped | control | default | — | process-relaunch | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 238.4 | 238.4 |
 
 ### quota-exhaustion
 
 | Mode | Trial | SQLite code | Statement / message | DOM error / numeric write return | Reopen outcome |
 | --- | --- | --- | --- | --- | --- |
-| WAL | 1 | — | page.evaluate: SQLite3Error: SQLITE_IOERR: sqlite3 result code 10: disk I/O error     at Session.worker.onmessage (http://localhost:18998/harness-entry.js:2227:38) | [] | open-failed |
-| WAL | 2 | — | page.evaluate: SQLite3Error: SQLITE_IOERR: sqlite3 result code 10: disk I/O error     at Session.worker.onmessage (http://localhost:18998/harness-entry.js:2227:38) | [] | open-failed |
-| WAL | 3 | — | page.evaluate: SQLite3Error: SQLITE_IOERR: sqlite3 result code 10: disk I/O error     at Session.worker.onmessage (http://localhost:18998/harness-entry.js:2227:38) | [] | open-failed |
-| DELETE | 1 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-8f437a71-2d82-445b-8cd2-8f2b010d0558","offset":8384512,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
-| DELETE | 2 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-5090714c-374f-4463-9f5d-f255f2e3ae02","offset":8384512,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
-| DELETE | 3 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-41a40727-e8cf-42b7-b494-fb656954f3c1","offset":8384512,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
-| Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | default | — | in-page | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 3 | Error | — | — | — |
-| sqlite-sahpool | DELETE | -16384 | — | in-page | 3 | 3 | 0 | 3 | 0 | 0 | 0 | 0 | — | 1.0 | 61.3 | 61.3 |
+| WAL | 1 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-f184fdf4-8ed5-402a-b855-ea9dac8fec02-wal","offset":16773008,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| WAL | 2 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-801a6e65-05b3-466a-8422-5cf77a1f91fd-wal","offset":16773008,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| WAL | 3 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-1c8711ee-9c87-41ed-b870-1c2858ba2f3a-wal","offset":16773008,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| DELETE | 1 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-3fe19f5e-cf48-4414-a0f4-78acfed8b752","offset":33550336,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| DELETE | 2 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-7f9e22c2-2bdd-47d0-8e03-53e9687d0da8","offset":33550336,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| DELETE | 3 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-ecdef7f1-60f2-4edc-9c0a-532feb9a3e18","offset":33550336,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
 
 ## firefox — results.firefox.json
 
@@ -209,7 +220,7 @@ The Ubuntu job builds; the Windows job needs only Node and Playwright and runs e
 | versions | {"rxdb":"17.4.0","rxdb-premium":"17.4.0","esbuild":"0.28.2","playwright":"1.62.1","@sqlite.org/sqlite-wasm":"3.53.4-build1"} |
 | measuredAt | 2026-09-18T15:24:55.360Z |
 
-Not run: quota-exhaustion — stopped after 4 of 6 trials; each unbounded-quota reopen can burn the 600s timeout, and Chrome+Windows cover cell D
+Not run: quota-exhaustion — Firefox quota reset is pref-file based (not the CDP quota override Chrome uses); it does not reliably restore quota on relaunch, so reopen-after-quota is measured under residual quota pressure (reopens of 90-112 s, some harness timeouts, no data loss when completed) and is not a trustworthy measurement. Chrome and Windows (CDP quota override) carry the quota answer.
 
 ### boundary-stop
 
@@ -278,25 +289,9 @@ Not run: quota-exhaustion — stopped after 4 of 6 trials; each unbounded-quota 
 
 | Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | -16384 | — | in-page | 10 | 10 | 4 | 6 | 0 | 0 | 0 | 0 | — | 1.0 | 285.9 | 286.0 |
-| sqlite-sahpool | DELETE | -16384 | — | in-page | 10 | 10 | 3 | 7 | 0 | 0 | 0 | 0 | — | 1.0 | 165.1 | 165.1 |
-| opfs-shipped | control | default | — | in-page | 10 | 9 | 0 | 9 | 0 | 1 | 0 | 0 | — | 1.0 | 257.7 | 257.7 |
-
-### quota-exhaustion
-
-| Mode | Trial | SQLite code | Statement / message | DOM error / numeric write return | Reopen outcome |
-| --- | --- | --- | --- | --- | --- |
-| WAL | 1 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-ff4cfe81-feb9-4b19-8735-ad1aedc0b37c-wal","offset":11753032,"length":8192,"returned":0,"expected":8192}] | ok |
-| WAL | 2 | — | page.waitForFunction: Timeout 600000ms exceeded. | [] | open-failed |
-| WAL | 3 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-f77413d1-e59b-4455-ab2e-736869310fcf-wal","offset":11753032,"length":8192,"returned":0,"expected":8192}] | ok |
-| DELETE | 1 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-ebc8f351-ddbd-4f10-a80f-f800268594b1","offset":10734989312,"length":8192,"returned":0,"expected":8192}] | ok |
-| DELETE | 2 | — | page.waitForFunction: Target page, context or browser has been closed Browser logs:  <launching> /Users/kilbot/Library/Caches/ms-playwright/firefox-1538/firefox/Nightly.app/Contents/MacOS/firefox -no-remote -headless -profile /var/folders/4b/tqqv7pks34x147m1rw7tt6q00000gn/T/spike2144-quota-MLUATB -juggler-pipe about:blank <launched> pid=30376 [pid=30376][err] *** You are running in headless mode. [pid=30376][err] JavaScript warning: resource://services-settings/Utils.sys.mjs, line 119: unreachable code after return statement [pid=30376][out]  [pid=30376][out] Juggler listening to the pipe [pid=30376][out] console.error: "Error fetching remote settings base url from CDN. Falling back to https://firefox-settings-attachments.cdn.mozilla.net/" (new SyntaxError("XMLHttpRequest.open: '/' is not a valid URL.", (void 0), 126)) [pid=30376][out] console.error: services.settings:  [pid=30376][out]   Message: EmptyDatabaseError: "main/nimbus-desktop-experiments" has not been synced yet [pid=30376][out]   Stack: [pid=30376][out]     EmptyDatabaseError@resource://services-settings/Database.sys.mjs:19:5 [pid=30376][out] list@resource://services-settings/Database.sys.mjs:96:13 [pid=30376][out]  [pid=30376][err] JavaScript error: chrome://juggler/content/Helper.js, line 82: NS_ERROR_FAILURE: Component returned failure code: 0x80004005 (NS_ERROR_FAILURE) [nsIWebProgress.removeProgressListener] [pid=30376][out] console.warn: services.settings: #fetchAttachment: Forcing fallbackToDump to false due to Utils.LOAD_DUMPS being false [pid=30376][out] console.error: (new NotFoundError("Could not find fa0fc42c-d91d-fca7-34eb-806ff46062dc in cache or dump", "resource://services-settings/Attachments.sys.mjs", 48)) [pid=30376][out] console.warn: "Unable to find the attachment for" "fa0fc42c-d91d-fca7-34eb-806ff46062dc" [pid=30376][out] console.error: [Exception... "Favicon at "http://localhost:18998/favicon.ico" failed to load."  nsresult: "0x80004004 (NS_ERROR_ABORT)"  location: "JS frame :: resource:///modules/FaviconLoader.sys.mjs :: onStopRequest :: line 286"  data: no] [pid=30376][err] JavaScript warning: resource://gre/modules/UpdateService.sys.mjs, line 4029: unreachable code after return statement [pid=30376][out] console.error: "Could not download new icon" (new ServerInfoError("Server response is invalid SyntaxError: XMLHttpRequest.open: '/' is not a valid URL.", "resource://services-settings/Attachments.sys.mjs", 40)) [pid=30376] <gracefully close start> [pid=30376] <forcefully close> [pid=30376] <kill> [pid=30376] <will force kill> [pid=30376] exception while trying to kill process: Error: kill EPERM | [] | open-failed |
-| Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | -16384 | — | in-page | 2 | 2 | 0 | 2 | 0 | 0 | 0 | 0 | — | 1.0 | 109266.6 | 109266.7 |
-| sqlite-sahpool | WAL | default | — | in-page | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | TimeoutError | — | — | — |
-| sqlite-sahpool | DELETE | -16384 | — | in-page | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | — | 1.0 | 113893.5 | 113893.5 |
-| sqlite-sahpool | DELETE | default | — | in-page | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | Error | — | — | — |
+| sqlite-sahpool | WAL | -16384 | — | process-relaunch | 10 | 10 | 4 | 6 | 0 | 0 | 0 | 0 | — | 1.0 | 285.9 | 286.0 |
+| sqlite-sahpool | DELETE | -16384 | — | process-relaunch | 10 | 10 | 3 | 7 | 0 | 0 | 0 | 0 | — | 1.0 | 165.1 | 165.1 |
+| opfs-shipped | control | default | — | process-relaunch | 10 | 9 | 0 | 9 | 0 | 1 | 0 | 0 | — | 1.0 | 257.7 | 257.7 |
 
 ## safari — results.safari-reload.json
 
@@ -423,9 +418,9 @@ Not run: quota-exhaustion — stopped after 4 of 6 trials; each unbounded-quota 
 
 | Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | -16384 | — | in-page | 10 | 10 | 9 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 318.5 | 318.5 |
-| sqlite-sahpool | DELETE | -16384 | — | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 193.5 | 193.5 |
-| opfs-shipped | control | default | — | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 487.5 | 487.5 |
+| sqlite-sahpool | WAL | -16384 | — | process-relaunch | 10 | 10 | 9 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 318.5 | 318.5 |
+| sqlite-sahpool | DELETE | -16384 | — | process-relaunch | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 193.5 | 193.5 |
+| opfs-shipped | control | default | — | process-relaunch | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 487.5 | 487.5 |
 
 ## chrome — results.windows-chrome.json
 
@@ -437,44 +432,56 @@ Not run: quota-exhaustion — stopped after 4 of 6 trials; each unbounded-quota 
 | cpu | AMD EPYC 9V74 80-Core Processor                 |
 | node | v22.23.2 |
 | versions | {"rxdb":"17.4.0","rxdb-premium":"17.4.0","esbuild":"0.28.2","playwright":"1.62.1","@sqlite.org/sqlite-wasm":"3.53.4-build1"} |
-| measuredAt | 2026-09-18T15:03:43.685Z |
+| measuredAt | 2026-09-18T18:03:30.946Z |
 
 ### boundary-stop
 
 | Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | -16384 | wal-after-page-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2436.0 | 2436.0 |
-| sqlite-sahpool | WAL | -64 | wal-after-page-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2427.4 | 2427.4 |
-| sqlite-sahpool | WAL | -16384 | wal-after-commit-flush-before-checkpoint | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2426.9 | 2426.9 |
-| sqlite-sahpool | WAL | -64 | wal-after-commit-flush-before-checkpoint | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2433.7 | 2433.7 |
-| sqlite-sahpool | WAL | -16384 | wal-mid-checkpoint | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2675.5 | 2675.5 |
-| sqlite-sahpool | WAL | -64 | wal-mid-checkpoint | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2443.6 | 2443.6 |
-| sqlite-sahpool | DELETE | -16384 | journal-after-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2683.2 | 2683.2 |
-| sqlite-sahpool | DELETE | -64 | journal-after-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2682.9 | 2682.9 |
-| sqlite-sahpool | DELETE | -16384 | journal-after-flush-before-db-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2425.8 | 2425.8 |
-| sqlite-sahpool | DELETE | -64 | journal-after-flush-before-db-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2430.2 | 2430.2 |
-| sqlite-sahpool | DELETE | -16384 | db-mid-commit | in-page | 10 | 0 | 0 | 0 | 0 | 0 | 0 | 10 | SQLITE_CORRUPT (11) | 12.0 | — | 32471.3 |
-| sqlite-sahpool | DELETE | -64 | db-mid-commit | in-page | 10 | 1 | 1 | 0 | 0 | 0 | 0 | 9 | SQLITE_CORRUPT (11) | 12.0 | 2424.7 | 32423.4 |
-| sqlite-sahpool | WAL | -16384 | db-after-write-before-flush | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2434.5 | 2434.5 |
-| sqlite-sahpool | WAL | -64 | db-after-write-before-flush | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2435.4 | 2435.4 |
-| sqlite-sahpool | DELETE | -16384 | db-after-write-before-flush | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2419.8 | 2419.8 |
-| sqlite-sahpool | DELETE | -64 | db-after-write-before-flush | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2556.5 | 2556.5 |
-| sqlite-sahpool | DELETE | -16384 | journal-before-delete | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2422.8 | 2422.8 |
-| sqlite-sahpool | DELETE | -64 | journal-before-delete | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2419.9 | 2419.9 |
+| sqlite-sahpool | WAL | -16384 | wal-after-page-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2713.5 | 2713.5 |
+| sqlite-sahpool | WAL | -64 | wal-after-page-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2708.9 | 2708.9 |
+| sqlite-sahpool | WAL | -16384 | wal-after-commit-flush-before-checkpoint | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2459.0 | 2459.0 |
+| sqlite-sahpool | WAL | -64 | wal-after-commit-flush-before-checkpoint | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2475.3 | 2475.3 |
+| sqlite-sahpool | WAL | -16384 | wal-mid-checkpoint | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2473.5 | 2473.5 |
+| sqlite-sahpool | WAL | -64 | wal-mid-checkpoint | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2493.6 | 2493.6 |
+| sqlite-sahpool | DELETE | -16384 | journal-after-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2710.7 | 2710.7 |
+| sqlite-sahpool | DELETE | -64 | journal-after-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2713.8 | 2713.8 |
+| sqlite-sahpool | DELETE | -16384 | journal-after-flush-before-db-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2698.5 | 2698.5 |
+| sqlite-sahpool | DELETE | -64 | journal-after-flush-before-db-write | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 2725.9 | 2725.9 |
+| sqlite-sahpool | DELETE | -16384 | db-mid-commit | in-page | 10 | 0 | 0 | 0 | 0 | 0 | 0 | 10 | SQLITE_CORRUPT (11) | 1.0 | — | 2691.0 |
+| sqlite-sahpool | DELETE | -64 | db-mid-commit | in-page | 10 | 1 | 1 | 0 | 0 | 0 | 0 | 9 | SQLITE_CORRUPT (11) | 1.0 | 2741.9 | 2725.3 |
+| sqlite-sahpool | WAL | -16384 | db-after-write-before-flush | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2465.1 | 2465.1 |
+| sqlite-sahpool | WAL | -64 | db-after-write-before-flush | in-page | 10 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2475.4 | 2475.4 |
+| sqlite-sahpool | DELETE | -16384 | db-after-write-before-flush | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2479.4 | 2479.4 |
+| sqlite-sahpool | DELETE | -64 | db-after-write-before-flush | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2733.5 | 2733.5 |
+| sqlite-sahpool | DELETE | -16384 | journal-before-delete | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2690.4 | 2690.4 |
+| sqlite-sahpool | DELETE | -64 | journal-before-delete | in-page | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2707.6 | 2707.6 |
+| sqlite-sahpool | WAL | -16384 | wal-after-page-write | reload | 3 | 3 | 0 | 3 | 0 | 0 | 0 | 0 | — | 1.0 | 2337.6 | 2337.6 |
+| sqlite-sahpool | WAL | -16384 | wal-after-commit-flush-before-checkpoint | reload | 3 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2338.1 | 2338.1 |
+| sqlite-sahpool | WAL | -16384 | wal-mid-checkpoint | reload | 3 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2343.8 | 2343.8 |
+| sqlite-sahpool | DELETE | -16384 | journal-after-write | reload | 3 | 3 | 0 | 3 | 0 | 0 | 0 | 0 | — | 1.0 | 2353.4 | 2353.4 |
+| sqlite-sahpool | DELETE | -16384 | journal-after-flush-before-db-write | reload | 3 | 3 | 0 | 3 | 0 | 0 | 0 | 0 | — | 1.0 | 2345.1 | 2345.1 |
+| sqlite-sahpool | DELETE | default | db-mid-commit | reload | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 3 | SQLITE_CORRUPT (11) | 1.0 | — | 2318.8 |
+| sqlite-sahpool | WAL | -16384 | db-after-write-before-flush | reload | 3 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2345.5 | 2345.5 |
+| sqlite-sahpool | DELETE | -16384 | db-after-write-before-flush | reload | 3 | 3 | 3 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2339.5 | 2339.5 |
+| sqlite-sahpool | DELETE | -16384 | journal-before-delete | reload | 3 | 3 | 3 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2338.7 | 2338.7 |
 
 ### random-stop
 
 | Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | -16384 | — | in-page | 30 | 30 | 26 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2727.7 | 2727.7 |
-| sqlite-sahpool | DELETE | -16384 | — | in-page | 30 | 30 | 29 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2700.9 | 2700.9 |
-| opfs-shipped | control | default | — | in-page | 30 | 29 | 3 | 26 | 1 | 0 | 0 | 0 | — | 1.0 | 273.3 | 273.3 |
+| sqlite-sahpool | WAL | -16384 | — | in-page | 30 | 30 | 28 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2761.6 | 2761.6 |
+| sqlite-sahpool | DELETE | -16384 | — | in-page | 30 | 30 | 30 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2724.7 | 2724.7 |
+| opfs-shipped | control | default | — | in-page | 30 | 27 | 2 | 25 | 3 | 0 | 0 | 0 | — | 1.0 | 310.2 | 310.2 |
+| sqlite-sahpool | WAL | -16384 | — | reload | 10 | 10 | 10 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2369.9 | 2370.0 |
+| sqlite-sahpool | DELETE | -16384 | — | reload | 10 | 10 | 9 | 0 | 0 | 0 | 0 | 0 | — | 1.0 | 2367.8 | 2367.8 |
+| opfs-shipped | control | default | — | reload | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 134.8 | 134.8 |
 
 ### pool-exhaustion
 
 | Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | -16384 | — | in-page | 3 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | — | — | 54.3 | — |
+| sqlite-sahpool | WAL | -16384 | — | in-page | 3 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | — | — | 119.2 | — |
 
 | Trial | Opened DBs | Clean CANTOPEN + pool-full message | addCapacity recovered | Error |
 | --- | --- | --- | --- | --- |
@@ -492,37 +499,33 @@ Not run: quota-exhaustion — stopped after 4 of 6 trials; each unbounded-quota 
 
 | Worker state | Last increment after terminate() ms | Increments after terminate() | Outcome |
 | --- | --- | --- | --- |
-| spinning | 2009.5 | 216698460 | ok |
+| spinning | 2008.6 | 165734217 | ok |
 | waiting | 0.0 | 0 | ok |
 
 ### slot-reuse
 
 | Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | -16384 | — | in-page | 50 | 50 | 0 | 0 | 0 | 0 | 0 | 0 | — | — | 31.8 | 2696.6 |
+| sqlite-sahpool | WAL | -16384 | — | in-page | 50 | 50 | 0 | 0 | 0 | 0 | 0 | 0 | — | — | 43.7 | 2738.0 |
 
 ### process-stop
 
 | Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | -16384 | — | in-page | 10 | 10 | 9 | 1 | 0 | 0 | 0 | 0 | — | 1.0 | 2314.9 | 2314.9 |
-| sqlite-sahpool | DELETE | -16384 | — | in-page | 10 | 10 | 8 | 2 | 0 | 0 | 0 | 0 | — | 1.0 | 2289.5 | 2289.5 |
-| opfs-shipped | control | default | — | in-page | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 293.4 | 293.4 |
+| sqlite-sahpool | WAL | -16384 | — | process-relaunch | 10 | 10 | 9 | 1 | 0 | 0 | 0 | 0 | — | 1.0 | 2276.2 | 2276.2 |
+| sqlite-sahpool | DELETE | -16384 | — | process-relaunch | 10 | 10 | 9 | 1 | 0 | 0 | 0 | 0 | — | 1.0 | 2246.2 | 2246.2 |
+| opfs-shipped | control | default | — | process-relaunch | 10 | 10 | 0 | 10 | 0 | 0 | 0 | 0 | — | 1.0 | 345.7 | 345.7 |
 
 ### quota-exhaustion
 
 | Mode | Trial | SQLite code | Statement / message | DOM error / numeric write return | Reopen outcome |
 | --- | --- | --- | --- | --- | --- |
-| WAL | 1 | — | page.evaluate: SQLite3Error: SQLITE_IOERR: sqlite3 result code 10: disk I/O error     at Session.worker.onmessage (http://localhost:18998/harness-entry.js:2227:38) | [] | open-failed |
-| WAL | 2 | — | page.evaluate: SQLite3Error: SQLITE_IOERR: sqlite3 result code 10: disk I/O error     at Session.worker.onmessage (http://localhost:18998/harness-entry.js:2227:38) | [] | open-failed |
-| WAL | 3 | — | page.evaluate: SQLite3Error: SQLITE_IOERR: sqlite3 result code 10: disk I/O error     at Session.worker.onmessage (http://localhost:18998/harness-entry.js:2227:38) | [] | open-failed |
-| DELETE | 1 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-5c9f2d0a-beb8-426d-9b96-7bcf47541956","offset":8384512,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
-| DELETE | 2 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-3bb91a47-0da3-4a76-8730-8eb2b37dab23","offset":8384512,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
-| DELETE | 3 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-aeaa2c73-809f-4e8b-a399-168213aa4761","offset":8384512,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
-| Row | Journal | Cache | Boundary | Recovery | Trials | ok | ok-with-inflight-present | ok-with-inflight-absent | lost | partial | integrity-failed | open-failed | open-failed reason | Median reopen attempts | Median reacquire ms | Median reopen ms |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sqlite-sahpool | WAL | default | — | in-page | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 3 | Error | — | — | — |
-| sqlite-sahpool | DELETE | -16384 | — | in-page | 3 | 3 | 0 | 3 | 0 | 0 | 0 | 0 | — | 1.0 | 2697.3 | 2697.3 |
+| WAL | 1 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-054fe3c8-16ce-4b5e-a72c-5093fdcbeb98-wal","offset":16773008,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| WAL | 2 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-69f105ea-d966-40f7-a419-ebe978933946-wal","offset":16773008,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| WAL | 3 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-9034e174-aab8-403f-9052-5ba69606aa10-wal","offset":16773008,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| DELETE | 1 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-bcf433ea-be73-4349-94a7-f4932a84ad4c","offset":33550336,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| DELETE | 2 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-849b0b3f-1669-40e4-a873-6b6454f992d0","offset":33550336,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
+| DELETE | 3 | 1 | COMMIT: SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active | [{"op":"write","path":"/crash-1a463af7-4670-4b31-8dfb-b561c85ce849","offset":33550336,"length":8192,"name":"QuotaExceededError","message":"Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"}] | ok |
 
 ## Cross-browser stop summary
 
@@ -543,9 +546,9 @@ Not run: quota-exhaustion — stopped after 4 of 6 trials; each unbounded-quota 
 | webkit / results.webkit-process.json | sqlite-sahpool | WAL | 10/10 (100.0%) | not measured |
 | webkit / results.webkit-process.json | sqlite-sahpool | DELETE | 10/10 (100.0%) | not measured |
 | webkit / results.webkit-process.json | opfs-shipped | control | 10/10 (100.0%) | not measured |
-| chrome / results.windows-chrome.json | sqlite-sahpool | WAL | 10/10 (100.0%) | 30/30 (100.0%) |
-| chrome / results.windows-chrome.json | sqlite-sahpool | DELETE | 10/10 (100.0%) | 30/30 (100.0%) |
-| chrome / results.windows-chrome.json | opfs-shipped | control | 10/10 (100.0%) | 29/30 (96.7%) |
+| chrome / results.windows-chrome.json | sqlite-sahpool | WAL | 10/10 (100.0%) | 40/40 (100.0%) |
+| chrome / results.windows-chrome.json | sqlite-sahpool | DELETE | 10/10 (100.0%) | 40/40 (100.0%) |
+| chrome / results.windows-chrome.json | opfs-shipped | control | 10/10 (100.0%) | 37/40 (92.5%) |
 
 ## Diagnostic traces (not scored)
 
@@ -562,11 +565,11 @@ the page held before the stop; `ok` = no acked transaction lost and integrity cl
 SQLite over opfs-sahpool is perfect in both journal modes on every platform measured: Chrome 10/10,
 Firefox 10/10, WebKit 10/10, Windows Chrome 10/10, WAL and DELETE alike. The shipped OPFS filesystem
 engine — the incumbent — is the one that loses acked data: 1/10 `partial` on a Firefox process kill,
-and on random worker stops 2/30 `lost` (Chrome), 5/30 lost-or-unopenable (Firefox), 1/30 `lost`
+and on random worker stops 2/30 `lost` (Chrome), 5/30 lost-or-unopenable (Firefox), 3/40 `lost`
 (Windows). This is the durability gap the research doc argued, now reproduced: the incumbent drops
 transactions it had already acknowledged; SQLite-WAL does not. SQLite random-stop pass rates: WAL
-30/30 on Chrome, Firefox and Windows; DELETE 30/30 on Chrome and Windows but **22/30 on Firefox**,
-the eight failures all `SQLITE_CORRUPT` — see the next point.
+30/30 on Chrome and Firefox and 40/40 on Windows; DELETE 30/30 on Chrome and 40/40 on Windows but
+**22/30 on Firefox**, the eight failures all `SQLITE_CORRUPT` — see the next point.
 
 **2. Boundaries, and the one real gap: DELETE journal mode.** Seven of the eight VFS boundaries are
 clean in every browser: WAL page-write, WAL commit-flush-before-checkpoint, **WAL mid-checkpoint**,
@@ -587,15 +590,22 @@ so it is not merely theoretical.
 **3. Quota and pool exhaustion.** Pool exhaustion is clean everywhere: filling a capacity-6 pool
 raises `SQLITE_CANTOPEN` with the message "SAH pool is full" (not corruption), every already-open
 database still passes `integrity_check` and its ledger, and `addCapacity(4)` then lets the next open
-succeed — 3/3 on Chrome, Firefox and Windows. Quota exhaustion is messier and journal-mode-dependent:
-in DELETE mode SQLite surfaces `SQLITE_FULL` (result code 13 via `SQLITE_IOERR`) and the database
-reopens cleanly once quota is raised (Chrome, Firefox, Windows). In **WAL mode the database failed to
-reopen** after the quota event on Chrome (3/3) and Windows (3/3) and once on Firefox — the `-wal`
-could not be checkpointed into a full main file and the reopen hangs until space is genuinely
-available. The `sah.write` DOM error at the boundary is `QuotaExceededError` ("No space available for
-this operation"); note this is the modern shape — the research doc's warning about Chrome returning a
-bare oversized integer did not reproduce on Chrome 154. Cell D on Firefox was stopped after 4 of 6
-trials (each unbounded reopen can burn the 600 s timeout); Chrome and Windows cover it.
+succeed — 3/3 on Chrome, Firefox and Windows. Quota exhaustion is survived in **both** journal modes.
+When temporary-storage quota is exhausted mid-workload the failing OPFS write throws
+`QuotaExceededError` ("No space available for this operation") — on the `-wal` file in WAL mode, on the
+main database file in DELETE mode — and SQLite surfaces it on the `COMMIT` as result code 1
+(`SQLITE_ERROR`, "cannot rollback - no transaction is active"), **not** `SQLITE_FULL`/code 13. No
+acknowledged transaction is lost. Once quota is raised and a **fresh** session is opened, the database
+reopens cleanly with integrity intact and every acked row present: WAL 3/3 and DELETE 3/3 on both
+Chrome (~0.1 s reopen) and Windows/NTFS (~2.4 s, consistent with the runner's cold-open cost). The
+`sah.write` DOM error is the modern `QuotaExceededError` shape — the research doc's warning about
+Chrome returning a bare oversized integer did not reproduce on Chrome 154. Firefox quota is **not
+reported**: its pref-file quota reset (Firefox exposes no CDP quota override) does not reliably restore
+quota on relaunch, so Firefox reopens under residual quota pressure (90–112 s, some harness timeouts,
+no data loss when a trial completes) — a harness measurement limitation, not a Firefox storage defect;
+Chrome and Windows carry the answer. (An earlier draft reported "WAL fails to reopen after quota on
+Chrome/Windows"; that was a harness defect — the reopen ran concurrently with the original, still-open
+session instead of after it had closed. Corrected and re-measured.)
 
 **4. Handle ceiling, and the Safari "252" folklore.** No per-origin ceiling appeared below 2,048
 sync access handles on Chrome, Firefox or Windows — the probe hit its own 2,048 cap with every handle
@@ -624,7 +634,8 @@ durability directly, run `safari-external-stops.sh` (documented above), which ki
 Safari itself; it was not run here because it repeatedly force-quits the operator's Safari.
 
 **Net.** On the scenario the ticket says to score first — a real process crash — SQLite-over-OPFS with
-WAL kept every acknowledged transaction on Chrome, Firefox, WebKit and Windows/NTFS, where the
-shipped filesystem engine did not. The only corruption SQLite showed is confined to DELETE journal
-mode under a mid-commit stop, which WAL avoids by construction. Open items for a follow-up: the WAL
-quota-reopen hang, and a first-party Safari handle-ceiling number.
+WAL kept every acknowledged transaction on Chrome, Firefox, Playwright WebKit and Windows/NTFS, where
+the shipped filesystem engine did not. The only corruption SQLite showed is confined to DELETE journal
+mode under a mid-commit stop, which WAL avoids by construction; quota exhaustion is survived in both
+modes. Open items for a follow-up: a first-party Safari handle-ceiling number, and a direct
+real-Safari process-kill run (`safari-external-stops.sh`) to replace the WebKit-engine inference.

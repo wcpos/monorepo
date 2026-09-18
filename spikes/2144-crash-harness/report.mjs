@@ -30,8 +30,10 @@ for (const report of reports) {
     if (cell === 'terminate-latency') {
       output.push(table(['Worker state', 'Last increment after terminate() ms', 'Increments after terminate()', 'Outcome'], cells.map(t => [t.kind, t.terminateLatencyMs?.toFixed(1), t.incrementsAfterTerminate, t.outcome]))); continue;
     }
-    if (cell === 'quota-exhaustion') output.push(table(['Mode', 'Trial', 'SQLite code', 'Statement / message', 'DOM error / numeric write return', 'Reopen outcome'], cells.map(t => [t.mode, t.trial, t.quotaFailure?.resultCode,
-      [t.quotaFailure?.statement, t.quotaFailure?.message ?? t.error?.message].filter(Boolean).join(': '), JSON.stringify(t.quotaFailure?.hookFailures ?? []), t.outcome])));
+    if (cell === 'quota-exhaustion') {
+      output.push(table(['Mode', 'Trial', 'SQLite code', 'Statement / message', 'DOM error / numeric write return', 'Reopen outcome'], cells.map(t => [t.mode, t.trial, t.quotaFailure?.resultCode,
+        [t.quotaFailure?.statement, t.quotaFailure?.message ?? t.error?.message].filter(Boolean).join(': '), JSON.stringify(t.quotaFailure?.hookFailures ?? []), t.outcome]))); continue;
+    }
     const groups = new Map();
     for (const trial of cells.filter(t => t.outcome !== 'invalid-setup')) { const k = key(trial); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(trial); }
     output.push(table(['Row', 'Journal', 'Cache', 'Boundary', 'Recovery', 'Trials', 'ok', 'ok-with-inflight-present', 'ok-with-inflight-absent', 'lost', 'partial', 'integrity-failed', 'open-failed', 'open-failed reason', 'Median reopen attempts', 'Median reacquire ms', 'Median reopen ms'],

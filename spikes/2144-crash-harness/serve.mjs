@@ -16,4 +16,4 @@ createServer(async (request, response) => {
     response.writeHead(200, { ...headers, 'Content-Type': name.endsWith('.wasm') ? 'application/wasm' : name.endsWith('.json') ? 'application/json' : name.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript' });
     response.end(body);
   } catch { response.writeHead(404, headers); response.end('Not found'); }
-}).listen(18998, 'localhost', () => console.info('Open http://localhost:18998/ in real Safari. Results are downloaded, not written by this server.'));
+}).listen(18998, 'localhost', () => console.info('Open http://localhost:18998/ in real Safari. Safari downloads its results; a POSTed results.*.json is written next to serve.mjs.'));
