@@ -30,7 +30,7 @@ const variantToCSSVariable: Record<string, string> = {
 	secondary: '--color-secondary',
 	muted: '--color-muted-foreground',
 	success: '--color-success',
-	error: '--color-error',
+	error: '--color-destructive',
 	warning: '--color-warning',
 	info: '--color-info',
 	accent: '--color-accent-foreground',

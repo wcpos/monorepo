@@ -56,7 +56,7 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 		'--color-table-row',
 		'--color-table-row-alt',
 		'--color-success',
-		'--color-error',
+		'--color-destructive',
 	]) as string[];
 
 	// Determine the base color based on row index
