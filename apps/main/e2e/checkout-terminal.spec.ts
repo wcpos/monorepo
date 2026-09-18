@@ -1,4 +1,4 @@
-import { expect, type Page, type Request } from '@playwright/test';
+import { expect, type Page, type Request, type Response } from '@playwright/test';
 
 import copy from '../../../packages/core/src/contexts/translations/locales/en/core.json';
 import { addCheckoutProbeProductAgain } from './checkout-probe';
@@ -365,9 +365,13 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 				'needs live failure detail: shard 4 of the next lane cancels at the 60-min timeout (run 35333465670)'
 			);
 			liveTest.slow();
+			// Count ACCEPTED intents, not transport attempts: an expired cashier token costs one
+			// 401 and a retry on the same logical intent, which is not a duplicate payment.
 			const intents: Request[] = [];
-			const recordRequest = (sent: Request) => intents.push(sent);
-			page.on('request', recordRequest);
+			const recordRequest = (received: Response) => {
+				if (received.ok()) intents.push(received.request());
+			};
+			page.on('response', recordRequest);
 			const { orderId, uuid, mode } = await newOrderAtCheckout(page, trackOrder);
 			const { authorization, descriptors } = await requireTenderCheckout(
 				request,
@@ -396,8 +400,8 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			await page.reload();
 			// Page listeners survive reload: keep coverage during boot, then re-register
 			// without resetting the pre-reload count or double-registering the listener.
-			page.off('request', recordRequest);
-			page.on('request', recordRequest);
+			page.off('response', recordRequest);
+			page.on('response', recordRequest);
 			await expect(page.getByTestId('screen-pos')).toBeVisible({ timeout: 60_000 });
 			const server = await pollOrder(
 				request,
