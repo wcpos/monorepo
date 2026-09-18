@@ -7,10 +7,8 @@ import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useStoreSession } from '../../../../../contexts/app-state';
-import { usePushDocument } from '../../../contexts/use-push-document';
-import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
-import { persistProvenance } from '../provenance/persist-provenance';
+import { persistSaleProvenance, prepareSale } from '../sale-completion';
+import { useSaleContext } from './use-sale-context';
 import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { useT } from '../../../../../contexts/translations';
 import {
@@ -62,11 +60,8 @@ export function createCheckoutIdempotencyKey(
 
 export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const http = useRestHttpClient();
-	const { userDB, site, store } = useStoreSession();
+	const ctx = useSaleContext();
 	const { status: bindingStatus } = useRegisterBinding();
-	const siteUuid = site.uuid!;
-	const { localPatch } = useLocalMutation();
-	const pushDocument = usePushDocument();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const runtime = useQueryRuntime();
 	const t = useT();
@@ -162,7 +157,16 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		if (blockIfDegraded('process-payment', { orderId: orderId })) return;
 		// A gateway sale completes the whole balance, so a store with several registers
 		// and none chosen cannot start one; the picker is on the cart.
-		if (bindingStatus === 'choose') {
+		if (
+			!(
+				await prepareSale(ctx, {
+					order,
+					completing: true,
+					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+					sessionRule: 'none',
+				})
+			).ok
+		) {
 			checkoutLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
 			return;
 		}
@@ -182,14 +186,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		try {
 			if (online) {
 				try {
-					await persistProvenance({
-						order,
-						localPatch,
-						pushDocument,
-						userDB,
-						siteUuid,
-						storeId: store.id,
-					});
+					await persistSaleProvenance(ctx, { order, online: true });
 				} catch {
 					const message = t('pos_cart.checkout_failed');
 					setError(message);
@@ -263,7 +260,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 						},
 					}
 				);
-				await completeOrderFlow();
+				await completeOrderFlow({ source: 'gateway-contract', status: state.status });
 				return;
 			}
 
@@ -290,11 +287,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			setLoading(false);
 		}
 	}, [
+		ctx,
 		order,
-		localPatch,
-		pushDocument,
-		userDB,
-		siteUuid,
 		online,
 		blockIfDegraded,
 		completeOrderFlow,
@@ -302,7 +296,6 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		gatewayId,
 		gatewayResolved,
 		bindingStatus,
-		store.id,
 		handleStockRejection,
 		http,
 		orderId,

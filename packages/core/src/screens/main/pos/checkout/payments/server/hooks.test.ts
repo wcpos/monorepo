@@ -85,7 +85,13 @@ beforeEach(() => {
 		})),
 		post: jest.fn(),
 	};
-	mockFind.mockResolvedValue({ payload: { meta_data: [{ key: 'other', value: 7 }] } });
+	mockFind.mockResolvedValue({
+		uuid: 'order',
+		payload: { id: 42, meta_data: [{ key: 'other', value: 7 }] },
+		getLatest() {
+			return this;
+		},
+	});
 	mockPatch.mockResolvedValue({});
 });
 afterEach(() => {
@@ -265,9 +271,33 @@ it('cold subscribers see service start, changes and stop; both resume hooks trac
 	view.unmount();
 });
 
-jest.mock('../../provenance/stamp-completion', () => ({
-	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
-		...meta_data,
-		{ key: '_wcpos_sale_counter', value: '1' },
-	],
+jest.mock('../../sale-completion', () => {
+	const actual =
+		jest.requireActual<typeof import('../../sale-completion')>('../../sale-completion');
+	const { withMetaReplaced } =
+		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+	const completionMetaFor = jest.fn<
+		ReturnType<typeof actual.completionMetaFor>,
+		Parameters<typeof actual.completionMetaFor>
+	>();
+	completionMetaFor.mockImplementation(async (_ctx, meta, facts) =>
+		withMetaReplaced(meta, [{ key: '_wcpos_sale_counter', value: '1' }, ...(facts.extraMeta ?? [])])
+	);
+	return { ...actual, completionMetaFor };
+});
+
+jest.mock('../../hooks/use-sale-context', () => ({
+	useSaleContext: () => ({
+		userDB: {},
+		siteUuid: 'site',
+		storeId: 1,
+		runtime: mockManager,
+		dp: 2,
+		localPatch: mockPatch,
+		actor: {
+			id: String(mockSession.wpCredentials.id),
+			name: mockSession.wpCredentials.display_name,
+		},
+		stockAdjustment: jest.fn(),
+	}),
 }));

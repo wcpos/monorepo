@@ -16,7 +16,8 @@ import { engineCollection, type EngineRecord, useQueryRuntime } from '@wcpos/que
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { completionMeta } from '../../provenance/stamp-completion';
+import { completeSale, completionMetaFor } from '../../sale-completion';
+import { useSaleContext } from '../../hooks/use-sale-context';
 import { useStoreSession } from '../../../../../../contexts/app-state';
 import {
 	getTerminalPaymentsService,
@@ -31,19 +32,13 @@ import {
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { usePaymentMethods } from '../../../../hooks/use-payment-methods';
 import { getOrderSaveState, subscribeCheckoutMode } from '../../checkout-mode';
-import { completeRecordedOrder } from '../../hooks/reconcile-completed-order';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
 export function useTerminalPaymentsService(): void {
-	const { store, site, userDB, wpCredentials } = useStoreSession();
-	const actor = React.useMemo(
-		() => ({
-			id: String(wpCredentials?.id ?? ''),
-			name: wpCredentials?.display_name || wpCredentials?.username || '',
-		}),
-		[wpCredentials?.id, wpCredentials?.display_name, wpCredentials?.username]
-	);
+	const { store, site, userDB } = useStoreSession();
+	const ctx = useSaleContext();
+	const actor = ctx.actor;
 	const http = useRestHttpClient();
 	const manager = useQueryRuntime();
 	const { localPatch } = useLocalMutation();
@@ -53,10 +48,10 @@ export function useTerminalPaymentsService(): void {
 	// manager only, so an in-flight leg is never torn down by a re-login — and the
 	// action row must name whoever is at the till when the money lands, not
 	// whoever started the service. So the actor is read live, like the rest.
-	const latest = React.useRef({ localPatch, methods, online, actor });
+	const latest = React.useRef({ localPatch, methods, online, actor, ctx });
 	React.useLayoutEffect(() => {
-		latest.current = { localPatch, methods, online, actor };
-	}, [localPatch, methods, online, actor]);
+		latest.current = { localPatch, methods, online, actor, ctx };
+	}, [localPatch, methods, online, actor, ctx]);
 	// Connectivity changes are external events; they resume deferred settlements.
 	React.useEffect(() => {
 		if (online) void getTerminalPaymentsService()?.flushOffline();
@@ -105,10 +100,7 @@ export function useTerminalPaymentsService(): void {
 					document: resident,
 					data: {
 						meta_data: isCompletingStatus(summary.status)
-							? await completionMeta(
-									{ meta_data },
-									{ userDB, siteUuid: site.uuid!, storeId: store.id }
-								)
+							? await completionMetaFor(latest.current.ctx, meta_data, {})
 							: meta_data,
 						status: summary.status,
 					},
@@ -153,10 +145,7 @@ export function useTerminalPaymentsService(): void {
 						const patched = await latest.current.localPatch({
 							document: resident,
 							data: {
-								meta_data: await completionMeta(
-									{ meta_data },
-									{ userDB, siteUuid: site.uuid!, storeId: store.id }
-								),
+								meta_data: await completionMetaFor(latest.current.ctx, meta_data, {}),
 							},
 						});
 						if (!patched) throw new Error('provenance_save_failed');
@@ -181,16 +170,15 @@ export function useTerminalPaymentsService(): void {
 				}).balance;
 			},
 			getActor: () => latest.current.actor,
-			completeOrder: async (orderUuid, actor, refresh) => {
+			completeOrder: async (orderUuid, actor, outcome) => {
 				const resident = await findEngineResident(manager, 'orders', orderUuid);
 				if (stopped) return;
 				if (!resident) throw new Error('Terminal payment order is not resident');
-				await completeRecordedOrder(
-					manager,
+				await completeSale(
+					{ ...latest.current.ctx, actor },
 					resident as unknown as EngineRecord<'orders'>,
-					actor,
-					{ userDB, siteUuid: site.uuid!, storeId: store.id },
-					refresh
+					outcome,
+					{ host: 'background' }
 				);
 			},
 		});

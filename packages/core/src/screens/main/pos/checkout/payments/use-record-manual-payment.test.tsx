@@ -85,19 +85,16 @@ const order = {
 		total: '100.00',
 		meta_data: [{ key: '_pos_user', value: '7' }],
 	},
-	getLatest: () => ({
-		payload: {
-			id: 1042,
-			number: '1042',
-			total: '100.00',
-			meta_data: [{ key: '_pos_user', value: '7' }],
-		},
-	}),
+	getLatest: () => order,
 } as EngineRecord<'orders'>;
 
 beforeEach(() => {
 	jest.clearAllMocks();
-	mockLocalPatch.mockResolvedValue({ document: order });
+	order.payload.meta_data = [{ key: '_pos_user', value: '7' }];
+	mockLocalPatch.mockImplementation(async ({ data }) => {
+		Object.assign(order.payload, data);
+		return { document: order };
+	});
 	onlineStatus = 'offline';
 });
 
@@ -227,17 +224,7 @@ let mockBoundRegisterId: string | null = 'register';
 beforeEach(() => {
 	mockBoundRegisterId = 'register';
 });
-jest.mock('../../../../../services/register/register-document', () => ({
-	readRegister: async () => ({ id: 'till' }),
-	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) =>
-		mockBoundRegisterId ? { id: mockBoundRegisterId } : null,
-}));
-jest.mock('../provenance/stamp-completion', () => ({
-	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
-		...meta_data,
-		{ key: '_wcpos_sale_counter', value: '1' },
-	],
-}));
+
 it.each([null, 'register'])(
 	'queues one provenance patch and stamps only the bound register (%s)',
 	async (registerId) => {
@@ -302,7 +289,8 @@ it('logs the cart-safe error without enqueueing a payment when the provenance pa
 it('awaits the provenance push before posting and preserves the tuple in the mirror', async () => {
 	onlineStatus = 'online-website-available';
 	const calls: string[] = [];
-	mockLocalPatch.mockImplementationOnce(async () => {
+	mockLocalPatch.mockImplementationOnce(async ({ data }) => {
+		Object.assign(order.payload, data);
 		await Promise.resolve();
 		calls.push('patched');
 		return { document: order };
@@ -354,8 +342,8 @@ it('does not post or enqueue a payment when the provenance push rejects', async 
 });
 
 it('mirrors a refused server status without allocating or patching provenance', async () => {
-	const stamp = jest.requireMock('../provenance/stamp-completion');
-	const completion = jest.spyOn(stamp, 'completionMeta');
+	const stamp = jest.requireMock('../sale-completion');
+	const completion = jest.spyOn(stamp, 'completionMetaFor');
 	onlineStatus = 'online-website-available';
 	mockPost.mockRejectedValueOnce({
 		response: {
@@ -371,7 +359,6 @@ it('mirrors a refused server status without allocating or patching provenance', 
 	);
 	expect(completion).not.toHaveBeenCalled();
 	expect(mockLocalPatch).not.toHaveBeenCalled();
-	completion.mockRestore();
 });
 
 it.each([false, true])(
@@ -438,4 +425,92 @@ it('refuses manual payment without an open session', async () => {
 	});
 	expect(mockPost).not.toHaveBeenCalled();
 	expect(mockLocalPatch).not.toHaveBeenCalled();
+});
+
+jest.mock('../sale-completion', () => {
+	const actual = jest.requireActual<typeof import('../sale-completion')>('../sale-completion');
+	const { withMetaReplaced } =
+		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+	const completionMetaFor = jest.fn<
+		ReturnType<typeof actual.completionMetaFor>,
+		Parameters<typeof actual.completionMetaFor>
+	>();
+	completionMetaFor.mockImplementation(async (_ctx, meta, facts) =>
+		withMetaReplaced(meta, [{ key: '_wcpos_sale_counter', value: '1' }, ...(facts.extraMeta ?? [])])
+	);
+	return {
+		...actual,
+		completionMetaFor,
+		persistSaleProvenance: jest.fn(
+			async (
+				ctx: import('../sale-completion').SaleContext,
+				input: Parameters<typeof actual.persistSaleProvenance>[1]
+			) => {
+				const meta_data = input.online
+					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
+					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
+				if (!input.online && !input.extraMeta) return;
+				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+					throw new Error('provenance_save_failed');
+				if (input.online) await ctx.pushDocument(input.order);
+			}
+		),
+		prepareSale: jest.fn(
+			async (
+				_ctx: import('../sale-completion').SaleContext,
+				input: Parameters<typeof actual.prepareSale>[1]
+			) => {
+				if (input.completing && input.bindingStatus === 'choose')
+					return { ok: false, reason: 'choose_register' };
+				if (mockSessionsOn && !mockSessionId)
+					throw new (jest.requireActual(
+						'../../../../../services/register-session/session-store'
+					).RegisterSessionRequiredError)();
+				return {
+					ok: true,
+					registerId: mockBoundRegisterId,
+					sessionId: mockSessionsOn ? mockSessionId : null,
+				};
+			}
+		),
+	};
+});
+
+jest.mock('../hooks/use-sale-context', () => ({
+	useSaleContext: () => ({
+		userDB: {},
+		siteUuid: 'site',
+		storeId: 1,
+		runtime: manager,
+		dp: 2,
+		localPatch: mockLocalPatch,
+		pushDocument: mockPushDocument,
+	}),
+}));
+
+it('includes completion metadata, ledger and status in one offline local write', async () => {
+	const { result } = renderHook(() => useRecordManualPayment());
+	await act(() => result.current(order, method, { amount: 100 }));
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch).toHaveBeenCalledWith({
+		document: order,
+		data: {
+			status: 'completed',
+			meta_data: expect.arrayContaining([
+				{ key: '_wcpos_sale_counter', value: '1' },
+				expect.objectContaining({ key: '_wcpos_payments' }),
+			]),
+		},
+	});
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockPushDocument).not.toHaveBeenCalled();
+});
+it('does not fallback-stamp an accepted response whose status is still partial', async () => {
+	onlineStatus = 'online-website-available';
+	mockPost.mockResolvedValueOnce({ data: { order: { status: 'pos-partial', balance: '60.00' } } });
+	const { result } = renderHook(() => useRecordManualPayment());
+	await act(() => result.current(order, method, { amount: 40 }));
+	expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+	expect(jest.requireMock('../sale-completion').completionMetaFor).not.toHaveBeenCalled();
 });

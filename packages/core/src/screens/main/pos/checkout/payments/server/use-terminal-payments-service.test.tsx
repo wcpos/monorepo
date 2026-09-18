@@ -117,12 +117,6 @@ it('recovers a completed resident offline authorization without any open checkou
 	hook.unmount();
 });
 
-jest.mock('../../provenance/stamp-completion', () => ({
-	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
-		...meta_data,
-		{ key: '_wcpos_sale_counter', value: '2' },
-	],
-}));
 it('offline settlement puts the tuple and ledger in the same completing patch', async () => {
 	const original = mockResident.payload.meta_data;
 	mockResident.payload.meta_data = withLedger([], []);
@@ -171,9 +165,6 @@ it('background terminal settlement enqueues one provenance-only patch after mirr
 const mockMirrorError = jest.fn();
 const mockInfo = jest.fn();
 const mockWarn = jest.fn();
-jest.mock('../../../../../../services/register/register-document', () => ({
-	readBoundRegister: async () => null,
-}));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
 		error: (...args: unknown[]) => mockMirrorError(...args),
@@ -366,3 +357,34 @@ it('narrates a terminal refusal with no checkout mounted', async () => {
 	).toHaveLength(1);
 	hook.unmount();
 });
+
+jest.mock('../../sale-completion', () => {
+	const actual =
+		jest.requireActual<typeof import('../../sale-completion')>('../../sale-completion');
+	const { withMetaReplaced } =
+		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+	const completionMetaFor = jest.fn<
+		ReturnType<typeof actual.completionMetaFor>,
+		Parameters<typeof actual.completionMetaFor>
+	>();
+	completionMetaFor.mockImplementation(async (_ctx, meta, facts) =>
+		withMetaReplaced(meta, [{ key: '_wcpos_sale_counter', value: '2' }, ...(facts.extraMeta ?? [])])
+	);
+	return { ...actual, completionMetaFor };
+});
+
+jest.mock('../../hooks/use-sale-context', () => ({
+	useSaleContext: () => ({
+		userDB: {},
+		siteUuid: 'site',
+		storeId: 1,
+		runtime: mockRuntime,
+		dp: 2,
+		localPatch: mockPatch,
+		actor: {
+			id: String(mockSession.wpCredentials.id),
+			name: mockSession.wpCredentials.display_name,
+		},
+		stockAdjustment: jest.fn(),
+	}),
+}));

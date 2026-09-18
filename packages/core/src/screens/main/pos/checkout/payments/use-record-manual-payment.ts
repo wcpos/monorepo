@@ -3,28 +3,27 @@ import * as React from 'react';
 import cloneDeep from 'lodash/cloneDeep';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { useDocField, useQueryRuntime } from '@wcpos/query';
+import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import {
 	hasSaleProvenance,
 	isCompletingStatus,
-	type MetaDataEntry,
 	type PaymentMethodDescriptor,
-	withMetaReplaced,
 } from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
-import { useRegisterSessionCollection } from '../../../../../services/register-session/use-register-session-collections';
-import { requireOpenSession } from '../../../../../services/register-session/session-store';
-import { readBoundRegister } from '../../../../../services/register/register-document';
-import { completionMeta } from '../provenance/stamp-completion';
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
-import { usePushDocument } from '../../../contexts/use-push-document';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
-import { refreshOrderRecord } from '../hooks/reconcile-completed-order';
+import {
+	completionMetaFor,
+	persistSaleProvenance,
+	prepareSale,
+	refreshOrderRecord,
+} from '../sale-completion';
+import { useSaleContext } from '../hooks/use-sale-context';
 import { recordManualPayment } from './record-manual-payment';
 
 import type { RecordManualPaymentInput, RecordManualPaymentOutcome } from './record-manual-payment';
@@ -56,20 +55,24 @@ export function useRecordManualPayment(
 	input: RecordManualPaymentInput
 ) => Promise<RecordManualPaymentOutcome> {
 	const http = useRestHttpClient();
-	const sessions = useRegisterSessionCollection();
+	const ctx = useSaleContext();
 	const onlineStatus = useOnlineStatus();
 	const forceOffline = options.offline === true;
-	const { wpCredentials, store, userDB, site } = useStoreSession();
-	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
+	const { wpCredentials, store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
-	const pushDocument = usePushDocument();
 	const manager = useQueryRuntime();
 	const t = useT();
 
 	return React.useCallback(
 		async (order, method, input) => {
-			const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id ?? null;
-			const sessionId = await requireOpenSession(sessions, registerId, sessionsOn);
+			const prepared = await prepareSale(ctx, {
+				order,
+				completing: false,
+				bindingStatus: 'none',
+				sessionRule: 'require',
+			});
+			if (!prepared.ok) throw new Error(prepared.reason);
+			const { registerId, sessionId } = prepared;
 			const payload = order.getLatest?.().payload ?? order.payload;
 			const paymentOrder = {
 				uuid: order.uuid,
@@ -79,10 +82,6 @@ export function useRecordManualPayment(
 				// RxDB serves object fields as Proxies; the ledger helpers need plain data.
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
-			// The split summary rides with whichever leg completes the sale; every path
-			// that stamps completion here merges it by key so a re-divided remainder wins.
-			const withCompletionFacts = (meta: MetaDataEntry[]) =>
-				withMetaReplaced(meta, input.extraMeta ?? []);
 			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post: (url, body) => http.post(url, body),
 				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
@@ -90,27 +89,16 @@ export function useRecordManualPayment(
 				storeId: store.id ? store.id : null,
 				registerId,
 				sessionId,
-				completionMeta: async (meta_data) =>
-					withCompletionFacts(
-						await completionMeta(
-							{ meta_data },
-							{ userDB, siteUuid: site.uuid!, storeId: store.id, sessionId }
-						)
-					),
+				completionMeta: (meta) =>
+					completionMetaFor(ctx, meta, { sessionId, extraMeta: input.extraMeta }),
 				persistProvenance: async () => {
-					const meta_data = withCompletionFacts(
-						await completionMeta(order.getLatest().payload, {
-							userDB,
-							siteUuid: site.uuid!,
-							storeId: store.id,
-							sessionId,
-						})
-					);
-					const patched = await localPatch({ document: order, data: { meta_data } });
-					if (!patched) throw new Error('provenance_save_failed');
-					await pushDocument(order);
-					// Preserve the pre-stamped tuple in the subsequent payment mirror.
-					paymentOrder.meta_data = meta_data;
+					await persistSaleProvenance(ctx, {
+						order,
+						sessionId,
+						online: true,
+						extraMeta: input.extraMeta,
+					});
+					paymentOrder.meta_data = cloneDeep(order.getLatest().payload.meta_data ?? []);
 				},
 				currency: store.currency ?? '',
 				dp: store.price_num_decimals ?? 2,
@@ -136,14 +124,10 @@ export function useRecordManualPayment(
 							isCompletingStatus(changes.status ?? '') &&
 							!hasSaleProvenance(changes.meta_data)
 						) {
-							const meta_data = withCompletionFacts(
-								await completionMeta(changes, {
-									userDB,
-									siteUuid: site.uuid!,
-									storeId: store.id,
-									sessionId,
-								})
-							);
+							const meta_data = await completionMetaFor(ctx, changes.meta_data, {
+								sessionId,
+								extraMeta: input.extraMeta,
+							});
 							const patched = await localPatch({ document: order, data: { meta_data } });
 							if (!patched) throw new Error('provenance_save_failed');
 						}
@@ -210,20 +194,6 @@ export function useRecordManualPayment(
 			}
 			return outcome;
 		},
-		[
-			sessions,
-			sessionsOn,
-			userDB,
-			site.uuid,
-			http,
-			forceOffline,
-			onlineStatus.status,
-			wpCredentials.id,
-			store,
-			localPatch,
-			pushDocument,
-			manager,
-			t,
-		]
+		[ctx, http, forceOffline, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
 	);
 }

@@ -2,63 +2,41 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
+import { type EngineRecord } from '@wcpos/query';
 
-import { useStoreSession } from '../../../../../contexts/app-state';
 import { useTheme } from '../../../../../contexts/theme';
-import { enterReceipt, leaveCheckout } from '../checkout-mode';
+import { leaveCheckout } from '../checkout-mode';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
-import { completeRecordedOrder } from './reconcile-completed-order';
-
-export interface CompleteOrderFlowOptions {
-	/**
-	 * Force-refresh the order from the server before routing. False when the payment
-	 * was recorded offline: there is nothing to fetch, and the throw on a missing
-	 * remote id would strand the cashier on a paid order.
-	 */
-	refresh?: boolean;
-}
+import { completeSale, type SaleOutcome } from '../sale-completion';
+import { useSaleContext } from './use-sale-context';
 
 /** Finish checkout from the freshest available order before leaving the cart. */
 export function useCompleteOrderFlow(
 	order: EngineRecord<'orders'>,
 	receiptHost: 'stage' | 'modal' = 'stage'
-): (options?: CompleteOrderFlowOptions) => Promise<void> {
-	const runtime = useQueryRuntime();
-	const { wpCredentials, userDB, site, store } = useStoreSession();
-	const actor = React.useMemo(
-		() => ({
-			id: String(wpCredentials.id ?? ''),
-			name: wpCredentials.display_name || wpCredentials.username || '',
-		}),
-		[wpCredentials.id, wpCredentials.display_name, wpCredentials.username]
-	);
-	const { stockAdjustment } = useStockAdjustment();
+): (outcome: SaleOutcome) => Promise<void> {
+	const ctx = useSaleContext();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const { setCurrentOrderID } = useCurrentOrderActions();
 
 	return React.useCallback(
-		async ({ refresh = true }: CompleteOrderFlowOptions = {}) => {
-			// Enter the receipt stage BEFORE the refresh below. The final payment has already
-			// patched the order out of `pos-open`, so the current-order provider is about to fall
-			// back to the new-order placeholder; if the stage waited for the (up to 10 s) refresh,
-			// the columns would show an empty cart while the paid order was nowhere on screen.
-			// The stage renders from its own record and shows the syncing badge until data lands.
-			if (receiptHost === 'stage' && uiSettings.autoShowReceipt) {
-				enterReceipt(order.uuid);
-			}
-			await completeRecordedOrder(
-				runtime,
-				order,
-				actor,
-				{ userDB, siteUuid: site.uuid!, storeId: store.id },
-				refresh,
-				stockAdjustment
-			);
+		async (outcome: SaleOutcome) => {
+			if (
+				(await completeSale(
+					ctx,
+					order,
+					outcome,
+					receiptHost === 'stage'
+						? { host: 'stage', autoShowReceipt: !!uiSettings.autoShowReceipt }
+						: { host: 'modal' }
+				)) !== 'completed'
+			)
+				return;
+			// The webview already routed before catch-up; never route it a second time.
+			if (outcome.source === 'gateway-snapshot') return;
 
 			// The pre-tender contract checkout still hosts receipts in a routed modal.
 			if (receiptHost === 'modal') {
@@ -80,19 +58,6 @@ export function useCompleteOrderFlow(
 				if (screenSize === 'sm') router.replace({ pathname: '/cart' });
 			}
 		},
-		[
-			actor,
-			receiptHost,
-			runtime,
-			order,
-			router,
-			screenSize,
-			setCurrentOrderID,
-			stockAdjustment,
-			uiSettings.autoShowReceipt,
-			userDB,
-			site.uuid,
-			store.id,
-		]
+		[ctx, receiptHost, order, router, screenSize, setCurrentOrderID, uiSettings.autoShowReceipt]
 	);
 }

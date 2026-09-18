@@ -34,9 +34,7 @@ jest.mock('../../../contexts/use-push-document', () => ({
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 }));
-jest.mock('../provenance/stamp-completion', () => ({
-	completionMeta: async () => [{ key: '_wcpos_sale_counter', value: '1' }],
-}));
+
 let autoShowReceipt = false;
 const ORDER_UUID = '5b8e1a3c-2f4d-4a6b-9c8e-000000000042';
 
@@ -1103,3 +1101,63 @@ describe('PaymentWebview register gate', () => {
 		expect(webViewProps.source).toBeUndefined();
 	});
 });
+
+jest.mock('../sale-completion', () => {
+	const actual = jest.requireActual<typeof import('../sale-completion')>('../sale-completion');
+	const { withMetaReplaced } =
+		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+	const completionMetaFor = jest.fn<
+		ReturnType<typeof actual.completionMetaFor>,
+		Parameters<typeof actual.completionMetaFor>
+	>();
+	completionMetaFor.mockImplementation(async (_ctx, meta, facts) =>
+		withMetaReplaced(meta, [{ key: '_wcpos_sale_counter', value: '1' }, ...(facts.extraMeta ?? [])])
+	);
+	return {
+		...actual,
+		completionMetaFor,
+		persistSaleProvenance: jest.fn(
+			async (
+				ctx: import('../sale-completion').SaleContext,
+				input: Parameters<typeof actual.persistSaleProvenance>[1]
+			) => {
+				const meta_data = input.online
+					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
+					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
+				if (!input.online && !input.extraMeta) return;
+				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+					throw new Error('provenance_save_failed');
+				if (input.online) await ctx.pushDocument(input.order);
+			}
+		),
+		prepareSale: jest.fn(
+			async (
+				_ctx: import('../sale-completion').SaleContext,
+				input: Parameters<typeof actual.prepareSale>[1]
+			) => {
+				if (input.completing && input.bindingStatus === 'choose')
+					return { ok: false, reason: 'choose_register' };
+				return { ok: true, registerId: null, sessionId: null };
+			}
+		),
+	};
+});
+
+jest.mock('../hooks/use-sale-context', () => ({
+	useSaleContext: () => ({
+		userDB: {},
+		siteUuid: 'site',
+		storeId: 1,
+		runtime: { engine: { require: mockEngineRequire } },
+		dp: 2,
+		localPatch: mockLocalPatch,
+		pushDocument: mockPushDocument,
+		stockAdjustment: mockStockAdjustment,
+	}),
+}));
+
+jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+
+jest.mock('../../contexts/current-order/context', () => ({
+	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
+}));
