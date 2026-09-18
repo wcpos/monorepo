@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Uniwind } from 'uniwind';
 
+import { stories as breadcrumb } from '@wcpos/components/breadcrumb/gallery';
 import { stories as button } from '@wcpos/components/button/gallery';
 import { stories as combobox } from '@wcpos/components/combobox/gallery';
 import { stories as emptyState } from '@wcpos/components/empty-state/gallery';
@@ -13,6 +14,7 @@ import { stories as notice } from '@wcpos/components/notice/gallery';
 import { stories as skeleton } from '@wcpos/components/skeleton/gallery';
 import { stories as icon } from '@wcpos/components/icon/gallery';
 import { stories as input } from '@wcpos/components/input/gallery';
+import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
 import { PortalHost } from '@wcpos/components/portal';
 import { stories as select } from '@wcpos/components/select/gallery';
 import { Text } from '@wcpos/components/text';
@@ -31,6 +33,8 @@ const registry: Record<string, Story[]> = {
 	skeleton,
 	'empty-state': emptyState,
 	notice,
+	breadcrumb,
+	'page-bar': pageBar,
 };
 
 function GalleryPage({ children }: React.PropsWithChildren) {
