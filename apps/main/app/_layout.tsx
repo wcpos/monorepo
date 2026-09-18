@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { ObserveRoot } from 'expo-observe';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -25,6 +26,8 @@ import {
 } from '../components/clear-local-data-on-startup';
 import { LiveTabGate } from '../components/live-tab-gate';
 import { RootError } from '../components/root-error';
+// Configures EAS Observe at import, before any screen mounts (see lib/observe.ts).
+import { useObserveConsent } from '../lib/observe';
 import '../global.css';
 import '../polyfills';
 
@@ -87,7 +90,10 @@ function RootStack() {
 	const appState = useAppState();
 	const { store } = appState;
 	const { isThemeReady } = useThemeRestorer();
-	useTelemetryConsent();
+	// One merchant preference, two telemetry clients: the Sentry sink (inside the
+	// hook) and EAS Observe. Neither sends anything before it is `allowed`.
+	const telemetryConsent = useTelemetryConsent();
+	useObserveConsent(telemetryConsent);
 	const t = useT();
 	// `Toast.show` on its own would print the developer log message when a call
 	// site logs `showToast: true` without cashier copy. The adapter resolves the
@@ -132,7 +138,7 @@ function ThemedToaster() {
 	return <Toaster position="top-center" theme={toastTheme} richColors />;
 }
 
-export default function RootLayout() {
+function RootLayout() {
 	// A build-time constant: false in every merchant build (Metro resolves the gallery
 	// registry to its stub), so production never reads the route to decide anything.
 	if (IS_GALLERY_BUILD) return <GalleryRootLayout merchant={MerchantRootLayout} />;
@@ -142,6 +148,14 @@ export default function RootLayout() {
 		</LiveTabGate>
 	);
 }
+
+/**
+ * EAS Observe marks time-to-first-render from this wrapper and scopes its
+ * per-route hooks under it. No `errorBoundaryFallback`: the merchant-facing
+ * root boundary (`RootError`, with its unsent-changes count) stays the app's
+ * own, and unhandled JS errors still reach Observe through its global handler.
+ */
+export default ObserveRoot.wrap(RootLayout);
 
 function MerchantRootLayout() {
 	const clearLocalDataState = useClearLocalDataOnStartup();

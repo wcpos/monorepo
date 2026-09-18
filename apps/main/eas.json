@@ -32,6 +32,7 @@
       "extends": "monorepo",
       "channel": "production",
       "distribution": "store",
+      "uploadSourceMaps": true,
       "android": {
         "buildType": "app-bundle"
       },
