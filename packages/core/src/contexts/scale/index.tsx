@@ -5,6 +5,7 @@ import { ScopedVariables } from 'uniwind';
 
 import { usePointer } from '@wcpos/components/lib/device';
 import { resolveStep, scaleVariables, type ScaleVariables } from '@wcpos/components/lib/scale';
+import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../app-state';
 
@@ -41,6 +42,7 @@ function useRootScaleMirror(variables: ScaleVariables): void {
  */
 export function ScaleProvider({ children }: { children: React.ReactNode }) {
 	const { store } = useAppState();
+	const scale = useDocField(store, (latest) => latest.scale);
 	const { width, height } = useWindowDimensions();
 	const pointer = usePointer();
 
@@ -48,7 +50,7 @@ export function ScaleProvider({ children }: { children: React.ReactNode }) {
 	// side on native. A web window is resized, not rotated: there the width is
 	// what the merchant changed and what the step should follow.
 	const extent = Platform.OS === 'web' ? width : Math.min(width, height);
-	const step = resolveStep(store?.scale, extent);
+	const step = resolveStep(scale, extent);
 	const variables = React.useMemo(() => scaleVariables(step, pointer), [step, pointer]);
 
 	useRootScaleMirror(variables);

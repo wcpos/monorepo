@@ -27,26 +27,6 @@
   --width-144: 504px;
   --width-160: 560px;
 
-  /* Type ramp from base, with a shared 1.35 line height. */
-  --text-3xs: calc(var(--text-base) * 0.714);
-  --text-3xs--line-height: calc(var(--text-3xs) * 1.35);
-  --text-2xs: calc(var(--text-base) * 0.786);
-  --text-2xs--line-height: calc(var(--text-2xs) * 1.35);
-  --text-xs: calc(var(--text-base) * 0.857);
-  --text-xs--line-height: calc(var(--text-xs) * 1.35);
-  --text-sm: calc(var(--text-base) * 0.929);
-  --text-sm--line-height: calc(var(--text-sm) * 1.35);
-  --text-base--line-height: calc(var(--text-base) * 1.35);
-  --text-lg: calc(var(--text-base) * 1.143);
-  --text-lg--line-height: calc(var(--text-lg) * 1.35);
-  --text-xl: calc(var(--text-base) * 1.286);
-  --text-xl--line-height: calc(var(--text-xl) * 1.35);
-  --text-2xl: calc(var(--text-base) * 1.5);
-  --text-2xl--line-height: calc(var(--text-2xl) * 1.35);
-  --text-3xl: calc(var(--text-base) * 1.857);
-  --text-3xl--line-height: calc(var(--text-3xl) * 1.35);
-  --text-amt--line-height: calc(var(--text-amt) * 1.1);
-
   /* Semantic colors (shadcn/ui) - referencing CSS variables */
   --color-border: var(--border);
   --color-input: var(--input);
@@ -115,13 +95,6 @@
   /* Custom border width */
   --border-width-hairline: var(--hairline-width);
 
-  /* Radius scale */
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-
   /* motion:start */
   --duration-press: 80ms;
   --duration-overlay-fade: 150ms;
@@ -138,6 +111,36 @@
   --animate-accordion-down: accordion-down 200ms ease-out;
   --animate-accordion-up: accordion-up 200ms ease-out;
   /* motion:end */
+}
+
+/* Resolve derived values where utilities are used, including inside a scale scope. */
+@theme inline {
+  /* Type ramp from base, with a shared 1.35 line height. */
+  --text-3xs: calc(var(--text-base) * 0.714);
+  --text-3xs--line-height: calc(var(--text-base) * 0.714 * 1.35);
+  --text-2xs: calc(var(--text-base) * 0.786);
+  --text-2xs--line-height: calc(var(--text-base) * 0.786 * 1.35);
+  --text-xs: calc(var(--text-base) * 0.857);
+  --text-xs--line-height: calc(var(--text-base) * 0.857 * 1.35);
+  --text-sm: calc(var(--text-base) * 0.929);
+  --text-sm--line-height: calc(var(--text-base) * 0.929 * 1.35);
+  --text-base--line-height: calc(var(--text-base) * 1.35);
+  --text-lg: calc(var(--text-base) * 1.143);
+  --text-lg--line-height: calc(var(--text-base) * 1.143 * 1.35);
+  --text-xl: calc(var(--text-base) * 1.286);
+  --text-xl--line-height: calc(var(--text-base) * 1.286 * 1.35);
+  --text-2xl: calc(var(--text-base) * 1.5);
+  --text-2xl--line-height: calc(var(--text-base) * 1.5 * 1.35);
+  --text-3xl: calc(var(--text-base) * 1.857);
+  --text-3xl--line-height: calc(var(--text-base) * 1.857 * 1.35);
+  --text-amt--line-height: calc(var(--text-amt) * 1.1);
+
+  /* Radius scale */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
 }
 
 /* Web-only keyframes for accordion animations */

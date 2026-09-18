@@ -21,8 +21,23 @@ test('the theme exposes radius-md to rounded utilities', () => {
 	assert.ok(themes.some(([, body]) => /--radius-md\s*:/.test(body)));
 });
 
-const themeBody = [...css.matchAll(/@theme\b[^{}]*\{([^{}]*)\}/g)]
+const themeBody = [...css.matchAll(/@theme\s*\{([^{}]*)\}/g)]
 	.map(([, body]) => body).join('\n');
+const inlineThemeBody = [...css.matchAll(/@theme\s+inline\s*\{([^{}]*)\}/g)]
+	.map(([, body]) => body).join('\n');
+
+test('derived type and radius tokens are inline so scopes recompute them', () => {
+	const declarations = /--(?:text-[\w-]+|radius-[\w-]+)\s*:/g;
+	const derived = [...css.matchAll(declarations)]
+		.map(([declaration]) => declaration.replace(/\s*:$/, ''))
+		.filter((token) => token !== '--text-base' && token !== '--text-amt');
+	assert.ok(derived.length > 0);
+	for (const token of derived) {
+		const declaration = new RegExp(`${token}\\s*:`);
+		assert.match(inlineThemeBody, declaration, `${token} must be inline`);
+		assert.doesNotMatch(themeBody, declaration, `${token} must not be in plain @theme`);
+	}
+});
 const themeNames = ['light', 'dark', 'ocean', 'sunset', 'monochrome'];
 const newColors = [
 	'rail', 'rail-foreground', 'rail-border', 'ok', 'ok-bg', 'warn', 'warn-bg',
