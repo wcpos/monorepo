@@ -21,3 +21,9 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 11. Anchor the tooltip to the top of the complete stack, choose above/below placement and constrain its horizontal position — keeps inspection attached to the bar and within chart bounds — evidence: `reports/chart/chart.tsx:243`, “Top of stack = totalY - taxHeight”; `:249`, “Calculate tooltip position to keep it on screen” — platform: all.
 12. Accumulate absolute refund amounts separately, show them negatively only when nonzero, and enlarge/reflow the tooltip — refund information must not disappear or overlap order count — evidence: [^refunds], `reports/chart/chart.tsx:247–317` — platform: all.
 13. Keep `getClosest` above the exported worklet helper — declaration order matters to worklet hoisting; the current chart separately uses its local nearest-point implementation — evidence: `reports/chart/findClosestPoint.ts:5`, “IMPORTANT! Keep this above findClosestPoint, for worklet/hoisting reasons” — platform: native worklet execution.
+
+## Evidence footnotes
+
+[^chart-intervals]: `44317f7466 2026-01-22 fix: improve daily reports chart with smart time intervals`.
+[^timezone]: `f2b5a84f70 2026-09-16 Date filters and reports follow the store's timezone, not the device's (#2098)`; body also names `wcpos/roadmap#324`.
+[^refunds]: `4dd20a76a4 2026-03-13 feat: display refund information across cart, orders table, and reports (#189)`.

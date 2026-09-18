@@ -18,3 +18,9 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 8. In `ZReport`, store the generated timestamp as a Date, restamp on focus/selected-order changes and format during render — formatter identity/output churn must not trigger a nested-update loop — evidence: `c06a2c54e7 2026-08-04 fix(reports): break the ZReport nested-update loop behind the update-depth flake`; `template.update-depth.test.tsx` names that churn case — platform: all.
 9. Label report periods and generated timestamps in store time — printed labels must describe the same day as filters and chart buckets — evidence: `reports/report/template.tsx:65`, “The period is the store's day, so it is labelled in the store's zone, not the till's”; [^timezone] — platform: all.
 10. Supply both a content ref and separately generated HTML to the cross-platform print hook; expose printing state on the action — native printing cannot rely on a DOM subtree — evidence: `9edc6be159 2025-12-17 fix html printing for native`; `reports/report/index.tsx:187–188`, “Web: uses contentRef with react-to-print” / “Native: uses html with expo-print” — platform: web/Electron and iOS/Android.
+
+## Evidence footnotes
+
+[^refunds]: `4dd20a76a4 2026-03-13 feat: display refund information across cart, orders table, and reports (#189)`.
+[^register]: `03338ed7c5 2026-09-11 feat(orders): the register as a browse and report dimension (wcpos/roadmap#252)`.
+[^timezone]: `f2b5a84f70 2026-09-16 Date filters and reports follow the store's timezone, not the device's (#2098)`; body also names `wcpos/roadmap#324`.

@@ -27,3 +27,9 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 17. New closure links reset room selection, while consuming a closed link preserves the current room — prevents reopening dismissed details or returning unexpectedly to Sales — evidence: `reports/index.tsx:246`, “Clearing a consumed link keeps the current room; a new link resets its selection.” — platform: all.
 18. Seed custom dates from current scope; a multi-day seed starts a fresh two-tap range; enforce retained-history/today bounds and close successful choices — avoids accidentally extending the old range or selecting unavailable history — evidence: [^closures]; `page-bar.test.tsx` names “replaces September 1–30 with September 10–20 using two day taps” — platform: all.
 19. Keep picked calendar days as calendar dates across device/store zones; use 44-point days, viewport-bounded picker width, and a separate phone tab row — preserves usable selection on narrow phones — evidence: [^closures]; `calendar.test.tsx` names device-local-midnight conversion; `page-bar.tsx:261`, “Keep the shared day behavior and theme, with touch-sized targets.” — platform: all.
+
+## Evidence footnotes
+
+[^query]: `91722e8e59 2026-07-15 feat(core): the reports screen rides the query-state store + bindings (per-screen migration 6/8) (#659)`.
+[^timezone]: `f2b5a84f70 2026-09-16 Date filters and reports follow the store's timezone, not the device's (#2098)`; body also names `wcpos/roadmap#324`.
+[^closures]: `21b57723e9 2026-09-17 Land the Closures room on Reports: the page bar with Sales | Closures, closures by business day, the drill-in through the closure template with settled figures, Reprint, Recount and Export CSV (#2131)`. Commit body and diffstat inspected; its body records the specific follow-up behaviours cited above.

@@ -19,3 +19,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 9. Forward column alignment to the shared header — stretching its press target across the cell must not lose right/centre alignment — evidence: `f2666fb5a4 2026-04-08 fix: make column header Pressable fill entire cell for reliable click targeting` — platform: all; web click-target defect.
 10. Use the report-specific table skeleton inside Suspense — loading retains the expected table structure — evidence: `aaa6f4fbc9 2026-03-26 feat: use DataTableSkeleton as Suspense fallback in all table screens` — platform: all.
 11. Supply shared engine-record cells through a cells map, including Register, while delegating fallback rendering — prevents report/order display drift and preserves register browsing — evidence: `f3ec0f150c 2026-08-22 refactor(data-table): take a cells map instead of a render function`; [^register] — platform: all.
+
+## Evidence footnotes
+
+[^query]: `91722e8e59 2026-07-15 feat(core): the reports screen rides the query-state store + bindings (per-screen migration 6/8) (#659)`.
+[^register]: `03338ed7c5 2026-09-11 feat(orders): the register as a browse and report dimension (wcpos/roadmap#252)`.

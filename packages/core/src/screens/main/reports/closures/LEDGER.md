@@ -37,3 +37,7 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 27. Quote/escape CSV cells, use CRLF, and prefix formula/control-leading text, including whitespace-prefixed formulas — exported names must remain text rather than spreadsheet instructions — evidence: [^closures]; `export-csv.test.ts` names formula-prefix neutralization — platform: all.
 28. Native export writes UTF-8 CSV to cache and opens sharing with CSV MIME/UTI; web downloads through a temporary Blob link and removes/revokes it — preserves each platform’s file handoff — evidence: [^closures]; both `save-or-share-csv` test names pin their handoffs — platform: iOS/Android versus web/Electron.
 29. Keep offline document labels aligned with shipped server-template keys — offline documents must speak the same template vocabulary — evidence: `reports/closures/document-labels.ts:1`, “Offline defaults use the same label keys as the shipped server closure template.” — platform: all.
+
+## Evidence footnotes
+
+[^closures]: `21b57723e9 2026-09-17 Land the Closures room on Reports: the page bar with Sales | Closures, closures by business day, the drill-in through the closure template with settled figures, Reprint, Recount and Export CSV (#2131)`. Commit body and diffstat inspected; its body records the specific follow-up behaviours cited above.
