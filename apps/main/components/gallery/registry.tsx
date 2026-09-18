@@ -8,6 +8,9 @@ import { Uniwind } from 'uniwind';
 
 import { stories as button } from '@wcpos/components/button/gallery';
 import { stories as combobox } from '@wcpos/components/combobox/gallery';
+import { stories as emptyState } from '@wcpos/components/empty-state/gallery';
+import { stories as notice } from '@wcpos/components/notice/gallery';
+import { stories as skeleton } from '@wcpos/components/skeleton/gallery';
 import { stories as icon } from '@wcpos/components/icon/gallery';
 import { stories as input } from '@wcpos/components/input/gallery';
 import { PortalHost } from '@wcpos/components/portal';
@@ -18,7 +21,17 @@ import { stories as text } from '@wcpos/components/text/gallery';
 import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
 
-const registry: Record<string, Story[]> = { input, button, select, combobox, text, icon };
+const registry: Record<string, Story[]> = {
+	input,
+	button,
+	select,
+	combobox,
+	text,
+	icon,
+	skeleton,
+	'empty-state': emptyState,
+	notice,
+};
 
 function GalleryPage({ children }: React.PropsWithChildren) {
 	const { theme } = useLocalSearchParams<{ theme?: string }>();
