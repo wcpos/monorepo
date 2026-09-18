@@ -1,6 +1,7 @@
-import { View, type ViewProps } from 'react-native';
+import * as React from 'react';
+import { AccessibilityInfo, Platform, View, type ViewProps } from 'react-native';
 
-import { Button } from '../button';
+import { Button, ButtonText } from '../button';
 import { DocsLink } from '../docs-link';
 import { HStack } from '../hstack';
 import { Icon, type IconName } from '../icon';
@@ -18,9 +19,9 @@ type NoticeProps = ViewProps & {
 	docs?: { label: string; href: string; testID?: string };
 };
 const tones = {
-	warn: { surface: 'border-warn/45 bg-warn-bg', icon: 'triangleExclamation', color: 'text-warn' },
-	info: { surface: 'border-border bg-card', icon: 'circleInfo', color: 'text-info' },
-	bad: { surface: 'border-bad/45 bg-bad-bg', icon: 'circleExclamation', color: 'text-bad' },
+	warn: { surface: 'border-warn/45 bg-warn-bg', icon: 'triangleExclamation' },
+	info: { surface: 'border-border bg-card', icon: 'circleInfo' },
+	bad: { surface: 'border-bad/45 bg-bad-bg', icon: 'circleExclamation' },
 } as const;
 
 export function Notice({
@@ -35,6 +36,13 @@ export function Notice({
 	...props
 }: NoticeProps) {
 	const style = tones[tone];
+	// iOS has no live region (`aria-live` maps to Android's accessibilityLiveRegion), so a
+	// mounted outage is spoken explicitly there; the live region covers Android and web.
+	const spoken = React.useRef(tone === 'bad' ? title : undefined);
+	React.useEffect(() => {
+		if (spoken.current && Platform.OS === 'ios')
+			AccessibilityInfo.announceForAccessibility(spoken.current);
+	}, []);
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	return (
 		<View
@@ -48,13 +56,13 @@ export function Notice({
 				className
 			)}
 		>
-			<Icon name={icon ?? style.icon} className={style.color} />
+			<Icon name={icon ?? style.icon} className="text-foreground" />
 			<VStack className="min-w-0 flex-1 basis-48">
 				<Text testID={id('title')} className="text-foreground font-medium">
 					{title}
 				</Text>
 				{description && (
-					<Text testID={id('description')} className="text-muted-foreground text-sm">
+					<Text testID={id('description')} className="text-muted-foreground">
 						{description}
 					</Text>
 				)}
@@ -66,10 +74,11 @@ export function Notice({
 							key={index}
 							variant="ghost-quiet"
 							size="sm"
+							className="h-auto min-h-9 py-1"
 							testID={action.testID ?? id(`action-${index}`)}
 							onPress={action.onPress}
 						>
-							{action.label}
+							<ButtonText className="web:whitespace-normal text-clip">{action.label}</ButtonText>
 						</Button>
 					))}
 					{docs && (

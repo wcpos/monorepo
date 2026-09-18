@@ -26,7 +26,7 @@ it.each([
 		'w-1/2'
 	);
 	expect(screen.getByTestId('shape')).toHaveAttribute('aria-busy', 'true');
-	expect(screen.getByTestId('shape')).toHaveAttribute('data-accessible', 'false');
+	expect(screen.getByTestId('shape')).not.toHaveAttribute('data-accessible', 'false');
 });
 
 it('defaults to filling the caller box', () => {

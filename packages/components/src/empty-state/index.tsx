@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
 
-import { Button } from '../button';
+import { Button, ButtonText } from '../button';
 import { DocsLink } from '../docs-link';
 import { HStack } from '../hstack';
 import { Icon, type IconName } from '../icon';
@@ -62,14 +62,12 @@ export function EmptyState({
 			{!inline && <Icon name={icon ?? icons[kind]} size="3xl" className="text-muted-foreground" />}
 			<Text
 				testID={id('title')}
-				className={
-					inline ? 'text-muted-foreground text-sm' : 'text-foreground text-center font-medium'
-				}
+				className={inline ? 'text-muted-foreground' : 'text-foreground text-center font-medium'}
 			>
 				{title}
 			</Text>
 			{!inline && description && (
-				<Text testID={id('description')} className="text-muted-foreground text-center text-sm">
+				<Text testID={id('description')} className="text-muted-foreground text-center">
 					{description}
 				</Text>
 			)}
@@ -80,10 +78,14 @@ export function EmptyState({
 							{...{ ref: actionRef }}
 							variant="ghost-quiet"
 							size="sm"
+							className="h-auto min-h-9 py-1"
 							testID={action.testID ?? id('action')}
 							onPress={action.onPress}
 						>
-							{action.label}
+							{/* Button truncates a string child; the block's only recovery action wraps instead. */}
+							<ButtonText className="web:whitespace-normal text-center text-clip">
+								{action.label}
+							</ButtonText>
 						</Button>
 					)}
 					{docs && (

@@ -79,3 +79,18 @@ it('composes a real DocsLink', () => {
 it('has no internal dismissal or timer', () => {
 	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/onDismiss|xmark|setTimeout/);
 });
+
+it('announces a bad notice on iOS, where aria-live has no native live region', () => {
+	const { AccessibilityInfo, Platform } = jest.requireActual('react-native');
+	const announce = jest
+		.spyOn(AccessibilityInfo, 'announceForAccessibility')
+		.mockImplementation(() => {});
+	const os = jest.replaceProperty(Platform, 'OS', 'ios');
+	render(<Notice tone="bad" title="Local database unavailable" />);
+	expect(announce).toHaveBeenCalledWith('Local database unavailable');
+	announce.mockClear();
+	render(<Notice tone="warn" title="Offline" />);
+	expect(announce).not.toHaveBeenCalled();
+	os.restore();
+	announce.mockRestore();
+});

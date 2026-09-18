@@ -12,12 +12,7 @@ const shapes = {
 
 export function Skeleton({ shape = 'block', className, ...props }: SkeletonProps) {
 	return (
-		<View
-			{...props}
-			className={cn('bg-muted rounded-lg', shapes[shape], className)}
-			aria-busy
-			accessible={false}
-		/>
+		<View {...props} className={cn('bg-muted rounded-lg', shapes[shape], className)} aria-busy />
 	);
 }
 
