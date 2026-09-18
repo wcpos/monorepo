@@ -22,7 +22,9 @@ const keys = new Set(reports.flatMap(r => r.results.flatMap(row => row.cells.map
 for (const key of keys) {
   const [scale, name] = key.split('/'), winners = reports.map(r => r.results.filter(row => row.scale === scale).map(row => ({ engine: row.engine, cell: row.cells.find(c => c.name === name) })).filter(x => x.cell).sort((a, b) => a.cell.p50 - b.cell.p50));
   const labels = winners.map(w => w.length ? w.filter(x => x.cell.p50 === w[0].cell.p50).map(x => x.engine).join(' = ') : '—');
-  lines.push(`| ${key} | ${labels.join(' | ')} | ${new Set(labels.filter(x => x !== '—')).size > 1 ? 'yes' : 'no'} |`);
+  // A column that measured one engine (WebKit: IndexedDB only) cannot straddle anything.
+  const multi = reports.map(r => new Set(r.results.filter(row => row.scale === scale).map(row => row.engine)).size > 1);
+  lines.push(`| ${key} | ${labels.join(' | ')} | ${new Set(labels.filter((x, i) => multi[i] && x !== '—')).size > 1 ? 'yes' : 'no'} |`);
 }
 let text = await readFile(target, 'utf8');
 const previous = text.match(/<!-- measuredAt:(.*?) -->/)?.[1];

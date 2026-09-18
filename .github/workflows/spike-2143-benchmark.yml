@@ -1,11 +1,7 @@
 name: Spike 2143 storage benchmark
-# workflow_dispatch only resolves for files on the default branch, so the spike branch
-# also runs on push. Drop the push trigger before this merges anywhere.
-on:
-  workflow_dispatch:
-  push:
-    branches: [spike/2143-storage-benchmark]
-    paths: ['.github/workflows/spike-2143-benchmark.yml', 'spikes/2143-storage-benchmark/**']
+# workflow_dispatch only resolves for files on the default branch. To re-run from a branch,
+# add a temporary `push: { branches: [<branch>] }` trigger (as runs 35327100216 and 35328362910 did).
+on: workflow_dispatch
 permissions:
   contents: read
 jobs:
