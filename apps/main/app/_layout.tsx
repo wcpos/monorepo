@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { Uniwind, useUniwind } from 'uniwind';
 
+import { GalleryRootLayout, IS_GALLERY_BUILD } from '@wcpos/main/components/gallery/registry';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
@@ -130,6 +131,13 @@ function ThemedToaster() {
 }
 
 export default function RootLayout() {
+	// A build-time constant: false in every merchant build (Metro resolves the gallery
+	// registry to its stub), so production never reads the route to decide anything.
+	if (IS_GALLERY_BUILD) return <GalleryRootLayout merchant={MerchantRootLayout} />;
+	return <MerchantRootLayout />;
+}
+
+function MerchantRootLayout() {
 	const clearLocalDataState = useClearLocalDataOnStartup();
 
 	if (clearLocalDataState === 'clearing') {

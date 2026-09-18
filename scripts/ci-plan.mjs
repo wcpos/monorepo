@@ -108,6 +108,7 @@ export function classify(file) {
 
 function everythingPlan(detail) {
 	return {
+		gallery: true,
 		lint: true,
 		unit: 'all',
 		web: 'full',
@@ -193,6 +194,7 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 		if (nonBehavioural) {
 			const detail = 'only documentation or comment-only code changed';
 			return {
+				gallery: false,
 				lint: false,
 				unit: 'none',
 				web: 'none',
@@ -206,6 +208,21 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 		if (fallback !== -1) return everythingPlan(`${changedFiles[fallback]} matched no rule`);
 
 		const plan = {
+			gallery: changedFiles.some(
+				(file) =>
+					/^(packages\/components\/|packages\/core\/src\/screens\/|apps\/main\/(app\/\(gallery\)\/|components\/gallery\/|gallery\/))/.test(
+						file
+					) ||
+					[
+						'apps/main/global.css',
+						'apps/main/app/_layout.tsx',
+						'apps/main/metro.config.js',
+						'apps/main/playwright.gallery.config.ts',
+						'.github/workflows/test.yml',
+						'.github/actions/ci-plan/action.yml',
+						'scripts/ci-plan.mjs',
+					].includes(file)
+			),
 			lint: false,
 			unit: 'none',
 			web: 'none',
@@ -367,7 +384,7 @@ function emit(plan) {
 	// $GITHUB_OUTPUT is one `key=value` per line; a newline inside a value (a
 	// multi-line git error in `reason`) would corrupt the file and fail the
 	// changes job instead of falling back to the everything-plan.
-	for (const key of ['lint', 'unit', 'web', 'only_specs', 'native', 'self', 'reason'])
+	for (const key of ['lint', 'unit', 'web', 'only_specs', 'native', 'self', 'gallery', 'reason'])
 		console.log(`${key}=${String(plan[key]).replace(/[\r\n]+/g, ' ')}`);
 }
 

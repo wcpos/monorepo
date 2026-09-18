@@ -55,6 +55,13 @@ const workspaceSourceRoots = {
 
 const _baseResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+	if (moduleName === '@wcpos/main/components/gallery/registry') {
+		const gallery = process.env.EXPO_PUBLIC_WCPOS_GALLERY === '1' && platform === 'web';
+		return {
+			type: 'sourceFile',
+			filePath: path.join(__dirname, `components/gallery/registry${gallery ? '' : '.stub'}.tsx`),
+		};
+	}
 	if (moduleName === 'rxdb-premium/plugins/shared') {
 		return { type: 'sourceFile', filePath: rxdbPremiumESMShared };
 	}

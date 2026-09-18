@@ -1,0 +1,41 @@
+import { expect, test } from '@playwright/test';
+
+test('gallery cells', async ({ page }, testInfo) => {
+	const smoke = testInfo.project.ignoreSnapshots && !process.env.CI;
+	if (!smoke && process.platform !== 'linux') {
+		throw new Error(
+			'Gallery comparison requires Linux. CI is the only baseline writer. Use --ignore-snapshots for a local smoke shoot.'
+		);
+	}
+	if (testInfo.project.ignoreSnapshots && process.env.CI)
+		throw new Error('CI must compare gallery baselines.');
+	if (!smoke && testInfo.config.updateSnapshots !== 'none' && !process.env.CI) {
+		throw new Error('CI is the only gallery baseline writer.');
+	}
+	await page.goto('/gallery');
+	const links = page.locator('[data-gallery-component]');
+	await expect(links.first()).toBeVisible();
+	const components = await links.evaluateAll((nodes) =>
+		nodes.map((node) => node.getAttribute('data-gallery-component')!)
+	);
+	let count = 0;
+	for (const component of components) {
+		for (const theme of ['light', 'dark']) {
+			await page.goto(`/gallery/${component}?theme=${theme}`);
+			const cells = page.locator('[data-cell-id]');
+			await expect(cells.first()).toBeVisible();
+			const ids = await cells.evaluateAll((nodes) =>
+				nodes.map((node) => node.getAttribute('data-cell-id')!)
+			);
+			for (const id of ids) {
+				const cell = page.getByTestId(id);
+				if (smoke)
+					await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
+				else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
+				count++;
+			}
+		}
+	}
+	expect(count).toBeGreaterThan(0);
+	process.stdout.write(`Gallery cells found: ${count}\n`);
+});
