@@ -73,8 +73,10 @@ function AppStack() {
 	const t = useT();
 
 	React.useEffect(() => {
-		// The diagnostic timers belong to the native app lifecycle and must stop on unmount.
-		if (Platform.OS === 'web' || !STORAGE_TIMING_PROBE_ENABLED) return;
+		// The diagnostic timers belong to the app lifecycle and must stop on unmount. Every
+		// platform reports: the storage boundary is a worker on web, IPC on Electron and the
+		// JS thread on native, and the same probe puts a number on each (wayfinder #2141).
+		if (!STORAGE_TIMING_PROBE_ENABLED) return;
 		return startStorageTimingReporter();
 	}, []);
 
