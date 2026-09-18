@@ -1249,10 +1249,10 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 				// requirement (the drain lane finishes it later). Presence gate first.
 				//
 				// This one does NOT go through `runSeedDrain`: presence requests use RESIDENCY;
-				// forced refreshes also reject owned failures. It re-checks after every tick,
+				// forced refreshes require owned completions. It re-checks after every tick,
 				// waits out another owner's active claim with a bounded backoff instead of
-				// releasing on it, and reports the ids it pulled — so it shares the drain
-				// arguments (`drainScheduler`) and nothing else.
+				// releasing on it, and reports the ids it pulled. Forced requests share the
+				// drain outcome classifier, but keep this residency/active-wait loop.
 				const remoteIds = item.requirement.remoteIds ?? [];
 				if (remoteIds.length === 0) {
 					throw new Error("require: 'targeted-records' needs remoteIds");
@@ -1290,9 +1290,12 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					remainingActiveOrderWaitMs(remaining.length);
 					let skippedActive = 0;
 					let failed = 0;
+					let refreshOutcome: CoverageOutcome | undefined;
+					let refreshPending = false;
 					const applied = await bound.guardWrite(async () => {
 						const nowMs = now();
 						const seedResult = await seedTargetedOrderSchedulerTask({
+							wakeFailed: item.requirement.forceRefresh,
 							remoteIds: remaining,
 							priority: item.priority,
 							completedDedupeForMs: 0,
@@ -1307,17 +1310,41 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 						failed = drainResult.tasks.filter(
 							(outcome) => ownedTaskIds.has(outcome.taskId) && outcome.kind === 'failed'
 						).length;
+						if (item.requirement.forceRefresh && failed === 0) {
+							refreshOutcome = drainResult.ledgerRebuilt
+								? {
+										action: 'released',
+										missingRecordIds: [],
+										reason: 'local sync bookkeeping was rebuilt mid-drain',
+									}
+								: requirementDrainOutcome({
+										drain: drainResult,
+										seed: seedResult,
+										fetchedReason: 'orders refreshed',
+										freshReason: 'orders already fresh',
+									});
+							refreshPending = !seedResult.taskIds.every((id) =>
+								drainResult.tasks.some((task) => task.taskId === id && task.kind === 'succeeded')
+							);
+						}
 					});
 					if (applied === 'dropped') {
 						throw new Error('require: scope moved mid-pull — writes dropped');
 					}
 					if (item.abortController.signal.aborted) return releasedOutcome();
-					remaining = await missingRemoteIds(database, orderWooIdLookup, remaining);
+					const absent = await missingRemoteIds(database, orderWooIdLookup, remaining);
 					if (item.requirement.forceRefresh && failed > 0) {
 						throw new Error(
-							`require: forced refresh failed ${failed} task(s) for ${remoteIds.length - remaining.length} resident order(s)`
+							`require: forced refresh failed ${failed} task(s) for ${remoteIds.length - absent.length} resident order(s)`
 						);
 					}
+					// Forced resident refreshes are fetched only after every seeded task has an owned
+					// completion. Other outcomes use the shared classification; active tasks wait.
+					if (refreshOutcome?.action === 'released') return refreshOutcome;
+					if (refreshPending && skippedActive === 0 && refreshOutcome) {
+						return refreshOutcome.action === 'fetched' ? releasedOutcome() : refreshOutcome;
+					}
+					if (!refreshPending) remaining = absent;
 					if (remaining.length === 0) break;
 					if (failed > 0) {
 						throw new Error(
@@ -1351,7 +1378,8 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 					if (!bound.isCurrent()) {
 						throw new Error('require: scope moved while waiting for an active order task');
 					}
-					remaining = await missingRemoteIds(database, orderWooIdLookup, remaining);
+					if (!item.requirement.forceRefresh)
+						remaining = await missingRemoteIds(database, orderWooIdLookup, remaining);
 				}
 				return {
 					action: 'fetched' as const,
