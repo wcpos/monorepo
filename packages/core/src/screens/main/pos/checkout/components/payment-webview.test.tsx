@@ -8,6 +8,7 @@ import { BehaviorSubject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { LegacyTab } from '../tender/legacy-tab';
 import { persistSaleProvenance, prepareSale } from '../sale-completion';
 import { recordCompletionAttempt } from '../completion-journal';
 import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview';
@@ -17,6 +18,7 @@ import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview
 let webViewProps: Record<string, any> = {};
 // Every mount of the (mocked) WebView: a reload is a remount (new `key`).
 let webViewMounts = 0;
+const mockPostMessage = jest.fn();
 const mockGet = jest.fn();
 const mockReplace = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
@@ -48,11 +50,45 @@ jest.mock('@wcpos/components/webview', () => {
 			webViewProps = props;
 			R.useEffect(() => {
 				webViewMounts += 1;
+				return () => {
+					webViewProps = {};
+				};
 			}, []);
+			R.useImperativeHandle(props.ref, () => ({ postMessage: mockPostMessage }));
 			return null;
 		},
 	};
 });
+jest.mock('../hooks/use-checkout-session', () => ({
+	useCheckoutSession: () => ({ handleStockRejection: () => false }),
+}));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		onPress,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		testID: string;
+		onPress: () => void;
+		disabled: boolean;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@wcpos/components/vstack', () => ({
+	VStack: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -1174,7 +1210,7 @@ jest.mock('../completion-journal', () => ({
 }));
 
 let mockSessionsOn = false;
-const mockOpenSession = new BehaviorSubject<{ id: string } | null>(null);
+const mockOpenSession = new BehaviorSubject<{ id: string; status?: string } | null>(null);
 const mockSessions = { findOne: jest.fn() };
 describe('pay-page session gate', () => {
 	beforeEach(() => {
@@ -1195,6 +1231,107 @@ describe('pay-page session gate', () => {
 		mockSessionsOn = false;
 		mockOnlineStatus = 'offline';
 		jest.mocked(persistSaleProvenance).mockReset();
+	});
+	it.each(['counting', 'closed', 'missing'])(
+		'ready session A becomes %s: hides and stalls once, then re-prepares in B',
+		async (status) => {
+			const sessionA = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
+			const preparedSession = new BehaviorSubject<typeof sessionA | null>(sessionA);
+			mockOpenSession.next(sessionA);
+			mockSessions.findOne.mockImplementation((query: unknown) =>
+				typeof query === 'string'
+					? { $: preparedSession }
+					: { exec: async () => mockOpenSession.value, $: mockOpenSession }
+			);
+			const order = makeOrder(undefined, [
+				{ key: '_wcpos_sale_counter', value: '7' },
+				{ key: '_wcpos_session', value: 'session-A' },
+			]);
+			const setFrameStatus = jest.fn();
+			const view = render(
+				<PaymentWebview
+					order={order}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+				/>
+			);
+			await act(async () => {});
+			act(() => webViewProps.onLoad({}));
+			expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+			jest.mocked(persistSaleProvenance).mockClear();
+			mockLocalPatch.mockClear();
+			mockPushDocument.mockClear();
+			await act(async () => {
+				mockOpenSession.next(null);
+				preparedSession.next(status === 'missing' ? null : { ...sessionA, status });
+				preparedSession.next(status === 'missing' ? null : { ...sessionA, status });
+			});
+			expect(webViewProps.src).toBeUndefined();
+			expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+			expect(preparedSession.observed).toBe(false);
+			expect(persistSaleProvenance).not.toHaveBeenCalled();
+			expect(mockLocalPatch).not.toHaveBeenCalled();
+			expect(mockPushDocument).not.toHaveBeenCalled();
+			const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+			expect(logger.info).toHaveBeenCalledTimes(1);
+			expect(logger.info).toHaveBeenCalledWith(
+				'pos_checkout.open_register_first',
+				expect.objectContaining({ showToast: true })
+			);
+			const sessionB = { ...sessionA, id: 'session-B' };
+			await act(async () => {
+				preparedSession.next(sessionB);
+				mockOpenSession.next(sessionB);
+			});
+			expect(prepareSale).toHaveBeenCalledTimes(2);
+			expect(persistSaleProvenance).toHaveBeenCalledTimes(1);
+			expect(mockSessions.findOne).toHaveBeenCalledWith('session-B');
+			expect(webViewProps.src).toContain('/order-pay/42');
+			expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+				key: '_wcpos_session',
+				value: 'session-B',
+			});
+			await act(async () => mockOpenSession.next({ ...sessionB }));
+			expect(prepareSale).toHaveBeenCalledTimes(2);
+			view.unmount();
+			expect(preparedSession.observed).toBe(false);
+		}
+	);
+	it('closing ready session A leaves LegacyTab Process Payment disabled without a new session', async () => {
+		const session = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
+		const preparedSession = new BehaviorSubject(session);
+		mockOpenSession.next(session);
+		mockSessions.findOne.mockImplementation((query: unknown) =>
+			typeof query === 'string'
+				? { $: preparedSession }
+				: { exec: async () => mockOpenSession.value, $: mockOpenSession }
+		);
+		const view = render(
+			<LegacyTab
+				order={makeOrder()}
+				flow={
+					{
+						hasLiveLeg: false,
+						legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
+						saveState: null,
+					} as never
+				}
+			/>
+		);
+		await act(async () => {});
+		act(() => webViewProps.onLoad({}));
+		const button = view.getByTestId('checkout-legacy-process-payment') as HTMLButtonElement;
+		expect(button.disabled).toBe(false);
+		await act(async () => {
+			mockOpenSession.next(null);
+			preparedSession.next({ ...session, status: 'closed' });
+		});
+		expect(button.disabled).toBe(true);
+		expect(webViewProps.src).toBeUndefined();
+		act(() => button.click());
+		expect(mockPostMessage).not.toHaveBeenCalled();
+		expect(prepareSale).toHaveBeenCalledTimes(1);
 	});
 	it('opening a session recovers the legacy frame exactly once without a retryToken', async () => {
 		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
@@ -1218,7 +1355,7 @@ describe('pay-page session gate', () => {
 		);
 		expect(webViewMounts).toBe(0);
 		expect(prepareSale).toHaveBeenCalledTimes(1);
-		const session = { id: 'session-B', incrementalPatch: async () => undefined };
+		const session = { id: 'session-B', status: 'open', incrementalPatch: async () => undefined };
 		mockSessions.findOne.mockReturnValue({ exec: async () => session, $: mockOpenSession });
 		await act(async () => mockOpenSession.next(session));
 		expect(prepareSale).toHaveBeenCalledTimes(2);
@@ -1292,6 +1429,7 @@ describe('pay-page session gate', () => {
 		mockOnlineStatus = 'online-website-unavailable';
 		mockSessions.findOne.mockReturnValue({
 			exec: async () => ({ id: 'session-42', incrementalPatch: async () => undefined }),
+			$: new BehaviorSubject({ id: 'session-42', status: 'open' }),
 		});
 		let finish!: () => void;
 		const pendingPreparation = new Promise<void>((resolve) => {
@@ -1344,6 +1482,7 @@ describe('pay-page session gate', () => {
 		expect(webViewProps.src).toContain('/order-pay/42');
 		await act(async () => {});
 		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+		expect(mockSessions.findOne).not.toHaveBeenCalled();
 		expect(mockLocalPatch).not.toHaveBeenCalled();
 		expect(mockPushDocument).not.toHaveBeenCalled();
 		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).info).not.toHaveBeenCalled();
@@ -1379,6 +1518,7 @@ describe('pay-page session gate', () => {
 			mockSessionsOn = enabled;
 			mockSessions.findOne.mockReturnValue({
 				exec: async () => ({ id: 'session-42', incrementalPatch: async () => undefined }),
+				$: new BehaviorSubject({ id: 'session-42', status: 'open' }),
 			});
 			render(
 				<PaymentWebview
@@ -1395,6 +1535,7 @@ describe('pay-page session gate', () => {
 				enabled ? [{ key: '_wcpos_session', value: 'session-42' }] : []
 			);
 			expect(mockPushDocument).toHaveBeenCalledTimes(1);
+			if (!enabled) expect(mockSessions.findOne).not.toHaveBeenCalled();
 			expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).info).not.toHaveBeenCalledWith(
 				'pos_checkout.open_register_first',
 				expect.anything()

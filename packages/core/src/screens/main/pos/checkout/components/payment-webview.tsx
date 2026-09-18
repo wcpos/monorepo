@@ -138,6 +138,7 @@ export function PaymentWebview({
 		uuid: string;
 		status: 'ready' | 'failed';
 		sessionRequired?: boolean;
+		sessionId?: string | null;
 	} | null>(null);
 	// Sessions require preparation even offline: a stale probe may hide a reachable
 	// pay page. Online also waits for provenance; failed preparation stays closed.
@@ -215,13 +216,14 @@ export function PaymentWebview({
 					orderLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
 					return;
 				}
+				const { sessionId } = prepared;
 				await persistSaleProvenance(ctx, {
 					order: currentOrder,
 					source: 'gateway-snapshot',
-					sessionId: prepared.sessionId,
+					sessionId,
 					online,
 				});
-				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready' });
+				if (active) setPreparation({ uuid: currentOrder.uuid, status: 'ready', sessionId });
 			} catch (error) {
 				if (!active) return;
 				setPreparation({
@@ -258,15 +260,26 @@ export function PaymentWebview({
 		sessionsOn,
 	]);
 
-	// Only a session refusal observes reopening; other failures still need the existing retry.
+	// Readiness follows the prepared row; only a session refusal observes reopening.
 	React.useEffect(() => {
-		if (preparation?.uuid !== order.uuid || !preparation?.sessionRequired || !sessionsOn) return;
+		if (preparation?.uuid !== order.uuid || !sessionsOn) return;
+		const sessionId = preparation.status === 'ready' ? preparation.sessionId : null;
+		if (!sessionId && !preparation.sessionRequired) return;
+		const id = registerId ?? '';
+		const open = { register_id: id, status: 'open', sync_status: { $ne: 'failed' } } as const;
 		const subscription = ctx.sessions
-			?.findOne({
-				selector: { register_id: registerId ?? '', status: 'open', sync_status: { $ne: 'failed' } },
-			})
-			.$.pipe(filter(Boolean), take(1))
-			.subscribe(() => setSessionRetry((value) => value + 1));
+			?.findOne(sessionId ?? { selector: open })
+			.$.pipe(
+				filter((session) => (sessionId ? session?.status !== 'open' : !!session)),
+				take(1)
+			)
+			.subscribe(() => {
+				if (!sessionId) return setSessionRetry((value) => value + 1);
+				setPreparation({ uuid: order.uuid, status: 'failed', sessionRequired: true });
+				const { setFrameStatus, orderLogger, t } = collaborators.current;
+				setFrameStatus('stalled');
+				presentSessionRequired(orderLogger, t);
+			});
 		return () => subscription?.unsubscribe();
 	}, [ctx.sessions, registerId, order.uuid, preparation, sessionsOn]);
 
@@ -665,9 +678,9 @@ export function PaymentWebview({
 	React.useLayoutEffect(() => {
 		loadCountRef.current = 0;
 		frameSettledRef.current = false;
-		setFrameStatus('loading');
+		setFrameStatus(prepared === 'failed' ? 'stalled' : 'loading');
 		return () => setFrameStatus('loading');
-	}, [paymentURLWithToken, frameKey, setFrameStatus]);
+	}, [paymentURLWithToken, frameKey, prepared, setFrameStatus]);
 
 	/**
 	 * The load watchdog. Runs for every navigation of the first document (a new

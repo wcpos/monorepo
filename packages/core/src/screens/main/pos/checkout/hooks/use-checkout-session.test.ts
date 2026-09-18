@@ -643,6 +643,30 @@ describe('contract session gate', () => {
 		expect(result.current.loading).toBe(false);
 		expect(mockCheckoutError).not.toHaveBeenCalled();
 	});
+	it('session closes during bootstrap: refuses the payment POST with a toast and no second journal write', async () => {
+		mockSessions.findOne.mockReturnValue({
+			exec: async () => ({ id: 'session-A', incrementalPatch: async () => undefined }),
+		});
+		mockPost.mockImplementationOnce(async () => {
+			mockSessions.findOne.mockReturnValue({ exec: async () => null });
+			return { data: { status: 'ready' } };
+		});
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => result.current.startCheckout());
+		expect(mockPost.mock.calls.map(([url]) => url)).toEqual([
+			'payment-gateways/stripe_terminal_for_woocommerce/bootstrap',
+		]);
+		expect(mockCheckoutInfo).toHaveBeenCalledTimes(1);
+		expect(mockCheckoutInfo).toHaveBeenCalledWith(
+			'pos_checkout.open_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(recordCompletionAttempt).toHaveBeenCalledTimes(1);
+		expect(result.current.error).toBeNull();
+		expect(result.current.loading).toBe(false);
+		expect(mockCheckoutError).not.toHaveBeenCalled();
+	});
 	it('retrying a pre-stamped unpaid contract order attributes it to the newly open session', async () => {
 		const retryOrder = makeOrder();
 		const identity = [

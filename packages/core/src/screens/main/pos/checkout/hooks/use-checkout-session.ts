@@ -7,7 +7,10 @@ import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
+import {
+	RegisterSessionRequiredError,
+	requireOpenSession,
+} from '../../../../../services/register-session/session-store';
 import { presentSessionRequired } from '../session-required';
 import { persistSaleProvenance, prepareSale } from '../sale-completion';
 import { useSaleContext } from './use-sale-context';
@@ -171,6 +174,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		}
 
 		try {
+			let registerId: string | null = null;
 			try {
 				// A gateway sale completes the whole balance, so a store with several registers
 				// and none chosen cannot start one; the picker is on the cart.
@@ -185,6 +189,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 					checkoutLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
 					return;
 				}
+				registerId = prepared.registerId;
 				if (online)
 					await persistSaleProvenance(ctx, {
 						order,
@@ -213,6 +218,8 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				context: { order_id: orderId },
 			});
 
+			// Recheck after bootstrap without resetting the completion journal via prepareSale.
+			await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn);
 			// Last point at which no money has moved (#163 ruling R5). The gateway
 			// refetch and the bootstrap POST above are both awaits the worker can die
 			// under, so re-read the latch here rather than trusting the check made
@@ -279,6 +286,9 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 
 			throw new Error(state.status || 'checkout_failed');
 		} catch (err) {
+			if (err instanceof RegisterSessionRequiredError) {
+				return presentSessionRequired(checkoutLogger, t);
+			}
 			if (handleStockRejection(err)) return;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
