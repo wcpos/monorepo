@@ -117,6 +117,7 @@ function createFakeOpfsInstance({ documents, corruptId, gapBefore }) {
   const changelogOperations = [];
   const accessHandle = {
     read: async (start, end) => documentBytes.subarray(start, end),
+    getSize: async () => documentBytes.length,
   };
 
   return {
@@ -273,7 +274,11 @@ test("propagates the retry error and reports the initial cleanup error", async (
   const retryError = new Error("retry cleanup failure");
   let cleanupCalls = 0;
   const documentFileHandle = {
-    createAccessHandle: async () => ({ read: async () => Buffer.alloc(0) }),
+    // Every range reads blank inside a file large enough to hold it.
+    createAccessHandle: async () => ({
+      read: async () => Buffer.alloc(0),
+      getSize: async () => Number.MAX_SAFE_INTEGER,
+    }),
   };
   const instance = {
     primaryPath: "id",
@@ -355,7 +360,10 @@ for (const collectionName of ["logs", "orders"]) {
         firstIdx: indexes[0],
         indexStates: indexes,
         documentFileHandle: {
-          createAccessHandle: async () => ({ read: async () => bytes }),
+          createAccessHandle: async () => ({
+            read: async () => bytes,
+            getSize: async () => bytes.length,
+          }),
         },
         changelog: {
           addChangelogOperations: async (_, ops) => operations.push(...ops),
@@ -460,7 +468,10 @@ test("drops every index row sharing one whitespace range, not just the first", a
     firstIdx: indexes[0],
     indexStates: indexes,
     documentFileHandle: {
-      createAccessHandle: async () => ({ read: async () => bytes }),
+      createAccessHandle: async () => ({
+        read: async () => bytes,
+        getSize: async () => bytes.length,
+      }),
     },
     changelog: {
       addChangelogOperations: async (_, ops) => operations.push(...ops),

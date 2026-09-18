@@ -251,6 +251,39 @@ for (const scenario of [
 			}
 			// First storage cleanup after this boot; no 60-second wall-clock wait is
 			// needed to exercise the timer's target method and its catch/retry path.
+			if (scenario === 'other instance compacts') {
+				// This instance's rows are stale relative to a file another writer
+				// compacted and baked. Recovery must refuse them, never drop them: the
+				// stale instance fails loudly and the baked index stays authoritative.
+				await assert.rejects(boot.cleanup(0), /range-past-eof/);
+				await boot.taskQueue.awaitIdle();
+				const kinds = events.map((e) => `${e.kind}:${e.reason ?? ''}`).join(' ');
+				assert.ok(
+					!events.some((e) => e.kind === 'hollow-row-dropped'),
+					`no row may be dropped past EOF: ${kinds}`
+				);
+				assert.ok(
+					events.some((e) => e.kind === 'hollow-row-refused' && e.reason === 'range-past-eof'),
+					`the refusal is reported by reason: ${kinds}`
+				);
+				assert.deepEqual(
+					JSON.parse(readFileSync(documentsPath)),
+					expected,
+					'the document bytes stay at the moved position'
+				);
+				const indexFile = (await bootState.firstIdx.fileHandlePromise).filepath;
+				assert.ok(
+					readFileSync(indexFile, 'utf8').includes('login'),
+					'the baked primary index still holds the row'
+				);
+				const reopened = await open('third-process');
+				assert.deepEqual(
+					await reopened.findDocumentsById(['login'], false),
+					[expected],
+					'a fresh instance reads the row where the other instance moved it'
+				);
+				return;
+			}
 			await boot.cleanup(0);
 			await boot.taskQueue.awaitIdle();
 			const actual = await boot.findDocumentsById(['login'], false);
@@ -264,17 +297,6 @@ for (const scenario of [
 					remaining: actual.length,
 				})
 			);
-			if (scenario === 'other instance compacts') {
-				assert.deepEqual(
-					JSON.parse(readFileSync(documentsPath)),
-					expected,
-					'the document bytes still exist at the moved position when recovery drops the row'
-				);
-				const indexFile = (await bootState.firstIdx.fileHandlePromise).filepath;
-				t.diagnostic(
-					`persisted primary index after recovery: ${JSON.stringify(readFileSync(indexFile, 'utf8'))}`
-				);
-			}
 			assert.deepEqual(actual, [expected], 'the live login row must survive its first cleanup');
 		} finally {
 			for (const instance of instances.reverse()) await instance.close();

@@ -115,7 +115,7 @@ function extractDocument(text, primaryPath, expectedId) {
 async function repairDocument(
   instance,
   documentId,
-  { discardInvalid = false, ownsRepairs = () => true } = {},
+  { discardInvalid = false, ownsRepairs = () => true, dropPastEof = false } = {},
 ) {
   const state = await instance.internals.statePromise;
   return instance.taskQueue.runCleanup(async (runState) => {
@@ -128,8 +128,11 @@ async function repairDocument(
     // Classify the range before demanding index parity: a blank range is
     // dropped from every index that still points at it, whether or not a
     // secondary row survived, so a lost secondary row cannot keep the hollow
-    // primary row indexed.
+    // primary row indexed. A range past EOF is refused unless the caller
+    // carries the document (see rangePastEof).
     const accessHandle = await documentsAccessHandle(state, runState);
+    if (!dropPastEof && (await rangePastEof(accessHandle, oldEnd)))
+      return "range-past-eof";
     const damagedBytes = await accessHandle.read(oldStart, oldEnd);
     if (isBlankBytes(damagedBytes)) {
       await dropIndexRowsForRange(state, runState, oldStart, oldEnd);
@@ -182,6 +185,21 @@ async function repairDocument(
   });
 }
 
+// A range that ends past the end of documents.json is NOT a hollow row. The
+// file has no bytes there, so filesystem-node's read() hands back a zero-filled
+// buffer that reads as blank; the rows pointing at it are this instance's stale
+// copy of an index that another writer has since compacted and baked (two
+// desktop processes on one install, electron#464). Dropping them deleted a
+// live login row whose bytes sat at the new position
+// (opfs-first-cleanup-hollow-drop.test.mjs). The read and cleanup paths
+// refuse such a row instead: the stale instance fails loudly and the baked
+// index on disk stays authoritative. The write path alone still drops it
+// (`dropPastEof`): the write carries the whole document, so the drop is
+// followed by an insert of the new revision and nothing is lost (#2114).
+async function rangePastEof(accessHandle, end) {
+  return end > (await accessHandle.getSize());
+}
+
 // A blank range is whitespace (compaction's own fill) or NUL (a Windows
 // zero-fill after a crash); both drop the same way. The positional "D" op is
 // broadcast like any other storage op. Like the per-id hollow probe, this
@@ -191,10 +209,23 @@ async function dropWhitespaceRows(instance, target, ownsRepairs = () => true) {
   return instance.taskQueue.runCleanup(async (runState) => {
     const refusal = ownsRepairs() ? undefined : "multi-instance";
     const accessHandle = await documentsAccessHandle(state, runState);
+    const fileSize = await accessHandle.getSize();
     for (const indexState of state.indexStates) {
       let position = indexState.rows.length;
       while (position--) {
         const row = indexState.rows[position];
+        if (row[2] > fileSize) {
+          if (indexState === state.firstIdx)
+            report("hollow-row-refused", {
+              target,
+              reason: "range-past-eof",
+              id: getPrimaryKeyFromIndexableString(
+                row[0],
+                indexState.primaryKeyLength,
+              ),
+            });
+          continue;
+        }
         const bytes = await accessHandle.read(row[1], row[2]);
         if (!isBlankBytes(bytes)) continue;
         if (!refusal) await dropIndexRow(state, runState, indexState, position);
@@ -242,7 +273,7 @@ async function dropWhitespaceRows(instance, target, ownsRepairs = () => true) {
 async function dropHollowRows(
   instance,
   documentIds,
-  { discardForeign = false, ownsRepairs = () => true } = {},
+  { discardForeign = false, ownsRepairs = () => true, dropPastEof = false } = {},
 ) {
   const state = await instance.internals.statePromise;
   return instance.taskQueue.runCleanup(async (runState) => {
@@ -257,6 +288,10 @@ async function dropHollowRows(
         continue;
       }
       const [, start, end] = primaryRow;
+      if (!dropPastEof && (await rangePastEof(accessHandle, end))) {
+        outcomes.set(documentId, "range-past-eof");
+        continue;
+      }
       const foreign = !isBlankBytes(await accessHandle.read(start, end));
       if (foreign && !discardForeign) {
         outcomes.set(documentId, "range-holds-foreign-bytes");
@@ -618,7 +653,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
         });
       };
 
-      const dropHollowIds = async (hollow) => {
+      const dropHollowIds = async (hollow, { dropPastEof = false } = {}) => {
         const refused = [];
         if (hollow.length === 0) return refused;
         // Only the sole repair owner may mutate positions (#1057, #1049).
@@ -636,6 +671,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
         const outcomes = await dropHollowRows(instance, hollow, {
           discardForeign: params.collectionName === "logs",
           ownsRepairs: soleRepairOwner,
+          dropPastEof,
         });
         for (const [id, outcome] of outcomes) {
           if (outcome === "discarded-foreign-bytes") {
@@ -670,7 +706,11 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
             : { batchSize: batch.length }),
         });
 
-      const repairMalformedIds = async (ids, onMalformedBatch) => {
+      const repairMalformedIds = async (
+        ids,
+        onMalformedBatch,
+        { dropPastEof = false } = {},
+      ) => {
         const repairBatch = async (batch) => {
           let documents;
           try {
@@ -688,6 +728,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
               const failure = await repairDocument(instance, batch[0], {
                 discardInvalid: params.collectionName === "logs",
                 ownsRepairs: soleRepairOwner,
+                dropPastEof,
               });
               if (failure === "hollow-row-dropped") {
                 report("hollow-row-dropped", { target, id: batch[0] });
@@ -726,7 +767,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
           // by key and replaces them in place.
           const hollow = await findHollowIds(batch, documents, true);
           if (hollow.length === 0) return false;
-          const refused = await dropHollowIds(hollow);
+          const refused = await dropHollowIds(hollow, { dropPastEof });
           onMalformedBatch?.();
           if (refused.length === hollow.length) return false;
           return true;
@@ -1008,6 +1049,8 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
           if (!isMalformedJson(error)) throw error;
           await repairMalformedIds(
             documentWrites.map((row) => row.document[instance.primaryPath]),
+            undefined,
+            { dropPastEof: true },
           );
           const retried = await withoutStalePrevious(documentWrites);
           try {
@@ -1026,10 +1069,14 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
         );
         let malformedBatch = false;
         if (ids.some((id) => !cleanIds.has(id))) {
-          await repairMalformedIds(ids, () => {
-            malformedBatch = true;
-            cleanIds.clear();
-          });
+          await repairMalformedIds(
+            ids,
+            () => {
+              malformedBatch = true;
+              cleanIds.clear();
+            },
+            { dropPastEof: true },
+          );
           if (!malformedBatch) {
             for (const id of ids) cleanIds.add(id);
           }
