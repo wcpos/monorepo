@@ -6,10 +6,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Uniwind } from 'uniwind';
 
+import { stories as breadcrumb } from '@wcpos/components/breadcrumb/gallery';
 import { stories as button } from '@wcpos/components/button/gallery';
 import { stories as combobox } from '@wcpos/components/combobox/gallery';
 import { stories as icon } from '@wcpos/components/icon/gallery';
 import { stories as input } from '@wcpos/components/input/gallery';
+import { stories as pageBar } from '@wcpos/components/page-bar/gallery';
 import { PortalHost } from '@wcpos/components/portal';
 import { stories as select } from '@wcpos/components/select/gallery';
 import { Text } from '@wcpos/components/text';
@@ -18,7 +20,16 @@ import { stories as text } from '@wcpos/components/text/gallery';
 import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
 
-const registry: Record<string, Story[]> = { input, button, select, combobox, text, icon };
+const registry: Record<string, Story[]> = {
+	input,
+	button,
+	select,
+	combobox,
+	text,
+	icon,
+	breadcrumb,
+	'page-bar': pageBar,
+};
 
 function GalleryPage({ children }: React.PropsWithChildren) {
 	const { theme } = useLocalSearchParams<{ theme?: string }>();

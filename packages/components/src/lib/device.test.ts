@@ -1,8 +1,9 @@
+import * as React from 'react';
 import { Platform } from 'react-native';
 
 import { act, renderHook } from '@testing-library/react';
 
-import { useIsPhone, usePointer } from './device';
+import { DeviceScope, useIsPhone, usePointer } from './device';
 
 const mockDimensions = { width: 639, height: 800, scale: 1, fontScale: 1 };
 jest.mock('react-native', () => ({
@@ -67,4 +68,47 @@ it.each(['ios', 'android'] as const)('always returns coarse on %s, even with a t
 		throw new Error('native must not query web input');
 	};
 	expect(renderHook(usePointer).result.current).toBe('coarse');
+});
+
+it.each([
+	[true, 1200],
+	[false, 320],
+])('DeviceScope phone=%s overrides width %s', (phone, width) => {
+	mockDimensions.width = width as number;
+	const { result } = renderHook(useIsPhone, {
+		wrapper: ({ children }) =>
+			React.createElement(DeviceScope, { phone: phone as boolean }, children),
+	});
+	expect(result.current).toBe(phone);
+});
+
+it('DeviceScope overrides pointer while keeping the media subscription mounted', () => {
+	Platform.OS = 'web';
+	const addEventListener = jest.fn();
+	const removeEventListener = jest.fn();
+	window.matchMedia = jest.fn(
+		() => ({ matches: false, addEventListener, removeEventListener }) as unknown as MediaQueryList
+	);
+	const { result, rerender, unmount } = renderHook(usePointer, {
+		wrapper: ({ children }) => React.createElement(DeviceScope, { pointer: 'fine' }, children),
+	});
+	expect(result.current).toBe('fine');
+	rerender();
+	expect(addEventListener).toHaveBeenCalledTimes(2);
+	unmount();
+	expect(removeEventListener).toHaveBeenCalledTimes(2);
+});
+
+it('nested DeviceScopes merge rather than clearing an outer phone override', () => {
+	Platform.OS = 'ios';
+	mockDimensions.width = 1200;
+	const { result } = renderHook(() => [useIsPhone(), usePointer()], {
+		wrapper: ({ children }) =>
+			React.createElement(
+				DeviceScope,
+				{ phone: true, pointer: 'coarse' },
+				React.createElement(DeviceScope, { pointer: 'fine' }, children)
+			),
+	});
+	expect(result.current).toEqual([true, 'fine']);
 });
