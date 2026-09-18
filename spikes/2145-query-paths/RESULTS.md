@@ -21,8 +21,9 @@ page completely and the count only partly, and a small premium patch reaches the
 | Orders cashier pill, count (5,000 hits) | **94.7 s** | 13.5 s | 706 ms |
 | Orders cashier pill + open statuses, count (3,000 hits) | **94.2 s** | 7.5 s | 453 ms |
 
-Medians, timed inside the worker around premium's `query()`/`count()`. Page-side round trips are
-within 0.3 ms of these. Full tables, plans and the SQL are in the generated section below.
+Medians, timed inside the worker around premium's `query()`/`count()`. The page-side round trip
+through premium's worker RPC adds under 2 ms to any cell (1.4 ms on the 16.5 s logs page, 0.3 ms on
+the 1.3 ms orders page). Full tables, plans and the SQL are in the generated section below.
 
 ## What the mechanism costs, not just the time
 
@@ -33,10 +34,10 @@ within 0.3 ms of these. Full tables, plans and the SQL are in the generated sect
   temp b-tree (§18 of the research measured that same shape natively at 4 ms). **wasm + the
   opfs-sahpool VFS makes that page ~80x dearer than native.** The multiplier the ticket asked for is
   therefore two numbers: ~80x per page over native, and pages × 330 ms over the pushed query.
-- **A grid page needs `matches-per-page` pages.** Logs at 1 hit in 50 rows needs 50 pages (2,500
-  rows parsed in JS) for 50 results; two terms need 100. Orders at 1 hit in 4 needs 4 pages, 7 with
-  the status filter. Every page is a full sort of the table, so the grid page scales with
-  `table × (50 / hit-rate) / 50`.
+- **A grid page needs about `1 / hit-rate` fallback pages.** Each fetched page of 50 rows yields
+  `50 × h` matches, so 50 results take `1 / h` pages: logs at 1 hit in 50 rows needs 50 pages (2,500
+  rows parsed in JS); two terms need 100. Orders at 1 hit in 4 needs 4 pages, 7 with the status
+  filter. Every page is a full sort of the table, so the grid page costs `(1 / h) × table-sort`.
 - **A count pages the entire table**: 921 pages and 46,000 `JSON.parse`s on logs, 401 and 20,000 on
   orders, regardless of the term or the hit rate (the one- and two-term counts are within 1%).
 - **The modifier makes the first page the last page for a grid query**: the injected WHERE returns
@@ -216,7 +217,7 @@ Parameters: `["_pos_user","1","pos-open","pos-partial","pending",false]`
 
 ## Files
 
-- `sqlite-basics-oo1.mjs` — byte-identical copy of spike 2138's adapter.
+- `sqlite-basics-oo1.mjs` — spike 2138's adapter, unchanged apart from the repo formatter.
 - `sqlite-worker-entry.mjs` — 2138's worker plus: a `queryModifier` compiled in by esbuild's
   `--define:MODIFIER`, per-call timing/counting around `sqliteBasics.all`, and a type-tagged message
   handler for the `direct` and `explain` modes and for reading the worker-side counters.
