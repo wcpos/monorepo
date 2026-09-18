@@ -77,6 +77,10 @@ globalThis.runBench = async ({ engine, scale, databaseName }) => {
   const n = scale === 'small' ? 2000 : 20000, data = fixtures(n), cells = [];
   const instances = await open(engine, databaseName, ['products', 'orders', 'mutations']);
   for (const name of ['products', 'orders']) await seed(instances[name], data[name]);
+  // Without statistics SQLite's planner serves premium's `id IN (...) AND deleted = 0` from the
+  // deleted-leading expression index and scans every live row (2.1 s at 20k in Chrome; see
+  // probe-findbyids.chrome.json). An engine migration would ANALYZE after a resync; so does this row.
+  if (engine === 'sqlite-sahpool') await analyze(session.worker);
   const storageUsage = scale === 'large' ? (await navigator.storage.estimate()).usage : undefined;
   const seedBytes = Object.fromEntries(Object.entries(data).map(([k, docs]) => [k, docs.reduce((a, d) => a + JSON.stringify(d).length, 0) / n]));
   async function sample(name, count, setup) {
@@ -141,4 +145,67 @@ globalThis.coldRead = async ({ engine, databaseName }) => {
   const docs = await instances.products.findDocumentsById([uuid(1)], false), ms = performance.now() - start;
   if (docs.length !== 1) throw new Error('Cold read missing product');
   return { ms, rows: docs.length, signature: await signature(docs) };
+};
+
+function analyze(worker) {
+  return new Promise((resolve, reject) => {
+    const listener = ({ data: m }) => {
+      if (m?.type !== 'spike-2143-probe-result' || m.id !== 'analyze') return;
+      worker.removeEventListener('message', listener);
+      m.error ? reject(new Error(m.error)) : resolve(m.result);
+    };
+    worker.addEventListener('message', listener);
+    worker.postMessage({ type: 'spike-2143-probe', id: 'analyze', collection: 'products', action: 'sql', query: 'ANALYZE', params: [] });
+  });
+}
+globalThis.probeFindByIds = async ({ databaseName }) => {
+  const data = fixtures(20000), instances = await open('sqlite-sahpool', databaseName, ['products']);
+  await seed(instances.products, data.products);
+  const random = rng(2144), ids = [];
+  while (ids.length < 10) { const id = uuid(1 + Math.floor(random() * 20000)); if (!ids.includes(id)) ids.push(id); }
+  const worker = session.worker;
+  let sequence = 0;
+  const probe = message => new Promise((resolve, reject) => {
+    const id = ++sequence;
+    const listener = ({ data: m }) => {
+      if (m?.type !== 'spike-2143-probe-result' || m.id !== id) return;
+      worker.removeEventListener('message', listener);
+      if (m.error) reject(new Error(m.error)); else resolve(m.result);
+    };
+    worker.addEventListener('message', listener);
+    worker.postMessage({ type: 'spike-2143-probe', id, collection: 'products', ...message });
+  });
+  const measurements = {};
+  async function sample(name, run) {
+    const samplesMs = [];
+    let last;
+    for (let i = 0; i < 5; i++) {
+      const start = performance.now(), result = await run();
+      const { ms = performance.now() - start, ...details } = result;
+      samplesMs.push(ms); last = details;
+    }
+    measurements[name] = { ...last, samplesMs, medianMs: [...samplesMs].sort((a, b) => a - b)[2] };
+  }
+  const find = async () => ({ rows: (await instances.products.findDocumentsById(ids, false)).length });
+  const inner = `SELECT data FROM "$table" WHERE id IN (${ids.map(() => '?').join(', ')}) AND deleted = 0`;
+  const aggregate = `SELECT COALESCE('[' || group_concat(data, ',') || ']', '[]') as data FROM (${inner})`;
+  const sql = (name, query) => sample(name, () => probe({ action: 'sql', query, params: ids }));
+  await sample('a_page_findByIds_before', find);
+  await sql('b_worker_aggregate', aggregate);
+  await sql('c_worker_inner', inner);
+  await sql('d_worker_without_deleted', inner.replace(' AND deleted = 0', ''));
+  await sql('e_worker_ids_only', inner.replace('SELECT data', 'SELECT id').replace(' AND deleted = 0', ''));
+  for (const [name, query] of [['aggregate', aggregate], ['inner', inner]])
+    await sample(`f_explain_${name}`, () => probe({ action: 'explain', query, params: ids }));
+  for (const name of ['cache_size', 'page_size', 'page_count', 'journal_mode', 'locking_mode'])
+    await sample(`g_pragma_${name}`, () => probe({ action: 'pragma', name }));
+  await sample('h_page_findByIds_after', find);
+  const query = prepared('products', { uuid: { $in: ids } }, { sort: [{ uuid: 'asc' }] });
+  await sample('i_page_query_uuid_in', async () => ({ rows: (await instances.products.query(query)).documents.length }));
+  // Hypothesis: the planner picks the deleted-leading expression index for lack of statistics.
+  await sample('j_worker_analyze', () => probe({ action: 'sql', query: 'ANALYZE', params: [] }));
+  await sample('k_explain_inner_after_analyze', () => probe({ action: 'explain', query: inner, params: ids }));
+  await sample('l_page_findByIds_after_analyze', find);
+  await sql('m_worker_inner_after_analyze', inner);
+  return { databaseName, products: data.products.length, ids, measurements };
 };

@@ -1,0 +1,257 @@
+{
+ "databaseName": "spike2143-probe-1789722632275",
+ "products": 20000,
+ "ids": [
+  "00001340",
+  "00014949",
+  "00016682",
+  "00000620",
+  "00005755",
+  "00014279",
+  "00009743",
+  "00017440",
+  "00003861",
+  "00015028"
+ ],
+ "measurements": {
+  "a_page_findByIds_before": {
+   "rows": 10,
+   "samplesMs": [
+    2121.1150000095367,
+    1703.5550000071526,
+    2064.7900000214577,
+    2067.9950000047684,
+    2128.6299999952316
+   ],
+   "medianMs": 2067.9950000047684
+  },
+  "b_worker_aggregate": {
+   "tableName": "products-0",
+   "rows": 1,
+   "first": "{\"data\":\"[{\\\"uuid\\\":\\\"00014279\\\",\\\"remoteId\\\":\\\"14279\\\",\\\"price\\\":10,\\\"stockStatus\\\":\\\"instock\\\",\\\"type\\\":\\\"simple\\\",\\\"categoryIds\\\":[1],\\\"brandIds\\\":[],\\\"onSale\\\":false,\\\"featured\\\":false,\\\"stockQuan",
+   "samplesMs": [
+    2032.324999988079,
+    2107.439999997616,
+    2111.564999997616,
+    2118.75,
+    2128.060000002384
+   ],
+   "medianMs": 2111.564999997616
+  },
+  "c_worker_inner": {
+   "tableName": "products-0",
+   "rows": 10,
+   "first": "{\"data\":\"{\\\"uuid\\\":\\\"00014279\\\",\\\"remoteId\\\":\\\"14279\\\",\\\"price\\\":10,\\\"stockStatus\\\":\\\"instock\\\",\\\"type\\\":\\\"simple\\\",\\\"categoryIds\\\":[1],\\\"brandIds\\\":[],\\\"onSale\\\":false,\\\"featured\\\":false,\\\"stockQuant",
+   "samplesMs": [
+    2137.485000014305,
+    1956.0450000166893,
+    1984.8599999547005,
+    2093.625,
+    2117.064999997616
+   ],
+   "medianMs": 2093.625
+  },
+  "d_worker_without_deleted": {
+   "tableName": "products-0",
+   "rows": 10,
+   "first": "{\"data\":\"{\\\"uuid\\\":\\\"00000620\\\",\\\"remoteId\\\":\\\"620\\\",\\\"price\\\":10,\\\"stockStatus\\\":\\\"instock\\\",\\\"type\\\":\\\"simple\\\",\\\"categoryIds\\\":[1],\\\"brandIds\\\":[],\\\"onSale\\\":false,\\\"featured\\\":false,\\\"stockQuantit",
+   "samplesMs": [
+    2.2549999952316284,
+    0.11499994993209839,
+    0.06499999761581421,
+    0.04999995231628418,
+    0.050000011920928955
+   ],
+   "medianMs": 0.06499999761581421
+  },
+  "e_worker_ids_only": {
+   "tableName": "products-0",
+   "rows": 10,
+   "first": "{\"id\":\"00000620\"}",
+   "samplesMs": [
+    0.04500001668930054,
+    0.04500001668930054,
+    0.09500002861022949,
+    0.07999998331069946,
+    0.06000000238418579
+   ],
+   "medianMs": 0.06000000238418579
+  },
+  "f_explain_aggregate": {
+   "tableName": "products-0",
+   "plan": [
+    {
+     "id": 4,
+     "parent": 0,
+     "notused": 62,
+     "detail": "SEARCH products-0 USING INDEX rxdbspike2143-probe-1789722632275_products_0__deleted_payload_dot_name_uuid_idx (deleted=?)"
+    }
+   ],
+   "samplesMs": [
+    0.19499999284744263,
+    0.06000000238418579,
+    0.04500001668930054,
+    0.04500001668930054,
+    0.0350000262260437
+   ],
+   "medianMs": 0.04500001668930054
+  },
+  "f_explain_inner": {
+   "tableName": "products-0",
+   "plan": [
+    {
+     "id": 3,
+     "parent": 0,
+     "notused": 62,
+     "detail": "SEARCH products-0 USING INDEX rxdbspike2143-probe-1789722632275_products_0__deleted_payload_dot_name_uuid_idx (deleted=?)"
+    }
+   ],
+   "samplesMs": [
+    0.0350000262260437,
+    0.029999971389770508,
+    0.029999971389770508,
+    0.029999971389770508,
+    0.030000030994415283
+   ],
+   "medianMs": 0.029999971389770508
+  },
+  "g_pragma_cache_size": {
+   "tableName": "products-0",
+   "value": -8000,
+   "samplesMs": [
+    0.05500000715255737,
+    0.004999995231628418,
+    0.009999990463256836,
+    0.004999995231628418,
+    0.009999990463256836
+   ],
+   "medianMs": 0.009999990463256836
+  },
+  "g_pragma_page_size": {
+   "tableName": "products-0",
+   "value": 8192,
+   "samplesMs": [
+    0.009999990463256836,
+    0.010000050067901611,
+    0.02499997615814209,
+    0.019999980926513672,
+    0.02499997615814209
+   ],
+   "medianMs": 0.019999980926513672
+  },
+  "g_pragma_page_count": {
+   "tableName": "products-0",
+   "value": 5584,
+   "samplesMs": [
+    0.010000050067901611,
+    0.009999990463256836,
+    0.009999990463256836,
+    0.004999995231628418,
+    0.009999990463256836
+   ],
+   "medianMs": 0.009999990463256836
+  },
+  "g_pragma_journal_mode": {
+   "tableName": "products-0",
+   "value": "wal",
+   "samplesMs": [
+    0.01500004529953003,
+    0.009999990463256836,
+    0.004999995231628418,
+    0.004999995231628418,
+    0.009999990463256836
+   ],
+   "medianMs": 0.009999990463256836
+  },
+  "g_pragma_locking_mode": {
+   "tableName": "products-0",
+   "value": "exclusive",
+   "samplesMs": [
+    0.005000054836273193,
+    0.009999990463256836,
+    0.004999995231628418,
+    0.004999995231628418,
+    0.009999990463256836
+   ],
+   "medianMs": 0.005000054836273193
+  },
+  "h_page_findByIds_after": {
+   "rows": 10,
+   "samplesMs": [
+    2105.335000038147,
+    2112.3199999928474,
+    2000.1650000214577,
+    2081.7450000047684,
+    2110.2799999713898
+   ],
+   "medianMs": 2105.335000038147
+  },
+  "i_page_query_uuid_in": {
+   "rows": 10,
+   "samplesMs": [
+    2101.439999997616,
+    2159.7200000286102,
+    2147.2049999833107,
+    2170.5300000309944,
+    2140.310000002384
+   ],
+   "medianMs": 2147.2049999833107
+  },
+  "j_worker_analyze": {
+   "tableName": "products-0",
+   "rows": 0,
+   "first": "null",
+   "samplesMs": [
+    841.0550000071526,
+    831.2400000095367,
+    840.6699999570847,
+    780.8299999833107,
+    846.3799999952316
+   ],
+   "medianMs": 840.6699999570847
+  },
+  "k_explain_inner_after_analyze": {
+   "tableName": "products-0",
+   "plan": [
+    {
+     "id": 2,
+     "parent": 0,
+     "notused": 73,
+     "detail": "SEARCH products-0 USING PRIMARY KEY (id=?)"
+    }
+   ],
+   "samplesMs": [
+    0.20999997854232788,
+    0.050000011920928955,
+    0.06999999284744263,
+    0.04000002145767212,
+    0.034999966621398926
+   ],
+   "medianMs": 0.050000011920928955
+  },
+  "l_page_findByIds_after_analyze": {
+   "rows": 10,
+   "samplesMs": [
+    3.1949999928474426,
+    0.22999995946884155,
+    0.1950000524520874,
+    0.15999996662139893,
+    0.16500002145767212
+   ],
+   "medianMs": 0.1950000524520874
+  },
+  "m_worker_inner_after_analyze": {
+   "tableName": "products-0",
+   "rows": 10,
+   "first": "{\"data\":\"{\\\"uuid\\\":\\\"00000620\\\",\\\"remoteId\\\":\\\"620\\\",\\\"price\\\":10,\\\"stockStatus\\\":\\\"instock\\\",\\\"type\\\":\\\"simple\\\",\\\"categoryIds\\\":[1],\\\"brandIds\\\":[],\\\"onSale\\\":false,\\\"featured\\\":false,\\\"stockQuantit",
+   "samplesMs": [
+    0.06000000238418579,
+    0.06499999761581421,
+    0.05500000715255737,
+    0.06999999284744263,
+    0.06499999761581421
+   ],
+   "medianMs": 0.06499999761581421
+  }
+ }
+}

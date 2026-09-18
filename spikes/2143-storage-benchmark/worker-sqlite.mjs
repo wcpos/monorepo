@@ -5,14 +5,14 @@ import { getSQLiteBasicsOo1 } from './sqlite-basics-oo1.mjs';
 const ready = sqlite3InitModule().then(s => s.installOpfsSAHPoolVfs({ name: 'spike-2143', initialCapacity: 64 }));
 const sqliteBasics = getSQLiteBasicsOo1({ journalMode: 'WAL', openDb: async n => new (await ready).OpfsSAHPoolDb('/' + n) });
 // Copied from 2145; the guard below restricts it to the operators used in this workload.
-function predicate(selector, params) {
+function predicate(selector, params, primary) {
 	return (
 		'(' +
 		Object.entries(selector)
 			.map(([field, value]) => {
 				if (field === '$and' || field === '$or')
-					return value.map((s) => predicate(s, params)).join(field === '$and' ? ' AND ' : ' OR ');
-				const column = field === '_deleted' ? 'deleted' : `JSON_EXTRACT(data, '$.${field}')`;
+					return value.map((s) => predicate(s, params, primary)).join(field === '$and' ? ' AND ' : ' OR ');
+				const column = field === '_deleted' ? 'deleted' : field === primary ? 'id' : `JSON_EXTRACT(data, '$.${field}')`;
 				if (value.$regex !== undefined) {
 					// buildScanSearchSelector regex-escapes the typed term (`0\.4`, `K\-2`): undo that,
 					// then escape the SQL wildcards so the pattern is a literal substring match.
@@ -53,13 +53,15 @@ function translatable(selector) {
 const storage = getRxStorageSQLite({ sqliteBasics, storeAttachmentsAsBase64String: true,
   queryModifier(q, prepared) {
     if (!translatable(prepared.mangoQuery.selector)) return q;
-    const params = [], where = predicate(prepared.mangoQuery.selector, params);
+    const params = [], where = predicate(prepared.mangoQuery.selector, params, prepared.schema?.primaryKey);
     return { ...q, query: q.query.replace('ORDER BY', `WHERE ${where} ORDER BY`), params };
   },
 });
 const create = storage.createStorageInstance.bind(storage);
+const instances = new Map();
 storage.createStorageInstance = async p => {
   const instance = await create(p);
+  instances.set(p.collectionName, instance);
   for (const method of ['query', 'count']) {
     const original = instance[method].bind(instance);
     instance[method] = async prepared => {
@@ -67,7 +69,7 @@ storage.createStorageInstance = async p => {
       if (!translatable(q.selector)) return original(prepared);
       const db = await instance.internals.databasePromise;
       await instance.internals.indexCreationPromise;
-      const params = [], where = predicate(q.selector, params), count = method === 'count';
+      const params = [], where = predicate(q.selector, params, instance.primaryPath), count = method === 'count';
       const sort = (q.sort || []).map(s => Object.entries(s).map(([k, v]) => `${k === instance.primaryPath ? 'id' : `JSON_EXTRACT(data, '$.${k}')`} ${v}`).join(',')).join(',');
       const query = `SELECT ${count ? 'COUNT(1) AS count' : 'data'} FROM "${instance.tableName}" WHERE deleted = 0 AND ${where}`
         + (count ? '' : ` ORDER BY ${sort} LIMIT ${q.limit ?? -1} OFFSET ${q.skip ?? 0}`);
@@ -78,3 +80,23 @@ storage.createStorageInstance = async p => {
   return instance;
 };
 exposeWorkerRxStorage({ storage });
+self.addEventListener('message', async ({ data: m }) => {
+  if (m?.type !== 'spike-2143-probe') return;
+  try {
+    const instance = instances.get(m.collection), db = await instance.internals.databasePromise;
+    await instance.internals.indexCreationPromise;
+    // Resolve the placeholder here, without an extra SQL read before measurement (a).
+    const query = m.action === 'pragma' ? `PRAGMA ${m.name}`
+      : (m.action === 'explain' ? 'EXPLAIN QUERY PLAN ' : '')
+        + m.query.replace('"$table"', `"${instance.tableName.replaceAll('"', '""')}"`);
+    const start = performance.now();
+    const rows = await sqliteBasics.all(db, { query, params: m.params ?? [], context: { method: 'spike-2143-probe', data: {} } });
+    const ms = performance.now() - start;
+    const result = { ms, tableName: instance.tableName, ...(m.action === 'explain' ? { plan: rows }
+      : m.action === 'pragma' ? { value: Object.values(rows[0] ?? {})[0] }
+        : { rows: rows.length, first: JSON.stringify(rows[0] ?? null).slice(0, 200) }) };
+    self.postMessage({ type: 'spike-2143-probe-result', id: m.id, result });
+  } catch (e) {
+    self.postMessage({ type: 'spike-2143-probe-result', id: m.id, error: String(e.stack || e) });
+  }
+});

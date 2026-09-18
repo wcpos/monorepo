@@ -6,11 +6,11 @@ import { parseArgs } from 'node:util';
 import assert from 'node:assert/strict';
 import { chromium, firefox, webkit } from 'playwright';
 const directory = fileURLToPath(new URL('.', import.meta.url));
-const { values: args } = parseArgs({ options: { browser: { type: 'string', default: 'chrome' }, bundles: { type: 'string', default: resolve(directory, '.build') }, out: { type: 'string' }, scale: { type: 'string', default: 'both' } } });
+const { values: args } = parseArgs({ options: { browser: { type: 'string', default: 'chrome' }, bundles: { type: 'string', default: resolve(directory, '.build') }, out: { type: 'string' }, scale: { type: 'string', default: 'both' }, engines: { type: 'string', default: 'opfs-shipped,sqlite-sahpool,indexeddb-premium' } } });
 assert(['chrome', 'firefox', 'webkit'].includes(args.browser) && ['small', 'large', 'both'].includes(args.scale), 'Invalid browser or scale');
 const versions = JSON.parse(await readFile(resolve(args.bundles, 'versions.json'))), bundles = {};
 for (const name of ['bench.js', 'opfs.worker.js', 'worker-sqlite.js', 'worker-indexeddb.js', 'sqlite3.wasm']) bundles[name] = await readFile(resolve(args.bundles, name));
-const engineNames = ['opfs-shipped', 'sqlite-sahpool', 'indexeddb-premium'], expected = new Map(), results = [];
+const engineNames = args.engines.split(','), expected = new Map(), results = [];
 const browser = await ({ chrome: chromium, firefox, webkit }[args.browser]).launch(args.browser === 'chrome' ? { channel: 'chrome' } : {});
 const environment = { browser: args.browser, browserVersion: browser.version(), os: `${platform()} ${release()} ${arch()}`, cpu: cpus()[0].model, node: process.version, versions, measuredAt: new Date().toISOString() };
 function verify(scale, engine, cell) {
@@ -61,6 +61,6 @@ let timer;
 try {
   await Promise.race([measure(), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Benchmark exceeded 110 minutes')), 110 * 60 * 1000); })]);
   const out = args.out ?? resolve(directory, `results.${args.browser}.json`);
-  await writeFile(out, JSON.stringify({ environment, bundleBytes: Object.fromEntries(Object.entries(bundles).map(([n, b]) => [n, b.length])), equality: 'All warmups and samples matched across all three engines (SHA-256 of canonical revision-independent content).', results }, null, 2) + '\n');
+  await writeFile(out, JSON.stringify({ environment, bundleBytes: Object.fromEntries(Object.entries(bundles).map(([n, b]) => [n, b.length])), equality: `All warmups and samples matched across ${engineNames.join(', ')} (SHA-256 of canonical revision-independent content).`, results }, null, 2) + '\n');
   console.info('Wrote', out);
 } finally { clearTimeout(timer); await browser.close(); }
