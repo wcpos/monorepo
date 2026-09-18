@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { AppMetrics, Observe } from 'expo-observe';
+import { Observe } from 'expo-observe';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 import { DEFAULT_APP_SCHEME } from '@wcpos/utils/app-info/scheme';
@@ -20,8 +20,9 @@ import type { TelemetryConsent } from '@wcpos/utils/logger/sentry-sink';
  *   id, the one value that cannot disagree with the installed build.
  * - Nothing leaves the device before the merchant has said yes. Dispatching is
  *   OFF from import and switches on only while the store's `tracking_consent`
- *   is `allowed`; `denied` (or logout) switches it off again, which drops
- *   whatever was pending.
+ *   is `allowed`. A refusal (`denied`) also discards what was collected, on the
+ *   way in and again on the way out, so a store that said no followed by one
+ *   that said yes on the same till never uploads the refusal's events.
  *
  * `Observe.configure` REPLACES the whole configuration on every call, so every
  * option lives in this one function and a consent change re-sends all of it.
@@ -40,11 +41,12 @@ const DISPATCH_FROM_NON_STORE_BUILDS = false;
 const REPORTING_BUILD = DISPATCH_FROM_NON_STORE_BUILDS || AppInfo.scheme === DEFAULT_APP_SCHEME;
 
 /**
- * Every dynamic segment under apps/main/app, plus the query-string ids the app
- * navigates with (`?closureId=&registerId=` into Reports, `?store=` on web).
- * The dashboard groups by the route PATTERN (`orders/(modals)/view/[orderId]`),
- * which survives filtering; the ids are a merchant's records and add nothing
- * to a timing. A filtered key also hides the resolved URL.
+ * Every dynamic segment under apps/main/app, plus every id-bearing query
+ * parameter the app navigates with (`?closureId=&registerId=` into Reports,
+ * `?document=refund:<id>` into a receipt, `?store=` on web). The dashboard
+ * groups by the route PATTERN (`orders/(modals)/view/[orderId]`), which
+ * survives filtering; the ids are a merchant's records and add nothing to a
+ * timing. A filtered key also hides the resolved URL.
  */
 const FILTERED_ROUTE_PARAMS = [
 	'orderId',
@@ -54,6 +56,7 @@ const FILTERED_ROUTE_PARAMS = [
 	'couponId',
 	'closureId',
 	'registerId',
+	'document',
 	'store',
 	'id',
 	'component',
@@ -63,8 +66,7 @@ let dispatchingEnabled: boolean | null = null;
 
 function configure(nextDispatchingEnabled: boolean): void {
 	// Re-sending an unchanged configuration re-initialises the router integration
-	// for nothing; `dispatchingEnabled: false` also discards pending metrics, so
-	// only a real change is worth a call.
+	// for nothing, so only a real change is worth a call.
 	if (dispatchingEnabled === nextDispatchingEnabled) return;
 	dispatchingEnabled = nextDispatchingEnabled;
 	Observe.configure({
@@ -80,42 +82,68 @@ function configure(nextDispatchingEnabled: boolean): void {
 configure(false);
 
 /**
- * Drops every metric and error still stored on the device. Switching
- * `dispatchingEnabled` off does NOT: the SDK discards pending events only when
- * a dispatch runs while disabled, so what a store that said no collected would
- * otherwise upload the moment a store that said yes takes over the till.
+ * Discards every metric and log still pending on the device. This is the SDK's
+ * own discard path: a dispatch that runs while dispatching is disabled advances
+ * the sent-cursor past everything pending without sending it (expo-observe
+ * 57.0.23, `Observability.swift` dispatchMetrics/dispatchLogs and
+ * `ObservabilityManager.kt` dispatchUnsentMetrics/Logs), and it leaves the live
+ * session alone. `AppMetrics.clearStoredEntries` is NOT it: a no-op on iOS, and
+ * on Android it deletes the session the running SDK keeps writing to.
+ *
+ * Must be called with dispatching OFF, or it sends. The one gap: a retry
+ * backoff armed by an earlier failed send makes the dispatch return early
+ * without moving the cursor.
  */
-function discardStoredEvents(): Promise<void> {
-	return AppMetrics.clearStoredEntries().catch(() => {
+function discardPendingEvents(): Promise<void> {
+	return Observe.dispatchEvents().catch(() => {
 		// Diagnostics must never interrupt the app.
 	});
 }
 
 let appliedConsent: TelemetryConsent | null = null;
+let pendingDiscard: Promise<void> | null = null;
+
+function applyLatestConsent(): void {
+	configure(REPORTING_BUILD && appliedConsent === 'allowed');
+}
+
+/**
+ * Runs a discard and, once it has finished, applies whatever consent is current
+ * BY THEN. Consent can change again while a discard is in flight; the newest
+ * discard is the only one whose completion counts, and dispatching cannot be
+ * switched on by anyone while one is pending, so a refusal's events are never
+ * in the queue when sending resumes.
+ */
+function discardThenApplyLatestConsent(): void {
+	const discard: Promise<void> = discardPendingEvents().then(() => {
+		if (pendingDiscard !== discard) return;
+		pendingDiscard = null;
+		applyLatestConsent();
+	});
+	pendingDiscard = discard;
+}
 
 /**
  * Applies the merchant's telemetry preference. `null` is boot, before the
  * session has restored (see `useTelemetryConsent`): no opinion, nothing changes.
+ * A logout (`undecided`) only stops dispatching; what an allowed store collected
+ * stays and goes out once a store that allows reporting is back.
  */
 export function setObserveConsent(consent: TelemetryConsent | null): void {
 	if (consent === null || consent === appliedConsent) return;
-	const leavingDenied = appliedConsent === 'denied';
+	const previousConsent = appliedConsent;
 	appliedConsent = consent;
 
-	if (consent === 'denied') {
-		// Off first, then drop what was held: what the merchant refused never leaves.
+	if (consent === 'denied' || previousConsent === 'denied') {
+		// Off first (a no-op when leaving a refusal, it already is), so the discard
+		// sends nothing; the discard's completion applies the consent current by then.
 		configure(false);
-		void discardStoredEvents();
+		discardThenApplyLatestConsent();
 		return;
 	}
-
-	const dispatch = REPORTING_BUILD && consent === 'allowed';
-	if (leavingDenied) {
-		// Everything collected under the refusal goes BEFORE dispatching can resume.
-		void discardStoredEvents().then(() => configure(dispatch));
-		return;
-	}
-	configure(dispatch);
+	// A discard in flight applies the latest consent when it completes.
+	if (pendingDiscard) return;
+	applyLatestConsent();
 }
 
 export function useObserveConsent(consent: TelemetryConsent | null): void {
