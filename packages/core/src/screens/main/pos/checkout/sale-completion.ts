@@ -19,7 +19,7 @@ import {
 	resolveCompletionAttempt,
 } from './completion-journal';
 import { enterReceipt } from './checkout-mode';
-import { reconcileCompletedOrder } from './hooks/reconcile-completed-order';
+import { reconcileCompletedOrder, refreshOrderRecord } from './hooks/reconcile-completed-order';
 import { completionMeta } from './provenance/stamp-completion';
 import { persistProvenance } from './provenance/persist-provenance';
 import { reportProvenanceGap } from './provenance/provenance-gap';
@@ -121,6 +121,7 @@ export type SaleOutcome =
 			row: PaymentRow;
 			order: OrderPaymentSummary | null;
 			mirrorFailed: boolean;
+			preparedCompleting: boolean;
 			preLegBalanceMinor: number;
 			amountMinor: number;
 	  }
@@ -136,8 +137,10 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 	switch (outcome.source) {
 		case 'replay': // Replay trusts the resident status, never re-collects money.
 			return !!payload?.status && !UNPAID_STATUSES.includes(payload.status);
-		case 'manual': // ADR 0032: the server summary wins; predict locally only without one, and never after a failed mirror.
-			return outcome.order
+		case 'manual': // ADR 0032: a usable server balance wins; otherwise predict, never after a failed mirror.
+			return typeof outcome.order?.balance === 'string' &&
+				/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(outcome.order.balance) &&
+				Number.isFinite(Number(outcome.order.balance))
 				? toMinor(outcome.order.balance, dp) === 0
 				: !outcome.mirrorFailed && outcome.preLegBalanceMinor - outcome.amountMinor === 0;
 		case 'terminal': // The narrator uses Number, with derived local balance only when no summary exists.
@@ -160,10 +163,38 @@ async function finishSale(
 	outcome: SaleOutcome,
 	presentation: Presentation
 ): Promise<'completed' | 'partial' | 'not-completed'> {
-	if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload))
+	if (!isSaleComplete(outcome, ctx.dp, order.getLatest().payload)) {
+		const latest = order.getLatest().payload;
+		if (
+			outcome.source === 'manual' &&
+			outcome.order &&
+			latest.id &&
+			toMinor(outcome.order.balance, ctx.dp) !== outcome.preLegBalanceMinor - outcome.amountMinor
+		) {
+			// ADR 0032: the server's balance stands; the till must SHOW it to collect it.
+			// Only when the store disagrees with the till: an ordinary split leg costs no request.
+			const logger = getLogger(['wcpos', 'pos', 'checkout']);
+			const refreshed = refreshOrderRecord(ctx.runtime, latest.id);
+			try {
+				if ((await refreshed) === 'timed-out')
+					logger.debug('Post-payment order refresh timed out; keeping sale open', {
+						terminal: { outcome: 'recovered', operationId: String(latest.id) },
+						context: { orderId: order.uuid },
+					});
+			} catch (error) {
+				logger.debug('Post-payment order refresh failed; keeping sale open', {
+					terminal: { outcome: 'recovered', operationId: String(latest.id) },
+					context: {
+						orderId: order.uuid,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			}
+		}
 		return outcome.source === 'manual' || outcome.source === 'terminal'
 			? 'partial'
 			: 'not-completed';
+	}
 	// Enter BEFORE refresh: the paid order has left pos-open and otherwise the cashier sees an empty cart.
 	if (presentation.host === 'background') enterReceipt(order.uuid, { select: false });
 	if (presentation.host === 'stage' && presentation.autoShowReceipt) enterReceipt(order.uuid);
@@ -214,6 +245,15 @@ export async function completeSale(...args: Parameters<typeof finishSale>) {
 	// No entry snapshot: resolve/fail unconditionally belong to the current attempt, even in replay.
 	// A paid order cannot start a new completing attempt while its finish is running.
 	try {
+		if (outcome.source === 'manual' && !outcome.preparedCompleting) {
+			// The choose-register gate cannot run retroactively; reportProvenanceGap reports missing attribution.
+			if (isSaleComplete(outcome, ctx.dp))
+				await recordCompletionAttempt(ctx.storeDB, {
+					orderUuid: order.uuid,
+					source: outcome.source,
+					...(ctx.actor ? { actor: ctx.actor } : {}),
+				});
+		}
 		const result = await finishSale(...args);
 		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
 		await resolveCompletionAttempt(ctx.storeDB, order.uuid);
