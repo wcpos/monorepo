@@ -161,10 +161,20 @@ export function VoidButton() {
 		const isCannotDelete = (error: unknown) =>
 			error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE;
 
-		const receipt = await requestServerDelete(manager.engine, {
-			collection: 'orders',
-			recordId,
-		});
+		let receipt: Awaited<ReturnType<typeof requestServerDelete>>;
+		try {
+			receipt = await requestServerDelete(manager.engine, {
+				collection: 'orders',
+				recordId,
+			});
+		} catch (err) {
+			cartLogger.error('Failed to void order', {
+				showToast: true,
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+				context: { orderId: recordId, error: getErrorMessage(err) },
+			});
+			return;
+		}
 
 		// Only a truly offline engine skips the outcome watch (the accepted gap):
 		// the write drain still pushes while 'degraded', so a degraded refusal

@@ -74,6 +74,7 @@ import {
 } from '../collections/engine-collections';
 import { sanitizeOutboundOrderPayload } from '../materialization/sanitize-outbound-order-payload';
 import { sanitizeOutboundProductPayload } from '../materialization/sanitize-outbound-product-payload';
+import { rejectionSuggestsServerRecord } from './conflict-resolution';
 import { coalescedPayload, decideWritePlacement } from './write-placement';
 
 import type { RxCollection, RxDatabase } from 'rxdb';
@@ -234,9 +235,9 @@ export async function enqueueWriteIntent(input: {
 	// bound is generous; hitting it means something is livelocking the queue.
 	for (let attempt = 0; attempt < 10; attempt += 1) {
 		const rows = await queue.pending();
-		const recordRows = rows.filter(
-			(item) => item.collectionName === intent.collection && item.recordId === intent.recordId
-		);
+		const isRecordRow = (item: QueuedMutation) =>
+			item.collectionName === intent.collection && item.recordId === intent.recordId;
+		const recordRows = rows.filter(isRecordRow);
 		// Read the resident before placement so delete deferral sees the same
 		// explicit-or-stored revision fallback used when the mutation is built.
 		const doc = (await collection.findOne(intent.recordId).exec()) as MutationDoc | null;
@@ -383,6 +384,60 @@ export async function enqueueWriteIntent(input: {
 			} else {
 				const baseRevision = intent.baseRevision ?? storedRevision;
 				if (!baseRevision && !createAhead) {
+					// A record with no stored revision and no numeric server id is born-local
+					// and never acknowledged (materialization stamps a revision on every
+					// pulled record; zero is the born-local payload's placeholder id): its
+					// create was pushed, refused and dead-lettered, so the server has nothing
+					// to delete and a void only discards local state — the resident and the
+					// `rejected` rows that recorded the refusal. One verdict says otherwise:
+					// a create rejected because the server matched MORE than one record
+					// (`rejectionSuggestsServerRecord`) proves a server-side sale may exist,
+					// so that resident is kept for pull reconciliation and the caller gets
+					// the 428 contract below, exactly as dead-letter discard treats it.
+					const payloadId = stored?.payload?.id;
+					const deadLetters = (await queue.all()).filter(
+						(row) =>
+							row.collectionName === intent.collection &&
+							row.recordId === intent.recordId &&
+							row.status === 'rejected'
+					);
+					const bornLocal =
+						!storedRevision &&
+						(payloadId === 0 || typeof payloadId !== 'number') &&
+						!deadLetters.some((row) => rejectionSuggestsServerRecord(row.rejectedReason));
+					if (bornLocal) {
+						// Un-pushed successors (edits appended after the create dead-lettered,
+						// or landed since the read at the top of this iteration) go with the
+						// resident, through the same CONDITIONAL removal as annihilation: a row
+						// the drain has claimed refuses, and the decision re-runs against the
+						// fresh queue. Successors go first, so a failing resident removal
+						// loses only writes the server could never have applied.
+						let removed = 0;
+						let refused = false;
+						for (const row of (await queue.pending()).filter(isRecordRow).reverse()) {
+							if (await queue.removePending(row.mutationId)) {
+								removed += 1;
+								supersededIds.add(row.mutationId);
+							} else {
+								refused = true;
+								break;
+							}
+						}
+						if (refused) continue;
+						await doc.remove();
+						// Each dead letter is dropped only while it still reads `rejected`, so a
+						// row another window has claimed for resolution stays with that resolution.
+						for (const row of deadLetters) {
+							if (await queue.removeIfStatus(row.mutationId, 'rejected')) removed += 1;
+						}
+						input.observe?.({
+							type: 'queue.write.annihilate',
+							level: 'info',
+							collection: intent.collection,
+							fields: { recordId: intent.recordId, removed, deadLetters: deadLetters.length },
+						});
+						return { mutationId: input.mintUuid(), recordId: intent.recordId, annihilated: true };
+					}
 					throw new Error(
 						'write(delete): a baseRevision is required — the server 428s an unconditional delete'
 					);
