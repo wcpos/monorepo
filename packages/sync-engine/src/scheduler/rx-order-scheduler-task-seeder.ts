@@ -57,6 +57,7 @@ export type SeedOrderSchedulerTasksInput = {
 };
 
 export type SeedTargetedOrderSchedulerTaskInput = {
+	wakeFailed?: boolean;
 	remoteIds: RemoteId[];
 	priority?: number;
 	batchSize?: number;
@@ -187,6 +188,7 @@ export async function seedTargetedOrderSchedulerTask(
 	input: SeedTargetedOrderSchedulerTaskInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
 	return seedTargetedLane(ORDER_TARGETED_LANE, {
+		wakeFailed: input.wakeFailed,
 		remoteIds: input.remoteIds,
 		priority: input.priority,
 		batchSize: input.batchSize,

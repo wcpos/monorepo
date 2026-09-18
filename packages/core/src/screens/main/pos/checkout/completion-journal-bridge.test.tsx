@@ -357,12 +357,16 @@ it('catches up an open resident before replay and never requests a second refres
 	expect(mockInfo).toHaveBeenCalledTimes(1);
 });
 
-it.each(['timed-out', 'rejected'] as const)(
+it.each(['timed-out', 'rejected', 'synchronously thrown'] as const)(
 	'retains an open resident when catch-up is %s',
 	async (failure) => {
 		await record();
 		mockFind.mockResolvedValue(resident('order', 'pos-open'));
 		if (failure === 'timed-out') mockCatchUp.mockResolvedValueOnce('timed-out');
+		else if (failure === 'synchronously thrown')
+			mockCatchUp.mockImplementationOnce(() => {
+				throw new Error('refresh rejected');
+			});
 		else mockCatchUp.mockRejectedValueOnce(new Error('refresh rejected'));
 		render(<SaleCompletionBridge />);
 		await waitFor(async () =>

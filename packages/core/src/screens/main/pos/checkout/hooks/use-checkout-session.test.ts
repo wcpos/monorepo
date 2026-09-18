@@ -57,6 +57,7 @@ jest.mock('../../hooks/use-cart-stock-guard', () => ({
 }));
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => ({
+		debug: jest.fn(),
 		info: (...args: unknown[]) => mockCheckoutInfo(...args),
 		success: jest.fn(),
 		warn: jest.fn(),
@@ -144,65 +145,90 @@ describe('useCheckoutSession', () => {
 		expect(result.current.error).toBe('payment_gateways_fetch_failed');
 	});
 
-	it('polls contract checkout to completed and refreshes the order', async () => {
-		jest.useFakeTimers();
-		mockGet
-			.mockResolvedValueOnce({
-				data: [
-					{
-						id: 'stripe_terminal_for_woocommerce',
-						provider: 'stripe',
-						pos_type: 'terminal',
-						capabilities: { supports_checkout: true },
+	it.each(['succeeded', 'rejected', 'synchronously thrown'] as const)(
+		'polls contract checkout to completed with refresh %s',
+		async (refresh) => {
+			jest.useFakeTimers();
+			mockGet
+				.mockResolvedValueOnce({
+					data: [
+						{
+							id: 'stripe_terminal_for_woocommerce',
+							provider: 'stripe',
+							pos_type: 'terminal',
+							capabilities: { supports_checkout: true },
+						},
+					],
+				})
+				.mockResolvedValueOnce({
+					data: {
+						status: 'completed',
+						checkout_id: 'chk_123',
+						order_id: 42,
+						gateway_id: 'stripe_terminal_for_woocommerce',
+						terminal: true,
+						provider_data: {},
 					},
-				],
-			})
-			.mockResolvedValueOnce({
+				});
+			mockPost.mockResolvedValueOnce({ data: { status: 'ready' } }).mockResolvedValueOnce({
 				data: {
-					status: 'completed',
+					status: 'processing',
 					checkout_id: 'chk_123',
 					order_id: 42,
 					gateway_id: 'stripe_terminal_for_woocommerce',
-					terminal: true,
+					terminal: false,
 					provider_data: {},
 				},
 			});
-		mockPost.mockResolvedValueOnce({ data: { status: 'ready' } }).mockResolvedValueOnce({
-			data: {
-				status: 'processing',
-				checkout_id: 'chk_123',
-				order_id: 42,
-				gateway_id: 'stripe_terminal_for_woocommerce',
-				terminal: false,
-				provider_data: {},
-			},
-		});
 
-		const { result } = renderHook(() => useCheckoutSession(order));
-		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+			const release = jest.fn();
+			const refreshError = new Error('refresh failed');
+			mockEngineRequire.mockImplementationOnce(() => {
+				if (refresh === 'synchronously thrown') throw refreshError;
+				return {
+					ready: refresh === 'rejected' ? Promise.reject(refreshError) : Promise.resolve(),
+					release,
+				};
+			});
+			const { result } = renderHook(() => useCheckoutSession(order));
+			await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
 
-		await act(async () => {
-			const promise = result.current.startCheckout();
-			await jest.advanceTimersByTimeAsync(750);
-			await promise;
-		});
+			await act(async () => {
+				const promise = result.current.startCheckout();
+				await jest.advanceTimersByTimeAsync(750);
+				await promise;
+			});
 
-		expect(mockPost).toHaveBeenNthCalledWith(
-			1,
-			expect.stringContaining('payment-gateways/stripe_terminal_for_woocommerce/bootstrap'),
-			expect.anything()
-		);
-		expect(mockEngineRequire).toHaveBeenCalledWith({
-			id: 'checkout:order-refresh:42',
-			collection: 'orders',
-			kind: 'targeted-records',
-			remoteIds: ['42'],
-			forceRefresh: true,
-		});
-		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
-		expect(mockReplace).toHaveBeenCalled();
-		jest.useRealTimers();
-	});
+			expect(mockPost).toHaveBeenNthCalledWith(
+				1,
+				expect.stringContaining('payment-gateways/stripe_terminal_for_woocommerce/bootstrap'),
+				expect.anything()
+			);
+			expect(mockEngineRequire).toHaveBeenCalledWith({
+				id: 'checkout:order-refresh:42',
+				collection: 'orders',
+				kind: 'targeted-records',
+				remoteIds: ['42'],
+				forceRefresh: true,
+			});
+			if (refresh === 'synchronously thrown') {
+				expect(release).not.toHaveBeenCalled();
+				expect(mockReplace).not.toHaveBeenCalled();
+				expect(result.current.error).toBe('refresh failed');
+				expect(mockCheckoutError).toHaveBeenCalledWith(
+					'refresh failed',
+					expect.objectContaining({ code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN, showToast: true })
+				);
+			} else {
+				expect(release).toHaveBeenCalledTimes(1);
+				expect(mockReplace).toHaveBeenCalled();
+				expect(mockCheckoutError).not.toHaveBeenCalled();
+				expect(result.current.error).toBeNull();
+			}
+			expect(result.current.loading).toBe(false);
+			jest.useRealTimers();
+		}
+	);
 
 	it('surfaces checkout_poll_timeout when polling never reaches a terminal status', async () => {
 		jest.useFakeTimers();

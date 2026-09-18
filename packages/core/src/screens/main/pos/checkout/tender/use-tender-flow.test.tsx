@@ -115,6 +115,7 @@ const mockManualMirror = jest.fn();
 const mockRecordOptions = jest.fn();
 const mockVoidPayments = jest.fn();
 const mockCompleteOrderFlow = jest.fn();
+let mockUseRealCompletion = false;
 const mockSetCurrentOrderID = jest.fn();
 const mockRequire = jest.fn();
 const mockAdjustStock = jest.fn();
@@ -211,7 +212,10 @@ jest.mock('../payments', () => ({
 	useVoidPayments: () => mockVoidPayments,
 }));
 jest.mock('../hooks/use-complete-order-flow', () => ({
-	useCompleteOrderFlow: () => mockCompleteOrderFlow,
+	useCompleteOrderFlow: (order: EngineRecord<'orders'>) =>
+		mockUseRealCompletion
+			? jest.requireActual('../hooks/use-complete-order-flow').useCompleteOrderFlow(order)
+			: mockCompleteOrderFlow,
 }));
 jest.mock('../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => value.toFixed(2) }),
@@ -1674,6 +1678,98 @@ it('zero balance writes completion and provenance together exactly once', async 
 		data: { status: 'completed', meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
 	});
 });
+
+it.each([
+	['1.00', 'pos-open', false, 1000],
+	['0.00', 'completed', true, 1000],
+	['0.00', 'completed', true, 500],
+] as const)(
+	'manual online tender uses server balance %s (%s, complete %s, tender %s)',
+	async (balance, status, completed, amountMinor) => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		enterCheckout(order.uuid);
+		mockUseRealManual = true;
+		mockUseRealCompletion = true;
+		mockAutoShowReceipt = true;
+		mockLeg = null;
+		mockPayload = { id: 42, total: '10.00', meta_data: [] };
+		mockMethods = methods;
+		mockOnlineStatus = 'online-website-available';
+		mockBlockIfDegraded.mockReturnValue(false);
+		mockLocalPatch.mockResolvedValue(order);
+		mockManualPost.mockResolvedValue({
+			data: {
+				order: {
+					status,
+					total: completed ? (amountMinor / 100).toFixed(2) : '11.00',
+					paid: (amountMinor / 100).toFixed(2),
+					balance,
+					payment_method: 'pos_cash',
+					payment_method_title: 'Cash',
+				},
+			},
+		});
+		mockManualMirror.mockImplementation(async ({ changes }: { changes: object }) => {
+			mockPayload = { ...mockPayload, ...changes };
+		});
+		mockRequire.mockImplementation(() => ({
+			ready: Promise.resolve().then(() => {
+				mockPayload = {
+					...mockPayload,
+					total: completed ? (amountMinor / 100).toFixed(2) : '11.00',
+				};
+			}),
+			release: jest.fn(),
+		}));
+		const view = renderHook(() => useTenderFlow(order));
+		try {
+			act(() => view.result.current.pickMethod('pos_cash'));
+			if (amountMinor === 500)
+				act(() => view.result.current.dispatch({ type: 'set-entry', minor: 500 }));
+			expect(view.result.current.entryAppliedMinor).toBe(amountMinor);
+			await act(async () => view.result.current.takeTender());
+			expect(mockManualPost).toHaveBeenCalledTimes(1);
+			expect(mockManualMirror).toHaveBeenCalledTimes(1);
+			expect(order.getLatest().payload.status).toBe(status);
+			expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(completed);
+			expect(
+				mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.completed')
+			).toHaveLength(completed ? 1 : 0);
+			expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+			expect(mockReplace).not.toHaveBeenCalled();
+			expect(mockRequire).toHaveBeenCalledTimes(1);
+			expect(mockRequire).toHaveBeenCalledWith(
+				expect.objectContaining({ kind: 'targeted-records', remoteIds: ['42'], forceRefresh: true })
+			);
+			if (!completed) {
+				expect(view.result.current.balanceMinor).toBe(100);
+				expect(view.result.current.entryAppliedMinor).toBe(100);
+				expect(view.result.current.state.entryMinor).toBe(100);
+				expect(view.result.current.busy).toBe(false);
+			}
+			if (amountMinor === 500) {
+				expect(recordCompletionAttempt).toHaveBeenCalledTimes(1);
+				expect(recordCompletionAttempt).toHaveBeenCalledWith(undefined, {
+					orderUuid: order.uuid,
+					source: 'manual',
+					actor: { id: '7', name: 'Pat' },
+				});
+				expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+					mockRequire.mock.invocationCallOrder[0]
+				);
+			}
+			expect(mockError).not.toHaveBeenCalled();
+		} finally {
+			view.unmount();
+			mockUseRealManual = false;
+			mockUseRealCompletion = false;
+			mockManualMirror.mockReset();
+			mockRequire.mockReset();
+			jest.clearAllMocks();
+		}
+	}
+);
 
 it('full manual online tender persists provenance before POST and the mirror', async () => {
 	jest.mocked(provenance.completionMetaFor).mockClear();
