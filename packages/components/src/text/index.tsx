@@ -7,6 +7,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { decode } from 'html-entities';
 
 import { cn } from '../lib/utils';
+import { MAX_FONT_SCALE } from '../lib/scale';
 
 const TextClassContext = React.createContext<string | undefined>(undefined);
 
@@ -25,7 +26,17 @@ const textVariants = cva('text-foreground web:select-text text-base', {
 export type TextProps = SlottableTextProps &
 	VariantProps<typeof textVariants> & { decodeHtml?: boolean };
 
-function Text({ className, variant, asChild = false, children, decodeHtml, ...props }: TextProps) {
+function Text({
+	className,
+	variant,
+	asChild = false,
+	children,
+	decodeHtml,
+	// The OS text-size multiplier is capped here rather than at every call site:
+	// past 1.3x the keypad and the cart break. A caller's prop still wins.
+	maxFontSizeMultiplier = MAX_FONT_SCALE,
+	...props
+}: TextProps) {
 	const textClass = React.useContext(TextClassContext);
 	const Component = asChild ? Slot : RNText;
 
@@ -33,7 +44,11 @@ function Text({ className, variant, asChild = false, children, decodeHtml, ...pr
 		decodeHtml && typeof children === 'string' ? decode(children) : children;
 
 	return (
-		<Component className={cn(textVariants({ variant }), textClass, className)} {...props}>
+		<Component
+			className={cn(textVariants({ variant }), textClass, className)}
+			maxFontSizeMultiplier={maxFontSizeMultiplier}
+			{...props}
+		>
 			{processedChildren}
 		</Component>
 	);

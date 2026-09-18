@@ -31,6 +31,7 @@
     "./label": "./src/label/index.tsx",
     "./lib/device": "./src/lib/device.ts",
     "./lib/portal-container": "./src/lib/portal-container.ts",
+    "./lib/scale": "./src/lib/scale.ts",
     "./lib/set-ref-value": "./src/lib/set-ref-value.ts",
     "./lib/use-hierarchy": "./src/lib/use-hierarchy.ts",
     "./lib/utils": "./src/lib/utils.ts",

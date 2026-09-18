@@ -13,6 +13,7 @@ import { Toast, Toaster } from '@wcpos/components/toast';
 import { hasStoreSession, useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
+import { ScaleProvider } from '@wcpos/core/contexts/scale';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
 import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
@@ -157,10 +158,16 @@ function MerchantRootLayout() {
 				<GestureHandlerRootView style={{ flex: 1 }}>
 					<KeyboardProvider>
 						<HydrationProviders>
-							<RootStack />
-							<ErrorBoundary>
-								<ThemedToaster />
-							</ErrorBoundary>
+							{/* Inside the hydration sandwich (it reads the store's Scale
+							    override) and around the toaster, so every PortalHost —
+							    the app's, the (auth) one and the named `pos` host — sits
+							    inside the scale scope. */}
+							<ScaleProvider>
+								<RootStack />
+								<ErrorBoundary>
+									<ThemedToaster />
+								</ErrorBoundary>
+							</ScaleProvider>
 						</HydrationProviders>
 					</KeyboardProvider>
 				</GestureHandlerRootView>

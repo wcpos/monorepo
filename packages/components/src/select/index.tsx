@@ -123,7 +123,7 @@ function SelectTrigger({
 		return (
 			<SelectMultiTrigger
 				className={cn(
-					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card flex h-10 flex-row items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
+					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm [&>span]:line-clamp-1',
 					props.disabled && 'web:cursor-not-allowed opacity-50',
 					className
 				)}
@@ -140,7 +140,7 @@ function SelectTrigger({
 		<SelectPrimitiveTrigger
 			asChild={asChild}
 			className={cn(
-				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card flex h-10 flex-row items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
+				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm [&>span]:line-clamp-1',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
 				className
 			)}
@@ -300,7 +300,7 @@ function SelectButton({ className, children, ...props }: ButtonProps) {
 	return (
 		<Button
 			className={cn(
-				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 border-input bg-background text-muted-foreground flex h-10 flex-row items-center justify-between rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
+				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 border-input bg-background text-muted-foreground h-ctl flex flex-row items-center justify-between rounded-lg border px-3 py-2 text-sm [&>span]:line-clamp-1',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
 				className
 			)}

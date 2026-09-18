@@ -24,7 +24,7 @@ import type { VariantProps } from 'class-variance-authority';
 const ButtonText = Text;
 
 const buttonVariants = cva(
-	'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 web:transition-colors group flex max-w-full shrink items-center justify-center rounded-md',
+	'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 web:transition-colors group flex max-w-full shrink items-center justify-center rounded-lg',
 	{
 		variants: {
 			variant: {
@@ -114,14 +114,14 @@ const buttonVariants = cva(
 				link: 'bg-transparent',
 			},
 			size: {
-				default: 'h-10 px-4 py-2',
+				default: 'h-ctl px-4 py-2',
 				xs: 'h-6 px-2',
 				compact: 'h-9 px-3',
 				sm: 'h-9 px-3',
 				lg: 'h-11 px-8',
-				xl: 'h-14 px-10',
+				xl: 'h-tile px-10',
 				/** A keypad key: tall, no side padding, the digit carries the size. */
-				key: 'h-14 px-0',
+				key: 'h-tile px-0',
 			},
 		},
 		defaultVariants: {

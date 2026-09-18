@@ -3,6 +3,7 @@ import { TextInput } from 'react-native';
 
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
+import { MAX_FONT_SCALE } from '../lib/scale';
 import { cn } from '../lib/utils';
 
 interface TextareaProps extends React.ComponentPropsWithoutRef<typeof TextInput> {
@@ -20,6 +21,9 @@ function Textarea({
 	style,
 	onFocus,
 	onSelectionChange,
+	// Capped like `Text` and the `Input` field: a larger OS text size must not
+	// break the row it sits in. A caller's prop still wins.
+	maxFontSizeMultiplier = MAX_FONT_SCALE,
 	...props
 }: TextareaProps) {
 	/**
@@ -103,6 +107,7 @@ function Textarea({
 			)}
 			placeholderTextColor={cn('text-muted-foreground', placeholderClassName)}
 			multiline={multiline}
+			maxFontSizeMultiplier={maxFontSizeMultiplier}
 			textAlignVertical="top"
 			onContentSizeChange={onContentSizeChange}
 			onFocus={handleFocus}
