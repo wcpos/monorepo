@@ -63,8 +63,18 @@ async function init(input) {
   util = await sqlite.installOpfsSAHPoolVfs({ name: 'spike-2144', directory: '/' + spec.pool, initialCapacity: spec.capacity ?? 12 });
   const reacquireMs = performance.now() - start;
   if (spec.poolOnly) return { reacquireMs };
-  db = open(spec.name, !spec.reopen);
-  return { reacquireMs, ...effective };
+  // Evidence of what the stop left behind, read before SQLite touches it: the pool's live file
+  // set and, for a rollback journal, its size and first 8 bytes (a live journal starts with
+  // SQLite's magic d9d505f920a163d7; a finalised one is zeroed or truncated).
+  const leftBehind = spec.reopen ? { files: util.getFileNames() } : undefined;
+  if (leftBehind && leftBehind.files.includes('/' + spec.name + '-journal')) {
+    const bytes = await util.exportFile('/' + spec.name + '-journal');
+    leftBehind.journalBytes = bytes.byteLength;
+    leftBehind.journalHead = Array.from(bytes.subarray(0, 8), b => b.toString(16).padStart(2, '0')).join('');
+  }
+  if (leftBehind && leftBehind.files.includes('/' + spec.name + '-wal')) leftBehind.walBytes = (await util.exportFile('/' + spec.name + '-wal')).byteLength;
+  try { db = open(spec.name, !spec.reopen); } catch (e) { e.leftBehind = leftBehind; throw e; }
+  return { reacquireMs, leftBehind, ...effective };
 }
 async function poolTrial() {
   const databases = [], checks = [], snapshots = { acked: [{ tx: 1, n: 3 }], inflight: null };
@@ -122,6 +132,9 @@ self.onmessage = async ({ data: m }) => {
       hooks.armed = null;
     } else if (m.op === 'checkpoint') db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     else if (m.op === 'read') result = read(db);
+    else if (m.op === 'files') result = util.getFileNames();
+    else if (m.op === 'openOnly') { db = open(m.name, m.fresh); result = effective; }
+    else if (m.op === 'unlink') result = util.unlink('/' + m.name);
     else if (m.op === 'pool') result = await poolTrial();
     else if (m.op === 'slot') result = slotRound(m.round);
     else if (m.op === 'slotCheck') {
@@ -131,6 +144,6 @@ self.onmessage = async ({ data: m }) => {
     else throw new Error(`Unknown operation: ${m.op}`);
     self.postMessage({ id: m.id, result, logs: logs.splice(0) });
   } catch (e) {
-    self.postMessage({ id: m.id, error: { ...errorInfo(e), statement, hookFailures: hooks?.failures.slice(), logs: logs.splice(0) } });
+    self.postMessage({ id: m.id, error: { ...errorInfo(e), statement, leftBehind: e.leftBehind, hookFailures: hooks?.failures.slice(), logs: logs.splice(0) } });
   }
 };

@@ -3,7 +3,7 @@ set -euo pipefail
 SPIKE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SPIKE/../.." && pwd)"
 BUILD="$SPIKE/.build"
-BUILD_ONLY=false; BROWSERS="chrome firefox webkit"; CELLS="A,B,E,F,C,D"
+BUILD_ONLY=false; BROWSERS="chrome firefox webkit"; CELLS="A,B,E,F,G,C,D"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --build-only) BUILD_ONLY=true; shift;;

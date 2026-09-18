@@ -9,8 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { chromium, firefox, webkit } from 'playwright';
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const { values: args } = parseArgs({ options: { browser: { type: 'string', default: 'chrome' },
-  cells: { type: 'string', default: 'A,B,E,F,C,D' }, bundles: { type: 'string', default: resolve(directory, '.build') }, out: { type: 'string' } } });
-if (!['chrome', 'firefox', 'webkit'].includes(args.browser) || args.cells.split(',').some(c => !'ABCDEF'.includes(c) || c.length !== 1)) throw new Error('Invalid browser or cells');
+  cells: { type: 'string', default: 'A,B,E,F,G,C,D' }, bundles: { type: 'string', default: resolve(directory, '.build') }, out: { type: 'string' } } });
+if (!['chrome', 'firefox', 'webkit'].includes(args.browser) || args.cells.split(',').some(c => !'ABCDEFG'.includes(c) || c.length !== 1)) throw new Error('Invalid browser or cells');
 const origin = 'http://localhost:18998', type = { chrome: chromium, firefox, webkit }[args.browser];
 const bundles = Object.fromEntries(await Promise.all((await readdir(args.bundles)).map(async name => [name, await readFile(resolve(args.bundles, name))])));
 const out = args.out ?? resolve(directory, `results.${args.browser}.json`), trials = [], skips = [];
@@ -18,7 +18,9 @@ const environment = { browser: args.browser, browserVersion: null, os: `${platfo
   node: process.version, versions: JSON.parse(bundles['versions.json']), measuredAt: new Date().toISOString() };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 let current, fatal;
-async function save() { await writeFile(out, JSON.stringify({ environment, trials, skips, ...(fatal ? { fatal } : {}) }, null, 2) + '\n'); }
+const HEAVY = ['dryTrace', 'trace', 'snapshot', 'logs', 'workerErrors', 'preStopDiagnostics', 'dryMainWrites'];
+const slim = t => { const c = { ...t }; for (const k of HEAVY) delete c[k]; if (c.leftBehind?.trace) delete c.leftBehind.trace; return c; };
+async function save() { await writeFile(out, JSON.stringify({ environment, trials: trials.map(slim), skips, ...(fatal ? { fatal } : {}) }, null, 2) + '\n'); }
 async function launch(profile, quota = false) {
   // Persistent BrowserContext has no public process(). Observe only this launch's
   // spawn whose arguments contain OUR fresh profile, restoring spawn immediately.
@@ -124,6 +126,22 @@ async function quotaTrials() {
     trials.push(record); await save();
   }
 }
+// Cell G: the page stops a worker, stashes the acked set in localStorage and reloads itself; the
+// driver only waits for the page to announce the merged result (evaluate fails across each reload).
+async function reloadTrials() {
+  const profile = await mkdtemp(join(tmpdir(), 'spike2144-reload-')); let run;
+  try {
+    run = await launch(profile);
+    await run.page.goto(`${origin}/?cells=G&browser=${args.browser}`);
+    const started = Date.now();
+    for (;;) {
+      await delay(1000); let result = null;
+      try { result = await run.page.evaluate(() => globalThis.reloadCellsResult ?? null); } catch { /* mid-reload */ }
+      if (result) { trials.push(...result.trials); await save(); break; }
+      if (fatal || Date.now() - started > 60 * 60 * 1000) { skips.push({ cell: 'reload-recovery', reason: 'did not finish within 60 minutes' }); break; }
+    }
+  } finally { if (run) await run.context.close().catch(() => {}); await rm(profile, { recursive: true, force: true }); }
+}
 const timer = setTimeout(() => { fatal = 'Driver exceeded 110 minutes'; current?.close().catch(() => {}); }, 110 * 60 * 1000);
 try {
   const pageCells = ['A', 'B', 'E', 'F'].filter(c => args.cells.split(',').includes(c));
@@ -136,6 +154,7 @@ try {
       await run.page.evaluate(input => globalThis.runCells(input), { cells: pageCells.join(','), browser: args.browser });
     } finally { if (run) await run.context.close().catch(() => {}); await rm(profile, { recursive: true, force: true }); }
   }
+  if (args.cells.split(',').includes('G') && !fatal) await reloadTrials();
   if (args.cells.split(',').includes('C') && !fatal) await processTrials();
   if (args.cells.split(',').includes('D') && !fatal) await quotaTrials();
 } catch (e) { fatal = { name: e.name, message: e.message }; process.exitCode = 1; }
