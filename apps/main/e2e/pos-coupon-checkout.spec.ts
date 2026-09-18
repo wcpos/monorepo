@@ -13,7 +13,13 @@ import {
 	request as playwrightRequest,
 } from '@playwright/test';
 
-import { getStoreUrl, getStoreVariant, listStoreIds, storeRequestOptions } from './fixtures';
+import {
+	ensureRegisterOpen,
+	getStoreUrl,
+	getStoreVariant,
+	listStoreIds,
+	storeRequestOptions,
+} from './fixtures';
 import {
 	createPushOrdersResponseMatcher,
 	liveOrderTest as liveTest,
@@ -160,6 +166,7 @@ for (const targetStoreId of storeTargets) {
 					const captureConsole = (message: ConsoleMessage) => consoleLines.push(message.text());
 					page.on('console', captureConsole);
 					try {
+						await ensureRegisterOpen(page);
 						const label = newRunLabel();
 						// The fixture's own tax-exempt product, found by its run-private token (the
 						// same search-then-add path checkout-probe uses for run-private products).

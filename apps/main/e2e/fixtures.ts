@@ -111,6 +111,29 @@ export async function becomesVisible(locator: Locator, timeout: number): Promise
 }
 
 /**
+ * Open a real live-store session when the cart column shows the open-register
+ * landing; leave it open so later runs can reuse it.
+ *
+ * Races the landing against the ready cart header rather than waiting a fixed
+ * few seconds for the card: an already-open register resolves as soon as its
+ * header renders (this runs several times per checkout), and a slow register
+ * hydration still gets the normal readiness budget instead of a short timer
+ * that would return just before the card appears.
+ */
+export async function ensureRegisterOpen(page: Page): Promise<void> {
+	const card = page.getByTestId('open-register-card');
+	const cartReady = page.getByTestId('add-cart-item-menu');
+	await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
+	if (!(await card.isVisible())) return;
+	const amount = page.getByTestId('open-register-amount');
+	await amount.fill((await amount.inputValue()) || '100');
+	await page.getByTestId('open-register-button').click();
+	await expect(card).toBeHidden({ timeout: 30_000 });
+	// A healthy open register has no warning pill; its cart header is ready instead.
+	await expect(page.getByTestId('add-cart-item-menu')).toBeVisible({ timeout: 30_000 });
+}
+
+/**
  * Try to add the fallback E2E product to the cart by searching for its SKU.
  *
  * Returns `added` when the product landed in the cart, `unavailable` when the

@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
+import { ensureRegisterOpen } from './fixtures';
 import { beginCartAddMeasurement, expectCartAddMeasurement } from './cart-add-timing';
 import {
 	addCheckoutProbeProduct,
@@ -31,6 +32,7 @@ async function addFirstProductToCart(page: Page) {
  * dropdown trigger in the cart header.
  */
 async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
+	await ensureRegisterOpen(page);
 	await page.getByTestId('add-cart-item-menu').click();
 	const menuItem = page.getByTestId(menuItemTestId);
 	await expect(menuItem).toBeVisible({ timeout: 5_000 });
