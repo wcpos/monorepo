@@ -157,3 +157,7 @@ Budget: at most **350 added lines** of non-generated code across the new spike f
 and `results.json` do not count). If you are about to exceed it, STOP and report why rather than
 continuing; splitting into more files does not raise it. Build the harness, run it, write
 RESULTS.md, then report what you ran and every number you could not obtain.
+
+## Budget note (2026-09-18, operator)
+
+The 350-line budget above was the delegation bound for the first build, and Codex met it (311 lines before the repo formatter). The review rounds then required the screens' real selectors, RxQuery's count normalization, three grid windows per query, regex unescaping with `ESCAPE`, a paired-latency table and a staleness guard, and the repo formatter roughly doubled the line count of the same code. The harness now stands at ~620 formatted lines; that overrun is accepted by the operator as the cost of the review findings, not a silent breach.

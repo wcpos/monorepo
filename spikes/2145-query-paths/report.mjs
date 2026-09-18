@@ -38,25 +38,38 @@ for (const query of [...new Set(result.cells.map((c) => c.query))]) {
 }
 // Both screens wait on find AND count before they render (use-local-query.ts combineLatest of
 // documents$/total$; execute-query.ts combineLatest of query.$/count.$), and one worker serves
-// both, so the user-visible latency of a search keystroke or pill change is the sum.
+// both. A selector change (keystroke, pill) re-runs both; extending the limit on scroll re-runs
+// only the find, because RxDB's query cache returns the unchanged count query with its result.
 lines.push(
-	'### Screen-visible latency: find + count on one worker (median ms)',
+	'### Screen-visible latency on one worker (median ms)',
 	'',
-	'| Query | Window | Fallback | Modifier | One statement |',
+	'| Query | Action | Fallback | Modifier | One statement |',
 	'|---|---|---:|---:|---:|'
 );
 for (const query of [...new Set(result.cells.map((c) => c.query))]) {
-	const count = (mode) =>
-		med(result.cells.find((c) => c.query === query && c.operation === 'count' && c.mode === mode), 'workerMs');
-	for (const op of [...new Set(result.cells.filter((c) => c.query === query && c.operation !== 'count').map((c) => c.operation))]) {
-		const find = (mode) =>
-			med(result.cells.find((c) => c.query === query && c.operation === op && c.mode === mode), 'workerMs');
-		lines.push(
-			`| ${query} | ${op} | ${(find('fallback') + count('fallback')).toFixed(1)} | ${(find('modifier') + count('modifier')).toFixed(1)} | ${(find('direct') + count('direct')).toFixed(1)} |`
+	const cell = (op, mode) =>
+		med(
+			result.cells.find((c) => c.query === query && c.operation === op && c.mode === mode),
+			'workerMs'
 		);
-	}
+	const ops = [
+		...new Set(
+			result.cells
+				.filter((c) => c.query === query && c.operation !== 'count')
+				.map((c) => c.operation)
+		),
+	];
+	const row = (label, f) =>
+		lines.push(
+			`| ${query} | ${label} | ${f('fallback').toFixed(1)} | ${f('modifier').toFixed(1)} | ${f('direct').toFixed(1)} |`
+		);
+	row(`${ops[0]} + count (selector change)`, (mode) => cell(ops[0], mode) + cell('count', mode));
+	for (const op of ops.slice(1))
+		row(`${op} only (limit extension, count cached)`, (mode) => cell(op, mode));
 }
 lines.push('', '### Direct query plans (observed)', '');
+// The prose above the markers is hand-written from one run; say so loudly if results.json moved on.
+const stamp = result.environment.measuredAt;
 for (const [key, p] of Object.entries(result.plans)) {
 	const details = p.plan.map((r) => r.detail).join('; ');
 	lines.push(
@@ -71,6 +84,12 @@ for (const [key, p] of Object.entries(result.plans)) {
 }
 const path = new URL('./RESULTS.md', import.meta.url),
 	old = await readFile(path, 'utf8');
+const stale = !old.split('<!-- generated:start -->')[0].includes(stamp);
+if (stale)
+	lines.unshift(
+		`> **STALE PROSE.** results.json is from the run stamped \`${stamp}\`, but the hand-written sections above this marker were not written from it (they name a different \`measuredAt\`). Re-derive the verdict and headline tables from the tables below before quoting them.`,
+		''
+	);
 await writeFile(
 	path,
 	old.replace(
@@ -78,4 +97,8 @@ await writeFile(
 		`<!-- generated:start -->\n${lines.join('\n')}\n<!-- generated:end -->`
 	)
 );
-console.info('Updated RESULTS.md tables and environment from results.json.');
+console.info(
+	stale
+		? `Updated RESULTS.md tables from results.json (${stamp}); the prose above the marker is from a different run and is flagged STALE.`
+		: `Updated RESULTS.md tables from results.json (${stamp}); the prose above the marker was written from this run.`
+);

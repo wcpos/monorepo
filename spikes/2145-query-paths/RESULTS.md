@@ -4,7 +4,10 @@ Measured 2026-09-18 on this Mac (Apple M4 Pro, Chrome 154.0.8037.44, rxdb + rxdb
 `@sqlite.org/sqlite-wasm` 3.53.4-build1, `opfs-sahpool`, WAL) on the stack spike 2138 proved works:
 premium `getRxStorageSQLite` in a dedicated worker, driven through premium's worker RPC from a
 headless page. 46,000 logs rows of 500 B and 20,000 engine-shaped orders of ~850 B. Ticket:
-[#2145](https://github.com/wcpos/monorepo/issues/2145).
+[#2145](https://github.com/wcpos/monorepo/issues/2145). The prose and headline tables in this file
+were written from the run stamped `2026-09-18T00:43:03.794Z` (`results.json` → `measuredAt`);
+`report.mjs` regenerates only the section between the `generated` markers and flags this prose as
+stale if `results.json` is ever from a different run.
 
 The queries are the ones the screens issue: the Logs grid's `buildScanSearchSelector` (five `$regex`
 arms per term, terms regex-escaped) sorted by timestamp, and the Orders screen's default scope —
@@ -23,15 +26,17 @@ change to 0.72 s — and those are still full scans, which only indexed columns 
 
 Screen-visible latency — both screens render only when `find` **and** `count` have answered, and one
 worker serves both (`use-local-query.ts` `combineLatest([documents$, total$])`; `execute-query.ts`
-`combineLatest([query.$, count.$])`):
+`combineLatest([query.$, count.$])`). A selector change (a keystroke, a pill) re-runs both; extending
+the limit on scroll re-runs only the `find`, because RxDB's query cache returns the unchanged count
+query with its current result:
 
 | Screen action | As shipped (fallback) | With `queryModifier` | Patched (one statement) |
 |---|---:|---:|---:|
-| Logs: keystroke, first window of 20 (one term) | **115 s** | 7.5 s | 0.38 s |
-| Logs: keystroke, two terms | **121 s** | 4.2 s | 0.38 s |
-| Logs: scroll to 100 rows | **141 s** | 7.5 s | 0.39 s |
-| Orders: pill change, first window of 10 | **29.7 s** | 15.5 s | 0.72 s |
-| Orders: scroll to 100 rows | **32.9 s** | 15.5 s | 0.72 s |
+| Logs: keystroke, first window of 20 (one term) — find + count | **115 s** | 7.5 s | 0.38 s |
+| Logs: keystroke, two terms — find + count | **121 s** | 4.2 s | 0.38 s |
+| Logs: scroll to 100 rows — find only, count cached | **32.9 s** | 16 ms | 11 ms |
+| Orders: pill change, first window of 10 — find + count | **29.7 s** | 15.5 s | 0.72 s |
+| Orders: scroll to 100 rows — find only, count cached | **3.7 s** | 7 ms | 5 ms |
 
 The two halves (median ms in the worker, five runs, three for the fallback counts):
 
@@ -92,9 +97,10 @@ for a Logs keystroke and 30 s for an Orders pill change**, in the storage worker
 (`GLOB` for the fold-space arm; `LIKE … ESCAPE '\'` for the four case-insensitive raw arms; `EXISTS
 (SELECT 1 FROM json_each(…))` per `$elemMatch`; the regex-escaped term unescaped first — verified
 against the shipped fallback on the punctuation term `co-balt`), every grid window lands within
-1.5–2.5x of the floor, in milliseconds. But the count survives the loop and the screens wait for it:
-**7.5 s per Logs keystroke, 15.5 s per Orders pill change**. That is an order of magnitude better
-than shipped and still a stall on every interaction.
+1.5–2.5x of the floor, in milliseconds — so scrolling, which re-runs only the `find`, becomes
+instant (16 ms / 7 ms at 100 rows). But every selector change re-runs the count, which survives the
+loop, and the screens wait for it: **7.5 s per Logs keystroke, 15.5 s per Orders pill change**. That
+is an order of magnitude better than shipped and still a stall on the interactions that matter most.
 
 **3. A full fix.** A ~20-line patch to premium's `sqlite-storage-instance.js` — let the modifier
 declare the selector fully translated, then (a) run `query()` as one statement without the paging
@@ -123,7 +129,7 @@ for the same queries (that is the benchmark ticket, #2143).
 - Runs are serial: fallback and direct share one worker/dataset; modifier gets an identical seed in its own worker and pool. Fresh database names, 1,000-row writes, one warm-up then five samples per cell (three for a fallback count, ~1.8 min a sample on logs); instances close and workers terminate. No app observers, retention deletes or background sync. Warm-cache measurements, not cold-start latency.
 - Worker time wraps the storage instance's `query()`/`count()` (a nested query is counted once); `all() ms` sums adapter call time. Calls and rows-to-JS count every row SQLite returned, including the count scalar and the final empty fallback page; they do not count SQLite's internal row visits. Seeding, `EXPLAIN`, validation and metrics retrieval are untimed.
 - Page timing covers premium's worker RPC for fallback/modifier; direct uses a separate type-tagged message on the same worker and returns equivalent documents/count. Direct worker time is one statement plus document `JSON.parse`, no paging, no matcher. No patched premium build was run; direct is the proxy the ticket asked for, not a measurement of a patch.
-- Every sample checks exact ordered ids / count across all three modes and the expected cardinality, so the modifier's rewrite (including the unescaping) is verified against the shipped matcher on every cell. The screen-visible table sums the median find and median count of the same mode; the two requests are issued together and serialize on the one worker.
+- Every sample checks exact ordered ids / count across all three modes and the expected cardinality, so the modifier's rewrite (including the unescaping) is verified against the shipped matcher on every cell. The screen-visible table sums the median find and median count of the same mode for a selector change (the two requests are issued together and serialize on the one worker) and uses the find alone for a limit extension, where RxDB's query cache returns the unchanged count query and its result; the harness does not drive the cache itself, so that row is derived, not observed.
 - An earlier run of this harness (superseded, kept in the PR history) used a cashier-only orders selector, an open-status variant that is not a fallback path, a fixed limit of 50, and the grid sort on counts; it read 310 s / 95 s for the counts. Those figures are withdrawn.
 
 <!-- generated:start -->
@@ -178,17 +184,17 @@ All timing/count cells are median / max of five runs after one discarded warm-up
 | find100 | modifier | 7.30 / 7.30 | 7.10 / 7.20 | 7.60 / 7.70 | 2.00 / 2.00 | 100.00 / 100.00 | 100.00 / 100.00 | 1.49× | 1.43× |
 | count | modifier | 15540.80 / 15651.00 | 15536.40 / 15645.90 | 15541.00 / 15652.30 | 51.00 / 51.00 | 2500.00 / 2500.00 | 2500.00 / 2500.00 | 21.74× | 21.71× |
 
-### Screen-visible latency: find + count on one worker (median ms)
+### Screen-visible latency on one worker (median ms)
 
-| Query | Window | Fallback | Modifier | One statement |
+| Query | Action | Fallback | Modifier | One statement |
 |---|---|---:|---:|---:|
-| logs-1 | find20 | 114703.7 | 7500.1 | 380.6 |
-| logs-1 | find60 | 127825.8 | 7510.9 | 384.8 |
-| logs-1 | find100 | 141061.3 | 7510.7 | 389.0 |
-| logs-2 | find20 | 121275.7 | 4153.3 | 383.5 |
-| orders | find10 | 29732.2 | 15543.6 | 715.5 |
-| orders | find50 | 31120.1 | 15543.4 | 717.5 |
-| orders | find100 | 32948.1 | 15548.1 | 719.8 |
+| logs-1 | find20 + count (selector change) | 114703.7 | 7500.1 | 380.6 |
+| logs-1 | find60 only (limit extension, count cached) | 19682.1 | 16.5 | 6.6 |
+| logs-1 | find100 only (limit extension, count cached) | 32917.6 | 16.3 | 10.8 |
+| logs-2 | find20 + count (selector change) | 121275.7 | 4153.3 | 383.5 |
+| orders | find10 + count (selector change) | 29732.2 | 15543.6 | 715.5 |
+| orders | find50 only (limit extension, count cached) | 1846.5 | 2.6 | 2.6 |
+| orders | find100 only (limit extension, count cached) | 3674.5 | 7.3 | 4.9 |
 
 ### Direct query plans (observed)
 
