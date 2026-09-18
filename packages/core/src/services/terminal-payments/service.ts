@@ -14,7 +14,7 @@ import {
 	offlineProviderRefs,
 } from '../../screens/main/pos/checkout/payments/device/device-leg';
 import { getDriver, listDrivers } from '../payment-drivers/registry';
-import { enterReceipt } from '../../screens/main/pos/checkout/checkout-mode';
+import { isSaleComplete, type SaleOutcome } from '../../screens/main/pos/checkout/sale-completion';
 import { createServerLeg } from '../../screens/main/pos/checkout/payments/server/server-leg';
 
 import type { OfflineSettlement } from '../payment-drivers/types';
@@ -51,7 +51,7 @@ export interface TerminalPaymentsServiceOptions {
 	completeOrder?: (
 		orderUuid: string,
 		actor: { id: string; name: string } | undefined,
-		refresh: boolean
+		outcome: Extract<SaleOutcome, { source: 'terminal' }>
 	) => Promise<void>;
 	/**
 	 * The store's price decimals for resumed legs, read at resume time (a getter, so a
@@ -325,11 +325,17 @@ export class TerminalPaymentsService {
 		}
 		this.settlements.set(row.id, undefined);
 		const actor = this.options.getActor?.();
+		const sale: Extract<SaleOutcome, { source: 'terminal' }> = {
+			source: 'terminal',
+			row,
+			order: order ?? null,
+		};
+		const dp = typeof this.options.dp === 'function' ? this.options.dp() : (this.options.dp ?? 2);
 		const result: TerminalSettlement = {
 			payment: row,
 			outcome,
 			order,
-			saleComplete: outcome === 'captured' && !!order && Number(order.balance) === 0,
+			saleComplete: outcome === 'captured' && isSaleComplete(sale, dp),
 			finishingError,
 		};
 		const context = {
@@ -363,7 +369,8 @@ export class TerminalPaymentsService {
 			});
 		if (outcome === 'captured' && !order) {
 			try {
-				result.saleComplete = Number(await this.options.getBalance?.(orderUuid)) === 0;
+				sale.balance = await this.options.getBalance?.(orderUuid);
+				result.saleComplete = isSaleComplete(sale, dp);
 			} catch (error) {
 				result.finishingError = getErrorMessage(error);
 			}
@@ -374,8 +381,7 @@ export class TerminalPaymentsService {
 		this.publish();
 		try {
 			if (result.saleComplete) {
-				enterReceipt(orderUuid, { select: false });
-				await this.options.completeOrder?.(orderUuid, actor, !row.recorded_offline);
+				await this.options.completeOrder?.(orderUuid, actor, sale);
 			}
 		} catch (error) {
 			result.finishingError = getErrorMessage(error);

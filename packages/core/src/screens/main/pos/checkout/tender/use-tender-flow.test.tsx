@@ -24,7 +24,7 @@ import {
 	setTenderMethod,
 	useCheckoutMode,
 } from '../checkout-mode';
-import * as provenance from '../provenance/persist-provenance';
+import * as provenance from '../sale-completion';
 import { useLedgerView } from './use-ledger-view';
 import { useTenderFlow } from './use-tender-flow';
 import { rememberedReaders } from './remembered-readers';
@@ -34,7 +34,7 @@ import type {
 	TerminalPaymentsService,
 } from '../../../../../services/terminal-payments';
 
-const persistProvenanceSpy = jest.spyOn(provenance, 'persistProvenance');
+const persistProvenanceSpy = jest.spyOn(provenance, 'persistSaleProvenance');
 
 let mockRealService: TerminalPaymentsService | null = null;
 let mockLeg: TerminalLegState | null = null;
@@ -559,7 +559,9 @@ describe('useTenderFlow', () => {
 		await act(async () => result.current.takeTender());
 
 		expect(mockCompleteOrderFlow).toHaveBeenCalledTimes(1);
-		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: true });
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({ source: 'manual', via: 'online' })
+		);
 	});
 
 	it('completes a zero-balance order without recording a payment row', async () => {
@@ -576,7 +578,7 @@ describe('useTenderFlow', () => {
 				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
 			},
 		});
-		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: false });
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ source: 'zero-balance' });
 	});
 
 	it('does not record an online-only method after connectivity drops', async () => {
@@ -612,7 +614,15 @@ describe('useTenderFlow', () => {
 			amount: '50.00',
 			tendered: '50.00',
 		});
-		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				source: 'manual',
+				mirrorFailed: false,
+				preLegBalanceMinor: 9295,
+				amountMinor: 5000,
+			})
+		);
+		expect(provenance.isSaleComplete(mockCompleteOrderFlow.mock.calls[0][0], 2)).toBe(false);
 		expect(result.current.state.view).toBe('amount');
 	});
 
@@ -1281,12 +1291,31 @@ describe('server tender', () => {
 			>('../../../../../services/terminal-payments/service');
 			let rejectCompletion!: (error: Error) => void;
 			const captured = payment({ capture_mode: 'server', method_id: 'terminal' });
-			const completeOrder = jest.fn(
-				() =>
-					new Promise<void>((_resolve, reject) => {
-						rejectCompletion = reject;
-					})
-			);
+			const completeOrder = jest.fn(async (_uuid, actor, outcome) => {
+				let finishingError: Error;
+				const ready = new Promise<void>((resolve) => {
+					rejectCompletion = (error) => {
+						finishingError = error;
+						resolve();
+					};
+				});
+				await provenance.completeSale(
+					{
+						userDB: {},
+						siteUuid: 'site',
+						storeId: 9,
+						dp: 2,
+						actor,
+						runtime: { engine: { require: () => ({ ready, release: jest.fn() }) } },
+						stockAdjustment: () => {
+							throw finishingError;
+						},
+					} as unknown as provenance.SaleContext,
+					order,
+					outcome,
+					{ host: 'background' }
+				);
+			});
 			const service = new TerminalPaymentsService({
 				http: {
 					get: async () => ({
@@ -1624,17 +1653,7 @@ jest.mock('../../../../../services/register/use-register-binding', () => ({
 		bind: jest.fn(),
 	}),
 }));
-jest.mock('../../../../../services/register/register-document', () => ({
-	readRegister: async () => ({ id: 'till' }),
-	readBoundRegister: async (_userDB: unknown, _siteUuid: string, _storeId?: number) =>
-		mockBoundRegisterId ? { id: mockBoundRegisterId } : null,
-}));
-jest.mock('../provenance/stamp-completion', () => ({
-	completionMeta: async ({ meta_data }: { meta_data: unknown[] }) => [
-		...meta_data,
-		{ key: '_wcpos_sale_counter', value: '1' },
-	],
-}));
+
 it('zero balance writes completion and provenance together exactly once', async () => {
 	mockPayload = { total: '0.00', meta_data: [] };
 	mockLocalPatch.mockClear();
@@ -1648,7 +1667,7 @@ it('zero balance writes completion and provenance together exactly once', async 
 	});
 });
 
-it('full manual online tender enqueues one follow-up provenance patch after the mirror', async () => {
+it('full manual online tender persists provenance before POST and the mirror', async () => {
 	mockUseRealManual = true;
 	mockLocalPatch.mockClear();
 	mockManualMirror.mockClear();
@@ -1664,6 +1683,15 @@ it('full manual online tender enqueues one follow-up provenance patch after the 
 		await act(async () => view.result.current.takeTender());
 		expect(mockManualMirror).toHaveBeenCalledTimes(1);
 		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
+			mockPushDocument.mock.invocationCallOrder[0]
+		);
+		expect(mockPushDocument.mock.invocationCallOrder[0]).toBeLessThan(
+			mockManualPost.mock.invocationCallOrder[0]
+		);
+		expect(mockManualPost.mock.invocationCallOrder[0]).toBeLessThan(
+			mockManualMirror.mock.invocationCallOrder[0]
+		);
 		expect(mockLocalPatch).toHaveBeenCalledWith({
 			document: order,
 			data: { meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]) },
@@ -1707,12 +1735,14 @@ describe('provider completion provenance before intent', () => {
 			rerender();
 			act(() => result.current.pickMethod('terminal'));
 			expect(result.current.entryAppliedMinor).toBe(3098);
+			const beforeMeta = mockPayload.meta_data;
 			await act(async () => result.current.takeTender());
 			const split = {
 				key: '_wcpos_split',
 				value: JSON.stringify({ kind: 'even', ways: 3, shares: ['30.99', '30.98', '30.98'] }),
 			};
 			expect(persistProvenanceSpy).toHaveBeenCalledWith(
+				expect.anything(),
 				expect.objectContaining({ extraMeta: [split] })
 			);
 			// A declined attempt followed by a re-divided remainder must not leave the first
@@ -1724,10 +1754,10 @@ describe('provider completion provenance before intent', () => {
 					meta_data: existing
 						? [
 								split,
-								...mockPayload.meta_data.filter(({ key }) => key !== '_wcpos_split'),
+								...beforeMeta.filter(({ key }) => key !== '_wcpos_split'),
 								{ key: '_wcpos_sale_counter', value: '1' },
 							]
-						: [...mockPayload.meta_data, { key: '_wcpos_sale_counter', value: '1' }, split],
+						: [...beforeMeta, { key: '_wcpos_sale_counter', value: '1' }, split],
 				},
 			});
 			expect(mockBegin).toHaveBeenCalledTimes(1);
@@ -1741,6 +1771,7 @@ describe('provider completion provenance before intent', () => {
 		await act(async () => result.current.takeTender());
 		const cleared = { key: '_wcpos_split', value: null };
 		expect(persistProvenanceSpy).toHaveBeenCalledWith(
+			expect.anything(),
 			expect.objectContaining({ extraMeta: [cleared] })
 		);
 		// A synced entry is nulled rather than dropped: that is how Woo is told to delete it.
@@ -1791,7 +1822,7 @@ describe('provider completion provenance before intent', () => {
 			data: { meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
 		});
 		expect(persistProvenanceSpy).toHaveBeenCalledTimes(1);
-		expect(persistProvenanceSpy.mock.calls[0][0]).not.toHaveProperty('extraMeta');
+		expect(persistProvenanceSpy.mock.calls[0][1]).toHaveProperty('extraMeta', undefined);
 		expect(mockPushDocument).toHaveBeenCalledWith(order);
 		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
 			mockPushDocument.mock.invocationCallOrder[0]
@@ -1898,7 +1929,9 @@ it('reports a payment the store took but the till could not mirror, and never sa
 		);
 		expect(mockError).not.toHaveBeenCalled();
 		// The store said the order is settled, so the sale still finishes.
-		expect(mockCompleteOrderFlow).toHaveBeenCalledWith({ refresh: true });
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({ source: 'manual', via: 'online' })
+		);
 	} finally {
 		view.unmount();
 		mockUseRealManual = false;
@@ -1926,7 +1959,14 @@ it('keeps the pane on the balance the store reports when a partial payment could
 		await act(async () => view.result.current.takeTender());
 
 		expect(mockWarn).toHaveBeenCalledTimes(1);
-		expect(mockCompleteOrderFlow).not.toHaveBeenCalled();
+		expect(mockCompleteOrderFlow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				source: 'manual',
+				mirrorFailed: true,
+				order: { status: 'pos-open', balance: '5.00' },
+			})
+		);
+		expect(provenance.isSaleComplete(mockCompleteOrderFlow.mock.calls[0][0], 2)).toBe(false);
 		// The resident order is the copy that failed to save, and the recovery refresh may
 		// not have landed, so the derived balance is still the pre-payment one. What must
 		// not happen is the keypad pre-typing the whole balance again on a payment the store
@@ -2083,3 +2123,69 @@ it('does not describe a refused payment with a mirror failure as paid', async ()
 	expect(Toast.show).not.toHaveBeenCalled();
 	hook.unmount();
 });
+
+jest.mock('../sale-completion', () => {
+	const actual = jest.requireActual<typeof import('../sale-completion')>('../sale-completion');
+	const { withMetaReplaced } =
+		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+	const completionMetaFor = jest.fn<
+		ReturnType<typeof actual.completionMetaFor>,
+		Parameters<typeof actual.completionMetaFor>
+	>();
+	completionMetaFor.mockImplementation(async (_ctx, meta, facts) =>
+		withMetaReplaced(meta, [{ key: '_wcpos_sale_counter', value: '1' }, ...(facts.extraMeta ?? [])])
+	);
+	return {
+		...actual,
+		completionMetaFor,
+		persistSaleProvenance: jest.fn(
+			async (
+				ctx: import('../sale-completion').SaleContext,
+				input: Parameters<typeof actual.persistSaleProvenance>[1]
+			) => {
+				const meta_data = input.online
+					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
+					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
+				if (!input.online && !input.extraMeta) return;
+				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+					throw new Error('provenance_save_failed');
+				if (input.online) {
+					mockPayload.meta_data = meta_data;
+					await ctx.pushDocument(input.order);
+				}
+			}
+		),
+		prepareSale: jest.fn(
+			async (
+				_ctx: import('../sale-completion').SaleContext,
+				input: Parameters<typeof actual.prepareSale>[1]
+			) => {
+				if (input.completing && input.bindingStatus === 'choose')
+					return { ok: false, reason: 'choose_register' };
+				if (mockSessionsOn && !mockSessionId)
+					throw new (jest.requireActual(
+						'../../../../../services/register-session/session-store'
+					).RegisterSessionRequiredError)();
+				return {
+					ok: true,
+					registerId: mockBoundRegisterId,
+					sessionId: mockSessionsOn ? mockSessionId : null,
+				};
+			}
+		),
+	};
+});
+
+jest.mock('../hooks/use-sale-context', () => ({
+	useSaleContext: () => ({
+		userDB: {},
+		siteUuid: 'site',
+		storeId: 1,
+		runtime: mockRuntime,
+		dp: 2,
+		localPatch: mockLocalPatch,
+		pushDocument: mockPushDocument,
+		actor: { id: '7', name: 'Pat' },
+		stockAdjustment: mockAdjustStock,
+	}),
+}));

@@ -2,7 +2,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { PaymentRow } from '@wcpos/order-math';
 
-import * as checkoutMode from '../../screens/main/pos/checkout/checkout-mode';
 import { createDeviceLeg } from '../../screens/main/pos/checkout/payments/device/device-leg';
 import {
 	method as deviceMethod,
@@ -183,11 +182,18 @@ it('captured callback fires once with authoritative summary and a final leg can 
 	await jest.advanceTimersByTimeAsync(0);
 	await leg.checkNow();
 	expect(c.completeOrder).toHaveBeenCalledTimes(1);
-	expect(c.completeOrder).toHaveBeenCalledWith('order', undefined, true);
+	expect(c.completeOrder).toHaveBeenCalledWith(
+		'order',
+		undefined,
+		expect.objectContaining({
+			source: 'terminal',
+			row: expect.objectContaining({ recorded_offline: false }),
+		})
+	);
 	expect(c.service.get('order')).toBeNull();
 	expect(c.service.begin({ ...input, row: { ...row, id: 'new-leg' } })).not.toBe(leg);
 });
-it('retires a completed capture after receipt entry without forgetting its narration', async () => {
+it('retires a completed capture after owner completion without forgetting its narration', async () => {
 	const c = setup();
 	const info = getLogger([]).info as jest.Mock;
 	info.mockClear();
@@ -198,7 +204,6 @@ it('retires a completed capture after receipt entry without forgetting its narra
 				finish = resolve;
 			})
 	);
-	const enterReceipt = jest.spyOn(checkoutMode, 'enterReceipt');
 	c.http.get.mockResolvedValue({
 		data: { payment: { ...row, status: 'captured' }, order: c.summary },
 	});
@@ -206,8 +211,6 @@ it('retires a completed capture after receipt entry without forgetting its narra
 		c.service.begin(input);
 		expect(c.service.readersInUse().has('reader')).toBe(true);
 		await jest.advanceTimersByTimeAsync(0);
-		expect(enterReceipt).toHaveBeenCalledTimes(1);
-		expect(enterReceipt).toHaveBeenCalledWith('order', { select: false });
 		expect(c.service.get('order')?.settlement?.saleComplete).toBe(true);
 		finish();
 		await jest.advanceTimersByTimeAsync(0);
@@ -216,12 +219,10 @@ it('retires a completed capture after receipt entry without forgetting its narra
 		c.service.resume(input);
 		await jest.advanceTimersByTimeAsync(0);
 		expect(c.completeOrder).toHaveBeenCalledTimes(1);
-		expect(enterReceipt).toHaveBeenCalledTimes(1);
 		expect(
 			info.mock.calls.filter(([, options]) => options.context?.type === 'payment.captured')
 		).toHaveLength(1);
 	} finally {
-		enterReceipt.mockRestore();
 		c.service.stop();
 	}
 });
@@ -308,7 +309,14 @@ it('online device capture notifies once without tracking or writing an offline s
 	await service.flushOffline();
 	expect(service.get('order')).toBeNull();
 	expect(c.completeOrder).toHaveBeenCalledTimes(1);
-	expect(c.completeOrder).toHaveBeenCalledWith('order', undefined, true);
+	expect(c.completeOrder).toHaveBeenCalledWith(
+		'order',
+		undefined,
+		expect.objectContaining({
+			source: 'terminal',
+			row: expect.objectContaining({ recorded_offline: false }),
+		})
+	);
 	expect(trackOffline).not.toHaveBeenCalled();
 	expect(patchAndEnqueue).not.toHaveBeenCalled();
 	expect(c.http.post.mock.calls.map(([url]) => url)).toEqual([
@@ -656,7 +664,14 @@ it('retains capture before refresh, narrates once across duplicate/stale deliver
 		order: c.summary,
 		saleComplete: true,
 	});
-	expect(completeOrder).toHaveBeenCalledWith('order', { id: '9', name: 'Sam' }, true);
+	expect(completeOrder).toHaveBeenCalledWith(
+		'order',
+		{ id: '9', name: 'Sam' },
+		expect.objectContaining({
+			source: 'terminal',
+			row: expect.objectContaining({ recorded_offline: false }),
+		})
+	);
 	expect(info).toHaveBeenCalledWith(
 		'Card payment taken',
 		expect.objectContaining({ actor: { id: '9', name: 'Sam' } })
@@ -718,7 +733,14 @@ it('narrates offline authorization once and completes without refresh, not again
 		})
 	);
 	expect(service.get('order')).toBeNull();
-	expect(c.completeOrder).toHaveBeenCalledWith('order', { id: '7', name: 'Pat' }, false);
+	expect(c.completeOrder).toHaveBeenCalledWith(
+		'order',
+		{ id: '7', name: 'Pat' },
+		expect.objectContaining({
+			source: 'terminal',
+			row: expect.objectContaining({ recorded_offline: true }),
+		})
+	);
 	service.subscribe(jest.fn())();
 	service.subscribe(jest.fn());
 	online = true;

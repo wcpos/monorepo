@@ -1,9 +1,7 @@
-import { readLedger } from '@wcpos/order-math';
 import type { EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 
-import { reportProvenanceGap } from '../provenance/provenance-gap';
 import { stockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 // Bound the post-payment wait so a stalled refresh cannot strand checkout.
@@ -88,35 +86,4 @@ export async function reconcileCompletedOrder(
 		(item.meta_data as { key: string }[] | undefined)?.some((meta) => meta.key === '_reduced_stock')
 	);
 	adjustStock(reducedStockItems);
-}
-
-/** Shared completion writes only; receipt presentation belongs to the caller. */
-export async function completeRecordedOrder(
-	runtime: Parameters<typeof reconcileCompletedOrder>[0],
-	order: EngineRecord<'orders'>,
-	actor: { id: string; name: string } | undefined,
-	provenance: Omit<Parameters<typeof reportProvenanceGap>[0], 'order'>,
-	refresh = true,
-	stockAdjustment?: Parameters<typeof reconcileCompletedOrder>[3]
-): Promise<void> {
-	let latest = order.getLatest().payload;
-	await reportProvenanceGap({
-		...provenance,
-		order: { id: latest.id, uuid: order.uuid, meta_data: latest.meta_data },
-	});
-	await reconcileCompletedOrder(runtime, order, refresh, stockAdjustment);
-	latest = order.getLatest().payload;
-	logger.info(`Sale ${order.uuid} completed`, {
-		actor,
-		context: {
-			type: 'checkout.completed',
-			orderId: latest.id ?? null,
-			orderUUID: order.uuid,
-			orderNumber: latest.number,
-			total: latest.total,
-			paymentLegs: readLedger(latest.meta_data).filter(
-				(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
-			).length,
-		},
-	});
 }

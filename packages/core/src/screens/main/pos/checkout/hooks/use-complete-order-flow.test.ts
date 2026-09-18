@@ -96,11 +96,11 @@ describe('useCompleteOrderFlow', () => {
 		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
 	});
 
-	it('force-refreshes by default before adjusting stock and routing', async () => {
+	it('force-refreshes a completed gateway contract before adjusting stock and routing', async () => {
 		const { record, reduced } = makeOrder();
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 
-		await act(async () => result.current());
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
 
 		expect(mockInfo).toHaveBeenCalledWith(expect.any(String), {
 			actor: { id: '7', name: 'pat' },
@@ -132,7 +132,7 @@ describe('useCompleteOrderFlow', () => {
 		const { record, reduced } = makeOrder(null);
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 
-		await act(async () => result.current({ refresh: false }));
+		await act(async () => result.current({ source: 'zero-balance' }));
 
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
@@ -144,17 +144,19 @@ describe('useCompleteOrderFlow', () => {
 	it('closes the phone sheet when receipts are disabled', async () => {
 		mockScreenSize = 'sm';
 		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
-		await act(async () => result.current());
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
 		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
 	});
 
-	it('rejects a default refresh when the order has no remote id', async () => {
+	it('rejects a contract refresh when the order has no remote id', async () => {
 		const { record } = makeOrder(null);
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 
-		await expect(result.current()).rejects.toThrow('checkout_refresh_requires_persisted_order');
+		await expect(
+			result.current({ source: 'gateway-contract', status: 'completed' })
+		).rejects.toThrow('checkout_refresh_requires_persisted_order');
 		expect(mockInfo).not.toHaveBeenCalled();
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).not.toHaveBeenCalled();
@@ -166,7 +168,7 @@ describe('useCompleteOrderFlow', () => {
 		mockRequire.mockReturnValue({ ready: new Promise<void>(() => undefined), release });
 		const { record } = makeOrder();
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
-		const completion = result.current();
+		const completion = result.current({ source: 'gateway-contract', status: 'completed' });
 
 		await act(async () => {
 			await jest.advanceTimersByTimeAsync(10_000);
@@ -190,7 +192,7 @@ it.each([true, false])(
 		resetCheckoutMode();
 		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
 		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record, 'modal'));
-		await act(async () => result.current());
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
 		expect(getCheckoutModeSnapshot().receiptOrders.size).toBe(0);
 		expect(mockReplace).toHaveBeenCalledWith(
@@ -215,7 +217,7 @@ describe('useCompleteOrderFlow provenance gap', () => {
 	it('reports a completed sale that carries no store register, once it has completed', async () => {
 		const { record } = makeOrder();
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
-		await act(async () => result.current());
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
 		expect(mockWarn).toHaveBeenCalledWith('Sale recorded without register provenance', {
 			context: {
 				type: 'checkout.provenance-skipped',
@@ -231,7 +233,7 @@ describe('useCompleteOrderFlow provenance gap', () => {
 		mockBound = { id: 'elsewhere', name: 'Other' };
 		const { record } = makeOrder();
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
-		await act(async () => result.current());
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
 		expect(mockWarn).toHaveBeenCalledWith(
 			expect.any(String),
 			expect.objectContaining({
@@ -240,3 +242,15 @@ describe('useCompleteOrderFlow provenance gap', () => {
 		);
 	});
 });
+
+jest.mock('./use-sale-context', () => ({
+	useSaleContext: () => ({
+		userDB: {},
+		siteUuid: 'site',
+		storeId: 1,
+		dp: 2,
+		runtime: { engine: { require: mockRequire } },
+		stockAdjustment: mockStockAdjustment,
+		actor: { id: '7', name: 'pat' },
+	}),
+}));

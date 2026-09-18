@@ -17,24 +17,18 @@ import {
 	SPLIT_META_KEY,
 	splitPlanMeta,
 	toMinor,
-	withMetaReplaced,
 } from '@wcpos/order-math';
-import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useRecordField } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useRegisterSessionCollection } from '../../../../../services/register-session/use-register-session-collections';
-import {
-	RegisterSessionRequiredError,
-	requireOpenSession,
-} from '../../../../../services/register-session/session-store';
+import { RegisterSessionRequiredError } from '../../../../../services/register-session/session-store';
 import {
 	getTerminalPaymentsService,
 	type TerminalLegState,
 } from '../../../../../services/terminal-payments';
-import { readBoundRegister } from '../../../../../services/register/register-document';
-import { persistProvenance } from '../provenance/persist-provenance';
-import { completionMeta } from '../provenance/stamp-completion';
+import { completionMetaFor, persistSaleProvenance, prepareSale } from '../sale-completion';
+import { useSaleContext } from '../hooks/use-sale-context';
 import { useTerminalLeg } from '../payments/server/use-terminal-leg';
 import { useResumeTerminalLegs } from '../payments/server/use-resume-terminal-legs';
 import { useStoreSession } from '../../../../../contexts/app-state';
@@ -51,7 +45,6 @@ import {
 	setTenderPlan,
 	useTenderMethod,
 } from '../checkout-mode';
-import { usePushDocument } from '../../../contexts/use-push-document';
 import { useOrderSaveState } from '../use-order-save-state';
 import { resolveMerchantToastText } from '../../../../../contexts/merchant-toast';
 import { useT } from '../../../../../contexts/translations';
@@ -161,14 +154,14 @@ export interface TenderFlow {
 
 export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	useDriverChanges();
-	const sessions = useRegisterSessionCollection();
+	const ctx = useSaleContext();
 	const storedMethodId = useTenderMethod(order.uuid);
 	const saveState = useOrderSaveState(order.uuid);
 	const [busy, setBusy] = React.useState(false);
 	// State drives rendering; the ref closes the same-tick gap that could otherwise record twice.
 	const busyRef = React.useRef(false);
 	const payload = useRecordField(order, (record) => record.payload);
-	const { store, wpCredentials, userDB, site } = useStoreSession();
+	const { store, wpCredentials } = useStoreSession();
 	const actor = React.useMemo(
 		() => ({
 			id: String(wpCredentials.id ?? ''),
@@ -176,7 +169,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		}),
 		[wpCredentials.id, wpCredentials.display_name, wpCredentials.username]
 	);
-	const sessionsOn = !!useDocField(store, (value) => value.register_sessions);
 	useResumeTerminalLegs(order);
 	const terminalLeg = useTerminalLeg(order.uuid);
 	const service = getTerminalPaymentsService();
@@ -189,7 +181,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 	const online = useOnlineStatus().status === 'online-website-available';
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
 	const { localPatch } = useLocalMutation();
-	const pushDocument = usePushDocument();
 	// A save queued offline is an order the server does not have yet (or has stale): even
 	// once connectivity is back and before the ack lands, tender must behave as offline —
 	// online-only tiles stay disabled and a works-offline tile records its local leg.
@@ -497,21 +488,9 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			service?.get(order.uuid)
 		)
 			return;
-		// A store with several registers needs one picked before a sale can be attributed
-		// to it; the picker is on the cart. Part payments may proceed, the completing leg
-		// may not. A store with no register at all keeps trading (an admin removed it) and
-		// the completion stamp says so.
-		if (bindingStatus === 'choose' && entryAppliedMinor === balanceMinor) {
-			logger.info(t('pos_checkout.choose_register_first'), {
-				showToast: true,
-				context: orderContext,
-			});
-			return;
-		}
 		busyRef.current = true;
 		setBusy(true);
 		let savingProvenance = false;
-		let sessionId: string | null = null;
 		// The split as the cashier saw it, written with whichever leg completes the sale —
 		// cash included, which does not pass through saveProvenance below. With no plan, a
 		// split an earlier abandoned attempt left on the order is cleared: it must not
@@ -533,51 +512,46 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			: hasStaleSplit
 				? [{ key: SPLIT_META_KEY, value: null }]
 				: undefined;
-		const saveProvenance = async () => {
-			if (entryAppliedMinor !== balanceMinor) return;
-			if (!online || queuedOffline || !payload.id) {
-				// No completion tuple can be stamped yet, but the split is a fact about this
-				// till's sale and the offline completion write keeps whatever is on the order.
-				if (!splitMeta) return;
-				const patched = await localPatch({
-					document: order,
-					data: { meta_data: withMetaReplaced(order.getLatest().payload.meta_data, splitMeta) },
+		try {
+			const prepared = await prepareSale(ctx, {
+				order,
+				completing: entryAppliedMinor === balanceMinor,
+				bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+				sessionRule: 'require',
+			});
+			if (!prepared.ok) {
+				logger.info(t('pos_checkout.choose_register_first'), {
+					showToast: true,
+					context: orderContext,
 				});
-				if (!patched) throw new Error('provenance_save_failed');
 				return;
 			}
-			savingProvenance = true;
-			await persistProvenance({
-				order,
-				localPatch,
-				pushDocument,
-				userDB,
-				siteUuid: site.uuid!,
-				storeId: store.id,
-				sessionId,
-				...(splitMeta ? { extraMeta: splitMeta } : {}),
-			});
-			savingProvenance = false;
-		};
-		try {
-			const registerId = (await readBoundRegister(userDB, site.uuid!, store.id))?.id ?? null;
-			sessionId = await requireOpenSession(sessions, registerId, sessionsOn);
+			const { registerId, sessionId } = prepared;
+			const saveProvenance = async () => {
+				if (entryAppliedMinor !== balanceMinor) return;
+
+				savingProvenance = online && !queuedOffline && !!payload.id;
+				await persistSaleProvenance(ctx, {
+					order,
+					sessionId,
+					online: savingProvenance,
+					extraMeta: splitMeta,
+				});
+				savingProvenance = false;
+			};
 			if (balanceMinor === 0) {
 				if (blockIfDegraded('process-payment', { orderId: order.uuid })) return;
 				const result = await localPatch({
 					document: order,
 					data: {
 						status: 'completed',
-						meta_data: await completionMeta(order.getLatest().payload, {
-							userDB,
-							siteUuid: site.uuid!,
-							storeId: store.id,
+						meta_data: await completionMetaFor(ctx, order.getLatest().payload.meta_data, {
 							sessionId,
 						}),
 					},
 				});
 				if (!result) throw new Error('zero_balance_completion_failed');
-				await completeOrderFlow({ refresh: false });
+				await completeOrderFlow({ source: 'zero-balance' });
 				return;
 			}
 			if (!method) return;
@@ -723,9 +697,13 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			});
 			if (outcome.kind === 'recorded') {
 				tenderRecorded(outcome.row, outcome.via);
-				if (balanceMinor - entryAppliedMinor === 0) {
-					await completeOrderFlow({ refresh: outcome.via === 'online' });
-				}
+				await completeOrderFlow({
+					source: 'manual',
+					...outcome,
+					mirrorFailed: false,
+					preLegBalanceMinor: balanceMinor,
+					amountMinor: entryAppliedMinor,
+				});
 				return;
 			}
 			if (outcome.kind === 'refused') {
@@ -781,9 +759,13 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 				// The store's summary is the only balance worth trusting now. Complete only
 				// when it says the order is settled; otherwise stay on the pane, which is now
 				// showing what is actually left to pay.
-				if (outcome.order && toMinor(outcome.order.balance, dp) === 0) {
-					await completeOrderFlow({ refresh: true });
-				}
+				await completeOrderFlow({
+					source: 'manual',
+					...outcome,
+					mirrorFailed: true,
+					preLegBalanceMinor: balanceMinor,
+					amountMinor: entryAppliedMinor,
+				});
 				return;
 			}
 			if (savingProvenance) {
@@ -813,8 +795,7 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 			setBusy(false);
 		}
 	}, [
-		sessions,
-		sessionsOn,
+		ctx,
 		balanceMinor,
 		deviceTransport,
 		online,
@@ -824,9 +805,6 @@ export function useTenderFlow(order: EngineRecord<'orders'>): TenderFlow {
 		dp,
 		entryAppliedMinor,
 		method,
-		userDB,
-		site.uuid,
-		pushDocument,
 		localPatch,
 		order,
 		recordManualPayment,
