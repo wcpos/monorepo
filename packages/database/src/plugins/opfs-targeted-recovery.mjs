@@ -314,6 +314,14 @@ async function dropHollowRows(
       return new Map(documentIds.map((id) => [id, "multi-instance"]));
     const outcomes = new Map();
     const accessHandle = await documentsAccessHandle(state, runState);
+    // Classify the whole batch before dropping any of it: one row past EOF
+    // means the index is stale, and a blank range elsewhere in the batch is
+    // then just as likely to be compaction's fill over a document the other
+    // process has already moved. Dropping that one first and refusing the
+    // second afterwards would lose it (the same order trap as the cleanup
+    // scan).
+    const candidates = [];
+    let stale = false;
     for (const documentId of documentIds) {
       const primaryRow = state.firstIdx.metaIdMap.get(documentId);
       if (!primaryRow) {
@@ -324,11 +332,29 @@ async function dropHollowRows(
       const { bytes, pastEof } = await readRange(accessHandle, start, end);
       if (pastEof && !dropPastEof) {
         outcomes.set(documentId, "range-past-eof");
+        stale = true;
         continue;
       }
       const foreign = !pastEof && !isBlankBytes(bytes);
       if (foreign && !discardForeign) {
         outcomes.set(documentId, "range-holds-foreign-bytes");
+        continue;
+      }
+      candidates.push({ documentId, start, end, foreign });
+    }
+    if (stale) {
+      for (const { documentId } of candidates) {
+        outcomes.set(documentId, "range-past-eof");
+      }
+      return outcomes;
+    }
+
+    for (const { documentId, start, end, foreign } of candidates) {
+      // Re-read immediately before the drop: another process can compact or
+      // truncate between the classification above and here.
+      const { bytes, pastEof } = await readRange(accessHandle, start, end);
+      if (pastEof || (!foreign && !isBlankBytes(bytes))) {
+        outcomes.set(documentId, pastEof ? "range-past-eof" : "range-changed");
         continue;
       }
       if (foreign) {
@@ -341,6 +367,26 @@ async function dropHollowRows(
       outcomes.set(documentId, foreign ? "discarded-foreign-bytes" : true);
     }
     return outcomes;
+  });
+}
+
+// The malformed-read repair halves a batch it cannot parse, so the left half's
+// singleton could drop its row before the right half reached the past-EOF
+// refusal. The whole batch is classified first and one stale row refuses all
+// of it. Writes are exempt (`dropPastEof`): they carry the documents.
+async function batchHasPastEofRow(instance, documentIds) {
+  const state = await instance.internals?.statePromise;
+  // Nothing to classify without a primary index to locate the rows in.
+  if (!state?.firstIdx?.metaIdMap || !instance.taskQueue) return false;
+  return instance.taskQueue.runCleanup(async (runState) => {
+    const accessHandle = await documentsAccessHandle(state, runState);
+    for (const documentId of documentIds) {
+      const row = state.firstIdx.metaIdMap?.get(documentId);
+      if (!row) continue;
+      const { pastEof } = await readRange(accessHandle, row[1], row[2]);
+      if (pastEof) return true;
+    }
+    return false;
   });
 }
 
@@ -774,6 +820,15 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
               throw error;
             }
             onMalformedBatch?.();
+            if (
+              !dropPastEof &&
+              batch.length > 1 &&
+              (await batchHasPastEofRow(instance, batch))
+            ) {
+              reportRepairRefusal(batch, "range-past-eof");
+              error.message += "; targeted recovery refused: range-past-eof";
+              throw error;
+            }
             if (batch.length === 1) {
               const failure = await repairDocument(instance, batch[0], {
                 discardInvalid: params.collectionName === "logs",

@@ -744,3 +744,85 @@ test("no row is dropped when a later row in the scan is past EOF", async () => {
     "the refusal is reported by reason",
   );
 });
+
+// The read-repair path drops per id, so a batch holding a droppable blank row
+// AND a row past EOF must refuse the whole batch: the blank range on a stale
+// index is as likely to be compaction's fill over a document the other process
+// already moved, and a drop is broadcast and cannot be taken back.
+test("a hollow read batch drops nothing when one of its rows is past EOF", async () => {
+  const bytes = Buffer.from("        ");
+  const ids = ["first", "second"];
+  const operations = [];
+  // "first" is blank and inside the file; "second" ends past EOF.
+  const ranges = new Map([
+    ["first", [0, bytes.length]],
+    ["second", [bytes.length, bytes.length + 8]],
+  ]);
+  const indexes = ["primary", "secondary"].map((indexId) => ({
+    indexId,
+    primaryKeyLength: 6,
+    rows: ids.map((rowId) => [`0${rowId}`, ...ranges.get(rowId)]),
+    metaIdMap: new Map(ids.map((rowId) => [rowId, [`0${rowId}`, ...ranges.get(rowId)]])),
+    runChangelogOperation([, position]) {
+      const [row] = this.rows.splice(position, 1);
+      this.metaIdMap.delete(row[0].slice(1));
+    },
+  }));
+  const state = {
+    firstIdx: indexes[0],
+    indexStates: indexes,
+    documentFileHandle: {
+      createAccessHandle: async () => ({
+        read: async (start, end) => bytes.subarray(start, end),
+        getSize: async () => bytes.length,
+      }),
+    },
+    changelog: { addChangelogOperations: async (_, ops) => operations.push(...ops) },
+  };
+  const instance = {
+    primaryPath: "id",
+    findDocumentsById: async () => "[]",
+    bulkWrite: async () => ({ error: [] }),
+    query: async () => ({ documents: [] }),
+    getChangedDocumentsSince: async () => ({ documents: [] }),
+    cleanup: async () => true,
+    internals: { statePromise: Promise.resolve(state) },
+    taskQueue: {
+      runCleanup: async (operation) => operation({ accessHandlers: new Map() }),
+    },
+    _decode: (value) => value.toString(),
+  };
+  const recovering = await withTargetedOpfsRecovery({
+    createStorageInstance: async () => instance,
+  }).createStorageInstance({
+    databaseName: "store_v6_test",
+    collectionName: "orders",
+    multiInstance: false,
+  });
+  const events = [];
+  const previousHook = globalThis.__wcposOnStorageRecovery;
+  globalThis.__wcposOnStorageRecovery = (event) => events.push(event);
+  try {
+    await assert.rejects(recovering.findDocumentsById(ids, true), /range-past-eof/);
+  } finally {
+    globalThis.__wcposOnStorageRecovery = previousHook;
+  }
+  for (const index of indexes) {
+    assert.equal(index.rows.length, 2, `${index.indexId}: both rows survive`);
+  }
+  assert.deepEqual(operations, [], "nothing is broadcast");
+  assert.deepEqual(
+    events.filter((event) => event.kind === "hollow-row-dropped"),
+    [],
+  );
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "hollow-row-refused")
+      .map((event) => [event.id, event.reason])
+      .sort(),
+    [
+      ["first", "range-past-eof"],
+      ["second", "range-past-eof"],
+    ],
+  );
+});
