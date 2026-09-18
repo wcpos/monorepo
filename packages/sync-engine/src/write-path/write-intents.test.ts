@@ -120,7 +120,16 @@ describe('enqueueWriteIntent', () => {
 		{ name: 'rejected born-local create', id: 0, rejected: true, annihilated: true },
 		{ name: 'born-local record with no queue rows', id: 0, rejected: false, annihilated: true },
 		{ name: 'server record with no revision', id: 42, rejected: false, annihilated: false },
-	])('deletes $name only when it is born-local', async ({ id, rejected, annihilated }) => {
+		{
+			// `identity-ambiguous`: the push adapter matched MORE than one server record,
+			// so a server-side sale may exist — the resident and its dead letter stay.
+			name: 'rejected create the server may already hold',
+			id: 0,
+			rejected: true,
+			reason: 'identity-ambiguous',
+			annihilated: false,
+		},
+	])('deletes $name only when it is born-local', async ({ id, rejected, reason, annihilated }) => {
 		const mutationCollection = createFakeMutationCollection();
 		if (rejected) {
 			await mutationCollection.bulkUpsert([
@@ -135,6 +144,7 @@ describe('enqueueWriteIntent', () => {
 					queuedAt: '2026-09-18T00:00:00.000Z',
 					status: 'rejected',
 					attempts: 1,
+					...(reason ? { rejectedReason: reason } : {}),
 				},
 			]);
 		}
@@ -176,7 +186,62 @@ describe('enqueueWriteIntent', () => {
 			expect(await orders.findOne().exec()).toBe(resident);
 			expect(observe).not.toHaveBeenCalled();
 		}
+		// A dead letter survives only when the void was refused because of it.
+		expect(mutationCollection.store.size).toBe(rejected && !annihilated ? 1 : 0);
+	});
+
+	it('a born-local void takes a same-record edit that lands after the queue read with it', async () => {
+		// An update enqueued between the decision's `pending()` read and the resident's
+		// removal must not be left targeting a missing record: it is consumed through
+		// the queue's conditional removal, like a never-pushed chain's successors.
+		const mutationCollection = createFakeMutationCollection();
+		let reads = 0;
+		const originalFind = mutationCollection.find;
+		mutationCollection.find = () => {
+			reads += 1;
+			if (reads === 2) {
+				// After the decision's read (1) and during the dead-letter scan (2), an
+				// edit for the same record lands; the successor sweep (3) must see it.
+				void mutationCollection.bulkUpsert([
+					{
+						mutationId: 'update-1',
+						collectionName: 'orders',
+						recordId: 'order-1',
+						operation: 'update',
+						origin: 'existing',
+						payload: { id: 0, status: 'pos-open', customer_note: 'late' },
+						baseRevision: null,
+						queuedAt: '2026-09-18T00:00:00.500Z',
+					},
+				]);
+			}
+			return originalFind();
+		};
+		let removed = false;
+		const resident = {
+			toJSON: () => ({ payload: { id: 0, status: 'pos-open' }, sync: {} }),
+			remove: async () => {
+				removed = true;
+			},
+		};
+		const orders = { findOne: () => ({ exec: async () => (removed ? null : resident) }) };
+		const db = {
+			collections: { orders, recordMutations: mutationCollection },
+		} as unknown as RxDatabase;
+		const observe = vi.fn();
+		const receipt = await enqueueWriteIntent({
+			db,
+			intent: { collection: 'orders', operation: 'delete', recordId: 'order-1' },
+			mintUuid: () => 'delete-1',
+			now: () => '2026-09-18T00:00:01.000Z',
+			observe,
+		});
+		expect(receipt.annihilated).toBe(true);
+		expect(removed).toBe(true);
 		expect(mutationCollection.store.size).toBe(0);
+		expect(observe).toHaveBeenCalledWith(
+			expect.objectContaining({ fields: { recordId: 'order-1', removed: 1, deadLetters: 0 } })
+		);
 	});
 
 	it('carries an own `__proto__` payload key through as ordinary data', async () => {
