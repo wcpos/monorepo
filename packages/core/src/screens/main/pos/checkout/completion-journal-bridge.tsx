@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { isCompletingStatus } from '@wcpos/order-math';
 import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -13,7 +12,7 @@ import {
 	resolveCompletionAttempt,
 } from './completion-journal';
 import { useSaleContext } from './hooks/use-sale-context';
-import { completeSale } from './sale-completion';
+import { completeSale, isSaleComplete, refreshOrderRecord } from './sale-completion';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -54,9 +53,9 @@ export function SaleCompletionBridge(): null {
 					)) as unknown as EngineRecord<'orders'> | null;
 					if (current.stopped) return;
 					if (!resident) {
-						await failCompletionAttempt(storeDB, uuid, 'order_not_resident');
+						await failCompletionAttempt(storeDB, uuid, 'order_not_resident', true);
 						if (current.stopped) return;
-						if (attempt.attempts + 1 >= 3) {
+						if ((attempt.missingStarts ?? 0) + 1 >= 3) {
 							await resolveCompletionAttempt(storeDB, uuid);
 							logger.warn('Pending sale completion abandoned: order not resident', {
 								code: ERROR_CODES.PAYMENT_CAPTURED_ORDER_UNFINISHED,
@@ -67,13 +66,34 @@ export function SaleCompletionBridge(): null {
 								},
 							});
 						}
-					} else if (!isCompletingStatus(resident.getLatest().payload.status ?? '')) {
+						continue;
+					}
+					let refreshed = false;
+					const payload = resident.getLatest().payload;
+					if (!isSaleComplete({ source: 'replay' }, current.ctx.dp, payload) && payload.id) {
+						// One bounded targeted GET per pending unpaid order at start; no second GET in the owner.
+						try {
+							if ((await refreshOrderRecord(manager, payload.id)) === 'timed-out')
+								throw new Error('completion_refresh_timed_out');
+							refreshed = true;
+						} catch (error) {
+							await failCompletionAttempt(storeDB, uuid, error);
+							continue;
+						}
+						if (current.stopped) return;
+					}
+					if (!isSaleComplete({ source: 'replay' }, current.ctx.dp, resident.getLatest().payload)) {
 						await resolveCompletionAttempt(storeDB, uuid);
 						logger.debug('Sale completion replay skipped: order is not completing', {
 							context: { orderUUID: uuid },
 						});
 					} else {
-						await completeSale(current.ctx, resident, { source: 'replay' }, { host: 'background' });
+						await completeSale(
+							{ ...current.ctx, actor: attempt.actor },
+							resident,
+							{ source: 'replay', ...(refreshed ? { refreshed } : {}) },
+							{ host: 'background' }
+						);
 					}
 				} catch (error) {
 					// The owner retains finishing errors. Leave them for the next session.

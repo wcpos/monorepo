@@ -16,6 +16,7 @@ import type { SaleContext } from './sale-completion';
 
 const mockFind = jest.fn();
 const mockRefresh = jest.fn();
+const mockCatchUp = jest.fn();
 const mockReceipt = jest.fn();
 const mockInfo = jest.fn();
 const mockDebug = jest.fn();
@@ -32,6 +33,7 @@ jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 }));
 jest.mock('./hooks/reconcile-completed-order', () => ({
 	reconcileCompletedOrder: (...args: unknown[]) => mockRefresh(...args),
+	refreshOrderRecord: (...args: unknown[]) => mockCatchUp(...args),
 }));
 jest.mock('./provenance/provenance-gap', () => ({ reportProvenanceGap: jest.fn() }));
 jest.mock('./checkout-mode', () => ({
@@ -68,6 +70,7 @@ beforeEach(async () => {
 		dp: 2,
 	} as SaleContext;
 	mockFind.mockResolvedValue(resident());
+	mockCatchUp.mockResolvedValue('refreshed');
 	jest.spyOn(owner, 'completeSale');
 });
 afterEach(async () => {
@@ -104,7 +107,7 @@ it('finishes a resident completed order once in the background, marks its audit,
 	);
 });
 
-it('clears an unpaid resident with a debug row, without completing or refreshing', async () => {
+it('clears a confirmed unpaid resident after one refresh, without completing', async () => {
 	await record();
 	mockFind.mockResolvedValue(resident('order', 'pos-open'));
 	render(<SaleCompletionBridge />);
@@ -115,6 +118,7 @@ it('clears an unpaid resident with a debug row, without completing or refreshing
 	);
 	expect(owner.completeSale).not.toHaveBeenCalled();
 	expect(mockRefresh).not.toHaveBeenCalled();
+	expect(mockCatchUp).toHaveBeenCalledTimes(1);
 });
 
 it('counts missing orders once per session and abandons with one warning on the third start', async () => {
@@ -125,6 +129,7 @@ it('counts missing orders once per session and abandons with one warning on the 
 		await waitFor(async () =>
 			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
 				attempts,
+				missingStarts: attempts,
 				lastError: 'order_not_resident',
 			})
 		);
@@ -247,3 +252,105 @@ it('retains a failed completion without an in-session retry and continues with t
 	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
 	expect(owner.completeSale).toHaveBeenCalledTimes(3);
 });
+
+it('catches up an open resident before replay and never requests a second refresh', async () => {
+	await record();
+	let status = 'pos-open';
+	mockFind.mockResolvedValue({
+		uuid: 'order',
+		getLatest: () => ({ payload: { id: 42, status, meta_data: [], line_items: [] } }),
+	});
+	mockCatchUp.mockImplementationOnce(async () => {
+		status = 'completed';
+		return 'refreshed';
+	});
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).toHaveBeenCalledTimes(1);
+	expect(mockCatchUp).toHaveBeenCalledTimes(1);
+	expect(mockCatchUp).toHaveBeenCalledWith(mockManager, 42);
+	expect(mockRefresh).toHaveBeenCalledWith(mockManager, expect.anything(), false, undefined);
+	expect(mockInfo).toHaveBeenCalledTimes(1);
+});
+
+it.each(['timed-out', 'rejected'] as const)(
+	'retains an open resident when catch-up is %s',
+	async (failure) => {
+		await record();
+		mockFind.mockResolvedValue(resident('order', 'pos-open'));
+		if (failure === 'timed-out') mockCatchUp.mockResolvedValueOnce('timed-out');
+		else mockCatchUp.mockRejectedValueOnce(new Error('refresh rejected'));
+		render(<SaleCompletionBridge />);
+		await waitFor(async () =>
+			expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+				attempts: 1,
+				lastError: failure === 'timed-out' ? 'completion_refresh_timed_out' : 'refresh rejected',
+			})
+		);
+		expect(owner.completeSale).not.toHaveBeenCalled();
+		expect(mockCatchUp).toHaveBeenCalledTimes(1);
+	}
+);
+
+it('does not abandon the first missing lookup after two finish failures', async () => {
+	await record();
+	mockRefresh.mockRejectedValue(new Error('finish failed'));
+	for (let i = 0; i < 2; i++) {
+		await expect(
+			owner.completeSale(
+				mockContext,
+				resident() as never,
+				{ source: 'replay' },
+				{ host: 'background' }
+			)
+		).rejects.toThrow('finish failed');
+	}
+	mockFind.mockResolvedValue(null);
+	render(<SaleCompletionBridge />);
+	await waitFor(() => expect(mockFind).toHaveBeenCalledTimes(1));
+	await drain();
+	expect((await pendingCompletions(mockContext.storeDB)).order).toMatchObject({
+		attempts: 3,
+		missingStarts: 1,
+		lastError: 'order_not_resident',
+	});
+	expect(mockWarn).not.toHaveBeenCalled();
+});
+
+it('clears a cancelled contract attempt without completing, receipt, or audit', async () => {
+	await owner.prepareSale(mockContext, {
+		order: resident('order', 'pos-open') as never,
+		completing: true,
+		source: 'gateway-contract',
+		bindingStatus: 'none',
+		sessionRule: 'none',
+	});
+	mockFind.mockResolvedValue(resident('order', 'cancelled'));
+	render(<SaleCompletionBridge />);
+	await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+	expect(owner.completeSale).not.toHaveBeenCalled();
+	expect(mockReceipt).not.toHaveBeenCalled();
+	expect(mockInfo).not.toHaveBeenCalled();
+	expect(mockDebug).toHaveBeenCalled();
+	expect(mockCatchUp).toHaveBeenCalledTimes(1);
+});
+
+it.each([{ id: 'A', name: 'Cashier A' }, undefined])(
+	'replays the recorded actor %j, never the reopening cashier',
+	async (actor) => {
+		await owner.prepareSale(
+			{ ...mockContext, actor },
+			{
+				order: resident() as never,
+				completing: true,
+				source: 'gateway-contract',
+				bindingStatus: 'none',
+				sessionRule: 'none',
+			}
+		);
+		mockContext = { ...mockContext, actor: { id: 'B', name: 'Cashier B' } };
+		render(<SaleCompletionBridge />);
+		await waitFor(async () => expect(await pendingCompletions(mockContext.storeDB)).toEqual({}));
+		expect(mockInfo).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ actor }));
+	}
+);

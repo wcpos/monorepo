@@ -1715,6 +1715,7 @@ it('full manual online tender persists provenance before POST and the mirror', a
 		expect(recordCompletionAttempt).toHaveBeenCalledWith(undefined, {
 			orderUuid: order.uuid,
 			source: 'manual',
+			actor: { id: '7', name: 'Pat' },
 		});
 		expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
 			jest.mocked(provenance.completionMetaFor).mock.invocationCallOrder[0]

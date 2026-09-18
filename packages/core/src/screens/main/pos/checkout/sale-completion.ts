@@ -1,6 +1,5 @@
 import type { RegisterSessionCollection, StoreDatabase, UserDatabase } from '@wcpos/database';
 import {
-	isCompletingStatus,
 	type MetaDataEntry,
 	type OrderPaymentSummary,
 	type PaymentRow,
@@ -70,6 +69,7 @@ export async function prepareSale(
 		await recordCompletionAttempt(ctx.storeDB, {
 			orderUuid: input.order.uuid,
 			source: input.source,
+			...(ctx.actor ? { actor: ctx.actor } : {}),
 		});
 	return { ok: true, registerId, sessionId };
 }
@@ -128,12 +128,14 @@ export type SaleOutcome =
 	| { source: 'gateway-contract'; status: string }
 	| { source: 'gateway-snapshot'; snapshot: OrderPayload }
 	| { source: 'zero-balance' }
-	| { source: 'replay' };
+	| { source: 'replay'; refreshed?: boolean };
+
+const UNPAID_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
 
 export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: OrderPayload): boolean {
 	switch (outcome.source) {
 		case 'replay': // Replay trusts the resident status, never re-collects money.
-			return isCompletingStatus(payload?.status ?? '');
+			return !!payload?.status && !UNPAID_STATUSES.includes(payload.status);
 		case 'manual': // Normal manual completion predicts locally; mirror recovery trusts only the server.
 			return outcome.mirrorFailed
 				? !!outcome.order && toMinor(outcome.order.balance, dp) === 0
@@ -143,9 +145,7 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 		case 'gateway-contract': // The contract accepts only its exact completed state.
 			return outcome.status === 'completed';
 		case 'gateway-snapshot': // Intentionally a blocklist: on-hold and custom paid statuses are accepted.
-			return !['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'].includes(
-				outcome.snapshot.status ?? ''
-			);
+			return !UNPAID_STATUSES.includes(outcome.snapshot.status ?? '');
 		case 'zero-balance': // No payment row exists for this route.
 			return true;
 	}
@@ -180,7 +180,7 @@ async function finishSale(
 			: outcome.source === 'terminal'
 				? !outcome.row.recorded_offline
 				: outcome.source === 'replay'
-					? !!latest.id
+					? !!latest.id && !outcome.refreshed
 					: outcome.source === 'gateway-contract';
 	if (outcome.source === 'gateway-snapshot') {
 		const reduced = (latest.line_items ?? []).filter((item) =>
@@ -213,6 +213,7 @@ export async function completeSale(...args: Parameters<typeof finishSale>) {
 	const [ctx, order] = args;
 	try {
 		const result = await finishSale(...args);
+		// Audit persistence is best-effort, not at-least-once: the logger exposes no awaitable write.
 		await resolveCompletionAttempt(ctx.storeDB, order.uuid);
 		return result;
 	} catch (error) {

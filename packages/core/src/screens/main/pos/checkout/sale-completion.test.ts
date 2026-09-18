@@ -356,12 +356,12 @@ it.each([42, 0])(
 it.each([
 	['completed', true],
 	['on-hold', true],
-	['cancelled', true],
+	['cancelled', false],
 	['pos-open', false],
 	['pos-partial', false],
 	['pending', false],
 	['failed', false],
 	['', false],
-] as const)('replay preserves the completing-status predicate for %s', (status, expected) => {
+] as const)('replay accepts only paid statuses for %s', (status, expected) => {
 	expect(isSaleComplete({ source: 'replay' }, 2, { ...payload, status } as never)).toBe(expected);
 });
