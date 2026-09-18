@@ -257,6 +257,10 @@ for (const scenario of [
 				// stale instance fails loudly and the baked index stays authoritative.
 				await assert.rejects(boot.cleanup(0), /range-past-eof/);
 				await boot.taskQueue.awaitIdle();
+				// A read must not serve the live row as absent either: that is the
+				// logout. It fails the same way until the instance restarts.
+				await assert.rejects(boot.findDocumentsById(['login'], false), /range-past-eof/);
+				await boot.taskQueue.awaitIdle();
 				const kinds = events.map((e) => `${e.kind}:${e.reason ?? ''}`).join(' ');
 				assert.ok(
 					!events.some((e) => e.kind === 'hollow-row-dropped'),

@@ -613,3 +613,58 @@ test("recovers and broadcasts whitespace-row drops in multi-instance mode as sol
     col: "orders",
   });
 });
+
+test("a row truncated past EOF between its blank read and the drop is refused, and cleanup fails loudly", async () => {
+  const { instance, indexStates, changelogOperations } = createFakeOpfsInstance(
+    {
+      documents: DOCUMENTS,
+      corruptId: "bbb",
+      gapBefore: "bbb",
+    },
+  );
+  const state = await instance.internals.statePromise;
+  const inner = await state.documentFileHandle.createAccessHandle();
+  const fullSize = await inner.getSize();
+  let bbbEnd;
+  for (const [, start, end] of state.firstIdx.rows) {
+    if ((await inner.read(start, end)).every((byte) => byte === 0x20)) bbbEnd = end;
+  }
+  assert.ok(bbbEnd, "the fixture holds exactly the blank row this test truncates under");
+  // Another process truncates the file right after this one reads the blank
+  // row: the size seen before the read still covered it, the size seen after
+  // does not. Independent processes share no task queue.
+  let lastReadBlank = false;
+  state.documentFileHandle.createAccessHandle = async () => ({
+    read: async (start, end) => {
+      const bytes = await inner.read(start, end);
+      lastReadBlank = bytes.every((byte) => byte === 0x20);
+      return bytes;
+    },
+    getSize: async () => (lastReadBlank ? bbbEnd - 1 : fullSize),
+  });
+  const events = [];
+  const previousHook = globalThis.__wcposOnStorageRecovery;
+  globalThis.__wcposOnStorageRecovery = (event) => events.push(event);
+  try {
+    const recovering = await withTargetedOpfsRecovery({
+      createStorageInstance: async () => instance,
+    }).createStorageInstance({ multiInstance: false });
+    await assert.rejects(() => recovering.cleanup(0), /range-past-eof/);
+  } finally {
+    globalThis.__wcposOnStorageRecovery = previousHook;
+  }
+  for (const indexState of indexStates) {
+    assert.equal(indexState.rows.length, 3, "no row is dropped past EOF");
+  }
+  assert.deepEqual(changelogOperations, []);
+  assert.deepEqual(
+    events
+      .filter((event) => event.kind === "hollow-row-refused")
+      .map((event) => [event.id, event.reason]),
+    [["bbb", "range-past-eof"]],
+  );
+  assert.ok(
+    events.some((event) => event.kind === "cleanup-recovery"),
+    "the failed round is reported, not retried into a bake of stale rows",
+  );
+});

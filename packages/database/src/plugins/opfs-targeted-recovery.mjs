@@ -129,12 +129,15 @@ async function repairDocument(
     // dropped from every index that still points at it, whether or not a
     // secondary row survived, so a lost secondary row cannot keep the hollow
     // primary row indexed. A range past EOF is refused unless the caller
-    // carries the document (see rangePastEof).
+    // carries the document (see readRange).
     const accessHandle = await documentsAccessHandle(state, runState);
-    if (!dropPastEof && (await rangePastEof(accessHandle, oldEnd)))
-      return "range-past-eof";
-    const damagedBytes = await accessHandle.read(oldStart, oldEnd);
-    if (isBlankBytes(damagedBytes)) {
+    const { bytes: damagedBytes, pastEof } = await readRange(
+      accessHandle,
+      oldStart,
+      oldEnd,
+    );
+    if (pastEof && !dropPastEof) return "range-past-eof";
+    if (pastEof || isBlankBytes(damagedBytes)) {
       await dropIndexRowsForRange(state, runState, oldStart, oldEnd);
       return "hollow-row-dropped";
     }
@@ -196,8 +199,17 @@ async function repairDocument(
 // index on disk stays authoritative. The write path alone still drops it
 // (`dropPastEof`): the write carries the whole document, so the drop is
 // followed by an insert of the new revision and nothing is lost (#2114).
-async function rangePastEof(accessHandle, end) {
-  return end > (await accessHandle.getSize());
+//
+// The size is read again AFTER a blank read. The other process shares no task
+// queue with this one, so it can truncate the file between a size check and
+// the read; a drop that follows a blank read must be judged against the size
+// at that moment, not the earlier one.
+async function readRange(accessHandle, start, end) {
+  if (end > (await accessHandle.getSize())) return { pastEof: true };
+  const bytes = await accessHandle.read(start, end);
+  const pastEof =
+    isBlankBytes(bytes) && end > (await accessHandle.getSize());
+  return { bytes, pastEof };
 }
 
 // A blank range is whitespace (compaction's own fill) or NUL (a Windows
@@ -209,12 +221,16 @@ async function dropWhitespaceRows(instance, target, ownsRepairs = () => true) {
   return instance.taskQueue.runCleanup(async (runState) => {
     const refusal = ownsRepairs() ? undefined : "multi-instance";
     const accessHandle = await documentsAccessHandle(state, runState);
-    const fileSize = await accessHandle.getSize();
+    // Any row past EOF, in any index, means this instance's rows are stale;
+    // the caller must not retry a cleanup that would bake them.
+    let stale = false;
     for (const indexState of state.indexStates) {
       let position = indexState.rows.length;
       while (position--) {
         const row = indexState.rows[position];
-        if (row[2] > fileSize) {
+        const { bytes, pastEof } = await readRange(accessHandle, row[1], row[2]);
+        if (pastEof) {
+          stale = true;
           if (indexState === state.firstIdx)
             report("hollow-row-refused", {
               target,
@@ -226,7 +242,6 @@ async function dropWhitespaceRows(instance, target, ownsRepairs = () => true) {
             });
           continue;
         }
-        const bytes = await accessHandle.read(row[1], row[2]);
         if (!isBlankBytes(bytes)) continue;
         if (!refusal) await dropIndexRow(state, runState, indexState, position);
         if (indexState === state.firstIdx)
@@ -240,7 +255,7 @@ async function dropWhitespaceRows(instance, target, ownsRepairs = () => true) {
           });
       }
     }
-    return refusal;
+    return stale ? "range-past-eof" : refusal;
   });
 }
 
@@ -288,11 +303,12 @@ async function dropHollowRows(
         continue;
       }
       const [, start, end] = primaryRow;
-      if (!dropPastEof && (await rangePastEof(accessHandle, end))) {
+      const { bytes, pastEof } = await readRange(accessHandle, start, end);
+      if (pastEof && !dropPastEof) {
         outcomes.set(documentId, "range-past-eof");
         continue;
       }
-      const foreign = !isBlankBytes(await accessHandle.read(start, end));
+      const foreign = !pastEof && !isBlankBytes(bytes);
       if (foreign && !discardForeign) {
         outcomes.set(documentId, "range-holds-foreign-bytes");
         continue;
@@ -690,6 +706,22 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
         return refused;
       };
 
+      // A read that served a past-EOF row as absent would log the cashier out
+      // of a live session (a missing `wp_credentials` row reads as no session).
+      // The rows are stale, not the document, so the read fails and the caller
+      // sees a storage error; a restart re-reads the baked index.
+      const throwIfPastEof = (refused) => {
+        const stale = refused.filter(
+          ({ reason }) => reason === "range-past-eof",
+        );
+        if (stale.length === 0) return;
+        throw new Error(
+          `targeted recovery refused: range-past-eof for ${stale
+            .map(({ id }) => id)
+            .join(", ")} (${target})`,
+        );
+      };
+
       // A per-document repair that cannot proceed rethrows the parse error
       // with the reason appended, which reaches the caller (and the renderer
       // log) but not the storage telemetry: a till refusing every login this
@@ -768,6 +800,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
           const hollow = await findHollowIds(batch, documents, true);
           if (hollow.length === 0) return false;
           const refused = await dropHollowIds(hollow, { dropPastEof });
+          throwIfPastEof(refused);
           onMalformedBatch?.();
           if (refused.length === hollow.length) return false;
           return true;
@@ -838,6 +871,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
           // id served only by a foreign row and absent at its own.
           const hollow = await findHollowIds(ids, documents, withDeleted);
           const refused = await dropHollowIds(hollow);
+          throwIfPastEof(refused);
           const suspectForeign = refused.some(
             ({ reason }) => reason === "range-holds-foreign-bytes",
           );
@@ -1219,7 +1253,17 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
         } catch (initialError) {
           let failure;
           try {
-            await dropWhitespaceRows(instance, target, soleRepairOwner);
+            const refusal = await dropWhitespaceRows(
+              instance,
+              target,
+              soleRepairOwner,
+            );
+            // A retry after a past-EOF refusal could complete and bake the
+            // stale rows; the round fails instead (reported below).
+            if (refusal === "range-past-eof")
+              throw new Error(
+                `targeted recovery refused: range-past-eof (${target}); index rows are stale relative to documents.json`,
+              );
             return await cleanup(minimumDeletedTime);
           } catch (retryError) {
             failure = retryError;
