@@ -7,7 +7,12 @@ import {
 	type WorkerInfo,
 } from '@playwright/test';
 
-import { authenticatedTest, type StoreAuthorization, tryAddProductBySku } from './fixtures';
+import {
+	authenticatedTest,
+	ensureRegisterOpen,
+	type StoreAuthorization,
+	tryAddProductBySku,
+} from './fixtures';
 import {
 	createRunPrivateProduct,
 	createVariationMatrixProduct,
@@ -273,6 +278,7 @@ export async function tryAddRunPrivateSimpleProduct(page: Page, index = 0): Prom
 			'tryAddRunPrivateSimpleProduct requires isolatedProductTest fixture registration'
 		);
 	}
+	await ensureRegisterOpen(page);
 	const probe = probes?.[index] ?? null;
 	if (probe) {
 		if (!probe.rowTestId) {
@@ -349,6 +355,7 @@ export async function addCheckoutProbeProductAgain(page: Page): Promise<void> {
 			'addCheckoutProbeProductAgain requires isolatedProductTest fixture registration'
 		);
 	}
+	await ensureRegisterOpen(page);
 	const probe = probes?.[0] ?? null;
 	if (probe && probe.rowTestId) {
 		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });

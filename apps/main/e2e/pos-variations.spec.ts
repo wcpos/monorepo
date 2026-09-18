@@ -6,7 +6,7 @@ import {
 	isolatedVariableProductTest as test,
 	variableProductProbe,
 } from './checkout-probe';
-import { becomesVisible, isWcposRestRoute } from './fixtures';
+import { becomesVisible, ensureRegisterOpen, isWcposRestRoute } from './fixtures';
 import { unwrapWireBody } from './wire-envelope';
 import { ensureTableView } from './pos-view-mode';
 
@@ -174,6 +174,7 @@ async function voidCartIfNeeded(page: Page) {
  */
 test.describe('POS Variations', () => {
 	test.beforeEach(async ({ posPage: page }) => {
+		await ensureRegisterOpen(page);
 		await voidCartIfNeeded(page);
 	});
 

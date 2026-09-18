@@ -12,7 +12,7 @@ import {
 	readAmountMinor,
 	requireTenderCheckout,
 } from './checkout-shared';
-import { getStoreVariant, wcposRestRoute } from './fixtures';
+import { getStoreVariant, navigateToPage, wcposRestRoute } from './fixtures';
 import {
 	expectOrderPaid,
 	liveOrderTest as liveTest,
@@ -348,6 +348,75 @@ liveTest.describe('POS terminal (server capture-mode) checkout (live store)', ()
 			);
 			expect(ledgerRows(server)).toHaveLength(1);
 			expect(ledgerRows(server)[0].status).toBe('voided');
+			expect(intents.filter((sent) => terminalRoute(sent, orderId, 'intent'))).toHaveLength(1);
+		}
+	);
+
+	liveTest(
+		'reloading mid-capture completes once without taking over the receipt stage',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			const intents: Request[] = [];
+			const recordRequest = (sent: Request) => intents.push(sent);
+			page.on('request', recordRequest);
+			const { orderId, uuid, mode } = await newOrderAtCheckout(page, trackOrder);
+			const { authorization, descriptors } = await requireTenderCheckout(
+				request,
+				testInfo,
+				storeAuthorization,
+				mode
+			);
+			const terminal = simulatedTerminal(descriptors);
+			liveTest.skip(!terminal, 'store has no simulated terminal provider');
+			await page.getByTestId(`checkout-method-${terminal!.id}`).click();
+			await showReaderChips(page);
+			await page.getByTestId('checkout-reader-sim-approve').click();
+			// sim-slow never captures without cancel. sim-approve is pending on its first
+			// fetch, then captures; its server-side transient survives a browser reload.
+			// takeTerminal awaits the intent response and the visible leg: reload NOW.
+			await takeTerminal(page, orderId, 'sim-approve');
+			await page.reload();
+			// Page listeners survive reload: keep coverage during boot, then re-register
+			// without resetting the pre-reload count or double-registering the listener.
+			page.off('request', recordRequest);
+			page.on('request', recordRequest);
+			await expect(page.getByTestId('screen-pos')).toBeVisible({ timeout: 60_000 });
+			const server = await pollOrder(
+				request,
+				testInfo,
+				authorization,
+				orderId,
+				(order) => {
+					const rows = ledgerRows(order);
+					return (
+						rows.length === 1 &&
+						rows[0].status === 'captured' &&
+						!!(order.date_paid ?? order.date_paid_gmt)
+					);
+				},
+				'the reloaded terminal must capture exactly one leg and mark the order paid'
+			);
+			expectOrderPaid(server);
+			expect(ledgerRows(server)).toHaveLength(1);
+			expect(ledgerRows(server)[0].status).toBe('captured');
+			await expect(page.getByTestId(`open-order-tab-${uuid}`)).toHaveCount(0, {
+				timeout: 60_000,
+			});
+			await expect(page.getByTestId('checkout-receipt-stage')).toBeHidden();
+			await navigateToPage(page, 'health');
+			await page.getByTestId('health-nav-logs').click();
+			const logs = page.getByTestId('screen-logs');
+			await expect(logs.getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
+			// Event code and order UUID are indexed log facts, not translated UI copy.
+			await logs.getByTestId('search-logs').fill(`checkout.completed ${uuid}`);
+			await expect(logs.getByTestId('logs-loaded-count')).toHaveText('1', { timeout: 30_000 });
+			await expect(logs.getByTestId('logs-total-count')).toHaveText('1');
+			const rows = logs.getByTestId(/^logs-row-/).filter({ visible: true });
+			await expect(rows).toHaveCount(1);
+			await rows.click();
+			const detail = logs.getByTestId(/^logs-detail-/);
+			await expect(detail).toContainText('checkout.completed');
+			await expect(detail).toContainText(uuid);
 			expect(intents.filter((sent) => terminalRoute(sent, orderId, 'intent'))).toHaveLength(1);
 		}
 	);

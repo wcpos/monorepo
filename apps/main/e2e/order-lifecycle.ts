@@ -23,7 +23,12 @@ import { randomUUID } from 'crypto';
 import { type APIRequestContext, expect, type Page, type TestInfo } from '@playwright/test';
 
 import { isolatedProductTest } from './checkout-probe';
-import { getStoreUrl, type StoreAuthorization, storeRequestOptions } from './fixtures';
+import {
+	ensureRegisterOpen,
+	getStoreUrl,
+	type StoreAuthorization,
+	storeRequestOptions,
+} from './fixtures';
 import { resolveProbeAuthorization, TEARDOWN_CREDENTIAL_TIMEOUT_MS } from './probe-credential';
 
 /** POST target the app uses to persist an order. */
@@ -211,6 +216,7 @@ export async function openCheckout(
 	page: Page,
 	options: { onOrderCreated?: (order: TrackedOrder) => void } = {}
 ): Promise<{ orderId: number; uuid: string; sent: OrderPayload }> {
+	await ensureRegisterOpen(page);
 	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
 		timeout: 90_000,
 	});

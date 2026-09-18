@@ -1,7 +1,7 @@
 import { type APIRequestContext, expect, type Page, type TestInfo } from '@playwright/test';
 
 import { tryAddRunPrivateSimpleProduct } from './checkout-probe';
-import { getStoreUrl, wcposRestRoute } from './fixtures';
+import { ensureRegisterOpen, getStoreUrl, wcposRestRoute } from './fixtures';
 import {
 	createPushOrdersResponseMatcher,
 	liveOrderTest as liveTest,
@@ -180,6 +180,7 @@ export async function openCheckout(
 	page: Page,
 	onOrderCreated: (order: TrackedOrder) => void
 ): Promise<{ orderId: number; uuid: string; mode: 'tender' | 'legacy' }> {
+	await ensureRegisterOpen(page);
 	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), { timeout: 90_000 });
 	// An unhandled rejection here takes down the whole worker process (#997).
 	saved.catch(() => {});
@@ -234,6 +235,7 @@ export async function newOrderAtCheckout(
 	page: Page,
 	trackOrder: (order: TrackedOrder) => void
 ): Promise<{ orderId: number; uuid: string; mode: 'tender' | 'legacy'; cartTotal: string }> {
+	await ensureRegisterOpen(page);
 	const added = await tryAddRunPrivateSimpleProduct(page);
 	liveTest.skip(!added, 'product-writer credentials are unavailable');
 	const label = newRunLabel();

@@ -110,6 +110,18 @@ export async function becomesVisible(locator: Locator, timeout: number): Promise
 		.catch(() => false);
 }
 
+/** Open a real live-store session; leave it open so later runs can reuse it. */
+export async function ensureRegisterOpen(page: Page): Promise<void> {
+	const card = page.getByTestId('open-register-card');
+	if (!(await becomesVisible(card, 3_000))) return;
+	const amount = page.getByTestId('open-register-amount');
+	await amount.fill((await amount.inputValue()) || '100');
+	await page.getByTestId('open-register-button').click();
+	await expect(card).toBeHidden({ timeout: 30_000 });
+	// A healthy open register has no warning pill; its cart header is ready instead.
+	await expect(page.getByTestId('add-cart-item-menu')).toBeVisible({ timeout: 30_000 });
+}
+
 /**
  * Try to add the fallback E2E product to the cart by searching for its SKU.
  *
@@ -125,6 +137,7 @@ export async function tryAddProductBySku(
 ): Promise<'added' | 'unavailable' | 'add_failed'> {
 	// `waitFor`, not `isVisible` — `isVisible()` samples the DOM once and returns
 	// immediately, so it would report "missing" on anything still rendering.
+	await ensureRegisterOpen(page);
 	const search = page.getByTestId('search-products');
 	if (!(await becomesVisible(search, 30_000))) {
 		log.info('[product] search unavailable — falling back to first catalogue product');
