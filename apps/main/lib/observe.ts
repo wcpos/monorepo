@@ -29,6 +29,16 @@ import type { TelemetryConsent } from '@wcpos/utils/logger/sentry-sink';
  *
  * On web and Electron `expo-observe` resolves to its web stub, so this module
  * is safe to import from the shared root layout: nothing is recorded there.
+ *
+ * Known limits, both inside the SDK (expo-observe 57.0.23) with no app-side
+ * API to close them; they need a consent flip inside a narrow native window:
+ * - A retry backoff armed by an earlier FAILED upload makes the disabled
+ *   dispatch return before it advances the cursor, so a discard in that window
+ *   discards nothing and the next allowed store uploads the refusal's events.
+ *   The gate resets on process restart.
+ * - `configure(false)` does not cancel a dispatch round already in flight (a
+ *   background upload awaiting its response); that round can still send what
+ *   was collected in the seconds after a refusal.
  */
 
 /**
