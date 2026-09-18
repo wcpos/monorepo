@@ -2,7 +2,7 @@ import type { UserDatabase } from '@wcpos/database';
 import type { MetaDataEntry } from '@wcpos/order-math';
 import { getLogger } from '@wcpos/utils/logger';
 
-import { readBoundRegister } from '../../../../../services/register/register-document';
+import { readRegister } from '../../../../../services/register/register-document';
 
 const logger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -22,9 +22,8 @@ export async function reportProvenanceGap(input: {
 }): Promise<void> {
 	const { order } = input;
 	if ((order.meta_data ?? []).some(({ key }) => key === '_wcpos_register')) return;
-	const bound = await readBoundRegister(input.userDB, input.siteUuid, input.storeId).catch(
-		() => null
-	);
+	const bound = (await readRegister(input.userDB).catch(() => null))?.sites?.[input.siteUuid]
+		?.register_id;
 	logger.warn('Sale recorded without register provenance', {
 		context: {
 			type: 'checkout.provenance-skipped',
