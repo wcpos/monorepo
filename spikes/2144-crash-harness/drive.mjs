@@ -12,6 +12,7 @@ const { values: args } = parseArgs({ options: { browser: { type: 'string', defau
   cells: { type: 'string', default: 'A,B,E,F,G,C,D' }, bundles: { type: 'string', default: resolve(directory, '.build') }, out: { type: 'string' } } });
 if (!['chrome', 'firefox', 'webkit'].includes(args.browser) || args.cells.split(',').some(c => !'ABCDEFG'.includes(c) || c.length !== 1)) throw new Error('Invalid browser or cells');
 const origin = 'http://localhost:18998', type = { chrome: chromium, firefox, webkit }[args.browser];
+const QUOTA_BYTES = 64 * 1024 * 1024; // 2000 ~2 KiB seed rows need room for SQLite pages and WAL/journal copies.
 const bundles = Object.fromEntries(await Promise.all((await readdir(args.bundles)).map(async name => [name, await readFile(resolve(args.bundles, name))])));
 const out = args.out ?? resolve(directory, `results.${args.browser}.json`), trials = [], skips = [];
 const environment = { browser: args.browser, browserVersion: null, os: `${platform()} ${release()} ${arch()}`, cpu: cpus()[0]?.model,
@@ -33,7 +34,7 @@ async function launch(profile, quota = false) {
   let context;
   try {
     context = await type.launchPersistentContext(profile, { ...(args.browser === 'chrome' ? { channel: 'chrome' } : {}),
-      ...(quota && args.browser === 'firefox' ? { firefoxUserPrefs: { 'dom.quotaManager.temporaryStorage.fixedLimit': 24576 } } : {}) });
+      ...(quota && args.browser === 'firefox' ? { firefoxUserPrefs: { 'dom.quotaManager.temporaryStorage.fixedLimit': QUOTA_BYTES / 1024 } } : {}) });
   } finally { childProcess.spawn = original; }
   current = context;
   if (!processHandle?.pid) { await context.close(); throw new Error('Could not identify the process spawned for this profile; refusing to simulate a process stop'); }
@@ -63,6 +64,7 @@ async function processTrials() {
     const profile = await mkdtemp(join(tmpdir(), 'spike2144-process-')); let run;
     try {
       for (let trial = 1; trial <= 10; trial++) {
+        if (fatal) break;
         const spec = makeSpec('process-stop', mode, trial); let snapshot, record, killed = false;
         try {
           run ??= await launch(profile);
@@ -86,7 +88,8 @@ async function processTrials() {
           Object.assign(record, { ...metrics, ...record, targetStopMs, pid, stopKind: 'SIGKILL',
             killToExitMs, stopMs, snapshotToKillMs: stopMs - snapshot.elapsedMs, preStopDiagnostics: diagnostics,
             ...(snapshot.failure ? { workloadFailure: snapshot.failure, outcome: 'open-failed' } : {}) });
-        } catch (e) { record = { ...failure(spec, e), killed, snapshot }; }
+        } catch (e) { if (fatal) break; record = { ...failure(spec, e), killed, snapshot }; }
+        record.recoveredBy = 'process-relaunch';
         trials.push(record); await save();
         if (run) await run.context.close().catch(() => {}); run = null;
       }
@@ -105,23 +108,34 @@ async function clearFirefoxQuotaPref(profile) {
 async function quotaTrials() {
   if (args.browser === 'webkit') { skips.push({ cell: 'quota-exhaustion', reason: "No quota control in Playwright's WebKit" }); return; }
   for (const mode of ['WAL', 'DELETE']) for (let trial = 1; trial <= 3; trial++) {
+    if (fatal) break;
     const spec = makeSpec('quota-exhaustion', mode, trial), profile = await mkdtemp(join(tmpdir(), 'spike2144-quota-'));
-    let run, record, snapshot;
+    let run, record, snapshot, streamStarted = false;
     try {
       run = await launch(profile, true); let cdp;
       if (args.browser === 'chrome') {
         cdp = await run.context.newCDPSession(run.page);
-        await cdp.send('Storage.overrideQuotaForOrigin', { origin, quotaSize: 24 * 1024 * 1024 });
+        await cdp.send('Storage.overrideQuotaForOrigin', { origin, quotaSize: QUOTA_BYTES });
       }
       await run.page.evaluate(spec => globalThis.startStream(spec), spec);
+      streamStarted = true;
       await run.page.waitForFunction(() => !!globalThis.streamSnapshot().failure, { }, { timeout: 600000 });
       snapshot = await run.page.evaluate(() => globalThis.stopStream());
       const diagnostics = run.diagnostics;
-      if (args.browser === 'chrome') await cdp.send('Storage.overrideQuotaForOrigin', { origin, quotaSize: 1024 * 1024 * 1024 });
-      else { await run.context.close(); await clearFirefoxQuotaPref(profile); run = await launch(profile); }
+      await run.context.close();
+      if (args.browser === 'firefox') await clearFirefoxQuotaPref(profile);
+      run = await launch(profile);
+      if (args.browser === 'chrome') {
+        cdp = await run.context.newCDPSession(run.page);
+        await cdp.send('Storage.overrideQuotaForOrigin', { origin, quotaSize: 1024 * 1024 * 1024 });
+      }
       record = await run.page.evaluate(input => globalThis.recoverTrial(input), { spec, snapshot });
-      Object.assign(record, { quotaBytes: 24 * 1024 * 1024, quotaFailure: snapshot.failure, preStopDiagnostics: diagnostics });
-    } catch (e) { record = { ...failure(spec, e), snapshot }; }
+      Object.assign(record, { quotaBytes: QUOTA_BYTES, quotaFailure: snapshot.failure, preStopDiagnostics: diagnostics });
+    } catch (e) {
+      if (fatal) break;
+      record = { ...failure(spec, e), snapshot };
+      if (!streamStarted && !snapshot?.acked?.length && !snapshot?.failure) Object.assign(record, { outcome: 'invalid-setup', invalidReason: 'Failed before streamed workload began' });
+    }
     finally { if (run) await run.context.close().catch(() => {}); await rm(profile, { recursive: true, force: true }); }
     trials.push(record); await save();
   }

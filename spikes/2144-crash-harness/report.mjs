@@ -11,7 +11,9 @@ const median = values => {
   const numbers = values.filter(x => typeof x === 'number' && Number.isFinite(x)).sort((a, b) => a - b);
   return numbers.length ? ((numbers[Math.floor((numbers.length - 1) / 2)] + numbers[Math.floor(numbers.length / 2)]) / 2).toFixed(1) : '—';
 };
-const key = t => JSON.stringify([t.row, t.journalMode ?? t.mode ?? 'control', t.cacheSize ?? t.cache ?? '—', t.boundary ?? '—', t.recoveredBy ?? 'in-page']);
+// process-stop records are fresh-process relaunches; older result files predate the driver setting
+// recoveredBy, so derive the label from the cell when the field is absent.
+const key = t => JSON.stringify([t.row, t.journalMode ?? t.mode ?? 'control', t.cacheSize ?? t.cache ?? '—', t.boundary ?? '—', t.recoveredBy ?? (t.cell === 'process-stop' ? 'process-relaunch' : 'in-page')]);
 const output = ['<!-- generated:start -->'];
 if (!reports.length) output.push('No browser measurements yet. Filled by `node report.mjs` when `results.*.json` exist.');
 for (const report of reports) {
@@ -31,7 +33,7 @@ for (const report of reports) {
     if (cell === 'quota-exhaustion') output.push(table(['Mode', 'Trial', 'SQLite code', 'Statement / message', 'DOM error / numeric write return', 'Reopen outcome'], cells.map(t => [t.mode, t.trial, t.quotaFailure?.resultCode,
       [t.quotaFailure?.statement, t.quotaFailure?.message ?? t.error?.message].filter(Boolean).join(': '), JSON.stringify(t.quotaFailure?.hookFailures ?? []), t.outcome])));
     const groups = new Map();
-    for (const trial of cells) { const k = key(trial); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(trial); }
+    for (const trial of cells.filter(t => t.outcome !== 'invalid-setup')) { const k = key(trial); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(trial); }
     output.push(table(['Row', 'Journal', 'Cache', 'Boundary', 'Recovery', 'Trials', 'ok', 'ok-with-inflight-present', 'ok-with-inflight-absent', 'lost', 'partial', 'integrity-failed', 'open-failed', 'open-failed reason', 'Median reopen attempts', 'Median reacquire ms', 'Median reopen ms'],
       [...groups].map(([k, group]) => [...JSON.parse(k), group.length, group.filter(t => t.outcome === 'ok').length,
         group.filter(t => t.outcome === 'ok' && t.inflightPresent === true).length, group.filter(t => t.outcome === 'ok' && t.inflightPresent === false).length,

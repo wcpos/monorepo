@@ -9313,20 +9313,57 @@
       "row": "sqlite-sahpool",
       "cache": "default",
       "trial": 1,
-      "name": "crash-bde40dc5-e321-4133-bd5d-5ba9fb24caa6",
-      "pool": "crash-aa705182-fb84-4e0c-8f8a-3702c498188c",
+      "name": "crash-f184fdf4-8ed5-402a-b855-ea9dac8fec02",
+      "pool": "crash-fc3a59d4-a57f-4183-9e99-5a901624f73d",
       "journalMode": "WAL",
-      "cacheSize": null,
+      "cacheSize": -16384,
       "boundary": null,
-      "stopMs": null,
-      "ackedCount": 0,
-      "inflightPresent": null,
-      "reacquireMs": null,
-      "reopenMs": null,
-      "outcome": "open-failed",
-      "error": {
-        "name": "Error",
-        "message": "page.evaluate: SQLite3Error: SQLITE_IOERR: sqlite3 result code 10: disk I/O error\n    at Session.worker.onmessage (http://localhost:18998/harness-entry.js:2227:38)"
+      "stopMs": 682.7049999833107,
+      "ackedCount": 160,
+      "inflightPresent": false,
+      "reacquireMs": 102.06499999761581,
+      "reopenMs": 102.06499999761581,
+      "leftBehind": {
+        "files": [
+          "/crash-f184fdf4-8ed5-402a-b855-ea9dac8fec02",
+          "/crash-f184fdf4-8ed5-402a-b855-ea9dac8fec02-wal"
+        ],
+        "walBytes": 16768912
+      },
+      "journalSizeLimit": -1,
+      "reopenAttempts": 1,
+      "outcome": "ok",
+      "cleanupMs": 2.349999964237213,
+      "quotaBytes": 67108864,
+      "quotaFailure": {
+        "name": "SQLite3Error",
+        "message": "SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active",
+        "resultCode": 1,
+        "statement": "COMMIT",
+        "hookFailures": [
+          {
+            "op": "write",
+            "path": "/crash-f184fdf4-8ed5-402a-b855-ea9dac8fec02-wal",
+            "offset": 16773008,
+            "length": 8192,
+            "name": "QuotaExceededError",
+            "message": "Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          }
+        ],
+        "logs": [
+          {
+            "level": "error",
+            "text": "spike-2144: Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 10 SQLITE_IOERR SQL = COMMIT"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 1 SQLITE_ERROR SQL = ROLLBACK"
+          }
+        ]
       }
     },
     {
@@ -9335,20 +9372,57 @@
       "row": "sqlite-sahpool",
       "cache": "default",
       "trial": 2,
-      "name": "crash-13e30186-44f9-4fbd-a9f8-4543acaf1472",
-      "pool": "crash-2cbb8121-98de-4096-9512-bf821cfffea9",
+      "name": "crash-801a6e65-05b3-466a-8422-5cf77a1f91fd",
+      "pool": "crash-8792601a-7378-4cb4-83be-09051ade61f9",
       "journalMode": "WAL",
-      "cacheSize": null,
+      "cacheSize": -16384,
       "boundary": null,
-      "stopMs": null,
-      "ackedCount": 0,
-      "inflightPresent": null,
-      "reacquireMs": null,
-      "reopenMs": null,
-      "outcome": "open-failed",
-      "error": {
-        "name": "Error",
-        "message": "page.evaluate: SQLite3Error: SQLITE_IOERR: sqlite3 result code 10: disk I/O error\n    at Session.worker.onmessage (http://localhost:18998/harness-entry.js:2227:38)"
+      "stopMs": 667.7350000143051,
+      "ackedCount": 160,
+      "inflightPresent": false,
+      "reacquireMs": 104.32499998807907,
+      "reopenMs": 104.32499998807907,
+      "leftBehind": {
+        "files": [
+          "/crash-801a6e65-05b3-466a-8422-5cf77a1f91fd",
+          "/crash-801a6e65-05b3-466a-8422-5cf77a1f91fd-wal"
+        ],
+        "walBytes": 16768912
+      },
+      "journalSizeLimit": -1,
+      "reopenAttempts": 1,
+      "outcome": "ok",
+      "cleanupMs": 2.0049999952316284,
+      "quotaBytes": 67108864,
+      "quotaFailure": {
+        "name": "SQLite3Error",
+        "message": "SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active",
+        "resultCode": 1,
+        "statement": "COMMIT",
+        "hookFailures": [
+          {
+            "op": "write",
+            "path": "/crash-801a6e65-05b3-466a-8422-5cf77a1f91fd-wal",
+            "offset": 16773008,
+            "length": 8192,
+            "name": "QuotaExceededError",
+            "message": "Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          }
+        ],
+        "logs": [
+          {
+            "level": "error",
+            "text": "spike-2144: Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 10 SQLITE_IOERR SQL = COMMIT"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 1 SQLITE_ERROR SQL = ROLLBACK"
+          }
+        ]
       }
     },
     {
@@ -9357,20 +9431,57 @@
       "row": "sqlite-sahpool",
       "cache": "default",
       "trial": 3,
-      "name": "crash-9695b613-a320-49ed-8594-551f04c6a94d",
-      "pool": "crash-3f451b96-469f-49e1-9bd3-6d1dea876057",
+      "name": "crash-1c8711ee-9c87-41ed-b870-1c2858ba2f3a",
+      "pool": "crash-ca77e0c3-7cdf-442a-81fc-a2c497818bc6",
       "journalMode": "WAL",
-      "cacheSize": null,
+      "cacheSize": -16384,
       "boundary": null,
-      "stopMs": null,
-      "ackedCount": 0,
-      "inflightPresent": null,
-      "reacquireMs": null,
-      "reopenMs": null,
-      "outcome": "open-failed",
-      "error": {
-        "name": "Error",
-        "message": "page.evaluate: SQLite3Error: SQLITE_IOERR: sqlite3 result code 10: disk I/O error\n    at Session.worker.onmessage (http://localhost:18998/harness-entry.js:2227:38)"
+      "stopMs": 660.8600000143051,
+      "ackedCount": 160,
+      "inflightPresent": false,
+      "reacquireMs": 109.31000000238419,
+      "reopenMs": 109.31499999761581,
+      "leftBehind": {
+        "files": [
+          "/crash-1c8711ee-9c87-41ed-b870-1c2858ba2f3a-wal",
+          "/crash-1c8711ee-9c87-41ed-b870-1c2858ba2f3a"
+        ],
+        "walBytes": 16768912
+      },
+      "journalSizeLimit": -1,
+      "reopenAttempts": 1,
+      "outcome": "ok",
+      "cleanupMs": 2.25,
+      "quotaBytes": 67108864,
+      "quotaFailure": {
+        "name": "SQLite3Error",
+        "message": "SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active",
+        "resultCode": 1,
+        "statement": "COMMIT",
+        "hookFailures": [
+          {
+            "op": "write",
+            "path": "/crash-1c8711ee-9c87-41ed-b870-1c2858ba2f3a-wal",
+            "offset": 16773008,
+            "length": 8192,
+            "name": "QuotaExceededError",
+            "message": "Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          }
+        ],
+        "logs": [
+          {
+            "level": "error",
+            "text": "spike-2144: Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 10 SQLITE_IOERR SQL = COMMIT"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 1 SQLITE_ERROR SQL = ROLLBACK"
+          }
+        ]
       }
     },
     {
@@ -9379,21 +9490,29 @@
       "row": "sqlite-sahpool",
       "cache": "default",
       "trial": 1,
-      "name": "crash-8f437a71-2d82-445b-8cd2-8f2b010d0558",
-      "pool": "crash-45f661ab-1539-415f-aa64-0f2d5d68893b",
+      "name": "crash-3fe19f5e-cf48-4414-a0f4-78acfed8b752",
+      "pool": "crash-268f6bd5-d0f2-409e-bac0-2d8e117fef02",
       "journalMode": "DELETE",
       "cacheSize": -16384,
       "boundary": null,
-      "stopMs": 169.52000004053116,
-      "ackedCount": 21,
+      "stopMs": 839.2400000095367,
+      "ackedCount": 128,
       "inflightPresent": false,
-      "reacquireMs": 60.37999999523163,
-      "reopenMs": 60.37999999523163,
+      "reacquireMs": 99.54000002145767,
+      "reopenMs": 99.54000002145767,
+      "leftBehind": {
+        "files": [
+          "/crash-3fe19f5e-cf48-4414-a0f4-78acfed8b752",
+          "/crash-3fe19f5e-cf48-4414-a0f4-78acfed8b752-journal"
+        ],
+        "journalBytes": 1365296,
+        "journalHead": "0000000000000000"
+      },
       "journalSizeLimit": -1,
       "reopenAttempts": 1,
       "outcome": "ok",
-      "cleanupMs": 3.9200000166893005,
-      "quotaBytes": 25165824,
+      "cleanupMs": 3.14000004529953,
+      "quotaBytes": 67108864,
       "quotaFailure": {
         "name": "SQLite3Error",
         "message": "SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active",
@@ -9402,11 +9521,25 @@
         "hookFailures": [
           {
             "op": "write",
-            "path": "/crash-8f437a71-2d82-445b-8cd2-8f2b010d0558",
-            "offset": 8384512,
+            "path": "/crash-3fe19f5e-cf48-4414-a0f4-78acfed8b752",
+            "offset": 33550336,
             "length": 8192,
             "name": "QuotaExceededError",
             "message": "Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          }
+        ],
+        "logs": [
+          {
+            "level": "error",
+            "text": "spike-2144: Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 10 SQLITE_IOERR SQL = COMMIT"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 1 SQLITE_ERROR SQL = ROLLBACK"
           }
         ]
       }
@@ -9417,21 +9550,29 @@
       "row": "sqlite-sahpool",
       "cache": "default",
       "trial": 2,
-      "name": "crash-5090714c-374f-4463-9f5d-f255f2e3ae02",
-      "pool": "crash-2d4d74f0-1e83-4c0d-b27c-896250247d39",
+      "name": "crash-7f9e22c2-2bdd-47d0-8e03-53e9687d0da8",
+      "pool": "crash-8bb2df87-baea-4730-a79b-0cba372d8dde",
       "journalMode": "DELETE",
       "cacheSize": -16384,
       "boundary": null,
-      "stopMs": 173.21999996900558,
-      "ackedCount": 21,
+      "stopMs": 754.6299999952316,
+      "ackedCount": 128,
       "inflightPresent": false,
-      "reacquireMs": 61.294999957084656,
-      "reopenMs": 61.294999957084656,
+      "reacquireMs": 91.43500000238419,
+      "reopenMs": 91.43999999761581,
+      "leftBehind": {
+        "files": [
+          "/crash-7f9e22c2-2bdd-47d0-8e03-53e9687d0da8",
+          "/crash-7f9e22c2-2bdd-47d0-8e03-53e9687d0da8-journal"
+        ],
+        "journalBytes": 1365296,
+        "journalHead": "0000000000000000"
+      },
       "journalSizeLimit": -1,
       "reopenAttempts": 1,
       "outcome": "ok",
-      "cleanupMs": 3.7699999809265137,
-      "quotaBytes": 25165824,
+      "cleanupMs": 3.48499995470047,
+      "quotaBytes": 67108864,
       "quotaFailure": {
         "name": "SQLite3Error",
         "message": "SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active",
@@ -9440,11 +9581,25 @@
         "hookFailures": [
           {
             "op": "write",
-            "path": "/crash-5090714c-374f-4463-9f5d-f255f2e3ae02",
-            "offset": 8384512,
+            "path": "/crash-7f9e22c2-2bdd-47d0-8e03-53e9687d0da8",
+            "offset": 33550336,
             "length": 8192,
             "name": "QuotaExceededError",
             "message": "Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          }
+        ],
+        "logs": [
+          {
+            "level": "error",
+            "text": "spike-2144: Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 10 SQLITE_IOERR SQL = COMMIT"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 1 SQLITE_ERROR SQL = ROLLBACK"
           }
         ]
       }
@@ -9455,21 +9610,29 @@
       "row": "sqlite-sahpool",
       "cache": "default",
       "trial": 3,
-      "name": "crash-41a40727-e8cf-42b7-b494-fb656954f3c1",
-      "pool": "crash-7acff513-91ec-412e-a8e9-d5eb0737ca11",
+      "name": "crash-ecdef7f1-60f2-4edc-9c0a-532feb9a3e18",
+      "pool": "crash-0f46c804-1c17-476e-bb34-93a97543b93d",
       "journalMode": "DELETE",
       "cacheSize": -16384,
       "boundary": null,
-      "stopMs": 176.55500000715256,
-      "ackedCount": 21,
+      "stopMs": 714.7250000238419,
+      "ackedCount": 128,
       "inflightPresent": false,
-      "reacquireMs": 62.36500000953674,
-      "reopenMs": 62.37000000476837,
+      "reacquireMs": 103.14999997615814,
+      "reopenMs": 103.14999997615814,
+      "leftBehind": {
+        "files": [
+          "/crash-ecdef7f1-60f2-4edc-9c0a-532feb9a3e18-journal",
+          "/crash-ecdef7f1-60f2-4edc-9c0a-532feb9a3e18"
+        ],
+        "journalBytes": 1365296,
+        "journalHead": "0000000000000000"
+      },
       "journalSizeLimit": -1,
       "reopenAttempts": 1,
       "outcome": "ok",
-      "cleanupMs": 3.584999978542328,
-      "quotaBytes": 25165824,
+      "cleanupMs": 2.8050000071525574,
+      "quotaBytes": 67108864,
       "quotaFailure": {
         "name": "SQLite3Error",
         "message": "SQLITE_ERROR: sqlite3 result code 1: cannot rollback - no transaction is active",
@@ -9478,11 +9641,25 @@
         "hookFailures": [
           {
             "op": "write",
-            "path": "/crash-41a40727-e8cf-42b7-b494-fb656954f3c1",
-            "offset": 8384512,
+            "path": "/crash-ecdef7f1-60f2-4edc-9c0a-532feb9a3e18",
+            "offset": 33550336,
             "length": 8192,
             "name": "QuotaExceededError",
             "message": "Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          }
+        ],
+        "logs": [
+          {
+            "level": "error",
+            "text": "spike-2144: Failed to execute 'write' on 'FileSystemSyncAccessHandle': No space available for this operation"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 10 SQLITE_IOERR SQL = COMMIT"
+          },
+          {
+            "level": "warn",
+            "text": "sqlite3_step() rc= 1 SQLITE_ERROR SQL = ROLLBACK"
           }
         ]
       }
