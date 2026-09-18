@@ -158,6 +158,33 @@ describe('drainMutationQueue', () => {
 		expect(pending[1]!.attempts ?? 0).toBe(0);
 	});
 
+	it('blocks and reports per COLLECTION+record, so a 401 on one collection does not stop the same id in another', async () => {
+		// A recordId is unique within its collection, not across them. Keying the
+		// drain's per-record sets on the id alone let an order's refusal block — and
+		// report its 401 against — an unrelated product carrying the same id.
+		const q = await queueWith(
+			mut({ mutationId: 'm1', collectionName: 'orders', recordId: 'shared-id' }),
+			mut({ mutationId: 'm2', collectionName: 'products', recordId: 'shared-id' })
+		);
+		const pushed: string[] = [];
+		const result = await drainMutationQueue({
+			queue: q,
+			push: async (mutation) => {
+				pushed.push(`${mutation.collectionName}:${mutation.mutationId}`);
+				if (mutation.collectionName === 'orders') {
+					throw new RecordPushError(mutation, 401, 'woocommerce_pos_rest_unauthorized');
+				}
+				return ok(mutation);
+			},
+		});
+
+		// The product was pushed, not swept up by the order's wall.
+		expect(pushed).toEqual(['orders:m1', 'products:m2']);
+		expect(result).toMatchObject({ pushed: 1, failed: 1 });
+		expect(result.failures.map(({ mutation }) => mutation.mutationId)).toEqual(['m1']);
+		expect((await q.pending()).map((m) => m.mutationId)).toEqual(['m1']);
+	});
+
 	it('dead-letters a non-retryable 4xx (e.g. unsupported collection) instead of retrying forever', async () => {
 		const q = await queueWith(mut({ mutationId: 'm1', recordId: 'rec-A' }));
 		const err = Object.assign(new Error('unknown collection'), { status: 400 });
