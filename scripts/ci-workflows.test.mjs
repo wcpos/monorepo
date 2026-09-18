@@ -1376,7 +1376,10 @@ test('the native E2E aggregator exists under the name the merge gate will requir
 		({ name }) => name === 'Evaluate merge policy'
 	);
 	const required = gateStep.env.MERGE_GATE_REQUIRED_CHECKS.split('|');
-	assert.deepEqual(required, ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests']);
+	// 'Gallery' is test.yml's aggregator over the read-only shoot and the label-driven
+	// baseline update (roadmap#355): SKIPPED when the gallery path filter did not fire.
+	assert.deepEqual(required, ['🧹 Lint', '🧪 Unit Tests', '🎭 E2E Tests', 'Gallery']);
+	assert.equal(readWorkflow('test.yml').jobs.gallery.name, 'Gallery');
 });
 
 test('the shared-store queue stays removed', () => {
