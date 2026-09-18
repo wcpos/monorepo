@@ -136,10 +136,10 @@ export function isSaleComplete(outcome: SaleOutcome, dp: number, payload?: Order
 	switch (outcome.source) {
 		case 'replay': // Replay trusts the resident status, never re-collects money.
 			return !!payload?.status && !UNPAID_STATUSES.includes(payload.status);
-		case 'manual': // Normal manual completion predicts locally; mirror recovery trusts only the server.
-			return outcome.mirrorFailed
-				? !!outcome.order && toMinor(outcome.order.balance, dp) === 0
-				: outcome.preLegBalanceMinor - outcome.amountMinor === 0;
+		case 'manual': // ADR 0032: the server summary wins; predict locally only without one, and never after a failed mirror.
+			return outcome.order
+				? toMinor(outcome.order.balance, dp) === 0
+				: !outcome.mirrorFailed && outcome.preLegBalanceMinor - outcome.amountMinor === 0;
 		case 'terminal': // The narrator uses Number, with derived local balance only when no summary exists.
 			return Number(outcome.order ? outcome.order.balance : outcome.balance) === 0;
 		case 'gateway-contract': // The contract accepts only its exact completed state.

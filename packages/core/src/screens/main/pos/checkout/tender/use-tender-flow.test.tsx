@@ -115,6 +115,7 @@ const mockManualMirror = jest.fn();
 const mockRecordOptions = jest.fn();
 const mockVoidPayments = jest.fn();
 const mockCompleteOrderFlow = jest.fn();
+let mockUseRealCompletion = false;
 const mockSetCurrentOrderID = jest.fn();
 const mockRequire = jest.fn();
 const mockAdjustStock = jest.fn();
@@ -211,7 +212,10 @@ jest.mock('../payments', () => ({
 	useVoidPayments: () => mockVoidPayments,
 }));
 jest.mock('../hooks/use-complete-order-flow', () => ({
-	useCompleteOrderFlow: () => mockCompleteOrderFlow,
+	useCompleteOrderFlow: (order: EngineRecord<'orders'>) =>
+		mockUseRealCompletion
+			? jest.requireActual('../hooks/use-complete-order-flow').useCompleteOrderFlow(order)
+			: mockCompleteOrderFlow,
 }));
 jest.mock('../../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ format: (value: number) => value.toFixed(2) }),
@@ -1674,6 +1678,66 @@ it('zero balance writes completion and provenance together exactly once', async 
 		data: { status: 'completed', meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
 	});
 });
+
+it.each([
+	['1.00', 'pos-open', false],
+	['0.00', 'completed', true],
+] as const)(
+	'full manual online tender uses mirrored server balance %s for completion',
+	async (balance, status, completed) => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		enterCheckout(order.uuid);
+		mockUseRealManual = true;
+		mockUseRealCompletion = true;
+		mockAutoShowReceipt = true;
+		mockLeg = null;
+		mockPayload = { id: 42, total: '10.00', meta_data: [] };
+		mockMethods = methods;
+		mockOnlineStatus = 'online-website-available';
+		mockBlockIfDegraded.mockReturnValue(false);
+		mockLocalPatch.mockResolvedValue(order);
+		mockManualPost.mockResolvedValue({
+			data: {
+				order: {
+					status,
+					total: completed ? '10.00' : '11.00',
+					paid: '10.00',
+					balance,
+					payment_method: 'pos_cash',
+					payment_method_title: 'Cash',
+				},
+			},
+		});
+		mockManualMirror.mockImplementation(async ({ changes }: { changes: object }) => {
+			mockPayload = { ...mockPayload, ...changes };
+		});
+		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		const view = renderHook(() => useTenderFlow(order));
+		try {
+			act(() => view.result.current.pickMethod('pos_cash'));
+			expect(view.result.current.entryAppliedMinor).toBe(1000);
+			await act(async () => view.result.current.takeTender());
+			expect(mockManualPost).toHaveBeenCalledTimes(1);
+			expect(mockManualMirror).toHaveBeenCalledTimes(1);
+			expect(order.getLatest().payload.status).toBe(status);
+			expect(getCheckoutModeSnapshot().receiptOrders.has(order.uuid)).toBe(completed);
+			expect(
+				mockInfo.mock.calls.filter(([, options]) => options.context?.type === 'checkout.completed')
+			).toHaveLength(completed ? 1 : 0);
+			expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+			expect(mockReplace).not.toHaveBeenCalled();
+			expect(mockRequire).toHaveBeenCalledTimes(completed ? 1 : 0);
+			expect(mockError).not.toHaveBeenCalled();
+		} finally {
+			view.unmount();
+			mockUseRealManual = false;
+			mockUseRealCompletion = false;
+			mockManualMirror.mockReset();
+			jest.clearAllMocks();
+		}
+	}
+);
 
 it('full manual online tender persists provenance before POST and the mirror', async () => {
 	jest.mocked(provenance.completionMetaFor).mockClear();

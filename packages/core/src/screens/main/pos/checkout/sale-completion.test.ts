@@ -91,8 +91,30 @@ beforeEach(async () => {
 });
 it.each([
 	['manual online prediction', manual, true],
+	['manual online partial prediction without summary', { ...manual, amountMinor: 50 }, false],
 	['manual offline prediction', { ...manual, via: 'offline', amountMinor: 50 }, false],
+	['manual offline full prediction', { ...manual, via: 'offline' }, true],
+	[
+		'manual online non-zero summary overrides a paid prediction',
+		{ ...manual, order: { balance: '1.00' } },
+		false,
+	],
+	[
+		'manual online zero summary overrides an unpaid prediction',
+		{ ...manual, amountMinor: 50, order: { balance: '0.00' } },
+		true,
+	],
 	['manual mirror recovery', { ...manual, mirrorFailed: true, order: { balance: '1.00' } }, false],
+	[
+		'manual mirror recovery with zero summary',
+		{ ...manual, mirrorFailed: true, amountMinor: 50, order: { balance: '0.00' } },
+		true,
+	],
+	[
+		'manual mirror recovery without summary is never complete (no evidence either side)',
+		{ ...manual, mirrorFailed: true },
+		false,
+	],
 	['terminal summary', { source: 'terminal', row, order: { balance: '0.00' } }, true],
 	['terminal fallback', { source: 'terminal', row, order: null, balance: '0.00' }, true],
 	['contract exact status', { source: 'gateway-contract', status: 'on-hold' }, false],
