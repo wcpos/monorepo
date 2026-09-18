@@ -360,10 +360,9 @@ async function dropHollowRows(
       const { bytes, pastEof } = await readRange(accessHandle, start, end);
       // The primary row can still point inside the file while one of this
       // id's secondary rows is past EOF; that too means the indexes are stale.
-      if (
-        (pastEof || (await idHasRowPastEof(state, accessHandle, documentId))) &&
-        !dropPastEof
-      ) {
+      const stalePastEof =
+        pastEof || (await idHasRowPastEof(state, accessHandle, documentId));
+      if (stalePastEof && !dropPastEof) {
         outcomes.set(documentId, "range-past-eof");
         stale = true;
         continue;
@@ -373,7 +372,10 @@ async function dropHollowRows(
         outcomes.set(documentId, "range-holds-foreign-bytes");
         continue;
       }
-      candidates.push({ documentId, start, end, foreign });
+      // An exempt write keeps the evidence: its primary range may be blank and
+      // in-file while a secondary sits past EOF, and a range-wide delete would
+      // then take a second id that shares the range.
+      candidates.push({ documentId, start, end, foreign, stalePastEof });
     }
     if (stale) {
       for (const { documentId } of candidates) {
@@ -382,7 +384,7 @@ async function dropHollowRows(
       return outcomes;
     }
 
-    for (const { documentId, start, end, foreign } of candidates) {
+    for (const { documentId, start, end, foreign, stalePastEof } of candidates) {
       // Re-read immediately before the drop: another process can compact or
       // truncate between the classification above and here. A write keeps its
       // exemption here too, or it would reject instead of reinserting.
@@ -395,7 +397,7 @@ async function dropHollowRows(
         outcomes.set(documentId, "range-changed");
         continue;
       }
-      if (foreign || pastEof) {
+      if (foreign || pastEof || stalePastEof) {
         // By identity: the range is either another document's bytes, or gone
         // from the file and possibly shared with a second id.
         await dropIndexRowsById(state, runState, documentId, {
@@ -771,7 +773,10 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
         });
       };
 
-      const dropHollowIds = async (hollow, { dropPastEof = false } = {}) => {
+      const dropHollowIds = async (
+        hollow,
+        { dropPastEof = false, requestedIds } = {},
+      ) => {
         const refused = [];
         if (hollow.length === 0) return refused;
         // Only the sole repair owner may mutate positions (#1057, #1049).
@@ -782,6 +787,28 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
               target,
               id,
               reason: "multi-instance",
+            });
+          }
+          return refused;
+        }
+        // A requested id that read back fine can still carry a row past EOF,
+        // and that proves the indexes are stale for its hollow neighbours too.
+        // dropHollowRows only ever sees the hollow ones, so the rest of the
+        // request is classified here.
+        const others = (requestedIds ?? []).filter(
+          (id) => !hollow.includes(id),
+        );
+        if (
+          !dropPastEof &&
+          others.length > 0 &&
+          (await batchHasPastEofRow(instance, others))
+        ) {
+          for (const id of hollow) {
+            refused.push({ id, reason: "range-past-eof" });
+            report("hollow-row-refused", {
+              target,
+              id,
+              reason: "range-past-eof",
             });
           }
           return refused;
@@ -910,7 +937,10 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
           // by key and replaces them in place.
           const hollow = await findHollowIds(batch, documents, true);
           if (hollow.length === 0) return false;
-          const refused = await dropHollowIds(hollow, { dropPastEof });
+          const refused = await dropHollowIds(hollow, {
+            dropPastEof,
+            requestedIds: batch,
+          });
           throwIfPastEof(refused);
           onMalformedBatch?.();
           if (refused.length === hollow.length) return false;
@@ -981,7 +1011,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
           // refused id stays unverified for the write preflight, as does an
           // id served only by a foreign row and absent at its own.
           const hollow = await findHollowIds(ids, documents, withDeleted);
-          const refused = await dropHollowIds(hollow);
+          const refused = await dropHollowIds(hollow, { requestedIds: ids });
           throwIfPastEof(refused);
           const suspectForeign = refused.some(
             ({ reason }) => reason === "range-holds-foreign-bytes",
