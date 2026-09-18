@@ -654,21 +654,23 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 									currentRevision: pushResult.currentRevision,
 								});
 							},
+							// A deferral stays queued, so it is not subject to the acknowledgement
+							// gate below and is emitted AS the drain meets it: a waiter on a 401
+							// (and on any row queued behind that record) must not wait for the
+							// rest of the queue to be tried first.
+							onRetryableFailure: ({ mutation, status, reason }) =>
+								deps.emitWriteEvent({
+									type: 'write-deferred',
+									collection: mutation.collectionName,
+									recordId: mutation.recordId,
+									mutationId: mutation.mutationId,
+									status,
+									reason,
+								}),
 							observe: deps.diagnostics,
 							drainInstanceId: deps.drainInstanceIdFor(),
 							...(deps.now !== undefined ? { now: deps.now } : {}),
 						});
-						// Deferrals stay queued; they are not subject to the acknowledgement gate.
-						for (const { mutation, status, reason } of result.failures) {
-							deps.emitWriteEvent({
-								type: 'write-deferred',
-								collection: mutation.collectionName,
-								recordId: mutation.recordId,
-								mutationId: mutation.mutationId,
-								status,
-								reason,
-							});
-						}
 						const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));
 						for (const ack of ackCandidates) {
 							if (stillPending.has(ack.mutationId)) continue;

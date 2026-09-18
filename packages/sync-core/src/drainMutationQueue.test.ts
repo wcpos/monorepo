@@ -112,28 +112,50 @@ describe('drainMutationQueue', () => {
 		expect((await q.pending()).map((m) => m.mutationId)).toEqual(['m1']);
 	});
 
-	it('keeps a 401 pending with backoff and reports the retryable push failure', async () => {
-		const q = await queueWith(mut());
+	it('keeps a 401 pending with backoff, reports it the moment it happens, and reports the rows FIFO-blocked behind it', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'm1', recordId: 'rec-A' }),
+			mut({ mutationId: 'm2', recordId: 'rec-A' }),
+			mut({ mutationId: 'm3', recordId: 'rec-B' })
+		);
 		const now = Date.parse('2026-06-26T00:00:00.000Z');
+		// One ordered trace of pushes and failure reports: a waiter on m1 must be
+		// told BEFORE the drain moves on to rec-B, not after the whole queue ran.
+		const trace: string[] = [];
 		const result = await drainMutationQueue({
 			queue: q,
 			now: () => now,
 			push: async (mutation) => {
-				throw new RecordPushError(mutation, 401, 'woocommerce_pos_rest_unauthorized');
+				trace.push(`push:${mutation.mutationId}`);
+				if (mutation.recordId === 'rec-A') {
+					throw new RecordPushError(mutation, 401, 'woocommerce_pos_rest_unauthorized');
+				}
+				return ok(mutation);
 			},
+			onRetryableFailure: ({ mutation }) => trace.push(`deferred:${mutation.mutationId}`),
 		});
 
-		expect(result).toMatchObject({ pushed: 0, failed: 1, rejected: [] });
+		expect(trace).toEqual(['push:m1', 'deferred:m1', 'deferred:m2', 'push:m3']);
+		expect(result).toMatchObject({ pushed: 1, failed: 1, rejected: [] });
 		expect(result.failures).toEqual([
 			{
 				mutation: expect.objectContaining({ mutationId: 'm1' }),
 				status: 401,
 				reason: 'woocommerce_pos_rest_unauthorized',
 			},
+			// m2 was never pushed (FIFO behind m1) but a waiter on it needs the same verdict.
+			{
+				mutation: expect.objectContaining({ mutationId: 'm2' }),
+				status: 401,
+				reason: 'woocommerce_pos_rest_unauthorized',
+			},
 		]);
-		const [pending] = await q.pending();
-		expect(pending).toMatchObject({ mutationId: 'm1', status: 'pending', attempts: 1 });
-		expect(Date.parse(pending.nextAttemptAt!)).toBeGreaterThan(now);
+		const pending = await q.pending();
+		expect(pending.map((m) => m.mutationId)).toEqual(['m1', 'm2']);
+		expect(pending[0]).toMatchObject({ status: 'pending', attempts: 1 });
+		expect(Date.parse(pending[0]!.nextAttemptAt!)).toBeGreaterThan(now);
+		// The blocked successor was never attempted, so it carries no backoff of its own.
+		expect(pending[1]!.attempts ?? 0).toBe(0);
 	});
 
 	it('dead-letters a non-retryable 4xx (e.g. unsupported collection) instead of retrying forever', async () => {

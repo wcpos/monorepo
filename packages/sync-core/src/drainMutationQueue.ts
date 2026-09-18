@@ -284,6 +284,13 @@ export async function drainMutationQueue(input: {
 	/** Leaves matching mutations pending without claiming, retrying, or backing off. */
 	shouldHold?: (mutation: QueuedMutation) => Promise<boolean>;
 	/**
+	 * Called the moment a push fails retryably — before the drain moves on to the
+	 * next row — and again for every later row of the same record this drain then
+	 * skips behind it (FIFO), carrying the head's status. A waiter on a 401 must
+	 * hear about it now, not after the rest of the queue has been tried.
+	 */
+	onRetryableFailure?: (failure: DrainResult['failures'][number]) => void;
+	/**
 	 * This drain instance's id + how long its claim lease lasts (task 43 follow-up).
 	 * With both set, a claim carries a stealable lease so two windows draining
 	 * cannot both claim one row. Absent ⇒ no lease (single-process / legacy callers
@@ -386,6 +393,13 @@ export async function drainMutationQueue(input: {
 	);
 	const rejected: DrainResult['rejected'] = [];
 	const failures: DrainResult['failures'] = [];
+	// Records whose head failed retryably THIS drain, with that failure: later rows of
+	// the record are FIFO-blocked behind it and are reported with the same verdict.
+	const blockedByFailure = new Map<string, { status?: number; reason?: string }>();
+	const reportFailure = (failure: DrainResult['failures'][number]): void => {
+		failures.push(failure);
+		input.onRetryableFailure?.(failure);
+	};
 	let pushed = 0;
 	let held = 0;
 	let failed = 0;
@@ -549,6 +563,8 @@ export async function drainMutationQueue(input: {
 			break;
 		}
 		if (blockedRecords.has(mutation.recordId)) {
+			const wall = blockedByFailure.get(mutation.recordId);
+			if (wall) reportFailure({ mutation, ...wall });
 			continue;
 		}
 		if (!releaseRecords.has(mutation.recordId) && (await input.shouldHold?.(mutation))) {
@@ -697,7 +713,8 @@ export async function drainMutationQueue(input: {
 				// The push adapter already emitted push.error. Leave it queued; bump + back off (ADR 0012).
 				failed += 1;
 				const detail = error as { status?: number; reason?: string } | null;
-				failures.push({ mutation: draining, status: detail?.status, reason: detail?.reason });
+				reportFailure({ mutation: draining, status: detail?.status, reason: detail?.reason });
+				blockedByFailure.set(mutation.recordId, { status: detail?.status, reason: detail?.reason });
 				blockedRecords.add(mutation.recordId);
 				await applyBackoff({ ...draining, status: 'pending' });
 				continue;
