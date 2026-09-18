@@ -170,6 +170,6 @@ test('shipped OPFS worker contains changelog identity protection exactly once', 
 	const helper =
 		/function ([\w$]+)\([\w$]+\)\{for\(var [\w$]+=0;[^}]*__wcposIndexStates=/.exec(source);
 	assert.ok(helper, 'link helper definition present in the shipped worker');
-	const name = helper[1].replace(/[$]/g, '\\$');
+	const name = helper[1].replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 	assert.equal(source.match(new RegExp(`(?<![\\w$])${name}\\(`, 'g'))?.length, 2);
 });
