@@ -43,6 +43,9 @@ it.each([
 	[100, 0, 1],
 	[100, -1, 1],
 	[100, Infinity, 1],
+	[Number.NaN, 44, 1],
+	[0, 44, 1],
+	[-100, 44, 1],
 ])('counts %s / %s as %s rows', (extent, rowHeight, count) => {
 	expect(skeletonCount(extent, rowHeight)).toBe(count);
 });
