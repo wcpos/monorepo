@@ -21,11 +21,12 @@ import {
 import { POPOVER_FADE_MS } from '../lib/overlay-motion';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
-import { INDENT_PX } from '../tree-select/tree-item';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 
 import type { FlatTreeItem } from '../lib/use-hierarchy';
 import type { TreeComboboxContentProps, TreeComboboxProps } from './types';
+
+const INDENT_PX = 16;
 
 type ComboboxOption<T = undefined> = { value: string; label: string; item?: T };
 

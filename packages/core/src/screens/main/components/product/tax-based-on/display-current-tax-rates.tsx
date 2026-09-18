@@ -122,7 +122,7 @@ export function DisplayCurrentTaxRates({
 				) : (
 					<HStack space="xs">
 						<Icon variant="error" name="triangleExclamation" />
-						<Text className="text-error text-sm">{t('common.no_rates_matched')}</Text>
+						<Text className="text-destructive text-sm">{t('common.no_rates_matched')}</Text>
 					</HStack>
 				)}
 			</VStack>

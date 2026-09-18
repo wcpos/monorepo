@@ -39,7 +39,7 @@ const buttonVariants = cva(
 				info: 'bg-info web:hover:opacity-90 active:opacity-90',
 				attention: 'bg-attention web:hover:opacity-90 active:opacity-90',
 				warning: 'bg-warning web:hover:opacity-90 active:opacity-90',
-				error: 'bg-error web:hover:opacity-90 active:opacity-90',
+				error: 'bg-destructive web:hover:opacity-90 active:opacity-90',
 
 				/**
 				 * Outline buttons
@@ -63,7 +63,7 @@ const buttonVariants = cva(
 				'outline-warning':
 					'border-warning bg-card web:hover:bg-warning/90 web:hover:text-warning-foreground active:bg-warning border',
 				'outline-error':
-					'border-error bg-card web:hover:bg-error/90 web:hover:text-error-foreground active:bg-error border',
+					'border-destructive bg-card web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive border',
 
 				/**
 				 * Ghost buttons
@@ -77,7 +77,7 @@ const buttonVariants = cva(
 				'ghost-info': 'bg-info/15 web:hover:bg-info active:bg-info',
 				'ghost-attention': 'bg-attention/15 web:hover:bg-attention active:bg-attention',
 				'ghost-warning': 'bg-warning/15 web:hover:bg-warning active:bg-warning',
-				'ghost-error': 'bg-error/15 web:hover:bg-error active:bg-error',
+				'ghost-error': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
 
 				/**
 				 * Transparent, de-emphasised label. Distinct from `ghost-muted`,
@@ -148,7 +148,7 @@ const buttonTextVariants = cva(
 				info: 'text-info-foreground',
 				attention: 'text-attention-foreground',
 				warning: 'text-warning-foreground',
-				error: 'text-error-foreground',
+				error: 'text-destructive-foreground',
 
 				/**
 				 * Outline buttons
@@ -162,7 +162,7 @@ const buttonTextVariants = cva(
 				'outline-info': 'group-active:text-info-foreground',
 				'outline-attention': 'group-active:text-attention-foreground',
 				'outline-warning': 'group-active:text-warning-foreground',
-				'outline-error': 'group-active:text-error-foreground',
+				'outline-error': 'group-active:text-destructive-foreground',
 
 				/**
 				 * Ghost buttons
@@ -185,7 +185,7 @@ const buttonTextVariants = cva(
 				'ghost-warning':
 					'text-warning web:group-hover:text-warning-foreground group-active:text-warning-foreground',
 				'ghost-error':
-					'text-error web:group-hover:text-error-foreground group-active:text-error-foreground',
+					'text-destructive web:group-hover:text-destructive-foreground group-active:text-destructive-foreground',
 				'ghost-quiet':
 					'text-muted-foreground web:group-hover:text-accent-foreground group-active:text-accent-foreground',
 				sidebar: 'text-sidebar-foreground',

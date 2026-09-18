@@ -49,7 +49,7 @@ const iconVariants = cva('inset-0 content-center items-center', {
 			secondary: 'text-secondary',
 			muted: 'text-muted-foreground',
 			success: 'text-success',
-			error: 'text-error',
+			error: 'text-destructive',
 			warning: 'text-warning',
 			info: 'text-info',
 			accent: 'text-accent-foreground',
