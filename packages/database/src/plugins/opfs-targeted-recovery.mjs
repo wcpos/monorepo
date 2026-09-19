@@ -131,13 +131,14 @@ async function repairDocument(
     // primary row indexed. A range past EOF is refused unless the caller
     // carries the document (see readRange).
     const accessHandle = await documentsAccessHandle(state, runState);
+    const stale = await anyRowPastEof(state, accessHandle);
     const { bytes: damagedBytes, pastEof } = await readRange(
       accessHandle,
       oldStart,
       oldEnd,
     );
-    if (pastEof && !dropPastEof) return "range-past-eof";
-    if (pastEof) {
+    if ((pastEof || stale) && !dropPastEof) return "range-past-eof";
+    if (pastEof || (stale && isBlankBytes(damagedBytes))) {
       // The write-path exemption drops by IDENTITY, not by range: the known
       // damage shape leaves two ids on one range, and the retry carries only
       // the written document — a range-wide delete would lose the other one.
@@ -221,23 +222,29 @@ async function readRange(accessHandle, start, end) {
   return { bytes, pastEof };
 }
 
-// A stale SECONDARY row proves this instance's indexes are stale just as a
-// primary one does, and the per-id paths see only the primary row. Rows are
-// matched by identity (the primary key inside the indexable string), never by
-// offsets, so a range a sibling happens to share is not mistaken for this id's.
-async function idHasRowPastEof(state, accessHandle, documentId) {
-  const keyLength = state.firstIdx.primaryKeyLength;
+// Staleness is a property of the INSTANCE, not of one id: any row, in any
+// index, ending past the file proves this instance's rows predate another
+// writer's compaction — and the row that proves it need not belong to the id
+// being repaired, or to the request at all. One size read plus a walk of the
+// in-memory rows answers it: no per-row I/O, and one pass rather than one per
+// id, so a repair stays linear in the collection instead of quadratic.
+async function anyRowPastEof(state, accessHandle) {
+  const size = await accessHandle.getSize();
   for (const indexState of state.indexStates) {
     for (const row of indexState.rows) {
-      if (
-        getPrimaryKeyFromIndexableString(row[0], keyLength) !== documentId
-      )
-        continue;
-      const { pastEof } = await readRange(accessHandle, row[1], row[2]);
-      if (pastEof) return true;
+      if (row[2] > size) return true;
     }
   }
   return false;
+}
+
+// The same question from outside a cleanup run.
+async function instanceHasRowPastEof(instance) {
+  const state = await instance.internals?.statePromise;
+  if (!state?.indexStates || !instance.taskQueue) return false;
+  return instance.taskQueue.runCleanup(async (runState) =>
+    anyRowPastEof(state, await documentsAccessHandle(state, runState)),
+  );
 }
 
 // A blank range is whitespace (compaction's own fill) or NUL (a Windows
@@ -348,8 +355,21 @@ async function dropHollowRows(
     // process has already moved. Dropping that one first and refusing the
     // second afterwards would lose it (the same order trap as the cleanup
     // scan).
+    // One instance-wide question, asked once: a row past EOF anywhere means
+    // these rows predate another writer's compaction, so a blank range here is
+    // as likely to be its fill over a document that has been moved.
+    const stale = await anyRowPastEof(state, accessHandle);
+    if (stale && !dropPastEof) {
+      for (const documentId of documentIds) {
+        outcomes.set(
+          documentId,
+          state.firstIdx.metaIdMap.has(documentId) ? "range-past-eof" : false,
+        );
+      }
+      return outcomes;
+    }
+
     const candidates = [];
-    let stale = false;
     for (const documentId of documentIds) {
       const primaryRow = state.firstIdx.metaIdMap.get(documentId);
       if (!primaryRow) {
@@ -358,33 +378,15 @@ async function dropHollowRows(
       }
       const [, start, end] = primaryRow;
       const { bytes, pastEof } = await readRange(accessHandle, start, end);
-      // The primary row can still point inside the file while one of this
-      // id's secondary rows is past EOF; that too means the indexes are stale.
-      const stalePastEof =
-        pastEof || (await idHasRowPastEof(state, accessHandle, documentId));
-      if (stalePastEof && !dropPastEof) {
-        outcomes.set(documentId, "range-past-eof");
-        stale = true;
-        continue;
-      }
       const foreign = !pastEof && !isBlankBytes(bytes);
       if (foreign && !discardForeign) {
         outcomes.set(documentId, "range-holds-foreign-bytes");
         continue;
       }
-      // An exempt write keeps the evidence: its primary range may be blank and
-      // in-file while a secondary sits past EOF, and a range-wide delete would
-      // then take a second id that shares the range.
-      candidates.push({ documentId, start, end, foreign, stalePastEof });
-    }
-    if (stale) {
-      for (const { documentId } of candidates) {
-        outcomes.set(documentId, "range-past-eof");
-      }
-      return outcomes;
+      candidates.push({ documentId, start, end, foreign });
     }
 
-    for (const { documentId, start, end, foreign, stalePastEof } of candidates) {
+    for (const { documentId, start, end, foreign } of candidates) {
       // Re-read immediately before the drop: another process can compact or
       // truncate between the classification above and here. A write keeps its
       // exemption here too, or it would reject instead of reinserting.
@@ -397,9 +399,11 @@ async function dropHollowRows(
         outcomes.set(documentId, "range-changed");
         continue;
       }
-      if (foreign || pastEof || stalePastEof) {
+      if (foreign || pastEof || stale) {
         // By identity: the range is either another document's bytes, or gone
-        // from the file and possibly shared with a second id.
+        // from the file and possibly shared with a second id. On a stale
+        // instance every exempt deletion goes this way, whichever id carried
+        // the proof.
         await dropIndexRowsById(state, runState, documentId, {
           includePrimary: true,
         });
@@ -412,23 +416,6 @@ async function dropHollowRows(
   });
 }
 
-// The malformed-read repair halves a batch it cannot parse, so the left half's
-// singleton could drop its row before the right half reached the past-EOF
-// refusal. The whole batch is classified first and one stale row refuses all
-// of it. Writes are exempt (`dropPastEof`): they carry the documents.
-async function batchHasPastEofRow(instance, documentIds) {
-  const state = await instance.internals?.statePromise;
-  // Nothing to classify without a primary index to locate the rows in.
-  if (!state?.firstIdx?.metaIdMap || !instance.taskQueue) return false;
-  return instance.taskQueue.runCleanup(async (runState) => {
-    const accessHandle = await documentsAccessHandle(state, runState);
-    for (const documentId of documentIds) {
-      if (!state.firstIdx.metaIdMap.has(documentId)) continue;
-      if (await idHasRowPastEof(state, accessHandle, documentId)) return true;
-    }
-    return false;
-  });
-}
 
 // Drops every index row (primary and secondary) pointing at one byte range,
 // inside the caller's cleanup run. Only safe for a range nothing else can
@@ -773,10 +760,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
         });
       };
 
-      const dropHollowIds = async (
-        hollow,
-        { dropPastEof = false, requestedIds } = {},
-      ) => {
+      const dropHollowIds = async (hollow, { dropPastEof = false } = {}) => {
         const refused = [];
         if (hollow.length === 0) return refused;
         // Only the sole repair owner may mutate positions (#1057, #1049).
@@ -787,28 +771,6 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
               target,
               id,
               reason: "multi-instance",
-            });
-          }
-          return refused;
-        }
-        // A requested id that read back fine can still carry a row past EOF,
-        // and that proves the indexes are stale for its hollow neighbours too.
-        // dropHollowRows only ever sees the hollow ones, so the rest of the
-        // request is classified here.
-        const others = (requestedIds ?? []).filter(
-          (id) => !hollow.includes(id),
-        );
-        if (
-          !dropPastEof &&
-          others.length > 0 &&
-          (await batchHasPastEofRow(instance, others))
-        ) {
-          for (const id of hollow) {
-            refused.push({ id, reason: "range-past-eof" });
-            report("hollow-row-refused", {
-              target,
-              id,
-              reason: "range-past-eof",
             });
           }
           return refused;
@@ -885,11 +847,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
               throw error;
             }
             onMalformedBatch?.();
-            if (
-              !dropPastEof &&
-              batch.length > 1 &&
-              (await batchHasPastEofRow(instance, batch))
-            ) {
+            if (!dropPastEof && (await instanceHasRowPastEof(instance))) {
               reportRepairRefusal(batch, "range-past-eof");
               error.message += "; targeted recovery refused: range-past-eof";
               throw error;
@@ -937,10 +895,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
           // by key and replaces them in place.
           const hollow = await findHollowIds(batch, documents, true);
           if (hollow.length === 0) return false;
-          const refused = await dropHollowIds(hollow, {
-            dropPastEof,
-            requestedIds: batch,
-          });
+          const refused = await dropHollowIds(hollow, { dropPastEof });
           throwIfPastEof(refused);
           onMalformedBatch?.();
           if (refused.length === hollow.length) return false;
@@ -1011,7 +966,7 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
           // refused id stays unverified for the write preflight, as does an
           // id served only by a foreign row and absent at its own.
           const hollow = await findHollowIds(ids, documents, withDeleted);
-          const refused = await dropHollowIds(hollow, { requestedIds: ids });
+          const refused = await dropHollowIds(hollow);
           throwIfPastEof(refused);
           const suspectForeign = refused.some(
             ({ reason }) => reason === "range-holds-foreign-bytes",
