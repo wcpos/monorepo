@@ -167,8 +167,9 @@ test('shipped OPFS worker contains changelog identity protection exactly once', 
 	// A minified name can contain `$` — esbuild picked `$s` once the bundle grew
 	// — so the identifier class is [\w$], and the call sites are bounded by a
 	// lookbehind rather than \b, which does not hold before a leading `$`.
-	const helper =
-		/function ([\w$]+)\([\w$]+\)\{for\(var [\w$]+=0;[^}]*__wcposIndexStates=/.exec(source);
+	const helper = /function ([\w$]+)\([\w$]+\)\{for\(var [\w$]+=0;[^}]*__wcposIndexStates=/.exec(
+		source
+	);
 	assert.ok(helper, 'link helper definition present in the shipped worker');
 	const name = helper[1].replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 	assert.equal(source.match(new RegExp(`(?<![\\w$])${name}\\(`, 'g'))?.length, 2);

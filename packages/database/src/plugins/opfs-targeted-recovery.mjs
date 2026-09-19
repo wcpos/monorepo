@@ -228,14 +228,28 @@ async function readRange(accessHandle, start, end) {
 // being repaired, or to the request at all. One size read plus a walk of the
 // in-memory rows answers it: no per-row I/O, and one pass rather than one per
 // id, so a repair stays linear in the collection instead of quadratic.
-async function anyRowPastEof(state, accessHandle) {
-  const size = await accessHandle.getSize();
+// Any row ends past the file exactly when the furthest one does, so the walk
+// is needed only to learn that furthest offset. It is cached per run and
+// recomputed only when the cheap comparison trips — rows can have been dropped
+// since — which keeps the check O(1) at each deletion site. It must be asked
+// again immediately before every deletion: another process shares no task
+// queue with this one and can truncate between the scan and the drop.
+function furthestRowEnd(state) {
+  let furthest = 0;
   for (const indexState of state.indexStates) {
     for (const row of indexState.rows) {
-      if (row[2] > size) return true;
+      if (row[2] > furthest) furthest = row[2];
     }
   }
-  return false;
+  return furthest;
+}
+
+async function anyRowPastEof(state, accessHandle, cache = {}) {
+  const size = await accessHandle.getSize();
+  if (cache.furthest === undefined) cache.furthest = furthestRowEnd(state);
+  if (cache.furthest <= size) return false;
+  cache.furthest = furthestRowEnd(state);
+  return cache.furthest > size;
 }
 
 // The same question from outside a cleanup run.
@@ -294,11 +308,15 @@ async function dropWhitespaceRows(instance, target, ownsRepairs = () => true) {
 
     // Positions are descending within each index, so each drop leaves the
     // ones still to come valid. Each range is re-read immediately before its
-    // drop: the other process shares no task queue with this one and can
-    // compact or truncate between the scan and here.
+    // drop, and the instance-wide question is asked again with it: the other
+    // process shares no task queue with this one and can truncate an unrelated
+    // row between the scan and here, which leaves this candidate reading blank
+    // and in bounds while it is really compaction fill over a moved document.
+    const eof = {};
     for (const { indexState, position, row } of blank) {
       const { bytes, pastEof } = await readRange(accessHandle, row[1], row[2]);
-      if (pastEof) return refusePastEof(indexState, row);
+      if (pastEof || (await anyRowPastEof(state, accessHandle, eof)))
+        return refusePastEof(indexState, row);
       if (!isBlankBytes(bytes)) continue;
       if (!refusal) await dropIndexRow(state, runState, indexState, position);
       if (indexState === state.firstIdx)
@@ -350,15 +368,12 @@ async function dropHollowRows(
     const outcomes = new Map();
     const accessHandle = await documentsAccessHandle(state, runState);
     // Classify the whole batch before dropping any of it: one row past EOF
-    // means the index is stale, and a blank range elsewhere in the batch is
-    // then just as likely to be compaction's fill over a document the other
-    // process has already moved. Dropping that one first and refusing the
-    // second afterwards would lose it (the same order trap as the cleanup
-    // scan).
-    // One instance-wide question, asked once: a row past EOF anywhere means
-    // these rows predate another writer's compaction, so a blank range here is
-    // as likely to be its fill over a document that has been moved.
-    const stale = await anyRowPastEof(state, accessHandle);
+    // anywhere means these rows predate another writer's compaction, so a
+    // blank range in the batch is as likely to be its fill over a document
+    // that has been moved. Dropping one first and refusing the next afterwards
+    // would lose it (the same order trap as the cleanup scan).
+    const eof = {};
+    const stale = await anyRowPastEof(state, accessHandle, eof);
     if (stale && !dropPastEof) {
       for (const documentId of documentIds) {
         outcomes.set(
@@ -387,11 +402,16 @@ async function dropHollowRows(
     }
 
     for (const { documentId, start, end, foreign } of candidates) {
-      // Re-read immediately before the drop: another process can compact or
-      // truncate between the classification above and here. A write keeps its
-      // exemption here too, or it would reject instead of reinserting.
+      // Re-read immediately before the drop, and ask the instance-wide
+      // question again with it: another process can truncate an UNRELATED row
+      // between the classification above and here, which leaves this candidate
+      // reading blank and in bounds while it is really compaction fill over a
+      // moved document. A write keeps its exemption here too, or it would
+      // reject instead of reinserting.
       const { bytes, pastEof } = await readRange(accessHandle, start, end);
-      if (pastEof && !dropPastEof) {
+      const staleNow =
+        stale || pastEof || (await anyRowPastEof(state, accessHandle, eof));
+      if (staleNow && !dropPastEof) {
         outcomes.set(documentId, "range-past-eof");
         continue;
       }
@@ -399,7 +419,7 @@ async function dropHollowRows(
         outcomes.set(documentId, "range-changed");
         continue;
       }
-      if (foreign || pastEof || stale) {
+      if (foreign || staleNow) {
         // By identity: the range is either another document's bytes, or gone
         // from the file and possibly shared with a second id. On a stale
         // instance every exempt deletion goes this way, whichever id carried
