@@ -1274,6 +1274,18 @@ export function withTargetedOpfsRecovery(storage, options = {}) {
         // A rebuild rewrites every row without emitting changelog operations,
         // so peers cannot converge; ownership does not make it safe.
         // Refused under multi-instance regardless of ownership (#1049).
+        // Refused on a stale instance too: the selected secondary row can end
+        // past EOF while every primary row still parses, so the repair above
+        // returns without refusing, and a rebuild would then persist these
+        // stale rows and empty the changelog behind them.
+        if (await instanceHasRowPastEof(instance)) {
+          error.message += "; index reconciliation refused: range-past-eof";
+          report("index-reconcile-refused", {
+            target,
+            reason: "range-past-eof",
+          });
+          return false;
+        }
         let refusal = "multi-instance";
         if (!params.multiInstance) {
           try {
