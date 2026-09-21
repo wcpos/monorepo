@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -108,4 +110,14 @@ it.each([{ dimmed: true }, { disabled: true }])('disables label and clear for %j
 	fireEvent.click(screen.getByTestId('chip-clear'));
 	expect(onPress).not.toHaveBeenCalled();
 	expect(onClear).not.toHaveBeenCalled();
+});
+
+it('keeps the split wrapper out of the tree, floors the clear target and forwards a boolean disabled', () => {
+	// Per class and per prop, read from source: react-native-web compiles these classes away
+	// in this harness. Codex review on #2189.
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	expect(source).toContain('accessible={onClear ? false : undefined}');
+	expect(source).toContain('!!(disabled || dimmed)');
+	const clear = source.match(/hitSlop=\{8\}[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
+	expect(clear).toContain('min-w-ctl');
 });

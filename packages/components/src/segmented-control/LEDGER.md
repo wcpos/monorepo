@@ -11,3 +11,4 @@ Seeded 2026-09-21 by wcpos/roadmap#360 from the component map (wcpos/roadmap#291
 1. The selected segment cannot be pressed off; a picker is never empty — evidence: component map §5 and §7a (one value picker).
 2. The group is one Tab stop with arrow keys between segments — evidence: the ARIA radiogroup pattern; map §8 F8 (Tab order, no roving tabindex in navigation).
 3. Two to four segments, enforced by the type — evidence: map §5.
+4. The disabled state is always an explicit boolean — evidence: `button` ledger line 1 as origin (`c99855da17`); Codex review on wcpos/monorepo#2189.

@@ -33,7 +33,7 @@ export function Keypad({ rows, onPress, fit = 'tile', testID, className, ...prop
 						<Pressable
 							key={key.value}
 							role="button"
-							disabled={key.disabled}
+							disabled={!!key.disabled}
 							testID={key.testID ?? id(`key-${key.value}`) ?? `keypad-key-${key.value}`}
 							accessibilityLabel={key.accessibilityLabel ?? key.label ?? key.value}
 							onPress={() => onPress(key.value)}

@@ -70,7 +70,7 @@ export function SegmentedControl({
 					}}
 					role="radio"
 					aria-checked={segment.value === value}
-					disabled={segment.disabled}
+					disabled={!!segment.disabled}
 					tabIndex={segment.value === value ? 0 : -1}
 					testID={segment.testID ?? id(`segment-${segment.value}`)}
 					onPress={() => choose(segment.value)}

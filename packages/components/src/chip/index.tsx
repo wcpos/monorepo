@@ -32,7 +32,9 @@ export function Chip({
 	onPress,
 	...props
 }: ChipProps) {
-	const inactive = disabled || dimmed;
+	// A boolean, never undefined: Android keeps a view accessibility-disabled when the
+	// state key is absent, which is what `button` ledger line 1 records.
+	const inactive = !!(disabled || dimmed);
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const content = (
 		<>
@@ -66,6 +68,7 @@ export function Chip({
 			onPress={onClear ? undefined : onPress}
 			role={onClear ? undefined : 'button'}
 			tabIndex={onClear ? -1 : 0}
+			accessible={onClear ? false : undefined}
 			className={cn(
 				'h-ctl bg-card active:bg-muted web:hover:bg-muted flex-row items-center gap-1.5 rounded-full border px-3',
 				on ? 'border-primary' : 'border-border',
@@ -94,7 +97,7 @@ export function Chip({
 						testID={clearTestID ?? id('clear')}
 						accessibilityLabel={clearLabel ?? 'Remove'}
 						hitSlop={8}
-						className="items-center justify-center self-stretch active:opacity-70"
+						className="min-w-ctl -mr-3 items-center justify-center self-stretch active:opacity-70"
 						onPress={(event) => {
 							event?.stopPropagation?.();
 							onClear();

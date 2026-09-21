@@ -13,3 +13,6 @@ Seeded 2026-09-21 by wcpos/roadmap#360 from the component map (wcpos/roadmap#291
 3. The clear control has its own test ID — evidence: `button` line 12 (`00f86c0049`).
 4. The press handler reaches the label, so a chip composes as a trigger — evidence: `button` line 9 (`4f0e72e463`).
 5. A dimmed chip is disabled and its reason is the caller’s, never colour alone — evidence: the register sign-off’s dimmed pill; `.claude/rules/design.mdc` §7.
+6. The disabled state is always an explicit boolean; an absent state key leaves an Android view accessibility-disabled after it looks enabled again — evidence: `button` ledger line 1 as origin (`c99855da17`, issue #1614); Codex review on wcpos/monorepo#2189.
+7. With a clear control the wrapper is not an accessibility element: it handles nothing and would otherwise group the two actionable halves into one VoiceOver stop — evidence: Codex review on wcpos/monorepo#2189.
+8. The clear control carries a control-sized hit area rather than relying on `hitSlop`, which react-native-web does not implement — evidence: `.claude/rules/design.mdc` §3 (44 pt minimum); Codex review on wcpos/monorepo#2189.
