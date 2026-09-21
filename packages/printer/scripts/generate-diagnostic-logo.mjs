@@ -34,25 +34,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// `pngjs` and `playwright` are not dependencies of this package — they are only needed to
-// regenerate the bitmap, which happens when the brand mark changes and not otherwise. They
-// resolve today because something else in the workspace pulls them in; imported dynamically
-// so that if that ever stops being true, this says so instead of throwing a bare
-// ERR_MODULE_NOT_FOUND at whoever is editing the logo a year from now.
-const { PNG } = await importOrExplain('pngjs');
-const { chromium } = await importOrExplain('playwright');
-
-async function importOrExplain(specifier) {
-	try {
-		return await import(specifier);
-	} catch (cause) {
-		throw new Error(
-			`This script needs "${specifier}", which packages/printer does not depend on ` +
-				`(it is a dev-only tool). Install it at the workspace root and re-run.`,
-			{ cause }
-		);
-	}
-}
+// Both are exact-pinned devDependencies of this package rather than floating ranges: these
+// are the versions that produced the committed bitmap, so regenerating reproduces it byte
+// for byte instead of quietly re-encoding it differently.
+import { PNG } from 'pngjs';
+import { chromium } from 'playwright';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG = path.resolve(HERE, '..');

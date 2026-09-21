@@ -1038,6 +1038,12 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1(@noble/hashes@2.2.0)
+      playwright:
+        specifier: 1.62.1
+        version: 1.62.1
+      pngjs:
+        specifier: 3.4.0
+        version: 3.4.0
       react-dom:
         specifier: 19.2.3
         version: 19.2.3(react@19.2.3)
