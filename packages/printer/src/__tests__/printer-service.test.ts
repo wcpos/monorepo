@@ -325,7 +325,7 @@ describe('PrinterService', () => {
 	it('routes the test print through asset preparation, like a real receipt', async () => {
 		const service = new PrinterService();
 		const transport = markupTransport();
-		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+		Reflect.set(service, 'getTransport', vi.fn().mockResolvedValue(transport));
 
 		await service.testPrint({ ...networkProfile(), codePage: 'cp858' });
 

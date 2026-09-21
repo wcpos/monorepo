@@ -37,6 +37,15 @@ const SAMPLE_QR_URL = 'https://wcpos.com';
  * The caller must route this template through the asset-preparation path
  * (`prepareThermalPrintAssets`), or sections 2-5 degrade: the image prints blank, and
  * the barcodes fall back to the printer's native barcode commands.
+ *
+ * The copy here is deliberately English and ASCII-only, unlike app UI copy, which comes
+ * from the translation catalogue. Section 8 exists to detect a misconfigured code page —
+ * so if this page were printed in a locale carrying accented characters, a wrong code page
+ * would garble the very instructions that tell the merchant to fix the code page. English
+ * ASCII is the one thing that renders on every printer whatever the code page is set to.
+ * (`packages/printer` also has no translation context: it is a leaf package below
+ * `packages/core`, and `DEFAULT_THERMAL_TEMPLATE` is English for the same reason — receipt
+ * wording is localised by overriding the template server-side, per store.)
  */
 export function buildDiagnosticTemplate(columns: number): string {
 	const normalizedColumns =
