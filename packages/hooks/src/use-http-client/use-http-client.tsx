@@ -18,7 +18,7 @@ import { mapToInternalCode, parseWpError } from './parse-wp-error';
 import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
-import type { HttpErrorHandler, HttpErrorHandlerContext, RequestConfig } from './types';
+import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
 // This wrapper owns the WCPOS axios config flags: `wcposHeaders` (opt out of
 // the marker/signal headers entirely, e.g. third-party image hosts),

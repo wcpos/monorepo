@@ -180,7 +180,13 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				});
 
 				if (response && response.status === 200) {
-					return { url: fallbackUrl, timedOut: false, challenged: false, blocked: false, offline: false };
+					return {
+						url: fallbackUrl,
+						timedOut: false,
+						challenged: false,
+						blocked: false,
+						offline: false,
+					};
 				}
 
 				return { url: null, timedOut: false, challenged: false, blocked: false, offline: false };
@@ -191,7 +197,13 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 
 				// A WP REST API error (e.g. rest_unauthorized) proves the endpoint exists
 				if (isWpRestApiError(err)) {
-					return { url: fallbackUrl, timedOut: false, challenged: false, blocked: false, offline: false };
+					return {
+						url: fallbackUrl,
+						timedOut: false,
+						challenged: false,
+						blocked: false,
+						offline: false,
+					};
 				}
 
 				return {
