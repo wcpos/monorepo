@@ -120,6 +120,11 @@ overrides:
   "@svgr/plugin-svgo>svgo": ">=3.3.4 <4"
 allowBuilds:
   "@firebase/util": false
+  # Arrived with jest 30.5 (jest-haste-map now depends on it). Its postinstall only compiles
+  # a native binding when no prebuild matches; the per-platform @parcel/watcher-* packages
+  # cover every platform we build on, and jest only reaches for it in watch mode, which CI
+  # never runs (--ci). Stays unapproved like @firebase/util.
+  "@parcel/watcher": false
   # sentry-cli's postinstall downloads its platform binary; without approval the strict install
   # fails outright (ERR_PNPM_IGNORED_BUILDS broke the 1.10.5 Publish Web Bundle run).
   "@sentry/cli": true
