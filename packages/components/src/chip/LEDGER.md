@@ -1,0 +1,15 @@
+# Behaviour ledger: `chip`
+
+Seeded 2026-09-21 by wcpos/roadmap#360 from the component map (wcpos/roadmap#291), the register sign-off (wcpos/roadmap#287) and the scale page (wcpos/roadmap#289). Numbers are assigned once and never reused: a struck line leaves a gap, a new line takes the next number. Every line keeps its evidence. The rules for preserving or striking a line are in the [library strategy](https://github.com/wcpos/roadmap/blob/worktree-docs%2Bdesign-program-2026-09-12/docs/design/2026-09-18-library-strategy.md), section 3. Not reworded from the source.
+
+**Job:** The register’s pill and filter trigger skin.
+
+**Base:** `react-native` Pressable and View; `Text` and `Icon`.
+
+## Lines
+
+1. The clear press never bubbles into the chip or a surrounding trigger — evidence: `button` line 10 as origin (`186b25c5c3`), carried here.
+2. The clear control has an overridable accessible name defaulting to Remove — evidence: `button` line 11 (`a68a9dfee1`).
+3. The clear control has its own test ID — evidence: `button` line 12 (`00f86c0049`).
+4. The press handler reaches the label, so a chip composes as a trigger — evidence: `button` line 9 (`4f0e72e463`).
+5. A dimmed chip is disabled and its reason is the caller’s, never colour alone — evidence: the register sign-off’s dimmed pill; `.claude/rules/design.mdc` §7.

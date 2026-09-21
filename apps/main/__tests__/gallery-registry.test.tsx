@@ -12,6 +12,9 @@ const registered = [
 	'notice',
 	'breadcrumb',
 	"'page-bar': pageBar",
+	'chip',
+	'keypad',
+	"'segmented-control': segmentedControl",
 ];
 
 it('registers every new primitive before the gallery shoot', () => {
