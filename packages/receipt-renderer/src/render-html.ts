@@ -41,7 +41,10 @@ function renderNode(node: ThermalNode, widthChars: number): string {
 		case 'underline':
 			return `<span style="text-decoration: underline">${renderNodes(node.children, widthChars)}</span>`;
 		case 'invert':
-			return `<span style="background: #000; color: #fff; padding: 0 4px">${renderNodes(node.children, widthChars)}</span>`;
+			// inline-block, because `<text>` children render as block `<div>`s: an inline span
+			// wrapping a block collapses to a zero-width sliver, so the reversed background
+			// disappears and the inherited white text lands on white paper, invisible.
+			return `<span style="display: inline-block; background: #000; color: #fff; padding: 0 4px">${renderNodes(node.children, widthChars)}</span>`;
 		case 'size':
 			return `<span style="font-size: ${safeFloat(node.width, 1, 0.5, 8)}em; line-height: 1.2">${renderNodes(node.children, widthChars)}</span>`;
 		case 'align':

@@ -495,6 +495,16 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('<div>Hello</div>');
 	});
 
+	it('keeps inverted text visible when its child renders as a block', () => {
+		const html = renderHtml(parseXml('<receipt><invert><text>Reversed</text></invert></receipt>'));
+
+		// `<text>` renders as a block <div>. An inline wrapper around a block collapses to a
+		// zero-width sliver, which drops the black background and leaves the inherited white
+		// text on white paper — invisible in every preview.
+		expect(html).toContain('display: inline-block');
+		expect(html).toContain('Reversed');
+	});
+
 	it('falls back to defaults when numeric XML attributes are invalid', () => {
 		const ast = parseXml(
 			'<receipt paper-width="12px"><feed lines="3.5" /><qrcode size="1e3">code</qrcode></receipt>'
