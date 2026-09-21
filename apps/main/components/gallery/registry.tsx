@@ -8,6 +8,9 @@ import { Uniwind } from 'uniwind';
 
 import { stories as breadcrumb } from '@wcpos/components/breadcrumb/gallery';
 import { stories as button } from '@wcpos/components/button/gallery';
+import { stories as chip } from '@wcpos/components/chip/gallery';
+import { stories as keypad } from '@wcpos/components/keypad/gallery';
+import { stories as segmentedControl } from '@wcpos/components/segmented-control/gallery';
 import { stories as combobox } from '@wcpos/components/combobox/gallery';
 import { stories as emptyState } from '@wcpos/components/empty-state/gallery';
 import { stories as notice } from '@wcpos/components/notice/gallery';
@@ -24,6 +27,9 @@ import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
 
 const registry: Record<string, Story[]> = {
+	chip,
+	keypad,
+	'segmented-control': segmentedControl,
 	input,
 	button,
 	select,
