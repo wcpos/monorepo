@@ -69,7 +69,8 @@ honest wording). Anything else is "unsupported" in the UI, with the diagnostics 
 
 ### 6. Live sessions run a fixed script
 
-Research gate → scan/identify → width → Test Print → Open drawer → real receipt (image + barcode) →
+Research gate → scan/identify → width → Test Print (proves raster, QR, both barcode symbologies,
+styles and the code page on its own) → Open drawer → real receipt (the store's own logo and data) →
 browser / native client → security setting flipped → the five breakages (wrong port, alternate port,
 raw port by hand, wrong subnet, device off). Timestamps, dialog text and log lines for each; record
 on wcpos/roadmap#136 the same hour as signature + cause + remedy. Prove a lane on paper before building
@@ -284,3 +285,16 @@ Append, newest last. One entry = date · device/lane · signature → cause → 
   never known on this lane; the flow pre-selects 58 mm and asks. Unit-tested against a mocked
   module; the first real SPP-only printer is still to be found — the Netum NT-1809 is dual-mode and
   lands on its LE row.
+- **2026-09-21 · every lane · the test print could never have shown a logo.** `testPrint` called
+  `encodeThermalTemplate` directly instead of going through `prepareThermalPrintAssets`, so
+  `imageAssets` was always empty — and `render-escpos.ts` skips an `<image>` with no matching asset
+  (`if (!asset) break;`) without an error or a gap in the byte stream. The same shortcut dropped
+  `profile.codePage` (so the page encoded at `codepage('auto')`, not the configured page) and
+  skipped `withEscposFontA`, which is what the column ruler assumes it is measuring. Found by
+  reading, not at a printer: nothing could have reported it, which is the point. Remedy: one shared
+  `buildMarkupJobWithAssets` behind both the receipt and diagnostic paths, and the diagnostic page
+  now carries the WCPOS mark, a QR code and Code 128 + EAN-13 so the raster and barcode lanes are
+  proved by the test print itself rather than by a separate real receipt. The mark is embedded as a
+  data URI, so a blank logo box means the printer, never the network — which also tells a
+  cross-origin store logo (2026-09-03, still open) apart from a printer that cannot raster at all
+  (wcpos/monorepo#TBD).

@@ -1,0 +1,22 @@
+// GENERATED FILE — do not edit by hand.
+// Regenerate: pnpm --filter @wcpos/printer generate:diagnostic-logo
+//   (not a bare `node` run of the script — that skips the Chromium install it needs)
+// Source mark: packages/printer/assets/wcpos-mark.svg
+// See that script's header for why the mark is embedded and why it is encoded this way.
+
+/**
+ * Printed width of the diagnostic mark, in printer dots.
+ *
+ * Half the printable width of 58 mm paper and a third of 80 mm, so the mark is never
+ * rescaled at print time — the bitmap below is rendered at exactly this width.
+ */
+export const DIAGNOSTIC_LOGO_WIDTH_DOTS = 192;
+
+/**
+ * The WCPOS mark as a pre-thresholded 1-bit greyscale PNG data URI (192x192).
+ *
+ * Embedded rather than fetched so a blank logo box on the diagnostic means the printer
+ * failed, never that the network or a CORS header did.
+ */
+export const DIAGNOSTIC_LOGO_DATA_URI =
+	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAAAAAB3tzPbAAAEmklEQVR4Ae3Bi5KrOBBEwVMd/v9frvVrACEJBOOdS0c4U+ZNZGLeZB5EPuYheBAJiQcZRFIGgsQEBIi0BJjUHCQXfH19ff1Los/0iS7TJ7pMn+gKkguSC5ILkguSC5ILkguSC5ILkguSC5ILkguSC5ILkguSC5ILkguSC5ILkguSC5ILkguSC5ILkguSC5ILc4r5MHOKgy5zitlgTjFdgUnMBD1mk2kzm0yb2WR6Aswp5oPMKYYATIM5xewwp5gGAzJ3Ys0MEGtmn1gzA8SauZN5EAUzRhTMGFEwY0TBPMi8iJkZJRbMKLFgRomZeZH5IZ7MMeLJHCOezDHiyfwQpkOYHmE6hOkRpkOYHmE6JDBN4s40CTBN4s60iDvTJMA0iTvTJMSdqYgXUxMvpiJeTE28mIp4MTXxYioCxJMpiAVTEDNTEAtmSSyYgpiZglgwBfEgJuZJ1MyLqJknUTMvomaeRM28iJp5El9fX19fX19fX19fX2LNPIiJmYlhZkkMMRWxSayYF/Fk1sQAUxPbTJ/oESXzJsA0iR2mTfSZbaJNlMwPYXrEBtMn2swA0SBKZojoMltEgxkkKqJgRok2s01UzDixEpxkmswOs2YOMCvBWabB7DIlc4gpBaeZihlgPin4IDPELJiDTOHGeRYFsyYezIrFJvFmdomCqYmJKYkFUxIzUxATsyRqpiAKomDWRMEsiQWzJEpmSbyZBdFhZqIgCmZFrJglMTFLYs0siRczERvMmygFm8SaxABREb8h8SRWRMEURIuZiTezIFrMTLyYiTgj2CDOEU1iZj4k6BNtYmZqokNssTkhOEFUzDliwTZH3egS54gumR8WLeZJjLpxSWZBbAjOEBPzO2KX7+i50SOuxCBagk8TG0RFDDItwT8nBtnUgn9PjDKV4E+ZFolBZi34NHOCJIaYlaDH/C1JnHDjl8TniDuzyaJw4wzz/xFLZkfQZQ4QE9NlJmKI7thy4wTzpwSmJ+gzbWYmaqbDnCUmphBsMOPEzDSZmZj5jrOCLabB7DINpsnmzuacYJNZs1kQbaZiFsQP82bTZ3qCbaZkesSSTcFml02HmYmCKJiamJiSWDIFMTMF8cOsiRVTEIUbu0yP2GJOMYcE54mSGCTOE6Xgg8QQMRO/FJwmKmKA+AWxEpwlGsQuURBHiDVRMKNEm9kmKmaUqIiCGSO6zBbRYoaImiiYiTA9YovpET1mn2gQBTMRmCaxwzSJLWaTaBMFMxEPZk2MMGtin2kTXaJgJuLNTMQBZiaGmYLYJgpmIlIIkguSC5ILkguSC5ILkguSC5ILkguSC5ILkguSCwoimyA3Bx0ih6AkkhFr5k7kYERmBpGYAZGXuRNZmSeRkvkhTjFXIc4wlyGOMxciDjNXIo4ylyKOMRcjDjFXI44wlyPGmQsSw8wViVHmksQYc1FiiLkqMcJclthnLkzsMlcm9phLE9vMxYlN5urEFnN5os8kILpMBqLHpCDaTBKiyWQhWkwaomYSERWTiVgzqYiSSUYUTDZiyaQjZiYhMTEZiR8mJfFikhJPJivxYNISYBITmMyESe0/T6U6yEdoqBQAAAAASUVORK5CYII=';

@@ -1,3 +1,4 @@
+import { DIAGNOSTIC_LOGO_DATA_URI, DIAGNOSTIC_LOGO_WIDTH_DOTS } from '../encoder/diagnostic-logo';
 import { buildDiagnosticTemplate } from '../encoder/diagnostic-template';
 
 describe('buildDiagnosticTemplate', () => {
@@ -28,5 +29,52 @@ describe('buildDiagnosticTemplate', () => {
 		const template = buildDiagnosticTemplate(48);
 		expect(template).toContain('{{printerName}}');
 		expect(template).toContain('{{date}}');
+	});
+});
+
+describe('buildDiagnosticTemplate capability sections', () => {
+	const template = buildDiagnosticTemplate(42);
+
+	it('embeds the logo as a data URI at the width it was rendered for', () => {
+		// Fetching it would make a network or CORS failure look like a printer failure.
+		expect(template).toContain(`<image src="${DIAGNOSTIC_LOGO_DATA_URI}"`);
+		expect(template).toContain(`width="${DIAGNOSTIC_LOGO_WIDTH_DOTS}"`);
+	});
+
+	it('exercises a QR code and both barcode symbologies', () => {
+		expect(template).toContain('<qrcode');
+		expect(template).toContain('type="code128"');
+		// Fixed-length and checksummed, so it fails to encode rather than printing wrong.
+		expect(template).toContain('type="ean13"');
+	});
+
+	it('covers the text styles a printer can silently drop', () => {
+		expect(template).toContain('<bold>');
+		expect(template).toContain('<underline>');
+		expect(template).toContain('<invert>');
+		expect(template).toContain('<size');
+	});
+
+	it('prints accented and currency characters for the code page check', () => {
+		// Entity-encoded in the source so the template survives any file encoding.
+		expect(template).toContain('&#233;'); // e-acute
+		expect(template).toContain('&#8364;'); // euro
+	});
+
+	it('labels every section, so a failure is reportable and a gap is legible', () => {
+		// An <image> with no prepared asset prints nothing at all — without a label that is
+		// indistinguishable from a page that simply has no logo.
+		for (const label of [
+			'1 COLUMN RULER',
+			'2 LOGO (RASTER)',
+			'3 QR CODE',
+			'4 BARCODE CODE128',
+			'5 BARCODE EAN-13',
+			'6 TEXT STYLES',
+			'7 ALIGNMENT',
+			'8 CHARACTERS',
+		]) {
+			expect(template).toContain(label);
+		}
 	});
 });

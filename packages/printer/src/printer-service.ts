@@ -7,8 +7,11 @@ import { canOpenDrawer } from './capabilities';
 import { buildDiagnosticTemplate } from './encoder/diagnostic-template';
 import { buildReceiptMarkupJob, encodeReceipt } from './encoder/encode-receipt';
 import {
+	buildDiagnosticMarkupJob,
 	buildThermalTemplateMarkupJob,
+	encodeDiagnosticTemplateForPrint,
 	encodeThermalTemplateForPrint,
+	maxDotsForColumns,
 } from './encoder/thermal-print';
 import { isVerboseDiagnostics, printerLogger } from './logger';
 import { encodeThermalTemplate } from './renderer';
@@ -547,10 +550,17 @@ export class PrinterService {
 
 		return this.enqueue('diagnostic', profile.id, async () => {
 			const transport = await this.getTransport(profile);
-			const job = {
+			// Goes through the same asset-preparation path as a real receipt: the diagnostic
+			// prints a logo, a QR code and two barcodes, and encoding directly would drop the
+			// logo silently, ignore the profile's code page, and leave Font A unforced.
+			const input = {
 				template: buildDiagnosticTemplate(profile.columns),
 				data: { printerName: profile.name, date: new Date().toLocaleString() },
-				options: {
+				// The profile's column count, not the template's paper width: most templates
+				// leave paper_width null, and assuming 80 mm crops the mark on 58 mm paper.
+				maxWidthDots: maxDotsForColumns(profile.columns),
+				codePage: profile.codePage,
+				encodeOptions: {
 					language: profile.language,
 					columns: profile.columns,
 					printerModel: profile.printerModel,
@@ -559,13 +569,10 @@ export class PrinterService {
 					drawerConnector: profile.drawerConnector,
 				},
 			};
-			if (await transport.supportsMarkup?.())
-				await this.dispatchMarkup(transport, job, 'diagnostic');
-			else {
-				await this.dispatchRaw(
-					transport,
-					encodeThermalTemplate(job.template, job.data, job.options)
-				);
+			if (await transport.supportsMarkup?.()) {
+				await this.dispatchMarkup(transport, await buildDiagnosticMarkupJob(input), 'diagnostic');
+			} else {
+				await this.dispatchRaw(transport, await encodeDiagnosticTemplateForPrint(input));
 			}
 			return { status: await readStatusAfterTest(transport) };
 		});

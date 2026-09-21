@@ -191,15 +191,48 @@ export async function buildThermalTemplateMarkupJob(
 		input.templateXml,
 		formatted as Record<string, unknown>
 	);
-	const { imageAssets, barcodeImages } = await prepareThermalPrintAssets({
+
+	return buildMarkupJobWithAssets({
+		template: input.templateXml,
 		renderedTemplateXml,
+		data: formatted as Record<string, unknown>,
+		maxWidthDots: input.maxWidthDots,
+		codePage: input.codePage,
+		encodeOptions: input.encodeOptions,
+		imageSrcResolver: input.imageSrcResolver,
+	});
+}
+
+/**
+ * Prepares a rendered template's image and barcode assets and wires them into the
+ * encode options.
+ *
+ * Shared by every markup print path. Encoding a template *without* this step leaves
+ * `imageAssets` empty, and an `<image>` with no matching asset renders nothing at all
+ * (render-escpos.ts, `case 'image'`) — silently, with no error and no gap in the byte
+ * stream. The test print encoded directly for exactly this reason and printed no logo;
+ * keeping the wiring in one place is what stops the two paths drifting apart again.
+ */
+export async function buildMarkupJobWithAssets(input: {
+	/** Passed through to the encoder; may still contain Mustache placeholders. */
+	template: string;
+	/** The same template with placeholders resolved — asset discovery reads this. */
+	renderedTemplateXml: string;
+	data: Record<string, unknown>;
+	maxWidthDots: number;
+	codePage?: string;
+	encodeOptions?: EscposRenderOptions;
+	imageSrcResolver?: ThermalImageSrcResolver;
+}): Promise<MarkupPrintJob> {
+	const { imageAssets, barcodeImages } = await prepareThermalPrintAssets({
+		renderedTemplateXml: input.renderedTemplateXml,
 		maxWidthDots: input.maxWidthDots,
 		imageSrcResolver: input.imageSrcResolver,
 	});
 
 	return {
-		template: input.templateXml,
-		data: formatted as Record<string, unknown>,
+		template: input.template,
+		data: input.data,
 		options: {
 			...input.encodeOptions,
 			codePage: input.codePage,
@@ -209,6 +242,51 @@ export async function buildThermalTemplateMarkupJob(
 			barcodeImages,
 		},
 	};
+}
+
+/**
+ * Builds the markup job for the printer diagnostic page.
+ *
+ * Deliberately not `buildThermalTemplateMarkupJob`: that one canonicalises its data as
+ * *receipt* data through `mapReceiptData`/`formatReceiptData`, which would discard the
+ * diagnostic's `printerName`/`date` placeholders. Asset preparation is shared; the data
+ * handling is not.
+ */
+export async function buildDiagnosticMarkupJob(input: {
+	template: string;
+	data: Record<string, unknown>;
+	maxWidthDots: number;
+	codePage?: string;
+	encodeOptions?: EscposRenderOptions;
+}): Promise<MarkupPrintJob> {
+	return buildMarkupJobWithAssets({
+		template: input.template,
+		// Rendered only so asset discovery sees final values; the encoder re-renders.
+		renderedTemplateXml: renderTemplatePlaceholders(input.template, input.data),
+		data: input.data,
+		maxWidthDots: input.maxWidthDots,
+		codePage: input.codePage,
+		encodeOptions: input.encodeOptions,
+	});
+}
+
+/**
+ * Encodes the printer diagnostic page to ESC/POS bytes, with its raster assets prepared
+ * and Font A forced — the column ruler only measures what it claims to measure if the
+ * printer is in Font A.
+ */
+export async function encodeDiagnosticTemplateForPrint(input: {
+	template: string;
+	data: Record<string, unknown>;
+	maxWidthDots: number;
+	codePage?: string;
+	encodeOptions?: EscposRenderOptions;
+}): Promise<Uint8Array> {
+	const job = await buildDiagnosticMarkupJob(input);
+	return withEscposFontA(
+		encodeThermalTemplate(job.template, job.data, job.options),
+		job.options.language ?? 'esc-pos'
+	);
 }
 
 export function isSupportedThermalLogoSrc(src: unknown): boolean {
