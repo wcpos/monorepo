@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
+import { ObserveInteractiveMarker } from 'expo-observe';
 import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -46,6 +47,7 @@ export default function ResizablePOSColumns() {
 	if (screenSize === 'sm') {
 		return (
 			<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
+				<ObserveInteractiveMarker />
 				{/* Tab content. Both panes stay MOUNTED and toggle visibility: POSProducts
 				    owns the barcode scan subscription, and the POS section owns scans
 				    (#1438) — unmounting it on the Cart tab would drop every scan. */}
@@ -101,6 +103,9 @@ export default function ResizablePOSColumns() {
 	return (
 		<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
 			<POSColumns />
+			{/* The logged-in entry screen: time-to-interactive is the till's mount, the
+			    moment after hydration the cashier first sees the register (lib/observe.ts). */}
+			<ObserveInteractiveMarker />
 		</View>
 	);
 }

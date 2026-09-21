@@ -39,21 +39,25 @@ describe('useTelemetryConsent', () => {
 
 	it('has no opinion before the store has ever loaded (boot)', async () => {
 		mockStore = undefined;
-		renderHook(() => useElectronTelemetryConsent());
+		const { result } = renderHook(() => useElectronTelemetryConsent());
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(mockSetTelemetryConsent).not.toHaveBeenCalled();
 		expect(mockSend).not.toHaveBeenCalled();
+		expect(result.current).toBeNull();
 	});
 
 	it('resets the web sink when the store becomes unavailable', async () => {
-		const { rerender } = renderHook(() => useWebTelemetryConsent());
+		const { result, rerender } = renderHook(() => useWebTelemetryConsent());
 		await waitFor(() => expect(mockSetTelemetryConsent).toHaveBeenLastCalledWith('allowed'));
+		// The applied answer is also returned, for telemetry clients the app owns.
+		expect(result.current).toBe('allowed');
 
 		mockStore = undefined;
 		rerender();
 
 		await waitFor(() => expect(mockSetTelemetryConsent).toHaveBeenLastCalledWith('undecided'));
+		expect(result.current).toBe('undecided');
 	});
 
 	it('resets both Electron telemetry processes when the store becomes unavailable', async () => {
