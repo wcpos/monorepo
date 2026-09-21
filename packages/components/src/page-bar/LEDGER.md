@@ -12,3 +12,4 @@ Seeded 2026-09-18 by wcpos/roadmap#359 from the component map (wcpos/roadmap#291
 2. The status chip is the page’s one status place, always with text, a `StatusBadge` — evidence: wcpos/roadmap#308 §7; the map’s one-way rule §7a.
 3. The leading slot (menu or back crumb) renders on the phone width only; the rail carries navigation on wide widths — evidence: platform split (wcpos/roadmap#290) §1; `navigation-area` line 2 as origin.
 4. No store name is appended to the title; the caller owns the title — evidence: the drawn bar shows the store only when a store has more than one register (`· UK Store`), as a subtitle.
+5. The drawer glyph takes a caller-supplied label; an icon-only control carries no accessible name of its own and the string is the caller's to translate — evidence: Codex review on wcpos/monorepo#2188.

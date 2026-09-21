@@ -15,7 +15,9 @@ export type PageBarProps = ViewProps & {
 	title: string;
 	subtitle?: string;
 	status?: { label: string; variant?: StatusBadgeProps['variant']; testID?: string };
-	onMenu?: () => void;
+	// A label, not a bare handler: an icon-only control carries no accessible name of
+	// its own, and the caller owns the translated string (Codex review on #2188).
+	onMenu?: { label: string; onPress: () => void };
 	back?: { label: string; onPress: () => void; testID?: string };
 };
 
@@ -46,7 +48,13 @@ export function PageBar({
 					(back ? (
 						<Breadcrumb parents={[back]} testID={id('back')} />
 					) : onMenu ? (
-						<IconButton name="bars" onPress={onMenu} testID={id('menu')} className="-ml-2" />
+						<IconButton
+							name="bars"
+							onPress={onMenu.onPress}
+							aria-label={onMenu.label}
+							testID={id('menu')}
+							className="-ml-2"
+						/>
 					) : null)}
 				<View className="min-w-0 shrink">
 					<Text

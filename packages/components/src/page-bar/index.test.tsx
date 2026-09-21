@@ -83,15 +83,17 @@ it('renders title, subtitle, real status variant and controls with a safe-area o
 	expect(screen.getByTestId('bar-title')).toHaveAttribute('data-ellipsis', 'tail');
 });
 
-it('phone scope shows the menu and fires its callback', () => {
-	const onMenu = jest.fn();
+it('phone scope shows the named menu and fires its callback', () => {
+	const onPress = jest.fn();
 	render(
 		<DeviceScope phone>
-			<PageBar testID="bar" title="Products" onMenu={onMenu} />
+			<PageBar testID="bar" title="Products" onMenu={{ label: 'Menu', onPress }} />
 		</DeviceScope>
 	);
+	// An icon-only control is unreachable by name without this; the caller translates it.
+	expect(screen.getByTestId('bar-menu')).toHaveAttribute('aria-label', 'Menu');
 	fireEvent.click(screen.getByTestId('bar-menu'));
-	expect(onMenu).toHaveBeenCalledTimes(1);
+	expect(onPress).toHaveBeenCalledTimes(1);
 });
 
 it('phone back composes Breadcrumb and wins over the menu', () => {
@@ -101,7 +103,7 @@ it('phone back composes Breadcrumb and wins over the menu', () => {
 			<PageBar
 				testID="bar"
 				title="Printers"
-				onMenu={jest.fn()}
+				onMenu={{ label: 'Menu', onPress: jest.fn() }}
 				back={{ label: 'Settings', onPress }}
 			/>
 		</DeviceScope>
@@ -118,7 +120,7 @@ it('wide window without a scope renders neither leading control', () => {
 		<PageBar
 			testID="bar"
 			title="Products"
-			onMenu={jest.fn()}
+			onMenu={{ label: 'Menu', onPress: jest.fn() }}
 			back={{ label: 'Settings', onPress: jest.fn() }}
 		/>
 	);

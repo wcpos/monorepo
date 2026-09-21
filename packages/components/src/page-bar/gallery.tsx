@@ -26,7 +26,7 @@ export const stories = [
 		render: () => (
 			<DeviceScope phone>
 				<View className="w-80">
-					<PageBar testID="phone-menu" title="Products" onMenu={onPress}>
+					<PageBar testID="phone-menu" title="Products" onMenu={{ label: 'Menu', onPress }}>
 						<IconButton name="bell" testID="phone-bell" onPress={onPress} />
 					</PageBar>
 				</View>
@@ -47,7 +47,7 @@ export const stories = [
 		id: 'wide-no-leading',
 		render: () => (
 			<DeviceScope phone={false}>
-				<PageBar testID="wide" title="Printers" onMenu={onPress} back={back} />
+				<PageBar testID="wide" title="Printers" onMenu={{ label: 'Menu', onPress }} back={back} />
 			</DeviceScope>
 		),
 	},
