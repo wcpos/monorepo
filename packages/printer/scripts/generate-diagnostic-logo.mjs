@@ -142,7 +142,8 @@ assertPureBlackAndWhite(png);
 
 const base64 = png.toString('base64');
 const source = `// GENERATED FILE — do not edit by hand.
-// Regenerate: node packages/printer/scripts/generate-diagnostic-logo.mjs
+// Regenerate: pnpm --filter @wcpos/printer generate:diagnostic-logo
+//   (not a bare \`node\` run of the script — that skips the Chromium install it needs)
 // Source mark: packages/printer/assets/wcpos-mark.svg
 // See that script's header for why the mark is embedded and why it is encoded this way.
 
