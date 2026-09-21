@@ -6,7 +6,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { APP_DATABASE_PREFIXES } from './database-names';
 
 const dbLogger = getLogger(['wcpos', 'db', 'clear']);
-const EXPO_OPFS_ROOT = new Directory(Paths.document, '.expo-opfs');
+const OPFS_ROOTS = ['.expo-opfs', '.worklet-opfs'].map(
+	(root) => new Directory(Paths.document, root)
+);
 const LEGACY_SQLITE_DIRECTORY = new Directory(Paths.document, 'SQLite');
 const RXDB_DIRECTORY_PREFIX = 'rxdb-';
 
@@ -36,20 +38,19 @@ const deleteLegacySQLiteDatabases = () => {
 };
 
 const deleteFilesystemDatabases = () => {
-	if (!EXPO_OPFS_ROOT.exists) {
-		dbLogger.debug('Expo OPFS root does not exist');
-		return 0;
+	let deleted = 0;
+	for (const root of OPFS_ROOTS) {
+		if (!root.exists) continue;
+		const contents = root.list();
+		const appEntries = contents.filter((item) => isKnownAppFilesystemEntry(item.name));
+
+		for (const entry of appEntries) {
+			dbLogger.debug(`Deleting filesystem-backed database entry: ${entry.name}`);
+			entry.delete();
+		}
+		deleted += appEntries.length;
 	}
-
-	const contents = EXPO_OPFS_ROOT.list();
-	const appEntries = contents.filter((item) => isKnownAppFilesystemEntry(item.name));
-
-	for (const entry of appEntries) {
-		dbLogger.debug(`Deleting filesystem-backed database entry: ${entry.name}`);
-		entry.delete();
-	}
-
-	return appEntries.length;
+	return deleted;
 };
 
 export const clearAllDB = async (): Promise<ClearDBResult> => {

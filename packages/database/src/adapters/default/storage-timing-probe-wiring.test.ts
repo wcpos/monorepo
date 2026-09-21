@@ -39,10 +39,11 @@ jest.mock('../../plugins/storage-timing-probe', () => ({
 		mockWithStorageTimingProbe(storage, layer),
 }));
 
+// Native is asserted separately, below: it now has two storage hosts, and only the
+// js-thread one still builds its whole chain at module load. See that describe block.
 const platforms = [
 	['web', './index.web'],
 	['electron', './index.electron'],
-	['native', './index'],
 ] as const;
 
 describe('storage timing probe wiring per platform adapter', () => {
@@ -78,6 +79,59 @@ describe('storage timing probe wiring per platform adapter', () => {
 			delete process.env.EXPO_PUBLIC_WCPOS_STORAGE_PROBE;
 
 			const { storage } = await import(modulePath);
+
+			expect(mockWithStorageTimingProbe).not.toHaveBeenCalled();
+			expect(storage).toBe(errorHandledStorage);
+		});
+	});
+
+	/**
+	 * Native has two storage hosts since the worklet runtime landed, and they probe in
+	 * different places:
+	 *
+	 * - 'js-thread' builds the whole chain at module load, exactly as every platform did
+	 *   before, so the original two-layer pin still holds.
+	 * - 'worklet' (the default) creates the worker lazily inside createStorageInstance, so
+	 *   at module load only the 'wrapped' layer exists in the RN process. The raw layer is
+	 *   still measured, but it wraps the worker round trip and is labelled
+	 *   'raw-worklet-round-trip' — a different cost to the one 'raw' names elsewhere, which
+	 *   is the whole point of giving it its own label.
+	 *
+	 * Asserting a bare two-layer chain for native would therefore pin the js-thread path
+	 * while the app ships the worklet one.
+	 */
+	describe('native', () => {
+		it('wraps raw and wrapped layers on the js-thread host', async () => {
+			process.env.EXPO_PUBLIC_WCPOS_STORAGE_PROBE = '1';
+			jest.doMock('../storage/native-storage-host', () => ({
+				NATIVE_STORAGE_HOST: 'js-thread',
+			}));
+
+			const { storage } = await import('./index');
+
+			expect(mockWithStorageTimingProbe.mock.calls).toEqual([
+				[rawStorage, 'raw'],
+				[errorHandledStorage, 'wrapped'],
+			]);
+			expect(storage).toEqual({ name: 'probed:wrapped', storage: errorHandledStorage });
+		});
+
+		it('wraps only the wrapped layer at module load on the worklet host', async () => {
+			process.env.EXPO_PUBLIC_WCPOS_STORAGE_PROBE = '1';
+			jest.doMock('../storage/native-storage-host', () => ({
+				NATIVE_STORAGE_HOST: 'worklet',
+			}));
+
+			const { storage } = await import('./index');
+
+			expect(mockWithStorageTimingProbe.mock.calls).toEqual([[errorHandledStorage, 'wrapped']]);
+			expect(storage).toEqual({ name: 'probed:wrapped', storage: errorHandledStorage });
+		});
+
+		it('leaves the chain untouched when the flag is unset', async () => {
+			delete process.env.EXPO_PUBLIC_WCPOS_STORAGE_PROBE;
+
+			const { storage } = await import('./index');
 
 			expect(mockWithStorageTimingProbe).not.toHaveBeenCalled();
 			expect(storage).toBe(errorHandledStorage);

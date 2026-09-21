@@ -1,3 +1,6 @@
+// These existing assertions cover the retained Expo/JS-thread host.
+jest.mock('./native-storage-host', () => ({ NATIVE_STORAGE_HOST: 'js-thread' }));
+
 const mockDeleteDirectory = jest.fn();
 const mockGetRxStorageExpoAsync = jest.fn(() => ({
 	name: 'expo-filesystem-storage',
