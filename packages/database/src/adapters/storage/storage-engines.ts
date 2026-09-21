@@ -36,6 +36,23 @@ export const WEB_WORKER_PATH_BY_ENGINE: Record<WebStorageEngine, string> = {
 };
 
 /**
+ * The file name each engine's worker must have, wherever it is served from.
+ *
+ * `globalThis.opfsWorker` is set by the page bootstrap (`apps/main/app/+html.tsx`,
+ * `apps/main/public/index.html`) and rewritten to a CDN URL by the published web
+ * bundle, so an override is NORMAL and its directory is not ours to predict — but
+ * its BASENAME identifies which engine's worker it is. A stale override that still
+ * names the previous engine's worker would load that engine while the rest of the
+ * app, `multiInstance` included, is configured for the new one. `index.web.ts`
+ * refuses such an override; `apps/main/lib/storage-worker-bootstrap.test.ts` fails
+ * the build if a bootstrap file is left behind by an engine change.
+ */
+export const WEB_WORKER_BASENAME_BY_ENGINE: Record<WebStorageEngine, string> = {
+	'opfs-filesystem': 'opfs.worker.js',
+	'sqlite-sahpool': 'sqlite.worker.js',
+};
+
+/**
  * `multiInstance` is a CONSEQUENCE of the engine, not a preference. Pinned as a
  * pair by `../default/multi-instance-ruling.test.ts`: change one without the
  * other and that test goes red, naming the half you forgot.
