@@ -70,7 +70,10 @@ export function Chip({
 			tabIndex={onClear ? -1 : 0}
 			accessible={onClear ? false : undefined}
 			className={cn(
-				'h-ctl bg-card active:bg-muted web:hover:bg-muted flex-row items-center gap-1.5 rounded-full border px-3',
+				// `self-start`: a pill hugs its label. A View stretches across a column parent by
+				// default, which turned the chip into a full-width bar outside a filter row; the
+				// drawn chip is inline-flex.
+				'h-ctl bg-card active:bg-muted web:hover:bg-muted flex-row items-center gap-1.5 self-start rounded-full border px-3',
 				on ? 'border-primary' : 'border-border',
 				add && 'border-dashed',
 				dimmed && 'opacity-45',

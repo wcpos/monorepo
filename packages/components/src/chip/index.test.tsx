@@ -120,4 +120,7 @@ it('keeps the split wrapper out of the tree, floors the clear target and forward
 	expect(source).toContain('!!(disabled || dimmed)');
 	const clear = source.match(/hitSlop=\{8\}[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
 	expect(clear).toContain('min-w-ctl');
+	// The pill's own class line, found by a class only it carries.
+	const root = source.match(/'([^']*rounded-full border px-3[^']*)'/)?.[1]?.split(' ') ?? [];
+	expect(root).toContain('self-start');
 });
