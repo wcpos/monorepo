@@ -5,12 +5,15 @@ import {
 	STORAGE_TIMING_PROBE_ENABLED,
 	withStorageTimingProbe,
 } from '../../plugins/storage-timing-probe';
+import { WEB_STORAGE_ENGINE, WEB_WORKER_PATH_BY_ENGINE } from './storage-engines';
 
 export function getWebStorageWorkerPaths() {
 	const runtime = globalThis as typeof globalThis & { opfsWorker?: string };
 
+	// The engine selects the worker bundle. `globalThis.opfsWorker` still wins: the
+	// published web bundle rewrites it to a CDN path at load time.
 	return {
-		targetOpfsWorker: runtime.opfsWorker ?? '/opfs.worker.js',
+		targetOpfsWorker: runtime.opfsWorker ?? WEB_WORKER_PATH_BY_ENGINE[WEB_STORAGE_ENGINE],
 	};
 }
 
