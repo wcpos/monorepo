@@ -16,6 +16,8 @@ type ChipProps = Omit<PressableProps, 'children'> & {
 	clearTestID?: string;
 };
 
+// Every variant carries the same root classes; a cell that renders full-width is a stale
+// baseline, not a prop-dependent layout (measured on wcpos/monorepo#2189).
 export function Chip({
 	label,
 	icon,
