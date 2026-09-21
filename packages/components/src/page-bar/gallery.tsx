@@ -16,8 +16,8 @@ export const stories = [
 				subtitle="· UK Store"
 				status={{ label: 'Offline', variant: 'warning' }}
 			>
-				<IconButton name="sliders" testID="filters" onPress={onPress} />
-				<IconButton name="bell" testID="bell" onPress={onPress} />
+				<IconButton name="sliders" aria-label="Filters" testID="filters" onPress={onPress} />
+				<IconButton name="bell" aria-label="Notifications" testID="bell" onPress={onPress} />
 			</PageBar>
 		),
 	},
@@ -27,7 +27,12 @@ export const stories = [
 			<DeviceScope phone>
 				<View className="w-80">
 					<PageBar testID="phone-menu" title="Products" onMenu={{ label: 'Menu', onPress }}>
-						<IconButton name="bell" testID="phone-bell" onPress={onPress} />
+						<IconButton
+							name="bell"
+							aria-label="Notifications"
+							testID="phone-bell"
+							onPress={onPress}
+						/>
 					</PageBar>
 				</View>
 			</DeviceScope>
