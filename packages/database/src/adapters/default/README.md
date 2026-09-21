@@ -14,7 +14,11 @@ The expo adapter uses the Expo Filesystem-backed storage implementation.
 
 ## Decision: web runs RxDB with `multiInstance: true`
 
-**Status:** ruled, standing. Owner ruling 2026-08-06. Implemented by #1057 (closes #1045, #1055, #1050-web). Supersedes #1049 and wcpos/electron#325.
+**Status:** ruled, standing **on this lane**. Owner ruling 2026-08-06. Implemented by #1057 (closes #1045, #1055, #1050-web). Supersedes #1049 and wcpos/electron#325.
+
+> **This lane only.** `main` / 1.10.x runs the OPFS filesystem engine, and everything below is correct for it — `multiInstance: false` on web here is still a data-loss path.
+>
+> **On `next`, 2.0 reverses it.** Owner ruling 2026-09-21 (#2146, under storage-engine map #2137): web moves to SQLite on the `opfs-sahpool` VFS, which holds exclusive OPFS access handles for the whole origin, so a second tab cannot open storage at all. Web multi-tab ends there and `multiInstance` becomes `false` — **as a consequence of the engine, not a change of mind about multi-tab**. Read `next`'s copy of this file before carrying anything here into 2.0 work; the two lanes deliberately disagree.
 
 ## Decision
 
