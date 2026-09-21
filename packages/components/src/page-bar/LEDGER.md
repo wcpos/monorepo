@@ -13,3 +13,5 @@ Seeded 2026-09-18 by wcpos/roadmap#359 from the component map (wcpos/roadmap#291
 3. The leading slot (menu or back crumb) renders on the phone width only; the rail carries navigation on wide widths — evidence: platform split (wcpos/roadmap#290) §1; `navigation-area` line 2 as origin.
 4. No store name is appended to the title; the caller owns the title — evidence: the drawn bar shows the store only when a store has more than one register (`· UK Store`), as a subtitle.
 5. The drawer glyph takes a caller-supplied label; an icon-only control carries no accessible name of its own and the string is the caller's to translate — evidence: Codex review on wcpos/monorepo#2188.
+6. The drawer glyph is sized to the control token, because an icon plus its padding is under the pointer floor and it is a primary navigation control — evidence: `.claude/rules/design.mdc` §3 (44 pt minimum); Codex review on wcpos/monorepo#2188.
+7. The subtitle yields before the title: it shrinks and ellipsises, so flexbox never collapses the page's own name first — evidence: Codex review on wcpos/monorepo#2188.

@@ -53,7 +53,7 @@ export function PageBar({
 							onPress={onMenu.onPress}
 							aria-label={onMenu.label}
 							testID={id('menu')}
-							className="-ml-2"
+							className="h-ctl w-ctl -ml-2 items-center justify-center"
 						/>
 					) : null)}
 				<View className="min-w-0 shrink">
@@ -67,7 +67,12 @@ export function PageBar({
 					</Text>
 				</View>
 				{subtitle !== undefined && (
-					<Text testID={id('subtitle')} className="text-muted-foreground" numberOfLines={1}>
+					<Text
+						testID={id('subtitle')}
+						className="text-muted-foreground min-w-0 shrink"
+						numberOfLines={1}
+						ellipsizeMode="tail"
+					>
 						{subtitle}
 					</Text>
 				)}

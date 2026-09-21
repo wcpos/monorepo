@@ -38,13 +38,18 @@ export function Breadcrumb({
 		</Text>
 	);
 	return (
-		<HStack testID={testID} className={cn('h-ctl items-center gap-1 pr-2', className)} {...props}>
+		<HStack
+			testID={testID}
+			className={cn('min-h-ctl flex-wrap items-center gap-1 pr-2', className)}
+			{...props}
+		>
 			{parents.map((parent, index) => (
 				<React.Fragment key={index}>
 					{index > 0 && separator}
 					<Button
-						variant="ghost-quiet"
+						variant="ghost"
 						size="sm"
+						className="min-h-ctl h-auto py-1"
 						onPress={parent.onPress}
 						testID={parent.testID ?? id(`parent-${index}`)}
 						{...{ ref: index === parents.length - 1 ? backRef : undefined }}

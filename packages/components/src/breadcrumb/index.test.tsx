@@ -111,3 +111,14 @@ it('does not focus without autoFocus and renders the trailing slot', () => {
 it('does not constrain labels to a line count', () => {
 	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toContain('numberOfLines');
 });
+
+it('grows with a wrapped label and keeps every crumb at the pointer floor', () => {
+	// react-native-web compiles HStack's and Button's classes away in this harness, so the
+	// contract is read from source: a fixed row height cannot honour the wrapping contract
+	// (ledger line 3), and a crumb is the phone page's back control, so it meets the floor
+	// (Codex review on #2188).
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	expect(source).toContain('min-h-ctl flex-wrap');
+	expect(source).not.toMatch(/'h-ctl /);
+	expect(source).toContain('h-auto min-h-ctl py-1');
+});

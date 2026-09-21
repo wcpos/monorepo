@@ -148,3 +148,12 @@ it('owns no system bars, theme lookup or store title suffix', () => {
 		/SystemBars|useTheme|storeName/
 	);
 });
+
+it('floors the drawer control and lets the subtitle yield before the title', () => {
+	// Read from source: the harness compiles IconButton's and Text's classes away. The icon
+	// plus its padding is under the floor, and an unshrinkable subtitle collapses the page's
+	// own name first (Codex review on #2188).
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	expect(source).toContain('h-ctl w-ctl -ml-2 items-center justify-center');
+	expect(source).toContain('text-muted-foreground min-w-0 shrink');
+});
