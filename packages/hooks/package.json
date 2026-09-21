@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "@wcpos/utils": "workspace:*",
-    "axios": "^1.19.0",
+    "axios": "^1.20.0",
     "bottleneck": "^2.19.5",
     "lodash": "^4.18.1",
     "observable-hooks": "4.2.4",
@@ -51,11 +51,11 @@
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.25",
     "@types/react": "^19.2.18",
-    "jest": "^30.4.2",
+    "jest": "^30.5.2",
     "react-native": "0.86.2",
     "react-test-renderer": "19.2.3",
     "ts-jest": "^29.4.12"
