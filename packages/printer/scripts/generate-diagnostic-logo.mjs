@@ -1,7 +1,12 @@
 /**
  * Regenerates `src/encoder/diagnostic-logo.ts` from `assets/wcpos-mark.svg`.
  *
- *   node packages/printer/scripts/generate-diagnostic-logo.mjs
+ *   pnpm --filter @wcpos/printer generate:diagnostic-logo
+ *
+ * Use that script rather than calling this file directly: installing the devDependencies
+ * does not install Playwright's browser binary, and the script runs `playwright install
+ * chromium` first (a no-op once it is present). Running the file directly on a clean
+ * checkout fails at `chromium.launch()`.
  *
  * The diagnostic page prints the WCPOS mark to prove the `<image>` raster path
  * (asset load -> rasterize -> dither -> `GS v 0`) end to end. The bitmap is embedded
@@ -57,7 +62,17 @@ const THRESHOLD = 128;
 const SOURCE_FILL = /#a7aaad/gi;
 
 async function rasterize(svg, size) {
-	const browser = await chromium.launch();
+	let browser;
+	try {
+		browser = await chromium.launch();
+	} catch (cause) {
+		throw new Error(
+			'Could not launch Chromium. Installing the devDependencies does not install the ' +
+				'browser binary — run `pnpm --filter @wcpos/printer generate:diagnostic-logo`, ' +
+				'which installs it first.',
+			{ cause }
+		);
+	}
 	try {
 		const page = await browser.newPage();
 		const dataUrl = await page.evaluate(
