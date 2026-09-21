@@ -117,8 +117,13 @@ it('grows with a wrapped label and keeps every crumb at the pointer floor', () =
 	// contract is read from source: a fixed row height cannot honour the wrapping contract
 	// (ledger line 3), and a crumb is the phone page's back control, so it meets the floor
 	// (Codex review on #2188).
+	// Asserted per class, not as one string: the pre-commit formatter sorts class lists, so
+	// a substring assertion on a whole list goes red on a reorder that changes nothing.
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	expect(source).toContain('min-h-ctl flex-wrap');
-	expect(source).not.toMatch(/'h-ctl /);
-	expect(source).toContain('h-auto min-h-ctl py-1');
+	const root = source.match(/className=\{cn\('([^']+)'/)?.[1]?.split(' ') ?? [];
+	expect(root).toContain('min-h-ctl');
+	expect(root).toContain('flex-wrap');
+	expect(root).not.toContain('h-ctl');
+	const crumb = source.match(/className="([^"]*min-h-ctl[^"]*)"/)?.[1]?.split(' ') ?? [];
+	expect(crumb).toEqual(expect.arrayContaining(['h-auto', 'min-h-ctl']));
 });

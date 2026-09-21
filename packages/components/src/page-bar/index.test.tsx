@@ -153,7 +153,11 @@ it('floors the drawer control and lets the subtitle yield before the title', () 
 	// Read from source: the harness compiles IconButton's and Text's classes away. The icon
 	// plus its padding is under the floor, and an unshrinkable subtitle collapses the page's
 	// own name first (Codex review on #2188).
+	// Per class, not as one string: the formatter sorts class lists (see the breadcrumb test).
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	expect(source).toContain('h-ctl w-ctl -ml-2 items-center justify-center');
-	expect(source).toContain('text-muted-foreground min-w-0 shrink');
+	const menu = source.match(/name="bars"[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
+	expect(menu).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl']));
+	const subtitle =
+		source.match(/id\('subtitle'\)[\s\S]*?className="([^"]+)"/)?.[1]?.split(' ') ?? [];
+	expect(subtitle).toEqual(expect.arrayContaining(['shrink', 'min-w-0']));
 });
