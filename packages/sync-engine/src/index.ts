@@ -61,3 +61,5 @@ export type { QueryTotalWooRequest } from './scheduler';
 /** The reference-lane wire sort vocabulary (#1347) — what a `refresh`
  * requirement's `orderby` may spell for terms and coupons. */
 export type { CouponReferenceOrderby, TermReferenceOrderby } from './scheduler';
+
+export type { WooRefundPayload, LocalRefundDocument } from './collections/refund-schema';

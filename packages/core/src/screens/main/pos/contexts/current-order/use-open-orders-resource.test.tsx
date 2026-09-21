@@ -2,12 +2,13 @@
  * @jest-environment jsdom
  */
 import { act, renderHook } from '@testing-library/react';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, map, of } from 'rxjs';
 
 import { useOpenOrdersResource } from './use-open-orders-resource';
 
 type EngineDocument = Record<string, unknown> & {
 	uuid: string;
+	status: string;
 	payload: Record<string, unknown>;
 };
 
@@ -107,7 +108,7 @@ describe('useOpenOrdersResource', () => {
 		const { result } = renderHook(() => useOpenOrdersResource(7, 2));
 
 		expect(firstDatabase.collections.orders.find).toHaveBeenCalledWith({
-			selector: { status: 'pos-open' },
+			selector: { status: { $in: ['pos-open', 'pos-partial', 'pending'] } },
 		});
 		expect(result.current.read().map((hit) => [hit.id, hit.record.uuid])).toEqual([
 			['early', 'early'],
@@ -163,7 +164,7 @@ describe('useOpenOrdersResource', () => {
 		const { result, unmount } = renderHook(() => useOpenOrdersResource(7, 2));
 
 		expect(requireOrders).toHaveBeenCalledWith({
-			id: 'pos:open-orders:orders-browse',
+			id: 'pos:open-orders:pos-open:orders-browse',
 			collection: 'orders',
 			kind: 'orders-browse',
 			status: 'pos-open',
@@ -175,7 +176,7 @@ describe('useOpenOrdersResource', () => {
 		expect(result.current.read().map((hit) => hit.id)).toEqual(['resident']);
 
 		unmount();
-		expect(releaseRequirement).toHaveBeenCalledTimes(1);
+		expect(releaseRequirement).toHaveBeenCalledTimes(3);
 	});
 
 	it('releases its engine database subscriber across repeated mounts', () => {
@@ -193,4 +194,31 @@ describe('useOpenOrdersResource', () => {
 
 		expect(result.current.read()).toEqual([]);
 	});
+});
+
+it('keeps the active order reachable when a leg changes its status', () => {
+	const record = order('live', 42, '2026-09-07T12:00:00', 7, 2);
+	const orders$ = new BehaviorSubject([record]);
+	const database = databaseWith(orders$);
+	database.collections.orders.find.mockImplementation(
+		({ selector }: { selector: { status: string | { $in: string[] } } }) => ({
+			$: orders$.pipe(
+				map((records) =>
+					records.filter((item) =>
+						typeof selector.status === 'string'
+							? item.status === selector.status
+							: selector.status.$in.includes(item.status)
+					)
+				)
+			),
+		})
+	);
+	activeDatabase = database;
+	const { result } = renderHook(() => useOpenOrdersResource(7, 2));
+	for (const status of ['pos-open', 'pending', 'pos-partial']) {
+		act(() => orders$.next([{ ...record, status, payload: { ...record.payload, status } }]));
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['live']);
+	}
+	act(() => orders$.next([{ ...record, status: 'completed' }]));
+	expect(result.current.read()).toEqual([]);
 });

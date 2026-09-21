@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ORDER_MONEY_ORACLE, ORDER_MONEY_ORACLE_LINE_UUID } from '@wcpos/sync-core/testing';
 
 import {
+	classifyMoneyDivergence,
 	compareOrderMoney,
 	ORDER_MONEY_PRECISION_MODE,
 	preserveEquivalentLocalPrecision,
@@ -208,6 +209,41 @@ describe('compareOrderMoney — server-precision mode (the legacy rule)', () => 
 });
 
 describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', () => {
+	// CHECKOUT401, issue #1875 class A: Sentry line-tax samples rendered at 2dp,
+	// then padded to six by the plugin. Detection AND adoption must ignore padding.
+	it.each([
+		['1.735537', '1.740000'],
+		['2.290909', '2.290000'],
+		['5.206612', '5.210000'],
+		// A sub-cent tax rendered at 2dp is an all-zero fraction once padded: still
+		// a display-width spelling (cents), not the integer spelling `"0"`.
+		['0.0049', '0.000000'],
+	])('preserves line taxes %s when the ack merely renders %s', (expected, got) => {
+		const pushed = clone(pos);
+		const acked = clone(pos);
+		for (const key of ['total_tax', 'subtotal_tax']) {
+			lineOf(pushed)[key] = expected;
+			lineOf(acked)[key] = got;
+		}
+		expect(compareOrderMoney({ pushed, acked })).toBeNull();
+		const adopted = lineOf(preserveEquivalentLocalPrecision(pushed, acked));
+		expect(adopted.total_tax).toBe(expected);
+		expect(adopted.subtotal_tax).toBe(expected);
+	});
+
+	it.each([
+		['36.68', '36.680001'],
+		['29.97', '30.000000'],
+		// CHECKOUT401 Sentry: real order-level cent and material differences.
+		['22.49', '22.500000'],
+		['50.000000', '98.000000'],
+	])('reports and adopts the real correction %s -> %s', (expected, got) => {
+		const pushed = { total: expected };
+		const acked = { total: got };
+		expect(compareOrderMoney({ pushed, acked })?.fields).toHaveLength(1);
+		expect(preserveEquivalentLocalPrecision(pushed, acked).total).toBe(got);
+	});
+
 	it('is the shipped default now that the server guarantee is live', () => {
 		expect(ORDER_MONEY_PRECISION_MODE).toBe('exact-6dp');
 		// The default path and the explicit path must agree, or the flag is decorative.
@@ -225,7 +261,7 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 			mode: 'exact-6dp',
 		});
 		expect(divergence?.fields).toEqual([
-			{ field: 'cart_tax', expected: '0.000000', got: '0.010000', decimals: 6 },
+			{ field: 'cart_tax', expected: '0.00', got: '0.01', decimals: 2 },
 		]);
 	});
 
@@ -253,11 +289,11 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 			mode: 'exact-6dp',
 		});
 		expect(divergence?.fields).toEqual([
-			{ field: 'total', expected: '45.000000', got: '50.070000', decimals: 6 },
+			{ field: 'total', expected: '45.00', got: '50.07', decimals: 2 },
 		]);
 	});
 
-	it('compares genuinely six-decimal money at six decimals — the point of #946', () => {
+	it('compares sub-cent money at the effective server width — the point of #946', () => {
 		// `cart_tax` is the field that carries sub-cent components (WC sums
 		// per-rate taxes unrounded), and it is now compared without being rounded
 		// away. A sub-cent server disagreement here is a real divergence.
@@ -265,7 +301,7 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 		acked.cart_tax = '6.714000';
 		const divergence = compareOrderMoney({ pushed: pos, acked, mode: 'exact-6dp' });
 		expect(divergence?.fields).toEqual([
-			{ field: 'cart_tax', expected: '6.713280', got: '6.714000', decimals: 6 },
+			{ field: 'cart_tax', expected: '6.713', got: '6.714', decimals: 3 },
 		]);
 	});
 
@@ -276,9 +312,9 @@ describe('compareOrderMoney — exact-6dp mode (woocommerce-pos#1466 is live)', 
 		expect(divergence?.fields).toEqual([
 			{
 				field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total_tax`,
-				expected: '6.713280',
-				got: '6.723280',
-				decimals: 6,
+				expected: '6.71328',
+				got: '6.72328',
+				decimals: 5,
 			},
 		]);
 	});
@@ -382,9 +418,9 @@ describe('an order compared without an aggregate on either side', () => {
 		expect(compareOrderMoney({ pushed: withoutAggregate(pos), acked })?.fields).toEqual([
 			{
 				field: `line_items[${ORDER_MONEY_ORACLE_LINE_UUID}].total`,
-				expected: roundDecimalString(String(lineOf(pos).total), 6),
-				got: '19.980000',
-				decimals: 6,
+				expected: '29.97',
+				got: '19.98',
+				decimals: 2,
 			},
 		]);
 	});
@@ -400,7 +436,7 @@ describe('an order compared without an aggregate on either side', () => {
 				pushed: { ...withoutAggregate(pos), total: pos.total as string },
 				acked,
 			})?.fields
-		).toEqual([{ field: 'total', expected: '36.680000', got: '50.070000', decimals: 6 }]);
+		).toEqual([{ field: 'total', expected: '36.68', got: '50.07', decimals: 2 }]);
 	});
 
 	it('leaves adoption alone — that half reads the RESIDENT, which keeps its money', () => {
@@ -548,5 +584,32 @@ describe('preserveEquivalentLocalPrecision (the adoption half of the mirror cont
 			const flagged = (reported ?? []).some((f) => f.field === 'cart_tax');
 			expect({ ack: ackedCartTax, adopted }).toEqual({ ack: ackedCartTax, adopted: flagged });
 		}
+	});
+});
+
+// CHECKOUT401 Sentry order-level samples from #1875; the microunit control
+// ensures real sub-cent corrections remain distinguishable from a whole cent.
+describe('classifyMoneyDivergence', () => {
+	it.each([
+		['36.68', '36.680001', 'sub-cent'],
+		['22.49', '22.500000', 'cent'],
+		['50.000000', '98.000000', 'material'],
+	])('classifies %s -> %s as %s', (expected, got, roundingClass) => {
+		const divergence = compareOrderMoney({ pushed: { total: expected }, acked: { total: got } });
+		expect(divergence).not.toBeNull();
+		expect(classifyMoneyDivergence(divergence!.fields)).toBe(roundingClass);
+	});
+
+	it('classifies the largest difference, regardless of field order or sign', () => {
+		const subCent = { field: 'cart_tax', expected: '0.002', got: '0.001', decimals: 3 };
+		const cent = { field: 'total', expected: '22.50', got: '22.49', decimals: 2 };
+		const material = { field: 'total', expected: '0.000000', got: '0.010001', decimals: 6 };
+		expect(classifyMoneyDivergence([subCent, subCent])).toBe('sub-cent');
+		expect(classifyMoneyDivergence([subCent, cent])).toBe('cent');
+		expect(classifyMoneyDivergence([cent, subCent])).toBe('cent');
+		expect(classifyMoneyDivergence([cent, material])).toBe('material');
+		expect(classifyMoneyDivergence([{ ...cent, expected: 'invalid', decimals: null }])).toBe(
+			'material'
+		);
 	});
 });

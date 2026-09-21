@@ -38,6 +38,7 @@ function createFetcherHarness(
 	input: {
 		auth?: typeof BASE_AUTH & {
 			refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
+			onAuthExhausted?: (token: string | null) => void;
 			useJwtAsParam?: boolean;
 			bareAuthParam?: boolean;
 			useProtocolHeaders?: boolean;
@@ -240,28 +241,12 @@ describe('createEngineFetcher', () => {
 	});
 
 	it.each([
-		[true, 'test-token'],
-		[false, 'Bearer test-token'],
-		[undefined, 'Bearer test-token'],
-	])('formats parameter auth when bareAuthParam is %s', async (bareAuthParam, authorization) => {
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-		const { fetcher } = createFetcherHarness({
-			fetch,
-			auth: { ...BASE_AUTH, useJwtAsParam: true, bareAuthParam },
-		});
-
-		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-		const requestedUrl = new URL(fetch.mock.calls[0][0]);
-		expect(requestedUrl.searchParams.get('authorization')).toBe(authorization);
-	});
-
-	it.each([
 		['orders', 'wcpos/v2/orders'],
 		['products', 'wcpos/v2/products'],
 		['variations', 'wcpos/v1/products/variations'],
 		['customers', 'wcpos/v2/customers'],
 		['taxRates', 'wcpos/v2/taxes'],
+		['refunds', 'wcpos/v2/refunds'],
 		['categories', 'wcpos/v2/products/categories'],
 		['brands', 'wcpos/v2/products/brands'],
 		['tags', 'wcpos/v2/products/tags'],
@@ -344,90 +329,6 @@ describe('createEngineFetcher', () => {
 		expect(
 			new URL(fetch.mock.calls[1]![0] as string).searchParams.get('_wcpos_envelope')
 		).toBeNull();
-	});
-
-	it('sends protocol and client query signals on web without capability evidence', async () => {
-		const { AppInfo } =
-			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
-		const originalPlatform = AppInfo.platform;
-		AppInfo.platform = 'web';
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-
-		try {
-			const path = createFetcherHarness({ fetch });
-			const query = createFetcherHarness({ fetch, useRestRouteParam: true });
-
-			await path.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-			await query.fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-			for (const call of fetch.mock.calls) {
-				const requestedUrl = new URL(call[0] as string);
-				expect(requestedUrl.searchParams.get('wcpos_protocol')).toBe('2');
-				expect(requestedUrl.searchParams.get('wcpos_client')).toBe(`web/${AppInfo.version}`);
-			}
-		} finally {
-			AppInfo.platform = originalPlatform;
-		}
-	});
-
-	it('sends protocol and client headers outside web', async () => {
-		const { AppInfo } =
-			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-		const { fetcher } = createFetcherHarness({ fetch });
-
-		await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-		const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
-		expect(headers.get('X-WCPOS-Protocol')).toBe('2');
-		expect(headers.get('X-WCPOS-Client')).toBe(`${AppInfo.platform}/${AppInfo.version}`);
-	});
-
-	it('sends params and no headers on web without capability evidence', async () => {
-		const { AppInfo } =
-			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
-		const originalPlatform = AppInfo.platform;
-		AppInfo.platform = 'web';
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-
-		try {
-			const { fetcher } = createFetcherHarness({ fetch });
-			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-			const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
-			expect(headers.has('X-WCPOS-Protocol')).toBe(false);
-			expect(headers.has('X-WCPOS-Client')).toBe(false);
-			const url = new URL(fetch.mock.calls[0]?.[0] as string);
-			expect(url.searchParams.get('wcpos_protocol')).toBe('2');
-			expect(url.searchParams.get('wcpos_client')).toBe(`web/${AppInfo.version}`);
-		} finally {
-			AppInfo.platform = originalPlatform;
-		}
-	});
-
-	it('sends headers and no params on web with capability evidence', async () => {
-		const { AppInfo } =
-			jest.requireActual<typeof import('@wcpos/utils/app-info')>('@wcpos/utils/app-info');
-		const originalPlatform = AppInfo.platform;
-		AppInfo.platform = 'web';
-		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
-
-		try {
-			const { fetcher } = createFetcherHarness({
-				fetch,
-				auth: { ...BASE_AUTH, useProtocolHeaders: true },
-			});
-			await fetcher('https://store.example.test/wp-json/wcpos/v2/products');
-
-			const headers = new Headers((fetch.mock.calls[0]?.[1] as RequestInit).headers);
-			expect(headers.get('X-WCPOS-Protocol')).toBe('2');
-			expect(headers.get('X-WCPOS-Client')).toBe(`web/${AppInfo.version}`);
-			const url = new URL(fetch.mock.calls[0]?.[0] as string);
-			expect(url.searchParams.has('wcpos_protocol')).toBe(false);
-			expect(url.searchParams.has('wcpos_client')).toBe(false);
-		} finally {
-			AppInfo.platform = originalPlatform;
-		}
 	});
 
 	it('reports an unknown census collection as unsupported without making a request', async () => {
@@ -541,26 +442,6 @@ describe('createEngineFetcher', () => {
 
 		it('sends the scoped store on every sync request', async () => {
 			expect((await requestHeaders({ storeId: 7 })).get('X-WCPOS-Store')).toBe('7');
-		});
-
-		it('accepts a string store id without reformatting it', async () => {
-			expect((await requestHeaders({ storeId: '7' })).get('X-WCPOS-Store')).toBe('7');
-		});
-
-		// Store 0 is the free plugin's "no store" sentinel — the SAME one
-		// `use-new-order`/`utils.ts` test before stamping `_pos_store`. Sending it
-		// would read server-side as a real scope; omitting it makes the server
-		// treat the scope as unknown and refuse to overwrite a store-scoped price.
-		it.each([
-			['the single-store sentinel', 0],
-			['the single-store sentinel as a string', '0'],
-			['an absent store', undefined],
-			['a null store', null],
-			['a blank store', '   '],
-			['a non-finite store', Number.NaN],
-			['a negative store', -3],
-		])('omits the header for %s', async (_label, storeId) => {
-			expect((await requestHeaders({ storeId })).has('X-WCPOS-Store')).toBe(false);
 		});
 
 		// B6 (wcpos-infra#72): the scope also rides the URL as store_id, which a
@@ -950,6 +831,44 @@ describe('createEngineFetcher', () => {
 		expect(networkWarn).not.toHaveBeenCalled();
 	});
 
+	it('passes a browser DOMException abort through untouched (Sentry 2HK)', async () => {
+		// Firefox and Safari reject an aborted fetch with a DOMException whose
+		// message ("The operation was aborted.") matches the native-cancel
+		// normalisation above, and whose `name` is a getter-only prototype
+		// accessor. Assigning it threw `TypeError: setting getter-only property
+		// "name"` (Firefox) / `Attempted to assign to readonly property.`
+		// (Safari) — so a cashier typing the next search character was reported
+		// as a SYNC321 requirement failure instead of a quiet cancel.
+		//
+		// A real jsdom DOMException cannot stand in here: jest's babel transform
+		// runs this module in sloppy mode, where the same assignment is silently
+		// ignored, so it passed before the fix. The web bundle is strict (the
+		// Sentry message is Firefox's strict-mode wording), and a setter that
+		// throws is what strict mode does at that exact point.
+		class StrictModeDOMException extends Error {
+			get name() {
+				return 'AbortError';
+			}
+			set name(_value: string) {
+				throw new TypeError('setting getter-only property "name"');
+			}
+		}
+		const controller = new AbortController();
+		const abort = new StrictModeDOMException('The operation was aborted.');
+		expect(abort).toBeInstanceOf(Error);
+		const fetch = jest.fn().mockRejectedValue(abort);
+		const { fetcher, recordTransport, networkWarn } = createFetcherHarness({ fetch });
+		controller.abort();
+
+		await expect(
+			fetcher('https://store.example.test/wp-json/wcpos/v2/products', {
+				signal: controller.signal,
+			})
+		).rejects.toBe(abort);
+		expect(recordTransport).toHaveBeenCalledWith(expect.objectContaining({ failed: false }));
+		expect(networkWarn).not.toHaveBeenCalled();
+	});
+
 	it('does not persist a row for a successful request, and never logs query credentials', async () => {
 		const fetch = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 		const { fetcher, networkInfo, appMetricsObserver } = createFetcherHarness({
@@ -998,6 +917,60 @@ describe('createEngineFetcher', () => {
 			fetch.mockReset();
 		}
 	);
+
+	it('reports the rejected retry token on auth exhaustion, but not on a successful retry', async () => {
+		let accessToken = 'expired-token';
+		const onAuthExhausted = jest.fn();
+		const fetch = jest.fn();
+		const { fetcher } = createFetcherHarness({
+			fetch,
+			auth: {
+				credentials: { getLatest: () => ({ access_token: accessToken }) },
+				refreshAuth: async () => {
+					accessToken = 'refreshed-token';
+					return accessToken;
+				},
+				onAuthExhausted,
+			},
+		});
+		for (const retryStatus of [401, 200]) {
+			accessToken = 'expired-token';
+			onAuthExhausted.mockClear();
+			fetch
+				.mockResolvedValueOnce(new Response(null, { status: 401 }))
+				.mockResolvedValueOnce(new Response(null, { status: retryStatus }));
+			const response = await fetcher('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+			expect(response.status).toBe(retryStatus);
+			if (retryStatus === 401) {
+				expect(onAuthExhausted).toHaveBeenCalledTimes(1);
+				expect(onAuthExhausted).toHaveBeenCalledWith('refreshed-token');
+			} else {
+				expect(onAuthExhausted).not.toHaveBeenCalled();
+			}
+		}
+	});
+
+	it('reports the token actually sent when refresh returns a different token', async () => {
+		let accessToken = 'expired-token';
+		const onAuthExhausted = jest.fn();
+		const fetch = jest.fn(async () => new Response(null, { status: 401 }));
+		const { fetcher } = createFetcherHarness({
+			fetch,
+			auth: {
+				credentials: { getLatest: () => ({ access_token: accessToken }) },
+				refreshAuth: async () => {
+					accessToken = 'live-retry-token';
+					return 'refresh-return-token';
+				},
+				onAuthExhausted,
+			},
+		});
+
+		await fetcher('https://store.example.test/wp-json/wcpos/v2/changes/tick');
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(onAuthExhausted).toHaveBeenCalledWith('live-retry-token');
+	});
 
 	it('refreshes after a 401 and retries once with the latest access token', async () => {
 		let accessToken = 'expired-token';
@@ -1337,6 +1310,40 @@ describe('createEngineFetcher', () => {
 				fields: expect.objectContaining({ status: 403 }),
 			})
 		);
+		fetch.mockReset();
+	});
+
+	it('reports a 403 at error once per path and at info after that (#1876)', async () => {
+		// Sentry AUTH201: a cashier without customer read permission produced one
+		// error row per 10 s tick, 242 events on 11 installs. The permission is a
+		// property of the session, so the second 403 on the same path is info.
+		const credentials = {
+			getLatest: jest.fn(() => ({ access_token: 'token' })),
+		};
+		const fetch = jest
+			.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 403 }))
+			.mockResolvedValueOnce(new Response(null, { status: 403 }))
+			.mockResolvedValueOnce(new Response(null, { status: 403 }))
+			.mockResolvedValueOnce(new Response(null, { status: 403 }));
+		// The auth object is shared by reference and a same-site cashier swap
+		// replaces `credentials` on it in place (create-app-engine).
+		const auth = { credentials, refreshAuth: jest.fn() };
+		const { fetcher, appMetricsObserver } = createFetcherHarness({ fetch, auth });
+
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/customers?page=1');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/customers?page=2');
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/products');
+		auth.credentials = { getLatest: jest.fn(() => ({ access_token: 'other-cashier' })) };
+		await fetcher?.('https://store.example.test/wp-json/wcpos/v2/customers?page=3');
+
+		const rows = appMetricsObserver.mock.calls
+			.map(([event]) => event)
+			.filter((event) => event.type === 'transport.request' && event.fields?.status === 403);
+		expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error', 'error']);
+		expect(rows[1].fields).toEqual(expect.objectContaining({ outcome: 'forbidden-repeat' }));
+		expect(rows[0].fields).not.toEqual(expect.objectContaining({ outcome: 'forbidden-repeat' }));
+		expect(rows[3].fields).not.toEqual(expect.objectContaining({ outcome: 'forbidden-repeat' }));
 		fetch.mockReset();
 	});
 

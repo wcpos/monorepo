@@ -6,12 +6,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { Uniwind, useUniwind } from 'uniwind';
 
+import { GalleryRootLayout, IS_GALLERY_BUILD } from '@wcpos/main/components/gallery/registry';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
-import { useAppState } from '@wcpos/core/contexts/app-state';
+import { hasStoreSession, useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { createMerchantToast } from '@wcpos/core/contexts/merchant-toast';
+import { ScaleProvider } from '@wcpos/core/contexts/scale';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useTelemetryConsent } from '@wcpos/core/hooks/use-telemetry-consent';
 import { useCustomerDisplayService } from '@wcpos/core/screens/main/pos/customer-display/use-customer-display-service';
@@ -81,7 +83,8 @@ function useToastTheme(): 'light' | 'dark' {
 }
 
 function RootStack() {
-	const { storeDB, store } = useAppState();
+	const appState = useAppState();
+	const { store } = appState;
 	const { isThemeReady } = useThemeRestorer();
 	useTelemetryConsent();
 	const t = useT();
@@ -99,9 +102,12 @@ function RootStack() {
 
 	return (
 		<>
-			{storeDB ? <CustomerDisplayServiceController /> : null}
+			{hasStoreSession(appState) ? <CustomerDisplayServiceController /> : null}
 			<Stack screenOptions={{ headerShown: false }}>
-				<Stack.Protected guard={!!storeDB}>
+				{/* The whole session, not just the store database: the (app) stack calls
+				    useStoreSession on its first render, and a partially hydrated session
+				    used to mount it and throw (#2112). */}
+				<Stack.Protected guard={hasStoreSession(appState)}>
 					<Stack.Screen name="(app)" />
 				</Stack.Protected>
 				<Stack.Screen name="(auth)" />
@@ -126,6 +132,13 @@ function ThemedToaster() {
 }
 
 export default function RootLayout() {
+	// A build-time constant: false in every merchant build (Metro resolves the gallery
+	// registry to its stub), so production never reads the route to decide anything.
+	if (IS_GALLERY_BUILD) return <GalleryRootLayout merchant={MerchantRootLayout} />;
+	return <MerchantRootLayout />;
+}
+
+function MerchantRootLayout() {
 	const clearLocalDataState = useClearLocalDataOnStartup();
 
 	if (clearLocalDataState === 'clearing') {
@@ -145,10 +158,16 @@ export default function RootLayout() {
 				<GestureHandlerRootView style={{ flex: 1 }}>
 					<KeyboardProvider>
 						<HydrationProviders>
-							<RootStack />
-							<ErrorBoundary>
-								<ThemedToaster />
-							</ErrorBoundary>
+							{/* Inside the hydration sandwich (it reads the store's Scale
+							    override) and around the toaster, so every PortalHost —
+							    the app's, the (auth) one and the named `pos` host — sits
+							    inside the scale scope. */}
+							<ScaleProvider>
+								<RootStack />
+								<ErrorBoundary>
+									<ThemedToaster />
+								</ErrorBoundary>
+							</ScaleProvider>
 						</HydrationProviders>
 					</KeyboardProvider>
 				</GestureHandlerRootView>

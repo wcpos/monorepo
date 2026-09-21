@@ -6,6 +6,7 @@ import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import { isBotChallengeError } from './bot-challenge';
 import { useT } from '../../../contexts/translations';
 import { parseLinkHeader } from '../../../lib/url';
 
@@ -27,6 +28,7 @@ const DISCOVERY_PROBE_TIMEOUT_MS = 10_000;
 interface ProbeResult {
 	url: string | null;
 	timedOut: boolean;
+	challenged: boolean;
 }
 
 /**
@@ -108,17 +110,26 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				});
 
 				if (!response) {
-					return { url: null, timedOut: false };
+					return { url: null, timedOut: false, challenged: false };
 				}
 
 				return {
 					url: extractWpApiUrlFromLink(get(response, ['headers', 'link'])),
 					timedOut: false,
+					challenged: false,
 				};
 			} catch (err: unknown) {
+				if (isBotChallengeError(err)) {
+					return { url: null, timedOut: false, challenged: true };
+				}
+
 				// Check error response headers for Link header
 				const link = get(err, ['response', 'headers', 'link']);
-				return { url: extractWpApiUrlFromLink(link), timedOut: isTimeoutError(err) };
+				return {
+					url: extractWpApiUrlFromLink(link),
+					timedOut: isTimeoutError(err),
+					challenged: false,
+				};
 			}
 		},
 		[http]
@@ -142,17 +153,21 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				});
 
 				if (response && response.status === 200) {
-					return { url: fallbackUrl, timedOut: false };
+					return { url: fallbackUrl, timedOut: false, challenged: false };
 				}
 
-				return { url: null, timedOut: false };
+				return { url: null, timedOut: false, challenged: false };
 			} catch (err: unknown) {
+				if (isBotChallengeError(err)) {
+					return { url: null, timedOut: false, challenged: true };
+				}
+
 				// A WP REST API error (e.g. rest_unauthorized) proves the endpoint exists
 				if (isWpRestApiError(err)) {
-					return { url: fallbackUrl, timedOut: false };
+					return { url: fallbackUrl, timedOut: false, challenged: false };
 				}
 
-				return { url: null, timedOut: isTimeoutError(err) };
+				return { url: null, timedOut: isTimeoutError(err), challenged: false };
 			}
 		},
 		[http]
@@ -184,15 +199,26 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				const linkProbe = await tryLinkHeaderDiscovery(normalizedUrl);
 				let discoveredUrl = linkProbe.url;
 				let timedOut = linkProbe.timedOut;
+				let challenged = linkProbe.challenged;
 
 				// Step 2: If Link header failed, try fallback
 				if (!discoveredUrl) {
 					const fallbackProbe = await tryFallbackDiscovery(normalizedUrl);
 					discoveredUrl = fallbackProbe.url;
 					timedOut = timedOut || fallbackProbe.timedOut;
+					challenged = challenged || fallbackProbe.challenged;
 				}
 
 				if (!discoveredUrl) {
+					if (challenged) {
+						discoveryLogger.error(t('auth.host_compatibility_problem'), {
+							code: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API,
+							context: { url: normalizedUrl },
+						});
+						throw Object.assign(new Error(t('auth.host_compatibility_problem')), {
+							errorCode: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API,
+						});
+					}
 					throw new Error(
 						timedOut ? t('auth.site_took_too_long_to_respond') : t('auth.site_does_not_seem_to_be')
 					);

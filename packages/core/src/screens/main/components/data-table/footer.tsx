@@ -47,8 +47,12 @@ function FooterContent({
 
 	return (
 		<HStack className="border-border bg-footer rounded-b-lg border-t p-2">
-			<HStack className="flex-1 justify-start *:flex-1">{children}</HStack>
-			<HStack className="justify-end gap-0">
+			{/* min-w-0 lets the children (the tax label) shrink and truncate; without it a
+			    narrow products column wrapped the label one character per line and the
+			    footer grew to the column's full height. The count and sync button keep
+			    their natural width. */}
+			<HStack className="min-w-0 flex-1 justify-start *:min-w-0 *:flex-1">{children}</HStack>
+			<HStack className="shrink-0 justify-end gap-0">
 				<Text testID="data-table-count" className="text-xs">
 					{/* No denominator unless something vouches for one (binding.total$). Falling
 					    back to the loaded-row count printed "Showing 20 of 20" on a page of 20

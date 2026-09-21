@@ -1,0 +1,220 @@
+import * as React from 'react';
+
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+
+import { recordRegisterFact, useRegisterActor } from '../register-session/audit';
+import { useStoreSession } from '../../contexts/app-state';
+import { useRestHttpClient } from '../../screens/main/hooks/use-rest-http-client';
+import {
+	adoptCounters,
+	bindRegister,
+	getBoundRegisterId,
+	getRegisterSnapshot,
+	readBoundRegister,
+	readCounters,
+	type RegisterCounters,
+	unbindRegister,
+} from './register-document';
+
+type Register = {
+	id: string;
+	name: string;
+	status: string;
+	store_id?: number | null;
+	default_float?: string | null;
+	counters?: RegisterCounters;
+};
+type Binding = {
+	status: 'bound' | 'choose' | 'none' | 'unknown';
+	registerId: string | null;
+	registerName: string | null;
+	registers: Register[];
+};
+type Directory = {
+	value: Binding;
+	request?: Promise<void>;
+	loaded: boolean;
+	listeners: Set<() => void>;
+};
+const directories = new Map<string, Directory>();
+
+function directory(siteUuid: string, storeId: number | undefined): Directory {
+	const key = `${siteUuid}:${storeId}`;
+	if (!directories.has(key)) {
+		const pointer = getBoundRegisterId(siteUuid, storeId)
+			? getRegisterSnapshot()?.sites?.[siteUuid]
+			: null;
+		directories.set(key, {
+			loaded: false,
+			listeners: new Set(),
+			value: {
+				status: pointer?.register_id ? 'bound' : 'unknown',
+				registerId: pointer?.register_id ?? null,
+				registerName: pointer?.register_name ?? null,
+				registers: [],
+			},
+		});
+	}
+	return directories.get(key)!;
+}
+
+function publish(entry: Directory, changes: Partial<Binding>) {
+	entry.value = { ...entry.value, ...changes };
+	entry.listeners.forEach((notify) => notify());
+}
+
+/** Mounted once at the store-session bridge. Readers share this one site:store directory. */
+/** One directory request per (site, store) per app session, shared by every reader. */
+function loadDirectory(
+	entry: Directory,
+	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
+	storeId: number | undefined
+): Promise<void> {
+	entry.request ??= http
+		.get('registers', { params: { store_id: storeId || null } })
+		.then((response) => {
+			entry.loaded = true;
+			publish(entry, {
+				registers: (response.data as Register[]).filter(
+					(row) => row.status === 'active' && (storeId !== 0 || !row.store_id)
+				),
+			});
+		})
+		.catch(() => {
+			// A failed list request leaves the pointer and status unchanged; the next
+			// session (or reconnect) tries again.
+			entry.request = undefined;
+			recordRegisterFact({
+				kind: 'directory-unavailable',
+				registerId: entry.value?.registerId ?? null,
+			});
+		});
+	return entry.request;
+}
+
+/**
+ * Raise the local counter floor to the server's. Never blocks a bind: the closure queue
+ * re-adopts on `wcpos_closure_number_invalid`, and a payload without usable counters is ignored.
+ */
+async function adoptFromServer(
+	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
+	userDB: Parameters<typeof adoptCounters>[0],
+	siteUuid: string,
+	registerId: string
+): Promise<void> {
+	try {
+		const row = (await http.get(`registers/${registerId}`)).data as Register;
+		const counters = readCounters(row?.counters);
+		if (counters) await adoptCounters(userDB, siteUuid, registerId, counters);
+	} catch {
+		// Binding proceeds on the local floor.
+	}
+}
+
+export function useRegisterBindingSession(): void {
+	const { userDB, site, store } = useStoreSession();
+	const http = useRestHttpClient();
+	const online = useOnlineStatus().status === 'online-website-available';
+	const entry = directory(site.uuid!, store.id);
+	// Synchronize the persisted pointer and the external register directory on session/connectivity changes.
+	React.useEffect(() => {
+		const adoptServerCounters = (id: string) => adoptFromServer(http, userDB, site.uuid!, id);
+		const load = async () => {
+			const bound = await readBoundRegister(userDB, site.uuid!, store.id);
+			publish(entry, {
+				status: bound ? 'bound' : 'unknown',
+				registerId: bound?.id ?? null,
+				registerName: bound?.name ?? null,
+			});
+			if (!online) return;
+			await loadDirectory(entry, http, store.id);
+			if (!entry.loaded) return;
+			const registers = entry.value.registers;
+			if (bound && registers.some(({ id }) => id === bound.id)) {
+				await adoptServerCounters(bound.id);
+				return;
+			}
+			if (registers.length === 1) {
+				await adoptServerCounters(registers[0].id);
+				await bindRegister(userDB, site.uuid!, registers[0], store.id);
+				recordRegisterFact({
+					kind: 'binding-changed',
+					source: 'automatic',
+					registerId: registers[0].id,
+					previousRegisterId: bound?.id ?? null,
+				});
+				publish(entry, {
+					status: 'bound',
+					registerId: registers[0].id,
+					registerName: registers[0].name,
+				});
+			} else {
+				if (bound) {
+					await unbindRegister(userDB, site.uuid!, store.id);
+					recordRegisterFact({ kind: 'binding-removed', registerId: bound.id });
+				}
+				publish(entry, {
+					status: registers.length ? 'choose' : 'none',
+					registerId: null,
+					registerName: null,
+				});
+			}
+		};
+		// A failed list request leaves the pointer/status unchanged; no retries.
+		void load().catch(() => {});
+	}, [entry, http, online, site.uuid, store.id, userDB]);
+}
+
+/** Read another store's directory without changing the physical till binding. */
+export function useRegisterDirectory(storeId: number | undefined) {
+	const { site } = useStoreSession();
+	const http = useRestHttpClient();
+	const online = useOnlineStatus().status === 'online-website-available';
+	const entry = directory(site.uuid!, storeId);
+	// A reader mounted before (or without) the session hook still gets the directory.
+	React.useEffect(() => {
+		if (online && !entry.loaded) void loadDirectory(entry, http, storeId);
+	}, [entry, http, online, storeId]);
+	const subscribe = React.useCallback(
+		(notify: () => void) => {
+			entry.listeners.add(notify);
+			return () => {
+				entry.listeners.delete(notify);
+			};
+		},
+		[entry]
+	);
+	const snapshot = React.useCallback(() => entry.value, [entry]);
+	const value = React.useSyncExternalStore(subscribe, snapshot, snapshot);
+	return value;
+}
+
+export function useRegisterBinding() {
+	const { userDB, site, store } = useStoreSession();
+	const actor = useRegisterActor();
+	const http = useRestHttpClient();
+	const value = useRegisterDirectory(store.id);
+	const entry = directory(site.uuid!, store.id);
+	const bind = React.useCallback(
+		async (id: string) => {
+			const register = entry.value.registers.find((row) => row.id === id);
+			if (!register) return;
+			const adoptServerCounters = (registerId: string) =>
+				adoptFromServer(http, userDB, site.uuid!, registerId);
+			const previousRegisterId = entry.value.registerId;
+			await adoptServerCounters(id);
+			await bindRegister(userDB, site.uuid!, register, store.id);
+			publish(entry, { status: 'bound', registerId: id, registerName: register.name });
+			if (previousRegisterId !== id)
+				recordRegisterFact({
+					kind: 'binding-changed',
+					source: 'manual',
+					actor,
+					registerId: id,
+					previousRegisterId,
+				});
+		},
+		[actor, entry, http, site.uuid, store.id, userDB]
+	);
+	return { ...value, bind };
+}

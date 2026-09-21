@@ -78,7 +78,9 @@ export function assertLaneStoresConfigured(): void {
 	throw new Error(
 		'E2E_STORE_URL_PRO is not set. Every lane runs the pro matrix, so the workflow ' +
 			'must name its store (main → dev-pro, next → dev-next); the config will not ' +
-			'guess one. The free matrix is opt-in: name E2E_STORE_URL_FREE to run it.'
+			'guess one. An EMPTY value in CI usually means the run belongs to neither ' +
+			'trunk (a PR based on a feature branch, or a dispatch without the lane input): ' +
+			'retarget it or name the lane. The free matrix is opt-in: name E2E_STORE_URL_FREE to run it.'
 	);
 }
 const FREE_PROJECT_ENABLED = FREE_STORE_URL.length > 0;
@@ -106,6 +108,8 @@ const LIVE_SPEC = /\.live\.spec\.ts$/;
 export default defineConfig<WcposTestOptions>({
 	globalSetup: './e2e/global-setup.ts',
 	testDir: './e2e',
+	// Frame budgets run alone, without competing suites (playwright.search-performance.config.ts).
+	testIgnore: /\.perf\.spec\.ts$/,
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
@@ -163,6 +167,8 @@ export default defineConfig<WcposTestOptions>({
 							// for three skips, run 33617749219). Exclude at collection instead.
 							/server-created-visibility\.spec\.ts/,
 							/checkout-tender\.spec\.ts/,
+							/checkout-device\.spec\.ts/,
+							/\.perf\.spec\.ts$/,
 							COLD_SPEC,
 							LIVE_SPEC,
 						],
@@ -199,6 +205,7 @@ export default defineConfig<WcposTestOptions>({
 				/auth\.spec\.ts/,
 				/rest-route-transport\.spec\.ts/,
 				/host-blocked-errors\.spec\.ts/,
+				/\.perf\.spec\.ts$/,
 				COLD_SPEC,
 				LIVE_SPEC,
 			],

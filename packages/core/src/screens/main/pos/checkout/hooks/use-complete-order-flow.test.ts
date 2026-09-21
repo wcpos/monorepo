@@ -3,13 +3,56 @@
  */
 import { act, renderHook } from '@testing-library/react';
 
+import { withLedger } from '@wcpos/order-math';
+
+import { row } from '../payments/device/fixtures.test-utils';
+import { enterCheckout, getCheckoutModeSnapshot, resetCheckoutMode } from '../checkout-mode';
 import { useCompleteOrderFlow } from './use-complete-order-flow';
 
+import type { RegisterDocument } from '../../../../../services/register/register-document';
+
+const mockInfo = jest.fn();
+const mockWarn = jest.fn();
+let mockRegister: RegisterDocument;
+const mockUserDB = {
+	getLocal: async () => ({ toJSON: () => ({ data: mockRegister }) }),
+};
+beforeEach(() => {
+	mockRegister = {
+		id: 'device',
+		name: 'Till',
+		platform: 'web',
+		created_at: '2026-09-18T00:00:00.000Z',
+		sites: {},
+	};
+});
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({
+		debug: jest.fn(),
+		info: (...args: unknown[]) => mockInfo(...args),
+		warn: (...args: unknown[]) => mockWarn(...args),
+	}),
+}));
+jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({
+		wpCredentials: { id: 7, username: 'pat' },
+		userDB: mockUserDB,
+		site: { uuid: 'site' },
+		store: { id: 1 },
+	}),
+}));
 const mockReplace = jest.fn();
 const mockRequire = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 let mockAutoShowReceipt = false;
+let mockScreenSize = 'lg';
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('../../../../../contexts/theme', () => ({
+	useTheme: () => ({ screenSize: mockScreenSize }),
+}));
 
 jest.mock('expo-router', () => ({
 	useRouter: () => ({ replace: mockReplace }),
@@ -34,7 +77,22 @@ function makeOrder(id: number | null = 42) {
 	const record = {
 		uuid: 'uuid-42',
 		payload: { id, line_items: [] },
-		getLatest: () => ({ payload: { id, line_items: [reduced, untouched] } }),
+		getLatest: () => ({
+			payload: {
+				id,
+				number: '1042',
+				total: '50.00',
+				line_items: [reduced, untouched],
+				meta_data: withLedger(
+					[],
+					[
+						{ ...row, id: 'cash', status: 'captured' },
+						{ ...row, id: 'offline', status: 'authorized', recorded_offline: true },
+						{ ...row, id: 'failed', status: 'failed' },
+					]
+				),
+			},
+		}),
 	};
 	return { record: record as never, reduced };
 }
@@ -43,15 +101,29 @@ describe('useCompleteOrderFlow', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockAutoShowReceipt = false;
+		mockScreenSize = 'lg';
+		resetCheckoutMode();
+		enterCheckout('uuid-42');
 		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
 	});
 
-	it('force-refreshes by default before adjusting stock and routing', async () => {
+	it('force-refreshes a completed gateway contract before adjusting stock and routing', async () => {
 		const { record, reduced } = makeOrder();
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 
-		await act(async () => result.current());
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
 
+		expect(mockInfo).toHaveBeenCalledWith(expect.any(String), {
+			actor: { id: '7', name: 'pat' },
+			context: {
+				type: 'checkout.completed',
+				orderId: 42,
+				orderUUID: 'uuid-42',
+				orderNumber: '1042',
+				total: '50.00',
+				paymentLegs: 2,
+			},
+		});
 		expect(mockRequire).toHaveBeenCalledWith({
 			id: 'checkout:order-refresh:42',
 			collection: 'orders',
@@ -62,7 +134,8 @@ describe('useCompleteOrderFlow', () => {
 		expect(mockRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
 	});
 
 	it('skips refresh for an unpersisted offline order and can route to its receipt', async () => {
@@ -70,22 +143,32 @@ describe('useCompleteOrderFlow', () => {
 		const { record, reduced } = makeOrder(null);
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 
-		await act(async () => result.current({ refresh: false }));
+		await act(async () => result.current({ source: 'zero-balance' }));
 
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).toHaveBeenCalledWith([reduced]);
-		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({
-			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-			params: { orderId: 'uuid-42' },
-		});
+		expect(mockSetCurrentOrderID).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().selectedReceiptOrder).toBe('uuid-42');
 	});
 
-	it('rejects a default refresh when the order has no remote id', async () => {
+	it('closes the phone sheet when receipts are disabled', async () => {
+		mockScreenSize = 'sm';
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record));
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(getCheckoutModeSnapshot().checkoutOrders.size).toBe(0);
+		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+	});
+
+	it('rejects a contract refresh when the order has no remote id', async () => {
 		const { record } = makeOrder(null);
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
 
-		await expect(result.current()).rejects.toThrow('checkout_refresh_requires_persisted_order');
+		await expect(
+			result.current({ source: 'gateway-contract', status: 'completed' })
+		).rejects.toThrow('checkout_refresh_requires_persisted_order');
+		expect(mockInfo).not.toHaveBeenCalled();
 		expect(mockRequire).not.toHaveBeenCalled();
 		expect(mockStockAdjustment).not.toHaveBeenCalled();
 	});
@@ -96,16 +179,100 @@ describe('useCompleteOrderFlow', () => {
 		mockRequire.mockReturnValue({ ready: new Promise<void>(() => undefined), release });
 		const { record } = makeOrder();
 		const { result } = renderHook(() => useCompleteOrderFlow(record));
-		const completion = result.current();
+		const completion = result.current({ source: 'gateway-contract', status: 'completed' });
 
 		await act(async () => {
-			jest.advanceTimersByTime(10_000);
+			await jest.advanceTimersByTimeAsync(10_000);
 			await completion;
 		});
 
 		expect(release).toHaveBeenCalledTimes(1);
 		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
-		expect(mockReplace).toHaveBeenCalledWith({ pathname: '/cart' });
+		expect(mockReplace).not.toHaveBeenCalled();
+		expect(getCheckoutModeSnapshot().checkoutOrders.has('uuid-42')).toBe(false);
 		jest.useRealTimers();
 	});
 });
+
+it.each([true, false])(
+	'preserves the legacy modal completion when autoShowReceipt=%s',
+	async (autoShowReceipt) => {
+		mockAutoShowReceipt = autoShowReceipt;
+		mockScreenSize = 'lg';
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+		const { result } = renderHook(() => useCompleteOrderFlow(makeOrder().record, 'modal'));
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
+		expect(mockSetCurrentOrderID).toHaveBeenCalledWith('');
+		expect(getCheckoutModeSnapshot().receiptOrders.size).toBe(0);
+		expect(mockReplace).toHaveBeenCalledWith(
+			autoShowReceipt
+				? {
+						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+						params: { orderId: 'uuid-42' },
+					}
+				: { pathname: '/cart' }
+		);
+	}
+);
+
+describe('useCompleteOrderFlow provenance gap', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		resetCheckoutMode();
+		enterCheckout('uuid-42');
+		mockRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
+	});
+	it('reports a completed sale that carries no store register, once it has completed', async () => {
+		const { record } = makeOrder();
+		const { result } = renderHook(() => useCompleteOrderFlow(record));
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
+		expect(mockWarn).toHaveBeenCalledWith('Sale recorded without register provenance', {
+			context: {
+				type: 'checkout.provenance-skipped',
+				reason: 'no_register_bound',
+				orderId: 42,
+				orderUUID: 'uuid-42',
+				recordId: 'uuid-42',
+				storeId: 1,
+			},
+		});
+	});
+	it('names the reason when the till is bound to a register of another store', async () => {
+		mockRegister.sites.site = {
+			sale_counter: 0,
+			register_id: 'elsewhere',
+			register_name: 'Other',
+			register_store_id: 2,
+		};
+		const { record } = makeOrder();
+		const { result } = renderHook(() => useCompleteOrderFlow(record));
+		await act(async () => result.current({ source: 'gateway-contract', status: 'completed' }));
+		expect(mockWarn).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				context: expect.objectContaining({ reason: 'register_bound_elsewhere' }),
+			})
+		);
+	});
+});
+
+jest.mock('./use-sale-context', () => ({
+	useSaleContext: () => ({
+		userDB: mockUserDB,
+		siteUuid: 'site',
+		storeId: 1,
+		dp: 2,
+		runtime: { engine: { require: mockRequire } },
+		stockAdjustment: mockStockAdjustment,
+		actor: { id: '7', name: 'pat' },
+	}),
+}));
+
+// Journal storage is exercised against RxDB in the owner/journal suites.
+jest.mock('../completion-journal', () => ({
+	recordCompletionAttempt: jest.fn(async () => {}),
+	resolveCompletionAttempt: jest.fn(async () => {}),
+	failCompletionAttempt: jest.fn(async () => {}),
+}));

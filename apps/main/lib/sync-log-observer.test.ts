@@ -87,6 +87,14 @@ describe('createSyncLogObserver', () => {
 		expect(rows[0].code).toBe(errorCode);
 	});
 
+	it('classifies signal tick auth, rate-limit and local failures separately', () => {
+		for (const fields of [{ status: 401 }, { status: 429 }, {}]) {
+			observer.observe(event({ type: 'signal.tick.error', level: 'error', fields }));
+		}
+
+		expect(rows.map((row) => row.code)).toEqual(['AUTH101', 'SYNC141', 'SYNC401']);
+	});
+
 	it('stamps a statusless signal tick failure as a crashed task, not unreachable', () => {
 		observer.observe(event({ type: 'signal.tick.error', level: 'error', fields: {} }));
 
@@ -515,6 +523,27 @@ describe('createSyncLogObserver', () => {
 			expect.objectContaining({
 				level: 'warn',
 				context: expect.objectContaining({ type: 'coverage.ledger-rebuilt' }),
+				terminal: expect.objectContaining({
+					operationType: 'sync.coverage',
+					outcome: 'recovered',
+				}),
+			}),
+		]);
+	});
+
+	it('persists a re-attached coverage ledger as a recovered info event', () => {
+		observer.observe(
+			event({
+				type: 'coverage.ledger-reattached',
+				level: 'info',
+				fields: { reason: 'collection-closed:coverageRecords' },
+			})
+		);
+
+		expect(rows).toEqual([
+			expect.objectContaining({
+				level: 'info',
+				context: expect.objectContaining({ type: 'coverage.ledger-reattached' }),
 				terminal: expect.objectContaining({
 					operationType: 'sync.coverage',
 					outcome: 'recovered',

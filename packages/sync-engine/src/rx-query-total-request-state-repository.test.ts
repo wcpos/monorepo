@@ -167,6 +167,19 @@ describe('RxQueryTotalRequestStateRepository', () => {
 		]);
 	});
 
+	it('puts never-tried census keys ahead of failed attempts, oldest first', async () => {
+		const { repository } = repositoryFor([
+			state({ queryKey: 'census:customers', status: 'failed', retryAfterMs: 0, attempt: 1 }),
+			state({ queryKey: 'census:taxRates', claimedUntilMs: 0, attempt: 0, updatedAtMs: 200 }),
+			state({ queryKey: 'census:tags', claimedUntilMs: 0, attempt: 0, updatedAtMs: 100 }),
+		]);
+		expect((await repository.readRunnable(1_500)).map((entry) => entry.queryKey)).toEqual([
+			'census:tags',
+			'census:taxRates',
+			'census:customers',
+		]);
+	});
+
 	it('preserves Woo request metadata when reading runnable states', async () => {
 		const request = {
 			queryKey: 'orders:browser:status=processing:limit=50',

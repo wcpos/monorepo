@@ -2,88 +2,62 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
-import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { type EngineRecord } from '@wcpos/query';
 
+import { useTheme } from '../../../../../contexts/theme';
+import { leaveCheckout } from '../checkout-mode';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 import { useCurrentOrderActions } from '../../contexts/current-order/context';
-
-const ORDER_REFRESH_TIMEOUT_MS = 10_000;
-
-export interface CompleteOrderFlowOptions {
-	/**
-	 * Force-refresh the order from the server before routing. False when the payment
-	 * was recorded offline: there is nothing to fetch, and the throw on a missing
-	 * remote id would strand the cashier on a paid order.
-	 */
-	refresh?: boolean;
-}
+import { completeSale, type SaleOutcome } from '../sale-completion';
+import { useSaleContext } from './use-sale-context';
 
 /** Finish checkout from the freshest available order before leaving the cart. */
 export function useCompleteOrderFlow(
-	order: EngineRecord<'orders'>
-): (options?: CompleteOrderFlowOptions) => Promise<void> {
-	const runtime = useQueryRuntime();
-	const { stockAdjustment } = useStockAdjustment();
+	order: EngineRecord<'orders'>,
+	receiptHost: 'stage' | 'modal' = 'stage'
+): (outcome: SaleOutcome) => Promise<void> {
+	const ctx = useSaleContext();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
+	const { screenSize } = useTheme();
 	const { setCurrentOrderID } = useCurrentOrderActions();
-	const orderId = useRecordField(order, (record) => record.payload.id);
 
 	return React.useCallback(
-		async ({ refresh = true }: CompleteOrderFlowOptions = {}) => {
-			if (refresh) {
-				if (!orderId) {
-					throw new Error('checkout_refresh_requires_persisted_order');
-				}
-				const handle = runtime.engine.require({
-					id: `checkout:order-refresh:${orderId}`,
-					collection: 'orders',
-					kind: 'targeted-records',
-					remoteIds: [orderId].map(remoteIdOrNull).filter((remoteId) => remoteId !== null),
-					forceRefresh: true,
-				});
-				let timer: ReturnType<typeof setTimeout> | undefined;
-				try {
-					await Promise.race([
-						handle.ready,
-						new Promise<void>((resolve) => {
-							timer = setTimeout(resolve, ORDER_REFRESH_TIMEOUT_MS);
-						}),
-					]);
-				} finally {
-					if (timer) clearTimeout(timer);
-					handle.release();
-				}
+		async (outcome: SaleOutcome) => {
+			if (
+				(await completeSale(
+					ctx,
+					order,
+					outcome,
+					receiptHost === 'stage'
+						? { host: 'stage', autoShowReceipt: !!uiSettings.autoShowReceipt }
+						: { host: 'modal' }
+				)) !== 'completed'
+			)
+				return;
+			// The webview already routed before catch-up; never route it a second time.
+			if (outcome.source === 'gateway-snapshot') return;
+
+			// The pre-tender contract checkout still hosts receipts in a routed modal.
+			if (receiptHost === 'modal') {
+				setCurrentOrderID('');
+				router.replace(
+					uiSettings.autoShowReceipt
+						? {
+								pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
+								params: { orderId: order.uuid },
+							}
+						: { pathname: '/cart' }
+				);
+				return;
 			}
 
-			const latest = order.getLatest().payload;
-			const reducedStockItems = (latest.line_items || []).filter((item) =>
-				(item.meta_data as { key: string }[] | undefined)?.some(
-					(meta) => meta.key === '_reduced_stock'
-				)
-			);
-			stockAdjustment(reducedStockItems);
-			setCurrentOrderID('');
-
-			if (uiSettings.autoShowReceipt) {
-				router.replace({
-					pathname: '/(app)/(drawer)/(pos)/(modals)/cart/receipt/[orderId]',
-					params: { orderId: order.uuid! },
-				});
-			} else {
-				router.replace({ pathname: '/cart' });
+			if (!uiSettings.autoShowReceipt) {
+				leaveCheckout(order.uuid);
+				setCurrentOrderID('');
+				if (screenSize === 'sm') router.replace({ pathname: '/cart' });
 			}
 		},
-		[
-			runtime,
-			order,
-			orderId,
-			router,
-			setCurrentOrderID,
-			stockAdjustment,
-			uiSettings.autoShowReceipt,
-		]
+		[ctx, receiptHost, order, router, screenSize, setCurrentOrderID, uiSettings.autoShowReceipt]
 	);
 }

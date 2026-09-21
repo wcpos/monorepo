@@ -4,8 +4,8 @@
 /**
  * Extract translatable strings from the WCPOS monorepo.
  *
- * Parses t('...') calls, groups them by namespace (electron vs core),
- * then looks up the English value for each key from the locale files.
+ * Parses t('...') calls in the core namespace and looks up their English values.
+ * The electron repo has its own strings pipeline.
  *
  * Outputs one JSON file per namespace into .translations/:
  *   { "symbolic.key": "English value", ... }
@@ -25,7 +25,7 @@ const MONOREPO_PATH = args.find((arg) => !arg.startsWith('--')) || path.resolve(
 const OUTPUT_DIR = path.resolve(MONOREPO_PATH, '.translations');
 
 // Locale files that contain the English strings for each namespace
-// (electron is a separate repo with its own workflow)
+// (the electron repo has its own strings pipeline)
 const LOCALE_FILES = {
 	core: path.resolve(MONOREPO_PATH, 'packages/core/src/contexts/translations/locales/en/core.json'),
 };
@@ -90,13 +90,9 @@ function stripComments(content) {
 }
 
 /**
- * Determine the i18next namespace from the file path.
+ * Return the monorepo's i18next namespace.
  */
-function getNamespace(filePath) {
-	const rel = path.relative(MONOREPO_PATH, filePath);
-	if (rel.startsWith(path.join('apps', 'electron') + path.sep)) {
-		return 'electron';
-	}
+function getNamespace() {
 	return 'core';
 }
 
@@ -152,7 +148,6 @@ async function main() {
 		'**/dist/**',
 		'**/build/**',
 		'**/web-build/**',
-		'apps/electron/**',
 		'apps/web/**',
 		'**/*.d.ts',
 		'**/*.test.*',

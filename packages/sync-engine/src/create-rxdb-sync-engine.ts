@@ -39,6 +39,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import {
 	assertBulkSuccess,
 	canonicalSiteKey,
+	hasPosRefundStamp,
 	mintRemoteId,
 	MUTATION_QUEUE_COLLECTION,
 	normalizeCheckpoint,
@@ -57,6 +58,7 @@ import type {
 import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
 import {
+	COVERAGE_LANE_HISTORY_LIMIT,
 	ENGINE_KV_COLLECTION,
 	engineCollectionCreators,
 	isResettableCollection,
@@ -75,6 +77,7 @@ import {
 	parseRetryAfterMs,
 	parseServerLoad1m,
 	parseServerPressure,
+	type PressureSignal,
 	type ServerPressure,
 } from './change-signal/server-pressure';
 import { hydrateBarcodeSelectors } from './change-signal/config-fingerprint-source';
@@ -261,6 +264,8 @@ export type RxdbSyncEnginePorts = {
 	 * volatile database gets a volatile cursor for free. */
 	checkpoints?: EngineStringStore;
 	connectivity?: () => EngineConnectivity;
+	/** Hold automatic ticks while auth is required; manual sync() remains available. */
+	holdAutomaticTicks?: () => boolean;
 	/** Default: Web Crypto. Native hosts inject their UUID v4 generator. */
 	uuid?: () => string;
 	/** Default: Math.random. Injectable jitter source for deterministic tests. */
@@ -431,6 +436,18 @@ export type EngineEvent =
 			recordId: string;
 			mutationId: string;
 	  }
+	// A pending mutation REPLACED at enqueue by a same-record coalesce: its row is
+	// gone under `replacedBy`, and no terminal event will ever name the old id.
+	// NOT terminal — a waiter re-binds and keeps waiting. Replayable like the
+	// terminal outcomes, so a waiter that subscribes after the coalesce still learns
+	// which id to follow.
+	| {
+			type: 'write-superseded';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			replacedBy: string;
+	  }
 	// Fresh query totals persisted by the retry lane — the host
 	// hydrates its UI caches from these.
 	| QueryTotalCacheEvent
@@ -507,6 +524,14 @@ export type EngineStatus = {
 	bootstrapFailed: Record<string, string>;
 	/** Pending mutation count of the active scope (cached from the last enqueue/drain; null before either). */
 	queueDepth: number | null;
+	serverPressure: {
+		multiplier: number;
+		retryAfterUntilMs: number | null;
+		/** The last pressure bucket the server reported, or null before any response carried one. */
+		reported: ServerPressure | null;
+		/** What started the current back-off, or null while the cadence is at ×1. */
+		signal: PressureSignal | null;
+	};
 	collections: Record<SyncCollectionName, EngineCollectionState>;
 };
 
@@ -581,9 +606,15 @@ export type RxdbSyncEngine = {
 	 * (#1209): the LEADER drains, and every peer re-emits what it publishes, so an
 	 * `awaitWriteOutcome` caller in a follower tab settles with the leader's real
 	 * verdict instead of timing out. */
-	write(
-		intent: WriteIntent
-	): Promise<{ mutationId: string; recordId: string; annihilated?: boolean }>;
+	write(intent: WriteIntent): Promise<{
+		mutationId: string;
+		recordId: string;
+		annihilated?: boolean;
+		/** Set when this enqueue coalesced into and replaced a pending row; a
+		 * `write-superseded` event names that row's id with this receipt's as
+		 * `replacedBy`, so a waiter on the old id can re-bind. */
+		supersededMutationId?: string;
+	}>;
 	/**
 	 * The terminal write entries awaiting an explicit caller decision — there
 	 * is NO auto-resolution, with ONE ruled exception.
@@ -729,7 +760,27 @@ export function createRxdbSyncEngine(
 	// findOne().$ streams per target). Re-resolving through the hub swaps in the
 	// fresh collections; late-bound because the hub is created further down.
 	let onLedgerRebuilt: (() => void) | undefined;
+	// All tick emitters share per-lane severity state, including rejected automatic ticks.
+	const laneLastEmittedError = new Map<string, string>();
 	const diagnostics: SyncObserver = (event) => {
+		if (
+			(event.type === 'engine.lane.tick' || event.type === 'signal.tick.error') &&
+			typeof event.fields?.lane === 'string'
+		) {
+			const { lane, status } = event.fields;
+			const key = `${event.type}:${lane}`;
+			const error = event.type === 'signal.tick.error' ? event.message : event.fields.error;
+			if ((event.type === 'signal.tick.error' || status === 'error') && typeof error === 'string') {
+				if (laneLastEmittedError.get(key) === error) event = { ...event, level: 'info' };
+				laneLastEmittedError.set(key, error);
+				// Only a tick that actually RAN is a recovery. A 'skipped' tick polled
+				// nothing — and the auth hold makes the gate emit exactly that — so
+				// clearing on it would re-escalate the identical next failure.
+			} else if (event.type === 'engine.lane.tick' && status === 'ran') {
+				laneLastEmittedError.delete(key);
+				laneLastEmittedError.delete(`signal.tick.error:${lane}`);
+			}
+		}
 		if (event.type === 'coverage.ledger-rebuilt') {
 			try {
 				onLedgerRebuilt?.();
@@ -789,6 +840,8 @@ export function createRxdbSyncEngine(
 			serverLoad1m?: number
 		): void => {
 			const atMs = nowMs();
+			const reportedBefore = serverPressure.reported();
+			const signalBefore = serverPressure.signal();
 			const transition = serverPressure.observe({
 				atMs,
 				status,
@@ -799,6 +852,16 @@ export function createRxdbSyncEngine(
 				...(serverLoad1m === undefined ? {} : { serverLoad1m }),
 			});
 			if (transition !== null) cadence?.onServerPressureTransition(transition);
+			// A header that moved without crossing a back-off threshold, or a
+			// signal re-labelled at the ladder's ceiling, changes the status
+			// read-out without a transition; subscribers were promised a snapshot
+			// when status changes, so tell them.
+			if (
+				serverPressure.reported() !== reportedBefore ||
+				serverPressure.signal() !== signalBefore
+			) {
+				scheduleStatusChange();
+			}
 		};
 		let response: Response;
 		try {
@@ -1020,6 +1083,7 @@ export function createRxdbSyncEngine(
 			fields: {
 				lane: report.lane,
 				status: report.status,
+				...(report.status === 'error' ? { error: report.error } : {}),
 				...(report.reason !== undefined ? { reason: report.reason } : {}),
 				...(report.pushed !== undefined
 					? {
@@ -1075,6 +1139,7 @@ export function createRxdbSyncEngine(
 		try {
 			setLifecyclePhase('add-collections');
 			await db.addCollections(engineCollectionCreators() as never);
+			db.collections.coverageLanes._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
 			setLifecyclePhase('legacy-cursor-migrate');
 			const engineCheckpoint =
 				await db.collections[ENGINE_KV_COLLECTION].findOne(CHANGE_SIGNAL_STATE_KEY).exec();
@@ -1290,7 +1355,10 @@ export function createRxdbSyncEngine(
 	const emitEngineEvent = (event: EngineEvent): void => {
 		// Recorded at the fan-out, so a BRIDGED peer outcome (which enters here, not
 		// at emitWriteEvent — see below) is replayable in the follower too.
-		if (TERMINAL_WRITE_EVENT_TYPES.has(event.type) && 'mutationId' in event) {
+		if (
+			(TERMINAL_WRITE_EVENT_TYPES.has(event.type) || event.type === 'write-superseded') &&
+			'mutationId' in event
+		) {
 			const { mutationId } = event;
 			// Re-insert to move it to the back of the insertion order, so eviction
 			// drops the genuinely oldest outcome.
@@ -1553,7 +1621,7 @@ export function createRxdbSyncEngine(
 		identityByScopeId.set(scopeId, identity);
 		return enqueueLifecycle(async () => {
 			setLifecyclePhase('scope-open');
-			await manager.switchTo(scopeId);
+			await changeSignalLane.activated(scopeId);
 			if (!bootstrappedScopes.has(scopeId)) {
 				const database = databaseByScopeId.get(scopeId);
 				if (!database) throw new Error(`Scope ${scopeId} opened without a database`);
@@ -1642,6 +1710,9 @@ export function createRxdbSyncEngine(
 	};
 	const changeSignalLane = createChangeSignalLane({
 		manager,
+		awaitInitialReady: () => readySettledForSync,
+		needsPrime: (scopeId) => !bootstrappedScopes.has(scopeId),
+		timers,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		fetcher,
 		syncBaseUrl: ports.site.syncBaseUrl,
@@ -1662,9 +1733,8 @@ export function createRxdbSyncEngine(
 		...(ports.now !== undefined ? { now: ports.now } : {}),
 	});
 	const requirePlane = createRequirePlane({
-		// Lazy: readySettledForSync is created after `ready` below; requirements
-		// enqueued before then await the settled initial open, never 'no active scope'.
-		awaitReady: () => readySettledForSync,
+		storeIdFor: (scopeId) => identityByScopeId.get(scopeId)?.storeId,
+		admitted: () => changeSignalLane.admitted(),
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
@@ -1801,6 +1871,7 @@ export function createRxdbSyncEngine(
 	// --- The maintenance lanes --------------------------------------
 	let maintenanceOwnerId: string | null = null;
 	const maintenanceLanes = createMaintenanceLanes({
+		storeIdFor: (scopeId) => identityByScopeId.get(scopeId)?.storeId,
 		manager,
 		databaseFor: (scopeId) => databaseByScopeId.get(scopeId) ?? null,
 		coverageFor: (scopeId) => localCoverageByScopeId.get(scopeId) ?? null,
@@ -1918,7 +1989,11 @@ export function createRxdbSyncEngine(
 							type: 'engine.lane.tick',
 							level: 'error',
 							message: `rebaseline continuation failed: ${error instanceof Error ? error.message : String(error)}`,
-							fields: { lane: 'rebaseline-continuation', status: 'error' },
+							fields: {
+								lane: 'rebaseline-continuation',
+								status: 'error',
+								error: error instanceof Error ? error.message : String(error),
+							},
 						});
 					});
 				}
@@ -1972,7 +2047,7 @@ export function createRxdbSyncEngine(
 		return report;
 	};
 	const automaticTickGate = createAutomaticTickGate({
-		isGated: () => pendingLifecycleOps > 0,
+		isGated: () => ports.holdAutomaticTicks?.() === true || pendingLifecycleOps > 0,
 		// Mirror the rebaseline-hold emission below: the gate returns before
 		// tickLaneWithEvents can run, so it must name the skip itself — a gated
 		// tick used to emit nothing at all (#1348). Deliberately NOT recordTick:
@@ -1984,7 +2059,7 @@ export function createRxdbSyncEngine(
 				type: 'lane-finish',
 				lane,
 				status: 'skipped',
-				detail: 'lifecycle-gated',
+				detail: ports.holdAutomaticTicks?.() === true ? 'auth-required' : 'lifecycle-gated',
 			});
 		},
 		connectivity: readConnectivity,
@@ -2131,6 +2206,7 @@ export function createRxdbSyncEngine(
 			});
 		}
 		const stats = manager.stats();
+		const now = nowMs();
 		const laneStatus = (name: EngineLane, lastError: string | null) => ({
 			lastError,
 			lastTick: laneLastTick.get(name) ?? null,
@@ -2162,6 +2238,13 @@ export function createRxdbSyncEngine(
 				])
 			) as EngineStatus['lanes'],
 			queueDepth: writePlane.queueDepth(),
+			serverPressure: {
+				multiplier: serverPressure.multiplier(),
+				retryAfterUntilMs:
+					serverPressure.retryAfterUntilMs() > now ? serverPressure.retryAfterUntilMs() : null,
+				reported: serverPressure.reported(),
+				signal: serverPressure.signal(),
+			},
 			collections: Object.fromEntries(
 				SYNC_COLLECTION_NAMES.map((collection) => [
 					collection,
@@ -2240,14 +2323,43 @@ export function createRxdbSyncEngine(
 						);
 					}
 					const beforeDrop = opts?.beforeDrop;
-					return manager.resetCollection(scopeId, name, {
+					const outcome = await manager.resetCollection(scopeId, name, {
 						...(opts?.confirmDestroyQueue !== undefined
 							? { confirmDestroyQueue: opts.confirmDestroyQueue }
 							: {}),
-						...(beforeDrop !== undefined
-							? { beforeDrop: () => beforeDrop(activeScopeOf(scopeId)) }
-							: {}),
+						beforeDrop: async () => {
+							await beforeDrop?.(activeScopeOf(scopeId));
+						},
 					});
+					if (name === 'orders' && outcome === 'reset') {
+						// No parents survive a reset. Repeating this after a failed cascade
+						// needs no pre-drop ids; independently POS-stamped refunds stay held.
+						const refunds = activeScopeOf(scopeId).database.collections.refunds;
+						const held = await refunds.find().exec();
+						const orphanIds = held
+							.filter((doc) => !hasPosRefundStamp(doc.toJSON().payload.meta_data))
+							.map((doc) => doc.toJSON().uuid);
+						if (orphanIds.length > 0)
+							assertBulkSuccess(await refunds.bulkRemove(orphanIds), 'orders reset refund cascade');
+						if (disposed) return outcome;
+						const handle = engine.require({
+							id: 'orders-reset:refund-history',
+							kind: 'refresh',
+							collection: 'refunds',
+							forceRefresh: true,
+						});
+						void handle.ready
+							.catch((error) => {
+								diagnostics({
+									type: 'engine.guard',
+									level: 'warn',
+									collection: 'refunds',
+									message: `Orders reset refund history refresh failed: ${String(error)}`,
+								});
+							})
+							.finally(() => handle.release());
+					}
+					return outcome;
 				});
 			},
 		},
@@ -2310,6 +2422,33 @@ export function createRxdbSyncEngine(
 				changeStartedAt
 			);
 			const reports = [censusReport, changeReport];
+			if (name === 'refunds' && !options?.signal?.aborted) {
+				const handle = engine.require({
+					id: 'check-collection:refunds',
+					kind: 'refresh',
+					collection: 'refunds',
+					forceRefresh: true,
+				});
+				const release = () => handle.release();
+				options?.signal?.addEventListener('abort', release, { once: true });
+				try {
+					const result = await handle.ready;
+					reports.push({
+						lane: 'scheduler-drain',
+						status:
+							result.action === 'released' || result.action === 'serve-local' ? 'skipped' : 'ran',
+					});
+				} catch (error) {
+					reports.push({
+						lane: 'scheduler-drain',
+						status: 'error',
+						error: error instanceof Error ? error.message : String(error),
+					});
+				} finally {
+					options?.signal?.removeEventListener('abort', release);
+					release();
+				}
+			}
 			const worst = reports.some((report) => report.status === 'error')
 				? ('error' as const)
 				: reports.some((report) => report.status === 'ran')
@@ -2456,6 +2595,7 @@ export function createRxdbSyncEngine(
 			// each sees the prior outcome), so dispose's turn sees every scope a
 			// pending switch opened.
 			disposed = true;
+			changeSignalLane.stopActivation();
 			// Detach from the cross-tab bridge synchronously (#1209): the host owns
 			// the channel and may keep it for the successor engine, so a stale
 			// subscription would fan a peer's outcome into a disposed instance's

@@ -5,6 +5,64 @@ function loadLogic(): typeof import('./performance-logic') {
 
 const HOUR_MS = 60 * 60 * 1000;
 
+describe('describeServerPace', () => {
+	const at = (overrides: Partial<import('./performance-logic').ServerPressureStatus>) => ({
+		multiplier: 1,
+		retryAfterUntilMs: null,
+		reported: null,
+		signal: null,
+		...overrides,
+	});
+
+	it('is a plain normal pace when the server has never reported pressure', () => {
+		const { describeServerPace } = loadLogic();
+		expect(describeServerPace(at({}), 1_000)).toEqual({ kind: 'normal', reported: null });
+		expect(describeServerPace(at({ reported: 'low' }), 1_000)).toEqual({
+			kind: 'normal',
+			reported: null,
+		});
+	});
+
+	it('names an advisory header the cadence is overruling, without a warning', () => {
+		// The christadelphian case: `high` on every response, answers in 300 ms.
+		const { describeServerPace } = loadLogic();
+		expect(describeServerPace(at({ reported: 'high' }), 1_000)).toEqual({
+			kind: 'normal',
+			reported: 'high',
+		});
+		expect(describeServerPace(at({ reported: 'elevated' }), 1_000)).toEqual({
+			kind: 'normal',
+			reported: 'elevated',
+		});
+	});
+
+	it('reports easing off with the factor and the signal that started it', () => {
+		const { describeServerPace } = loadLogic();
+		expect(describeServerPace(at({ multiplier: 4, signal: 'rate-limited' }), 1_000)).toEqual({
+			kind: 'easing',
+			factor: 4,
+			reason: 'rate-limited',
+		});
+		// A raised multiplier with no recorded signal still needs a reason a merchant can read.
+		expect(describeServerPace(at({ multiplier: 2 }), 1_000)).toEqual({
+			kind: 'easing',
+			factor: 2,
+			reason: 'slow',
+		});
+	});
+
+	it('lets a live server-named pause outrank the multiplier, and expires it', () => {
+		const { describeServerPace } = loadLogic();
+		const pressure = at({ multiplier: 2, signal: 'server-error', retryAfterUntilMs: 5_000 });
+		expect(describeServerPace(pressure, 1_000)).toEqual({ kind: 'paused', untilMs: 5_000 });
+		expect(describeServerPace(pressure, 5_000)).toEqual({
+			kind: 'easing',
+			factor: 2,
+			reason: 'server-error',
+		});
+	});
+});
+
 describe('performance page logic', () => {
 	it('matches presets exactly and reports custom otherwise', () => {
 		const { presetFor } = loadLogic();

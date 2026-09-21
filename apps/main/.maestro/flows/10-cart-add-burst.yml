@@ -1,0 +1,168 @@
+appId: com.wcpos.main.dev
+env:
+  # Seeded by scripts/e2e-native-seed.mjs — the suite owns this product
+  # (store-agnostic policy; keep in step with the seed's SIMPLE_PRODUCT).
+  PRODUCT_SEARCH: WCPOS E2E Simple
+---
+# Twenty adds of one simple product: one verified setup add, then nineteen
+# paced taps with nothing between them. The quantity field must report exactly
+# "20" and the settle after the last tap is the number CI reports per device.
+#
+# Maestro reads the accessibility value, not the pixels. On 2026-09-09 the
+# field's value was "20" while it painted "2": the shared input's horizontal
+# padding left ~17 points for digits inside the 56-wide column, so wider
+# values clipped (fixed separately in PR 1923). A clipped or stale paint
+# with a correct value passes this flow; only a screenshot comparison would
+# catch it, and the lab's persisted-47-painted-46 stays unreproduced.
+- runFlow:
+    file: ../subflows/ensure-pos-ready.yml
+# Precondition: an empty cart, which is what flow 08's void leaves for 09 and
+# this flow. Selecting the new-order tab here is not a substitute: on a phone
+# the Products -> Cart round trip re-delivers the previous order's route id
+# and the setup add landed in that order (local run, 2026-09-09).
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-cart"
+    commands:
+      - tapOn:
+          id: "pos-tab-cart"
+- extendedWaitUntil:
+    visible:
+      id: "add-cart-item-menu"
+    timeout: 15000
+- assertNotVisible:
+    id: "cart-quantity-input"
+    label: 'Flow 10 needs the empty cart the suite order leaves after flow 08'
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
+# Typing retried, search speed NOT — see flow 04 for the ruling and both
+# mechanisms. The single 60s tile wait reports a slow demand path as a
+# failure instead of absorbing it.
+- retry:
+    maxRetries: 2
+    commands:
+      # A retry leg starts on the previous leg's text; a tap lands the caret
+      # mid-field and eraseText erases only before it (the URL-field splice,
+      # run 33631408939). Clear through the box's own × first.
+      - runFlow:
+          when:
+            visible:
+              id: "search-products-clear"
+          commands:
+            - tapOn:
+                id: "search-products-clear"
+      - tapOn:
+          id: "search-products"
+      - eraseText
+      # See flow 04: one printable key per Maestro command cannot latch the
+      # wedge detector, regardless of the store's configured minimum length.
+      - evalScript: ${output.searchCharIndex = 0}
+      - repeat:
+          while:
+            true: ${output.searchCharIndex < PRODUCT_SEARCH.length}
+          commands:
+            - inputText: ${PRODUCT_SEARCH.charAt(output.searchCharIndex)}
+            - evalScript: ${output.searchCharIndex++}
+      - assertVisible:
+          text: ${PRODUCT_SEARCH}
+- extendedWaitUntil:
+    visible:
+      id: "product-tile"
+    timeout: 60000
+# Keyboard down BEFORE the tile tap — same overlay no-op as flow 04
+# (monorepo#1614 defect 2); flow 07 set the pattern.
+# optional — see flow 01: hideKeyboard is flaky on iOS and this is
+# housekeeping; a genuinely covered target fails at its own tap.
+- hideKeyboard:
+    optional: true
+# Setup add. When hideKeyboard did not land, the first tile tap only dismisses
+# the keyboard (#1614 defect 2; 19/20 on the local simulator, 2026-09-09). The
+# retry leg re-taps once, so the burst below never starts on a swallowed tap.
+- evalScript: ${output.setupAddAttempt = 0}
+- retry:
+    maxRetries: 1
+    commands:
+      - evalScript: ${output.setupAddAttempt = output.setupAddAttempt + 1}
+      - runFlow:
+          when:
+            true: ${output.setupAddAttempt > 1}
+          commands:
+            - evalScript: "${console.log('WCPOS_E2E setup add did not reach the cart within 8 s (first tap dismissed the keyboard, #1614 defect 2); re-tapping the tile once')}"
+      - runFlow:
+          when:
+            visible:
+              id: "pos-tab-products"
+          commands:
+            - tapOn:
+                id: "pos-tab-products"
+      - tapOn:
+          id: "product-tile"
+          index: 0
+      - runFlow:
+          when:
+            visible:
+              id: "pos-tab-cart"
+          commands:
+            - tapOn:
+                id: "pos-tab-cart"
+      - extendedWaitUntil:
+          visible:
+            id: "cart-quantity-input"
+          timeout: 8000
+- extendedWaitUntil:
+    visible:
+      id: "cart-quantity-input"
+      text: "1"
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-products"
+    commands:
+      - tapOn:
+          id: "pos-tab-products"
+# The burst: nineteen taps at 200 ms, no assertions or waits between them.
+- evalScript: ${output.burstStartedAt = Date.now()}
+- tapOn:
+    id: "product-tile"
+    index: 0
+    repeat: 19
+    delay: 200
+- evalScript: ${output.burstTappedAt = Date.now()}
+- runFlow:
+    when:
+      visible:
+        id: "pos-tab-cart"
+    commands:
+      - tapOn:
+          id: "pos-tab-cart"
+# optional here so the numbers are logged before the hard assertion below.
+- extendedWaitUntil:
+    visible:
+      id: "cart-quantity-input"
+      text: "20"
+    timeout: 20000
+    optional: true
+- evalScript: ${output.burstSettledAt = Date.now()}
+- evalScript: "${console.log('WCPOS_E2E_CART_BURST ' + JSON.stringify({ adds: 20, burstTaps: 19, paceMs: 200, tapSpanMs: output.burstTappedAt - output.burstStartedAt, settleAfterLastTapMs: output.burstSettledAt - output.burstTappedAt, totalMs: output.burstSettledAt - output.burstStartedAt }))}"
+- assertVisible:
+    id: "cart-quantity-input"
+    text: "20"
+# settleAfterLastTapMs is the app-attributable number (on phones it includes
+# one cart-tab tap of driver time); tapSpanMs is the driver's pacing and is
+# logged, not gated. Local iPhone 16 Pro simulator, Metro --no-dev --minify,
+# 2026-09-09: tapSpanMs 7454, settleAfterLastTapMs 5261. Provisional ceiling
+# below; after two green four-device runs, tighten to the observed CI maximum
+# plus ~30%, as assert-cart-add-timing.yml does.
+- assertTrue:
+    condition: ${output.burstSettledAt - output.burstTappedAt <= 15000}
+    label: 'Last burst tap → quantity 20 within 15000 ms'
+# Leave the cart intact; the next suite run starts at flow 01's clean launch.
+- assertVisible:
+    id: "cart-subtotal"

@@ -6,7 +6,13 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import {
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -16,7 +22,6 @@ import {
 	FormSwitch,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
@@ -91,7 +96,7 @@ export function AddShipping() {
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<HStack className="gap-4">
 					<FormField
@@ -163,17 +168,17 @@ export function AddShipping() {
 						/>
 					)}
 				/>
-				<DialogFooter className="px-0">
-					<DialogClose>{t('common.cancel')}</DialogClose>
-					<DialogAction
-						disabled={form.formState.isSubmitting}
-						testID="add-to-cart-submit"
-						onPress={onAdd}
-					>
-						{t('common.add_to_cart')}
-					</DialogAction>
-				</DialogFooter>
-			</VStack>
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.cancel')}</DialogClose>
+				<DialogAction
+					disabled={form.formState.isSubmitting}
+					testID="add-to-cart-submit"
+					onPress={onAdd}
+				>
+					{t('common.add_to_cart')}
+				</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }

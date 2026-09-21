@@ -10,6 +10,9 @@ import { of } from 'rxjs';
 import { ReportsProvider, useReportsBinding, useReportsData, useReportsSelection } from './context';
 import { QueryStateProvider, useQueryStateActions } from '../../../query';
 
+jest.mock('../../../contexts/app-state', () => ({
+	useAppState: () => ({ site: { timezone_string: 'UTC', gmt_offset: '0' }, store: {} }),
+}));
 jest.mock('../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (value: string) => new Date(value),
 }));

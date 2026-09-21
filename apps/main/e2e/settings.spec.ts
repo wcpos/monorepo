@@ -3,11 +3,10 @@ import { expect } from '@playwright/test';
 import { navigateToPage, authenticatedTest as test } from './fixtures';
 
 /**
- * Helper to open the settings area via the user menu.
+ * Helper to open the settings area from the rail (the POS has no title bar).
  */
 async function openSettings(page: import('@playwright/test').Page) {
-	await page.getByTestId('user-menu-trigger').click();
-	await page.getByTestId('settings-menu-item').click();
+	await navigateToPage(page, 'settings');
 	await expect(page.getByTestId('screen-settings-general')).toBeVisible({
 		timeout: 10_000,
 	});
@@ -205,11 +204,7 @@ test.describe('Language Settings', () => {
 		});
 
 		// Reopen settings and verify the new language stuck (testID-anchored)
-		await page.locator('[data-testid="user-menu-trigger"]:visible').click();
-		await expect(page.getByTestId('settings-menu-item')).toBeVisible({
-			timeout: 15_000,
-		});
-		await page.getByTestId('settings-menu-item').click();
+		await navigateToPage(page, 'settings');
 		await expect(page.getByTestId('screen-settings-general')).toBeVisible({
 			timeout: 15_000,
 		});

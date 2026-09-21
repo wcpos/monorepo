@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -11,9 +12,12 @@ import {
 	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
+import { Text } from '@wcpos/components/text';
+import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
+import { useT } from '../../../../contexts/translations';
 import {
 	columnsFormSchema,
 	UISettingsColumnsForm,
@@ -22,6 +26,7 @@ import {
 import { useUISettings } from '../../contexts/ui-settings';
 
 export const schema = z.object({
+	openOrdersPosition: z.enum(['top', 'bottom']),
 	autoShowReceipt: z.boolean(),
 	autoPrintReceipt: z.boolean(),
 	// quickDiscounts: z.array(z.number()).optional(),
@@ -33,6 +38,7 @@ export const schema = z.object({
  *
  */
 export function UISettingsForm() {
+	const t = useT();
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('pos-cart');
 	const formData = useDocField(uiSettings, (value) => value) as unknown as z.infer<typeof schema>;
 	const { setButtonPressHandler } = useDialogContext();
@@ -94,6 +100,27 @@ export function UISettingsForm() {
 						control={form.control}
 						name="quickDiscounts"
 						render={({ field }) => <FormInput label={getUILabel('quickDiscounts')} {...field} />}
+					/>
+					<FormField
+						control={form.control}
+						name="openOrdersPosition"
+						render={({ field: { value, onChange } }) => (
+							<View className="gap-1 px-1">
+								<Text>{getUILabel('openOrdersPosition')}</Text>
+								<ToggleGroup
+									type="single"
+									value={value}
+									onValueChange={(val) => onChange(val || value)}
+								>
+									<ToggleGroupItem value="top" testID="open-orders-position-top">
+										<Text>{t('common.top')}</Text>
+									</ToggleGroupItem>
+									<ToggleGroupItem value="bottom" testID="open-orders-position-bottom">
+										<Text>{t('common.bottom')}</Text>
+									</ToggleGroupItem>
+								</ToggleGroup>
+							</View>
+						)}
 					/>
 					<UISettingsColumnsForm getUILabel={getUILabel} />
 				</VStack>

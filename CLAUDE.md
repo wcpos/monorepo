@@ -9,6 +9,7 @@ This repository keeps project-specific agent configuration local to the repo:
 - `CLAUDE.md` — project overview and shared local agent policy.
 - `AGENTS.md` — Codex/agent entrypoint and local discovery instructions.
 - `.claude/rules/*.mdc` — local project rules.
+- `.claude/rules/design.mdc` — **must-read before any UI work** (screens, components, `global.css`, mockups, UI review).
 - `.claude/skills/*/SKILL.md` — local project skills.
 
 Do not move these local rules or skills to global `~/.claude`, `~/.codex`, or other global agent configuration without explicit user approval.
@@ -69,6 +70,46 @@ bought nine build pairs in sixteen hours verifying fixes one commit at a time.
   `apps/main` (Android: `adb reverse tcp:8081 tcp:8081`), then
   `maestro test apps/main/.maestro`.
 
+## Mobile OTA lane (EAS Update)
+
+Mobile release channels are `production` (store) and `adhoc` (internal).
+Ship JS-only patches with `publish-mobile-update.yml` at the release SHA.
+Updates reach only binaries with a matching fingerprint runtime version.
+`apps/main/fingerprint.config.js` skips version fields so patch releases keep
+the runtime version stable; it must not be removed. Native inputs still feed the hash.
+A fingerprint move (native dep, config plugin, app config, native code) needs
+`build.yml` instead: a store submit for `production`, a new internal build for `adhoc`.
+The release train decides with
+`eas fingerprint:compare --build-id <shipped build of that platform and profile>`
+(adhoc builds carry plugins production does not, so compare like with like).
+
+CI sets `EAS_BUILD_PROFILE` to match `--profile`; the CLI does not set it locally. Laptop users must do the same from `apps/main`:
+`EAS_BUILD_PROFILE=development eas build --profile development`.
+Use `adhoc` or `production` in both places for those profiles.
+
+**Historical only — shipped 1.10.16 production baseline:** these binaries included
+version fields in their hashes and can never receive updates from this OTA lane.
+The first OTA-capable cohort is the first store build made after the fingerprint
+config change. When it ships, record its per-platform `.runtime.version` here
+using `eas build:view <build-id> --json` from `apps/main`, not a local fingerprint.
+
+| Platform | Build ID | Runtime version |
+| --- | --- | --- |
+| Android | `2c2a5601-5db5-44ea-abaa-aee8be4fe048` | `0aeafa6969b108dab0f4082f117bc8ee488238a5` |
+| iOS | `98efef84-0804-4d91-ba9e-92b656b3302f` | `d02402d0a158a9b73e6c6666647eeef5e67a2887` |
+
+There is no single production hash: compare each platform with its shipped build of the same profile before OTA.
+
+**First OTA-capable cohort — 1.10.18 store build from `e962c8b6` (after #2087), run 35059240821.**
+This is the baseline every `eas update` on the `production` channel is compared against; a patch
+version bump no longer moves it. Read from `eas build:view <build-id> --json`, not a local fingerprint.
+
+| Platform | Build ID | Runtime version |
+| --- | --- | --- |
+| Android | `247b12c8-4d98-47d2-8f3e-9840666d211d` | `050c0144c106f24ab23db6509c37f998f4c1dddd` |
+| iOS | `d650ce31-d233-481f-99dc-edc037e58fab` | `612a275dcc877f7d400f203cd56c0b8f77490683` |
+
+
 ## E2E selector policy
 
 E2E tests must use stable `testID` selectors for app UI. Do not use localized UI text as selectors: no `getByText`, no `getByPlaceholder`, no `getByLabel`, and no `getByRole(..., { name })` in `apps/main/e2e`. If a UI element needs to be exercised by E2E, add a stable `testID` to the component and select it with `getByTestId()`. (Reading a testID-addressed cell's `textContent` is fine; _selecting_ by text is not.)
@@ -85,6 +126,10 @@ E2E specs must pass against **any** store — never against one store's remember
 - **Both permalink styles.** Any direct REST call must tolerate pretty (`/wp-json/...`) and plain (`?rest_route=...`) permalinks — see `probeRequest` in `search-probe.ts`.
 - **Infra identities are keyed by well-known username, never server-specific ids.** The `e2e-product-writer` (shop_manager) identity exists on every dev server with one shared credential pair (`E2E_PRODUCT_WRITER_USER/_PASS` Actions secrets); a new or moved server needs exactly one `wp user create` line and the specs skip-with-reason until it's run.
 - **Leftover probe records on dev stores are acceptable** (owner ruling, 2026-08-07): unique per-run tokens make past probes invisible to future runs; delete in teardown only best-effort, never letting teardown fail a test.
+
+## Standing rulings
+
+- **Web `multiInstance` is `true`. Do not flip it.** Multi-tab of one store is first-class (#1057, closes #1045/#1055). `false` on web is a proven data-loss path (#1049). If Sentry shows `targeted recovery refused: multi-instance` on web, the defect is the gate in `opfs-targeted-recovery.mjs`, not the flag. Read the Decision section of `packages/database/src/adapters/default/README.md` before touching either.
 
 ## Branch lanes
 

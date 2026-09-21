@@ -15,9 +15,10 @@ const authLogger = getLogger(['wcpos', 'auth', 'user']);
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
 	hasExistingUsers: boolean;
+	compact?: boolean;
 }
 
-export function AddUserButton({ site, hasExistingUsers }: Props) {
+export function AddUserButton({ site, hasExistingUsers, compact = false }: Props) {
 	const { handleLoginSuccess, isProcessing } = useLoginHandler(site);
 	const processedResponseRef = React.useRef<string | null>(null);
 	const t = useT();
@@ -77,24 +78,30 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 
 	return (
 		<Pressable
-			testID="add-user-button"
+			testID={compact ? 'user-sheet-another-account' : 'add-user-button'}
 			disabled={disabled}
 			onPress={handlePress}
 			className={
-				disabled
-					? 'border-border web:cursor-not-allowed flex-row items-center gap-3 rounded-lg border border-dashed p-3 opacity-60'
-					: 'border-border active:bg-primary/5 web:cursor-pointer web:transition-colors web:hover:border-primary/40 web:hover:bg-primary/5 flex-row items-center gap-3 rounded-lg border border-dashed p-3'
+				compact
+					? 'active:bg-muted h-11 justify-center px-4'
+					: disabled
+						? 'border-border web:cursor-not-allowed flex-row items-center gap-3 rounded-lg border border-dashed p-3 opacity-60'
+						: 'border-border active:bg-primary/5 web:cursor-pointer web:transition-colors web:hover:border-primary/40 web:hover:bg-primary/5 flex-row items-center gap-3 rounded-lg border border-dashed p-3'
 			}
 		>
-			<View className="bg-primary/10 h-9 w-9 items-center justify-center rounded-full">
-				<Icon name="plus" size="sm" variant="primary" />
-			</View>
+			{!compact && (
+				<View className="bg-primary/10 h-9 w-9 items-center justify-center rounded-full">
+					<Icon name="plus" size="sm" variant="primary" />
+				</View>
+			)}
 			<Text className="text-muted-foreground text-sm font-medium">
 				{isProcessing
 					? t('common.loading')
-					: hasExistingUsers
-						? t('auth.add_another_user', { _tags: 'core' })
-						: t('auth.sign_in_with_wordpress', { _tags: 'core' })}
+					: compact
+						? t('register.another_account')
+						: hasExistingUsers
+							? t('auth.add_another_user', { _tags: 'core' })
+							: t('auth.sign_in_with_wordpress', { _tags: 'core' })}
 			</Text>
 		</Pressable>
 	);

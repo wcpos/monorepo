@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DrawerItemList } from './drawer-item-list';
 import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from './panel-visibility';
 import { Version } from './version';
+import { NotificationBell } from '../header/notification-bell';
 
 import type { DrawerContentComponentProps } from 'expo-router/build/react-navigation/drawer';
 
@@ -82,6 +83,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 				}}
 			>
 				<DrawerItemList {...props} />
+				<NotificationBell showLabel={drawerType !== 'permanent'} />
 				<Version />
 			</DrawerContentScrollView>
 		</>

@@ -23,6 +23,10 @@ import {
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import {
+	getCurrentBoundRegisterId,
+	getRegisterId,
+} from '../../../../services/register/register-document';
 import { useT } from '../../../../contexts/translations';
 import {
 	getTemporaryOrder,
@@ -280,6 +284,8 @@ export async function patchAndEnqueueEngineResident(input: {
 	recordId: string;
 	changes: Record<string, unknown>;
 	initial?: ScopedEngineResident;
+	registerId?: string;
+	tillId?: string;
 }): Promise<EngineResident> {
 	for (let attempt = 0; attempt < 2; attempt += 1) {
 		// The rollback guard's baseline is the CAPTURED scope's own id, not a
@@ -297,10 +303,29 @@ export async function patchAndEnqueueEngineResident(input: {
 			throw new Error(`Engine resident "${input.recordId}" is missing from "${input.collection}"`);
 		}
 		const previousResident = cloneDeep(resident.toJSON());
+		let changes = input.changes;
+		const identities = [
+			['_wcpos_register', input.registerId],
+			['_wcpos_till', input.tillId ?? getRegisterId()],
+		] as const;
+		const meta = (residentPayload(resident).meta_data ?? []) as { key?: string; value?: unknown }[];
+		if (input.collection === 'orders') {
+			for (const [key, value] of identities) {
+				const existing = meta.find((entry) => entry.key === key);
+				const incoming = changes.meta_data === undefined ? meta : changes.meta_data;
+				if (
+					Array.isArray(incoming) &&
+					!incoming.some((entry) => entry.key === key) &&
+					(existing || value)
+				) {
+					changes = { ...changes, meta_data: [...incoming, existing ?? { key, value }] };
+				}
+			}
+		}
 		await applyEngineResidentChanges(
 			resident,
 			input.collection,
-			input.changes,
+			changes,
 			scopeBarcodeSelectors(scope, input.collection)
 		);
 
@@ -315,7 +340,7 @@ export async function patchAndEnqueueEngineResident(input: {
 				recordId: input.recordId,
 				payload: withoutEchoedBarcode(
 					input.collection,
-					input.changes,
+					changes,
 					(previousResident.payload ?? {}) as Record<string, unknown>
 				),
 			});
@@ -487,6 +512,7 @@ export const useLocalMutation = () => {
 							recordId: recordId!,
 							changes: syncChanges,
 							initial: scopedEngineResident!,
+							registerId: getCurrentBoundRegisterId() ?? undefined,
 						});
 					} else {
 						patched = await applyEngineResidentChanges(

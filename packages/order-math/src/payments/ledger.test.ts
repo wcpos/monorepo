@@ -2,7 +2,14 @@
  * Ledger tests protect typed-meta preservation and deterministic manual payment rows.
  */
 
-import { mintManualPayment, readLedger, upsertPaymentRow, withLedger } from './ledger';
+import {
+	mintDevicePayment,
+	mintManualPayment,
+	mintServerPayment,
+	readLedger,
+	upsertPaymentRow,
+	withLedger,
+} from './ledger';
 
 import type { MetaDataEntry, MintManualPaymentInput } from './ledger';
 import type { CaptureMode, PaymentKind, PaymentMethodDescriptor, PaymentRow } from './types';
@@ -100,7 +107,7 @@ describe('mintManualPayment', () => {
 		// prettier-ignore
 		return {
 			method: method('cash', 'manual', true), amount: '42.50', tendered: '50', currency: 'USD',
-			orderId: null, cashierId: 9, storeId: 4, recordedOffline: true,
+			orderId: null, cashierId: 9, storeId: 4, registerId: null, recordedOffline: true,
 			now: () => clock, uuid: () => 'ABC-DEF',
 			...overrides,
 		};
@@ -132,5 +139,147 @@ describe('mintManualPayment', () => {
 		['device method', { method: method('card', 'device'), tendered: null }, 'not_manual'],
 	] as const)('rejects %s', (_name, overrides, reason) => {
 		expect(mintManualPayment(input(overrides))).toEqual({ ok: false, reason });
+	});
+});
+
+describe('mintServerPayment', () => {
+	const input = {
+		method: method('card', 'server'),
+		amount: '12.345',
+		currency: 'USD',
+		orderId: 42,
+		cashierId: 9,
+		storeId: 4,
+		registerId: null,
+		now: () => '2026-01-01T00:00:00Z',
+		uuid: () => 'ABC',
+	};
+	it('mints an online pending row with server fields and formatted amounts', () => {
+		const result = mintServerPayment({ ...input, dp: 3 });
+		expect(result).toEqual({
+			ok: true,
+			row: {
+				...row(),
+				id: 'abc',
+				order_id: 42,
+				method_id: 'pos_card',
+				provider: 'provider',
+				kind: 'card',
+				capture_mode: 'server',
+				amount: '12.345',
+				status: 'pending',
+				refunded_amount: '0.000',
+				cashier_id: 9,
+				store_id: 4,
+				register_id: null,
+				session_id: null,
+				captured_at_gmt: null,
+				expires_at: null,
+				events: [],
+				void_requested_at: null,
+			},
+		});
+	});
+	it.each([
+		[{ method: method('cash', 'manual') }, 'not_server'],
+		[{ amount: 0 }, 'amount_not_positive'],
+		[{ amount: -1 }, 'amount_not_positive'],
+		[{ orderId: null }, 'no_order_id'],
+		[{ orderId: 0 }, 'no_order_id'],
+		[{ orderId: 1.5 }, 'no_order_id'],
+	] as const)('rejects invalid server input %o', (override, reason) => {
+		expect(mintServerPayment({ ...input, ...override })).toEqual({ ok: false, reason });
+	});
+	it('defaults to two decimals and old rows remain readable without new fields', () => {
+		expect(mintServerPayment(input)).toMatchObject({ row: { amount: '12.35' } });
+		expect(readLedger(withLedger([], [row()]))).toEqual([row()]);
+	});
+});
+
+describe('mintDevicePayment', () => {
+	const input = {
+		method: method('card', 'device'),
+		amount: '12.345',
+		currency: 'USD',
+		orderId: 42,
+		cashierId: 9,
+		storeId: 4,
+		registerId: null,
+		now: () => '2026-01-01T00:00:00Z',
+		uuid: () => 'ABC',
+		transport: 'bluetooth' as const,
+		recordedOffline: false,
+	};
+	it('mints pending device rows without claiming a capture', () => {
+		expect(mintDevicePayment({ ...input, dp: 3 })).toMatchObject({
+			ok: true,
+			row: {
+				id: 'abc',
+				capture_mode: 'device',
+				status: 'pending',
+				transport: 'bluetooth',
+				amount: '12.345',
+				recorded_offline: false,
+				provider_refs: {},
+				captured_at_gmt: null,
+			},
+		});
+	});
+	it.each([
+		['serial-123', { reader: 'serial-123' }],
+		[undefined, {}],
+		[null, {}],
+	] as const)('keeps the connected reader identity %s on the row', (readerId, refs) => {
+		const minted = mintDevicePayment({ ...input, readerId });
+		expect(minted.ok).toBe(true);
+		if (!minted.ok) throw new Error(minted.reason);
+		expect(minted.row.provider_refs).toEqual(refs);
+	});
+	it('allows unsaved orders only offline', () => {
+		expect(mintDevicePayment({ ...input, orderId: null, recordedOffline: true })).toMatchObject({
+			ok: true,
+			row: { order_id: 0, recorded_offline: true },
+		});
+		expect(mintDevicePayment({ ...input, orderId: null })).toEqual({
+			ok: false,
+			reason: 'no_order_id',
+		});
+	});
+	it('refuses another capture mode or nonpositive amounts', () => {
+		expect(mintDevicePayment({ ...input, method: method('card', 'server') })).toEqual({
+			ok: false,
+			reason: 'not_device',
+		});
+		expect(mintDevicePayment({ ...input, amount: 0 })).toEqual({
+			ok: false,
+			reason: 'amount_not_positive',
+		});
+	});
+});
+
+it.each(['manual', 'server', 'device'] as const)('mints %s provenance fields', (mode) => {
+	const input = {
+		method: method('card', mode),
+		amount: 1,
+		currency: 'USD',
+		orderId: 42,
+		cashierId: 1,
+		storeId: null,
+		registerId: 'register',
+		sessionId: 'session',
+		recordedOffline: false,
+		transport: 'bluetooth' as const,
+		now: () => 'now',
+		uuid: () => 'id',
+	};
+	const mint =
+		mode === 'manual'
+			? mintManualPayment
+			: mode === 'server'
+				? mintServerPayment
+				: mintDevicePayment;
+	expect(mint(input)).toMatchObject({ row: { register_id: 'register', session_id: 'session' } });
+	expect(mint({ ...input, registerId: null, sessionId: undefined })).toMatchObject({
+		row: { register_id: null, session_id: null },
 	});
 });

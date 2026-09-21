@@ -36,6 +36,20 @@ jest.mock('@wcpos/core/hooks/use-site-info', () => ({ useSiteInfo: jest.fn() }))
 jest.mock('@wcpos/core/screens/main/receipt/email-queue/bridge', () => ({
 	ReceiptEmailQueueBridge: () => null,
 }));
+jest.mock('@wcpos/core/screens/main/pos/checkout/completion-journal-bridge', () => ({
+	SaleCompletionBridge: () => null,
+}));
+jest.mock('@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge', () => ({
+	TerminalPaymentsBridge: () => null,
+}));
+// The register-session bridge drains the session outbox through the REST client; not this test's concern.
+jest.mock('@wcpos/core/services/register-session/bridge', () => ({
+	RegisterSessionBridge: () => null,
+}));
+// The card-reader driver registration mounts a native SDK bridge; not this test's concern.
+jest.mock('../lib/payment-drivers', () => ({
+	StripeTerminalDriverRegistration: () => null,
+}));
 jest.mock('@wcpos/core/screens/main/contexts/ui-settings', () => ({
 	UISettingsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));

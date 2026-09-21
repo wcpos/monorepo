@@ -52,7 +52,10 @@ function stubPlane(input: { readLane: LaneRead } & StubOverrides) {
 		},
 	};
 	const plane = createRequirePlane({
-		awaitReady: input.awaitReady ?? (async () => undefined),
+		admitted: async () => {
+			if (input.awaitReady) await input.awaitReady();
+			return bound as never;
+		},
 		manager: {
 			activeScope: 'scope-1',
 			runGuarded: (operation: (scope: unknown) => Promise<unknown>) => operation(bound),

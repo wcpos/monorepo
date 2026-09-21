@@ -412,7 +412,7 @@ describe('pushRecordMutation', () => {
 		expect(events[0]).toMatchObject({
 			type: 'push.error',
 			level: 'error',
-			fields: { reason: 'TypeError' },
+			fields: { reason: 'TypeError', message: 'Failed to fetch', phase: 'transport' },
 		});
 	});
 

@@ -1034,6 +1034,84 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		}
 	});
 
+	it.each(['create', 'update'] as const)(
+		'pushes %s with create-only line-id stripping (WOOCOMMERCE-POS-2N3)',
+		async (operation) => {
+			const server = createFakeWriteServer();
+			server.seed(UUID_A, { id: 42, revision: 'sha256:base-r1' });
+			const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
+			const first = {
+				uuid: 'line-a',
+				quantity: 2,
+				meta_data: [{ id: 91, key: '_woocommerce_pos_uuid', value: 'line-a' }],
+			};
+			const second = {
+				uuid: 'line-b',
+				quantity: 3,
+				meta_data: [{ id: 92, key: '_woocommerce_pos_uuid', value: 'line-b' }],
+			};
+			const fields = ['line_items', 'fee_lines', 'shipping_lines', 'coupon_lines'];
+			const payload = {
+				id: 42,
+				status: 'pending',
+				customer_note: 'keep cashier intent',
+				meta_data: [{ id: 90, key: '_woocommerce_pos_uuid', value: UUID_A }],
+				tax_lines: [{ id: 93 }],
+				...Object.fromEntries(fields.map((field) => [field, [first, { ...second, id: 702 }]])),
+			};
+			try {
+				await engine.ready;
+				await insertServerBornOrder(engine, UUID_A, { wooOrderId: 42, revision: 'sha256:base-r1' });
+				const database = engine.active()!.database;
+				const resident = await database.collections.orders.findOne(UUID_A).exec();
+				await resident?.incrementalModify((data: Record<string, unknown>) => ({
+					...data,
+					payload: {
+						...payload,
+						...Object.fromEntries(
+							fields.map((field) => [
+								field,
+								[
+									{ ...first, id: 701 },
+									{ ...second, id: 702 },
+								],
+							])
+						),
+					},
+				}));
+				// Enqueue the frozen snapshot directly so the test observes push-time shaping.
+				await queueFor(database).enqueue({
+					mutationId: `line-identity-${operation}`,
+					collectionName: 'orders',
+					operation,
+					recordId: UUID_A,
+					origin: 'minted',
+					payload,
+					baseRevision: 'sha256:base-r1',
+					queuedAt: '2026-01-05T00:00:00.000Z',
+				});
+				await engine.sync('write-drain');
+				const pushed = server.received.find((envelope) => envelope.operation === operation);
+				expect(pushed?.payload).toEqual({
+					...payload,
+					...Object.fromEntries(
+						fields.map((field) => [
+							field,
+							operation === 'create'
+								? [first, second]
+								: [
+										{ ...first, id: 701 },
+										{ ...second, id: 702 },
+									],
+						])
+					),
+				});
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('grafts server line identity onto a successor queued behind an IN-FLIGHT create (#818)', async () => {
 		const server = createFakeWriteServer({ firstId: 900_000_106 });
 		const LINE_UUID = '44444444-4444-4444-8444-444444444444';
@@ -1478,16 +1556,12 @@ describe('write() + sync("write-drain") through the public handle', () => {
 			fetch: async (url) => {
 				const parsed = new URL(url);
 				if (!parsed.pathname.includes('/push/')) throw new Error(`unexpected ${parsed.pathname}`);
-				// The REAL wire shape (Write_Controller::document_for): the variation
-				// ack document is the pull-envelope WRAPPER — identity and REST
-				// fields nested under `payload`, id/parent_id on the wrapper.
 				const flat: Record<string, unknown> = {
 					...variationPayload(0),
 					stock_status: 'outofstock',
 				};
-				const { id, parent_id, ...inner } = flat;
 				return Response.json({
-					document: { id, parent_id, payload: inner },
+					document: flat,
 					currentRevision: 'sha256:variation-after-stock-edit',
 				});
 			},
@@ -1861,6 +1935,20 @@ describe('#507 offline write flows through the public handle', () => {
 			expect(second.mutationId).not.toBe(first.mutationId); // a coalesced entry NEVER reuses a mutationId with a different payload
 			expect(engine.status().queueDepth).toBe(1); // coalesced, not stacked
 			expect(events.some((event) => event.type === 'queue.write.coalesce')).toBe(true);
+			// The orphaned id is announced (and replayable) so a waiter can follow the replacement.
+			const superseded = {
+				type: 'write-superseded',
+				collection: 'orders',
+				recordId: UUID_A,
+				mutationId: first.mutationId,
+				replacedBy: second.mutationId,
+			};
+			expect(second.supersededMutationId).toBe(first.mutationId);
+			const replayed: EngineEvent[] = [];
+			engine.events((event) => replayed.push(event), {
+				replayWriteOutcomeFor: first.mutationId,
+			})();
+			expect(replayed).toEqual([superseded]);
 
 			connectivity.set('online');
 			expect(await engine.sync('write-drain')).toMatchObject({

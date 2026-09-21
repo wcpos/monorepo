@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useRouter } from 'expo-router';
-
 import { Button } from '@wcpos/components/button';
 import {
 	DropdownMenu,
@@ -17,9 +15,10 @@ import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { PrinterProfile } from '@wcpos/printer';
+import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
 
 import { printerIconName } from './utils';
-import { usePrinterWizardAvailable } from '../../mini-apps/catalog';
+import { useCopySetupReport } from '../printer/copy-setup-report';
 import { useT } from '../../../../contexts/translations';
 
 interface PrinterRowProps {
@@ -45,11 +44,9 @@ export function PrinterRow({
 	onDelete,
 }: PrinterRowProps) {
 	const t = useT();
-	const router = useRouter();
-	const showWizard = usePrinterWizardAvailable('settings.printers.trouble');
 
 	let connectionLabel: string;
-	if (profile.connectionType === 'system') {
+	if (usesSystemPrintDialog(profile)) {
 		connectionLabel = `${t('settings.connection_print_dialog')} · ${t(
 			'settings.connection_built_in'
 		)}`;
@@ -65,7 +62,14 @@ export function PrinterRow({
 		connectionLabel = `${provider} · ${t('settings.managed_by_wcpos')}`;
 	} else {
 		const host = profile.address || '?';
-		const base = profile.port ? `${host}:${profile.port}` : host;
+		// A 'system' profile that is not the Print Dialog is a Windows installed queue; its address is
+		// the queue key, not something a cashier recognises.
+		const base =
+			profile.connectionType === 'system'
+				? t('settings.setup_source_system')
+				: profile.port
+					? `${host}:${profile.port}`
+					: host;
 		if (profile.vendor === 'epson') {
 			connectionLabel = `${base} · Epson`;
 		} else if (profile.vendor === 'star') {
@@ -77,8 +81,9 @@ export function PrinterRow({
 
 	// Built-in/server-owned targets are not backed by mutable printer_profiles documents.
 	const canSetDefault = !profile.isDefault && !profile.isBuiltIn;
+	const copyReport = useCopySetupReport();
 	const canDelete = !profile.isBuiltIn;
-	const showMenu = canSetDefault || canDelete;
+	const showMenu = true; // the setup report is always offered
 
 	return (
 		<View
@@ -118,21 +123,32 @@ export function PrinterRow({
 						<Text>{t('common.edit')}</Text>
 					</Button>
 				)}
-				{showWizard && (
-					<Button
-						variant="ghost-quiet"
-						size="sm"
-						onPress={() => router.push('/settings/mini-app/printer-wizard')}
-					>
-						<Text>{t('settings.having_trouble')}</Text>
-					</Button>
-				)}
 				{showMenu && (
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<IconButton name="ellipsisVertical" testID={`printer-row-${profile.id}-menu`} />
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
+							<DropdownMenuItem
+								onPress={() =>
+									void copyReport({
+										printer: {
+											name: profile.name,
+											vendor: profile.vendor,
+											model: profile.printerModel,
+											connectionType: profile.connectionType,
+											address: profile.address,
+											port: profile.port,
+											columns: profile.columns,
+											language: profile.language,
+										},
+									})
+								}
+								testID={`printer-row-${profile.id}-copy-report`}
+							>
+								<Icon name="circleInfo" />
+								<Text>{t('settings.setup_copy_report')}</Text>
+							</DropdownMenuItem>
 							{canSetDefault && (
 								<DropdownMenuItem
 									onPress={() => onSetDefault(profile.id)}

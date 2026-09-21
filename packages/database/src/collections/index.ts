@@ -1,5 +1,6 @@
 import { ExtractDocumentTypeFromTypedRxJsonSchema, RxJsonSchema } from 'rxdb';
 
+import { closuresLiteral } from './schemas/closures';
 import { brandsLiteral } from './schemas/brands';
 import { categoriesLiteral } from './schemas/categories';
 import { couponsLiteral } from './schemas/coupons';
@@ -10,7 +11,10 @@ import { logsLiteral } from './schemas/logs';
 import { notificationsLiteral } from './schemas/notifications';
 import { templatesLiteral } from './schemas/templates';
 import { ordersLiteral } from './schemas/orders';
+import { refundsLiteral } from './schemas/refunds';
 import { productsLiteral } from './schemas/products';
+import { registerSessionsLiteral } from './schemas/register-sessions';
+import { cashMovementsLiteral } from './schemas/cash-movements';
 import { receiptEmailQueueLiteral } from './schemas/receipt-email-queue';
 import { sitesLiteral } from './schemas/sites';
 import { storesLiteral } from './schemas/stores';
@@ -206,6 +210,17 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 		16(oldDoc: StoreDocumentType) {
 			return oldDoc;
 		},
+		17(oldDoc: StoreDocumentType) {
+			oldDoc.register_sessions = false;
+			oldDoc.variance_threshold = '';
+			oldDoc.expected_close_time = '';
+			return oldDoc;
+		},
+		18(oldDoc: StoreDocumentType) {
+			// v18 adds the optional `scale` override beside `theme`. Absent means
+			// Auto — resolveStep falls back to the window — so nothing is written.
+			return oldDoc;
+		},
 	},
 };
 
@@ -363,6 +378,13 @@ type CouponDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof coupon
 export type CouponDocument = RxDocument<CouponDocumentType>;
 export type CouponCollection = RxCollection<CouponDocumentType>;
 
+export type RefundDocumentType = WithNestedJsonMetaData<
+	WithJsonMetaData<ExtractDocumentTypeFromTypedRxJsonSchema<typeof refundsLiteral>>,
+	'line_items' | 'tax_lines' | 'shipping_lines' | 'fee_lines'
+>;
+export type RefundDocument = RxDocument<RefundDocumentType>;
+export type RefundCollection = RxCollection<RefundDocumentType>;
+
 /**
  * Taxes
  */
@@ -431,6 +453,22 @@ const logs: RxCollectionCreator<LogDocumentType> = {
 	},
 	options: {
 		searchFields: ['message', 'context.error', 'context.errorCode', 'context.search'],
+		// NO FlexSearch index for logs — the Logs screen searches these fields with a
+		// bounded substring scan instead (use-local-query). Measured 2026-09-15 on a
+		// 46k-row day (an overnight escalation storm on a merchant store): building the
+		// premium index in the renderer took 21.5 s of blocked main thread and ~350 MB
+		// of heap, and the tokenizer/field choice moved nothing (forward 19.4 s, strict
+		// 18.8 s, message-only 19.6 s) — the cost is the pipeline's per-row index
+		// persistence, ~0.4 ms and ~7 KB a row. The same rows regex-scan in 40 ms,
+		// and on the web that scan runs in the storage worker. Logs are the one
+		// searched collection that churns without bound (retention is bytes, not
+		// rows), so an index sized for a catalogue is the wrong structure here.
+		searchIndex: false,
+		// The logger writes the fold of the searched fields here (foldLogSearchText),
+		// so the scan is an exact fold-space match — any script, any normal form —
+		// exactly the parity the folding index had. The raw searchFields above are
+		// the fallback for rows written before this field existed.
+		searchFoldedField: 'context.fold',
 	},
 };
 
@@ -457,6 +495,10 @@ export type TemplateCollection = RxCollection<TemplateDocumentType>;
 const templates: RxCollectionCreator<TemplateDocumentType> = {
 	schema: templateSchema,
 	migrationStrategies: {
+		2(oldDoc) {
+			// v2: closure templates are keyed by store; unscoped rows are re-synced under the new key.
+			return oldDoc.type === 'closure' ? null : oldDoc;
+		},
 		1(oldDoc) {
 			// v1: Added output_type and paper_width fields — populated on next sync
 			return oldDoc;
@@ -571,6 +613,28 @@ const receipt_email_queue: RxCollectionCreator<ReceiptEmailQueueDocumentType> = 
 	schema: receiptEmailQueueSchema,
 };
 
+export type ClosureRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof closuresLiteral>;
+export type ClosureDocument = RxDocument<ClosureRow>;
+export type ClosureCollection = RxCollection<ClosureRow>;
+const closures: RxCollectionCreator<ClosureRow> = {
+	schema: closuresLiteral,
+	migrationStrategies: { 1: (oldDoc) => oldDoc },
+};
+
+export type RegisterSessionRow = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof registerSessionsLiteral
+>;
+export type RegisterSessionDocument = RxDocument<RegisterSessionRow>;
+export type RegisterSessionCollection = RxCollection<RegisterSessionRow>;
+const register_sessions: RxCollectionCreator<RegisterSessionRow> = {
+	schema: registerSessionsLiteral,
+	migrationStrategies: { 1: (oldDoc) => oldDoc },
+};
+export type CashMovementRow = ExtractDocumentTypeFromTypedRxJsonSchema<typeof cashMovementsLiteral>;
+export type CashMovementDocument = RxDocument<CashMovementRow>;
+export type CashMovementCollection = RxCollection<CashMovementRow>;
+const cash_movements: RxCollectionCreator<CashMovementRow> = { schema: cashMovementsLiteral };
+
 export type UserCollections = {
 	users: UserCollection;
 	sites: SiteCollection;
@@ -587,6 +651,9 @@ export type StoreCollections = {
 	scanner_profiles: ScannerProfileCollection;
 	template_printer_overrides: TemplatePrinterOverrideCollection;
 	receipt_email_queue: ReceiptEmailQueueCollection;
+	closures: ClosureCollection;
+	register_sessions: RegisterSessionCollection;
+	cash_movements: CashMovementCollection;
 };
 
 export type TemporaryCollections = {
@@ -613,6 +680,9 @@ export const storeCollections = {
 	scanner_profiles,
 	template_printer_overrides,
 	receipt_email_queue,
+	closures,
+	register_sessions,
+	cash_movements,
 };
 
 export const temporaryCollections = {

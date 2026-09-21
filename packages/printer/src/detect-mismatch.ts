@@ -1,3 +1,5 @@
+import { usesSystemPrintDialog } from './transport/device-key';
+
 import type { PrinterProfile } from './types';
 import type { TemplateInfo } from './resolve-printer';
 
@@ -7,7 +9,7 @@ export function detectMismatch(
 ): string | null {
 	if (!printer) return null;
 
-	const isSystemPrinter = printer.connectionType === 'system';
+	const isSystemPrinter = usesSystemPrintDialog(printer);
 	const isThermalTemplate = template.output_type === 'escpos';
 	const isHtmlTemplate = template.output_type === 'html';
 

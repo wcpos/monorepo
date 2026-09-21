@@ -8,7 +8,7 @@ vi.mock('../../transport/epson-native-adapter', () => ({
 		getPaperWidthMm = getPaperWidthMm;
 	},
 }));
-vi.mock('../../logger', () => ({ printerLogger: { info: vi.fn() } }));
+vi.mock('../../logger', () => ({ printerLogger: { debug: vi.fn(), info: vi.fn() } }));
 
 describe('native printer paper width', () => {
 	it.each([
@@ -28,6 +28,32 @@ describe('native printer paper width', () => {
 				name: 'Unknown',
 			})
 		).resolves.toEqual({ columns, source: 'printer' });
+	});
+
+	it('asks the merchant for a generic BLE printer instead of guessing from its name', async () => {
+		getPaperWidthMm.mockClear();
+		await expect(
+			resolveNativePrinterColumns({
+				address: 'ble:aa:11',
+				connectionType: 'bluetooth',
+				vendor: 'generic',
+				name: 'Netum NT-1809',
+			})
+		).resolves.toEqual({ columns: undefined, source: 'default' });
+		expect(getPaperWidthMm).not.toHaveBeenCalled();
+	});
+
+	it('asks the merchant for a paired Bluetooth Classic printer too', async () => {
+		getPaperWidthMm.mockClear();
+		await expect(
+			resolveNativePrinterColumns({
+				address: 'spp:AA:BB:CC:DD:EE:FF',
+				connectionType: 'bluetooth',
+				vendor: 'generic',
+				name: 'BlueTooth Printer',
+			})
+		).resolves.toEqual({ columns: undefined, source: 'default' });
+		expect(getPaperWidthMm).not.toHaveBeenCalled();
 	});
 
 	it('falls back to the model table when the SDK query fails', async () => {

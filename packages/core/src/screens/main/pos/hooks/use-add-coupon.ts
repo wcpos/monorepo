@@ -25,6 +25,7 @@ import {
 	readEngineCoupons,
 	readEngineProductsByWooId,
 } from './engine-coupon-data';
+import { readQuickDiscountIntent } from './quick-discount';
 import { reportCartFailure } from './cart-failure';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { parsePosData } from './utils';
@@ -107,6 +108,7 @@ export const useAddCoupon = () => {
 				// 2. Look up applied coupons that have individual_use for reverse check
 				const appliedCouponsWithIndividualUse: string[] = [];
 				for (const cl of appliedCouponLines) {
+					if (readQuickDiscountIntent(cl)) continue;
 					const appliedCoupon = coupons.find((record) => record.payload.code === cl.code);
 					if (appliedCoupon?.payload.individual_use && cl.code) {
 						appliedCouponsWithIndividualUse.push(cl.code);

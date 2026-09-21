@@ -64,6 +64,14 @@ export type ServerPressureMonitor = {
 	retryAfterUntilMs(): number;
 	/** Raise/lower the ladder's top when the merchant's cadence changes. */
 	setMaxMultiplier(maxMultiplier: number): void;
+	/** The last pressure bucket the server reported, or null before any response carried one. */
+	reported(): ServerPressure | null;
+	/**
+	 * What raised the ladder to its current multiplier, or null while it sits at ×1.
+	 * A server-named pause is NOT a signal: it is read from `retryAfterUntilMs()`
+	 * and expires with it, whereas a signal lives exactly as long as the multiplier.
+	 */
+	signal(): PressureSignal | null;
 };
 
 /**
@@ -116,6 +124,9 @@ const RECOVERY_HEALTHY_RESPONSES = 10;
  * poll: long enough that the healthy responses are genuinely new evidence.
  */
 const RECOVERY_MIN_DWELL_MS = 60_000;
+
+/** After header-only distress recovers, trust raw latency for fifteen minutes to avoid flapping. */
+const HEADER_CLAMP_COOLDOWN_MS = 15 * 60_000;
 
 /**
  * A hostile or broken `Retry-After` must not park a point of sale for a day.
@@ -216,9 +227,17 @@ export function createServerPressureMonitor(
 	let softLoadStreak = 0;
 	let healthyStreak = 0;
 	let lastBackoffAtMs = Number.NEGATIVE_INFINITY;
+	// Track header-triggered back-off separately from its post-recovery cooldown.
+	let headerStartedBackoff = false;
+	let headerClampCooldownUntilMs = 0;
+	// Read back by the Health > Performance page so a merchant can see WHY the
+	// till is easing off — or that the server's advisory header is being
+	// overruled by fast responses.
+	let lastReported: ServerPressure | null = null;
+	let lastSignal: PressureSignal | null = null;
 	/** Timestamps of 5xx / transport failures inside the rolling window. */
 	let distressAtMs: number[] = [];
-	let latencySamples: { durationMs: number; pressure?: ServerPressure }[] = [];
+	let latencySamples: { atMs: number; durationMs: number; pressure?: ServerPressure }[] = [];
 	const effectiveMultiplier = (): number =>
 		Math.max(multiplier, softLoadActive ? Math.min(2, maxMultiplier) : 1);
 	const observeServerLoad = (load1m: number): ServerPressureTransition | null => {
@@ -262,7 +281,11 @@ export function createServerPressureMonitor(
 		lastBackoffAtMs = atMs;
 		const from = effectiveMultiplier();
 		const to = Math.min(multiplier * 2, maxMultiplier);
+		if (signal === 'server-pressure' && to > multiplier) {
+			headerStartedBackoff = true;
+		}
 		multiplier = to;
+		if (multiplier > 1) lastSignal = signal;
 		if (effectiveMultiplier() === from) return null;
 		return {
 			direction: 'backoff',
@@ -291,11 +314,26 @@ export function createServerPressureMonitor(
 		isBackingOff: (atMs) => multiplier > 1 || retryAfterUntilMs > atMs,
 		multiplier: effectiveMultiplier,
 		retryAfterUntilMs: () => retryAfterUntilMs,
+		reported: () => lastReported,
+		// The soft-load machine raises the effective multiplier without stepUp(),
+		// so it has no recorded signal of its own: while it alone holds the
+		// cadence at x2, the reason IS reported server load. `lastSignal` is only
+		// ever set while the hard multiplier is above 1 and cleared when it returns,
+		// so it can never outlive the back-off it names.
+		signal: () => lastSignal ?? (softLoadActive ? 'server-pressure' : null),
 
 		setMaxMultiplier(next) {
 			maxMultiplier = Math.max(1, next);
 			// A slower tier has a shorter ladder; never leave the multiplier above its top.
-			if (multiplier > maxMultiplier) multiplier = maxMultiplier;
+			if (multiplier > maxMultiplier) {
+				multiplier = maxMultiplier;
+				// A forced drop to ×1 skips the recovery branch, so settle the header
+				// marker here or the clamp stays disabled for the life of the monitor.
+				if (multiplier === 1) {
+					headerStartedBackoff = false;
+					lastSignal = null;
+				}
+			}
 		},
 
 		observe(observation) {
@@ -305,6 +343,7 @@ export function createServerPressureMonitor(
 			// off exactly when reconnecting wants a prompt poll, so offline failures
 			// are not evidence of anything and are dropped whole.
 			if (observation.offline === true && status === 0) return null;
+			if (observation.pressure !== undefined) lastReported = observation.pressure;
 
 			const retryAfterMs = parseRetryAfterMs(observation.retryAfter, atMs);
 			// A server that names its own pause gets it honoured verbatim, on any
@@ -357,29 +396,39 @@ export function createServerPressureMonitor(
 			const softTransition =
 				observation.serverLoad1m !== undefined ? observeServerLoad(observation.serverLoad1m) : null;
 
-			latencySamples.push({ durationMs, pressure: observation.pressure });
+			latencySamples.push({ atMs, durationMs, pressure: observation.pressure });
 			if (latencySamples.length > SLOW_SAMPLE_COUNT) latencySamples.shift();
 			const effectiveLatency = latencySamples.map((sample) =>
-				sample.pressure === 'high'
+				// Headers may start back-off, but only raw latency may sustain it.
+				sample.pressure === 'high' &&
+				multiplier === 1 &&
+				!headerStartedBackoff &&
+				sample.atMs >= headerClampCooldownUntilMs
 					? Math.max(sample.durationMs, SLOW_MEDIAN_MS + 1)
 					: sample.durationMs
 			);
+			const rawSlow = median(latencySamples.map((sample) => sample.durationMs)) > SLOW_MEDIAN_MS;
+			// Cooldown samples never clamp; a header re-trip needs a fresh ten-sample
+			// window after the deadline, while real slowness can still trip immediately.
+			const freshWindow = latencySamples.every(
+				(sample) => sample.atMs >= headerClampCooldownUntilMs
+			);
 			if (
 				latencySamples.length === SLOW_SAMPLE_COUNT &&
-				median(effectiveLatency) > SLOW_MEDIAN_MS
+				(rawSlow || (freshWindow && median(effectiveLatency) > SLOW_MEDIAN_MS))
 			) {
-				const signal =
-					median(latencySamples.map((sample) => sample.durationMs)) > SLOW_MEDIAN_MS
-						? 'slow'
-						: 'server-pressure';
+				const signal = rawSlow ? 'slow' : 'server-pressure';
 				// Drop the window with the step: without this the same ten slow samples
 				// would trip every subsequent request and walk straight to the ceiling.
 				latencySamples = [];
 				return stepUp(signal, atMs) ?? softTransition;
 			}
 
-			// Reported pressure is neither distress nor evidence that a prior back-off can be undone.
-			if (observation.pressure === 'elevated' || observation.pressure === 'high') {
+			// Fast raw responses are recovery evidence even when the advisory header disagrees.
+			if (
+				(observation.pressure === 'high' || observation.pressure === 'elevated') &&
+				durationMs > SLOW_MEDIAN_MS
+			) {
 				return softTransition;
 			}
 			healthyStreak += 1;
@@ -399,6 +448,11 @@ export function createServerPressureMonitor(
 			distressAtMs = [];
 			const from = effectiveMultiplier();
 			multiplier = Math.max(1, Math.floor(multiplier / 2));
+			if (multiplier === 1 && headerStartedBackoff) {
+				headerClampCooldownUntilMs = atMs + HEADER_CLAMP_COOLDOWN_MS;
+				headerStartedBackoff = false;
+			}
+			if (multiplier === 1) lastSignal = null;
 			if (effectiveMultiplier() === from) return softTransition;
 			return {
 				direction: 'recovery',

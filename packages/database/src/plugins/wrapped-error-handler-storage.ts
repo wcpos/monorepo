@@ -38,6 +38,14 @@ type InstanceLatchState = {
 	 * tears its side down; that is teardown noise, not a live-store outage.
 	 */
 	closing: boolean;
+	/**
+	 * `method:remoteErrorName` signatures that have already been logged at error
+	 * on this instance and not yet cleared by a success of that method. One entry
+	 * per signature (not one slot) so two methods failing in alternation each log
+	 * once, not once per turn.
+	 */
+	activeRemoteErrorSignatures: Set<string>;
+	notFoundWriteStreak: number;
 };
 const instancesByDatabaseName = new Map<string, Set<InstanceLatchState>>();
 
@@ -46,6 +54,8 @@ const instancesByDatabaseName = new Map<string, Set<InstanceLatchState>>();
 // ---------------------------------------------------------------------------
 
 const REQUEST_REMOTE_ERROR_MARKER = 'could not requestRemote: ';
+// One failure can be a transient handle race; three consecutive without success means the collection's OPFS file is gone and every later write will fail the same way.
+const NOT_FOUND_WRITES_BEFORE_DEGRADED = 3;
 const WORKER_CONNECTION_FAILURE =
 	/(?:worker|message (?:channel|port)).*(?:closed|disconnected|gone|lost|terminated|unavailable)|(?:closed|disconnected|gone|lost|terminated|unavailable).*(?:worker|message (?:channel|port))/i;
 
@@ -221,35 +231,53 @@ function isStorageWorkerTimeout(error: unknown): boolean {
 
 export interface StorageDegradation {
 	databaseName: string;
-	/** The RPC that first lost the worker. */
+	kind: 'worker-lost' | 'write-stalled';
+	/** The RPC that raised the degradation signal. */
 	methodName: StorageRpcMethod;
 	message: string;
 	at: number;
 }
 
+// Local POS hot-path writes take milliseconds; ten seconds is far past a real write,
+// but short enough not to leave a cashier staring. False trips are harmless because
+// the flag clears itself on the next successful answer.
+export const STORAGE_WRITE_DEADLINE_MS = 10_000;
+
 const degradedByDatabaseName = new Map<string, StorageDegradation>();
+const stalledWriteByDatabaseName = new Map<string, StorageDegradation>();
 const degradedStorageSubject = new BehaviorSubject<readonly StorageDegradation[]>([]);
 
 /**
- * Databases whose storage worker stopped answering; empty while storage is healthy.
+ * Databases whose storage stopped answering; empty while storage is healthy.
  *
- * Latch semantics: one-shot per database, and it can never be cleared by a later
- * successful call or instance teardown. Web databases share one module-scope
- * worker, so closing one database or resetting one collection does not replace the
- * worker that failed. Recovery requires replacing that worker by reloading the app.
+ * Two kinds with different lifetimes:
+ * - `worker-lost` is a one-shot latch per database that can never be cleared by
+ *   a later successful call or instance teardown. Web databases share one
+ *   module-scope worker, so closing one database or resetting one collection
+ *   does not replace the worker that failed. Recovery requires replacing that
+ *   worker by reloading the app.
+ * - `write-stalled` (#237) is raised by a caller whose local write passed its
+ *   deadline while a `bulkWrite` was still in flight. The stalled write is still
+ *   awaited, so a later answer is real evidence of recovery: the entry clears on
+ *   the next successful storage call, on any database.
  */
 export const degradedStorage$: Observable<readonly StorageDegradation[]> =
 	degradedStorageSubject.asObservable();
 
 function publishDegradedStorage(): void {
-	degradedStorageSubject.next([...degradedByDatabaseName.values()]);
+	degradedStorageSubject.next([
+		...degradedByDatabaseName.values(),
+		...[...stalledWriteByDatabaseName.values()].filter(
+			(entry) => !degradedByDatabaseName.has(entry.databaseName)
+		),
+	]);
 }
 
-/** True while the named database (or any database) has lost its storage worker. */
+/** True while the named database (or any database) has lost its worker or stalled a write. */
 export function isStorageDegraded(databaseName?: string): boolean {
 	return databaseName === undefined
-		? degradedByDatabaseName.size > 0
-		: degradedByDatabaseName.has(databaseName);
+		? degradedByDatabaseName.size > 0 || stalledWriteByDatabaseName.size > 0
+		: degradedByDatabaseName.has(databaseName) || stalledWriteByDatabaseName.has(databaseName);
 }
 
 /**
@@ -258,12 +286,89 @@ export function isStorageDegraded(databaseName?: string): boolean {
  */
 export function clearStorageDegradation(databaseName?: string): void {
 	if (databaseName === undefined) {
-		if (degradedByDatabaseName.size === 0) return;
+		if (!isStorageDegraded()) return;
 		degradedByDatabaseName.clear();
-	} else if (!degradedByDatabaseName.delete(databaseName)) {
-		return;
+		stalledWriteByDatabaseName.clear();
+	} else {
+		const latched = degradedByDatabaseName.delete(databaseName);
+		const stalled = stalledWriteByDatabaseName.delete(databaseName);
+		if (!latched && !stalled) return;
 	}
 	publishDegradedStorage();
+}
+
+/**
+ * A caller's local write passed its deadline (#237). The checkout save arms
+ * `STORAGE_WRITE_DEADLINE_MS` around its order enqueue and calls this when it
+ * fires; the tender pane otherwise sits on "Saving order…" forever, because the
+ * killer watchdog is forbidden from condemning writes and the stall reporter
+ * only logs.
+ *
+ * Marks storage degraded ONLY while a `bulkWrite` is actually in flight on a
+ * live instance: that is the storage layer's own evidence that the wait is in
+ * storage and not somewhere on the JS side of the call. With nothing in flight
+ * this is a no-op and returns false.
+ *
+ * Deliberately never rejects, aborts or retries the write. The wrapper cannot
+ * cancel the RPC, and telling the caller a write failed that may still commit
+ * invites a duplicate order on retry. The only effect is the signal, which the
+ * money-path guard reads; a false trip costs a refused Pay until the next
+ * storage call answers, at which point the entry clears itself.
+ */
+export function noteStorageWriteDeadlinePassed(context: {
+	waitedMs: number;
+	[key: string]: unknown;
+}): boolean {
+	let stalled = false;
+	for (const [databaseName, instances] of instancesByDatabaseName) {
+		for (const state of instances) {
+			if (state.closing || state.failureReason !== null) continue;
+			if (![...state.inFlight].some((call) => call.methodName === 'bulkWrite')) continue;
+			stalledWriteByDatabaseName.set(databaseName, {
+				databaseName,
+				kind: 'write-stalled',
+				methodName: 'bulkWrite',
+				message: `Storage did not answer a write within ${context.waitedMs}ms`,
+				at: Date.now(),
+			});
+			stalled = true;
+			break;
+		}
+	}
+	if (!stalled) return false;
+	storageLogger.error('Storage did not answer a local write before its deadline', {
+		code: ERROR_CODES.LOCAL_DB_STALLED,
+		context,
+	});
+	publishDegradedStorage();
+	return true;
+}
+
+/** A successful RPC re-arms error-level logging for that method's signatures only. */
+function clearRemoteErrorSignatures(state: InstanceLatchState, methodName: string): void {
+	for (const signature of state.activeRemoteErrorSignatures) {
+		if (signature.startsWith(`${methodName}:`)) state.activeRemoteErrorSignatures.delete(signature);
+	}
+}
+
+function getRemoteErrorDetails(message: string) {
+	if (!message.startsWith(REQUEST_REMOTE_ERROR_MARKER)) return {};
+	try {
+		const envelope: unknown = JSON.parse(message.slice(REQUEST_REMOTE_ERROR_MARKER.length));
+		if (envelope === null || typeof envelope !== 'object') return {};
+		const remoteError = (envelope as { error?: unknown }).error;
+		// The worker may serialise the error as a bare string; keep it as the message.
+		if (typeof remoteError === 'string') return { message: remoteError.slice(0, 200) };
+		if (remoteError === null || typeof remoteError !== 'object') return {};
+		const { name, message: remoteMessage, code } = remoteError as Record<string, unknown>;
+		return {
+			name: typeof name === 'string' ? name : undefined,
+			message: typeof remoteMessage === 'string' ? remoteMessage.slice(0, 200) : undefined,
+			code: typeof code === 'string' || typeof code === 'number' ? code : undefined,
+		};
+	} catch {
+		return {};
+	}
 }
 
 function getRemoteErrorDescription(message: string): string | null {
@@ -326,6 +431,7 @@ function latchDegradedStorage(
 	const message = error instanceof Error ? error.message : String(error);
 	degradedByDatabaseName.set(databaseName, {
 		databaseName,
+		kind: 'worker-lost',
 		methodName,
 		message,
 		at: Date.now(),
@@ -425,6 +531,7 @@ function getTargetedRecovery(message: string): RegExpMatchArray | null {
 function handleStorageError(
 	methodName: string,
 	error: unknown,
+	state: InstanceLatchState,
 	context: Record<string, unknown> = {}
 ): boolean {
 	const message = error instanceof Error ? error.message : String(error);
@@ -491,13 +598,20 @@ function handleStorageError(
 	// failure or an ordinary storage-method exception.
 	if (message.startsWith(REQUEST_REMOTE_ERROR_MARKER)) {
 		const workerFailure = isStorageWorkerFailure(error);
-		storageLogger.error(
+		const remoteError = getRemoteErrorDetails(message);
+		const signature = `${methodName}:${remoteError.name ?? remoteError.message ?? ''}`;
+		const level = state.activeRemoteErrorSignatures.has(signature) ? 'debug' : 'error';
+		state.activeRemoteErrorSignatures.add(signature);
+		storageLogger[level](
 			`${workerFailure ? 'Storage worker error' : 'Storage remote method error'} in ${methodName}`,
 			{
 				code: workerFailure ? ERROR_CODES.LOCAL_DB_UNAVAILABLE : ERROR_CODES.SYNC_UNEXPECTED,
 				context: {
 					method: methodName,
 					...context,
+					remoteErrorName: remoteError.name,
+					remoteErrorMessage: remoteError.message,
+					remoteErrorCode: remoteError.code,
 					recoveryDocumentId: targetedRecovery?.[1],
 					recoveryFailure: targetedRecovery?.[2],
 				},
@@ -597,7 +711,7 @@ function containCleanupFailure(
 	const teardown = state.closing || state.failureReason !== null;
 	if (!teardown && !reportedCleanupFailures.has(key)) {
 		reportedCleanupFailures.add(key);
-		handleStorageError('cleanup', error, {
+		handleStorageError('cleanup', error, state, {
 			databaseName: state.databaseName,
 			collectionName,
 		});
@@ -657,6 +771,11 @@ async function raceStorageCall<T>(
 		() => {
 			disarmStallReport();
 			noteStorageCompletion();
+			if (stalledWriteByDatabaseName.size > 0) {
+				stalledWriteByDatabaseName.clear();
+				storageLogger.info('Storage answered again; clearing write-stalled degradation');
+				publishDegradedStorage();
+			}
 			state.inFlight.delete(callState);
 		},
 		(error) => {
@@ -728,9 +847,11 @@ function wrapStorageInstance<RxDocType>(
 
 	instance.findDocumentsById = async (ids, withDeleted) => {
 		try {
-			return await originalFindDocumentsById(ids, withDeleted);
+			const result = await originalFindDocumentsById(ids, withDeleted);
+			clearRemoteErrorSignatures(state, 'findDocumentsById');
+			return result;
 		} catch (error) {
-			const handled = handleStorageError('findDocumentsById', error, {
+			const handled = handleStorageError('findDocumentsById', error, state, {
 				collectionName: instance.collectionName,
 				documentId: ids.join(' '),
 			});
@@ -744,9 +865,22 @@ function wrapStorageInstance<RxDocType>(
 
 	instance.bulkWrite = async (documentWrites, context) => {
 		try {
-			return await originalBulkWrite(documentWrites, context);
+			const result = await originalBulkWrite(documentWrites, context);
+			state.notFoundWriteStreak = 0;
+			clearRemoteErrorSignatures(state, 'bulkWrite');
+			return result;
 		} catch (error) {
-			const handled = handleStorageError('bulkWrite', error);
+			const message = error instanceof Error ? error.message : String(error);
+			const notFound = getRemoteErrorDetails(message).name === 'NotFoundError';
+			state.notFoundWriteStreak = notFound ? state.notFoundWriteStreak + 1 : 0;
+			if (
+				state.notFoundWriteStreak >= NOT_FOUND_WRITES_BEFORE_DEGRADED &&
+				!state.closing &&
+				state.failureReason === null
+			) {
+				latchDegradedStorage(databaseName, 'bulkWrite', error);
+			}
+			const handled = handleStorageError('bulkWrite', error, state);
 			if (handled) {
 				// Return all writes as errors so the caller can handle partial results.
 				// RxStorageBulkWriteResponse only has an `error` array in RxDB 16.x.
@@ -770,6 +904,8 @@ function wrapStorageInstance<RxDocType>(
 		failureReason: null,
 		inFlight: new Set(),
 		closing: false,
+		activeRemoteErrorSignatures: new Set(),
+		notFoundWriteStreak: 0,
 	};
 	const instances = instancesByDatabaseName.get(databaseName) ?? new Set();
 	instances.add(state);
@@ -797,6 +933,7 @@ function wrapStorageInstance<RxDocType>(
 	instance.cleanup = (...args) =>
 		raceStorageCall(state, 'cleanup', () => cleanup(...args)).then(
 			(result) => {
+				clearRemoteErrorSignatures(state, 'cleanup');
 				// Only a completed round re-arms reporting — see containCleanupFailure.
 				if (result === true) reportedCleanupFailures.delete(cleanupKey);
 				return result;

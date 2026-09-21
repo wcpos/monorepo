@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { identifyModel } from '../identify-models';
 import { mapWebDeviceToDiscoveredPrinter } from '../map-web-device';
 
 describe('mapWebDeviceToDiscoveredPrinter', () => {
@@ -56,5 +57,18 @@ describe('mapWebDeviceToDiscoveredPrinter', () => {
 			address: 'webbluetooth:BT9',
 			vendor: 'epson',
 		});
+	});
+	it('carries the USB product string as the name so the model table can read it', () => {
+		const row = mapWebDeviceToDiscoveredPrinter({
+			type: 'usb',
+			language: 'esc-pos',
+			serialNumber: 'SN999',
+			manufacturerName: 'EPSON',
+			name: 'USB printer',
+			productName: 'TM-m30III',
+		});
+
+		expect(row.name).toBe('TM-m30III');
+		expect(identifyModel(row.name)).toEqual({ model: 'TM-m30III', columns: 48 });
 	});
 });

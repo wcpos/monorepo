@@ -70,9 +70,15 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: () => false,
 	useObservableSuspense: (resource: { value: unknown }) => resource.value,
 }));
+// The store document the popover reads `prevent_overselling` from (via useAppState +
+// useDocField). Tests flip it to prove Add to Cart follows the Avoid overselling switch.
+const mockStore = { prevent_overselling: false };
+jest.mock('../../../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: mockStore }),
+}));
 jest.mock('@wcpos/query', () => ({
-	useDocField: (_source: unknown, select: (value: unknown) => unknown) =>
-		select({ showOutOfStock: false }),
+	useDocField: (source: unknown, select: (value: unknown) => unknown) =>
+		select(source === mockStore ? mockStore : { showOutOfStock: false }),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 	useReplicationState: () => {
 		throw new Error('legacy popover replication reached');
@@ -149,8 +155,12 @@ jest.mock('./buttons', () => ({
 	),
 }));
 jest.mock('./select', () => ({ VariationSelect: () => null }));
+// What the resolved variation's stock reads as; tests set it unsellable to probe the button.
+const mockStock = { status: 'instock', quantity: null as number | null, sellable: true };
 jest.mock('./stock-status', () => ({
-	useVariationStock: () => ({ status: 'instock', quantity: null, sellable: true }),
+	useVariationStock: (..._args: Parameters<typeof import('./stock-status').useVariationStock>) => ({
+		...mockStock,
+	}),
 	VariationStockBadge: () => null,
 }));
 jest.mock('../../../../../../contexts/translations', () => ({
@@ -191,6 +201,8 @@ describe('Variations popover query state', () => {
 		mockResultCount = null;
 		mockResultNext = null;
 		mockResultSilent = false;
+		mockStore.prevent_overselling = false;
+		Object.assign(mockStock, { status: 'instock', quantity: null, sellable: true });
 	});
 
 	it('refreshes variations once when opened, not when re-rendered', () => {
@@ -459,6 +471,37 @@ describe('Variations popover query state', () => {
 		});
 		expect(button().disabled).toBe(false);
 		expect(button().dataset.loading).toBe('false');
+	});
+
+	it('lets an out-of-stock variation into the cart unless the store prevents overselling', () => {
+		// Two stores (2026-09-16): "Avoid overselling" off, yet an out-of-stock variation
+		// could not be added — the button disabled on `sellable` alone, while a simple
+		// product's Add to Cart never disables on stock and the cart guard bypasses its
+		// check when the setting is off. The popover must apply the same gate.
+		mockStock.status = 'outofstock';
+		mockStock.sellable = false;
+		const props = {
+			parent: {
+				payload: {
+					variations: [11, 12],
+					attributes: [{ id: 1, name: 'Color', variation: true, options: ['Red', 'Blue'] }],
+				},
+			} as never,
+			addToCart: jest.fn(),
+		};
+		const button = () => screen.getByTestId('variation-popover-add-to-cart') as HTMLButtonElement;
+
+		// Setting off (the plugin default): sell it, exactly like a simple product.
+		const { unmount } = render(<VariationsPopover {...props} />);
+		expect(button().disabled).toBe(false);
+		button().click();
+		expect(props.addToCart).toHaveBeenCalledTimes(1);
+		unmount();
+
+		// Setting on: refuse up front, as the cart guard would with a toast.
+		mockStore.prevent_overselling = true;
+		render(<VariationsPopover {...props} />);
+		expect(button().disabled).toBe(true);
 	});
 
 	it('does not show draft variations', () => {

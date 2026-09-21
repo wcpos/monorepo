@@ -20,6 +20,9 @@ let mockSubmitCustomer: SubmitCustomer | undefined;
 
 const currentOrderRecord = { uuid: 'order-1' };
 
+// No provider is mounted here; avoid loading the settings provider's ESM-only dependencies.
+jest.mock('../../contexts/ui-settings', () => ({ useUISettings: jest.fn() }));
+
 jest.mock('@hookform/resolvers/zod', () => ({
 	zodResolver: () => undefined,
 }));

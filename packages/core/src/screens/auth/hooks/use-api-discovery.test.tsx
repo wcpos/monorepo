@@ -120,6 +120,24 @@ describe('useApiDiscovery', () => {
 		}
 	);
 
+	it('reports a bot challenge blocking the API', async () => {
+		mockGet.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 403'), {
+				response: {
+					status: 403,
+					headers: { 'cf-mitigated': 'challenge', 'content-type': 'text/html; charset=UTF-8' },
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useApiDiscovery());
+		await act(async () => {
+			await expect(
+				result.current.discoverApiEndpoints('https://example.com/wp-json/')
+			).rejects.toMatchObject({ errorCode: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API });
+		});
+	});
+
 	it('reports the existing WooCommerce error for a light response missing wc/v3', async () => {
 		mockGet.mockResolvedValue({
 			data: { ...siteData, namespaces: ['wcpos/v2'] },
@@ -177,7 +195,7 @@ describe('useApiDiscovery', () => {
 
 	it('reports hidden routes, not an outdated plugin, when the version is compatible', async () => {
 		mockGet.mockResolvedValue({
-			data: { ...siteData, namespaces: ['wc/v3'], wcpos_version: '1.10.0' },
+			data: { ...siteData, namespaces: ['wc/v3'], wcpos_version: '1.11.0' },
 		});
 
 		const { result } = renderHook(() => useApiDiscovery());
@@ -190,7 +208,7 @@ describe('useApiDiscovery', () => {
 
 	it('lets a compatible version override a visible legacy namespace', async () => {
 		mockGet.mockResolvedValue({
-			data: { ...siteData, namespaces: ['wc/v3', 'wcpos/v1'], wcpos_version: '1.10.0' },
+			data: { ...siteData, namespaces: ['wc/v3', 'wcpos/v1'], wcpos_version: '1.11.0' },
 		});
 
 		const { result } = renderHook(() => useApiDiscovery());
@@ -202,7 +220,7 @@ describe('useApiDiscovery', () => {
 	});
 
 	it.each([
-		['routes stripped from a compatible plugin', ['wc/v3'], '1.10.0'],
+		['routes stripped from a compatible plugin', ['wc/v3'], '1.11.0'],
 		['no WCPOS evidence at all', ['wc/v3'], undefined],
 	])(
 		'shows the merchant the API message, not the dev diagnosis (%s)',

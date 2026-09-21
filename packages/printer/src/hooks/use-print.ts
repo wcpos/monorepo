@@ -1,11 +1,14 @@
 import * as React from 'react';
 
 import { DEFAULT_THERMAL_TEMPLATE } from '../encoder/default-thermal-template';
+import { MAX_DOTS_58MM, MAX_DOTS_80MM, maxDotsForColumns } from '../encoder/thermal-print';
 import { mapReceiptData } from '../encoder/map-receipt-data';
 import { prepareSystemPrintHtml } from '../print-html';
 import { PrinterService } from '../printer-service';
 import { useOptionalRasterize } from '../raster/rasterize-provider';
 import { isOrderBasedCloudProfile } from '../transport/cloud-adapter';
+import { SYSTEM_TARGET, usesSystemPrintDialog } from '../transport/device-key';
+import { printerLogger } from '../logger';
 import { printFromUrl } from './print-from-url';
 
 import type { ReceiptData } from '../encoder/types';
@@ -38,6 +41,10 @@ interface UsePrintOptions {
 	orderId?: number;
 	/** Server template id — required for order-based cloud providers (Epson/PrintNode). */
 	templateId?: string;
+	/** Fetch/build the counted receipt at print time, never from preview state. */
+	preparePrint?: () => Promise<
+		Pick<UsePrintOptions, 'receiptData' | 'html'> & { commit?: () => Promise<void> }
+	>;
 	/** Callbacks */
 	onBeforePrint?: () => void | Promise<void>;
 	onAfterPrint?: () => void;
@@ -46,6 +53,8 @@ interface UsePrintOptions {
 
 // Singleton service instance
 let printerService: PrinterService | null = null;
+// Include counted preparation in each printer's dispatch order, across hook instances.
+const printQueues = new Map<string, Promise<unknown>>();
 
 function getService(): PrinterService {
 	if (!printerService) {
@@ -72,12 +81,24 @@ function extractIframeHtml(
 	}
 }
 
-function resolvePaperGeometry(paperWidth: string | null | undefined): {
+/**
+ * The template's paper width decides the logo width when it has one; most templates leave
+ * `paper_width` null, and then the printer's own column count decides rather than a fixed 80 mm.
+ */
+function resolvePaperGeometry(
+	paperWidth: string | null | undefined,
+	columns?: number
+): {
 	paperFrameClass: 'thermal-58' | 'thermal-80';
 	maxWidthDots: number;
 } {
-	if (paperWidth === '58mm') return { paperFrameClass: 'thermal-58', maxWidthDots: 384 };
-	return { paperFrameClass: 'thermal-80', maxWidthDots: 576 };
+	if (paperWidth === '58mm') return { paperFrameClass: 'thermal-58', maxWidthDots: MAX_DOTS_58MM };
+	if (paperWidth) return { paperFrameClass: 'thermal-80', maxWidthDots: MAX_DOTS_80MM };
+	const maxWidthDots = maxDotsForColumns(columns);
+	return {
+		paperFrameClass: maxWidthDots === MAX_DOTS_58MM ? 'thermal-58' : 'thermal-80',
+		maxWidthDots,
+	};
 }
 
 export function usePrint(options: UsePrintOptions) {
@@ -94,6 +115,7 @@ export function usePrint(options: UsePrintOptions) {
 		cloudEnqueueFactory,
 		orderId,
 		templateId,
+		preparePrint,
 		onBeforePrint,
 		onAfterPrint,
 		onPrintError,
@@ -106,15 +128,22 @@ export function usePrint(options: UsePrintOptions) {
 
 	const rasterize = useOptionalRasterize();
 
-	const print = React.useCallback(async () => {
-		activePrintsRef.current += 1;
-		setIsPrinting(true);
-
+	const runPrint = React.useCallback(async () => {
 		try {
 			if (onBeforePrint) {
 				await onBeforePrint();
 			}
 
+			// Cloud jobs count on the server. Legacy URL/iframe receipts cannot consume
+			// marked JSON, so preserve their uncounted system-print behavior.
+			const serverRendered =
+				isOrderBasedCloudProfile(printerProfile) ||
+				((!printerProfile || usesSystemPrintDialog(printerProfile)) &&
+					!html &&
+					Boolean(receiptUrl));
+			const prepared = serverRendered ? undefined : await preparePrint?.();
+			const printData = prepared?.receiptData ?? receiptData;
+			const printHtml = prepared?.html ?? html;
 			const service = getService();
 			service.setCloudEnqueueFactory(cloudEnqueueFactory);
 
@@ -135,8 +164,8 @@ export function usePrint(options: UsePrintOptions) {
 					throw new Error('Order-based cloud printing requires a template id');
 				}
 				await service.printOrderViaCloud(printerProfile, orderId, templateId);
-			} else if (printerProfile && printerProfile.connectionType !== 'system' && receiptData) {
-				const normalised = mapReceiptData(receiptData as Record<string, any>);
+			} else if (printerProfile && !usesSystemPrintDialog(printerProfile) && printData) {
+				const normalised = mapReceiptData(printData as Record<string, any>);
 
 				if (printerProfile.fullReceiptRaster) {
 					if (!rasterize) {
@@ -147,7 +176,7 @@ export function usePrint(options: UsePrintOptions) {
 					// then send the finished bytes via the existing printRaw.
 					const effectiveTemplateXml =
 						templateEngine === 'thermal' && templateXml ? templateXml : DEFAULT_THERMAL_TEMPLATE;
-					const geometry = resolvePaperGeometry(paperWidth);
+					const geometry = resolvePaperGeometry(paperWidth, printerProfile.columns);
 					const bytes = await rasterize({
 						templateXml: effectiveTemplateXml,
 						receiptData: normalised as Record<string, unknown>,
@@ -164,7 +193,7 @@ export function usePrint(options: UsePrintOptions) {
 					});
 					await service.printRaw(bytes, printerProfile);
 				} else if (templateEngine === 'thermal' && templateXml) {
-					const geometry = resolvePaperGeometry(paperWidth);
+					const geometry = resolvePaperGeometry(paperWidth, printerProfile.columns);
 					await service.printThermalTemplateForPrint(
 						normalised,
 						printerProfile,
@@ -176,7 +205,7 @@ export function usePrint(options: UsePrintOptions) {
 				}
 			} else {
 				// System print fallback — need HTML content
-				let htmlContent = html;
+				let htmlContent = printHtml;
 
 				// Try extracting from the visible iframe (works for same-origin / srcDoc)
 				if (!htmlContent) {
@@ -207,16 +236,20 @@ export function usePrint(options: UsePrintOptions) {
 				}
 			}
 
+			// The paper is already out: a failed count commit must not fail the print (a
+			// retry would print the same copy again). Logged; the local count understates.
+			try {
+				await prepared?.commit?.();
+			} catch (error) {
+				printerLogger.warn('Local print count commit failed after dispatch', {
+					context: { error: String(error) },
+				});
+			}
 			onAfterPrint?.();
+			return true;
 		} catch (error) {
 			onPrintError?.(error as Error);
 			throw error;
-		} finally {
-			activePrintsRef.current -= 1;
-			if (activePrintsRef.current <= 0) {
-				activePrintsRef.current = 0;
-				setIsPrinting(false);
-			}
 		}
 	}, [
 		cloudEnqueueFactory,
@@ -224,6 +257,7 @@ export function usePrint(options: UsePrintOptions) {
 		html,
 		iframeRef,
 		onAfterPrint,
+		preparePrint,
 		onBeforePrint,
 		onPrintError,
 		orderId,
@@ -236,6 +270,26 @@ export function usePrint(options: UsePrintOptions) {
 		templateId,
 		templateXml,
 	]);
+
+	const print = React.useCallback(() => {
+		activePrintsRef.current += 1;
+		setIsPrinting(true);
+		const queueId =
+			!printerProfile || usesSystemPrintDialog(printerProfile) ? SYSTEM_TARGET : printerProfile.id;
+		const job = (printQueues.get(queueId) ?? Promise.resolve()).then(runPrint);
+		// Preserve rejection for the caller, but let subsequent print jobs proceed.
+		printQueues.set(
+			queueId,
+			job.catch(() => {})
+		);
+		return job.finally(() => {
+			activePrintsRef.current -= 1;
+			if (activePrintsRef.current <= 0) {
+				activePrintsRef.current = 0;
+				setIsPrinting(false);
+			}
+		});
+	}, [printerProfile, runPrint]);
 
 	return { print, isPrinting };
 }

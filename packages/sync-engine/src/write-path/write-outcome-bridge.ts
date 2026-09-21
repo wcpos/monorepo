@@ -1,4 +1,8 @@
-import type { WriteAnnihilatedEvent, WriteOutcomeEvent } from './write-drain-lane';
+import type {
+	WriteAnnihilatedEvent,
+	WriteOutcomeEvent,
+	WriteSupersededEvent,
+} from './write-drain-lane';
 
 /**
  * THE CROSS-TAB WRITE-OUTCOME BRIDGE (#1209).
@@ -47,7 +51,8 @@ import type { WriteAnnihilatedEvent, WriteOutcomeEvent } from './write-drain-lan
  * the void needs to be told). Structurally identical to what `events()` emits;
  * `awaitWriteOutcome` matches on `mutationId` alone, so the id must survive the
  * hop verbatim. */
-export type BroadcastWriteOutcome = WriteOutcomeEvent | WriteAnnihilatedEvent;
+export type BroadcastWriteOutcome =
+	WriteOutcomeEvent | WriteAnnihilatedEvent | WriteSupersededEvent;
 
 /** The engine-facing port. The engine neither opens nor names a channel — it
  * publishes what it produced and re-emits what a peer produced. */

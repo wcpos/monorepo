@@ -96,7 +96,6 @@ function twoTabs(fetch: (url: string, init?: RequestInit) => Promise<Response>) 
 			identity: freshIdentity(),
 			mode: 'manual',
 			fetch,
-			routes: { '/changes/config-fingerprint': { fingerprints: {} } },
 			ports: { writePlaneOwner: owner, writeOutcomeBridge: bridge },
 			awaitReady: false,
 		});

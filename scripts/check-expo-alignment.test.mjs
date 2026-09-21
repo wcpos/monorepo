@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { findExpoMisalignments, formatMisalignments, satisfies } from './check-expo-alignment.mjs';
+import {
+	ALLOWED_EXPO_MISMATCHES,
+	findExpoMisalignments,
+	formatMisalignments,
+	satisfies,
+} from './check-expo-alignment.mjs';
 
 test('satisfies handles exact versions', () => {
 	assert.equal(satisfies('19.2.3', '19.2.3'), true);
@@ -78,6 +83,23 @@ test('findExpoMisalignments accepts in-range tilde resolutions', () => {
 test('findExpoMisalignments respects the allowlist', () => {
 	const allowed = new Map([['react', 'testing']]);
 	assert.deepEqual(findExpoMisalignments(importers, bundled, allowed), []);
+});
+
+test('default allowlist permits the intentional Sentry SDK override', () => {
+	const sentryImporters = {
+		'apps/main': {
+			'@sentry/react-native': { specifier: '8.25.0', version: '8.25.0' },
+		},
+		'packages/utils': {
+			'@sentry/react-native': { specifier: '8.25.0', version: '8.25.0' },
+		},
+	};
+
+	assert.match(ALLOWED_EXPO_MISMATCHES.get('@sentry/react-native'), /8\.25\.0.*#6630/);
+	assert.deepEqual(
+		findExpoMisalignments(sentryImporters, { '@sentry/react-native': '~7.11.0' }),
+		[]
+	);
 });
 
 test('formatMisalignments renders the prescribed range and importers', () => {

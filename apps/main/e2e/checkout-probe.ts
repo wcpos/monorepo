@@ -7,7 +7,12 @@ import {
 	type WorkerInfo,
 } from '@playwright/test';
 
-import { authenticatedTest, type StoreAuthorization, tryAddProductBySku } from './fixtures';
+import {
+	authenticatedTest,
+	ensureRegisterOpen,
+	type StoreAuthorization,
+	tryAddProductBySku,
+} from './fixtures';
 import {
 	createRunPrivateProduct,
 	createVariationMatrixProduct,
@@ -47,7 +52,7 @@ const simpleProbesByPage = new WeakMap<Page, SearchProbe[] | null>();
 const variableProbeByPage = new WeakMap<Page, RunPrivateProductProbe | null>();
 const matrixProbeByPage = new WeakMap<Page, VariationMatrixProbe | null>();
 
-function workerStoreUrl(workerInfo: WorkerInfo): string {
+export function workerStoreUrl(workerInfo: WorkerInfo): string {
 	if (process.env.E2E_STORE_URL) return process.env.E2E_STORE_URL;
 	return (workerInfo.project.use as WcposTestOptions).storeUrl || 'https://dev-free.wcpos.com';
 }
@@ -273,6 +278,7 @@ export async function tryAddRunPrivateSimpleProduct(page: Page, index = 0): Prom
 			'tryAddRunPrivateSimpleProduct requires isolatedProductTest fixture registration'
 		);
 	}
+	await ensureRegisterOpen(page);
 	const probe = probes?.[index] ?? null;
 	if (probe) {
 		if (!probe.rowTestId) {
@@ -317,6 +323,21 @@ export async function addCheckoutProbeProduct(page: Page): Promise<void> {
 }
 
 /**
+ * The add control of the run-private simple product after its first add: the same
+ * tile (or table row button) `tryAddRunPrivateSimpleProduct` clicked, so a burst of
+ * repeat clicks keeps one product identity. `null` on secretless forks, where the
+ * shared-catalog fallback cannot guarantee which product a page-wide `.first()` hits.
+ */
+export function checkoutProbeAddControl(page: Page): Locator | null {
+	const probe = simpleProbesByPage.get(page)?.[0] ?? null;
+	if (!probe?.rowTestId) return null;
+	const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
+	const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
+	const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
+	return tile.or(tableButton).first();
+}
+
+/**
  * Add a product a SECOND time in the same session, without any server wait.
  *
  * `addCheckoutProbeProduct` cannot be called twice: its writer path re-searches the same
@@ -334,11 +355,23 @@ export async function addCheckoutProbeProductAgain(page: Page): Promise<void> {
 			'addCheckoutProbeProductAgain requires isolatedProductTest fixture registration'
 		);
 	}
+	await ensureRegisterOpen(page);
 	const probe = probes?.[0] ?? null;
 	if (probe && probe.rowTestId) {
 		const posScreen = page.getByTestId('screen-pos').filter({ visible: true });
 		const tile = posScreen.getByTestId(`product-tile-${probe.id}`);
 		const tableButton = posScreen.getByTestId(probe.rowTestId).getByTestId('add-to-cart-button');
+		// A new order starts on the unfiltered grid, where a run-private probe is one row in
+		// hundreds: search for it again (measured live 2026-09-18). The first add already
+		// satisfied this demand, so the engine may answer locally with no wire request: the
+		// rendered row stands in for the response (`localResult`), as the helper documents.
+		await searchAndWaitForServer(
+			page,
+			page.getByTestId('search-products'),
+			'products',
+			probe.token,
+			tile.or(tableButton).first()
+		);
 		await expect(tile.or(tableButton).first()).toBeVisible({ timeout: 30_000 });
 		if (await tile.isVisible()) await tile.click();
 		else await tableButton.click();

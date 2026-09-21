@@ -14,9 +14,8 @@
 export const FLEXSEARCH_MIN_TERM_LENGTH = 3;
 
 /**
- * Where a search string breaks into terms: whitespace/control characters and the
- * three characters WordPress's own `WP_Query::parse_search()` treats as term
- * separators (`"`, `,`, `+`).
+ * Where a search string breaks into terms: whitespace/control characters only.
+ * Internal quotes, commas and plus signs stay literal, so "0,4" is one term.
  *
  * Punctuation inside a term is part of the term. FlexSearch's default encoder splits
  * on it (`/[\p{Z}\p{S}\p{P}\p{C}]+/u`), which turned "0.4" into "0" and "4", both under
@@ -28,7 +27,7 @@ export const FLEXSEARCH_MIN_TERM_LENGTH = 3;
  * Bump `SEARCH_INDEX_VERSION` in `@wcpos/database` whenever any of this changes: the
  * persisted index is not re-tokenized in place.
  */
-export const FLEXSEARCH_TOKEN_BOUNDARY = /[\p{Z}\p{C}",+]+/u;
+export const FLEXSEARCH_TOKEN_BOUNDARY = /[\p{Z}\p{C}]+/u;
 
 /**
  * Longest term kept whole with its punctuation.

@@ -1,3 +1,5 @@
+import { usesSystemPrintDialog } from './transport/device-key';
+
 import type { PrinterProfile } from './types';
 
 export interface TemplateInfo {
@@ -39,14 +41,14 @@ export function resolvePrinter(options: ResolvePrinterOptions): PrinterProfile |
 	if (template.output_type === 'escpos') {
 		const targetColumns = targetColumnsForTemplate(template);
 		const candidates = profiles.filter(
-			(p) => p.connectionType !== 'system' && targetColumns.includes(p.columns)
+			(p) => !usesSystemPrintDialog(p) && targetColumns.includes(p.columns)
 		);
 		if (candidates.length === 0) return null;
 		return candidates.find((p) => p.isDefault) ?? candidates[0];
 	}
 
 	if (template.output_type === 'html') {
-		const candidates = profiles.filter((p) => p.connectionType === 'system');
+		const candidates = profiles.filter((p) => usesSystemPrintDialog(p));
 		if (candidates.length === 0) return null;
 		return candidates.find((p) => p.isDefault) ?? candidates[0];
 	}

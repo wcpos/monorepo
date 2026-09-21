@@ -6,7 +6,9 @@ import { Uniwind, useUniwind } from 'uniwind';
 import { Icon, IconName } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
+import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
 import { VStack } from '@wcpos/components/vstack';
+import { useDocField } from '@wcpos/query';
 
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
@@ -129,6 +131,49 @@ function ThemeGrid({
 	);
 }
 
+/** Auto first: it is the default, and the three steps override it. */
+const SCALE_OPTIONS = ['auto', 'compact', 'regular', 'spacious'] as const;
+
+/**
+ * The Scale row. The step itself reaches the screens through `ScaleProvider`,
+ * which reads this field off the store document — nothing here touches a token.
+ *
+ * A toggle group until the segmented control lands in the primitives pass.
+ */
+function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
+	const { store } = useStoreSession();
+	const { localPatch } = useLocalMutation();
+	const scale = useDocField(store, (latest) => latest.scale) ?? 'auto';
+
+	const handleScaleChange = React.useCallback(
+		async (value: string | undefined) => {
+			if (!value) return;
+			try {
+				await localPatch({ document: store, data: { scale: value } });
+			} catch (error) {
+				console.error('Failed to persist selected scale', error);
+			}
+		},
+		[localPatch, store]
+	);
+
+	return (
+		<ToggleGroup
+			type="single"
+			value={scale}
+			onValueChange={(value) => {
+				void handleScaleChange(value as string | undefined);
+			}}
+		>
+			{SCALE_OPTIONS.map((option) => (
+				<ToggleGroupItem key={option} value={option} testID={`settings-scale-${option}`}>
+					<Text>{t(`settings.scale.${option}`)}</Text>
+				</ToggleGroupItem>
+			))}
+		</ToggleGroup>
+	);
+}
+
 /**
  * Theme Settings Component
  *
@@ -215,6 +260,9 @@ export function ThemeSettings() {
 				description={t('settings.choose_a_theme_for_the_app')}
 			>
 				<ThemeGrid themeOptions={themeOptions} onThemeChange={handleThemeChange} t={t} />
+			</SettingsSection>
+			<SettingsSection title={t('settings.scale')} description={t('settings.scale.description')}>
+				<ScaleRow t={t} />
 			</SettingsSection>
 		</VStack>
 	);

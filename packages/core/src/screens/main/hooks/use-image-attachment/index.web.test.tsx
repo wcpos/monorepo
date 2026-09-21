@@ -137,6 +137,18 @@ describe('useImageAttachment (web)', () => {
 		expect(mockGet).toHaveBeenCalledTimes(1);
 	});
 
+	it('owns its failure code so a missing file logs as PRODUCT201, not a missing REST route', async () => {
+		mockGet.mockResolvedValue(makeImageResponse('owned'));
+
+		render(probeTree({} as DocumentArg, 'owned.jpg'));
+
+		expect(await screen.findByText('blob:owned')).toBeTruthy();
+		expect(mockGet).toHaveBeenCalledWith(
+			'owned.jpg',
+			expect.objectContaining({ quietErrors: true, failureCode: 'PRODUCT201' })
+		);
+	});
+
 	it('shows the fallback, not the previous image, while the next one loads', async () => {
 		const fetches: Record<string, Deferred<ReturnType<typeof makeImageResponse>>> = {
 			'b-red.jpg': defer(),

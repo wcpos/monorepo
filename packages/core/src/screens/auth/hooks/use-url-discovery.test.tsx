@@ -3,6 +3,8 @@
  */
 import { renderHook } from '@testing-library/react';
 
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 import { useUrlDiscovery } from './use-url-discovery';
 
 const mockHead = jest.fn();
@@ -74,6 +76,57 @@ describe('useUrlDiscovery', () => {
 		const { result } = renderHook(() => useUrlDiscovery());
 		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toThrow(
 			'The site took too long to respond — check the server and try again'
+		);
+	});
+
+	it('reports a bot challenge when both probes are challenged', async () => {
+		mockHead.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 403'), {
+				response: {
+					status: 403,
+					headers: { 'cf-mitigated': 'challenge', 'content-type': 'text/html; charset=UTF-8' },
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toMatchObject({
+			message:
+				"This store's hosting setup is blocking the app — the details page names the exact cause and fix.",
+			errorCode: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API,
+		});
+	});
+
+	it('recognises a challenge whose header name is not lower-cased', async () => {
+		mockHead.mockRejectedValue(
+			Object.assign(new Error('Request failed with status code 403'), {
+				response: {
+					status: 403,
+					headers: { 'CF-Mitigated': 'Challenge', 'Content-Type': 'text/html' },
+				},
+			})
+		);
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).rejects.toMatchObject({
+			errorCode: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API,
+		});
+	});
+
+	it('discovers the fallback URL when only the Link-header probe is challenged', async () => {
+		mockHead.mockRejectedValueOnce(
+			Object.assign(new Error('Request failed with status code 403'), {
+				response: {
+					status: 403,
+					headers: { 'cf-mitigated': 'challenge', 'content-type': 'text/html; charset=UTF-8' },
+				},
+			})
+		);
+		mockHead.mockResolvedValueOnce({ status: 200, headers: {} });
+
+		const { result } = renderHook(() => useUrlDiscovery());
+		await expect(result.current.discoverWpApiUrl('https://example.com')).resolves.toBe(
+			'https://example.com/wp-json/'
 		);
 	});
 

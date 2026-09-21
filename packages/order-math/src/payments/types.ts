@@ -24,6 +24,34 @@ export const KNOWN_CAPTURE_MODES: readonly CaptureMode[] = [
 export type OpenEnum<Known extends string> = Known | (string & {});
 export type PaymentTransport = 'bluetooth' | 'usb' | 'network' | 'tap_to_pay';
 
+export type PaymentHardware =
+	| {
+			discovery: OpenEnum<'server'>;
+			readers: {
+				id: string;
+				label: string;
+				status: OpenEnum<'online' | 'offline'>;
+				default: boolean;
+			}[];
+			default_reader: string | null;
+			lock_to_default: boolean;
+	  }
+	| {
+			transports: {
+				transport: OpenEnum<PaymentTransport>;
+				offline: OpenEnum<'record' | 'queue' | 'none'>;
+				tips: OpenEnum<'none' | 'on_reader' | 'at_till'>;
+			}[];
+			discovery: OpenEnum<'sdk' | 'manual'>;
+	  };
+
+export interface PaymentEvent {
+	t: string;
+	level: 'info' | 'warning' | 'error';
+	message: string;
+	context?: Record<string, unknown>;
+}
+
 export interface PaymentMethodDescriptor {
 	schema: 1;
 	id: string;
@@ -34,14 +62,7 @@ export interface PaymentMethodDescriptor {
 	capture: {
 		mode: OpenEnum<CaptureMode>;
 		provider: string | null;
-		hardware: {
-			transports: {
-				transport: OpenEnum<PaymentTransport>;
-				offline: OpenEnum<'record' | 'queue' | 'none'>;
-				tips: OpenEnum<'none' | 'on_reader' | 'at_till'>;
-			}[];
-			discovery: OpenEnum<'sdk' | 'manual'>;
-		} | null;
+		hardware: PaymentHardware | null;
 		webview_available: boolean;
 	};
 	capabilities: {
@@ -92,6 +113,9 @@ export interface PaymentRow {
 	change: string | null;
 	tip: string | null;
 	status: PaymentStatus;
+	expires_at?: string | null;
+	events?: PaymentEvent[];
+	void_requested_at?: string | null;
 	failure_reason: string | null;
 	refunded_amount: string;
 	refunds: PaymentRefundEntry[];
@@ -99,8 +123,12 @@ export interface PaymentRow {
 	receipt: Record<string, string>;
 	cashier_id: number;
 	store_id: number | null;
+	register_id?: string | null;
+	session_id?: string | null;
 	created_at_gmt: string;
 	captured_at_gmt: string | null;
+	// This is when the reader approved the hold; captured_at_gmt is when the money was taken.
+	authorized_at_gmt?: string | null;
 	updated_at_gmt: string;
 	[extra: string]: unknown;
 }
@@ -130,6 +158,8 @@ export type PaymentErrorCode =
 	| 'wcpos_capture_mode_unsupported'
 	| 'wcpos_payment_not_found'
 	| 'wcpos_payment_conflict'
+	| 'wcpos_payment_locked'
+	| 'wcpos_amount_mismatch'
 	| 'wcpos_invalid_transition'
 	| 'wcpos_amount_exceeds_balance'
 	| 'wcpos_order_already_paid'
@@ -145,6 +175,7 @@ export interface PaymentRefusalBody {
 		payment?: PaymentRow;
 		order?: OrderPaymentSummary;
 		detail?: unknown;
+		retry_after?: number;
 	};
 }
 

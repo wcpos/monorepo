@@ -2,7 +2,9 @@ import * as Crypto from 'expo-crypto';
 
 import { createStoreDB, createUserDB, sanitizeWPCredentialsData } from '@wcpos/database';
 import { platformFetch } from '@wcpos/hooks/platform-fetch';
-import { bareAuthParamSupported, formatAuthorizationParam } from '@wcpos/utils/auth-param';
+import { AppInfo } from '@wcpos/utils/app-info';
+import { buildRequestPreamble } from '@wcpos/utils/request-preamble';
+import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import {
 	ERROR_CATALOGUE,
@@ -31,8 +33,10 @@ import {
 	normalizeStorePayload,
 	type ServerStorePayload,
 } from '../../utils/merge-stores';
+import { ensureRegister } from '../../services/register/register-document';
 import { upsertSiteData } from '../../utils/site-writes';
 import { initialProps } from './initial-props';
+import { commitStoreSession, IncompleteStoreSessionError } from './store-session';
 
 import type { RxState } from 'rxdb';
 import type { InitialProps } from './initial-props.types';
@@ -129,12 +133,13 @@ type AuthProbeResult = { verdict: 'success' | 'auth-failed' | 'transport-dead'; 
 
 async function testHeaderAuth(authTestUrl: string, token: string): Promise<AuthProbeResult> {
 	try {
-		const result = await fetchJsonWithTimeout(authTestUrl, {
+		const prepared = buildRequestPreamble(
+			{ purpose: 'probe-header', client: AppInfo, accessToken: token },
+			{ url: authTestUrl }
+		);
+		const result = await fetchJsonWithTimeout(prepared.url, {
 			method: 'GET',
-			headers: {
-				'X-WCPOS': '1',
-				Authorization: `Bearer ${token}`,
-			},
+			headers: Object.fromEntries(prepared.headers),
 		});
 
 		if (!result || result.response.status === 403 || result.response.status === 404) {
@@ -159,14 +164,13 @@ async function testParamAuth(
 	bareSupported: boolean
 ): Promise<AuthProbeResult> {
 	try {
-		const url = new URL(authTestUrl);
-		url.searchParams.set('authorization', formatAuthorizationParam(token, bareSupported));
-
-		const result = await fetchJsonWithTimeout(url.toString(), {
+		const prepared = buildRequestPreamble(
+			{ purpose: 'probe-param', client: AppInfo, accessToken: token, bareAuthParam: bareSupported },
+			{ url: authTestUrl }
+		);
+		const result = await fetchJsonWithTimeout(prepared.url, {
 			method: 'GET',
-			headers: {
-				'X-WCPOS': '1',
-			},
+			headers: Object.fromEntries(prepared.headers),
 		});
 
 		if (!result || result.response.status === 403 || result.response.status === 404) {
@@ -279,39 +283,28 @@ async function probeHeaderEcho(
 	wcposVersion?: string
 ): Promise<EchoProbeVerdict> {
 	try {
-		const url = new URL(echoUrl);
-		// The URL must never carry the real token — query strings persist in
-		// server/proxy/telemetry logs, and this probe runs every boot even when
-		// header auth is healthy. Masking char-for-char keeps what a WAF keys
-		// on: the value's SHAPE (Bearer prefix decision, JWT charset and dots)
-		// and its LENGTH (P17-class size ceilings). The Authorization HEADER
-		// keeps the real token: headers do not land in URL logs, and header
-		// arrival is the channel being measured.
-		const probeToken = accessToken.replace(/[A-Za-z0-9]/g, 'x');
-		url.searchParams.set(
-			'authorization',
-			formatAuthorizationParam(probeToken, bareAuthParamSupported(wcposVersion))
-		);
-		url.searchParams.set('wcpos', '1');
-		url.searchParams.set('store_id', '1');
-
-		const result = await fetchJsonWithTimeout(
-			url.toString(),
+		const prepared = buildRequestPreamble(
 			{
-				method: 'GET',
-				// Adding a header here? Add its lowercase name to
-				// ECHO_PROBE_SENT_HEADERS above, or it reads as dead.
+				purpose: 'probe-echo',
+				client: AppInfo,
+				accessToken,
+				site: { wcpos_version: wcposVersion },
+			},
+			{
+				url: echoUrl,
+				// Adding a header here? Add its lowercase name to ECHO_PROBE_SENT_HEADERS.
 				headers: {
-					Authorization: `Bearer ${accessToken}`,
 					'Content-Type': 'application/json',
-					'X-WCPOS': '1',
-					'X-WCPOS-Store': '1',
 					'Idempotency-Key': 'wcpos-echo-probe',
 					'If-Match': '"wcpos-echo-probe"',
 					'If-None-Match': '"wcpos-echo-probe"',
 					'X-WCPOS-Idempotency-Key': 'wcpos-echo-probe',
 				},
-			},
+			}
+		);
+		const result = await fetchJsonWithTimeout(
+			prepared.url,
+			{ method: 'GET', headers: Object.fromEntries(prepared.headers) },
 			AUTH_PROBE_TIMEOUT_MS
 		);
 
@@ -445,9 +438,11 @@ export async function runConnectCompatibilityProbes(input: {
 }): Promise<{ blocking: ErrorCode | null; warnings: ErrorCode[] }> {
 	const resolvedUrl = (pathUrl: string) =>
 		input.useRestRouteParam ? toRestRouteUrl(pathUrl, input.pathRoot) : pathUrl;
-	const ping = new URL(`${input.pathBase}ping`);
-	ping.searchParams.set('wcpos', '1');
-	const barePingUrl = resolvedUrl(ping.toString());
+	const ping = buildRequestPreamble(
+		{ purpose: 'probe-bare', client: AppInfo },
+		{ url: `${input.pathBase}ping` }
+	);
+	const barePingUrl = resolvedUrl(ping.url);
 	const nastyPing = new URL(barePingUrl);
 	nastyPing.searchParams.set('s', 'Ünion select café');
 	const bare = await fetchWithProbeTimeout(barePingUrl, { method: 'GET' });
@@ -463,14 +458,14 @@ export async function runConnectCompatibilityProbes(input: {
 		});
 	}
 
-	const echo = new URL(`${input.pathBase}echo`);
-	echo.searchParams.set('wcpos', '1');
-	echo.searchParams.set('store_id', '1');
-	const echoUrl = resolvedUrl(echo.toString());
 	const requestEcho = async (token: string): Promise<HeaderEchoResult | null> => {
+		const prepared = buildRequestPreamble(
+			{ purpose: 'probe-cache', client: AppInfo, accessToken: token },
+			{ url: `${input.pathBase}echo` }
+		);
 		const result = await fetchJsonWithTimeout(
-			echoUrl,
-			{ method: 'GET', headers: { Authorization: `Bearer ${token}` } },
+			resolvedUrl(prepared.url),
+			{ method: 'GET', headers: Object.fromEntries(prepared.headers) },
 			AUTH_PROBE_TIMEOUT_MS
 		);
 		return result ? parseHeaderEcho(result.data) : null;
@@ -771,23 +766,12 @@ export const hydrateUserSession = async (
 export async function switchUserSessionStore(
 	userDB: UserDatabase,
 	appState: SessionAppState,
-	storeLocalID: string,
-	opts?: {
-		switchEngineScope?: (
-			sessionData: Awaited<ReturnType<typeof hydrateUserSession>>
-		) => Promise<void>;
-	}
+	storeLocalID: string
 ) {
 	const current = await appState.get('current');
 	const newState = { ...current, storeID: storeLocalID };
 	const sessionData = await hydrateUserSession(userDB, newState);
-
-	// The engine must reach the new scope BEFORE the session is committed — a
-	// failed engine transition aborts the switch with durable state untouched.
-	await opts?.switchEngineScope?.(sessionData);
-
-	await appState.set('current', () => newState);
-	return sessionData;
+	return commitStoreSession(appState, { ids: newState, session: sessionData });
 }
 
 /**
@@ -825,6 +809,7 @@ export type PreparedStorePayload = ServerStorePayload & { localID: string };
  * the members typed without widening the exception.
  */
 export interface HydrationContext {
+	session?: Awaited<ReturnType<typeof hydrateUserSession>>;
 	userDB?: UserDatabase;
 	/** Session pointer (`current`). */
 	appState?: SessionAppState;
@@ -876,6 +861,8 @@ const initializeUserDBStep: HydrationStep = {
 		if (!user) {
 			user = await userDB.users.insert({ first_name: 'Global', last_name: 'User' });
 		}
+
+		await ensureRegister(userDB);
 
 		const result = {
 			userDB,
@@ -1017,7 +1004,18 @@ const processInitialPropsStep: HydrationStep = {
 		};
 
 		if (JSON.stringify(oldState) !== JSON.stringify(newState)) {
-			await appState.set('current', () => newState);
+			try {
+				const session = await hydrateUserSession(userDB, newState);
+				// ?store= is already stripped, so reload cannot retry a refused selection.
+				await commitStoreSession(appState, { ids: newState, session });
+				return { stores, storeLocalIDs, session };
+			} catch (error) {
+				if (!(error instanceof IncompleteStoreSessionError)) throw error;
+				appLogger.error(error.message, {
+					code: ERROR_CODES.STORE_SESSION_INCOMPLETE,
+					context: { missingFields: error.missingFields, ...newState },
+				});
+			}
 		}
 
 		return {
@@ -1134,6 +1132,21 @@ const hydrateUserSessionStep: HydrationStep = {
 			throw new Error('Missing userDB or appState in hydration context');
 		}
 		const current = await context.appState.get('current');
+		const { session } = context;
+		if (
+			session &&
+			current &&
+			session.site?.uuid === current.siteID &&
+			session.wpCredentials?.uuid === current.wpCredentialsID &&
+			session.store?.localID === current.storeID
+		) {
+			return {
+				...session,
+				site: session.site?.getLatest?.() ?? session.site,
+				wpCredentials: session.wpCredentials?.getLatest?.() ?? session.wpCredentials,
+				store: session.store?.getLatest?.() ?? session.store,
+			};
+		}
 		return await hydrateUserSession(context.userDB, current || {});
 	},
 };

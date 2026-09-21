@@ -18,6 +18,14 @@ function byQueryKey(left: QueryTotalRequestState, right: QueryTotalRequestState)
 	return left.queryKey.localeCompare(right.queryKey);
 }
 
+// Never-tried requests precede failed requests; oldest first within each attempt count.
+// The query key is the final tiebreak only.
+function byRunnablePriority(left: QueryTotalRequestState, right: QueryTotalRequestState): number {
+	return (
+		left.attempt - right.attempt || left.updatedAtMs - right.updatedAtMs || byQueryKey(left, right)
+	);
+}
+
 function isRunnable(state: QueryTotalRequestState, nowMs: number): boolean {
 	if (state.status === 'in-flight') {
 		return state.claimedUntilMs !== null && state.claimedUntilMs <= nowMs;
@@ -67,7 +75,7 @@ export class RxQueryTotalRequestStateRepository {
 			sort: [{ queryKey: 'asc' }],
 		});
 
-		return states.filter((state) => isRunnable(state, nowMs)).sort(byQueryKey);
+		return states.filter((state) => isRunnable(state, nowMs)).sort(byRunnablePriority);
 	}
 
 	async remove(expectedState: QueryTotalRequestState): Promise<boolean> {

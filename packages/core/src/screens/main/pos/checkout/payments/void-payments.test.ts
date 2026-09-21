@@ -181,7 +181,11 @@ describe('voidPayments', () => {
 		expect(written[1]).toBe(refused);
 		expect(written[2]).toMatchObject({ id: 'last', status: 'voided' });
 		expect(result.rows).toEqual([voidedFirst, written[2]]);
-		expect(result.failed).toEqual([{ paymentId: 'refused', message: 'Provider refused the void' }]);
+		// The store answered with a refusal, so the caller may safely tell the cashier to
+		// refund this one by hand.
+		expect(result.failed).toEqual([
+			{ paymentId: 'refused', message: 'Provider refused the void', refused: true },
+		]);
 		expect(deps.mirror).toHaveBeenCalledTimes(1);
 	});
 
@@ -199,12 +203,23 @@ describe('voidPayments', () => {
 			via: 'online',
 			rows: [],
 			failed: [
-				{ paymentId: 'first', message: 'network' },
-				{ paymentId: 'second', message: 'second' },
+				// A bare Error is a transport failure: the store never answered, so the void
+				// may yet have been applied and the caller must not promise a hand refund.
+				{ paymentId: 'first', message: 'network', refused: false },
+				{ paymentId: 'second', message: 'second', refused: false },
 			],
 			order: null,
 		});
 		expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 		expect(deps.mirror).not.toHaveBeenCalled();
 	});
+});
+it('cannot void device money through the manual offline write seam', async () => {
+	const deps = createDeps(false);
+	const result = await voidPayments(
+		order([{ ...payment('device', 'authorized'), capture_mode: 'device', recorded_offline: true }]),
+		deps
+	);
+	expect(result.failed).toHaveLength(1);
+	expect(deps.patchAndEnqueue).not.toHaveBeenCalled();
 });

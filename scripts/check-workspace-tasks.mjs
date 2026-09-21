@@ -18,18 +18,19 @@
  * allowlist needs a reason, and both are checked for staleness so a fixed
  * exclusion cannot outlive the problem it documented.
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readSubmodulePaths } from './check-ci-test-matrix.mjs';
+import {
+	parseWorkspaceGlobs,
+	readSubmodulePaths,
+	resolveWorkspacePackages,
+} from './check-ci-test-matrix.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const REQUIRED_TASKS = ['lint', 'typecheck'];
-
-/** Workspace roots from pnpm-workspace.yaml. Submodules are dropped separately. */
-const WORKSPACE_PARENTS = ['apps', 'packages'];
 
 export const ALLOWLIST = [
 	{
@@ -52,14 +53,10 @@ export const GATE_ALLOWLIST = [];
 
 export function readWorkspacePackages(root = repoRoot) {
 	const submodules = readSubmodulePaths(root);
-	const dirs = WORKSPACE_PARENTS.flatMap((parent) =>
-		readdirSync(path.join(root, parent), { withFileTypes: true })
-			.filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
-			.map((entry) => `${parent}/${entry.name}`)
-	);
+	const globs = parseWorkspaceGlobs(readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8'));
 
-	return dirs
-		.filter((dir) => !submodules.has(dir) && existsSync(path.join(root, dir, 'package.json')))
+	return resolveWorkspacePackages(globs, root)
+		.filter((dir) => !submodules.has(dir))
 		.sort()
 		.map((dir) => ({
 			dir,

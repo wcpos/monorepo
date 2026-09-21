@@ -1,0 +1,60 @@
+import type { ClosureRow } from '@wcpos/database';
+
+import { createTestT } from '../../../../../jest/translate';
+import { exportCsv } from './export-csv';
+
+// Revert: omit a visible column/row, interpolate unescaped names, or export signed formulas.
+const row = {
+	id: 'c',
+	business_day: '2026-09-17',
+	number: 4,
+	register_id: 'r',
+	store_id: 3,
+	opened_at: '2026-09-17T08:00:00Z',
+	closed_at: '2026-09-17T17:00:00Z',
+	breakdowns: { register_name: 'Front,"desk"\n二', closed_by_name: '=1+1' },
+	expected: { cash: '100.0000', card: '8.0000' },
+	counted: { cash: '99.0000', card: '10.0000' },
+	variance: { cash: '-1.0000', card: '2.0000' },
+	corrections_count: 1,
+	synced_rows_at: null,
+} as unknown as ClosureRow;
+it('exports the shown rows with stable columns, all tenders, direction, badge precedence and UTF-8 names', () => {
+	const csv = exportCsv([row], createTestT(), {}, 'Café');
+	expect(csv.split('\r\n')[0]).toBe(
+		'"Business day","Closure","Register","Store","Opened","Closed","Closer","Expected (cash)","Counted (cash)","Variance (cash)","Expected (card)","Counted (card)","Variance (card)","Status"'
+	);
+	expect(csv).toContain('"2026-09-17","4","Front,""desk""\n二","Café"');
+	expect(csv).toContain(
+		'"\'=1+1","100.0000","99.0000","1.0000 short","8.0000","10.0000","2.0000 over","Unsynced"'
+	);
+	expect(exportCsv([{ ...row, synced_rows_at: 'now' }], createTestT())).toContain('"Corrected"');
+	expect(exportCsv([], createTestT())).not.toContain('2026-09-17');
+});
+it.each(['=cmd', '+cmd', '-cmd', '@cmd'])('neutralizes text starting with %s', (name) => {
+	expect(exportCsv([{ ...row, breakdowns: { closed_by_name: name } }], createTestT())).toContain(
+		`"'${name}"`
+	);
+});
+
+// Revert: guard only a formula marker at byte zero.
+it.each(['\tname', '\rname', '\nname', ' =cmd', '\u0000+cmd', '\t\r\n @cmd', '\u00a0-cmd'])(
+	'neutralizes control/whitespace prefixes: %j',
+	(name) => {
+		expect(exportCsv([{ ...row, breakdowns: { closed_by_name: name } }], createTestT())).toContain(
+			`"'${name}"`
+		);
+	}
+);
+
+// Revert: discover columns only from submitted counts/variance, hiding an omitted tender.
+it('exports an expected-only tender with zero counted and its shortage', () => {
+	const csv = exportCsv(
+		[{ ...row, expected: { voucher: '40.0000' }, counted: {}, variance: {} }],
+		createTestT()
+	);
+	expect(csv.split('\r\n')[0]).toContain(
+		'"Expected (voucher)","Counted (voucher)","Variance (voucher)"'
+	);
+	expect(csv).toContain('"40.0000","0","40.0000 short"');
+});

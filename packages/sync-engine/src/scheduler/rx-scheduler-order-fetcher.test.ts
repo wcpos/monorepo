@@ -49,7 +49,9 @@ function orderTask(overrides: Partial<FetchTask> = {}): FetchTask {
 	};
 }
 
-function response(payload: PullResponse<WirePullDocument> | unknown[]): Response {
+function response(
+	payload: (Omit<PullResponse<WirePullDocument>, 'hasMore'> & { complete: boolean }) | unknown[]
+): Response {
 	return new Response(JSON.stringify(payload), {
 		status: 200,
 		headers: { 'content-type': 'application/json' },
@@ -89,7 +91,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			writeCustomPullCheckpoint: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: true })
+			response({ documents, checkpoint: nextCheckpoint, complete: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -141,7 +143,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({
 				documents: [doc],
 				checkpoint: nextCheckpoint,
-				hasMore: false,
+				complete: true,
 			})
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
@@ -196,7 +198,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				response({
 					documents: [applied, skipped],
 					checkpoint: nextCheckpoint,
-					hasMore: false,
+					complete: true,
 				})
 			),
 			// Order 12 has a queued local mutation: the adapter drops it before the upsert.
@@ -240,7 +242,7 @@ describe('createOrdersSchedulerFetcher', () => {
 				response({
 					documents: [stored, dirtyResident],
 					checkpoint: nextCheckpoint,
-					hasMore: false,
+					complete: true,
 				})
 			),
 		});
@@ -286,7 +288,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({
 				documents: [serverDoc],
 				checkpoint: nextCheckpoint,
-				hasMore: false,
+				complete: true,
 			})
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
@@ -322,7 +324,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			response({
 				documents: [serverDoc],
 				checkpoint: nextCheckpoint,
-				hasMore: false,
+				complete: true,
 			})
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
@@ -352,7 +354,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			recordCumulativeQueryResult: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -405,7 +407,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			recordCumulativeQueryResult: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -448,7 +450,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			})),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -484,7 +486,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			recordCumulativeQueryResult: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -520,7 +522,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			recordRecords: vi.fn(async () => undefined),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: true })
+			response({ documents, checkpoint: nextCheckpoint, complete: false })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -567,7 +569,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			}),
 		};
 		const fetcher = vi.fn(async () =>
-			response({ documents, checkpoint: nextCheckpoint, hasMore: false })
+			response({ documents, checkpoint: nextCheckpoint, complete: true })
 		);
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
@@ -764,6 +766,56 @@ describe('createOrdersSchedulerFetcher', () => {
 		);
 		expect(fetcher).not.toHaveBeenCalled();
 		expect(repository.upsertMany).not.toHaveBeenCalled();
+	});
+
+	it('applies a completed targeted order after discarding its held rows', async () => {
+		const repository = { upsertMany: vi.fn(async () => undefined) };
+		const pending = new Set([uuidFor(123)]);
+		const discardHeldOpenCartRows = vi.fn(async () => {
+			pending.clear();
+			return 1;
+		});
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository,
+			checkpointStore: {
+				readCustomPullCheckpoint: async () => checkpoint,
+				writeCustomPullCheckpoint: async () => undefined,
+			},
+			pendingMutationOrderIds: async () => pending,
+			discardHeldOpenCartRows,
+			fetcher: async () =>
+				response([
+					{
+						id: 123,
+						status: 'completed',
+						date_paid_gmt: '2026-09-01T10:02:00',
+						date_modified_gmt: '2026-09-01T10:02:30',
+						meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidFor(123) }],
+					},
+				]),
+		});
+		await schedulerFetcher(
+			orderTask({
+				queryKey: 'orders:ids:123',
+				documentIds: [uuidFor(123)],
+				remoteIds: [remoteId(123)],
+				mode: 'on-demand',
+			})
+		);
+		expect(discardHeldOpenCartRows).toHaveBeenCalledExactlyOnceWith(uuidFor(123), {
+			status: 'completed',
+			datePaid: '2026-09-01T10:02:00',
+			dateModified: '2026-09-01T10:02:30',
+		});
+		// The materialized document carries status under `payload`; the promoted
+		// top-level `status` is added by the collection descriptor at write time.
+		expect(repository.upsertMany).toHaveBeenCalledWith([
+			expect.objectContaining({
+				uuid: uuidFor(123),
+				payload: expect.objectContaining({ status: 'completed' }),
+			}),
+		]);
 	});
 
 	it('does NOT overwrite a targeted order that has queued local mutations, but keeps it covered', async () => {
@@ -2777,7 +2829,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
 			writeCustomPullCheckpoint: vi.fn(async () => undefined),
 		};
-		const fetcher = vi.fn(async () => response({ documents: [], checkpoint, hasMore: true }));
+		const fetcher = vi.fn(async () => response({ documents: [], checkpoint, complete: false }));
 		const schedulerFetcher = createOrdersSchedulerFetcher({
 			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
 			repository,
@@ -2838,7 +2890,7 @@ describe('createOrdersSchedulerFetcher', () => {
 		type ReadShape = {
 			name: string;
 			task: FetchTask;
-			body: (wooId: number) => PullResponse<WirePullDocument> | unknown[];
+			body: (wooId: number) => Parameters<typeof response>[0];
 		};
 
 		const readShapes: ReadShape[] = [
@@ -2853,7 +2905,7 @@ describe('createOrdersSchedulerFetcher', () => {
 						},
 					] as WirePullDocument[],
 					checkpoint: nextCheckpoint,
-					hasMore: false,
+					complete: true,
 				}),
 			},
 			{
@@ -2919,3 +2971,62 @@ describe('createOrdersSchedulerFetcher', () => {
 		});
 	});
 });
+
+it('sends the register dimension as pos_register', async () => {
+	const registerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+	const fetcher = vi.fn(async (_url: string) => response([]));
+	const schedulerFetcher = createOrdersSchedulerFetcher({
+		baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+		repository: { upsertMany: vi.fn(async () => undefined) },
+		checkpointStore: {
+			readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+			writeCustomPullCheckpoint: vi.fn(async () => undefined),
+		},
+		fetcher,
+	});
+	await schedulerFetcher(
+		orderTask({ queryKey: `orders:browser:status=all:register=${registerId}:search=:limit=25` })
+	);
+	expect(new URL(fetcher.mock.calls[0][0]).searchParams.get('pos_register')).toBe(registerId);
+});
+
+it.each([
+	['BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB', false, []],
+	['AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA', true, ['woo-order:901', 'woo-order:902']],
+])(
+	'checks returned register %s before recording lane coverage',
+	async (returnedRegister, complete, documentIds) => {
+		const registerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+		const recordQueryResult = vi.fn(async () => undefined);
+		const schedulerFetcher = createOrdersSchedulerFetcher({
+			baseUrl: 'http://wcpos.local/wp-json/wcpos/v2',
+			repository: { upsertMany: vi.fn(async () => undefined) },
+			coverageRepository: { recordQueryResult },
+			checkpointStore: {
+				readCustomPullCheckpoint: vi.fn(async () => checkpoint),
+				writeCustomPullCheckpoint: vi.fn(async () => undefined),
+			},
+			fetcher: vi.fn(async () =>
+				response(
+					[registerId, returnedRegister].map((value, index) => ({
+						id: 901 + index,
+						status: 'processing',
+						date_modified_gmt: '2026-05-20T10:12:00',
+						meta_data: [
+							{ key: '_woocommerce_pos_uuid', value: uuidFor(901 + index) },
+							{ key: '_wcpos_register', value },
+						],
+					}))
+				)
+			),
+		});
+		await schedulerFetcher(
+			orderTask({
+				queryKey: `orders:browser:status=all:register=${registerId}:search=:limit=25`,
+			})
+		);
+		expect(recordQueryResult).toHaveBeenLastCalledWith(
+			expect.objectContaining({ complete, records: documentIds.map((id) => ({ id })) })
+		);
+	}
+);

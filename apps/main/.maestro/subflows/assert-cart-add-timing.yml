@@ -1,0 +1,26 @@
+appId: com.wcpos.main.dev
+---
+- assertTrue:
+    condition: ${output.cartAddRetried === false}
+    label: 'Performance sample must not come from a recovery tap'
+# The app clock stops at the cart's React commit, not at this accessibility lookup.
+- extendedWaitUntil:
+    visible:
+      id: 'e2e-cart-add-timing'
+      text: ${'.*"sequence":' + (output.cartAddSequence + 1) + ',"status":"complete".*'}
+    timeout: 15000
+- copyTextFrom:
+    id: 'e2e-cart-add-timing'
+- evalScript: ${output.cartAddSample = JSON.parse(maestro.copiedText)}
+- evalScript: ${console.log('WCPOS_E2E_CART_ADD ' + maestro.copiedText)}
+- assertTrue:
+    condition: ${output.cartAddSample.sequence === output.cartAddSequence + 1 && output.cartAddSample.status === 'complete'}
+    label: 'Exactly one add reached the expected cart quantity'
+- assertTrue:
+    # Phone CI runs 34278415612 and 34282434936 measured 1182-1510 ms; the iOS
+    # phone rerun in 34357810800 measured 2159 ms on a runner where flow 01 took
+    # 6 min instead of 2, producing the exact fresh completed sample above. Keep
+    # roughly 30-40% headroom over that observed maximum while still failing a
+    # three-second regression.
+    condition: ${typeof output.cartAddSample.durationMs === 'number' && isFinite(output.cartAddSample.durationMs) && output.cartAddSample.durationMs >= 0 && output.cartAddSample.durationMs <= 3000}
+    label: 'Add handler to cart commit is within 3000 ms (not touch-to-paint)'

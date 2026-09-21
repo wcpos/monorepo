@@ -5,3 +5,6 @@ await import('./http-router.test.mjs');
 await import('./server-config.test.mjs');
 await import('./index-start.test.mjs');
 await import('./mdns-services.test.mjs');
+await import('./scenarios.test.mjs');
+await import('./self-signed-cert.test.mjs');
+await import('./lib.test.mjs');

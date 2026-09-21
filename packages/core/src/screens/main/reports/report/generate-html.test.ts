@@ -19,6 +19,7 @@ const makeData = (overrides = {}) => ({
 	],
 	taxTotalsArray: [{ rate_id: 1, label: 'GST', total: '$100.00' }],
 	shippingTotalsArray: [],
+	registerArray: [],
 	userStoreArray: [{ cashierId: '42', storeId: '1', totalOrders: 10, totalAmount: '$1000.00' }],
 	totalItemsSold: '25',
 	averageOrderValue: '$100.00',
@@ -40,6 +41,7 @@ const makeData = (overrides = {}) => ({
 		taxes: 'Taxes',
 		shipping: 'Shipping',
 		cashierStoreTotals: 'Cashier/Store Totals',
+		byRegister: 'By register',
 		cashierId: 'Cashier ID',
 		storeId: 'Store ID',
 		additionalInfo: 'Additional Info',
@@ -146,5 +148,42 @@ describe('generateZReportHTML', () => {
 		expect(html).toContain('Items Sold:');
 		expect(html).toContain('25');
 		expect(html).toContain('Average Order Value:');
+	});
+});
+
+describe('register totals HTML', () => {
+	const registers = [
+		{
+			registerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+			name: 'Front <desk>',
+			totalOrders: 2,
+			totalAmount: '$40.00',
+		},
+		{
+			registerId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+			name: 'Back desk',
+			totalOrders: 1,
+			totalAmount: '$20.00',
+		},
+	];
+	it('renders the by-register block for two registers', () => {
+		const data = {
+			...makeData(),
+			registerArray: registers,
+			t: { ...makeData().t, byRegister: 'By register' },
+		};
+		const html = generateZReportHTML(data);
+		expect(html).toContain('By register');
+		expect(html).toContain('Front &lt;desk&gt;');
+		expect(html).toContain('Back desk');
+		expect(html).toContain('$40.00');
+	});
+	it('omits the by-register block for one register', () => {
+		const data = {
+			...makeData(),
+			registerArray: registers.slice(0, 1),
+			t: { ...makeData().t, byRegister: 'By register' },
+		};
+		expect(generateZReportHTML(data)).not.toContain('By register');
 	});
 });

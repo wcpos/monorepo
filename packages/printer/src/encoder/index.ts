@@ -15,6 +15,7 @@ export {
 	encodeThermalTemplateForPrint,
 	isSupportedThermalLogoSrc,
 	loadThermalLogoAsset,
+	maxDotsForColumns,
 	maxDotsForPaperWidth,
 	normalizeThermalImageSize,
 	prepareThermalPrintAssets,

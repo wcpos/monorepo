@@ -1,5 +1,13 @@
 import get from 'lodash/get';
-import { removeCollectionStorages } from 'rxdb';
+import {
+	createRevision,
+	flatCloneDocWithMeta,
+	getAllCollectionDocuments,
+	getPrimaryKeyOfInternalDocument,
+	INTERNAL_CONTEXT_PIPELINE_CHECKPOINT,
+	now,
+	removeCollectionStorages,
+} from 'rxdb';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -16,6 +24,91 @@ const searchLogger = getLogger(['wcpos', 'db', 'search']);
  * Older locales are evicted when this limit is exceeded (LRU strategy).
  */
 const MAX_CACHED_LOCALES = 3;
+// This is a HARD cap, and eviction really closes (pipeline, instance, index back-reference).
+// A session that holds a fourth locale live on one collection therefore loses one: a consumer
+// still bound to the evicted instance stops receiving source changes until it re-resolves
+// through initSearch, and with four concurrent inits one caller's instance is closed before it
+// returns (initSearch re-inits in that case, but the next eviction can land on a caller that
+// already resolved). Before 2026-09 an evicted instance was left running untracked, which
+// hid this at the cost of the memory the cap exists to bound. Raising the cap is the lever
+// if a real workflow ever needs more than three locales per collection at once.
+
+// Export events hold whole serialized indexes twice (current + previous). Keep only
+// the latest event; rare destination queries can re-read storage when history expires.
+// Use one, not zero: RxDB's buffer slicing does not support a zero-length history.
+const SEARCH_EXPORT_HISTORY_LIMIT = 1;
+
+const searchLocaleChains = new WeakMap<RxCollection, Map<string, Promise<unknown>>>();
+
+function withSearchLocale<T>(
+	collection: RxCollection,
+	locale: string,
+	run: () => Promise<T>
+): Promise<T> {
+	let chains = searchLocaleChains.get(collection);
+	if (!chains) {
+		chains = new Map();
+		searchLocaleChains.set(collection, chains);
+	}
+	const result = (chains.get(locale) ?? Promise.resolve()).then(run);
+	const settled = result.then(
+		() => undefined,
+		() => undefined
+	);
+	chains.set(locale, settled);
+	return result;
+}
+
+/**
+ * Stop a search instance: pipeline, instance, then the index back-reference. Every step runs
+ * even when an earlier one rejects.
+ *
+ * `closeDestination` additionally deregisters the `*_flexsearch` collection from
+ * `database.collections`. The premium close() leaves it registered, and that collection's
+ * onClose hook retains the RxFulltextSearch and its Index, so deleting the back-reference
+ * alone does not free an evicted locale; RxCollection.close() releases it without touching
+ * the persisted index, so the locale reopens from storage instead of rebuilding.
+ *
+ * It defaults to off because `database.collections` is the ONLY handle a later rebuild has
+ * on the destination: both `destroySearchCollection()` and the post-reset rebuild in
+ * `createSearchInstance()` look it up there and call `remove()` on it. Deregistering first
+ * turns that removal into a no-op and reopens the very index the caller asked to rebuild.
+ * Eviction is the one path that frees a locale without rebuilding it, so it opts in.
+ */
+async function closeSearchInstance(
+	instance: FlexSearchInstance,
+	{ closeDestination = false }: { closeDestination?: boolean } = {}
+): Promise<void> {
+	const search = instance as FlexSearchInstance & {
+		close(): Promise<void>;
+		pipeline: { close(): Promise<void> };
+		collection: { __wcposAppendIndex?: unknown; close(): Promise<void> };
+	};
+	let pipelineFailed = false;
+	let pipelineError: unknown;
+	try {
+		await search.pipeline.close();
+	} catch (error) {
+		pipelineFailed = true;
+		pipelineError = error;
+	} finally {
+		try {
+			await search.close();
+		} catch (error) {
+			if (!pipelineFailed) throw error;
+		} finally {
+			try {
+				if (closeDestination) await search.collection.close();
+			} catch (error) {
+				// Never let a destination that will not close mask why the teardown started.
+				if (!pipelineFailed) throw error;
+			} finally {
+				delete search.collection.__wcposAppendIndex;
+			}
+		}
+	}
+	if (pipelineFailed) throw pipelineError;
+}
 
 /**
  * Normalize locale to 2-character code.
@@ -39,15 +132,16 @@ function normalizeLocale(locale: string): string {
  * v2: tokenize 'forward' -> 'full' for WooCommerce-parity mid-word matching (#679).
  * v3: accent-/Unicode-normalization-folding encoder (#1732).
  * v4: terms keep their punctuation — "0.4" is one term, not "0" + "4" dropped by minlength.
+ * v5: `"`, `,`, `+` are no longer term separators — `0,4` is one term.
  */
-const SEARCH_INDEX_VERSION = 'v4';
+const SEARCH_INDEX_VERSION = 'v5';
 
 /**
  * Identifier versions this build no longer reads ('' is the unversioned pre-v2 name).
  * A bump above leaves every upgraded device carrying the whole old index next to the
  * new one, so the first build of a collection+locale in a session drops these.
  */
-const STALE_SEARCH_INDEX_VERSIONS = ['', 'v2', 'v3'];
+const STALE_SEARCH_INDEX_VERSIONS = ['', 'v2', 'v3', 'v4'];
 const staleSearchIndexSweeps = new Set<string>();
 
 /**
@@ -106,6 +200,77 @@ async function removeStaleSearchCollections(
 	}
 }
 
+/** A collection that carries searchFields for a scan but must never be indexed (logs). */
+function refusesSearchIndex(collection: RxCollection): boolean {
+	return (collection.options as { searchIndex?: unknown } | undefined)?.searchIndex === false;
+}
+
+const persistedIndexSweeps = new Set<string>();
+
+/**
+ * Drop every persisted `<collection>-search-*_flexsearch` collection of a
+ * collection that now refuses an index — any version, any locale — once per
+ * database+collection per session (Codex review). An upgraded device that ever
+ * searched its logs holds that index on disk (~7 KB a row); `initSearch` will
+ * never open it again, so nothing else would ever reclaim it. The names come
+ * from the internal store's collection documents, so no locale list is needed.
+ * The pipeline checkpoints stay: a few bytes each, and harmless without their
+ * collection.
+ */
+export async function removePersistedSearchIndexes(collection: RxCollection): Promise<string[]> {
+	const database = collection.database;
+	const sweepKey = `${database.name}:${collection.name}`;
+	if (!database.internalStore || persistedIndexSweeps.has(sweepKey)) return [];
+	persistedIndexSweeps.add(sweepKey);
+	const prefix = `${collection.name}-search-`;
+	let documents: Awaited<ReturnType<typeof getAllCollectionDocuments>>;
+	try {
+		documents = await getAllCollectionDocuments(database.internalStore);
+	} catch (error: any) {
+		// A transient storage failure (worker not up yet) must not spend the
+		// once-per-session ticket: log it and let the next opener retry (Codex review).
+		persistedIndexSweeps.delete(sweepKey);
+		searchLogger.warn('Could not enumerate persisted search indexes', {
+			context: { collection: collection.name, error: error.message },
+		});
+		return [];
+	}
+	const names = documents
+		.map((document) => document.data.name)
+		.filter((name) => name.startsWith(prefix) && name.endsWith('_flexsearch'));
+	const removed: string[] = [];
+	let removalFailed = false;
+	for (const name of names) {
+		try {
+			await removeCollectionStorages(
+				database.storage,
+				database.internalStore,
+				database.token,
+				database.name,
+				name,
+				database.multiInstance,
+				database.password,
+				database.hashFunction
+			);
+			removed.push(name);
+		} catch (error: any) {
+			removalFailed = true;
+			searchLogger.warn('Could not remove a persisted search index', {
+				context: { collection: collection.name, searchCollection: name, error: error.message },
+			});
+		}
+	}
+	// A partial sweep must not spend the once-per-session ticket either: the
+	// next opener retries what is left (review: CodeRabbit + Codex).
+	if (removalFailed) persistedIndexSweeps.delete(sweepKey);
+	if (removed.length > 0) {
+		searchLogger.info('Removed persisted search indexes of an unindexed collection', {
+			context: { collection: collection.name, removed },
+		});
+	}
+	return removed;
+}
+
 /**
  * Update LRU tracking - move locale to end (most recently used).
  */
@@ -145,10 +310,13 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 			const instance = collection._searchInstances.get(oldestLocale);
 			collection._searchInstances.delete(oldestLocale);
 
-			// Destroy the search collection
-			if (instance?.collection && typeof instance.collection.destroy === 'function') {
+			// Close the evicted instance under its locale chain. Nothing rebuilds an evicted
+			// locale, so this is the one path that also deregisters the destination.
+			if (instance) {
 				try {
-					await instance.collection.destroy();
+					await withSearchLocale(collection, oldestLocale, () =>
+						closeSearchInstance(instance, { closeDestination: true })
+					);
 				} catch (error: any) {
 					searchLogger.warn('Failed to destroy evicted search instance', {
 						context: {
@@ -165,8 +333,7 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 
 /**
  * Create a new FlexSearch instance for a collection and locale.
- * If a FlexSearch collection already exists (e.g., after main collection reset),
- * it will be destroyed first to avoid DB3 "collection already exists" error.
+ * Reopen healthy persisted indexes; rebuild append histories larger than the source.
  */
 async function createSearchInstance(
 	collection: RxCollection,
@@ -187,27 +354,36 @@ async function createSearchInstance(
 		},
 	});
 
-	// Check if FlexSearch collection already exists (can happen after main collection reset)
-	// If so, remove it first to avoid DB3 error
-	if (database.collections[searchCollectionName]) {
-		searchLogger.debug('FlexSearch collection already exists, removing first', {
-			context: { searchCollection: searchCollectionName },
-		});
-		try {
-			await database.collections[searchCollectionName].remove();
-		} catch (removeError: any) {
-			searchLogger.warn('Failed to remove existing FlexSearch collection', {
-				context: {
-					searchCollection: searchCollectionName,
-					error: removeError.message,
-				},
-			});
+	const resetPipelineCheckpoint = async () => {
+		// Removing collection storage does not remove RxDB's pipeline checkpoint.
+		// Reset it too, otherwise the new empty index resumes AFTER the source rows.
+		const checkpointId = getPrimaryKeyOfInternalDocument(
+			`rx-pipeline-${getSearchIdentifier(collection.name, locale)}FlexSearch`,
+			INTERNAL_CONTEXT_PIPELINE_CHECKPOINT
+		);
+		const [checkpoint] = await database.internalStore.findDocumentsById([checkpointId], false);
+		if (checkpoint) {
+			const deleted = flatCloneDocWithMeta(checkpoint);
+			deleted._deleted = true;
+			deleted._meta.lwt = now();
+			deleted._rev = createRevision(database.token, checkpoint);
+			const result = await database.internalStore.bulkWrite(
+				[{ previous: checkpoint, document: deleted }],
+				'search-rebuild'
+			);
+			if (result.error.length) throw result.error[0];
 		}
+	};
+	const existing = database.collections[searchCollectionName];
+	if (existing) {
+		// A registered index belongs to a source collection that was just reset.
+		await resetPipelineCheckpoint();
+		await existing.remove();
 	}
 
 	await removeStaleSearchCollections(collection, locale);
 
-	const searchInstance = await addFulltextSearch({
+	const searchOptions: Parameters<typeof addFulltextSearch>[0] = {
 		identifier: getSearchIdentifier(collection.name, locale),
 		collection,
 		docToString: (doc: any) => {
@@ -231,7 +407,26 @@ async function createSearchInstance(
 			minlength: FLEXSEARCH_MIN_TERM_LENGTH,
 			language: locale,
 		},
-	});
+	};
+	let searchInstance = (await addFulltextSearch(searchOptions)) as FlexSearchInstance & {
+		close(): Promise<void>;
+		pipeline: { close(): Promise<void> };
+	};
+	searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
+	const appendDocs = await searchInstance.collection.find({ selector: { type: 'append' } }).exec();
+	const appendedEntries = appendDocs.reduce((total, doc) => total + doc.get('dataAr').length, 0);
+	const sourceCount = await collection.count().exec();
+	if (appendedEntries > sourceCount) {
+		searchLogger.info('Rebuilding oversized search index', {
+			context: { collection: collection.name, locale, appendedEntries, sourceCount },
+		});
+		await searchInstance.close();
+		await searchInstance.pipeline.close();
+		await resetPipelineCheckpoint();
+		await searchInstance.collection.remove();
+		searchInstance = (await addFulltextSearch(searchOptions)) as typeof searchInstance;
+		searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
+	}
 
 	searchLogger.debug('Search instance created successfully', {
 		context: { collection: collection.name, locale },
@@ -314,6 +509,13 @@ export const searchPlugin: RxPlugin = {
 				if (!Array.isArray(options?.searchFields ?? this.options?.searchFields)) {
 					return null;
 				}
+				// A collection can carry searchFields for a scan-based search and still
+				// refuse an index (logs: see the collection creator). Refusing HERE, not
+				// only in the query layer, means no caller — warmup, audit, a future
+				// binding — can build the index by accident.
+				if (refusesSearchIndex(this)) {
+					return null;
+				}
 
 				locale = normalizeLocale(locale);
 				if (!this._searchInitializationOptions) {
@@ -344,7 +546,12 @@ export const searchPlugin: RxPlugin = {
 				}
 
 				// Create initialization promise
-				const searchPromise = (async (): Promise<FlexSearchInstance> => {
+				const searchPromise = withSearchLocale(this, locale, async () => {
+					if (this._searchInstances.has(locale)) {
+						this._searchPromises.delete(locale);
+						touchLRU(this, locale);
+						return this._searchInstances.get(locale)!;
+					}
 					try {
 						const searchInstance = await createSearchInstance(this, locale, initializationOptions);
 
@@ -352,9 +559,6 @@ export const searchPlugin: RxPlugin = {
 						this._searchInstances.set(locale, searchInstance);
 						this._searchPromises.delete(locale);
 						touchLRU(this, locale);
-
-						// Evict old instances if over limit
-						await evictLRUIfNeeded(this);
 
 						return searchInstance;
 					} catch (error: any) {
@@ -385,7 +589,6 @@ export const searchPlugin: RxPlugin = {
 								);
 								this._searchInstances.set(locale, searchInstance);
 								touchLRU(this, locale);
-								await evictLRUIfNeeded(this);
 
 								searchLogger.info('Search recovery successful', {
 									context: { collection: this.name, locale },
@@ -407,7 +610,16 @@ export const searchPlugin: RxPlugin = {
 
 						throw error;
 					}
-				})();
+				}).then(async (searchInstance) => {
+					await evictLRUIfNeeded(this);
+					// Concurrent inits can push this locale to the LRU head between the chain
+					// publishing it and this callback running, so the eviction above may have just
+					// closed it. Never hand a caller a closed instance; build a live one instead.
+					if (this._searchInstances.get(locale) !== searchInstance) {
+						return (await this.initSearch(locale)) ?? searchInstance;
+					}
+					return searchInstance;
+				});
 
 				// Store promise for deduplication
 				this._searchPromises.set(locale, searchPromise);
@@ -444,87 +656,14 @@ export const searchPlugin: RxPlugin = {
 							return;
 						}
 
-						// Destroy all search instances
-						// NOTE: We only destroy FlexSearch collections (ending in _flexsearch)
-						// to avoid accidentally destroying other collections
 						if (this._searchInstances) {
 							for (const [loc, searchInstance] of this._searchInstances.entries()) {
-								// Diagnostic: what does searchInstance actually contain?
-								const collectionKeys = searchInstance?.collection
-									? Object.keys(searchInstance.collection)
-									: [];
-								const collectionProto = searchInstance?.collection
-									? Object.getOwnPropertyNames(Object.getPrototypeOf(searchInstance.collection))
-									: [];
-								searchLogger.debug('Inspecting search instance for cleanup', {
-									context: {
-										mainCollection: this.name,
-										locale: loc,
-										hasSearchInstance: !!searchInstance,
-										hasCollection: !!searchInstance?.collection,
-										collectionName: searchInstance?.collection?.name || 'none',
-										hasDestroyFn: typeof searchInstance?.collection?.destroy === 'function',
-										collectionType: searchInstance?.collection?.constructor?.name || 'unknown',
-										collectionKeys: collectionKeys.slice(0, 10),
-										protoMethods: collectionProto.slice(0, 10),
-									},
-								});
-
-								if (
-									searchInstance.collection &&
-									typeof searchInstance.collection.destroy === 'function'
-								) {
-									// Log what we're about to destroy
-									const searchCollectionName = searchInstance.collection?.name || 'unknown';
-									const searchCollectionDb = searchInstance.collection?.database?.name || 'unknown';
-									const isFlexSearchCollection = searchCollectionName.endsWith('_flexsearch');
-									const isAlreadyDestroyed = (searchInstance.collection as any)?.destroyed;
-
-									searchLogger.debug('About to destroy search instance collection', {
-										context: {
-											mainCollection: this.name,
-											locale: loc,
-											searchCollectionName,
-											searchCollectionDb,
-											isFlexSearchCollection,
-											isAlreadyDestroyed,
-										},
+								try {
+									await withSearchLocale(this, loc, () => closeSearchInstance(searchInstance));
+								} catch (error: any) {
+									searchLogger.warn('Error destroying search instance on cleanup', {
+										context: { collection: this.name, locale: loc, error: error.message },
 									});
-
-									// Only destroy if it's a FlexSearch collection and not already destroyed
-									if (!isFlexSearchCollection) {
-										searchLogger.warn('Skipping non-FlexSearch collection destruction', {
-											context: {
-												mainCollection: this.name,
-												locale: loc,
-												searchCollectionName,
-												expectedPattern: `${getSearchIdentifier(this.name, loc)}_flexsearch`,
-											},
-										});
-										continue;
-									}
-
-									if (isAlreadyDestroyed) {
-										searchLogger.debug('Skipping already-destroyed FlexSearch collection', {
-											context: { mainCollection: this.name, locale: loc },
-										});
-										continue;
-									}
-
-									try {
-										await searchInstance.collection.destroy();
-										searchLogger.debug('Search instance collection destroyed', {
-											context: { mainCollection: this.name, locale: loc },
-										});
-									} catch (error: any) {
-										searchLogger.warn('Error destroying search instance on cleanup', {
-											context: {
-												collection: this.name,
-												locale: loc,
-												error: error.message,
-											},
-										});
-									}
 								}
 							}
 							this._searchInstances.clear();
@@ -591,11 +730,20 @@ export const searchPlugin: RxPlugin = {
 			 * @param locale - The locale to recreate (defaults to active locale)
 			 * @returns The new FlexSearch instance
 			 */
-			proto.recreateSearch = async function (locale?: string): Promise<FlexSearchInstance | null> {
+			const recreateSearch = async function (
+				this: RxCollection,
+				locale?: string,
+				retiring?: FlexSearchInstance
+			): Promise<FlexSearchInstance | null> {
 				// Check if collection has searchFields configured
 				const normalizedLocale = normalizeLocale(locale || this._activeLocale || 'en');
 				const initializationOptions = this._searchInitializationOptions?.get(normalizedLocale);
 				if (!Array.isArray(initializationOptions?.searchFields ?? this.options?.searchFields)) {
+					return null;
+				}
+				// The opt-out holds on the rebuild path too (Codex review): a maintenance
+				// caller must not be the one that builds the index initSearch refused.
+				if (refusesSearchIndex(this)) {
 					return null;
 				}
 
@@ -605,29 +753,31 @@ export const searchPlugin: RxPlugin = {
 					context: { collection: this.name, locale },
 				});
 
-				// Remove existing instance from cache
-				if (this._searchInstances?.has(locale)) {
-					const oldInstance = this._searchInstances.get(locale);
-					this._searchInstances.delete(locale);
+				// The wrapper retired the cached instance before queueing; an init that published
+				// while this waited in the chain is retired here.
+				const oldInstance = retiring ?? this._searchInstances?.get(locale);
+				this._searchInstances?.delete(locale);
 
-					// Destroy the old search collection
-					if (oldInstance?.collection && typeof oldInstance.collection.destroy === 'function') {
-						try {
-							await oldInstance.collection.destroy();
-						} catch (error: any) {
-							searchLogger.warn('Error destroying old search instance', {
-								context: {
-									collection: this.name,
-									locale,
-									error: error.message,
-								},
-							});
-						}
+				// Close before removing the destination collection, but leave it registered:
+				// destroySearchCollection() below reaches it only through database.collections.
+				if (oldInstance) {
+					try {
+						await closeSearchInstance(oldInstance);
+					} catch (error: any) {
+						searchLogger.warn('Error destroying old search instance', {
+							context: {
+								collection: this.name,
+								locale,
+								error: error.message,
+							},
+						});
 					}
 				}
 
-				// Also try to destroy any orphaned search collection
-				await destroySearchCollection(this, locale);
+				// The destination is deliberately left registered for createSearchInstance below:
+				// its `existing` branch resets the pipeline checkpoint BEFORE removing the
+				// storage. Removing it here instead drops the storage but keeps the checkpoint,
+				// so the fresh index resumes after the source rows and rebuilds to nothing.
 
 				// Remove from LRU tracking
 				if (this._localeLRU) {
@@ -654,7 +804,6 @@ export const searchPlugin: RxPlugin = {
 					}
 					this._searchInstances.set(locale, searchInstance);
 					touchLRU(this, locale);
-					await evictLRUIfNeeded(this);
 
 					searchLogger.info('Search index recreated successfully', {
 						context: { collection: this.name, locale },
@@ -674,6 +823,40 @@ export const searchPlugin: RxPlugin = {
 					throw error;
 				}
 			};
+			proto.recreateSearch = async function (locale?: string): Promise<FlexSearchInstance | null> {
+				locale = normalizeLocale(locale || this._activeLocale || 'en');
+				// Retire the cached instance NOW. The chain defers the rebuild to a later microtask,
+				// and an initSearch arriving before then must join the replacement rather than take
+				// the fast path on an instance that is about to be closed.
+				const retiring = this._searchInstances?.get(locale);
+				this._searchInstances?.delete(locale);
+				// Likewise drop the dedupe entry of an init still building: an init arriving after
+				// this request must queue behind the rebuild, not join the earlier one whose
+				// instance the rebuild will retire.
+				this._searchPromises?.delete(locale);
+				const instance = await withSearchLocale(this, locale, () =>
+					recreateSearch.call(this, locale, retiring)
+				);
+				if (instance) {
+					await evictLRUIfNeeded(this);
+					// Same guard as initSearch: do not return an instance the eviction just closed.
+					if (this._searchInstances?.get(locale) !== instance) {
+						return (await this.initSearch(locale)) ?? instance;
+					}
+				}
+				return instance;
+			};
+		},
+	},
+	hooks: {
+		createRxCollection: {
+			// Fire-and-forget: the hook is synchronous and collection creation must
+			// not wait on storage removal. Errors are logged inside the sweep.
+			after: ({ collection }: { collection: RxCollection }) => {
+				if (refusesSearchIndex(collection)) {
+					void removePersistedSearchIndexes(collection).catch(() => undefined);
+				}
+			},
 		},
 	},
 	overwritable: {},

@@ -44,6 +44,7 @@ export const useUILabel = () => {
 					category: t('common.categories'),
 				},
 				'pos-cart': {
+					openOrdersPosition: t('pos_cart.open_orders_position'),
 					autoShowReceipt: t('common.automatically_show_receipt_after_checkout'),
 					autoPrintReceipt: t('common.automatically_print_receipt_after_checkout'),
 					receiptOutputType: t('receipt.output_type'),
@@ -98,6 +99,7 @@ export const useUILabel = () => {
 					date_completed_gmt: t('common.date_completed'),
 					date_paid_gmt: t('common.date_paid_2'),
 					cashier: t('common.cashier'),
+					register: t('common.register'),
 					payment_method: t('common.payment_method'),
 					total: t('common.total'),
 					receipt: t('common.receipt'),
@@ -144,6 +146,7 @@ export const useUILabel = () => {
 					date_completed_gmt: t('common.date_completed'),
 					date_paid_gmt: t('common.date_paid'),
 					cashier: t('common.cashier'),
+					register: t('common.register'),
 					payment_method: t('common.payment_method'),
 					total: t('common.total'),
 				},

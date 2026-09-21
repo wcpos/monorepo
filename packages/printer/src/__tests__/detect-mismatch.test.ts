@@ -47,6 +47,16 @@ describe('detectMismatch', () => {
 		detectMismatch = mod.detectMismatch;
 	});
 
+	it('accepts a 48-column winspool queue for an 80mm ESC/POS template', () => {
+		expect(
+			detectMismatch(thermal, {
+				...thermalPrinter,
+				connectionType: 'system',
+				address: 'winspool:POS-80',
+			})
+		).toBeNull();
+	});
+
 	it('returns null when escpos template matches thermal printer', () => {
 		expect(detectMismatch(thermal, thermalPrinter)).toBeNull();
 	});

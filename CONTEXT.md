@@ -298,3 +298,276 @@ The state machine a display page exposes to templates: `idle`, `cart`, `payment`
 **Signaling**:
 The one-time exchange that lets two WebRTC peers (POS and display) find each other,
 carried by the merchant's WordPress site as a mailbox; not the data path.
+
+## Language — Cashiers & till
+
+Ruled 2026-09-10 on the cashiers & till wayfinder map (wcpos/roadmap#202,
+tickets #207, #208, #210, #209, #211, #212 and #213); the Register entry amended 2026-09-11 on #214.
+
+**Cashier**:
+A WordPress user who holds, or has held, POS access, seen through the cashier resource. A
+user whose access is revoked stays a cashier — inactive — because past sales and closures
+name them. Distinct from a Customer: the same person may also be a customer, and a cashier
+may be chosen as a sale's customer.
+_Avoid_: staff, team member, employee, operator, user (for this concept)
+
+**Cashier directory**:
+The list of every current and former cashier that any POS user may read: id, display name,
+avatar, active. Nobody is ever removed from it — a former cashier stays resolvable, because
+orders and closures point at them.
+
+**Cashier record**:
+One cashier's full record — names, roles, effective POS capabilities, allowed stores and
+allowed registers, last access — readable by that cashier and by managers. The signed-in
+cashier's own record is what the app gates its UI from: every gate reads a capability the
+record serves, never a role name.
+_Avoid_: profile, account (for this concept)
+
+**Register**:
+The identity of one cash drawer — the server record a session is opened on. The
+register is not a page and has no menu item (ruled 2026-09-11 on wcpos/roadmap#214,
+superseding the menu-item sentence of #207): it is a state of the POS screen — the cart
+column is the "Open register" card while closed and the count while counting — plus one
+Register panel opened from a bar at the top of the cart while open. The cashier is whoever
+the app is signed in as; there is no register-level sign-in. A register is a server record:
+every store has one by default, created with the store, and more are created in the plugin's
+admin, never in the POS. A device holds only a pointer to its register — bound silently at
+first sign-in when the store has one register, chosen once from a picker when it has more,
+changed under the avatar — so a wiped device re-binds and loses no numbering. The register
+is named on screen only when its store has more than one. A register is the drawer, not the
+device: several devices may point at one register (two cashiers with their own tablets sharing
+one cash drawer ring on the same session, each row stamped with its actor). A register belongs
+to exactly one store, moved to another only by an administrator while it has no open session,
+its numbering unbroken by the move. Every closure records the store the register belonged
+to when it was written, and a store's figures are summed from those closures, so moving a
+register moves no history. A store has any number of registers.
+_Avoid_: till (prose synonym only, never in UI or code), station, device, terminal (that is
+a card reader)
+
+**Session**:
+One register's opened-to-closed period: opened with a float, closed with a count. Keyed on
+the register, never the cashier; several cashiers may ring on one session and every row
+records who acted. States: `open` → `counting` → `closed`. UI verbs: "Open register" /
+"Close register".
+_Avoid_: shift (the time clock — clock in/out for payroll), cash tracking session, drawer shift
+
+**Counting**:
+The session state between "Close register" being pressed and the closure being written: no
+sale may be tendered, the closer enters the counted totals, and the register may return to
+`open` if the close is abandoned. A session is never `closed` without passing through it.
+_Avoid_: closing (as a state name), pending close
+
+**Opening float**:
+The cash placed in the drawer when a session opens. Carries an expected value (suggested
+from the previous close) and a counted value, so an opening variance exists.
+_Avoid_: starting cash, opening balance
+
+**Cash movement**:
+A cash event inside a session that is not a sale, typed `paid_in`, `paid_out` or `no_sale`,
+each with a reason. `paid_in` and `paid_out` carry a positive amount with the direction in
+the type; `no_sale` carries a zero amount. A movement is never edited or deleted: a mistaken
+one is **voided** by a new row that names it in `voided_by`, so the ledger only ever grows.
+_Avoid_: drop, pickup (as types), adjustment, edit/delete (of a movement)
+
+**No sale**:
+The zero-amount, permissioned cash movement that opens the drawer without a sale.
+
+**Expected**:
+What a payment method should have taken over the session, per method. For cash it is the
+drawer: the *counted* opening float + cash sales − cash refunds + paid in − paid out. For
+any other payment method it is the sum of that method's payment rows bound to the session,
+less its refunds. The opening variance is recorded on its own and never carries into the
+closing variance — each compares a count against what was expected at that moment.
+
+**Counted**:
+What the closer declares was taken, entered as one total per payment method counted. Cash
+is always counted; other payment methods may be, so a terminal batch that disagrees with
+the till is caught. A denomination helper is a calculator and its breakdown is never
+stored.
+_Avoid_: actual
+
+**Variance**:
+Counted minus expected — over or short — for each payment method counted, recorded at open
+(cash only) and at close. A method that was not counted has no variance, not a zero one.
+_Avoid_: discrepancy, difference
+
+**Blind count**:
+A count entered by a cashier who cannot see the expected figure. Not a mode a merchant
+switches on: it is the absence of the permission to view reports, so the same cashier also
+cannot read the X-report or other registers' closures.
+_Avoid_: hidden count, blind close
+
+**Variance threshold**:
+A store setting: the size of variance, over or short alike, beyond which a close needs an
+override — the comparison ignores the sign. Blank means no threshold, and every variance
+closes without one. Never per role and never per register.
+_Avoid_: tolerance, max difference
+
+**Override**:
+A holder of `manage_woocommerce_pos_closures` (managers by default) approving, by entering
+their own credential on the cashier's till, an action the cashier may not take alone: a
+close beyond the variance threshold, a recount, closing a forgotten session from another
+register. The record the action writes — the closure or the correction — names the cashier
+as its actor and the manager as its approver, two identities, never one. A session closed
+from another register is numbered on the forgotten register's behalf, so the sequence
+stays gap-free.
+_Avoid_: manager PIN, approval code, supervisor unlock
+
+**Closure**:
+The immutable, numbered document written when a session closes. One per session, not per
+day: a closure may span or subdivide a calendar day. It stores its breakdowns as recorded —
+per payment method, per tax rate, counted against expected for each payment method that
+was counted, the cash movements — so reading it next year gives the figures printed on
+the night. It carries two kinds of money figure and keeps them apart: payment figures,
+summed from the payment rows bound to the session, and the grand total, a sales figure. Corrections are separate
+records that point at it; the closure itself never changes.
+_Avoid_: end of day, Z-report (for the record — that is its print), shift report
+
+**Closure number**:
+The closure's place in its register's sequence: ascending, gap-free, never reset, one
+sequence per register. The register assigns it at close, so the print carries it even
+offline; the server checks it on arrival and treats a gap or a duplicate as a fault, never
+renumbering. Read with the register's name: "Closure 12 · Front counter".
+_Avoid_: Z number, report id, global sequence
+
+**Grand total**:
+The tax-inclusive value of the sales that completed in a closure's session, with refunds
+kept as a separate total rather than netted off. It is a sales figure keyed on completion,
+deliberately not a payment figure: a deposit taken yesterday for a sale completed today is
+in yesterday's payment figures and today's grand total, and the closure shows both, as a
+layby always did. The pair is stored on every closure.
+_Avoid_: net sales (for this concept), turnover (in UI), payments total (for this concept)
+
+**Perpetual grand total**:
+The running sum of a register's grand totals since its counters began — sales and refunds
+as two counters — carried from each closure to the next, never decreasing and never reset,
+including across upgrades. A store-wide figure is the sum across registers.
+_Avoid_: lifetime sales, cumulative total, reset
+
+**Recount**:
+A correction that supplies a new counted figure for a closure after it was written,
+with its actor and reason. The closure keeps the figure as recorded; the recount gives the
+settled one.
+_Avoid_: edit count, reopen, amend
+
+**X-report / Z-report**:
+The two printed renderings of the **Session report**: an X-report is the print of an open
+session, read without closing it and never stored; a Z-report is the print of a closure,
+printed once at close, every later print being a marked copy. Neither is a screen or a
+picker entry — they are names for paper. The date-range sales summary the old Reports
+screen printed under the name "Z-report" is the **Sales** report.
+_Avoid_: Z-report (for any date-range summary), X-report (for anything on screen)
+
+**Session report**:
+The one report whose scope is a single session: opened and closed, float, counted against
+expected, variance, movements, payment-method and tax breakdowns. Printing it for an open
+session gives the X-report; for a closed session, the Z-report printed from its closure. The register panel's *Print
+X-report* button is a shortcut into it; the **Closures** list is how a past session is
+reached. One report, two prints, not two features.
+_Avoid_: closure report, shift report, end-of-day report
+
+**Sales**:
+The what-sold and payment-mix report — count, gross, refunds, net, tax — **grouped by**
+payment method, cashier, register, tax rate, item or category. One report with a grouping, never six
+reports; the grouping words are what the picker searches. Takes either scope mode. By
+session, the payment-method grouping sums payment and refund rows by tender-time session, the
+drawer's basis, and every other grouping counts the sales that completed in the session,
+the closure's basis; by range, membership is order-level, the sales that completed in the
+range by the store's clock, and the same two bases apply within it. The payment-method
+grouping shows what each method took and refunded and counts payments, never gross or
+tax, which no payment row carries; every other grouping counts sales. The heading says
+which.
+_Avoid_: Z-report, range report, tender report, payment report, tax report, cashier report (as entries)
+
+**Scope**:
+What a report is *about*: either one **session**, current or past, or a **date range** in
+the store's timezone. Every report declares which modes it accepts, so a question a report
+cannot answer is unaskable rather than answered wrongly. The default is the open session
+when there is one, otherwise today for a report that takes a range and the last session
+for one that does not. Free is limited to the session mode and today on its own
+register; wider ranges, other registers and other stores are Pro.
+_Avoid_: filter (for the session/range choice), period (for a session)
+
+**Report document**:
+What a `report` template renders: a tabular core — the scope, columns, rows with cells in
+column order, group subtotals and totals — beside the store, register, cashier, software,
+fiscal and label blocks a receipt carries. A report adds its own figures as named keys
+*beside* the core, never inside it, so one default template renders every report and a
+template guards on an extra's key the way ADR 0039 prescribes. The Session report is not
+one of these: it renders a closure-shaped document — the closure itself for a closed
+session, the same shape built live from the open session for an X-report — through the
+`closure` template type, and template types are never added to.
+_Avoid_: report payload, report data (for this shape), report type (for a template type)
+
+**Registered report**:
+A report a plugin adds through the `woocommerce_pos_reports` filter in the Free plugin: a
+key, a title, the scopes it accepts, a capability, and a query that returns a report
+document for a resolved scope. It sits in the picker beside the built-ins, on Free under
+the scope gate, and prints with the default report template unless it brings its own. It
+is computed on the server, so it needs a connection; the built-ins are computed on the
+device.
+_Avoid_: custom report (for this concept), report plugin, third-party report type
+
+**Business day**:
+The trading day a closure belongs to: the day, in the **store's** timezone, on which its
+session *opened*. A session that runs past midnight is one night's trade, never split, so
+there is no configurable day-start setting. Stamped on the closure when it is written, so a
+later change to the store's timezone moves no history. Day boundaries in every report are
+the store's, not the device's: two tills in one shop never disagree about today.
+_Avoid_: calendar day (for a closure), trading day start, cutoff time
+
+**Session on the sale**:
+Which session a sale's money belongs to. Each payment row binds to the session open on the
+register when it was tendered, so a deposit taken yesterday counts in yesterday's drawer
+and the balance paid today in today's. Expected and every payment figure on a closure are
+summed from payment and refund rows by that tender-time session, never from the sale's
+completing session or its order total. The sale itself records the session it completed
+in; that key drives reports and receipts and the closure's grand total, which is a sales
+figure and the one deliberate exception to the tender-time rule. Membership is only ever by the stamped session, never
+inferred from a time window or from whichever session is open when the sale reaches the
+server. **Sales** follows the scope: by session, its payment-method grouping sums payment and
+refund rows by tender-time session and its other groupings count sales by completing
+session, the closure's two bases; by date range, membership is order-level — the sales
+that completed in the range by the store's clock — outside this rule, and the
+payment-method grouping then sums the payment and refund rows of those sales, a payment
+mix, so a split sale can show under different days in the two modes.
+_Avoid_: shift on the order, current session (for a late-arriving sale)
+
+**Unsynced**:
+A closure whose session still has sales or movements the server has not acknowledged —
+the till was offline or a row is stuck. The close is never blocked by it: the closure
+records how many and how much were unsynced, and shows as unsynced until every named row
+has landed.
+_Avoid_: pending, incomplete, provisional (as the state name)
+
+**Late sale**:
+A sale (or cash movement) that reaches the server after its session's closure has been
+written. It stays in the session it was rung in and the closure is never edited: a
+correction row against the closure carries the change, and the closure reads as recorded
+plus its corrections.
+_Avoid_: orphan sale, moved sale, re-closing
+
+**Settled**:
+A closure's figure after its corrections are applied, shown beside the figure as recorded.
+The recorded figure never changes; the settled one is what the drawer finally held.
+_Avoid_: adjusted, corrected (as the figure's name), final
+
+**Cashier on the sale**:
+The one cashier a sale is credited to — the person whose token the server authenticated at
+the sale, stamped server-side as `_pos_user`. There is one identity on a sale: the token
+always follows the person, so this is never "the account the till was logged in as" with
+a separate person behind it.
+_Avoid_: sold by, salesperson, operator, staff member
+
+**Rung up by**:
+The cashier who created the sale, stamped write-once as `_pos_user_created`. It never
+changes, so a reassigned sale still shows who took it.
+_Avoid_: created by (for this concept), original cashier
+
+**Reassignment**:
+Changing the cashier on the sale (and, by the same rule, its store) after the fact, to any
+active cashier. Gated by the single capability `reassign_woocommerce_pos_sales` — held by
+administrators and shop managers by default, not by cashiers — covering the self-claim as
+well. Audited by "rung up by" and an order note. A reassignment **never reopens or amends a
+closure**: the closure reads as at close; live reports read the current cashier on the sale.
+_Avoid_: transfer, change server, edit cashier

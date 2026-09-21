@@ -6,7 +6,13 @@ import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import {
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/dialog';
 import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -176,46 +182,48 @@ export function EditCartCustomerForm() {
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
-				<FormErrors />
-				<Collapsible defaultOpen={true}>
-					<CollapsibleTrigger>
-						<Text>{t('common.billing_address')}</Text>
-					</CollapsibleTrigger>
-					<CollapsibleContent>
-						<BillingAddressForm />
-					</CollapsibleContent>
-				</Collapsible>
-				<Collapsible>
-					<HStack>
+			<DialogBody>
+				<VStack className="gap-4">
+					<FormErrors />
+					<Collapsible defaultOpen={true}>
 						<CollapsibleTrigger>
-							<Text>{t('common.shipping_address')}</Text>
+							<Text>{t('common.billing_address')}</Text>
 						</CollapsibleTrigger>
-					</HStack>
-					<CollapsibleContent>
-						<VStack className="gap-4">
-							<Button variant="muted" onPress={handleCopyBillingToShipping}>
-								<ButtonText>{t('common.copy_billing_address_to_shipping_address')}</ButtonText>
-							</Button>
-							<ShippingAddressForm />
-						</VStack>
-					</CollapsibleContent>
-				</Collapsible>
-				<TaxIdsForm />
-				<DialogFooter className="px-0">
-					<DialogClose>{t('common.close')}</DialogClose>
-					{customerID != null && !isGuestCustomer(customerID) && caps.canEditCustomers && (
-						// @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps
-						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
-							{t('pos_cart.save_to_order_customer')}
-						</DialogAction>
-					)}
-					{/* @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps */}
-					<DialogAction onPress={onSaveToOrder} loading={loading}>
-						{t('pos_cart.save_to_order')}
+						<CollapsibleContent>
+							<BillingAddressForm />
+						</CollapsibleContent>
+					</Collapsible>
+					<Collapsible>
+						<HStack>
+							<CollapsibleTrigger>
+								<Text>{t('common.shipping_address')}</Text>
+							</CollapsibleTrigger>
+						</HStack>
+						<CollapsibleContent>
+							<VStack className="gap-4">
+								<Button variant="muted" onPress={handleCopyBillingToShipping}>
+									<ButtonText>{t('common.copy_billing_address_to_shipping_address')}</ButtonText>
+								</Button>
+								<ShippingAddressForm />
+							</VStack>
+						</CollapsibleContent>
+					</Collapsible>
+					<TaxIdsForm />
+				</VStack>
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.close')}</DialogClose>
+				{customerID != null && !isGuestCustomer(customerID) && caps.canEditCustomers && (
+					// @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps
+					<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
+						{t('pos_cart.save_to_order_customer')}
 					</DialogAction>
-				</DialogFooter>
-			</VStack>
+				)}
+				{/* @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps */}
+				<DialogAction onPress={onSaveToOrder} loading={loading}>
+					{t('pos_cart.save_to_order')}
+				</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }

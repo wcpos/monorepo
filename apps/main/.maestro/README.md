@@ -148,6 +148,15 @@ app's code.
    iOS, verify dismissal with `notVisible … focused: true` and submit again if
    the field is still focused (`ensure-pos-ready.yml`). On Android a view's
    focus outlives the keyboard, so that check is iOS-only.
+   **On Android `hideKeyboard` is `input keyevent 4` (Back).** With no keyboard
+   up, that Back reaches the activity, and at the POS root it finishes the app:
+   the ❌ frame is the launcher home screen and the next assertion reads
+   "element not found" (runs 33662941896 and 34124672113, both in a recovery
+   branch right after tapping a VISIBLE tab). Never call it unconditionally on
+   the POS screens; use the `ensure-pos-ready.yml` guard — phone, `search-products`
+   visible, `pos-tab-products` NOT visible — which is the keyboard's only
+   reliable tell. Inside a form with a focused input (flows 01, 02, 08) the
+   keyboard is up and the plain call is fine.
 10. **Relaunch by platform.** iOS relaunches with `launchApp`. **Android
     relaunches with `openLink` to the dev-client URL** because Maestro's
     `launchApp` re-grants every manifest permission through `pm grant` first
@@ -171,6 +180,49 @@ app's code.
     the fingerprint and the workflow did not expect a build, add the path to
     the native-config rule in `scripts/ci-plan.mjs`. The warning in the resolve
     job names this case.
+
+## Add-to-cart performance in the ordinary flows
+
+Native flows 04/06 and the web add-product case in `e2e/pos-cart.spec.ts` check
+performance alongside the cart outcome; there is no separate performance suite.
+For native, start Metro in `apps/main` with
+`EXPO_NO_METRO_LAZY=1 EXPO_PUBLIC_WCPOS_E2E=1 npx expo start --no-dev --minify --clear`.
+CI sets the E2E flag. Restart Metro after edits if `CI=1` disables its watcher.
+Native timing in `packages/core/e2e` is excluded from normal bundles by literal
+E2E guards. Playwright injects web measurement without app instrumentation.
+
+Native measures **add-handler entry → expected quantity's React cart-table commit**;
+web measures **DOM click/submit intent → expected cart quantity in the DOM**.
+Neither includes paint or server acknowledgement; native also excludes input
+queueing before the handler. These are not a shared web/native metric.
+These serial checks exclude rapid bursts, variations, startup and idle stalls.
+
+Native requires the next completed `e2e-cart-add-timing` sequence and emits
+`WCPOS_E2E_CART_ADD` JSON; web attaches `cart-add-performance` JSON.
+Budgets live in the web assertion and `subflows/assert-cart-add-timing.yml`.
+Change budgets only with evidence. Validate a gate by temporarily slowing the
+actual handler: correct quantity must still fail performance; remove and rerun.
+
+Flow 10 and the web test `should absorb twenty rapid adds and paint the exact
+quantity` cover the burst case: one verified setup add, then nineteen taps at
+200 ms with nothing between them, then the quantity field must read exactly
+`20`. Flow 10 needs the empty cart flow 08's void leaves; selecting the
+new-order tab is not a substitute on a phone (the Products -> Cart round trip
+re-delivered the previous order's id and the setup add landed there, local run
+2026-09-09). Native logs `WCPOS_E2E_CART_BURST` with `tapSpanMs` (driver
+pacing, logged only), `settleAfterLastTapMs` (gated, provisional 15000 ms;
+local iPhone 16 Pro simulator measured 7454 / 5261 on 2026-09-09) and
+`totalMs`; web attaches `cart-add-burst` JSON and gates first burst click ->
+quantity 20 in the DOM at a provisional 8000 ms. After two green four-device
+runs, tighten both ceilings to the observed CI maximum plus ~30%.
+
+Known blind spot: Maestro asserts the accessibility value, not the pixels.
+On 2026-09-09 the field's value was `20` while it painted `2`: the shared
+input's 12-point horizontal padding left ~17 points for digits inside the
+56-wide quantity column, so wider values clipped (fixed separately in PR
+1923). The flow passes on a clipped or stale paint with a correct value; only
+a screenshot comparison would catch it, and the lab's persisted-47-painted-46
+remains unreproduced.
 
 ## 4. Reading a red run
 
@@ -216,6 +268,9 @@ Known classes, by what the screenshot shows:
 | Android tablet flow 09, cold start shows the default ~60% split; post-relaunch band assert fails                                         | The relaunch killed the process ~300 ms after the swipe, before the single async RxState width write landed         | 3 s write settle before the relaunch in flow 09 (the write has no UI observable)                                              | read it as a persistence bug; the app has no debounce to shorten |
 | iPad flow 02, connected-store card with "Sign in with WordPress" idle after the add-user tap; no consent alert, no login page            | Add-user press lost on the starved runner (tap COMPLETED, no reaction)                                              | Logged re-tap after 20 s when neither sign-in surface is up and the button is still there                                     | raise the 60 s wait                                              |
 | iOS "Application is not running" ~200 ms after launch                                                                                    | XCTest driver queried before scene activation; not a crash                                                          | Split stop/launch and a settle in `relaunch-app.yml`                                                                          | read it as a crash                                               |
+| iOS flow 01 launcher says "The request timed out"; CFNetwork `-1001` for `localhost:8081/`, zero response bytes | Manifest exceeded the launcher's 10 s deadline. Run 34982744656: warm manifests 6.9–11.8 s after adding fingerprint runtime resolution; Expo recomputes it per request (expo/expo#46415). This timeout signature predates OTA (#1686). | Both CI jobs resolve the runtime once before Metro (iOS #2068, Android #2096 — the Android half was missed for a day); `app.config.ts` reuses that exact value only under E2E | raise Maestro waits; blame a missing selector or the Updates tab |
+| App log `engine.lane.tick`, `lane: change-signal`, `status: error`, message `incomplete-snapshot` or `identity-ambiguous` on a refresh collection (was RxDB `COL22` before #2072) | A numbered-page walk returned the same uuid twice. Either the same record repeated because the page window shifted mid-walk — in which case some other record is missing from the combined result — or two different remote records share one uuid, which is server-side identity corruption. | `refreshPrunable` throws before any write or prune, so the lane holds its checkpoint and re-walks from page 1 next tick; it clears itself once the server returns a stable page set. Regressions cover same-page repeat, cross-page repeat, identity collision and a shifted window | assume the refresh applied; swallow it; weaken a quantity assertion; infer causation from one red run — the run that surfaced this had the error at 16:46:57, recovered by 16:47:58, and flow 10 started at 16:58:05 in a new process |
+| Android flows 03/08 `search-products is visible` after a relaunch; header rendered, body blank for the whole ready window; logcat `ActivityTaskManager: Displayed com.wcpos.main.dev` → next `START … wcpos-dev://` gap of 15–22 s (green baseline 40 ms); iOS green on the same JS | Metro fingerprints the whole project on every manifest request when the runtime version is a policy object, and expo-dev-launcher issues two serialized manifest requests (HEAD, then GET) per relaunch — the stall is in the launcher, before `Loading JS Bundle`. #2068 pre-resolved the runtime to a string only in the iOS job; the Android job started Metro without it (found on the first run after the dev client gained `expo-updates`, 2026-09-16) | Both jobs export `WCPOS_E2E_RUNTIME_VERSION` before `expo start` (#2096); `ota-updates-config.test.ts` pins it for every Metro start. Measured after: gap 1.4 s, relaunch-to-ready 22 s | widen the relaunch window; blame the `[wcpos] rebuilt storage indexes … stale-changelog-op` lines — the last green run and the passing iOS lane have the same ones (see roadmap `docs/research/2026-09-16-boot-replay-index-rebuild-false-positive.md`); diagnose from one run — download the last GREEN run's artifact and diff the same phase |
 
 When a red matches none of these, the thing to produce is a new row: the
 signature, the mechanism with the evidence that established it, and where the

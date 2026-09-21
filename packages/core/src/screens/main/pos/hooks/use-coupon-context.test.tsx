@@ -73,3 +73,38 @@ it('builds lowercase coupons, raw product categories, and category parents from 
 		])
 	);
 });
+
+it.each(['missing', 'mixed', 'collision'])('resolves virtual context: %s', async (mode) => {
+	const records =
+		mode === 'missing'
+			? []
+			: [
+					engineRecord('501', {
+						code: mode === 'collision' ? 'pos-discount' : 'real',
+						discount_type: 'fixed_cart',
+						amount: '99',
+					}),
+				];
+	engine.active().database.collections.coupons.find = () => ({ exec: async () => records });
+	const { result } = renderHook(() => useCouponContext());
+	const context = await result.current.getCouponContext(
+		[],
+		[
+			{
+				code: 'pos-discount',
+				meta_data: [
+					{ key: '_wcpos_quick_discount', value: { discount_type: 'percent', amount: '10' } },
+				],
+			},
+		]
+	);
+	expect(context.coupons.get('pos-discount')).toEqual(
+		expect.objectContaining({
+			discount_type: 'percent',
+			amount: '10',
+			individual_use: false,
+		})
+	);
+	expect(context.coupons.size).toBe(mode === 'mixed' ? 2 : 1);
+	if (mode === 'mixed') expect(context.coupons.get('real')?.amount).toBe('99');
+});

@@ -30,9 +30,10 @@ module.exports = {
 		// (wcpos/roadmap#129): the compiler cached a module-level service read
 		// behind a memo sentinel, so the screen never saw the service that started
 		// after it mounted. Uncompiled, the same component passed every test.
-		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index|settings/customer-display/index)\\.tsx$':
+		// Reader dev controls must refresh mutable driver state under compiler memoization too.
+		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index|settings/customer-display/index|checkout/tender/reader-connection)\\.tsx$':
 			'<rootDir>/jest/react-compiler-transform.js',
-		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index|settings/customer-display/index)\\.tsx$).+\\.(ts|tsx)$':
+		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index|settings/customer-display/index|checkout/tender/reader-connection)\\.tsx$).+\\.(ts|tsx)$':
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
 	transformIgnorePatterns: [

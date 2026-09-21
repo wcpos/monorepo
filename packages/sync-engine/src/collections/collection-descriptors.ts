@@ -65,6 +65,7 @@ import {
 import { graftServerLineIdentity } from '../write-path/graft-server-line-identity';
 import { preserveEquivalentLocalPrecision } from '../write-path/order-money-divergence';
 import { type WooTaxRatePayload } from './tax-rate-schema';
+import { removeRefundChildren } from '../write-path/refund-children';
 
 import type { RxDatabase } from 'rxdb';
 import type { WooReferencePayload } from './reference-collection-schema';
@@ -127,49 +128,13 @@ function parseBareArray(body: unknown): WooPayload[] {
 	return body as WooPayload[];
 }
 
-/**
- * The lab /variations include envelope: `{ documents: [...] }`. Each wrapper
- * is flattened into the payload the projection consumes — `parent_id` rides
- * the wrapper (not the inner payload), and the wrapper-level `_rxdb_digest`
- * (a transport-only Leg-3 digest) is carried through onto the flattened row
- * for the existence manifest.
- */
+// The plugin has emitted bare variation arrays since 1.11.0.
+// Each record carries its own identity and revision stamp.
 export function parseVariationsEnvelope(body: unknown): WooPayload[] {
-	/**
-	 * A BARE wc/v3 array is accepted as well as the `{ documents: [...] }` wrapper.
-	 *
-	 * `/variations` is the only targeted lane that wraps; `/products` and `/customers` answer with a
-	 * bare array and carry their stamps on the record. The wrapper exists to supply `id` and
-	 * `parent_id`, and WooCommerce has carried BOTH in the variation payload itself since WC 8.3
-	 * (the plugin backfills them below that), so it adds nothing the payload does not already have.
-	 *
-	 * Tolerance ships FIRST and on its own. The server cannot drop the wrapper until every deployed
-	 * client can read both shapes — this function used to throw on anything else, so a plugin that
-	 * changed the envelope would have broken variation sync on every till the moment a merchant
-	 * updated. That is the standing rule for this seam: the client tolerates both shapes, the server
-	 * emits exactly one, and the tolerance is removed only once the plugin's minimum supported
-	 * version is past the release that changed it.
-	 */
-	if (Array.isArray(body)) {
-		return body as WooPayload[];
+	if (!Array.isArray(body)) {
+		throw new Error('variations pull returned a non-array body');
 	}
-	const documents = (body as { documents?: unknown })?.documents;
-	if (!Array.isArray(documents)) {
-		throw new Error('variations pull returned neither a documents array nor a bare array');
-	}
-	return (
-		documents as {
-			id: number;
-			parent_id: number;
-			payload: Record<string, unknown>;
-			_rxdb_digest?: string;
-		}[]
-	).map((wrapper) => ({
-		...wrapper.payload,
-		id: wrapper.id,
-		parent_id: wrapper.parent_id,
-		...(wrapper._rxdb_digest !== undefined ? { _rxdb_digest: wrapper._rxdb_digest } : {}),
-	}));
+	return body as WooPayload[];
 }
 
 /** shape: 'greedy-prunable' — one re-pull upserts AND prunes; no per-id arms. */
@@ -230,7 +195,8 @@ export type WriteAck = {
  */
 export type AckIdentityGraft = (
 	payload: Record<string, unknown>,
-	source: Record<string, unknown>
+	source: Record<string, unknown>,
+	options?: { serverLinesComplete?: boolean }
 ) => Record<string, unknown>;
 
 /**
@@ -306,11 +272,12 @@ export type CollectionWriteFacet = {
 /** shape: 'local-only' — no change-signal arms (orders). */
 export type LocalOnlyDescriptor = {
 	shape: 'local-only';
-	collection: Extract<SyncCollectionName, 'orders'>;
-	write: CollectionWriteFacet;
+	collection: Extract<SyncCollectionName, 'orders' | 'refunds'>;
+	write?: CollectionWriteFacet;
 };
 
 type AckDoc = {
+	toJSON(): Record<string, unknown>;
 	incrementalModify(
 		fn: (data: Record<string, unknown>) => Record<string, unknown>
 	): Promise<unknown>;
@@ -393,11 +360,15 @@ function ackBookkeeping(options: {
 				// document was not materializable, or the born-twice arm withheld it —
 				// the resident would keep its pre-create, ID-LESS lines, and every push
 				// built from it makes WooCommerce APPEND duplicates. Take the server's
-				// line IDENTITY (and nothing else) so local values still win.
+				// line IDENTITY so local values still win. A caller-confirmed full array
+				// also retires deleted ids and drops completed deletion tombstones.
 				let identityPatch: Record<string, unknown> = {};
 				if (!adopting && graftAckIdentity && ack.identityDocument) {
 					const residentPayload = (data.payload ?? {}) as Record<string, unknown>;
-					const grafted = graftAckIdentity(residentPayload, ack.identityDocument);
+					const grafted = graftAckIdentity(residentPayload, ack.identityDocument, {
+						// Without a pending successor, this ack patch would replace the local arrays.
+						serverLinesComplete: ackDocumentPatch !== null,
+					});
 					// Payload ONLY: the promoted filter/sort columns derive from values
 					// this graft never touches, so re-promoting them here would smuggle
 					// the ack's status/total past the pending-successor guard.
@@ -426,8 +397,23 @@ function ackBookkeeping(options: {
 			const doc = (await db.collections[collection]
 				.findOne(mutation.recordId)
 				.exec()) as AckDoc | null;
-			if (!doc || signal?.aborted) return; // already removed, or the scope switched
-			await doc.remove();
+			if (signal?.aborted) return;
+			// Delete mutations carry only the UUID, and the existence manifest has no UUID map.
+			// RxDB retains the removed row: recover its remoteId when a prior cascade failed.
+			const data =
+				doc?.toJSON() ??
+				(collection === 'orders'
+					? (
+							await db.collections.orders.storageInstance.findDocumentsById(
+								[mutation.recordId],
+								true
+							)
+						)[0]
+					: undefined);
+			if (signal?.aborted) return;
+			const remoteId = (data?.remoteId as string | null | undefined) ?? null;
+			if (doc) await doc.remove();
+			if (collection === 'orders') await removeRefundChildren(db.collections.refunds, [remoteId]);
 		},
 	};
 }
@@ -583,24 +569,9 @@ const variationsWriteFacet = createWriteFacet({
 	parse: parseVariationsEnvelope,
 	project: variationDocument,
 	documentPatchFromAckDocument: (document, barcodeSelectors) =>
-		catalogAckPatch(variationDocument, flattenVariationAckDocument(document), barcodeSelectors),
+		catalogAckPatch(variationDocument, document, barcodeSelectors),
 });
 
-/**
- * The variation push ack `document` is the SAME wrapper shape the pull
- * envelope carries — `{ id, parent_id, payload, _rxdb_digest? }` with identity
- * and the REST fields inside `payload` (Write_Controller::document_for) — so
- * it must be flattened exactly like parseVariationsEnvelope flattens a pull
- * row before the flat-payload projection can key it. Passing the wrapper
- * straight through leaves no top-level meta_data, identifyRecord throws, and
- * adoption silently degrades to the bookkeeping-only ack. A document that is
- * already flat (defensive: no nested payload object) passes through untouched.
- */
-function flattenVariationAckDocument(document: Record<string, unknown>): Record<string, unknown> {
-	if (typeof document.payload !== 'object' || document.payload === null) return document;
-	const [flattened] = parseVariationsEnvelope({ documents: [document] });
-	return flattened ?? document;
-}
 const customersWriteFacet = createWriteFacet({
 	collection: 'customers',
 	remoteIdField: 'remoteId',
@@ -649,15 +620,27 @@ const ordersWriteFacet = createWriteFacet({
 	//    sub-cent tax components 1.9 shipped AND stops the cart from patching the
 	//    rounded value straight back — an oscillation the cashier never asked for.
 	//    A number that genuinely CHANGED is adopted verbatim: server is truth.
-	adoptPayload: (localPayload, adoptedPayload) =>
-		preserveEquivalentLocalPrecision(localPayload, { ...localPayload, ...adoptedPayload }),
+	adoptPayload: (localPayload, adoptedPayload) => {
+		const merged = { ...localPayload, ...adoptedPayload };
+		if (Array.isArray(localPayload.line_items) && Array.isArray(adoptedPayload.line_items)) {
+			// A live line whose Woo id was retired is still cashier intent, even
+			// when no successor has been enqueued yet (Undo can race the ack).
+			const retired = graftServerLineIdentity(
+				{ line_items: localPayload.line_items.filter((line) => line?.id) },
+				adoptedPayload,
+				{ serverLinesComplete: true }
+			).line_items.filter((line) => !line.id);
+			merged.line_items = [...(adoptedPayload.line_items as unknown[]), ...retired];
+		}
+		return preserveEquivalentLocalPrecision(localPayload, merged);
+	},
 	// #818: WooCommerce APPENDS an order line posted without an `id`. Adoption is
 	// skipped while a successor is queued, so without this the resident — and
 	// every push built from it — keeps posting ID-LESS lines and duplicates the
 	// cart. Identity only, never a value. The display-field strip re-applies
 	// because a payload may predate it (#885/#890) and this rewrites line arrays.
-	graftAckIdentity: (payload, source) =>
-		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source)),
+	graftAckIdentity: (payload, source, options) =>
+		stripNonStringMetaDisplayFields(graftServerLineIdentity(payload, source, options)),
 	upsert: async (db, document) => {
 		await new EngineOrderRepository(db.collections as never).upsertMany([document as never]);
 	},
@@ -736,6 +719,7 @@ export const COLLECTION_DESCRIPTORS: readonly CollectionDescriptor[] = [
 		write: couponsWriteFacet,
 	},
 	{ shape: 'local-only', collection: 'orders', write: ordersWriteFacet },
+	{ shape: 'local-only', collection: 'refunds' },
 ] as const;
 
 /**

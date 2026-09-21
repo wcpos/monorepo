@@ -131,3 +131,17 @@ describe('useDownloadReceiptPdf', () => {
 		expect(result.current.isDownloading).toBe(false);
 	});
 });
+
+it('downloads the frozen refund PDF with its own filename', async () => {
+	const data = new ArrayBuffer(4);
+	mockHttpGet.mockResolvedValue({ data });
+	const { result } = renderHook(() => useDownloadReceiptPdf());
+	await act(async () => {
+		await result.current.download({ orderId: 42, templateId: '7', document: 'refund:12' });
+	});
+	expect(mockHttpGet).toHaveBeenLastCalledWith('/receipts/42/pdf', {
+		params: { template_id: '7', document: 'refund:12' },
+		responseType: 'arraybuffer',
+	});
+	expect(mockSaveOrSharePdf).toHaveBeenLastCalledWith(data, 'refund-12.pdf');
+});

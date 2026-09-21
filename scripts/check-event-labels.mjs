@@ -39,6 +39,20 @@ export const EVENT_SOURCE_ROOTS = [
 	// titles the same way. Scoped to its own directory for the same reason as
 	// the email queue above.
 	'packages/core/src/screens/main/components/online-status',
+	// Checkout writes `payment.*`, `checkout.*` and `reader.*` rows the Logs UI
+	// titles from the same registry. Scoped to the two directories that emit them
+	// — the tender flow and its payment services, and the terminal-payments
+	// service that settles offline card approvals.
+	'packages/core/src/screens/main/pos/checkout',
+	'packages/core/src/services/terminal-payments',
+	// Register actions and their system outcomes write `register.*` rows titled
+	// from the same registry: session/outbox/audit and device binding.
+	'packages/core/src/services/register-session',
+	'packages/core/src/services/register',
+	// The shared ErrorBoundary writes one `render.error` row per caught render
+	// throw (#2112), titled by the Logs UI like every other event. Scoped to its
+	// own directory for the same reason as the two above.
+	'packages/components/src/error-boundary',
 ];
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
@@ -379,7 +393,12 @@ export async function collectEmittedEventTypes(roots = EVENT_SOURCE_ROOTS, known
 		[...emitted.keys(), ...knownTypes].map((type) => type.slice(0, type.indexOf('.')))
 	);
 	for (const [file, source] of sources) {
-		for (const type of quotedTypesIn(source)) {
+		// Operation kinds are persisted metadata, not event types.
+		const eventSource = source.replace(
+			/\boperationType\s*:\s*(['"])[^'"]*\1/g,
+			'operationType: ""'
+		);
+		for (const type of quotedTypesIn(eventSource)) {
 			if (namespaces.has(type.slice(0, type.indexOf('.')))) record(type, file);
 		}
 	}

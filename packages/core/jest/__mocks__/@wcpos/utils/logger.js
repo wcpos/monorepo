@@ -62,6 +62,8 @@ module.exports.CategoryLogger = CategoryLogger;
 module.exports.getErrorMessage = (error) =>
 	error instanceof Error ? error.message : String(error);
 module.exports.setToast = jest.fn();
+module.exports.markErrorReported = jest.fn();
+module.exports.isErrorReported = jest.fn(() => false);
 module.exports.setDatabase = jest.fn();
 module.exports.log = mockLogger;
 
@@ -76,3 +78,4 @@ module.exports.setVerboseDiagnostics = jest.fn((enabled) => {
 module.exports.recorderStats = jest.fn(() => ({ events: 0, bytes: 0 }));
 module.exports.snapshotRecorder = jest.fn(() => []);
 module.exports.promoteRecorder = jest.fn();
+module.exports.capturePrinterOutcome = jest.fn();

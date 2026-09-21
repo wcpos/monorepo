@@ -72,6 +72,7 @@ export type OrderBrowserSchedulerDescriptor = {
 	limit: number;
 	customerId?: number;
 	cashierId?: number;
+	registerId?: string;
 	store?: string;
 	afterSeconds?: number;
 	beforeSeconds?: number;
@@ -104,6 +105,7 @@ export type OrderBrowseWindowFields = {
 	limit: number | 'all';
 	customerId?: number | undefined;
 	cashierId?: number | undefined;
+	registerId?: string | undefined;
 	store?: string | undefined;
 	afterSeconds?: number | undefined;
 	beforeSeconds?: number | undefined;
@@ -143,6 +145,7 @@ function encodeOrderBrowseWindowKey(fields: OrderBrowseWindowFields, limitText: 
 		`orders:browser:status=${fields.status}`,
 		browseWindowKeyPart('customer', fields.customerId),
 		browseWindowKeyPart('cashier', fields.cashierId),
+		browseWindowKeyPart('register', fields.registerId),
 		browseWindowKeyPart('store', fields.store),
 		browseWindowKeyPart('after', fields.afterSeconds),
 		browseWindowKeyPart('before', fields.beforeSeconds),
@@ -168,6 +171,7 @@ export function orderBrowseWindowRequirementId(fields: OrderBrowseWindowFields):
 	const dimensioned =
 		fields.customerId !== undefined ||
 		fields.cashierId !== undefined ||
+		fields.registerId !== undefined ||
 		fields.store !== undefined ||
 		fields.afterSeconds !== undefined ||
 		fields.beforeSeconds !== undefined ||
@@ -218,6 +222,7 @@ export function orderBrowserQueryKey(dims: OrderBrowseDimensions): string {
 		limit: dims.limit === 'all' ? 'all' : normalizeOrderBrowseWindowLimit(dims.limit as number),
 		customerId: safeNonNegativeInteger(dims.customerId),
 		cashierId: safeNonNegativeInteger(dims.cashierId),
+		registerId: dims.registerId,
 		store,
 		afterSeconds,
 		beforeSeconds,
@@ -249,7 +254,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 	// BETWEEN the colon-free `status` and `:search=` — appending them after `search`
 	// would let a literal search term like `invoice:after=1` be read as a date bound.
 	const match =
-		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::store=([a-z0-9_-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
+		/^orders:browser:status=([^:]*)(?::customer=(\d+))?(?::cashier=(\d+))?(?::register=([a-f0-9-]{36}))?(?::store=([a-z0-9_-]+))?(?::after=(\d+))?(?::before=(\d+))?(?::orderby=(date|modified|id|status|customer_id|payment_method|total))?(?::order=(asc|desc))?:search=(.*):limit=(\d+|all)$/.exec(
 			queryKey
 		);
 	if (!match) return { skipReason: ORDER_BROWSER_SCHEDULER_UNSUPPORTED_DESCRIPTOR_REASON };
@@ -259,6 +264,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 		status,
 		customerText,
 		cashierText,
+		registerId,
 		store,
 		afterText,
 		beforeText,
@@ -302,6 +308,7 @@ export function parseOrderBrowserSchedulerDescriptor(
 			limit,
 			...(customerId !== undefined ? { customerId } : {}),
 			...(cashierId !== undefined ? { cashierId } : {}),
+			...(registerId !== undefined ? { registerId } : {}),
 			...(store !== undefined ? { store } : {}),
 			...(afterSeconds !== undefined ? { afterSeconds } : {}),
 			...(beforeSeconds !== undefined ? { beforeSeconds } : {}),
@@ -332,6 +339,7 @@ export function orderBrowseWindowFields(
 		limit: descriptor.complete ? 'all' : descriptor.limit,
 		customerId: descriptor.customerId,
 		cashierId: descriptor.cashierId,
+		registerId: descriptor.registerId,
 		store: descriptor.store,
 		afterSeconds: descriptor.afterSeconds,
 		beforeSeconds: descriptor.beforeSeconds,

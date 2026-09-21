@@ -15,10 +15,18 @@
  * still need a live pass on the device/web hosts.
  */
 
+import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
+import {
+	refreshAccessToken,
+	type RefreshAccessTokenConfig,
+} from '@wcpos/hooks/use-http-client/refresh-access-token';
+import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
+import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { defaultConfig } from '@wcpos/database/adapters/default';
 import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { reportNetworkResponse } from '@wcpos/hooks';
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync-core';
 import {
 	createRxdbSyncEngine,
@@ -42,7 +50,12 @@ import { lastUserActivityMs, onUserActivity } from '@wcpos/utils/user-activity';
 
 import { getEngineConnectivity } from './connectivity';
 import { createE2eEngineLedgerObserver } from './e2e-engine-ledger';
-import { createEngineFetcher, type EngineFetcherScope, fetchWooQueryTotal } from './engine-fetcher';
+import {
+	createEngineFetcher,
+	type EngineFetcherAuth,
+	type EngineFetcherScope,
+	fetchWooQueryTotal,
+} from './engine-fetcher';
 import { platformEngineFetch } from './engine-platform-fetch';
 import { appMetricsObserver } from './metrics';
 import { createSyncLogObserver } from './sync-log-observer';
@@ -109,14 +122,15 @@ type MutableFetcherOptions = Pick<
 	| 'useProtocolHeaders'
 >;
 type WriteLeaderState = {
-	current: ReturnType<typeof electWriteLeader>;
+	current: ReturnType<typeof electWriteLeader> | null;
 	onUnavailable: () => void;
 };
 
 type CachedEngine = {
-	key: string;
+	renderKey: string | null;
 	site: string;
-	databaseName: string;
+	allocationKey: string;
+	requests: { key: string; options?: MutableFetcherOptions; settled: Promise<unknown> }[];
 	/** Every scope database this engine opened (same-site switches retain the
 	 * prior scope's database) — a timed-out disposal must terminally fail ALL
 	 * of them, not just the last active one. */
@@ -129,32 +143,12 @@ type CachedEngine = {
 	 * and reads it per attempt, so a scope move retargets in-flight lanes.
 	 */
 	fetcherScope: EngineFetcherScope;
-	/**
-	 * The identity the engine LAST SUCCESSFULLY ACTIVATED — the only safe thing
-	 * to fall back to when a scope switch rejects.
-	 *
-	 * Reverting to a snapshot taken when the failed switch STARTED is wrong as
-	 * soon as switches chain: on A→B→C where both reject, B's rejection is
-	 * ignored (the cache already names C) and C's rejection then restores B —
-	 * a scope the engine never reached. The engine sits on A while the cache,
-	 * and the store header, claim B, so a price edit is written against the
-	 * wrong store until some later render happens to repair it.
-	 */
-	committed: CommittedScope;
 	/** Shared with the fetcher so a response can prove it belongs to the active scope activation. */
 	clockSkew: { generation: number; evaluated: boolean };
 	writeLeader?: WriteLeaderState;
 	/** Web multi-tab write-outcome feedback (#1209) — re-pointed at the new
 	 * scope's channel on every switch, exactly like the write lock. */
 	writeOutcomeBridge?: ScopedWriteOutcomeBridge;
-};
-
-/** A scope identity the engine is known to have activated. */
-type CommittedScope = {
-	key: string;
-	databaseName: string;
-	storeId: number | string;
-	fetcherOptions: MutableFetcherOptions;
 };
 
 let cachedEngine: CachedEngine | null = null;
@@ -170,7 +164,7 @@ function moveWriteLeader(entry: CachedEngine, databaseName: string): void {
 	entry.writeLeader.current = electWriteLeader(`wcpos-write-leader:${databaseName}`, {
 		onUnavailable: entry.writeLeader.onUnavailable,
 	});
-	previous.dispose();
+	previous?.dispose();
 }
 
 function canonicalSite(site: string): string {
@@ -193,13 +187,90 @@ function scopeCacheKey(scope: StoreScopeIdentity): string {
 	]);
 }
 
+/** Shared by render and awaited session commits, including the incoming cashier's refresh. */
+export function createSessionFetcherOptions(
+	site: RefreshAccessTokenConfig['site'],
+	wpCredentials: RefreshAccessTokenConfig['wpUser'] & CreateAppSyncEngineOptions['credentials'],
+	sessionRenewedMessage: string
+): MutableFetcherOptions {
+	return {
+		credentials: wpCredentials,
+		useJwtAsParam: site.use_jwt_as_param,
+		useRestRouteParam: resolveRestTransport(site) === 'query',
+		bareAuthParam: bareAuthParamSupported(site.wcpos_version),
+		useProtocolHeaders: site.use_protocol_headers,
+		refreshAuth: (context) =>
+			refreshAccessToken({
+				site: {
+					wcpos_api_url: site.wcpos_api_url,
+					wp_api_url: site.wp_api_url,
+					use_jwt_as_param: site.use_jwt_as_param,
+					use_rest_route_param: site.use_rest_route_param,
+					use_protocol_headers: site.use_protocol_headers,
+				},
+				wpUser: wpCredentials,
+				getHttpClient: createRefreshHttpClient,
+				sessionRenewedMessage,
+				operationId: context?.operationId,
+			}),
+	};
+}
+
+function projectFetcherOptions(options: MutableFetcherOptions): MutableFetcherOptions {
+	return {
+		credentials: options.credentials,
+		refreshAuth: options.refreshAuth,
+		useJwtAsParam: options.useJwtAsParam,
+		bareAuthParam: options.bareAuthParam,
+		useRestRouteParam: options.useRestRouteParam,
+		useProtocolHeaders: options.useProtocolHeaders,
+	};
+}
+
+async function requestScope(
+	entry: CachedEngine,
+	scope: StoreScopeIdentity,
+	options?: MutableFetcherOptions
+): Promise<void> {
+	entry.databaseNames.add(scopeDatabaseName(scope));
+	// Registered BEFORE the engine is asked: activation can be published synchronously inside
+	// scope.switch, and the subscriber must find the request (and its staged auth) already there.
+	const request: CachedEngine['requests'][number] = {
+		key: scopeCacheKey(scope),
+		options,
+		settled: Promise.resolve(),
+	};
+	entry.requests.push(request);
+	request.settled = entry.engine.scope.switch(scope);
+	try {
+		await request.settled;
+	} finally {
+		const latest = entry.requests.at(-1) === request;
+		const index = entry.requests.indexOf(request);
+		if (index >= 0) entry.requests.splice(index, 1);
+		if (latest) {
+			const active = entry.engine.active();
+			entry.renderKey = active ? scopeCacheKey(active.identity) : null;
+		}
+	}
+}
+
 function disposeCachedEngine(entry: CachedEngine): void {
-	const priorDisposal = pendingDisposals.get(entry.key);
+	const active = entry.engine.active();
+	const disposalKey = active ? scopeCacheKey(active.identity) : entry.allocationKey;
+	const disposalKeys = new Set([disposalKey, ...entry.requests.map((request) => request.key)]);
+	if (entry.renderKey) disposalKeys.add(entry.renderKey);
+	const priorDisposals = new Set(
+		[...disposalKeys]
+			.map((key) => pendingDisposals.get(key))
+			.filter((pending): pending is Promise<void> => pending !== undefined)
+	);
 	let disposal: Promise<void>;
 	try {
-		disposal = priorDisposal
-			? priorDisposal.then(() => entry.engine.dispose())
-			: entry.engine.dispose();
+		disposal =
+			priorDisposals.size > 0
+				? Promise.allSettled(priorDisposals).then(() => entry.engine.dispose())
+				: entry.engine.dispose();
 	} catch {
 		disposal = Promise.resolve();
 	}
@@ -226,7 +297,7 @@ function disposeCachedEngine(entry: CachedEngine): void {
 			engineLogger.error('ENGINE DISPOSAL TIMED OUT; force-releasing the database-open barrier', {
 				code: ERROR_CODES.SYNC_UNEXPECTED,
 				context: {
-					scopeKey: entry.key,
+					scopeKey: disposalKey,
 					databaseNames: [...entry.databaseNames],
 				},
 			});
@@ -238,12 +309,12 @@ function disposeCachedEngine(entry: CachedEngine): void {
 			resolve();
 		});
 	});
-	pendingDisposals.set(entry.key, bounded);
+	for (const key of disposalKeys) pendingDisposals.set(key, bounded);
 	void bounded.then(() => {
-		entry.writeLeader?.current.dispose();
+		entry.writeLeader?.current?.dispose();
 		entry.writeOutcomeBridge?.close();
-		if (pendingDisposals.get(entry.key) === bounded) {
-			pendingDisposals.delete(entry.key);
+		for (const key of disposalKeys) {
+			if (pendingDisposals.get(key) === bounded) pendingDisposals.delete(key);
 		}
 	});
 }
@@ -252,20 +323,22 @@ function disposeCachedEngine(entry: CachedEngine): void {
  * Awaited scope transition for the store-switch flow (issue #876). Called by
  * the app-state layer (via the core engine-scope port) AFTER the new store's
  * session hydrated and BEFORE the session is committed: a rejection here
- * aborts the switch with durable state untouched. Cache identity is committed
- * only on success, so there is nothing to revert and the fetcher auth options
- * are never swapped early (renders refresh those on every cache hit).
+ * aborts the switch with durable state untouched. Active scope is published by
+ * the activation subscriber, not by this promise settling.
  *
  * Cross-site sessions and sessions without a full scope identity resolve as
  * no-ops — engine creation/disposal for those is owned by the render path in
  * createAppSyncEngine. Relies on the AppStack invariant that the engine's
  * scope.site IS the site's wp_api_url.
  */
-export async function switchAppEngineScope(session: {
-	site?: { wp_api_url?: string } | null;
-	wpCredentials?: { id?: number | string } | null;
-	store?: { id?: number | string } | null;
-}): Promise<void> {
+export async function switchAppEngineScope(
+	session: {
+		site?: { wp_api_url?: string } | null;
+		wpCredentials?: { id?: number | string } | null;
+		store?: { id?: number | string } | null;
+	},
+	options?: MutableFetcherOptions
+): Promise<void> {
 	const entry = cachedEngine;
 	if (!entry) return;
 	const site = session.site?.wp_api_url;
@@ -274,133 +347,54 @@ export async function switchAppEngineScope(session: {
 	if (!site || storeId == null || cashierId == null) return;
 	if (canonicalSite(site) !== entry.site) return;
 	const scope: StoreScopeIdentity = { site, storeId, cashierId };
-	const targetKey = scopeCacheKey(scope);
-	if (entry.key === targetKey) return;
-
-	// Record the target scope database BEFORE awaiting, matching the render
-	// path's superset semantics: a cross-site disposal racing this switch must
-	// terminally fail the database the switch may be opening, and a name
-	// recorded only on success escapes the deadline's mark/free loops exactly
-	// when the switch itself is what wedged. Marking a database the engine
-	// never opened is a no-op, so the early add is safe on rejection too.
-	entry.databaseNames.add(scopeDatabaseName(scope));
-
-	await entry.engine.scope.switch(scope);
-
-	entry.key = targetKey;
-	// Committed HERE rather than left to the next render's cache hit (the way the
-	// auth options are). Between a settled switch and that render the engine is
-	// already pulling and pushing under the new scope; a stale store header in
-	// that window would divert a price edit into the OUTGOING store's meta
-	// (pro#425). Only reached on success, so there is nothing to revert.
-	entry.fetcherScope.storeId = storeId;
-	entry.databaseName = scopeDatabaseName(scope);
-	// The engine confirmed this scope, so it becomes the fallback for any later
-	// switch that fails.
-	entry.committed = {
-		key: targetKey,
-		databaseName: entry.databaseName,
-		storeId,
-		fetcherOptions: { ...entry.fetcherOptions },
-	};
-	moveWriteLeader(entry, entry.databaseName);
-	entry.clockSkew.generation += 1;
-	entry.clockSkew.evaluated = false;
+	const active = entry.engine.active();
+	const key = scopeCacheKey(scope);
+	const latest = entry.requests.at(-1);
+	if (latest?.key === key) {
+		await latest.settled;
+		return;
+	}
+	if (!latest && (active ? scopeCacheKey(active.identity) : entry.allocationKey) === key) return;
+	await requestScope(entry, scope, options && projectFetcherOptions(options));
 }
 
 /** Create or reuse the app sync engine for the requested store scope. */
 export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSyncEngine {
 	const cacheKey = scopeCacheKey(options.scope);
 	const siteKey = canonicalSite(options.scope.site);
-	if (cachedEngine && cachedEngine.key === cacheKey) {
-		cachedEngine.fetcherOptions.credentials = options.credentials;
-		cachedEngine.fetcherOptions.refreshAuth = options.refreshAuth;
-		cachedEngine.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
-		cachedEngine.fetcherOptions.bareAuthParam = options.bareAuthParam;
-		cachedEngine.fetcherOptions.useRestRouteParam = options.useRestRouteParam;
-		cachedEngine.fetcherOptions.useProtocolHeaders = options.useProtocolHeaders;
-		cachedEngine.fetcherScope.storeId = options.scope.storeId;
-		// The engine IS on this scope, so these are committed values, not
-		// optimistic ones — a later failed switch must fall back to them.
-		cachedEngine.committed = {
-			...cachedEngine.committed,
-			storeId: options.scope.storeId,
-			fetcherOptions: { ...cachedEngine.fetcherOptions },
-		};
-		return cachedEngine.engine;
-	}
 	if (cachedEngine && cachedEngine.site === siteKey) {
-		// Same-site scope change arriving via render (e.g. a cashier swap without
-		// the store-switch flow). The awaited path is switchAppEngineScope below;
-		// render cannot await, so this branch fires the transition detached and
-		// reverts the cache identity — INCLUDING the fetcher auth options, which
-		// must not keep authenticating as the new identity when the engine never
-		// left the old scope — if it rejects.
 		const entry = cachedEngine;
-		const previousClockSkewEvaluated = entry.clockSkew.evaluated;
-		// What this switch is trying to become. Recorded as committed only once
-		// the engine confirms it, and used as the fallback by whichever LATER
-		// switch fails — see CachedEngine.committed.
-		const target: CommittedScope = {
-			key: cacheKey,
-			databaseName: scopeDatabaseName(options.scope),
-			storeId: options.scope.storeId,
-			fetcherOptions: {
-				credentials: options.credentials,
-				refreshAuth: options.refreshAuth,
-				useJwtAsParam: options.useJwtAsParam,
-				useRestRouteParam: options.useRestRouteParam,
-				bareAuthParam: options.bareAuthParam,
-				useProtocolHeaders: options.useProtocolHeaders,
-			},
-		};
-		const switching = entry.engine.scope.switch(options.scope);
-		entry.key = cacheKey;
-		entry.databaseName = scopeDatabaseName(options.scope);
-		entry.databaseNames.add(entry.databaseName);
-		entry.fetcherOptions.credentials = options.credentials;
-		entry.fetcherOptions.refreshAuth = options.refreshAuth;
-		entry.fetcherOptions.useJwtAsParam = options.useJwtAsParam;
-		entry.fetcherOptions.useRestRouteParam = options.useRestRouteParam;
-		entry.fetcherOptions.bareAuthParam = options.bareAuthParam;
-		entry.fetcherOptions.useProtocolHeaders = options.useProtocolHeaders;
-		entry.fetcherScope.storeId = options.scope.storeId;
-		entry.clockSkew.generation += 1;
-		entry.clockSkew.evaluated = false;
-		void switching.then(
-			() => {
-				// Committed unconditionally: the engine reached this scope, even if a
-				// newer switch has already superseded it as the active target. That is
-				// exactly the case a chained failure needs to fall back to.
-				entry.committed = target;
-				if (cachedEngine === entry && entry.key === cacheKey) {
-					moveWriteLeader(entry, entry.databaseName);
-				}
-			},
-			(error) => {
-				engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
-					code: ERROR_CODES.SYNC_UNEXPECTED,
-					context: {
-						scopeKey: cacheKey,
-						error: error instanceof Error ? error.message : String(error),
-					},
-				});
-				if (cachedEngine === entry && entry.key === cacheKey) {
-					const committed = entry.committed;
-					entry.key = committed.key;
-					entry.databaseName = committed.databaseName;
-					entry.fetcherOptions.credentials = committed.fetcherOptions.credentials;
-					entry.fetcherOptions.refreshAuth = committed.fetcherOptions.refreshAuth;
-					entry.fetcherOptions.useJwtAsParam = committed.fetcherOptions.useJwtAsParam;
-					entry.fetcherOptions.useRestRouteParam = committed.fetcherOptions.useRestRouteParam;
-					entry.fetcherOptions.bareAuthParam = committed.fetcherOptions.bareAuthParam;
-					entry.fetcherOptions.useProtocolHeaders = committed.fetcherOptions.useProtocolHeaders;
-					entry.fetcherScope.storeId = committed.storeId;
-					entry.clockSkew.generation += 1;
-					entry.clockSkew.evaluated = previousClockSkewEvaluated;
-				}
-			}
-		);
+		const active = entry.engine.active();
+		const activeKey = active ? scopeCacheKey(active.identity) : null;
+		const latest = entry.requests.at(-1);
+		const pending = entry.requests.filter((request) => request.key === cacheKey).at(-1);
+		const projected = projectFetcherOptions(options);
+		if (pending) pending.options = projected;
+		if (
+			activeKey === cacheKey ||
+			(activeKey === null && cacheKey === entry.allocationKey && !latest)
+		) {
+			Object.assign(entry.fetcherOptions, projected);
+		}
+		// Unchanged render intent stays inert during an awaited switch or initial open.
+		// B → C → B still enqueues the return because renderKey has moved to C.
+		if (
+			latest?.key === cacheKey ||
+			entry.renderKey === cacheKey ||
+			(!latest && activeKey === cacheKey)
+		) {
+			return entry.engine;
+		}
+		entry.renderKey = cacheKey;
+		void requestScope(entry, options.scope, projected).catch((error) => {
+			engineLogger.error('ENGINE SCOPE SWITCH FAILED', {
+				code: ERROR_CODES.SYNC_UNEXPECTED,
+				context: {
+					scopeKey: cacheKey,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		});
 		return entry.engine;
 	}
 	const supersedesCachedEngine = cachedEngine !== null;
@@ -415,13 +409,26 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 
 	const site = deriveSyncSite(options.wpApiUrl);
 	const databaseOpenBarrier = pendingDisposals.get(cacheKey);
-	const fetcherOptions: MutableFetcherOptions = {
-		credentials: options.credentials,
-		refreshAuth: options.refreshAuth,
-		useJwtAsParam: options.useJwtAsParam,
-		bareAuthParam: options.bareAuthParam,
-		useRestRouteParam: options.useRestRouteParam,
-		useProtocolHeaders: options.useProtocolHeaders,
+	let authExhaustedToken: string | null = null;
+	const fetcherOptions: MutableFetcherOptions & Pick<EngineFetcherAuth, 'onAuthExhausted'> = {
+		...projectFetcherOptions(options),
+		onAuthExhausted: (token) => {
+			if (authExhaustedToken === token) return;
+			// The latch is this engine's own state and stays unguarded: a superseded
+			// engine must still hold its lanes. The TOAST is global, so it takes the
+			// same cache-identity guard as guardedDiagnostics — a late 401 from a
+			// disposed engine must not tell the cashier to sign in to the store they
+			// just switched TO.
+			authExhaustedToken = token;
+			if (engineSelf !== null && cachedEngine?.engine !== engineSelf) return;
+			engineLogger.error(
+				'Sync paused: the store rejected the renewed session — sign in again to resume',
+				{
+					code: ERROR_CODES.SESSION_EXPIRED,
+					showToast: true,
+				}
+			);
+		},
 	};
 	const fetcherScope: EngineFetcherScope = { storeId: options.scope.storeId };
 	const clockSkew = { generation: 0, evaluated: false };
@@ -570,6 +577,10 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				fetchWooQueryTotal: (input) => fetchWooQueryTotal(input, fetcher, site.wpJsonRoot),
 			},
 			connectivity: getEngineConnectivity,
+			holdAutomaticTicks: () =>
+				requestStateManager.isAuthFailed() ||
+				(authExhaustedToken !== null &&
+					authExhaustedToken === fetcherOptions.credentials.getLatest().access_token),
 			// The one authored product default (initial-settings) — the engine's
 			// boot seed and trickle fallback derive from it, never restate it.
 			...(hostDefaultProductBrowseSort
@@ -585,30 +596,51 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 				e2eEngineLedgerObserver
 			),
 			multiInstance: isWeb ? webLocksAvailable : (options.multiInstance ?? false),
-			...(writeLeader ? { writePlaneOwner: () => writeLeader.current.isLeader() } : {}),
+			...(writeLeader ? { writePlaneOwner: () => writeLeader.current?.isLeader() ?? false } : {}),
 			...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),
 			...(databaseOpenBarrier ? { databaseOpenBarrier } : {}),
 		},
 		options.scope
 	);
 	engineSelf = engine;
-	cachedEngine = {
-		key: cacheKey,
+	// The store header follows the ENGINE's active scope, never the app's
+	// intent. The engine flips scopes after it has aborted the outgoing scope's
+	// ticket and before the incoming open's barcode hydrate, bootstrap seed and
+	// change-signal prime run, so this is the one point at which neither an
+	// outgoing lane nor an incoming open can fetch under the other store's
+	// header. Committing it before an awaited switch mis-scoped outgoing ticks
+	// during a slow open; committing it after mis-scoped the open itself.
+	const entry: CachedEngine = {
+		renderKey: cacheKey,
 		site: siteKey,
-		databaseName: scopeDatabaseName(options.scope),
+		allocationKey: cacheKey,
+		requests: [],
 		databaseNames: new Set([scopeDatabaseName(options.scope)]),
 		engine,
 		fetcherOptions,
 		fetcherScope,
-		committed: {
-			key: cacheKey,
-			databaseName: scopeDatabaseName(options.scope),
-			storeId: options.scope.storeId,
-			fetcherOptions: { ...fetcherOptions },
-		},
 		clockSkew,
 		...(writeLeader ? { writeLeader } : {}),
 		...(writeOutcomeBridge ? { writeOutcomeBridge } : {}),
 	};
+	cachedEngine = entry;
+	let publishedKey: string | null = cacheKey;
+	let hasActivated = false;
+	engine.db$(() => {
+		if (cachedEngine !== entry) return;
+		const active = engine.active();
+		// db$ immediately emits null during boot; retain the allocation's seed.
+		if (!active && !hasActivated) return;
+		hasActivated = true;
+		const key = active ? scopeCacheKey(active.identity) : null;
+		const pending = entry.requests.find((request) => request.key === key);
+		if (pending?.options) Object.assign(fetcherOptions, pending.options);
+		if (key === publishedKey) return;
+		fetcherScope.storeId = active?.identity.storeId ?? null;
+		clockSkew.generation += 1;
+		clockSkew.evaluated = false;
+		if (active) moveWriteLeader(entry, scopeDatabaseName(active.identity));
+		publishedKey = key;
+	});
 	return engine;
 }

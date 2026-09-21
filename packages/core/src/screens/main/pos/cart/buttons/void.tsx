@@ -9,6 +9,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import { useT } from '../../../../../contexts/translations';
+import { getCurrentBoundRegisterId } from '../../../../../services/register/register-document';
 import { requestServerDelete } from '../../../hooks/mutations/request-server-delete';
 import {
 	findEngineResident,
@@ -102,6 +103,7 @@ export function VoidButton() {
 	 *
 	 */
 	const handleRemove = React.useCallback(async () => {
+		const registerId = getCurrentBoundRegisterId() ?? undefined;
 		// #163 ruling R5: voiding writes a delete (or a status change) that must be
 		// recorded locally. With the worker dead the order's fate is unknowable from
 		// this device, and the undo path below could not restore it either.
@@ -142,6 +144,7 @@ export function VoidButton() {
 					collection: 'orders',
 					recordId,
 					changes: { status: 'pending' },
+					registerId,
 				});
 				showSuccess(t('pos_cart.order_voided_kept_pending'));
 			} catch (err) {
@@ -158,10 +161,20 @@ export function VoidButton() {
 		const isCannotDelete = (error: unknown) =>
 			error instanceof WriteOutcomeError && error.reason === WOO_REST_CANNOT_DELETE;
 
-		const receipt = await requestServerDelete(manager.engine, {
-			collection: 'orders',
-			recordId,
-		});
+		let receipt: Awaited<ReturnType<typeof requestServerDelete>>;
+		try {
+			receipt = await requestServerDelete(manager.engine, {
+				collection: 'orders',
+				recordId,
+			});
+		} catch (err) {
+			cartLogger.error('Failed to void order', {
+				showToast: true,
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+				context: { orderId: recordId, error: getErrorMessage(err) },
+			});
+			return;
+		}
 
 		// Only a truly offline engine skips the outcome watch (the accepted gap):
 		// the write drain still pushes while 'degraded', so a degraded refusal

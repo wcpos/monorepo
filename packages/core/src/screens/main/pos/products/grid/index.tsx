@@ -54,8 +54,8 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 	const result = useObservableSuspense(binding.resource);
 	const deferredResult = React.useDeferredValue(result);
 
-	// Guarded (#1221): search paging follows the engine's exhaustion verdict, not the shorter
-	// locally merged product rows, while pending demand still blocks duplicate extensions.
+	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.
+	// Short local reads stop unless the engine says more may exist.
 	const handleEndReached = useGuardedExtendLimit(
 		actions.extendLimit,
 		deferredResult.hits.length,
@@ -84,6 +84,10 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 		}
 		return { rows: chunked, skippedStaleHits: deferredResult.hits.length - products.length };
 	}, [deferredResult.hits, gridColumns]);
+	// What the footers report as "loaded": the rows the grid actually built, not the hits it
+	// was handed — replication churn can hand over stale hits that are skipped above, and the
+	// loaded-count is a referent E2E reads (#1345), so it must count rendered rows.
+	const renderedCount = deferredResult.hits.length - skippedStaleHits;
 
 	// Products vanishing from the grid during sync churn must be visible in the log
 	// pipeline (cashier-full-information ruling), even though the grid self-heals
@@ -128,7 +132,11 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 					onEndReachedThreshold={0.1}
 					onEndReached={handleEndReached}
 					ListFooterComponent={
-						<ProductGridFooter binding={binding} count={deferredResult.hits.length} />
+						<ProductGridFooter
+							binding={binding}
+							renderedCount={renderedCount}
+							hitCount={deferredResult.hits.length}
+						/>
 					}
 					ListEmptyComponent={() => (
 						<View className="items-center justify-center p-4">
@@ -150,7 +158,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 						active$={binding.active$}
 						total$={binding.total$}
 						sync={binding.sync}
-						count={deferredResult.hits.length}
+						count={renderedCount}
 					>
 						<TaxBasedOn />
 					</DataTableFooter>
@@ -160,7 +168,7 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 						active$={binding.active$}
 						total$={binding.total$}
 						sync={binding.sync}
-						count={deferredResult.hits.length}
+						count={renderedCount}
 					/>
 				)}
 			</View>

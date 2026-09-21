@@ -1,0 +1,26 @@
+import { readFileSync } from 'node:fs';
+
+// Match the source-only app tests: clear Expo's lazy native runtime after setup.
+jest.resetModules();
+
+// A folder with a `gallery.tsx` that is not registered has no cells, and the
+// definition of done (landing order, DoD C) fails it silently at the shoot.
+// Reading the source keeps this test free of the gallery's native imports.
+const registered = [
+	'skeleton',
+	"'empty-state': emptyState",
+	'notice',
+	'breadcrumb',
+	"'page-bar': pageBar",
+	'chip',
+	'keypad',
+	"'segmented-control': segmentedControl",
+];
+
+it('registers every new primitive before the gallery shoot', () => {
+	const source = readFileSync(`${__dirname}/../components/gallery/registry.tsx`, 'utf8');
+	const entries = source.match(/const registry[^=]*=\s*\{([^}]+)\}/)?.[1];
+	expect(entries).toBeDefined();
+	const names = entries!.split(',').map((entry) => entry.trim());
+	for (const name of registered) expect(names).toContain(name);
+});

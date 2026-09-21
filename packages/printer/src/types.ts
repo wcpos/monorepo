@@ -7,6 +7,7 @@ import type {
 } from '@wcpos/receipt-renderer';
 
 import type { PrinterIdentity } from './discovery/identify';
+import type { PrinterStatus } from './transport/escpos-status';
 
 export type { DrawerConnector };
 
@@ -14,6 +15,10 @@ export interface PrintRawOptions {
 	/** Whether transports that add their own cutter command should include it. */
 	cutPaper?: boolean;
 }
+
+/** What a logged print dispatch carries: bytes for raw, markup characters for a job. */
+export type PrintJobShape =
+	{ kind: 'raw'; bytes: number } | { kind: 'markup'; markupLength: number };
 
 export interface MarkupPrintJob {
 	template: string;
@@ -50,6 +55,13 @@ export interface PrinterTransport {
 	 * Some transports include this in printRaw; this is for standalone kicks.
 	 */
 	openCashDrawer?(): Promise<void>;
+
+	/**
+	 * Ask the printer for its real-time status (`DLE EOT`). Resolves null when this lane cannot
+	 * ask — a write-only channel, or a BLE profile with no notify characteristic (audit D4).
+	 * Never throws: a status read is a nicety and must not fail the print it followed.
+	 */
+	queryStatus?(): Promise<PrinterStatus | null>;
 
 	/** Disconnect / clean up resources */
 	disconnect?(): Promise<void>;
@@ -106,6 +118,13 @@ export interface PrinterProfile {
 	printerModel?: string;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns: number;
+	/**
+	 * ESC/POS code page for receipt text, named as the encoder library expects ('cp437',
+	 * 'cp1252', 'cp936'…). Absent means the encoder picks a page per string, which is right for
+	 * Latin receipts and wrong for a printer whose character tables are a Chinese, Thai or
+	 * Cyrillic set — that receipt prints as question marks (gotcha N38).
+	 */
+	codePage?: string;
 	/**
 	 * Emit `ESC !` print-mode bytes alongside `GS !` size bytes.
 	 * Default `true`. Some printers and simulators only honour one of the two

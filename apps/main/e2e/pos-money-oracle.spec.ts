@@ -178,21 +178,14 @@ async function addMiscProduct(page: Page, price: string, taxStatus?: 'taxable' |
 	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
-/**
- * A NEGATIVE fee — entered the way a cashier does, with the numpad's +/- key.
- *
- * WooCommerce treats a negative fee as a discount and taxes it on a completely
- * different code path (`WC_Order_Item_Fee::calculate_taxes()`): instead of applying
- * the fee's own tax class to the whole amount, it apportions the amount across the
- * tax-class mix of every POSITIVE line in the order — including a `non-taxable`
- * bucket that draws no tax at all.
- */
-async function addNegativeFee(page: Page, amount: string) {
-	await openCartMenuAndClick(page, 'menu-add-fee');
-	const dialog = page.getByTestId('add-fee-dialog');
+/** Adds a quick discount through the cashier's fixed-amount or percent numpad. */
+async function addQuickDiscount(page: Page, amount: string, percent = false) {
+	await openCartMenuAndClick(page, 'menu-add-discount');
+	const dialog = page.getByTestId('add-discount-dialog');
 	await expect(dialog).toBeVisible({ timeout: 15_000 });
-	await fillCurrencyField(page, 'fee-amount-input', amount, { negative: true });
-	await page.getByTestId('add-to-cart-submit').click();
+	if (percent) await page.getByTestId('discount-percent-switch').click();
+	await fillCurrencyField(page, 'discount-amount-input', amount);
+	await page.getByTestId('add-discount-submit').click();
 	await expect(dialog).toBeHidden({ timeout: 15_000 });
 }
 
@@ -579,47 +572,74 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 		}
 	);
 	/**
-	 * NEGATIVE FEE — the POS override, NOT WooCommerce's discount path.
+	 * QUICK DISCOUNTS are coupon lines: WooCommerce's contra-revenue primitive,
+	 * which recomputes each line's tax on its discounted base. On tax-inclusive
+	 * stores the discount acts on gross amounts, preserving the correct tax base.
 	 *
-	 * `WC_Order_Item_Fee::calculate_taxes()` branches on the sign: a negative fee is
-	 * treated as a discount and apportioned across the tax-class mix of every positive
-	 * line, ignoring the fee's own `tax_status` and `tax_class` entirely. **The POS
-	 * plugin deliberately undoes that.** `WCPOS\WooCommercePOS\Orders::fee_after_calculate_taxes()`
-	 * hooks `woocommerce_order_item_fee_after_calculate_taxes` and, for any POS order,
-	 * recomputes the tax from the fee's OWN tax class — or clears it when the fee's
-	 * `tax_status` is `none`. So on a POS order the apportionment runs and is then
-	 * replaced, and the client is right to apply the fee's own class.
+	 * `percent` discounts every line at the same rate, pro rata by value;
+	 * `fixed_cart` allocates equally per unit with WooCommerce's remainder loop.
+	 * The mixed taxable / non-taxable cart discriminates the allocation: the untaxed
+	 * line takes its share of the fixed discount but draws no tax.
 	 *
-	 * This test therefore locks the OVERRIDE, not the apportionment. It goes red if the
-	 * plugin-side hook stops firing — the order gate loosens, the POS marker is dropped
-	 * from the v2 push's inner wc/v3 forward, the hook is removed — any of which would
-	 * silently hand negative-fee tax back to WooCommerce and start diverging from every
-	 * till that rang one up.
-	 *
-	 * The cart mixes a taxable line with a NON-taxable one on purpose: that is the shape
-	 * where apportionment and the override give different answers, so a green here means
-	 * the override is genuinely in force rather than the two happening to agree.
-	 *
-	 * The override is a STOPGAP with a ruling behind it (woocommerce-pos
-	 * .claude/research/2026-08-06-wc-negative-fee-tax.md): on a tax-INCLUSIVE store it
-	 * charges the customer the right amount but over-declares VAT, while WooCommerce's
-	 * own behaviour charges the wrong amount. Neither is defensible there; the plan of
-	 * record is migrating till discounts to coupon lines. When that lands, this test
-	 * changes with it — it pins today's contract, not a permanent truth.
+	 * These cases pin the SERVER's application of the app's virtual-coupon line,
+	 * including its echoed intent, not just the client's discount calculation.
+	 * Per-rate taxes live on `line_items`, not `coupon_lines`.
+	 * See wcpos/roadmap#91, woocommerce-pos#1927, monorepo#1932.
 	 */
 	liveTest(
-		'a negative fee is taxed from its OWN class (the POS override, not WC apportionment)',
+		'a percent quick discount is a coupon line: pro-rata across a mixed taxable / non-taxable cart',
 		async ({ posPage: page, trackOrder }, testInfo) => {
 			const label = newRunLabel();
 			const divergence = captureDivergenceLog(page);
 			await addCheckoutProbeProduct(page);
 			await addMiscProduct(page, ADVERSARIAL.nonTaxable, 'none');
-			await addNegativeFee(page, ADVERSARIAL.fee);
+			await addQuickDiscount(page, '10', true);
 			await stampRunLabel(page, label);
 
 			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
-			assertSaleParity(sale, page, 'fee_lines', 'negative-fee cart');
-			await expectNoBanner(page, 'negative-fee cart', divergence);
+			assertSaleParity(sale, page, 'line_items', 'percent quick-discount cart');
+			expect(sale.doc.coupon_lines).toEqual([
+				expect.objectContaining({
+					code: 'pos-discount',
+					discount_type: 'percent',
+					meta_data: expect.arrayContaining([
+						expect.objectContaining({
+							key: '_wcpos_quick_discount',
+							value: { discount_type: 'percent', amount: '10' },
+						}),
+					]),
+				}),
+			]);
+			expect(Number(sale.doc.discount_total)).toBeGreaterThan(0);
+			await expectNoBanner(page, 'percent quick-discount cart', divergence);
+		}
+	);
+	liveTest(
+		'a fixed quick discount is a coupon line: equal-per-unit across a mixed taxable / non-taxable cart',
+		async ({ posPage: page, trackOrder }, testInfo) => {
+			const label = newRunLabel();
+			const divergence = captureDivergenceLog(page);
+			await addCheckoutProbeProduct(page);
+			await addMiscProduct(page, ADVERSARIAL.nonTaxable, 'none');
+			await addQuickDiscount(page, ADVERSARIAL.fee);
+			await stampRunLabel(page, label);
+
+			const sale = await saveAndCapture(page, trackOrder, label, testInfo);
+			assertSaleParity(sale, page, 'line_items', 'fixed quick-discount cart');
+			expect(sale.doc.coupon_lines).toEqual([
+				expect.objectContaining({
+					code: 'pos-discount',
+					discount_type: 'fixed_cart',
+					meta_data: expect.arrayContaining([
+						expect.objectContaining({
+							key: '_wcpos_quick_discount',
+							value: { discount_type: 'fixed_cart', amount: ADVERSARIAL.fee },
+						}),
+					]),
+				}),
+			]);
+			expect(Number(sale.doc.discount_total)).toBeGreaterThan(0);
+			await expectNoBanner(page, 'fixed quick-discount cart', divergence);
 		}
 	);
 	/**

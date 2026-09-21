@@ -36,6 +36,13 @@ export const ALLOWED_EXPO_MISMATCHES = new Map([
 			"reanimated 4.5.5's peer range (0.10.x - 0.11.x); the pnpm override and a patch under " +
 			'patches/ pin it. Drop when the SDK prescribes >= 0.11.4.',
 	],
+	[
+		'@sentry/react-native',
+		'8.25.0: SDK 57 prescribes ~7.11.0; only 8.25.0 carries getsentry/sentry-react-native#6630 ' +
+			'(Expo 57 / RN 0.86 iOS: envelopes report HTTP 200 but never ingest). The 7.x line ended ' +
+			'2026-02-12. Also listed in apps/main `expo.install.exclude`. Drop when the SDK prescribes ' +
+			'>= 8.25.0.',
+	],
 ]);
 
 /**

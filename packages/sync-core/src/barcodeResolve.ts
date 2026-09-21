@@ -589,7 +589,7 @@ export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> 
 			}
 			const parsed = JSON.parse(text) as WireResolveBarcodeResponse;
 			body = parsed as ResolveBarcodeResponse;
-			if (parsed.match && !('payload' in parsed.match)) {
+			if (parsed.match) {
 				const parent_id = parsed.match.parent_id ?? 0;
 				body.match = {
 					id: parsed.match.id,

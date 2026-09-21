@@ -83,7 +83,6 @@ function engineWith(overrides: Partial<RxdbSyncEnginePorts> = {}, storeIdentity 
 		now,
 		diagnostics,
 		connectivitySignal: connectivity,
-		routes: { '/changes/config-fingerprint': {} },
 		ports,
 		awaitReady: false,
 	}).engine;

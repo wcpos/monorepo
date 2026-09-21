@@ -12,7 +12,17 @@ function resolveDisplayValueSide(data: ReceiptData): 'incl' | 'excl' {
 	return hints?.prices_entered_with_tax === false ? 'excl' : 'incl';
 }
 
-const DEFAULT_I18N = {
+export const DEFAULT_I18N = {
+	copy: 'COPY',
+	corrects: 'Corrects',
+	refunded_to: 'Refunded to',
+	reprint: 'Reprint',
+	register: 'Register',
+	sale_time: 'Sale time',
+	document_refund: 'Refund',
+	document_void: 'Void',
+	document_cancellation: 'Cancellation',
+	software: 'Software',
 	order: 'Order',
 	date: 'Date',
 	cashier: 'Cashier',

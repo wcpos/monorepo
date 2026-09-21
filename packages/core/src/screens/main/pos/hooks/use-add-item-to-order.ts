@@ -6,6 +6,7 @@ import { calculateCartLine } from '@wcpos/order-math';
 import { type EngineRecord, useDocField, useQueryRuntime } from '@wcpos/query';
 import { isMiscProductLine, MISC_PRODUCT_ID, wooMetaCarrier } from '@wcpos/sync-core';
 
+import { useRegister } from '../../../../services/register/use-register';
 import { useCartConfig } from './use-cart-config';
 import { useCartStockGuard } from './use-cart-stock-guard';
 import { enqueueOrderMutation } from './order-mutation-queue';
@@ -77,11 +78,18 @@ export const useAddItemToOrder = () => {
 	const { stockGuardEnabled, checkCartStock, showBackorderWarning } = useCartStockGuard();
 	const cartConfig = useCartConfig();
 	const reportEngineWarnings = useReportEngineWarnings();
-	const { store, wpCredentials } = useStoreSession();
+	const { store, wpCredentials, site } = useStoreSession();
+	const register = useRegister();
 	const taxBasedOn = useDocField(store, (value) => value.tax_based_on) as string | undefined;
 	const identity = React.useMemo(
-		() => ({ userId: wpCredentials.id!, storeId: store.id!, taxBasedOn }),
-		[store.id, taxBasedOn, wpCredentials.id]
+		() => ({
+			userId: wpCredentials.id!,
+			tillId: register?.id,
+			registerId: register?.sites[site.uuid!]?.register_id ?? undefined,
+			storeId: store.id!,
+			taxBasedOn,
+		}),
+		[store.id, taxBasedOn, wpCredentials.id, register, site.uuid]
 	);
 
 	/**

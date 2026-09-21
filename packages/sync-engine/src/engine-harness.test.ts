@@ -39,7 +39,15 @@ describe('createEngineHarness', () => {
 			.hostTransport()
 			.fetcher('https://shop.example.test/probe');
 		expect(await response.json()).toEqual({ ok: true });
-		expect(harness.requests).toEqual([expect.objectContaining({ method: 'GET', path: '/probe' })]);
+		expect(harness.requests.filter(({ path }) => path === '/probe')).toEqual([
+			expect.objectContaining({ method: 'GET', path: '/probe' }),
+		]);
+		expect(harness.requests.map(({ path }) => path)).toEqual(
+			expect.arrayContaining([
+				'/wp-json/wcpos/v2/changes/sequence-log',
+				'/wp-json/wcpos/v2/changes/config-fingerprint',
+			])
+		);
 
 		await harness.engine.sync('write-drain');
 		expect(harness.events).toEqual(
@@ -56,6 +64,151 @@ describe('createEngineHarness', () => {
 		expect(harness.diagnostics).toEqual(
 			expect.arrayContaining([expect.objectContaining({ type: 'engine.disposed' })])
 		);
+	});
+
+	it('answers startup protocol without invoking the scenario fetch', async () => {
+		const fetch = vi.fn(async () => {
+			throw new Error('unexpected scenario fetch');
+		});
+		const harness = createEngineHarness({ mode: 'manual', fetch, awaitReady: false });
+		await harness.engine.ready;
+		expect(fetch).not.toHaveBeenCalled();
+		expect(
+			harness.requests.filter(({ path }) => path.endsWith('/changes/config-fingerprint'))
+		).toHaveLength(1);
+		const primes = harness.requests.filter(({ path }) => path.endsWith('/changes/sequence-log'));
+		expect(primes).toHaveLength(1);
+		expect(new URL(primes[0].url).searchParams.get('since')).toBe('0');
+		expect(new URL(primes[0].url).searchParams.get('limit')).toBe('1');
+	});
+
+	it('protocolDefaults false hands protocol traffic to the suite fetch', async () => {
+		const fetch = vi.fn(async (_url: string, _init?: RequestInit) => {
+			throw new Error('unexpected scenario fetch');
+		});
+		const harness = await createEngineHarness({
+			protocolDefaults: false,
+			fetch,
+			routes: {
+				'/changes/config-fingerprint': {
+					fingerprints: {},
+					barcode_fields: { products: ['sku'], variations: ['global_unique_id'] },
+				},
+			},
+		});
+		expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+			`${harness.site.syncBaseUrl}/changes/sequence-log?collection=all&since=0&limit=1`,
+		]);
+		expect(harness.engine.active()?.barcodeSelectors).toEqual({
+			products: ['sku'],
+			variations: ['global_unique_id'],
+		});
+	});
+
+	it('explicit routes override protocol defaults', async () => {
+		const journal = vi.fn(() => Response.json({ checkpoint: { head: 37 } }));
+		const fingerprint = vi.fn(() =>
+			Response.json({
+				fingerprints: {},
+				barcode_fields: { products: ['sku'], variations: ['global_unique_id'] },
+			})
+		);
+		const harness = await createEngineHarness({
+			routes: {
+				'/changes/sequence-log': journal,
+				'/changes/config-fingerprint': fingerprint,
+			},
+		});
+		expect(journal).toHaveBeenCalledOnce();
+		expect(fingerprint).toHaveBeenCalledOnce();
+		expect(harness.engine.active()?.barcodeSelectors).toEqual({
+			products: ['sku'],
+			variations: ['global_unique_id'],
+		});
+	});
+
+	it('answers an empty journal at the supplied cursor', async () => {
+		const fetch = vi.fn(async () => Response.json({ unexpected: true }));
+		const harness = await createEngineHarness({ fetch });
+		const response = await harness.engine
+			.hostTransport()
+			.fetcher(`${harness.site.syncBaseUrl}/changes/sequence-log?since=42&limit=10`);
+		expect(await response.json()).toEqual({
+			changes: [],
+			checkpoint: { since: 42, head: 42 },
+			complete: true,
+		});
+		expect(fetch).not.toHaveBeenCalled();
+	});
+
+	it('keeps lightweight tick and range defaults out of scenario fetch', async () => {
+		const fetch = vi.fn(async () => Response.json({ unexpected: true }));
+		const harness = await createEngineHarness({ fetch });
+		const before = harness.requests.length;
+		const tick = await harness.engine
+			.hostTransport()
+			.fetcher(`${harness.site.syncBaseUrl}/changes/tick`);
+		const range = await harness.engine
+			.hostTransport()
+			.fetcher(`${harness.site.syncBaseUrl}/changes/range-checksum`);
+		expect(await tick.json()).toEqual({});
+		expect(await range.json()).toEqual({ changes: [], complete: true });
+		expect(harness.requests.slice(before).map(({ path }) => path)).toEqual([
+			'/wp-json/wcpos/v2/changes/tick',
+			'/wp-json/wcpos/v2/changes/range-checksum',
+		]);
+		expect(fetch).not.toHaveBeenCalled();
+	});
+
+	it('delegates unknown traffic with unchanged arguments', async () => {
+		const fetch = vi.fn(async (_url: string, _init?: RequestInit) => Response.json({ ok: true }));
+		const harness = await createEngineHarness({ fetch });
+		const probe = `${harness.site.syncBaseUrl}/probe`;
+		const post = `${harness.site.syncBaseUrl}/changes/config-fingerprint`;
+		const init = { method: 'POST', body: '{}' };
+		await harness.engine.hostTransport().fetcher(probe);
+		await harness.engine.hostTransport().fetcher(post, init);
+		expect(fetch.mock.calls).toEqual([
+			[probe, undefined],
+			[post, init],
+		]);
+		expect(fetch.mock.calls[1][1]).toBe(init);
+	});
+
+	it('records selected-handler failures without falling through', async () => {
+		const failure = new Error('tick unavailable');
+		const fetch = vi.fn(async () => Response.json({ unexpected: true }));
+		const harness = await createEngineHarness({
+			fetch,
+			routes: {
+				'/changes/tick': () => {
+					throw failure;
+				},
+			},
+		});
+		const before = harness.requests.length;
+		await expect(
+			harness.engine.hostTransport().fetcher(`${harness.site.syncBaseUrl}/changes/tick`)
+		).rejects.toBe(failure);
+		expect(harness.requests.slice(before)).toEqual([
+			expect.objectContaining({ method: 'GET', path: '/wp-json/wcpos/v2/changes/tick' }),
+		]);
+		expect(fetch).not.toHaveBeenCalled();
+	});
+
+	it('records scripted responses and preserves script precedence', async () => {
+		const tick = vi.fn(() => Response.json({ head: 1 }));
+		const harness = await createEngineHarness({ routes: { '/changes/tick': tick } });
+		const before = harness.requests.length;
+		await harness.respond(Response.json({}));
+		expect(tick).not.toHaveBeenCalled();
+		expect(harness.requests.slice(before)).toEqual([
+			expect.objectContaining({
+				method: 'GET',
+				path: '/wp-json/wcpos/v2/changes/tick',
+				scripted: true,
+			}),
+		]);
 	});
 
 	it("responds through the engine's wrapped fetcher and advances its clock", async () => {

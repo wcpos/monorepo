@@ -40,6 +40,7 @@ import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { CellContext } from '@wcpos/core/table-types';
 
+import { useRegister } from '../../../../services/register/use-register';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { requestServerDelete } from '../../hooks/mutations/request-server-delete';
@@ -62,7 +63,8 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 	const { localPatch } = useLocalMutation();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const { store, wpCredentials } = useStoreSession();
+	const { store, wpCredentials, site } = useStoreSession();
+	const register = useRegister();
 	const orderID = useRecordField(record, ({ payload }) => payload.id);
 	const runtime = useQueryRuntime();
 	const { readOnly } = useProAccess();
@@ -109,6 +111,8 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 		const existingStoreId = wooMetaCarrier.readIdentity(existingMeta).storeId;
 		let meta_data = wooMetaCarrier.stampIdentity(existingMeta, {
 			userId: wpCredentials.id!,
+			tillId: register?.id,
+			registerId: register?.sites[site.uuid!]?.register_id ?? undefined,
 			storeId: store.id === NO_STORE ? (existingStoreId ?? NO_STORE) : store.id!,
 		});
 		if (store.id === NO_STORE && existingStoreId === null) {
@@ -124,7 +128,7 @@ export function Actions({ row }: CellContext<{ record: EngineRecord<'orders'> },
 			pathname: '/cart/[...orderId]',
 			params: { orderId: order.uuid ? [order.uuid] : [] },
 		});
-	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id]);
+	}, [blockIfDegraded, localPatch, router, order, store.id, wpCredentials.id, register, site.uuid]);
 
 	/**
 	 * Handle delete button click

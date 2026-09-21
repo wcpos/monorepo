@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 
 import {
 	AlertDialog,
@@ -26,8 +27,10 @@ import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
+import { cn } from '@wcpos/components/lib/utils';
 import { COLLECTION_VOCABULARY, runResetRefill, useQueryRuntime } from '@wcpos/query';
 import { getErrorMessage } from '@wcpos/utils/logger';
+import { HISTORY_DAYS } from '@wcpos/sync-core';
 
 import { AttentionPanel } from './attention-panel';
 import { ConflictedMutationsPanel } from './conflicted-mutations';
@@ -61,10 +64,12 @@ import {
 	deriveRows,
 	formatBytes,
 	isReadyToSell,
+	isServerBackingOff,
 	stuckCountsByRow,
 	totalLocalRecords,
 } from './database-logic';
 import { QueuedEmailsPanel } from './queued-emails';
+import { RegistersPanel } from './registers-panel';
 import { RejectedMutationsPanel } from './rejected-mutations';
 import { useCollectionSizes } from './use-collection-sizes';
 import { useNowMs, useRelativeTime } from './use-relative-time';
@@ -80,6 +85,7 @@ const ROW_ORDER = exhaustiveCollectionOrder([
 	'products',
 	'variations',
 	'orders',
+	'refunds',
 	'customers',
 	'categories',
 	'brands',
@@ -117,7 +123,7 @@ type RowStory = { serverText: string; coverage: RowCoverage };
  * - a stale/missing census reads "checking…", never "unknown"
  * - an empty fresh census reads "—" (nothing to mirror)
  */
-function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
+function useRowStory(row: CollectionRow, phase: RowPhase, backingOff: boolean): RowStory {
 	const t = useT();
 	if (phase === 'clearing') {
 		return {
@@ -136,7 +142,7 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 			serverText: row.serverTotal !== null ? row.serverTotal.toLocaleString() : '…',
 			coverage: {
 				kind: 'checking',
-				label: t('health.database.checking'),
+				label: backingOff ? t('health.database.checking_busy') : t('health.database.checking'),
 			},
 		};
 	}
@@ -144,6 +150,12 @@ function useRowStory(row: CollectionRow, phase: RowPhase): RowStory {
 		return {
 			serverText: '0',
 			coverage: { kind: 'empty', label: '—' },
+		};
+	}
+	if (row.key === 'refunds') {
+		return {
+			serverText: row.serverTotal.toLocaleString(),
+			coverage: { kind: 'none', label: t('health.database.window_short') },
 		};
 	}
 	if (row.windowed) {
@@ -216,16 +228,40 @@ function CoverageCell({ coverage }: { coverage: RowCoverage }) {
 	}
 }
 
+/**
+ * The table row's fixed columns (on device 80 + on server 96 + coverage 128 + size 80 +
+ * menu 36, five 12 px gaps) take 480 px before the collection column gets anything.
+ * Below this width the collection column wrapped one character per line (portrait iPad
+ * with the drawer rail open). The choice used to be the `md:` window breakpoint, but the
+ * width that matters is the table's own: a tablet rail or an open drawer narrows the
+ * content column without changing the window.
+ */
+const TABLE_LAYOUT_MIN_WIDTH = 640;
+
+/** Measured container width → whether the table layout fits; compact until measured. */
+function useTableLayout(): { wide: boolean; onLayout: (event: LayoutChangeEvent) => void } {
+	const [wide, setWide] = React.useState(false);
+	const onLayout = React.useCallback((event: LayoutChangeEvent) => {
+		const next = event.nativeEvent.layout.width >= TABLE_LAYOUT_MIN_WIDTH;
+		setWide((previous) => (previous === next ? previous : next));
+	}, []);
+	return { wide, onLayout };
+}
+
 function CollectionRowView({
 	row,
 	label,
 	sizeBytes,
 	stuckCount = 0,
+	backingOff,
+	wide,
 }: {
 	row: CollectionRow;
 	label: string;
 	sizeBytes: number | null | undefined;
 	stuckCount?: number;
+	backingOff: boolean;
+	wide: boolean;
 }) {
 	const t = useT();
 	const { engine } = useQueryRuntime();
@@ -233,7 +269,7 @@ function CollectionRowView({
 	const { checking, check } = useCollectionCheck();
 	const [confirming, setConfirming] = React.useState(false);
 	const [phase, setPhase] = React.useState<RowPhase>('idle');
-	const story = useRowStory(row, phase);
+	const story = useRowStory(row, phase, backingOff);
 
 	const isVariations = row.key === 'variations';
 	const sizeText = formatBytes(sizeBytes ?? null);
@@ -260,17 +296,19 @@ function CollectionRowView({
 			}
 			await runResetRefill(engine, legacyNames);
 			const successMessage =
-				row.key === 'products'
-					? t('health.database.redownload_done_products', {
-							label,
-						})
-					: row.key === 'variations' || row.key === 'customers' || row.key === 'orders'
-						? t('health.database.redownload_done_lazy', {
+				row.key === 'refunds'
+					? t('health.database.redownload_done_refunds')
+					: row.key === 'products'
+						? t('health.database.redownload_done_products', {
 								label,
 							})
-						: t('health.database.redownload_done', {
-								label,
-							});
+						: row.key === 'variations' || row.key === 'customers' || row.key === 'orders'
+							? t('health.database.redownload_done_lazy', {
+									label,
+								})
+							: t('health.database.redownload_done', {
+									label,
+								});
 			Toast.show({
 				type: 'success',
 				text1: successMessage,
@@ -323,12 +361,12 @@ function CollectionRowView({
 
 	return (
 		<>
-			{/* md+ — table row */}
+			{/* wide — table row */}
 			<HStack
 				testID={`db-row-${row.key}`}
-				className="border-border hidden items-center gap-3 border-b py-2 md:flex"
+				className={cn('border-border items-center gap-3 border-b py-2', wide ? 'flex' : 'hidden')}
 			>
-				<View className={isVariations ? 'flex-1 pl-4' : 'flex-1'}>
+				<View className={isVariations ? 'min-w-0 flex-1 pl-4' : 'min-w-0 flex-1'}>
 					<HStack className="items-center gap-2">
 						<Text className={isVariations ? undefined : 'font-medium'}>
 							{isVariations ? `↳ ${label}` : label}
@@ -344,9 +382,11 @@ function CollectionRowView({
 							{t('health.database.variations_policy')}
 						</Text>
 					) : null}
-					{row.key === 'orders' ? (
+					{row.key === 'orders' || row.key === 'refunds' ? (
 						<Text className="text-muted-foreground text-xs">
-							{t('health.database.orders_policy')}
+							{row.key === 'refunds'
+								? t('health.database.refunds_policy', { days: HISTORY_DAYS })
+								: t('health.database.orders_policy')}
 						</Text>
 					) : null}
 					{clearingSub}
@@ -364,10 +404,10 @@ function CollectionRowView({
 				{menu}
 			</HStack>
 
-			{/* below md — two-line list row */}
+			{/* compact — two-line list row */}
 			<HStack
 				testID={`db-row-sm-${row.key}`}
-				className="border-border items-center gap-2 border-b py-2 md:hidden"
+				className={cn('border-border items-center gap-2 border-b py-2', wide ? 'hidden' : 'flex')}
 			>
 				<View className="min-w-0 flex-1">
 					<HStack className="items-center gap-2">
@@ -389,7 +429,7 @@ function CollectionRowView({
 								})
 							: isVariations
 								? `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })} · ${t('health.database.with_products')}`
-								: row.key === 'orders'
+								: row.key === 'orders' || row.key === 'refunds'
 									? `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })} · ${t('health.database.window_short')}`
 									: story.coverage.kind === 'empty'
 										? '0'
@@ -398,6 +438,7 @@ function CollectionRowView({
 													count: row.local.toLocaleString(),
 												})
 											: `${row.local.toLocaleString()} ${t('health.database.of_total', { total: story.serverText })}`}
+						{story.coverage.kind === 'checking' ? ` · ${story.coverage.label}` : ''}
 					</Text>
 				</View>
 				<View className="items-end">
@@ -432,8 +473,10 @@ function CollectionRowView({
 										? t('health.database.clear_body_customers', {
 												...clearBodyValues,
 											})
-										: row.key === 'orders'
-											? t('health.database.clear_body_orders')
+										: row.key === 'orders' || row.key === 'refunds'
+											? row.key === 'refunds'
+												? t('health.database.clear_body_refunds', { days: HISTORY_DAYS })
+												: t('health.database.clear_body_orders')
 											: t('health.database.clear_body', {
 													...clearBodyValues,
 												})}
@@ -511,6 +554,7 @@ function HowSyncingWorksLink() {
  */
 export function DatabaseScreen() {
 	const t = useT();
+	const tableLayout = useTableLayout();
 	const { syncing, sync } = useManualSync();
 	const { checking } = useCollectionCheck();
 	const status = useEngineStatus();
@@ -520,6 +564,7 @@ export function DatabaseScreen() {
 	const footprint = useStorageFootprint();
 	const sizes = useCollectionSizes(counts, ROW_ORDER);
 	const nowMs = useNowMs(1_000);
+	const backingOff = isServerBackingOff(status.serverPressure, nowMs);
 	const relative = useRelativeTime();
 
 	const stats = useLogStats();
@@ -644,9 +689,10 @@ export function DatabaseScreen() {
 					</Callout>
 				) : null}
 
-				{/* Per-collection rows (table header md+ only; rows render both layouts) */}
-				<VStack className="gap-0">
-					<HairlineHeaderRow className="hidden md:flex">
+				{/* Per-collection rows (table header in the wide layout only; rows render both
+				    layouts and show one, chosen by the measured table width) */}
+				<VStack testID="db-table" className="gap-0" onLayout={tableLayout.onLayout}>
+					<HairlineHeaderRow className={tableLayout.wide ? 'flex' : 'hidden'}>
 						<HairlineHeaderCell className="flex-1">
 							{t('health.database.col_collection')}
 						</HairlineHeaderCell>
@@ -671,6 +717,8 @@ export function DatabaseScreen() {
 							sizeBytes={sizes[row.key]}
 							stuckCount={stuckByRow[row.key] ?? 0}
 							label={t(ROW_LABEL_KEYS[row.key])}
+							wide={tableLayout.wide}
+							backingOff={backingOff}
 						/>
 					))}
 					{/* Measured storage the collection rows don't itemize — every bucket
@@ -766,14 +814,18 @@ export function DatabaseScreen() {
 						<Text className="text-muted-foreground pl-3.5 text-xs">
 							{censusWindow.updatedAtMs === null
 								? t('health.database.totals_pending')
-								: censusRefreshDue(censusWindow, nowMs)
-									? t('health.database.totals_refreshing', {
+								: backingOff
+									? t('health.database.totals_server_busy', {
 											ago: relative(censusWindow.updatedAtMs, nowMs),
 										})
-									: t('health.database.totals_updated', {
-											ago: relative(censusWindow.updatedAtMs, nowMs),
-											next: relative(nowMs, censusWindow.nextUpdateAtMs ?? nowMs),
-										})}
+									: censusRefreshDue(censusWindow, nowMs)
+										? t('health.database.totals_refreshing', {
+												ago: relative(censusWindow.updatedAtMs, nowMs),
+											})
+										: t('health.database.totals_updated', {
+												ago: relative(censusWindow.updatedAtMs, nowMs),
+												next: relative(nowMs, censusWindow.nextUpdateAtMs ?? nowMs),
+											})}
 						</Text>
 						{censusProgress !== null && !censusRefreshDue(censusWindow, nowMs) ? (
 							<View className="bg-muted mt-1 ml-3.5 h-0.5 w-40 overflow-hidden rounded-full">
@@ -801,6 +853,7 @@ export function DatabaseScreen() {
 					</Button>
 				</HStack>
 
+				<RegistersPanel />
 				<View className="h-4" />
 			</VStack>
 		</ScrollView>

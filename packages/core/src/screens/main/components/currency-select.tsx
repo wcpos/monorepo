@@ -50,7 +50,7 @@ function CurrencySelectBase({ value, ...props }: ComboboxSingleRootProps) {
 	 */
 	return (
 		<Combobox value={{ value: value?.value ?? '', label: label ?? '' }} {...props}>
-			<ComboboxTrigger>
+			<ComboboxTrigger testID="currency-select-trigger">
 				<ComboboxValue placeholder={t('common.select_currency')} />
 			</ComboboxTrigger>
 			<ComboboxContent>

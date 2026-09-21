@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildCloudTarget,
 	buildSerialKey,
+	buildSppKey,
 	buildUsbKey,
 	buildWinspoolKey,
 	connectionTypeForTarget,
 	parseTarget,
 	SYSTEM_TARGET,
+	usesSystemPrintDialog,
 } from '../device-key';
 
 describe('device-key target codec', () => {
@@ -21,6 +23,15 @@ describe('device-key target codec', () => {
 			raw,
 		});
 		expect(connectionTypeForTarget(raw)).toBe('bluetooth');
+	});
+
+	it('builds and parses Bluetooth Classic keys as bluetooth targets', () => {
+		const raw = buildSppKey('AA:BB:CC:DD:EE:FF');
+
+		expect(raw).toBe('spp:AA:BB:CC:DD:EE:FF');
+		expect(parseTarget(raw)).toEqual({ kind: 'spp', address: 'AA:BB:CC:DD:EE:FF', raw });
+		expect(connectionTypeForTarget(raw)).toBe('bluetooth');
+		expect(parseTarget('spp:')).toEqual({ kind: 'unknown', raw: 'spp:' });
 	});
 
 	it('rejects empty serial device keys as unknown', () => {
@@ -87,4 +98,12 @@ describe('device-key target codec', () => {
 		});
 		expect(connectionTypeForTarget('550e8400-e29b-41d4-a716-446655440000')).toBeUndefined();
 	});
+});
+
+it.each([
+	[{ connectionType: 'system', address: '' }, true],
+	[{ connectionType: 'system', address: 'winspool:POS-80' }, false],
+	[{ connectionType: 'network', address: '192.168.1.10' }, false],
+] as const)('classifies Print Dialog for %j as %s', (profile, expected) => {
+	expect(usesSystemPrintDialog(profile)).toBe(expected);
 });

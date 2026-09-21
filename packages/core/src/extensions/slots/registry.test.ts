@@ -67,22 +67,25 @@ describe('slot registry', () => {
 		expect(warn).toHaveBeenCalledTimes(1);
 	});
 
-	it('stamps the contract version and keeps descriptors JSON-serializable', () => {
-		registerSlotEntry({
-			id: 'products',
-			slot: 'pos.columns.panel',
-			order: 10,
-			title: 'Products',
-			capabilities: ['ui.toast'],
-			component: Noop,
-		});
+	it.each(['pos.columns.panel', 'pos.cart.bar', 'pos.products.filter-bar.item'] as const)(
+		'stamps the contract version and keeps %s descriptors JSON-serializable',
+		(slot) => {
+			registerSlotEntry({
+				id: 'products',
+				slot,
+				order: 10,
+				title: 'Products',
+				capabilities: ['ui.toast'],
+				component: Noop,
+			});
 
-		const [descriptor] = getSlotEntries('pos.columns.panel');
-		expect(descriptor.slotApiVersion).toBe(SLOT_API_VERSION);
-		// The descriptor is the part of a registration that may one day cross a bundle
-		// boundary — nothing in it may be a function, a class instance, or a database object.
-		expect(JSON.parse(JSON.stringify(descriptor))).toEqual(descriptor);
-	});
+			const [descriptor] = getSlotEntries(slot);
+			expect(descriptor.slotApiVersion).toBe(SLOT_API_VERSION);
+			// The descriptor is the part of a registration that may one day cross a bundle
+			// boundary — nothing in it may be a function, a class instance, or a database object.
+			expect(JSON.parse(JSON.stringify(descriptor))).toEqual(descriptor);
+		}
+	);
 
 	it('returns a stable snapshot until a registration changes it', () => {
 		register('quick-filters', 10);

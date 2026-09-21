@@ -14,13 +14,15 @@ jest.mock('@wcpos/query', () => ({
 }));
 
 jest.mock('react-native', () => ({
-	View: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	View: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
 }));
 jest.mock('expo-router', () => ({ useFocusEffect: () => undefined }));
 jest.mock('@wcpos/components/print', () => ({
 	Br: () => <br />,
 	Line: () => <hr />,
-	Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+	Row: jest.requireActual('@wcpos/components/print/row').Row,
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('./utils', () => ({
@@ -32,6 +34,7 @@ jest.mock('./utils', () => ({
 		totalTax: 2,
 		discountTotal: 0,
 		userStoreArray: [],
+		registerArray: mockRegisterTotals,
 		totalItemsSold: 1,
 		shippingTotalsArray: [],
 		averageOrderValue: 10,
@@ -41,6 +44,9 @@ jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({
 		store: {
 			id: 9,
+			// The period label is printed in the store's zone (Madrid is UTC+2 in July),
+			// whatever zone the test machine runs in.
+			timezone: 'Europe/Madrid',
 			name$: new BehaviorSubject('Madrid'),
 			price_num_decimals$: new BehaviorSubject(2),
 		},
@@ -92,11 +98,52 @@ describe('ZReport query-state dates', () => {
 			</QueryStateProvider>
 		);
 
+		// Print Text does not forward testID; these existing date lines remain text-selected.
 		expect(screen.getByText(/reports.report_period_start/).textContent).toContain(
-			'2026-07-01T08:00:00.000Z'
+			'2026-07-01T10:00:00.000+02:00'
 		);
 		expect(screen.getByText(/reports.report_period_end/).textContent).toContain(
-			'2026-07-02T18:00:00.000Z'
+			'2026-07-02T20:00:00.000+02:00'
 		);
+	});
+});
+
+jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => ({ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': 'Front desk' }),
+}));
+
+const mockRegisterTotals: { registerId: string; totalOrders: number; totalAmount: number }[] = [];
+describe('native register totals block', () => {
+	it('renders only when more than one register appears', () => {
+		mockRegisterTotals.push({
+			registerId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+			totalOrders: 2,
+			totalAmount: 40,
+		});
+		const report = () => (
+			<QueryStateProvider
+				collection="orders"
+				initialPageSize={10}
+				initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			>
+				<ZReport />
+			</QueryStateProvider>
+		);
+		const { rerender } = render(report());
+		expect(screen.queryByTestId('report-by-register')).toBeNull();
+		mockRegisterTotals.push({
+			registerId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+			totalOrders: 1,
+			totalAmount: 20,
+		});
+		rerender(report());
+		expect(screen.getByTestId('report-by-register')).toBeTruthy();
+		const row = screen.getByTestId('report-register-row-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+		expect(Array.from(row.querySelectorAll('span'), (cell) => cell.textContent)).toEqual([
+			'Front desk',
+			'2',
+			'40',
+		]);
+		mockRegisterTotals.length = 0;
 	});
 });

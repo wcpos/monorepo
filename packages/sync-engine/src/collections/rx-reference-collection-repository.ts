@@ -9,7 +9,11 @@ import { assertBulkSuccess, wooIdOf } from '@wcpos/sync-core';
  * fetcher stays storage-free and this concrete wiring can be integration-tested
  * against a real RxDB collection.
  */
-import { hasPendingLocalWork, withoutLocallyProtected } from '../write-path/local-work-guard';
+import {
+	hasPendingLocalWork,
+	withoutLocallyProtected,
+	withoutUnchanged,
+} from '../write-path/local-work-guard';
 
 import type { LocalReferenceDocument } from './reference-collection-schema';
 
@@ -23,7 +27,7 @@ export type ReferenceRxCollection = {
 };
 
 export type ReferenceCollectionRepository = {
-	upsertMany(documents: LocalReferenceDocument[]): Promise<void>;
+	upsertMany(documents: LocalReferenceDocument[]): Promise<LocalReferenceDocument[]>;
 	listServerSourcedAbsent(
 		keptDocumentIds: readonly string[]
 	): Promise<{ uuid: string; wooId: number }[]>;
@@ -51,13 +55,17 @@ export function referenceCollectionRepository(
 		return uuids;
 	};
 	return {
-		async upsertMany(documents: LocalReferenceDocument[]): Promise<void> {
-			const applicable = await withoutLocallyProtected(collection, documents);
-			if (applicable.length > 0)
+		async upsertMany(documents: LocalReferenceDocument[]): Promise<LocalReferenceDocument[]> {
+			if (documents.length === 0) return [];
+			const stored = await collection.findByIds(documents.map(({ uuid }) => uuid)).exec();
+			const applicable = await withoutLocallyProtected(collection, documents, stored);
+			const changed = withoutUnchanged(collection, stored, applicable);
+			if (changed.length > 0)
 				assertBulkSuccess(
-					await collection.bulkUpsert(applicable),
+					await collection.bulkUpsert(changed),
 					'rx-reference-collection-repository upsert'
 				);
+			return applicable;
 		},
 		async listServerSourcedAbsent(keptDocumentIds) {
 			const kept = new Set(keptDocumentIds);

@@ -10,6 +10,7 @@ import {
 import { writeFacetFor } from '../collections/collection-descriptors';
 import { fetchOrderServerRevision } from './order-server-revision';
 import { requeueRejectedMutation } from './write-intents';
+import { removeRefundChildren } from './refund-children';
 
 import type { BarcodeSelectors } from '../materialization/barcode-selectors';
 import type { RxDatabase } from 'rxdb';
@@ -318,8 +319,17 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									nextAttemptAt: _gate,
 									...intact
 								} = entry;
+								const graft =
+									entry.operation !== 'delete'
+										? writeFacetFor(entry.collectionName)?.graftAckIdentity
+										: undefined;
+								const reconcile = (payload: Record<string, unknown>) =>
+									graft && entry.conflictDocument
+										? graft(payload, entry.conflictDocument, { serverLinesComplete: true })
+										: payload;
 								await queue.replace({
 									...intact,
+									payload: reconcile(entry.payload),
 									baseRevision: serverBase ?? entry.baseRevision,
 									status: 'pending',
 								});
@@ -337,6 +347,7 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 									const revision = serverBase;
 									await doc.incrementalModify((data) => ({
 										...data,
+										payload: reconcile((data.payload ?? {}) as Record<string, unknown>),
 										sync: { ...((data.sync ?? {}) as object), revision },
 									}));
 								}
@@ -543,6 +554,10 @@ export function createConflictResolution(deps: ConflictResolutionDeps): Conflict
 										if (stillResident) throw error;
 										residentRemoved = true;
 									}
+									if (entry.collectionName === 'orders')
+										await removeRefundChildren(database.collections.refunds, [
+											row?.remoteId as string | null,
+										]);
 								}
 								// CAS, not an unconditional remove: two discards of one terminal row
 								// (a double-tap that beat the button's disabled state, two windows)

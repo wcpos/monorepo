@@ -32,6 +32,13 @@ export { pushEndpointResolver, pushRecordMutation, reconcileCreateAck, WOO_REST_
 // prettier-ignore
 export { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH, FLEXSEARCH_TOKEN_BOUNDARY, foldSearchText } from './searchIndexConfig';
 export {
+	buildScanSearchSelector,
+	escapeRegex,
+	scanSearchTerms,
+	type ScanSearchArm,
+	type ScanSearchSelector,
+} from './scanSearchSelector';
+export {
 	canonicalSiteKey,
 	containsScopeDatabaseName,
 	scopeDatabaseName,
@@ -40,7 +47,7 @@ export {
 	type StoreScopeIdentity,
 } from './storeScopeIdentity';
 // prettier-ignore
-export { MUTATION_QUEUE_COLLECTION, StoreScopeManager, type Fetcher, type ScopeDatabase, type ScopeEvent } from './storeScopeManager';
+export { MUTATION_QUEUE_COLLECTION, StoreScopeManager, type Fetcher, type ScopeBound, type ScopeDatabase, type ScopeEvent } from './storeScopeManager';
 // prettier-ignore
 export {
 	checkpointInstantMs, finiteOrNull, normalizeCheckpoint,
@@ -52,7 +59,7 @@ export {
 // prettier-ignore
 export {
 	catalogDocumentId, customerDocumentId, orderDocumentId, productDocumentId,
-	referenceDocumentId, taxRateDocumentId, variationDocumentId,
+	referenceDocumentId, taxRateDocumentId, refundDocumentId, variationDocumentId,
 } from './woo/documentKeys';
 export {
 	orderChangesAssertIntent,
@@ -93,3 +100,8 @@ export {
 	type SyncEventFields, type SyncEventFieldsBase, type SyncEventFieldsByType,
 	type SyncEventType, type SyncObserver,
 } from './telemetry';
+
+export { HISTORY_DAYS } from './history-policy';
+
+export { reconcileRefundIds } from './refund-reconciliation';
+export { hasPosRefundStamp } from './refund-provenance';

@@ -15,7 +15,6 @@
 			"@wcpos/react-native-worklet-fs": ["node_modules/@wcpos/react-native-worklet-fs", "apps/main/node_modules/@wcpos/react-native-worklet-fs/src/index.ts"],
 			"@wcpos/printer/ipc-channels": ["packages/printer/src/ipc/channels.cts"],
 			"@wcpos/main/*": ["apps/main/*"],
-			"@wcpos/electron/*": ["apps/electron/*"],
 			"@wcpos/order-math": ["packages/order-math/src/index"],
 			"react-native-resizable-panels": ["packages/resizable-panels/src/index"],
 			"react-native-resizable-panels/*": ["packages/resizable-panels/src/*"],

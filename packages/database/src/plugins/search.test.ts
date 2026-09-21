@@ -11,11 +11,17 @@
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 // Real FlexSearch engine, used by the tokenizer-behaviour tests below.
 import { Index } from 'flexsearch';
-import { removeCollectionStorages } from 'rxdb';
+import { getAllCollectionDocuments, removeCollectionStorages } from 'rxdb';
 
 import { deriveBarcodeFromPayload, encodeSearchText } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
 
-import { getSearchIdentifier, searchPlugin, staleSearchCollectionNames } from './search';
+import {
+	getSearchIdentifier,
+	removePersistedSearchIndexes,
+	searchPlugin,
+	staleSearchCollectionNames,
+} from './search';
 
 import type { RxCollection } from 'rxdb';
 
@@ -24,30 +30,44 @@ let shouldFailOnCreate = false;
 // The plugin only imports the storage-removal helper from rxdb; types are erased.
 jest.mock('rxdb', () => ({
 	removeCollectionStorages: jest.fn().mockResolvedValue(undefined),
+	// A recreate now rebuilds through createSearchInstance's `existing` branch, which resets
+	// the pipeline checkpoint before dropping the storage. These fixtures persist no
+	// checkpoint, so the reset is a lookup that finds nothing; search-rebuild.test.ts covers
+	// the real thing against real rxdb.
+	getPrimaryKeyOfInternalDocument: jest.fn((key: string) => key),
+	INTERNAL_CONTEXT_PIPELINE_CHECKPOINT: 'rx-pipeline-checkpoint',
+	flatCloneDocWithMeta: jest.fn((doc: unknown) => ({ ...(doc as object) })),
+	createRevision: jest.fn(() => '1-rev'),
+	now: jest.fn(() => 0),
+	getAllCollectionDocuments: jest.fn().mockResolvedValue([]),
 }));
 
-jest.mock(
-	'rxdb-premium/plugins/flexsearch',
-	() => ({
-		addFulltextSearch: jest.fn().mockImplementation(async (config) => {
-			if (shouldFailOnCreate) {
-				shouldFailOnCreate = false; // Only fail once for recovery tests
-				throw new Error('FlexSearch schema mismatch');
-			}
+jest.mock('rxdb-premium/plugins/flexsearch', () => ({
+	addFulltextSearch: jest.fn().mockImplementation(async (config) => {
+		if (shouldFailOnCreate) {
+			shouldFailOnCreate = false; // Only fail once for recovery tests
+			throw new Error('FlexSearch schema mismatch');
+		}
 
-			// Return a mock search instance
-			return {
-				collection: {
-					destroy: jest.fn().mockResolvedValue(undefined),
-					remove: jest.fn().mockResolvedValue(undefined),
-					$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
-				},
-				search: jest.fn().mockResolvedValue(['uuid-1', 'uuid-2']),
-			};
-		}),
+		// Return a mock search instance
+		return {
+			collection: {
+				__wcposAppendIndex: {},
+				_changeEventBuffer: { limit: 100 },
+				destroy: jest.fn().mockResolvedValue(undefined),
+				remove: jest.fn().mockResolvedValue(undefined),
+				// A real RxCollection has close() as well as remove(); eviction calls it.
+				close: jest.fn().mockResolvedValue(undefined),
+				$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
+				// A healthy index: no appended entries, so the oversized-index check never rebuilds here.
+				find: jest.fn(() => ({ exec: jest.fn().mockResolvedValue([]) })),
+			},
+			close: jest.fn().mockResolvedValue(undefined),
+			pipeline: { close: jest.fn().mockResolvedValue(undefined) },
+			search: jest.fn().mockResolvedValue(['uuid-1', 'uuid-2']),
+		};
 	}),
-	{ virtual: true }
-);
+}));
 
 // Mock the logger
 jest.mock('@wcpos/utils/logger', () => ({
@@ -59,10 +79,267 @@ jest.mock('@wcpos/utils/logger', () => ({
 	})),
 }));
 
+const searchLogger = jest.mocked(getLogger).mock.results[0].value;
+
 describe('search plugin', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		shouldFailOnCreate = false;
+	});
+
+	describe('instance lifecycle', () => {
+		function makeCollection() {
+			const prototype: Record<string, unknown> = {};
+			const install = searchPlugin.prototypes?.RxCollection;
+			if (!install) throw new Error('search plugin RxCollection prototype is missing');
+			install(prototype as unknown as RxCollection);
+			return Object.assign(Object.create(prototype), {
+				name: 'products',
+				options: { searchFields: ['name'] },
+				database: {
+					collections: {},
+					// Reached by the checkpoint reset on the rebuild path; no checkpoint here.
+					internalStore: {
+						findDocumentsById: jest.fn().mockResolvedValue([]),
+						bulkWrite: jest.fn().mockResolvedValue({ error: [] }),
+					},
+				},
+				onClose: [],
+				count: () => ({ exec: async () => 0 }),
+			});
+		}
+
+		function deferred() {
+			let resolve!: () => void;
+			const promise = new Promise<void>((done) => {
+				resolve = done;
+			});
+			return { promise, resolve };
+		}
+
+		it('eviction closes only the evicted instance, pipeline first', async () => {
+			const collection = makeCollection();
+			const instances = [];
+			for (const locale of ['en', 'de', 'fr', 'es']) {
+				instances.push(await collection.initSearch(locale));
+			}
+			const [evicted, ...retained] = instances;
+			expect(evicted.pipeline.close).toHaveBeenCalledTimes(1);
+			expect(evicted.close).toHaveBeenCalledTimes(1);
+			expect(evicted.pipeline.close.mock.invocationCallOrder[0]).toBeLessThan(
+				evicted.close.mock.invocationCallOrder[0]
+			);
+			expect(evicted.collection).not.toHaveProperty('__wcposAppendIndex');
+			// Nothing rebuilds an evicted locale, so its destination is deregistered too:
+			// the onClose hook holds the whole index until the collection itself closes.
+			expect(evicted.collection.close).toHaveBeenCalledTimes(1);
+			expect(evicted.collection.remove).not.toHaveBeenCalled();
+			for (const instance of retained) {
+				expect(instance.pipeline.close).not.toHaveBeenCalled();
+				expect(instance.close).not.toHaveBeenCalled();
+				expect(instance.collection.close).not.toHaveBeenCalled();
+				expect(instance.collection).toHaveProperty('__wcposAppendIndex');
+			}
+		});
+
+		it('recreate closes the old instance before building the new one', async () => {
+			const collection = makeCollection();
+			const old = await collection.initSearch('en');
+			const remove = jest.fn().mockResolvedValue(undefined);
+			collection.database.collections[`${getSearchIdentifier('products', 'en')}_flexsearch`] = {
+				remove,
+			};
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			const create = fulltextSearch.getMockImplementation()!;
+			fulltextSearch.mockImplementationOnce((config) => {
+				expect(old.pipeline.close).toHaveBeenCalledTimes(1);
+				expect(old.close).toHaveBeenCalledTimes(1);
+				expect(old.collection).not.toHaveProperty('__wcposAppendIndex');
+				delete collection.database.collections[
+					`${getSearchIdentifier('products', 'en')}_flexsearch`
+				];
+				return create(config);
+			});
+			remove.mockImplementation(async () => {
+				delete collection.database.collections[
+					`${getSearchIdentifier('products', 'en')}_flexsearch`
+				];
+			});
+			const replacement = await collection.recreateSearch('en');
+			expect(remove).toHaveBeenCalledTimes(1);
+			expect(old.close.mock.invocationCallOrder[0]).toBeLessThan(
+				remove.mock.invocationCallOrder[0]
+			);
+			expect(replacement).not.toBe(old);
+			expect(collection._searchInstances.get('en')).toBe(replacement);
+		});
+
+		it.each([false, true])(
+			'cleanup continues on pipeline rejection (close rejects: %s)',
+			async (closeRejects) => {
+				const collection = makeCollection();
+				const old = await collection.initSearch('en');
+				old.pipeline.close.mockRejectedValue(new Error('pipeline failed'));
+				if (closeRejects) old.close.mockRejectedValue(new Error('instance failed'));
+				await collection.initSearch('de');
+				await collection.initSearch('fr');
+				await expect(collection.initSearch('es')).resolves.toBeDefined();
+				expect(old.close).toHaveBeenCalledTimes(1);
+				expect(old.collection).not.toHaveProperty('__wcposAppendIndex');
+				expect(searchLogger.warn).toHaveBeenCalledWith(
+					expect.any(String),
+					expect.objectContaining({
+						context: expect.objectContaining({ error: 'pipeline failed' }),
+					})
+				);
+			}
+		);
+
+		it('an init already past the cache check cannot outlive a recreate', async () => {
+			const collection = makeCollection();
+			const started = deferred();
+			const gate = deferred();
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			const create = fulltextSearch.getMockImplementation()!;
+			fulltextSearch.mockImplementationOnce(async (config) => {
+				started.resolve();
+				await gate.promise;
+				return create(config);
+			});
+			const init = collection.initSearch('en');
+			await started.promise;
+			const recreate = collection.recreateSearch('en');
+			gate.resolve();
+			const [fromInit, replacement] = await Promise.all([init, recreate]);
+			const old = await fulltextSearch.mock.results[0].value;
+			expect(collection._searchInstances.size).toBe(1);
+			expect(collection._searchInstances.get('en')).toBe(replacement);
+			expect(replacement).not.toBe(old);
+			// The init's caller is not handed the instance the recreate just closed.
+			expect(fromInit).toBe(replacement);
+			expect(old.close).toHaveBeenCalledTimes(1);
+			expect(old.pipeline.close).toHaveBeenCalledTimes(1);
+			expect(old.collection).not.toHaveProperty('__wcposAppendIndex');
+		});
+
+		it('an init in the same tick as a recreate joins the replacement', async () => {
+			// The chain defers the rebuild to a later microtask. Without retiring the cached
+			// instance synchronously, this init takes the fast path and receives the instance
+			// the queued recreate is about to close.
+			const collection = makeCollection();
+			const old = await collection.initSearch('en');
+			const recreate = collection.recreateSearch('en');
+			const joined = collection.initSearch('en');
+			const [replacement, fromInit] = await Promise.all([recreate, joined]);
+			expect(fromInit).toBe(replacement);
+			expect(fromInit).not.toBe(old);
+			expect(old.close).toHaveBeenCalledTimes(1);
+			expect(collection._searchInstances.get('en')).toBe(replacement);
+			expect(collection._searchInstances.size).toBe(1);
+		});
+
+		it('an init requested after a recreate does not join an init still building', async () => {
+			// While the first init is still creating, recreate has nothing cached to retire; it
+			// must still drop the dedupe entry so a later init queues behind the rebuild.
+			const collection = makeCollection();
+			const started = deferred();
+			const gate = deferred();
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			const create = fulltextSearch.getMockImplementation()!;
+			fulltextSearch.mockImplementationOnce(async (config) => {
+				started.resolve();
+				await gate.promise;
+				return create(config);
+			});
+			const first = collection.initSearch('en');
+			await started.promise;
+			const recreate = collection.recreateSearch('en');
+			const later = collection.initSearch('en');
+			gate.resolve();
+			const [fromFirst, replacement, fromLater] = await Promise.all([first, recreate, later]);
+			const built = await fulltextSearch.mock.results[0].value;
+			expect(fromLater).toBe(replacement);
+			expect(replacement).not.toBe(built);
+			// Both callers end up on the live replacement; the instance built first was retired.
+			expect(fromFirst).toBe(replacement);
+			expect(built.close).toHaveBeenCalledTimes(1);
+			expect(collection._searchInstances.get('en')).toBe(replacement);
+			expect(collection._searchInstances.size).toBe(1);
+		});
+
+		it('an init whose locale is evicted before it returns hands back a live instance', async () => {
+			// Cache full with en/de/fr. While es is being created, the other three are touched
+			// after es publishes but before its eviction pass runs, so es becomes the LRU head
+			// and its own eviction closes it. The caller must not receive that closed instance.
+			const collection = makeCollection();
+			for (const locale of ['en', 'de', 'fr']) await collection.initSearch(locale);
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			// The moment es is recorded in the LRU (inside its chain, before the deferred
+			// eviction callback), the cached three are touched: cached-locale inits touch
+			// synchronously on the fast path. es is then the LRU head when eviction runs.
+			const lru = collection._localeLRU as string[];
+			const push = lru.push.bind(lru);
+			let armed = true;
+			lru.push = (locale: string) => {
+				const length = push(locale);
+				if (armed && locale === 'es') {
+					armed = false;
+					for (const cached of ['en', 'de', 'fr']) collection.initSearch(cached);
+				}
+				return length;
+			};
+			const returned = await collection.initSearch('es');
+			// The fourth create is the es instance the eviction closed; the fifth is the live one.
+			const builtFirst = await fulltextSearch.mock.results[3].value;
+			expect(fulltextSearch).toHaveBeenCalledTimes(5);
+			expect(builtFirst.close).toHaveBeenCalledTimes(1);
+			expect(returned).not.toBe(builtFirst);
+			expect(returned.close).not.toHaveBeenCalled();
+			expect(collection._searchInstances.get('es')).toBe(returned);
+			expect(collection._searchInstances.size).toBe(3);
+		});
+
+		it('concurrent init for a different locale is not blocked', async () => {
+			const collection = makeCollection();
+			await collection.initSearch('en');
+			const started = deferred();
+			const gate = deferred();
+			const fulltextSearch = addFulltextSearch as jest.Mock;
+			const create = fulltextSearch.getMockImplementation()!;
+			fulltextSearch.mockImplementationOnce(async (config) => {
+				started.resolve();
+				await gate.promise;
+				return create(config);
+			});
+			let recreated = false;
+			const recreate = collection.recreateSearch('en').then((instance: unknown) => {
+				recreated = true;
+				return instance;
+			});
+			await started.promise;
+			const sameLocaleInit = collection.initSearch('en');
+			try {
+				const german = await collection.initSearch('de');
+				expect(collection._searchInstances.get('de')).toBe(german);
+				expect(recreated).toBe(false);
+			} finally {
+				gate.resolve();
+			}
+			expect(await sameLocaleInit).toBe(await recreate);
+			expect(fulltextSearch).toHaveBeenCalledTimes(3);
+		});
+
+		it('collection close tears every instance down', async () => {
+			const collection = makeCollection();
+			const instances = [await collection.initSearch('en'), await collection.initSearch('de')];
+			for (const close of collection.onClose) await close();
+			for (const instance of instances) {
+				expect(instance.pipeline.close).toHaveBeenCalledTimes(1);
+				expect(instance.close).toHaveBeenCalledTimes(1);
+				expect(instance.collection).not.toHaveProperty('__wcposAppendIndex');
+			}
+			expect(collection._searchInstances.size).toBe(0);
+		});
 	});
 
 	describe('locale normalization', () => {
@@ -251,12 +528,12 @@ describe('search plugin', () => {
 
 	describe('search identifier generation', () => {
 		it('should generate a versioned, unique identifier per collection and locale', () => {
-			// The version tag (v3) is migration-critical: it forces the rxdb-premium
+			// The version tag (v5) is migration-critical: it forces the rxdb-premium
 			// flexsearch pipeline to rebuild the persisted index from scratch when the
-			// index config changes. Guard it explicitly. See #679, #1732, and the v4 decimal-term fix.
-			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v4-en');
-			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v4-de');
-			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v4-fr');
+			// index config changes. Guard it explicitly. See #679, #1732, and the v5 decimal-comma fix.
+			expect(getSearchIdentifier('products', 'en')).toBe('products-search-v5-en');
+			expect(getSearchIdentifier('orders', 'de')).toBe('orders-search-v5-de');
+			expect(getSearchIdentifier('customers', 'fr')).toBe('customers-search-v5-fr');
 		});
 
 		it('should generate different identifiers for different locales', () => {
@@ -272,6 +549,129 @@ describe('search plugin', () => {
 	});
 
 	describe('FlexSearch initialization', () => {
+		it('refuses to build an index for a collection that opts out, whatever the caller asks', async () => {
+			// logs: a 46k-row day cost 21.5 s and ~350 MB to index in the renderer
+			// (2026-09-15); the Logs screen scans instead. Refusing at the plugin
+			// means no warmup, audit or binding can build it by accident.
+			const collectionPrototype: Record<string, unknown> = {};
+			const install = searchPlugin.prototypes?.RxCollection;
+			if (!install) throw new Error('search plugin RxCollection prototype is missing');
+			install(collectionPrototype as unknown as RxCollection);
+			const collection = Object.assign(Object.create(collectionPrototype), {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database: { collections: {} },
+				onClose: [],
+				count: () => ({ exec: async () => 0 }),
+			});
+
+			await expect(collection.initSearch('en')).resolves.toBeNull();
+			await expect(
+				collection.initSearch('en', { searchFields: ['message', 'context.search'] })
+			).resolves.toBeNull();
+			// The rebuild path honours the opt-out too (Codex review).
+			await expect(collection.recreateSearch('en')).resolves.toBeNull();
+			expect(addFulltextSearch).not.toHaveBeenCalled();
+		});
+
+		it('reclaims the persisted indexes of a collection that now refuses one, every version and locale', async () => {
+			const database = {
+				name: 'upgraded-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			(getAllCollectionDocuments as jest.Mock).mockResolvedValueOnce([
+				{ data: { name: 'logs' } },
+				{ data: { name: 'logs-search-v4-es_flexsearch' } },
+				{ data: { name: 'logs-search-v3-en_flexsearch' } },
+				{ data: { name: 'products-search-v4-en_flexsearch' } },
+			]);
+			(removeCollectionStorages as jest.Mock).mockClear();
+			const collection = {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database,
+			} as unknown as RxCollection;
+
+			const after = searchPlugin.hooks?.createRxCollection?.after;
+			if (!after) throw new Error('search plugin createRxCollection hook is missing');
+			after({ collection } as never);
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([]); // once per session
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			const removed = (removeCollectionStorages as jest.Mock).mock.calls.map((call) => call[4]);
+			expect(removed).toEqual(['logs-search-v4-es_flexsearch', 'logs-search-v3-en_flexsearch']);
+		});
+
+		it('a failed enumeration is logged and does not spend the once-per-session sweep (Codex review)', async () => {
+			const database = {
+				name: 'flaky-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			const collection = {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database,
+			} as unknown as RxCollection;
+			(getAllCollectionDocuments as jest.Mock)
+				.mockRejectedValueOnce(new Error('worker not ready'))
+				.mockResolvedValueOnce([{ data: { name: 'logs-search-v4-en_flexsearch' } }]);
+			(removeCollectionStorages as jest.Mock).mockClear();
+
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([]);
+			// The failure was swallowed as "nothing removed", not thrown, and the
+			// retry is not short-circuited by the once-per-session sweep key.
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([
+				'logs-search-v4-en_flexsearch',
+			]);
+			expect((removeCollectionStorages as jest.Mock).mock.calls.map((call) => call[4])).toEqual([
+				'logs-search-v4-en_flexsearch',
+			]);
+		});
+
+		it('a failed removal releases the sweep so the next opener retries the leftover (review)', async () => {
+			const database = {
+				name: 'partial-db',
+				collections: {},
+				internalStore: { id: 'internal' },
+				storage: { name: 'memory' },
+				token: 'token',
+				multiInstance: false,
+				password: undefined,
+				hashFunction: jest.fn(),
+			};
+			const collection = {
+				name: 'logs',
+				options: { searchFields: ['message'], searchIndex: false },
+				database,
+			} as unknown as RxCollection;
+			(getAllCollectionDocuments as jest.Mock).mockResolvedValue([
+				{ data: { name: 'logs-search-v4-en_flexsearch' } },
+			]);
+			(removeCollectionStorages as jest.Mock)
+				.mockClear()
+				.mockRejectedValueOnce(new Error('storage busy'))
+				.mockResolvedValueOnce(undefined);
+
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([]);
+			await expect(removePersistedSearchIndexes(collection)).resolves.toEqual([
+				'logs-search-v4-en_flexsearch',
+			]);
+			expect(removeCollectionStorages).toHaveBeenCalledTimes(2);
+			(getAllCollectionDocuments as jest.Mock).mockResolvedValue([]);
+		});
+
 		it('passes the caller snapshot and intended index options to FlexSearch', async () => {
 			const collectionPrototype: Record<string, unknown> = {};
 			const install = searchPlugin.prototypes?.RxCollection;
@@ -283,6 +683,7 @@ describe('search plugin', () => {
 				options: {},
 				database: { collections: {} },
 				onClose: [],
+				count: () => ({ exec: async () => 0 }),
 			});
 			const documentSnapshot = (document: Record<string, unknown>) => ({
 				...(document.payload as Record<string, unknown>),
@@ -334,6 +735,7 @@ describe('search plugin', () => {
 				options: { searchFields: ['name'] },
 				database,
 				onClose: [],
+				count: () => ({ exec: async () => 0 }),
 			});
 			(removeCollectionStorages as jest.Mock).mockClear();
 
@@ -344,6 +746,7 @@ describe('search plugin', () => {
 				'products-search-en_flexsearch',
 				'products-search-v2-en_flexsearch',
 				'products-search-v3-en_flexsearch',
+				'products-search-v4-en_flexsearch',
 			]);
 			expect(removed).toEqual(staleSearchCollectionNames('products', 'en'));
 			expect(removed).not.toContain(`${getSearchIdentifier('products', 'en')}_flexsearch`);
@@ -552,23 +955,6 @@ describe('search plugin', () => {
 
 			expect(cleanupRegistered).toBe(previousState);
 		});
-
-		it('should destroy all search instances on cleanup', async () => {
-			const instances = new Map([
-				['en', { collection: { destroy: jest.fn().mockResolvedValue(undefined) } }],
-				['de', { collection: { destroy: jest.fn().mockResolvedValue(undefined) } }],
-			]);
-
-			// Cleanup logic
-			for (const [locale, instance] of instances.entries()) {
-				if (instance.collection?.destroy) {
-					await instance.collection.destroy();
-				}
-				instances.delete(locale);
-			}
-
-			expect(instances.size).toBe(0);
-		});
 	});
 
 	describe('recreateSearch logic', () => {
@@ -588,17 +974,6 @@ describe('search plugin', () => {
 
 			expect(instances.has('en')).toBe(false);
 			expect(lru).not.toContain('en');
-		});
-
-		it('should call destroy on old instance', async () => {
-			const destroyMock = jest.fn().mockResolvedValue(undefined);
-			const oldInstance = { collection: { destroy: destroyMock } };
-
-			if (oldInstance.collection?.destroy) {
-				await oldInstance.collection.destroy();
-			}
-
-			expect(destroyMock).toHaveBeenCalled();
 		});
 	});
 

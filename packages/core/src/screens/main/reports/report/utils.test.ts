@@ -195,3 +195,16 @@ describe('calculateTotals', () => {
 		expect(result.refundTotal).toBe(0);
 	});
 });
+
+it('groups three orders by two intact register UUIDs independently of cashier/store', () => {
+	const ids = ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
+	const orders = [0, 1, 0].map((index, i) => ({
+		total: String((i + 1) * 10),
+		meta_data: [{ key: '_wcpos_register', value: ids[index] }],
+	}));
+	expect(calculateTotals({ orders }).registerArray).toEqual([
+		{ registerId: ids[0], totalOrders: 2, totalAmount: 40 },
+		{ registerId: ids[1], totalOrders: 1, totalAmount: 20 },
+	]);
+	expect(calculateTotals({ orders: [{ total: '5' }] }).registerArray).toEqual([]);
+});

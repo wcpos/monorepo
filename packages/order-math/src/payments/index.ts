@@ -2,16 +2,34 @@
  * One payments entry point keeps the contract consumable without exposing implementation paths.
  */
 
-export { derive } from './derive';
+export {
+	saleProvenanceMeta,
+	SPLIT_META_KEY,
+	splitPlanMeta,
+	hasSaleProvenance,
+	hasSaleTime,
+	withSaleProvenance,
+	withMetaReplaced,
+} from './provenance';
+export { derive, isCompletingStatus } from './derive';
 export {
 	readLedger,
 	withLedger,
 	upsertPaymentRow,
 	mintManualPayment,
+	mintServerPayment,
+	mintDevicePayment,
 	LEDGER_META_KEY,
 	LEDGER_SCHEMA,
 } from './ledger';
-export type { MetaDataEntry, MintManualPaymentInput, MintManualPaymentResult } from './ledger';
+export type {
+	MetaDataEntry,
+	MintManualPaymentInput,
+	MintManualPaymentResult,
+	MintServerPaymentInput,
+	MintDevicePaymentInput,
+	MintServerPaymentResult,
+} from './ledger';
 export { toMinor, fromMinor } from './money';
 export type { PaymentMoney } from './money';
 export { KNOWN_CAPTURE_MODES, KNOWN_KINDS } from './types';
@@ -26,6 +44,8 @@ export type {
 	PaymentSource,
 	PaymentRefundEntry,
 	PaymentRow,
+	PaymentHardware,
+	PaymentEvent,
 	OrderLedger,
 	OrderPaymentSummary,
 	PaymentRouteResponse,

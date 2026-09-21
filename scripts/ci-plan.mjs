@@ -53,18 +53,22 @@ export function classify(file) {
 		file.startsWith('apps/main/scripts/')
 	)
 		return 'web-helper';
-	if (
-		!file.startsWith('scripts/') &&
-		(/\.test\.(ts|tsx|js|mjs|cjs)$/.test(file) || file.includes('/__tests__/'))
-	)
-		return 'unit-test-file';
+	// A package manifest keeps the dependency plan even in a leaf package (#1986 review).
 	if (/^packages\/[^/]+\/package\.json$/.test(file)) return 'package-deps';
+	// Leaf packages have no unit lane (their node:test files run as script tests in
+	// Lint), so their test files must not schedule the unit job: a narrowed run that
+	// selects nothing fails the "prove narrowed unit tests ran" guard (#1984).
 	if (
 		file.startsWith('packages/virtual-printer/') ||
 		file.startsWith('packages/eslint/') ||
 		file.startsWith('apps/template-studio/')
 	)
 		return 'leaf-package';
+	if (
+		!file.startsWith('scripts/') &&
+		(/\.test\.(ts|tsx|js|mjs|cjs)$/.test(file) || file.includes('/__tests__/'))
+	)
+		return 'unit-test-file';
 	const source = /^(.*)\.(ts|tsx|js|jsx|mjs|cjs)$/.exec(file);
 	if (
 		/^(apps\/main|packages\/[^/]+)\//.test(file) &&
@@ -98,12 +102,13 @@ export function classify(file) {
 	if (file.startsWith('.github/actions/') || file.startsWith('.github/scripts/'))
 		return 'github-shared';
 	if (file.startsWith('scripts/')) return 'scripts';
-	if (file === 'apps/web' || file === 'apps/electron') return 'submodule';
+	if (file === 'apps/web') return 'submodule';
 	return 'fallback';
 }
 
 function everythingPlan(detail) {
 	return {
+		gallery: true,
 		lint: true,
 		unit: 'all',
 		web: 'full',
@@ -189,6 +194,7 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 		if (nonBehavioural) {
 			const detail = 'only documentation or comment-only code changed';
 			return {
+				gallery: false,
 				lint: false,
 				unit: 'none',
 				web: 'none',
@@ -202,6 +208,25 @@ export function planFor(changedFiles, { commentOnly = false, baseBranch = '' } =
 		if (fallback !== -1) return everythingPlan(`${changedFiles[fallback]} matched no rule`);
 
 		const plan = {
+			gallery: changedFiles.some(
+				(file) =>
+					/^(packages\/components\/|packages\/core\/src\/screens\/|apps\/main\/(app\/\(gallery\)\/|components\/gallery\/|gallery\/))/.test(
+						file
+					) ||
+					[
+						'apps/main/global.css',
+						'apps/main/package.json',
+						'packages/components/package.json',
+						'pnpm-lock.yaml',
+						'pnpm-workspace.yaml',
+						'apps/main/app/_layout.tsx',
+						'apps/main/metro.config.js',
+						'apps/main/playwright.gallery.config.ts',
+						'.github/workflows/test.yml',
+						'.github/actions/ci-plan/action.yml',
+						'scripts/ci-plan.mjs',
+					].includes(file)
+			),
 			lint: false,
 			unit: 'none',
 			web: 'none',
@@ -363,7 +388,7 @@ function emit(plan) {
 	// $GITHUB_OUTPUT is one `key=value` per line; a newline inside a value (a
 	// multi-line git error in `reason`) would corrupt the file and fail the
 	// changes job instead of falling back to the everything-plan.
-	for (const key of ['lint', 'unit', 'web', 'only_specs', 'native', 'self', 'reason'])
+	for (const key of ['lint', 'unit', 'web', 'only_specs', 'native', 'self', 'gallery', 'reason'])
 		console.log(`${key}=${String(plan[key]).replace(/[\r\n]+/g, ' ')}`);
 }
 

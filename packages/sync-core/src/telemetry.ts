@@ -65,6 +65,7 @@ export type SyncEventType =
 	| 'coverage.existence-reconcile'
 	| 'coverage.gate.hit'
 	| 'coverage.gate.miss'
+	| 'coverage.ledger-reattached'
 	| 'coverage.ledger-rebuilt'
 	| 'coverage.require.error'
 	| 'coverage.require.log'
@@ -169,9 +170,10 @@ export type SyncEventFieldsByType = {
 		readonly backlog?: number;
 	};
 	'engine.lane.tick': {
-		readonly lane?: string;
+		readonly lane: string;
 		/** Lane report status — `'error'` is the one the observer keys on. */
 		readonly status: string;
+		readonly error?: string;
 		readonly reason?: string;
 		readonly pushed?: number;
 		readonly held?: number;

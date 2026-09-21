@@ -1,7 +1,12 @@
 import type { RxStorage, RxStorageInstance, RxStorageInstanceCreationParams } from 'rxdb';
 // Bundle-time gate, inlined by Expo like EXPO_PUBLIC_WCPOS_E2E: in a release bundle this folds to
-// `false` and the storage chain is untouched. Measurement builds opt in with
-// `EXPO_PUBLIC_WCPOS_STORAGE_PROBE=1 npx expo start --no-dev --minify --clear`.
+// `false` and the storage chain is untouched on every platform. Measurement builds opt in on the
+// Expo command that produces the bundle:
+//   native   (apps/main)     EXPO_PUBLIC_WCPOS_STORAGE_PROBE=1 npx expo start --no-dev --minify --clear
+//   web      (apps/main)     EXPO_PUBLIC_WCPOS_STORAGE_PROBE=1 npx expo start --web --no-dev --minify --clear
+//   electron (monorepo root) EXPO_PUBLIC_WCPOS_STORAGE_PROBE=1 pnpm dev:electron-renderer, then
+//            `pnpm dev` in wcpos/electron; a packaged build takes the flag on `pnpm build:electron`.
+// The report is one logger row a minute (['wcpos','storage','timing']) in the app's Logs screen.
 export const STORAGE_TIMING_PROBE_ENABLED = process.env.EXPO_PUBLIC_WCPOS_STORAGE_PROBE === '1';
 export const STORAGE_SLOW_CALL_MS = 16; // One 60 Hz frame.
 const STORAGE_SLOW_SAMPLE_LIMIT = 5; // Keeps recent outliers without making each log row noisy.

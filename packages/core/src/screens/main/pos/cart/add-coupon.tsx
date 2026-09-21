@@ -13,7 +13,13 @@ import {
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import {
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/dialog';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -67,22 +73,24 @@ export function AddCoupon() {
 	}, [selected, isApplying, addCoupon, onOpenChange, t]);
 
 	return (
-		<VStack className="gap-4">
-			{error && <Text className="text-destructive">{error}</Text>}
-			<Combobox onValueChange={handleValueChange}>
-				<ComboboxTrigger testID="add-coupon-combobox">
-					<ComboboxValue placeholder={t('pos_cart.select_coupon')} />
-				</ComboboxTrigger>
-				<ComboboxContent
-					portalHost="pos"
-					{...(Platform.OS === 'web'
-						? ({ style: { width: 'var(--radix-popover-trigger-width)' } } as any)
-						: {})}
-				>
-					<CouponSearch onSearchChange={() => setError(null)} />
-				</ComboboxContent>
-			</Combobox>
-			<DialogFooter className="px-0">
+		<>
+			<DialogBody contentContainerClassName="gap-4">
+				{error && <Text className="text-destructive">{error}</Text>}
+				<Combobox onValueChange={handleValueChange}>
+					<ComboboxTrigger testID="add-coupon-combobox">
+						<ComboboxValue placeholder={t('pos_cart.select_coupon')} />
+					</ComboboxTrigger>
+					<ComboboxContent
+						portalHost="pos"
+						{...(Platform.OS === 'web'
+							? ({ style: { width: 'var(--radix-popover-trigger-width)' } } as any)
+							: {})}
+					>
+						<CouponSearch onSearchChange={() => setError(null)} />
+					</ComboboxContent>
+				</Combobox>
+			</DialogBody>
+			<DialogFooter>
 				<DialogClose>{t('common.cancel')}</DialogClose>
 				<DialogAction
 					testID="add-coupon-submit"
@@ -92,7 +100,7 @@ export function AddCoupon() {
 					{t('common.apply')}
 				</DialogAction>
 			</DialogFooter>
-		</VStack>
+		</>
 	);
 }
 

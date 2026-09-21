@@ -11,9 +11,9 @@
  *    G3). Below the reference lanes and the orders window. The window is a ROW
  *    COUNT; the wire page size is the Performance dial (#908), so the seed is
  *    several polite requests, not one 100-record one.
- *  - REFERENCE RE-SEED (F11): a completed greedy task is terminal, so a
- *    mid-session category/brand/tag/coupon edit never reaches a running POS
- *    without a periodic re-seed → re-pull → set-difference prune.
+ *  - REFERENCE RE-SEED (F11): backfills empty collections with a positive census.
+ *    Materialized references refresh on change signals or demand; periodic
+ *    re-pull → set-difference prune is only a longer-interval safety net.
  *  - QUERY-TOTAL RETRY SCAN: drains persisted query-total request states
  *    through the host's fetchWooQueryTotal port. Armed ONLY when the port is
  *    provided; fresh cache entries surface as a 'query-total-cache' engine
@@ -50,6 +50,7 @@ import {
 	type SeedPersistedSchedulerTasksResult,
 	seedProductBrowseWindowSchedulerTask,
 	seedReferenceLanes,
+	seedRefundWindowLane,
 	SUPPORTED_CENSUS_COLLECTIONS,
 } from '../scheduler';
 import { runQueryTotalRetryRequests } from '../rx-query-total-retry-runner';
@@ -108,10 +109,13 @@ export const ORDER_OPEN_RECENT_PRIORITY = 600;
 export { PRODUCT_BROWSE_WINDOW_LIMIT };
 export const PRODUCT_BROWSE_WINDOW_PRIORITY = 500;
 export const REFERENCE_REFRESH_DEDUPE_MS = 4 * 60_000;
+// Owner-selected safety interval for populated references when change signals
+// are unavailable. Keep the short empty-collection backfill window above.
+export const REFERENCE_SAFETY_REFRESH_MS = 30 * 60_000;
 // Demand-path (picker/screen open) reference refreshes use a much shorter
 // window: just enough to absorb remount churn, never enough to hide a fresh
 // record from a cashier who deliberately opened the surface. The 4-minute
-// window above is for the IDLE maintenance passes — #1302 showed that letting
+// window above is for EMPTY-COLLECTION backfill — #1302 showed that letting
 // an idle backfill arm the demand window makes a coupon created in wp-admin
 // invisible at the till for up to 4 minutes (indefinitely while idle passes
 // keep re-arming ahead of opens).
@@ -131,6 +135,7 @@ export const COVERAGE_COMPACTION_MIN_EXPIRED_DOCUMENTS = 1;
 type MaintenanceLaneDeps = {
 	manager: StoreScopeManager;
 	databaseFor: (scopeId: string) => RxDatabase | null;
+	storeIdFor?: (scopeId: string) => string | number | undefined;
 	coverageFor: (scopeId: string) => LocalCoverage | null;
 	/** The per-scope barcode carriers a scheduler pull materializes products/variations by. */
 	barcodeSelectorsFor?: (scopeId: string) => BarcodeSelectors | null;
@@ -266,6 +271,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			tick: { starvation: boolean } & MaintenanceLaneTickOptions
 		) => Promise<MaintenanceLaneBodyReport>
 	): MaintenanceLane {
+		const existenceAudit = name === 'existence-prime' || name === 'existence-reconcile';
 		let lastError: string | null = null;
 		/**
 		 * A skipped tick used to be COMPLETELY silent, which is why #1318 — a lane
@@ -294,6 +300,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		};
 		return {
 			tick: async (callerSignal, options) => {
+				const startedAtMs = now();
 				let starvation = false;
 				let starvationReservationAtMs: number | null = null;
 				if (callerSignal?.aborted) {
@@ -317,16 +324,20 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				if (pressureDeferredLanes.has(name) && !forcedCensusTick) {
 					const tickAtMs = now();
 					if (deps.isServerBackingOff?.(tickAtMs)) {
+						// Existing caches must heal even on persistently busy hosts. Start
+						// bounded existence work on the first tick, then at normal cadence;
+						// other background lanes retain their two-interval stand-down.
 						const previousRunAtMs = lastRanAtMs.get(name);
-						if (previousRunAtMs === undefined) {
+						if (previousRunAtMs === undefined && !existenceAudit) {
 							lastRanAtMs.set(name, tickAtMs);
 							return skipped('server-pressure');
 						}
 						if (deps.isServerRetryAfterActive?.(tickAtMs)) {
 							return skipped('server-pressure');
 						}
-						const starvationCeilingMs = 2 * laneRegistryEntry(name).defaultMs;
-						if (tickAtMs - previousRunAtMs < starvationCeilingMs) {
+						const starvationCeilingMs =
+							(existenceAudit ? 1 : 2) * laneRegistryEntry(name).defaultMs;
+						if (previousRunAtMs !== undefined && tickAtMs - previousRunAtMs < starvationCeilingMs) {
 							return skipped('server-pressure');
 						}
 						starvation = true;
@@ -402,7 +413,9 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 									...(options?.forceAllCensus === true ? { forceAllCensus: true } : {}),
 								});
 								if (bodyReport.status !== 'skipped' && pressureDeferredLanes.has(name)) {
-									lastRanAtMs.set(name, now());
+									// Auto timers are start-to-start; request duration must not
+									// make the next scheduled existence pass miss its cadence.
+									lastRanAtMs.set(name, existenceAudit ? startedAtMs : now());
 								}
 								const { summary, level } = bodyReport;
 								if (summary !== null) {
@@ -478,7 +491,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 
 	const seedSummary = (
 		label: string,
-		result: SeedPersistedSchedulerTasksResult
+		result: Pick<SeedPersistedSchedulerTasksResult, 'inserted' | 'requeued' | 'claimLost'>
 	): { summary: string | null; level?: 'info' | 'error' } => {
 		if (result.inserted === 0 && result.requeued === 0 && result.claimLost === 0)
 			return { summary: null };
@@ -498,6 +511,7 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 				? undefined
 				: () => deps.barcodeSelectorsFor!(_scopeId) ?? undefined;
 		const result = await runEngineSchedulerDrain({
+			scope: { storeId: deps.storeIdFor?.(_scopeId) },
 			db: db as unknown as SchedulerDrainDatabase,
 			coverage,
 			...(barcodeSelectors !== undefined ? { barcodeSelectors } : {}),
@@ -592,6 +606,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 	});
 
 	const referenceSeed = lane('reference-seed', async (db) => {
+		const nowMs = now();
+		const result = await seedRefundWindowLane({
+			database: db,
+			nowMs,
+			completedDedupeForMs: REFERENCE_SAFETY_REFRESH_MS,
+		});
 		const counts = await Promise.all(
 			REFERENCE_COLLECTIONS.map((collection) => db.collections[collection].count().exec())
 		);
@@ -604,16 +624,25 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 		});
 		const collections = [...materialized, ...backfill];
 		if (collections.length === 0) {
-			return { summary: null, status: 'skipped', reason: 'no reference collections need seeding' };
+			return seedSummary('Refund history refresh', result);
 		}
-		const result = await seedReferenceLanes({
-			collections,
-			completedDedupeForMs: REFERENCE_REFRESH_DEDUPE_MS,
-			database: db,
-			// Same one-clock rule as the order window seed above.
-			...(deps.now !== undefined ? { nowMs: deps.now() } : {}),
-		});
-		const label = `Reference refresh (categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
+
+		for (const [group, completedDedupeForMs] of [
+			[materialized, REFERENCE_SAFETY_REFRESH_MS],
+			[backfill, REFERENCE_REFRESH_DEDUPE_MS],
+		] as const) {
+			if (group.length === 0) continue;
+			const seeded = await seedReferenceLanes({
+				collections: group,
+				completedDedupeForMs,
+				database: db,
+				nowMs,
+			});
+			result.inserted += seeded.inserted;
+			result.requeued += seeded.requeued;
+			result.claimLost += seeded.claimLost;
+		}
+		const label = `Reference refresh (refunds + categories + brands + tags + coupons${backfill.length > 0 ? `; backfilled: ${backfill.join(', ')}` : ''})`;
 		return seedSummary(label, result);
 	});
 
@@ -707,11 +736,18 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 						censusCollectionFromQueryKey(request.queryKey) === null
 							? QUERY_TOTAL_FRESH_FOR_MS
 							: deps.censusFreshForMs,
+					// Nine per_page=1 probes are the sweep's cheapest requests, already
+					// exempt from pressure deferral for forced ticks in the lane gate above.
 					maxRequests:
-						forced !== undefined || (tick.starvation && !tick.forceAllCensus)
+						forced !== undefined
 							? 1
-							: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
+							: tick.starvation && !tick.forceAllCensus
+								? SUPPORTED_CENSUS_COLLECTIONS.length
+								: laneRegistryEntry('query-total-retry').maxRequestsPerTick!,
 					...(forced !== undefined ? { forceQueryKey: censusQueryKey(forced) } : {}),
+					...(forced === undefined && tick.starvation && !tick.forceAllCensus
+						? { onlyQueryKeys: censusQueryKeys }
+						: {}),
 					...(tick.forceAllCensus
 						? { onlyQueryKeys: censusQueryKeys, ignoreFreshQueryKeys: censusQueryKeys }
 						: {}),
@@ -892,7 +928,12 @@ export function createMaintenanceLanes(deps: MaintenanceLaneDeps): MaintenanceLa
 			const result = await coverage.reconcilePass(
 				signal,
 				fetcher,
-				tick.starvation ? () => false : () => Boolean(deps.isServerBackingOff?.(now())),
+				() =>
+					Boolean(
+						tick.starvation
+							? deps.isServerRetryAfterActive?.(now())
+							: deps.isServerBackingOff?.(now())
+					),
 				tick.starvation ? { maxScanPagesPerSpace: 1, maxDrillDowns: 1 } : undefined
 			);
 			deps.diagnostics({

@@ -1,7 +1,9 @@
 import * as React from 'react';
 
 import { useRouter } from 'expo-router';
+import { filter, take } from 'rxjs';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
 import { type EngineRecord, useDocField, useQueryRuntime, useRecordField } from '@wcpos/query';
@@ -9,12 +11,20 @@ import { isRecordUuid, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
-import { useAppState } from '../../../../../contexts/app-state';
+import {
+	openSessionSelector,
+	RegisterSessionRequiredError,
+} from '../../../../../services/register-session/session-store';
+import { presentSessionRequired } from '../session-required';
+import { isSaleComplete, persistSaleProvenance, prepareSale } from '../sale-completion';
+import { useSaleContext } from '../hooks/use-sale-context';
+import { useCompleteOrderFlow } from '../hooks/use-complete-order-flow';
+import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
+import { useAppState, useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrderActions } from '../../contexts/current-order';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
-import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 // Upper bound on the post-payment local refresh. The cart and receipt are
 // already routed by then; this only decides how long a queued-but-stalled
@@ -51,17 +61,6 @@ export const PAYMENT_FRAME_LOAD_TIMEOUT_MS = 90_000;
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 type OrderSnapshot = Record<string, unknown> & { id: number; status: string };
-
-/**
- * Statuses that mean the payment has NOT happened — the client mirror of the store's
- * received-page emission gate (`! $order->needs_payment()` plus the parked POS statuses):
- * `pending`/`failed` are still payable, `cancelled` means it is never coming, and the POS
- * statuses are open carts. Everything else counts as paid. A BLOCKLIST, not an allowlist of
- * processing/completed: a cheque or BACS gateway configured through POS settings lands on
- * `on-hold`, and a gateway configured to land on a custom status did so deliberately —
- * refusing those would strand a genuinely completed sale as an open cart.
- */
-const UNPAID_ORDER_STATUSES = ['pos-open', 'pos-partial', 'pending', 'failed', 'cancelled'];
 
 function isOrderSnapshot(payload: unknown): payload is OrderSnapshot {
 	if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return false;
@@ -128,13 +127,34 @@ export function PaymentWebview({
 	...props
 }: PaymentWebviewProps) {
 	const router = useRouter();
+	const ctx = useSaleContext();
+	const { sessionsOn } = ctx;
+	const completeOrderFlow = useCompleteOrderFlow(order, 'modal');
 	const orderData = useRecordField(order, (record) => record.payload);
-	const paymentURL = orderData.links?.payment?.[0]?.href;
+	const rawPaymentURL = orderData.links?.payment?.[0]?.href;
+	const online = useOnlineStatus().status === 'online-website-available';
+	const { userDB, site, store } = useStoreSession();
+	const { status: bindingStatus, registerId } = useRegisterBinding();
+	const [sessionRetry, setSessionRetry] = React.useState(0);
+	const siteUuid = site.uuid!;
+	const preparationKey = `${order.uuid}:${registerId}`;
+	const [preparation, setPreparation] = React.useState<{
+		key: string;
+		status: 'ready' | 'failed';
+		sessionRequired?: boolean;
+		sessionId?: string | null;
+	} | null>(null);
+	// Sessions require preparation even offline: a stale probe may hide a reachable
+	// pay page. Online also waits for provenance; failed preparation stays closed.
+	const prepared = preparation?.key === preparationKey ? preparation.status : null;
+	const paymentURL =
+		((online || sessionsOn) && prepared !== 'ready') || prepared === 'failed'
+			? undefined
+			: rawPaymentURL;
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
 	const { wpCredentials } = useAppState();
 	const jwt = useDocField(wpCredentials, (value) => value.access_token);
-	const { stockAdjustment } = useStockAdjustment();
 	const { setCurrentOrderID } = useCurrentOrderActions();
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
@@ -164,6 +184,111 @@ export function PaymentWebview({
 			}),
 		[order.uuid, orderNumber]
 	);
+
+	// Latest collaborators for the preparation effect, refreshed after every render so
+	// the effect can key on order identity rather than on revisions our own write emits.
+	const collaborators = React.useRef({
+		order,
+		ctx,
+		setFrameStatus,
+		orderLogger,
+		t,
+	});
+	React.useEffect(() => {
+		collaborators.current = { order, ctx, setFrameStatus, orderLogger, t };
+	});
+	// Mounting the external pay page can complete the sale: prepare before exposing
+	// its URL, persisting attribution online. Key on order identity, not our writes.
+	// Cleanup only suppresses an obsolete view's readiness update.
+	React.useEffect(() => {
+		if ((!online && !sessionsOn) || !rawPaymentURL) return;
+		const { order: currentOrder, ctx, setFrameStatus, orderLogger, t } = collaborators.current;
+		let active = true;
+		void (async () => {
+			try {
+				const prepared = await prepareSale(ctx, {
+					order: currentOrder,
+					source: 'gateway-snapshot',
+					completing: true,
+					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+					sessionRule: 'require',
+				});
+				if (!active) return;
+				if (!prepared.ok) {
+					setPreparation({ key: preparationKey, status: 'failed' });
+					setFrameStatus('stalled');
+					orderLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
+					return;
+				}
+				const { sessionId } = prepared;
+				await persistSaleProvenance(ctx, {
+					order: currentOrder,
+					source: 'gateway-snapshot',
+					sessionId,
+					online,
+				});
+				if (active) setPreparation({ key: preparationKey, status: 'ready', sessionId });
+			} catch (error) {
+				if (!active) return;
+				setPreparation({
+					key: preparationKey,
+					status: 'failed',
+					sessionRequired: error instanceof RegisterSessionRequiredError,
+				});
+				setFrameStatus('stalled');
+				if (error instanceof RegisterSessionRequiredError) {
+					presentSessionRequired(orderLogger, t);
+					return;
+				}
+				orderLogger.error('Checkout failed', {
+					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					showToast: true,
+					toast: { title: t('pos_cart.checkout_failed') },
+					context: { error: getErrorMessage(error) },
+				});
+			}
+		})();
+		return () => {
+			active = false;
+		};
+	}, [
+		preparationKey,
+		userDB,
+		siteUuid,
+		store.id,
+		online,
+		rawPaymentURL,
+		retryToken,
+		sessionRetry,
+		bindingStatus,
+		sessionsOn,
+	]);
+
+	// Readiness follows the prepared row; only a session refusal observes reopening.
+	React.useEffect(() => {
+		if (preparation?.key !== preparationKey || !sessionsOn) return;
+		const sessionId = preparation.status === 'ready' ? preparation.sessionId : null;
+		if (!sessionId && !preparation.sessionRequired) return;
+		const id = registerId ?? '';
+		const selector = {
+			...openSessionSelector,
+			...(sessionId ? { id: sessionId } : { register_id: id }),
+		};
+		const subscription = ctx.sessions
+			?.findOne({ selector })
+			.$.pipe(
+				filter((session) => (sessionId ? !session : !!session)),
+				take(1)
+			)
+			.subscribe(() => {
+				if (!sessionId) return setSessionRetry((value) => value + 1);
+				setPreparation({ key: preparationKey, status: 'failed', sessionRequired: true });
+				const { setFrameStatus, orderLogger, t } = collaborators.current;
+				setFrameStatus('stalled');
+				presentSessionRequired(orderLogger, t);
+			});
+		return () => subscription?.unsubscribe();
+	}, [ctx.sessions, registerId, preparationKey, preparation, sessionsOn]);
 
 	/**
 	 *
@@ -261,7 +386,15 @@ export function PaymentWebview({
 				// A status change is not a payment: an unpaid transition leaves everything in
 				// place (the finally releases the spinner) so the cashier can retry from the
 				// cart they still have.
-				if (UNPAID_ORDER_STATUSES.includes(serverStatus)) {
+				if (
+					!isSaleComplete(
+						{
+							source: 'gateway-snapshot',
+							snapshot: serverOrder as EngineRecord<'orders'>['payload'],
+						},
+						ctx.dp
+					)
+				) {
 					orderLogger.debug('Server order status changed but is not paid; leaving the cart open', {
 						context: { serverStatus, source: 'fallback-refresh' },
 					});
@@ -270,15 +403,6 @@ export function PaymentWebview({
 				paymentReceivedRef.current = true;
 				settled = true;
 				setCurrentOrderID('');
-				adoptSnapshot(serverOrder, false);
-				const reducedStockItems = (
-					(serverOrder.line_items as Record<string, unknown>[]) || []
-				).filter((item) =>
-					(item.meta_data as { key: string }[] | undefined)?.some(
-						(meta) => meta.key === '_reduced_stock'
-					)
-				);
-				stockAdjustment(reducedStockItems);
 				orderLogger.success(
 					t('pos_checkout.payment_completed_for_order', {
 						orderNumber: (serverOrder.number as string) || orderNumber,
@@ -302,6 +426,11 @@ export function PaymentWebview({
 				} else {
 					router.replace({ pathname: '/cart' });
 				}
+				adoptSnapshot(serverOrder, false);
+				await completeOrderFlow({
+					source: 'gateway-snapshot',
+					snapshot: serverOrder as EngineRecord<'orders'>['payload'],
+				});
 			} catch (err) {
 				// Best-effort safety net only. Order completion is authoritatively
 				// delivered via the postMessage path, so a failed or premature poll
@@ -335,7 +464,8 @@ export function PaymentWebview({
 			order,
 			orderId,
 			orderNumber,
-			stockAdjustment,
+			completeOrderFlow,
+			ctx.dp,
 			uiSettings.autoShowReceipt,
 			router,
 			adoptSnapshot,
@@ -365,7 +495,12 @@ export function PaymentWebview({
 				// before the provider confirms, with the order still unpaid. Don't
 				// complete on the message's say-so: leave the poll armed and let
 				// server truth decide.
-				if (UNPAID_ORDER_STATUSES.includes(payload.status)) {
+				if (
+					!isSaleComplete(
+						{ source: 'gateway-snapshot', snapshot: payload as EngineRecord<'orders'>['payload'] },
+						ctx.dp
+					)
+				) {
 					orderLogger.warn(
 						'Payment received but the order is not paid; deferring to server truth',
 						{ context: { orderId, status: payload.status } }
@@ -380,15 +515,6 @@ export function PaymentWebview({
 						clearTimeout(fallbackTimerRef.current);
 						fallbackTimerRef.current = null;
 					}
-					// get line_items with "_reduced_stock" meta
-					const reducedStockItems = (
-						(payload.line_items as Record<string, unknown>[]) || []
-					).filter((item: Record<string, unknown>) =>
-						(item.meta_data as { key: string }[])?.some(
-							(meta: { key: string }) => meta.key === '_reduced_stock'
-						)
-					);
-					stockAdjustment(reducedStockItems);
 					orderLogger.success(
 						t('pos_checkout.payment_completed_for_order', {
 							orderNumber: payload.number || orderNumber,
@@ -424,6 +550,10 @@ export function PaymentWebview({
 						});
 					}
 					adoptSnapshot(payload, true);
+					await completeOrderFlow({
+						source: 'gateway-snapshot',
+						snapshot: payload as EngineRecord<'orders'>['payload'],
+					});
 				} catch (err) {
 					const errorMessage = err instanceof Error ? err.message : 'Payment processing error';
 					orderLogger.error(errorMessage, {
@@ -443,7 +573,8 @@ export function PaymentWebview({
 			orderId,
 			router,
 			order,
-			stockAdjustment,
+			completeOrderFlow,
+			ctx.dp,
 			uiSettings.autoShowReceipt,
 			setLoading,
 			setCurrentOrderID,
@@ -554,9 +685,9 @@ export function PaymentWebview({
 	React.useLayoutEffect(() => {
 		loadCountRef.current = 0;
 		frameSettledRef.current = false;
-		setFrameStatus('loading');
+		setFrameStatus(prepared === 'failed' ? 'stalled' : 'loading');
 		return () => setFrameStatus('loading');
-	}, [paymentURLWithToken, frameKey, setFrameStatus]);
+	}, [paymentURLWithToken, frameKey, prepared, setFrameStatus]);
 
 	/**
 	 * The load watchdog. Runs for every navigation of the first document (a new

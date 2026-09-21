@@ -48,6 +48,7 @@ describe('mergeWithInitalValues', () => {
 
 	it('does not write state when columns are already semantically equal', async () => {
 		const currentState = {
+			openOrdersPosition: 'bottom',
 			sortBy: 'id',
 			sortDirection: 'asc',
 			autoShowReceipt: true,

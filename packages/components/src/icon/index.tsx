@@ -11,9 +11,13 @@ import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 import { TextClassContext } from '../text';
-import * as Svgs from './components/fontawesome/solid';
+import * as FontAwesome from './components/fontawesome/solid';
+import { SvgLock } from './components/lock';
+import * as Tabler from './components/tabler';
 
 import type { SvgProps } from 'react-native-svg';
+
+const Svgs = { ...FontAwesome, ...Tabler, lock: SvgLock };
 
 export type IconName = Extract<keyof typeof Svgs, string>;
 
@@ -27,7 +31,7 @@ const variantToCSSVariable: Record<string, string> = {
 	secondary: '--color-secondary',
 	muted: '--color-muted-foreground',
 	success: '--color-success',
-	error: '--color-error',
+	error: '--color-destructive',
 	warning: '--color-warning',
 	info: '--color-info',
 	accent: '--color-accent-foreground',
@@ -46,7 +50,7 @@ const iconVariants = cva('inset-0 content-center items-center', {
 			secondary: 'text-secondary',
 			muted: 'text-muted-foreground',
 			success: 'text-success',
-			error: 'text-error',
+			error: 'text-destructive',
 			warning: 'text-warning',
 			info: 'text-info',
 			accent: 'text-accent-foreground',

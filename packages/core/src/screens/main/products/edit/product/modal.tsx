@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
@@ -25,7 +26,7 @@ export function EditProductModal({ resource }: Props) {
 	if (!product) {
 		return (
 			<Modal>
-				<ModalContent size="lg">
+				<ModalContent side="right" size="lg">
 					<ModalHeader>
 						<ModalTitle>{t('products.no_product_found')}</ModalTitle>
 					</ModalHeader>
@@ -36,7 +37,7 @@ export function EditProductModal({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent testID="product-edit-modal" size="lg">
+			<ModalContent side="right" testID="product-edit-modal" size="lg">
 				<ModalHeader>
 					{/* The product name is interpolated straight into the heading, so the
 				    heading needs the same decode the grid row behind it already does. */}
@@ -44,9 +45,9 @@ export function EditProductModal({ resource }: Props) {
 						<Text decodeHtml>{t('common.edit_2', { name })}</Text>
 					</ModalTitle>
 				</ModalHeader>
-				<ModalBody>
-					<Tabs value={value} onValueChange={setValue}>
-						<TabsList className="w-full flex-row">
+				<View className="min-h-0 flex-1">
+					<Tabs className="min-h-0 flex-1" value={value} onValueChange={setValue}>
+						<TabsList className="mx-4 flex-row">
 							<TabsTrigger value="form" className="flex-1">
 								<Text>{t('common.form')}</Text>
 							</TabsTrigger>
@@ -54,14 +55,16 @@ export function EditProductModal({ resource }: Props) {
 								<Text>{t('common.json')}</Text>
 							</TabsTrigger>
 						</TabsList>
-						<TabsContent value="form">
+						<TabsContent value="form" className="min-h-0 flex-1">
 							<EditProductForm product={product} />
 						</TabsContent>
-						<TabsContent value="json">
-							<Tree value={payload} />
+						<TabsContent value="json" className="min-h-0 flex-1">
+							<ModalBody>
+								<Tree value={payload} />
+							</ModalBody>
 						</TabsContent>
 					</Tabs>
-				</ModalBody>
+				</View>
 			</ModalContent>
 		</Modal>
 	);

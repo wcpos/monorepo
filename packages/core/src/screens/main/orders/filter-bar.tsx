@@ -9,6 +9,7 @@ import { forceRefreshFilterCustomer } from './force-refresh-filter-customer';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useQueryState } from '../../../query';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
+import { RegisterPill } from '../components/order/filter-bar/register-pill';
 import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
@@ -67,6 +68,7 @@ export function FilterBar() {
 			<Suspense>
 				<StorePill resource={storesResource} />
 			</Suspense>
+			<RegisterPill />
 			<DateRangePill />
 		</HStack>
 	);

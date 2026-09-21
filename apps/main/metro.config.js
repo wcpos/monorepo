@@ -4,14 +4,16 @@ const path = require('path');
 // Load .env from monorepo root before Metro starts
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
-const { getDefaultConfig } = require('expo/metro-config');
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const { FileStore } = require('metro-cache');
 const { getBundleModeMetroConfig } = require('react-native-worklets/bundleMode');
 const { withUniwindConfig } = require('uniwind/metro');
 
 const { withBundleSerializerCache } = require('./metro/bundle-serializer-cache');
 
-let config = getDefaultConfig(__dirname);
+// Sentry stamps exported bundles and source maps with matching Debug IDs,
+// allowing crashes from OTA bundles to symbolicate after each JS-only update.
+let config = getSentryExpoConfig(__dirname);
 
 // Local link: packages live outside this worktree; watch them and resolve their
 // imports from the app too. These paths also work once the packages come from npm.
@@ -73,6 +75,13 @@ const workspaceSourceRoots = {
 
 const _baseResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+	if (moduleName === '@wcpos/main/components/gallery/registry') {
+		const gallery = process.env.EXPO_PUBLIC_WCPOS_GALLERY === '1' && platform === 'web';
+		return {
+			type: 'sourceFile',
+			filePath: path.join(__dirname, `components/gallery/registry${gallery ? '' : '.stub'}.tsx`),
+		};
+	}
 	if (moduleName === 'rxdb-premium/plugins/shared') {
 		return { type: 'sourceFile', filePath: rxdbPremiumESMShared };
 	}

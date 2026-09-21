@@ -3,7 +3,9 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
+
+import { Toast } from '@wcpos/components/toast';
 
 import { DatabaseScreen } from './database';
 
@@ -22,6 +24,7 @@ const mockDeadLetterStuck: StuckRecord[] = [];
 let mockConflictedKeys = new Set<string>();
 let lastAttentionStuck: StuckRecord[] = [];
 let mockLogStats: { stuck: StuckRecord[] } = { stuck: [] };
+let mockBackingOff = false;
 const mockSync = jest.fn();
 const mockCheckCollection = jest.fn();
 const defaultStorageFootprint = {
@@ -61,7 +64,19 @@ jest.mock('@wcpos/components/alert-dialog', () => {
 	}
 	return {
 		AlertDialog: Component,
-		AlertDialogAction: Component,
+		AlertDialogAction: ({
+			children,
+			testID,
+			onPress,
+		}: {
+			children: React.ReactNode;
+			testID?: string;
+			onPress?: () => void;
+		}) => (
+			<button data-testid={testID} onClick={onPress}>
+				{children}
+			</button>
+		),
 		AlertDialogCancel: Component,
 		AlertDialogContent: Component,
 		AlertDialogDescription: Component,
@@ -120,20 +135,7 @@ jest.mock('@wcpos/components/dropdown-menu', () => {
 	};
 });
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
-}));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
-jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
-jest.mock('@wcpos/components/text', () => ({
-	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
-		<span data-testid={testID}>{children}</span>
-	),
-}));
-jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
-jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({
+	HStack: ({
 		children,
 		testID,
 		className,
@@ -147,13 +149,45 @@ jest.mock('@wcpos/components/vstack', () => ({
 		</div>
 	),
 }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
+jest.mock('@wcpos/components/toast', () => ({ Toast: { show: jest.fn() } }));
+type LayoutHandler = (event: { nativeEvent: { layout: { width: number } } }) => void;
+const mockLayoutHandlers: Record<string, LayoutHandler> = {};
+jest.mock('@wcpos/components/vstack', () => ({
+	VStack: ({
+		children,
+		testID,
+		className,
+		onLayout,
+	}: {
+		children: React.ReactNode;
+		testID?: string;
+		className?: string;
+		onLayout?: LayoutHandler;
+	}) => {
+		if (typeof onLayout === 'function' && typeof testID === 'string') {
+			mockLayoutHandlers[testID] = onLayout;
+		}
+		return (
+			<div data-testid={testID} className={className}>
+				{children}
+			</div>
+		);
+	},
+}));
 jest.mock('@wcpos/query', () => ({
 	COLLECTION_VOCABULARY: jest.requireActual('@wcpos/query').COLLECTION_VOCABULARY,
 	runResetRefill: jest.fn(),
 	useQueryRuntime: () => ({
 		engine: {
 			active: jest.fn(),
-			scope: {},
+			scope: { resetCollection: jest.fn().mockResolvedValue('reset') },
 			sync: mockSync,
 			checkCollection: mockCheckCollection,
 		},
@@ -175,6 +209,7 @@ jest.mock('./use-unresolved-conflicts', () => ({
 	useUnresolvedConflictKeys: () => mockConflictedKeys,
 }));
 jest.mock('./queued-emails', () => ({ QueuedEmailsPanel: () => null }));
+jest.mock('./registers-panel', () => ({ RegistersPanel: () => null }));
 jest.mock('../../../contexts/translations', () => {
 	const { createTestT } = jest.requireActual<typeof import('../../../../jest/translate')>(
 		'../../../../jest/translate'
@@ -194,6 +229,12 @@ jest.mock('../hooks/use-census-totals', () => ({
 jest.mock('../hooks/use-engine-monitor', () => ({
 	useCollectionCounts: () => ({ products: 1 }),
 	useEngineStatus: () => ({
+		serverPressure: {
+			multiplier: mockBackingOff ? 2 : 1,
+			retryAfterUntilMs: null,
+			reported: null,
+			signal: null,
+		},
 		bootstrapFailed: {},
 		connectivity: 'online',
 		gatedBy: null,
@@ -221,6 +262,7 @@ jest.mock('./use-relative-time', () => ({
 
 describe('DatabaseScreen coverage', () => {
 	afterEach(() => {
+		mockBackingOff = false;
 		mockSync.mockReset();
 		mockCheckCollection.mockReset();
 		mockMutationCounts.needsDecision = 0;
@@ -245,6 +287,18 @@ describe('DatabaseScreen coverage', () => {
 		const rowText = getAllByTestId('db-row-products')[0].textContent ?? '';
 		expect(rowText).toContain('203');
 		expect(rowText).toContain('checking…');
+		expect(getAllByTestId('db-row-sm-products')[0].textContent).toContain('checking…');
+	});
+
+	it('explains server pressure on stale rows and the census freshness line', () => {
+		mockBackingOff = true;
+		mockCensusTotals = {
+			products: { total: 203, updatedAtMs: 100, freshUntilMs: 400, fresh: false },
+		};
+		const { getAllByTestId, getByText } = render(<DatabaseScreen />);
+		expect(getAllByTestId('db-row-products')[0].textContent).toContain('server busy…');
+		expect(getAllByTestId('db-row-sm-products')[0].textContent).toContain('server busy…');
+		expect(getByText(/Server totals updated/).textContent).toContain('server is busy');
 	});
 
 	it('spins only the checked row and disables manual controls while its check runs', async () => {
@@ -296,6 +350,27 @@ describe('DatabaseScreen coverage', () => {
 
 		expect(mockTooltip).toHaveBeenCalled();
 		expect(mockTooltip.mock.calls.every(([props]) => props.showOnNative === true)).toBe(true);
+	});
+
+	it('picks the table or list row by the measured table width, not the window breakpoint', () => {
+		const { getByTestId } = render(<DatabaseScreen />);
+		const layout = (width: number) =>
+			act(() => mockLayoutHandlers['db-table']({ nativeEvent: { layout: { width } } }));
+
+		// Compact until measured: nothing has told us the table fits.
+		expect(getByTestId('db-row-products').className).toContain('hidden');
+		expect(getByTestId('db-row-sm-products').className).toContain('flex');
+
+		// Portrait iPad with the drawer rail open: the content column is ~530 px, the
+		// window is still ≥ md — the collection column wrapped one character per line.
+		layout(530);
+		expect(getByTestId('db-row-products').className).toContain('hidden');
+		expect(getByTestId('db-row-sm-products').className).toContain('flex');
+
+		layout(760);
+		expect(getByTestId('db-row-products').className).toContain('flex');
+		expect(getByTestId('db-row-products').className).not.toContain('hidden');
+		expect(getByTestId('db-row-sm-products').className).toContain('hidden');
 	});
 
 	it('keeps the wider health layout with the shared screen spacing', () => {
@@ -415,4 +490,22 @@ describe('DatabaseScreen coverage', () => {
 
 		expect(getAllByText('1 stuck')).toHaveLength(2);
 	});
+});
+
+it('shows the refund history policy on the registered Health row', () => {
+	const { getByTestId } = render(<DatabaseScreen />);
+	expect(getByTestId('db-row-refunds').textContent).toContain(
+		'Refunds from the last 92 days, plus any refund of an order you have opened'
+	);
+});
+
+it('does not claim refund history downloaded after requesting reset refill', async () => {
+	const { getByTestId } = render(<DatabaseScreen />);
+	fireEvent.click(getByTestId('db-row-clear-confirm-refunds'));
+	await waitFor(() =>
+		expect(Toast.show).toHaveBeenCalledWith({
+			type: 'success',
+			text1: 'Refunds cleared — recent history requested again',
+		})
+	);
 });

@@ -34,6 +34,11 @@ export const useRemoveLineItem = () => {
 
 			// Determine if the item with this UUID exists in the current list
 			const items = (order.payload[type] ?? []) as LineItem[];
+			// A confirmed deletion retired this Woo id; Undo must append a new line.
+			if (itemToRestore.id && !items.some((item) => item.id === itemToRestore.id)) {
+				const { id: _id, ...content } = itemToRestore;
+				itemToRestore = content;
+			}
 			const itemIndex = items.findIndex((item) => wooMetaCarrier.lineUuid(item) === uuid);
 
 			let updatedLines: LineItem[];

@@ -1,4 +1,6 @@
 import type { IconName } from '@wcpos/components/icon';
+import type { PrinterProfile } from '@wcpos/printer';
+import { usesSystemPrintDialog } from '@wcpos/printer/transport/device-key';
 
 /** Sentinel value for the "Auto" routing option in the template printer Select. */
 export const AUTO_VALUE = '__auto__';
@@ -7,8 +9,10 @@ export const AUTO_VALUE = '__auto__';
  * Icon for a printer profile row — `desktop` for the built-in System Print Dialog,
  * `printer` for every hardware connection type (network / bluetooth / usb).
  */
-export function printerIconName(profile: { connectionType: string }): IconName {
-	return profile.connectionType === 'system' ? 'desktop' : 'printer';
+export function printerIconName(
+	profile: Pick<PrinterProfile, 'connectionType'> & { address?: string }
+): IconName {
+	return usesSystemPrintDialog(profile) ? 'desktop' : 'printer';
 }
 
 /**
@@ -34,4 +38,20 @@ export function templateTypeLabel(
 		return `${thermalLabel} ${template.paper_width ?? ''}`.trim();
 	}
 	return 'HTML';
+}
+
+/**
+ * Ports whose lane answers the print job: Epson ePOS (443/8043/80/8008) and Star WebPRNT
+ * both reply once the printer has taken the bytes. A raw 9100 socket accepts and says
+ * nothing, so the app can only claim the job was sent (roadmap#161 P1).
+ */
+const ACKNOWLEDGING_PORTS = [443, 8043, 80, 8008];
+
+export function laneAcknowledgesPrint(profile: PrinterProfile): boolean {
+	if (profile.connectionType === 'cloud') return true;
+	return (
+		profile.connectionType === 'network' &&
+		(profile.vendor === 'epson' || profile.vendor === 'star') &&
+		ACKNOWLEDGING_PORTS.includes(profile.port ?? 0)
+	);
 }

@@ -32,7 +32,7 @@ export function BluetoothDevicePicker({ form }: { form: UseFormReturn<PrinterFor
 						testID={`add-printer-bt-device-${device.id}`}
 						onPress={async () => {
 							const resolveColumns = form.getValues('columns') === DEFAULT_FORM_VALUES.columns;
-							form.setValue('address', device.address ?? '');
+							form.setValue('address', device.address ?? '', { shouldValidate: true });
 							form.setValue('name', device.name);
 							if (device.vendor)
 								form.setValue('vendor', device.vendor as PrinterFormValues['vendor']);

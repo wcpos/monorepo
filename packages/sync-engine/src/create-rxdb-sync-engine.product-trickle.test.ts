@@ -93,7 +93,9 @@ function engineWith(
 		now,
 		diagnostics,
 		connectivitySignal: connectivity,
-		routes: { '/changes/config-fingerprint': configFingerprint },
+		routes: {
+			'/changes/config-fingerprint': configFingerprint,
+		},
 		ports,
 		awaitReady: false,
 	}).engine;

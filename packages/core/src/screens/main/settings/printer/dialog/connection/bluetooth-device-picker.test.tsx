@@ -3,11 +3,17 @@ import '@testing-library/jest-dom';
 import * as React from 'react';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 import { resolveNativePrinterColumns } from '@wcpos/printer';
 
+import { DEFAULT_FORM_VALUES, electronPrinterSchema } from '../../schema';
 import { BluetoothDevicePicker } from './bluetooth-device-picker';
 import { UsbDevicePicker } from './usb-device-picker';
+
+import type { PrinterFormValues } from '../../schema';
+import type { Resolver } from 'react-hook-form';
 
 jest.mock('@wcpos/printer', () => ({
 	resolveNativePrinterColumns: jest.fn(async () => ({ columns: 48, source: 'printer' })),
@@ -32,7 +38,10 @@ jest.mock('@wcpos/printer', () => ({
 		isScanning: false,
 	}),
 }));
-jest.mock('react-hook-form', () => ({ useWatch: () => '' }));
+jest.mock('react-hook-form', () => ({
+	...jest.requireActual('react-hook-form'),
+	useWatch: () => '',
+}));
 jest.mock('react-native', () => ({
 	Pressable: ({
 		children,
@@ -115,4 +124,30 @@ it.each([
 	await act(async () => resolveWidth({ columns: 48, source: 'printer' }));
 
 	expect(setValue).not.toHaveBeenCalledWith('columns', 48);
+});
+
+it.each([
+	[BluetoothDevicePicker, 'add-printer-bt-device-epson-bt'],
+	[UsbDevicePicker, 'add-printer-usb-device-epson-usb'],
+])('clears an existing address error when selecting a device', async (Picker, testID) => {
+	function Harness() {
+		const form = useForm<PrinterFormValues>({
+			defaultValues: DEFAULT_FORM_VALUES,
+			resolver: zodResolver(electronPrinterSchema) as unknown as Resolver<PrinterFormValues>,
+		});
+		return (
+			<>
+				<button onClick={() => form.setError('address', { message: 'required' })}>
+					Invalidate
+				</button>
+				<span data-testid="address-error">{form.formState.errors.address?.message}</span>
+				<Picker form={form} />
+			</>
+		);
+	}
+	render(<Harness />);
+	fireEvent.click(screen.getByText('Invalidate'));
+	expect(screen.getByTestId('address-error')).toHaveTextContent('required');
+	fireEvent.click(screen.getByTestId(testID));
+	await waitFor(() => expect(screen.getByTestId('address-error')).toBeEmptyDOMElement());
 });

@@ -9,7 +9,7 @@ import packageJson from './package.json';
  * $1 Android) for a client whose JS comes from Metro anyway. Move it only when
  * a native change forces a new dev-client build regardless.
  */
-const DEV_CLIENT_NATIVE_VERSION = '1.10.3';
+const DEV_CLIENT_NATIVE_VERSION = '1.10.4';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
 	const easProfile = process.env.EAS_BUILD_PROFILE ?? 'production';
@@ -41,6 +41,21 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		// bumps must keep using the native metadata already cached by EAS.
 		version: isDev ? DEV_CLIENT_NATIVE_VERSION : packageJson.version,
 
+		// Fingerprint hashes native deps and config; a package.json version bump
+		// alone does NOT move it (verified with @expo/fingerprint 0.20.8, 2026-09-15).
+		// One store binary receives every JS-only patch until a native change lands.
+		// fallbackToCacheTimeout: 0 starts the POS instantly; a downloaded update
+		// applies on the next cold start.
+		// CI resolves once before Metro: Expo otherwise fingerprints every manifest,
+		// exceeding the iOS launcher's 10 s timeout (expo/expo#46415).
+		runtimeVersion: (process.env.EXPO_PUBLIC_WCPOS_E2E === '1' &&
+			process.env.WCPOS_E2E_RUNTIME_VERSION) || { policy: 'fingerprint' },
+		updates: {
+			url: 'https://u.expo.dev/eb1b6e66-92d7-47f5-b93f-95bf51287f60',
+			checkAutomatically: 'ON_LOAD',
+			fallbackToCacheTimeout: 0,
+		},
+
 		orientation: 'default',
 		icon: './assets/images/icon.png',
 		// One URL scheme per build profile, mirroring the bundle ids below. The
@@ -67,14 +82,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				ITSAppUsesNonExemptEncryption: false,
 				// Keep in step with the react-native-ble-plx plugin entry below — the
 				// plugin's withInfoPlist mod runs after this static merge, so both must
-				// carry the same combined printers+scanners wording.
+				// carry the same combined readers+printers+scanners wording.
 				NSBluetoothAlwaysUsageDescription:
 					iosInfoPlist.NSBluetoothAlwaysUsageDescription ??
-					'WCPOS uses Bluetooth to connect supported barcode scanners and receipt printers.',
+					'WCPOS uses Bluetooth to connect card readers, supported barcode scanners and receipt printers.',
 				// Local network access for printer discovery
 				NSLocalNetworkUsageDescription:
 					iosInfoPlist.NSLocalNetworkUsageDescription ??
-					'WCPOS needs local network access to discover and connect to receipt printers.',
+					'WCPOS uses the local network to connect card readers and receipt printers.',
 				// Bonjour services for printer discovery
 				NSBonjourServices: Array.from(
 					new Set([...bonjourServices, '_ipp._tcp', '_ipps._tcp', '_pdl-datastream._tcp'])
@@ -114,8 +129,46 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		},
 
 		plugins: [
+			// Pinned to 8.25.0 over Expo SDK 57's ~7.11.0 (excluded from `expo install`
+			// checks in package.json): only 8.25.0 carries the fix for
+			// getsentry/sentry-react-native#6630 — on Expo 57 / RN 0.86 iOS, envelopes
+			// report HTTP 200 but never ingest. The 7.x line ended 2026-02-12.
+			// Source maps and debug symbols upload during the STORE build's native
+			// Release step, authenticated by the SENTRY_AUTH_TOKEN EAS environment
+			// variable (an organization token, `org:ci`, on `production` only).
+			// sentry-xcode.sh FAILS a Release build when that upload fails, so every
+			// other profile — dev client, ad-hoc, the reusable `monorepo` base — never
+			// attempts it. No profile means production (`easProfile` above), so a local
+			// Release build of the store binary uploads too and needs the token in its
+			// shell; a missing or revoked token there is a red build, not a silent gap.
+			// Uploads are keyed <applicationId>@<version>+<build>, which is why
+			// sentry-sink.native.ts lets the SDK derive release/dist.
+			[
+				'@sentry/react-native/expo',
+				{
+					organization: 'wcpos',
+					project: 'woocommerce-pos',
+					disableAutoUpload: easProfile !== 'production',
+				},
+			],
+			// Expo 57 already supplies compile/target SDK >= 35; only the minimum must move.
+			['expo-build-properties', { android: { minSdkVersion: 26 } }],
+			[
+				'@stripe/stripe-terminal-react-native',
+				{
+					bluetoothBackgroundMode: true,
+					locationWhenInUsePermission:
+						'WCPOS uses your location to connect card readers and accept payments.',
+					bluetoothPeripheralPermission: 'WCPOS uses Bluetooth to connect card readers.',
+					bluetoothAlwaysUsagePermission:
+						'WCPOS uses Bluetooth to connect card readers, supported barcode scanners and receipt printers.',
+					localNetworkUsagePermission:
+						'WCPOS uses the local network to connect card readers and receipt printers.',
+				},
+			],
 			'./plugins/with-printer-support',
 			'./plugins/with-wedge-key-events',
+			'./plugins/with-sumup-reader',
 			[
 				'@config-plugins/react-native-webrtc',
 				{
@@ -145,11 +198,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				'react-native-ble-plx',
 				{
 					// iOS app-mode scanning for supported BLE barcode scanners (#1461).
-					// Foreground only — no background modes requested. This overwrites the
+					// Scanner discovery is foreground-only; Stripe enables background Bluetooth.
+					// This overwrites the
 					// static infoPlist NSBluetoothAlwaysUsageDescription above at prebuild;
-					// both carry the same combined printers+scanners wording.
+					// both carry the same combined readers+printers+scanners wording.
 					bluetoothAlwaysPermission:
-						'WCPOS uses Bluetooth to connect supported barcode scanners and receipt printers.',
+						'WCPOS uses Bluetooth to connect card readers, supported barcode scanners and receipt printers.',
 				},
 			],
 			[

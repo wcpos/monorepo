@@ -1,10 +1,20 @@
 import * as React from 'react';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
 import { remoteIdOrNull } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
+import {
+	RegisterSessionRequiredError,
+	requireOpenSession,
+} from '../../../../../services/register-session/session-store';
+import { presentSessionRequired } from '../session-required';
+import { persistSaleProvenance, prepareSale } from '../sale-completion';
+import { useSaleContext } from './use-sale-context';
+import { useRegisterBinding } from '../../../../../services/register/use-register-binding';
 import { useT } from '../../../../../contexts/translations';
 import {
 	PaymentGatewayContract,
@@ -55,6 +65,9 @@ export function createCheckoutIdempotencyKey(
 
 export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const http = useRestHttpClient();
+	const ctx = useSaleContext();
+	const { status: bindingStatus } = useRegisterBinding();
+	const online = useOnlineStatus().status === 'online-website-available';
 	const runtime = useQueryRuntime();
 	const t = useT();
 	const { resolveStockOwnerId } = useCartStockGuard();
@@ -66,7 +79,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 	const orderData = useRecordField(order, (record) => record.payload);
 	const orderId = orderData.id;
 	const orderNumber = orderData.number;
-	const completeOrderFlow = useCompleteOrderFlow(order);
+	const completeOrderFlow = useCompleteOrderFlow(order, 'modal');
 
 	const gatewayId = React.useMemo(
 		() => orderData.payment_method || 'pos_cash',
@@ -161,6 +174,44 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 		}
 
 		try {
+			let registerId: string | null = null;
+			let sessionId: string | null = null;
+			try {
+				// A gateway sale completes the whole balance, so a store with several registers
+				// and none chosen cannot start one; the picker is on the cart.
+				const prepared = await prepareSale(ctx, {
+					order,
+					source: 'gateway-contract',
+					completing: true,
+					bindingStatus: bindingStatus === 'unknown' ? 'none' : bindingStatus,
+					sessionRule: 'require',
+				});
+				if (!prepared.ok) {
+					checkoutLogger.info(t('pos_checkout.choose_register_first'), { showToast: true });
+					return;
+				}
+				registerId = prepared.registerId;
+				sessionId = prepared.sessionId;
+				if (online)
+					await persistSaleProvenance(ctx, {
+						order,
+						source: 'gateway-contract',
+						sessionId: prepared.sessionId,
+						online: true,
+					});
+			} catch (error) {
+				if (error instanceof RegisterSessionRequiredError) {
+					presentSessionRequired(checkoutLogger, t);
+					return;
+				}
+				const message = t('pos_cart.checkout_failed');
+				setError(message);
+				checkoutLogger.error(message, {
+					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					showToast: true,
+				});
+				return;
+			}
 			if (!checkoutAttemptIdRef.current) {
 				checkoutAttemptIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 			}
@@ -169,6 +220,9 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 				context: { order_id: orderId },
 			});
 
+			// Recheck after bootstrap without resetting the completion journal via prepareSale.
+			if ((await requireOpenSession(ctx.sessions, registerId, ctx.sessionsOn)) !== sessionId)
+				throw new RegisterSessionRequiredError();
 			// Last point at which no money has moved (#163 ruling R5). The gateway
 			// refetch and the bootstrap POST above are both awaits the worker can die
 			// under, so re-read the latch here rather than trusting the check made
@@ -224,7 +278,7 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 						},
 					}
 				);
-				await completeOrderFlow();
+				await completeOrderFlow({ source: 'gateway-contract', status: state.status });
 				return;
 			}
 
@@ -235,10 +289,14 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 
 			throw new Error(state.status || 'checkout_failed');
 		} catch (err) {
+			if (err instanceof RegisterSessionRequiredError) {
+				return presentSessionRequired(checkoutLogger, t);
+			}
 			if (handleStockRejection(err)) return;
 			const message = err instanceof Error ? err.message : 'checkout_failed';
 			setError(message);
-			checkoutLogger.error(message, {
+			const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
+			checkoutLogger[logLevel](message, {
 				showToast: true,
 				code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,
 				context: {
@@ -250,11 +308,15 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			setLoading(false);
 		}
 	}, [
+		ctx,
+		order,
+		online,
 		blockIfDegraded,
 		completeOrderFlow,
 		gateway,
 		gatewayId,
 		gatewayResolved,
+		bindingStatus,
 		handleStockRejection,
 		http,
 		orderId,

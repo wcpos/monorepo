@@ -8,13 +8,20 @@ setPremiumFlag();
 
 const ORDER_UUID = '5b8e1a3c-2f4d-4a6b-9c8e-000000000042';
 
-function orderSnapshot(status: string) {
+/** A server order payload; paid statuses carry the payment stamp WooCommerce sets on payment_complete(). */
+function orderSnapshot(
+	status: string,
+	datePaid: string | null = status === 'pos-open' ? null : '2026-09-01T10:02:00'
+) {
 	return {
 		id: 42,
 		number: '42',
 		status,
 		date_created_gmt: '2026-09-01T10:00:00',
-		date_modified_gmt: '2026-09-01T10:01:00',
+		// A paid document is a LATER save than the open cart the till adopted; the held-row
+		// discard requires that ordering, so the paid snapshot carries a newer modified date.
+		date_modified_gmt: status === 'pos-open' ? '2026-09-01T10:01:00' : '2026-09-01T10:02:30',
+		date_paid_gmt: datePaid,
 		total: '10.00',
 		customer_id: 0,
 		meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],
@@ -41,42 +48,70 @@ describe('RxdbSyncEngine.adoptOrderSnapshot', () => {
 		});
 	});
 
-	it('protects a resident order with pending local work', async () => {
-		const harness = await createEngineHarness();
-		const residentPayload = orderSnapshot('pos-open');
-		await harness.seed('orders', [
-			{
-				uuid: ORDER_UUID,
-				remoteId: remoteId(42),
-				number: '42',
-				dateCreatedGmt: '2026-09-01T10:00:00',
-				status: 'pos-open',
-				total: '10.00',
-				customerId: 0,
-				payload: residentPayload,
-				sync: { revision: '', partial: false, source: 'woo-rest' },
-				local: { dirty: false, pendingMutationIds: [] },
-			},
-		]);
-		await harness.seed('recordMutations', [
-			{
-				mutationId: 'mutation-42',
-				seq: 1,
-				status: 'pending',
-				recordId: ORDER_UUID,
-				collectionName: 'orders',
-				operation: 'update',
-				payload: { status: 'pos-open' },
-				queuedAt: '2026-09-01T10:02:00.000Z',
-			},
-		]);
+	it.each([
+		// An explicit row is the cashier asking for a push: it protects, as it always did.
+		{ explicit: true, status: 'completed', residentPaid: false, outcome: 'protected' },
+		// The bug: a held (non-explicit) row on an unpaid open cart must not block the paid sale.
+		{ explicit: false, status: 'completed', residentPaid: false, outcome: 'applied' },
+		// The hold still holds while the store also says pos-open.
+		{ explicit: false, status: 'pos-open', residentPaid: false, outcome: 'protected' },
+		// A REOPENED order is pos-open locally but carries the date_paid it adopted from the paid
+		// document: its held row is the cashier's reopen, and a pull of the paid document must not
+		// throw it away.
+		{ explicit: false, status: 'completed', residentPaid: true, outcome: 'protected' },
+	])(
+		'adopts $status over explicit=$explicit local work (resident paid=$residentPaid): $outcome',
+		async ({ explicit, status, residentPaid, outcome }) => {
+			const harness = await createEngineHarness();
+			const residentPayload = orderSnapshot(
+				'pos-open',
+				residentPaid ? '2026-09-01T09:00:00' : null
+			);
+			await harness.seed('orders', [
+				{
+					uuid: ORDER_UUID,
+					remoteId: remoteId(42),
+					number: '42',
+					dateCreatedGmt: '2026-09-01T10:00:00',
+					status: 'pos-open',
+					total: '10.00',
+					customerId: 0,
+					payload: residentPayload,
+					sync: { revision: '', partial: false, source: 'woo-rest' },
+					local: { dirty: true, pendingMutationIds: ['mutation-42'] },
+				},
+			]);
+			await harness.seed('recordMutations', [
+				{
+					mutationId: 'mutation-42',
+					explicit,
+					seq: 1,
+					status: 'pending',
+					recordId: ORDER_UUID,
+					collectionName: 'orders',
+					operation: 'update',
+					payload: { status: 'pos-open' },
+					queuedAt: '2026-09-01T10:02:00.000Z',
+				},
+			]);
 
-		expect(await harness.engine.adoptOrderSnapshot(orderSnapshot('completed'))).toBe('protected');
+			expect(await harness.engine.adoptOrderSnapshot(orderSnapshot(status))).toBe(outcome);
 
-		const stored = (await harness.collection('orders').findOne(ORDER_UUID).exec())?.toJSON() as
-			Record<string, unknown> | undefined;
-		expect(stored?.payload).toMatchObject({ status: 'pos-open' });
-	});
+			const stored = (await harness.collection('orders').findOne(ORDER_UUID).exec())?.toJSON() as
+				Record<string, unknown> | undefined;
+			expect(stored).toMatchObject({
+				status: outcome === 'applied' ? 'completed' : 'pos-open',
+				payload: { status: outcome === 'applied' ? 'completed' : 'pos-open' },
+				local: {
+					dirty: outcome !== 'applied',
+					pendingMutationIds: outcome === 'applied' ? [] : ['mutation-42'],
+				},
+			});
+			expect(await harness.collection('recordMutations').count().exec()).toBe(
+				outcome === 'applied' ? 0 : 1
+			);
+		}
+	);
 
 	it('re-resolves pending mutations after the mutation collection is reset', async () => {
 		const harness = await createEngineHarness();
@@ -87,6 +122,7 @@ describe('RxdbSyncEngine.adoptOrderSnapshot', () => {
 		await harness.seed('recordMutations', [
 			{
 				mutationId: 'mutation-after-reset',
+				explicit: true,
 				seq: 1,
 				status: 'pending',
 				recordId: ORDER_UUID,

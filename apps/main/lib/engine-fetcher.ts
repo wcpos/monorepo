@@ -8,20 +8,9 @@ import {
 	type SyncCollectionName,
 } from '@wcpos/sync-engine';
 import { AppInfo } from '@wcpos/utils/app-info';
-import { formatAuthorizationParam } from '@wcpos/utils/auth-param';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import { toRestRouteUrl } from '@wcpos/utils/rest-transport';
-import {
-	CLIENT_HEADER,
-	CLIENT_QUERY_PARAM,
-	formatClientSignal,
-	PROTOCOL_HEADER,
-	PROTOCOL_QUERY_PARAM,
-	sendsProtocolHeaders,
-	sendsProtocolQueryTwins,
-	SYNC_PROTOCOL_VERSION,
-} from '@wcpos/utils/sync-protocol';
+import { buildRequestPreamble } from '@wcpos/utils/request-preamble';
 
 import { evaluateClockSkew } from './clock-skew';
 import {
@@ -67,6 +56,7 @@ function createRateLimitObserver(): (status: number) => void {
 export type EngineFetcherAuth = {
 	credentials: { getLatest: () => { access_token?: string } };
 	refreshAuth?: (context?: { operationId?: string }) => Promise<string | null>;
+	onAuthExhausted?: (token: string | null) => void;
 	useJwtAsParam?: boolean;
 	bareAuthParam?: boolean;
 	/** These ride the same live-options ref as the auth flags: cache hits mutate it
@@ -92,28 +82,6 @@ export type EngineFetcherScope = {
 	storeId?: number | string | null;
 };
 
-/** The header carrying the till's store scope to the WCPOS v2 REST surface. */
-export const STORE_SCOPE_HEADER = 'X-WCPOS-Store';
-
-/**
- * Narrow a scope value to a store id worth sending, or null.
- *
- * Store `0` is the free plugin's "no store" default — the SAME sentinel the
- * order lane tests before stamping `_pos_store`, kept identical here on purpose.
- * Sending a placeholder would be worse than sending nothing: the server treats
- * an absent scope as "unknown" and refuses to overwrite a store-scoped price,
- * whereas a bogus `0` would read as a real scope.
- */
-function normalizeStoreScope(storeId: number | string | null | undefined): string | null {
-	if (storeId === null || storeId === undefined) return null;
-	if (typeof storeId === 'number') {
-		return Number.isFinite(storeId) && storeId > 0 ? String(storeId) : null;
-	}
-	const trimmed = storeId.trim();
-	if (trimmed === '' || trimmed === '0') return null;
-	return trimmed;
-}
-
 function isSyncCollectionName(name: string): name is SyncCollectionName {
 	return Object.prototype.hasOwnProperty.call(COLLECTION_VOCABULARY, name);
 }
@@ -131,6 +99,15 @@ export function createEngineFetcher(input: {
 }): EngineFetcher {
 	const now = input.now ?? Date.now;
 	const observeResponseStatus = createRateLimitObserver();
+	// Paths that have already answered 403 on this fetcher. A permission error is
+	// a property of the session (a cashier role without that capability), not of
+	// the tick, so it is reported at error ONCE per path and at info after that;
+	// the fetcher is created per engine, so a new session starts clean (#1876).
+	// A same-site cashier swap keeps the fetcher and replaces `auth.credentials`
+	// in place, so the set is owned by the credentials object it was built for
+	// and starts over when that object changes.
+	const forbiddenPaths = new Set<string>();
+	let forbiddenPathsOwner: unknown = input.auth.credentials;
 
 	// One logical request = one arc. When a 401 enters the refresh path, the arc's
 	// rows — the absorbed attempt, the refresh layer's "Session renewed
@@ -151,7 +128,11 @@ export function createEngineFetcher(input: {
 		 * double-counts the request, never loses it. `settle`, not `emit`, because
 		 * emitting a log row is only half of what it does.
 		 */
-		settle: (level: SyncEvent['level'], extraFields?: Record<string, unknown>) => void;
+		settle: (
+			level: SyncEvent['level'],
+			extraFields?: Record<string, unknown>,
+			overrides?: { failed?: boolean }
+		) => void;
 	};
 
 	/** Execute one logical request arc, including any authentication retry. */
@@ -180,81 +161,33 @@ export function createEngineFetcher(input: {
 		const performAttempt = async (arcFields?: Record<string, unknown>): Promise<SettledAttempt> => {
 			const token = input.auth.credentials.getLatest().access_token;
 			tokenUsed = token;
-			const headers = new Headers(init?.headers ?? {});
-			// The WCPOS REST namespaces only construct for POS-flagged requests
-			// (woocommerce_pos_request()) — without this header every sync route
-			// answers rest_no_route and the engine stays degraded-empty.
-			headers.set('X-WCPOS', '1');
-			if (sendsProtocolHeaders(AppInfo.platform, input.auth.useProtocolHeaders)) {
-				headers.set(PROTOCOL_HEADER, String(SYNC_PROTOCOL_VERSION));
-				headers.set(CLIENT_HEADER, formatClientSignal(AppInfo.platform, AppInfo.version));
-			}
-			// Explicit product UA on native/Electron (B10, wcpos-infra#72): a blank
-			// or library UA on a POST earns a permanent AIOS IP ban. The fragment is
-			// EMPTY on web — Firefox honours fetch UA overrides, and replacing the
-			// battle-tested browser UA with a product string reads as a bot.
-			for (const [name, value] of Object.entries(AppInfo.userAgentHeader)) {
-				headers.set(name, value);
-			}
-			// Re-read per attempt: a store switch that lands between the absorbed 401
-			// and its retry must send the retry under the NEW scope, never the old one.
-			const storeScope = normalizeStoreScope(input.scope?.storeId);
-			if (storeScope !== null) {
-				headers.set(STORE_SCOPE_HEADER, storeScope);
-			} else {
-				// An unscoped engine must not inherit a stale header from init.
-				headers.delete(STORE_SCOPE_HEADER);
-			}
-			if (input.auth.useRestRouteParam) url = toRestRouteUrl(url, input.wpJsonRoot);
-			let finalUrl = url;
-			if (token) {
-				if (input.auth.useJwtAsParam) {
-					const parsed = new URL(url);
-					parsed.searchParams.set(
-						'authorization',
-						formatAuthorizationParam(token, input.auth.bareAuthParam ?? false)
-					);
-					finalUrl = parsed.toString();
-				} else {
-					headers.set('Authorization', `Bearer ${token}`);
-				}
-			}
-			const parsedUrl = new URL(finalUrl);
+			// Transport now uses resolveRestTransport (=== true); _layout.tsx resolves this flag to a strict boolean.
+			const prepared = buildRequestPreamble(
+				{
+					purpose: 'sync',
+					client: AppInfo,
+					site: {
+						use_jwt_as_param: input.auth.useJwtAsParam,
+						use_rest_route_param: input.auth.useRestRouteParam,
+						use_protocol_headers: input.auth.useProtocolHeaders,
+					},
+					accessToken: token,
+					storeId: input.scope?.storeId,
+					wpJsonRoot: input.wpJsonRoot,
+					bareAuthParam: input.auth.bareAuthParam ?? false,
+				},
+				{ url, method, headers: init?.headers }
+			);
+			const { headers } = prepared;
+			const parsedUrl = new URL(prepared.url);
 			// Plain permalinks carry the REST route in ?rest_route= with pathname
 			// '/', so the push exemption must classify from the route, not the path.
 			const restRoutePath = parsedUrl.searchParams.get('rest_route') ?? parsedUrl.pathname;
 			const envelopeRequested = !restRoutePath.split('/').includes('push');
-			// Marker parity with the X-WCPOS header set above: hostile proxies
-			// strip custom request headers, and an unmarked request answers
-			// rest_no_route. The query-var twin (`wcpos`, registered in the
-			// plugin's Init::query_vars) rides the URL, which a header-stripping
-			// proxy cannot touch — sent unconditionally, pushes included, so
-			// marker delivery never depends on header survival (B7,
-			// wcpos-infra#72; prerequisite for B12's strict marker gating).
-			parsedUrl.searchParams.set('wcpos', '1');
-			if (sendsProtocolQueryTwins(AppInfo.platform, input.auth.useProtocolHeaders)) {
-				parsedUrl.searchParams.set(PROTOCOL_QUERY_PARAM, String(SYNC_PROTOCOL_VERSION));
-				parsedUrl.searchParams.set(
-					CLIENT_QUERY_PARAM,
-					formatClientSignal(AppInfo.platform, AppInfo.version)
-				);
-			}
-			// Scope parity with the X-WCPOS-Store header set above: the server
-			// honours the store_id param only when NO header arrived (free#1646 —
-			// a stripping proxy produces absence; a sent header always wins), so
-			// republishing the scope here is a no-op until the header dies in
-			// transit — exactly the hostile case (B6, wcpos-infra#72).
-			if (storeScope !== null) {
-				parsedUrl.searchParams.set('store_id', storeScope);
-			} else {
-				// An unscoped engine must not inherit a stale param from the caller
-				// URL — mirror of the header delete above.
-				parsedUrl.searchParams.delete('store_id');
-			}
 			if (envelopeRequested) {
 				parsedUrl.searchParams.set('_wcpos_envelope', '1');
 			}
-			finalUrl = parsedUrl.toString();
+			const finalUrl = parsedUrl.toString();
 			const path = parsedUrl.pathname;
 			const startedAtMs = now();
 			// Captured at start: a completion after a store switch (epoch bump) is the
@@ -274,7 +207,13 @@ export function createEngineFetcher(input: {
 					/FetchRequestCanceledException|Fetch request has been canceled|UnexpectedException: cancelled|The operation was aborted/i.test(
 						error.message
 					);
-				if (isNativeCancel) error.name = 'AbortError';
+				// Only rename what is not already an abort. A browser abort is a
+				// DOMException whose message ALSO matches the pattern above and whose
+				// `name` is a getter-only prototype accessor — assigning it throws on
+				// Firefox ("setting getter-only property") and Safari ("Attempted to
+				// assign to readonly property"), turning a cancelled search into a
+				// SYNC321 failure (Sentry 2HK, 1.10.6–1.10.9).
+				if (isNativeCancel && error.name !== 'AbortError') error.name = 'AbortError';
 				const aborted = (error as { name?: unknown } | null)?.name === 'AbortError';
 				input.emitTransport(
 					{
@@ -384,17 +323,19 @@ export function createEngineFetcher(input: {
 
 			return {
 				response,
-				settle: (level, extraFields) => {
+				settle: (level, extraFields, overrides) => {
 					// A failure is what the merchant would recognise as one: warn or
 					// error. Everything the rubric settles as info or debug — a 2xx, a
 					// 304 conditional poll, a tick-probe 404 the change signal is built
 					// to fall back from, an absorbed 401 whose retry then succeeded —
-					// is a healthy request, not an amber hour.
+					// is a healthy request, not an amber hour. A caller may pin the bit
+					// when the LOG level is quieter than the outcome (a repeated 403 is
+					// still a failed request in the hourly metrics).
 					recordTransport({
 						atMs,
 						durationMs,
 						bytes,
-						failed: level === 'warn' || level === 'error',
+						failed: overrides?.failed ?? (level === 'warn' || level === 'error'),
 						epoch: epochAtStart,
 					});
 					input.emitTransport({
@@ -434,8 +375,22 @@ export function createEngineFetcher(input: {
 			if (attempt.response.ok || status === 304) attempt.settle('info', extraFields);
 			else if (status === 404 && isTickProbe)
 				attempt.settle('debug', { outcome: 'recovered', ...extraFields });
-			else if (status === 403) attempt.settle('error', extraFields);
-			else attempt.settle('warn', extraFields);
+			else if (status === 403) {
+				if (forbiddenPathsOwner !== input.auth.credentials) {
+					forbiddenPaths.clear();
+					forbiddenPathsOwner = input.auth.credentials;
+				}
+				const forbiddenKey = requestPath ?? url;
+				const repeat = forbiddenPaths.has(forbiddenKey);
+				forbiddenPaths.add(forbiddenKey);
+				// The repeat row is quiet, but the request still failed: keep the
+				// hourly transport metric honest.
+				attempt.settle(
+					repeat ? 'info' : 'error',
+					{ ...(repeat ? { outcome: 'forbidden-repeat' } : {}), ...extraFields },
+					{ failed: true }
+				);
+			} else attempt.settle('warn', extraFields);
 		};
 
 		const first = await performAttempt();
@@ -496,6 +451,7 @@ export function createEngineFetcher(input: {
 			// something is actually wrong and the user will need to re-authenticate.
 			first.settle('debug', { outcome: 'failed', operationId });
 			retry.settle('error', { operationId });
+			input.auth.onAuthExhausted?.(tokenUsed ?? null);
 		} else {
 			// The 401 was cured but the retry hit a different failure — classify that
 			// failure on its own terms, keeping the arc id for the chain.

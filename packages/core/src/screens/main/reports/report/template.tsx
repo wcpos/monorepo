@@ -7,9 +7,11 @@ import { Br, Line, Row, Text } from '@wcpos/components/print';
 import { useDocField } from '@wcpos/query';
 
 import { calculateTotals } from './utils';
+import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
+import { inZone, useStoreDay } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
@@ -21,6 +23,7 @@ import { useQueryState } from '../../../../query';
  */
 export function ZReport() {
 	const t = useT();
+	const registerNames = useRegisterNames();
 	const { store, wpCredentials } = useStoreSession();
 	const storeName = useDocField(store, (value) => value.name) as string;
 	const num_decimals = useDocField(store, (value) => value.price_num_decimals) as number;
@@ -36,6 +39,7 @@ export function ZReport() {
 		totalTax,
 		discountTotal,
 		userStoreArray,
+		registerArray,
 		totalItemsSold,
 		shippingTotalsArray,
 		averageOrderValue,
@@ -45,6 +49,7 @@ export function ZReport() {
 	const { format: formatName } = useCustomerNameFormat();
 	const { format: formatNumber } = useNumberFormat();
 	const { formatDate } = useLocalDate();
+	const { timezone } = useStoreDay();
 
 	/**
 	 *
@@ -57,11 +62,12 @@ export function ZReport() {
 			? convertUTCStringToLocalDate(selectedDateRange.to)
 			: new Date();
 
+		// The period is the store's day, so it is labelled in the store's zone, not the till's.
 		return {
-			from: formatDate(from, 'yyyy-M-dd HH:mm:ss'),
-			to: formatDate(to, 'yyyy-M-dd HH:mm:ss'),
+			from: formatDate(inZone(timezone, from), 'yyyy-M-dd HH:mm:ss'),
+			to: formatDate(inZone(timezone, to), 'yyyy-M-dd HH:mm:ss'),
 		};
-	}, [formatDate, selectedDateRange]);
+	}, [formatDate, selectedDateRange, timezone]);
 
 	/**
 	 * Stamp a new report-generated time when:
@@ -87,7 +93,7 @@ export function ZReport() {
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- generatedAt is an event timestamp, not derived render data; new Date() is impure and must not run during render.
 		setGeneratedAt(new Date());
 	}, [selectedOrders]);
-	const reportGenerated = formatDate(generatedAt, 'yyyy-M-dd HH:mm:ss');
+	const reportGenerated = formatDate(inZone(timezone, generatedAt), 'yyyy-M-dd HH:mm:ss');
 
 	return (
 		<View>
@@ -184,6 +190,24 @@ export function ZReport() {
 					))}
 					<Br />
 				</>
+			)}
+
+			{registerArray.length > 1 && (
+				<View testID="report-by-register">
+					<Line />
+					<Text uppercase align="center">
+						{t('reports.by_register')}
+					</Text>
+					<Line />
+					{registerArray.map(({ registerId, totalOrders, totalAmount }) => (
+						<Row key={registerId} testID={`report-register-row-${registerId}`}>
+							<Text className="flex-1">{registerNames[registerId] || registerId.slice(0, 8)}</Text>
+							<Text align="right">{totalOrders}</Text>
+							<Text align="right">{formatCurrency(totalAmount)}</Text>
+						</Row>
+					))}
+					<Br />
+				</View>
 			)}
 
 			{userStoreArray.length > 1 && (

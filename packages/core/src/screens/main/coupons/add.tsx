@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import { Modal, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
@@ -43,22 +43,20 @@ export function AddCouponScreen() {
 
 	return (
 		<Modal>
-			<ModalContent size="lg">
+			<ModalContent side="right" size="lg">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t('coupons.add_coupon')}</Text>
 					</ModalTitle>
 				</ModalHeader>
-				<ModalBody>
-					<ErrorBoundary>
-						<CouponForm
-							form={form}
-							onSubmit={handleSave}
-							onClose={() => router.back()}
-							loading={loading}
-						/>
-					</ErrorBoundary>
-				</ModalBody>
+				<ErrorBoundary>
+					<CouponForm
+						form={form}
+						onSubmit={handleSave}
+						onClose={() => router.back()}
+						loading={loading}
+					/>
+				</ErrorBoundary>
 			</ModalContent>
 		</Modal>
 	);

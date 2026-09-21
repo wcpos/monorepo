@@ -25,7 +25,11 @@ export type CollectionRow = {
  * products. Their rows show the real server total plus the policy, never a
  * completeness percentage.
  */
-export const WINDOWED_COLLECTIONS: ReadonlySet<CollectionKey> = new Set(['orders', 'variations']);
+export const WINDOWED_COLLECTIONS: ReadonlySet<CollectionKey> = new Set([
+	'orders',
+	'variations',
+	'refunds',
+]);
 
 export function deriveCollectionRow(
 	key: CollectionKey,
@@ -209,4 +213,15 @@ export function stuckCountsByRow(
 		counts[key] = (counts[key] ?? 0) + 1;
 	}
 	return counts;
+}
+
+/** Back-off is time-dependent (a Retry-After window expires without a status push), so derive it against the page clock. */
+export function isServerBackingOff(
+	pressure: { multiplier: number; retryAfterUntilMs: number | null },
+	nowMs: number
+): boolean {
+	return (
+		pressure.multiplier > 1 ||
+		(pressure.retryAfterUntilMs !== null && pressure.retryAfterUntilMs > nowMs)
+	);
 }

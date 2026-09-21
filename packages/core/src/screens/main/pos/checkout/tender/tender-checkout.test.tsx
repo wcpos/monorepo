@@ -15,9 +15,13 @@ import type { TenderFlow } from './use-tender-flow';
 
 const mockPickMethod = jest.fn();
 const mockBack = jest.fn();
+const mockFinishSale = jest.fn();
+let mockStage = 'checkout';
 let mockOnClose: (() => void) | undefined;
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
 let mockFlow: TenderFlow;
+let mockNumber = '1187';
+let mockLineItems: NonNullable<import('@wcpos/database').OrderDocument['line_items']> = [];
 
 const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethodDescriptor => ({
 	schema: 1,
@@ -40,6 +44,12 @@ const method = (overrides: Partial<PaymentMethodDescriptor> = {}): PaymentMethod
 	...overrides,
 });
 
+jest.mock('../checkout-mode', () => ({ useOrderCheckoutStage: () => mockStage }));
+jest.mock('../receipt-stage/receipt-stage', () => ({
+	ReceiptStage: () => <div data-testid="checkout-receipt-stage" />,
+}));
+jest.mock('../receipt-stage/use-finish-sale', () => ({ useFinishSale: () => mockFinishSale }));
+jest.mock('./reader-connection', () => ({ ReaderConnection: () => null }));
 jest.mock('./use-tender-flow', () => ({ useTenderFlow: () => mockFlow }));
 jest.mock('./legacy-tab', () => ({ LegacyTab: () => <div data-testid="legacy-tab" /> }));
 jest.mock('../../cart/totals-changed-banner', () => ({ TotalsChangedBanner: () => null }));
@@ -56,7 +66,9 @@ jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: str
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
-		select({ payload: { id: 1187, number: '1187', currency_symbol: '$', line_items: [] } }),
+		select({
+			payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: mockLineItems },
+		}),
 }));
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
@@ -86,6 +98,11 @@ jest.mock('@wcpos/components/collapsible', () => ({
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
 }));
+// Terminal rendering/animations have their own suite; this marker only verifies pane ownership.
+jest.mock('./terminal-leg-view', () => ({
+	TerminalLegView: () => <div data-testid="terminal-leg-view" />,
+}));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -93,7 +110,9 @@ jest.mock('@wcpos/components/text', () => ({
 	),
 }));
 jest.mock('@wcpos/components/vstack', () => ({
-	VStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	VStack: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
+		<div data-testid={testID}>{children}</div>
+	),
 }));
 jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
@@ -126,6 +145,14 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		dp: 2,
 		totalMinor: 9295,
 		paidMinor: 0,
+		thisPaymentMinor: 9295,
+		afterThisPaymentMinor: 0,
+		plan: null,
+		planLegs: [],
+		planLabel: null,
+		planMore: false,
+		lines: [],
+		linesPaidBy: {},
 		balanceMinor: 9295,
 		rows: [],
 		liveRows: [],
@@ -140,6 +167,12 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 		entryChangeMinor: 0,
 		quickAmountsMinor: [],
 		busy: false,
+		saveState: null,
+		terminalLeg: null,
+		hasLiveTerminalLeg: false,
+		readers: [],
+		lockToDefault: false,
+		pickReader: jest.fn(),
 		pickMethod: mockPickMethod,
 		takeTender: jest.fn(),
 		cancelPayment: jest.fn(),
@@ -150,9 +183,25 @@ function makeFlow(overrides: Partial<TenderFlow> = {}): TenderFlow {
 describe('TenderCheckout', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockNumber = '1187';
 		mockScreenSize = 'lg';
+		mockStage = 'checkout';
 		mockOnClose = undefined;
+		mockLineItems = [];
 		mockFlow = makeFlow();
+	});
+
+	it('replaces the phone tenders with the receipt and finishes on close', () => {
+		mockStage = 'receipt';
+		mockScreenSize = 'sm';
+		mockFlow = makeFlow({ hasLiveLeg: true });
+		render(<TenderCheckout order={order} />);
+		expect(screen.getByTestId('checkout-receipt-stage')).not.toBeNull();
+		expect(screen.queryByTestId('checkout-cancel-payment')).toBeNull();
+		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
+		mockOnClose?.();
+		expect(mockFinishSale).toHaveBeenCalledTimes(1);
+		expect(mockBack).not.toHaveBeenCalled();
 	});
 
 	it('shows the ledger pane beside the tenders on a wide screen', () => {
@@ -163,15 +212,31 @@ describe('TenderCheckout', () => {
 		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 	});
 
-	it('collapses the ledger to a balance bar on a phone', () => {
+	it('keeps an offline line payment badge after the server assigns a numeric ID', () => {
+		mockLineItems = [
+			{
+				id: 123,
+				name: 'Coffee',
+				quantity: 1,
+				total: '10.00',
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: 'line-local' }],
+			},
+		];
+		mockFlow = makeFlow({ linesPaidBy: { 'line-local': ['Cash'] } });
+
+		render(<TenderCheckout order={order} />);
+
+		expect(document.body.textContent).toContain('pos_checkout.line_paid_by');
+	});
+
+	it("drops the ledger on a phone; the pane's own label row carries the balance", () => {
 		mockScreenSize = 'sm';
 
 		render(<TenderCheckout order={order} />);
 
-		expect(screen.getByTestId('checkout-balance-bar')).not.toBeNull();
-		// The order lines and the order total are what the bar drops; the balance stays.
+		expect(screen.queryByTestId('checkout-balance-bar')).toBeNull();
 		expect(screen.queryByTestId('checkout-order-total')).toBeNull();
-		expect(screen.getByTestId('checkout-balance').textContent).toBe('$92.95');
+		expect(screen.getByTestId('checkout-label').textContent).toContain('$92.95');
 	});
 
 	it('renders an undrivable method disabled, with the reason, rather than hiding it', () => {
@@ -188,11 +253,12 @@ describe('TenderCheckout', () => {
 
 		render(<TenderCheckout order={order} />);
 
-		const tile = screen.getByTestId('checkout-tile-square_terminal') as HTMLButtonElement;
-		expect(tile.disabled).toBe(true);
-		expect(tile.textContent).toContain('pos_checkout.update_app_to_use');
-
-		fireEvent.click(tile);
+		// Undrivable methods are not pills: they sit in the folded "not available" list.
+		expect(screen.queryByTestId('checkout-method-square_terminal')).toBeNull();
+		fireEvent.click(screen.getByTestId('checkout-unavailable-toggle'));
+		const row = screen.getByTestId('checkout-unavailable-square_terminal');
+		expect(row.textContent).toContain('Square Terminal');
+		expect(row.textContent).toContain('pos_checkout.update_app_to_use');
 		expect(mockPickMethod).not.toHaveBeenCalled();
 	});
 
@@ -219,6 +285,18 @@ describe('TenderCheckout', () => {
 		expect(mockBack).not.toHaveBeenCalled();
 	});
 
+	it('keeps the terminal pane mounted when the leg finishes on the Legacy tab', () => {
+		mockFlow = makeFlow({
+			state: { ...initialTenderState, tab: 'legacy' },
+			terminalLeg: { phase: 'final' } as TenderFlow['terminalLeg'],
+		});
+
+		render(<TenderCheckout order={order} />);
+
+		expect(screen.getByTestId('terminal-leg-view')).not.toBeNull();
+		expect(screen.queryByTestId('legacy-tab')).toBeNull();
+	});
+
 	it('offers a completion action for a zero-total order', () => {
 		const takeTender = jest.fn();
 		mockFlow = makeFlow({ totalMinor: 0, balanceMinor: 0, takeTender });
@@ -228,4 +306,44 @@ describe('TenderCheckout', () => {
 
 		expect(takeTender).toHaveBeenCalledTimes(1);
 	});
+});
+
+it('closing a live terminal leg leaves without a whole-order cancel prompt', () => {
+	mockFlow = makeFlow({ hasLiveLeg: true, hasLiveTerminalLeg: true });
+	render(<TenderCheckout order={order} />);
+	mockOnClose?.();
+	expect(mockBack).toHaveBeenCalledTimes(1);
+	expect(mockFlow.dispatch).not.toHaveBeenCalled();
+	expect(screen.queryByTestId('checkout-cancel-payment')).toBeNull();
+});
+it('reader chips require an explicit choice when there is no default', () => {
+	const server = method({
+		capture: { mode: 'server', provider: null, hardware: null, webview_available: false },
+	});
+	mockFlow = makeFlow({
+		method: server,
+		entryAppliedMinor: 500,
+		readers: [
+			{ id: 'free', label: 'Front', isDefault: false, inUseBy: null },
+			{ id: 'busy', label: 'Back', isDefault: false, inUseBy: '123' },
+		],
+	});
+	render(<TenderCheckout order={order} />);
+	expect((screen.getByTestId('checkout-commit') as HTMLButtonElement).disabled).toBe(true);
+	expect((screen.getByTestId('checkout-reader-busy') as HTMLButtonElement).disabled).toBe(true);
+	// The reader chooser sits above the keys now, not inside them.
+	expect(document.body.textContent).toContain('pos_checkout.choose_a_terminal');
+	fireEvent.click(screen.getByTestId('checkout-reader-free'));
+	expect(mockFlow.pickReader).toHaveBeenCalledWith('free');
+});
+it('the single default reader is a locked line, not a chip', () => {
+	mockFlow = makeFlow({
+		method: method({
+			capture: { mode: 'server', provider: null, hardware: null, webview_available: false },
+		}),
+		readers: [{ id: 'reader', label: 'Front', isDefault: true, inUseBy: null }],
+	});
+	render(<TenderCheckout order={order} />);
+	expect(screen.getByTestId('checkout-reader-locked').textContent).toBe('pos_checkout.reader_line');
+	expect(screen.queryByTestId('checkout-reader-reader')).toBeNull();
 });

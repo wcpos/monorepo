@@ -21,6 +21,7 @@ import {
 import { DataTableSkeleton } from '../../components/data-table/skeleton';
 import { RecordDateCell } from '../../components/record-date-cell';
 import { Cashier } from '../../components/order/cashier';
+import { Register } from '../../components/order/register';
 import { CreatedVia } from '../../components/order/created-via';
 import { Customer } from '../../components/order/customer';
 import { OrderNumber } from '../../components/order/order-number';
@@ -50,6 +51,7 @@ const cells = {
 	payment_method: PaymentMethod,
 	created_via: CreatedVia,
 	cashier: Cashier,
+	register: Register,
 	number: OrderNumber,
 };
 

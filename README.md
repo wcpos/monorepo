@@ -37,7 +37,7 @@ This monorepo contains all the code for the **client applications** — a single
 | Target          | Built from                                        | Distributed as                                         |
 | --------------- | ------------------------------------------------- | ------------------------------------------------------ |
 | 🌐 Web          | `apps/main`                                       | [wcpos.expo.app](https://wcpos.expo.app) (EAS Hosting) |
-| 🖥 Desktop       | `apps/electron` (wraps the `apps/main` web build) | Windows / macOS / Linux installers                     |
+| 🖥 Desktop       | `apps/main` (`build:electron` export), wrapped by the standalone [wcpos/electron](https://github.com/wcpos/electron) repo | Windows / macOS / Linux installers                     |
 | 📱 Mobile       | `apps/main`                                       | iOS & Android (EAS Build)                              |
 | 🧩 In-WordPress | `apps/web`                                        | JS bundle on jsDelivr, loaded by the WP plugin         |
 
@@ -50,7 +50,6 @@ The repo is a [pnpm](https://pnpm.io) workspace orchestrated with [Turborepo](ht
 | Path                                                 | Package                  | Description                                                                               |
 | ---------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- |
 | [`apps/main`](./apps/main)                           | `@wcpos/main`            | The Expo app (expo-router) — the source of truth for web, iOS and Android.                |
-| [`apps/electron`](https://github.com/wcpos/electron) | `@wcpos/app-electron`    | Electron desktop wrapper for Windows/macOS/Linux. _(git submodule)_                       |
 | [`apps/web`](https://github.com/wcpos/web-bundle)    | `@wcpos/web-bundle`      | Builds the web JS bundle shipped via jsDelivr for the WordPress plugin. _(git submodule)_ |
 | [`apps/template-studio`](./apps/template-studio)     | `@wcpos/template-studio` | A Vite harness for previewing and print-testing receipt templates.                        |
 
@@ -69,7 +68,7 @@ The repo is a [pnpm](https://pnpm.io) workspace orchestrated with [Turborepo](ht
 | [`packages/virtual-printer`](./packages/virtual-printer)   | `@wcpos/virtual-printer`  | Dev tool: a virtual TCP printer for testing.                |
 | [`packages/eslint`](./packages/eslint)                     | `@wcpos/eslint-config`    | Shared ESLint configuration.                                |
 
-> Submodules: `apps/electron` and `apps/web`. `pnpm install` initialises `apps/web` automatically; initialise/refresh `apps/electron` with `pnpm submodules:update` when working on the desktop app.
+> `apps/web` is the only git submodule and `pnpm install` initialises it.
 
 ## 🏗 Architecture
 
@@ -103,7 +102,7 @@ pnpm install          # also initialises the apps/web submodule
 
 ```bash
 pnpm start            # clean Metro dev server for apps/main (web + native clients)
-pnpm dev:electron     # the desktop app (Expo dev server + Electron)
+pnpm dev:electron-renderer   # serve the renderer for a wcpos/electron checkout (port 8088)
 
 # native dev clients
 pnpm --filter @wcpos/main ios
@@ -115,13 +114,13 @@ pnpm --filter @wcpos/main android
 | Script                                             | Description                                |
 | -------------------------------------------------- | ------------------------------------------ |
 | `pnpm start`                                       | Clean-state Metro launcher for `apps/main` |
-| `pnpm dev` / `pnpm dev:main` / `pnpm dev:electron` | Turborepo dev tasks                        |
+| `pnpm dev` / `pnpm dev:main` / `pnpm dev:electron-renderer` | Dev servers                        |
 | `pnpm build` / `pnpm build:main`                   | Production builds                          |
 | `pnpm test`                                        | Run package + app unit tests               |
 | `pnpm lint` / `pnpm lint:fix`                      | Lint via Turborepo                         |
 | `pnpm typecheck`                                   | Type-check all workspaces                  |
 | `pnpm extract:translations`                        | Extract source strings for translation     |
-| `pnpm submodules:update`                           | Pull latest `apps/electron` / `apps/web`   |
+| `pnpm submodules:update`                           | Pull latest `apps/web`                     |
 
 ## 👷 Workflows
 
@@ -131,7 +130,6 @@ CI/CD lives in [`.github/workflows/`](./.github/workflows):
 - **[`build.yml`](./.github/workflows/build.yml)** — EAS Build for native iOS/Android apps (manually dispatched), with optional store submission.
 - **[`test.yml`](./.github/workflows/test.yml)** — lint, type-check and unit tests with a coverage ratchet, gating every PR.
 - **[`publish-web-bundle.yml`](./.github/workflows/publish-web-bundle.yml)** — builds `apps/web` and publishes the bundle to a branch of the [`web-bundle`](https://github.com/wcpos/web-bundle) repo for jsDelivr. One ref per lane, named after the lane: the `next` trunk ships at `https://cdn.jsdelivr.net/gh/wcpos/web-bundle@next` (the `next` branch _is_ its tag — dev-next reads it); the released trunk ships at the plugin's major.minor tag (`@1.10`, then `@1.11` once `next` becomes `main`), which the release train cuts. See "Web bundle ref per lane" in `CLAUDE.md`.
-- **[`bump-submodules.yml`](./.github/workflows/bump-submodules.yml)** — daily auto-bump of the `apps/electron` submodule.
 
 ## 📚 Documentation
 

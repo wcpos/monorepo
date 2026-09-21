@@ -14,7 +14,7 @@ import {
 	FormSwitch,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
+import { ModalAction, ModalBody, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -136,7 +136,7 @@ export function EditVariationForm({ variation }: Props) {
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<ModalBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<HStack className="gap-4">
 					<FormField
@@ -254,13 +254,13 @@ export function EditVariationForm({ variation }: Props) {
 					/>
 				</HStack>
 				<MetaDataForm />
-				<ModalFooter className="px-0">
-					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction testID="variation-edit-save-button" loading={loading} onPress={onSave}>
-						{t('common.save')}
-					</ModalAction>
-				</ModalFooter>
-			</VStack>
+			</ModalBody>
+			<ModalFooter>
+				<ModalClose>{t('common.cancel')}</ModalClose>
+				<ModalAction testID="variation-edit-save-button" loading={loading} onPress={onSave}>
+					{t('common.save')}
+				</ModalAction>
+			</ModalFooter>
 		</Form>
 	);
 }

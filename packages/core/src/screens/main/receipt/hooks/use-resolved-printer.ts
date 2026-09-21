@@ -50,7 +50,7 @@ export function useResolvedPrinter({
 		[pick, template?.id]
 	);
 
-	const allPrinters = useAvailablePrinterProfiles();
+	const { printers: allPrinters } = useAvailablePrinterProfiles();
 
 	// Subscribe to all overrides
 	const overrides$ = React.useMemo(

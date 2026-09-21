@@ -24,7 +24,7 @@ import type { VariantProps } from 'class-variance-authority';
 const ButtonText = Text;
 
 const buttonVariants = cva(
-	'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 web:transition-colors group flex max-w-full shrink items-center justify-center rounded-md',
+	'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 web:transition-colors group flex max-w-full shrink items-center justify-center rounded-lg',
 	{
 		variants: {
 			variant: {
@@ -39,7 +39,7 @@ const buttonVariants = cva(
 				info: 'bg-info web:hover:opacity-90 active:opacity-90',
 				attention: 'bg-attention web:hover:opacity-90 active:opacity-90',
 				warning: 'bg-warning web:hover:opacity-90 active:opacity-90',
-				error: 'bg-error web:hover:opacity-90 active:opacity-90',
+				error: 'bg-destructive web:hover:opacity-90 active:opacity-90',
 
 				/**
 				 * Outline buttons
@@ -63,7 +63,7 @@ const buttonVariants = cva(
 				'outline-warning':
 					'border-warning bg-card web:hover:bg-warning/90 web:hover:text-warning-foreground active:bg-warning border',
 				'outline-error':
-					'border-error bg-card web:hover:bg-error/90 web:hover:text-error-foreground active:bg-error border',
+					'border-destructive bg-card web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive border',
 
 				/**
 				 * Ghost buttons
@@ -77,7 +77,7 @@ const buttonVariants = cva(
 				'ghost-info': 'bg-info/15 web:hover:bg-info active:bg-info',
 				'ghost-attention': 'bg-attention/15 web:hover:bg-attention active:bg-attention',
 				'ghost-warning': 'bg-warning/15 web:hover:bg-warning active:bg-warning',
-				'ghost-error': 'bg-error/15 web:hover:bg-error active:bg-error',
+				'ghost-error': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
 
 				/**
 				 * Transparent, de-emphasised label. Distinct from `ghost-muted`,
@@ -95,6 +95,18 @@ const buttonVariants = cva(
 					'web:hover:bg-sidebar-foreground/10 active:bg-sidebar-foreground/10 rounded-none bg-transparent',
 
 				/**
+				 * The pay surface (checkout tender pane) is the sidebar colour too, but its
+				 * buttons are rounded and stand on their own: `sidebar-solid` is the one
+				 * white commit / selected pill, `sidebar-quiet` the translucent chips and
+				 * unselected pills, `sidebar-key` a boxless keypad key.
+				 */
+				'sidebar-solid': 'bg-sidebar-foreground web:hover:opacity-90 active:opacity-90',
+				'sidebar-quiet':
+					'bg-sidebar-foreground/10 web:hover:bg-sidebar-foreground/20 active:bg-sidebar-foreground/20',
+				'sidebar-key':
+					'web:hover:bg-sidebar-foreground/10 active:bg-sidebar-foreground/15 bg-transparent',
+
+				/**
 				 * Reads as a link, behaves as a button — no surface at all. For
 				 * in-flow navigation (a back affordance, an "open docs" jump), where a
 				 * ghost's hover surface would be too much furniture.
@@ -102,12 +114,14 @@ const buttonVariants = cva(
 				link: 'bg-transparent',
 			},
 			size: {
-				default: 'h-10 px-4 py-2',
+				default: 'h-ctl px-4 py-2',
 				xs: 'h-6 px-2',
 				compact: 'h-9 px-3',
 				sm: 'h-9 px-3',
 				lg: 'h-11 px-8',
-				xl: 'h-14 px-10',
+				xl: 'h-tile px-10',
+				/** A keypad key: tall, no side padding, the digit carries the size. */
+				key: 'h-tile px-0',
 			},
 		},
 		defaultVariants: {
@@ -134,7 +148,7 @@ const buttonTextVariants = cva(
 				info: 'text-info-foreground',
 				attention: 'text-attention-foreground',
 				warning: 'text-warning-foreground',
-				error: 'text-error-foreground',
+				error: 'text-destructive-foreground',
 
 				/**
 				 * Outline buttons
@@ -148,7 +162,7 @@ const buttonTextVariants = cva(
 				'outline-info': 'group-active:text-info-foreground',
 				'outline-attention': 'group-active:text-attention-foreground',
 				'outline-warning': 'group-active:text-warning-foreground',
-				'outline-error': 'group-active:text-error-foreground',
+				'outline-error': 'group-active:text-destructive-foreground',
 
 				/**
 				 * Ghost buttons
@@ -171,10 +185,13 @@ const buttonTextVariants = cva(
 				'ghost-warning':
 					'text-warning web:group-hover:text-warning-foreground group-active:text-warning-foreground',
 				'ghost-error':
-					'text-error web:group-hover:text-error-foreground group-active:text-error-foreground',
+					'text-destructive web:group-hover:text-destructive-foreground group-active:text-destructive-foreground',
 				'ghost-quiet':
 					'text-muted-foreground web:group-hover:text-accent-foreground group-active:text-accent-foreground',
 				sidebar: 'text-sidebar-foreground',
+				'sidebar-solid': 'text-sidebar',
+				'sidebar-quiet': 'text-sidebar-foreground',
+				'sidebar-key': 'text-sidebar-foreground',
 				link: 'text-primary web:hover:underline',
 			},
 			size: {
@@ -184,6 +201,7 @@ const buttonTextVariants = cva(
 				sm: 'text-sm',
 				lg: 'text-lg',
 				xl: 'text-xl',
+				key: 'text-3xl font-medium',
 			},
 		},
 		defaultVariants: {

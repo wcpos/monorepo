@@ -5,6 +5,7 @@ import { HStack } from '@wcpos/components/hstack';
 
 import { DatePickerInput } from './date-picker-input';
 import { expiryPresetToDate } from './expiry-presets';
+import { useStoreDay } from '../../../../hooks/use-store-day';
 import { useT } from '../../../../contexts/translations';
 
 import type { ExpiryPreset } from './expiry-presets';
@@ -16,6 +17,7 @@ interface ExpiryPresetChipsProps {
 
 export function ExpiryPresetChips({ value, onChange }: ExpiryPresetChipsProps) {
 	const t = useT();
+	const { timezone } = useStoreDay();
 	const hasDate = !!value;
 
 	const presets: { key: ExpiryPreset; label: string }[] = [
@@ -39,7 +41,7 @@ export function ExpiryPresetChips({ value, onChange }: ExpiryPresetChipsProps) {
 					key={preset.key}
 					size="sm"
 					variant="muted"
-					onPress={() => onChange(expiryPresetToDate(preset.key))}
+					onPress={() => onChange(expiryPresetToDate(preset.key, timezone))}
 					testID={`coupon-expiry-${preset.key}`}
 				>
 					<ButtonText>{preset.label}</ButtonText>

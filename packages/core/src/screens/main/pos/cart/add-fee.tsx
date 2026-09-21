@@ -6,7 +6,13 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import {
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -53,7 +59,14 @@ export function AddFee() {
 	 *
 	 */
 	const form = useForm<FormValues, unknown, FormValues>({
-		resolver: zodResolver(formSchema as never) as never,
+		resolver: zodResolver(
+			formSchema.extend({
+				amount: z
+					.string()
+					.refine((value) => Number(value) >= 0, { message: t('pos_cart.fee_amount_negative') })
+					.optional(),
+			}) as never
+		) as never,
 		defaultValues: {
 			name: '',
 			amount: '0',
@@ -96,7 +109,7 @@ export function AddFee() {
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<FormField
 					control={form.control}
@@ -180,17 +193,17 @@ export function AddFee() {
 						)}
 					/>
 				</HStack>
-				<DialogFooter className="px-0">
-					<DialogClose>{t('common.cancel')}</DialogClose>
-					<DialogAction
-						disabled={form.formState.isSubmitting}
-						testID="add-to-cart-submit"
-						onPress={onAdd}
-					>
-						{t('common.add_to_cart')}
-					</DialogAction>
-				</DialogFooter>
-			</VStack>
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.cancel')}</DialogClose>
+				<DialogAction
+					disabled={form.formState.isSubmitting}
+					testID="add-to-cart-submit"
+					onPress={onAdd}
+				>
+					{t('common.add_to_cart')}
+				</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }

@@ -1,5 +1,8 @@
+import { createRevision, now } from 'rxdb/plugins/utils';
+
 import { assertBulkSuccess } from '@wcpos/sync-core';
 
+import { yieldToEventLoop } from '../event-loop-yield';
 import {
 	buildCoverageDocumentsFromQueryResult,
 	type BuildCoverageDocumentsFromQueryResultInput,
@@ -23,6 +26,7 @@ import {
 import { retainedCoverageQueryKeys } from './coverage-key-retention';
 
 import type { CoverageLaneDocument, CoverageRecordDocument } from './coverage-schema';
+import type { BulkWriteRow, RxDocumentData } from 'rxdb';
 
 export type RxCoverageDocument<T> = {
 	toJSON(withRevAndAttachments?: boolean): unknown;
@@ -52,6 +56,14 @@ export type LocalLaneCoverageWithExpectedRecords = {
 };
 
 type RxCoverageCollection<T> = {
+	database: { token: string };
+	storageInstance: {
+		bulkWrite(
+			rows: BulkWriteRow<T>[],
+			context: string
+		): Promise<{ error: { status: number; documentId: string }[] }>;
+	};
+	findByIds(ids: string[]): { exec(): Promise<Map<string, RxCoverageDocument<T>>> };
 	bulkUpsert(items: T[]): Promise<unknown>;
 	insert(item: T): Promise<unknown>;
 	find(query?: unknown): { exec(): Promise<(RxCoverageDocument<T> | T)[]> };
@@ -501,10 +513,12 @@ export class RxCoverageRepository {
 		ids: string[],
 		nowMs: number
 	): Promise<LocalRecordCoverage[]> {
-		const records = await Promise.all(
-			ids.map((id) => this.readLocalRecordCoverage(collection, id, nowMs))
-		);
-		return records.filter((record): record is LocalRecordCoverage => record !== null);
+		const keys = ids.map((id) => coverageRecordKey(collection, id));
+		const documents = await this.coverageRecords.findByIds(keys).exec();
+		return keys.flatMap((key) => {
+			const document = documents.get(key);
+			return document ? [localRecordCoverage(fromRecordDocument(toJson(document)), nowMs)] : [];
+		});
 	}
 
 	async readLocalLaneCoverage(
@@ -663,13 +677,84 @@ export class RxCoverageRepository {
 		const liveLaneKeys =
 			documents.records.length > 0 ? await this.liveLaneKeysFor(documents) : new Set<string>();
 
-		for (const record of documents.records) {
-			await this.insertOrMergeRecord(record, liveLaneKeys);
+		// Two storage calls per PAGE, not two per record. On native the storage runs synchronously
+		// on the JS thread; the per-record findOne + insert/incrementalModify this replaced issued
+		// ~16k one-row writes and ~3.5k one-id reads in the first ten minutes after login on a
+		// Pixel 10, freezing the thread for 14–109 s at a stretch, and a one-id read on this
+		// collection costs 30 ms at 800 rows and 750 ms at 1,900 (probe rows, 2026-09-05). The
+		// merge/prune semantics are unchanged: each row is written with the revision it was merged
+		// against as `previous`, so the storage rejects (409) any record another writer touched in
+		// between, and only those take the per-record path below.
+		if (documents.records.length > 0) {
+			const recordsByKey = new Map<string, PersistedCoverageRecord>();
+			for (const record of documents.records) {
+				const key = coverageRecordKey(record.collection, record.documentId);
+				const pending = recordsByKey.get(key);
+				// A repeated new id used to insert, then merge/prune. Preserve that in one row.
+				recordsByKey.set(
+					key,
+					pending
+						? fromRecordDocument(
+								mergeRecordWithCurrentRevision(toRecordDocument(pending), record, liveLaneKeys)
+							)
+						: record
+				);
+			}
+			const current = await this.coverageRecords.findByIds([...recordsByKey.keys()]).exec();
+			const rows = [...recordsByKey].flatMap<BulkWriteRow<CoverageRecordDocument>>(
+				([key, record]) => {
+					const previous = current.get(key)?.toJSON(true) as
+						RxDocumentData<CoverageRecordDocument> | undefined;
+					const merged = previous
+						? mergeRecordWithCurrentRevision(previous, record, liveLaneKeys)
+						: toRecordDocument(record);
+					// Re-pulls need not re-stamp unchanged records while over half the incoming
+					// freshness window remains. Merge/prune first so membership changes still write.
+					if (
+						previous &&
+						!previous._deleted &&
+						previous.freshUntilMs - record.updatedAtMs >
+							(record.freshUntilMs - record.updatedAtMs) / 2 &&
+						previous.coverageKey === merged.coverageKey &&
+						previous.collectionName === merged.collectionName &&
+						previous.documentId === merged.documentId &&
+						previous.schemaVersion === merged.schemaVersion &&
+						sameStringArray(previous.coveredQueryKeys, merged.coveredQueryKeys)
+					)
+						return [];
+					return [
+						{
+							previous,
+							document: {
+								...merged,
+								_rev: createRevision(this.coverageRecords.database.token, previous),
+								_meta: { ...previous?._meta, lwt: now() },
+								_deleted: false,
+								_attachments: previous?._attachments ?? {},
+							},
+						},
+					];
+				}
+			);
+			// CAS keeps the prune tied to the revision written; only conflicts take the old path.
+			// A 409 (another writer moved the revision) is expected and merges below; any other
+			// row failure is fatal, so only the non-conflict remainder reaches the assert.
+			const storage = this.coverageRecords.storageInstance;
+			const result =
+				rows.length > 0 ? await storage.bulkWrite(rows, 'coverage-record-batch') : { error: [] };
+			assertBulkSuccess(
+				{ error: result.error.filter((error) => error.status !== 409) },
+				'Coverage record batch write'
+			);
+			for (const conflict of result.error) {
+				await this.insertOrMergeRecord(recordsByKey.get(conflict.documentId)!, liveLaneKeys);
+			}
 		}
 
 		for (const lane of documents.lanes) {
 			await this.insertOrMergeLane(lane);
 		}
+		await yieldToEventLoop();
 	}
 
 	/**

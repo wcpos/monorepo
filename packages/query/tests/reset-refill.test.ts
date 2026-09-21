@@ -78,3 +78,15 @@ describe('runResetRefill seeding', () => {
 		]);
 	});
 });
+
+it('forces the history walk when refunds are reset', () => {
+	expect(resetRefillRequirements(['refunds'])).toEqual([
+		{
+			id: 'refunds:collection-reset',
+			collection: 'refunds',
+			kind: 'refresh',
+			forceRefresh: true,
+			priority: 1000,
+		},
+	]);
+});

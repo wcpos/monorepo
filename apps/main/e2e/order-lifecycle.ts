@@ -23,7 +23,12 @@ import { randomUUID } from 'crypto';
 import { type APIRequestContext, expect, type Page, type TestInfo } from '@playwright/test';
 
 import { isolatedProductTest } from './checkout-probe';
-import { getStoreUrl, type StoreAuthorization, storeRequestOptions } from './fixtures';
+import {
+	ensureRegisterOpen,
+	getStoreUrl,
+	type StoreAuthorization,
+	storeRequestOptions,
+} from './fixtures';
 import { resolveProbeAuthorization, TEARDOWN_CREDENTIAL_TIMEOUT_MS } from './probe-credential';
 
 /** POST target the app uses to persist an order. */
@@ -177,16 +182,16 @@ export function newRunLabel(): string {
 }
 
 /**
- * Stamp the run label onto the order via the cart's order-note UI, so the
+ * Stamp the run label onto the order via the cart's Order Meta UI, so the
  * created order is identifiable in the shared store.
  */
 export async function stampRunLabel(page: Page, label: string): Promise<void> {
-	await page.getByTestId('order-note-button').click();
+	await page.getByTestId('order-meta-button').click();
 	const input = page.getByTestId('order-note-input');
 	await expect(input).toBeVisible({ timeout: 15_000 });
 	await input.fill(label);
-	await page.getByTestId('add-note-button').click();
-	await expect(page.getByTestId('order-note-dialog')).toBeHidden({ timeout: 15_000 });
+	await page.getByTestId('order-meta-save').click();
+	await expect(page.getByTestId('order-meta-dialog')).toBeHidden({ timeout: 15_000 });
 }
 
 /**
@@ -211,6 +216,7 @@ export async function openCheckout(
 	page: Page,
 	options: { onOrderCreated?: (order: TrackedOrder) => void } = {}
 ): Promise<{ orderId: number; uuid: string; sent: OrderPayload }> {
+	await ensureRegisterOpen(page);
 	const saved = page.waitForResponse(createPushOrdersResponseMatcher(), {
 		timeout: 90_000,
 	});

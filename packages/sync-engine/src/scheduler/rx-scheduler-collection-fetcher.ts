@@ -150,7 +150,8 @@ export async function recordCoverage(
 	task: FetchTask,
 	coverageRecordIds: readonly string[],
 	complete: boolean,
-	prefixAncestry?: BuildCoverageDocumentsFromQueryResultInput['prefixAncestry']
+	prefixAncestry?: BuildCoverageDocumentsFromQueryResultInput['prefixAncestry'],
+	expectedRecordIds?: string[]
 ): Promise<void> {
 	if (!input.coverageRepository) return;
 	await input.coverageRepository.recordQueryResult({
@@ -161,6 +162,7 @@ export async function recordCoverage(
 		nowMs: input.nowMs?.() ?? Date.now(),
 		freshForMs: input.coverageFreshForMs ?? DEFAULT_COVERAGE_FRESH_FOR_MS,
 		...(prefixAncestry ? { prefixAncestry } : {}),
+		...(expectedRecordIds ? { expectedRecordIds } : {}),
 	});
 }
 /**

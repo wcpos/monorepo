@@ -22,7 +22,7 @@ import {
 } from 'rxjs/operators';
 import get from 'lodash/get';
 
-import { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH, foldSearchText } from '@wcpos/sync-core';
+import { FLEXSEARCH_MIN_TERM_LENGTH, foldSearchText } from '@wcpos/sync-core';
 import type { CoverageTarget, CoverageVerdict, RxdbSyncEngine } from '@wcpos/sync-engine';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -37,10 +37,19 @@ import {
 	type EngineRxDocument,
 	executeAdapterQuery,
 } from './engine-adapter/execute-query';
+import { catalogueSearchBlobFor } from './catalogue-search-blob';
 import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
 import {
+	fieldsMatchShortPrefix,
+	fieldsMatchTokens,
+	fieldsMissAnyOfTokens,
+	searchTerms,
+	searchTokens,
+} from './search-match';
+import {
 	rebuiltSearchIndexes,
+	SEARCH_SCAN_RETHROTTLE_MS,
 	type SearchableCollection,
 	searchLogger,
 	sharedSearchInstances,
@@ -59,8 +68,6 @@ import type { MangoQuerySortPart, RxCollection, RxDatabase } from 'rxdb';
  * including the input debounce, without paying a scan on healthy keystrokes.
  */
 const SEARCH_INDEX_ANSWER_DEADLINE_MS = 250;
-/** Collapse scan re-runs while sync churn streams source-collection events. */
-const SEARCH_SCAN_RETHROTTLE_MS = 500;
 /** Log the scan takeover once per collection:locale per session, not per keystroke. */
 const stalledSearchIndexes = new Set<string>();
 // Owned by the side that builds the index; re-exported for existing consumers.
@@ -129,18 +136,9 @@ export function observeCoverage(
 	);
 }
 
-function withSearchSelector(selector: LegacyMangoSelector, ids: string[]): LegacyMangoSelector {
-	const searchSelector = { uuid: { $in: ids } } as LegacyMangoSelector;
-	return Object.keys(selector).length === 0
-		? searchSelector
-		: ({ $and: [selector, searchSelector] } as LegacyMangoSelector);
-}
-
 /**
  * The fallback answer when the index cannot answer: match the query directly
- * against the documents, mirroring the index's semantics — per-token AND over
- * the same fields joined into one blob, substring match (`tokenize: 'full'`),
- * tokens under the index's minimum length dropped as the index drops them.
+ * against the documents: non-catalogue collections retain the index's per-token AND semantics.
  * Folding goes through the SAME `foldSearchText` the index's encoder uses
  * (#1732), so a scan answer and the indexed answer that replaces it agree.
  *
@@ -154,41 +152,50 @@ async function scanDocumentsForSearch(
 	searchFields: string[],
 	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>
 ): Promise<EngineRxDocument[]> {
-	const tokens = encodeSearchText(search).filter(
-		(token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH
-	);
-	if (tokens.length === 0 || searchFields.length === 0) return [];
+	const tokens = searchTokens(search);
+	if (searchFields.length === 0 || tokens.length === 0) return [];
 	const documents = await collection.find().exec();
 	return documents.filter((document) => {
 		const snapshot = documentSnapshot(document);
-		const blob = foldSearchText(
-			searchFields.map((field) => String(get(snapshot, field) ?? '')).join(' ')
-		);
-		return tokens.every((token) => blob.includes(token));
+		const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
+		return fieldsMatchTokens(fields, tokens);
 	});
 }
 function matchingSelectors$(
 	database: AdapterDatabase,
 	descriptor: EngineQueryDescriptor,
 	locale: string
-): Observable<LegacyMangoSelector> {
+): Observable<{ selector: LegacyMangoSelector; hitIds: string[] | null }> {
 	const selector = descriptor.selector ?? {};
 	const search = (descriptor.read?.search ?? descriptor.search)?.trim() ?? '';
-	if (!search) return of(selector);
+	if (!search) return of({ selector, hitIds: null });
 
 	const collectionName = engineCollectionNameFor(descriptor.collection);
 	const collection = database.collections[collectionName] as unknown as
 		SearchableCollection | undefined;
-	if (!collection?.initSearch) return of(withSearchSelector(selector, []));
+	if (!collection?.initSearch) return of({ selector, hitIds: [] });
 	const documentSnapshot = (document: EngineRxDocument): Record<string, unknown> =>
 		legacySearchSnapshot(descriptor.collection, document);
 
 	// Route on the FOLDED length, not the raw one: a pasted NFD "Cè" is 3 code units but
 	// folds to 2 chars, which the index's minlength would silently drop — it belongs on the
-	// short-prefix path with the typed NFC "Cè" (#1732). A query that folds away entirely
+	// scan path with the typed NFC "Cè" (#1732). A query that folds away entirely
 	// (only combining marks) matches everything, like WooCommerce's ai_ci LIKE would.
 	const foldedSearch = foldSearchText(search);
-	if (!foldedSearch) return of(selector);
+	if (!foldedSearch) return of({ selector, hitIds: null });
+	const phraseSearch =
+		descriptor.collection === 'products' || descriptor.collection === 'variations';
+	if (phraseSearch) {
+		const terms = searchTerms(search);
+		if (terms.length === 0) return of({ selector, hitIds: [] });
+		const searchFields =
+			descriptor.read?.searchFields ??
+			descriptor.searchFields ??
+			collection.options?.searchFields ??
+			[];
+		const blob = catalogueSearchBlobFor(collection, searchFields, documentSnapshot);
+		return blob.changes$.pipe(map(() => ({ selector, hitIds: blob.search(terms) })));
+	}
 	if (foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
 		const prefix = foldedSearch;
 		// Mirror initSearch's fallback so short and indexed terms search the same fields.
@@ -202,34 +209,27 @@ function matchingSelectors$(
 		return collection.$.pipe(
 			startWith(null),
 			switchMap(() => from(collection.find().exec())),
-			map((documents) =>
-				withSearchSelector(
-					selector,
-					documents
-						.filter((document) => {
-							const snapshot = documentSnapshot(document);
-							return searchFields.some((field) =>
-								String(get(snapshot, field) ?? '')
-									.split(/\s+/)
-									.some((token) => foldSearchText(token).startsWith(prefix))
-							);
-						})
-						.map((document) => document.primary)
-				)
-			)
+			map((documents) => ({
+				selector,
+				hitIds: documents
+					.filter((document) => {
+						const snapshot = documentSnapshot(document);
+						const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
+						return fieldsMatchShortPrefix(fields, prefix);
+					})
+					.map((document) => document.primary),
+			}))
 		);
 	}
 	const configuredFields = descriptor.read?.searchFields ?? descriptor.searchFields;
 	const searchFields = configuredFields ?? collection.options?.searchFields ?? [];
 	const findFalseHits = (documents: EngineRxDocument[]) => {
-		const tokens = encodeSearchText(search).filter(
-			(token) => token.length >= FLEXSEARCH_MIN_TERM_LENGTH
-		);
+		const tokens = searchTokens(search);
 		if (searchFields.length === 0 || tokens.length === 0) return [];
 		return documents.flatMap((document) => {
 			const snapshot = documentSnapshot(document);
 			const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-			return tokens.some((token) => fields.every((field) => !foldSearchText(field).includes(token)))
+			return fieldsMissAnyOfTokens(fields, tokens)
 				? [{ document, uuid: document.primary, fields: fields.join(' ').slice(0, 120) }]
 				: [];
 		});
@@ -358,12 +358,10 @@ function matchingSelectors$(
 			})
 		);
 	}).pipe(
-		map((documents) =>
-			withSearchSelector(
-				selector,
-				documents.map((document) => document.primary)
-			)
-		)
+		map((documents) => ({
+			selector,
+			hitIds: documents.map((document) => document.primary),
+		}))
 	);
 }
 
@@ -405,11 +403,12 @@ export function observeEngineQuery(
 				return of(search ? pendingSearchResult() : emptyResult());
 			}
 			return matchingSelectors$(database, descriptor, locale).pipe(
-				switchMap((selector) =>
+				switchMap(({ selector, hitIds }) =>
 					executeAdapterQuery({
 						database,
 						collection: descriptor.collection,
 						selector,
+						hitIds,
 						sort: descriptor.sort,
 						skip: descriptor.skip,
 						limit: descriptor.limit,

@@ -16,28 +16,32 @@ import { OnlineStatusLogger } from '@wcpos/core/screens/main/components/online-s
 import { SearchReadinessBridge } from '@wcpos/core/screens/main/components/search-readiness-bridge';
 import { UnsentChangesBridge } from '@wcpos/core/screens/main/components/unsent-changes-bridge';
 import { VariationParentBridge } from '@wcpos/core/screens/main/components/variation-parent-bridge';
+import { RegisterSessionBridge } from '@wcpos/core/services/register-session/bridge';
 import { ReceiptEmailQueueBridge } from '@wcpos/core/screens/main/receipt/email-queue/bridge';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
+import { SaleCompletionBridge } from '@wcpos/core/screens/main/pos/checkout/completion-journal-bridge';
+import { TerminalPaymentsBridge } from '@wcpos/core/screens/main/pos/checkout/payments/server/terminal-payments-bridge';
 import { ScanHubProvider } from '@wcpos/core/screens/main/hooks/barcodes/scan-hub-context';
 import { UpdateRequired } from '@wcpos/core/screens/main/update-required';
 import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
-import { createRefreshHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client/refresh-http-client';
-import { refreshAccessToken } from '@wcpos/hooks/use-http-client/refresh-access-token';
 import { OnlineStatusProvider, useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider, useDocField } from '@wcpos/query';
-import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { setHostVisible } from '@wcpos/utils/host-visibility';
 import { getLogger, setDatabase } from '@wcpos/utils/logger';
-import { resolveRestTransport } from '@wcpos/utils/rest-transport';
 import { markUserActivity } from '@wcpos/utils/user-activity';
 
+import { StripeTerminalDriverRegistration } from '../../lib/payment-drivers';
 import { SyncConfigBridge } from '../../components/sync-config-bridge';
 import { useNavigationBackground } from '../../components/use-navigation-background';
 import { setAppOnlineStatus } from '../../lib/connectivity';
-import { createAppSyncEngine, switchAppEngineScope } from '../../lib/create-app-engine';
+import {
+	createAppSyncEngine,
+	createSessionFetcherOptions,
+	switchAppEngineScope,
+} from '../../lib/create-app-engine';
 import {
 	getMetricsBuckets,
 	hydrateMetricsBuckets,
@@ -70,8 +74,10 @@ function AppStack() {
 	const t = useT();
 
 	React.useEffect(() => {
-		// The diagnostic timers belong to the native app lifecycle and must stop on unmount.
-		if (Platform.OS === 'web' || !STORAGE_TIMING_PROBE_ENABLED) return;
+		// The diagnostic timers belong to the app lifecycle and must stop on unmount. Every
+		// platform reports: the storage boundary is a worker on web, IPC on Electron and the
+		// JS thread on native, and the same probe puts a number on each (wayfinder #2141).
+		if (!STORAGE_TIMING_PROBE_ENABLED) return;
 		return startStorageTimingReporter();
 	}, []);
 
@@ -97,8 +103,8 @@ function AppStack() {
 	/**
 	 * The sync engine every fluent read is served from (ADR 0023 increment 1b).
 	 * Bound to the site; store/cashier are scopes within it. Memoized on the
-	 * site + scope identity — store switching via `scope.switch()` is a
-	 * follow-up (increment-3).
+	 * site + scope identity — same-site switches reuse the engine through
+	 * `scope.switch()`; cross-site changes dispose and recreate it.
 	 */
 	const wpApiUrl = useDocField(site, (value) => value.wp_api_url) as string;
 	const wcposApiUrl = useDocField(site, (value) => value.wcpos_api_url) as string;
@@ -110,13 +116,7 @@ function AppStack() {
 		(value) => value.use_rest_route_param
 	) as boolean;
 	const useProtocolHeaders = useDocField(site, (value) => value.use_protocol_headers) as boolean;
-	const useRestRouteParam =
-		resolveRestTransport({
-			wp_api_url: wpApiUrl,
-			use_rest_route_param: useRestRouteParamField,
-		}) === 'query';
 	const wcposVersion = useDocField(site, (value) => value.wcpos_version) as string;
-	const bareAuthParam = bareAuthParamSupported(wcposVersion);
 
 	// The credentials DOCUMENT is a stable identity; the engine reads the JWT
 	// fresh at request time via getLatest() inside the lib module, so token
@@ -128,36 +128,37 @@ function AppStack() {
 	// port BEFORE committing the session (see switchAppEngineScope). Registered
 	// here because AppStack owns the engine's lifecycle.
 	React.useEffect(() => {
-		registerEngineScopeSwitcher(switchAppEngineScope);
+		registerEngineScopeSwitcher(async (session) => {
+			if (!session.site || !session.wpCredentials) return;
+			await switchAppEngineScope(
+				session,
+				createSessionFetcherOptions(
+					session.site.getLatest(),
+					session.wpCredentials,
+					t('auth.session_renewed_automatically')
+				)
+			);
+		});
 		return () => registerEngineScopeSwitcher(null);
-	}, []);
+	}, [t]);
 
 	const engine = React.useMemo(
 		() =>
 			createAppSyncEngine({
 				wpApiUrl,
-				credentials: wpCredentials,
 				siteDocument: site,
-				useJwtAsParam,
-				useRestRouteParam,
-				bareAuthParam,
-				useProtocolHeaders,
-				refreshAuth: (context) =>
-					refreshAccessToken({
-						site: {
-							wcpos_api_url: wcposApiUrl,
-							// Fallback the shared core uses to construct `${wp_api_url}wcpos/v2/`
-							// when wcpos_api_url is transiently unset (e.g. after a web wake).
-							wp_api_url: wpApiUrl,
-							use_jwt_as_param: useJwtAsParam,
-							use_rest_route_param: useRestRouteParamField,
-							use_protocol_headers: useProtocolHeaders,
-						},
-						wpUser: wpCredentials,
-						getHttpClient: createRefreshHttpClient,
-						sessionRenewedMessage: t('auth.session_renewed_automatically'),
-						operationId: context?.operationId,
-					}),
+				...createSessionFetcherOptions(
+					{
+						wcpos_api_url: wcposApiUrl,
+						wp_api_url: wpApiUrl,
+						wcpos_version: wcposVersion,
+						use_jwt_as_param: useJwtAsParam,
+						use_rest_route_param: useRestRouteParamField,
+						use_protocol_headers: useProtocolHeaders,
+					},
+					wpCredentials,
+					t('auth.session_renewed_automatically')
+				),
 				scope: { site: wpApiUrl, storeId: storeID, cashierId: cashierID },
 			}),
 		[
@@ -167,9 +168,8 @@ function AppStack() {
 			storeID,
 			cashierID,
 			useJwtAsParam,
-			useRestRouteParam,
 			useRestRouteParamField,
-			bareAuthParam,
+			wcposVersion,
 			useProtocolHeaders,
 			wpCredentials,
 			t,
@@ -188,6 +188,13 @@ function AppStack() {
 			    screens, because the promise made at the Send button has to be kept
 			    whether or not the receipt modal is still open. */}
 				<ReceiptEmailQueueBridge />
+				<RegisterSessionBridge />
+				{/* Terminal payment legs poll from here, not from the checkout screen, so
+				    a tab chip can say "Waiting for terminal" while another order is on
+				    screen and a finished leg reaches its receipt unattended (#154). */}
+				<StripeTerminalDriverRegistration key={`${wpApiUrl}:${storeID}:${cashierID}`} />
+				<TerminalPaymentsBridge />
+				<SaleCompletionBridge />
 				{/* A variable product's price range is recomputed from its children on
 				    every read, so an acknowledged variation write leaves the parent's row
 				    stale with nothing to pull it (#1495). Here, not on the Products

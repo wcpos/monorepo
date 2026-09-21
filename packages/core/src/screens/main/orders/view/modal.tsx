@@ -38,7 +38,7 @@ export function ViewOrderModal({ resource }: Props) {
 	if (!order || !payload) {
 		return (
 			<Modal>
-				<ModalContent size="xl" className="gap-0 py-0">
+				<ModalContent side="right" size="2xl" className="gap-0 py-0">
 					<View className="px-5 py-6">
 						<Text className="text-foreground text-base font-semibold">
 							{t('common.no_order_found')}
@@ -60,7 +60,7 @@ export function ViewOrderModal({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent size="2xl" className="gap-0">
+			<ModalContent side="right" size="2xl" className="gap-0">
 				<HeaderSection order={payload} />
 				<ModalBody className="p-0">
 					<View className="w-full flex-col sm:flex-row">
@@ -70,6 +70,7 @@ export function ViewOrderModal({ resource }: Props) {
 							<TotalsSection order={payload} />
 							<RefundsBoundary
 								key={refundsRetryKey}
+								orderUuid={order.uuid}
 								order={payload}
 								onRetry={() => setRefundsRetryKey((key) => key + 1)}
 							/>
@@ -104,20 +105,37 @@ export function ViewOrderModal({ resource }: Props) {
 	);
 }
 
-function RefundsBoundary({ order, onRetry }: { order: OrderPayload; onRetry: () => void }) {
+function RefundsBoundary({
+	order,
+	orderUuid,
+	onRetry,
+}: {
+	order: OrderPayload;
+	orderUuid: string;
+	onRetry: () => void;
+}) {
 	if (!order.id) {
 		return null;
 	}
 
-	return <RefundsResourceBoundary order={order} orderId={order.id} onRetry={onRetry} />;
+	return (
+		<RefundsResourceBoundary
+			order={order}
+			orderUuid={orderUuid}
+			orderId={order.id}
+			onRetry={onRetry}
+		/>
+	);
 }
 
 function RefundsResourceBoundary({
 	order,
+	orderUuid,
 	orderId,
 	onRetry,
 }: {
 	order: OrderPayload;
+	orderUuid: string;
 	orderId: number;
 	onRetry: () => void;
 }) {
@@ -139,7 +157,7 @@ function RefundsResourceBoundary({
 	return (
 		<ErrorBoundary FallbackComponent={RefundsErrorFallback}>
 			<React.Suspense fallback={<RefundsSkeleton />}>
-				<RefundsSection order={order} resource={resource} />
+				<RefundsSection order={order} orderUuid={orderUuid} resource={resource} />
 			</React.Suspense>
 		</ErrorBoundary>
 	);

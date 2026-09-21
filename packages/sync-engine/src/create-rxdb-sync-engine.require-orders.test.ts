@@ -124,6 +124,9 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 			orderId: id,
 			revision: `revision-${id}`,
 			sequence: id,
+			epoch: 'scripted-epoch',
+			head: batchCount,
+			horizon: 0,
 		};
 		return new Response(
 			JSON.stringify({
@@ -151,7 +154,7 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 					},
 				],
 				checkpoint,
-				hasMore: state.pulls < batchCount,
+				complete: state.pulls >= batchCount,
 			}),
 			{ status: 200, headers: { 'content-type': 'application/json' } }
 		);
@@ -286,7 +289,7 @@ describe('require() for orders (the durable path)', () => {
 		};
 		const diagnostics = vi.fn();
 		const plane = createRequirePlane({
-			awaitReady: async () => undefined,
+			admitted: async () => bound as never,
 			manager: {
 				runGuarded: async (operation: (captured: typeof bound) => Promise<unknown>) =>
 					operation(bound),

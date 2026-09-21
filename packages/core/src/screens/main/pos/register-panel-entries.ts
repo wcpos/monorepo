@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { registerSlotEntry } from '../../../extensions/slots';
+import { useCheckoutMode } from './checkout/checkout-mode';
 import { OpenOrders } from './cart';
 import { POSProducts } from './products';
 
@@ -23,7 +24,11 @@ function ProductsPanelEntry(_props: SlotEntryProps<'pos.columns.panel'>) {
 }
 
 function CartPanelEntry(_props: SlotEntryProps<'pos.columns.panel'>) {
-	return React.createElement(OpenOrders, { isColumn: true });
+	const { selectedReceiptOrder } = useCheckoutMode();
+	return React.createElement(OpenOrders, {
+		isColumn: true,
+		receiptOrderUuid: selectedReceiptOrder ?? undefined,
+	});
 }
 
 registerSlotEntry({

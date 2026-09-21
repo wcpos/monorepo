@@ -1,15 +1,16 @@
 export const templatesLiteral = {
 	title: 'WCPOS Template schema',
-	version: 1,
+	version: 2,
 	description: 'POS receipt/report templates',
 	type: 'object',
 	primaryKey: 'uuid',
 	indexes: ['type', 'menu_order'],
 	properties: {
+		closure_store_id: { type: 'number' },
 		uuid: {
 			description: 'Unique identifier for the resource.',
 			type: 'string',
-			maxLength: 36,
+			maxLength: 80,
 		},
 		id: {
 			description: 'Template ID. Integer for database templates, string for virtual.',

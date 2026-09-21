@@ -63,6 +63,9 @@ export type {
 	StoreDatabase,
 	StoreDocument,
 	TaxRateDocument,
+	RefundDocumentType,
+	RefundDocument,
+	RefundCollection,
 	TemplateDocument,
 	UserDatabase,
 	UserDocument,
@@ -71,4 +74,16 @@ export type {
 	ScannerProfileDocument,
 	TemplatePrinterOverrideDocument,
 	ReceiptEmailQueueCollection,
+} from './collections';
+
+export type {
+	ClosureRow,
+	ClosureDocument,
+	ClosureCollection,
+	RegisterSessionRow,
+	RegisterSessionDocument,
+	RegisterSessionCollection,
+	CashMovementRow,
+	CashMovementDocument,
+	CashMovementCollection,
 } from './collections';

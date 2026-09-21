@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import Mustache from 'mustache';
 
 import {
 	analyzeThermalTemplate,
@@ -12,6 +13,8 @@ import {
 	thermalImageAssetKey,
 } from '../index';
 import { normalizeThermalText } from '../render-escpos';
+import { DEFAULT_THERMAL_TEMPLATE } from '../../../printer/src/encoder/default-thermal-template';
+import { renderEposXml } from '../render-epos-xml';
 
 const THERMAL_TEMPLATE = `<receipt paper-width="32">
   <align mode="center"><bold>{{store.name}}</bold></align>
@@ -299,6 +302,21 @@ function expectScaledVisualCentered(bytes: Uint8Array, text: string, columns: nu
 	expect(line).toBeDefined();
 	const actualCenter = (line?.xStart ?? 0) + (line?.textWidth ?? 0) / 2;
 	expect(Math.abs(actualCenter - columns / 2)).toBeLessThanOrEqual(1);
+}
+
+/**
+ * The longest run of consecutive spaces in an encoded job — the alignment padding, which is
+ * emitted as raw 0x20 bytes and separated from the text it indents by the code-page command.
+ * Words inside the text are separated by single spaces, so the padding always wins.
+ */
+function longestSpaceRun(bytes: Uint8Array): number {
+	let longest = 0;
+	let run = 0;
+	for (const byte of bytes) {
+		run = byte === 0x20 ? run + 1 : 0;
+		longest = Math.max(longest, run);
+	}
+	return longest;
 }
 
 function expectSingleNewlineBetween(bytes: Uint8Array, first: string, second: string): void {
@@ -810,6 +828,45 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expectVisuallyCentered(lines, 'VAT ES0000000000', 48);
 		expectVisuallyCentered(lines, 'Horario de apertura', 48);
 		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
+	});
+
+	it.each([32, 42])('physically aligns multiline text at %i columns', (columns) => {
+		for (const mode of ['center', 'right'] as const) {
+			for (const content of ['<text>{{hours}}</text>', '<bold>{{hours}}</bold>']) {
+				const bytes = encodeThermalTemplate(
+					`<receipt paper-width="${columns}"><align mode="${mode}">${content}</align><text>After</text></receipt>`,
+					{ hours: 'Mon 1:12 PM – 1:14 PM\nTue–Sun Cerrado' },
+					{ columns, language: 'esc-pos' }
+				);
+				const lines = simulateEscposTextLines(bytes, columns);
+				for (const text of ['Mon 1:12 PM - 1:14 PM', 'Tue-Sun Cerrado']) {
+					const padding =
+						mode === 'center' ? Math.floor((columns - text.length) / 2) : columns - text.length;
+					const index = sequenceIndex(bytes, Array.from(new TextEncoder().encode(text)));
+					expect(index).toBeGreaterThan(0);
+					expect(lastEscposAlignBefore(bytes, index)).toBe(0);
+					expect(decodePrintableAscii(bytes).split('\n')).toContain(
+						`${' '.repeat(padding)}${text}`
+					);
+					expect(lines.find((line) => line.text === text)?.xStart).toBe(padding);
+				}
+				expectSingleNewlineBetween(bytes, 'Mon 1:12 PM - 1:14 PM', 'Tue-Sun Cerrado');
+				expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
+			}
+		}
+	});
+
+	it('preserves empty lines within aligned multiline text', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><align mode="center"><text>{{value}}</text></align></receipt>',
+			{ value: 'Before\n\nAfter' },
+			{ columns: 32, language: 'esc-pos' }
+		);
+		const before = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Before')));
+		const after = sequenceIndex(bytes, Array.from(new TextEncoder().encode('After')));
+		expect(before).toBeGreaterThan(0);
+		expect(after).toBeGreaterThan(before);
+		expect(Array.from(bytes.slice(before, after)).filter((byte) => byte === 0x0a)).toHaveLength(2);
 	});
 
 	it('does not insert blank rows between centered standalone text lines', () => {
@@ -1601,6 +1658,25 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(nextIndex).toBeGreaterThan(restoreSpacingIndex);
 	});
 
+	it('reapplies scaled line spacing between aligned lines inside an outer size', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><size width="2" height="2"><align mode="center">A\nB</align></size></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const firstLineIndex = sequenceIndex(bytes, [0x41]);
+		const newlineIndex = sequenceIndex(bytes, [0x0a], firstLineIndex);
+		const restoreSpacingIndex = sequenceIndex(bytes, [0x1b, 0x32], newlineIndex);
+		const reappliedSpacingIndex = sequenceIndex(bytes, [0x1b, 0x33, 60], restoreSpacingIndex);
+		const secondLineIndex = sequenceIndex(bytes, [0x42], reappliedSpacingIndex);
+
+		expect(firstLineIndex).toBeGreaterThanOrEqual(0);
+		expect(newlineIndex).toBeGreaterThan(firstLineIndex);
+		expect(restoreSpacingIndex).toBeGreaterThan(newlineIndex);
+		expect(reappliedSpacingIndex).toBeGreaterThan(restoreSpacingIndex);
+		expect(secondLineIndex).toBeGreaterThan(reappliedSpacingIndex);
+	});
+
 	it('keeps height-only scaled mixed inline text on one physical line', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt paper-width="48"><align mode="center"><size height="2">AB<bold>CD</bold></size></align></receipt>',
@@ -2018,6 +2094,87 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(decoded).not.toContain('Total-Today');
 	});
 
+	// A merchant's TSP143III printed `2:05?pm`: ICU >= 72 separates a CLDR short time's hour
+	// from its day period with U+202F, and no Star character table carries it.
+	it('folds no-break and fixed-width spaces on Star, which has no character table for them', () => {
+		for (const language of ['star-line', 'star-prnt'] as const) {
+			for (const space of ['\u00A0', '\u202F', '\u2009', '\u2007']) {
+				const bytes = encodeThermalTemplate(
+					`<receipt><text>2:05${space}pm</text></receipt>`,
+					{},
+					{ columns: 42, language }
+				);
+
+				expect(includesSequence(bytes, [0x32, 0x3a, 0x30, 0x35, 0x20, 0x70, 0x6d])).toBe(true);
+				// 0x3f is the encoder's stand-in for a character the table cannot hold.
+				expect(Array.from(bytes)).not.toContain(0x3f);
+			}
+		}
+	});
+
+	// Centering pads with literal spaces INSIDE the scaled run, so each one is `width` columns
+	// wide. Counting them against width 1 while the printer is in double width laid down twice
+	// the margin and wrapped the line — a merchant's 48-column receipt printed the store name as
+	// 'Evans Hobb' / 'y and Tech'.
+	it('counts centering padding in scaled columns, not characters, on Star', () => {
+		const scaled = (language: 'esc-pos' | 'star-prnt' | 'star-line') =>
+			encodeThermalTemplate(
+				'<receipt paper-width="48"><align mode="center"><size width="2" height="2">' +
+					'<text>Evans Hobby and Tech</text></size></align></receipt>',
+				{},
+				{ columns: 48, language }
+			);
+
+		for (const language of ['star-line', 'star-prnt'] as const) {
+			// 20 characters at double width is 40 of the 48 columns; 8 remain, so 4 columns of
+			// left margin, which is 2 double-width spaces. Fourteen of them (the old count, taken
+			// from the unscaled character width) is 28 columns and overruns the line.
+			const padding = longestSpaceRun(scaled(language));
+
+			expect(padding).toBe(2);
+			expect(padding * 2 + 'Evans Hobby and Tech'.length * 2).toBeLessThanOrEqual(48);
+		}
+	});
+
+	// Star's ESC i magnification is n1/n2 in 0-5 (6x max) while `<size width>` is unbounded on the
+	// way in, so a custom template can ask for more than the command carries. Raised by Codex
+	// review on the PHP twin of this fix (wcpos/woocommerce-pos#1966).
+	it('caps Star magnification at 6x, in the command and in the padding alike', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><align mode="center"><size width="8" height="1">' +
+				'<text>AB</text></size></align></receipt>',
+			{},
+			{ columns: 48, language: 'star-line' }
+		);
+
+		// ESC i <height-1> <width-1>, so the width byte is the 6x cap at 0x05, not 0x07.
+		expect(includesSequence(bytes, [0x1b, 0x69, 0x00, 0x05])).toBe(true);
+		// 2 glyphs x 6 = 12 of 48 columns; half the remaining 36 is 18 columns = 3 six-cell spaces.
+		expect(longestSpaceRun(bytes)).toBe(3);
+	});
+
+	it('leaves ESC/POS magnification alone, where GS ! really does reach 8x', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><size width="8" height="1"><text>AB</text></size></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+
+		// GS ! n: bits 4-7 are the WIDTH magnification, bits 0-3 the height. Width 8 with height 1
+		// is therefore (8 - 1) << 4 = 0x70, uncapped.
+		expect(includesSequence(bytes, [0x1d, 0x21, 0x70])).toBe(true);
+	});
+
+	it('leaves unscaled centering padding unchanged', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><align mode="center"><text>Thank you</text></align></receipt>',
+			{},
+			{ columns: 48, language: 'star-line' }
+		);
+		// (48 - 9) / 2 = 19, unaffected by the scale fix because the scale is 1.
+		expect(longestSpaceRun(bytes)).toBe(19);
+	});
+
 	it('reports height-only scaled text in thermal row diagnostics', () => {
 		const diagnostics = analyzeThermalTemplate(
 			'<receipt paper-width="48"><row><col width="*"><size height="2">Subtotal</size></col><col width="14" align="right">13,26 €</col></row></receipt>',
@@ -2108,5 +2265,62 @@ describe('@wcpos/receipt-renderer exports', () => {
 			globalThis.document = originalDocument;
 			globalThis.DOMParser = originalDOMParser;
 		}
+	});
+});
+
+describe('built-in receipt identity blocks', () => {
+	const legacy = {
+		columns: 48,
+		infoColLeft: 24,
+		infoColRight: 24,
+		nameColWidth: 36,
+		priceColWidth: 12,
+		store: { name: 'Shop' },
+		order: { printed: { datetime: 'Printed now' } },
+		fiscal: { receipt_number: 'old-number', is_reprint: false, reprint_count: 0 },
+		i18n: { copy: 'COPY' },
+	};
+	const render = (value: object, template = DEFAULT_THERMAL_TEMPLATE) => {
+		const ast = parseXml(Mustache.render(template, value));
+		return { html: renderHtml(ast), escpos: renderEscpos(ast), epos: renderEposXml(ast) };
+	};
+	it('renders the fiscal QR, copy and identity in all three outputs', () => {
+		const result = render({
+			...legacy,
+			software: { name: 'WCPOS', plugin_version: 'plugin', app_version: 'app' },
+			register: { name: 'Front till' },
+			fiscal: {
+				...legacy.fiscal,
+				qr_payload: 'https://example.test/fiscal/42',
+				is_reprint: true,
+				reprint_count: 1,
+				sale_time: { datetime: 'Sale time' },
+			},
+		});
+		expect(result.html).toContain('data-barcode-kind="qrcode"');
+		expect(result.epos).toContain(
+			'<symbol type="qrcode_model_2" level="level_m" width="4">https://example.test/fiscal/42</symbol>'
+		);
+		expect(includesSequence(result.escpos, [0x1d, 0x28, 0x6b])).toBe(true);
+		for (const output of [result.html, result.epos, new TextDecoder().decode(result.escpos)]) {
+			expect(output).toContain('COPY 1');
+			expect(output).toContain('Printed now');
+			expect(output).toContain('Front till');
+			expect(output).toContain('Sale time');
+			expect(output).toContain('WCPOS plugin');
+		}
+	});
+	it('leaves 1.3 output identical with all new blocks removed', () => {
+		const oldTemplate = DEFAULT_THERMAL_TEMPLATE.replace(
+			/  {{#fiscal.qr_payload}}[\s\S]*?{{\/fiscal.qr_payload}}\n/,
+			''
+		)
+			.replace(/  {{#fiscal.is_reprint}}[\s\S]*?{{\/fiscal.is_reprint}}\n/, '')
+			.replace(/  {{#software}}[\s\S]*?{{\/software}}\n/, '');
+		const result = render(legacy);
+		expect(result).toEqual(render(legacy, oldTemplate));
+		expect(result.html).not.toContain('data-barcode-kind="qrcode"');
+		expect(result.html).not.toContain('COPY');
+		expect(result.html).not.toContain('#old-number');
 	});
 });

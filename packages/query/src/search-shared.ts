@@ -7,10 +7,11 @@ import type { Observable } from 'rxjs';
 
 export type SearchInstance = {
 	collection: { $: Observable<unknown> };
-	find(term: string): Promise<EngineRxDocument[]>;
+	find(term: string, options?: { limit?: number }): Promise<EngineRxDocument[]>;
 };
 
 export type SearchableCollection = {
+	onClose?: (() => void | Promise<unknown>)[];
 	$: Observable<unknown>;
 	options?: { searchFields?: string[] };
 	find(query?: Record<string, unknown>): { exec(): Promise<EngineRxDocument[]> };
@@ -26,6 +27,12 @@ export type SearchableCollection = {
 };
 
 export const searchLogger = getLogger(['wcpos', 'query', 'search']);
+
+/**
+ * Collapse re-runs while sync churn streams source-collection events: the
+ * document scan lanes and the catalogue blob both re-answer on this cadence.
+ */
+export const SEARCH_SCAN_RETHROTTLE_MS = 500;
 
 /**
  * One rebuild per collection:locale per session, shared by every path that can

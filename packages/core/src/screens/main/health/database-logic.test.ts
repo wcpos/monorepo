@@ -9,6 +9,7 @@ import {
 	estimateCollectionBytes,
 	formatBytes,
 	isReadyToSell,
+	isServerBackingOff,
 	relativeTimeParts,
 	stuckCountsByRow,
 	totalLocalRecords,
@@ -45,6 +46,9 @@ describe('database page logic', () => {
 	});
 
 	it('never computes a percentage for windowed collections even with a fresh census', () => {
+		const refunds = deriveCollectionRow('refunds', 10, census(100));
+		expect(refunds.windowed).toBe(true);
+		expect(refunds.percentLocal).toBeNull();
 		const orders = deriveCollectionRow('orders', 200, census(17887));
 		expect(orders.windowed).toBe(true);
 		expect(orders.percentLocal).toBeNull();
@@ -155,5 +159,22 @@ describe('stuckCountsByRow', () => {
 				{ collection: 'mystery' },
 			])
 		).toEqual({ products: 2, taxRates: 1 });
+	});
+});
+
+describe('isServerBackingOff', () => {
+	it('backs off for a raised multiplier', () => {
+		expect(isServerBackingOff({ multiplier: 2, retryAfterUntilMs: null }, 1_000)).toBe(true);
+	});
+
+	it('backs off only while the Retry-After window is in the future', () => {
+		const pressure = { multiplier: 1, retryAfterUntilMs: 2_000 };
+		expect(isServerBackingOff(pressure, 1_000)).toBe(true);
+		expect(isServerBackingOff(pressure, 2_000)).toBe(false);
+		expect(isServerBackingOff(pressure, 2_001)).toBe(false);
+	});
+
+	it('does not back off when both signals are clear', () => {
+		expect(isServerBackingOff({ multiplier: 1, retryAfterUntilMs: null }, 1_000)).toBe(false);
 	});
 });

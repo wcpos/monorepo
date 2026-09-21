@@ -1,8 +1,12 @@
+import 'whatwg-fetch';
+
 import { renderHook } from '@testing-library/react';
+import { CanceledError, isCancel } from 'axios';
 
 import { AppInfo } from '@wcpos/utils/app-info';
 
 jest.mock('@wcpos/utils/logger', () => {
+	const debug = jest.fn();
 	const info = jest.fn();
 	const error = jest.fn();
 	const warn = jest.fn();
@@ -11,14 +15,17 @@ jest.mock('@wcpos/utils/logger', () => {
 		context: { name: 'Error', message: 'network down' },
 	}));
 	return {
-		getLogger: jest.fn(() => ({ debug: jest.fn(), info, warn, error })),
+		getLogger: jest.fn(() => ({ debug, info, warn, error })),
 		getDatabaseEpoch: jest.fn(() => 0),
 		mapExceptionToCode,
+		__debug: debug,
 		__info: info,
 		__error: error,
 		__warn: warn,
 	};
 });
+
+jest.mock('./refresh-access-token', () => ({ refreshAccessToken: jest.fn(async () => 'fresh') }));
 
 jest.mock('./http', () => ({
 	http: { request: jest.fn(), isCancel: jest.fn(() => false) },
@@ -38,11 +45,15 @@ jest.mock('./request-state-manager', () => ({
 
 /* eslint-disable import/first -- mocks must precede the code under test */
 import { http } from './http';
+import { createTokenRefreshHandler } from './create-token-refresh-handler';
 import { requestStateManager } from './request-state-manager';
-import { useHttpClient } from './use-http-client';
+import { useHttpClient, type WcposRequestConfig } from './use-http-client';
+
+import type { HttpErrorHandler } from './types';
 /* eslint-enable import/first */
 
 const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
+	__debug: jest.Mock;
 	__info: jest.Mock;
 	__error: jest.Mock;
 	__warn: jest.Mock;
@@ -72,10 +83,10 @@ describe('useHttpClient network audit logs', () => {
 		});
 
 		const config = (http.request as jest.Mock).mock.calls[0][0];
-		expect(config.headers['X-WCPOS']).toBe(1);
-		expect(config.headers).not.toHaveProperty('X-WCPOS-Protocol');
-		expect(config.headers).not.toHaveProperty('X-WCPOS-Client');
-		expect(config.headers).not.toHaveProperty('User-Agent');
+		expect(config.headers['x-wcpos']).toBe('1');
+		expect(config.headers).not.toHaveProperty('x-wcpos-protocol');
+		expect(config.headers).not.toHaveProperty('x-wcpos-client');
+		expect(config.headers).not.toHaveProperty('user-agent');
 	});
 
 	it('stamps protocol and client headers outside web', async () => {
@@ -88,8 +99,8 @@ describe('useHttpClient network audit logs', () => {
 			await result.current.get('https://example.com/wp-json/wcpos/v2/products');
 
 			const config = (http.request as jest.Mock).mock.calls[0][0];
-			expect(config.headers['X-WCPOS-Protocol']).toBe('2');
-			expect(config.headers['X-WCPOS-Client']).toBe(`electron/${AppInfo.version}`);
+			expect(config.headers['x-wcpos-protocol']).toBe('2');
+			expect(config.headers['x-wcpos-client']).toBe(`electron/${AppInfo.version}`);
 		} finally {
 			AppInfo.platform = webPlatform;
 		}
@@ -106,8 +117,8 @@ describe('useHttpClient network audit logs', () => {
 		} as never);
 
 		const config = (http.request as jest.Mock).mock.calls[0][0];
-		expect(config.headers['X-WCPOS-Protocol']).toBe('2');
-		expect(config.headers['X-WCPOS-Client']).toBe(`web/${AppInfo.version}`);
+		expect(config.headers['x-wcpos-protocol']).toBe('2');
+		expect(config.headers['x-wcpos-client']).toBe(`web/${AppInfo.version}`);
 	});
 
 	it('persists mutating responses with a sanitized searchable endpoint', async () => {
@@ -141,7 +152,7 @@ describe('useHttpClient network audit logs', () => {
 			)
 		).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				method: 'GET',
@@ -168,7 +179,7 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'SYNC131',
 			context: expect.objectContaining({
 				serverCode: 'merchant_plugin_unknown_error',
@@ -211,7 +222,7 @@ describe('useHttpClient network audit logs', () => {
 
 		await expect(result.current.get('/wc/v3/products')).rejects.toBe(failure);
 
-		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed', {
+		expect(loggerMock.__error).toHaveBeenCalledWith('HTTP request failed: GET /wc/v3/products', {
 			code: 'CLIENT999',
 			context: expect.objectContaining({
 				status: 0,
@@ -233,15 +244,171 @@ describe('useHttpClient network audit logs', () => {
 		).rejects.toBe(failure);
 
 		expect(loggerMock.__error).not.toHaveBeenCalled();
-		expect(loggerMock.__warn).toHaveBeenCalledWith('HTTP request failed', {
-			code: 'CLIENT999',
-			context: expect.objectContaining({
-				method: 'GET',
-				endpoint: '/wp-content/uploads/product.jpg',
-				status: 0,
-				codeFallback: true,
-			}),
+		expect(loggerMock.__warn).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/product.jpg',
+			{
+				code: 'CLIENT999',
+				context: expect.objectContaining({
+					method: 'GET',
+					endpoint: '/wp-content/uploads/product.jpg',
+					status: 0,
+					codeFallback: true,
+				}),
+			}
+		);
+	});
+
+	it('logs a request-owned failureCode instead of reading a non-REST 404 as a missing REST route', async () => {
+		// WordPress answers a missing upload with its HTML 404 page; as an
+		// arraybuffer it carries no WP error code, so without the request-owned
+		// code the status table would attribute it to AUTH311 (REST route missing).
+		const failure = Object.assign(new Error('Request failed with status code 404'), {
+			response: { status: 404, data: new ArrayBuffer(8) },
 		});
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/2016/03/product-300x300.jpg', {
+				quietErrors: true,
+				failureCode: 'PRODUCT201',
+			})
+		).rejects.toBe(failure);
+
+		expect(loggerMock.__error).not.toHaveBeenCalled();
+		expect(loggerMock.__warn).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/2016/03/product-300x300.jpg',
+			{
+				code: 'PRODUCT201',
+				context: expect.objectContaining({ status: 404 }),
+			}
+		);
+		expect(loggerMock.__warn.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
+	});
+
+	it('logs a request-owned failureCode for a transport failure instead of the CLIENT999 fallback', async () => {
+		const failure = new Error('Network Error');
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/product.jpg', {
+				quietErrors: true,
+				failureCode: 'PRODUCT201',
+			})
+		).rejects.toBe(failure);
+
+		expect(loggerMock.__warn).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/product.jpg',
+			{
+				code: 'PRODUCT201',
+				context: expect.objectContaining({ status: 0 }),
+			}
+		);
+		expect(loggerMock.__warn.mock.calls[0][1].context).not.toHaveProperty('codeFallback');
+	});
+
+	it('lets a WordPress error body outrank the request-owned failureCode', async () => {
+		const failure = Object.assign(new Error('request failed'), {
+			response: {
+				status: 401,
+				data: { code: 'rest_forbidden', message: 'Sorry', data: { status: 401 } },
+			},
+		});
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const { result } = renderHook(() => useHttpClient());
+
+		await expect(
+			result.current.get('/wp-content/uploads/product.jpg', { failureCode: 'PRODUCT201' })
+		).rejects.toBe(failure);
+
+		// rest_forbidden maps directly to AUTH201; asserting that exact code (rather
+		// than "not PRODUCT201") also rules out the status fallback winning.
+		expect(loggerMock.__error).toHaveBeenCalledWith(
+			'HTTP request failed: GET /wp-content/uploads/product.jpg',
+			expect.objectContaining({
+				code: 'AUTH201',
+				context: expect.objectContaining({ serverCode: 'rest_forbidden' }),
+			})
+		);
+	});
+
+	it.each([false, true])(
+		'logs handler failure only for a replacement error (%s)',
+		async (replace) => {
+			const failure = Object.assign(new Error('expired'), {
+				response: { status: 401 },
+				isRefreshTokenInvalid: true,
+			});
+			const handlerError = replace ? new Error('refresh broke') : failure;
+			(http.request as jest.Mock).mockRejectedValue(failure);
+			const recovered = { status: 200, data: {} } as import('axios').AxiosResponse;
+			const fallback = jest.fn(async () => recovered);
+			const { result } = renderHook(() =>
+				useHttpClient([
+					{
+						name: 'token-refresh',
+						priority: 100,
+						intercepts: true,
+						canHandle: () => true,
+						handle: async () => {
+							throw handlerError;
+						},
+					},
+					{ name: 'fallback', canHandle: () => true, handle: fallback },
+				])
+			);
+			if (replace) {
+				await expect(result.current.get('/wc/v3/products')).rejects.toBe(handlerError);
+				expect(fallback).not.toHaveBeenCalled();
+				expect(loggerMock.__error).toHaveBeenCalledWith(
+					'Error handler token-refresh threw an error',
+					expect.objectContaining({
+						code: 'CLIENT999',
+						context: expect.objectContaining({ error: 'refresh broke' }),
+					})
+				);
+			} else {
+				await expect(result.current.get('/wc/v3/products')).resolves.toBe(recovered);
+				expect(fallback).toHaveBeenCalledTimes(1);
+				expect(loggerMock.__error).not.toHaveBeenCalled();
+				expect(loggerMock.__debug).toHaveBeenCalledWith(expect.any(String), {
+					context: { handlerName: 'token-refresh', status: 401 },
+				});
+			}
+		}
+	);
+
+	it('rejects with an intercepting handler cancellation without error-level logging', async () => {
+		const failure = Object.assign(new Error('expired'), { response: { status: 401 } });
+		const cancellation = new CanceledError();
+		(http.request as jest.Mock).mockRejectedValue(failure);
+		const cancelSpy = jest.spyOn(http, 'isCancel').mockImplementation(isCancel);
+		const nextHandler = jest.fn();
+		const { result } = renderHook(() =>
+			useHttpClient([
+				{
+					name: 'fallback-auth-handler',
+					priority: 50,
+					intercepts: true,
+					canHandle: () => true,
+					handle: async () => {
+						throw cancellation;
+					},
+				},
+				{ name: 'next', canHandle: () => true, handle: nextHandler },
+			])
+		);
+		try {
+			await expect(result.current.get('/wc/v3/products')).rejects.toBe(cancellation);
+			expect(nextHandler).not.toHaveBeenCalled();
+			expect(loggerMock.__error).not.toHaveBeenCalled();
+			expect(loggerMock.__debug).toHaveBeenCalledWith(expect.stringContaining('CanceledError'), {
+				context: { handlerName: 'fallback-auth-handler', status: 401 },
+			});
+		} finally {
+			cancelSpy.mockReturnValue(false);
+		}
 	});
 
 	it('does not persist a recovered request as a failure', async () => {
@@ -329,5 +496,141 @@ describe('useHttpClient network audit logs', () => {
 		await result.current.get('/wc/v3/products', { timeout: 0 });
 
 		expect(http.request).toHaveBeenCalledWith(expect.objectContaining({ timeout: 0 }));
+	});
+});
+
+describe('request preamble dispatch seam', () => {
+	const canonical: WcposRequestConfig = {
+		baseURL: 'https://shop.test/blog/wp-json/wcpos/v2/orders',
+		url: '/42',
+		wcposPreamble: {
+			purpose: 'rest',
+			accessToken: 'old',
+			storeId: 7,
+			site: { wp_api_url: 'https://shop.test/blog/?rest_route=/' },
+		},
+	};
+	beforeEach(() => {
+		jest.clearAllMocks();
+		(http.request as jest.Mock).mockResolvedValue({ status: 200, data: {} });
+	});
+	it('composes orders plus /42 before rewriting, serializes once and strips metadata before IPC', async () => {
+		const serialize = jest.fn(() => 'tags=a&tags=b');
+		const { result } = renderHook(() => useHttpClient());
+		await result.current.request({
+			...canonical,
+			params: { tags: ['a', 'b'] },
+			paramsSerializer: { serialize },
+		});
+		const sent = (http.request as jest.Mock).mock.calls[0][0];
+		const url = new URL(sent.url);
+		expect(url.pathname).toBe('/blog/');
+		expect(url.searchParams.get('rest_route')).toBe('/wcpos/v2/orders/42');
+		expect(url.searchParams.getAll('tags')).toEqual(['a', 'b']);
+		expect(url.searchParams.get('store_id')).toBe('7');
+		expect(serialize).toHaveBeenCalledTimes(1);
+		for (const key of ['wcposPreamble', 'baseURL', 'params', 'paramsSerializer']) {
+			expect(sent).not.toHaveProperty(key);
+		}
+	});
+	it('pins the normalized URL for Woo array, status and timestamp parameters', async () => {
+		const { result } = renderHook(() => useHttpClient());
+		await result.current.request({
+			...canonical,
+			params: {
+				include: [1, 2],
+				status: 'wc-completed',
+				after: '2026-01-01T00:00:00',
+				_fields: 'id,status',
+			},
+		});
+		const sent = (http.request as jest.Mock).mock.calls[0][0];
+		expect(sent.url).toBe(
+			'https://shop.test/blog/?rest_route=%2Fwcpos%2Fv2%2Forders%2F42' +
+				'&include%5B%5D=1&include%5B%5D=2&status=wc-completed&after=2026-01-01T00%3A00%3A00&_fields=id%2Cstatus' +
+				`&wcpos_protocol=2&wcpos_client=web%2F${AppInfo.version}&store_id=7`
+		);
+	});
+	it.each(['test', 'development'])(
+		'preserves URLSearchParams on HEAD in %s',
+		async (environment) => {
+			const previous = process.env.NODE_ENV;
+			const params = new URLSearchParams('tag=a&tag=b');
+			try {
+				process.env.NODE_ENV = environment;
+				const { result } = renderHook(() => useHttpClient());
+				await result.current.request({ ...canonical, method: 'HEAD', params });
+				const sent = (http.request as jest.Mock).mock.calls[0][0];
+				const query = new URL(sent.url).searchParams;
+				expect(query.getAll('tag')).toEqual(['a', 'b']);
+				expect(query.get('_method')).toBe('HEAD');
+				expect(query.get('XDEBUG_SESSION')).toBe(environment === 'development' ? 'start' : null);
+				expect(sent.headers).not.toHaveProperty('x-wcpos');
+				expect(params.toString()).toBe('tag=a&tag=b');
+			} finally {
+				if (previous === undefined) delete process.env.NODE_ENV;
+				else process.env.NODE_ENV = previous;
+			}
+		}
+	);
+	it.each([false, true])(
+		'first try and post-refresh retry differ only in token (query auth: %s)',
+		async (query) => {
+			const config = {
+				...canonical,
+				...(query
+					? { params: { authorization: 'Bearer old' } }
+					: { headers: { Authorization: 'Bearer old' } }),
+				wcposPreamble: {
+					...canonical.wcposPreamble!,
+					site: { ...canonical.wcposPreamble!.site, use_jwt_as_param: query },
+				},
+			};
+			const handler = createTokenRefreshHandler({
+				site: config.wcposPreamble.site,
+				wpUser: {
+					getLatest() {
+						return this;
+					},
+					incrementalPatch: jest.fn(),
+				},
+				getHttpClient: jest.fn(),
+			});
+			(http.request as jest.Mock).mockRejectedValueOnce({ response: { status: 401 } });
+			const { result } = renderHook(() => useHttpClient([handler]));
+			await result.current.request(config);
+			const first = (http.request as jest.Mock).mock.calls[0][0];
+			const sent = (http.request as jest.Mock).mock.calls[1][0];
+			expect({ url: sent.url, headers: sent.headers }).toEqual({
+				url: query ? first.url.replace('Bearer+old', 'Bearer+fresh') : first.url,
+				headers: query ? first.headers : { ...first.headers, authorization: 'Bearer fresh' },
+			});
+			expect(sent).not.toHaveProperty('wcposPreamble');
+			expect(
+				query ? new URL(sent.url).searchParams.get('authorization') : sent.headers.authorization
+			).toBe('Bearer fresh');
+			expect(new URL(sent.url).searchParams.get('rest_route')).toBe('/wcpos/v2/orders/42');
+		}
+	);
+	it('header opt-out preserves third-party URL handling and idempotency headers survive', async () => {
+		const { result } = renderHook(() => useHttpClient());
+		await result.current.post(
+			'/image',
+			{ value: 1 },
+			{
+				wcposHeaders: false,
+				headers: { 'Idempotency-Key': 'key' },
+				params: new URLSearchParams('size=2'),
+			}
+		);
+		expect((http.request as jest.Mock).mock.calls[0][0]).toMatchObject({
+			url: '/image',
+			data: { value: 1 },
+			params: new URLSearchParams('size=2'),
+			headers: { 'idempotency-key': 'key' },
+		});
+		expect((http.request as jest.Mock).mock.calls[0][0].headers).not.toHaveProperty('x-wcpos');
+		await result.current.request({ ...canonical, headers: { 'Idempotency-Key': 'key' } });
+		expect((http.request as jest.Mock).mock.calls[1][0].headers['idempotency-key']).toBe('key');
 	});
 });

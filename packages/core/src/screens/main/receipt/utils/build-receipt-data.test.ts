@@ -1,5 +1,9 @@
+import { createInstance } from 'i18next';
+import { setI18n } from 'react-i18next';
+
 import { mapReceiptData, ReceiptDataSchema } from '@wcpos/printer/encoder';
 
+import en from '../../../../contexts/translations/locales/en/core.json';
 import { buildReceiptData } from './build-receipt-data';
 
 const mockOrder = {
@@ -989,4 +993,123 @@ describe('buildReceiptData', () => {
 			});
 		});
 	});
+});
+
+it.each([
+	['fixed_cart', 'Discount'],
+	['percent', 'Discount (10%)'],
+])('labels quick %s discounts for receipts and printers', async (discount_type, label) => {
+	const i18n = createInstance();
+	await i18n.init({
+		lng: 'en',
+		keySeparator: false,
+		resources: { en: { translation: en } },
+		interpolation: { prefix: '{', suffix: '}', escapeValue: false },
+	});
+	setI18n(i18n);
+	const receipt = buildReceiptData(
+		{
+			...mockOrder,
+			coupon_lines: [
+				{
+					code: 'pos-discount',
+					discount: '10',
+					discount_tax: '0',
+					meta_data: [
+						{
+							key: '_wcpos_quick_discount',
+							value: JSON.stringify({ discount_type, amount: '10.00' }),
+						},
+					],
+				},
+				{ code: 'SAVE10', discount: '1', discount_tax: '0' },
+			],
+		},
+		mockStore
+	);
+	expect(receipt.discounts.map((line) => line.label)).toEqual([label, 'SAVE10']);
+	expect(mapReceiptData(receipt as unknown as Record<string, unknown>).discounts[0].label).toBe(
+		label
+	);
+});
+
+it.each(['incl', 'excl'])(
+	'prints historical negative fees with signed totals (%s)',
+	(tax_display_cart) => {
+		const receipt = buildReceiptData(
+			{ ...mockOrder, fee_lines: [{ name: 'Legacy discount', total: '-5', total_tax: '-1' }] },
+			{ ...mockStore, tax_display_cart }
+		);
+		expect(receipt.fees).toEqual([
+			{
+				label: 'Legacy discount',
+				total_excl: '-5.00',
+				total_incl: '-6.00',
+				total: tax_display_cart === 'incl' ? '-6.00' : '-5.00',
+			},
+		]);
+	}
+);
+
+it('builds completed local sale identity and copy marking', () => {
+	const { AppInfo } = jest.requireActual('@wcpos/utils/app-info');
+	const receipt = buildReceiptData(
+		{
+			...mockOrder,
+			meta_data: [
+				{ key: '_wcpos_sale_time', value: '2026-09-11T10:30:00+02:00' },
+				{ key: '_wcpos_sale_tz', value: 'Europe/Madrid' },
+				{ key: '_wcpos_sale_counter', value: '42' },
+				{ key: '_wcpos_register', value: 'register-1' },
+			],
+		},
+		mockStore,
+		2,
+		{
+			register: { id: 'register-1', name: 'Front till' },
+			pluginVersion: 'plugin',
+			printCount: 2,
+		}
+	);
+	expect(receipt.software).toEqual({
+		name: 'WCPOS',
+		plugin_version: 'plugin',
+		app_version: AppInfo.version,
+		app_build: AppInfo.buildNumber,
+	});
+	expect(receipt.register).toEqual({ id: 'register-1', name: 'Front till' });
+	expect(receipt.fiscal).toMatchObject({
+		document_type: 'sale',
+		sale_tz: 'Europe/Madrid',
+		sale_counter: 42,
+		is_reprint: true,
+		reprint_count: 1,
+	});
+	expect(receipt.fiscal.sale_time?.datetime).toBe('Sep 11, 2026, 10:30 AM');
+	expect(ReceiptDataSchema.parse(mapReceiptData(receipt))).toMatchObject({
+		software: receipt.software,
+		register: receipt.register,
+		fiscal: receipt.fiscal.sale_time ? { sale_time: receipt.fiscal.sale_time } : {},
+	});
+});
+
+it('a bad stamped zone or time never aborts the render', () => {
+	const badZone = buildReceiptData(
+		{
+			...mockOrder,
+			meta_data: [
+				{ key: '_wcpos_sale_time', value: '2026-09-11T10:30:00+02:00' },
+				{ key: '_wcpos_sale_tz', value: 'Not/AZone' },
+			],
+		},
+		mockStore,
+		2
+	);
+	expect(badZone.fiscal.sale_time?.datetime).toEqual(expect.any(String));
+	const badTime = buildReceiptData(
+		{ ...mockOrder, meta_data: [{ key: '_wcpos_sale_time', value: 'yesterday-ish' }] },
+		mockStore,
+		2
+	);
+	expect(badTime.fiscal.sale_time).toBeNull();
 });

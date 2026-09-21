@@ -98,7 +98,11 @@ jest.mock('@wcpos/components/text', () => ({
 }));
 
 jest.mock('../../../../contexts/app-state', () => {
-	const useAppState = () => ({ store: { id: 1 }, wpCredentials: { id: 7 } });
+	const useAppState = () => ({
+		store: { id: 1 },
+		wpCredentials: { id: 7 },
+		site: { uuid: 'site-1' },
+	});
 	return { useAppState, useStoreSession: useAppState };
 });
 
@@ -234,3 +238,5 @@ describe('Orders list actions while storage is degraded (#163 ruling R5)', () =>
 		expect(mockPush).not.toHaveBeenCalled();
 	});
 });
+
+jest.mock('../../../../services/register/use-register', () => ({ useRegister: () => null }));

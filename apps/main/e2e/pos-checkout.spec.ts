@@ -211,13 +211,13 @@ test.describe('POS Cart - Order Actions', () => {
 	test('should add order note', async ({ posPage: page }) => {
 		await addTestProductToCart(page);
 
-		await page.getByTestId('order-note-button').click();
+		await page.getByTestId('order-meta-button').click();
 
-		const textarea = page.locator('textarea').first();
+		const textarea = page.getByTestId('order-note-input');
 		await expect(textarea).toBeVisible({ timeout: 15_000 });
 		await textarea.fill('Test order note from e2e');
 
-		const addNoteButton = page.getByTestId('add-note-button');
+		const addNoteButton = page.getByTestId('order-meta-save');
 		await expect(addNoteButton).toBeVisible({ timeout: 15_000 });
 		await addNoteButton.click();
 	});

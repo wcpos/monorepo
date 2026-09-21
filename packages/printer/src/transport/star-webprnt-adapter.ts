@@ -1,5 +1,6 @@
 import { buildConnectionError } from '../utils/connection-error';
 import { withTargetAddressSpace } from '../utils/local-fetch';
+import { logPrintJob } from './log-print-job';
 
 import type { PrinterTransport, PrintRawOptions } from '../types';
 
@@ -25,6 +26,15 @@ export class StarWebPrntAdapter implements PrinterTransport {
 	constructor(private url: string) {}
 
 	async printRaw(data: Uint8Array, options: PrintRawOptions = {}): Promise<void> {
+		await logPrintJob(
+			'WebPRNT',
+			{ transport: this.name, url: this.url, bytes: data.byteLength },
+			() => this.postWebPrnt(data, options)
+		);
+	}
+
+	/** Posts the job and reports the HTTP status the printer answered with. */
+	private async postWebPrnt(data: Uint8Array, options: PrintRawOptions): Promise<number> {
 		const base64 = uint8ArrayToBase64(data);
 		const cutPaper = options.cutPaper ?? true;
 
@@ -87,6 +97,7 @@ export class StarWebPrntAdapter implements PrinterTransport {
 		if (statusMatch && statusMatch[1] !== 'Normal') {
 			throw new Error(`Star printer reported status: ${statusMatch[1]}`);
 		}
+		return response.status;
 	}
 
 	async printHtml(_html: string): Promise<void> {

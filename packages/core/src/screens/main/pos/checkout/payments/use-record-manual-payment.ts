@@ -6,13 +6,24 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useQueryRuntime } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
-import type { PaymentMethodDescriptor } from '@wcpos/order-math';
+import {
+	hasSaleProvenance,
+	isCompletingStatus,
+	type PaymentMethodDescriptor,
+} from '@wcpos/order-math';
 import type { EngineRecord } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { patchEngineResident, useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
+import {
+	completionMetaFor,
+	persistSaleProvenance,
+	prepareSale,
+	refreshOrderRecord,
+} from '../sale-completion';
+import { useSaleContext } from '../hooks/use-sale-context';
 import { recordManualPayment } from './record-manual-payment';
 
 import type { RecordManualPaymentInput, RecordManualPaymentOutcome } from './record-manual-payment';
@@ -29,13 +40,24 @@ const logger = getLogger(['wcpos', 'payments']);
  * (`logs-logic.ts` `deriveStuckRecords`), and shows `context.reason` as its line —
  * so the cashier-readable sentence goes there, the machine reason beside it.
  */
-export function useRecordManualPayment(): (
+export function useRecordManualPayment(
+	options: {
+		/**
+		 * Record the local leg even while the till is online: the order's own save is still
+		 * queued (roadmap#171 rule 2), so the server copy — if there is one — is stale and a
+		 * payment posted against it would settle the wrong totals.
+		 */
+		offline?: boolean;
+	} = {}
+): (
 	order: EngineRecord<'orders'>,
 	method: PaymentMethodDescriptor,
 	input: RecordManualPaymentInput
 ) => Promise<RecordManualPaymentOutcome> {
 	const http = useRestHttpClient();
+	const ctx = useSaleContext();
 	const onlineStatus = useOnlineStatus();
+	const forceOffline = options.offline === true;
 	const { wpCredentials, store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
 	const manager = useQueryRuntime();
@@ -43,6 +65,15 @@ export function useRecordManualPayment(): (
 
 	return React.useCallback(
 		async (order, method, input) => {
+			const prepared = await prepareSale(ctx, {
+				order,
+				source: 'manual',
+				completing: false,
+				bindingStatus: 'none',
+				sessionRule: 'require',
+			});
+			if (!prepared.ok) throw new Error(prepared.reason);
+			const { registerId, sessionId } = prepared;
 			const payload = order.getLatest?.().payload ?? order.payload;
 			const paymentOrder = {
 				uuid: order.uuid,
@@ -52,11 +83,24 @@ export function useRecordManualPayment(): (
 				// RxDB serves object fields as Proxies; the ledger helpers need plain data.
 				meta_data: cloneDeep(payload.meta_data ?? []),
 			};
-			return recordManualPayment(paymentOrder, method, input, {
+			const outcome = await recordManualPayment(paymentOrder, method, input, {
 				post: (url, body) => http.post(url, body),
-				isOnline: () => onlineStatus.status === 'online-website-available',
+				isOnline: () => !forceOffline && onlineStatus.status === 'online-website-available',
 				cashierId: wpCredentials.id ?? 0,
 				storeId: store.id ? store.id : null,
+				registerId,
+				sessionId,
+				completionMeta: (meta) =>
+					completionMetaFor(ctx, meta, { sessionId, extraMeta: input.extraMeta }),
+				persistProvenance: async () => {
+					await persistSaleProvenance(ctx, {
+						order,
+						sessionId,
+						online: true,
+						extraMeta: input.extraMeta,
+					});
+					paymentOrder.meta_data = cloneDeep(order.getLatest().payload.meta_data ?? []);
+				},
 				currency: store.currency ?? '',
 				dp: store.price_num_decimals ?? 2,
 				patchAndEnqueue: async (changes) => {
@@ -68,13 +112,37 @@ export function useRecordManualPayment(): (
 					const status = (response?.data as { status?: unknown } | undefined)?.status;
 					return typeof status === 'string' ? status : null;
 				},
-				mirror: async (changes) => {
-					await patchEngineResident({
-						manager,
-						collection: 'orders',
-						recordId: order.uuid,
-						changes,
-					});
+				mirror: async (changes, { accepted }) => {
+					try {
+						await patchEngineResident({
+							manager,
+							collection: 'orders',
+							recordId: order.uuid,
+							changes,
+						});
+						if (
+							accepted &&
+							isCompletingStatus(changes.status ?? '') &&
+							!hasSaleProvenance(changes.meta_data)
+						) {
+							const meta_data = await completionMetaFor(ctx, changes.meta_data, {
+								sessionId,
+								extraMeta: input.extraMeta,
+							});
+							const patched = await localPatch({ document: order, data: { meta_data } });
+							if (!patched) throw new Error('provenance_save_failed');
+						}
+					} catch (error) {
+						// The store has already answered: the money is on the order there, and only
+						// this till's copy is behind. Swallowing that used to report a generic
+						// "checkout failed" on a payment the store had taken, which invites the
+						// cashier to take it again. Pull the store's copy so the ledger catches up,
+						// then let the caller report the gap for what it is.
+						if (paymentOrder.id) {
+							await refreshOrderRecord(manager, paymentOrder.id).catch(() => undefined);
+						}
+						throw error;
+					}
 				},
 				raiseAttention: ({ row, order: summary, reason }) => {
 					const number = paymentOrder.number || paymentOrder.uuid.slice(0, 8);
@@ -89,12 +157,19 @@ export function useRecordManualPayment(): (
 									})
 								: t('payments.refusal.exceeds_balance', values);
 					logger.error(message, {
+						// Two different stories with two different answers: an order already paid
+						// online needs a refund, an over-payment needs the store's balance taken
+						// instead. Neither is "payment handling hit an unexpected problem".
 						code:
 							reason === 'order_already_paid'
 								? ERROR_CODES.PAYMENT_ALREADY_PAID_ONLINE
-								: ERROR_CODES.PAYMENT_UNEXPECTED,
+								: ERROR_CODES.PAYMENT_EXCEEDS_BALANCE,
 						showToast: true,
-						terminal: { operationType: 'sync.record', outcome: 'failed' },
+						terminal: {
+							operationType: 'sync.record',
+							outcome: 'failed',
+							operationId: row.id,
+						},
 						context: {
 							collection: 'orders',
 							recordId: paymentOrder.uuid,
@@ -110,7 +185,16 @@ export function useRecordManualPayment(): (
 					});
 				},
 			});
+			if (outcome.kind === 'failed') {
+				logger.error('Checkout failed', {
+					code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+					showToast: true,
+					toast: { title: t('pos_cart.checkout_failed') },
+					context: { error: outcome.reason },
+				});
+			}
+			return outcome;
 		},
-		[http, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
+		[ctx, http, forceOffline, onlineStatus.status, wpCredentials.id, store, localPatch, manager, t]
 	);
 }

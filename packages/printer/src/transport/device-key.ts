@@ -1,11 +1,29 @@
+import type { PrinterProfile } from '../types';
+
 export const SERIAL_PREFIX = 'serial:';
+export const BLE_PREFIX = 'ble:';
+/** Bluetooth Classic (SPP) printers paired with an Android phone; the value is the MAC. */
+export const SPP_PREFIX = 'spp:';
 export const USB_PREFIX = 'usb:';
 export const WINSPOOL_PREFIX = 'winspool:';
 export const CLOUD_PREFIX = 'cloud:';
 export const SYSTEM_TARGET = 'system';
 
+/**
+ * True for the OS print dialog profile. A Windows winspool queue shares `connectionType: 'system'`
+ * (it is keyed by the spooler) but prints raw bytes, so every "is this the Print Dialog?" branch
+ * must go through here rather than testing the connection type.
+ */
+export function usesSystemPrintDialog(
+	profile: Pick<PrinterProfile, 'connectionType'> & { address?: string }
+): boolean {
+	return profile.connectionType === 'system' && !profile.address?.startsWith(WINSPOOL_PREFIX);
+}
+
 export type ParsedTarget =
 	| { kind: 'serial'; path: string; raw: string }
+	| { kind: 'ble'; deviceId: string; raw: string }
+	| { kind: 'spp'; address: string; raw: string }
 	| { kind: 'usb'; vid: number; pid: number; bus: number; address: number; raw: string }
 	| { kind: 'winspool'; queue: string; raw: string }
 	| { kind: 'cloud'; cloudPrinterId: string; raw: string }
@@ -19,6 +37,8 @@ const USB_KEY_PATTERN = /^usb:(\d+):(\d+):(\d+):(\d+)$/;
 
 export const TARGET_KIND_CONNECTION_TYPE = {
 	serial: 'bluetooth',
+	ble: 'bluetooth',
+	spp: 'bluetooth',
 	usb: 'usb',
 	winspool: 'system',
 	cloud: 'cloud',
@@ -32,6 +52,16 @@ export function parseTarget(value: string): ParsedTarget {
 	if (value.startsWith(SERIAL_PREFIX)) {
 		const path = value.slice(SERIAL_PREFIX.length);
 		return path ? { kind: 'serial', path, raw: value } : { kind: 'unknown', raw: value };
+	}
+
+	if (value.startsWith(BLE_PREFIX)) {
+		const deviceId = value.slice(BLE_PREFIX.length);
+		return deviceId ? { kind: 'ble', deviceId, raw: value } : { kind: 'unknown', raw: value };
+	}
+
+	if (value.startsWith(SPP_PREFIX)) {
+		const address = value.slice(SPP_PREFIX.length);
+		return address ? { kind: 'spp', address, raw: value } : { kind: 'unknown', raw: value };
 	}
 
 	const usbMatch = USB_KEY_PATTERN.exec(value);
@@ -67,6 +97,14 @@ export function buildSerialKey(path: string): string {
 	return `${SERIAL_PREFIX}${path}`;
 }
 
+export function buildBleKey(deviceId: string): string {
+	return `${BLE_PREFIX}${deviceId}`;
+}
+
+export function buildSppKey(address: string): string {
+	return `${SPP_PREFIX}${address}`;
+}
+
 export function buildUsbKey(p: { vid: number; pid: number; bus: number; address: number }): string {
 	return `${USB_PREFIX}${p.vid}:${p.pid}:${p.bus}:${p.address}`;
 }
@@ -84,6 +122,8 @@ export function connectionTypeForParsedTarget(
 ): TargetConnectionType | undefined {
 	if (
 		target.kind === 'serial' ||
+		target.kind === 'ble' ||
+		target.kind === 'spp' ||
 		target.kind === 'usb' ||
 		target.kind === 'winspool' ||
 		target.kind === 'cloud' ||

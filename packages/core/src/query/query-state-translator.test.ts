@@ -1,4 +1,5 @@
 import { orderBrowserQueryKey } from '@wcpos/query/testing';
+import { mintRemoteId } from '@wcpos/sync-core';
 
 import {
 	compileQuery,
@@ -19,6 +20,30 @@ type ExhaustiveFilterMap = {
 const exhaustiveFilterMap: ExhaustiveFilterMap = FILTER_TRANSLATORS;
 
 describe('query-state translator', () => {
+	// Remove the refunds-by-parent suffix: re-declaration produces an undefined requirement id.
+	it('gives re-declared parent refund demand a stable id and forced refresh', () => {
+		expect(
+			requirementsForCompiledQuery(
+				[
+					{
+						id: 'old',
+						kind: 'refunds-by-parent',
+						collection: 'refunds',
+						parentRemoteId: mintRemoteId(42, 'test'),
+					},
+				],
+				{ id: 'detail', forceRefresh: true }
+			)
+		).toEqual([
+			{
+				id: 'detail:refunds-by-parent',
+				kind: 'refunds-by-parent',
+				collection: 'refunds',
+				parentRemoteId: '42',
+				forceRefresh: true,
+			},
+		]);
+	});
 	it.each([
 		['price', 'sortable_price'],
 		['regular_price', 'regular_price'],
@@ -1009,5 +1034,23 @@ describe('logs preset filters', () => {
 				],
 			});
 		});
+	});
+});
+
+it('translates the register into both metadata reads and browse demand', () => {
+	const register = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+	const compiled = compileQuery(
+		'orders',
+		{
+			filters: { register },
+			search: '',
+			limit: 10,
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+		},
+		{ id: 'orders' }
+	);
+	expect(compiled.demand[0]).toMatchObject({ registerId: register });
+	expect(compiled.read.prefilter).toEqual({
+		'payload.meta_data': { $elemMatch: { key: '_wcpos_register', value: register } },
 	});
 });

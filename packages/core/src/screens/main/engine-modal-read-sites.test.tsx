@@ -35,6 +35,13 @@ jest.mock('./orders/edit/modal', () => ({ EditOrderModal: () => null }));
 jest.mock('./orders/refund/modal', () => ({ RefundOrderModal: () => null }));
 jest.mock('./orders/view/modal', () => ({ ViewOrderModal: () => null }));
 jest.mock('./pos/checkout/checkout', () => ({ Checkout: () => null }));
+// The checkout route decides between the modal and the in-column redirect from the payment
+// methods and the breakpoint; neither is under test here, and the real hooks drag app-state
+// (expo-crypto, ESM) into this jsdom suite.
+jest.mock('./hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ loaded: false, unsupportedSchema: false }),
+}));
+jest.mock('../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
 jest.mock('./products/edit/product/modal', () => ({ EditProductModal: () => null }));
 jest.mock('./products/edit/variation/modal', () => ({ EditVariationModal: () => null }));
 jest.mock('./receipt/receipt', () => ({ Receipt: () => null }));

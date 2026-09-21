@@ -24,6 +24,9 @@
  * collections (the web app's createDatabase recipe) open identically.
  */
 
+import { addRxPlugin } from 'rxdb';
+import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
+
 import {
 	MUTATION_QUEUE_COLLECTION,
 	recordMutationQueueMigrationStrategies,
@@ -35,6 +38,7 @@ import { productSchema } from './product-schema';
 import { variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
+import { refundSchema } from './refund-schema';
 import {
 	brandSchema,
 	categorySchema,
@@ -54,6 +58,8 @@ import { changeSignalStateSchema } from '../change-signal/change-signal-state-sc
 
 import type { RxDatabase } from 'rxdb';
 
+addRxPlugin(RxDBLocalDocumentsPlugin);
+
 /** The syncable collections a host can reset through the public handle. */
 export const SYNC_COLLECTION_NAMES = [
 	'orders',
@@ -65,6 +71,7 @@ export const SYNC_COLLECTION_NAMES = [
 	'brands',
 	'tags',
 	'coupons',
+	'refunds',
 ] as const;
 
 export type SyncCollectionName = (typeof SYNC_COLLECTION_NAMES)[number];
@@ -81,6 +88,10 @@ export const MUTATION_QUEUE_RXDB_COLLECTION = 'recordMutations';
 /** Engine-owned kv collection backing the default checkpoints StringStore. */
 export const ENGINE_KV_COLLECTION = 'engineKv';
 
+// Whole expectedRecordIds arrays retained 6.67 MiB for 13 lanes in the 2026-09-15 soak.
+// One (not zero, unsupported by RxDB slicing) lets lagging queries re-read storage.
+export const COVERAGE_LANE_HISTORY_LIMIT = 1;
+
 export const engineKvSchema = {
 	title: 'Sync engine internal key-value store',
 	version: 0,
@@ -93,18 +104,25 @@ export const engineKvSchema = {
 	required: ['key', 'value'],
 } as const;
 
-export type CollectionCreator = { schema: unknown; migrationStrategies?: unknown };
+export type CollectionCreator = {
+	schema: unknown;
+	migrationStrategies?: unknown;
+	localDocuments?: boolean;
+	options?: Record<string, unknown>;
+};
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
-	orders: { schema: orderSchema },
-	products: { schema: productSchema },
-	variations: { schema: variationSchema },
+	orders: { schema: orderSchema, localDocuments: true },
+	// #2073: full-token indexes used 143 MiB at 20k rows; catalogue search uses a folded blob.
+	products: { schema: productSchema, options: { searchIndex: false } },
+	variations: { schema: variationSchema, options: { searchIndex: false } },
 	customers: { schema: customerSchema },
 	taxRates: { schema: taxRateSchema },
 	categories: { schema: categorySchema },
 	brands: { schema: brandSchema },
 	tags: { schema: tagSchema },
 	coupons: { schema: couponSchema },
+	refunds: { schema: refundSchema },
 };
 
 /** Deliberate `/testing` seam for hosts that open schema-canary databases. */
@@ -220,4 +238,7 @@ export async function resetDerivableMetadataCollection(
 	}
 	await live.remove();
 	await db.addCollections({ [name]: SCHEDULER_TIER_CREATORS[name] as never });
+	if (name === 'coverageLanes') {
+		db.collections[name]._changeEventBuffer.limit = COVERAGE_LANE_HISTORY_LIMIT;
+	}
 }

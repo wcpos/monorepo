@@ -10,6 +10,8 @@ import { BehaviorSubject } from 'rxjs';
 
 import {
 	clearStorageDegradation,
+	noteStorageWriteDeadlinePassed,
+	STORAGE_WRITE_DEADLINE_MS,
 	wrappedErrorHandlerStorage,
 } from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { getLogger } from '@wcpos/utils/logger';
@@ -28,6 +30,7 @@ import { VoidButton } from './void';
  * `useStorageDegraded` — the seam that failed on March 6 is the one under test.
  */
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockPushDocument = jest.fn();
 const mockEngineWrite = jest.fn(async () => ({
@@ -39,8 +42,13 @@ const mockLogger = getLogger(['test']) as unknown as {
 	success: jest.Mock;
 };
 
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
+jest.mock('../../checkout/refusal-toast', () => ({ showOrderRefusedToast: jest.fn() }));
+
 jest.mock('expo-router', () => ({
-	useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
+	useRouter: () => ({ push: mockPush, replace: mockReplace, setParams: mockSetParams }),
 }));
 
 jest.mock('rxdb', () => ({ isRxDocument: () => true }));
@@ -234,6 +242,54 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 		expect(mockPush).not.toHaveBeenCalled();
 	});
 
+	it('refuses Pay during a real write stall and proceeds after storage answers', async () => {
+		let resolveWrite!: (value: { error: [] }) => void;
+		const wrapped = await wrappedErrorHandlerStorage({
+			storage: {
+				name: 'mock-storage',
+				createStorageInstance: jest.fn().mockResolvedValue({
+					schema: { primaryKey: 'id' },
+					bulkWrite: () =>
+						new Promise<{ error: [] }>((resolve) => {
+							resolveWrite = resolve;
+						}),
+					findDocumentsById: jest.fn(),
+					query: jest.fn(),
+					count: jest.fn(),
+					getAttachmentData: jest.fn(),
+					cleanup: jest.fn(),
+					remove: jest.fn(),
+					close: jest.fn().mockResolvedValue(undefined),
+					collectionName: 'orders',
+				}),
+			} as never,
+		}).createStorageInstance({ databaseName: 'stalled-checkout' } as never);
+		const write = wrapped.bulkWrite([], 'test');
+		expect(noteStorageWriteDeadlinePassed({ waitedMs: STORAGE_WRITE_DEADLINE_MS })).toBe(true);
+		render(<PayButton />);
+		const button = screen.getByTestId('checkout-button');
+		expect(button).toBeDisabled();
+		await act(async () => {
+			await mockHandlers.get('checkout-button')!();
+		});
+		expectBlockedLog();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		expect(mockPush).not.toHaveBeenCalled();
+		await act(async () => {
+			resolveWrite({ error: [] });
+			await write;
+		});
+		expect(button).not.toBeDisabled();
+		mockLogger.error.mockClear();
+		await act(async () => {
+			fireEvent.click(button);
+		});
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+		expect(mockPush).toHaveBeenCalledTimes(1);
+		expect(mockLogger.error).not.toHaveBeenCalled();
+		await wrapped.close();
+	});
+
 	it('disables save to server and refuses to push the order', async () => {
 		render(<SaveButton />);
 		await degradeStorage('degraded-save');
@@ -273,6 +329,7 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 	 * storage was healthy and the worker died mid-push. The rendered `disabled`
 	 * state cannot help here — the guard has to re-read the latch after the await
 	 * or the cashier lands in the payment modal for an order that never persisted.
+	 * (This lane has no payment-methods contract, so it still waits for the save.)
 	 */
 	it('does not open the payment modal when the worker dies mid-checkout', async () => {
 		let resolvePush: (value: unknown) => void = () => undefined;
@@ -294,5 +351,11 @@ describe('POS money paths while storage is degraded (#163 ruling R5)', () => {
 
 		await waitFor(() => expectBlockedLog());
 		expect(mockPush).not.toHaveBeenCalled();
+		expect(mockReplace).not.toHaveBeenCalled();
 	});
 });
+
+jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
+jest.mock('../../../hooks/use-payment-methods', () => ({
+	usePaymentMethods: () => ({ loaded: false, unsupportedSchema: false }),
+}));

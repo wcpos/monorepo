@@ -43,6 +43,7 @@ import type {
 
 import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
 import {
+	classifyMoneyDivergence,
 	compareOrderMoney,
 	type MoneyDivergenceField,
 	type MoneyPrecisionMode,
@@ -71,7 +72,8 @@ export { fetchOrderServerRevision } from './order-server-revision';
  * those as new items (duplicated cart, multiplied total, real money). The
  * resident learned that identity when the create was acked (`reconcile`'s
  * graft), so the resident is the authority here: whatever ids it holds are
- * stamped onto the outgoing payload, and nothing else about it is read.
+ * stamped onto the outgoing payload. Its reconciled line_items also retire
+ * stale ids in frozen snapshots; local removals retain ids as tombstones until acked.
  *
  * Doing this at PUSH time rather than rewriting the queue rows is deliberate.
  * The durable row stays the honest record of what the cashier intended; no
@@ -91,13 +93,38 @@ async function withGraftedLineIdentity<T extends QueuedMutation>(
 ): Promise<T> {
 	const facet = writeFacetFor(mutation.collectionName);
 	if (!facet?.graftAckIdentity || mutation.operation === 'delete') return mutation;
+	if (mutation.operation === 'create') {
+		// WOOCOMMERCE-POS-2N3: WooCommerce POST rejects line ids; born-twice discards the payload.
+		const payload = { ...((mutation.payload ?? {}) as Record<string, unknown>) };
+		for (const field of ['line_items', 'fee_lines', 'shipping_lines', 'coupon_lines']) {
+			const lines = payload[field];
+			if (!Array.isArray(lines)) continue;
+			payload[field] = lines.map((line: unknown) => {
+				if (typeof line !== 'object' || line === null || Array.isArray(line)) return line;
+				const { id: _id, ...rest } = line as Record<string, unknown>;
+				return rest;
+			});
+		}
+		return { ...mutation, payload };
+	}
 	const resident = await database.collections[mutation.collectionName]
 		?.findOne(mutation.recordId)
 		.exec();
-	const residentPayload = (resident?.toJSON() as { payload?: unknown } | undefined)?.payload;
+	const row = resident?.toJSON() as
+		{ payload?: Record<string, unknown>; remoteId?: unknown } | undefined;
+	const residentPayload = row?.payload;
 	if (typeof residentPayload !== 'object' || residentPayload === null) return mutation;
 	const payload = (mutation.payload ?? {}) as Record<string, unknown>;
-	const grafted = facet.graftAckIdentity(payload, residentPayload as Record<string, unknown>);
+	// Pending create acks promote remoteId without adopting payload.id.
+	const remoteId = Number(row?.remoteId);
+	const grafted = facet.graftAckIdentity(
+		payload,
+		{
+			...residentPayload,
+			...(residentPayload.id === undefined && Number.isFinite(remoteId) ? { id: remoteId } : {}),
+		},
+		{ serverLinesComplete: true }
+	);
 	return grafted === payload ? mutation : { ...mutation, payload: grafted };
 }
 
@@ -230,6 +257,22 @@ export type WriteAnnihilatedEvent = {
 	collection: string;
 	recordId: string;
 	mutationId: string;
+};
+
+/**
+ * A pending mutation was REPLACED at enqueue by a same-record coalesce
+ * (`write-intents`): its queue row is gone under a FRESH mutationId, so no
+ * terminal event will ever name the old id. NOT terminal — a waiter re-binds
+ * to `replacedBy` and keeps waiting. Without it a checkout that waits on
+ * events rather than a clock (roadmap#171) would wedge on the first cart edit
+ * made while its save was still queued.
+ */
+export type WriteSupersededEvent = {
+	type: 'write-superseded';
+	collection: string;
+	recordId: string;
+	mutationId: string;
+	replacedBy: string;
 };
 
 export type WriteDrainReport = {
@@ -388,6 +431,8 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							 * holds by design is never reported to the cashier as a change
 							 * stuck waiting to send.
 							 */
+							// Paid snapshots discard held rows via createOrderHeldRowDiscarder.
+							// A paid status must never RELEASE their stale open-cart payload.
 							shouldHold: async (mutation) => {
 								if (!isOpenCartHoldCandidate(mutation)) return false;
 								const doc = await database.collections.orders?.findOne(mutation.recordId).exec();
@@ -425,6 +470,21 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 							// server-side bookkeeping churn — not a competing edit. Every other
 							// collection keeps parking on the first conflict.
 							autoRecoverConflict: (mutation) => mutation.collectionName === 'orders',
+							reconcileConflict: async (mutation, current) => {
+								const facet = writeFacetFor(mutation.collectionName);
+								if (!facet?.graftAckIdentity || mutation.operation === 'delete') return;
+								const doc = await database.collections[mutation.collectionName]
+									?.findOne(mutation.recordId)
+									.exec();
+								await doc?.incrementalModify((data: Record<string, unknown>) => ({
+									...data,
+									payload: facet.graftAckIdentity!(
+										(data.payload ?? {}) as Record<string, unknown>,
+										current,
+										{ serverLinesComplete: true }
+									),
+								}));
+							},
 							refreshRevision: async (mutation) => {
 								const facet = writeFacetFor(mutation.collectionName);
 								if (!facet) {
@@ -626,6 +686,7 @@ export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
 										mutationId: ack.mutationId,
 										outcome: 'failed',
 										mode: ack.mode,
+										roundingClass: classifyMoneyDivergence(ack.fields),
 										divergentFields: ack.fields.map((field) => field.field).join(','),
 										detail: ack.fields
 											.map((field) => `${field.field}: ${field.expected} -> ${field.got}`)

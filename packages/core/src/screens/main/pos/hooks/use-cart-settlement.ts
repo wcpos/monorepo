@@ -10,6 +10,7 @@ import { useRecordField } from '@wcpos/query';
 
 import { useAppliedCouponReferenceDemand } from '../../../../query';
 import { useCartConfig } from './use-cart-config';
+import { readQuickDiscountIntent } from './quick-discount';
 import { useCouponContext } from './use-coupon-context';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
@@ -137,7 +138,9 @@ export const useCartSettlement = () => {
 	const feeLines = useRecordField(currentOrderRecord, (order) => order.payload.fee_lines);
 	const shippingLines = useRecordField(currentOrderRecord, (order) => order.payload.shipping_lines);
 	const couponLines = useRecordField(currentOrderRecord, (order) => order.payload.coupon_lines);
-	const activeCouponLineCount = (couponLines || []).filter((line) => line.code != null).length;
+	const catalogCouponLineCount = (couponLines || []).filter(
+		(line) => line.code != null && !readQuickDiscountIntent(line)
+	).length;
 	const { localPatch } = useLocalMutation();
 	const { getCouponContext } = useCouponContext();
 	const { serverOwnsMoney } = useOrderMoneyDivergence(currentOrderRecord.uuid);
@@ -155,7 +158,7 @@ export const useCartSettlement = () => {
 		whenSettled: whenCouponReferencesSettled,
 		whenSettledInBackground: whenCouponReferencesSettledInBackground,
 		generation: couponReferenceGeneration,
-	} = useAppliedCouponReferenceDemand(activeCouponLineCount > 0);
+	} = useAppliedCouponReferenceDemand(catalogCouponLineCount > 0);
 
 	// Continuation + single-flight state. Refs, not state: nothing renders off them, and a
 	// re-render must not disarm a wait that is still legitimate.
@@ -313,7 +316,10 @@ export const useCartSettlement = () => {
 			if (replayingRef.current === flightKey) return;
 			replayingRef.current = flightKey;
 			try {
-				const couponContext = await getCouponContext(freshOrder.payload.line_items || []);
+				const couponContext = await getCouponContext(
+					freshOrder.payload.line_items || [],
+					freshOrder.payload.coupon_lines || []
+				);
 				const result = settleCart(
 					snapshotFromOrderJSON(freshOrder.toMutableJSON().payload),
 					cartConfig,
@@ -529,7 +535,10 @@ export const useCartSettlement = () => {
 		// the missing-coupon gate (or validate a category-restricted coupon against an
 		// empty tree). Wait for it, and if the wait times out, keep waiting off the
 		// critical path rather than replaying against residents we know are not ready.
-		if (!(await whenCouponReferencesSettled())) {
+		const needsReferences = (afterMoney.payload.coupon_lines || []).some(
+			(line) => line.code != null && !readQuickDiscountIntent(line)
+		);
+		if (needsReferences && !(await whenCouponReferencesSettled())) {
 			// Bailing used to strand the cashier on stale totals until the next edit (#963).
 			armReplayContinuation(afterMoney);
 			return;

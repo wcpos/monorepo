@@ -3,10 +3,14 @@
  */
 import * as React from 'react';
 
-import { act, render } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
+import { BehaviorSubject, map, take } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import { LegacyTab } from '../tender/legacy-tab';
+import { persistSaleProvenance, prepareSale } from '../sale-completion';
+import { recordCompletionAttempt } from '../completion-journal';
 import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview';
 
 // Capture the props handed to the (mocked) WebView so the test can drive the
@@ -14,12 +18,28 @@ import { PAYMENT_FRAME_LOAD_TIMEOUT_MS, PaymentWebview } from './payment-webview
 let webViewProps: Record<string, any> = {};
 // Every mount of the (mocked) WebView: a reload is a remount (new `key`).
 let webViewMounts = 0;
+const mockPostMessage = jest.fn();
 const mockGet = jest.fn();
 const mockReplace = jest.fn();
 const mockSetCurrentOrderID = jest.fn();
 const mockStockAdjustment = jest.fn();
 const mockEngineRequire = jest.fn();
 const mockAdoptOrderSnapshot = jest.fn();
+const mockUserDB = {};
+const mockSite = { uuid: 'site' };
+let mockOnlineStatus = 'offline';
+const mockPushDocument = jest.fn();
+const mockLocalPatch = jest.fn();
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: mockOnlineStatus }),
+}));
+jest.mock('../../../contexts/use-push-document', () => ({
+	usePushDocument: () => mockPushDocument,
+}));
+jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
+	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
+}));
+
 let autoShowReceipt = false;
 const ORDER_UUID = '5b8e1a3c-2f4d-4a6b-9c8e-000000000042';
 
@@ -30,11 +50,45 @@ jest.mock('@wcpos/components/webview', () => {
 			webViewProps = props;
 			R.useEffect(() => {
 				webViewMounts += 1;
+				return () => {
+					webViewProps = {};
+				};
 			}, []);
+			R.useImperativeHandle(props.ref, () => ({ postMessage: mockPostMessage }));
 			return null;
 		},
 	};
 });
+jest.mock('../hooks/use-checkout-session', () => ({
+	useCheckoutSession: () => ({ handleStockRejection: () => false }),
+}));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({
+		children,
+		testID,
+		onPress,
+		disabled,
+	}: {
+		children: React.ReactNode;
+		testID: string;
+		onPress: () => void;
+		disabled: boolean;
+	}) => (
+		<button data-testid={testID} onClick={onPress} disabled={disabled}>
+			{children}
+		</button>
+	),
+	ButtonText: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@wcpos/components/hstack', () => ({
+	HStack: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@wcpos/components/vstack', () => ({
+	VStack: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -50,7 +104,19 @@ jest.mock('@wcpos/query', () => ({
 	}),
 	useRecordField: (record: unknown, select: (value: unknown) => unknown) => select(record),
 }));
+let mockRegisterId: string | null = null;
+let mockBindingStatus: 'bound' | 'choose' | 'none' | 'unknown' = 'bound';
+jest.mock('../../../../../services/register/use-register-binding', () => ({
+	useRegisterBinding: () => ({
+		status: mockBindingStatus,
+		registerId: mockRegisterId,
+		registerName: null,
+		registers: [],
+		bind: jest.fn(),
+	}),
+}));
 jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ userDB: mockUserDB, site: mockSite, store: { id: 1 } }),
 	useAppState: () => ({
 		wpCredentials: { access_token: 'jwt-token', access_token$: {} },
 	}),
@@ -69,7 +135,10 @@ jest.mock('../../../hooks/use-stock-adjustment', () => ({
 	useStockAdjustment: () => ({ stockAdjustment: mockStockAdjustment }),
 }));
 
-const makeOrder = (href = 'https://shop.example.com/wcpos-checkout/order-pay/42') => {
+const makeOrder = (
+	href = 'https://shop.example.com/wcpos-checkout/order-pay/42',
+	meta_data: { key: string; value: string }[] = []
+) => {
 	const order = {
 		uuid: 'uuid-42',
 		payload: {
@@ -78,6 +147,7 @@ const makeOrder = (href = 'https://shop.example.com/wcpos-checkout/order-pay/42'
 			status: 'pos-open',
 			links: { payment: [{ href }] },
 			line_items: [],
+			meta_data,
 		},
 		getLatest: () => order,
 	};
@@ -992,4 +1062,641 @@ describe('PaymentWebview frame-status signal', () => {
 		// checkout may offer a retry that navigates to the pay page again.
 		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
 	});
+});
+
+it.each([false, true])(
+	'awaits provenance before opening online webview (save fails: %s)',
+	async (fails) => {
+		jest.clearAllMocks();
+		mockOnlineStatus = 'online-website-available';
+		webViewMounts = 0;
+		const order = makeOrder();
+		mockLocalPatch.mockResolvedValue(order);
+		let finish!: () => void;
+		mockPushDocument.mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve, reject) => {
+					finish = () => (fails ? reject(new Error('save failed')) : resolve());
+				})
+		);
+		const view = render(
+			<PaymentWebview
+				order={order}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		try {
+			await act(async () => {});
+			expect(mockLocalPatch).toHaveBeenLastCalledWith({
+				document: order,
+				data: { meta_data: [{ key: '_wcpos_sale_counter', value: '1' }] },
+			});
+			expect(mockPushDocument).toHaveBeenLastCalledWith(order);
+			expect(jest.mocked(recordCompletionAttempt).mock.invocationCallOrder[0]).toBeLessThan(
+				mockLocalPatch.mock.invocationCallOrder[0]
+			);
+			expect(webViewMounts).toBe(0);
+			await act(async () => finish());
+			expect(webViewMounts).toBe(fails ? 0 : 1);
+			expect(mockPushDocument).toHaveBeenCalledTimes(1);
+			if (fails) {
+				mockOnlineStatus = 'offline';
+				view.rerender(
+					<PaymentWebview
+						order={order}
+						setLoading={jest.fn()}
+						setFrameStatus={jest.fn()}
+						onStockRejection={() => false}
+					/>
+				);
+				expect(webViewMounts).toBe(0);
+			}
+		} finally {
+			view.unmount();
+			mockOnlineStatus = 'offline';
+		}
+	}
+);
+
+describe('PaymentWebview register gate', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		webViewProps = {};
+		mockOnlineStatus = 'online-website-available';
+		mockLocalPatch.mockResolvedValue(true);
+	});
+	afterEach(() => {
+		mockBindingStatus = 'bound';
+		mockOnlineStatus = 'offline';
+	});
+	it('does not expose the pay page while a register is still to be chosen', async () => {
+		mockBindingStatus = 'choose';
+		const setFrameStatus = jest.fn();
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+				retryToken={0}
+			/>
+		);
+		await waitFor(() => expect(setFrameStatus).toHaveBeenCalledWith('stalled'));
+		// The pay page completes the whole balance: no provenance write, no URL.
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(webViewProps.src).toBeUndefined();
+	});
+});
+
+jest.mock('../sale-completion', () => {
+	const actual = jest.requireActual<typeof import('../sale-completion')>('../sale-completion');
+	const { withMetaReplaced } =
+		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+	const completionMetaFor = jest.fn<
+		ReturnType<typeof actual.completionMetaFor>,
+		Parameters<typeof actual.completionMetaFor>
+	>();
+	completionMetaFor.mockImplementation(async (_ctx, meta, facts) =>
+		withMetaReplaced(meta, [{ key: '_wcpos_sale_counter', value: '1' }, ...(facts.extraMeta ?? [])])
+	);
+	return {
+		...actual,
+		completionMetaFor,
+		persistSaleProvenance: jest.fn(
+			async (
+				ctx: import('../sale-completion').SaleContext,
+				input: Parameters<typeof actual.persistSaleProvenance>[1]
+			) => {
+				const meta_data = input.online
+					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
+					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
+				if (!input.online && !input.extraMeta) return;
+				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+					throw new Error('provenance_save_failed');
+				if (input.online) await ctx.pushDocument(input.order);
+			}
+		),
+		prepareSale: jest.fn(actual.prepareSale),
+	};
+});
+
+jest.mock('../hooks/use-sale-context', () => ({
+	useSaleContext: () => ({
+		userDB: {
+			getLocal: async () =>
+				mockRegisterId
+					? {
+							toJSON: () => ({
+								data: { sites: { site: { register_id: mockRegisterId, register_store_id: 1 } } },
+							}),
+						}
+					: null,
+		},
+		sessionsOn: mockSessionsOn,
+		sessions: mockSessions,
+		siteUuid: 'site',
+		storeId: 1,
+		runtime: { engine: { require: mockEngineRequire } },
+		dp: 2,
+		localPatch: mockLocalPatch,
+		pushDocument: mockPushDocument,
+		stockAdjustment: mockStockAdjustment,
+	}),
+}));
+
+jest.mock('../../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+
+jest.mock('../../contexts/current-order/context', () => ({
+	useCurrentOrderActions: () => ({ setCurrentOrderID: mockSetCurrentOrderID }),
+}));
+
+// Journal storage is exercised against RxDB in the owner/journal suites.
+jest.mock('../completion-journal', () => ({
+	recordCompletionAttempt: jest.fn(async () => {}),
+	resolveCompletionAttempt: jest.fn(async () => {}),
+	failCompletionAttempt: jest.fn(async () => {}),
+}));
+
+let mockSessionsOn = false;
+const mockOpenSession = new BehaviorSubject<{ id: string; status?: string } | null>(null);
+const mockSessions = { findOne: jest.fn() };
+type SessionFixture = {
+	id: string;
+	register_id: string;
+	status: string;
+	sync_status: string;
+	incrementalPatch: () => Promise<void>;
+};
+function observeSessions(rows: BehaviorSubject<SessionFixture[]>) {
+	mockSessions.findOne.mockImplementation(
+		(query: string | { selector: Record<string, unknown> }) => {
+			const selector = typeof query === 'string' ? { id: query } : query.selector;
+			const selected = rows.pipe(
+				map(
+					(values) =>
+						values.find((row) =>
+							Object.entries(selector).every(([key, value]) => {
+								const actual = row[key as keyof SessionFixture];
+								return typeof value === 'object' && value !== null && '$ne' in value
+									? actual !== value.$ne
+									: actual === value;
+							})
+						) ?? null
+				)
+			);
+			return {
+				$: selected,
+				exec: async () => new Promise((resolve) => selected.pipe(take(1)).subscribe(resolve)),
+			};
+		}
+	);
+}
+describe('pay-page session gate', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		jest.mocked(recordCompletionAttempt).mockReset().mockResolvedValue(undefined);
+		mockSessionsOn = true;
+		mockOnlineStatus = 'online-website-available';
+		webViewMounts = 0;
+		webViewProps = {};
+		mockLocalPatch.mockResolvedValue(true);
+		mockOpenSession.next(null);
+		mockSessions.findOne.mockReturnValue({ exec: async () => null, $: mockOpenSession });
+		jest
+			.mocked(persistSaleProvenance)
+			.mockImplementation(jest.requireActual('../sale-completion').persistSaleProvenance);
+	});
+	afterEach(() => {
+		mockSessionsOn = false;
+		mockRegisterId = null;
+		mockOnlineStatus = 'offline';
+		jest.mocked(persistSaleProvenance).mockReset();
+	});
+	it('sync rejection hides and stalls ready A once, then re-prepares and stamps B', async () => {
+		mockRegisterId = 'register-A';
+		const sessionA = {
+			id: 'session-A',
+			register_id: 'register-A',
+			status: 'open',
+			sync_status: 'pending',
+			incrementalPatch: async () => undefined,
+		};
+		const rows = new BehaviorSubject<SessionFixture[]>([sessionA]);
+		observeSessions(rows);
+		const props = {
+			order: makeOrder(undefined, [{ key: '_wcpos_sale_counter', value: '7' }]),
+			setLoading: jest.fn(),
+			setFrameStatus: jest.fn(),
+			onStockRejection: () => false,
+		};
+		const view = render(<PaymentWebview {...props} />);
+		await act(async () => {});
+		act(() => webViewProps.onLoad({}));
+		expect(props.setFrameStatus).toHaveBeenLastCalledWith('ready');
+		mockLocalPatch.mockClear();
+		await act(async () => rows.next([{ ...sessionA, sync_status: 'failed' }]));
+		expect(webViewProps.src).toBeUndefined();
+		expect(props.setFrameStatus).toHaveBeenLastCalledWith('stalled');
+		await act(async () => rows.next([{ ...sessionA, sync_status: 'failed' }]));
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		expect(logger.info).toHaveBeenCalledTimes(1);
+		expect(logger.info).toHaveBeenCalledWith(
+			'pos_checkout.open_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		await act(async () =>
+			rows.next([...rows.value, { ...sessionA, id: 'session-B', sync_status: 'synced' }])
+		);
+		expect(prepareSale).toHaveBeenCalledTimes(2);
+		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+			key: '_wcpos_session',
+			value: 'session-B',
+		});
+		expect(webViewProps.src).toContain('/order-pay/42');
+		expect(logger.info).toHaveBeenCalledTimes(1);
+		view.unmount();
+		expect(rows.observed).toBe(false);
+	});
+	it.each([false, true])(
+		'switching bound A to B invalidates A before preparing B (open: %s)',
+		async (open) => {
+			mockRegisterId = 'register-A';
+			const sessionA = {
+				id: 'session-A',
+				register_id: 'register-A',
+				status: 'open',
+				sync_status: 'synced',
+				incrementalPatch: async () => undefined,
+			};
+			const sessionB = { ...sessionA, id: 'session-B', register_id: 'register-B' };
+			const rows = new BehaviorSubject<SessionFixture[]>(open ? [sessionA, sessionB] : [sessionA]);
+			observeSessions(rows);
+			const props = {
+				order: makeOrder(undefined, [{ key: '_wcpos_sale_counter', value: '7' }]),
+				setLoading: jest.fn(),
+				setFrameStatus: jest.fn(),
+				onStockRejection: () => false,
+			};
+			const view = render(<PaymentWebview {...props} />);
+			await act(async () => {});
+			act(() => webViewProps.onLoad({}));
+			expect(props.setFrameStatus).toHaveBeenLastCalledWith('ready');
+			mockLocalPatch.mockClear();
+			let finish!: () => void;
+			const pending = new Promise<void>((resolve) => {
+				finish = resolve;
+			});
+			jest.mocked(recordCompletionAttempt).mockReturnValueOnce(pending);
+			mockRegisterId = 'register-B';
+			view.rerender(<PaymentWebview {...props} />);
+			expect(webViewProps.src).toBeUndefined();
+			expect(props.setFrameStatus).toHaveBeenLastCalledWith('loading');
+			await act(async () => {});
+			const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+			if (!open) {
+				expect(props.setFrameStatus).toHaveBeenLastCalledWith('stalled');
+				expect(logger.info).toHaveBeenCalledTimes(1);
+				expect(logger.info).toHaveBeenCalledWith(
+					'pos_checkout.open_register_first',
+					expect.objectContaining({ showToast: true })
+				);
+				expect(mockLocalPatch).not.toHaveBeenCalled();
+				await act(async () => rows.next([sessionA, sessionB]));
+			}
+			expect(webViewProps.src).toBeUndefined();
+			await act(async () => finish());
+			expect(prepareSale).toHaveBeenCalledTimes(open ? 2 : 3);
+			expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+				key: '_wcpos_session',
+				value: 'session-B',
+			});
+			expect(webViewProps.src).toContain('/order-pay/42');
+			expect(logger.info).toHaveBeenCalledTimes(open ? 0 : 1);
+			view.unmount();
+			expect(rows.observed).toBe(false);
+		}
+	);
+	it.each(['counting', 'closed', 'missing'])(
+		'ready session A becomes %s: hides and stalls once, then re-prepares in B',
+		async (status) => {
+			const sessionA = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
+			const preparedSession = new BehaviorSubject<typeof sessionA | null>(sessionA);
+			mockOpenSession.next(sessionA);
+			mockSessions.findOne.mockImplementation((query: string | { selector: { id?: string } }) =>
+				typeof query === 'string' || query.selector.id
+					? {
+							$: preparedSession.pipe(
+								map((session) => (session?.status === 'open' ? session : null))
+							),
+						}
+					: { exec: async () => mockOpenSession.value, $: mockOpenSession }
+			);
+			const order = makeOrder(undefined, [
+				{ key: '_wcpos_sale_counter', value: '7' },
+				{ key: '_wcpos_session', value: 'session-A' },
+			]);
+			const setFrameStatus = jest.fn();
+			const view = render(
+				<PaymentWebview
+					order={order}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+				/>
+			);
+			await act(async () => {});
+			act(() => webViewProps.onLoad({}));
+			expect(setFrameStatus).toHaveBeenLastCalledWith('ready');
+			jest.mocked(persistSaleProvenance).mockClear();
+			mockLocalPatch.mockClear();
+			mockPushDocument.mockClear();
+			await act(async () => {
+				mockOpenSession.next(null);
+				preparedSession.next(status === 'missing' ? null : { ...sessionA, status });
+				preparedSession.next(status === 'missing' ? null : { ...sessionA, status });
+			});
+			expect(webViewProps.src).toBeUndefined();
+			expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+			expect(preparedSession.observed).toBe(false);
+			expect(persistSaleProvenance).not.toHaveBeenCalled();
+			expect(mockLocalPatch).not.toHaveBeenCalled();
+			expect(mockPushDocument).not.toHaveBeenCalled();
+			const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+			expect(logger.info).toHaveBeenCalledTimes(1);
+			expect(logger.info).toHaveBeenCalledWith(
+				'pos_checkout.open_register_first',
+				expect.objectContaining({ showToast: true })
+			);
+			const sessionB = { ...sessionA, id: 'session-B' };
+			await act(async () => {
+				preparedSession.next(sessionB);
+				mockOpenSession.next(sessionB);
+			});
+			expect(prepareSale).toHaveBeenCalledTimes(2);
+			expect(persistSaleProvenance).toHaveBeenCalledTimes(1);
+			expect(mockSessions.findOne).toHaveBeenCalledWith({
+				selector: { id: 'session-B', status: 'open', sync_status: { $ne: 'failed' } },
+			});
+			expect(webViewProps.src).toContain('/order-pay/42');
+			expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+				key: '_wcpos_session',
+				value: 'session-B',
+			});
+			await act(async () => mockOpenSession.next({ ...sessionB }));
+			expect(prepareSale).toHaveBeenCalledTimes(2);
+			view.unmount();
+			expect(preparedSession.observed).toBe(false);
+		}
+	);
+	it('closing ready session A leaves LegacyTab Process Payment disabled without a new session', async () => {
+		const session = { id: 'session-A', status: 'open', incrementalPatch: async () => undefined };
+		const preparedSession = new BehaviorSubject(session);
+		mockOpenSession.next(session);
+		mockSessions.findOne.mockImplementation((query: string | { selector: { id?: string } }) =>
+			typeof query === 'string' || query.selector.id
+				? {
+						$: preparedSession.pipe(
+							map((session) => (session?.status === 'open' ? session : null))
+						),
+					}
+				: { exec: async () => mockOpenSession.value, $: mockOpenSession }
+		);
+		const view = render(
+			<LegacyTab
+				order={makeOrder()}
+				flow={
+					{
+						hasLiveLeg: false,
+						legacyMethods: [{ id: 'legacy', title: 'Legacy' }],
+						saveState: null,
+					} as never
+				}
+			/>
+		);
+		await act(async () => {});
+		act(() => webViewProps.onLoad({}));
+		const button = view.getByTestId('checkout-legacy-process-payment') as HTMLButtonElement;
+		expect(button.disabled).toBe(false);
+		await act(async () => {
+			mockOpenSession.next(null);
+			preparedSession.next({ ...session, status: 'closed' });
+		});
+		expect(button.disabled).toBe(true);
+		expect(webViewProps.src).toBeUndefined();
+		act(() => button.click());
+		expect(mockPostMessage).not.toHaveBeenCalled();
+		expect(prepareSale).toHaveBeenCalledTimes(1);
+	});
+	it('opening a session recovers the legacy frame exactly once without a retryToken', async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const setFrameStatus = jest.fn();
+		render(
+			<PaymentWebview
+				order={makeOrder(undefined, [
+					{ key: '_wcpos_sale_counter', value: '7' },
+					{ key: '_wcpos_session', value: 'session-A' },
+				])}
+				setLoading={jest.fn()}
+				setFrameStatus={setFrameStatus}
+				onStockRejection={() => false}
+			/>
+		);
+		await act(async () => {});
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+		expect(logger.info).toHaveBeenCalledWith(
+			'pos_checkout.open_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(webViewMounts).toBe(0);
+		expect(prepareSale).toHaveBeenCalledTimes(1);
+		const session = { id: 'session-B', status: 'open', incrementalPatch: async () => undefined };
+		mockSessions.findOne.mockReturnValue({ exec: async () => session, $: mockOpenSession });
+		await act(async () => mockOpenSession.next(session));
+		expect(prepareSale).toHaveBeenCalledTimes(2);
+		expect(webViewMounts).toBe(1);
+		expect(webViewProps.src).toContain('/order-pay/42');
+		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+			key: '_wcpos_session',
+			value: 'session-B',
+		});
+		await act(async () => mockOpenSession.next({ ...session }));
+		expect(prepareSale).toHaveBeenCalledTimes(2);
+	});
+	it.each(['choose-register', 'provenance-push'])(
+		'opening a session does not retry %s failure',
+		async (failure) => {
+			if (failure === 'choose-register') mockBindingStatus = 'choose';
+			else {
+				mockSessions.findOne.mockReturnValue({
+					exec: async () => ({ id: 'session-A', incrementalPatch: async () => undefined }),
+					$: mockOpenSession,
+				});
+				mockPushDocument.mockRejectedValueOnce(new Error('push failed'));
+			}
+			const setFrameStatus = jest.fn();
+			const view = render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+				/>
+			);
+			await act(async () => {});
+			expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+			await act(async () => mockOpenSession.next({ id: 'session-B' }));
+			expect(prepareSale).toHaveBeenCalledTimes(1);
+			expect(webViewMounts).toBe(0);
+			view.unmount();
+			mockBindingStatus = 'bound';
+		}
+	);
+	it.each(['offline', 'online-website-unavailable'])(
+		'%s at mount without an open session: toasts, stalls and never exposes the frame',
+		async (status) => {
+			mockOnlineStatus = status;
+			const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+			const setFrameStatus = jest.fn();
+			render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={setFrameStatus}
+					onStockRejection={() => false}
+				/>
+			);
+			expect(webViewMounts).toBe(0);
+			await act(async () => {});
+			expect(logger.info).toHaveBeenCalledWith(
+				'pos_checkout.open_register_first',
+				expect.objectContaining({ showToast: true })
+			);
+			expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+			expect(webViewProps.src).toBeUndefined();
+			expect(webViewMounts).toBe(0);
+			expect(persistSaleProvenance).not.toHaveBeenCalled();
+			expect(mockLocalPatch).not.toHaveBeenCalled();
+			expect(mockPushDocument).not.toHaveBeenCalled();
+		}
+	);
+	it('website unavailable with an open session: waits for preparation, pushes the session stamp only online', async () => {
+		mockOnlineStatus = 'online-website-unavailable';
+		mockSessions.findOne.mockReturnValue({
+			exec: async () => ({ id: 'session-42', incrementalPatch: async () => undefined }),
+			$: new BehaviorSubject({ id: 'session-42', status: 'open' }),
+		});
+		let finish!: () => void;
+		const pendingPreparation = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		jest.mocked(recordCompletionAttempt).mockReturnValueOnce(pendingPreparation);
+		const props = {
+			order: makeOrder(),
+			setLoading: jest.fn(),
+			setFrameStatus: jest.fn(),
+			onStockRejection: () => false,
+		};
+		const view = render(<PaymentWebview {...props} />);
+		await act(async () => {});
+		expect(webViewMounts).toBe(0);
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		await act(async () => finish());
+		expect(webViewMounts).toBe(1);
+		expect(webViewProps.src).toContain('/order-pay/42');
+		expect(persistSaleProvenance).toHaveBeenCalledWith(expect.anything(), {
+			order: props.order,
+			source: 'gateway-snapshot',
+			sessionId: 'session-42',
+			online: false,
+		});
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		// Offline preparation does not push provenance; reconnection stamps the session.
+		mockOnlineStatus = 'online-website-available';
+		view.rerender(<PaymentWebview {...props} />);
+		await act(async () => {});
+		expect(mockLocalPatch.mock.calls[0][0].data.meta_data).toContainEqual({
+			key: '_wcpos_session',
+			value: 'session-42',
+		});
+		expect(mockPushDocument).toHaveBeenCalledTimes(1);
+	});
+	it('offline with sessions off: exposes the frame immediately without preparation or a toast', async () => {
+		mockSessionsOn = false;
+		mockOnlineStatus = 'offline';
+		render(
+			<PaymentWebview
+				order={makeOrder()}
+				setLoading={jest.fn()}
+				setFrameStatus={jest.fn()}
+				onStockRejection={() => false}
+			/>
+		);
+		expect(webViewMounts).toBe(1);
+		expect(webViewProps.src).toContain('/order-pay/42');
+		await act(async () => {});
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+		expect(mockSessions.findOne).not.toHaveBeenCalled();
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).info).not.toHaveBeenCalled();
+	});
+	it('no open session: toasts, stalls and keeps failed preparation closed even offline', async () => {
+		const logger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
+		const setFrameStatus = jest.fn();
+		const props = {
+			order: makeOrder(),
+			setLoading: jest.fn(),
+			setFrameStatus,
+			onStockRejection: () => false,
+		};
+		const view = render(<PaymentWebview {...props} />);
+		await act(async () => {});
+		expect(logger.info).toHaveBeenCalledWith(
+			'pos_checkout.open_register_first',
+			expect.objectContaining({ showToast: true })
+		);
+		expect(setFrameStatus).toHaveBeenLastCalledWith('stalled');
+		expect(mockLocalPatch).not.toHaveBeenCalled();
+		expect(mockPushDocument).not.toHaveBeenCalled();
+		expect(recordCompletionAttempt).not.toHaveBeenCalled();
+		expect(logger.error).not.toHaveBeenCalled();
+		expect(webViewMounts).toBe(0);
+		mockOnlineStatus = 'offline';
+		await act(async () => view.rerender(<PaymentWebview {...props} />));
+		expect(webViewMounts).toBe(0);
+	});
+	it.each([true, false])(
+		'stamps the open session only with sessions enabled: %s',
+		async (enabled) => {
+			mockSessionsOn = enabled;
+			mockSessions.findOne.mockReturnValue({
+				exec: async () => ({ id: 'session-42', incrementalPatch: async () => undefined }),
+				$: new BehaviorSubject({ id: 'session-42', status: 'open' }),
+			});
+			render(
+				<PaymentWebview
+					order={makeOrder()}
+					setLoading={jest.fn()}
+					setFrameStatus={jest.fn()}
+					onStockRejection={() => false}
+				/>
+			);
+			await waitFor(() => expect(webViewMounts).toBe(1));
+			const meta: { key: string; value: unknown }[] =
+				mockLocalPatch.mock.calls[0][0].data.meta_data;
+			expect(meta.filter(({ key }) => key === '_wcpos_session')).toEqual(
+				enabled ? [{ key: '_wcpos_session', value: 'session-42' }] : []
+			);
+			expect(mockPushDocument).toHaveBeenCalledTimes(1);
+			if (!enabled) expect(mockSessions.findOne).not.toHaveBeenCalled();
+			expect(getLogger(['wcpos', 'pos', 'checkout', 'payment']).info).not.toHaveBeenCalledWith(
+				'pos_checkout.open_register_first',
+				expect.anything()
+			);
+		}
+	);
 });

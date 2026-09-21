@@ -46,7 +46,7 @@ export function CancelPaymentView({ flow, format }: Props) {
 								className="border-border bg-background rounded-md border p-2 text-sm"
 								decodeHtml
 							>
-								{row.kind === 'cash'
+								{row.kind === 'cash' && row.capture_mode !== 'server'
 									? t('pos_checkout.return_cash', { amount })
 									: t('pos_checkout.void_on_method', { amount, title })}
 							</Text>

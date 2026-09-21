@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
 import {
 	__resetStorageLivenessForTests,
@@ -10,9 +11,11 @@ import {
 	degradedStorage$,
 	isStorageDegraded,
 	isStorageWorkerFailure,
+	noteStorageWriteDeadlinePassed,
 	resetReportedCleanupFailures,
 	STORAGE_RPC_STALL_REPORT_MS,
 	STORAGE_RPC_WATCHDOG_MS,
+	STORAGE_WRITE_DEADLINE_MS,
 	wrappedErrorHandlerStorage,
 } from './wrapped-error-handler-storage';
 
@@ -27,6 +30,8 @@ const terminalFailureApi = jest.requireActual<typeof import('./wrapped-error-han
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: jest.fn(() => ({
+		debug: jest.fn(),
+		info: jest.fn(),
 		warn: jest.fn(),
 		error: jest.fn(),
 	})),
@@ -38,6 +43,8 @@ jest.mock('@wcpos/utils/logger', () => ({
  * (jest.mock is hoisted), so we can grab the instance it returned.
  */
 const mockLoggerInstance = (getLogger as jest.Mock).mock.results[0].value as {
+	debug: jest.Mock;
+	info: jest.Mock;
 	warn: jest.Mock;
 	error: jest.Mock;
 };
@@ -82,6 +89,173 @@ function createMockStorage(instance: RxStorageInstance<any, any, any, any>) {
 describe('wrappedErrorHandlerStorage', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+	});
+
+	describe('remote failure diagnostics', () => {
+		const remoteMessage =
+			'A requested file or directory could not be found at the time an operation was processed.';
+		const remoteError = (name = 'NotFoundError', message = remoteMessage) =>
+			new Error(
+				'could not requestRemote: ' +
+					JSON.stringify({
+						error: { name, message, code: 8 },
+						params: ['private document'],
+					})
+			);
+		async function wrap(bulkWrite = jest.fn().mockRejectedValue(remoteError())) {
+			return wrappedErrorHandlerStorage({
+				storage: createMockStorage(
+					createMockStorageInstance({
+						bulkWrite,
+						findDocumentsById: jest.fn().mockResolvedValue([]),
+					})
+				),
+			}).createStorageInstance({ databaseName: 'remote-db' } as Parameters<
+				RxStorage<unknown, unknown>['createStorageInstance']
+			>[0]);
+		}
+		beforeEach(() => clearStorageDegradation());
+		afterEach(() => clearStorageDegradation());
+
+		it.each([remoteMessage, 'x'.repeat(250)])(
+			'logs only remote error details (%s)',
+			async (message) => {
+				const instance = await wrap(
+					jest.fn().mockRejectedValue(remoteError('NotFoundError', message))
+				);
+				await expect(instance.bulkWrite([], 'test')).rejects.toThrow('could not requestRemote');
+				expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+					'Storage remote method error in bulkWrite',
+					expect.objectContaining({
+						context: {
+							method: 'bulkWrite',
+							remoteErrorName: 'NotFoundError',
+							remoteErrorMessage: message.slice(0, 200),
+							remoteErrorCode: 8,
+							recoveryDocumentId: undefined,
+							recoveryFailure: undefined,
+						},
+					})
+				);
+			}
+		);
+
+		it('logs string-form remote errors by message and suppresses only repeats', async () => {
+			const stringError = (message: string) =>
+				new Error(`could not requestRemote: ${JSON.stringify({ error: message })}`);
+			const write = jest
+				.fn()
+				.mockRejectedValueOnce(stringError('first remote failure'))
+				.mockRejectedValueOnce(stringError('first remote failure'))
+				.mockRejectedValueOnce(stringError('second remote failure'));
+			const instance = await wrap(write);
+
+			for (let count = 0; count < 3; count += 1) {
+				await expect(instance.bulkWrite([], 'test')).rejects.toThrow('could not requestRemote');
+			}
+
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(2);
+			expect(mockLoggerInstance.debug).toHaveBeenCalledTimes(1);
+			expect(mockLoggerInstance.error).toHaveBeenNthCalledWith(
+				2,
+				'Storage remote method error in bulkWrite',
+				expect.objectContaining({
+					context: expect.objectContaining({ remoteErrorMessage: 'second remote failure' }),
+				})
+			);
+		});
+
+		it('logs repeats at debug and re-arms only after the same method succeeds', async () => {
+			const write = jest.fn().mockRejectedValue(remoteError());
+			const instance = await wrap(write);
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			await instance.findDocumentsById([], false);
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+			expect(mockLoggerInstance.debug).toHaveBeenCalledWith(
+				'Storage remote method error in bulkWrite',
+				expect.anything()
+			);
+			write.mockResolvedValueOnce({ error: [] });
+			await instance.bulkWrite([], 'test');
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(2);
+			expect(isStorageDegraded('remote-db')).toBe(false);
+		});
+
+		it('does not re-arm logging when a failed RPC returns a handled fallback', async () => {
+			const write = jest.fn().mockRejectedValue(remoteError());
+			const instance = await wrap(write);
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			write.mockRejectedValueOnce(new Error('CONFLICT'));
+			await instance.bulkWrite([], 'test');
+			await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+			expect(mockLoggerInstance.debug).toHaveBeenCalledTimes(1);
+		});
+
+		it.each(['NotFoundError', 'QuotaExceededError'])(
+			'latches only the third NotFoundError (%s)',
+			async (name) => {
+				const instance = await wrap(jest.fn().mockRejectedValue(remoteError(name)));
+				for (let count = 1; count <= 3; count += 1) {
+					await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+					expect(isStorageDegraded('remote-db')).toBe(name === 'NotFoundError' && count === 3);
+				}
+				if (name === 'NotFoundError') {
+					expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+						'Storage degraded for database "remote-db" in bulkWrite',
+						expect.objectContaining({ code: 'SYNC161' })
+					);
+				}
+			}
+		);
+
+		it.each(['success', 'QuotaExceededError'])(
+			'breaks the failure streak on %s',
+			async (interruption) => {
+				const write = jest.fn().mockRejectedValue(remoteError());
+				const instance = await wrap(write);
+				for (let count = 0; count < 2; count += 1) {
+					await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+				}
+				if (interruption === 'success') {
+					write.mockResolvedValueOnce({ error: [] });
+					await instance.bulkWrite([], 'test');
+				} else {
+					write.mockRejectedValueOnce(remoteError(interruption));
+					await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+				}
+				await expect(instance.bulkWrite([], 'test')).rejects.toThrow();
+				expect(isStorageDegraded('remote-db')).toBe(false);
+			}
+		);
+
+		it('keeps counts and signatures separate for instances of the same database', async () => {
+			const first = await wrap();
+			const second = await wrap();
+			await expect(first.bulkWrite([], 'test')).rejects.toThrow();
+			await expect(first.bulkWrite([], 'test')).rejects.toThrow();
+			await expect(second.bulkWrite([], 'test')).rejects.toThrow();
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(2);
+			expect(isStorageDegraded('remote-db')).toBe(false);
+		});
+
+		it('does not latch for three NotFoundError reads', async () => {
+			const instance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(
+					createMockStorageInstance({
+						findDocumentsById: jest.fn().mockRejectedValue(remoteError()),
+					})
+				),
+			}).createStorageInstance({ databaseName: 'remote-db' } as Parameters<
+				RxStorage<unknown, unknown>['createStorageInstance']
+			>[0]);
+			for (let count = 0; count < 3; count += 1) {
+				await expect(instance.findDocumentsById([], false)).rejects.toThrow();
+			}
+			expect(isStorageDegraded('remote-db')).toBe(false);
+		});
 	});
 
 	// -----------------------------------------------------------------------
@@ -653,6 +827,100 @@ describe('wrappedErrorHandlerStorage', () => {
 		it('returns false for an unknown database name', () => {
 			expect(markTerminalFailure('unknown-database')).toBe(false);
 		});
+	});
+
+	describe('local write deadline', () => {
+		let resolveWrite: (value: { error: [] }) => void;
+		let instance: ReturnType<typeof createMockStorageInstance>;
+		let read: jest.Mock;
+		let emissions: (readonly StorageDegradation[])[];
+		let subscription: { unsubscribe(): void };
+
+		beforeEach(async () => {
+			clearStorageDegradation();
+			read = jest.fn().mockResolvedValue([]);
+			instance = await wrappedErrorHandlerStorage({
+				storage: createMockStorage(
+					createMockStorageInstance({
+						bulkWrite: jest.fn(
+							() =>
+								new Promise<{ error: [] }>((resolve) => {
+									resolveWrite = resolve;
+								})
+						),
+						findDocumentsById: read,
+						close: jest.fn().mockResolvedValue(undefined),
+					})
+				),
+			}).createStorageInstance({ databaseName: 'write-deadline-db' } as never);
+			emissions = [];
+			subscription = degradedStorage$.subscribe((next) => emissions.push(next));
+		});
+		afterEach(async () => {
+			subscription.unsubscribe();
+			await instance.close();
+			clearStorageDegradation();
+		});
+
+		it('marks a pending bulkWrite degraded, then clears when storage answers', async () => {
+			const write = instance.bulkWrite([], 'test');
+			const context = { waitedMs: STORAGE_WRITE_DEADLINE_MS, orderId: 'order-1' };
+			expect(noteStorageWriteDeadlinePassed(context)).toBe(true);
+			expect(isStorageDegraded()).toBe(true);
+			expect(isStorageDegraded('write-deadline-db')).toBe(true);
+			expect(emissions).toEqual([
+				[],
+				[
+					expect.objectContaining({
+						databaseName: 'write-deadline-db',
+						methodName: 'bulkWrite',
+						kind: 'write-stalled',
+					}),
+				],
+			]);
+			expect(mockLoggerInstance.error).toHaveBeenCalledTimes(1);
+			expect(mockLoggerInstance.error).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({ code: ERROR_CODES.LOCAL_DB_STALLED, context })
+			);
+			await instance.findDocumentsById([], false);
+			expect(emissions[emissions.length - 1]).toEqual([]);
+			expect(isStorageDegraded()).toBe(false);
+			expect(mockLoggerInstance.info).toHaveBeenCalledTimes(1);
+			resolveWrite({ error: [] });
+			await expect(write).resolves.toEqual({ error: [] });
+		});
+
+		it('does nothing when no bulkWrite is in flight', () => {
+			expect(noteStorageWriteDeadlinePassed({ waitedMs: STORAGE_WRITE_DEADLINE_MS })).toBe(false);
+			expect(isStorageDegraded()).toBe(false);
+			expect(emissions).toEqual([[]]);
+			expect(mockLoggerInstance.error).not.toHaveBeenCalled();
+		});
+
+		it.each(['ordinary error', 'worker gone'])(
+			'does not clear on a rejected call: %s',
+			async (message) => {
+				const write = instance.bulkWrite([], 'test');
+				expect(noteStorageWriteDeadlinePassed({ waitedMs: STORAGE_WRITE_DEADLINE_MS })).toBe(true);
+				read.mockRejectedValueOnce(
+					new Error(`could not requestRemote: ${JSON.stringify({ error: { message } })}`)
+				);
+				await expect(instance.findDocumentsById([], false)).rejects.toThrow(message);
+				expect(isStorageDegraded()).toBe(true);
+				expect(emissions.slice(1).every((entries) => entries.length === 1)).toBe(true);
+				expect(mockLoggerInstance.info).not.toHaveBeenCalled();
+				resolveWrite({ error: [] });
+				await write;
+				// A later success clears only the stall, never the worker-lost latch.
+				expect(isStorageDegraded()).toBe(message === 'worker gone');
+				expect(emissions[emissions.length - 1]).toEqual(
+					message === 'worker gone'
+						? [expect.objectContaining({ databaseName: 'write-deadline-db', kind: 'worker-lost' })]
+						: []
+				);
+			}
+		);
 	});
 
 	describe('degraded storage signal (#163)', () => {

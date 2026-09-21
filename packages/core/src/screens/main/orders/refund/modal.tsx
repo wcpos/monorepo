@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import { Modal, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
 
@@ -21,7 +21,7 @@ export function RefundOrderModal({ resource }: Props) {
 	if (!order) {
 		return (
 			<Modal>
-				<ModalContent size="xl">
+				<ModalContent side="right" size="xl">
 					<ModalHeader>
 						<ModalTitle>
 							<Text>{t('common.no_order_found')}</Text>
@@ -34,15 +34,13 @@ export function RefundOrderModal({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent size="xl">
+			<ModalContent side="right" size="xl">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t('orders.refund_order', { number: orderId || '' })}</Text>
 					</ModalTitle>
 				</ModalHeader>
-				<ModalBody>
-					<RefundOrderForm order={order} />
-				</ModalBody>
+				<RefundOrderForm order={order} />
 			</ModalContent>
 		</Modal>
 	);

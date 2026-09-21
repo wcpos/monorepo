@@ -50,6 +50,18 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.cadence_recovered');
 		case 'cadence.start':
 			return t('health.logs.event.cadence_start');
+		case 'checkout.cancelled':
+			return t('health.logs.event.checkout_cancelled');
+		case 'checkout.completed':
+			return t('health.logs.event.checkout_completed');
+		case 'checkout.opened':
+			return t('health.logs.event.checkout_opened');
+		case 'checkout.order-refresh':
+			return t('health.logs.event.checkout_order_refresh');
+		case 'checkout.provenance-skipped':
+			return t('health.logs.event.checkout_provenance_skipped');
+		case 'checkout.split-planned':
+			return t('health.logs.event.checkout_split_planned');
 		case 'connectivity.device-offline':
 			return t('health.logs.event.connectivity_device_offline');
 		case 'connectivity.restored':
@@ -66,6 +78,8 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.coverage_gate_hit');
 		case 'coverage.gate.miss':
 			return t('health.logs.event.coverage_gate_miss');
+		case 'coverage.ledger-reattached':
+			return t('health.logs.event.coverage_ledger_reattached');
 		case 'coverage.ledger-rebuilt':
 			return t('health.logs.event.coverage_ledger_rebuilt');
 		case 'coverage.require.error':
@@ -132,6 +146,32 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.maintenance_lane_error');
 		case 'maintenance.lane.tick':
 			return t('health.logs.event.maintenance_lane_tick');
+		case 'payment.authorized-offline':
+			return t('health.logs.event.payment_authorized_offline');
+		case 'payment.cancelled':
+			return t('health.logs.event.payment_cancelled');
+		case 'payment.captured':
+			return t('health.logs.event.payment_captured');
+		case 'payment.declined':
+			return t('health.logs.event.payment_declined');
+		case 'payment.not-mirrored':
+			return t('health.logs.event.payment_not_mirrored');
+		case 'payment.recorded':
+			return t('health.logs.event.payment_recorded');
+		case 'payment.recorded-offline':
+			return t('health.logs.event.payment_recorded_offline');
+		case 'payment.refused':
+			return t('health.logs.event.payment_refused');
+		case 'payment.released':
+			return t('health.logs.event.payment_released');
+		case 'payment.settlement':
+			return t('health.logs.event.payment_settlement');
+		case 'payment.void-refused':
+			return t('health.logs.event.payment_void_refused');
+		case 'payment.void-unknown':
+			return t('health.logs.event.payment_void_unknown');
+		case 'payment.voided':
+			return t('health.logs.event.payment_voided');
 		case 'product.browse-window.approximate':
 			return t('health.logs.event.product_browse_window_approximate');
 		case 'product.browse-window.brand-filter-ignored':
@@ -186,6 +226,60 @@ export function translateEventTitle(t: TranslateEvent, type: SyncEventType): str
 			return t('health.logs.event.queue_write_resolve');
 		case 'queue.write.tick.error':
 			return t('health.logs.event.queue_write_tick_error');
+		case 'reader.battery-low':
+			return t('health.logs.event.reader_battery_low');
+		case 'reader.connected':
+			return t('health.logs.event.reader_connected');
+		case 'reader.disconnected':
+			return t('health.logs.event.reader_disconnected');
+		case 'register.approval-granted':
+			return t('health.logs.event.register_approval_granted');
+		case 'register.approval-refused':
+			return t('health.logs.event.register_approval_refused');
+		case 'register.bound':
+			return t('health.logs.event.register_bound');
+		case 'register.counting-abandoned':
+			return t('health.logs.event.register_counting_abandoned');
+		case 'register.counting-started':
+			return t('health.logs.event.register_counting_started');
+		case 'register.directory-unavailable':
+			return t('health.logs.event.register_directory_unavailable');
+		case 'register.drawer-opened':
+			return t('health.logs.event.register_drawer_opened');
+		case 'register.movement-accepted':
+			return t('health.logs.event.register_movement_accepted');
+		case 'register.movement-recorded':
+			return t('health.logs.event.register_movement_recorded');
+		case 'register.movement-rejected':
+			return t('health.logs.event.register_movement_rejected');
+		case 'register.movement-retrying':
+			return t('health.logs.event.register_movement_retrying');
+		case 'register.movement-voided':
+			return t('health.logs.event.register_movement_voided');
+		case 'register.no-sale-recorded':
+			return t('health.logs.event.register_no_sale_recorded');
+		case 'register.session-adopted':
+			return t('health.logs.event.register_session_adopted');
+		case 'register.session-closed':
+			return t('health.logs.event.register_session_closed');
+		case 'register.session-opened':
+			return t('health.logs.event.register_session_opened');
+		case 'register.session-pruned':
+			return t('health.logs.event.register_session_pruned');
+		case 'register.session-refresh-failed':
+			return t('health.logs.event.register_session_refresh_failed');
+		case 'register.switched':
+			return t('health.logs.event.register_switched');
+		case 'register.unbound':
+			return t('health.logs.event.register_unbound');
+		case 'register.upload-refused':
+			return t('health.logs.event.register_upload_refused');
+		case 'register.variance-over-threshold':
+			return t('health.logs.event.register_variance_over_threshold');
+		case 'register.x-report-printed':
+			return t('health.logs.event.register_x_report_printed');
+		case 'render.error':
+			return t('health.logs.event.render_error');
 		case 'signal.cursor':
 			return t('health.logs.event.signal_cursor');
 		case 'signal.cycle':
@@ -221,6 +315,16 @@ export function translateEventDescription(
 			return t('health.logs.event_description.apply_rebaseline');
 		case 'apply.refetch':
 			return t('health.logs.event_description.apply_refetch');
+		case 'checkout.cancelled':
+			return t('health.logs.event_description.checkout_cancelled');
+		case 'checkout.completed':
+			return t('health.logs.event_description.checkout_completed');
+		case 'checkout.order-refresh':
+			return t('health.logs.event_description.checkout_order_refresh');
+		case 'checkout.provenance-skipped':
+			return t('health.logs.event_description.checkout_provenance_skipped');
+		case 'checkout.split-planned':
+			return t('health.logs.event_description.checkout_split_planned');
 		case 'connectivity.device-offline':
 			return t('health.logs.event_description.connectivity_device_offline');
 		case 'connectivity.restored':
@@ -251,6 +355,28 @@ export function translateEventDescription(
 			return t('health.logs.event_description.engine_write_leader_degraded');
 		case 'maintenance.lane.error':
 			return t('health.logs.event_description.maintenance_lane_error');
+		case 'payment.authorized-offline':
+			return t('health.logs.event_description.payment_authorized_offline');
+		case 'payment.captured':
+			return t('health.logs.event_description.payment_captured');
+		case 'payment.declined':
+			return t('health.logs.event_description.payment_declined');
+		case 'payment.not-mirrored':
+			return t('health.logs.event_description.payment_not_mirrored');
+		case 'payment.recorded':
+			return t('health.logs.event_description.payment_recorded');
+		case 'payment.recorded-offline':
+			return t('health.logs.event_description.payment_recorded_offline');
+		case 'payment.refused':
+			return t('health.logs.event_description.payment_refused');
+		case 'payment.released':
+			return t('health.logs.event_description.payment_released');
+		case 'payment.settlement':
+			return t('health.logs.event_description.payment_settlement');
+		case 'payment.void-refused':
+			return t('health.logs.event_description.payment_void_refused');
+		case 'payment.void-unknown':
+			return t('health.logs.event_description.payment_void_unknown');
 		case 'push.conflict':
 			return t('health.logs.event_description.push_conflict');
 		case 'push.error':
@@ -273,6 +399,54 @@ export function translateEventDescription(
 			return t('health.logs.event_description.queue_write_drain');
 		case 'queue.write.enqueued':
 			return t('health.logs.event_description.queue_write_enqueued');
+		case 'register.approval-granted':
+			return t('health.logs.event_description.register_approval_granted');
+		case 'register.approval-refused':
+			return t('health.logs.event_description.register_approval_refused');
+		case 'register.bound':
+			return t('health.logs.event_description.register_bound');
+		case 'register.counting-abandoned':
+			return t('health.logs.event_description.register_counting_abandoned');
+		case 'register.counting-started':
+			return t('health.logs.event_description.register_counting_started');
+		case 'register.directory-unavailable':
+			return t('health.logs.event_description.register_directory_unavailable');
+		case 'register.drawer-opened':
+			return t('health.logs.event_description.register_drawer_opened');
+		case 'register.movement-accepted':
+			return t('health.logs.event_description.register_movement_accepted');
+		case 'register.movement-recorded':
+			return t('health.logs.event_description.register_movement_recorded');
+		case 'register.movement-rejected':
+			return t('health.logs.event_description.register_movement_rejected');
+		case 'register.movement-retrying':
+			return t('health.logs.event_description.register_movement_retrying');
+		case 'register.movement-voided':
+			return t('health.logs.event_description.register_movement_voided');
+		case 'register.no-sale-recorded':
+			return t('health.logs.event_description.register_no_sale_recorded');
+		case 'register.session-adopted':
+			return t('health.logs.event_description.register_session_adopted');
+		case 'register.session-closed':
+			return t('health.logs.event_description.register_session_closed');
+		case 'register.session-opened':
+			return t('health.logs.event_description.register_session_opened');
+		case 'register.session-pruned':
+			return t('health.logs.event_description.register_session_pruned');
+		case 'register.session-refresh-failed':
+			return t('health.logs.event_description.register_session_refresh_failed');
+		case 'register.switched':
+			return t('health.logs.event_description.register_switched');
+		case 'register.unbound':
+			return t('health.logs.event_description.register_unbound');
+		case 'register.upload-refused':
+			return t('health.logs.event_description.register_upload_refused');
+		case 'register.variance-over-threshold':
+			return t('health.logs.event_description.register_variance_over_threshold');
+		case 'register.x-report-printed':
+			return t('health.logs.event_description.register_x_report_printed');
+		case 'render.error':
+			return t('health.logs.event_description.render_error');
 		case 'signal.cursor':
 			return t('health.logs.event_description.signal_cursor');
 		case 'signal.cycle':

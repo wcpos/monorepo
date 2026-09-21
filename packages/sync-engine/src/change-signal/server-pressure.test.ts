@@ -384,39 +384,110 @@ describe('server pressure monitor', () => {
 		});
 	});
 
-	it('treats elevated pressure as neutral recovery evidence', () => {
-		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
-		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
-
-		for (let index = 0; index < 10; index += 1) {
+	it.each(['elevated', 'high'] as const)(
+		'recovers from %s headers after the dwell and ten responses',
+		(pressure) => {
+			const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+			monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
+			for (let index = 0; index < 9; index += 1) {
+				expect(
+					monitor.observe({ atMs: 60_000 + index, status: 200, durationMs: 100, pressure })
+				).toBeNull();
+			}
+			expect(monitor.multiplier()).toBe(2);
 			expect(
-				monitor.observe({
-					atMs: 60_000 + index,
-					status: 200,
-					durationMs: 50,
-					pressure: 'elevated',
-				})
-			).toBeNull();
+				monitor.observe({ atMs: 60_009, status: 200, durationMs: 100, pressure })
+			).toMatchObject({
+				direction: 'recovery',
+				fromMultiplier: 2,
+				toMultiplier: 1,
+			});
+		}
+	);
+
+	it('recovers from fast high headers and ignores their clamp during the cooldown, not real slowness', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		const fastHigh = { status: 200, durationMs: 100, pressure: 'high' as const };
+		for (let index = 0; index < 10; index += 1) {
+			monitor.observe({ atMs: index, ...fastHigh });
 		}
 		expect(monitor.multiplier()).toBe(2);
+		for (let index = 0; index < 9; index += 1) {
+			expect(monitor.observe({ atMs: 60_010 + index, ...fastHigh })).toBeNull();
+		}
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.observe({ atMs: 60_019, ...fastHigh })).toMatchObject({
+			direction: 'recovery',
+			fromMultiplier: 2,
+			toMultiplier: 1,
+		});
+		for (let index = 0; index < 10; index += 1) {
+			expect(monitor.observe({ atMs: 60_020 + index, ...fastHigh })).toBeNull();
+		}
+		expect(monitor.multiplier()).toBe(1);
+		for (let index = 0; index < 10; index += 1) {
+			monitor.observe({ atMs: 60_030 + index, ...fastHigh, durationMs: 3_000 });
+		}
+		expect(monitor.multiplier()).toBe(2);
+		healthy(monitor, 10, 120_040);
+		expect(monitor.multiplier()).toBe(1);
+		const cooldownDeadline = 60_019 + 15 * 60_000;
+		for (let index = 0; index < 9; index += 1) {
+			expect(monitor.observe({ atMs: cooldownDeadline - 9 + index, ...fastHigh })).toBeNull();
+		}
+		// Nine buffered before the deadline plus one fresh response must not re-trip.
+		for (let index = 0; index < 9; index += 1) {
+			expect(monitor.observe({ atMs: cooldownDeadline + index, ...fastHigh })).toBeNull();
+			expect(monitor.multiplier()).toBe(1);
+		}
+		expect(monitor.observe({ atMs: cooldownDeadline + 9, ...fastHigh })).toMatchObject({
+			direction: 'backoff',
+			fromMultiplier: 1,
+			toMultiplier: 2,
+		});
 	});
 
-	it('treats high pressure as neutral recovery evidence before the median trips', () => {
+	it('does not count a high header with a raw five-second duration as healthy', () => {
 		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
 		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
-		expect(
-			monitor.observe({ atMs: 60_000, status: 200, durationMs: 50, pressure: 'high' })
-		).toBeNull();
+		monitor.observe({ atMs: 60_000, status: 200, durationMs: 5_000, pressure: 'high' });
+		healthy(monitor, 9, 60_001);
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.observe({ atMs: 60_020, ...OK })).toMatchObject({
+			direction: 'recovery',
+			fromMultiplier: 2,
+			toMultiplier: 1,
+		});
+	});
 
-		for (let index = 0; index < 9; index += 1) {
-			expect(
-				monitor.observe({ atMs: 60_001 + index, status: 200, durationMs: 50, pressure: 'low' })
-			).toBeNull();
+	it('does not count an elevated header with a raw five-second duration as healthy', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 429, durationMs: 5 });
+		monitor.observe({ atMs: 60_000, status: 200, durationMs: 5_000, pressure: 'elevated' });
+		healthy(monitor, 9, 60_001);
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.observe({ atMs: 60_020, ...OK })).toMatchObject({
+			direction: 'recovery',
+			fromMultiplier: 2,
+			toMultiplier: 1,
+		});
+	});
+
+	it('re-arms the header clamp when a tier change forces the multiplier back to 1', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		const fastHigh = { status: 200, durationMs: 100, pressure: 'high' as const };
+		for (let index = 0; index < 10; index += 1) {
+			monitor.observe({ atMs: index, ...fastHigh });
 		}
 		expect(monitor.multiplier()).toBe(2);
-		expect(
-			monitor.observe({ atMs: 60_010, status: 200, durationMs: 50, pressure: 'low' })
-		).toMatchObject({ direction: 'recovery', fromMultiplier: 2, toMultiplier: 1 });
+		// A slower tier clamps the ladder to ×1 without passing through recovery.
+		monitor.setMaxMultiplier(1);
+		expect(monitor.multiplier()).toBe(1);
+		monitor.setMaxMultiplier(8);
+		for (let index = 0; index < 10; index += 1) {
+			monitor.observe({ atMs: 1_000 + index, ...fastHigh });
+		}
+		expect(monitor.multiplier()).toBe(2);
 	});
 
 	it('does not read a non-429 4xx as either distress or health', () => {
@@ -552,5 +623,60 @@ describe('server pressure monitor', () => {
 		expect(monitor.multiplier()).toBe(32);
 		monitor.setMaxMultiplier(2);
 		expect(monitor.multiplier()).toBe(2);
+	});
+});
+
+describe('reported() and signal() — the Health page read-out', () => {
+	it('remembers the last reported bucket and clears the signal only when the ladder is back at x1', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		expect(monitor.reported()).toBeNull();
+		expect(monitor.signal()).toBeNull();
+
+		monitor.observe({ atMs: 0, ...OK, pressure: 'high' });
+		expect(monitor.reported()).toBe('high');
+		// One header is advisory: nothing started a back-off.
+		expect(monitor.signal()).toBeNull();
+
+		monitor.observe({ atMs: 1, status: 429, durationMs: 40 });
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.signal()).toBe('rate-limited');
+
+		// Ten healthy responses after the dwell walk the ladder back to x1.
+		healthy(monitor, 10, 61_000);
+		expect(monitor.multiplier()).toBe(1);
+		expect(monitor.signal()).toBeNull();
+		// The last reported bucket survives recovery; it is what the server said, not what we did.
+		expect(monitor.reported()).toBe('high');
+		monitor.observe({ atMs: 70_000, ...OK, pressure: 'low' });
+		expect(monitor.reported()).toBe('low');
+	});
+
+	it('names reported server load as the signal while the soft-load machine alone holds x2', () => {
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 1, ...OK, serverLoad1m: 1 });
+		monitor.observe({ atMs: 2, ...OK, serverLoad1m: 1 });
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.signal()).toBe('server-pressure');
+		// Load back under 1.25x the learned baseline for two samples ends the soft back-off.
+		monitor.observe({ atMs: 3, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 4, ...OK, serverLoad1m: 0.4 });
+		expect(monitor.multiplier()).toBe(1);
+		expect(monitor.signal()).toBeNull();
+	});
+
+	it('does not let a pause-only response leave a signal behind once its Retry-After expires', () => {
+		// The pause is read from retryAfterUntilMs() and expires with it; a signal
+		// that outlived it would mislabel a later load-only x2 as a server error.
+		const monitor = createServerPressureMonitor({ maxMultiplier: 8 });
+		monitor.observe({ atMs: 0, status: 503, durationMs: 40, retryAfter: '30' });
+		expect(monitor.multiplier()).toBe(1);
+		expect(monitor.retryAfterUntilMs()).toBe(30_000);
+		expect(monitor.signal()).toBeNull();
+		monitor.observe({ atMs: 31_000, ...OK, serverLoad1m: 0.4 });
+		monitor.observe({ atMs: 31_001, ...OK, serverLoad1m: 1 });
+		monitor.observe({ atMs: 31_002, ...OK, serverLoad1m: 1 });
+		expect(monitor.multiplier()).toBe(2);
+		expect(monitor.signal()).toBe('server-pressure');
 	});
 });

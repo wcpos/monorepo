@@ -9,6 +9,7 @@ import {
 	readEngineCoupons,
 	readEngineProductRecordsByWooId,
 } from './engine-coupon-data';
+import { quickDiscountCouponInput, readQuickDiscountIntent } from './quick-discount';
 import { buildCategoryParents } from './coupon-helpers-engine';
 
 function isDiscountType(value: unknown): value is CouponInput['discount_type'] {
@@ -20,7 +21,12 @@ export const useCouponContext = () => {
 	const runtime = useQueryRuntime();
 
 	const getCouponContext = React.useCallback(
-		async (lineItems: readonly LineItemInput[]): Promise<CouponContext> => {
+		async (
+			lineItems: readonly LineItemInput[],
+			couponLines: readonly NonNullable<
+				import('@wcpos/database').OrderDocument['coupon_lines']
+			>[number][] = []
+		): Promise<CouponContext> => {
 			const productIds = lineItems
 				.map((item) => item.product_id)
 				.filter((id): id is number => id != null);
@@ -40,6 +46,13 @@ export const useCouponContext = () => {
 					discount_type: payload.discount_type,
 					amount: payload.amount || '0',
 				});
+			}
+
+			for (const line of couponLines) {
+				const intent = readQuickDiscountIntent(line);
+				if (line.code != null && intent) {
+					coupons.set(line.code.toLowerCase(), quickDiscountCouponInput(line.code, intent));
+				}
 			}
 
 			const productCategories = new Map<number, { id: number }[]>();

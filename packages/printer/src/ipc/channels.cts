@@ -107,6 +107,8 @@ export interface IpcInvokeChannels {
 		res: DiscoveredNetworkPrinter[];
 	};
 	'usb-discovery': { req: Record<string, never>; res: UsbPrinterInfo[] };
+	/** GS I 67 over the claimed USB interface: the printer's model name, or null when it will not say. */
+	'usb-query-model': { req: { device: string }; res: string | null };
 	'serial-discovery': { req: Record<string, never>; res: DiscoveredSerialPrinter[] };
 	// axios-shaped request/response payloads over Chromium net.fetch (the channel
 	// was named 'axios' until the library left the main process — wcpos/electron#354).
@@ -146,6 +148,7 @@ export const INVOKE_CHANNELS = [
 	'print-raw-serial',
 	'printer-discovery',
 	'usb-discovery',
+	'usb-query-model',
 	'serial-discovery',
 	'http-request',
 	'auth:prompt',
@@ -190,7 +193,7 @@ type _OnChannelsCoverRegistry = AssertExactChannelKeys<
 /** Dynamic channels NOT enumerable as literal keys. */
 export const DYNAMIC_ON_PATTERNS = [/^onBeforePrint-/, /^onAfterPrint-/, /^onPrintError-/] as const;
 
-/** Must equal IPC_RENDERER_KEY_PREFIX from rxdb/plugins/electron used in apps/electron/src/main/rxdb-storage.ts. */
+/** Must equal IPC_RENDERER_KEY_PREFIX from rxdb/plugins/electron used in wcpos/electron/src/main/rxdb-storage.ts. */
 export const RXDB_IPC_CHANNEL_PREFIX = 'rxdb-ipc-renderer-storage|';
 
 export interface TypedIpcRenderer {

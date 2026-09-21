@@ -65,12 +65,20 @@ jest.mock('@wcpos/core/contexts/translations', () => {
 jest.mock('@wcpos/core/screens/main/hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: jest.fn() }),
 }));
+const idlePressure = () => ({
+	multiplier: 1,
+	retryAfterUntilMs: null as number | null,
+	reported: null as 'low' | 'elevated' | 'high' | null,
+	signal: null as 'rate-limited' | 'server-error' | 'timeout' | 'slow' | 'server-pressure' | null,
+});
+let mockServerPressure = idlePressure();
 jest.mock('@wcpos/core/screens/main/hooks/use-engine-monitor', () => ({
 	useEngineStatus: () => ({
 		connectivity: 'online',
 		gatedBy: null,
 		bootstrapFailed: {},
 		lanes: {},
+		serverPressure: mockServerPressure,
 	}),
 }));
 jest.mock('@wcpos/core/screens/main/logs/logs-logic', () => ({
@@ -129,6 +137,9 @@ const bucket = (hoursAgo: number, requests: number, load?: number): MetricsBucke
 
 let rendered: ReactTestRenderer | null = null;
 
+const paceText = (renderer: ReactTestRenderer): string =>
+	renderer.root.findByProps({ testID: 'server-pace' }).props.children.toString();
+
 function renderScreen(buckets: MetricsBucket[]): ReactTestRenderer {
 	mockBuckets = buckets;
 	mockTrendProps.length = 0;
@@ -156,8 +167,39 @@ describe('PerformanceScreen · server over time', () => {
 			act(() => renderer.unmount());
 			rendered = null;
 		}
+		mockServerPressure = idlePressure();
 		jest.restoreAllMocks();
 		jest.useRealTimers();
+	});
+
+	it('shows a normal pace with no warning on a quiet server', () => {
+		const renderer = renderScreen([]);
+		expect(paceText(renderer)).toBe('✓ Normal pace');
+	});
+
+	it('says the advisory high header is being overruled, still as a normal pace', () => {
+		// The host that stamps every response "high" while answering in 300 ms:
+		// the cadence does not slow for it, and the page must say so instead of
+		// showing a warning the engine does not act on.
+		mockServerPressure = { ...idlePressure(), reported: 'high' };
+		const renderer = renderScreen([bucket(1, 5, 0.4)]);
+		expect(paceText(renderer)).toBe(
+			'✓ Normal pace — your server reports high load; the till only slows down if its answers do'
+		);
+		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
+			'text-muted-foreground'
+		);
+	});
+
+	it('warns when the till is easing off and names the reason', () => {
+		mockServerPressure = { ...idlePressure(), multiplier: 4, signal: 'rate-limited' };
+		const renderer = renderScreen([bucket(1, 5, 0.4)]);
+		expect(paceText(renderer)).toBe(
+			'⚠ Easing off — checking 4× less often: your server asked the POS to slow down'
+		);
+		expect(renderer.root.findByProps({ testID: 'server-pace' }).props.className).toContain(
+			'text-warning'
+		);
 	});
 
 	it('mounts both trend frames on a brand-new till', () => {

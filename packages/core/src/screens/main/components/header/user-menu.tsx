@@ -15,7 +15,6 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	DropdownMenu,
@@ -37,7 +36,7 @@ import { Toast } from '@wcpos/components/toast';
 import { clearAllDB, scheduleClearLocalDataOnNextLoad } from '@wcpos/database';
 import { useDocField, useQueryRuntime } from '@wcpos/query';
 import { Platform } from '@wcpos/utils/platform';
-import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
 import { forgetUnsentChanges, type UnsentChanges } from '@wcpos/utils/unsent-changes';
@@ -47,7 +46,8 @@ import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { reloadApp } from '../../../../utils/reload-app';
 import { storeListResource } from '../../hooks/store-list-resource';
-import { useImageAttachment } from '../../hooks/use-image-attachment';
+import { UserAvatar } from './user-avatar';
+import { useSwitchStore } from './use-switch-store';
 import { countUnsentChanges, describeResetConfirm } from '../../hooks/use-unsent-changes';
 
 import type { ObservableResource } from 'observable-hooks';
@@ -55,7 +55,6 @@ import type { ObservableResource } from 'observable-hooks';
 const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
 
 type StoreDocument = import('@wcpos/database').StoreDocument;
-type WPCredentialsDocument = import('@wcpos/database').WPCredentialsDocument;
 
 interface StoreSubMenuProps {
 	storesResource: ObservableResource<StoreDocument[]>;
@@ -85,41 +84,10 @@ function StoreSubMenu({ storesResource, switchStore, currentStoreID }: StoreSubM
 }
 
 /**
- * The image attachment hook suspends while the avatar loads, so it lives in
- * its own component behind a Suspense boundary that falls back to initials.
- */
-function UserAvatarImage({
-	wpCredentials,
-	displayName,
-}: {
-	wpCredentials: WPCredentialsDocument;
-	displayName?: string;
-}) {
-	const avatarUrl = useDocField(wpCredentials, (value) => value.avatar_url);
-	const { uri } = useImageAttachment(wpCredentials, avatarUrl as string);
-
-	return <Avatar source={{ uri }} fallback={getInitials(displayName)} />;
-}
-
-function UserAvatar({
-	wpCredentials,
-	displayName,
-}: {
-	wpCredentials: WPCredentialsDocument;
-	displayName?: string;
-}) {
-	return (
-		<Suspense fallback={<Avatar source={{ uri: undefined }} fallback={getInitials(displayName)} />}>
-			<UserAvatarImage wpCredentials={wpCredentials} displayName={displayName} />
-		</Suspense>
-	);
-}
-
-/**
  * @TODO - remove hardcoded screensize
  */
 export function UserMenu() {
-	const { wpCredentials, site, store, logout, switchStore } = useStoreSession();
+	const { wpCredentials, site, store, logout } = useStoreSession();
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const { engine } = useQueryRuntime();
@@ -130,7 +98,7 @@ export function UserMenu() {
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as
 		string | undefined;
 	const t = useT();
-	const [isSwitching, setIsSwitching] = React.useState(false);
+	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	/** Non-null while the reset confirm is open, carrying the reading it must state. */
 	const [confirmingReset, setConfirmingReset] = React.useState<UnsentChanges | null>(null);
 	/**
@@ -206,38 +174,6 @@ export function UserMenu() {
 
 		// Reload the app to reinitialize everything
 		reloadApp();
-	};
-
-	const handleSwitchStore = async (nextStore: StoreDocument): Promise<void> => {
-		setIsSwitching(true);
-		try {
-			await switchStore(nextStore);
-			// The router owns the URL: passing the server store id as a param writes
-			// `/?store=<id>` on web (so a refresh boots into the new store) without
-			// clobbering Expo Router's own history state the way a manual
-			// history.replaceState would. Boot-time `?store=` handling consumes and
-			// removes the param as before.
-			if (Platform.isWeb) {
-				router.replace({
-					pathname: '/',
-					params: { store: String(nextStore.id) },
-				});
-			} else {
-				router.replace('/');
-			}
-		} catch (error) {
-			Toast.show({
-				type: 'error',
-				title: t('common.store_switch_failed'),
-				description: getErrorMessage(error),
-			});
-			uiLogger.error('Store switch failed', {
-				code: ERROR_CODES.UNEXPECTED_ERROR,
-				context: { error },
-			});
-		} finally {
-			setIsSwitching(false);
-		}
 	};
 
 	return (

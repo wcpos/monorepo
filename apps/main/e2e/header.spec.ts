@@ -1,27 +1,24 @@
 import { expect } from '@playwright/test';
 
-import { getStoreVariant, authenticatedTest as test } from './fixtures';
+import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
 
-test.describe('Header', () => {
-	test('should show user menu trigger', async ({ posPage: page }) => {
-		await expect(page.getByTestId('user-menu-trigger')).toBeVisible({
+test.describe('Register bar (the POS has no title bar)', () => {
+	test('should show the cashier avatar on the bar', async ({ posPage: page }) => {
+		await expect(page.getByTestId('header-title-container')).toHaveCount(0);
+		await expect(page.getByTestId('register-bar-avatar')).toBeVisible({
 			timeout: 10_000,
 		});
 	});
 
-	test('should open user menu dropdown', async ({ posPage: page }) => {
-		await page.getByTestId('user-menu-trigger').click();
-		await expect(page.getByTestId('settings-menu-item')).toBeVisible({
+	test('should open the user sheet from the avatar', async ({ posPage: page }) => {
+		await page.getByTestId('register-bar-avatar').click();
+		await expect(page.getByTestId('user-sheet-sign-out')).toBeVisible({
 			timeout: 15_000,
 		});
 	});
 
-	test('should open settings area from user menu', async ({ posPage: page }) => {
-		await page.getByTestId('user-menu-trigger').click();
-		await expect(page.getByTestId('settings-menu-item')).toBeVisible({
-			timeout: 15_000,
-		});
-		await page.getByTestId('settings-menu-item').click();
+	test('should open settings area from the rail', async ({ posPage: page }) => {
+		await navigateToPage(page, 'settings');
 		await expect(page.getByTestId('screen-settings-general')).toBeVisible({
 			timeout: 15_000,
 		});

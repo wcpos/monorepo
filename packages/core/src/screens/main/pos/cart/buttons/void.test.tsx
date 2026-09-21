@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+
 import { VoidButton } from './void';
 
 /** Scripted result for one awaitWriteOutcome call, consumed in order. */
@@ -263,6 +265,22 @@ describe('VoidButton', () => {
 		query.awaitWriteOutcome = original;
 	});
 
+	it('surfaces an error toast and no success toast when the delete write fails', async () => {
+		mockEngine.write.mockRejectedValueOnce(new Error('delete enqueue failed'));
+		render(<VoidButton />);
+		fireEvent.click(screen.getByTestId('void-button'));
+
+		await waitFor(() =>
+			expect(mockCartLogger.error).toHaveBeenCalledWith('Failed to void order', {
+				showToast: true,
+				code: ERROR_CODES.LOCAL_DB_WRITE_FAILED,
+				context: { orderId: 'order-1', error: 'delete enqueue failed' },
+			})
+		);
+		expect(mockCartLogger.success).not.toHaveBeenCalled();
+		expect(mockAwaitCalls).toHaveLength(0);
+	});
+
 	it('surfaces an error toast and no success toast when the fallback enqueue fails', async () => {
 		mockOutcomes = ['rejected'];
 		mockPatchAndEnqueueEngineResident.mockRejectedValue(new Error('enqueue failed'));
@@ -299,3 +317,103 @@ describe('VoidButton', () => {
 		});
 	});
 });
+
+jest.mock('../../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ site: { uuid: 'site' }, store: { id: 1 } }),
+}));
+
+it('stamps the original register through the real writer when binding switches during the outcome wait', async () => {
+	const query = jest.requireMock('@wcpos/query');
+	const realQuery = jest.requireActual('@wcpos/query');
+	for (const key of [
+		'COLLECTION_VOCABULARY',
+		'adapterDerivedFieldsFor',
+		'promotedColumnsFor',
+		'engineCollection',
+	])
+		query[key] = realQuery[key];
+	const { patchAndEnqueueEngineResident } = jest.requireActual(
+		'../../../hooks/mutations/use-local-mutation'
+	);
+	const { readBoundRegister } = jest.requireActual(
+		'../../../../../services/register/register-document'
+	);
+	await readBoundRegister(
+		{
+			getLocal: async () => ({
+				toJSON: () => ({
+					data: { id: 'till', sites: { site: { register_id: 'register', register_store_id: 1 } } },
+				}),
+			}),
+		} as never,
+		'site',
+		1
+	);
+	const stored = { payload: { status: 'pos-open' } };
+	const resident = {
+		toJSON: () => stored,
+		incrementalModify: async (modify: (old: typeof stored) => typeof stored) =>
+			Object.assign(stored, modify(stored)),
+	};
+	const manager = {
+		engine: {
+			whenActive: async () => ({
+				scopeId: 'scope',
+				barcodeSelectors: {},
+				database: { collections: { orders: { findOne: () => ({ exec: async () => resident }) } } },
+			}),
+			status: () => ({ activeScopeId: 'scope' }),
+			write: mockEngine.write,
+		},
+	};
+	jest.clearAllMocks();
+	mockOutcomes = ['rejected'];
+	mockConnectivity = 'online';
+	mockFindEngineResident.mockResolvedValue({});
+	mockPatchAndEnqueueEngineResident.mockImplementationOnce((input) =>
+		patchAndEnqueueEngineResident({ ...input, manager })
+	);
+	let refuse!: () => void;
+	const outcome = jest.spyOn(query, 'awaitWriteOutcome').mockImplementationOnce(
+		() =>
+			new Promise((_resolve, reject) => {
+				refuse = () => reject(new query.WriteOutcomeError('woocommerce_rest_cannot_delete', 403));
+			})
+	);
+	render(<VoidButton />);
+	fireEvent.click(screen.getByTestId('void-button'));
+	await waitFor(() => expect(outcome).toHaveBeenCalled());
+	await readBoundRegister(
+		{
+			getLocal: async () => ({
+				toJSON: () => ({
+					data: {
+						id: 'till',
+						sites: { site: { register_id: 'new-register', register_store_id: 2 } },
+					},
+				}),
+			}),
+		} as never,
+		'site',
+		2
+	);
+	refuse();
+	await waitFor(() =>
+		expect(mockEngine.write).toHaveBeenCalledWith(
+			expect.objectContaining({
+				payload: {
+					status: 'pending',
+					meta_data: [
+						{ key: '_wcpos_register', value: 'register' },
+						{ key: '_wcpos_till', value: 'till' },
+					],
+				},
+			})
+		)
+	);
+	outcome.mockRestore();
+});
+
+jest.mock('../../contexts/current-order/temporary-order', () => ({}));
+
+jest.mock('../../../../../hooks/use-local-date', () => ({}));

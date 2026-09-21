@@ -25,6 +25,7 @@ import {
 	EngineStringStore,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
+import { materializeGreedyPrunable } from './materialization/record-materialization';
 
 import type { RxStorage } from 'rxdb';
 
@@ -62,6 +63,8 @@ function scriptedServer() {
 		sequenceLogFetches: 0,
 		sequenceLogSince: [] as number[],
 		headFetches: 0,
+		/** When set, the scope-open head prime waits on it before answering. */
+		holdHeadFetch: null as Promise<void> | null,
 		products: new Map<number, Record<string, unknown>>([
 			[
 				9,
@@ -104,7 +107,10 @@ function scriptedServer() {
 			}
 			const since = Number(u.searchParams.get('since') ?? '0');
 			state.sequenceLogSince.push(since);
-			if (since === 0 && u.searchParams.get('limit') === '1') state.headFetches += 1;
+			if (since === 0 && u.searchParams.get('limit') === '1') {
+				state.headFetches += 1;
+				if (state.holdHeadFetch) await state.holdHeadFetch;
+			}
 			const rows = state.rows.filter((row) => row.sequence > since);
 			const maxSeen = rows.reduce((max, row) => Math.max(max, row.sequence), since);
 			return json({
@@ -145,25 +151,24 @@ function scriptedServer() {
 		if (path.endsWith('/variations')) {
 			state.variationPulls += 1;
 			const include = (u.searchParams.get('include') ?? '').split(',').map(Number);
-			return json({
-				documents: include
+			return json(
+				include
 					.filter((id) => !state.elidedVariationIds.has(id))
 					.map((id) => ({
 						id,
 						parent_id: 9,
-						payload: {
-							meta_data: [
-								{
-									key: '_woocommerce_pos_uuid',
-									value: variationUuid(id),
-								},
-							],
-							price: '4.00',
-							stock_status: 'instock',
-							attributes: [],
-						},
-					})),
-			});
+						_rxdb_revision: 'r',
+						meta_data: [
+							{
+								key: '_woocommerce_pos_uuid',
+								value: variationUuid(id),
+							},
+						],
+						price: '4.00',
+						stock_status: 'instock',
+						attributes: [],
+					}))
+			);
 		}
 		if (path.endsWith('/customers')) {
 			state.customerPulls += 1;
@@ -227,6 +232,7 @@ function engineWith(input: {
 	checkpoints?: EngineStringStore;
 }): RxdbSyncEngine {
 	return createEngineHarness({
+		protocolDefaults: false,
 		site: SITE,
 		identity: input.identity,
 		storage: input.storage,
@@ -254,6 +260,131 @@ async function productCount(engine: RxdbSyncEngine): Promise<number> {
 }
 
 describe('sync("change-signal") through the public handle', () => {
+	it.each(['within a page', 'across pages', 'identity collision', 'shifted window'])(
+		'rejects coupon duplicates %s without writes or checkpointing, then replays',
+		async (overlap) => {
+			const server = scriptedServer();
+			const coupon = (id: number, code = `coupon-${id}`) => ({
+				id,
+				code,
+				meta_data: [{ key: '_woocommerce_pos_uuid', value: variationUuid(id) }],
+			});
+			const firstPage = Array.from({ length: 100 }, (_, index) => coupon(index + 1));
+			firstPage[99] = coupon(100, overlap === 'within a page' ? 'later' : 'earlier');
+			if (overlap === 'within a page') firstPage[98] = coupon(100, 'earlier');
+			const checkpoints = memoryStringStore();
+			let refreshing = false;
+			let stable = false;
+			const events: SyncEvent[] = [];
+			// The shifted walk starts with 1..102. After page 1, resident 102 moves
+			// to the front and new coupon 103 is inserted ahead of it.
+			let catalog = Array.from({ length: 102 }, (_, index) => coupon(index + 1));
+			const stableCatalog = Array.from(
+				{ length: overlap === 'shifted window' ? 103 : 101 },
+				(_, index) => coupon(index + 1, index === 99 ? 'later' : undefined)
+			).filter((row) => overlap !== 'within a page' || row.id !== 99);
+			const pages: number[] = [];
+			const engine = engineWith({
+				storage: memoryEngineStorage(),
+				identity: freshIdentity(),
+				checkpoints,
+				diagnostics: (event) => events.push(event),
+				fetch: async (url) => {
+					const u = new URL(url);
+					if (!u.pathname.endsWith('/coupons') || !refreshing) return server.fetch(url);
+					const page = Number(u.searchParams.get('page'));
+					pages.push(page);
+					if (stable) return Response.json(stableCatalog.slice((page - 1) * 100, page * 100));
+					if (overlap === 'shifted window') {
+						if (page === 2) {
+							catalog = [coupon(103), coupon(102), ...catalog.filter((row) => row.id !== 102)];
+							server.state.head = 7;
+							server.state.rows.push({ ...server.state.rows[0]!, sequence: 7, id: 103 });
+						}
+						return Response.json(catalog.slice((page - 1) * 100, page * 100));
+					}
+					if (overlap === 'identity collision' && page === 2) {
+						return Response.json([{ ...coupon(101), meta_data: coupon(100).meta_data }]);
+					}
+					const lastPage =
+						overlap === 'within a page' ? [coupon(101)] : [coupon(100, 'later'), coupon(101)];
+					return Response.json(page === 1 ? firstPage : lastPage);
+				},
+			});
+			try {
+				await engine.ready;
+				await engine.sync('change-signal');
+				const collection = engine.active()!.database.collections.coupons!;
+				const dirty = materializeGreedyPrunable(coupon(1, 'local')).storedDocument;
+				dirty.local.dirty = true;
+				const seeded = await collection.bulkUpsert([
+					dirty,
+					materializeGreedyPrunable(coupon(999)).storedDocument,
+					materializeGreedyPrunable(coupon(100, 'original')).storedDocument,
+					...(overlap === 'shifted window'
+						? [materializeGreedyPrunable(coupon(102)).storedDocument]
+						: []),
+				]);
+				expect(seeded.error).toEqual([]);
+				refreshing = true;
+				server.state.head = 6;
+				server.state.rows.push({
+					sequence: 6,
+					id: overlap === 'shifted window' ? 102 : 100,
+					deleted: 0,
+					collection: 'coupons',
+					modified_gmt: '2026-07-10T00:00:01',
+				});
+
+				const before = (await collection.find().exec()).map((doc) => doc.toJSON());
+				const checkpointBefore = [...checkpoints.entries()];
+				const report = await engine.sync('change-signal');
+				expect(report).toMatchObject({ status: 'error' });
+				expect(report.error).toContain(
+					overlap === 'identity collision' ? 'identity-ambiguous' : 'incomplete-snapshot'
+				);
+				expect(events).toContainEqual(
+					expect.objectContaining({
+						type: 'signal.tick.error',
+						level: 'error',
+						message: report.error,
+					})
+				);
+				expect((await collection.find().exec()).map((doc) => doc.toJSON())).toEqual(before);
+				expect([...checkpoints.entries()]).toEqual(checkpointBefore);
+				expect(pages).toEqual([1, 2]);
+				stable = true; // Stable walk (or repaired server identity) on the next tick.
+				expect((await engine.sync('change-signal')).status).toBe('ran');
+				expect(pages).toEqual([1, 2, 1, 2]);
+				expect(server.state.sequenceLogSince.slice(-2)).toEqual([5, 5]);
+				const residents = await collection.find().exec();
+				expect(residents).toHaveLength(
+					overlap === 'shifted window' ? 103 : overlap === 'within a page' ? 100 : 101
+				);
+				if (overlap === 'shifted window') {
+					expect(await collection.findOne(variationUuid(102)).exec()).not.toBeNull();
+					expect(await collection.findOne(variationUuid(103)).exec()).not.toBeNull();
+				}
+				expect((await collection.findOne(variationUuid(100)).exec())?.toJSON().payload.code).toBe(
+					'later'
+				);
+				expect((await collection.findOne(variationUuid(1)).exec())?.toJSON().payload.code).toBe(
+					'local'
+				);
+				expect(await collection.findOne(variationUuid(999)).exec()).toBeNull();
+				const persisted = [...checkpoints.entries()].find(([key]) =>
+					key.endsWith(':checkpoint:change-signal')
+				);
+				expect(JSON.parse(persisted![1]).cursor.sequence).toBe(
+					overlap === 'shifted window' ? 7 : 6
+				);
+				expect((await engine.sync('change-signal')).status).toBe('ran');
+			} finally {
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('require targeted variations prunes a server-elided resident and resolves fetched', async () => {
 		const server = scriptedServer();
 		const diagnosticsEvents: SyncEvent[] = [];
@@ -373,6 +504,86 @@ describe('sync("change-signal") through the public handle', () => {
 		await engine.dispose();
 	});
 
+	it('primes the cursor at scope open so a record changed before the first poll is still pulled', async () => {
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		try {
+			await engine.ready;
+			expect(server.state.headFetches).toBe(1);
+			await engine
+				.active()!
+				.database.collections.products.bulkUpsert([
+					materializeGreedyPrunable(server.state.products.get(9)!).storedDocument,
+				]);
+			server.state.products.get(9)!.stock_status = 'outofstock';
+			server.state.rows.push({
+				sequence: 6,
+				id: 9,
+				deleted: 0,
+				collection: 'products',
+				modified_gmt: '2026-07-10T00:00:01',
+			});
+			server.state.head = 6;
+			server.state.sequenceLogSince = [];
+			expect((await engine.sync('change-signal')).status).toBe('ran');
+			expect(server.state.sequenceLogSince[0]).toBe(5);
+			expect(server.state.productIncludes).toContainEqual([9]);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('holds a requirement issued during a later switch until that scope is primed', async () => {
+		// A non-initial switch publishes the new scope before its open completes;
+		// a browse the new UI issues meanwhile must not pull before the prime has
+		// put a cursor under it.
+		const server = scriptedServer();
+		const engine = engineWith({
+			storage: memoryEngineStorage(),
+			fetch: server.fetch,
+			identity: freshIdentity(),
+		});
+		try {
+			await engine.ready;
+			let releaseHead!: () => void;
+			server.state.holdHeadFetch = new Promise<void>((resolve) => {
+				releaseHead = resolve;
+			});
+			const pullsBefore = server.state.productPulls;
+			// The requirement is issued from INSIDE the db$ emission for the new
+			// scope — the earliest moment a UI can react to the switch, before the
+			// lifecycle op has resumed past switchTo.
+			let browse!: ReturnType<typeof engine.require>;
+			const initialDb = engine.active()!.database;
+			const unsubscribe = engine.db$((db) => {
+				if (db === null || db === initialDb || browse !== undefined) return;
+				browse = engine.require({
+					id: 'browse-during-prime',
+					collection: 'products',
+					kind: 'product-browse',
+					limit: 10,
+				});
+			});
+			const switching = engine.scope.switch(freshIdentity());
+			await vi.waitFor(() => expect(server.state.headFetches).toBe(2));
+			expect(browse).toBeDefined();
+			unsubscribe();
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			expect(server.state.productPulls).toBe(pullsBefore);
+			releaseHead();
+			await switching;
+			await expect(browse.ready).resolves.toMatchObject({ action: 'fetched' });
+			expect(server.state.productPulls).toBeGreaterThan(pullsBefore);
+			browse.release();
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('primes to head, applies a fresh signal, persists the cursor across engines', async () => {
 		const server = scriptedServer();
 		const storage = memoryEngineStorage();
@@ -381,7 +592,7 @@ describe('sync("change-signal") through the public handle', () => {
 		const engine = engineWith({ storage, fetch: server.fetch, identity });
 		await engine.ready;
 
-		// Tick 1: cold start primes AT head (5) — the historical backlog is never drained.
+		// Scope open primed AT head (5) — the first tick never drains the historical backlog.
 		const first = await engine.sync('change-signal');
 		expect(first.status).toBe('ran');
 		expect(server.state.headFetches).toBe(1);
@@ -635,6 +846,7 @@ describe('sync("change-signal") through the public handle', () => {
 		server.state.head = 9_000;
 
 		const harness = createEngineHarness({
+			protocolDefaults: false,
 			site: SITE,
 			identity,
 			storage: memoryEngineStorage(),
@@ -1051,7 +1263,9 @@ describe('sync("change-signal") through the public handle', () => {
 		const started = new Promise<void>((resolve) => {
 			markStarted = resolve;
 		});
-		const fetch = async (_url: string, init?: RequestInit): Promise<Response> => {
+		const server = scriptedServer();
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
+			if (url.includes('since=0&limit=1')) return server.fetch(url);
 			requestSignal = init?.signal ?? undefined;
 			markStarted();
 			return new Promise((_resolve, reject) =>

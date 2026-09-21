@@ -3,7 +3,7 @@
 The shared language for the printing domain (settings UI, discovery, transport, cloud
 queue). This is a glossary, not a spec. Implementation lives in `src/`, the settings UI in
 `packages/core/src/screens/main/settings/printer/`, the persisted schema in
-`packages/database`, Electron IPC in `apps/electron`, and the cloud queue in the
+`packages/database`, Electron IPC in the `wcpos/electron` repo, and the cloud queue in the
 `woocommerce-pos` PHP plugin.
 
 ## Terms

@@ -12,6 +12,8 @@ Ruled in [wcpos/roadmap#139](https://github.com/wcpos/roadmap/issues/139), 2026-
   `@wcpos/core/extensions/slots` and is exported from no other barrel, so nothing acquires
   it by accident before v2 makes it public.
 
+- `pos.cart.bar` — open-order entries above or below the cart, with `{ position, isColumn }` data and no host methods.
+
 ## The contract
 
 An entry component receives exactly three props (`SlotEntryProps`):

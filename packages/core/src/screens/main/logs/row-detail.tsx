@@ -52,6 +52,12 @@ function useGuidanceText(entry: CatalogueEntry | null): string | null {
 		case 'data-at-risk':
 			risk = t('health.logs.safety_data_at_risk');
 			break;
+		case 'local-only':
+			// Nothing on the server moved, but what this device holds may be
+			// affected (e.g. AUTH131: a re-added site opens a fresh local copy of
+			// the store). The merchant must hear that before clearing anything.
+			risk = t('health.logs.safety_local_only');
+			break;
 	}
 
 	const action = translateErrorAction((key) => t(key), entry.code);
@@ -219,6 +225,11 @@ export function RowDetail({ row, kind, title }: { row: LogRow; kind: LevelKind; 
 
 	return (
 		<VStack testID={`logs-detail-${row.logId}`} className="relative py-2 pl-4 md:ml-42 md:pl-0">
+			{/* The row's occurrence count on its own: the logger folds repeats within a window
+			    into one row, so an exactly-once assertion must read this, not the row count. */}
+			<Text testID={`logs-attempts-${row.logId}`} className="hidden">
+				{detail.attempts?.count ?? 1}
+			</Text>
 			{isProblem ? (
 				<View
 					className={cn(

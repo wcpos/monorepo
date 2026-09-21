@@ -17,7 +17,7 @@ import {
 	FormTextarea,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
+import { ModalAction, ModalBody, ModalClose, ModalFooter, useModal } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -286,7 +286,7 @@ export function EditOrderForm({ order }: Props) {
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<ModalBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<VStack className="gap-4">
 					<HStack className="gap-4">
@@ -411,18 +411,18 @@ export function EditOrderForm({ order }: Props) {
 					<TaxIdsForm name="tax_ids" />
 					<MetaDataForm name="meta_data" />
 				</VStack>
-				<ModalFooter className="px-0">
-					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction
-						testID="order-edit-save-button"
-						loading={loading}
-						onPress={onSave}
-						disabled={storageDegraded}
-					>
-						{t('common.save')}
-					</ModalAction>
-				</ModalFooter>
-			</VStack>
+			</ModalBody>
+			<ModalFooter>
+				<ModalClose>{t('common.cancel')}</ModalClose>
+				<ModalAction
+					testID="order-edit-save-button"
+					loading={loading}
+					onPress={onSave}
+					disabled={storageDegraded}
+				>
+					{t('common.save')}
+				</ModalAction>
+			</ModalFooter>
 		</Form>
 	);
 }

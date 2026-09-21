@@ -64,7 +64,6 @@ function engineWith(
 		identity: freshIdentity(),
 		mode: 'manual',
 		fetch,
-		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
 		awaitReady: false,
 	}).engine;
 }

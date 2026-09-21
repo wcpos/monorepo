@@ -33,6 +33,33 @@ describe('stores migration strategy', () => {
 		expect(migrated.receipt_i18n).toEqual({});
 	});
 
+	// v18 adds the per-store `scale` override (roadmap#357). It is a pass-through:
+	// an absent value means Auto, which is what the schema defaults to and what
+	// resolveStep falls back to, so no document is rewritten to gain it.
+	it('migration 18 passes a version-17 document through with no scale, which reads as auto', async () => {
+		const { userCollections } = await import('./index');
+		const { storesLiteral } = await import('./schemas/stores');
+		const migrate = userCollections.stores.migrationStrategies?.[18];
+		if (!migrate) throw new Error('stores migration 18 missing');
+		const oldStore = { localID: 'store-1', theme: 'dark' };
+
+		const migrated = migrate(oldStore as never, undefined as never);
+
+		expect(migrated).toBe(oldStore);
+		expect((migrated as { scale?: string }).scale).toBeUndefined();
+		expect(storesLiteral.properties.scale.default).toBe('auto');
+		expect(storesLiteral.version).toBe(18);
+	});
+
+	// The scale step is a device preference beside the theme: a login or a cashier
+	// sync must never overwrite the step a merchant set on this screen.
+	it('does not treat scale as a server-owned field', async () => {
+		const { SERVER_OWNED_STORE_FIELDS } = await import('./schemas/stores');
+
+		expect(SERVER_OWNED_STORE_FIELDS as readonly string[]).not.toContain('scale');
+		expect(SERVER_OWNED_STORE_FIELDS as readonly string[]).not.toContain('theme');
+	});
+
 	it('migration 16 preserves existing store data', async () => {
 		const { userCollections } = await import('./index');
 		const migrate = userCollections.stores.migrationStrategies?.[16];

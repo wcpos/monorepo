@@ -6,7 +6,7 @@ import type { StoreScopeIdentity } from '@wcpos/sync-core';
 
 import { buildReplicationHandlers } from './change-signal/change-signal-handlers';
 import { type RxdbSyncEngine } from './create-rxdb-sync-engine';
-import { createEngineHarness, remoteId } from './testing';
+import { createEngineHarness, type EngineHarnessOptions, remoteId } from './testing';
 
 setPremiumFlag();
 
@@ -134,21 +134,7 @@ function storedDocument(input: {
 	return common;
 }
 
-function pullResponse(spec: FacetSpec, document: Record<string, unknown> | null): Response {
-	if (spec.collection === 'variations') {
-		const body = document
-			? {
-					documents: [
-						{
-							id: document.id,
-							parent_id: document.parent_id,
-							payload: document,
-						},
-					],
-				}
-			: { documents: [] };
-		return Response.json(body);
-	}
+function pullResponse(_spec: FacetSpec, document: Record<string, unknown> | null): Response {
 	return Response.json(document ? [document] : []);
 }
 
@@ -171,12 +157,16 @@ function routedServer(spec: FacetSpec, truth: () => Record<string, unknown> | nu
 	return { server, pulls, state, fetch };
 }
 
-function engine(fetch: (url: string, init?: RequestInit) => Promise<Response>): RxdbSyncEngine {
+function engine(
+	fetch: (url: string, init?: RequestInit) => Promise<Response>,
+	routes?: EngineHarnessOptions['routes']
+): RxdbSyncEngine {
 	return createEngineHarness({
 		site: SITE,
 		identity: identity(),
 		mode: 'manual',
 		fetch,
+		routes,
 		awaitReady: false,
 	}).engine;
 }
@@ -682,18 +672,16 @@ describe('write facets beyond orders', () => {
 				collection: spec.collection,
 				payload: truth,
 			});
-			const subject = engine(async (url, init) =>
-				new URL(url).pathname.endsWith('/changes/config-fingerprint')
-					? Response.json({
-							fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
-							barcode_fields: {
-								products: ['global_unique_id'],
-								variations: ['global_unique_id'],
-								tax_rates: [],
-							},
-						})
-					: route.fetch(url, init)
-			);
+			const subject = engine(route.fetch, {
+				'/changes/config-fingerprint': {
+					fingerprints: { products: 'p1', variations: 'v1', tax_rates: 't1' },
+					barcode_fields: {
+						products: ['global_unique_id'],
+						variations: ['global_unique_id'],
+						tax_rates: [],
+					},
+				},
+			});
 			await subject.ready;
 			expect(subject.active()!.barcodeSelectors[spec.collection]).toEqual(['global_unique_id']);
 

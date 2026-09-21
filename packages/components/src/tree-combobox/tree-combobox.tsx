@@ -18,13 +18,15 @@ import {
 	NATIVE_LIST_MAX_HEIGHT,
 	NATIVE_POPOVER_MAX_HEIGHT,
 } from '../lib/native-popover-sizing';
+import { POPOVER_FADE } from '../lib/motion';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
-import { INDENT_PX } from '../tree-select/tree-item';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 
 import type { FlatTreeItem } from '../lib/use-hierarchy';
 import type { TreeComboboxContentProps, TreeComboboxProps } from './types';
+
+const INDENT_PX = 16;
 
 type ComboboxOption<T = undefined> = { value: string; label: string; item?: T };
 
@@ -385,8 +387,8 @@ function TreeComboboxContent<T>({
 				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
 				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
 				<Animated.View
-					entering={FadeIn.duration(200)}
-					exiting={FadeOut}
+					entering={FadeIn.duration(POPOVER_FADE)}
+					exiting={FadeOut.duration(POPOVER_FADE)}
 					pointerEvents="box-none"
 					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
 				>

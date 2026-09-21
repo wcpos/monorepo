@@ -157,3 +157,14 @@ test('shipped OPFS worker contains targeted record recovery exactly once', () =>
 	const source = readFileSync(shippedWorker, 'utf8');
 	assert.equal(source.match(/WCPOS_OPFS_TARGETED_RECOVERY/g)?.length, 1);
 });
+
+test('shipped OPFS worker contains changelog identity protection exactly once', () => {
+	const source = readFileSync(shippedWorker, 'utf8');
+	assert.equal(source.match(/WCPOS_CHANGELOG_IDENTITY_PATCH/g)?.length, 1);
+	assert.equal(source.match(/WCPOS_CHANGELOG_INDEX_STATES_PATCH/g)?.length, 1);
+	// esbuild renames the link helper, so find it by its body (the property it
+	// assigns survives minification) and require one definition plus one call site.
+	const helper = /function (\w+)\(\w+\)\{for\(var \w+=0;[^}]*__wcposIndexStates=/.exec(source);
+	assert.ok(helper, 'link helper definition present in the shipped worker');
+	assert.equal(source.match(new RegExp(`\\b${helper[1]}\\(`, 'g'))?.length, 2);
+});

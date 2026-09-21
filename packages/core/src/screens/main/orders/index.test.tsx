@@ -205,3 +205,5 @@ describe('OrdersScreen query-state wiring', () => {
 		});
 	});
 });
+
+jest.mock('../components/order/register', () => ({ Register: () => null }));

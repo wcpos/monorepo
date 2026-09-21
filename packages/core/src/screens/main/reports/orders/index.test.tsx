@@ -141,3 +141,5 @@ describe('reports orders binding table', () => {
 		expect(screen.getByTestId('filters').textContent).toContain('"status":"processing"');
 	});
 });
+
+jest.mock('../../components/order/register', () => ({ Register: () => null }));

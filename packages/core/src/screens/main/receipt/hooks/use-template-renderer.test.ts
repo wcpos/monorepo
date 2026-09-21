@@ -7,7 +7,7 @@ import { BehaviorSubject } from 'rxjs';
 import { renderOfflineTemplatePreview, useTemplateRenderer } from './use-template-renderer';
 
 const mockUseReceiptData = jest.fn();
-const mockUseActiveTemplates = jest.fn(() => []);
+const mockUseActiveTemplates = jest.fn((..._args: unknown[]) => []);
 const createStore = (dp = 2) => ({
 	name: 'Test Store',
 	wc_price_decimals$: new BehaviorSubject(dp),
@@ -39,7 +39,7 @@ jest.mock('./use-receipt-data', () => ({
 }));
 
 jest.mock('./use-active-templates', () => ({
-	useActiveTemplates: () => mockUseActiveTemplates(),
+	useActiveTemplates: (...args: unknown[]) => mockUseActiveTemplates(...args),
 }));
 
 jest.mock('../../contexts/tax-rates', () => ({
@@ -471,3 +471,306 @@ describe('renderOfflineTemplatePreview', () => {
 		).toThrow('Unsupported template engine: unsupported');
 	});
 });
+
+jest.mock('../../../../services/register/use-register', () => ({ useRegister: () => null }));
+
+it.each(['offline', 'online-website-available'])(
+	'prints an unsent closure from its frozen local report when %s',
+	async (status) => {
+		mockUseOnlineStatus.mockReturnValue({ status });
+		const fetchForPrint = jest.fn();
+		mockUseReceiptData.mockReturnValue({ data: null, fetchForPrint });
+		mockUseActiveTemplates.mockReturnValue([]);
+		const localReport = {
+			title: 'Z-report',
+			order_number: 'Closure 1',
+			footer: 'Unsynced',
+			line_items: [{ name: 'Counted', amount: '150.00' }],
+		};
+		const { result } = renderHook(() =>
+			useTemplateRenderer({
+				...defaultOptions,
+				order: undefined,
+				orderId: undefined,
+				document: 'closure:s',
+				documentReady: false,
+				localReport,
+			})
+		);
+		const printed = await result.current.preparePrintContent(jest.fn(async () => 2));
+		expect(printed.receiptData).toMatchObject({
+			...localReport,
+			fiscal: { is_reprint: true, reprint_count: 1 },
+		});
+		expect(printed.html).toContain('Closure 1');
+		expect(printed.html).toContain('150.00');
+		expect(printed.html).toContain('Unsynced');
+		expect(fetchForPrint).not.toHaveBeenCalled();
+	}
+);
+it('uses fresh server-marked closure data for printing, not the preview', async () => {
+	mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+	const formatReport = (data: Record<string, unknown>) => ({ ...data, title: 'Z-report' });
+	mockUseReceiptData.mockReturnValue({
+		data: { footer: 'Original' },
+		fetchForPrint: async () => ({ footer: 'Reprint copy' }),
+	});
+	mockUseActiveTemplates.mockReturnValue([]);
+	const { result } = renderHook(() =>
+		useTemplateRenderer({
+			...defaultOptions,
+			order: undefined,
+			orderId: undefined,
+			document: 'closure:s',
+			localReport: { footer: 'Offline' },
+			formatReport,
+		})
+	);
+	expect(result.current.renderedHtml).toContain('Original');
+	const printed = await result.current.preparePrintContent(jest.fn());
+	expect(printed.html).toContain('Reprint copy');
+	expect(printed.html).not.toContain('Original');
+});
+
+it.each(['offline', 'online-website-available'])(
+	'never builds a refund locally when %s',
+	async (status) => {
+		jest.clearAllMocks();
+		mockUseOnlineStatus.mockReturnValue({ status });
+		mockUseReceiptData.mockReturnValue({
+			data: null,
+			fetchForPrint: jest.fn().mockRejectedValue(new Error('404')),
+		});
+		const { result } = renderHook(() =>
+			useTemplateRenderer({
+				...defaultOptions,
+				document: 'refund:12',
+				baseReceiptURL: 'https://store.test/receipt/42',
+			})
+		);
+		const count = jest.fn();
+		expect(result.current.receiptData).toBeNull();
+		expect(result.current.receiptUrl).toBeNull();
+		await expect(result.current.preparePrintContent(count)).rejects.toThrow(
+			'receipt_document_requires_store'
+		);
+		expect(mockBuildReceiptData).not.toHaveBeenCalled();
+		expect(count).not.toHaveBeenCalled();
+	}
+);
+
+it.each(['https://store.test/receipt/42?foo=bar#preview', '/receipt/42?foo=bar#preview'])(
+	'preserves the refund selector on legacy preview URL %s',
+	async (baseReceiptURL) => {
+		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+		const data = { fiscal: { document_type: 'refund' } };
+		mockUseReceiptData.mockReturnValue({ data, fetchForPrint: jest.fn().mockResolvedValue(data) });
+		mockUseActiveTemplates.mockReturnValue([]);
+		const { result } = renderHook(() =>
+			useTemplateRenderer({ ...defaultOptions, document: 'refund:12', baseReceiptURL })
+		);
+		const url = new URL(result.current.receiptUrl!, 'https://store.test');
+		expect(url.searchParams.get('document')).toBe('refund:12');
+		expect(url.searchParams.get('mode')).toBe('fiscal');
+		expect(url.searchParams.get('foo')).toBe('bar');
+		expect(url.hash).toBe('#preview');
+		const count = jest.fn();
+		expect((await result.current.preparePrintContent(count)).receiptData).toBe(data);
+		expect(count).not.toHaveBeenCalled();
+	}
+);
+
+// Revert: feed the closure through the order normalizer (which drops its fields), or select report templates.
+it('renders the orderless closure envelope unchanged through its closure template online and offline', () => {
+	const local = {
+		closure: { number: 4 },
+		order: { currency: 'USD' },
+		fiscal: { document_type: 'closure' },
+	};
+	const remote = { ...local, closure: { number: 9 } };
+	mockUseActiveTemplates.mockReturnValue([
+		{
+			id: 'closure-core',
+			engine: 'logicless',
+			offline_capable: true,
+			content: '<b>{{closure.number}}</b>',
+		},
+	] as never);
+	mockUseReceiptData.mockReturnValue({ data: remote, hasResponded: true, isLoading: false });
+	mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+	const { result, rerender } = renderHook(() =>
+		useTemplateRenderer({
+			...defaultOptions,
+			orderId: undefined,
+			order: undefined,
+			document: 'closure:uuid',
+			localReport: local,
+			templateType: 'closure',
+			storeId: 7,
+		})
+	);
+	expect(mockUseActiveTemplates).toHaveBeenLastCalledWith('closure', 7);
+	expect(mockUseReceiptData).toHaveBeenLastCalledWith({
+		previewEnabled: true,
+		orderId: undefined,
+		mode: 'fiscal',
+		document: 'closure:uuid',
+		isReprint: false,
+	});
+	expect(result.current.renderedHtml).toBe('<b>9</b>');
+	mockUseOnlineStatus.mockReturnValue({ status: 'offline' });
+	rerender();
+	expect(result.current.renderedHtml).toBe('<b>4</b>');
+	expect(mockUseReceiptData).toHaveBeenLastCalledWith({
+		previewEnabled: true,
+		orderId: undefined,
+		mode: 'fiscal',
+		document: undefined,
+		isReprint: false,
+	});
+});
+// Revert: require an order-derived URL for a merchant's PHP closure template.
+it('addresses the orderless legacy closure page without an order', () => {
+	mockUseAppState.mockReturnValue({
+		store: createStore(),
+		site: { url: 'https://shop.test/subdir/' },
+	} as never);
+	mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+	mockUseReceiptData.mockReturnValue({
+		data: { closure: { number: 9 } },
+		hasResponded: true,
+		isLoading: false,
+	});
+	mockUseActiveTemplates.mockReturnValue([
+		{ id: 77, engine: 'legacy-php', offline_capable: false },
+	] as never);
+	const { result } = renderHook(() =>
+		useTemplateRenderer({
+			...defaultOptions,
+			orderId: undefined,
+			order: undefined,
+			document: 'closure:uuid',
+			templateType: 'closure',
+		})
+	);
+	const url = new URL(result.current.receiptUrl!);
+	expect(url.pathname).toBe('/subdir/');
+	expect(url.searchParams.get('wcpos-receipt')).toBe('0');
+	expect(url.searchParams.get('document')).toBe('closure:uuid');
+	expect(url.searchParams.get('template')).toBe('77');
+});
+
+jest.mock('../../../../hooks/use-store-day', () => ({
+	useStoreDay: () => ({ timezone: 'America/Los_Angeles' }),
+}));
+jest.mock('../../../../hooks/use-locale', () => ({
+	useLocale: () => ({ code: 'en-GB' }),
+}));
+
+// Revert: update only last_printed_at_gmt, leaving the template's order.printed at preview time.
+it.each([
+	['offline', true],
+	['online-website-available', false],
+])(
+	'refreshes the rendered closure print date at dispatch when %s (ready: %s)',
+	async (status, documentReady) => {
+		jest.useFakeTimers().setSystemTime(new Date('2026-09-17T09:00:00Z'));
+		try {
+			mockUseOnlineStatus.mockReturnValue({ status });
+			const fetchForPrint = jest.fn();
+			mockUseReceiptData.mockReturnValue({ data: null, fetchForPrint });
+			mockUseActiveTemplates.mockReturnValue([
+				{
+					id: 'closure',
+					offline_capable: true,
+					engine: 'logicless',
+					content: '<p>{{order.printed.datetime}} / {{order.printed.time}}</p>',
+				},
+			] as never);
+			const localReport = {
+				order: { currency: 'GBP', printed: { datetime: '17 Sept 2026, 02:00', time: '02:00' } },
+				closure: { last_printed_at_gmt: '2026-09-17T09:00:00.000Z' },
+			};
+			const { result } = renderHook(() =>
+				useTemplateRenderer({
+					...defaultOptions,
+					order: undefined,
+					orderId: undefined,
+					document: 'closure:s',
+					templateType: 'closure',
+					documentReady,
+					localReport,
+				})
+			);
+			expect(result.current.renderedHtml).toContain('02:00');
+			jest.setSystemTime(new Date('2026-09-17T10:15:00Z'));
+			const printed = await result.current.preparePrintContent(jest.fn(async () => 2));
+			expect(printed.receiptData).toMatchObject({
+				order: {
+					currency: 'GBP',
+					printed: {
+						datetime: '17 Sept 2026, 03:15',
+						time: '03:15',
+						date_ymd: '2026-09-17',
+					},
+				},
+				closure: { last_printed_at_gmt: '2026-09-17T10:15:00.000Z' },
+			});
+			expect(printed.html).toContain('17 Sept 2026, 03:15 / 03:15');
+			expect(fetchForPrint).not.toHaveBeenCalled();
+			expect(localReport.order.printed.time).toBe('02:00');
+		} finally {
+			jest.useRealTimers();
+		}
+	}
+);
+
+// Revert: let local X-reports reuse the preview timestamp (or reject their online fallback).
+it.each(['offline', 'online-website-available'])(
+	'refreshes the local X-report timestamp at dispatch when %s',
+	async (status) => {
+		jest.useFakeTimers().setSystemTime(new Date('2026-09-17T09:00:00Z'));
+		try {
+			mockUseOnlineStatus.mockReturnValue({ status });
+			const fetchForPrint = jest.fn().mockRejectedValue(new Error('Unavailable'));
+			mockUseReceiptData.mockReturnValue({ data: null, fetchForPrint });
+			mockUseActiveTemplates.mockReturnValue([
+				{
+					id: 'closure',
+					offline_capable: true,
+					engine: 'logicless',
+					content: '<p>{{order.printed.datetime}} / {{order.printed.time}}</p>',
+				},
+			] as never);
+			const localReport = {
+				order: { currency: 'GBP', printed: { datetime: '17 Sept 2026, 02:00', time: '02:00' } },
+				closure: { status: 'open' },
+				fiscal: { document_type: 'xreport', is_reprint: false },
+			};
+			const { result } = renderHook(() =>
+				useTemplateRenderer({
+					...defaultOptions,
+					order: undefined,
+					orderId: undefined,
+					document: 'xreport:s',
+					templateType: 'closure',
+					localReport,
+				})
+			);
+			expect(result.current.renderedHtml).toContain('02:00');
+			jest.setSystemTime(new Date('2026-09-17T10:15:00Z'));
+			const count = jest.fn();
+			const printed = await result.current.preparePrintContent(count);
+			expect(printed.html).toContain('17 Sept 2026, 03:15 / 03:15');
+			expect(printed.receiptData).toMatchObject({
+				order: { currency: 'GBP' },
+				fiscal: { document_type: 'xreport', is_reprint: false },
+			});
+			expect(count).not.toHaveBeenCalled();
+			expect(fetchForPrint).toHaveBeenCalledTimes(status === 'offline' ? 0 : 1);
+			expect(localReport.order.printed.time).toBe('02:00');
+		} finally {
+			jest.useRealTimers();
+		}
+	}
+);

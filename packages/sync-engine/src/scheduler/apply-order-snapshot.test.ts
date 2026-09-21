@@ -116,6 +116,62 @@ describe('applyOrderSnapshot', () => {
 		expect(upsertMany).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		{ status: 'completed', removed: 1, outcome: 'applied' },
+		{ status: 'completed', removed: 0, outcome: 'protected' },
+		{ status: 'pos-open', removed: 1, outcome: 'protected' },
+	])(
+		'offers a settled document to the held-row discarder, never a pos-open one (removed=$removed → $outcome)',
+		async ({ status, removed, outcome }) => {
+			const { repository, upsertMany } = fakeRepository();
+			const pending = new Set([UUID]);
+			const discardHeldOpenCartRows = vi.fn(async () => {
+				if (removed) pending.delete(UUID);
+				return removed;
+			});
+			const datePaid = status === 'completed' ? '2026-09-01T10:02:00' : null;
+			await expect(
+				applyOrderSnapshot(
+					{ repository, pendingMutationOrderIds: async () => pending, discardHeldOpenCartRows },
+					orderPayload({ status, date_paid_gmt: datePaid })
+				)
+			).resolves.toBe(outcome);
+			if (status === 'pos-open') {
+				expect(discardHeldOpenCartRows).not.toHaveBeenCalled();
+			} else {
+				// The discarder receives what it needs to decide: the status and the payment stamp.
+				// date_modified_gmt travels with the settlement so the
+				// discarder can tell a re-pull of an adopted (or older) document from a newer one.
+				expect(discardHeldOpenCartRows).toHaveBeenCalledExactlyOnceWith(UUID, {
+					status,
+					datePaid,
+					dateModified: '2026-09-01T10:00:00',
+				});
+			}
+			expect(upsertMany).toHaveBeenCalledTimes(outcome === 'applied' ? 1 : 0);
+		}
+	);
+
+	it('re-reads the pending set after a discard attempt that removed nothing (a concurrent lane won)', async () => {
+		const { repository, upsertMany } = fakeRepository();
+		let reads = 0;
+		const pendingMutationOrderIds = vi.fn(async () => {
+			reads += 1;
+			// First read: the row is still there. Second read (after the attempt): gone —
+			// another lane adopting the same paid snapshot retired it in between.
+			return reads === 1 ? new Set([UUID]) : new Set<string>();
+		});
+		const discardHeldOpenCartRows = vi.fn(async () => 0);
+		await expect(
+			applyOrderSnapshot(
+				{ repository, pendingMutationOrderIds, discardHeldOpenCartRows },
+				orderPayload({ date_paid_gmt: '2026-09-01T10:02:00' })
+			)
+		).resolves.toBe('applied');
+		expect(pendingMutationOrderIds).toHaveBeenCalledTimes(2);
+		expect(upsertMany).toHaveBeenCalledTimes(1);
+	});
+
 	it('reports protected when the storage guard drops the document', async () => {
 		const { repository, upsertManifestRows } = fakeRepository([]);
 		await expect(applyOrderSnapshot({ repository }, orderPayload())).resolves.toBe('protected');

@@ -19,10 +19,6 @@ jest.mock('expo-router', () => ({
 	useRouter: () => ({ setParams: jest.fn() }),
 }));
 
-jest.mock('@wcpos/utils/platform', () => ({
-	Platform: { isWeb: false },
-}));
-
 jest.mock('./use-new-order', () => ({
 	useNewOrder: () => ({ newOrder: { uuid: 'new-order', isNew: true } }),
 }));

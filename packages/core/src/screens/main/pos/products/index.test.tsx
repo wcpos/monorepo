@@ -33,6 +33,9 @@ let mockSortDirection = 'asc';
 let mockViewMode = 'table';
 let mockGridColumns = 4;
 
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => ({ session: null, sessionsOn: false }),
+}));
 jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
 	return {

@@ -43,6 +43,75 @@ function stubDatabase(): ScopeDatabase {
 }
 
 describe('change-signal cursor observability', () => {
+	it('keeps the HTTP status when the cold-start head fetch returns 401', async () => {
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		const diagnostics = vi.fn();
+		const fetcher = vi.fn(async () => new Response(null, { status: 401 }));
+		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher,
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => null,
+			writeBlob: vi.fn(),
+			connectivity: () => 'online',
+			diagnostics,
+			emitEvent: () => undefined,
+		});
+
+		expect(await lane.tick()).toMatchObject({ status: 'error' });
+		expect(fetcher).toHaveBeenCalledWith(
+			expect.stringContaining('/changes/sequence-log?'),
+			expect.anything()
+		);
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'signal.tick.error',
+				fields: { lane: 'change-signal', status: 401 },
+			})
+		);
+	});
+
+	it('emits the lane and HTTP status when a tick fetch returns 401', async () => {
+		const actual = await vi.importActual<typeof import('@wcpos/sync-core')>('@wcpos/sync-core');
+		vi.mocked(createHybridChangeSignalEngine).mockImplementationOnce(
+			actual.createHybridChangeSignalEngine
+		);
+		const manager = new StoreScopeManager({ createDatabase: async () => stubDatabase() });
+		await manager.switchTo('scope-a');
+		const diagnostics = vi.fn();
+		const fetcher = vi.fn(async () => new Response(null, { status: 401 }));
+		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
+			manager,
+			databaseFor: () => ({ collections: {} }) as never,
+			fetcher,
+			syncBaseUrl: 'https://example.test/wp-json/wcpos/v2',
+			readBlob: async () => JSON.stringify({ cursor: { sequence: 5 }, baselineDigests: [] }),
+			writeBlob: vi.fn(),
+			connectivity: () => 'online',
+			diagnostics,
+			emitEvent: () => undefined,
+		});
+
+		expect(await lane.tick()).toMatchObject({ status: 'error' });
+		expect(fetcher).toHaveBeenCalledWith(
+			expect.stringContaining('/changes/tick'),
+			expect.anything()
+		);
+		expect(diagnostics).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'signal.tick.error',
+				level: 'error',
+				fields: { lane: 'change-signal', status: 401 },
+			})
+		);
+	});
+
 	it('emits backwards when a poll reports zero behind a non-zero cursor', async () => {
 		const manager = new StoreScopeManager({
 			createDatabase: async () => stubDatabase(),
@@ -65,6 +134,8 @@ describe('change-signal cursor observability', () => {
 		};
 		mocks.poll.mockResolvedValueOnce(outcome);
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher: vi.fn(),
@@ -141,6 +212,8 @@ describe('config change events', () => {
 		}) as never);
 		const emitEvent = vi.fn();
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher: vi.fn(),
@@ -225,6 +298,8 @@ describe('hydration-miss recovery accounting', () => {
 		).toEqual(['products', 'variations']);
 
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher: vi.fn(),
@@ -286,6 +361,8 @@ describe('cold-start priming', () => {
 		} as HybridPollOutcome);
 		vi.mocked(createHybridChangeSignalEngine).mockClear();
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => ({ collections: {} }) as never,
 			fetcher: primingFetcher(checkpoint),
@@ -427,6 +504,8 @@ describe('census expiry on applied changes', () => {
 		const emitEvent = vi.fn();
 		const diagnostics = vi.fn();
 		const lane = createChangeSignalLane({
+			awaitInitialReady: async () => undefined,
+			needsPrime: () => true,
 			manager,
 			databaseFor: () => database,
 			fetcher: vi.fn(),

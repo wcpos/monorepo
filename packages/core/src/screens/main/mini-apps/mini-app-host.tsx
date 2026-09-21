@@ -4,7 +4,7 @@ import { Platform as RNPlatform, View } from 'react-native';
 import { useCSSVariable, useUniwind } from 'uniwind';
 
 import { Button } from '@wcpos/components/button';
-import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
+import { Modal, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
@@ -171,13 +171,11 @@ export function MiniAppHost({ id, onClose }: MiniAppHostProps) {
 
 	return (
 		<Modal onClose={() => close('cancelled')}>
-			<ModalContent testID="mini-app-host" size="xl" className="h-full">
+			<ModalContent side="right" testID="mini-app-host" size="xl">
 				<ModalHeader>
 					<ModalTitle>{entry?.title[locale.shortCode] ?? entry?.title.en ?? ''}</ModalTitle>
 				</ModalHeader>
-				<ModalBody contentContainerStyle={{ height: '100%' }}>
-					<View className="flex-1">{content}</View>
-				</ModalBody>
+				<View className="flex-1">{content}</View>
 			</ModalContent>
 		</Modal>
 	);

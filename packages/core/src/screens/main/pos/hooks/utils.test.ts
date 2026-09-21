@@ -24,11 +24,15 @@ describe('Utilities', () => {
 					userId: 7,
 					storeId: 11,
 					taxBasedOn: 'billing',
+					registerId: 'register',
+					tillId: 'till',
 				})
 			).toEqual([
 				{ key: 'custom', value: 'keep' },
 				{ key: '_pos_user', value: '7' },
 				{ key: '_pos_store', value: '11' },
+				{ key: '_wcpos_register', value: 'register' },
+				{ key: '_wcpos_till', value: 'till' },
 				{ key: '_woocommerce_pos_tax_based_on', value: 'billing' },
 			]);
 		});
@@ -37,6 +41,8 @@ describe('Utilities', () => {
 			const existing = [
 				{ key: '_pos_user', value: '3' },
 				{ key: '_pos_store', value: '4' },
+				{ key: '_wcpos_register', value: 'previous-register' },
+				{ key: '_wcpos_till', value: 'previous-till' },
 				{ key: '_woocommerce_pos_tax_based_on', value: 'shipping' },
 			];
 			expect(
@@ -44,6 +50,8 @@ describe('Utilities', () => {
 					userId: 7,
 					storeId: 11,
 					taxBasedOn: 'billing',
+					registerId: 'register',
+					tillId: 'till',
 				})
 			).toEqual(existing);
 		});

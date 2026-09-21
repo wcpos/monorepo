@@ -1,11 +1,33 @@
 /**
  * @jest-environment jsdom
  */
+import 'whatwg-fetch';
+
 import { renderHook } from '@testing-library/react';
 
 import { clearUpdateRequired, currentUpdateRequired } from '@wcpos/utils/update-required-gate';
 
 import { useRestHttpClient } from './index';
+
+const { useHttpClient: useSharedHttpClient } = jest.requireActual<
+	typeof import('@wcpos/hooks/use-http-client/use-http-client')
+>('@wcpos/hooks/use-http-client/use-http-client');
+const { http: sharedHttp } = jest.requireMock('@wcpos/hooks/use-http-client/http') as {
+	http: { request: jest.Mock };
+};
+
+jest.mock('@wcpos/hooks/use-http-client/http', () => ({
+	http: { request: jest.fn(), isCancel: () => false },
+}));
+jest.mock('@wcpos/hooks/use-http-client/request-queue', () => ({
+	scheduleRequest: (request: () => Promise<unknown>) => request(),
+}));
+jest.mock('@wcpos/hooks/use-http-client/request-state-manager', () => ({
+	requestStateManager: {
+		checkCanProceed: () => ({ ok: true }),
+		isTokenRefreshing: () => false,
+	},
+}));
 
 const mockRequest = jest.fn(
 	async (
@@ -43,7 +65,8 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online' }),
 }));
 jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: () => ({ debug: jest.fn(), error: jest.fn(), warn: jest.fn() }),
+	getLogger: () => ({ debug: jest.fn(), info: jest.fn(), error: jest.fn(), warn: jest.fn() }),
+	getDatabaseEpoch: () => 0,
 }));
 jest.mock('../../../../contexts/app-state', () => {
 	const useAppState = () => ({
@@ -97,34 +120,24 @@ describe('useRestHttpClient methods', () => {
 		});
 	});
 
-	it('composes a query-form axios base URL when query transport is enabled', async () => {
+	it('keeps the canonical path base and query transport metadata', async () => {
 		mockSite.use_rest_route_param = true;
 		const { result } = renderHook(() => useRestHttpClient('orders'));
 
 		await result.current.get('/42', { params: { page: 2 } });
 
 		expect(latestRequest()).toMatchObject({
-			baseURL: 'https://example.com/?rest_route=/wcpos/v2/orders',
+			baseURL: 'https://example.com/wp-json/wcpos/v2/orders',
+			wcposPreamble: {
+				purpose: 'rest',
+				site: { use_rest_route_param: true, wp_api_url: mockSite.wp_api_url },
+			},
 			url: '/42',
-			params: { page: 2, wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
-		});
-	});
-
-	it('uses protocol headers and omits protocol params on capable web sites', async () => {
-		mockSite.use_protocol_headers = true;
-		const { result } = renderHook(() => useRestHttpClient('orders'));
-
-		await result.current.get('/42', { params: { page: 2 } });
-
-		expect(latestRequest()).toMatchObject({
-			protocolHeaders: true,
 			params: { page: 2 },
 		});
-		expect(latestRequest().params).not.toHaveProperty('wcpos_protocol');
-		expect(latestRequest().params).not.toHaveProperty('wcpos_client');
 	});
 
-	it('never composes a double slash from a trailing-slash stored base in query mode', async () => {
+	it('passes a trimmed path base and query metadata for a trailing-slash stored base', async () => {
 		// Discovery stores wcpos_api_url WITH a trailing slash; rest_route matching
 		// is strict, so `/wcpos/v2//orders` would 404 where pretty routing shrugged.
 		mockSite.use_rest_route_param = true;
@@ -134,12 +147,16 @@ describe('useRestHttpClient methods', () => {
 		await result.current.get('/42');
 
 		expect(latestRequest()).toMatchObject({
-			baseURL: 'https://example.com/?rest_route=/wcpos/v2/orders',
+			baseURL: 'https://example.com/wp-json/wcpos/v2/orders',
+			wcposPreamble: {
+				purpose: 'rest',
+				site: { use_rest_route_param: true, wp_api_url: mockSite.wp_api_url },
+			},
 			url: '/42',
 		});
 	});
 
-	it('normalizes a query-shaped stored API base before composing axios baseURL', async () => {
+	it('passes a synthetic subdirectory path base and query-shaped site metadata', async () => {
 		mockSite.wp_api_url = 'https://example.com/blog/?rest_route=/';
 		mockSite.wcpos_api_url = 'https://example.com/blog/?rest_route=/wcpos/v2';
 		const { result } = renderHook(() => useRestHttpClient('orders'));
@@ -147,24 +164,38 @@ describe('useRestHttpClient methods', () => {
 		await result.current.get('/42');
 
 		expect(latestRequest()).toMatchObject({
-			baseURL: 'https://example.com/blog/?rest_route=/wcpos/v2/orders',
+			baseURL: 'https://example.com/blog/wp-json/wcpos/v2/orders',
+			wcposPreamble: {
+				purpose: 'rest',
+				site: { wp_api_url: mockSite.wp_api_url, use_rest_route_param: false },
+			},
 			url: '/42',
 		});
 	});
 
-	it.each([
-		['1.10.0', 'test-token'],
-		['1.9.17', 'Bearer test-token'],
-	])('formats parameter auth for WCPOS %s', async (wcposVersion, authorization) => {
-		mockSite.use_jwt_as_param = true;
-		mockSite.wcpos_version = wcposVersion;
+	it('dispatches a subdirectory REST query URL through the real shared wrapper', async () => {
+		mockSite.wp_api_url = 'https://example.com/blog/?rest_route=/';
+		mockSite.wcpos_api_url = 'https://example.com/blog/?rest_route=/wcpos/v2';
+		sharedHttp.request.mockResolvedValueOnce({ status: 200, data: {} });
+		const { result: shared } = renderHook(() => useSharedHttpClient());
+		mockRequest.mockImplementationOnce(
+			(config) =>
+				shared.current.request(config) as unknown as Promise<{
+					data: unknown;
+					headers?: Record<string, string>;
+				}>
+		);
 		const { result } = renderHook(() => useRestHttpClient('orders'));
 
-		await result.current.get('/');
+		await result.current.get('/42', { params: { page: 2 } });
 
-		expect(latestRequest()).toMatchObject({ params: { authorization } });
+		const sent = sharedHttp.request.mock.calls.at(-1)?.[0];
+		expect(sent.url).toMatch(
+			/^https:\/\/example\.com\/blog\/\?rest_route=%2Fwcpos%2Fv2%2Forders%2F42&/
+		);
+		expect(new URL(sent.url).searchParams.get('page')).toBe('2');
+		expect(sent).not.toHaveProperty('wcposPreamble');
 	});
-
 	it.each([
 		['put', 'PUT'],
 		['patch', 'PATCH'],

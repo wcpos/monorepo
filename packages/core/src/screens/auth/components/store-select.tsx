@@ -13,9 +13,10 @@ import { VStack } from '@wcpos/components/vstack';
 import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 
-import { storeListsEqual } from './store-select.helpers';
+import { resolvePreselectedStore, storeListsEqual } from './store-select.helpers';
 import { useT } from '../../../contexts/translations';
 import { useUserValidation } from '../../../hooks/use-user-validation';
+import { useRegister } from '../../../services/register/use-register';
 
 const storeLogger = getLogger(['wcpos', 'auth', 'stores']);
 
@@ -62,6 +63,7 @@ export function StoreSelect({
 	onLogin,
 }: StoreSelectProps) {
 	const t = useT();
+	const register = useRegister();
 	const { isValid, isLoading: isValidating } = useUserValidation({ site, wpUser });
 
 	// Resolve stores reactively by combining wpUser.stores$ (the localID array)
@@ -127,7 +129,16 @@ export function StoreSelect({
 		);
 	}, [wpUser]);
 
-	const stores = useObservableState(stores$, []);
+	const offeredStores = useObservableState(stores$, []);
+	const preselectedStore = resolvePreselectedStore(
+		offeredStores,
+		register?.sites[site.uuid!]?.store_id
+	);
+	// An accessible binding follows the same selection and UI path as a lone store.
+	const stores = React.useMemo(
+		() => (preselectedStore ? [preselectedStore] : offeredStores),
+		[offeredStores, preselectedStore]
+	);
 
 	// The parent holds the cashier's explicit pick; the EFFECTIVE selection is
 	// derived here rather than pushed back up through an effect. A pick that no

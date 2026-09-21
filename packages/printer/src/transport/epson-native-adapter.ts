@@ -1,4 +1,5 @@
 import { printerLogger } from '../logger';
+import { logPrintJob } from './log-print-job';
 
 import type { PrinterTransport } from '../types';
 
@@ -74,15 +75,22 @@ export class EpsonNativeAdapter implements PrinterTransport {
 	}
 
 	async printRaw(data: Uint8Array): Promise<void> {
-		const printer = await this.getPrinter();
-
-		try {
-			await printer.connect();
-			await printer.addCommand(data);
-			await printer.sendData();
-		} finally {
-			await this.disconnect();
-		}
+		const target = toEpsonTarget(this._address, this._connectionType);
+		// Acquisition and cleanup sit inside the logged span so the log outcome is printRaw's outcome.
+		await logPrintJob(
+			'Native',
+			{ transport: this.name, target, bytes: data.byteLength },
+			async () => {
+				const printer = await this.getPrinter();
+				try {
+					await printer.connect();
+					await printer.addCommand(data);
+					await printer.sendData();
+				} finally {
+					await this.disconnect();
+				}
+			}
+		);
 	}
 
 	async printHtml(_html: string): Promise<void> {

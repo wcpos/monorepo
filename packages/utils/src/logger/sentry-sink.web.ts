@@ -1,21 +1,15 @@
 import * as Sentry from '@sentry/browser';
 
 import { AppInfo } from '../app-info';
-import { redactSensitiveText } from './redact';
+import { buildCaptureOptions, createPendingCaptures, scrubEvent, SENTRY_DSN } from './sentry-core';
 
-export type SentryCaptureInput = {
-	message: string;
-	code?: number | string;
-	context?: unknown;
-};
-
-export type TelemetryConsent = 'undecided' | 'allowed' | 'denied';
-
-// Public DSN for the same Sentry project used by the desktop main process.
-const SENTRY_DSN = 'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733';
+import type { SentryCaptureInput, TelemetryConsent } from './sentry-core';
+export { buildCaptureOptions, messageTemplate, scrubEvent } from './sentry-core';
+export type { SentryCaptureInput, TelemetryConsent } from './sentry-core';
 
 let telemetryConsent: TelemetryConsent = 'undecided';
 let isInitialized = false;
+const pendingCaptures = createPendingCaptures();
 
 function getInstallId(): string | undefined {
 	const electronInstallId = (window as unknown as { electron?: { installId?: unknown } }).electron
@@ -40,55 +34,7 @@ function getInstallId(): string | undefined {
 	}
 }
 
-function stripOrigin(url: string): string {
-	try {
-		const parsedUrl = new URL(url);
-		return redactSensitiveText(`${parsedUrl.pathname}${parsedUrl.search}`);
-	} catch {
-		return redactSensitiveText(url);
-	}
-}
-
-function scrubUrlValues(value: unknown): unknown {
-	if (typeof value === 'string') return stripOrigin(value);
-	if (Array.isArray(value)) return value.map(scrubUrlValues);
-	if (value === null || typeof value !== 'object' || value instanceof Error) return value;
-	return Object.fromEntries(
-		Object.entries(value).map(([key, nestedValue]) => [key, scrubUrlValues(nestedValue)])
-	);
-}
-
-export function scrubEvent<T extends Sentry.Event>(event: T): T {
-	if (event.request?.url) {
-		event.request.url = stripOrigin(event.request.url);
-	}
-	for (const breadcrumb of event.breadcrumbs ?? []) {
-		if (typeof breadcrumb.data?.url === 'string') {
-			breadcrumb.data.url = stripOrigin(breadcrumb.data.url);
-		}
-	}
-	if (event.extra) {
-		event.extra = Object.fromEntries(
-			Object.entries(event.extra).map(([key, value]) => [key, scrubUrlValues(value)])
-		);
-	}
-	return event;
-}
-
-export function buildCaptureOptions({ message, code, context }: SentryCaptureInput) {
-	return {
-		level: 'error' as const,
-		...(code !== undefined && {
-			tags: { errorCode: String(code) },
-			fingerprint: [String(code)],
-		}),
-		extra: { message, context },
-	};
-}
-
-export function captureLoggedError(input: SentryCaptureInput): void {
-	if (!isInitialized) return;
-
+function send(input: SentryCaptureInput): void {
 	try {
 		const error =
 			input.context !== null && typeof input.context === 'object' && 'error' in input.context
@@ -105,6 +51,56 @@ export function captureLoggedError(input: SentryCaptureInput): void {
 	}
 }
 
+export function captureLoggedError(input: SentryCaptureInput): void {
+	if (!isInitialized) {
+		// Consent not known yet (boot, before the store document is read): hold
+		// it. Decided-but-uninitialised (denied, or a development build) drops it.
+		if (telemetryConsent === 'undecided') pendingCaptures.hold(input);
+		return;
+	}
+	send(input);
+}
+
+/**
+ * Opt-in printer setup outcome (roadmap#161 P0): one info-level message per terminal setup
+ * phase, tagged so Sentry can pivot by vendor/lane/platform. Sent only when the merchant
+ * allowed telemetry; carries no addresses or device keys.
+ */
+// Only stable, address-free fields leave the device; failure text can carry a printer endpoint.
+export const PRINTER_OUTCOME_FIELDS = [
+	'result',
+	'platform',
+	'source',
+	'vendor',
+	'model',
+	'lane',
+	'columns',
+	'testPages',
+	'securePrinting',
+	'troubleReason',
+] as const;
+
+export function capturePrinterOutcome(
+	context: Record<string, string | number | boolean | undefined>
+): void {
+	if (!isInitialized) return;
+	try {
+		const safe = Object.fromEntries(
+			PRINTER_OUTCOME_FIELDS.filter((key) => context[key] !== undefined).map((key) => [
+				key,
+				String(context[key]),
+			])
+		);
+		Sentry.captureMessage('Printer setup outcome', {
+			level: 'info',
+			tags: safe,
+			extra: { context: safe },
+		});
+	} catch {
+		// Diagnostics must never interfere with the logger.
+	}
+}
+
 // Development builds never report, whatever the merchant chose: dev noise
 // would drown the production signal. ts-jest leaves __DEV__ undefined.
 const isDevelopment = typeof __DEV__ !== 'undefined' && __DEV__;
@@ -114,7 +110,10 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 	telemetryConsent = consent;
 
 	if (consent === 'allowed') {
-		if (isDevelopment || typeof window === 'undefined') return;
+		if (isDevelopment || typeof window === 'undefined') {
+			pendingCaptures.drain();
+			return;
+		}
 		Sentry.init({
 			dsn: SENTRY_DSN,
 			release: `wcpos-app@${AppInfo.version}`,
@@ -128,6 +127,7 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 		const installId = getInstallId();
 		if (installId) Sentry.setUser({ id: installId });
 		isInitialized = true;
+		for (const input of pendingCaptures.drain()) send(input);
 		return;
 	}
 
@@ -135,6 +135,8 @@ export function setTelemetryConsent(consent: TelemetryConsent): void {
 		void Sentry.close();
 		isInitialized = false;
 	}
+	// Denied: what was held before the answer never leaves the device.
+	if (consent === 'denied') pendingCaptures.drain();
 
 	if (consent === 'denied') {
 		try {

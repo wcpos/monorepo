@@ -68,8 +68,8 @@ export const OTHER_LANES = [
  * will remove it. An empty list is the goal state.
  *
  * Submodules are not listed here — they are detected from .gitmodules, because
- * whether apps/web and apps/electron are even present depends on whether the
- * checkout initialized them, and a check that reports different packages
+ * whether apps/web is even present depends on whether the
+ * checkout initialized it, and a check that reports different packages
  * depending on that is a check nobody can trust.
  */
 export const ALLOWLIST = [
@@ -104,15 +104,16 @@ const LOOP_TEST_INVOCATION = /\b(?:jest|vitest|playwright|maestro)\b|\bpnpm\b[^\
 export function parseWorkspaceGlobs(yamlText) {
 	const block = /^packages:\s*$([\s\S]*?)^\S/m.exec(`${yamlText}\n￿`);
 	const body = block ? block[1] : '';
-	return [...body.matchAll(/^\s*-\s*["']?([^"'\s#]+)["']?\s*$/gm)]
-		.map((match) => match[1])
-		.filter((glob) => !glob.startsWith('!'));
+	return [...body.matchAll(/^\s*-\s*["']?([^"'\s#]+)["']?\s*$/gm)].map((match) => match[1]);
 }
 
 /** Directories the globs resolve to, relative to the repo root, that hold a package.json. */
 export function resolveWorkspacePackages(globs, root = repoRoot) {
-	const dirs = [];
-	for (const glob of globs) {
+	const included = new Set();
+	const excluded = new Set();
+	for (const workspaceGlob of globs) {
+		const isExcluded = workspaceGlob.startsWith('!');
+		const glob = isExcluded ? workspaceGlob.slice(1) : workspaceGlob;
 		const simpleWildcard = /^[^*?[\]{}]+\/\*$/.test(glob);
 		if (/[*?[\]{}]/.test(glob) && !simpleWildcard) {
 			throw new Error(
@@ -125,13 +126,15 @@ export function resolveWorkspacePackages(globs, root = repoRoot) {
 			if (!existsSync(absolute)) continue;
 			for (const entry of readdirSync(absolute, { withFileTypes: true })) {
 				if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-				dirs.push(`${parent}/${entry.name}`);
+				(isExcluded ? excluded : included).add(`${parent}/${entry.name}`);
 			}
 		} else if (existsSync(path.join(root, glob))) {
-			dirs.push(glob);
+			(isExcluded ? excluded : included).add(glob);
 		}
 	}
-	return dirs.filter((dir) => existsSync(path.join(root, dir, 'package.json'))).sort();
+	return [...included]
+		.filter((dir) => !excluded.has(dir) && existsSync(path.join(root, dir, 'package.json')))
+		.sort();
 }
 
 /** Every `*.test.*` / `*.spec.*` file under `dir`, repo-relative. */

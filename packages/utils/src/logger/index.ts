@@ -44,6 +44,7 @@ export interface LoggerOptions {
 	showToast?: boolean;
 	context?: any;
 	terminal?: LogTerminalFields;
+	actor?: { id?: string; role?: string; name?: string };
 	toast?: {
 		title?: string; // Override the toast title when the log message is forensic (ids, codes) rather than cashier-readable
 		text2?: string; // Secondary message
@@ -132,13 +133,56 @@ const REPEAT_IDENTITY_LIMIT = 16;
 const repeatStateByCollection = new WeakMap<object, Map<string, RepeatState>>();
 
 const SEARCH_CONTEXT_KEY =
-	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|collection|type|lane|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|endpoint|status|customerId|errorCode|reason|previousQuantity|quantity|previousPrice|price)$/;
+	/^(category|event|orderI[Dd]|orderUUID|orderNumber|documentId|collectionName|collection|type|lane|productId|productName|sku|itemName|couponCode|feeName|method|methodTitle|movementType|endpoint|status|customerId|errorCode|field|paymentId|registerId|sessionId|movementId|voids|closureId|previousRegisterId|approvedBy|readerId|reason|previousQuantity|quantity|previousPrice|price)$/;
 
 function searchableContext(context: Record<string, any>): string {
 	return Object.entries(context)
 		.filter(([key, value]) => SEARCH_CONTEXT_KEY.test(key) && value != null)
 		.map(([, value]) => value)
 		.join(' ');
+}
+
+/**
+ * The search fold — lowercase, NFD, strip combining marks — applied at WRITE
+ * time to everything the Logs screen searches, so a scan over `context.fold`
+ * is an exact match in fold space against a term folded the same way (any
+ * script, any normal form). This is a mirror of `foldSearchText` in
+ * @wcpos/sync-core, which utils cannot import; the parity is pinned by
+ * packages/database/src/search-fold-parity.test.ts.
+ */
+export function foldLogSearchText(value: unknown): string {
+	return String(value)
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(new RegExp('[\\u0300-\\u036f]', 'g'), '');
+}
+
+/**
+ * The searchable columns every persisted row carries — `search`, the raw
+ * operational identifiers, and `fold`, the folded blob of the fields the Logs
+ * screen scans (see the logs collection creator). ONE builder for both write
+ * paths (live rows and flight-recorder promotions), so no row misses the fold.
+ *
+ * The searchable columns come FIRST: admitContext truncates in insertion
+ * order, so on an oversized context the arbitrary payload is the casualty and
+ * the columns the Logs screen scans survive (review).
+ */
+function withSearchContext(
+	message: string,
+	code: string | undefined,
+	context: Record<string, any>
+): Record<string, unknown> {
+	const { search: _search, fold: _fold, ...rest } = context;
+	const search = Array.from(searchableContext(rest)).slice(0, SEARCH_COLUMN_MAX_CHARS).join('');
+	return {
+		search,
+		fold: Array.from(
+			foldLogSearchText([message, code, search, rest.error].filter(Boolean).join(' '))
+		)
+			.slice(0, SEARCH_COLUMN_MAX_CHARS)
+			.join(''),
+		...rest,
+	};
 }
 
 function serializedBytes(value: unknown): number {
@@ -206,6 +250,7 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 		const rows = recorded.map((event) => {
 			sequence += 1;
 			const terminal = event.terminal;
+			const actor = clampActor(event.actor);
 			// Mirror persistLog's column extraction so promoted narration answers the
 			// same category/code filters as live rows — otherwise the trail is present
 			// but invisible behind the Logs tab's preset chips.
@@ -221,13 +266,19 @@ async function runRecorderPromotion(reason: string, requestedEpoch: number): Pro
 				timestamp: event.timestamp,
 				level: event.level,
 				message: event.message,
-				context: { ...event.context, _promotedBy: reason },
+				// Same searchable + folded columns as a live row (review): a promoted
+				// row must be findable in fold space like every other.
+				context: withSearchContext(event.message, code, {
+					...event.context,
+					_promotedBy: reason,
+				}),
 				seq: sequence,
 				count: 1,
 				firstSeen: event.timestamp,
 				lastSeen: event.timestamp,
 				...(code && { code }),
 				...(category && { category }),
+				...(actor && { actor }),
 				...(terminal?.outcome && { outcome: terminal.outcome }),
 				...(terminal?.operationId !== undefined && {
 					operationId: clampColumn('operationId', terminal.operationId),
@@ -314,6 +365,12 @@ const COLUMN_MAX_LENGTH = {
 	serverRequestId: 40,
 } as const;
 
+// At most 4 UTF-8 bytes per code point: 4 KiB per column, 8 KiB for the pair.
+// Even JSON escaping fits under MAX_CONTEXT_BYTES (16 KiB), so admission trims
+// caller payload, not these first columns. Hundreds of search tokens suffice;
+// the tail of a multi-kilobyte blob is not a useful search target.
+const SEARCH_COLUMN_MAX_CHARS = 1024;
+
 function clampColumn<K extends keyof typeof COLUMN_MAX_LENGTH>(
 	column: K,
 	value: string | undefined
@@ -321,6 +378,14 @@ function clampColumn<K extends keyof typeof COLUMN_MAX_LENGTH>(
 	if (value === undefined) return undefined;
 	const max = COLUMN_MAX_LENGTH[column];
 	return value.length > max ? value.slice(0, max) : value;
+}
+
+function clampActor(actor: LoggerOptions['actor']): LoggerOptions['actor'] {
+	const fields = (['id', 'role', 'name'] as const).flatMap((key) => {
+		const value = actor?.[key];
+		return typeof value === 'string' && value.length > 0 ? [[key, value.slice(0, 64)]] : [];
+	});
+	return fields.length > 0 ? Object.fromEntries(fields) : undefined;
 }
 
 const GENERIC_ERROR_CODES = [
@@ -344,7 +409,8 @@ function persistLog(
 	level: LogLevel,
 	message: string,
 	context: Record<string, unknown>,
-	terminal?: LogTerminalFields
+	terminal?: LogTerminalFields,
+	actor?: LoggerOptions['actor']
 ): void {
 	const now = Date.now();
 	const outcome = terminal?.outcome;
@@ -367,10 +433,7 @@ function persistLog(
 		console.error(`Dropped failure-severity code ${code} from log row with outcome ok`);
 		code = undefined;
 	}
-	const admittedContext = admitContext({
-		...persistedContext,
-		search: searchableContext(persistedContext),
-	});
+	const admittedContext = admitContext(withSearchContext(message, code, persistedContext));
 	const identity = JSON.stringify([
 		level,
 		code ?? null,
@@ -381,6 +444,7 @@ function persistLog(
 		// Chained operations are distinct units of work and must not collapse.
 		// Uncorrelated record failures keep null here and still collapse by record/reason.
 		terminal?.operationId ?? null,
+		actor?.id ?? null,
 		// Collection is part of the identity or per-collection events with no
 		// message of their own collapse across collections: one change-signal cycle
 		// emitting apply.refresh for tax_rates and then for another collection
@@ -438,6 +502,7 @@ function persistLog(
 	}
 
 	sequence += 1;
+	const persistedActor = clampActor(actor);
 	const row = recordSize({
 		timestamp: now,
 		level,
@@ -449,6 +514,7 @@ function persistLog(
 		lastSeen: now,
 		...(code && { code }),
 		...(category && { category }),
+		...(persistedActor && { actor: persistedActor }),
 		...(outcome && { outcome }),
 		...(terminal?.operationId !== undefined && {
 			operationId: clampColumn('operationId', terminal.operationId),
@@ -744,6 +810,7 @@ const mainTransport = (props: any) => {
 	}
 
 	if (levelName === 'error') {
+		// Actor names are device-only cashier data and must never enter the Sentry payload.
 		captureLoggedError({ message, code: options.code, context: options.context });
 	}
 
@@ -830,13 +897,21 @@ const mainTransport = (props: any) => {
 				message,
 				context: options.context ?? {},
 				terminal: options.terminal,
+				actor: clampActor(options.actor),
 			});
 			if (dbCollection && isVerboseDiagnostics()) {
 				// Forward terminal fields too: a forensic debug row (e.g. a recovered 401
 				// attempt, #899) is only chainable to its refresh/success rows through
 				// outcome + operationId, and dropping them here would break the chain
 				// exactly where verbose diagnostics is meant to expose it.
-				persistLog(dbCollection, levelName, message, options.context ?? {}, options.terminal);
+				persistLog(
+					dbCollection,
+					levelName,
+					message,
+					options.context ?? {},
+					options.terminal,
+					options.actor
+				);
 			}
 		} catch (error) {
 			console.error('Failed to record debug log entry', error);
@@ -847,7 +922,7 @@ const mainTransport = (props: any) => {
 				level.text === 'success'
 					? { ...options.terminal, outcome: options.terminal?.outcome ?? 'ok' }
 					: options.terminal;
-			persistLog(dbCollection, levelName, message, options.context || {}, terminal);
+			persistLog(dbCollection, levelName, message, options.context || {}, terminal, options.actor);
 			if (levelName === 'error') void promoteRecorder('error');
 		} catch (error) {
 			console.error('Failed to persist log entry', error);
@@ -1126,5 +1201,7 @@ export function getLogger(category: string[]): CategoryLogger {
 
 export { getErrorMessage } from './error-message';
 export { mapExceptionToCode } from './map-exception';
+export { isErrorReported, markErrorReported } from './reported-errors';
 export { redactSensitiveText } from './redact';
 export { log, recorderStats, snapshotRecorder };
+export { capturePrinterOutcome } from './sentry-sink';

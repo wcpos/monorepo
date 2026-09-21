@@ -1,13 +1,23 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
+import { SystemBars } from 'react-native-edge-to-edge';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUniwind } from 'uniwind';
 
+import { UpgradeNotice } from '@wcpos/core/screens/main/components/header/upgrade-notice';
+import { UpgradeNoticeContext } from '@wcpos/core/screens/main/components/header/upgrade-notice-context';
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useStoreSession } from '@wcpos/core/contexts/app-state';
+import { PosUrlMirror } from '@wcpos/core/screens/main/pos/checkout/use-pos-url-mirror';
+import { useCheckoutUrlSeed } from '@wcpos/core/screens/main/pos/checkout/use-checkout-url-seed';
+import { useResetCheckoutModeOnStoreChange } from '@wcpos/core/screens/main/pos/checkout/checkout-mode';
+import { useRejectedOrderSavesSync } from '@wcpos/core/screens/main/pos/checkout/use-rejected-order-saves';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
 import { useDefaultCustomer } from '@wcpos/core/screens/main/hooks/use-default-customer';
 import {
@@ -16,6 +26,7 @@ import {
 } from '@wcpos/core/screens/main/pos/contexts/current-order';
 import { OrderEngineWarningsProvider } from '@wcpos/core/screens/main/pos/contexts/order-engine-warnings';
 import { OrderMoneyDivergenceProvider } from '@wcpos/core/screens/main/pos/contexts/order-money-divergence';
+import { POSOverlaySideProvider } from '@wcpos/core/screens/main/pos/contexts/overlay-side';
 import { CustomerDisplaySnapshotSource } from '@wcpos/core/screens/main/pos/customer-display/snapshot-source';
 
 import { useNavigationBackground } from '../../../../components/use-navigation-background';
@@ -29,9 +40,12 @@ export default function POSLayout() {
 	const { wpCredentials, store } = useStoreSession();
 	const cashierID = useDocField(wpCredentials, (value) => value.id) as number | undefined;
 	const storeID = useDocField(store, (value) => value.id) as number | undefined;
+	useResetCheckoutModeOnStoreChange(storeID);
+	useRejectedOrderSavesSync(storeID);
 	const segments: string[] = useSegments();
 	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();
+	useCheckoutUrlSeed(params.orderId);
 
 	// Extract orderId: handle array (catch-all) vs string, and handle empty array
 	let orderIdFromParams: string | undefined;
@@ -126,44 +140,59 @@ export default function POSLayout() {
  */
 function POSStack() {
 	const screenBackgroundColor = useNavigationBackground();
+	const insets = useSafeAreaInsets();
+	const { theme } = useUniwind();
+	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
+	const registerPOSContainer = React.useCallback((node: View | null) => {
+		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
+	}, []);
 
 	return (
 		<TaxRatesProvider>
 			<CustomerDisplaySnapshotSource />
-			<View className="bg-background flex-1">
-				<Stack
-					screenOptions={{
-						animation: 'none',
-						headerShown: false,
-						contentStyle: { backgroundColor: screenBackgroundColor },
-					}}
+			<PosUrlMirror />
+			<POSOverlaySideProvider>
+				<View
+					ref={registerPOSContainer}
+					className="bg-background flex-1"
+					style={{ paddingTop: insets.top }}
 				>
-					<Stack.Screen name="index" />
-					<Stack.Screen
-						name="(modals)/cart/[orderId]/checkout"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
+					<SystemBars style={theme === 'light' ? 'dark' : 'light'} />
+					{showUpgrade && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
+					<Stack
+						screenOptions={{
+							animation: 'none',
+							headerShown: false,
+							contentStyle: { backgroundColor: screenBackgroundColor },
 						}}
-					/>
-					<Stack.Screen
-						name="(modals)/cart/receipt/[orderId]"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
-						}}
-					/>
-				</Stack>
-			</View>
-			{/**
-			 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
-			 * so that dialogs like add/edit product etc can access the context
-			 */}
-			<ErrorBoundary>
-				<PortalHost name="pos" />
-			</ErrorBoundary>
+					>
+						<Stack.Screen name="index" />
+						<Stack.Screen
+							name="(modals)/cart/[orderId]/checkout"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/>
+						<Stack.Screen
+							name="(modals)/cart/receipt/[orderId]"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/>
+					</Stack>
+				</View>
+				{/**
+				 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
+				 * so that dialogs like add/edit product etc can access the context
+				 */}
+				<ErrorBoundary>
+					<PortalHost name="pos" />
+				</ErrorBoundary>
+			</POSOverlaySideProvider>
 		</TaxRatesProvider>
 	);
 }

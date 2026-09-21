@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { endOfDay, startOfDay } from 'date-fns';
-
 import { Card } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
@@ -11,9 +9,10 @@ import { isGuestCustomer } from '@wcpos/sync-core';
 
 import { forceRefreshFilterCustomer } from '../orders/force-refresh-filter-customer';
 import { useStoreSession } from '../../../contexts/app-state';
-import { convertLocalDateToUTCString } from '../../../hooks/use-local-date';
+import { useStoreDay } from '../../../hooks/use-store-day';
 import { useQueryState, useQueryStateActions } from '../../../query';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
+import { RegisterPill } from '../components/order/filter-bar/register-pill';
 import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
@@ -56,13 +55,10 @@ export function FilterBar() {
 	/**
 	 * Reports must stay bounded to a date window; clearing restores today's window.
 	 */
-	const today = React.useMemo(() => new Date(), []);
+	const { presets, rangeToFilter } = useStoreDay();
 	const removeDateRangeFilter = React.useCallback(() => {
-		actions.setFilter('dateRange', {
-			from: convertLocalDateToUTCString(startOfDay(today)),
-			to: convertLocalDateToUTCString(endOfDay(today)),
-		});
-	}, [actions, today]);
+		actions.setFilter('dateRange', rangeToFilter(presets().today));
+	}, [actions, presets, rangeToFilter]);
 
 	return (
 		<View className="p-2 pb-0">
@@ -87,6 +83,7 @@ export function FilterBar() {
 					<Suspense>
 						<StorePill resource={storesResource} />
 					</Suspense>
+					<RegisterPill />
 					<DateRangePill onRemove={removeDateRangeFilter} />
 				</HStack>
 			</Card>

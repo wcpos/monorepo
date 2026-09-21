@@ -17,7 +17,7 @@ import {
 	FormToggleGroup,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { VStack } from '@wcpos/components/vstack';
+import { ModalBody, ModalFooter } from '@wcpos/components/modal';
 
 import { CollapsibleSection } from './collapsible-section';
 import { couponFormSchema } from './coupon-schema';
@@ -76,7 +76,7 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<ModalBody contentContainerClassName="gap-4">
 				<FormErrors />
 
 				{/* 1. Code + generate */}
@@ -326,16 +326,15 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 					/>
 					<MetaDataForm />
 				</CollapsibleSection>
-
-				<HStack className="justify-end">
-					<Button variant="outline" onPress={onClose}>
-						<ButtonText>{t('common.close')}</ButtonText>
-					</Button>
-					<Button loading={loading} onPress={onSave}>
-						<ButtonText>{t('common.save')}</ButtonText>
-					</Button>
-				</HStack>
-			</VStack>
+			</ModalBody>
+			<ModalFooter>
+				<Button variant="outline" onPress={onClose}>
+					<ButtonText>{t('common.close')}</ButtonText>
+				</Button>
+				<Button loading={loading} onPress={onSave}>
+					<ButtonText>{t('common.save')}</ButtonText>
+				</Button>
+			</ModalFooter>
 		</Form>
 	);
 }

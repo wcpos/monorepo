@@ -112,6 +112,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			'brands',
 			'tags',
 			'coupons',
+			'refunds',
 		]);
 		const initialGeneration = engine.status().collections.products.coverageGeneration;
 		expect(engine.status().collections.products).toEqual({
@@ -141,6 +142,76 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 		});
 	});
 
+	it('notifies status subscribers on pressure and recovery in manual mode', async () => {
+		let now = 0;
+		let status = 200;
+		const engine = engineWith({
+			now: () => now,
+			fetcher: async () =>
+				new Response('[]', { status, headers: status === 429 ? { 'Retry-After': '60' } : {} }),
+		});
+		await engine.ready;
+		const statuses: EngineStatus[] = [];
+		engine.statusChanges((value) => statuses.push(value));
+		try {
+			status = 429;
+			await engine.hostTransport().fetcher(SYNC_BASE);
+			await vi.waitFor(() =>
+				expect(statuses.at(-1)?.serverPressure).toEqual({
+					multiplier: 2,
+					retryAfterUntilMs: 60_000,
+					reported: null,
+					signal: 'rate-limited',
+				})
+			);
+			now = 60_001;
+			status = 200;
+			for (let index = 0; index < 10; index += 1) await engine.hostTransport().fetcher(SYNC_BASE);
+			await vi.waitFor(() =>
+				expect(statuses.at(-1)?.serverPressure).toEqual({
+					multiplier: 1,
+					retryAfterUntilMs: null,
+					reported: null,
+					signal: null,
+				})
+			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('notifies status subscribers when the reported pressure bucket changes without a back-off', async () => {
+		let pressure: string | null = null;
+		const engine = engineWith({
+			fetcher: async () =>
+				new Response('[]', {
+					status: 200,
+					headers: pressure === null ? {} : { 'X-WCPOS-Pressure': pressure },
+				}),
+		});
+		await engine.ready;
+		const statuses: EngineStatus[] = [];
+		engine.statusChanges((value) => statuses.push(value));
+		try {
+			pressure = 'high';
+			await engine.hostTransport().fetcher(SYNC_BASE);
+			// One fast "high" response is advisory: no back-off, but the read-out moved.
+			await vi.waitFor(() =>
+				expect(statuses.at(-1)?.serverPressure).toEqual({
+					multiplier: 1,
+					retryAfterUntilMs: null,
+					reported: 'high',
+					signal: null,
+				})
+			);
+			pressure = 'low';
+			await engine.hostTransport().fetcher(SYNC_BASE);
+			await vi.waitFor(() => expect(statuses.at(-1)?.serverPressure.reported).toBe('low'));
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('publishes current and coalesced status changes, then unsubscribes', async () => {
 		const engine = engineWith();
 		const statuses: EngineStatus[] = [];
@@ -148,6 +219,12 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 
 		expect(statuses).toHaveLength(1);
 		expect(statuses[0]).toEqual(engine.status());
+		expect(statuses[0]?.serverPressure).toEqual({
+			multiplier: 1,
+			retryAfterUntilMs: null,
+			reported: null,
+			signal: null,
+		});
 
 		await engine.ready;
 		await vi.waitFor(() => expect(statuses.at(-1)?.activeScopeId).not.toBeNull());
@@ -227,6 +304,198 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 
 		await switching;
 		await engine.dispose();
+	});
+
+	it('holds automatic ticks for auth, but not manual sync, and resumes when cleared', async () => {
+		const captured = captureTimers();
+		let held = true;
+		const engine = engineWith({ mode: 'auto', holdAutomaticTicks: () => held });
+		const events: EngineEvent[] = [];
+		engine.events((event) => events.push(event));
+		try {
+			await engine.ready;
+			await waitForAutomaticIntervals(captured.intervals);
+			events.length = 0;
+			const tick = captured.intervals[0]!;
+			tick.callback();
+			expect(events).toEqual([
+				{ type: 'lane-start', lane: expect.any(String) },
+				{
+					type: 'lane-finish',
+					lane: expect.any(String),
+					status: 'skipped',
+					detail: 'auth-required',
+				},
+			]);
+			const lane = (events[0] as Extract<EngineEvent, { type: 'lane-start' }>).lane;
+			expect(engine.status().lanes[lane].lastTick).toBeNull();
+			expect((await engine.sync(lane)).status).toBe('ran');
+			// Let the held run release its same-lane reservation before firing again.
+			await Promise.resolve();
+			held = false;
+			events.length = 0;
+			tick.callback();
+			await vi.waitFor(() =>
+				expect(events).toContainEqual({ type: 'lane-finish', lane, status: 'ran' })
+			);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('lowers identical signal tick errors independently of lane tick errors', async () => {
+		let message = 'token rejected';
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			fetcher: async () => {
+				throw new Error(message);
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			await engine.sync('change-signal');
+			await engine.sync('change-signal');
+			message = 'different failure';
+			await engine.sync('change-signal');
+			for (const type of ['signal.tick.error', 'engine.lane.tick']) {
+				const rows = diagnostics.mock.calls
+					.map(([event]) => event)
+					.filter((event) => event.type === type);
+				expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error']);
+			}
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('keeps suppressing an identical signal tick error across a skipped tick', async () => {
+		let online = true;
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			connectivity: () => (online ? 'online' : 'offline'),
+			fetcher: async () => {
+				throw new Error('token rejected');
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			await engine.sync('change-signal');
+			await engine.sync('change-signal');
+			// A skip polled nothing, so it is not a recovery. recordLaneTick emits
+			// engine.lane.tick for ANY report status, so this reaches the same reset
+			// branch a successful tick does — the asserted status keeps that honest.
+			online = false;
+			expect((await engine.sync('change-signal')).status).toBe('skipped');
+			online = true;
+			await engine.sync('change-signal');
+
+			const rows = diagnostics.mock.calls
+				.map(([event]) => event)
+				.filter((event) => event.type === 'signal.tick.error');
+			expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'info']);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('raises an identical signal tick error again after a successful tick', async () => {
+		let failing = true;
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			fetcher: async (url) => {
+				if (failing) throw new Error('token rejected');
+				if (url.endsWith('/changes/tick')) return new Response(null, { status: 404 });
+				return new Response(
+					JSON.stringify({ changes: [], checkpoint: { since: 0, head: 0 }, complete: true }),
+					{ headers: { 'content-type': 'application/json' } }
+				);
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			await engine.sync('change-signal');
+			await engine.sync('change-signal');
+			failing = false;
+			expect((await engine.sync('change-signal')).status).toBe('ran');
+			failing = true;
+			await engine.sync('change-signal');
+
+			const rows = diagnostics.mock.calls
+				.map(([event]) => event)
+				.filter((event) => event.type === 'signal.tick.error');
+			expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error']);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('keeps every tick row but lowers consecutive identical errors per lane', async () => {
+		let failure: string | null = null;
+		const diagnostics = vi.fn();
+		const engine = engineWith({
+			diagnostics,
+			queryTotal: {
+				fetchWooQueryTotal: async () => {
+					if (failure !== null) throw new Error(failure);
+					return 0;
+				},
+			},
+			fetcher: async (url) => {
+				if (failure !== null) throw new Error(failure);
+				if (url.endsWith('/changes/tick')) return new Response(null, { status: 404 });
+				return new Response(
+					JSON.stringify({ changes: [], checkpoint: { since: 0, head: 0 }, complete: true }),
+					{
+						headers: { 'content-type': 'application/json' },
+					}
+				);
+			},
+		});
+		try {
+			await engine.ready;
+			diagnostics.mockClear();
+			for (const message of [
+				'Census refresh failed for products',
+				'Census refresh failed for products',
+				'different',
+				null,
+				'different',
+			]) {
+				failure = message;
+				await engine.checkCollection('products');
+			}
+			const rows = diagnostics.mock.calls
+				.map(([event]) => event)
+				.filter(
+					(event) => event.type === 'engine.lane.tick' && event.fields.lane === 'change-signal'
+				);
+			expect(rows.map((event) => event.level)).toEqual(['error', 'info', 'error', 'info', 'error']);
+			expect(rows.map((event) => event.fields.error)).toEqual([
+				'Census refresh failed for products',
+				'Census refresh failed for products',
+				'different',
+				undefined,
+				'different',
+			]);
+			expect(rows[3].fields.status).toBe('ran');
+			const firstCensus = diagnostics.mock.calls
+				.map(([event]) => event)
+				.find(
+					(event) => event.type === 'engine.lane.tick' && event.fields.lane === 'query-total-retry'
+				);
+			expect(firstCensus).toMatchObject({
+				level: 'error',
+				fields: { error: 'Census refresh failed for products' },
+			});
+		} finally {
+			await engine.dispose();
+		}
 	});
 
 	it('arms and advances each automatic lane nextDueAtMs on fixed interval boundaries', async () => {
@@ -429,7 +698,7 @@ describe('RxdbSyncEngine facade timers and live configuration', () => {
 			const engine = engineWith({
 				fetcher: async (url) => {
 					urls.push(url);
-					return new Response(JSON.stringify({ documents: [], checkpoint, hasMore: false }), {
+					return new Response(JSON.stringify({ documents: [], checkpoint, complete: true }), {
 						status: 200,
 						headers: { 'content-type': 'application/json' },
 					});

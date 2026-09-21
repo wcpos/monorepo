@@ -19,7 +19,6 @@ function engineWith(writePlaneOwner?: () => boolean) {
 		identity: { site: SITE, storeId: 1, cashierId: `leader-gate-${++scope}` },
 		mode: 'manual',
 		fetch: fetcher,
-		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
 		ports: { writePlaneOwner },
 		awaitReady: false,
 	}).engine;

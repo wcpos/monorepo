@@ -8,6 +8,7 @@ import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from '@wcpos/components/dialog';
@@ -24,6 +25,7 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
+import { usePOSOverlaySide } from '../contexts/overlay-side';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 
@@ -96,13 +98,27 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
 		[create, currentOrderRecord, format, localPatch, onClose, t]
 	);
 
-	return <CustomerForm form={form} onClose={onClose} onSubmit={handleSave} loading={loading} />;
+	return (
+		<CustomerForm
+			form={form}
+			onClose={onClose}
+			onSubmit={handleSave}
+			loading={loading}
+			renderLayout={(body, footer) => (
+				<>
+					<DialogBody className="min-h-0 shrink">{body}</DialogBody>
+					<DialogFooter>{footer}</DialogFooter>
+				</>
+			)}
+		/>
+	);
 }
 
 /**
  *
  */
 export function AddNewCustomer() {
+	const side = usePOSOverlaySide();
 	const t = useT();
 	const [open, setOpen] = React.useState(false);
 	const close = React.useCallback(() => setOpen(false), []);
@@ -118,13 +134,11 @@ export function AddNewCustomer() {
 						<Text>{t('common.add_new_customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent testID="add-new-customer-dialog" size="xl" portalHost="pos">
+				<DialogContent side={side} testID="add-new-customer-dialog" size="xl" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
-					<DialogBody>
-						<AddCustomerFormBody onClose={close} />
-					</DialogBody>
+					<AddCustomerFormBody onClose={close} />
 				</DialogContent>
 			</Dialog>
 		</ErrorBoundary>
@@ -141,18 +155,17 @@ interface AddCustomerDialogProps {
 }
 
 export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps) {
+	const side = usePOSOverlaySide();
 	const t = useT();
 	const close = React.useCallback(() => onOpenChange(false), [onOpenChange]);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange} style={{ display: 'none' }}>
-			<DialogContent testID="add-customer-dialog" size="xl" portalHost="pos">
+			<DialogContent side={side} testID="add-customer-dialog" size="xl" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>
-				<DialogBody>
-					<AddCustomerFormBody onClose={close} />
-				</DialogBody>
+				<AddCustomerFormBody onClose={close} />
 			</DialogContent>
 		</Dialog>
 	);

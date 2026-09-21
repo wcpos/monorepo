@@ -12,7 +12,11 @@ const mockLocalPatch = jest.fn();
 const mockPatchEngineResident = jest.fn(async (_input: unknown) => undefined);
 const mockLoggerError = jest.fn();
 const mockT = jest.fn();
-const manager = {};
+const mockEngineRequire = jest.fn((_input: unknown) => ({
+	ready: Promise.resolve(),
+	release: () => {},
+}));
+const manager = { engine: { require: (input: unknown) => mockEngineRequire(input) } };
 let onlineStatus = 'offline';
 
 jest.mock('uuid', () => ({ v4: () => 'payment-id' }));
@@ -24,15 +28,19 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 jest.mock('../../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({
+		site: { uuid: 'site' },
 		wpCredentials: { id: 7 },
-		store: { id: 9, currency: 'EUR', price_num_decimals: 2 },
+		store: { register_sessions: mockSessionsOn, id: 9, currency: 'EUR', price_num_decimals: 2 },
 	}),
 }));
 jest.mock('../../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({ localPatch: mockLocalPatch }),
 	patchEngineResident: (input: unknown) => mockPatchEngineResident(input),
 }));
-jest.mock('@wcpos/query', () => ({ useQueryRuntime: () => manager }));
+jest.mock('@wcpos/query', () => ({
+	useDocField: (doc: unknown, pick: (doc: unknown) => unknown) => pick(doc),
+	useQueryRuntime: () => manager,
+}));
 jest.mock('@wcpos/utils/logger', () => ({
 	// Lazy: the hook module calls getLogger() at import time, before the const above initialises.
 	getLogger: () => ({ error: (...args: unknown[]) => mockLoggerError(...args) }),
@@ -77,19 +85,16 @@ const order = {
 		total: '100.00',
 		meta_data: [{ key: '_pos_user', value: '7' }],
 	},
-	getLatest: () => ({
-		payload: {
-			id: 1042,
-			number: '1042',
-			total: '100.00',
-			meta_data: [{ key: '_pos_user', value: '7' }],
-		},
-	}),
+	getLatest: () => order,
 } as EngineRecord<'orders'>;
 
 beforeEach(() => {
 	jest.clearAllMocks();
-	mockLocalPatch.mockResolvedValue({ document: order });
+	order.payload.meta_data = [{ key: '_pos_user', value: '7' }];
+	mockLocalPatch.mockImplementation(async ({ data }) => {
+		Object.assign(order.payload, data);
+		return { document: order };
+	});
 	onlineStatus = 'offline';
 });
 
@@ -168,7 +173,7 @@ it('logs a refused online payment as a failed sync record needing attention', as
 		expect.stringContaining('Order #1042 was already paid online'),
 		expect.objectContaining({
 			code: 'PAYMENT501',
-			terminal: { operationType: 'sync.record', outcome: 'failed' },
+			terminal: expect.objectContaining({ operationType: 'sync.record', outcome: 'failed' }),
 			context: expect.objectContaining({
 				collection: 'orders',
 				recordId: order.uuid,
@@ -206,6 +211,306 @@ it('localizes an amount-exceeds-balance refusal with the server balance', async 
 	});
 	expect(mockLoggerError).toHaveBeenCalledWith(
 		'Order #1042 only had 15.00 outstanding; 40.00 Cash was taken at the till — refund the difference.',
-		expect.any(Object)
+		// Its own code: an over-payment is answered by taking the store's balance, which
+		// is a different story from an order that was already paid online.
+		expect.objectContaining({
+			code: 'PAYMENT511',
+			terminal: expect.objectContaining({ operationId: expect.any(String) }),
+		})
 	);
+});
+
+let mockBoundRegisterId: string | null = 'register';
+beforeEach(() => {
+	mockBoundRegisterId = 'register';
+});
+
+it.each([null, 'register'])(
+	'queues one provenance patch and stamps only the bound register (%s)',
+	async (registerId) => {
+		mockBoundRegisterId = registerId;
+		onlineStatus = 'online-website-available';
+		mockPost.mockResolvedValue({ data: { order: { status: 'completed', balance: '0.00' } } });
+		const { result } = renderHook(() => useRecordManualPayment());
+		const split = {
+			key: '_wcpos_split',
+			value: '{"kind":"even","ways":2,"shares":["50.00","50.00"]}',
+		};
+		await act(() => result.current(order, method, { amount: 100, extraMeta: [split] }));
+		expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
+		expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+		// The split summary rides with the leg that completes the sale.
+		expect(mockLocalPatch).toHaveBeenCalledWith({
+			document: order,
+			data: {
+				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }, split]),
+			},
+		});
+		expect(mockPost.mock.calls[0][1].payment).toMatchObject({
+			register_id: registerId,
+			session_id: null,
+		});
+	}
+);
+
+const mockPushDocument = jest.fn(async () => undefined);
+jest.mock('../../../contexts/use-push-document', () => ({
+	usePushDocument: () => mockPushDocument,
+}));
+
+it('logs the cart-safe error without enqueueing a payment when the provenance patch fails', async () => {
+	onlineStatus = 'online-website-available';
+	mockLocalPatch.mockResolvedValue(undefined);
+	const original = JSON.stringify(order.payload);
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await expect(result.current(order, method, { amount: 100 })).resolves.toEqual({
+		kind: 'failed',
+		reason: 'provenance_save_failed',
+	});
+
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		'Checkout failed',
+		expect.objectContaining({
+			code: 'CHECKOUT101',
+			showToast: true,
+			toast: { title: expect.any(String) },
+		})
+	);
+	expect(mockT).toHaveBeenCalledWith('pos_cart.checkout_failed', undefined);
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch.mock.calls[0][0].data).not.toHaveProperty('status');
+	expect(mockPushDocument).not.toHaveBeenCalled();
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockPatchEngineResident).not.toHaveBeenCalled();
+	expect(JSON.stringify(order.payload)).toBe(original);
+});
+
+it('awaits the provenance push before posting and preserves the tuple in the mirror', async () => {
+	onlineStatus = 'online-website-available';
+	const calls: string[] = [];
+	mockLocalPatch.mockImplementationOnce(async ({ data }) => {
+		Object.assign(order.payload, data);
+		await Promise.resolve();
+		calls.push('patched');
+		return { document: order };
+	});
+	mockPushDocument.mockImplementationOnce(async () => {
+		await Promise.resolve();
+		calls.push('pushed');
+	});
+	mockPost.mockImplementationOnce(async () => {
+		calls.push('post');
+		return { data: { order: { status: 'completed', balance: '0.00' } } };
+	});
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await act(() => result.current(order, method, { amount: 100 }));
+
+	expect(calls).toEqual(['patched', 'pushed', 'post']);
+	expect(mockPushDocument).toHaveBeenCalledWith(order);
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({
+			changes: expect.objectContaining({
+				meta_data: expect.arrayContaining([{ key: '_wcpos_sale_counter', value: '1' }]),
+			}),
+		})
+	);
+});
+
+it('does not post or enqueue a payment when the provenance push rejects', async () => {
+	onlineStatus = 'online-website-available';
+	mockPushDocument.mockRejectedValueOnce(new Error('push failed'));
+	const { result } = renderHook(() => useRecordManualPayment());
+
+	await expect(result.current(order, method, { amount: 100 })).resolves.toEqual({
+		kind: 'failed',
+		reason: 'provenance_save_failed',
+	});
+
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch.mock.calls[0][0].data).not.toHaveProperty('status');
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockPatchEngineResident).not.toHaveBeenCalled();
+	expect(mockLoggerError).toHaveBeenCalledWith(
+		'Checkout failed',
+		expect.objectContaining({
+			code: 'CHECKOUT101',
+		})
+	);
+});
+
+it('mirrors a refused server status without allocating or patching provenance', async () => {
+	const stamp = jest.requireMock('../sale-completion');
+	const completion = jest.spyOn(stamp, 'completionMetaFor');
+	onlineStatus = 'online-website-available';
+	mockPost.mockRejectedValueOnce({
+		response: {
+			data: { code: 'wcpos_order_already_paid', data: { order: { status: 'completed' } } },
+		},
+	});
+	const { result } = renderHook(() => useRecordManualPayment());
+	await expect(result.current(order, method, { amount: 40 })).resolves.toMatchObject({
+		kind: 'refused',
+	});
+	expect(mockPatchEngineResident).toHaveBeenCalledWith(
+		expect.objectContaining({ changes: expect.objectContaining({ status: 'completed' }) })
+	);
+	expect(completion).not.toHaveBeenCalled();
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+});
+
+it.each([false, true])(
+	'rejects with the accepted outcome when the mirror fails, after pulling the store copy (throws=%s)',
+	async (throws) => {
+		// The store has answered 2xx: the money is on the order there. Swallowing this used
+		// to report a generic "checkout failed" on a payment the store had taken, which is
+		// an invitation to take it twice. The caller is told what actually happened instead.
+		onlineStatus = 'online-website-available';
+		mockEngineRequire.mockClear();
+		mockPost.mockResolvedValueOnce({ data: { order: { status: 'completed' } } });
+		if (throws) mockLocalPatch.mockRejectedValueOnce(new Error('storage failed'));
+		else mockLocalPatch.mockResolvedValueOnce(undefined);
+		const { result } = renderHook(() => useRecordManualPayment());
+		await expect(result.current(order, method, { amount: 40 })).rejects.toMatchObject({
+			name: 'RecordManualPaymentMirrorError',
+			outcome: expect.objectContaining({ kind: 'recorded' }),
+		});
+		expect(mockEngineRequire).toHaveBeenCalledWith(
+			expect.objectContaining({ collection: 'orders', forceRefresh: true })
+		);
+		expect(mockLoggerError).not.toHaveBeenCalled();
+	}
+);
+
+let mockSessionsOn = false;
+let mockSessionId: string | null = 'session';
+jest.mock('../../../../../services/register-session/use-register-session-collections', () => ({
+	useRegisterSessionCollection: () => ({
+		findOne: () => ({
+			exec: async () =>
+				mockSessionId ? { id: mockSessionId, incrementalPatch: async () => undefined } : null,
+		}),
+	}),
+}));
+beforeEach(() => {
+	mockSessionsOn = false;
+	mockSessionId = 'session';
+});
+
+it.each(['offline', 'online-website-available'])(
+	'stamps the session on manual payments (%s)',
+	async (status) => {
+		mockSessionsOn = true;
+		onlineStatus = status;
+		mockPost.mockResolvedValue({ data: { order: { status: 'pending', balance: '60.00' } } });
+		const { result } = renderHook(() => useRecordManualPayment());
+		await act(() => result.current(order, method, { amount: 40 }));
+		if (status === 'offline') {
+			const { readLedger } =
+				jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+			expect(readLedger(mockLocalPatch.mock.calls[0][0].data.meta_data)[0].session_id).toBe(
+				'session'
+			);
+		} else expect(mockPost.mock.calls[0][1].payment.session_id).toBe('session');
+	}
+);
+it('refuses manual payment without an open session', async () => {
+	mockSessionsOn = true;
+	mockSessionId = null;
+	const { result } = renderHook(() => useRecordManualPayment());
+	await expect(result.current(order, method, { amount: 40 })).rejects.toMatchObject({
+		name: 'RegisterSessionRequiredError',
+	});
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+});
+
+jest.mock('../sale-completion', () => {
+	const actual = jest.requireActual<typeof import('../sale-completion')>('../sale-completion');
+	const { withMetaReplaced } =
+		jest.requireActual<typeof import('@wcpos/order-math')>('@wcpos/order-math');
+	const completionMetaFor = jest.fn<
+		ReturnType<typeof actual.completionMetaFor>,
+		Parameters<typeof actual.completionMetaFor>
+	>();
+	completionMetaFor.mockImplementation(async (_ctx, meta, facts) =>
+		withMetaReplaced(meta, [{ key: '_wcpos_sale_counter', value: '1' }, ...(facts.extraMeta ?? [])])
+	);
+	return {
+		...actual,
+		completionMetaFor,
+		persistSaleProvenance: jest.fn(
+			async (
+				ctx: import('../sale-completion').SaleContext,
+				input: Parameters<typeof actual.persistSaleProvenance>[1]
+			) => {
+				const meta_data = input.online
+					? await completionMetaFor(ctx, input.order.getLatest().payload.meta_data, input)
+					: withMetaReplaced(input.order.getLatest().payload.meta_data, input.extraMeta ?? []);
+				if (!input.online && !input.extraMeta) return;
+				if (!(await ctx.localPatch({ document: input.order, data: { meta_data } })))
+					throw new Error('provenance_save_failed');
+				if (input.online) await ctx.pushDocument(input.order);
+			}
+		),
+		prepareSale: jest.fn(
+			async (
+				_ctx: import('../sale-completion').SaleContext,
+				input: Parameters<typeof actual.prepareSale>[1]
+			) => {
+				if (input.completing && input.bindingStatus === 'choose')
+					return { ok: false, reason: 'choose_register' };
+				if (mockSessionsOn && !mockSessionId)
+					throw new (jest.requireActual(
+						'../../../../../services/register-session/session-store'
+					).RegisterSessionRequiredError)();
+				return {
+					ok: true,
+					registerId: mockBoundRegisterId,
+					sessionId: mockSessionsOn ? mockSessionId : null,
+				};
+			}
+		),
+	};
+});
+
+jest.mock('../hooks/use-sale-context', () => ({
+	useSaleContext: () => ({
+		userDB: {},
+		siteUuid: 'site',
+		storeId: 1,
+		runtime: manager,
+		dp: 2,
+		localPatch: mockLocalPatch,
+		pushDocument: mockPushDocument,
+	}),
+}));
+
+it('includes completion metadata, ledger and status in one offline local write', async () => {
+	const { result } = renderHook(() => useRecordManualPayment());
+	await act(() => result.current(order, method, { amount: 100 }));
+	expect(mockLocalPatch).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch).toHaveBeenCalledWith({
+		document: order,
+		data: {
+			status: 'completed',
+			meta_data: expect.arrayContaining([
+				{ key: '_wcpos_sale_counter', value: '1' },
+				expect.objectContaining({ key: '_wcpos_payments' }),
+			]),
+		},
+	});
+	expect(mockPost).not.toHaveBeenCalled();
+	expect(mockPushDocument).not.toHaveBeenCalled();
+});
+it('does not fallback-stamp an accepted response whose status is still partial', async () => {
+	onlineStatus = 'online-website-available';
+	mockPost.mockResolvedValueOnce({ data: { order: { status: 'pos-partial', balance: '60.00' } } });
+	const { result } = renderHook(() => useRecordManualPayment());
+	await act(() => result.current(order, method, { amount: 40 }));
+	expect(mockPatchEngineResident).toHaveBeenCalledTimes(1);
+	expect(mockLocalPatch).not.toHaveBeenCalled();
+	expect(jest.requireMock('../sale-completion').completionMetaFor).not.toHaveBeenCalled();
 });

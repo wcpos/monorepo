@@ -1,12 +1,6 @@
 import * as React from 'react';
 
-import {
-	Dialog,
-	DialogBody,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-} from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -18,10 +12,11 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent } from '@wcpos/components/tooltip';
 
 import { AddCoupon } from './add-coupon';
 import { AddCustomerDialog } from './add-customer';
+import { AddDiscount } from './add-discount';
 import { AddFee } from './add-fee';
 import { AddMiscProduct } from './add-misc-product';
 import { AddShipping } from './add-shipping';
@@ -29,10 +24,12 @@ import { useT } from '../../../../contexts/translations';
 import { useAppInfo } from '../../../../hooks/use-app-info';
 import { CapabilityTooltipTrigger } from '../../components/capability-tooltip';
 import { useUserCapabilities } from '../../hooks/use-user-capabilities';
+import { usePOSOverlaySide } from '../contexts/overlay-side';
 
-type DialogType = 'customer' | 'misc-product' | 'fee' | 'shipping' | 'coupon' | null;
+type DialogType = 'customer' | 'misc-product' | 'fee' | 'discount' | 'shipping' | 'coupon' | null;
 
 export function AddCartItemsMenu() {
+	const side = usePOSOverlaySide();
 	const t = useT();
 	const { license } = useAppInfo();
 	const isPro = license?.isPro ?? false;
@@ -80,28 +77,18 @@ export function AddCartItemsMenu() {
 						<Icon name="fileInvoiceDollar" />
 						<Text>{t('pos_cart.add_fee')}</Text>
 					</DropdownMenuItem>
+					<DropdownMenuItem testID="menu-add-discount" onPress={() => setOpenDialog('discount')}>
+						<Icon name="tag" />
+						<Text>{t('pos_cart.add_discount')}</Text>
+					</DropdownMenuItem>
 					<DropdownMenuItem testID="menu-add-shipping" onPress={() => setOpenDialog('shipping')}>
 						<Icon name="truck" />
 						<Text>{t('pos_cart.add_shipping')}</Text>
 					</DropdownMenuItem>
-					{isPro ? (
-						<DropdownMenuItem testID="menu-add-coupon" onPress={() => setOpenDialog('coupon')}>
-							<Icon name="badgePercent" />
-							<Text>{t('pos_cart.add_coupon')}</Text>
-						</DropdownMenuItem>
-					) : (
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<DropdownMenuItem testID="menu-add-coupon" disabled>
-									<Icon name="badgePercent" />
-									<Text>{t('pos_cart.add_coupon')}</Text>
-								</DropdownMenuItem>
-							</TooltipTrigger>
-							<TooltipContent>
-								<Text>{t('common.upgrade_to_pro')}</Text>
-							</TooltipContent>
-						</Tooltip>
-					)}
+					<DropdownMenuItem testID="menu-add-coupon" onPress={() => setOpenDialog('coupon')}>
+						<Icon name="badgePercent" />
+						<Text>{t('pos_cart.add_coupon')}</Text>
+					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
 
@@ -115,34 +102,35 @@ export function AddCartItemsMenu() {
 					onOpenChange={(open) => !open && setOpenDialog(null)}
 					style={{ display: 'none' }}
 				>
-					<DialogContent testID="add-misc-product-dialog" size="lg" portalHost="pos">
+					<DialogContent side={side} testID="add-misc-product-dialog" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_miscellaneous_product')}</DialogTitle>
 						</DialogHeader>
-						<DialogBody>
-							<ErrorBoundary>
-								<AddMiscProduct />
-							</ErrorBoundary>
-						</DialogBody>
+						<ErrorBoundary>
+							<AddMiscProduct />
+						</ErrorBoundary>
 					</DialogContent>
 				</Dialog>
 			)}
 
-			{openDialog === 'fee' && (
+			{(openDialog === 'fee' || openDialog === 'discount') && (
 				<Dialog
 					open
 					onOpenChange={(open) => !open && setOpenDialog(null)}
 					style={{ display: 'none' }}
 				>
-					<DialogContent testID="add-fee-dialog" size="lg" portalHost="pos">
+					<DialogContent
+						side={side}
+						testID={openDialog === 'fee' ? 'add-fee-dialog' : 'add-discount-dialog'}
+						size="lg"
+						portalHost="pos"
+					>
 						<DialogHeader>
-							<DialogTitle>{t('pos_cart.add_fee')}</DialogTitle>
+							<DialogTitle>
+								{openDialog === 'fee' ? t('pos_cart.add_fee') : t('pos_cart.add_discount')}
+							</DialogTitle>
 						</DialogHeader>
-						<DialogBody>
-							<ErrorBoundary>
-								<AddFee />
-							</ErrorBoundary>
-						</DialogBody>
+						<ErrorBoundary>{openDialog === 'fee' ? <AddFee /> : <AddDiscount />}</ErrorBoundary>
 					</DialogContent>
 				</Dialog>
 			)}
@@ -153,15 +141,13 @@ export function AddCartItemsMenu() {
 					onOpenChange={(open) => !open && setOpenDialog(null)}
 					style={{ display: 'none' }}
 				>
-					<DialogContent testID="add-shipping-dialog" size="lg" portalHost="pos">
+					<DialogContent side={side} testID="add-shipping-dialog" size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_shipping')}</DialogTitle>
 						</DialogHeader>
-						<DialogBody>
-							<ErrorBoundary>
-								<AddShipping />
-							</ErrorBoundary>
-						</DialogBody>
+						<ErrorBoundary>
+							<AddShipping />
+						</ErrorBoundary>
 					</DialogContent>
 				</Dialog>
 			)}
@@ -172,15 +158,13 @@ export function AddCartItemsMenu() {
 					onOpenChange={(open) => !open && setOpenDialog(null)}
 					style={{ display: 'none' }}
 				>
-					<DialogContent size="lg" portalHost="pos">
+					<DialogContent side={side} size="lg" portalHost="pos">
 						<DialogHeader>
 							<DialogTitle>{t('pos_cart.add_coupon')}</DialogTitle>
 						</DialogHeader>
-						<DialogBody>
-							<ErrorBoundary>
-								<AddCoupon />
-							</ErrorBoundary>
-						</DialogBody>
+						<ErrorBoundary>
+							<AddCoupon />
+						</ErrorBoundary>
 					</DialogContent>
 				</Dialog>
 			)}

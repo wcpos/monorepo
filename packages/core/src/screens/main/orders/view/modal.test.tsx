@@ -138,3 +138,35 @@ describe('ViewOrderModal', () => {
 		);
 	});
 });
+
+jest.mock('../../hooks/use-currency-format', () => ({
+	useCurrencyFormat: () => ({ format: String }),
+}));
+jest.mock('../../hooks/use-date-format', () => ({ useDateFormat: () => '' }));
+
+it.each([12, undefined])('opens the receipt for refund %s only when it has an id', (id) => {
+	const sections = jest.requireMock('./sections/refunds');
+	const actual = jest.requireActual('./sections/refunds');
+	const section = jest.spyOn(sections, 'RefundsSection').mockImplementation(actual.RefundsSection);
+	const observable = jest
+		.spyOn(jest.requireMock('observable-hooks'), 'useObservableSuspense')
+		.mockReturnValueOnce(mockOrder)
+		.mockReturnValue([{ id, total: '-5.00' }]);
+	push.mockClear();
+	try {
+		render(<ViewOrderModal resource={{} as never} />);
+		const button = screen.queryByRole('button', { name: 'common.receipt' });
+		if (id) {
+			fireEvent.click(button!);
+			expect(push).toHaveBeenCalledWith({
+				pathname: '/orders/receipt/[orderId]',
+				params: { orderId: 'order-uuid', document: 'refund:12' },
+			});
+		} else {
+			expect(button).toBeNull();
+		}
+	} finally {
+		section.mockRestore();
+		observable.mockRestore();
+	}
+});

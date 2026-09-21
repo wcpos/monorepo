@@ -8,11 +8,22 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { getNetPaymentTotal } from '@wcpos/order-math';
 import { useRecordField } from '@wcpos/query';
 
+import { useTheme } from '../../../../../contexts/theme';
+import { usePaymentMethods } from '../../../hooks/use-payment-methods';
+import {
+	clearOrderSaving,
+	enterCheckout,
+	getOrderSaveState,
+	leaveCheckout,
+	markOrderSaving,
+} from '../../checkout/checkout-mode';
 import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useStorageMoneyPathGuard } from '../../../hooks/use-storage-health';
 import { useCurrentOrder } from '../../contexts/current-order';
+import { type CheckoutRejection, useCheckoutSave } from '../../checkout/hooks/use-checkout-save';
+import { showOrderRefusedToast } from '../../checkout/refusal-toast';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -26,8 +37,11 @@ export function PayButton() {
 	const lineItems = useRecordField(currentOrderRecord, (order) => order.payload.line_items);
 	const { format } = useCurrentOrderCurrencyFormat();
 	const router = useRouter();
+	const { screenSize } = useTheme();
+	const { loaded, unsupportedSchema } = usePaymentMethods();
 	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
+	const save = useCheckoutSave();
 	const t = useT();
 	const { storageDegraded, blockIfDegraded } = useStorageMoneyPathGuard();
 
@@ -43,37 +57,95 @@ export function PayButton() {
 			return;
 		}
 
-		setLoading(true);
+		const uuid = currentOrderRecord.uuid;
 		const orderLogger = checkoutLogger.with({
-			orderId: currentOrderRecord.uuid,
+			orderId: uuid,
 			orderNumber: currentOrderRecord.payload.number,
 		});
+		const showRefusal = (rejection: CheckoutRejection) => {
+			showOrderRefusedToast({ t, router, rejection });
+			orderLogger.error('Checkout refused', {
+				code: ERROR_CODES.CHECKOUT_FAILED_CART_SAFE,
+				context: { ...rejection },
+			});
+		};
+		const sheetRoute = {
+			pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
+			params: { orderId: uuid },
+		} as const;
+		// Optimistic only where the tender flow hosts the checkout: it reads the saving
+		// flag and keeps every tile inert until the server copy (and its id) exists. The
+		// legacy webview checkout has no such gate, so that lane still waits for the save.
+		const tenderFlow = loaded && !unsupportedSchema;
+		const state = getOrderSaveState(uuid);
+		if (state?.kind === 'rejected') {
+			showRefusal(state);
+			return;
+		}
+		if (state?.kind === 'saving') {
+			// The earlier press is still waiting on the store. Show that wait again
+			// rather than enqueue a second write; the pane flips on the same events.
+			if (tenderFlow && screenSize !== 'sm') enterCheckout(uuid);
+			else if (tenderFlow) router.push(sheetRoute);
+			return;
+		}
+		markOrderSaving(uuid);
+		if (tenderFlow && screenSize !== 'sm') {
+			enterCheckout(uuid);
+		} else if (tenderFlow) {
+			router.push(sheetRoute);
+		} else {
+			setLoading(true);
+		}
+		// A save that fails or is blocked puts the cashier back at the cart to retry.
+		const abandon = () => {
+			leaveCheckout(uuid);
+			if (tenderFlow && screenSize === 'sm') router.replace('/cart');
+		};
 
 		try {
-			await pushDocument(currentOrderRecord).then((savedDoc) => {
-				if (savedDoc) {
-					// Re-checked after the await: the worker can die mid-push, and
-					// opening the payment modal then would let the cashier take money
-					// for an order this device can no longer record.
-					if (blockIfDegraded('checkout', { orderId: currentOrderRecord.uuid })) {
-						return;
-					}
-
-					// Log checkout started
-					orderLogger.info(t('pos_cart.checkout_started'), {
-						context: {
-							total,
-							lineItemCount: lineItems?.length ?? 0,
+			const result = tenderFlow
+				? await save(currentOrderRecord, {
+						// Late, so the cashier may be on another order by now: release this
+						// one's checkout and say why, but never navigate — on a phone the
+						// modal for THIS order renders the refusal itself if it is still open.
+						onLateRejected: (rejection) => {
+							leaveCheckout(uuid);
+							showRefusal(rejection);
 						},
-					});
-
-					router.push({
-						pathname: '/(app)/(drawer)/(pos)/(modals)/cart/[orderId]/checkout',
-						params: { orderId: currentOrderRecord.uuid },
-					});
+					})
+				: null;
+			if (result?.outcome === 'queued-offline') return;
+			if (result?.outcome === 'rejected') {
+				abandon();
+				showRefusal(result.rejection);
+				return;
+			}
+			const savedDoc =
+				result?.outcome === 'saved' ? result.resident : await pushDocument(currentOrderRecord);
+			if (savedDoc) {
+				// Re-checked after the await: the worker can die mid-push, and
+				// enabling tender then would let the cashier take money
+				// for an order this device can no longer record.
+				if (blockIfDegraded('checkout', { orderId: currentOrderRecord.uuid })) {
+					abandon();
+					return;
 				}
-			});
+
+				// Log checkout started
+				orderLogger.info(t('pos_cart.checkout_started'), {
+					context: {
+						total,
+						lineItemCount: lineItems?.length ?? 0,
+					},
+				});
+				if (!tenderFlow) router.push(sheetRoute);
+			} else {
+				abandon();
+			}
 		} catch (error) {
+			abandon();
+			if (tenderFlow) return;
 			const errorMessage = getErrorMessage(error);
 			orderLogger.error('Checkout failed', {
 				showToast: true,
@@ -84,9 +156,22 @@ export function PayButton() {
 				},
 			});
 		} finally {
+			if (!tenderFlow) clearOrderSaving(uuid);
 			setLoading(false);
 		}
-	}, [blockIfDegraded, pushDocument, currentOrderRecord, lineItems, router, t, total]);
+	}, [
+		blockIfDegraded,
+		pushDocument,
+		save,
+		currentOrderRecord,
+		lineItems,
+		router,
+		screenSize,
+		loaded,
+		unsupportedSchema,
+		t,
+		total,
+	]);
 
 	/**
 	 *

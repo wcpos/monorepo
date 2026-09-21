@@ -1,0 +1,21 @@
+appId: com.wcpos.main.dev
+---
+- evalScript: ${output.cartAddRetried = false}
+# Read before the action so a stale result or the existing re-add recovery cannot pass.
+- runFlow:
+    when:
+      visible:
+        id: 'pos-tab-cart'
+    commands:
+      - tapOn:
+          id: 'pos-tab-cart'
+- copyTextFrom:
+    id: 'e2e-cart-add-timing'
+- evalScript: ${output.cartAddSequence = JSON.parse(maestro.copiedText).sequence}
+- runFlow:
+    when:
+      visible:
+        id: 'pos-tab-products'
+    commands:
+      - tapOn:
+          id: 'pos-tab-products'

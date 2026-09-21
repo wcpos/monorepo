@@ -4,13 +4,17 @@ import {
 	BT_CONNECT_TIMEOUT_MS,
 	BT_DISCOVERY_TIMEOUT_MS,
 	createBluetoothScanSession,
+	requestKnownBluetoothDevice,
 } from './bluetooth-scan-session';
 
 import type { PosConnectedDevice } from '../types/point-of-sale-connectors';
 
 describe('createBluetoothScanSession', () => {
 	beforeEach(() => vi.useFakeTimers());
-	afterEach(() => vi.useRealTimers());
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+	});
 
 	const device = { type: 'bluetooth', id: 'dev-1', name: 'TM-P20' } as PosConnectedDevice;
 
@@ -150,6 +154,55 @@ describe('createBluetoothScanSession', () => {
 		// The machine is reusable after the failure.
 		session.start();
 		expect(session.isActive()).toBe(false); // throws again, ends again
+	});
+
+	it('an async chooser rejection cancels only while discovery is pending', async () => {
+		const sendSelection = vi.fn();
+		const session = createBluetoothScanSession(
+			{ sendSelection, startChooser: () => Promise.reject(new Error('Chooser failed')) },
+			{ onScanningChange: vi.fn(), onError: vi.fn(), onConnected: vi.fn() }
+		);
+
+		session.start();
+		await Promise.resolve();
+
+		expect(sendSelection).toHaveBeenCalledOnce();
+		expect(sendSelection).toHaveBeenCalledWith('');
+	});
+
+	it('an async chooser rejection after selection does not cancel the chooser again', async () => {
+		let rejectChooser: (reason: Error) => void = () => {};
+		const sendSelection = vi.fn();
+		const session = createBluetoothScanSession(
+			{
+				sendSelection,
+				startChooser: () =>
+					new Promise<void>((_resolve, reject) => {
+						rejectChooser = reject;
+					}),
+			},
+			{ onScanningChange: vi.fn(), onError: vi.fn(), onConnected: vi.fn() }
+		);
+
+		session.start();
+		session.select('dev-1');
+		rejectChooser(new Error('Chooser failed'));
+		await Promise.resolve();
+
+		expect(sendSelection).toHaveBeenCalledOnce();
+		expect(sendSelection).toHaveBeenCalledWith('dev-1');
+	});
+
+	it('requestKnownBluetoothDevice rejects a chooser result for another device', async () => {
+		vi.stubGlobal('navigator', {
+			bluetooth: {
+				requestDevice: vi.fn().mockResolvedValue({ id: 'other-printer' }),
+			},
+		});
+
+		await expect(
+			requestKnownBluetoothDevice('saved-printer', { acceptAllDevices: true, optionalServices: [] })
+		).rejects.toThrow('Selected Bluetooth device other-printer is not the saved printer');
 	});
 
 	it('select() when idle does nothing', () => {

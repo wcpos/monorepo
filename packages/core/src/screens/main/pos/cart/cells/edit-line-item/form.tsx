@@ -6,7 +6,13 @@ import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
+import {
+	DialogAction,
+	DialogBody,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -129,7 +135,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 	 */
 	return (
 		<Form {...form}>
-			<VStack className="gap-4">
+			<DialogBody contentContainerClassName="gap-4">
 				<FormErrors />
 				<FormField
 					control={form.control}
@@ -265,11 +271,11 @@ export function EditLineItemForm({ uuid, item }: Props) {
 					</>
 				)}
 				<MetaDataForm withDisplayValues />
-				<DialogFooter className="px-0">
-					<DialogClose>{t('common.close')}</DialogClose>
-					<DialogAction onPress={onSave}>{t('common.save')}</DialogAction>
-				</DialogFooter>
-			</VStack>
+			</DialogBody>
+			<DialogFooter>
+				<DialogClose>{t('common.close')}</DialogClose>
+				<DialogAction onPress={onSave}>{t('common.save')}</DialogAction>
+			</DialogFooter>
 		</Form>
 	);
 }

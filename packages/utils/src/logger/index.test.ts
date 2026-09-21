@@ -1,5 +1,7 @@
+import * as sentrySink from './sentry-sink';
 import {
 	CategoryLogger,
+	foldLogSearchText,
 	getLogger,
 	log,
 	promoteRecorder,
@@ -42,10 +44,7 @@ function createLogCollection() {
 		success: bulkRows.map(addRow),
 		error: [],
 	}));
-	const find = jest.fn((query: Record<string, unknown>) => {
-		if (query.selector) return { remove: jest.fn().mockResolvedValue([]) };
-		return { exec: jest.fn().mockResolvedValue(rows) };
-	});
+	const find = jest.fn((query: Record<string, unknown>) => ({ getPreparedQuery: () => query }));
 
 	return {
 		rows,
@@ -54,6 +53,7 @@ function createLogCollection() {
 			bulkInsert,
 			find,
 			bulkRemove: jest.fn().mockResolvedValue(undefined),
+			storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 		},
 	};
 }
@@ -63,6 +63,53 @@ async function flushWrites() {
 }
 
 describe('logger/index', () => {
+	it('persists bounded actors, omits empty actors, and separates cashiers', async () => {
+		const { collection, rows } = createLogCollection();
+		setDatabase(collection);
+		const options = { context: { type: 'payment.recorded' }, terminal: { operationId: 'payment' } };
+		log.info('Payment recorded', { ...options, actor: { id: '7', name: 'Pat' } });
+		log.info('Payment recorded', { ...options, actor: { id: '8', name: 'Sam' } });
+		log.info('Payment recorded', { ...options, actor: { id: '7', name: 'Pat' } });
+		log.info('Empty actor', { actor: { id: '', role: '', name: '' } });
+		log.info('Long actor', {
+			actor: { id: 'i'.repeat(80), role: 'r'.repeat(80), name: 'n'.repeat(80) },
+		});
+		await flushWrites();
+		expect(rows).toHaveLength(4);
+		expect(rows[0]).toMatchObject({ actor: { id: '7', name: 'Pat' }, count: 2 });
+		expect(rows[1]).toMatchObject({ actor: { id: '8', name: 'Sam' }, count: 1 });
+		expect(rows[2]).not.toHaveProperty('actor');
+		expect(rows[3].actor).toEqual({
+			id: 'i'.repeat(64),
+			role: 'r'.repeat(64),
+			name: 'n'.repeat(64),
+		});
+		setDatabase(null);
+	});
+
+	it('keeps the actor when promoting narration, without sending it to Sentry', async () => {
+		const capture = jest.spyOn(sentrySink, 'captureLoggedError');
+		const { collection, rows } = createLogCollection();
+		setDatabase(collection);
+		setVerboseDiagnostics(false);
+		log.debug('Narration', { actor: { id: '7', name: 'n'.repeat(80) } });
+		await promoteRecorder('test');
+		expect(rows[0].actor).toEqual({ id: '7', name: 'n'.repeat(64) });
+		log.error('Checkout failed', {
+			code: 'CHECKOUT999',
+			actor: { id: '7', name: 'Private cashier' },
+			context: { orderId: 42 },
+		});
+		expect(capture).toHaveBeenCalledWith({
+			message: 'Checkout failed',
+			code: 'CHECKOUT999',
+			context: { orderId: 42, errorCode: 'CHECKOUT999' },
+		});
+		await flushWrites();
+		capture.mockRestore();
+		setDatabase(null);
+	});
+
 	describe('module initialization', () => {
 		it('uses production behavior when the Metro __DEV__ global is unavailable', async () => {
 			const devDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
@@ -380,39 +427,24 @@ describe('logger/index', () => {
 				insert: jest.fn(),
 				find: jest
 					.fn()
-					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
 					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
 				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 			};
 			expect(() => setDatabase(mockCollection)).not.toThrow();
 		});
 
 		it('should prune log entries older than 30 days on bind', async () => {
-			const mockRemove = jest.fn().mockResolvedValue([{ id: '1' }, { id: '2' }]);
-			const mockFind = jest
-				.fn()
-				.mockReturnValueOnce({ remove: mockRemove })
-				.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
-			const mockCollection = {
-				insert: jest.fn(),
-				find: mockFind,
-				bulkRemove: jest.fn(),
-			};
-
-			let freshSetDatabase: typeof setDatabase;
-			jest.isolateModules(() => {
-				freshSetDatabase = require('./index').setDatabase;
+			const { collection } = createLogCollection();
+			collection.storageInstance.query.mockResolvedValueOnce({
+				documents: [{ logId: 'expired', timestamp: 1, sizeBytes: 100 }],
 			});
 
-			freshSetDatabase!(mockCollection);
+			setDatabase(collection);
+			await flushWrites();
 
-			// Let the microtask (find().remove().then()) settle
-			await Promise.resolve();
-
-			expect(mockFind).toHaveBeenCalledWith({
-				selector: { timestamp: { $lt: expect.any(Number) } },
-			});
-			expect(mockRemove).toHaveBeenCalled();
+			expect(collection.bulkRemove).toHaveBeenCalledWith(['expired']);
 		});
 
 		it('drops a deferred write when the database binding changes', async () => {
@@ -434,9 +466,10 @@ describe('logger/index', () => {
 				insert,
 				find: jest
 					.fn()
-					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
 					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
 				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 			});
 
 			getLogger(['wcpos', 'pos', 'cart']).info('Cart line item updated', {
@@ -444,6 +477,11 @@ describe('logger/index', () => {
 					event: 'cart.line-item.updated',
 					orderID: 2468,
 					orderNumber: '67882',
+					movementId: 'movement-search-id',
+					voids: 'original-movement-search-id',
+					previousRegisterId: 'previous-register-search-id',
+					approvedBy: 'approver-search-id',
+					closureId: 'closure-search-id',
 					productName: 'Diagnostic Coffee',
 					previousQuantity: 1,
 					quantity: 3,
@@ -460,6 +498,14 @@ describe('logger/index', () => {
 			const [{ context }] = insert.mock.calls[0];
 			expect(context.search).toContain('2468');
 			expect(context.search).toContain('67882');
+			expect(context.search).toContain('movement-search-id');
+			expect(context.search).toContain('original-movement-search-id');
+			expect(context.fold).toContain('original-movement-search-id');
+			expect(context.search).toContain('previous-register-search-id');
+			expect(context.fold).toContain('previous-register-search-id');
+			expect(context.search).toContain('approver-search-id');
+			expect(context.fold).toContain('approver-search-id');
+			expect(context.search).toContain('closure-search-id');
 			expect(context.search).toContain('Diagnostic Coffee');
 			expect(context.search).toContain('1');
 			expect(context.search).toContain('3');
@@ -470,6 +516,34 @@ describe('logger/index', () => {
 			expect(context.search).toContain('201');
 			expect(context.search).toContain('wcpos.pos.cart');
 			expect(context.search).not.toContain('must not be copied');
+			// The folded blob the Logs screen scans: message + code + search, folded.
+			expect(context.fold).toContain('cart line item updated');
+			expect(context.fold).toContain('diagnostic coffee');
+			expect(context.fold).not.toContain('must not be copied');
+		});
+
+		it('folds accents, case and normal form into context.fold at write time', async () => {
+			const insert = jest.fn().mockResolvedValue(undefined);
+			setDatabase({
+				insert,
+				find: jest
+					.fn()
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
+					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
+				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
+			});
+
+			getLogger(['wcpos', 'http']).warn('Conexión rechazada: Kelvin İstanbul', {
+				context: { errorCode: 'HTTP101', error: 'Σύνδεση απέτυχε' },
+			});
+			await Promise.resolve();
+
+			const [{ context }] = insert.mock.calls[0];
+			expect(context.fold).toBe(foldLogSearchText(context.fold)); // already in fold space
+			expect(context.fold).toContain('conexion rechazada');
+			expect(context.fold).toContain('συνδεση απετυχε');
+			expect(context.fold).toContain('kelvin');
 		});
 
 		it('includes collection, type and lane in the search string', async () => {
@@ -478,9 +552,10 @@ describe('logger/index', () => {
 				insert,
 				find: jest
 					.fn()
-					.mockReturnValueOnce({ remove: jest.fn().mockResolvedValue([]) })
+					.mockReturnValueOnce({ getPreparedQuery: () => ({}) })
 					.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }),
 				bulkRemove: jest.fn(),
+				storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 			});
 
 			getLogger(['wcpos', 'sync']).info('Applied sync changes', {
@@ -575,6 +650,19 @@ describe('logger/index', () => {
 
 			await expect(promoteRecorder('test')).resolves.toBe(1);
 			expect(snapshotRecorder()).toEqual([expect.objectContaining({ message: 'First step' })]);
+		});
+
+		it('promoted recorder rows carry the same searchable and folded columns as live rows (review)', async () => {
+			const { collection } = createLogCollection();
+			setDatabase(collection);
+			getLogger(['sync']).debug('Conexión reintentada', { context: { errorCode: 'HTTP101' } });
+
+			await expect(promoteRecorder('test')).resolves.toBe(1);
+			const [rows] = collection.bulkInsert.mock.calls[0];
+			expect(rows[0].context.search).toContain('HTTP101');
+			expect(rows[0].context.fold).toContain('conexion reintentada');
+			expect(rows[0].context.fold).toContain('http101');
+			expect(rows[0].context._promotedBy).toBe('test');
 		});
 
 		it('serializes overlapping recorder promotions', async () => {
@@ -1136,6 +1224,46 @@ describe('logger/index', () => {
 			expect(rows).toHaveLength(2);
 		});
 
+		it('keeps the searchable and folded columns when an oversized context is truncated (review)', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['wcpos', 'http']).info('Conexión rechazada', {
+				// Just under the cap on its own, so only the appended columns push it over.
+				context: { payload: 'x'.repeat(16 * 1024 - 100), endpoint: '/wp-json/wcpos/v2/orders' },
+			});
+			await flushWrites();
+
+			// Admission truncates in insertion order, so the payload is the casualty,
+			// never the columns the Logs screen scans.
+			expect(rows[0].context).toMatchObject({ payload: '[truncated]', _truncated: true });
+			expect(rows[0].context.search).toContain('/wp-json/wcpos/v2/orders');
+			expect(rows[0].context.fold).toContain('conexion rechazada');
+			expect(rows[0].context.fold).toContain('/wp-json/wcpos/v2/orders');
+			expect(
+				new TextEncoder().encode(JSON.stringify(rows[0].context)).byteLength
+			).toBeLessThanOrEqual(16 * 1024);
+		});
+
+		it('keeps folded search when a large whitelisted value fills both derived columns (review)', async () => {
+			const { rows, collection } = createLogCollection();
+			setDatabase(collection);
+
+			getLogger(['wcpos', 'http']).info('Conexión rechazada', {
+				context: { reason: 'y'.repeat(8300) },
+			});
+			await flushWrites();
+
+			expect(rows[0].context.fold).not.toBe('[truncated]');
+			expect(rows[0].context.fold).toBeDefined();
+			expect(rows[0].context.fold).toContain('conexion rechazada');
+			expect(rows[0].context.search).not.toBe('[truncated]');
+			expect(rows[0].context.search).toBeDefined();
+			expect(
+				new TextEncoder().encode(JSON.stringify(rows[0].context)).byteLength
+			).toBeLessThanOrEqual(16 * 1024);
+		});
+
 		it('truncates oversized context and records the serialized row size', async () => {
 			const { rows, collection } = createLogCollection();
 			setDatabase(collection);
@@ -1269,6 +1397,7 @@ describe('flight recorder promotion backoff (#163)', () => {
 				exec: jest.fn().mockResolvedValue([]),
 			})),
 			bulkRemove: jest.fn().mockResolvedValue(undefined),
+			storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 		};
 	}
 
@@ -1366,6 +1495,7 @@ describe('flight recorder promotion backoff — review findings (#163)', () => {
 				exec: jest.fn().mockResolvedValue([]),
 			})),
 			bulkRemove: jest.fn().mockResolvedValue(undefined),
+			storageInstance: { query: jest.fn().mockResolvedValue({ documents: [] }) },
 		};
 	}
 

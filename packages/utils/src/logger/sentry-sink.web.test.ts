@@ -21,8 +21,13 @@ Object.defineProperty(globalThis, 'window', {
 	},
 });
 
-const { buildCaptureOptions, captureLoggedError, scrubEvent, setTelemetryConsent } =
-	jest.requireActual<typeof import('./sentry-sink.web')>('./sentry-sink.web');
+const {
+	buildCaptureOptions,
+	captureLoggedError,
+	messageTemplate,
+	scrubEvent,
+	setTelemetryConsent,
+} = jest.requireActual<typeof import('./sentry-sink.web')>('./sentry-sink.web');
 const sentryInitCallsOnImport = jest.mocked(Sentry.init).mock.calls.length;
 
 describe('sentry-sink.web', () => {
@@ -54,11 +59,52 @@ describe('sentry-sink.web', () => {
 		expect(Sentry.setUser).toHaveBeenCalledWith({ id: 'new-install-id' });
 	});
 
-	it('does not capture errors before tracking is allowed', () => {
+	it('does not capture errors before tracking is allowed, and discards them when it is denied', () => {
 		captureLoggedError({ message: 'Checkout failed' });
 
 		expect(Sentry.captureException).not.toHaveBeenCalled();
 		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+
+		setTelemetryConsent('denied');
+		setTelemetryConsent('allowed');
+		expect(Sentry.captureMessage).not.toHaveBeenCalled();
+	});
+
+	it('holds errors logged before consent is known and sends them once it is allowed', () => {
+		// The #2112 timing: a render error in the first commit, before the root
+		// layout's effect has read the store's consent and initialised the sink.
+		const thrown = new Error('useStoreSession must be called within an active store session');
+		captureLoggedError({
+			message: `Render failed: ${thrown.message}`,
+			code: 'CLIENT151',
+			context: { type: 'render.error', error: thrown, message: thrown.message },
+		});
+		captureLoggedError({ message: 'Second, uncoded' });
+		expect(Sentry.captureException).not.toHaveBeenCalled();
+
+		setTelemetryConsent('allowed');
+
+		expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+		expect(Sentry.captureException).toHaveBeenCalledWith(
+			thrown,
+			expect.objectContaining({ fingerprint: ['CLIENT151', thrown.message] })
+		);
+		expect(Sentry.captureMessage).toHaveBeenCalledWith('Second, uncoded', expect.anything());
+		// Sent once: a later re-consent must not replay them.
+		setTelemetryConsent('undecided');
+		setTelemetryConsent('allowed');
+		expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps only the newest held captures', () => {
+		for (let index = 0; index < 25; index += 1) {
+			captureLoggedError({ message: `held ${index}` });
+		}
+		setTelemetryConsent('allowed');
+
+		expect(Sentry.captureMessage).toHaveBeenCalledTimes(20);
+		expect(jest.mocked(Sentry.captureMessage).mock.calls[0][0]).toBe('held 5');
+		expect(jest.mocked(Sentry.captureMessage).mock.calls[19][0]).toBe('held 24');
 	});
 
 	it('closes Sentry and forgets the install id when tracking is denied', () => {
@@ -95,6 +141,18 @@ describe('sentry-sink.web', () => {
 		expect(event.request?.url).toBe('/checkout?access_token=[REDACTED]&order=42');
 	});
 
+	it('redacts credentials from the message and exception values that become the title', () => {
+		const event = scrubEvent({
+			message: 'Login failed: Bearer abc.def.ghi for https://user:pw@merchant.example/wp-json',
+			exception: { values: [{ value: 'token=abcdef123456 rejected' }] },
+		});
+
+		expect(event.message).toBe(
+			'Login failed: Bearer [REDACTED] for https://[REDACTED]@merchant.example/wp-json'
+		);
+		expect(event.exception?.values?.[0].value).toBe('token=[REDACTED] rejected');
+	});
+
 	it('removes store origins from nested extra context urls', () => {
 		const event = scrubEvent({
 			extra: {
@@ -125,6 +183,144 @@ describe('sentry-sink.web', () => {
 		expect(buildCaptureOptions({ message: 'Uncoded error' })).toEqual({
 			level: 'error',
 			extra: { message: 'Uncoded error', context: undefined },
+		});
+	});
+
+	it.each([
+		['Order 123 failed', 'Order {} failed'],
+		['Product 123e4567-e89b-12d3-a456-426614174000 failed', 'Product {} failed'],
+		['Product "Blue shirt" failed', 'Product {} failed'],
+		["Product 'Blue shirt' failed", 'Product {} failed'],
+	])('templates %s', (message, expected) => {
+		expect(messageTemplate(message)).toBe(expected);
+	});
+
+	it('separates catch-all messages but preserves specific-code grouping', () => {
+		const fingerprints = ['Barcode lookup failed', 'Stock refresh failed'].map(
+			(message) => buildCaptureOptions({ message, code: 'PRODUCT999' }).fingerprint
+		);
+		expect(fingerprints).toEqual([
+			['PRODUCT999', 'Barcode lookup failed'],
+			['PRODUCT999', 'Stock refresh failed'],
+		]);
+		expect(
+			buildCaptureOptions({ message: 'Order 123 failed', code: 'AUTH201' }).fingerprint
+		).toEqual(['AUTH201']);
+	});
+
+	it('normalises merchant origins so one failure class is one issue, not one per store', () => {
+		expect(messageTemplate('Failed to connect to https://shop.example.com/wp-json/: timeout')).toBe(
+			'Failed to connect to {}/wp-json/: timeout'
+		);
+		expect(
+			buildCaptureOptions({
+				message: 'Failed to connect to https://a.example.com/wp-json/: timeout',
+				code: 'AUTH999',
+			}).fingerprint
+		).toEqual(
+			buildCaptureOptions({
+				message: 'Failed to connect to https://b.example.org/wp-json/: timeout',
+				code: 'AUTH999',
+			}).fingerprint
+		);
+	});
+
+	it('groups HTTP failures by method and endpoint template, whatever the code', () => {
+		const products = buildCaptureOptions({
+			message: 'HTTP request failed: GET /wp-json/wcpos/v2/products',
+			code: 'SYNC131',
+			context: { method: 'GET', endpoint: '/wp-json/wcpos/v2/products', status: 503 },
+		}).fingerprint;
+		const orders = buildCaptureOptions({
+			message: 'HTTP request failed: GET /wp-json/wcpos/v2/orders/12',
+			code: 'SYNC131',
+			context: { method: 'GET', endpoint: '/wp-json/wcpos/v2/orders/12', status: 503 },
+		}).fingerprint;
+		const orders2 = buildCaptureOptions({
+			message: 'HTTP request failed: GET /wp-json/wcpos/v2/orders/99',
+			code: 'SYNC131',
+			context: { method: 'GET', endpoint: '/wp-json/wcpos/v2/orders/99', status: 503 },
+		}).fingerprint;
+		expect(products).toEqual(['SYNC131', 'GET', '/wp-json/wcpos/v2/products']);
+		expect(products).not.toEqual(orders);
+		expect(orders).toEqual(orders2);
+	});
+
+	it('groups push rejections by collection, status and server reason, not by record', () => {
+		const push = (collection: string, recordId: string, status: number, reason?: string) =>
+			buildCaptureOptions({
+				message: `${collection} ${recordId} — push failed (HTTP ${status}${reason ? `: ${reason}` : ''})`,
+				code: 'SYNC201',
+				context: { type: 'push.error', collection, op: 'create', recordId, status, reason },
+			}).fingerprint;
+		const emailA = push('customers', 'ef72631f', 400, 'registration-error-email-exists');
+		const emailB = push('customers', '0b85f3f8', 400, 'registration-error-email-exists');
+		const coupon = push('orders', '3599cd24', 400, 'woocommerce_rest_invalid_coupon');
+		expect(emailA).toEqual(['SYNC201', 'customers', '400', 'registration-error-email-exists']);
+		expect(emailA).toEqual(emailB);
+		expect(emailA).not.toEqual(coupon);
+		// A bare 5xx with no server reason still groups by collection + status.
+		expect(push('orders', '3599cd24', 503)).toEqual(['SYNC201', 'orders', '503', '']);
+	});
+
+	it('groups a boundary-caught render error by its message, not by the screen that threw', () => {
+		const message = 'useStoreSession must be called within an active store session';
+		const capture = (componentStack: string) =>
+			buildCaptureOptions({
+				message: `Render failed: ${message}`,
+				code: 'CLIENT151',
+				context: { type: 'render.error', message, componentStack },
+			});
+		const appLayout = capture('\n    at AppLayout\n    at RootStack');
+		const header = capture('\n    at Header\n    at PosScreen');
+
+		expect(appLayout.fingerprint).toEqual(['CLIENT151', message]);
+		expect(appLayout.fingerprint).toEqual(header.fingerprint);
+		// The stack lands where Sentry renders it, as well as in `extra`.
+		expect(appLayout.contexts).toEqual({
+			react: { componentStack: '\n    at AppLayout\n    at RootStack' },
+		});
+	});
+
+	it('keeps quoted identifiers in a render-error fingerprint but folds record noise', () => {
+		const render = (message: string) =>
+			buildCaptureOptions({
+				message: `Render failed: ${message}`,
+				code: 'CLIENT151',
+				context: { type: 'render.error', message },
+			}).fingerprint;
+
+		// A property name is the bug's identity; the shared template would fold
+		// every undefined-property read in the app into one issue.
+		expect(render("Cannot read properties of undefined (reading 'name')")).not.toEqual(
+			render("Cannot read properties of undefined (reading 'price')")
+		);
+		expect(render("Cannot read properties of undefined (reading 'price')")).toEqual([
+			'CLIENT151',
+			"Cannot read properties of undefined (reading 'price')",
+		]);
+		// Merchant data in quotes is per-record noise and must never be a grouping key.
+		expect(render("Customer 'jane@example.com' has no orders")).toEqual(
+			render("Customer 'Bob Smith' has no orders")
+		);
+		expect(render('Order 12 has no line 3')).toEqual(render('Order 99 has no line 4'));
+		expect(render('Fetch https://a.example.com/x failed')).toEqual(
+			render('Fetch https://b.example.org/x failed')
+		);
+	});
+
+	it('scrubs merchant origins out of the React component stack, in both places it is sent', () => {
+		const componentStack = '\n    at Header (https://shop.example.com/wp-content/pos.js:10:5)';
+		const event = scrubEvent({
+			contexts: { react: { componentStack } },
+			extra: { message: 'Render failed: x', context: { type: 'render.error', componentStack } },
+		});
+		expect(event.contexts).toEqual({
+			react: { componentStack: '\n    at Header ({}/wp-content/pos.js:10:5)' },
+		});
+		expect(event.extra?.context).toEqual({
+			type: 'render.error',
+			componentStack: '\n    at Header ({}/wp-content/pos.js:10:5)',
 		});
 	});
 

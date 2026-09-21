@@ -27,6 +27,7 @@ export type UISettingState<T extends UISettingID> = import('rxdb').RxState<UISet
  */
 const ENUM_VOCABULARIES: Partial<Record<UISettingID, Record<string, readonly string[]>>> = {
 	'pos-products': { position: ['left', 'right'] },
+	'pos-cart': { openOrdersPosition: ['top', 'bottom'] },
 };
 
 /**

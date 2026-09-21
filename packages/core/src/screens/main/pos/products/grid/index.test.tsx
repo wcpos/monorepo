@@ -3,13 +3,14 @@
  */
 import * as React from 'react';
 
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
 import { ProductGrid } from './index';
 
 let mockResult: { hits: object[] };
+const mockGuard = jest.fn();
 
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
@@ -20,7 +21,10 @@ jest.mock('observable-hooks', () => ({
 	useObservableSuspense: () => mockResult,
 }));
 jest.mock('../../../../../query', () => ({
-	useGuardedExtendLimit: () => jest.fn(),
+	useGuardedExtendLimit: (...args: unknown[]) => {
+		mockGuard(...args);
+		return jest.fn();
+	},
 }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../contexts/ui-settings', () => ({
@@ -31,13 +35,22 @@ jest.mock('../../../contexts/ui-settings', () => ({
 jest.mock('../../../contexts/tax-rates', () => ({ useTaxSettings: () => ({ calcTaxes: false }) }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Root: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	List: () => null,
+	List: ({ ListFooterComponent }: { ListFooterComponent?: React.ReactNode }) => (
+		<div>{ListFooterComponent}</div>
+	),
 	Item: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
-jest.mock('./grid-footer', () => ({ ProductGridFooter: () => null }));
+jest.mock('./grid-footer', () => ({
+	ProductGridFooter: ({ renderedCount, hitCount }: { renderedCount: number; hitCount: number }) => (
+		<>
+			<span data-testid="product-grid-footer-count">{renderedCount}</span>
+			<span data-testid="product-grid-footer-result-count">{hitCount}</span>
+		</>
+	),
+}));
 jest.mock('./product-tile', () => ({ ProductTile: () => null }));
 jest.mock('./variable-product-tile', () => ({ VariableProductTile: () => null }));
 jest.mock('../../../components/data-table/footer', () => ({ DataTableFooter: () => null }));
@@ -69,6 +82,9 @@ describe('ProductGrid stale-hit reporting', () => {
 		const { rerender } = render(<ProductGrid {...props} />);
 
 		await waitFor(() => expect(getLogger([]).warn).toHaveBeenCalledTimes(1));
+		expect(screen.getByTestId('product-grid-footer-count').textContent).toBe('0');
+		expect(screen.getByTestId('product-grid-footer-result-count').textContent).toBe('1');
+		expect(mockGuard).toHaveBeenLastCalledWith(props.actions.extendLimit, 1, props.binding);
 		mockResult = { hits: [staleHit('second')] };
 		rerender(<ProductGrid {...props} />);
 

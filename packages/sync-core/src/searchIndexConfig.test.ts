@@ -22,11 +22,16 @@ describe('foldSearchText', () => {
 
 describe('encodeSearchText', () => {
 	it('splits on whitespace and drops empty strings', () => {
-		expect(encodeSearchText('  Blue   Cotton\tShirt  ')).toEqual(['blue', 'cotton', 'shirt']);
+		expect(encodeSearchText('  Blue\u00a0Cotton\u3000Shirt\t ')).toEqual([
+			'blue',
+			'cotton',
+			'shirt',
+		]);
 	});
 
 	it('keeps a decimal spec as one term instead of two sub-minimum digits', () => {
 		expect(encodeSearchText('0.4')).toEqual(['0.4']);
+		expect(encodeSearchText('0,4')).toEqual(['0,4']);
 		expect(encodeSearchText('ModelX 0.4')).toEqual(['modelx', '0.4']);
 	});
 
@@ -36,7 +41,7 @@ describe('encodeSearchText', () => {
 		expect(encodeSearchText("O'Reilly")).toEqual(["o'reilly"]);
 	});
 
-	it('strips punctuation wrapping a term, as WP_Query::parse_search_terms strips quotes', () => {
+	it('strips punctuation wrapping a term', () => {
 		expect(encodeSearchText("'0.4'")).toEqual(['0.4']);
 		expect(encodeSearchText('(Château-du) Cèdre!')).toEqual(['chateau-du', 'cedre']);
 		expect(encodeSearchText('--- ...')).toEqual([]);
@@ -54,7 +59,8 @@ describe('encodeSearchText', () => {
 		]);
 	});
 
-	it('splits where WP_Query::parse_search splits: quotes, commas, and plus signs', () => {
-		expect(encodeSearchText('modelX,0.4+"coil"')).toEqual(['modelx', '0.4', 'coil']);
+	it('keeps internal quotes, commas, and plus signs literal', () => {
+		expect(encodeSearchText('a,b')).toEqual(['a,b']);
+		expect(encodeSearchText('a"b c+d')).toEqual(['a"b', 'c+d']);
 	});
 });

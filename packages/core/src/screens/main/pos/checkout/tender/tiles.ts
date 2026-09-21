@@ -1,12 +1,82 @@
-import { KNOWN_CAPTURE_MODES, type PaymentMethodDescriptor } from '@wcpos/order-math';
+import {
+	KNOWN_CAPTURE_MODES,
+	type PaymentMethodDescriptor,
+	type PaymentTransport,
+} from '@wcpos/order-math';
+
+import { getDriver } from '../../../../../services/payment-drivers/registry';
+
+export function deviceTransports(method: PaymentMethodDescriptor | null) {
+	const hardware = method?.capture.hardware;
+	return hardware && 'transports' in hardware
+		? hardware.transports.filter((item): item is typeof item & { transport: PaymentTransport } =>
+				['bluetooth', 'usb', 'network', 'tap_to_pay'].includes(item.transport)
+			)
+		: [];
+}
+
 /** Why a tile cannot be tapped. The UI turns each into a cashier-facing line. */
 export type TileDisabledReason =
 	/** The descriptor names a capture mode this build has never heard of. */
 	| 'unsupported_mode'
-	/** A known mode whose driver has not shipped yet: device, server, stored_value. */
+	/** A known mode whose driver has not shipped yet: device, stored_value. */
 	| 'no_driver'
+	| 'driver_web'
+	| 'driver_permission'
+	| 'driver_bluetooth_off'
+	| 'driver_not_logged_in'
 	/** The method needs the network and the till is offline. */
-	| 'offline';
+	| 'offline'
+	| 'no_readers'
+	| { type: 'reader_in_use'; number: string };
+
+type ReadersInUse = ReadonlyMap<string, { orderUuid: string; orderNumber: string }>;
+export function selectableReaders(
+	method: PaymentMethodDescriptor | null,
+	readersInUse: ReadersInUse = new Map(),
+	currentOrderUuid?: string
+) {
+	const hardware = method?.capture.hardware;
+	const lockToDefault = Boolean(
+		method?.capture.mode === 'server' &&
+		hardware &&
+		'readers' in hardware &&
+		hardware.lock_to_default
+	);
+	const readers =
+		method?.capture.mode === 'server' && hardware && 'readers' in hardware
+			? hardware.readers
+					.filter(
+						(reader) =>
+							reader.status === 'online' &&
+							(!lockToDefault || reader.id === hardware.default_reader)
+					)
+					.map((reader) => {
+						const holder = readersInUse.get(reader.id);
+						return {
+							id: reader.id,
+							label: reader.label,
+							isDefault: reader.id === hardware.default_reader || reader.default,
+							inUseBy: holder && holder.orderUuid !== currentOrderUuid ? holder.orderNumber : null,
+						};
+					})
+			: [];
+	return { readers, lockToDefault };
+}
+
+/** The till's last confirmed choice wins unless the store has locked its default. */
+export function initialReaderId(
+	readers: readonly ReturnType<typeof selectableReaders>['readers'][number][],
+	lockToDefault: boolean,
+	remembered: string | null
+): string | null {
+	if (lockToDefault) return readers.find((reader) => reader.isDefault)?.id ?? null;
+	return (
+		readers.find((reader) => reader.id === remembered && reader.inUseBy === null)?.id ??
+		readers.find((reader) => reader.isDefault && reader.inUseBy === null)?.id ??
+		null
+	);
+}
 
 export interface TenderTile {
 	method: PaymentMethodDescriptor;
@@ -14,6 +84,7 @@ export interface TenderTile {
 	reason: TileDisabledReason | null;
 	/** capabilities.offline === 'record' — the tile carries a "works offline" flag. */
 	worksOffline: boolean;
+	settlesLater?: boolean;
 }
 /** The order the POS settings page assigns, then title, so the grid never reshuffles itself. */
 function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDescriptor): number {
@@ -23,21 +94,57 @@ function byOrderThenTitle(left: PaymentMethodDescriptor, right: PaymentMethodDes
 
 export function buildTenderTiles(
 	methods: readonly PaymentMethodDescriptor[],
-	options: { online: boolean }
+	options: {
+		online: boolean;
+		readersInUse?: ReadersInUse;
+		currentOrderUuid?: string;
+		transports?: Record<string, PaymentTransport>;
+	}
 ): TenderTile[] {
 	return methods
 		.filter((method) => method.pos_enabled && method.capture.mode !== 'webview')
 		.sort(byOrderThenTitle)
 		.map((method) => {
 			let reason: TileDisabledReason | null = null;
+			const transport =
+				deviceTransports(method).find(
+					(item) => item.transport === options.transports?.[method.id]
+				) ?? deviceTransports(method)[0];
+			const settlesLater = method.capture.mode === 'device' && transport?.offline === 'queue';
 			if (!KNOWN_CAPTURE_MODES.some((mode) => mode === method.capture.mode)) {
 				reason = 'unsupported_mode';
-			} else if (
-				method.capture.mode === 'device' ||
-				method.capture.mode === 'server' ||
-				method.capture.mode === 'stored_value'
-			) {
+			} else if (method.capture.mode === 'device') {
+				const driver = getDriver(method.capture.provider);
+				const availability = driver?.availability();
+				const holder = options.readersInUse?.get(`device:${method.capture.provider}`);
+				if (
+					!driver ||
+					!transport ||
+					(!availability?.available && availability?.reason === 'unsupported')
+				)
+					reason = 'no_driver';
+				// SDK-owned login is reached through Connect Reader inside the selected tile.
+				else if (
+					availability &&
+					!availability.available &&
+					!(availability.reason === 'not_logged_in' && driver?.capabilities.discovery === 'sdk_ui')
+				)
+					reason = `driver_${availability.reason}` as TileDisabledReason;
+				else if (!options.online && !settlesLater) reason = 'offline';
+				else if (holder && holder.orderUuid !== options.currentOrderUuid)
+					reason = { type: 'reader_in_use', number: holder.orderNumber };
+			} else if (method.capture.mode === 'stored_value') {
 				reason = 'no_driver';
+			} else if (method.capture.mode === 'server') {
+				const { readers } = selectableReaders(
+					method,
+					options.readersInUse,
+					options.currentOrderUuid
+				);
+				if (!options.online) reason = 'offline';
+				else if (!readers.length) reason = 'no_readers';
+				else if (readers.every((reader) => reader.inUseBy !== null))
+					reason = { type: 'reader_in_use', number: readers[0].inUseBy! };
 			} else if (!options.online && method.capabilities.offline === 'none') {
 				reason = 'offline';
 			}
@@ -45,7 +152,8 @@ export function buildTenderTiles(
 				method,
 				disabled: reason !== null,
 				reason,
-				worksOffline: method.capabilities.offline === 'record',
+				settlesLater: !options.online && settlesLater,
+				worksOffline: method.capture.mode === 'manual' && method.capabilities.offline === 'record',
 			};
 		});
 }

@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import ResizablePOSColumns from '../app/(app)/(drawer)/(pos)/(columns)/index';
+
 // Reset at module scope to avoid jest-expo's winter-runtime "require outside test scope" error.
 jest.resetModules();
 
@@ -69,6 +71,51 @@ jest.mock(
 	() => jest.requireActual('../../../packages/core/src/screens/main/pos/register-panel-entries'),
 	{ virtual: true }
 );
+/**
+ * The wide layout now lives in `POSColumns` (wcpos/roadmap#165), reached through the same
+ * borrowed-symlink situation as the slots above: keep it REAL and pinned to this checkout.
+ * What it reaches for beyond the slot — the checkout mode, the tender column, the receipt
+ * stage, the current order, reanimated's native init — is not under test here.
+ */
+jest.mock(
+	'@wcpos/core/screens/main/pos/columns',
+	() => jest.requireActual('../../../packages/core/src/screens/main/pos/columns'),
+	{ virtual: true }
+);
+jest.mock('react-native-reanimated', () => {
+	const react = jest.requireActual('react');
+	return {
+		__esModule: true,
+		default: {
+			View: ({ children }: { children: React.ReactNode }) =>
+				react.createElement(react.Fragment, null, children),
+		},
+		FadeIn: { duration: () => ({}) },
+		FadeOut: { duration: () => ({}) },
+	};
+});
+jest.mock('../../../packages/core/src/screens/main/pos/contexts/current-order', () => ({
+	useCurrentOrder: () => ({
+		currentOrderRecord: { uuid: 'draft', isNew: true },
+		openOrders: [],
+		setCurrentOrderID: () => {},
+	}),
+}));
+jest.mock('../../../packages/core/src/screens/main/pos/checkout/checkout-mode', () => ({
+	useOrderCheckoutStage: () => 'cart',
+	useCheckoutMode: () => ({
+		checkoutOrders: new Set(),
+		receiptOrders: new Set(),
+		selectedReceiptOrder: null,
+	}),
+}));
+jest.mock('../../../packages/core/src/screens/main/pos/checkout/column/checkout-column', () => ({
+	CheckoutColumn: () => null,
+}));
+jest.mock(
+	'../../../packages/core/src/screens/main/pos/checkout/receipt-stage/receipt-stage',
+	() => ({ ReceiptStage: () => null })
+);
 jest.mock('@wcpos/core/screens/main/pos/products', () => ({ POSProducts: () => null }));
 jest.mock('../../../packages/core/src/screens/main/pos/products', () => ({
 	POSProducts: () => null,
@@ -107,8 +154,6 @@ jest.mock('@wcpos/components/panels', () => {
 		},
 	};
 });
-
-import ResizablePOSColumns from '../app/(app)/(drawer)/(pos)/(columns)/index';
 
 let view: ReactTestRenderer | undefined;
 

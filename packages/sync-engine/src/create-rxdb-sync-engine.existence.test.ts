@@ -61,7 +61,6 @@ function engine(
 		identity: identity(),
 		mode: 'manual',
 		fetch: (url, init) => fetcher?.(url, init) ?? Promise.reject(new Error(`unexpected ${url}`)),
-		routes: { '/changes/config-fingerprint': { fingerprints: {} } },
 		now,
 		diagnostics,
 		connectivitySignal: connectivity,
@@ -80,6 +79,137 @@ async function seed(
 afterEach(() => vi.restoreAllMocks());
 
 describe('existence maintenance lanes through the public facade', () => {
+	it.each([
+		['existence-prime', false],
+		['existence-prime', true],
+		['existence-reconcile', false],
+		['existence-reconcile', true],
+	] as const)(
+		'automatically heals warm-cache visibility via %s under pressure (Retry-After: %s)',
+		async (lane, retryAfter) => {
+			let nowMs = 1_000;
+			const visible = { id: 24022, digest: '24022', object_type: 'product' };
+			const highPressure = (body: unknown) =>
+				Response.json(body, { headers: { 'X-WCPOS-Pressure': 'high' } });
+			const harness = await createEngineHarness({
+				protocolDefaults: false,
+				mode: 'auto',
+				now: () => nowMs,
+				captureTimers: true,
+				fetch: async (url) => {
+					const parsed = new URL(url);
+					nowMs += 1_000; // Real requests take time; timers remain start-to-start.
+					if (parsed.pathname.endsWith('/digests')) {
+						const ids = (parsed.searchParams.get('include') ?? '').split(',').map(Number);
+						return highPressure({
+							digests: ids.map((id) => (id === visible.id ? visible : { id, deleted: true })),
+						});
+					}
+					if (parsed.pathname.endsWith('/integrity/scan')) {
+						return highPressure(scanEnvelope(url, [visible]));
+					}
+					if (parsed.pathname.endsWith('/integrity/bucket')) {
+						expect(parsed.searchParams.get('status')).toBe('publish');
+						return highPressure({ ids: [] });
+					}
+					return highPressure({ changes: [], complete: true, documents: [] });
+				},
+			});
+			try {
+				const product = (id: number, dirty = false) => ({
+					uuid: `p${id}`,
+					remoteId: remoteId(id),
+					price: 1,
+					stockStatus: 'instock',
+					type: 'simple',
+					categoryIds: [],
+					brandIds: [],
+					onSale: false,
+					featured: false,
+					stockQuantity: null,
+					payload: { id, status: 'publish' },
+					sync: { revision: 'before-visibility-fix', partial: false, source: 'woo-rest' },
+					local: { dirty, pendingMutationIds: dirty ? ['pending-edit'] : [] },
+				});
+				await harness.seed('products', [
+					product(55160),
+					product(55161, true),
+					product(24022),
+					product(56500),
+				]);
+				if (lane === 'existence-reconcile') {
+					await harness.seed(
+						'existenceManifest',
+						[24022, 55160, 55161, 56500].map((id) => ({
+							remoteId: String(id),
+							wooId: id,
+							digest: String(id),
+							objectType: 'product',
+						}))
+					);
+				}
+				const intervalMs = (lane === 'existence-prime' ? 15 : 17) * 60_000;
+				await vi.waitFor(() =>
+					expect(harness.timers!.intervals.some((timer) => timer.delayMs === intervalMs)).toBe(true)
+				);
+				nowMs += intervalMs;
+				for (let response = 0; response < 10; response += 1) {
+					await harness.respond(highPressure({}));
+				}
+				expect(harness.ofType('cadence.backoff')).toContainEqual(
+					expect.objectContaining({
+						fields: expect.objectContaining({ signal: 'server-pressure' }),
+					})
+				);
+				const timer = harness.timers!.intervals.find((timer) => timer.delayMs === intervalMs)!;
+				if (retryAfter) {
+					await harness.respond(
+						Response.json({}, { status: 429, headers: { 'Retry-After': '60' } })
+					);
+					const beforePause = harness.requests.length;
+					timer.callback();
+					await vi.waitFor(() =>
+						expect(harness.ofType('engine.lane.tick')).toContainEqual(
+							expect.objectContaining({
+								fields: expect.objectContaining({
+									lane,
+									status: 'skipped',
+									reason: 'server-pressure',
+								}),
+							})
+						)
+					);
+					expect(harness.requests).toHaveLength(beforePause);
+					expect(await harness.collection('products').findOne('p55160').exec()).not.toBeNull();
+					nowMs += intervalMs;
+				}
+				for (let pass = 1; pass <= 2; pass += 1) {
+					const nextDue = nowMs + intervalMs;
+					const requestStart = harness.requests.length;
+					// Exercise the callback installed by auto mode, never engine.sync() or a button.
+					timer.callback();
+					await vi.waitFor(() =>
+						expect(
+							harness
+								.ofType('engine.lane.tick')
+								.filter((event) => event.fields?.lane === lane && event.fields?.status === 'ran')
+						).toHaveLength(pass)
+					);
+					expect(await harness.collection('products').findOne('p55160').exec()).toBeNull();
+					expect(await harness.collection('products').findOne('p55161').exec()).not.toBeNull();
+					expect(await harness.collection('products').findOne('p24022').exec()).not.toBeNull();
+					expect(harness.requests.length - requestStart).toBeLessThanOrEqual(
+						lane === 'existence-prime' ? 1 : 4
+					);
+					nowMs = nextDue;
+				}
+				expect(await harness.collection('products').findOne('p56500').exec()).toBeNull();
+			} finally {
+				await harness.dispose();
+			}
+		}
+	);
+
 	it('audits all three id spaces without downloads, protects dirty rows, and applies prune tombstones', async () => {
 		const diagnostics = vi.fn();
 		const fetches: string[] = [];

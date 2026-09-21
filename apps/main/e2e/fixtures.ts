@@ -10,6 +10,10 @@ import {
 	type TestInfo,
 } from '@playwright/test';
 
+import {
+	isWcposPluginCompatible,
+	MINIMUM_WCPOS_PLUGIN_VERSION,
+} from '@wcpos/core/utils/wcpos-plugin-version';
 import { log } from '@wcpos/utils/logger';
 
 import {
@@ -104,6 +108,29 @@ export async function becomesVisible(locator: Locator, timeout: number): Promise
 		.waitFor({ state: 'visible', timeout })
 		.then(() => true)
 		.catch(() => false);
+}
+
+/**
+ * Open a real live-store session when the cart column shows the open-register
+ * landing; leave it open so later runs can reuse it.
+ *
+ * Races the landing against the ready cart header rather than waiting a fixed
+ * few seconds for the card: an already-open register resolves as soon as its
+ * header renders (this runs several times per checkout), and a slow register
+ * hydration still gets the normal readiness budget instead of a short timer
+ * that would return just before the card appears.
+ */
+export async function ensureRegisterOpen(page: Page): Promise<void> {
+	const card = page.getByTestId('open-register-card');
+	const cartReady = page.getByTestId('add-cart-item-menu');
+	await expect(card.or(cartReady).first()).toBeVisible({ timeout: CATALOGUE_READY_TIMEOUT_MS });
+	if (!(await card.isVisible())) return;
+	const amount = page.getByTestId('open-register-amount');
+	await amount.fill((await amount.inputValue()) || '100');
+	await page.getByTestId('open-register-button').click();
+	await expect(card).toBeHidden({ timeout: 30_000 });
+	// A healthy open register has no warning pill; its cart header is ready instead.
+	await expect(page.getByTestId('add-cart-item-menu')).toBeVisible({ timeout: 30_000 });
 }
 
 /**
@@ -354,6 +381,26 @@ export async function stubStoreVersionForE2E(
 				await route.fulfill({ response });
 				return;
 			}
+			// The stub exists to mask the LICENCE per variant (one next-lane site
+			// serves both) and to keep the app's version string in step with the
+			// store's. It must never carry the app past its own minimum-plugin
+			// gate: a store older than MINIMUM_WCPOS_PLUGIN_VERSION is one this
+			// app refuses in production, so a run that reaches it is pointed at
+			// the wrong lane's store (roadmap#277). Pass the real response through
+			// and let the connect screen refuse it with the real reason, rather
+			// than run the whole suite against a plugin generation the app does
+			// not support and read the first feature it lacks as a bug.
+			// A missing or non-string version is the same case: the endpoint answered
+			// without the plugin's discovery payload, and painting the app version
+			// onto it would fabricate a plugin the store did not report.
+			const realVersion = typeof data.wcpos_version === 'string' ? data.wcpos_version : undefined;
+			if (!isWcposPluginCompatible(realVersion)) {
+				console.error(
+					`[stubStoreVersionForE2E] ${storeOrigin} ${realVersion ? `runs woocommerce-pos ${realVersion}, below this app's minimum ${MINIMUM_WCPOS_PLUGIN_VERSION}` : 'reported no wcpos_version at all'}. Leaving the discovery response unstubbed so the app refuses the store with the real reason: this run is pointed at the wrong lane's store (see the lane routing in deploy.yml).`
+				);
+				await route.fulfill({ response });
+				return;
+			}
 			await route.fulfill({
 				response,
 				json: {
@@ -467,26 +514,73 @@ async function waitForCatalogueQuiescence(
 	page: Page,
 	{ quietMs = 10_000, capMs = 300_000 }: { quietMs?: number; capMs?: number } = {}
 ): Promise<void> {
-	const catalogueRequest =
-		/(\/wcpos\/v2\/|rest_route=(%2F|\/)wcpos(%2F|\/)v2(%2F|\/))(products|variations|customers)/;
+	const settled = await waitForStoreQuiescence(page, {
+		quietMs,
+		capMs,
+		matcher:
+			/(\/wcpos\/v2\/|rest_route=(%2F|\/)wcpos(%2F|\/)v2(%2F|\/))(products|variations|customers)/,
+		pollMs: 1_000,
+	});
+	if (!settled) {
+		console.warn(
+			`[auth] catalogue sync still active after ${capMs}ms; exporting a partial snapshot`
+		);
+	}
+}
+
+/** Any request to the store's WCPOS REST namespace, under either permalink style. */
+export const STORE_REQUEST = /(\/wcpos\/v2\/|rest_route=(%2F|\/)wcpos(%2F|\/)v2(%2F|\/))/;
+
+/**
+ * Wait until no request matching `matcher` is in flight AND none has started or
+ * finished for `quietMs`.
+ *
+ * Resolves `true` once quiet, `false` if `capMs` passes first (the caller decides
+ * whether a still-busy store is a failure). A latency measurement that starts while
+ * the boot-time pulls (orders, coupons, taxes, categories) are still draining reads
+ * their contention, not the thing it measures: the require plane serves demand
+ * serially, so a search typed into that window queues behind them.
+ *
+ * In-flight tracking matters: a pull slower than `quietMs` emits no `request` event
+ * while it runs, so start-only counting would declare quiet under it. A request that
+ * was already in flight when this attached never shows a start either, but its
+ * finish does, and that finish resets the quiet timer.
+ */
+export async function waitForStoreQuiescence(
+	page: Page,
+	{
+		quietMs = 1_500,
+		capMs = 30_000,
+		matcher = STORE_REQUEST,
+		pollMs = 250,
+	}: { quietMs?: number; capMs?: number; matcher?: RegExp; pollMs?: number } = {}
+): Promise<boolean> {
 	let lastActivity = Date.now();
+	let inFlight = 0;
 	const onRequest = (request: { url(): string }) => {
-		if (catalogueRequest.test(request.url())) lastActivity = Date.now();
+		if (!matcher.test(request.url())) return;
+		inFlight += 1;
+		lastActivity = Date.now();
+	};
+	const onSettled = (request: { url(): string }) => {
+		if (!matcher.test(request.url())) return;
+		inFlight = Math.max(0, inFlight - 1);
+		lastActivity = Date.now();
 	};
 	page.on('request', onRequest);
+	page.on('requestfinished', onSettled);
+	page.on('requestfailed', onSettled);
 	try {
 		const start = Date.now();
-		while (Date.now() - lastActivity < quietMs) {
-			if (Date.now() - start >= capMs) {
-				console.warn(
-					`[auth] catalogue sync still active after ${capMs}ms; exporting a partial snapshot`
-				);
-				return;
-			}
-			await page.waitForTimeout(1_000);
+		while (inFlight > 0 || Date.now() - lastActivity < quietMs) {
+			if (Date.now() - start >= capMs) return false;
+			await page.waitForTimeout(pollMs);
 		}
+		return true;
 	} finally {
 		page.off('request', onRequest);
+		page.off('requestfinished', onSettled);
+		page.off('requestfailed', onSettled);
 	}
 }
 

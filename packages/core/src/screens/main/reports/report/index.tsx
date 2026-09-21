@@ -17,9 +17,11 @@ import { useDocField } from '@wcpos/query';
 import { ZReport } from './template';
 import { generateZReportHTML } from './generate-html';
 import { calculateTotals } from './utils';
+import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
+import { inZone, useStoreDay } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
@@ -32,6 +34,7 @@ import { useQueryState } from '../../../../query';
  */
 export function Report() {
 	const t = useT();
+	const registerNames = useRegisterNames();
 	const contentRef = React.useRef<View>(null);
 	const { store, wpCredentials } = useStoreSession();
 	const storeName = useDocField(store, (value) => value.name) as string;
@@ -45,6 +48,7 @@ export function Report() {
 	const { format: formatName } = useCustomerNameFormat();
 	const { format: formatNumber } = useNumberFormat();
 	const { formatDate } = useLocalDate();
+	const { timezone } = useStoreDay();
 
 	/**
 	 * Calculate totals from selected orders
@@ -57,6 +61,7 @@ export function Report() {
 		totalTax,
 		discountTotal,
 		userStoreArray,
+		registerArray,
 		totalItemsSold,
 		shippingTotalsArray,
 		averageOrderValue,
@@ -70,18 +75,19 @@ export function Report() {
 			? convertUTCStringToLocalDate(selectedDateRange.to)
 			: new Date();
 
+		// The period is the store's day, so it is labelled in the store's zone, not the till's.
 		return {
-			from: formatDate(from, 'yyyy-M-dd HH:mm:ss'),
-			to: formatDate(to, 'yyyy-M-dd HH:mm:ss'),
+			from: formatDate(inZone(timezone, from), 'yyyy-M-dd HH:mm:ss'),
+			to: formatDate(inZone(timezone, to), 'yyyy-M-dd HH:mm:ss'),
 		};
-	}, [formatDate, selectedDateRange]);
+	}, [formatDate, selectedDateRange, timezone]);
 
 	/**
 	 * Generate report timestamp
 	 */
 	const reportGenerated = React.useMemo(
-		() => formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'),
-		[formatDate]
+		() => formatDate(inZone(timezone, new Date()), 'yyyy-M-dd HH:mm:ss'),
+		[formatDate, timezone]
 	);
 
 	/**
@@ -113,6 +119,12 @@ export function Report() {
 				...s,
 				total: formatCurrency(s.total),
 			})),
+			registerArray: registerArray.map(({ registerId, totalOrders, totalAmount }) => ({
+				registerId,
+				name: registerNames[registerId] || registerId.slice(0, 8),
+				totalOrders,
+				totalAmount: formatCurrency(totalAmount),
+			})),
 			userStoreArray: userStoreArray.map((us) => ({
 				...us,
 				totalAmount: formatCurrency(us.totalAmount),
@@ -137,6 +149,7 @@ export function Report() {
 				taxes: t('common.taxes'),
 				shipping: t('common.shipping'),
 				cashierStoreTotals: t('reports.cashier_store_totals'),
+				byRegister: t('reports.by_register'),
 				cashierId: t('reports.cashier_id'),
 				storeId: t('reports.store_id'),
 				additionalInfo: t('reports.additional_info'),
@@ -161,6 +174,8 @@ export function Report() {
 		taxTotalsArray,
 		shippingTotalsArray,
 		userStoreArray,
+		registerArray,
+		registerNames,
 		formatNumber,
 		totalItemsSold,
 		averageOrderValue,

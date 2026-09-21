@@ -1,8 +1,12 @@
 import { waitFor } from '@testing-library/react';
 import { of } from 'rxjs';
+import { addRxPlugin } from 'rxdb';
+import { addFulltextSearch, RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
+import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { encodeSearchText, FLEXSEARCH_MIN_TERM_LENGTH } from '@wcpos/sync-core';
 
 import { startSearchReadiness } from '../src/search-readiness';
 import { sharedSearchInstances } from '../src/search-shared';
@@ -36,24 +40,26 @@ describe('startSearchReadiness', () => {
 			.spyOn(database.collections.customers, 'initSearch')
 			.mockResolvedValue(stub as never);
 
+		const findProducts = jest.spyOn(database.collections.products, 'find');
+		const findVariations = jest.spyOn(database.collections.variations, 'find');
+		const countProducts = jest.spyOn(database.collections.products, 'count');
+		const countVariations = jest.spyOn(database.collections.variations, 'count');
 		const dispose = startSearchReadiness({
 			engine,
 			locale: 'warmup-locale',
 			timings: TEST_TIMINGS,
 		});
 		try {
-			await waitFor(() => expect(initProducts).toHaveBeenCalled());
-			await waitFor(() => expect(initVariations).toHaveBeenCalled());
+			await waitFor(() => expect(findProducts).toHaveBeenCalledTimes(1));
+			await waitFor(() => expect(findVariations).toHaveBeenCalledTimes(1));
 			// A cashier refreshing the customer list expects a customer just the same:
 			// the secondary tier warms too, after the till pair.
-			await waitFor(() => expect(initCustomers).toHaveBeenCalled());
-			expect(initProducts).toHaveBeenCalledWith(
-				'warmup-locale',
-				expect.objectContaining({
-					searchFields: ['name', 'sku', 'barcode'],
-					documentSnapshot: expect.any(Function),
-				})
-			);
+			// Observe an audit as well as warm-up before asserting the till pair was never sampled.
+			await waitFor(() => expect(initCustomers.mock.calls.length).toBeGreaterThanOrEqual(2));
+			expect(initProducts).not.toHaveBeenCalled();
+			expect(initVariations).not.toHaveBeenCalled();
+			expect(countProducts).not.toHaveBeenCalled();
+			expect(countVariations).not.toHaveBeenCalled();
 			expect(initCustomers).toHaveBeenCalledWith(
 				'warmup-locale',
 				expect.objectContaining({
@@ -61,7 +67,7 @@ describe('startSearchReadiness', () => {
 				})
 			);
 			// The till pair was warmed before the customer index.
-			expect(initProducts.mock.invocationCallOrder[0]).toBeLessThan(
+			expect(findProducts.mock.invocationCallOrder[0]).toBeLessThan(
 				initCustomers.mock.invocationCallOrder[0]
 			);
 		} finally {
@@ -71,22 +77,22 @@ describe('startSearchReadiness', () => {
 	});
 
 	it('leaves a healthy index alone: the sampled document is findable by its own tokens', async () => {
-		const database = await createEngineDatabase(['products', 'variations']);
+		const database = await createEngineDatabase(['categories', 'variations']);
 		const engine = createFakeEngine(database);
-		await database.collections.products.insert(
+		await database.collections.categories.insert(
 			engineProduct({ uuid: 'healthy-sample', id: 1, name: 'Coffee Grinder' })
 		);
-		const sample = await database.collections.products.findOne('healthy-sample').exec();
+		const sample = await database.collections.categories.findOne('healthy-sample').exec();
 		if (!sample) throw new Error('missing healthy fixture');
 		const find = jest.fn(async () => [sample]);
 		jest
-			.spyOn(database.collections.products, 'initSearch')
+			.spyOn(database.collections.categories, 'initSearch')
 			.mockResolvedValue({ collection: { $: of(null) }, find } as never);
 		jest
 			.spyOn(database.collections.variations, 'initSearch')
 			.mockResolvedValue({ collection: { $: of(null) }, find: async () => [] } as never);
 		const recreateSearch = jest.fn();
-		Object.assign(database.collections.products, { recreateSearch });
+		Object.assign(database.collections.categories, { recreateSearch });
 
 		const dispose = startSearchReadiness({
 			engine,
@@ -105,76 +111,152 @@ describe('startSearchReadiness', () => {
 		}
 	});
 
-	it('detects a false miss after misses on two distinct documents and rebuilds once', async () => {
-		const database = await createEngineDatabase(['products', 'variations']);
+	it('does not rebuild a healthy index when common tokens fill the result limit', async () => {
+		setPremiumFlag();
+		addRxPlugin(RxDBFlexSearchPlugin);
+		const database = await createEngineDatabase(['categories']);
+		const products = database.collections.categories;
 		const engine = createFakeEngine(database);
-		// Two documents: the streak only extends on a DIFFERENT missed document, so a
-		// single-document store can never reach the threshold by resampling itself.
-		await database.collections.products.bulkInsert([
-			engineProduct({ uuid: 'missed-sample', id: 1, name: 'Coffee Grinder' }),
-			engineProduct({ uuid: 'missed-sibling', id: 2, name: 'Tea Strainer' }),
-		]);
-		// The index never returns the document it should contain — a false miss.
-		const find = jest.fn(async () => []);
-		jest
-			.spyOn(database.collections.products, 'initSearch')
-			.mockResolvedValue({ collection: { $: of(null) }, find } as never);
-		jest
-			.spyOn(database.collections.variations, 'initSearch')
-			.mockResolvedValue({ collection: { $: of(null) }, find: async () => [] } as never);
-		const recreateSearch = jest.fn().mockResolvedValue(null);
-		Object.assign(database.collections.products, { recreateSearch });
-
-		const dispose = startSearchReadiness({
-			engine,
-			locale: 'false-miss-audit',
-			timings: TEST_TIMINGS,
-		});
+		let dispose = () => {};
 		try {
-			await waitFor(() => expect(recreateSearch).toHaveBeenCalledTimes(1), { timeout: 2000 });
-			expect(searchError).toHaveBeenCalledWith(
-				'Search index cannot find an indexed document by its own tokens',
-				expect.objectContaining({
-					code: ERROR_CODES.SEARCH_INDEX_FALSE_MISS,
-					context: expect.objectContaining({
-						collection: 'products',
-						locale: 'false-miss-audit',
-					}),
-				})
+			await products.bulkInsert(
+				Array.from({ length: 100 }, (_, i) =>
+					engineProduct({ uuid: `z-${i}`, id: i + 1, name: 'Common Product' })
+				)
 			);
-			// The once-per-session guard: further failing audits log but never
-			// order a second rebuild.
+			// Real premium index/pipeline: older matches fill its default 100-result page.
+			const index = await addFulltextSearch({
+				identifier: 'bounded-audit',
+				collection: products,
+				docToString: (doc) => String(doc.get('payload.name')),
+				initialization: 'lazy',
+				indexOptions: {
+					preset: 'performance',
+					tokenize: 'full',
+					encode: encodeSearchText,
+					minlength: FLEXSEARCH_MIN_TERM_LENGTH,
+				},
+			});
+			await index.pipeline.awaitIdle();
+			// These sort first for the audit, but rank beyond the first result page.
+			await products.bulkInsert([
+				engineProduct({ uuid: 'a-first', id: 101, name: 'Common Product' }),
+				engineProduct({ uuid: 'a-second', id: 102, name: 'Common Product' }),
+			]);
+			await index.pipeline.awaitIdle();
+			expect(await index.find('common')).toHaveLength(100);
+			expect((await index.find('common')).map((doc) => doc.primary)).not.toContain('a-first');
+			expect(await index.find('common', { limit: Infinity })).toHaveLength(102);
+			const find = jest.spyOn(index, 'find');
+			jest.spyOn(products, 'initSearch').mockResolvedValue(index as never);
+			const recreateSearch = jest.fn();
+			Object.assign(products, { recreateSearch });
+			dispose = startSearchReadiness({ engine, locale: 'bounded-audit', timings: TEST_TIMINGS });
 			await waitFor(
 				() =>
 					expect(
-						searchError.mock.calls.filter(
-							([, options]) => (options?.context as { alreadyRebuilt?: boolean })?.alreadyRebuilt
-						).length
-					).toBeGreaterThan(0),
+						find.mock.calls.filter(([term]) => term === 'product').length
+					).toBeGreaterThanOrEqual(2),
 				{ timeout: 2000 }
 			);
-			expect(recreateSearch).toHaveBeenCalledTimes(1);
+			expect(recreateSearch).not.toHaveBeenCalled();
+			expect(searchError).not.toHaveBeenCalled();
+			expect(searchLogger.debug).toHaveBeenCalledWith(
+				'Search index audit inconclusive: probe reached result limit',
+				expect.objectContaining({
+					context: expect.objectContaining({ collection: 'products/categories', limit: 100 }),
+				})
+			);
+			// The audit must not turn the fix into an unbounded catalogue read.
+			for (const [term, options] of find.mock.calls) {
+				if (term) expect(options).toEqual({ limit: 100 });
+			}
+			expect(await products.count().exec()).toBe(102);
+			await index.pipeline.close();
+			await index.close();
 		} finally {
 			dispose();
 			await database.close();
 		}
 	});
 
+	it.each([false, true])(
+		'detects distinct-document misses and rebuilds once (capped common token: %s)',
+		async (cappedCommonToken) => {
+			const database = await createEngineDatabase(['categories', 'variations']);
+			const engine = createFakeEngine(database);
+			// Two documents: the streak only extends on a DIFFERENT missed document, so a
+			// single-document store can never reach the threshold by resampling itself.
+			await database.collections.categories.bulkInsert([
+				engineProduct({ uuid: 'missed-sample', id: 1, name: 'Coffee Grinder' }),
+				engineProduct({ uuid: 'missed-sibling', id: 2, name: 'Tea Strainer' }),
+			]);
+			// The index never returns the document it should contain — a false miss.
+			const find = jest.fn(async (term: string) =>
+				cappedCommonToken && ['coffee', 'tea'].includes(term)
+					? Array.from({ length: 100 }, (_, i) => ({ primary: `other-${i}` }))
+					: []
+			);
+			jest
+				.spyOn(database.collections.categories, 'initSearch')
+				.mockResolvedValue({ collection: { $: of(null) }, find } as never);
+			jest
+				.spyOn(database.collections.variations, 'initSearch')
+				.mockResolvedValue({ collection: { $: of(null) }, find: async () => [] } as never);
+			const recreateSearch = jest.fn().mockResolvedValue(null);
+			Object.assign(database.collections.categories, { recreateSearch });
+
+			const dispose = startSearchReadiness({
+				engine,
+				locale: `false-miss-audit-${cappedCommonToken}`,
+				timings: TEST_TIMINGS,
+			});
+			try {
+				await waitFor(() => expect(recreateSearch).toHaveBeenCalledTimes(1), { timeout: 2000 });
+				expect(searchError).toHaveBeenCalledWith(
+					'Search index cannot find an indexed document by its own tokens',
+					expect.objectContaining({
+						code: ERROR_CODES.SEARCH_INDEX_FALSE_MISS,
+						context: expect.objectContaining({
+							collection: 'products/categories',
+							locale: `false-miss-audit-${cappedCommonToken}`,
+						}),
+					})
+				);
+				// The once-per-session guard: further failing audits log but never
+				// order a second rebuild.
+				await waitFor(
+					() =>
+						expect(
+							searchError.mock.calls.filter(
+								([, options]) => (options?.context as { alreadyRebuilt?: boolean })?.alreadyRebuilt
+							).length
+						).toBeGreaterThan(0),
+					{ timeout: 2000 }
+				);
+				expect(recreateSearch).toHaveBeenCalledTimes(1);
+			} finally {
+				dispose();
+				await database.close();
+			}
+		}
+	);
+
 	it('never rebuilds from repeated misses of the same single document', async () => {
-		const database = await createEngineDatabase(['products', 'variations']);
+		const database = await createEngineDatabase(['categories', 'variations']);
 		const engine = createFakeEngine(database);
-		await database.collections.products.insert(
+		await database.collections.categories.insert(
 			engineProduct({ uuid: 'only-doc', id: 1, name: 'Coffee Grinder' })
 		);
 		const find = jest.fn(async () => []);
 		jest
-			.spyOn(database.collections.products, 'initSearch')
+			.spyOn(database.collections.categories, 'initSearch')
 			.mockResolvedValue({ collection: { $: of(null) }, find } as never);
 		jest
 			.spyOn(database.collections.variations, 'initSearch')
 			.mockResolvedValue({ collection: { $: of(null) }, find: async () => [] } as never);
 		const recreateSearch = jest.fn();
-		Object.assign(database.collections.products, { recreateSearch });
+		Object.assign(database.collections.categories, { recreateSearch });
 
 		const dispose = startSearchReadiness({
 			engine,
@@ -195,8 +277,8 @@ describe('startSearchReadiness', () => {
 	});
 
 	it('does not publish a rebuilt index from a superseded database emission', async () => {
-		const database = await createEngineDatabase(['products', 'variations']);
-		await database.collections.products.bulkInsert([
+		const database = await createEngineDatabase(['categories', 'variations']);
+		await database.collections.categories.bulkInsert([
 			engineProduct({ uuid: 'first-miss', id: 1, name: 'Coffee Grinder' }),
 			engineProduct({ uuid: 'second-miss', id: 2, name: 'Tea Strainer' }),
 		]);
@@ -214,10 +296,10 @@ describe('startSearchReadiness', () => {
 		const brokenInstance = { collection: { $: of(null) }, find: jest.fn(async () => []) };
 		const staleRebuiltInstance = { collection: { $: of(null) }, find: jest.fn(async () => []) };
 		const currentInstance = { collection: { $: of(null) }, find: jest.fn(async () => []) };
-		const shared = sharedSearchInstances('products:database-switch', currentInstance);
+		const shared = sharedSearchInstances('products/categories:database-switch', currentInstance);
 		let rebuildCompleted = false;
 		jest
-			.spyOn(database.collections.products, 'initSearch')
+			.spyOn(database.collections.categories, 'initSearch')
 			.mockImplementation(
 				async () => (rebuildCompleted ? staleRebuiltInstance : brokenInstance) as never
 			);
@@ -234,7 +316,7 @@ describe('startSearchReadiness', () => {
 					};
 				})
 		);
-		Object.assign(database.collections.products, { recreateSearch });
+		Object.assign(database.collections.categories, { recreateSearch });
 
 		const dispose = startSearchReadiness({
 			engine,
@@ -254,21 +336,21 @@ describe('startSearchReadiness', () => {
 	});
 
 	it('abstains when the index cannot answer in time — not ready is not a false miss', async () => {
-		const database = await createEngineDatabase(['products', 'variations']);
+		const database = await createEngineDatabase(['categories', 'variations']);
 		const engine = createFakeEngine(database);
-		await database.collections.products.insert(
+		await database.collections.categories.insert(
 			engineProduct({ uuid: 'not-ready-sample', id: 1, name: 'Coffee Grinder' })
 		);
 		// A stalled pipeline: find() never settles.
 		const find = jest.fn(() => new Promise<never>(() => undefined));
 		jest
-			.spyOn(database.collections.products, 'initSearch')
+			.spyOn(database.collections.categories, 'initSearch')
 			.mockResolvedValue({ collection: { $: of(null) }, find } as never);
 		jest
 			.spyOn(database.collections.variations, 'initSearch')
 			.mockResolvedValue({ collection: { $: of(null) }, find: async () => [] } as never);
 		const recreateSearch = jest.fn();
-		Object.assign(database.collections.products, { recreateSearch });
+		Object.assign(database.collections.categories, { recreateSearch });
 
 		const dispose = startSearchReadiness({
 			engine,

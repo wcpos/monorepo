@@ -8,6 +8,8 @@ env:
 # Session comes from 02-auth-setup; do NOT clear state.
 - runFlow:
     file: ../subflows/ensure-pos-ready.yml
+- runFlow:
+    file: ../subflows/capture-cart-add-sequence.yml
 # Typing is retried; SEARCH SPEED IS NOT (owner ruling 2026-08-28: "if it
 # takes 60 seconds to return a search, that is a bug or a mis-configured
 # test"). Two separate concerns:
@@ -94,6 +96,7 @@ env:
               id: 'cart-subtotal'
           commands:
             - evalScript: "${console.log('WCPOS_E2E cart has no line after the tile tap, re-adding once')}"
+            - evalScript: ${output.cartAddRetried = true}
             - runFlow:
                 when:
                   visible:
@@ -101,8 +104,22 @@ env:
                 commands:
                   - tapOn:
                       id: 'pos-tab-products'
-            - hideKeyboard:
-                optional: true
+            # Guarded like ensure-pos-ready.yml: Maestro's Android hideKeyboard is
+            # `input keyevent 4` (Back). The tab bar is visible here, so the keyboard
+            # is not covering it, and an unguarded Back at the POS root leaves the app
+            # for the launcher (run 34124672113, Android phone, flow 06). Dismiss only
+            # when the tab bar is pushed off screen while the search box stays.
+            - runFlow:
+                when:
+                  true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
+                  visible:
+                    id: 'search-products'
+                  notVisible:
+                    id: 'pos-tab-products'
+                commands:
+                  - evalScript: "${console.log('WCPOS_E2E keyboard covering the tab bar in the re-add branch, dismissing')}"
+                  - hideKeyboard:
+                      optional: true
             - tapOn:
                 id: 'product-tile'
                 index: 0
@@ -117,6 +134,8 @@ env:
     visible:
       id: 'cart-subtotal'
     timeout: 30000
+- runFlow:
+    file: ../subflows/assert-cart-add-timing.yml
 - assertVisible:
     id: 'checkout-button'
 - tapOn:

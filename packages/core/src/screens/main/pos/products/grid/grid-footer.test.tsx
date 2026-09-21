@@ -23,8 +23,9 @@ jest.mock('react-native', () => ({
 }));
 
 function renderFooter(
-	count: number,
-	binding: { pending$: BehaviorSubject<boolean>; exhausted$: BehaviorSubject<boolean | null> }
+	renderedCount: number,
+	binding: { pending$: BehaviorSubject<boolean>; exhausted$: BehaviorSubject<boolean | null> },
+	hitCount = renderedCount
 ) {
 	return render(
 		<QueryStateProvider
@@ -32,7 +33,7 @@ function renderFooter(
 			initialPageSize={10}
 			initialSort={{ field: 'name', direction: 'asc' }}
 		>
-			<ProductGridFooter binding={binding} count={count} />
+			<ProductGridFooter binding={binding} renderedCount={renderedCount} hitCount={hitCount} />
 		</QueryStateProvider>
 	);
 }
@@ -51,7 +52,7 @@ describe('ProductGridFooter', () => {
 		expect(screen.queryByTestId('pos-products-grid-end')).toBeNull();
 	});
 
-	it('shows the spinner while an extension is outstanding, and swaps it for the end row', () => {
+	it('settles a full exhausted read to silence, not an end row', () => {
 		const binding = settled();
 		binding.pending$.next(true);
 		renderFooter(10, binding);
@@ -63,9 +64,47 @@ describe('ProductGridFooter', () => {
 			binding.exhausted$.next(true);
 		});
 		expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
+		expect(screen.queryByTestId('pos-products-grid-end')).toBeNull();
+	});
+
+	it('settles a short exhausted read from spinner to end row', () => {
+		const binding = settled();
+		binding.pending$.next(true);
+		renderFooter(4, binding);
+		expect(screen.getByTestId('pos-products-grid-loading')).toBeTruthy();
+		expect(screen.queryByTestId('pos-products-grid-end')).toBeNull();
+
+		React.act(() => {
+			binding.pending$.next(false);
+			binding.exhausted$.next(true);
+		});
+		expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
 		expect(screen.getByTestId('pos-products-grid-end').textContent).toBe(
 			'pos_products.no_more_products'
 		);
+	});
+
+	it('does not treat a full local read with fewer rendered tiles as terminal', () => {
+		const binding = settled();
+		binding.exhausted$.next(true);
+		renderFooter(2, binding, 10);
+		expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
+		expect(screen.queryByTestId('pos-products-grid-end')).toBeNull();
+	});
+
+	it('says nothing under an empty rendered grid with a pending full local read', () => {
+		const binding = settled();
+		binding.pending$.next(true);
+		renderFooter(0, binding, 10);
+		expect(screen.queryByTestId('pos-products-grid-loading')).toBeNull();
+		expect(screen.queryByTestId('pos-products-grid-end')).toBeNull();
+	});
+
+	it('says nothing under an empty rendered grid with a settled full exhausted read', () => {
+		const binding = settled();
+		binding.exhausted$.next(true);
+		const { container } = renderFooter(0, binding, 10);
+		expect(container.firstChild).toBeNull();
 	});
 
 	it('shows nothing while the engine says more may exist, even under a short page', () => {

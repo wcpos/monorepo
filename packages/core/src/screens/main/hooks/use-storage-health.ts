@@ -38,7 +38,8 @@ export function isStorageBlockedError(error: unknown): error is StorageBlockedEr
 }
 
 /**
- * True while any open database has lost its RxDB storage worker (#163).
+ * True while any open database has lost its RxDB storage worker (#163), or a
+ * local write has passed its deadline with storage still silent (#237).
  *
  * Deliberately app-wide rather than scoped to the active store: the adapter
  * builds ONE worker storage for the whole app (`adapters/default/index.web.ts`
@@ -48,10 +49,13 @@ export function isStorageBlockedError(error: unknown): error is StorageBlockedEr
  * the loss takes barcode lookups down at the same moment as order writes — which
  * is what made the March 6 incident look like "scanning just stopped".
  *
- * The latch is one-shot and is NOT cleared by a store switch, Clear & Sync or a
- * collection reset: a half-dead worker still answers some calls, so neither a
- * later success nor a fresh database scope is proof of recovery, and the same
- * dead worker backs the successor scope. Recovery means reloading the app.
+ * The worker-lost latch is one-shot and is NOT cleared by a store switch, Clear
+ * & Sync or a collection reset: a half-dead worker still answers some calls, so
+ * neither a later success nor a fresh database scope is proof of recovery, and
+ * the same dead worker backs the successor scope. Recovery means reloading the
+ * app. The write-stalled entry is different: the stalled write is still awaited,
+ * so a later answer IS proof of recovery, and it clears on the next successful
+ * storage call.
  */
 export function useStorageDegraded(): boolean {
 	const degraded = useObservableEagerState(degradedStorage$);

@@ -49,6 +49,7 @@ import {
 	assertReturnedRequestedIds,
 	chunk,
 	type CollectionSchedulerCoverageRepository,
+	DEFAULT_COVERAGE_FRESH_FOR_MS,
 	type Fetcher,
 	httpGet,
 	recordCoverage,
@@ -57,6 +58,7 @@ import {
 // prettier-ignore
 import { type FetchTask, type FetchTaskResult, pullRequestLimit, type SchedulerFetcher, type SchedulerFetcherContext } from './replication-policy';
 
+import type { BuildCumulativeCoverageDocumentsFromQueryResultInput } from './query-coverage-writes';
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
 
 export type ProductSchedulerRepository = {
@@ -75,6 +77,9 @@ export type ProductSchedulerCoverageRepository = CollectionSchedulerCoverageRepo
 		 * un-resumed) full walk.
 		 */
 		readLocalLaneCoverage?: BrowseWindowLaneReader;
+		recordCumulativeQueryResult?(
+			input: BuildCumulativeCoverageDocumentsFromQueryResultInput
+		): Promise<void>;
 	};
 
 export type ProductsSchedulerFetcherInput = {
@@ -232,6 +237,16 @@ async function fetchTargetedProducts(
 	return { taskId: task.id, documentCount, requestCount, completed: true };
 }
 
+/** A non-2xx answer to a product query; its status and Woo code decide whether a walk may end. */
+class ProductQueryHttpError extends Error {
+	constructor(
+		readonly status: number,
+		readonly code: unknown
+	) {
+		super(`Woo REST product search request failed: ${status}`);
+	}
+}
+
 async function fetchProductQuery(
 	input: ProductsSchedulerFetcherInput,
 	query: URLSearchParams,
@@ -244,7 +259,8 @@ async function fetchProductQuery(
 	const url = `${input.baseUrl}/products?${query.toString()}`;
 	const response = await httpGet(input, url, context);
 	if (!response.ok) {
-		throw new Error(`Woo REST product search request failed: ${response.status}`);
+		const error = (await response.json().catch(() => null)) as { code?: unknown } | null;
+		throw new ProductQueryHttpError(response.status, error?.code);
 	}
 	return {
 		payloads: (await response.json()) as WooProductPayload[],
@@ -286,26 +302,57 @@ async function fetchProductSearchLeg(
 	params: (perPage: number, page: number) => URLSearchParams,
 	limit: number,
 	perPage: number,
-	context?: SchedulerFetcherContext
+	context?: SchedulerFetcherContext,
+	nextPage = 1
 ): Promise<{ payloads: WooProductPayload[]; requestCount: number; exhausted: boolean }> {
 	const payloads: WooProductPayload[] = [];
 	let requestCount = 0;
 	let exhausted = false;
 	// Page size is fixed for the whole walk: Woo's offset is (page-1)*per_page, so
 	// shrinking the final page would re-read earlier rows and drop the true tail.
-	// A limit below the dial still costs only one small page (single-page walks
-	// have no offset to corrupt); anything above walks at the dial and trims locally.
-	const pageSize = Math.min(perPage, limit);
-	while (payloads.length < limit) {
-		const page = await fetchProductQuery(input, params(pageSize, requestCount + 1), context);
+	// The page is the dial even when the window is smaller (reversing #908's small-page rule):
+	// one dial-sized page covers the grid's next few extensions locally, where four escalating
+	// requests used to walk 12, 24, 36, 48 rows on a slow host one round trip at a time.
+	const pageSize = perPage;
+	// One pass walks at most the browse budget of pages; a wider window resumes on the next
+	// declaration from the pages this one covered, so a huge limit never becomes one burst.
+	while (payloads.length < limit && requestCount < BROWSE_WINDOW_MAX_PAGES_PER_DRAIN) {
+		let page: Awaited<ReturnType<typeof fetchProductQuery>>;
+		try {
+			page = await fetchProductQuery(input, params(pageSize, nextPage), context);
+		} catch (error) {
+			// A result set that is an exact multiple of pageSize never yields a short page, so
+			// the page after its last is asked for — on a resume, or when a proxy stripped the
+			// X-WP-TotalPages header that would have said so. WP answers that with a 400
+			// (`woocommerce_rest_product_invalid_page_number` from Woo's CRUD controller, or WP
+			// core's `rest_post_invalid_page_number`): past page 1 that IS the end of the set,
+			// not a failure to retry forever (PR #1935 review). Any other 400, and a 400 on
+			// page 1, is a bad request — recording the prefix as complete would hide the rest.
+			if (
+				error instanceof ProductQueryHttpError &&
+				error.status === 400 &&
+				typeof error.code === 'string' &&
+				/_invalid_page_number$/.test(error.code) &&
+				nextPage > 1
+			) {
+				requestCount += 1; // the request was made; the merchant's host paid for it
+				exhausted = true;
+				break;
+			}
+			throw error;
+		}
 		requestCount += 1;
+		nextPage += 1;
 		payloads.push(...page.payloads);
-		if (page.payloads.length < pageSize) {
+		if (
+			page.payloads.length < pageSize ||
+			(page.totalPages !== null && nextPage > page.totalPages)
+		) {
 			exhausted = true;
 			break;
 		}
 	}
-	return { payloads: payloads.slice(0, limit), requestCount, exhausted };
+	return { payloads, requestCount, exhausted };
 }
 
 function uniqueProductPayloads(payloads: WooProductPayload[]): WooProductPayload[] {
@@ -669,14 +716,37 @@ async function fetchProductSearch(
 	search: string,
 	context?: SchedulerFetcherContext
 ): Promise<FetchTaskResult> {
-	// The dial governs the WIRE page, not the result set (#908): each leg still wants
-	// `limit` records, it just walks them in dial-sized pages instead of asking for the
-	// whole set in one heavy request. Capping per_page WITHOUT paginating would truncate
-	// search results, which is why this used to opt out of the dial entirely.
-	const limit = taskLimit(task);
-	const pageSize = taskLimit(task, input.pullBatchSize);
+	// The WINDOW is the task's limit, uncapped. It used to run through taskLimit(), which clamps
+	// to the Woo per-page maximum (100) — so every grid limit past 100 walked the same two pages
+	// of 50, a server with more hits than that was never exhausted, and the grid's extension
+	// guard re-declared forever (26+ identical requests per search, customer report 2026-09-10).
+	// The dial governs only the WIRE page.
+	const limit = task.limit;
+	if (!Number.isSafeInteger(limit) || limit <= 0) {
+		throw new Error('Product scheduler task limit must be a positive integer');
+	}
+	const pageSize = Math.min(input.pullBatchSize?.() ?? 100, WOO_REST_MAX_PER_PAGE);
+	const lane = await input.coverageRepository?.readLocalLaneCoverage?.(
+		'products',
+		task.queryKey,
+		input.nowMs?.() ?? Date.now()
+	);
+	// Resume from the covered prefix: a fresh, incomplete lane whose id count is a whole number
+	// of pages was walked at this page size, so the next page's offset is exact. Anything else
+	// (stale, complete, a dial change mid-lane, a forced refresh) walks from page 1.
+	const resume = Boolean(
+		!task.forceRefresh &&
+		lane?.fresh &&
+		!lane.complete &&
+		lane.expectedRecordIds &&
+		lane.expectedRecordIds.length >= pageSize &&
+		lane.expectedRecordIds.length % pageSize === 0 &&
+		input.coverageRepository?.recordCumulativeQueryResult
+	);
+	const coveredIds = new Set(resume ? lane?.expectedRecordIds : []);
+	const remaining = Math.max(0, limit - coveredIds.size);
 	const term = search.trim();
-	const exactSkuLeg = term.length > 0 && (input.exactSkuLeg?.() ?? true);
+	const exactSkuLeg = !resume && term.length > 0 && (input.exactSkuLeg?.() ?? true);
 	const skuLeg = !exactSkuLeg
 		? { payloads: [], requestCount: 0, exhausted: true }
 		: await fetchProductSearchLeg(
@@ -691,9 +761,10 @@ async function fetchProductSearch(
 		: await fetchProductSearchLeg(
 				input,
 				(perPage, page) => productSearchParams(term, perPage, page),
-				limit,
+				remaining,
 				pageSize,
-				context
+				context,
+				coveredIds.size / pageSize + 1
 			);
 	// Woo answers a sku= filter from BOTH post types: a variation whose sku matches the
 	// term comes back as a `type: 'variation'` row on the PRODUCTS route (WC core widens
@@ -703,25 +774,60 @@ async function fetchProductSearch(
 	// scan of that code turns falsely ambiguous ("2 products found locally"), permanently.
 	// Variations are materialized only by the variations lanes; drop the rows before
 	// they reach documents, counts, or coverage.
-	const payloads = uniqueProductPayloads([...skuLeg.payloads, ...searchLeg.payloads]).filter(
+	// Dedupe sku-first so an id both legs returned keeps the exact-match copy, then split by
+	// which leg carried it. Exact-sku hits that the search pages did not carry are persisted
+	// and covered as RECORDS, never as lane members: the lane's id count is the search walk's
+	// page cursor (a whole number of pages ⇒ resume at the next page), and one sku-only row
+	// would put it off by one forever (PR #1935 review). They still lead the persisted set so
+	// the exact match renders first.
+	// Ids are compared as numbers on both sides, the way uniqueProductPayloads keys them.
+	const searchLegIds = new Set(searchLeg.payloads.map((payload) => Number(payload.id)));
+	const merged = uniqueProductPayloads([...skuLeg.payloads, ...searchLeg.payloads]).filter(
 		(payload) => payload.type !== 'variation'
 	);
-	const documents = payloads
-		.slice(0, limit)
-		.map((payload) => productDocumentFromWooPayload(payload, input.barcodeSelectors?.()));
+	const searchRows = merged.filter((payload) => searchLegIds.has(Number(payload.id)));
+	const skuOnlyRows = merged.filter((payload) => !searchLegIds.has(Number(payload.id)));
+	const notCovered = ({ storedDocument }: Materialized<Record<string, unknown>>) =>
+		!coveredIds.has(coverageRecordId(storedDocument as ProductDocument));
+	const skuOnlyDocuments = skuOnlyRows
+		.map((payload) => productDocumentFromWooPayload(payload, input.barcodeSelectors?.()))
+		.filter(notCovered);
+	const searchDocuments = searchRows
+		.map((payload) => productDocumentFromWooPayload(payload, input.barcodeSelectors?.()))
+		.filter(notCovered);
+	const union = [...skuOnlyDocuments, ...searchDocuments];
+	// Every fetched row is persisted and recorded — the window only decides how far to WALK.
+	// Trimming to the window used to leave the lane covering 12, 24, 36… ids, so no later
+	// declaration could resume on a page boundary or be served locally, and each extension
+	// re-walked from page 1. Whole pages in the lane make the next few extensions free and
+	// the one after that a single page. The lane is complete exactly when both legs ended
+	// on a short page: nothing fetched is ever dropped, so nothing can hide behind the window.
+	const complete = skuLeg.exhausted && searchLeg.exhausted;
+	const documents = union;
 	await persistProductDocuments(input, documents);
-	// The slice above can drop deduped cross-leg hits past the window, and the products
-	// lane key carries no limit — a truncated persist must not record a complete lane,
-	// or the serve-local gate would answer a later, larger-limit search from the
-	// truncated set.
-	const complete = searchLeg.exhausted && skuLeg.exhausted && payloads.length <= limit;
-	await recordCoverage(
+	const recordIds = searchDocuments.map(({ storedDocument }) =>
+		coverageRecordId(storedDocument as ProductDocument)
+	);
+	await recordCoverageRecordsOnly(
 		'products',
 		input,
 		task,
-		documents.map(({ storedDocument }) => coverageRecordId(storedDocument as ProductDocument)),
-		complete
+		skuOnlyDocuments.map(({ storedDocument }) =>
+			coverageRecordId(storedDocument as ProductDocument)
+		)
 	);
+	if (resume) {
+		await input.coverageRepository!.recordCumulativeQueryResult!({
+			collection: 'products',
+			queryKey: task.queryKey,
+			records: recordIds.map((id) => ({ id })),
+			complete,
+			nowMs: input.nowMs?.() ?? Date.now(),
+			freshForMs: input.coverageFreshForMs ?? DEFAULT_COVERAGE_FRESH_FOR_MS,
+		});
+	} else {
+		await recordCoverage('products', input, task, recordIds, complete);
+	}
 
 	return {
 		taskId: task.id,

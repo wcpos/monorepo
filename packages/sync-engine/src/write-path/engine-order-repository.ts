@@ -3,14 +3,17 @@
 
 import {
 	assertBulkSuccess,
+	hasPosRefundStamp,
 	normalizeCheckpoint,
 	type OrderDocument,
 	POS_META_KEYS,
+	reconcileRefundIds,
 	type RemoteId,
 	type SyncCheckpoint,
 	withOrderColumns,
 	wooIdOf,
 } from '@wcpos/sync-core';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { stripOrderManifestDigest } from '../local-coverage/existence-manifest-population';
 import {
@@ -19,11 +22,17 @@ import {
 	upsertManifestRows,
 } from '../local-coverage/rx-existence-manifest-repository';
 import { orderStorageIdsForWooDeletes } from './order-tombstones';
-import { hasPendingLocalWork, withoutLocallyProtected } from './local-work-guard';
+import { hasPendingLocalWork, withoutLocallyProtected, withoutUnchanged } from './local-work-guard';
+import { type RefundChildrenCollection, removeRefundChildren } from './refund-children';
+// Direct import: the scheduler index evaluates the drain and the descriptors, which read this
+// module's constants while it is still initialising (see package-seam.test.ts).
+import { seedRefundParentLane } from '../scheduler/rx-refund-scheduler-task-seeder';
 
 import type { ExistenceManifestDocument } from '../local-coverage/existence-manifest-schema';
+import type { LocalRefundDocument } from '../collections/refund-schema';
 
 const CUSTOM_PULL_CHECKPOINT_ID = 'custom-pull';
+const RESYNC_RECEIPT_PRINT_COUNTS_ID = 'resync-receipt-print-counts';
 
 /** POS identity metadata whose resident values must survive server adoption. */
 export const POS_ORDER_IDENTITY_META_KEYS = [
@@ -35,6 +44,11 @@ export const POS_ORDER_IDENTITY_META_KEYS = [
 type StoredOrderDoc = { toJSON(): unknown };
 
 type OrdersCollection = {
+	getLocal(id: string): Promise<{
+		get(key: 'counts'): Record<string, number>;
+		remove(): Promise<unknown>;
+	} | null>;
+	upsertLocal(id: string, data: { counts: Record<string, number> }): Promise<unknown>;
 	bulkUpsert(docs: unknown[]): Promise<unknown>;
 	bulkRemove(ids: string[]): Promise<unknown>;
 	findByIds(ids: string[]): { exec(): Promise<Map<string, StoredOrderDoc>> };
@@ -55,6 +69,7 @@ type SyncCheckpointsCollection = {
 /** Structural: the collections the order repository touches — any engine scope database satisfies it. */
 export type OrderRepositoryDatabase = {
 	orders: OrdersCollection;
+	refunds: RefundChildrenCollection;
 	existenceManifestOrders: ManifestCollection;
 	syncCheckpoints: SyncCheckpointsCollection;
 	close(): Promise<unknown>; // RxDatabase.close() resolves boolean; the repository only awaits it
@@ -75,11 +90,13 @@ export class EngineOrderRepository {
 		// of the adapter-level pending-set filter, which can't see a row that is `local.dirty` (or holds
 		// `pendingMutationIds`) without being in the passed pending set. This is the same protection
 		// `resetForResync` (F8) and `removeDeletedOrders` (F6) already apply via `unprotectedOrders`.
-		const applicable = await withoutLocallyProtected(this.db.orders, documents);
-		if (applicable.length === 0) return [];
 		const residents = await this.db.orders
-			.findByIds(applicable.map((document) => document.uuid))
+			.findByIds(documents.map((document) => document.uuid))
 			.exec();
+		const applicable = await withoutLocallyProtected(this.db.orders, documents, residents);
+		if (applicable.length === 0) return [];
+		const stash = await this.db.orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+		const counts = { ...stash?.get('counts') };
 		// Leg-3 (ADR 0015): the order existence manifest is seeded by the INGEST SITE, which holds the
 		// `Materialized` envelope and knows which documents it applied (ADR 0028 rider) — see
 		// `upsertManifestRows` below. This boundary only guarantees no `_rxdb_digest` reaches storage.
@@ -88,7 +105,18 @@ export class EngineOrderRepository {
 		}));
 		for (const entry of materialized) {
 			const resident = residents.get(entry.storedDocument.uuid)?.toJSON() as
-				{ payload?: Record<string, unknown> } | undefined;
+				{ payload?: Record<string, unknown>; local?: { receiptPrintCount?: number } } | undefined;
+			// Pulls replace sync bookkeeping, but must not reset prints observed by this till.
+			const receiptPrintCount = resident
+				? resident.local?.receiptPrintCount
+				: counts[entry.storedDocument.uuid];
+			if (receiptPrintCount !== undefined) {
+				const local = {
+					...entry.storedDocument.local,
+					receiptPrintCount,
+				};
+				entry.storedDocument = { ...entry.storedDocument, local };
+			}
 			const localMeta = Array.isArray(resident?.payload?.meta_data)
 				? resident.payload.meta_data
 				: [];
@@ -111,12 +139,90 @@ export class EngineOrderRepository {
 		}
 		// Promote the filter/sort columns at the single storage boundary so the in-flight OrderDocument
 		// stays free of storage concerns and every stored order is queryable by the indexed columns.
-		assertBulkSuccess(
-			await this.db.orders.bulkUpsert(
-				materialized.map(({ storedDocument }) => withOrderColumns(storedDocument))
-			),
-			'engine-order-repository upsert'
+		const changed = withoutUnchanged(
+			this.db.orders,
+			residents,
+			materialized.map(({ storedDocument }) => withOrderColumns(storedDocument))
 		);
+		if (changed.length > 0)
+			assertBulkSuccess(await this.db.orders.bulkUpsert(changed), 'engine-order-repository upsert');
+		if (stash && changed.some((document) => counts[document.uuid] !== undefined)) {
+			for (const document of changed) delete counts[document.uuid];
+			if (Object.keys(counts).length === 0) await stash.remove();
+			else await this.db.orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
+		}
+		const parents = applicable.filter(
+			(order) => order.remoteId !== null && Array.isArray(order.payload.refunds)
+		);
+		const heldByParent = new Map<number, LocalRefundDocument[]>();
+		if (parents.length > 0) {
+			const held = await this.db.refunds
+				.find({
+					selector: {
+						'payload.parent_id': { $in: parents.map((order) => wooIdOf(order.remoteId!)) },
+					},
+				})
+				.exec();
+			for (const doc of held) {
+				const refund = doc.toJSON();
+				const group = heldByParent.get(refund.payload.parent_id) ?? [];
+				group.push(refund);
+				heldByParent.set(refund.payload.parent_id, group);
+			}
+		}
+		const candidates = new Set<string>();
+		for (const order of parents) {
+			if (order.remoteId === null || !Array.isArray(order.payload.refunds)) continue;
+			const held = heldByParent.get(wooIdOf(order.remoteId)) ?? [];
+			const { remove } = reconcileRefundIds(
+				order.payload.refunds,
+				held.map((doc) => doc.payload.id)
+			);
+			for (const doc of held) {
+				if (remove.includes(doc.payload.id)) candidates.add(doc.uuid);
+			}
+		}
+		// Another upsert may have stored a newer summary during the child lookup.
+		// Only current stored authority can confirm deletions or request missing children.
+		const currentParents =
+			parents.length > 0
+				? await this.db.orders.findByIds(parents.map((order) => order.uuid)).exec()
+				: new Map<string, StoredOrderDoc>();
+		const removeIds: string[] = [];
+		const missingParents: RemoteId[] = [];
+		for (const stored of currentParents.values()) {
+			const order = stored.toJSON() as OrderDocument;
+			if (order.remoteId === null) continue;
+			const held = heldByParent.get(wooIdOf(order.remoteId)) ?? [];
+			const { remove, missing } = reconcileRefundIds(
+				order.payload.refunds,
+				held.map((doc) => doc.payload.id)
+			);
+			removeIds.push(
+				...held
+					.filter((doc) => candidates.has(doc.uuid) && remove.includes(doc.payload.id))
+					.map((doc) => doc.uuid)
+			);
+			if (missing.length > 0) missingParents.push(order.remoteId);
+		}
+		if (removeIds.length > 0)
+			assertBulkSuccess(
+				await this.db.refunds.bulkRemove(removeIds),
+				'engine-order-repository refund reconciliation'
+			);
+		for (const parentRemoteId of missingParents) {
+			try {
+				// A summary can announce a refund after an active walk's last request.
+				await seedRefundParentLane({ database: this.db, parentRemoteId, coalesceInFlight: true });
+			} catch (error) {
+				getLogger(['wcpos', 'sync', 'orders']).warn(
+					'Refund parent seed failed after order ingestion',
+					{
+						context: { parentRemoteId, error: String(error) },
+					}
+				);
+			}
+		}
 		return applicable;
 	}
 
@@ -160,6 +266,10 @@ export class EngineOrderRepository {
 				await this.db.orders.bulkRemove(storageIds),
 				'engine-order-repository remove'
 			);
+		await removeRefundChildren(
+			this.db.refunds,
+			remoteIds.filter((remoteId) => !protectedRemoteIds.has(remoteId))
+		);
 		// Leg-3 maintenance invariant (ADR 0015): depurate the deleted remoteIds from the order
 		// manifest — except the ones whose document we just declined to remove.
 		await removeManifestByWooIds(
@@ -176,10 +286,40 @@ export class EngineOrderRepository {
 	 */
 	async resetForResync(pendingMutationOrderIds?: ReadonlySet<string>): Promise<void> {
 		const removable = await this.unprotectedOrders(pendingMutationOrderIds);
+		const stash = await this.db.orders.getLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID);
+		const counts = { ...stash?.get('counts') };
+		for (const document of removable) {
+			const local = document.local as typeof document.local & { receiptPrintCount?: number };
+			if (local?.receiptPrintCount !== undefined) counts[document.uuid] = local.receiptPrintCount;
+		}
+		// Persist before deleting orders: the next pull batch uses a new repository.
+		if (Object.keys(counts).length > 0)
+			await this.db.orders.upsertLocal(RESYNC_RECEIPT_PRINT_COUNTS_ID, { counts });
 		if (removable.length > 0)
 			assertBulkSuccess(
 				await this.db.orders.bulkRemove(removable.map((doc) => doc.uuid)),
 				'engine-order-repository remove'
+			);
+		// A retry may find the parents already gone. Sweep against current residency,
+		// retaining POS-stamped history even when its parent is not held locally.
+		const held = (await this.db.refunds.find({ selector: {} }).exec()).map((doc) => doc.toJSON());
+		if (held.length === 0) return;
+		const parents = await this.db.orders
+			.find({
+				selector: { 'payload.id': { $in: [...new Set(held.map((doc) => doc.payload.parent_id))] } },
+			})
+			.exec();
+		const residentIds = new Set(parents.map((doc) => (doc.toJSON() as OrderDocument).payload.id));
+		const orphanIds = held
+			.filter(
+				(doc) =>
+					!residentIds.has(doc.payload.parent_id) && !hasPosRefundStamp(doc.payload.meta_data)
+			)
+			.map((doc) => doc.uuid);
+		if (orphanIds.length > 0)
+			assertBulkSuccess(
+				await this.db.refunds.bulkRemove(orphanIds),
+				'orders resync refund cascade'
 			);
 	}
 

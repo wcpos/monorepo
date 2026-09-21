@@ -1,5 +1,7 @@
 import type { TypedIpcRenderer } from '@wcpos/printer/ipc-channels';
 
+import { PRINT_JOB_TIMEOUT_MS } from './print-timeouts';
+
 import type { PrinterTransport } from '../types';
 
 type ElectronWindow = Window & {
@@ -27,8 +29,6 @@ export class SystemPrintAdapter implements PrinterTransport {
 	async printHtml(html: string): Promise<void> {
 		const ipc = getIpc();
 		const jobId = crypto.randomUUID();
-		const PRINT_TIMEOUT_MS = 30_000;
-
 		return new Promise<void>((resolve, reject) => {
 			const afterChannel = `onAfterPrint-${jobId}`;
 			const errorChannel = `onPrintError-${jobId}`;
@@ -41,8 +41,8 @@ export class SystemPrintAdapter implements PrinterTransport {
 
 			const timeoutId = setTimeout(() => {
 				cleanup();
-				reject(new Error(`Electron print timed out after ${PRINT_TIMEOUT_MS}ms`));
-			}, PRINT_TIMEOUT_MS);
+				reject(new Error(`Electron print timed out after ${PRINT_JOB_TIMEOUT_MS}ms`));
+			}, PRINT_JOB_TIMEOUT_MS);
 
 			// ipc.on() returns an unsubscribe function (preload doesn't expose removeListener)
 			const unsubAfter = ipc.on(afterChannel, () => {

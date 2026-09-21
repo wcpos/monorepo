@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
+import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { AppInfo } from '@wcpos/utils/app-info';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
@@ -13,6 +14,7 @@ import {
 	SYNC_PROTOCOL_VERSION,
 } from '@wcpos/utils/sync-protocol';
 
+import { isBotChallengeError } from './bot-challenge';
 import { useT } from '../../../contexts/translations';
 import {
 	isWcposPluginCompatible,
@@ -111,6 +113,17 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 	const handleApiError = React.useCallback(
 		(error: unknown, wpApiUrl: string): never => {
+			if (isBotChallengeError(error)) {
+				const message = t('auth.host_compatibility_problem');
+				discoveryLogger.error(message, {
+					showToast: true,
+					toast: { title: message },
+					code: ERROR_CODES.BOT_CHALLENGE_BLOCKING_API,
+					context: { wpApiUrl },
+				});
+				throw errorWithCode(message, ERROR_CODES.BOT_CHALLENGE_BLOCKING_API);
+			}
+
 			// If it's already one of our logged errors, re-throw
 			if (error instanceof ApiDiscoveryError) {
 				throw error;
@@ -155,7 +168,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				throw new ApiDiscoveryError(t('auth.bad_api_response'));
 			}
 
-			discoveryLogger.error(`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
+			const logLevel = isExpectedPreflightBlock(error) ? 'warn' : 'error';
+			discoveryLogger[logLevel](`Failed to connect to ${wpApiUrl}: ${getErrorMessage(error)}`, {
 				showToast: true,
 				code: ERROR_CODES.AUTH_UNEXPECTED,
 				context: { wpApiUrl },

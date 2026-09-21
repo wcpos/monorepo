@@ -1,0 +1,884 @@
+import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
+import { addRxPlugin, createRxDatabase } from 'rxdb';
+import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
+
+import { getLogger } from '@wcpos/utils/logger';
+import type { StoreDatabase, UserDatabase } from '@wcpos/database';
+import { closuresLiteral } from '@wcpos/database/collections/schemas/closures';
+import { registerSessionsLiteral } from '@wcpos/database/collections/schemas/register-sessions';
+import { cashMovementsLiteral } from '@wcpos/database/collections/schemas/cash-movements';
+
+import { ensureRegister, readRegister } from '../register/register-document';
+import {
+	closeSession,
+	openSession,
+	recordMovement,
+	startCounting,
+	voidMovement,
+	writeClosure,
+} from './session-store';
+import { drainRegisterSessionQueue } from './queue';
+import { refreshSessions } from './refresh';
+
+addRxPlugin(RxDBLocalDocumentsPlugin);
+let db: StoreDatabase;
+let userDB: UserDatabase;
+const http = { post: jest.fn(), get: jest.fn() };
+jest.mock('../../contexts/app-state', () => ({ useStoreSession: jest.fn() }));
+const logger = jest.mocked(getLogger(['wcpos', 'registerSession']));
+beforeEach(async () => {
+	jest.clearAllMocks();
+	http.post.mockReset();
+	http.get.mockReset();
+	db = await createRxDatabase({
+		name: `queue${Math.random().toString(36).slice(2)}`,
+		storage: wrappedValidateAjvStorage({ storage: getRxStorageMemory() }),
+		multiInstance: false,
+	});
+	userDB = await createRxDatabase({
+		name: `queueuser${Math.random().toString(36).slice(2)}`,
+		storage: getRxStorageMemory(),
+		localDocuments: true,
+		multiInstance: false,
+	});
+	await ensureRegister(userDB);
+	await db.addCollections({
+		closures: { schema: closuresLiteral, autoMigrate: false },
+		register_sessions: { schema: registerSessionsLiteral, autoMigrate: false },
+		cash_movements: { schema: cashMovementsLiteral },
+	});
+});
+afterEach(async () => {
+	await db.remove();
+	await userDB.remove();
+});
+const open = () =>
+	openSession(db.register_sessions, {
+		registerId: 'register',
+		expectedFloat: null,
+		countedFloat: '100',
+		openedBy: 7,
+		businessDay: { year: 2026, month: 9, day: 16 },
+	});
+const drain = () =>
+	drainRegisterSessionQueue({
+		sessions: db.register_sessions,
+		movements: db.cash_movements,
+		closures: db.closures,
+		userDB,
+		siteUuid: 'site',
+		orders: null,
+		http,
+	});
+it('acknowledges a create, never resends it, and shares the in-flight drain', async () => {
+	const row = await open();
+	http.post.mockResolvedValue({ status: 201, data: { ...row.toJSON(), status: 'open' } });
+	const first = drain();
+	expect(drain()).toBe(first);
+	await first;
+	expect(row.getLatest().sync_status).toBe('synced');
+	await drain();
+	expect(http.post).toHaveBeenCalledTimes(1);
+	expect(http.post).toHaveBeenCalledWith(
+		'sessions',
+		// Revert: omit business_day from the session-create POST.
+		expect.objectContaining({
+			id: row.id,
+			opened_at: row.opened_at_gmt,
+			business_day: '2026-09-16',
+		})
+	);
+});
+it('marks a losing create failed and adopts the server session', async () => {
+	const row = await open();
+	http.post.mockRejectedValue({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_session_already_open', data: { session_id: 'winner' } },
+		},
+	});
+	http.get.mockResolvedValue({ data: { ...row.toJSON(), id: 'winner', status: 'open' } });
+	await drain();
+	expect(row.getLatest().sync_status).toBe('failed');
+	expect((await db.register_sessions.findOne('winner').exec())?.sync_status).toBe('synced');
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register session adopted',
+		expect.objectContaining({
+			// Its own operationId: two adoptions in one drain must stay two rows.
+			terminal: { operationId: 'winner' },
+			context: { type: 'register.session-adopted', sessionId: 'winner', registerId: 'register' },
+		})
+	);
+	expect(logger.info.mock.calls[0][1]).not.toHaveProperty('actor');
+	// The lost race is recovered, not refused: no "refused upload" title on its failure row.
+	const failures = [
+		...logger.debug.mock.calls,
+		...logger.warn.mock.calls,
+		...logger.error.mock.calls,
+	];
+	expect(failures).toHaveLength(1);
+	expect(failures[0][1]?.terminal).toMatchObject({ outcome: 'recovered' });
+	expect(failures[0][1]?.context).not.toHaveProperty('type');
+});
+it('backs off a 5xx without posting dependent movements', async () => {
+	const row = await open();
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	http.post.mockRejectedValue({ response: { status: 503 } });
+	await drain();
+	expect(row.getLatest()).toMatchObject({ sync_status: 'pending', sync_attempts: 1 });
+	expect(row.getLatest().sync_next_at).toBeGreaterThan(Date.now());
+	expect(movement.getLatest().sync_attempts).toBe(0);
+	expect(http.post).toHaveBeenCalledTimes(1);
+});
+it('sends movements after create but before a deferred counting transition', async () => {
+	const row = await open();
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: row.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	await startCounting(db.register_sessions, row.id);
+	http.post.mockImplementation(async (url, body) => ({
+		data:
+			url === 'movements'
+				? { ...movement.toJSON() }
+				: { ...row.toJSON(), status: url === 'sessions' ? 'open' : body.status },
+	}));
+	await drain();
+	expect(http.post.mock.calls.map(([url]) => url)).toEqual(['sessions', 'movements']);
+	expect(logger.info).toHaveBeenCalledWith(
+		'Register cash movement accepted',
+		expect.objectContaining({
+			context: expect.objectContaining({
+				type: 'register.movement-accepted',
+				sessionId: row.id,
+				registerId: 'register',
+				movementId: movement.id,
+				amount: '5',
+				movementType: 'paid_out',
+			}),
+		})
+	);
+	expect(logger.info.mock.calls[0][1]).not.toHaveProperty('actor');
+	expect(row.getLatest().toJSON()).toMatchObject({
+		status: 'counting',
+		pending_status: 'counting',
+	});
+	await drain();
+	expect(http.post.mock.calls[2][0]).toBe(`sessions/${row.id}/status`);
+	expect(row.getLatest()).toMatchObject({ sync_status: 'synced', pending_status: null });
+});
+it('closes a predecessor before creating its successor on the same register', async () => {
+	const predecessor = await open();
+	await predecessor.incrementalPatch({
+		server_status: 'open',
+		status: 'closed',
+		pending_status: 'closed',
+		status_at: new Date().toISOString(),
+		closed_at_gmt: new Date().toISOString(),
+	});
+	const successor = await open();
+	http.post.mockImplementation(async (url) => ({
+		data: {
+			...(url === 'sessions' ? successor.toJSON() : predecessor.toJSON()),
+			status: url === 'sessions' ? 'open' : 'closed',
+		},
+	}));
+
+	await drain();
+	expect(http.post.mock.calls.map(([url]) => url)).toEqual([
+		`sessions/${predecessor.id}/status`,
+		`sessions/${predecessor.id}/status`,
+	]);
+
+	await drain();
+	expect(http.post.mock.calls.map(([url]) => url)).toEqual([
+		`sessions/${predecessor.id}/status`,
+		`sessions/${predecessor.id}/status`,
+		'sessions',
+	]);
+});
+it.each([400, 409])('permanently fails HTTP %s', async (status) => {
+	const row = await open();
+	http.post.mockRejectedValue({ response: { status } });
+	await drain();
+	expect(row.getLatest().sync_status).toBe('failed');
+});
+it('retries HTTP 429 with backoff instead of failing', async () => {
+	const row = await open();
+	http.post.mockRejectedValue({ response: { status: 429 } });
+	await drain();
+	expect(row.getLatest().sync_status).toBe('pending');
+	expect(row.getLatest().sync_next_at).toBeGreaterThan(Date.now());
+});
+
+it('recovers a refused close to counting, preserving counts and machine-readable error', async () => {
+	const row = await open();
+	await row.incrementalPatch({
+		server_status: 'counting',
+		sync_status: 'synced',
+		status: 'counting',
+	});
+	await closeSession(db.register_sessions, row.id, { counted: { cash: '80', card: '10' } });
+	http.post.mockRejectedValue({
+		response: {
+			status: 403,
+			data: { code: 'wcpos_override_refused', message: 'Manager required' },
+		},
+	});
+	await drain();
+	expect(row.getLatest().toJSON()).toMatchObject({
+		status: 'counting',
+		pending_status: null,
+		sync_status: 'synced',
+		approval_required: true,
+		sync_error: 'wcpos_override_refused',
+		counted: { cash: '80', card: '10' },
+	});
+	expect(http.post).toHaveBeenCalledWith(`sessions/${row.id}/status`, {
+		status: 'closed',
+		at: expect.any(String),
+		counted: { cash: '80', card: '10' },
+	});
+});
+it('does not apply refused-close recovery to a create', async () => {
+	const row = await open();
+	http.post.mockRejectedValue({
+		response: { status: 403, data: { code: 'wcpos_override_refused', message: 'Refused' } },
+	});
+	await drain();
+	expect(row.getLatest().toJSON()).toMatchObject({
+		sync_status: 'failed',
+		sync_error: 'wcpos_override_refused',
+	});
+});
+
+it('prunes movements together with their expired closed session', async () => {
+	const row = await open();
+	await row.incrementalPatch({
+		status: 'closed',
+		server_status: 'closed',
+		sync_status: 'synced',
+		closed_at_gmt: new Date(Date.now() - 8 * 86400_000).toISOString(),
+	});
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: row.id,
+		type: 'paid_in',
+		amount: '5',
+		reason: 'Float',
+		actor: 7,
+	});
+	await movement.incrementalPatch({ sync_status: 'synced' });
+	http.get.mockResolvedValue({ data: [] });
+
+	await refreshSessions({
+		registerId: 'register',
+		closures: db.closures,
+		http,
+		sessions: db.register_sessions,
+		movements: db.cash_movements,
+	});
+
+	expect(await db.register_sessions.findOne(row.id).exec()).toBeNull();
+	expect(await db.cash_movements.findOne(movement.id).exec()).toBeNull();
+	const refreshLogger = jest.mocked(getLogger(['wcpos', 'registerSession']));
+	expect(refreshLogger.info).toHaveBeenCalledWith(
+		'Register session pruned',
+		expect.objectContaining({
+			terminal: { operationId: row.id.replace(/-/g, '') },
+			context: { type: 'register.session-pruned', sessionId: row.id, registerId: 'register' },
+		})
+	);
+	expect(refreshLogger.info.mock.calls[0][1]).not.toHaveProperty('actor');
+});
+
+it.each(['pending', 'failed'] as const)(
+	'keeps an expired session whose %s movement the server never accepted',
+	async (status) => {
+		const row = await open();
+		await row.incrementalPatch({
+			status: 'closed',
+			server_status: 'closed',
+			sync_status: 'synced',
+			closed_at_gmt: new Date(Date.now() - 8 * 86400_000).toISOString(),
+		});
+		const movement = await recordMovement(db.cash_movements, {
+			sessionId: row.id,
+			type: 'paid_in',
+			amount: '5',
+			reason: 'Float',
+			actor: 7,
+		});
+		await movement.incrementalPatch({ sync_status: status });
+		http.get.mockResolvedValue({ data: [] });
+
+		await refreshSessions({
+			registerId: 'register',
+			closures: db.closures,
+			http,
+			sessions: db.register_sessions,
+			movements: db.cash_movements,
+		});
+
+		// The cash physically moved and the server never took the row: the device holds the
+		// only record of it, so the prune must leave both it and its session alone.
+		expect(await db.cash_movements.findOne(movement.id).exec()).not.toBeNull();
+		expect(await db.register_sessions.findOne(row.id).exec()).not.toBeNull();
+	}
+);
+
+it('does not call a local write failure after the store accepted a movement a delivery retry', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '20',
+		reason: 'Bread money',
+		actor: 7,
+	});
+	// The store answers, but merging its row into the local document fails: the validating
+	// storage rejects a non-string amount, which stands in for any post-response write failure.
+	http.post.mockResolvedValueOnce({ data: { ...movement.toJSON(), amount: 42 } });
+	await drain();
+	const calls = [...logger.debug.mock.calls, ...logger.warn.mock.calls, ...logger.error.mock.calls];
+	expect(calls).toHaveLength(1);
+	expect(calls[0][1]?.context).toMatchObject({ endpoint: 'movements', movementId: movement.id });
+	// The store has the movement; "trying again" would tell the merchant it did not arrive.
+	expect(calls[0][1]?.context).not.toHaveProperty('type');
+	expect(logger.info).not.toHaveBeenCalledWith(
+		'Register cash movement accepted',
+		expect.anything()
+	);
+});
+
+it('logs a retryable outbox failure at debug and a permanent one at its registered level, with the transport facts', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '20',
+		reason: 'Bread money',
+		actor: 7,
+	});
+	http.post.mockRejectedValueOnce({ response: { status: 503 } });
+	await drain();
+	expect(logger.error).not.toHaveBeenCalled();
+	expect(logger.warn).not.toHaveBeenCalled();
+	expect(logger.debug).toHaveBeenCalledWith(
+		'Register session outbox request failed',
+		expect.objectContaining({
+			context: expect.objectContaining({
+				type: 'register.movement-retrying',
+				movementId: movement.id,
+				sessionId: session.id,
+				registerId: session.register_id,
+				endpoint: 'movements',
+				status: 503,
+				documentId: movement.id,
+				movementType: 'paid_in',
+				amount: '20',
+			}),
+			terminal: expect.objectContaining({ operationType: 'register.outbox', attempt: 1 }),
+		})
+	);
+
+	expect(logger.debug.mock.calls[0][1]).not.toHaveProperty('actor');
+	logger.debug.mockClear();
+	await movement.incrementalPatch({ sync_status: 'pending', sync_next_at: null });
+	http.post.mockRejectedValueOnce({
+		response: {
+			status: 400,
+			data: { code: 'rest_invalid_param', data: { params: { reason: 'Reason is required.' } } },
+		},
+	});
+	await drain();
+	expect(logger.debug).not.toHaveBeenCalled();
+	expect(logger.warn).not.toHaveBeenCalled();
+	// Money that has physically moved and the server will never take is an `error`: it needs
+	// the cashier now, and only a registered code gives the row a merchant-readable title,
+	// a Help link and a toast.
+	expect(logger.error).toHaveBeenCalledWith(
+		'Register session outbox request permanently refused',
+		expect.objectContaining({
+			code: 'REGISTER101',
+			showToast: true,
+			context: expect.objectContaining({
+				type: 'register.movement-rejected',
+				movementId: movement.id,
+				sessionId: session.id,
+				endpoint: 'movements',
+				status: 400,
+				errorCode: 'rest_invalid_param',
+				field: 'reason',
+				documentId: movement.id,
+			}),
+			terminal: expect.objectContaining({ outcome: 'failed', attempt: 2 }),
+		})
+	);
+	// `logger.error` forwards message AND context to Sentry. The cashier's free text
+	// must never ride along.
+	expect(JSON.stringify(logger.error.mock.calls)).not.toContain('Bread money');
+	for (const [, options] of logger.error.mock.calls) expect(options).not.toHaveProperty('actor');
+});
+
+it('gives a refused reversal its own code, below error, because the original still stands', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const target = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	await target.incrementalPatch({ sync_status: 'synced' });
+	await voidMovement(db.cash_movements, target.id, 7);
+	http.post.mockRejectedValueOnce({
+		response: { status: 409, data: { code: 'wcpos_movement_void_refused' } },
+	});
+	await drain();
+	expect(logger.error).not.toHaveBeenCalled();
+	expect(logger.warn).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER111' })
+	);
+});
+
+it('names a refused open and a refused close apart', async () => {
+	await open();
+	http.post.mockRejectedValueOnce({
+		response: { status: 400, data: { code: 'rest_invalid_param' } },
+	});
+	await drain();
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER201' })
+	);
+
+	expect(logger.error.mock.calls[0][1]?.context).toHaveProperty('type', 'register.upload-refused');
+	logger.error.mockClear();
+	const other = await open();
+	await other.incrementalPatch({
+		server_status: 'counting',
+		status: 'counting',
+		sync_status: 'synced',
+	});
+	await closeSession(db.register_sessions, other.id, { counted: { cash: '100' } });
+	http.post.mockRejectedValueOnce({
+		response: { status: 400, data: { code: 'rest_invalid_param' } },
+	});
+	await drain();
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			code: 'REGISTER211',
+			// The endpoint is searchable, so it must not carry the session id — one unique
+			// string per session makes a search for the route match nothing.
+			context: expect.objectContaining({ endpoint: 'sessions/status' }),
+		})
+	);
+	expect(logger.error.mock.calls[0][1]?.context).toHaveProperty('type', 'register.upload-refused');
+});
+
+it('does not call a refused counting transition a refused close', async () => {
+	const row = await open();
+	await row.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	await startCounting(db.register_sessions, row.id);
+	http.post.mockRejectedValueOnce({
+		response: { status: 400, data: { code: 'rest_invalid_param' } },
+	});
+	await drain();
+	// All three transitions share one route, so classifying on the route alone would report a
+	// refused "start counting" as a refused close — and the register is still OPEN.
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ code: 'REGISTER201' })
+	);
+});
+
+it('records a takeover as a takeover, not as a refused open', async () => {
+	const row = await open();
+	http.post.mockRejectedValue({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_session_already_open', data: { session_id: 'winner' } },
+		},
+	});
+	http.get.mockResolvedValue({ data: { ...row.toJSON(), id: 'winner', status: 'open' } });
+	await drain();
+	// Two tills on one drawer. Today this is completely mute.
+	expect(logger.warn).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			code: 'REGISTER221',
+			// The till adopts the winning session and carries on, so the arc RECOVERED. Calling
+			// it 'failed' would show a broken-looking row for a till that is working.
+			terminal: expect.objectContaining({ outcome: 'recovered' }),
+		})
+	);
+	expect(logger.error).not.toHaveBeenCalled();
+	expect(await db.register_sessions.findOne('winner').exec()).not.toBeNull();
+});
+
+it('puts the store’s own explanation on the row, not the axios transport text', async () => {
+	await open();
+	http.post.mockRejectedValueOnce(
+		Object.assign(new Error('Request failed with status code 400'), {
+			response: {
+				status: 400,
+				data: {
+					code: 'rest_invalid_param',
+					message: 'The session request could not be completed.',
+				},
+			},
+		})
+	);
+	await drain();
+	expect(logger.error).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			context: expect.objectContaining({
+				message: 'The session request could not be completed.',
+			}),
+		})
+	);
+});
+
+it('records a refused manager approval, which today leaves no trace at all', async () => {
+	const row = await open();
+	await row.incrementalPatch({
+		server_status: 'counting',
+		sync_status: 'synced',
+		status: 'counting',
+	});
+	await closeSession(db.register_sessions, row.id, { counted: { cash: '80' } });
+	http.post.mockRejectedValue({
+		response: {
+			status: 403,
+			data: { code: 'wcpos_override_refused', message: 'Manager required' },
+		},
+	});
+	await drain();
+	expect(logger.warn).toHaveBeenCalledWith(
+		'Register session close approval refused',
+		expect.objectContaining({
+			code: 'REGISTER301',
+			context: expect.objectContaining({
+				type: 'register.approval-refused',
+				sessionId: row.id,
+				registerId: 'register',
+				status: 403,
+				errorCode: 'wcpos_override_refused',
+			}),
+		})
+	);
+	// The recovery branch returns the session to counting; it must not also be logged as a
+	// refused close.
+	expect(logger.error).not.toHaveBeenCalled();
+	// Neither the approver's username nor their password is ever in scope here, but the
+	// session row is — assert the row we log carries no credential-shaped key.
+	expect(JSON.stringify(logger.warn.mock.calls)).not.toMatch(/password|username|approver_token/);
+	expect(logger.warn.mock.calls[0][1]).not.toHaveProperty('actor');
+});
+
+it('chains outbox attempts on one operation id the ledger can follow', async () => {
+	const row = await open();
+	http.post.mockRejectedValue({ response: { status: 503 } });
+	await drain();
+	await row.incrementalPatch({ sync_next_at: null });
+	await drain();
+	const ids = logger.debug.mock.calls.map(([, options]) => options?.terminal?.operationId);
+	expect(ids).toEqual([ids[0], ids[0]]);
+	// `operationId` is clamped to 32 characters, so a 36-character UUID would truncate.
+	expect(ids[0]).toHaveLength(32);
+});
+
+it('does not let a permanently failed close block a successor', async () => {
+	const predecessor = await open();
+	await predecessor.incrementalPatch({ server_status: 'counting', status: 'counting' });
+	await closeSession(db.register_sessions, predecessor.id, { counted: { cash: '100' } });
+	http.post.mockRejectedValueOnce({ response: { status: 403, data: { code: 'close_refused' } } });
+	await drain();
+	expect(predecessor.getLatest().sync_status).toBe('failed');
+	const successor = await open();
+	http.post.mockResolvedValueOnce({ data: successor.toJSON() });
+	await drain();
+	expect(successor.getLatest().sync_status).toBe('synced');
+	expect(http.post).toHaveBeenCalledTimes(2);
+});
+it('permanently fails a reversal with its refused target error', async () => {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open', sync_status: 'synced' });
+	const target = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	const reversal = await voidMovement(db.cash_movements, target.id, 7);
+	http.post.mockRejectedValueOnce({
+		response: { status: 403, data: { code: 'movement_refused' } },
+	});
+	await drain();
+	await drain();
+	expect(reversal.getLatest().toJSON()).toMatchObject({
+		sync_status: 'failed',
+		sync_error: 'movement_refused',
+		sync_next_at: null,
+	});
+	expect(http.post).toHaveBeenCalledTimes(1);
+});
+
+async function closure() {
+	const session = await open();
+	await session.incrementalPatch({ server_status: 'open' });
+	const closed = await closeSession(db.register_sessions, session.id, { counted: { cash: '100' } });
+	const row = await writeClosure({
+		closures: db.closures,
+		userDB,
+		siteUuid: 'site',
+		session: closed.toJSON(true),
+		counted: '100',
+		otherTenders: {},
+		movements: [],
+		orders: [],
+	});
+	return { session: closed, row };
+}
+it('waits for session rows, then adopts server number, totals and findings', async () => {
+	const { session, row } = await closure();
+	await session.incrementalPatch({ sync_next_at: Date.now() + 60000 });
+	http.post.mockImplementation(async (url, body) => ({
+		data:
+			url === 'closures'
+				? {
+						...row.toJSON(),
+						number: 4,
+						printed_number: 1,
+						perpetual_sales_total: '100.1234',
+						perpetual_refunds_total: '10.1000',
+						period_sales_total: '90.0000',
+						period_refunds_total: '5.0000',
+						findings: { gap: true },
+					}
+				: { ...session.toJSON(), status: body.status },
+	}));
+	await drain();
+	expect(http.post).not.toHaveBeenCalled();
+	await session.incrementalPatch({ sync_next_at: null });
+	await drain();
+	expect(http.post.mock.calls.map(([url]) => url)).toEqual([
+		`sessions/${session.id}/status`,
+		`sessions/${session.id}/status`,
+		'closures',
+	]);
+	expect(row.getLatest()).toMatchObject({
+		sync_status: 'synced',
+		number: 1,
+		server_number: 4,
+		printed_number: 1,
+		period_sales_total: '90.0000',
+		perpetual_sales_total: '100.1234',
+		server_findings: { gap: true },
+		synced_rows_at: expect.any(String),
+	});
+	expect((await readRegister(userDB))?.sites.site.registers?.register).toMatchObject({
+		last_closure_number: 4,
+		perpetual_sales_total: '100.1234',
+		perpetual_refunds_total: '10.1000',
+	});
+});
+it('supersedes a closure that landed as a recount', async () => {
+	const { session, row } = await closure();
+	await session.incrementalPatch({
+		sync_status: 'synced',
+		server_status: 'closed',
+		pending_status: null,
+	});
+	http.post.mockRejectedValue({
+		response: {
+			status: 409,
+			data: { code: 'wcpos_closure_exists', data: { closure_id: 'winner' } },
+		},
+	});
+	await drain();
+	expect(row.getLatest()).toMatchObject({
+		sync_status: 'superseded',
+		server_closure_id: 'winner',
+		synced_rows_at: expect.any(String),
+	});
+});
+it('waits for pending movements and dirty named orders before acknowledging a closure', async () => {
+	const { session, row } = await closure();
+	await session.incrementalPatch({
+		sync_status: 'synced',
+		server_status: 'closed',
+		pending_status: null,
+	});
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_in',
+		amount: '20',
+		reason: '',
+		actor: 7,
+	});
+	await movement.incrementalPatch({ sync_next_at: Date.now() + 60000 });
+	await row.incrementalPatch({ movement_ids: [movement.id], order_ids: ['order'] });
+	const order = { local: { dirty: true } };
+	const drainWithOrder = () =>
+		drainRegisterSessionQueue({
+			sessions: db.register_sessions,
+			movements: db.cash_movements,
+			closures: db.closures,
+			userDB,
+			siteUuid: 'site',
+			http,
+			orders: { findOne: () => ({ exec: async () => order }) } as never,
+		});
+	await drainWithOrder();
+	expect(http.post).not.toHaveBeenCalled();
+	await movement.incrementalPatch({ sync_status: 'synced' });
+	await drainWithOrder();
+	expect(http.post).not.toHaveBeenCalled();
+	expect(row.getLatest().synced_rows_at).toBeNull();
+	order.local.dirty = false;
+	http.post.mockResolvedValue({ data: { ...row.toJSON(), findings: {} } });
+	await drainWithOrder();
+	expect(http.post.mock.calls.map(([url]) => url)).toEqual(['closures']);
+	expect(row.getLatest().synced_rows_at).toEqual(expect.any(String));
+});
+it('adopts the floor and re-mints only once, including across drains, before dead-lettering', async () => {
+	const { session, row } = await closure();
+	await session.incrementalPatch({
+		sync_status: 'synced',
+		server_status: 'closed',
+		pending_status: null,
+	});
+	http.post.mockRejectedValue({
+		response: { status: 409, data: { code: 'wcpos_closure_number_invalid' } },
+	});
+	http.get.mockResolvedValue({
+		data: {
+			counters: {
+				last_closure_number: 8,
+				perpetual_sales_total: '5',
+				perpetual_refunds_total: '0',
+			},
+		},
+	});
+	await drain();
+	await drain();
+	expect(http.post.mock.calls.map(([, body]) => body.number)).toEqual([1, 9]);
+	expect(row.getLatest()).toMatchObject({
+		number: 9,
+		number_retried: true,
+		sync_status: 'failed',
+		sync_error: 'wcpos_closure_number_invalid',
+	});
+	expect((await readRegister(userDB))?.sites.site.registers?.register.last_closure_number).toBe(9);
+});
+
+it('blocks a failed named movement and dead-letters the closure after six due attempts', async () => {
+	const { session, row } = await closure();
+	await session.incrementalPatch({
+		sync_status: 'synced',
+		server_status: 'closed',
+		pending_status: null,
+	});
+	const movement = await recordMovement(db.cash_movements, {
+		sessionId: session.id,
+		type: 'paid_out',
+		amount: '5',
+		reason: 'Milk',
+		actor: 7,
+	});
+	await movement.incrementalPatch({ sync_status: 'failed', sync_error: 'movement_refused' });
+	await row.incrementalPatch({ movement_ids: [movement.id] });
+	for (let attempt = 1; attempt <= 6; attempt++) {
+		await row.incrementalPatch({ sync_next_at: null });
+		await drain();
+		expect(http.post).not.toHaveBeenCalled();
+		expect(row.getLatest()).toMatchObject({
+			sync_status: attempt < 6 ? 'pending' : 'failed',
+			sync_attempts: attempt,
+			sync_error: 'movement_refused',
+			synced_rows_at: null,
+		});
+		if (attempt < 6) {
+			expect(row.getLatest().sync_next_at).toBeGreaterThan(Date.now());
+			await drain();
+			expect(row.getLatest().sync_attempts).toBe(attempt);
+		}
+	}
+	expect(row.getLatest().sync_next_at).toBeNull();
+});
+it('resubmits the current closure with re-adopted perpetual totals', async () => {
+	const { session, row } = await closure();
+	await session.incrementalPatch({
+		sync_status: 'synced',
+		server_status: 'closed',
+		pending_status: null,
+	});
+	await row.incrementalPatch({ period_sales_total: '20', period_refunds_total: '3' });
+	http.post.mockRejectedValueOnce({
+		response: { status: 409, data: { code: 'wcpos_closure_number_invalid' } },
+	});
+	http.post.mockImplementation(async (_url, body) => ({
+		data: { ...row.getLatest().toJSON(), ...body },
+	}));
+	http.get.mockResolvedValue({
+		data: {
+			counters: {
+				last_closure_number: 8,
+				perpetual_sales_total: '100',
+				perpetual_refunds_total: '10',
+			},
+		},
+	});
+	await drain();
+	expect(http.get).toHaveBeenCalledWith('registers/register');
+	expect(http.post.mock.calls[1][1]).toMatchObject({
+		number: 9,
+		perpetual_sales_total: '120.0000',
+		perpetual_refunds_total: '13.0000',
+	});
+	expect(row.getLatest().sync_status).toBe('synced');
+});
+
+it.each([403, 503])(
+	'titles a permanent closure upload refusal and leaves a retry untitled (%s)',
+	async (status) => {
+		const { session, row } = await closure();
+		await session.incrementalPatch({
+			sync_status: 'synced',
+			server_status: 'closed',
+			pending_status: null,
+		});
+		http.post.mockRejectedValueOnce({ response: { status } });
+		await drain();
+		const calls = [
+			...logger.debug.mock.calls,
+			...logger.warn.mock.calls,
+			...logger.error.mock.calls,
+		];
+		expect(calls).toHaveLength(1);
+		expect(calls[0][1]?.context).toMatchObject({ endpoint: 'closures', closureId: row.id, status });
+		if (status === 403) {
+			expect(calls[0][1]?.context).toHaveProperty('type', 'register.upload-refused');
+		} else {
+			expect(calls[0][1]?.context).not.toHaveProperty('type');
+		}
+	}
+);

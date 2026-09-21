@@ -3,10 +3,10 @@ import { encodeThermalTemplateToEpos } from '@wcpos/receipt-renderer';
 import { buildConnectionError } from '../utils/connection-error';
 import { buildEposXml, commandFromBytes, parseEposResponse } from './epson-epos-protocol';
 import { getIpc } from './ipc-print.electron';
+import { PRINT_JOB_TIMEOUT_MS } from './print-timeouts';
+import { logPrintJob } from './log-print-job';
 
-import type { MarkupPrintJob, PrinterTransport } from '../types';
-
-const REQUEST_TIMEOUT_MS = 15_000;
+import type { MarkupPrintJob, PrinterTransport, PrintJobShape } from '../types';
 
 export async function postEposHttp(
 	host: string,
@@ -29,13 +29,24 @@ export class EpsonEposAdapter implements PrinterTransport {
 
 	async printRaw(data: Uint8Array): Promise<void> {
 		// <command> pass-through is not printable when Secure Printing is on; the service prefers printMarkup.
-		await this.sendEposPrint(commandFromBytes(data));
+		await this.sendEposPrint(commandFromBytes(data), { kind: 'raw', bytes: data.byteLength });
 	}
 
 	supportsMarkup = (): boolean => true;
-	printMarkup = async (job: MarkupPrintJob): Promise<void> =>
-		this.sendEposPrint(encodeThermalTemplateToEpos(job.template, job.data, job.options));
-	private async sendEposPrint(innerXml: string): Promise<void> {
+	printMarkup = async (job: MarkupPrintJob): Promise<void> => {
+		const markup = encodeThermalTemplateToEpos(job.template, job.data, job.options);
+		await this.sendEposPrint(markup, { kind: 'markup', markupLength: markup.length });
+	};
+
+	private async sendEposPrint(innerXml: string, job: PrintJobShape): Promise<void> {
+		const target = `${this.host}:${this.port}`;
+		await logPrintJob('ePOS', { transport: this.name, target, ...job }, () =>
+			this.postEposPrint(innerXml)
+		);
+	}
+
+	/** Posts the job over IPC and reports the HTTP status the printer answered with. */
+	private async postEposPrint(innerXml: string): Promise<number> {
 		const path =
 			'/cgi-bin/epos/service.cgi' + `?devid=${encodeURIComponent(this.deviceId)}&timeout=10000`;
 		const url = `${this.port === 443 || this.port === 8043 ? 'https' : 'http'}://${this.host}:${this.port}${path}`;
@@ -47,7 +58,7 @@ export class EpsonEposAdapter implements PrinterTransport {
 				this.port,
 				path,
 				buildEposXml(innerXml),
-				REQUEST_TIMEOUT_MS
+				PRINT_JOB_TIMEOUT_MS
 			);
 		} catch (cause) {
 			throw this.connectionError(url, cause);
@@ -64,6 +75,7 @@ export class EpsonEposAdapter implements PrinterTransport {
 			// dialog shows, instead of burying it under connectivity/certificate guidance.
 			throw new Error(`Epson print failed (code: ${result.code || 'unknown'})`);
 		}
+		return response.status;
 	}
 
 	async printHtml(_html: string): Promise<void> {

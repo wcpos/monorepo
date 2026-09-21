@@ -41,14 +41,13 @@ function floodHarness(): Promise<EngineHarness> {
 		site: SITE,
 		identity: identity(),
 		mode: 'manual',
-		fetch: async (url) => {
-			const path = new URL(url).pathname;
-			if (path.endsWith('/changes/config-fingerprint')) {
-				return json({
-					fingerprints: { products: 'fp-1', variations: 'fp-1', tax_rates: 'fp-1' },
-					barcode_fields: { products: ['sku'], variations: ['sku'], tax_rates: [] },
-				});
-			}
+		routes: {
+			'/changes/config-fingerprint': {
+				fingerprints: { products: 'fp-1', variations: 'fp-1', tax_rates: 'fp-1' },
+				barcode_fields: { products: ['sku'], variations: ['sku'], tax_rates: [] },
+			},
+		},
+		fetch: async () => {
 			// Targeted pulls: the ids stay absent server-side, so every re-require
 			// re-fetches — exactly the runaway refetch-churn shape (#888 class).
 			return json([], { 'X-WP-TotalPages': '1', 'X-WP-Total': '0' });

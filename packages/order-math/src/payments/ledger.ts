@@ -4,7 +4,7 @@
 
 import { fromMinor, toMinor } from './money';
 
-import type { PaymentMethodDescriptor, PaymentRow } from './types';
+import type { PaymentMethodDescriptor, PaymentRow, PaymentTransport } from './types';
 
 export const LEDGER_META_KEY = '_wcpos_payments';
 export const LEDGER_SCHEMA = 1;
@@ -72,6 +72,8 @@ export interface MintManualPaymentInput {
 	orderId: number | null;
 	cashierId: number;
 	storeId: number | null;
+	registerId: string | null;
+	sessionId?: string | null;
 	recordedOffline: boolean;
 	now: () => string;
 	uuid: () => string;
@@ -126,9 +128,84 @@ export function mintManualPayment(input: MintManualPaymentInput): MintManualPaym
 			receipt: {},
 			cashier_id: input.cashierId,
 			store_id: input.storeId,
+			register_id: input.registerId,
+			session_id: input.sessionId ?? null,
 			created_at_gmt: timestamp,
 			captured_at_gmt: timestamp,
 			updated_at_gmt: timestamp,
+		},
+	};
+}
+
+export type MintServerPaymentInput = Omit<
+	MintManualPaymentInput,
+	'tendered' | 'recordedOffline'
+> & {
+	readerId?: string | null;
+};
+export type MintServerPaymentResult =
+	| { ok: true; row: PaymentRow }
+	| { ok: false; reason: 'not_server' | 'amount_not_positive' | 'no_order_id' };
+
+export function mintServerPayment(input: MintServerPaymentInput): MintServerPaymentResult {
+	if (input.method.capture.mode !== 'server') return { ok: false, reason: 'not_server' };
+	return mintTerminalPayment(input, 'server', null, false);
+}
+
+export type MintDevicePaymentInput = MintServerPaymentInput & {
+	transport: PaymentTransport;
+	recordedOffline: boolean;
+};
+export function mintDevicePayment(input: MintDevicePaymentInput) {
+	if (input.method.capture.mode !== 'device') return { ok: false, reason: 'not_device' } as const;
+	return mintTerminalPayment(input, 'device', input.transport, input.recordedOffline);
+}
+
+function mintTerminalPayment(
+	input: MintServerPaymentInput,
+	mode: 'server' | 'device',
+	transport: PaymentTransport | null,
+	offline: boolean
+): MintServerPaymentResult {
+	const dp = input.dp ?? 2;
+	const amount = toMinor(input.amount, dp);
+	if (amount <= 0) return { ok: false, reason: 'amount_not_positive' };
+	if (!offline && (!Number.isInteger(input.orderId) || !input.orderId || input.orderId <= 0))
+		return { ok: false, reason: 'no_order_id' };
+	const timestamp = input.now();
+	return {
+		ok: true,
+		row: {
+			id: input.uuid().toLowerCase(),
+			source: 'app',
+			order_id: input.orderId ?? 0,
+			method_id: input.method.id,
+			provider: input.method.capture.provider,
+			kind: input.method.kind,
+			capture_mode: mode,
+			transport,
+			recorded_offline: offline,
+			amount: fromMinor(amount, dp),
+			currency: input.currency,
+			tendered: null,
+			change: null,
+			tip: null,
+			status: 'pending',
+			failure_reason: null,
+			refunded_amount: fromMinor(0, dp),
+			refunds: [],
+			provider_refs: input.readerId ? { reader: input.readerId } : {},
+			receipt: {},
+			cashier_id: input.cashierId,
+			store_id: input.storeId,
+			register_id: input.registerId,
+			session_id: input.sessionId ?? null,
+			created_at_gmt: timestamp,
+			captured_at_gmt: null,
+			updated_at_gmt: timestamp,
+			events: [],
+			expires_at: null,
+			void_requested_at: null,
 		},
 	};
 }
