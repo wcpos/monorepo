@@ -17,3 +17,5 @@ Seeded 2026-09-21 by wcpos/roadmap#360 from the component map (wcpos/roadmap#291
 7. With a clear control the wrapper is not an accessibility element: it handles nothing and would otherwise group the two actionable halves into one VoiceOver stop — evidence: Codex review on wcpos/monorepo#2189.
 8. The clear control carries a control-sized hit area rather than relying on `hitSlop`, which react-native-web does not implement — evidence: `.claude/rules/design.mdc` §3 (44 pt minimum); Codex review on wcpos/monorepo#2189.
 9. The chip hugs its label; it never stretches to its container, because a View stretches across a column parent by default and the drawn chip is inline-flex — evidence: the language prototype's `.chip` rule (`display:inline-flex`); the gallery cells on wcpos/monorepo#2189 showed the full-width bar.
+
+_Cells: a chip hugs its label, so each story is content-width. If a cell renders full-width the baseline is stale — see the shoot note on wcpos/monorepo#2189._
