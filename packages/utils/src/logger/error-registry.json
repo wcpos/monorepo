@@ -540,7 +540,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#294",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT121",
@@ -563,7 +563,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT201",
@@ -608,7 +608,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT221",
@@ -628,7 +628,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT301",
@@ -1122,7 +1122,7 @@
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"code": "PAYMENT999",

@@ -17,7 +17,7 @@ import { authenticatedTest, getStoreUrl, hydrateAuthenticatedPage } from './fixt
 const REFUSAL_BODY = JSON.stringify({
 	code: 'wcpos_update_required',
 	message: 'This store requires a newer version of WCPOS.',
-	data: { status: 426, min_protocol: 2, server_protocol: 2, plugin_version: '1.11.0' },
+	data: { status: 426, min_protocol: 2, server_protocol: 2, plugin_version: '2.0.0' },
 });
 
 const test = authenticatedTest.extend({

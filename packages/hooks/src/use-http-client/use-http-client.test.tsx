@@ -195,7 +195,7 @@ describe('useHttpClient network audit logs', () => {
 				data: {
 					code: 'wcpos_update_required',
 					message: 'This store requires a newer version of WCPOS.',
-					data: { status: 426, min_protocol: 2, plugin_version: '1.11.0' },
+					data: { status: 426, min_protocol: 2, plugin_version: '2.0.0' },
 				},
 			},
 		});
@@ -207,7 +207,7 @@ describe('useHttpClient network audit logs', () => {
 
 		expect(onUpdateRequired).toHaveBeenCalledWith({
 			minProtocol: 2,
-			pluginVersion: '1.11.0',
+			pluginVersion: '2.0.0',
 			status: 426,
 		});
 		expect(onUpdateRequired.mock.invocationCallOrder[0]).toBeLessThan(

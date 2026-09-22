@@ -111,41 +111,41 @@
 		"domain": "CHECKOUT",
 		"label": "Cancelled a sale",
 		"description": "The sale was abandoned and its payments reversed.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "checkout.completed",
 		"domain": "CHECKOUT",
 		"label": "Completed a sale",
 		"description": "Every payment on the order was taken and the order was closed.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "checkout.opened",
 		"domain": "CHECKOUT",
 		"label": "Started taking payment",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "checkout.order-refresh",
 		"domain": "CHECKOUT",
 		"label": "Refreshed a paid order from your store",
 		"description": "After a payment, the till asked your store for its copy of the order. A refresh that fails or times out is not a problem on its own — the sale completes from the local record.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "checkout.provenance-skipped",
 		"domain": "CHECKOUT",
 		"label": "Sale recorded without a register",
 		"description": "This till is not bound to a register, so the sale carries no register or sale number.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "checkout.split-planned",
 		"domain": "CHECKOUT",
 		"label": "Split the bill",
 		"description": "The sale was divided — evenly, by amount, by percentage, or by item.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "connectivity.device-offline",
@@ -419,89 +419,89 @@
 		"domain": "CHECKOUT",
 		"label": "Card approved while offline",
 		"description": "The reader approved the card with no connection to your store. The money is committed on the card and is claimed once the connection returns.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.cancelled",
 		"domain": "CHECKOUT",
 		"label": "Cashier cancelled a card payment",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.captured",
 		"domain": "CHECKOUT",
 		"label": "Card payment taken",
 		"description": "The terminal charged the card and your store recorded the payment.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.declined",
 		"domain": "CHECKOUT",
 		"label": "The terminal did not take the payment",
 		"description": "The card was declined, cancelled on the reader, or the payment expired.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.not-mirrored",
 		"domain": "CHECKOUT",
 		"label": "Payment saved on your store but not on this till",
 		"description": "Your store recorded the payment; this till could not save its own copy of the order and refreshes it from the store.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.recorded",
 		"domain": "CHECKOUT",
 		"label": "Took a payment",
 		"description": "A payment was taken at the till and added to the order.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.recorded-offline",
 		"domain": "CHECKOUT",
 		"label": "Took a payment while offline",
 		"description": "A payment was taken with no connection to your store. It is held on this device and sent when the connection returns.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.refused",
 		"domain": "CHECKOUT",
 		"label": "Your store refused a payment",
 		"description": "The store would not apply a payment taken at the till — usually because the order was already paid, or the amount was more than it owed.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.released",
 		"domain": "CHECKOUT",
 		"label": "Released a card approval",
 		"description": "An approval the till was holding was given up, so the money is no longer held.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.settlement",
 		"domain": "CHECKOUT",
 		"label": "Claiming a card approved while offline",
 		"description": "An offline card approval is being claimed from your store. It retries on its own; only a settlement that gives up needs your attention.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.void-refused",
 		"domain": "CHECKOUT",
 		"label": "A payment could not be reversed",
 		"description": "Your store refused to reverse a payment, so that money is still held.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.void-unknown",
 		"domain": "CHECKOUT",
 		"label": "A reversal could not be confirmed",
 		"description": "The till asked your store to reverse a payment and the answer never arrived, so the money may or may not still be held. Check the order before refunding by hand.",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "payment.voided",
 		"domain": "CHECKOUT",
 		"label": "Reversed a payment",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "product.browse-window.approximate",
@@ -680,19 +680,19 @@
 		"type": "reader.battery-low",
 		"domain": "CHECKOUT",
 		"label": "Card reader battery is low",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "reader.connected",
 		"domain": "CHECKOUT",
 		"label": "Card reader connected",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "reader.disconnected",
 		"domain": "CHECKOUT",
 		"label": "Card reader disconnected",
-		"introducedIn": "1.11.0"
+		"introducedIn": "2.0.0"
 	},
 	{
 		"type": "register.approval-granted",

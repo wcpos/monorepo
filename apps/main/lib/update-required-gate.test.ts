@@ -9,7 +9,7 @@ import {
 
 jest.resetModules();
 
-const DETAILS = { minProtocol: 2, serverProtocol: 2, pluginVersion: '1.11.0', status: 426 };
+const DETAILS = { minProtocol: 2, serverProtocol: 2, pluginVersion: '2.0.0', status: 426 };
 
 afterEach(() => {
 	clearUpdateRequired('https://a.example.test');
