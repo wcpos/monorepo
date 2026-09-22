@@ -63,6 +63,63 @@ const couponsConfig = {
 	options: { searchFields: ['name'] },
 };
 
+it.each(['read', 'open'])(
+	'rebuilds a persisted index after a destination %s failure without changing source documents',
+	async (failure) => {
+		const storage = getRxStorageMemory();
+		const config = { name: `searchrecovery${failure}`, storage, multiInstance: false };
+		database = await createRxDatabase(config);
+		const { coupons } = await database.addCollections({ coupons: couponsConfig });
+		await coupons.bulkInsert([
+			{ id: 'coupon-1', name: 'Discount' },
+			{ id: 'coupon-2', name: 'Voucher' },
+		]);
+		const first = (await coupons.initSearch!('en')) as unknown as SearchIndex;
+		await first.pipeline.awaitIdle();
+		await first.pipeline.close();
+		await first.close();
+		const before = (await coupons.find().exec()).map((doc) => doc.toJSON(true));
+		await database.close();
+
+		const createStorageInstance = storage.createStorageInstance.bind(storage);
+		const readError = new SyntaxError("Expected ',' or ']' after array element in JSON");
+		let failed = false;
+		storage.createStorageInstance = async (params) => {
+			if (params.collectionName.endsWith('_flexsearch') && !failed && failure === 'open') {
+				failed = true;
+				throw readError;
+			}
+			const instance = await createStorageInstance(params);
+			if (params.collectionName.endsWith('_flexsearch') && !failed) {
+				const query = instance.query.bind(instance);
+				instance.query = async (prepared) => {
+					if (!failed) {
+						failed = true;
+						throw readError;
+					}
+					return query(prepared);
+				};
+			}
+			return instance;
+		};
+		database = await createRxDatabase(config);
+		const { coupons: reopened } = await database.addCollections({ coupons: couponsConfig });
+		// A source change makes the real pipeline consume the rejected initialization queue.
+		await reopened.insert({ id: 'coupon-3', name: 'Rebate' });
+		const sourceBefore = (await reopened.find().exec()).map((doc) => doc.toJSON(true));
+		expect(sourceBefore.slice(0, 2)).toEqual(before);
+		const rebuilt = (await reopened.initSearch!('en')) as unknown as SearchIndex;
+		await rebuilt.pipeline.awaitIdle();
+		expect(failed).toBe(true);
+		expect((await rebuilt.find('discount')).map((doc) => doc.primary)).toEqual(['coupon-1']);
+		expect((await rebuilt.find('voucher')).map((doc) => doc.primary)).toEqual(['coupon-2']);
+		expect((await rebuilt.find('rebate')).map((doc) => doc.primary)).toEqual(['coupon-3']);
+		expect((await reopened.find().exec()).map((doc) => doc.toJSON(true))).toEqual(sourceBefore);
+		await rebuilt.pipeline.close();
+		await rebuilt.close();
+	}
+);
+
 it.each([false, true])(
 	'reopens persisted storage and rebuilds only an oversized index (oversized=%s)',
 	async (oversized) => {

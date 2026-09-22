@@ -369,24 +369,44 @@ async function createSearchInstance(
 			language: locale,
 		},
 	};
-	let searchInstance = (await addFulltextSearch(searchOptions)) as FlexSearchInstance & {
+	let searchInstance!: FlexSearchInstance & {
+		queue: Promise<void>;
 		close(): Promise<void>;
 		pipeline: { close(): Promise<void> };
 	};
-	searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
-	const appendDocs = await searchInstance.collection.find({ selector: { type: 'append' } }).exec();
-	const appendedEntries = appendDocs.reduce((total, doc) => total + doc.get('dataAr').length, 0);
-	const sourceCount = await collection.count().exec();
-	if (appendedEntries > sourceCount) {
-		searchLogger.info('Rebuilding oversized search index', {
-			context: { collection: collection.name, locale, appendedEntries, sourceCount },
-		});
-		await searchInstance.close();
-		await searchInstance.pipeline.close();
-		await resetPipelineCheckpoint();
-		await searchInstance.collection.remove();
+	try {
 		searchInstance = (await addFulltextSearch(searchOptions)) as typeof searchInstance;
 		searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
+		const appendDocs = await searchInstance.collection
+			.find({ selector: { type: 'append' } })
+			.exec();
+		const appendedEntries = appendDocs.reduce((total, doc) => total + doc.get('dataAr').length, 0);
+		const sourceCount = await collection.count().exec();
+		if (appendedEntries > sourceCount) {
+			searchLogger.info('Rebuilding oversized search index', {
+				context: { collection: collection.name, locale, appendedEntries, sourceCount },
+			});
+			await searchInstance.close();
+			await searchInstance.pipeline.close();
+			await resetPipelineCheckpoint();
+			await searchInstance.collection.remove();
+			searchInstance = (await addFulltextSearch(searchOptions)) as typeof searchInstance;
+			searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
+		}
+	} catch (error) {
+		try {
+			if (searchInstance) {
+				// The destination's onClose hook must not rethrow the failed storage read.
+				searchInstance.queue = searchInstance.queue.catch(() => undefined);
+				await closeSearchInstance(searchInstance);
+			}
+			await resetPipelineCheckpoint();
+		} catch (cleanupError) {
+			searchLogger.warn('Could not dispose failed search instance', {
+				context: { collection: collection.name, locale, error: String(cleanupError) },
+			});
+		}
+		throw error;
 	}
 
 	searchLogger.debug('Search instance created successfully', {
@@ -419,6 +439,17 @@ async function destroySearchCollection(collection: RxCollection, locale: string)
 			});
 			return true;
 		}
+		await removeCollectionStorages(
+			database.storage,
+			database.internalStore,
+			database.token,
+			database.name,
+			searchCollectionName,
+			database.multiInstance,
+			database.password,
+			database.hashFunction
+		);
+		return true;
 	} catch (error: any) {
 		searchLogger.warn('Could not destroy search collection via database', {
 			context: { searchCollection: searchCollectionName, error: error.message },
@@ -556,6 +587,7 @@ export const searchPlugin: RxPlugin = {
 
 								return searchInstance;
 							} catch (retryError: any) {
+								await destroySearchCollection(this, locale);
 								searchLogger.error('Search recovery failed', {
 									showToast: true,
 									code: ERROR_CODES.UNEXPECTED_ERROR,
