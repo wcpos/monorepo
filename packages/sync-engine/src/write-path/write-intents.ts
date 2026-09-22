@@ -936,6 +936,7 @@ export async function requeueBornTwiceSnapshot(input: {
 		const last = rows.at(-1);
 		if (
 			last &&
+			last.explicit !== true &&
 			(last.status === undefined || last.status === 'pending') &&
 			(last.attempts ?? 0) === 0
 		) {

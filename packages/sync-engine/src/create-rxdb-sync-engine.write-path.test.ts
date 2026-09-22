@@ -296,6 +296,75 @@ function withAckDocument(
 }
 
 describe('write() + sync("write-drain") through the public handle', () => {
+	it.each([false, true])(
+		'settles A before unrelated B completes only after durable acknowledgement (ack fails: %s)',
+		async (ackFails) => {
+			const server = createFakeWriteServer();
+			let releaseB!: () => void;
+			const blockedB = new Promise<void>((resolve) => {
+				releaseB = resolve;
+			});
+			let startedB!: () => void;
+			const pushingB = new Promise<void>((resolve) => {
+				startedB = resolve;
+			});
+			let pushes = 0;
+			const engine = engineWith({
+				fetch: async (url, init) => {
+					if (url.includes('/push/') && ++pushes === 2) {
+						startedB();
+						await blockedB;
+					}
+					return server.fetch(url, init as never);
+				},
+			});
+			const events: EngineEvent[] = [];
+			let drain: ReturnType<typeof engine.sync> | undefined;
+			let ackSpy: ReturnType<typeof vi.spyOn> | undefined;
+			try {
+				await engine.ready;
+				engine.events((event) => events.push(event));
+				await insertBornLocalOrder(engine, UUID_A);
+				await insertBornLocalOrder(engine, UUID_MINT);
+				const a = await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_A,
+					payload: { status: 'pending' },
+					explicit: true,
+				});
+				await engine.write({
+					collection: 'orders',
+					operation: 'create',
+					recordId: UUID_MINT,
+					payload: { status: 'pending' },
+					explicit: true,
+				});
+				const queue = queueFor(engine.active()!.database as never);
+				if (ackFails)
+					ackSpy = vi.spyOn(queue, 'acknowledge').mockRejectedValueOnce(new Error('storage down'));
+				drain = engine.sync('write-drain');
+				await pushingB;
+				const acks = () =>
+					events.filter(
+						(event) => event.type === 'write-acknowledged' && event.mutationId === a.mutationId
+					);
+				expect(acks()).toHaveLength(ackFails ? 0 : 1);
+				expect((await queue.pending()).some((row) => row.mutationId === a.mutationId)).toBe(
+					ackFails
+				);
+				releaseB();
+				expect(await drain).toMatchObject({ pushed: ackFails ? 1 : 2, failed: ackFails ? 1 : 0 });
+				expect(acks()).toHaveLength(ackFails ? 0 : 1);
+			} finally {
+				releaseB();
+				await drain;
+				ackSpy?.mockRestore();
+				await engine.dispose();
+			}
+		}
+	);
+
 	it('holds a non-explicit pos-open create without touching retry bookkeeping', async () => {
 		const server = createFakeWriteServer();
 		const events: SyncEvent[] = [];
@@ -4502,7 +4571,6 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 				operation: 'update',
 				recordId: UUID_A,
 				payload: { note: 'U2', discount: '5.00' },
-				explicit: true,
 			});
 			gate!();
 			expect((await drain1).failed).toBe(1);

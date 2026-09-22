@@ -317,7 +317,7 @@ describe('enqueueWriteIntent', () => {
 		['explicit create then plain update', true, false],
 		['plain create then explicit update', false, true],
 		['plain create then plain update', false, false],
-	])('propagates explicit while coalescing %s', async (_label, priorExplicit, incomingExplicit) => {
+	])('preserves awaited identities for %s', async (_label, priorExplicit, incomingExplicit) => {
 		const mutationCollection = createFakeMutationCollection();
 		const queued = {
 			values: () => [...mutationCollection.store.values()].map((entry) => entry.mutation),
@@ -371,8 +371,11 @@ describe('enqueueWriteIntent', () => {
 			} as never,
 		});
 
-		expect([...queued.values()]).toHaveLength(1);
-		expect([...queued.values()][0]?.explicit).toBe(priorExplicit || incomingExplicit || undefined);
+		expect([...queued.values()].map((row) => row.mutationId)).toEqual(
+			priorExplicit ? ['mutation-1', 'mutation-2'] : ['mutation-2']
+		);
+		expect(queued.get('mutation-2')?.explicit).toBe(incomingExplicit || undefined);
+		if (priorExplicit) expect(queued.get('mutation-1')?.explicit).toBe(true);
 	});
 
 	it('strips non-string order meta display fields after coalescing over resident payload', async () => {
@@ -643,54 +646,59 @@ describe('enqueueWriteIntent', () => {
 		]);
 	});
 
-	it('marks a tail-appended born-twice follow-up explicit when a contributing successor is explicit', async () => {
-		const queued = new Map<string, QueuedMutation>([
-			[
-				'successor-1',
-				{
-					mutationId: 'successor-1',
-					collectionName: 'orders',
-					operation: 'update',
-					recordId: 'order-1',
-					origin: 'existing',
-					payload: { customer_note: 'ring twice' },
-					baseRevision: 'sha256:server-r1',
-					queuedAt: '2026-08-04T00:00:01.000Z',
-					seq: 2,
-					status: 'claimed',
-					explicit: true,
+	it.each(['claimed', 'pending'] as const)(
+		'preserves a %s explicit born-twice successor and appends the snapshot',
+		async (status) => {
+			const queued = new Map<string, QueuedMutation>([
+				[
+					'successor-1',
+					{
+						mutationId: 'successor-1',
+						collectionName: 'orders',
+						operation: 'update',
+						recordId: 'order-1',
+						origin: 'existing',
+						payload: { customer_note: 'ring twice' },
+						baseRevision: 'sha256:server-r1',
+						queuedAt: '2026-08-04T00:00:01.000Z',
+						seq: 2,
+						status,
+						explicit: true,
+					},
+				],
+			]);
+			const mutationCollection = revCollectionOverMap(queued);
+			const db = {
+				collections: {
+					orders: { findOne: () => ({ exec: async () => null }) },
+					recordMutations: mutationCollection,
 				},
-			],
-		]);
-		const mutationCollection = revCollectionOverMap(queued);
-		const db = {
-			collections: {
-				orders: { findOne: () => ({ exec: async () => null }) },
-				recordMutations: mutationCollection,
-			},
-		} as unknown as RxDatabase;
+			} as unknown as RxDatabase;
 
-		await requeueBornTwiceSnapshot({
-			db,
-			mutation: {
-				mutationId: 'create-1',
-				collectionName: 'orders',
-				operation: 'create',
-				recordId: 'order-1',
-				origin: 'minted',
-				payload: { status: 'pos-open', total: '25.00' },
-				baseRevision: null,
-				queuedAt: '2026-08-04T00:00:00.000Z',
-			} as never,
-			ackRevision: 'sha256:server-r1',
-			mintUuid: () => 'follow-up-1',
-			now: () => '2026-08-04T00:00:02.000Z',
-		});
+			await requeueBornTwiceSnapshot({
+				db,
+				mutation: {
+					mutationId: 'create-1',
+					collectionName: 'orders',
+					operation: 'create',
+					recordId: 'order-1',
+					origin: 'minted',
+					payload: { status: 'pos-open', total: '25.00' },
+					baseRevision: null,
+					queuedAt: '2026-08-04T00:00:00.000Z',
+				} as never,
+				ackRevision: 'sha256:server-r1',
+				mintUuid: () => 'follow-up-1',
+				now: () => '2026-08-04T00:00:02.000Z',
+			});
 
-		// The claimed successor cannot coalesce, so the snapshot tail-appends —
-		// and inherits the successor's release: its payload rides the follow-up.
-		expect(queued.get('follow-up-1')).toEqual(
-			expect.objectContaining({ mutationId: 'follow-up-1', explicit: true })
-		);
-	});
+			// An explicit successor cannot coalesce, so the snapshot tail-appends —
+			// and inherits the successor's release: its payload rides the follow-up.
+			expect(queued.get('successor-1')).toMatchObject({ status, explicit: true });
+			expect([...queued.keys()]).toEqual(['successor-1', 'follow-up-1']);
+			expect(queued.get('follow-up-1')).toEqual(
+				expect.objectContaining({ mutationId: 'follow-up-1', explicit: true })
+			);
+		}
+	);
 });

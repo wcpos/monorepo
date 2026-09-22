@@ -27,7 +27,11 @@ export function decideWritePlacement(input: {
 
 	const pendingRows = rows.filter((row) => row.status === undefined || row.status === 'pending');
 	const candidate = pendingRows.at(-1);
-	const canUseCandidate = canCoalesce && candidate !== undefined && (candidate.attempts ?? 0) === 0;
+	const canUseCandidate =
+		canCoalesce &&
+		candidate !== undefined &&
+		candidate.explicit !== true &&
+		(candidate.attempts ?? 0) === 0;
 	if (
 		canUseCandidate &&
 		!(isRecovery && operation === 'update') &&

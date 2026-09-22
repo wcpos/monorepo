@@ -59,6 +59,16 @@ describe('decideWritePlacement', () => {
 		expect(decide(rows, { operation: 'delete' })).toEqual({ kind: 'annihilate', chain: rows });
 	});
 
+	it('appends behind an explicit pending candidate but still coalesces ordinary edits', () => {
+		const explicit = row({ explicit: true, status: 'pending', attempts: 0 });
+		expect(decide([row({ mutationId: 'older' }), explicit])).toEqual({
+			kind: 'append',
+			deferBaseRevision: false,
+		});
+		const ordinary = row({ explicit: false, status: 'pending', attempts: 0 });
+		expect(decide([ordinary])).toEqual({ kind: 'coalesce', prior: ordinary, operation: 'update' });
+	});
+
 	it('coalesces only into the last pending never-attempted row', () => {
 		const prior = row({ mutationId: 'last', operation: 'create' });
 		expect(decide([row({ mutationId: 'first', status: 'claimed' }), prior])).toEqual({
