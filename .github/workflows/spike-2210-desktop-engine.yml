@@ -1,0 +1,48 @@
+name: Spike 2210 desktop engine
+# workflow_dispatch only resolves for files on the default branch. To re-run from a branch,
+# add a temporary `push: { branches: [<branch>] }` trigger (as runs 35327100216 and 35328362910 did).
+on:
+  workflow_dispatch:
+  # Temporary: the Windows leg runs from the spike branch; remove before merge.
+  push:
+    branches: [research/2210-desktop-engine]
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+      - run: bash spikes/2210-desktop-engine/run.sh --build-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spike-2210-bundles
+          include-hidden-files: true
+          path: spikes/2210-desktop-engine/.build/
+  bench-windows:
+    runs-on: windows-latest
+    needs: bundle
+    timeout-minutes: 120
+    env:
+      NODE_OPTIONS: --max-old-space-size=2048
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: spike-2210-bundles
+          path: .build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node .build/bench-node.js --out results.windows.json --scale both
+      - run: node .build/crash-node.js --trials 30 --out crash.windows.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spike-2210-results-windows
+          path: |
+            results.windows.json
+            crash.windows.json
