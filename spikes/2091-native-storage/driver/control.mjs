@@ -41,7 +41,7 @@ export function prepareReport(current, previous, versions, scales) {
     results: previous.results ?? [], trials: previous.trials ?? [] };
 }
 
-export const IDLE_BUDGET_MS = 10 * 60 * 1000; // Long jobs stay alive only while the app reports work.
+export const IDLE_BUDGET_MS = 30 * 60 * 1000; // Long jobs stay alive only while the app reports work; the shipped engine's 20k orders seed went 10+ min between 1000-row batches on the iPad (2026-09-23).
 export const JOB_HARD_CAP_MS = 4 * 60 * 60 * 1000; // Bound even a continuously reporting job.
 const SEED_LOG_MS = 60 * 1000; // One seed progress line per minute per job, not per collection.
 export function log(level, ...values) {
@@ -60,5 +60,5 @@ export function jobTimeout(active, now) {
   if (now - active.launchedAt >= JOB_HARD_CAP_MS)
     return new Error(`Harness timeout: job exceeded 4 hours while ${active.phase}`);
   if (now - (active.lastMessageAt ?? active.launchedAt) >= IDLE_BUDGET_MS)
-    return new Error(`Harness timeout: no message from the app for 10 minutes while ${active.phase}`);
+    return new Error(`Harness timeout: no message from the app for 30 minutes while ${active.phase}`);
 }

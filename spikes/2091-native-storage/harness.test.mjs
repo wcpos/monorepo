@@ -609,8 +609,8 @@ test('idle budget resets on every event and result, then fires after silence', a
     h.time(time); await h.message(message);
     assert.equal(h.state().lastMessageAt, time);
   }
-  await assert.rejects(h.waitResult(h.pending.promise), /Harness timeout: no message from the app for 10 minutes while running/);
-  assert.equal(h.now(), 1780000);
+  await assert.rejects(h.waitResult(h.pending.promise), /Harness timeout: no message from the app for 30 minutes while running/);
+  assert.equal(h.now(), 2980000);
   const result = await jobHarness();
   result.time(123); await result.message({ result: { done: true } }, '/result');
   assert.equal(result.state().lastMessageAt, 123);
@@ -636,8 +636,8 @@ test('ordinary jobs switch from launching to running on first message, crash pha
     }
   }
   const silent = await jobHarness();
-  await assert.rejects(silent.waitResult(silent.pending.promise), /10 minutes while launching/);
-  assert.equal(silent.now(), 600000);
+  await assert.rejects(silent.waitResult(silent.pending.promise), /30 minutes while launching/);
+  assert.equal(silent.now(), 1800000);
 });
 
 // A collection change must not bypass the per-job throttle; sample events stay silent.

@@ -85,8 +85,9 @@ a published `expo-modules-core` release containing this fix, not this spike patc
 The shipped engine's 20k row is an hours-long job on a physical device. Leave the large scale
 running unattended, device on power; resume any failure with the original command plus `--resume`.
 Timestamped seed progress is logged at most once a minute; sample progress only resets the idle timer.
-`Harness timeout: no message from the app for 10 minutes while <phase>` means the active job
-has been silent for ten minutes, not necessarily that the process died. `Harness timeout: job
+`Harness timeout: no message from the app for 30 minutes while <phase>` means the active job
+has been silent for thirty minutes, not necessarily that the process died (the shipped engine's
+20k orders seed went more than ten minutes between 1000-row batches on the iPad). `Harness timeout: job
 exceeded 4 hours while <phase>` is the total job cap, even with progress. Ordinary jobs are
 `launching` until their first message, then `running`. Both timeouts are harness failures.
 
