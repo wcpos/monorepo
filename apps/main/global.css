@@ -110,6 +110,16 @@
   --ease-beat: cubic-bezier(0.2, 0.9, 0.3, 1.1);
   --animate-accordion-down: accordion-down 200ms ease-out;
   --animate-accordion-up: accordion-up 200ms ease-out;
+  --animate-overlay-in: overlay-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-overlay-out: overlay-out 150ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-dialog-in: dialog-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-dialog-out: dialog-out 150ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-panel-in-left: panel-in-left 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-panel-in-right: panel-in-right 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-panel-out-left: panel-out-left 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-panel-out-right: panel-out-right 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-sheet-in: sheet-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-sheet-out: sheet-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
   /* motion:end */
 }
 
@@ -160,6 +170,47 @@
   to {
     height: 0;
   }
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes dialog-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialog-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+@keyframes panel-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes panel-out-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+@keyframes panel-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes panel-out-right {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes sheet-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
 }
 
 @layer theme {

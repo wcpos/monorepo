@@ -29,6 +29,10 @@ jest.mock('class-variance-authority', () => ({
 // Mock tailwind-merge
 jest.mock('tailwind-merge', () => ({
 	twMerge: (...args: string[]) => args.filter(Boolean).join(' '),
+	extendTailwindMerge:
+		() =>
+		(...args: string[]) =>
+			args.filter(Boolean).join(' '),
 }));
 
 // Mock clsx

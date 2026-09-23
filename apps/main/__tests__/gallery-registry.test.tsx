@@ -12,6 +12,7 @@ const registered = [
 	'notice',
 	'breadcrumb',
 	"'page-bar': pageBar",
+	"'v2-dialog': dialogV2",
 	'chip',
 	'keypad',
 	"'segmented-control': segmentedControl",
