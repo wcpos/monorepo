@@ -1,124 +1,169 @@
-# Spike 2210 — desktop engine verification
+# Spike 2210 — premium SQLite on `node:sqlite` vs the shipped filesystem-node engine, in plain Node
 
-Desktop's decision is already SQLite (#2149); this evidence gates migration (#2150), not that
-choice. Nothing here ships. The harness decides nothing; the operator writes the answers below.
+Measured 2026-09-23. Ticket: [wcpos/monorepo#2210](https://github.com/wcpos/monorepo/issues/2210)
+(wayfinder map #2137). Desktop's engine was already ruled in
+[#2149](https://github.com/wcpos/monorepo/issues/2149): premium `storage-sqlite` on `node:sqlite` in
+the Electron main process, `better-sqlite3` as the fallback if the binding failed verification. This
+is the evidence that ruling said it rests on; it gates the migration (#2150), not the choice. Nothing
+here ships. Two engines, both called directly in plain Node on the same throwaway schemas, fixtures
+and query shapes as [spike 2143](../2143-storage-benchmark/RESULTS.md): the incumbent
+`filesystem-node` (premium abstract-filesystem over Node `fs`, `inWorker: false`, the seven install
+patches, the Electron task-queue lock — what wcpos/electron ships) and `sqlite-node` (premium
+`getRxStorageSQLite` over premium's own shipped `getSQLiteBasicsNodeNative(DatabaseSync)`, WAL,
+`synchronous = NORMAL`, one translated statement per supported query, `ANALYZE` after the seed).
+Every timed sample's content is SHA-256-checked across engines; every run reported here passed.
 
-## Environments
+**Environments.** Mac: Apple M4 Pro, macOS (darwin 27.0.0 arm64), Node 24.14.0 with SQLite 3.51.2
+for legs 2 and 3. Windows: GitHub `windows-latest` (Windows 10.0.26100, AMD EPYC 9V74 shared runner,
+NTFS), Node 24.20.0 with SQLite 3.53.4 — a CI VM, so read its ratios, not its absolutes. Leg 1 ran on
+the Node **inside Electron 43.4.0**: Node 24.18.1, SQLite 3.53.1 (`ELECTRON_RUN_AS_NODE=1` against the
+pinned binary). rxdb / rxdb-premium 17.4.0, esbuild 0.28.2; premium patch marker count 47 on both
+platforms (the same seven patches wcpos/electron mirrors).
 
-- Mac: TODO — OS, CPU, Node, SQLite, rxdb, rxdb-premium, measuredAt, premium patch marker count.
-- Windows: TODO — OS, CPU, Node, SQLite, rxdb, rxdb-premium, measuredAt, premium patch marker count.
-- Leg 1: TODO — Electron 43.4.0's actual Node and SQLite versions from the runtime evidence line.
+## Answers
 
-## Answers — operator only
+**1. Leg 1 — conformance on Electron's Node: PASS, `better-sqlite3` is not needed.** rxdb 17.4.0's own
+unit suite with `DEFAULT_STORAGE=custom` = premium SQLite over `getSQLiteBasicsNodeNative(DatabaseSync)`
+from `node:sqlite`, run by Electron 43.4.0's bundled Node: **1428 passing, 0 failing, exit 0**
+(`conformance/node-conformance-summary.log`; the runtime line reads `electron=43.4.0 node=24.18.1
+sqlite=3.53.1 journal_mode=wal`). The storage conformance block
+(`rx-storage-implementations.test.ts`) passed with `hasMultiInstance`, `hasAttachments` and
+`hasReplication` all true. The "Release candidate" stability label on `node:sqlite` produced no
+failure; the two failures on the way were the environment, not the binding (a WebRTC native module
+that npm's `ignore-scripts` had left unbuilt, and a test that spawns `mocha` from `PATH`). The shipped
+wrapper needed no adapter of ours beyond one `PRAGMA synchronous = NORMAL` after open.
 
-1. **Leg 1:** TODO — did premium's shipped `getSQLiteBasicsNodeNative` pass rxdb conformance on
-   Electron 43.4.0's Node? Is `better-sqlite3` needed? A suite failure selects the fallback; missing
-   Electron runtime evidence is not a qualifying run. A grep-limited pass is not a full-suite pass.
-2. **Leg 2:** TODO — acknowledged losses per engine per platform; incomplete/unscorable trials.
-3. **Leg 3:** TODO — winners and ratios for each cell family on each platform, whole-document read
-   versus projection (condition ii), fresh-process cold open, and disk bytes/file counts.
-4. **Gate:** TODO — does SQLite clear stability and win clearly on desktop speed? State what these
-   numbers do not decide. Windows decides any Mac/Windows speed disagreement.
+**2. Leg 2 — process stop: SQLite lost nothing acknowledged in 60 of 60 trials; the incumbent lost
+acknowledged rows in 8 of 30 on each platform.** A child process streams `bulkWrite` transactions
+(sizes 1,1,3,1,50,1,1,1000 repeating, 20% updates) through each engine and reports each one as acked
+only after the call resolves; the parent ends it with signal 9 at a random point in the first 3 s and
+a fresh process scores the reopened database against the parent's record.
 
-## Methods / accepted limits
+| Platform | Row | Trials | ok | acked rows lost | repaired on reopen | in-flight present / absent | median reopen |
+|---|---|---|---|---|---|---|---|
+| Mac | filesystem-node | 30 | 22 | **8** | 30 | 2 / 28 | 481 ms |
+| Mac | sqlite-node | 30 | **30** | 0 | 0 | 11 / 18 | 539 ms |
+| Windows | filesystem-node | 30 | 22 | **8** | 30 | 0 / 29 | 645 ms |
+| Windows | sqlite-node | 30 | **30** | 0 | 0 | 10 / 19 | 938 ms |
 
-- Engines run directly in plain Node, not through worker RPC, Electron UI or storage IPC. Only
-  process-stop coordination uses IPC; the parent's received messages are the acknowledgment record.
-- `filesystem-node` uses the raw installed premium engine and the verbatim Electron task-queue lock;
-  no targeted recovery wrapper. The requested patch marker metric is `grep -c __wcpos` on premium's
-  `storage-abstract-filesystem/index.js` (matching lines, not all patch files).
-- `sqlite-node` uses premium's shipped native basics with only an open wrapper setting
-  `synchronous=NORMAL`; premium retains WAL. A separate read-only connection proves effective WAL.
-- Query/count translation and its supported-selector guard are copied from 2143. Each supported
-  query/count uses one `sqliteBasics.all()` statement; unsupported selectors use premium unchanged.
-  `ANALYZE` runs once after initial seeding, outside timed cells.
-- Schemas, fixtures (seed 2143), indexes, workload cells and sample counts match 2143. Timing is now
-  around direct storage calls; therefore this is not a controlled comparison of RPC overhead.
-  Every measured warmup/sample is SHA-256 checked across engines, ignoring `_rev` and object key
-  order. Projection maps the filesystem whole-document query to the same four SQLite columns.
-- N=7 normally, N=25 order writes, N=3 seed and cold open; each discards one warmup. Cold open uses
-  a fresh process each time but the OS page cache stays warm. Startup/module loading is outside
-  the timer; storage construction, instance creation and first read are inside.
-- Disk bytes/file count are captured immediately after the initial large seed, before extra timed
-  seed databases. No physical-device throughput or power-loss durability claim is made.
-- Crash stream sizes repeat 1,1,3,1,50,1,1,1000. `floor(n/5)` updates seed IDs; sizes 1 and 3 cannot
-  represent 20% updates. Seeds are two 1,000-row writes; no child ledger file exists. A fresh scorer
-  replays parent-recorded ownership, including actual in-flight replacements, before checking
-  partial/orphan rows. Recovery/salvage signals are recorded, not suppressed or repaired.
-- Only the specified 50 ms / 10 s reopen retry is used. Unscorable stops are `open-failed`; launch
-  failures are incomplete runs. Three-trial smoke runs are not durability measurements.
+The incumbent's losses are the shape rxdb-premium-issues#28 describes: the *last* acknowledged
+transactions before the stop are gone — typically the two 1-row writes acked just before an in-flight
+1000-row batch (2 rows lost), the 1+1+3+1 acked before a 50-row batch (6 rows), and in five trials
+200 rows of an **acknowledged** 1000-row batch that was only partly on disk. It acknowledges before
+the bytes are durable. On every one of the 60 reopens its changelog was found stale and the wcpos
+index-rebuild patch rebuilt the indexes from `documents.json` (`__wcposOnIndexRebuild`,
+`stale-changelog-op`); an unpatched premium would not have that repair. SQLite in WAL with
+`synchronous = NORMAL` reopened clean every time (`PRAGMA integrity_check` = `ok`), and the in-flight
+1000-row batch was either wholly present (its COMMIT had landed before the ack was delivered) or
+wholly absent, never partial. Not measured: power loss (no process-level harness can), and the
+Electron IPC bridge (out of scope by design).
 
-## Operator commands (from repository root)
+**3. Leg 3 — speed: the same three families as web, with the same winner in each on both
+platforms.** Large scale (20,000 products and orders), p50, incumbent → SQLite, Mac / Windows:
 
-Run one task at a time on the 24 GB Mac. The full conformance suite has a **40-minute operator
-ceiling**: stop it if exceeded and record the incomplete result. Do not edit upstream tests.
+- **Indexed and pushed queries: SQLite, by one to three orders of magnitude.** The Orders default
+  scope find (`$elemMatch` ×2, sorted, limit 10): 233 → 1.0 ms / 685 → 4.1 ms (×228 / ×166); the
+  100-id `remoteId $in` find 93 → 1.1 / 248 → 4.9 (×88 / ×51) and its count 97 → 0.6 / 248 → 3.6
+  (×169 / ×69); the hypothetical pushed products grid (sort by name, limit 10) 218 → 0.15 /
+  920 → 0.7 ms (×1485 / ×1271). As on web, the incumbent's sorted-limit path is slower than its own
+  unsorted full read.
+- **Whole-document reads: the incumbent, by 1.3–7×.** The catalogue-blob read (every product
+  document, what `catalogue-search-blob.ts` does on every open): 58 → 328 ms on the Mac, 158 → 1190
+  on the runner (×0.18 / ×0.13). The grid as issued today (15,337 whole rows): 123 → 203 / 425 → 713
+  (×0.6). The JSON-scanned orders count is a wash (229 vs 232 / 692 vs 897). The open-status read
+  (12,000 rows) is the one straddle that is not a sub-millisecond tie: the incumbent wins it on the
+  Mac (136 vs 180) and SQLite wins it on the runner (579 vs 453); Windows decides, but it is a whole-set
+  read either way and the migration's condition (i) removes the shape. **The projection read
+  (condition ii) closes the gap to parity**: 58 vs 64 ms on the Mac, 153 vs 184 on the runner (×0.9 /
+  ×0.8) — the full read was never the cost, marshalling whole documents was.
+- **Writes and open: SQLite.** The three-write cart line add: 27 → 0.23 ms / 59 → 0.86 ms (×121 /
+  ×68) — the incumbent's cost grows with the table (2.2 ms at 2k), SQLite's does not. Order create is
+  a tie under 0.4 ms. A full 20,000-product resync: 1.15 s → 0.50 s / 3.2 s → 1.0 s (×2.3 / ×3.2).
+  **Cold open to first read on the 20k database: 138 → 2.9 ms / 370 → 6.3 ms (×48 / ×59)** — the
+  incumbent loads its store into memory on open; that is where its whole-read speed comes from and
+  why it is undurable (research §1). `findDocumentsById` is 0.1–0.5 ms on SQLite against 0.03–0.35 ms
+  on the memory-resident incumbent: slower by ratio, irrelevant in absolute terms.
+- **Disk:** 201 MB in 3 files (SQLite, WAL + shm) against 151 MB in 26 files for the large seed, on
+  both platforms.
 
-```sh
-bash spikes/2210-desktop-engine/conformance/run-conformance.sh
-```
+At the small scale (2,000 rows) every ratio has the same sign with smaller magnitude; the incumbent's
+whole-set reads are 5–17 ms there, SQLite's 17–84 ms.
 
-Installs pinned dependencies in `.deps/` and `conformance/.rxdb-src/`; writes
-`conformance/node.log` and tracked `conformance/node-conformance-summary.log`. It runs Mocha
-with Electron's binary and `ELECTRON_RUN_AS_NODE=1`, never `npm run test:node:custom`.
-Optional `MOCHA_GREP='...'` narrows the suite for diagnosis, not final evidence.
+**4. The gate: SQLite clears stability and wins clearly on desktop speed, conditional on the same
+three migration items as web.** Stability: 60/60 stops kept every acknowledged row and every reopen
+was clean, against 16/60 stops that lost acknowledged rows on the engine we ship. Speed: on every
+interactive path the app *could* push, SQLite wins by 50–1500×, on the cart write by 68–121×, on cold
+open by ~50×; it loses only the whole-document reads the app makes *today*, and the projection cell
+shows condition (ii) closes that loss to parity. Windows agrees with the Mac on the winner of every
+cell except three (two sub-millisecond `order-create` ties and `orders-open-status`, above); the
+Windows runner widens SQLite's whole-read penalty (×0.13 on the blob) and narrows nothing else, so the
+conditions are not optional on the platform that carries most tills. Numbers do not decide: anything
+about the IPC bridge (both engines sit behind `exposeRxStorageRemote` in Electron; its tax is the
+same for both), power-loss durability, native (#2091), or the second-window fog on the map.
 
-```sh
-bash spikes/2210-desktop-engine/run.sh --legs 2,3 --trials 30 --scale both
-```
+## Two defects the harness found on the way
 
-Builds `.build/{bench-node,crash-node,crash-child}.js`, `.build/package.json` and
-`.build/versions.json`; runs leg 3 then leg 2; writes `results.mac.json`, `crash.mac.json` (saved
-per trial) and regenerates this file's marked section. All data lives under `.data/<leg>/<row>/<run>/`.
-Leg 1 is never run by this command. `--build-only` just rebuilds; `--legs 2` or `--legs 3` selects one.
+- **The incumbent returns whole-set finds in an unstable order in Node.** RxDB promises the
+  normalized sort (for a no-sort products query that is `[_deleted, stockStatus, uuid]`); the
+  incumbent's 15,337-row grid read came back in a different order on repeated runs of the identical
+  query — 3 of 8 results out of order on the Mac, 8 of 8 on the Windows runner (`unsortedSamples` in
+  `results.*.json`; the probe that found it showed the same set every time with chunk boundaries
+  such as `…00007037, 00003501…`, i.e. page reads merged in completion order). The 2143 browser runs
+  never saw this: the OPFS worker reads synchronously; Node `fs` is async. The app's products grid
+  re-sorts in JS today, which is presumably why nobody noticed. SQLite's order was stable in every
+  sample. Recorded, not repaired.
+- **One intermittent cross-engine content mismatch on Windows** (run 2 of 3, `large/products-grid-pushed-50`:
+  sort by name, limit 50 — the two engines returned different top-50 sets once). It did not recur in
+  run 3, which is the run reported here, and the Mac never produced it. The harness now records both
+  engines' returned ids on any mismatch so a recurrence identifies the deviating engine; with the
+  order defect above on the same engine, the incumbent's limited sorted read is the suspect, not
+  SQLite's `ORDER BY … LIMIT`.
 
-After the operator commits/pushes and the workflow is dispatchable:
+## Method and limits
 
-```sh
-gh workflow run spike-2210-desktop-engine.yml --ref research/2210-desktop-engine
-gh run list --workflow spike-2210-desktop-engine.yml --limit 5
-# Replace RUN_ID with the run above:
-gh run download RUN_ID --name spike-2210-results-windows --dir spikes/2210-desktop-engine
+- Both engines are called in-process on their storage-instance methods; timing is
+  `performance.now()` around the direct call. No worker, no IPC, no Electron window — so these
+  numbers are engine costs, and the IPC bridge's tax (identical for both) is not in them.
+- `filesystem-node` is the raw installed premium engine (47 patch-marker lines across the
+  abstract-filesystem plugin) with wcpos/electron's `createStorageLock()` copied verbatim; no
+  `withTargetedOpfsRecovery` wrapper. `sqlite-node` is premium's shipped `getSQLiteBasicsNodeNative`
+  with one `open` wrapper (`PRAGMA synchronous = NORMAL`); a second read-only connection proves
+  `journal_mode = wal` in every leg. The `query`/`count` wrapper (one translated statement for the
+  selectors this workload uses, premium's own path otherwise) is 2143's, and is the in-harness
+  equivalent of the ~20-line premium patch spike 2145 recommended.
+- Schemas, fixtures (seed 2143, byte-identical to the web spike's), declared indexes, cells and
+  sample counts are 2143's (one discarded warm-up; N = 7; N = 25 for the two write cells; N = 3 for
+  full seeds and cold reads; p50/p95 by nearest rank, so p95 is the max at N ≤ 7). Cross-engine checks
+  compare canonical, `_rev`-independent content per sample sorted by primary key; a content mismatch
+  fails the run (exit 1 after writing the JSON). Returned order is compared separately and recorded.
+- Cold open spawns a fresh Node process per sample (module load outside the timer; storage
+  construction, instance creation and the first `findDocumentsById` inside); the OS page cache is
+  warm. Disk bytes are the row's data directory after the large seed.
+- The stop harness scores like 2144: `open-failed` (10 s of retries), `integrity-failed`
+  (`PRAGMA integrity_check` for SQLite; a reported failure, parse error or corruption in the
+  incumbent's console/hook output — a completed repair is recorded as `repairs`, not as failure),
+  `lost` (an acked row missing under 2144's ownership replay), `partial`, `ok`. The acked set is the
+  parent's IPC record; nothing is reconstructed from the database. Stops are process-level (signal 9;
+  `TerminateProcess` on Windows). Power loss is not simulated.
+- Leg 1 runs rxdb's suite with Electron's binary as the Node executable (a `node` shim on `PATH` so
+  the test that spawns `mocha` runs there too); it is Mac-only. 2138's wasm-in-Node run of the same
+  suite passed 1416 tests — the count differs because the WebRTC tests now run.
+- Windows ran on a shared GitHub runner from bundles built on Ubuntu
+  (`spike-2210-desktop-engine.yml`, Node 24 from `setup-node`; nothing else installed).
+
+## Reproduce
+
+```bash
+bash spikes/2210-desktop-engine/conformance/run-conformance.sh   # leg 1 on Electron 43.4.0's Node (Mac; ~5 min after setup)
+bash spikes/2210-desktop-engine/run.sh --legs 3,2 --trials 30       # legs 3 and 2 on this machine, then report
+gh workflow run spike-2210-desktop-engine.yml --ref <branch>        # Windows (dispatch needs the file on the default branch)
+gh run download <run-id> -n spike-2210-results-windows -D spikes/2210-desktop-engine/
 node spikes/2210-desktop-engine/report.mjs
 ```
 
-The Ubuntu job uploads `spike-2210-bundles`; Windows needs only Node 24, runs full legs 3 then 2,
-then uploads `results.windows.json` and `crash.windows.json` as `spike-2210-results-windows`.
-Before the workflow exists on the default branch, follow its comment about a temporary branch push
-trigger instead of dispatch. The download writes the Windows JSON here; the report merges every
-`results.*.json` and `crash.*.json` present. Remove smoke JSON and avoid duplicate reruns before
-reporting; separate input files stay separate, never silently pooled. Fill the four answers last.
-
-## Builder verification
-
-Observed on 2026-09-23 (builder only, not full measurement): macOS `darwin 27.0.0 arm64`,
-Apple M4 Pro, Node `24.14.0`, SQLite `3.51.2`, rxdb/rxdb-premium `17.4.0`, esbuild `0.28.2`.
-Requested premium `index.js` marker count: **0**. Other installed filesystem modules do contain
-`__wcpos` patches; this specific count is not a whole-plugin patch audit. No dependency was modified.
-
-- PASS — `bash spikes/2210-desktop-engine/run.sh --build-only` (exit 0). Bundle sizes:
-  `.build/bench-node.js` **1,300,343**, `.build/crash-node.js` **1,288,683**,
-  `.build/crash-child.js` **1,307,533** bytes. Tree-shaking is disabled so the coordination-only
-  driver also retains its imported engine modules and meets the brief's >10 KB artifact check.
-- PASS — `node --check` on all seven `.mjs` files; `bash -n` on both shell runners.
-- PASS — `node spikes/2210-desktop-engine/report.mjs` with no result JSON files (exit 0).
-- PASS — bundled leg 3 `--scale small` for both rows: all **16** cells' warmup/sample signatures
-  matched, including projection; effective `journal_mode=wal` printed. Schema/fixture/canonicalizer,
-  storage-lock, selector-guard and query/count-wrapper copies also passed byte-for-byte source checks.
-- PASS (execution, not an engine gate) — bundled leg 2 `--trials 3` completed all six trials.
-  Final outcomes: filesystem-node **integrity-failed, integrity-failed, integrity-failed** (observed
-  index-rebuild recovery signals); sqlite-node **ok, ok, ok**, integrity `ok` and WAL `wal` each time,
-  with in-flight presence **absent, present, present**. Integrity precedence means the control's
-  acknowledged losses were not evaluated in those trials.
-- Smoke JSON files were deleted; their timings are intentionally not promoted into the tables.
-  Two bounded review rounds corrected cold-open verification overhead and retry cleanup. No tests,
-  lint, full suite, full legs, Windows dispatch, commits or dependency installation were performed.
-- Not evaluated: full conformance, large-scale cells, cold-child execution, Windows execution,
-  transient-open retry behavior under a failing engine, and broad compatibility/performance claims.
-
-## Behavior changes / regressions
-
-No application code changed. New harness only; full conformance, Mac measurements and Windows
-execution remain unverified until the operator runs them. No broad engine compatibility claim.
+`.deps/` (Electron 43.4.0, ~100 MB; npm's `ignore-scripts` means `node install.js` runs by hand),
+`conformance/.rxdb-src/` (the rxdb 17.4.0 clone) and `.data/` are gitignored and recreated by the
+runners.
 
 <!-- generated:start -->
 ## Leg 1
@@ -236,43 +281,144 @@ Complete: 30 trials requested per selected row.
 | sqlite-node | 30 | 30 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 11 | 18 | 0 / 1 / 0 | 538.97 |
 
 
+## windows
+
+### Leg 3 — results.windows.json
+
+| Environment | Value |
+| --- | --- |
+| os | win32 10.0.26100 x64 |
+| platform | windows |
+| cpu | AMD EPYC 9V74 80-Core Processor                 |
+| node | 24.20.0 |
+| sqlite | 3.53.4 |
+| rxdb | 17.4.0 |
+| rxdb-premium | 17.4.0 |
+| esbuild | 0.28.2 |
+| premiumPatchMarkerCount | 47 |
+| measuredAt | 2026-09-23T15:02:59.633Z |
+
+All warmups and samples matched across both engines on content (SHA-256 of canonical revision-independent rows sorted by primary key); cells whose RETURNED order differed between engines carry orderMismatch, and each engine's unsortedSamples counts results that violate the query's normalized sort. Cold reads assert the exact seeded product.
+
+#### small
+
+| Cell (p50 / p95 ms) | filesystem-node | sqlite-node | filesystem-node ÷ sqlite-node (p50) |
+| --- | --- | --- | --- |
+| products-grid-asShipped | 16.88 / 22.00 | 50.84 / 51.25 | 0.33 |
+| products-grid-pushed-10 | 16.51 / 20.04 | 0.52 / 0.83 | 31.47 |
+| products-grid-pushed-50 | 15.68 / 18.14 | 2.32 / 2.54 | 6.76 |
+| products-catalogue-blob | 14.31 / 17.66 | 84.22 / 87.07 | 0.17 |
+| products-catalogue-projection — projection (condition ii) | 14.02 / 16.39 | 21.08 / 23.59 | 0.67 |
+| products-findByIds-10 | 0.11 / 0.13 | 0.48 / 0.53 | 0.22 |
+| products-findByIds-50 | 0.35 / 0.53 | 1.67 / 1.97 | 0.21 |
+| products-remoteId-in-find | 22.47 / 25.02 | 3.34 / 3.95 | 6.73 |
+| products-remoteId-in-count | 21.37 / 23.32 | 2.16 / 2.37 | 9.89 |
+| seed-products | 48.71 / 48.94 | 82.03 / 84.24 | 0.59 |
+| orders-default-find-10 | 35.88 / 40.95 | 3.26 / 3.62 | 11.00 |
+| orders-default-find-50 | 32.72 / 36.90 | 17.04 / 22.04 | 1.92 |
+| orders-default-count | 33.02 / 40.86 | 78.42 / 81.32 | 0.42 |
+| orders-open-status | 19.71 / 20.80 | 64.84 / 73.61 | 0.30 |
+| order-line-add | 6.74 / 25.86 | 0.75 / 0.86 | 8.94 |
+| order-create | 0.37 / 0.53 | 0.28 / 0.59 | 1.32 |
+
+- filesystem-node: WAL proof not applicable; mean seed JSON bytes {"products":2000,"orders":2758.653}.
+
+- sqlite-node: WAL proof wal; mean seed JSON bytes {"products":2000,"orders":2758.653}.
+
+#### large
+
+| Cell (p50 / p95 ms) | filesystem-node | sqlite-node | filesystem-node ÷ sqlite-node (p50) |
+| --- | --- | --- | --- |
+| products-grid-asShipped (returned order differed) | 424.58 / 481.83 ⚠ 8/8 unsorted | 712.95 / 736.05 | 0.60 |
+| products-grid-pushed-10 | 920.13 / 1031.01 | 0.72 / 6.93 | 1271.07 |
+| products-grid-pushed-50 | 912.94 / 1011.06 | 3.18 / 3.42 | 286.82 |
+| products-catalogue-blob | 157.78 / 159.87 | 1190.05 / 1237.84 | 0.13 |
+| products-catalogue-projection — projection (condition ii) | 153.22 / 162.39 | 184.34 / 196.33 | 0.83 |
+| products-findByIds-10 | 0.08 / 0.10 | 0.55 / 0.59 | 0.15 |
+| products-findByIds-50 | 0.35 / 0.49 | 2.55 / 2.72 | 0.14 |
+| products-remoteId-in-find | 248.01 / 379.27 | 4.89 / 5.58 | 50.72 |
+| products-remoteId-in-count | 248.15 / 384.71 | 3.61 / 4.19 | 68.73 |
+| seed-products | 3217.72 / 3293.56 | 1019.09 / 1053.48 | 3.16 |
+| orders-default-find-10 | 684.99 / 857.80 | 4.13 / 5.72 | 165.83 |
+| orders-default-find-50 | 685.54 / 713.89 | 19.18 / 19.49 | 35.74 |
+| orders-default-count | 692.12 / 996.31 | 897.17 / 901.25 | 0.77 |
+| orders-open-status | 578.64 / 599.18 | 452.56 / 545.06 | 1.28 |
+| order-line-add | 58.51 / 211.03 | 0.86 / 1.08 | 67.73 |
+| order-create | 0.36 / 0.50 | 0.27 / 0.34 | 1.33 |
+| cold-open-first-read | 369.79 / 375.03 | 6.26 / 17.60 | 59.03 |
+
+- filesystem-node: WAL proof not applicable; mean seed JSON bytes {"products":2000,"orders":2714.56025}.
+
+- filesystem-node disk-bytes after large seed: 151012993; files: 26.
+
+- filesystem-node cold-open-first-read: 369.79 / 375.03 ms; N=3, fresh Node processes, warm OS page cache.
+
+- sqlite-node: WAL proof wal; mean seed JSON bytes {"products":2000,"orders":2714.56025}.
+
+- sqlite-node disk-bytes after large seed: 201164264; files: 3.
+
+- sqlite-node cold-open-first-read: 6.26 / 17.60 ms; N=3, fresh Node processes, warm OS page cache.
+
+### Leg 2 — crash.windows.json
+
+| Environment | Value |
+| --- | --- |
+| os | win32 10.0.26100 x64 |
+| platform | windows |
+| cpu | AMD EPYC 9V74 80-Core Processor                 |
+| node | 24.20.0 |
+| sqlite | 3.53.4 |
+| rxdb | 17.4.0 |
+| rxdb-premium | 17.4.0 |
+| esbuild | 0.28.2 |
+| premiumPatchMarkerCount | 47 |
+| measuredAt | 2026-09-23T15:06:08.811Z |
+
+Complete: 30 trials requested per selected row.
+
+| Row | Trials | ok | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present | In-flight absent | In-flight partial / none / unknown | Median reopen ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| filesystem-node | 30 | 22 | 0 | 0 | 8 | 0 | 30 | 8 / 0 | 0 | 29 | 0 / 1 / 0 | 644.85 |
+| sqlite-node | 30 | 30 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 10 | 19 | 0 / 1 / 0 | 938.23 |
+
+
 ## Cross-platform summary
 
 Lowest p50, descriptive only; Windows decides when Mac and Windows disagree (map ruling 2026-09-18).
 
 | Scale / cell | Mac winner (source) | Windows winner (source) | straddles |
 | --- | --- | --- | --- |
-| small/products-grid-asShipped | filesystem-node (results.mac.json) | not measured | not evaluated |
-| small/products-grid-pushed-10 | sqlite-node (results.mac.json) | not measured | not evaluated |
-| small/products-grid-pushed-50 | sqlite-node (results.mac.json) | not measured | not evaluated |
-| small/products-catalogue-blob | filesystem-node (results.mac.json) | not measured | not evaluated |
-| small/products-catalogue-projection | filesystem-node (results.mac.json) | not measured | not evaluated |
-| small/products-findByIds-10 | filesystem-node (results.mac.json) | not measured | not evaluated |
-| small/products-findByIds-50 | filesystem-node (results.mac.json) | not measured | not evaluated |
-| small/products-remoteId-in-find | sqlite-node (results.mac.json) | not measured | not evaluated |
-| small/products-remoteId-in-count | sqlite-node (results.mac.json) | not measured | not evaluated |
-| small/seed-products | filesystem-node (results.mac.json) | not measured | not evaluated |
-| small/orders-default-find-10 | sqlite-node (results.mac.json) | not measured | not evaluated |
-| small/orders-default-find-50 | sqlite-node (results.mac.json) | not measured | not evaluated |
-| small/orders-default-count | filesystem-node (results.mac.json) | not measured | not evaluated |
-| small/orders-open-status | filesystem-node (results.mac.json) | not measured | not evaluated |
-| small/order-line-add | sqlite-node (results.mac.json) | not measured | not evaluated |
-| small/order-create | filesystem-node (results.mac.json) | not measured | not evaluated |
-| large/products-grid-asShipped | filesystem-node (results.mac.json) | not measured | not evaluated |
-| large/products-grid-pushed-10 | sqlite-node (results.mac.json) | not measured | not evaluated |
-| large/products-grid-pushed-50 | sqlite-node (results.mac.json) | not measured | not evaluated |
-| large/products-catalogue-blob | filesystem-node (results.mac.json) | not measured | not evaluated |
-| large/products-catalogue-projection | filesystem-node (results.mac.json) | not measured | not evaluated |
-| large/products-findByIds-10 | filesystem-node (results.mac.json) | not measured | not evaluated |
-| large/products-findByIds-50 | filesystem-node (results.mac.json) | not measured | not evaluated |
-| large/products-remoteId-in-find | sqlite-node (results.mac.json) | not measured | not evaluated |
-| large/products-remoteId-in-count | sqlite-node (results.mac.json) | not measured | not evaluated |
-| large/seed-products | sqlite-node (results.mac.json) | not measured | not evaluated |
-| large/orders-default-find-10 | sqlite-node (results.mac.json) | not measured | not evaluated |
-| large/orders-default-find-50 | sqlite-node (results.mac.json) | not measured | not evaluated |
-| large/orders-default-count | filesystem-node (results.mac.json) | not measured | not evaluated |
-| large/orders-open-status | filesystem-node (results.mac.json) | not measured | not evaluated |
-| large/order-line-add | sqlite-node (results.mac.json) | not measured | not evaluated |
-| large/order-create | filesystem-node (results.mac.json) | not measured | not evaluated |
-| large/cold-open-first-read | sqlite-node (results.mac.json) | not measured | not evaluated |
+| small/products-grid-asShipped | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| small/products-grid-pushed-10 | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| small/products-grid-pushed-50 | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| small/products-catalogue-blob | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| small/products-catalogue-projection | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| small/products-findByIds-10 | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| small/products-findByIds-50 | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| small/products-remoteId-in-find | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| small/products-remoteId-in-count | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| small/seed-products | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| small/orders-default-find-10 | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| small/orders-default-find-50 | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| small/orders-default-count | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| small/orders-open-status | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| small/order-line-add | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| small/order-create | filesystem-node (results.mac.json) | sqlite-node (results.windows.json) | yes |
+| large/products-grid-asShipped | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| large/products-grid-pushed-10 | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| large/products-grid-pushed-50 | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| large/products-catalogue-blob | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| large/products-catalogue-projection | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| large/products-findByIds-10 | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| large/products-findByIds-50 | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| large/products-remoteId-in-find | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| large/products-remoteId-in-count | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| large/seed-products | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| large/orders-default-find-10 | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| large/orders-default-find-50 | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| large/orders-default-count | filesystem-node (results.mac.json) | filesystem-node (results.windows.json) | no |
+| large/orders-open-status | filesystem-node (results.mac.json) | sqlite-node (results.windows.json) | yes |
+| large/order-line-add | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
+| large/order-create | filesystem-node (results.mac.json) | sqlite-node (results.windows.json) | yes |
+| large/cold-open-first-read | sqlite-node (results.mac.json) | sqlite-node (results.windows.json) | no |
 <!-- generated:end -->

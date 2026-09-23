@@ -1,11 +1,7 @@
 name: Spike 2210 desktop engine
 # workflow_dispatch only resolves for files on the default branch. To re-run from a branch,
 # add a temporary `push: { branches: [<branch>] }` trigger (as runs 35327100216 and 35328362910 did).
-on:
-  workflow_dispatch:
-  # Temporary: the Windows leg runs from the spike branch; remove before merge.
-  push:
-    branches: [research/2210-desktop-engine]
+on: workflow_dispatch
 permissions:
   contents: read
 jobs:
