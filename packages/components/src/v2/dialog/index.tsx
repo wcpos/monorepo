@@ -47,12 +47,14 @@ const sizes: Record<DialogSize, string> = {
 	full: 'w-full',
 };
 export function Dialog(allProps: DialogProps): React.JSX.Element {
-	const { route = false, onClose, children, ...props } = allProps;
+	const { route = false, onClose, children, asChild, ...props } = allProps;
 	return (
 		<RouteContext.Provider value={{ route }}>
 			<DialogPrimitive.Root
 				{...props}
-				asChild={React.Children.count(children) === 1 && React.isValidElement(children)}
+				asChild={
+					asChild ?? (React.Children.count(children) === 1 && React.isValidElement(children))
+				}
 				{...(route
 					? {
 							open: true,
@@ -109,6 +111,7 @@ function DialogPanel(allProps: DialogContentProps) {
 	const { closeLabel, closeButtonProps, onOpenAutoFocus, testID, ref, ...props } = rest;
 	const {
 		className: closeButtonClassName,
+		iconClassName: closeIconClassName,
 		testID: closeButtonTestID,
 		...closeProps
 	} = closeButtonProps ?? {};
@@ -149,6 +152,7 @@ function DialogPanel(allProps: DialogContentProps) {
 					<IconButton
 						name="xmark"
 						className={cn('h-ctl w-ctl items-center justify-center', closeButtonClassName)}
+						iconClassName={cn('size-4.5', closeIconClassName)}
 						aria-label={closeLabel ?? 'Close'}
 						testID={closeButtonTestID ?? (testID ? `${testID}-close` : 'dialog-close')}
 						{...closeProps}

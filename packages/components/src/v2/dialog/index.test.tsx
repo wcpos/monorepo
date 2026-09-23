@@ -64,7 +64,9 @@ jest.mock('../../keyboard-controller', () => ({
 jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
 jest.mock('expo-haptics', () => ({ impactAsync: jest.fn() }));
 jest.mock('../../loader', () => ({ Loader: () => null }));
-jest.mock('../../icon', () => ({ Icon: () => null }));
+jest.mock('../../icon', () => ({
+	Icon: ({ className }: { className?: string }) => <svg className={className} />,
+}));
 jest.mock('../../input', () => ({
 	Input: ({ value, onChangeText, placeholder, ...props }: any) => (
 		<input
@@ -292,6 +294,17 @@ it('2. passes controlled open and onOpenChange through', () => {
 	expect(screen.getByTestId('d')).toBeInTheDocument();
 });
 
+it('2. honours explicit asChild=false for a single content child', () => {
+	render(
+		<Dialog open asChild={false}>
+			<DialogContent inline testID="d">
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('primitive-root')).toContainElement(screen.getByTestId('d'));
+});
+
 function CloseFromContext() {
 	const { open, close } = useDialog();
 	return (
@@ -430,6 +443,10 @@ it('7. names the close control and lets callers override its label and testID', 
 		</Dialog>
 	);
 	expect(screen.getByTestId('d-close')).toHaveAttribute('aria-label', 'Close');
+	const icon = screen.getByTestId('d-close').querySelector('svg');
+	expect(icon).toHaveClass('size-4.5');
+	expect(icon).not.toHaveClass('h-ctl');
+	expect(icon).not.toHaveClass('w-ctl');
 	expect(
 		mockPressableProps.find((props) => props.testID === 'd-close')?.className?.split(' ')
 	).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl']));
@@ -453,7 +470,11 @@ it('7. names the close control and lets callers override its label and testID', 
 it('7. merges caller close classes with the control dimensions', () => {
 	render(
 		<Dialog open>
-			<DialogContent inline testID="d" closeButtonProps={{ className: 'opacity-70' }}>
+			<DialogContent
+				inline
+				testID="d"
+				closeButtonProps={{ className: 'opacity-70', iconClassName: 'size-6' }}
+			>
 				Task
 			</DialogContent>
 		</Dialog>
@@ -461,6 +482,9 @@ it('7. merges caller close classes with the control dimensions', () => {
 	expect(
 		mockPressableProps.find((props) => props.testID === 'd-close')?.className?.split(' ')
 	).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl', 'opacity-70']));
+	const icon = screen.getByTestId('d-close').querySelector('svg');
+	expect(icon).toHaveClass('size-6');
+	expect(icon).not.toHaveClass('size-4.5');
 });
 
 it.each(['right', 'center'] as const)(

@@ -157,7 +157,7 @@ it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
 			expect.objectContaining({
 				behavior: 'padding',
 				keyboardVerticalOffset: 34,
-				className: fullHeight ? 'h-full' : undefined,
+				className: fullHeight ? 'max-h-full max-w-full h-full' : 'max-h-full max-w-full',
 				pointerEvents: 'box-none',
 			})
 		);

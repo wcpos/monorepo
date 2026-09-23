@@ -198,7 +198,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				pointerEvents="box-none"
 				behavior="padding"
 				keyboardVerticalOffset={insets.bottom}
-				className={fullHeight ? 'h-full' : undefined}
+				className={cn('max-h-full max-w-full', fullHeight && 'h-full')}
 			>
 				<Animated.View
 					pointerEvents="box-none"
