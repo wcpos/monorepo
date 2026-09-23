@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "wcpos-spike-2091",
+    "slug": "wcpos-spike-2091",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wcpos.spike2091",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSLocalNetworkUsageDescription": "Connect to the storage benchmark driver on your Mac."
+      }
+    },
+    "android": {
+      "package": "com.wcpos.spike2091",
+      "predictiveBackGestureEnabled": false
+    },
+    "scheme": "spike2091",
+    "newArchEnabled": true,
+    "jsEngine": "hermes",
+    "plugins": [
+      "expo-sqlite",
+      "./with-cleartext"
+    ]
+  }
+}

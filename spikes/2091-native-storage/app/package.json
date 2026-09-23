@@ -1,0 +1,57 @@
+{
+  "name": "wcpos-spike-2091",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "~57.0.20",
+    "expo-crypto": "~57.0.2",
+    "expo-file-system": "~57.0.6",
+    "expo-opfs": "1.0.9",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-reanimated": "~4.5.0",
+    "@wcpos/react-native-worklet-fs": "0.1.1",
+    "react-native-worklets": "0.11.4",
+    "rxdb": "17.4.0",
+    "rxdb-premium": "17.4.0",
+    "@wcpos/rxdb-storage-worklet": "0.1.1",
+    "rxjs": "7.8.2",
+    "@wcpos/worklet-opfs": "0.1.1",
+    "expo-sqlite": "~57.0.1",
+    "expo-linking": "~57.0.10"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "babel-preset-expo": "~57.0.0",
+    "metro": "0.84.5",
+    "metro-runtime": "0.84.5",
+    "patch-package": "8.0.1",
+    "typescript": "~6.0.3"
+  },
+  "overrides": {
+    "metro": "0.84.5",
+    "metro-runtime": "0.84.5",
+    "rxdb": "17.4.0",
+    "rxjs": "7.8.2",
+    "react-native-worklets": "0.11.4"
+  },
+  "expo": {
+    "autolinking": {
+      "searchPaths": [
+        "./node_modules"
+      ],
+      "exclude": [
+        "expo-dev-client",
+        "expo-dev-launcher",
+        "expo-dev-menu",
+        "expo-updates",
+        "@sentry/react-native"
+      ]
+    }
+  }
+}
