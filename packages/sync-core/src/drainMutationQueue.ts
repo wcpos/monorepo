@@ -607,7 +607,7 @@ export async function drainMutationQueue(input: {
 		if (
 			mutation.nextAttemptAt &&
 			Date.parse(mutation.nextAttemptAt) > now() &&
-			!(lastAttemptAt(mutation) < (freshExplicitQueuedAt.get(recordKey(mutation)) ?? -Infinity))
+			!(lastAttemptAt(mutation) <= (freshExplicitQueuedAt.get(recordKey(mutation)) ?? -Infinity))
 		) {
 			deferred += 1;
 			blockedRecords.add(recordKey(mutation));
