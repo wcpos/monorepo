@@ -55,6 +55,25 @@ export function shouldUseContractCheckout(gateway?: GatewayContract | null) {
 	return supportsCheckoutContract(gateway) && !LEGACY_WEBVIEW_GATEWAY_IDS.has(gateway?.id || '');
 }
 
+/**
+ * The store refusing the chosen gateway itself: it is not enabled for the POS or
+ * cannot run the checkout contract (`_not_available`), or it no longer exists
+ * (`_not_found`, from the bootstrap or the checkout POST). Both are returned
+ * before the store claims the attempt, so no money moved and the outcome is
+ * KNOWN — that is PAYMENT301, not CHECKOUT201's "could not confirm", which sent
+ * the cashier checking for a charge instead of to the gateway settings.
+ */
+const GATEWAY_REFUSAL_CODES = new Set([
+	'wcpos_payment_gateway_not_available',
+	'wcpos_payment_gateway_not_found',
+]);
+
+export function isGatewayRefusal(error: unknown): boolean {
+	const body = (error as { response?: { data?: unknown } } | null)?.response?.data ?? error;
+	const code = (body as { code?: unknown } | null)?.code;
+	return typeof code === 'string' && GATEWAY_REFUSAL_CODES.has(code);
+}
+
 export function createCheckoutIdempotencyKey(
 	orderId: number,
 	gatewayId: string,
@@ -298,7 +317,9 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			const logLevel = isExpectedPreflightBlock(err) ? 'warn' : 'error';
 			checkoutLogger[logLevel](message, {
 				showToast: true,
-				code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,
+				code: isGatewayRefusal(err)
+					? ERROR_CODES.GATEWAY_UNAVAILABLE
+					: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN,
 				context: {
 					orderId: orderId,
 					gatewayId: resolvedGateway?.id,

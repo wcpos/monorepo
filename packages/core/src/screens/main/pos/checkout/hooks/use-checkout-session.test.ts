@@ -316,6 +316,74 @@ describe('useCheckoutSession', () => {
 		await waitFor(() => expect(mockResolveStockOwnerId).toHaveBeenCalledWith(10, 0));
 	});
 
+	// The store refuses the gateway before it claims the attempt, so nothing was
+	// charged: the log must send the cashier to PAYMENT301 (gateway settings),
+	// not CHECKOUT201 ("could not confirm — check for a charge").
+	it.each([
+		['wcpos_payment_gateway_not_available', 'checkout'],
+		['wcpos_payment_gateway_not_found', 'checkout'],
+		['wcpos_payment_gateway_not_found', 'bootstrap'],
+	])('logs a store refusal of the gateway (%s on %s) as PAYMENT301', async (code, refusedBy) => {
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		const refusal = Object.assign(new Error('Request failed with status code 400'), {
+			response: { status: 400, data: { code, message: 'Payment gateway refused.' } },
+		});
+		if (refusedBy === 'bootstrap') mockPost.mockRejectedValueOnce(refusal);
+		else
+			mockPost.mockResolvedValueOnce({ data: { status: 'ready' } }).mockRejectedValueOnce(refusal);
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => {
+			await result.current.startCheckout();
+		});
+
+		expect(mockCheckoutError).toHaveBeenCalledTimes(1);
+		expect(mockCheckoutError).toHaveBeenCalledWith(
+			'Request failed with status code 400',
+			expect.objectContaining({ code: ERROR_CODES.GATEWAY_UNAVAILABLE, showToast: true })
+		);
+		expect(result.current.loading).toBe(false);
+	});
+
+	it('still logs an unrecognised checkout refusal as CHECKOUT201', async () => {
+		mockGet.mockResolvedValueOnce({
+			data: [
+				{
+					id: 'stripe_terminal_for_woocommerce',
+					provider: 'stripe',
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				},
+			],
+		});
+		mockPost.mockResolvedValueOnce({ data: { status: 'ready' } }).mockRejectedValueOnce(
+			Object.assign(new Error('Request failed with status code 400'), {
+				response: { status: 400, data: { code: 'wcpos_checkout_failed' } },
+			})
+		);
+
+		const { result } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		await act(async () => {
+			await result.current.startCheckout();
+		});
+
+		expect(mockCheckoutError).toHaveBeenCalledWith(
+			'Request failed with status code 400',
+			expect.objectContaining({ code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN })
+		);
+	});
+
 	/**
 	 * #163 ruling R5, the narrowest window that matters: Process Payment was
 	 * pressed while storage was healthy and the worker died during the gateway
