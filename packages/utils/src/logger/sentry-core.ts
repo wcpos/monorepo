@@ -47,6 +47,64 @@ type SentryEventLike = {
 	contexts?: Record<string, unknown>;
 };
 
+export function describeBareException<T extends SentryEventLike>(
+	event: T,
+	hint?: { originalException?: unknown }
+): T {
+	try {
+		const err = hint?.originalException;
+		const bare = event.exception?.values?.some(
+			({ value }) => !value || value === 'No error message'
+		);
+		if (err === undefined || !bare) return event;
+		const fields = err as { name?: unknown; code?: unknown; stack?: unknown } | null;
+		const thrown: Record<string, unknown> = { keys: [], hasStack: false };
+		// Every string leaves through the scrubber: a `code` or key can carry a token, and a web
+		// stack names the merchant's origin on every frame.
+		const text = (value: unknown, max: number) => scrubComponentStack(String(value)).slice(0, max);
+		const readers: Record<string, () => unknown> = {
+			typeof: () => typeof err,
+			// Symbol.toStringTag is user-settable, so the tag is a string like any other.
+			tag: () => text(Object.prototype.toString.call(err), 100),
+			constructor: () => (fields?.constructor?.name ? text(fields.constructor.name, 100) : null),
+			name: () => (typeof fields?.name === 'string' ? text(fields.name, 100) : null),
+			code: () =>
+				typeof fields?.code === 'number'
+					? fields.code
+					: typeof fields?.code === 'string'
+						? text(fields.code, 100)
+						: null,
+			keys: () =>
+				err !== null && typeof err === 'object'
+					? Object.keys(err)
+							.slice(0, 20)
+							.map((key) => text(key, 60))
+					: [],
+			hasStack: () => typeof fields?.stack === 'string' && fields.stack.length > 0,
+			stackHead: () => (thrown.hasStack ? text(fields?.stack, 500) : null),
+			string: () => text(err, 200),
+		};
+		for (const [key, read] of Object.entries(readers)) {
+			try {
+				thrown[key] = read();
+			} catch {
+				thrown[key] = thrown[key] ?? null;
+			}
+		}
+		event.contexts = { ...event.contexts, thrown };
+	} catch {
+		// A diagnostic must never hide the event it was meant to explain.
+	}
+	return event;
+}
+
+export function prepareEvent<T extends SentryEventLike>(
+	event: T,
+	hint?: { originalException?: unknown }
+): T {
+	return scrubEvent(describeBareException(event, hint));
+}
+
 function stripOrigin(url: string): string {
 	try {
 		const parsedUrl = new URL(url);

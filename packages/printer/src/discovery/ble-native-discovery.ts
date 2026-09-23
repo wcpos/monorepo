@@ -32,13 +32,46 @@ function toRow({ id, name }: ScannedDevice): DiscoveredPrinter {
 	};
 }
 
+type BleManager = Awaited<ReturnType<typeof getBleManager>>;
+type BleState = Awaited<ReturnType<BleManager['state']>>;
+
+const settled = (state: BleState) => state !== 'Unknown' && state !== 'Resetting';
+
+/**
+ * Subscribes before reading the snapshot: ble-plx only emits future changes, so a transition
+ * landing between the two would otherwise go unseen until the budget ran out.
+ */
+function waitForBleState(manager: BleManager, budgetMs: number): Promise<BleState> {
+	return new Promise<BleState>((resolve) => {
+		// ble-plx types State as an enum; the literal is what the native side reports before its delegate fires.
+		let state = 'Unknown' as BleState;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		let subscription: { remove(): void } | undefined;
+		let done = false;
+		const finish = () => {
+			if (done) return;
+			done = true;
+			clearTimeout(timer);
+			subscription?.remove();
+			resolve(state);
+		};
+		const see = (next: BleState) => {
+			state = next;
+			if (settled(state)) finish();
+		};
+		subscription = manager.onStateChange(see, false);
+		timer = setTimeout(finish, budgetMs);
+		manager.state().then(see, () => finish());
+	});
+}
+
 async function scanOnce(
+	manager: BleManager,
 	serviceUuids: string[] | null,
 	timeoutMs: number,
 	accept: (device: ScannedDevice) => boolean,
 	rows: Map<string, DiscoveredPrinter>
 ): Promise<void> {
-	const manager = await getBleManager();
 	printerLogger.debug('BLE scan started', {
 		context: { filtered: serviceUuids !== null, timeoutMs },
 	});
@@ -76,15 +109,25 @@ async function scanOnce(
  * Generic BLE receipt printers on iOS/Android, over react-native-ble-plx. The scan filters on the
  * GATT print services first; printers that advertise only a name (most clones do) are picked up by
  * the unfiltered second pass. Loaded through a dynamic import, like the vendor SDK discoveries.
+ * CoreBluetooth starts Unknown on iOS; let it settle, including time for the permission alert,
+ * before scanning. The wait has its own budget equal to the scan's, so the worst case is twice
+ * `timeoutMs`; the Epson pass runs for ten seconds alongside, so the setup step is not slower.
  */
 export async function discover({
 	timeoutMs = BLE_SCAN_TIMEOUT_MS,
 }: { timeoutMs?: number } = {}): Promise<DiscoveredPrinter[]> {
+	const manager = await getBleManager();
+	const state = await waitForBleState(manager, timeoutMs);
+	if (state !== 'PoweredOn') {
+		printerLogger.warn('BLE scan skipped', { context: { state } });
+		return [];
+	}
 	const rows = new Map<string, DiscoveredPrinter>();
 	const filteredMs = Math.round(timeoutMs * FILTERED_SCAN_SHARE);
-	await scanOnce(BLE_PRINT_SERVICE_UUIDS, filteredMs, () => true, rows);
+	await scanOnce(manager, BLE_PRINT_SERVICE_UUIDS, filteredMs, () => true, rows);
 	if (rows.size === 0) {
 		await scanOnce(
+			manager,
 			null,
 			timeoutMs - filteredMs,
 			({ name }) => PRINTER_NAME_PATTERN.test(name),
