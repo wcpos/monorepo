@@ -59,11 +59,23 @@ test('gallery cells', async ({ page }, testInfo) => {
 		// shots found it gone, so the shot states its precondition: the cell's first text
 		// field is focused, and the spec puts it there when the page did not.
 		if (isolated) {
-			await page.evaluate((cellId) => {
+			const focus = await page.evaluate((cellId) => {
 				const root = document.querySelector<HTMLElement>(`[data-cell-id="${cellId}"]`);
 				const field = root?.querySelector<HTMLElement>('input,textarea');
-				if (field && document.activeElement !== field) field.focus({ preventScroll: true });
+				if (!field) return null;
+				if (document.activeElement !== field) field.focus({ preventScroll: true });
+				return {
+					active: document.activeElement === field,
+					ring: field.matches(':focus-visible'),
+					pageFocus: document.hasFocus(),
+				};
 			}, id);
+			// The ring is drawn only when all three hold; a shot without them is reported by
+			// name so the job log says which precondition the runner lost.
+			if (focus && !(focus.active && focus.ring && focus.pageFocus))
+				process.stdout.write(
+					`Gallery focus not settled on ${id}-${theme}: ${JSON.stringify(focus)}\n`
+				);
 		}
 		if (smoke)
 			await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
