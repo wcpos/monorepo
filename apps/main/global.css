@@ -770,6 +770,10 @@
 
 /* Web only: Uniwind must not apply an unsupported preference query on native.
  * Named functional waits keep moving; the indeterminate class is reserved for its rebuild. */
+@utility duration-crossfade {
+  transition-duration: var(--duration-crossfade);
+}
+
 @supports selector(div > div) {
   @media (prefers-reduced-motion: reduce) {
     *:not(.web\:animate-spin):not(.web\:animate-indeterminate),
@@ -781,5 +785,13 @@
       transition-duration: 0ms !important;
       transition-delay: 0ms !important;
     }
+  }
+  /* Controls tier: wcpos/roadmap#376, shared keyboard focus. */
+  :where([role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="switch"], [role="combobox"], [role="tab"], [role="menuitem"], [role="option"], button, a, summary):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  :where(input, textarea, [contenteditable]):focus-visible {
+    outline: none;
   }
 }

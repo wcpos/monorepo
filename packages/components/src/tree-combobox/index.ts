@@ -1,6 +1,7 @@
 export {
 	TreeCombobox,
 	TreeComboboxTrigger,
+	TreeComboboxValue,
 	TreeComboboxContent,
 	useTreeComboboxContext,
 } from './tree-combobox';

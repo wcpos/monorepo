@@ -87,12 +87,16 @@ function SelectMultiTrigger({
 	disabled: disabledProp,
 	...props
 }: PopoverPrimitive.TriggerProps) {
-	const { disabled: rootDisabled } = useMultiSelectContext();
+	const { disabled: rootDisabled, open } = useMultiSelectContext();
 	const disabled = Boolean(rootDisabled || disabledProp);
 
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(disabled && 'web:cursor-not-allowed opacity-50', className)}
+			className={cn(
+				className,
+				open && 'border-ring',
+				disabled && 'web:cursor-not-allowed opacity-45'
+			)}
 			disabled={disabled}
 			{...props}
 		>
@@ -122,7 +126,7 @@ function SelectMultiValue({
 
 	return (
 		<TextClassContext.Provider
-			value={cn(textClass, 'text-sm', !hasValue && 'text-muted-foreground', className)}
+			value={cn(textClass, 'text-base', !hasValue && 'text-muted-foreground', className)}
 		>
 			<Component {...props}>{displayText}</Component>
 		</TextClassContext.Provider>

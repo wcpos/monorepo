@@ -68,7 +68,7 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 			<IconButton
 				name="xmark"
 				size="sm"
-				className="text-destructive-foreground"
+				iconClassName="text-destructive-foreground"
 				onPress={resetErrorBoundary}
 			/>
 		</HStack>

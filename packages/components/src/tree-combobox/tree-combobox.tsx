@@ -225,6 +225,7 @@ function TreeComboboxTrigger({
 	...props
 }: PopoverPrimitive.TriggerProps) {
 	const { setTriggerWidth } = React.useContext(TreeComboboxWidthContext);
+	const { open } = PopoverPrimitive.useRootContext();
 
 	const handleLayout = React.useCallback(
 		(e: import('react-native').LayoutChangeEvent) => {
@@ -236,11 +237,53 @@ function TreeComboboxTrigger({
 
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(disabled && 'web:cursor-not-allowed opacity-50', className)}
+			className={cn(
+				className,
+				open && 'border-ring',
+				disabled && 'web:cursor-not-allowed opacity-45'
+			)}
 			disabled={disabled}
 			onLayout={handleLayout}
 			{...props}
 		/>
+	);
+}
+
+// --- Value ---
+
+interface TreeComboboxValueProps {
+	/** The text the closed control shows: the selection, or the placeholder when `hasValue` is false. */
+	children: string;
+	hasValue: boolean;
+	className?: string;
+}
+
+/**
+ * The closed face of the control: the same value box `ComboboxValue` draws, so a
+ * category picker and a customer picker read as one control. Reads the popover's
+ * `open` so the visible border lights up while the tree is open.
+ */
+function TreeComboboxValue({ children, hasValue, className }: TreeComboboxValueProps) {
+	const { open } = PopoverPrimitive.useRootContext();
+	return (
+		<View
+			className={cn(
+				'border-border bg-card h-ctl w-full flex-row items-center rounded-lg border px-3',
+				open && 'border-ring',
+				className
+			)}
+		>
+			<View className="flex-1">
+				<Text
+					className={cn('text-base', hasValue ? 'text-foreground' : 'text-muted-foreground')}
+					numberOfLines={1}
+					decodeHtml
+				>
+					{children}
+				</Text>
+			</View>
+			<Icon name="chevronDown" className="text-muted-foreground" />
+		</View>
 	);
 }
 
@@ -453,4 +496,10 @@ function TreeComboboxContent<T>({
 	);
 }
 
-export { TreeCombobox, TreeComboboxTrigger, TreeComboboxContent, useTreeComboboxContext };
+export {
+	TreeCombobox,
+	TreeComboboxTrigger,
+	TreeComboboxValue,
+	TreeComboboxContent,
+	useTreeComboboxContext,
+};

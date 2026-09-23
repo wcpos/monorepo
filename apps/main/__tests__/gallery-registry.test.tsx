@@ -7,6 +7,17 @@ jest.resetModules();
 // definition of done (landing order, DoD C) fails it silently at the shoot.
 // Reading the source keeps this test free of the gallery's native imports.
 const registered = [
+	'label',
+	'form',
+	'calendar',
+	'numpad',
+	"'tree-combobox': treeCombobox",
+	'slider',
+	'switch: switchStories',
+	"'radio-group': radioGroup",
+	'checkbox',
+	'textarea',
+	"'icon-button': iconButton",
 	'skeleton',
 	"'empty-state': emptyState",
 	'notice',

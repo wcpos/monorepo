@@ -123,15 +123,15 @@ function SelectTrigger({
 		return (
 			<SelectMultiTrigger
 				className={cn(
-					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm [&>span]:line-clamp-1',
-					props.disabled && 'web:cursor-not-allowed opacity-50',
+					'text-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-base [&>span]:line-clamp-1',
+					props.disabled && 'web:cursor-not-allowed opacity-45',
 					className
 				)}
 				onLayout={handleLayout}
 				{...(props as any)}
 			>
 				<>{children}</>
-				<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
+				<Icon name="chevronDown" aria-hidden={true} className="text-muted-foreground" />
 			</SelectMultiTrigger>
 		);
 	}
@@ -140,15 +140,15 @@ function SelectTrigger({
 		<SelectPrimitiveTrigger
 			asChild={asChild}
 			className={cn(
-				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm [&>span]:line-clamp-1',
-				props.disabled && 'web:cursor-not-allowed opacity-50',
+				'text-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-base [&>span]:line-clamp-1',
+				props.disabled && 'web:cursor-not-allowed opacity-45',
 				className
 			)}
 			onLayout={handleLayout}
 			{...props}
 		>
 			<>{children}</>
-			<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
+			<Icon name="chevronDown" aria-hidden={true} className="text-muted-foreground" />
 		</SelectPrimitiveTrigger>
 	);
 }
@@ -300,15 +300,15 @@ function SelectButton({ className, children, ...props }: ButtonProps) {
 	return (
 		<Button
 			className={cn(
-				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 border-input bg-background text-muted-foreground h-ctl flex flex-row items-center justify-between rounded-lg border px-3 py-2 text-sm [&>span]:line-clamp-1',
-				props.disabled && 'web:cursor-not-allowed opacity-50',
+				'text-foreground border-border bg-card h-ctl flex flex-row items-center justify-between gap-2 rounded-lg border px-3 py-2 text-base [&>span]:line-clamp-1',
+				props.disabled && 'web:cursor-not-allowed opacity-45',
 				className
 			)}
 			variant="ghost"
 			{...props}
 		>
 			<>{children}</>
-			<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
+			<Icon name="chevronDown" aria-hidden={true} className="text-muted-foreground" />
 		</Button>
 	);
 }

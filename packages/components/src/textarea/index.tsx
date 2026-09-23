@@ -20,6 +20,7 @@ function Textarea({
 	minHeight = 40,
 	style,
 	onFocus,
+	onBlur,
 	onSelectionChange,
 	// Capped like `Text` and the `Input` field: a larger OS text size must not
 	// break the row it sits in. A caller's prop still wins.
@@ -30,6 +31,7 @@ function Textarea({
 	 * Local state for controlling the cursor position.
 	 * Initially, this is undefined but is set when the component gains focus.
 	 */
+	const [isFocused, setIsFocused] = React.useState(false);
 	const [selection, setSelection] = React.useState<{ start: number; end: number } | undefined>(
 		undefined
 	);
@@ -68,6 +70,7 @@ function Textarea({
 	 */
 	const handleFocus = React.useCallback(
 		(e: any) => {
+			setIsFocused(true);
 			const textLength = props.value?.length || 0;
 			setSelection({ start: textLength, end: textLength });
 			onFocus?.(e);
@@ -101,8 +104,9 @@ function Textarea({
 	return (
 		<AnimatedTextInput
 			className={cn(
-				'web:flex web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 border-border text-foreground w-full rounded-md border bg-transparent px-3 py-2 text-base leading-none',
-				props.editable === false && 'web:cursor-not-allowed opacity-50',
+				'web:flex border-border bg-card text-foreground min-h-ctl w-full rounded-lg border px-3 py-2 text-base leading-none',
+				isFocused && 'border-ring web:ring-1 web:ring-ring',
+				props.editable === false && 'web:cursor-not-allowed opacity-45',
 				className
 			)}
 			placeholderTextColor={cn('text-muted-foreground', placeholderClassName)}
@@ -111,6 +115,10 @@ function Textarea({
 			textAlignVertical="top"
 			onContentSizeChange={onContentSizeChange}
 			onFocus={handleFocus}
+			onBlur={(event) => {
+				setIsFocused(false);
+				onBlur?.(event);
+			}}
 			selection={selection}
 			onSelectionChange={handleSelectionChange}
 			style={[style, animatedStyle]}
