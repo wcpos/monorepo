@@ -811,4 +811,10 @@
   :where(input, textarea, [contenteditable]):focus-visible {
     outline: none;
   }
+  /* Overlays tier: wcpos/roadmap#378. Radix focuses its own content element when a panel
+     opens with nothing tabbable inside; the panel's edge is the affordance, so the
+     container never carries the ring. Its rows and controls above still do. */
+  :where([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]):focus-visible {
+    outline: none;
+  }
 }
