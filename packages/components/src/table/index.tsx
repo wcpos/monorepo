@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { Slot } from '@rn-primitives/slot';
 import * as TablePrimitive from '@rn-primitives/table';
-import { useCSSVariable } from 'uniwind';
 
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
@@ -13,7 +12,7 @@ import type { SlottableViewProps } from '@rn-primitives/types';
 
 function Table({ className, ...props }: TablePrimitive.RootProps) {
 	return (
-		<TablePrimitive.Root className={cn('w-full caption-bottom text-sm', className)} {...props} />
+		<TablePrimitive.Root className={cn('w-full caption-bottom text-base', className)} {...props} />
 	);
 }
 
@@ -44,15 +43,14 @@ function TableFooter({ className, ...props }: TablePrimitive.FooterProps) {
 
 function PressableTableRow({
 	className,
-	index = 0,
+	index: _index = 0,
 	...props
 }: TablePrimitive.RowProps & { index?: number }) {
 	return (
 		<TablePrimitive.Row
 			role="row"
 			className={cn(
-				'web:transition-colors web:data-[state=selected]:bg-muted flex-row',
-				index % 2 && 'bg-muted/40',
+				'web:transition-colors web:hover:bg-muted web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
 				className
 			)}
 			{...props}
@@ -63,21 +61,18 @@ function PressableTableRow({
 function TableRow({
 	asChild,
 	className,
-	index = 0,
+	index: _index = 0,
 	...props
 }: SlottableViewProps & { index?: number }) {
 	const Component = asChild ? Slot : View;
-	// Use theme-aware colors for alternating rows
-	const [tableRowColor, tableRowAltColor] = useCSSVariable([
-		'--color-table-row',
-		'--color-table-row-alt',
-	]) as string[];
 
 	return (
 		<Component
 			role="row"
-			className={cn('web:transition-colors web:data-[state=selected]:bg-muted flex-row', className)}
-			style={{ backgroundColor: index % 2 ? tableRowAltColor : tableRowColor }}
+			className={cn(
+				'web:transition-colors web:hover:bg-muted web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
+				className
+			)}
 			{...props}
 		/>
 	);
@@ -85,10 +80,10 @@ function TableRow({
 
 function TableHead({ className, style, ...props }: TablePrimitive.HeadProps) {
 	return (
-		<TextClassContext.Provider value="text-muted-foreground text-xs uppercase text-left font-medium">
+		<TextClassContext.Provider value="text-muted-foreground text-xs font-semibold tracking-wide uppercase text-left">
 			<TablePrimitive.Head
 				className={cn(
-					'bg-table-header h-8 flex-1 flex-col justify-center px-2 [&:has([role=checkbox])]:pr-0',
+					'h-9 flex-1 flex-col justify-center px-3 [&:has([role=checkbox])]:pr-0',
 					className
 				)}
 				style={style}
@@ -104,7 +99,10 @@ function TableHead({ className, style, ...props }: TablePrimitive.HeadProps) {
 function TableCell({ className, children, ...props }: TablePrimitive.CellProps) {
 	return (
 		<TablePrimitive.Cell
-			className={cn('flex-1 flex-col justify-center p-2 [&:has([role=checkbox])]:pr-0', className)}
+			className={cn(
+				'flex-1 flex-col justify-center px-3 py-1.5 [&:has([role=checkbox])]:pr-0',
+				className
+			)}
 			{...props}
 		>
 			{children}

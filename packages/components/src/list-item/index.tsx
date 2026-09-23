@@ -30,19 +30,22 @@ import { Text } from '../text';
  *   <Text>Custom content here</Text>
  * </ListItem>
  */
-const listItemVariants = cva('flex-row items-center gap-3 rounded-lg border p-3', {
-	variants: {
-		variant: {
-			default: 'border-border bg-background',
-			selected: 'border-primary bg-primary/10',
-			warning: 'border-warning/40 bg-warning/10',
-			dashed: 'border-border border-dashed',
+const listItemVariants = cva(
+	'min-h-row active:bg-muted flex-row items-center gap-3 rounded-lg border px-3 py-2',
+	{
+		variants: {
+			variant: {
+				default: 'border-border bg-card',
+				selected: 'border-primary bg-primary/10',
+				warning: 'border-warning/40 bg-warning/10',
+				dashed: 'border-border border-dashed',
+			},
 		},
-	},
-	defaultVariants: {
-		variant: 'default',
-	},
-});
+		defaultVariants: {
+			variant: 'default',
+		},
+	}
+);
 
 export interface ListItemProps
 	extends Omit<PressableProps, 'children'>, VariantProps<typeof listItemVariants> {
@@ -83,7 +86,11 @@ export function ListItem({
 
 	return (
 		<Pressable
-			className={cn(listItemVariants({ variant: resolvedVariant }), className)}
+			className={cn(
+				listItemVariants({ variant: resolvedVariant }),
+				pressableProps.disabled && 'opacity-45',
+				className
+			)}
 			{...pressableProps}
 		>
 			{leading}
@@ -91,9 +98,9 @@ export function ListItem({
 			<View className="flex-1 gap-0.5">
 				{children ?? (
 					<>
-						{title && <Text className="text-sm leading-tight font-medium">{title}</Text>}
+						{title && <Text className="text-base leading-tight font-medium">{title}</Text>}
 						{subtitle && (
-							<Text className="text-muted-foreground text-xs leading-tight">{subtitle}</Text>
+							<Text className="text-muted-foreground text-sm leading-tight">{subtitle}</Text>
 						)}
 					</>
 				)}

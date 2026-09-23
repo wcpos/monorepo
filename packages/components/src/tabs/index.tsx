@@ -61,7 +61,7 @@ function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListP
 			</StyledView>
 			<TabsPrimitive.List
 				className={cn(
-					'bg-muted hidden items-center justify-center rounded-md p-1 sm:inline-flex',
+					'border-border hidden flex-row items-end gap-1 border-b sm:inline-flex',
 					className
 				)}
 				{...props}
@@ -86,7 +86,7 @@ function TabsList({ asSelect, className, children, ...props }: TabsListProps) {
 
 	return (
 		<TabsPrimitive.List
-			className={cn('bg-muted inline-flex items-center justify-center rounded-md p-1', className)}
+			className={cn('border-border flex-row items-end gap-1 border-b', className)}
 			{...props}
 		>
 			{children}
@@ -249,7 +249,7 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 				onLayout={handleLayout}
 			>
 				<TabsPrimitive.List
-					className={cn('bg-muted inline-flex flex-row items-center rounded-md py-2', className)}
+					className={cn('border-border flex-row items-end gap-1 border-b', className)}
 					{...props}
 				>
 					{childrenArray.map((child, index) => {
@@ -297,15 +297,15 @@ function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTrigge
 	return (
 		<TextClassContext.Provider
 			value={cn(
-				'text-muted-foreground web:transition-all text-center text-sm',
-				value === props.value && 'text-primary-foreground'
+				'text-muted-foreground text-center text-base font-medium',
+				value === props.value && 'text-foreground font-semibold'
 			)}
 		>
 			<TabsPrimitive.Trigger
 				className={cn(
-					'web:ring-offset-background web:transition-all web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 web:whitespace-nowrap inline-flex items-center justify-center rounded-md px-3 py-1.5',
-					props.disabled && 'web:pointer-events-none opacity-50',
-					props.value === value && 'bg-primary shadow-sm',
+					'web:cursor-default h-ctl active:bg-muted -mb-px flex-row items-center justify-center border-b-2 border-transparent px-3',
+					props.disabled && 'web:pointer-events-none opacity-45',
+					props.value === value && 'border-primary',
 					className
 				)}
 				onPress={handlePress}
@@ -319,15 +319,7 @@ function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTrigge
  *
  */
 function TabsContent({ className, ...props }: TabsPrimitive.ContentProps) {
-	return (
-		<TabsPrimitive.Content
-			className={cn(
-				'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 pt-4',
-				className
-			)}
-			{...props}
-		/>
-	);
+	return <TabsPrimitive.Content className={cn('pt-4', className)} {...props} />;
 }
 
 export { ScrollableTabsList, Tabs, TabsContent, TabsList, TabsTrigger };
