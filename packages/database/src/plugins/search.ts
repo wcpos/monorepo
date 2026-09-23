@@ -377,6 +377,9 @@ async function createSearchInstance(
 	try {
 		searchInstance = (await addFulltextSearch(searchOptions)) as typeof searchInstance;
 		searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
+		// The index import. Awaited here so an unreadable index fails creation (and so recovery)
+		// instead of every later find(); a find() would wait for it anyway.
+		await searchInstance.queue;
 		const appendDocs = await searchInstance.collection
 			.find({ selector: { type: 'append' } })
 			.exec();
@@ -392,6 +395,7 @@ async function createSearchInstance(
 			await searchInstance.collection.remove();
 			searchInstance = (await addFulltextSearch(searchOptions)) as typeof searchInstance;
 			searchInstance.collection._changeEventBuffer.limit = SEARCH_EXPORT_HISTORY_LIMIT;
+			await searchInstance.queue;
 		}
 	} catch (error) {
 		try {

@@ -63,7 +63,7 @@ const couponsConfig = {
 	options: { searchFields: ['name'] },
 };
 
-it.each(['read', 'open'])(
+it.each(['read', 'open', 'damaged'])(
 	'rebuilds a persisted index after a destination %s failure without changing source documents',
 	async (failure) => {
 		const storage = getRxStorageMemory();
@@ -84,7 +84,26 @@ it.each(['read', 'open'])(
 		const createStorageInstance = storage.createStorageInstance.bind(storage);
 		const readError = new SyntaxError("Expected ',' or ']' after array element in JSON");
 		let failed = false;
+		// 'damaged': every read of the persisted index fails until its storage is removed.
+		let damaged = failure === 'damaged';
 		storage.createStorageInstance = async (params) => {
+			if (damaged && params.collectionName.endsWith('_flexsearch')) {
+				const instance = await createStorageInstance(params);
+				const query = instance.query.bind(instance);
+				const remove = instance.remove.bind(instance);
+				instance.query = async (prepared) => {
+					if (damaged) {
+						failed = true;
+						throw readError;
+					}
+					return query(prepared);
+				};
+				instance.remove = async () => {
+					damaged = false;
+					return remove();
+				};
+				return instance;
+			}
 			if (params.collectionName.endsWith('_flexsearch') && !failed && failure === 'open') {
 				failed = true;
 				throw readError;
@@ -104,16 +123,13 @@ it.each(['read', 'open'])(
 		};
 		database = await createRxDatabase(config);
 		const { coupons: reopened } = await database.addCollections({ coupons: couponsConfig });
-		// A source change makes the real pipeline consume the rejected initialization queue.
-		await reopened.insert({ id: 'coupon-3', name: 'Rebate' });
 		const sourceBefore = (await reopened.find().exec()).map((doc) => doc.toJSON(true));
-		expect(sourceBefore.slice(0, 2)).toEqual(before);
+		expect(sourceBefore).toEqual(before);
 		const rebuilt = (await reopened.initSearch!('en')) as unknown as SearchIndex;
 		await rebuilt.pipeline.awaitIdle();
 		expect(failed).toBe(true);
 		expect((await rebuilt.find('discount')).map((doc) => doc.primary)).toEqual(['coupon-1']);
 		expect((await rebuilt.find('voucher')).map((doc) => doc.primary)).toEqual(['coupon-2']);
-		expect((await rebuilt.find('rebate')).map((doc) => doc.primary)).toEqual(['coupon-3']);
 		expect((await reopened.find().exec()).map((doc) => doc.toJSON(true))).toEqual(sourceBefore);
 		await rebuilt.pipeline.close();
 		await rebuilt.close();
