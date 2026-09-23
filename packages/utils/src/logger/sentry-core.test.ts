@@ -54,6 +54,11 @@ describe('describeBareException', () => {
 		Object.defineProperty(error, 'Bearer key-secret', { value: 1, enumerable: true });
 		error.stack = 'Error\n    at render (https://shop.example/wp-content/plugins/pos/app.js:1:2)';
 		describeBareException(event, { originalException: error });
+		Object.defineProperty(error, Symbol.toStringTag, { value: 'Bearer tag-secret' });
+		describeBareException(event, { originalException: error });
+		// The token scrubber eats the closing bracket too; what matters is that the secret is gone.
+		expect(event).toHaveProperty('contexts.thrown.tag', expect.stringContaining('[REDACTED]'));
+		expect(event).toHaveProperty('contexts.thrown.tag', expect.not.stringContaining('tag-secret'));
 		expect(event).toHaveProperty('contexts.thrown.code', 'Bearer [REDACTED]');
 		expect(event).toHaveProperty('contexts.thrown.keys', ['code', 'Bearer [REDACTED]']);
 		expect(event).toHaveProperty(

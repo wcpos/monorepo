@@ -64,7 +64,8 @@ export function describeBareException<T extends SentryEventLike>(
 		const text = (value: unknown, max: number) => scrubComponentStack(String(value)).slice(0, max);
 		const readers: Record<string, () => unknown> = {
 			typeof: () => typeof err,
-			tag: () => Object.prototype.toString.call(err),
+			// Symbol.toStringTag is user-settable, so the tag is a string like any other.
+			tag: () => text(Object.prototype.toString.call(err), 100),
 			constructor: () => (fields?.constructor?.name ? text(fields.constructor.name, 100) : null),
 			name: () => (typeof fields?.name === 'string' ? text(fields.name, 100) : null),
 			code: () =>
