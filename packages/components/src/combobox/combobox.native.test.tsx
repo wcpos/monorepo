@@ -36,6 +36,9 @@ jest.mock('react-native', () => {
 	return {
 		...actual,
 		Platform: { ...actual.Platform, OS: 'ios' },
+		// The sheet moves native accessibility focus into itself on mount; RN-web has no node handles.
+		findNodeHandle: () => 1,
+		AccessibilityInfo: { ...actual.AccessibilityInfo, setAccessibilityFocus: jest.fn() },
 		View: (props: ViewProps) => {
 			mockViews.push(props);
 			return <actual.View {...props} />;
@@ -335,6 +338,9 @@ it('renders the phone sheet as a View with phone metrics, not primitive Content'
 	);
 	expect(screen.queryByTestId('combobox-content')).toBeNull();
 	const panel = mockViews.find((p) => p.testID === 'phone-panel');
+	expect(
+		jest.requireMock('react-native').AccessibilityInfo.setAccessibilityFocus
+	).toHaveBeenCalledWith(1);
 	expect(panel?.className).toContain('rounded-t-2xl');
 	expect(StyleSheet.flatten(panel?.style)).toMatchObject({ maxHeight: 538 });
 	// The shell pads the safe area; the panel must not add the inset a second time.

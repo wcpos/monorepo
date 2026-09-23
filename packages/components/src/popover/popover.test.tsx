@@ -42,3 +42,8 @@ it('lets the sheet geometry win over an anchored caller width', () => {
 	expect(screen.getByTestId('panel')).toHaveClass('w-full');
 	expect(screen.getByTestId('panel')).not.toHaveClass('w-80');
 });
+
+it('unmounts an inline sheet when the popover closes (no portal presence to do it)', () => {
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	expect(source).toMatch(/return inline \? \(\s*open \? shell : null\s*\)/);
+});

@@ -267,3 +267,40 @@ it('focuses the first field of a sheet that owns its dismiss once the rise settl
 		jest.useRealTimers();
 	}
 });
+
+it('is a dialog that hands focus back to its opener when a sheet that owns its dismiss closes', () => {
+	const opener = document.createElement('button');
+	document.body.appendChild(opener);
+	opener.focus();
+	try {
+		const { rerender } = render(
+			<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={jest.fn()} testID="r">
+				<OverlaySheetPanel testID="sheet">
+					<input data-testid="field" />
+				</OverlaySheetPanel>
+			</OverlayShell>
+		);
+		const sheet = screen.getByTestId('sheet');
+		expect(sheet).toHaveAttribute('role', 'dialog');
+		act(() => {
+			sheet.dispatchEvent(new Event('animationend'));
+		});
+		expect(document.activeElement).toBe(screen.getByTestId('field'));
+		rerender(
+			<OverlayShell
+				presentation="bottom"
+				open={false}
+				Scrim={Pressable}
+				onDismiss={jest.fn()}
+				testID="r"
+			>
+				<OverlaySheetPanel testID="sheet">
+					<input data-testid="field" />
+				</OverlaySheetPanel>
+			</OverlayShell>
+		);
+		expect(document.activeElement).toBe(opener);
+	} finally {
+		opener.remove();
+	}
+});

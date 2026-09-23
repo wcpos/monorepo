@@ -55,7 +55,9 @@ it('renders every text story in six scoped cells with floored scale values', () 
 // An isolated story (an open overlay) is a link on the full page and the story alone on
 // its own `?cell=` page; both carry the cell id and the flag the shoot discovers.
 jest.mock('expo-router', () => ({
-	Link: ({ children }: React.PropsWithChildren) => children,
+	// A host element named Link keeps every prop, the href included, for the assertion below.
+	Link: (props: { href: unknown }) =>
+		jest.requireActual<typeof React>('react').createElement('Link', props),
 }));
 it('renders an isolated story as a link on the full page and mounts it only on its cell page', () => {
 	const isolated = [
@@ -75,6 +77,12 @@ it('renders an isolated story as a link on the full page and mounts it only on i
 		isolated: 'true',
 	});
 	expect(renderer!.root.findAllByType(ScopedVariables)).toHaveLength(0);
+	expect(
+		renderer!.root.findAllByType('Link' as never).map((link) => link.props.href)
+	).toContainEqual({
+		pathname: '/gallery/[component]',
+		params: { component: 'popover', cell: 'popover--open--regular-fine' },
+	});
 	act(() => {
 		renderer!.unmount();
 	});

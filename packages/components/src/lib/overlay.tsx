@@ -1,6 +1,8 @@
 import * as React from 'react';
 import {
+	AccessibilityInfo,
 	BackHandler,
+	findNodeHandle,
 	type GestureResponderEvent,
 	Platform,
 	type StyleProp,
@@ -144,9 +146,21 @@ export function OverlaySheetPanel({
 	children: React.ReactNode;
 }) {
 	const { open, onPanelNode } = useOverlay();
+	const setNode = React.useCallback(
+		(panel: View | null) => {
+			onPanelNode(panel as unknown as HTMLElement | null);
+			// Native: the primitive Content moved accessibility focus into itself on open; the sheet does the same.
+			if (isWeb || !panel) return;
+			const tag = findNodeHandle(panel);
+			if (tag) AccessibilityInfo.setAccessibilityFocus(tag);
+		},
+		[onPanelNode]
+	);
 	return (
 		<View
-			ref={onPanelNode as unknown as React.Ref<View>}
+			ref={setNode}
+			role="dialog"
+			aria-modal
 			testID={testID}
 			className={cn(
 				className,
@@ -189,6 +203,11 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
 	const deferAutoFocus = isWeb && fullHeight;
+	const ownsDismiss = Boolean(onDismiss);
+	const onDismissRef = React.useRef(onDismiss);
+	React.useEffect(() => {
+		onDismissRef.current = onDismiss;
+	});
 	const onScrimPress = React.useCallback(
 		(event?: GestureResponderEvent) => {
 			// On web the scrim is the panel's ancestor, so a press inside the panel bubbles
@@ -199,26 +218,29 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		[onDismiss]
 	);
 	React.useEffect(() => {
-		if (!open || !onDismiss) return;
+		if (!open || !ownsDismiss) return;
 		if (isWeb) {
 			// A sheet without primitive Content has no Radix dismissable layer: Escape is ours.
 			const onKey = (event: KeyboardEvent) => {
-				if (event.key === 'Escape') onDismiss();
+				if (event.key === 'Escape') onDismissRef.current?.();
 			};
 			document.addEventListener('keydown', onKey);
 			return () => document.removeEventListener('keydown', onKey);
 		}
 		const back = BackHandler.addEventListener('hardwareBackPress', () => {
-			onDismiss();
+			onDismissRef.current?.();
 			return true;
 		});
 		return () => back.remove();
-	}, [open, onDismiss]);
+	}, [open, ownsDismiss]);
 	// The external animation event (or reduced-motion timer) determines when focus is safe.
 	React.useEffect(() => {
 		// Side panels, and a sheet that owns its dismiss (no primitive Content to focus it).
-		const ownsSheet = presentation === 'bottom' && Boolean(onDismiss);
+		const ownsSheet = presentation === 'bottom' && ownsDismiss;
 		if (!isWeb || !open || !node || !(fullHeight || ownsSheet)) return;
+		// The primitive Content returned focus to the trigger on close; a sheet that owns its
+		// dismiss remembers the opener and hands focus back when it closes or unmounts.
+		const opener = ownsSheet ? (document.activeElement as HTMLElement | null) : null;
 		let done = false;
 		const focusFirst = () => {
 			if (done) return;
@@ -240,8 +262,16 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			done = true;
 			clearTimeout(timer);
 			node.removeEventListener('animationend', onAnimationEnd);
+			const active = document.activeElement;
+			if (
+				opener &&
+				opener !== document.body &&
+				(!active || active === document.body || node.contains(active))
+			) {
+				opener.focus({ preventScroll: true });
+			}
 		};
-	}, [node, open, presentation, fullHeight, onDismiss]);
+	}, [node, open, presentation, fullHeight, ownsDismiss]);
 	if (presentation === 'anchored') {
 		/**
 		 * The primitive positions the panel; the shell supplies only the plumbing the

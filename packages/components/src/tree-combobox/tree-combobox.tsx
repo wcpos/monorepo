@@ -514,8 +514,12 @@ function TreeComboboxContent<T>({
 			</TextClassContext.Provider>
 		</OverlayShell>
 	);
+	// Inline (the gallery) has no portal, so nothing unmounts a closed sheet; the portal's
+	// presence does that for every real caller.
 	return inline ? (
-		shell
+		open ? (
+			shell
+		) : null
 	) : (
 		<PopoverPrimitive.Portal hostName={portalHost}>{shell}</PopoverPrimitive.Portal>
 	);
