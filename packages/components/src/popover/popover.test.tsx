@@ -45,5 +45,5 @@ it('lets the sheet geometry win over an anchored caller width', () => {
 
 it('unmounts an inline sheet when the popover closes (no portal presence to do it)', () => {
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
-	expect(source).toMatch(/return inline \? \(\s*open \? shell : null\s*\)/);
+	expect(source).toMatch(/return inline \?[\s(]*open \?[\s(]*shell[\s)]*: null/);
 });

@@ -161,6 +161,8 @@ export function OverlaySheetPanel({
 			ref={setNode}
 			role="dialog"
 			aria-modal
+			// Focusable itself, for a sheet with nothing tabbable inside (the settle fallback).
+			tabIndex={-1}
 			testID={testID}
 			className={cn(
 				className,
@@ -220,9 +222,29 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	React.useEffect(() => {
 		if (!open || !ownsDismiss) return;
 		if (isWeb) {
-			// A sheet without primitive Content has no Radix dismissable layer: Escape is ours.
+			// A sheet without primitive Content has no Radix dismissable layer or focus scope:
+			// Escape is ours, and Tab stays inside the modal sheet, wrapping at either end.
 			const onKey = (event: KeyboardEvent) => {
-				if (event.key === 'Escape') onDismissRef.current?.();
+				if (event.key === 'Escape') {
+					onDismissRef.current?.();
+					return;
+				}
+				if (event.key !== 'Tab' || !node) return;
+				const tabbables = Array.from(node.querySelectorAll<HTMLElement>(TABBABLE));
+				const first = tabbables[0];
+				const last = tabbables[tabbables.length - 1];
+				const active = document.activeElement;
+				const inside = active instanceof Node && node.contains(active);
+				if (!first) {
+					event.preventDefault();
+					node.focus({ preventScroll: true });
+				} else if (event.shiftKey && (active === first || !inside)) {
+					event.preventDefault();
+					last.focus();
+				} else if (!event.shiftKey && (active === last || !inside)) {
+					event.preventDefault();
+					first.focus();
+				}
 			};
 			document.addEventListener('keydown', onKey);
 			return () => document.removeEventListener('keydown', onKey);
@@ -232,7 +254,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			return true;
 		});
 		return () => back.remove();
-	}, [open, ownsDismiss]);
+	}, [open, ownsDismiss, node]);
 	// The external animation event (or reduced-motion timer) determines when focus is safe.
 	React.useEffect(() => {
 		// Side panels, and a sheet that owns its dismiss (no primitive Content to focus it).

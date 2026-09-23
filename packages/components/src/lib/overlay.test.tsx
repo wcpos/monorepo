@@ -304,3 +304,30 @@ it('is a dialog that hands focus back to its opener when a sheet that owns its d
 		opener.remove();
 	}
 });
+
+it('keeps Tab inside a sheet that owns its dismiss, wrapping at either end', () => {
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={jest.fn()} testID="t">
+			<OverlaySheetPanel testID="sheet">
+				<input data-testid="first" />
+				<input data-testid="last" />
+			</OverlaySheetPanel>
+		</OverlayShell>
+	);
+	expect(screen.getByTestId('sheet')).toHaveAttribute('tabindex', '-1');
+	const tab = (shiftKey: boolean) => {
+		const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, cancelable: true });
+		document.dispatchEvent(event);
+		return event.defaultPrevented;
+	};
+	screen.getByTestId('last').focus();
+	expect(tab(false)).toBe(true);
+	expect(document.activeElement).toBe(screen.getByTestId('first'));
+	expect(tab(true)).toBe(true);
+	expect(document.activeElement).toBe(screen.getByTestId('last'));
+	screen.getByTestId('first').focus();
+	expect(tab(false)).toBe(false);
+	(document.activeElement as HTMLElement).blur();
+	expect(tab(false)).toBe(true);
+	expect(document.activeElement).toBe(screen.getByTestId('first'));
+});
