@@ -141,13 +141,22 @@ it('runs a width-free native loop scaled by the measured track and cancels on un
 
 it('announces an indeterminate wait as busy with no current value on native', () => {
 	mockPlatform.OS = 'ios';
-	render(<Progress indeterminate value={60} accessibilityState={{ disabled: true }} />);
+	render(
+		<Progress
+			indeterminate
+			value={60}
+			accessibilityState={{ disabled: true }}
+			accessibilityValue={{ now: 60, text: 'Syncing' }}
+			aria-valuetext="Syncing"
+		/>
+	);
 	const root = mockRootProps.at(-1)!;
 	expect(root.value).toBeUndefined();
 	expect(root.accessibilityState).toEqual({ disabled: true, busy: true });
-	expect(root.accessibilityValue).toEqual({ min: 0, max: 100 });
+	expect(root.accessibilityValue).toEqual({ min: 0, max: 100, text: 'Syncing' });
+	expect((root.accessibilityValue as { now?: number }).now).toBeUndefined();
 	expect(root['aria-valuenow']).toBeUndefined();
-	expect(root['aria-valuetext']).toBeUndefined();
+	expect(root['aria-valuetext']).toBe('Syncing');
 });
 
 it('passes indicatorClassName to the sweep', () => {

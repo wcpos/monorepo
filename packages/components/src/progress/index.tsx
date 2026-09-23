@@ -47,10 +47,17 @@ export function Progress({
 			// treats a missing value as indeterminate).
 			{...(indeterminate
 				? {
-						accessibilityValue: { min: 0, max: props.max ?? 100 },
+						// Only the numeric value is misleading; a caller's status text
+						// ("Syncing…") still says what the unknown wait is for.
+						accessibilityValue: {
+							...props.accessibilityValue,
+							min: 0,
+							max: props.max ?? 100,
+							now: undefined,
+						},
 						accessibilityState: { ...props.accessibilityState, busy: true },
 						'aria-valuenow': undefined,
-						'aria-valuetext': undefined,
+						'aria-valuetext': props['aria-valuetext'],
 					}
 				: {})}
 		>
