@@ -34,7 +34,8 @@ for (const platform of [...new Set([...benchmarks, ...crashes].map(r => r.enviro
         const cells = engines.map(engine => rows.find(r => r.engine === engine)?.cells.find(c => c.name === name));
         const flag = c => c?.unsortedSamples ? ` ⚠ ${c.unsortedSamples}/${c.samples.length + 1} unsorted` : '';
         const note = cells.some(c => c?.contentMismatch) ? ' **(CONTENT MISMATCH — not comparable)**' : cells.some(c => c?.orderMismatch) ? ' (returned order differed)' : '';
-        return [label(name) + note, ...cells.map(c => c ? `${number(c.p50)} / ${number(c.p95)}${flag(c)}` : '—'), cells.every(Boolean) ? number(cells[0].p50 / cells[1].p50) : '—'];
+        const comparable = cells.every(Boolean) && !cells.some(c => c.contentMismatch);
+        return [label(name) + note, ...cells.map(c => c ? `${number(c.p50)} / ${number(c.p95)}${flag(c)}` : '—'), comparable ? number(cells[0].p50 / cells[1].p50) : '—'];
       })));
       for (const row of rows) {
         lines.push(`- ${row.engine}: WAL proof ${row.wal ?? 'not applicable'}; mean seed JSON bytes ${JSON.stringify(row.seedBytes)}.`);
@@ -61,7 +62,7 @@ const keys = [...new Set(benchmarks.flatMap(r => r.results.flatMap(row => row.ce
 function winner(report, key) {
   const [scale, name] = key.split('/');
   const cells = engines.map(engine => report.results.find(r => r.engine === engine && r.scale === scale)?.cells.find(c => c.name === name));
-  if (!cells.every(Boolean)) return 'not compared';
+  if (!cells.every(Boolean) || cells.some(c => c.contentMismatch)) return 'not compared';
   return cells[0].p50 === cells[1].p50 ? 'tie' : engines[Number(cells[1].p50 < cells[0].p50)];
 }
 lines.push(table(['Scale / cell', 'Mac winner (source)', 'Windows winner (source)', 'straddles'], keys.map(key => {

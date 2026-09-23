@@ -116,8 +116,9 @@ async function runBench({ engine, scale, databaseName, dir }) {
       cell.setSignatures.push(await signature(Array.isArray(value) && value[0] && typeof value[0] === 'object' ? sorted(value) : value));
       if (sort && Array.isArray(value) && !inSortOrder(value, sort)) cell.unsortedSamples++;
       if (i) cell.samples.push({ ms, ...(Array.isArray(result?.documents ?? result) ? { rows: (result.documents ?? result).length } : {}) });
-      // Keep the returned ids of small (limited) results so a cross-engine mismatch can be judged offline.
-      if (Array.isArray(value) && value.length <= 100 && value[0] && typeof value[0] === 'object') (cell.ids ??= []).push(value.map(d => d.uuid ?? d.id));
+      // Keep every sample's returned ids in memory so a cross-engine content mismatch can be judged
+      // offline: small (limited) results are written whole, large ones as a set difference.
+      if (Array.isArray(value) && value[0] && typeof value[0] === 'object') (cell.idSets ??= []).push(value.map(d => d.uuid ?? d.id));
     }
     cells.push(cell);
     console.info('CELL', engine, scale, name, cell.unsortedSamples ? `UNSORTED ${cell.unsortedSamples}/${count + 1}` : '');
@@ -215,11 +216,16 @@ async function main() {
           // A content mismatch fails the run (exit 1 after the JSON is written) but does not abort it:
           // the cell keeps both engines' returned ids so the deviating engine can be identified.
           cell.contentMismatch = cell.setSignatures.some((s, i) => s !== prior.setSignatures[i]);
-          if (cell.contentMismatch) { mismatches.push(key); cell.priorIds = prior.ids; console.error('CROSS-ENGINE CONTENT MISMATCH', engine, key); }
+          if (cell.contentMismatch) {
+            mismatches.push(key); console.error('CROSS-ENGINE CONTENT MISMATCH', engine, key);
+            const i = cell.setSignatures.findIndex((s, j) => s !== prior.setSignatures[j]), here = cell.idSets?.[i] ?? [], there = prior.idSets?.[i] ?? [];
+            if (here.length <= 100 && there.length <= 100) cell.mismatch = { sample: i, ids: here, priorIds: there };
+            else { const a = new Set(here), b = new Set(there); cell.mismatch = { sample: i, rows: here.length, priorRows: there.length, onlyHere: here.filter(x => !b.has(x)).slice(0, 200), onlyPrior: there.filter(x => !a.has(x)).slice(0, 200) }; }
+          }
           cell.orderMismatch = !cell.contentMismatch && cell.signatures.some((s, i) => s !== prior.signatures[i]);
           if (!cell.contentMismatch) console.info(cell.orderMismatch ? 'EQUALITY PASS (content only; returned order differs)' : 'EQUALITY PASS', key);
-        } else expected.set(key, { signatures: cell.signatures, setSignatures: cell.setSignatures, ids: cell.ids });
-        delete cell.signatures; delete cell.setSignatures;
+        } else expected.set(key, { signatures: cell.signatures, setSignatures: cell.setSignatures, idSets: cell.idSets });
+        delete cell.signatures; delete cell.setSignatures; delete cell.idSets;
       }
       const samples = cell.samples.map(s => s.ms).sort((a, b) => a - b);
       Object.assign(cell, { p50: samples[Math.ceil(samples.length * .5) - 1], p95: samples[Math.ceil(samples.length * .95) - 1], max: samples.at(-1) });
@@ -228,7 +234,7 @@ async function main() {
   }
   const out = args.out ?? join(directory, `results.${env.platform}.json`);
   await writeFile(out, JSON.stringify({ environment: env, equality: selected.length !== 2 ? 'Single engine only: cross-engine equality NOT evaluated.'
-    : mismatches.length ? `CONTENT MISMATCH in ${mismatches.join(', ')} — the numbers for those cells are not comparable; see the cells' ids/priorIds.`
+    : mismatches.length ? `CONTENT MISMATCH in ${mismatches.join(', ')} — the numbers for those cells are not comparable; each such cell carries a \`mismatch\` record (both engines' ids, or the set difference for whole-set reads).`
     : 'All warmups and samples matched across both engines on content (SHA-256 of canonical revision-independent rows sorted by primary key); cells whose RETURNED order differed between engines carry orderMismatch, and each engine\'s unsortedSamples counts results that violate the query\'s normalized sort. Cold reads assert the exact seeded product.',
     results }, null, 2) + '\n');
   console.info('Wrote', out);

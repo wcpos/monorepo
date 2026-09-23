@@ -33,8 +33,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      # A cross-engine content mismatch exits 1 after writing the JSON; the stop harness still runs.
-      - run: node .build/bench-node.js --out results.windows.json --scale both
+      # A cross-engine content mismatch exits 1 after writing the JSON; the stop harness still runs
+      # and both files are uploaded, then the job fails on the benchmark's own outcome.
+      - id: bench
+        run: node .build/bench-node.js --out results.windows.json --scale both
         continue-on-error: true
       - run: node .build/crash-node.js --trials 30 --out crash.windows.json
       - uses: actions/upload-artifact@v4
@@ -44,3 +46,7 @@ jobs:
           path: |
             results.windows.json
             crash.windows.json
+      - if: steps.bench.outcome != 'success'
+        run: |
+          echo "benchmark step outcome: ${{ steps.bench.outcome }} (cross-engine mismatch or failure; see results.windows.json)"
+          exit 1

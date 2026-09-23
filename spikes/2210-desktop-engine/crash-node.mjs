@@ -38,19 +38,23 @@ async function stop(spec) {
   });
 }
 async function recover(spec, snapshot) {
-  return new Promise(resolve => {
-    const child = launch(spec, true); let output = '', stderr = '', timer, error;
+  return new Promise((resolve, reject) => {
+    const child = launch(spec, true); let output = '', stderr = '', timer, error, phase = 'launching';
     child.stdout.on('data', b => { output += b; }); child.stderr.on('data', b => { stderr += b; });
     // A rejected or stuck open/first read gets the same specified 10-second budget.
     child.on('message', m => {
-      if (m.type === 'scoring') timer = setTimeout(() => { error = 'Reopen/first-read exceeded 10 seconds'; child.kill('SIGKILL'); }, 10000);
-      if (m.type === 'read') clearTimeout(timer);
+      if (m.type === 'scoring') { phase = 'opening'; timer = setTimeout(() => { error = 'Reopen/first-read exceeded 10 seconds'; child.kill('SIGKILL'); }, 10000); }
+      if (m.type === 'read') { phase = 'scored'; clearTimeout(timer); }
     });
     child.on('error', e => { error = String(e); });
     child.send(snapshot, e => { if (e) { error = String(e); child.kill('SIGKILL'); } });
     child.on('close', code => {
       clearTimeout(timer);
       if (code === 0) { try { return resolve(JSON.parse(output)); } catch (e) { error = String(e); } }
+      // Only a failure while the storage is opening or serving its first read is a storage verdict.
+      // A scorer that died before it began or after it had read is a harness failure: the run is
+      // incomplete (the outer handler records `fatal`), never a trial outcome.
+      if (phase !== 'opening') return reject(new Error(`Scorer failed while ${phase} (exit ${code}): ${error ?? stderr}`));
       resolve({ outcome: 'open-failed', reopenMs: null, integrity: 'not checked', error: error ?? stderr, inflightPresence: 'unknown' });
     });
   });

@@ -34,15 +34,15 @@ that npm's `ignore-scripts` had left unbuilt, and a test that spawns `mocha` fro
 wrapper needed no adapter of ours beyond one `PRAGMA synchronous = NORMAL` after open.
 
 **2. Leg 2 — process stop: SQLite lost nothing acknowledged in 60 of 60 trials; the incumbent lost
-acknowledged rows in 8 of 30 on each platform.** A child process streams `bulkWrite` transactions
+acknowledged rows in 2 of 30 on the Mac and 8 of 30 on Windows.** A child process streams `bulkWrite` transactions
 (sizes 1,1,3,1,50,1,1,1000 repeating, 20% updates) through each engine and reports each one as acked
 only after the call resolves; the parent ends it with signal 9 at a random point in the first 3 s and
 a fresh process scores the reopened database against the parent's record.
 
 | Platform | Row | Trials | ok | acked rows lost | repaired on reopen | in-flight present / absent | median reopen |
 |---|---|---|---|---|---|---|---|
-| Mac | filesystem-node | 30 | 22 | **8** | 30 | 2 / 28 | 481 ms |
-| Mac | sqlite-node | 30 | **30** | 0 | 0 | 11 / 18 | 539 ms |
+| Mac | filesystem-node | 30 | 28 | **2** | 30 | 2 / 28 | 490 ms |
+| Mac | sqlite-node | 30 | **30** | 0 | 0 | 3 / 27 | 524 ms |
 | Windows | filesystem-node | 30 | 22 | **8** | 30 | 0 / 29 | 645 ms |
 | Windows | sqlite-node | 30 | **30** | 0 | 0 | 10 / 19 | 938 ms |
 
@@ -52,7 +52,10 @@ transactions before the stop are gone — typically the two 1-row writes acked j
 200 rows of an **acknowledged** 1000-row batch that was only partly on disk. It acknowledges before
 the bytes are durable. On every one of the 60 reopens its changelog was found stale and the wcpos
 index-rebuild patch rebuilt the indexes from `documents.json` (`__wcposOnIndexRebuild`,
-`stale-changelog-op`); an unpatched premium would not have that repair. SQLite in WAL with
+`stale-changelog-op`); an unpatched premium would not have that repair. The Mac row is the rerun
+with the final scorer (the first Mac run, 8 of 30 lost, sits in this branch's history and was
+superseded because its artifact carried the pre-fix marker count); random stop points make the
+incumbent's loss count vary between runs, its 0 for SQLite did not. SQLite in WAL with
 `synchronous = NORMAL` reopened clean every time (`PRAGMA integrity_check` = `ok`), and the in-flight
 1000-row batch was either wholly present (its COMMIT had landed before the ack was delivered) or
 wholly absent, never partial. Not measured: power loss (no process-level harness can), and the
@@ -91,7 +94,8 @@ whole-set reads are 5–17 ms there, SQLite's 17–84 ms.
 
 **4. The gate: SQLite clears stability and wins clearly on desktop speed, conditional on the same
 three migration items as web.** Stability: 60/60 stops kept every acknowledged row and every reopen
-was clean, against 16/60 stops that lost acknowledged rows on the engine we ship. Speed: on every
+was clean, against 10/60 stops that lost acknowledged rows on the engine we ship (and 60/60 that
+needed its indexes rebuilt). Speed: on every
 interactive path the app *could* push, SQLite wins by 50–1500×, on the cart write by 68–121×, on cold
 open by ~50×; it loses only the whole-document reads the app makes *today*, and the projection cell
 shows condition (ii) closes that loss to parity. Windows agrees with the Mac on the winner of every
@@ -270,15 +274,15 @@ All warmups and samples matched across both engines on content (SHA-256 of canon
 | rxdb | 17.4.0 |
 | rxdb-premium | 17.4.0 |
 | esbuild | 0.28.2 |
-| premiumPatchMarkerCount | 0 |
-| measuredAt | 2026-09-23T14:57:20.351Z |
+| premiumPatchMarkerCount | 47 |
+| measuredAt | 2026-09-23T15:34:28.789Z |
 
 Complete: 30 trials requested per selected row.
 
 | Row | Trials | ok | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present | In-flight absent | In-flight partial / none / unknown | Median reopen ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| filesystem-node | 30 | 22 | 0 | 0 | 8 | 0 | 30 | 8 / 0 | 2 | 28 | 0 / 0 / 0 | 481.02 |
-| sqlite-node | 30 | 30 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 11 | 18 | 0 / 1 / 0 | 538.97 |
+| filesystem-node | 30 | 28 | 0 | 0 | 2 | 0 | 30 | 2 / 0 | 2 | 27 | 0 / 1 / 0 | 485.99 |
+| sqlite-node | 30 | 30 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 3 | 27 | 0 / 0 / 0 | 522.00 |
 
 
 ## windows
