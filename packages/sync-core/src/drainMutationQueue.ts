@@ -272,6 +272,8 @@ export async function drainMutationQueue(input: {
 	 * Receives the abort signal so a scope-switch can cancel the ack write itself.
 	 */
 	applyAck?: (mutation: RecordMutation, result: PushResult, signal?: AbortSignal) => Promise<void>;
+	/** Called only after reconciliation and durable removal of this exact mutation succeed. */
+	onAcknowledged?: (mutation: RecordMutation) => void;
 	limit?: number;
 	signal?: AbortSignal;
 	observe?: SyncObserver;
@@ -568,6 +570,24 @@ export async function drainMutationQueue(input: {
 			.filter((mutation) => mutation.explicit === true || mutation.operation === 'delete')
 			.map(recordKey)
 	);
+	// A new cashier action gets one immediate attempt through its record's backoff: keyed by the
+	// newest never-attempted explicit row's queue time, and spent once the chain has been tried
+	// since then (below). Otherwise a head that keeps failing would keep the release fresh and
+	// the chain would retry on every drain.
+	const freshExplicitQueuedAt = new Map<string, number>();
+	for (const mutation of batch) {
+		if (mutation.explicit !== true || (mutation.attempts ?? 0) !== 0) continue;
+		const key = recordKey(mutation);
+		const queuedAt = Date.parse(mutation.queuedAt);
+		// A queue time ahead of the drain clock (the clock stepped back) releases nothing, so a
+		// skewed clock can only miss the release, never repeat it on every drain.
+		if (!(queuedAt <= now())) continue;
+		freshExplicitQueuedAt.set(key, Math.max(queuedAt, freshExplicitQueuedAt.get(key) ?? -Infinity));
+	}
+	// When a backing-off row last failed: its gate minus the (deterministic) delay that set it.
+	const lastAttemptAt = (mutation: QueuedMutation): number =>
+		Date.parse(mutation.nextAttemptAt!) -
+		computeRetryBackoffMs(mutation.attempts ?? 0, backoff, retryJitterSeed(mutation.mutationId));
 	for (const mutation of batch) {
 		if (input.signal?.aborted) {
 			break;
@@ -584,7 +604,11 @@ export async function drainMutationQueue(input: {
 		}
 		// Backoff gate (ADR 0012): a mutation rescheduled after an earlier failure must wait until
 		// its window elapses. Skip it AND hold later edits to the same record (FIFO ordering).
-		if (mutation.nextAttemptAt && Date.parse(mutation.nextAttemptAt) > now()) {
+		if (
+			mutation.nextAttemptAt &&
+			Date.parse(mutation.nextAttemptAt) > now() &&
+			!(lastAttemptAt(mutation) <= (freshExplicitQueuedAt.get(recordKey(mutation)) ?? -Infinity))
+		) {
 			deferred += 1;
 			blockedRecords.add(recordKey(mutation));
 			continue;
@@ -930,7 +954,9 @@ export async function drainMutationQueue(input: {
 			if (!input.signal?.aborted) {
 				await applyBackoff({ ...draining, status: 'pending' });
 			}
+			continue;
 		}
+		input.onAcknowledged?.(draining);
 	}
 
 	emit({

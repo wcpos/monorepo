@@ -27,9 +27,10 @@
  * carrying the LATEST full-document snapshot; create∘update = still a create
  * (the server hasn't seen the record) with the latest snapshot;
  * anything∘delete = a delete. The coalesced entry keeps the ORIGINAL queue
- * position (`seq`), ORIGINAL `baseRevision`, and original `queuedAt`, but a
- * FRESH `mutationId` — the server replays by mutationId, so one is never
- * reused with a different payload.
+ * position (`seq`), ORIGINAL `baseRevision`, and original `queuedAt` (unless
+ * the incoming write is explicit, which stamps its own), but a FRESH
+ * `mutationId` — the server replays by mutationId, so one is never reused
+ * with a different payload.
  *
  * ANNIHILATION (#516 rules 2–3): a delete arriving at a record whose queued
  * work is a NEVER-PUSHED local chain (a pending create head plus any pending
@@ -493,7 +494,10 @@ export async function enqueueWriteIntent(input: {
 				operation,
 				payload,
 				baseRevision: prior.baseRevision,
-				queuedAt: prior.queuedAt,
+				// A cashier action is stamped with its own time: the drain releases a record's
+				// backoff once for an explicit row queued after the chain's last attempt.
+				queuedAt:
+					intent.operation !== 'delete' && intent.explicit ? mutation.queuedAt : prior.queuedAt,
 				seq: prior.seq,
 				coalesced: (prior.coalesced ?? 0) + 1,
 				...(prior.explicit || (intent.operation !== 'delete' && intent.explicit)
@@ -936,6 +940,7 @@ export async function requeueBornTwiceSnapshot(input: {
 		const last = rows.at(-1);
 		if (
 			last &&
+			last.explicit !== true &&
 			(last.status === undefined || last.status === 'pending') &&
 			(last.attempts ?? 0) === 0
 		) {

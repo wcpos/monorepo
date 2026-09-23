@@ -657,6 +657,92 @@ const NO_JITTER_BACKOFF = { baseMs: 1_000, multiplier: 2, maxMs: 60_000, jitterR
 const at = (ms: number): string => new Date(ms).toISOString();
 
 describe('drainMutationQueue — retry backoff (ADR 0012)', () => {
+	it('a fresh explicit row releases only its own backoff chain once, in FIFO order', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'head' }),
+			mut({ mutationId: 'checkout', queuedAt: at(95_000) }),
+			// Same record id, different collection: this chain must stay in backoff.
+			mut({ mutationId: 'unrelated', collectionName: 'customers' })
+		);
+		const [head, checkout, unrelated] = await q.pending();
+		await q.replace({ ...checkout, explicit: true });
+		// The head last failed at 90 s (7th attempt, 60 s cap), before checkout was pressed at 95 s.
+		await q.reschedule({ ...head, attempts: 7, nextAttemptAt: at(150_000) });
+		await q.reschedule({ ...unrelated, attempts: 1, nextAttemptAt: at(160_000) });
+		const pushed: string[] = [];
+		const input = {
+			queue: q,
+			now: () => 100_000,
+			backoff: NO_JITTER_BACKOFF,
+			push: async (mutation: RecordMutation) => {
+				pushed.push(mutation.mutationId);
+				if (mutation.mutationId === 'checkout') throw new Error('network');
+				return ok(mutation);
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1, failed: 1, deferred: 1 });
+		expect(pushed).toEqual(['head', 'checkout']);
+		expect(await q.pending()).toEqual([
+			expect.objectContaining({ mutationId: 'checkout', attempts: 1, nextAttemptAt: at(101_000) }),
+			expect.objectContaining({ mutationId: 'unrelated', attempts: 1, nextAttemptAt: at(160_000) }),
+		]);
+
+		pushed.length = 0;
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 0, failed: 0, deferred: 2 });
+		expect(pushed).toEqual([]);
+	});
+
+	it('releases nothing for an explicit row queued ahead of the drain clock', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'head' }),
+			// The device clock stepped back after the press: queuedAt is in the drain's future.
+			mut({ mutationId: 'checkout', queuedAt: at(200_000) })
+		);
+		const [head, checkout] = await q.pending();
+		await q.replace({ ...checkout, explicit: true });
+		await q.reschedule({ ...head, attempts: 7, nextAttemptAt: at(150_000) });
+		const pushed: string[] = [];
+		const result = await drainMutationQueue({
+			queue: q,
+			now: () => 100_000,
+			backoff: NO_JITTER_BACKOFF,
+			push: async (mutation: RecordMutation) => {
+				pushed.push(mutation.mutationId);
+				return ok(mutation);
+			},
+		});
+		expect(result).toMatchObject({ pushed: 0, deferred: 1 });
+		expect(pushed).toEqual([]);
+	});
+
+	it('spends the release once the chain has been tried since the cashier acted', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'head' }),
+			mut({ mutationId: 'checkout', queuedAt: at(95_000) })
+		);
+		const [head, checkout] = await q.pending();
+		await q.replace({ ...checkout, explicit: true });
+		// The head last failed at 90 s (7th attempt, 60 s cap), before checkout was pressed at 95 s.
+		await q.reschedule({ ...head, attempts: 7, nextAttemptAt: at(150_000) });
+		const pushed: string[] = [];
+		const input = {
+			queue: q,
+			now: () => 100_000,
+			backoff: NO_JITTER_BACKOFF,
+			push: async (mutation: RecordMutation): Promise<PushResult> => {
+				pushed.push(mutation.mutationId);
+				throw new Error('network');
+			},
+		};
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 0, failed: 1 });
+		expect(pushed).toEqual(['head']);
+
+		// The head failed again at 100 s, after the press: the chain waits out its backoff.
+		pushed.length = 0;
+		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 0, failed: 0, deferred: 1 });
+		expect(pushed).toEqual([]);
+	});
+
 	it('bumps attempts and sets the backoff gate on a retryable failure', async () => {
 		const q = await queueWith(mut({ mutationId: 'm1' }));
 		const result = await drainMutationQueue({
