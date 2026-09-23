@@ -74,7 +74,14 @@ const server = createServer(async (req, res) => {
     } else {
       Object.assign(report.environment, m.versions);
       if (m.result?.sqlite) report.environment.sqlite = m.result.sqlite;
-      settle(m.error ? new Error(m.error) : null, { ...m.result, beginRetries: Math.max(m.beginRetries ?? 0, active.beginRetries), memory: active.memory });
+      if (m.error && active.job.type === 'crash-score' && active.phase === 'opening') {
+        settle(null, { outcome: 'open-failed', reopenMs: null, integrity: 'not checked', inflightPresence: 'unknown', error: m.error });
+      } else if (m.error) {
+        const outcome = active.job.type === 'crash-write' ? 'writer-failed' : active.job.type === 'crash-score' ? 'harness-failed' : 'app-failed';
+        const error = new Error(outcome === 'harness-failed' ? `Harness failure: scorer: ${m.error}` : m.error);
+        error.outcome = outcome;
+        settle(error);
+      } else settle(null, { ...m.result, beginRetries: Math.max(m.beginRetries ?? 0, active.beginRetries), memory: active.memory });
     }
     res.writeHead(200).end('ok');
   } catch (error) { res.writeHead(500).end(String(error)); settle(error); }
@@ -150,6 +157,7 @@ try {
           }
           await sleep(Math.max(0, targetStopMs - (performance.now() - active.seededAt)));
           stopMs = performance.now() - active.seededAt;
+          if (active.finished) await promise; // Preserve a reported writer failure before attempting the stop.
           await device.stop();
           const stopped = active;
           if (stopped.finished) { await promise; throw new Error('Writer returned before requested stop'); }
@@ -162,14 +170,15 @@ try {
             inflightTx: snapshot.inflight?.tx ?? null, inflightSize: snapshot.inflight?.n ?? 0, ...recovered });
           report.trials.push(record); await save(); log('info', row, trial, record.outcome, `acked=${record.ackedCount}`);
         } catch (error) {
-          if (!isHarnessFailure(error) && error.code !== 'ESRCH' && !/No such process/i.test(String(error))) throw error;
+          if (error.outcome !== 'writer-failed' && !isHarnessFailure(error) && error.code !== 'ESRCH' && !/No such process/i.test(String(error))) throw error;
           if (active) active.finished = true;
           const snapshot = { acked: writer?.started.filter(t => writer.acked.has(t.tx)) ?? [],
             inflight: writer?.started.find(t => !writer.acked.has(t.tx)) ?? null };
+          const outcome = error.outcome === 'writer-failed' ? 'writer-failed' : 'harness-failed';
           report.trials.push(compactTrial({ row, trial, targetStopMs, stopMs, snapshot,
             ackedCount: snapshot.acked.length, inflightTx: snapshot.inflight?.tx ?? null,
-            inflightSize: snapshot.inflight?.n ?? 0, outcome: 'harness-failed', error: String(error.stack ?? error) }));
-          await save(); log('error', row, trial, 'harness-failed', String(error));
+            inflightSize: snapshot.inflight?.n ?? 0, outcome, error: String(error.stack ?? error) }));
+          await save(); log('error', row, trial, outcome, String(error));
         }
       }
     } else {
@@ -186,15 +195,16 @@ try {
           report.results.push({ engine: row, scale, dir: input.dir, db: input.db, ...result }); await save();
           if (leg === 'smoke') log('info', row, result.scenarios.filter(s => !s.pass).length, 'divergences');
         } catch (error) {
-          if (!isHarnessFailure(error)) throw error;
+          if (error.outcome !== 'app-failed' && !isHarnessFailure(error)) throw error;
           if (active) active.finished = true;
-          report.results.push({ engine: row, scale, outcome: 'harness-failed', error: String(error.stack ?? error) });
-          await save(); log('error', row, scale, 'harness-failed', String(error));
+          const outcome = error.outcome === 'app-failed' ? 'app-failed' : 'harness-failed';
+          report.results.push({ engine: row, scale, outcome, error: String(error.stack ?? error) });
+          await save(); log('error', row, scale, outcome, String(error));
         }
       }
     }
   }
-  report.complete = ![...report.trials, ...report.results].some(t => t.outcome === 'harness-failed') && (leg === 'crash'
+  report.complete = ![...report.trials, ...report.results].some(t => ['harness-failed', 'app-failed'].includes(t.outcome)) && (leg === 'crash'
     ? (report.rows ?? rows).every(row => Array.from({ length: report.requestedTrials ?? trials }, (_, i) => i + 1)
       .every(trial => report.trials.some(t => t.row === row && t.trial === trial)))
     : (report.environment?.runs ?? [{ rows, scales }]).every(run => run.rows.every(row =>

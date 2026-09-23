@@ -322,3 +322,66 @@ in `app/android` and stop before `adb install`. One build at a time. The owner i
 
 When done, print: the harness test count and result, the two build output paths with their
 modification times, and the commit hash.
+
+# Round 7 (Android: an expo-modules-core shared-object race stopped the SQLite crash row, 2026-09-23 night)
+
+Round 6 is accepted and committed (`81057f584`). On the Pixel 10 the `expo-sqlite` crash row scored
+two `ok` trials, then the third trial's writer reported:
+
+```
+Call to function 'NativeDatabase.prepareAsync' has been rejected.
+-> Caused by: The 2nd argument cannot be cast to type class expo.modules.sqlite.NativeStatement (received class java.lang.Integer)
+-> Caused by: Cannot convert provided JavaScriptObject to the SharedObject, because it doesn't contain valid id
+```
+
+That is expo/expo issue #49799: on Android an `AsyncFunction` converts its arguments on the modules
+queue after the JS call has returned, a shared object travels as an integer id, and if Hermes
+collects the JS peer first the registry entry is gone. It hits allocation-heavy sessions, which
+the crash writer is by design. Fixed upstream by expo/expo PR #50513, merged 2026-09-23 and in no
+published `expo-modules-core` 57.x (the app has 57.0.18 of 2026-09-11, the latest). The driver
+treated the app-reported error as fatal and ended the leg with 28 SQLite trials unscored.
+
+Rules as before: commit at the end (include `FIXES.md`), do not push, do not open or edit a PR, do
+not reply on any PR, no physical devices (`adb install` and `devicectl ... install` are the owner's),
+no simulators or emulators (the iPad is running a leg on port 48091 from this tree: do not start
+any leg, do not bind that port, do not touch `results/`), keep `driver/driver.mjs` importable and
+iOS behaviour unchanged at every save, run `node --test harness.test.mjs` after each edit. Do not
+touch the iOS build. Measured code must not move.
+
+## 1. An app-reported job error is an outcome, not the end of the leg
+
+When the app posts `/result` with `error`:
+
+- crash-write (before the stop): record the trial as outcome `writer-failed` with the error text
+  and the acked/in-flight snapshot; it is a storage-side failure of the row, never `ok`, never
+  `harness-failed`; continue with the next trial; `--resume` does not rerun it (it is scored).
+- crash-score: while the phase is `opening`, `open-failed` with the error text (the existing
+  storage outcome); after `read`, `harness-failed` (the scorer's own code threw).
+- bench, smoke, cold-open: record `{ engine, scale, outcome: 'app-failed', error }`, continue with
+  the next row/scale, `complete: false`, exit 1, `--resume` reruns it.
+
+`report.mjs`: a `writer-failed` column in the crash table beside the existing outcomes, an
+`app-failed` line like the `harness-failed` one for bench/smoke. Tests for all three paths.
+
+## 2. Backport expo/expo PR #50513 to the Android build as a patch
+
+The upstream diff is at `.deps/expo-50513.diff` (from the merged PR). expo-modules-core 57.0.18
+compiles its Android C++ from source in this app (no `prebuilt/` directory), so a source patch
+takes effect. Apply the parts that matter to `node_modules/expo/node_modules/expo-modules-core`:
+`android/src/main/cpp/MethodMetadata.cpp`, `MethodMetadata.h`, `types/FrontendConverter.h`,
+`JavaCallback.cpp`, `JavaCallback.h`, and `android/src/main/java/expo/modules/kotlin/jni/JNIDeallocator.kt`.
+Skip the androidTest file, `cpp/tests/RuntimeHolder.cpp`, `prebuilt/*` and the CHANGELOG. Where
+57.0.18 differs from main, adapt minimally and say so in the patch header comment. Capture it as a
+nested patch-package patch (`npx patch-package expo/expo-modules-core`) under `app/patches/`,
+confirm `install.mjs`'s patch-package step applies it with `--error-on-fail`, then rebuild the
+Android release APK (`./gradlew assembleRelease` in `app/android`) and confirm from the gradle
+output that expo-modules-core's C++ was recompiled. Stop before `adb install`.
+
+Document in `DEVICE-RUN.md` (one short paragraph) and in the method notes of `RESULTS.md`: the
+Android build carries the #50513 backport, spike-only, the SQLite row's Android crash and bench
+results are gathered with it, and the shipped 2.0 app needs the published `expo-modules-core`
+release that contains the fix. Do not write any conclusion about the engines.
+
+When done, print: the harness test count and result, the patch file name and its line count, the
+gradle lines proving the expo-modules-core C++ compile ran, the APK path with its modification
+time, and the commit hash.

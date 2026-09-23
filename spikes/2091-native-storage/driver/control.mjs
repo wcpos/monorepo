@@ -24,7 +24,7 @@ export function compactTrial({ snapshot, logs = [], ...record }) {
 }
 
 export const isHarnessFailure = error => /Harness (failure|timeout)/i.test(String(error));
-export const hasResult = (result, leg) => result.outcome !== 'harness-failed'
+export const hasResult = (result, leg) => !['harness-failed', 'app-failed'].includes(result.outcome)
   && Boolean(leg === 'smoke' ? result.scenarios?.length : result.cells?.length);
 
 export function prepareReport(current, previous, versions, scales) {

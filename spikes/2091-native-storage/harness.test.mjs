@@ -332,7 +332,7 @@ test('crash report separates harness failures from storage outcomes', async () =
     assert.equal(await main(new URL('file://' + directory + '/')), 0);
     const output = await readFile(directory + '/RESULTS.md', 'utf8');
     assert.match(output, /\| partial \| harness-failed \|/);
-    assert.match(output, /expo-filesystem-js \| 1 \| 0 \/ 0 \| 0 \| 0 \| 0 \| 0 \| 0 \| 1 \|/);
+    assert.match(output, /expo-filesystem-js \| 1 \| 0 \/ 0 \| 0 \| 0 \| 0 \| 0 \| 0 \| 0 \| 1 \|/);
   } finally { await rm(directory, { recursive: true }); }
 });
 
@@ -738,4 +738,119 @@ test('driver logger timestamps every physical line including error stacks', asyn
   log('error', new Error('two\nlines'));
   assert.ok(lines.length > 2);
   assert.ok(lines.every(line => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z /.test(line)));
+});
+
+// App errors must reach the per-row loop with a verdict, not escape as fatal errors.
+test('app result errors are classified by job and scorer phase', async () => {
+  for (const type of ['bench', 'smoke', 'cold-open', 'crash-write', 'crash-score']) {
+    const h = await jobHarness(type);
+    await h.message({ error: 'native rejected' }, '/result');
+    await assert.rejects(h.pending.promise, error => error.outcome === (type === 'crash-write' ? 'writer-failed' : type === 'crash-score' ? 'harness-failed' : 'app-failed') && /native rejected/.test(String(error)));
+  }
+  for (const read of [false, true]) {
+    const h = await jobHarness('crash-score');
+    await h.message({ type: 'scoring' });
+    if (read) await h.message({ type: 'read' });
+    await h.message({ error: 'scorer rejected' }, '/result');
+    if (read) await assert.rejects(h.pending.promise, /Harness failure:.*scorer rejected/);
+    else {
+      const result = await h.pending.promise;
+      assert.equal(result.outcome, 'open-failed');
+      assert.match(result.error, /scorer rejected/);
+    }
+  }
+});
+
+test('bench smoke and cold-open app errors continue, exit 1 and resume failed rows', async () => {
+  for (const type of ['bench', 'smoke', 'cold-open']) {
+    const leg = type === 'smoke' ? 'smoke' : 'bench', scale = type === 'cold-open' ? 'large' : 'small';
+    const good = leg === 'smoke' ? { scenarios: [{ pass: true }] } : { cells: [{ name: 'read', samples: [{ ms: 1 }] }] };
+    const h = await jobHarness(type);
+    await h.message({ error: 'native rejected' }, '/result');
+    let failure; try { await h.pending.promise; } catch (error) { failure = error; }
+    const report = { rows: ['expo-filesystem-js', 'expo-sqlite'], results: [], trials: [] }, seen = [];
+    const run = async job => {
+      seen.push([job.row, job.type]);
+      if (job.row === 'expo-filesystem-js' && job.type === type) throw failure;
+      return job.type === 'cold-open' ? { ms: 1 } : structuredClone(good);
+    };
+    const extra = { scales: leg === 'smoke' ? [undefined] : [scale], COLD_SAMPLES: 3 };
+    const { saved, context } = await runDriverLoop(report, leg, run, extra);
+    assert.equal(saved[0].results[0].outcome, 'app-failed');
+    assert.match(saved[0].results[0].error, /native rejected/);
+    assert.equal(report.results.length, 2);
+    assert.equal(report.complete, false);
+    assert.equal(context.process.exitCode, 1);
+    assert.equal(report.fatal, undefined);
+    const resumed = [];
+    await runDriverLoop(report, leg, async job => { resumed.push(job.row); return job.type === 'cold-open' ? { ms: 1 } : structuredClone(good); }, extra);
+    assert.ok(resumed.length && resumed.every(row => row === 'expo-filesystem-js'));
+    assert.equal(report.complete, true);
+  }
+});
+
+test('writer error before seed or stop retains ledger snapshot, continues and is not resumed', async () => {
+  for (const seeded of [false, true]) {
+    const h = await jobHarness('crash-write');
+    await h.message({ type: 'started', tx: 1, n: 2, ids: ['a', 'b'] });
+    await h.message({ type: 'acked', tx: 1 });
+    await h.message({ type: 'started', tx: 2, n: 1, ids: ['c'] });
+    if (seeded) { h.time(1); await h.message({ type: 'seeded' }); }
+    await h.message({ error: 'NativeDatabase.prepareAsync rejected' }, '/result');
+    const report = { rows: ['expo-sqlite'], results: [], trials: [] };
+    let launches = 0, scored = 0, context;
+    const extra = { performance, sleep: async () => {}, randomInt: () => 0, RANDOM_STOP_MAX_MS: 3000,
+      watchMs: 250, WATCH_MS: 250, device: { stop: async () => {} },
+    };
+    extra.start = async () => {
+      launches++;
+      extra.active = launches === 1 ? h.state() : { seededAt: performance.now(), started: [], acked: new Set() };
+      return launches === 1 ? h.pending : { promise: new Promise(() => {}), seeded: Promise.resolve() };
+    };
+    const control = await import('./driver/control.mjs');
+    const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
+    context = { ...control, ...extra, physicalIos: false, AbortController, rows: report.rows, leg: 'crash', trials: 2, args: { resume: true }, report,
+      process: {}, spec: row => ({ row }), save: async () => {}, run: async () => { scored++; return { outcome: 'ok' }; } };
+    context.start = async () => { const pending = await extra.start(); context.active = extra.active; return pending; };
+    const loop = source.slice(source.indexOf('try {\n  for (const row'), source.indexOf('\nfinally {'));
+    await vm.runInNewContext('(async () => {' + loop + '})()', context);
+    assert.equal(report.fatal, undefined);
+    assert.deepEqual(report.trials.map(t => t.outcome), ['writer-failed', 'ok']);
+    assert.deepEqual(JSON.parse(JSON.stringify(report.trials[0].acked)), [{ tx: 1, n: 2 }]);
+    assert.equal(report.trials[0].inflightTx, 2);
+    assert.equal(report.trials[0].inflightSize, 1);
+    assert.match(report.trials[0].error, /NativeDatabase.prepareAsync/);
+    assert.equal(report.complete, true);
+    assert.equal(scored, 1);
+    await vm.runInNewContext('(async () => {' + loop + '})()', context);
+    assert.equal(launches, 2);
+  }
+});
+
+test('reports display app and writer failures without comparing failed cells', async () => {
+  const { mkdtemp, mkdir, writeFile, readFile, rm } = await import('node:fs/promises');
+  await mkdir(new URL('.deps/', here), { recursive: true });
+  const directory = await mkdtemp(new URL('.deps/report-test-', here));
+  try {
+    await mkdir(directory + '/results');
+    await writeFile(directory + '/RESULTS.md', '<!-- generated:start --><!-- generated:end -->');
+    const environment = { platform: 'android', device: 'test' };
+    for (const leg of ['smoke', 'results']) await writeFile(`${directory}/results/${leg}.android.test.json`, JSON.stringify({ environment, complete: false,
+      results: [{ engine: 'expo-sqlite', scale: 'small', outcome: 'app-failed', error: 'native rejected' }] }));
+    await writeFile(`${directory}/results/crash.android.test.json`, JSON.stringify({ environment, complete: true,
+      trials: [{ row: 'expo-sqlite', outcome: 'writer-failed', ackedCount: 1, acked: [{ tx: 1, n: 2 }] }] }));
+    const { main, compare, winner } = await import('./report.mjs');
+    assert.equal(await main(new URL('file://' + directory + '/')), 0);
+    const output = await readFile(directory + '/RESULTS.md', 'utf8');
+    assert.match(output, /expo-sqlite.*app-failed.*native rejected/);
+    assert.match(output, /\| ok \| writer-failed \| open-failed \|/);
+    assert.match(output, /expo-sqlite \| 1 \| 1 \/ 2 \| 0 \| 1 \| 0 \|/);
+    const { hasResult } = await import('./driver/control.mjs');
+    assert.equal(hasResult({ outcome: 'app-failed', cells: [{}] }, 'bench'), false);
+    assert.equal(hasResult({ outcome: 'app-failed', scenarios: [{}] }, 'smoke'), false);
+    const report = { results: ['expo-filesystem-js', 'worklet-filesystem', 'expo-sqlite'].map(engine => ({ engine, scale: 'small', outcome: 'app-failed',
+      cells: [{ name: 'read', p50: 1, samples: [{ ms: 1 }], signatures: [engine], setSignatures: [engine] }] })) };
+    assert.deepEqual(compare(report), []);
+    assert.equal(winner(report, 'small/read'), 'not compared');
+  } finally { await rm(directory, { recursive: true }); }
 });

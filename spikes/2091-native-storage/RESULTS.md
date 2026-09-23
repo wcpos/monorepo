@@ -28,6 +28,11 @@ _Operator: apply the stability gate and the “wins clearly, not narrowly” bar
 
 ## Method notes
 
+- The Android build carries the spike-only [expo/expo #50513](https://github.com/expo/expo/pull/50513)
+  shared-object lifetime backport. Subsequent SQLite Android crash and bench results must be
+  gathered with this patched APK; existing measurements have not been rerun here. The shipped
+  2.0 app needs a published `expo-modules-core` release containing the fix, not this spike patch.
+
 - Release Hermes bytecode, no Metro. All rows share the premium distribution with 47 patch markers.
 - iOS launches read the driver address from `Documents/spike2091-driver.txt`, placed by the
   driver before a plain launch; Android reads it from the launch intent. Physical iOS file

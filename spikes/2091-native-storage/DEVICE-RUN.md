@@ -55,6 +55,11 @@ The app uses npm, not pnpm. Installation applies patches and requires 47 premium
 
 ## Pixel — USB
 
+The Android build carries the spike-only [expo/expo #50513](https://github.com/expo/expo/pull/50513)
+shared-object lifetime backport. Gather subsequent SQLite Android crash and bench results with
+this patched APK; pre-backport files are not remeasured by rebuilding. The shipped 2.0 app needs
+a published `expo-modules-core` release containing this fix, not this spike patch.
+
 1. Enable USB debugging, connect, unlock and accept the debugging authorization prompt.
    Select the physical serial, not an emulator:
 
@@ -92,15 +97,19 @@ A lock during a run can appear as a no-message timeout or "No such process" at
 the stop: these are harness failures, never storage outcomes. A vanished stop target is recorded
 as `harness-failed`; the driver continues with the next trial but leaves `complete: false` and
 exits 1. The crash report adds a `harness-failed` column when needed.
-Bench and smoke record a failed row as `harness-failed` and continue; any such failure leaves
+Bench and smoke record a harness failure as `harness-failed` and an app-reported error
+(including cold-open) as `app-failed`, then continue; either leaves
 `complete: false` and exits 1. Launch/job timeouts are harness failures, not storage verdicts. The scorer's 10-second
 open/first-read timeout is instead recorded as the storage outcome `open-failed`. A completed
-smoke command may still contain failed scenarios: read the report.
+smoke command may still contain failed scenarios: read the report. An app-reported crash-writer
+error is a scored `writer-failed` storage outcome, with acknowledged/in-flight transaction counts;
+it is not retried by resume. A scorer-reported error during opening is `open-failed`; after the
+read event it is `harness-failed`. Each is recorded and the next trial runs.
 
 JSON is saved under `results/`, after every scored crash trial. **Rerunning a leg on the same
 device overwrites its JSON unless you add `--resume`.** Resume keeps completed row/scale results
 (including smoke divergences) and scored crash trials (including storage failures), rerunning
-missing or `harness-failed` entries within the requested rows, scales and trial count. Reuse the
+missing, `harness-failed`, or bench/smoke `app-failed` entries within the requested rows, scales and trial count. Reuse the
 original selection to finish the whole leg. A missing file starts a new run; a different device,
 platform or dependency version is refused. Each invocation is recorded in `environment.runs`
 with its start time, rows and scales; `measuredAt` is the latest invocation's start time.
