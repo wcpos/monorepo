@@ -5,7 +5,7 @@ import { networkInterfaces } from 'node:os';
 import { parseArgs } from 'node:util';
 import { ios } from './ios.mjs';
 import { android } from './android.mjs';
-import { sleep } from './control.mjs';
+import { compactTrial, sleep } from './control.mjs';
 const ROWS = ['expo-filesystem-js', 'worklet-filesystem', 'expo-sqlite'];
 const PORT = 48091; // Fixed in the app launch URL and USB forwarding contract.
 const DEFAULT_TRIALS = 30, RANDOM_STOP_MAX_MS = 3000, COLD_SAMPLES = 3; // Brief and 2210 sample sizes.
@@ -31,7 +31,7 @@ const out = new URL(`../results/${leg === 'bench' ? 'results' : leg}.${args.plat
 const versions = JSON.parse(await readFile(new URL('../app/src/versions.json', import.meta.url), 'utf8'));
 const report = { environment: { platform: args.platform, device: args.device, ...device.environment, simulator, ...versions, measuredAt: new Date().toISOString() },
   rows, requestedTrials: leg === 'crash' ? trials : undefined, complete: false, results: [], trials: [] };
-const save = () => writeFile(out, JSON.stringify(report, null, 2) + '\n');
+const save = () => writeFile(out, JSON.stringify(report, null, leg === 'crash' ? undefined : 2) + '\n');
 let active;
 function settle(error, value) {
   if (!active || active.finished) return;
@@ -42,6 +42,7 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/job') {
       if (!active || active.delivered || active.finished) { res.writeHead(204).end(); return; }
+      console.info('GET /job', active.job.type, active.job.row);
       active.delivered = true; res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(active.job)); return;
     }
     if (req.method !== 'POST' || !['/event', '/result'].includes(req.url)) { res.writeHead(404).end(); return; }
@@ -123,8 +124,8 @@ try {
         if (inflights.length > 1) throw new Error('More than one in-flight transaction');
         const snapshot = { acked: stopped.started.filter(t => stopped.acked.has(t.tx)), inflight: inflights[0] ?? null };
         const recovered = await run({ ...input, type: 'crash-score', snapshot });
-        const record = { row, trial, targetStopMs, stopMs, snapshot, ackedCount: snapshot.acked.length, wal: stopped.wal, writerBeginRetries: stopped.beginRetries,
-          inflightTx: snapshot.inflight?.tx ?? null, inflightSize: snapshot.inflight?.n ?? 0, ...recovered };
+        const record = compactTrial({ row, trial, targetStopMs, stopMs, snapshot, ackedCount: snapshot.acked.length, wal: stopped.wal, writerBeginRetries: stopped.beginRetries,
+          inflightTx: snapshot.inflight?.tx ?? null, inflightSize: snapshot.inflight?.n ?? 0, ...recovered });
         report.trials.push(record); await save(); console.info(row, trial, record.outcome, `acked=${record.ackedCount}`);
       }
     } else {

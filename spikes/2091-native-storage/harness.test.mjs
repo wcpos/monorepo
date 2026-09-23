@@ -54,3 +54,56 @@ test('report preserves mismatch diagnostics and failure exit on a second regener
     assert.equal(await main(new URL('file://' + directory + '/')), 1);
   } finally { await rm(directory, { recursive: true }); }
 });
+// Catches reintroducing the launch/openurl race or accepting a missing simulator PID.
+test('simulator launches via openurl only and waits for its PID', async () => {
+  const source = readFileSync(new URL('driver/ios.mjs', here), 'utf8').replace(/^import .*;\n/gm, '').replace('export async function', 'async function').replaceAll('import.meta.url', JSON.stringify(new URL('driver/ios.mjs', here).href));
+  const calls = [];
+  let polls = 0, elapsed = 0;
+  const context = { URL, fileURLToPath: u => u.pathname, bundle: 'com.wcpos.spike2091', performance: { now: () => elapsed },
+    sleep: async ms => { elapsed += ms; },
+    command: async (_file, args) => {
+      calls.push(args);
+      if (args[1] === 'list') return JSON.stringify({ devices: { runtime: [{ udid: 'test', state: 'Booted' }] } });
+      if (args[1] === 'launch') return 'com.wcpos.spike2091: 123';
+      if (args.includes('launchctl')) return ++polls > 1 ? '123\t0\tUIKitApplication:com.wcpos.spike2091[abc]' : '';
+      return '';
+    } };
+  const ios = vm.runInNewContext(source + '; ios', context);
+  const device = await ios('test', true);
+  await device.launch('spike2091://driver');
+  assert.equal(calls.some(args => args[1] === 'launch'), false);
+  assert.equal(polls, 2);
+  polls = -100000;
+  await assert.rejects(device.launch('spike2091://driver'), /No launch PID/);
+});
+// Catches serializing the scorer's full ID ledger or unbounded logs into trial files.
+test('crash records retain counts and outcomes but not snapshot IDs', async () => {
+  const { compactTrial } = await import('./driver/control.mjs');
+  const snapshot = { acked: [{ tx: 1, n: 2, ids: ['a', 'b'] }], inflight: { tx: 2, n: 1, ids: ['c'] } };
+  const logs = Array.from({ length: 25 }, (_, i) => `line ${i}`);
+  const record = compactTrial({ snapshot, outcome: 'lost', repairs: 25, logs, ackedCount: 1, inflightTx: 2, inflightSize: 1 });
+  assert.equal(record.snapshot, undefined);
+  assert.deepEqual(record.acked, [{ tx: 1, n: 2 }]);
+  assert.equal(record.logs.length, 20);
+  assert.equal(record.logsTruncated, 5);
+  assert.equal(record.repairs, 25);
+  assert.equal(record.outcome, 'lost');
+  assert.deepEqual(snapshot.acked[0].ids, ['a', 'b']);
+});
+// Catches sending RxDB's base64 data URL to Expo's Android network fetch.
+test('data fetch returns a decoded Blob and passes network requests through', async () => {
+  const ts = await import('./app/node_modules/typescript/lib/typescript.js');
+  const source = readFileSync(new URL('app/src/polyfills.ts', here), 'utf8').replace(/^import .*;\n/gm, '').replace('export function', 'function');
+  const calls = [], network = new Response('network');
+  const context = { Crypto: { digest() {} }, installWorkletFs() {}, getWorkletFs() {}, installWorkletRuntimePolyfills() {},
+    Blob, Response, Uint8Array, atob, fetch: async (...args) => { calls.push(args); if (String(args[0]).startsWith('data:')) throw new Error('unknown protocol: data'); return network; } };
+  vm.runInNewContext(ts.default.transpile(source) + '; installPolyfills();', context);
+  const response = await context.fetch('data:application/octet-stream;base64,AAH/');
+  const blob = await response.blob();
+  assert.equal(blob.type, 'application/octet-stream');
+  assert.deepEqual([...new Uint8Array(await blob.arrayBuffer())], [0, 1, 255]);
+  assert.equal(calls.length, 0);
+  const options = { method: 'POST', body: 'test' };
+  assert.equal(await context.fetch('http://localhost/job', options), network);
+  assert.deepEqual(calls, [['http://localhost/job', options]]);
+});

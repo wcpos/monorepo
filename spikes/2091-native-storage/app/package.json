@@ -34,6 +34,7 @@
     "typescript": "~6.0.3"
   },
   "overrides": {
+    "elliptic": ">=6.6.1",
     "metro": "0.84.5",
     "metro-runtime": "0.84.5",
     "rxdb": "17.4.0",

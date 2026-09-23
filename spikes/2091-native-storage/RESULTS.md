@@ -1,15 +1,15 @@
 # Spike 2091 — native storage
 
-**Simulator verification only — not evidence for the native platform decision.**
-Physical-device results and answer paragraphs are reserved for the operator.
+**Simulator/emulator checks are not evidence for the native storage decision.**
+Run the physical-device checklist in [DEVICE-RUN.md](DEVICE-RUN.md), then fill these answers.
 
 ## Leg 1 — semantics
 
-_Operator: assess physical-device smoke, probes, and cross-row content divergences._
+_Operator: assess smoke, probes and cross-row content divergences._
 
 ## Leg 2 — stability
 
-_Operator: assess acknowledged losses on the iPad and Pixel; process termination is not power loss._
+_Operator: assess acknowledged losses on iPad and Pixel; process termination is not power loss._
 
 ## Leg 3 — speed
 
@@ -23,45 +23,44 @@ _Operator: apply the stability gate and the “wins clearly, not narrowly” bar
 
 | Target | OS | Verification |
 | --- | --- | --- |
-| iPad Pro 13-inch (M5), simulator | iOS 26.5 | Release smoke, small bench, 5 stops per row complete; first-launch caveat below |
-| Pixel_Tablet_API_35 (`emulator-5554`), emulator | Android 15 / API 35 | Release smoke, small bench, 5 stops per row complete |
+| iPad Pro 13-inch (M5), simulator | iOS 26.5 | Earlier release smoke, small bench and 5 stops per row; clean-install recheck blocked below |
+| Pixel_Tablet_API_35 (`emulator-5554`), emulator | Android 15 / API 35 | Updated release smoke complete; earlier small bench and 5 stops per row |
 
 ## Method notes
 
-- Standalone release builds: Hermes bytecode bundled into the binary, no Metro at runtime.
-- All rows use the same premium dist, checked for 47 patch-marker lines at installation.
-- Sources ported from 2143/2210 and `wcpos/rxdb-storage-worklet` commit `acbbc93d642511d1d37bb119abc805e085235f6c`.
-- The Expo control includes the monorepo’s existing expo-opfs native copy/move/recovery patch.
-- The raw Expo engine changes only its root directory; no recovery/probe wrapper. Its flush remains a no-op.
-- The original seed is in batches of 1000; ingest-100 is a separate seed into a fresh instance.
-- Installed RxDB's BEGIN retry helper has no `console.dir`; retry counts are recorded in results.
-- Timing includes the native binding or worklet round trip. SHA-256 checks are outside timings.
-- Physical signing/USB controls and large-scale native additions require operator verification.
-- Benchmark JSON is compacted by `report` after all three rows complete: sample timings,
-  comparison verdicts and mismatch diagnostics remain; per-sample id/hash arrays are removed.
+- Release Hermes bytecode, no Metro. All rows share the premium distribution with 47 patch markers.
+- Sources: spikes 2143/2210 and `wcpos/rxdb-storage-worklet` commit `acbbc93d642511d1d37bb119abc805e085235f6c`.
+- Expo control: shipped expo-opfs copy/move/recovery patch, but raw storage with no recovery/probe
+  wrapper and a no-op flush. Its root directory is the only engine configuration change.
+- Android SQLite migration item: RxDB `utils-blob.createBlobFromBase64` fetches a base64 `data:`
+  URL, which Expo's Android fetch rejects. `app/src/polyfills.ts` decodes those URLs locally into
+  the installed Blob polyfill and returns a Response whose `blob()` resolves to it; other
+  requests pass through. This is runtime adaptation, not a query-semantics divergence.
+- Seed batches are 1000; ingest-100 uses a second fresh instance. Timing includes native/worklet
+  calls; SHA-256 comparisons are outside timings. Cold open ends at first read, with OS cache warm.
+- Benchmark compaction retains timings, verdicts and mismatch diagnostics, not sample id/hash
+  arrays. Crash records retain transaction counts/sizes and the first 20 log lines with a
+  truncation count; full ID snapshots are used only while scoring. Existing scores are unchanged.
+- Installed RxDB's BEGIN retry helper has no `console.dir`; results record retry counts.
+- Physical signing/USB controls and large-scale measurements remain for the operator.
 
 ## Behavior changes / regressions
 
 No shipping application code changed. This spike does not establish broad compatibility,
-power-loss durability, or a performance improvement on physical hardware.
+power-loss durability or physical-device performance improvements.
 
-Observed: all eight binding-smoke scenarios pass for both filesystem rows on both simulators.
-SQLite passes all eight on iOS; Android's attachment scenario fails because Expo's native
-fetch rejects a `data:` URL (`java.net.MalformedURLException: unknown protocol: data`).
-SQLite also differs on explicit-null existence, missing/null membership, and mixed-type
-ordering on both simulators. Filesystem rows have no probe divergences. These are runtime
-observations, not physical-device evidence; no engine behavior was changed to hide them.
+Observed: the updated Android release smoke passes all eight binding scenarios on every row,
+including SQLite attachments. The three SQLite query divergences (explicit-null existence,
+missing/null membership and mixed-type ordering) remain; filesystem rows have none.
+The earlier iOS run passed all eight binding scenarios with the same three SQLite probe
+failures; its clean-install recheck below did not reach a job.
 
 ## Blocked
 
-- **Clean first-launch URL delivery on this Mac remains unverified.**
-  `xcrun simctl launch DDC18EF3-759A-494B-A0B1-E5139EA0A74F com.wcpos.spike2091` followed by
-  `xcrun simctl openurl DDC18EF3-759A-494B-A0B1-E5139EA0A74F 'spike2091://driver?url=http%3A%2F%2F127.0.0.1%3A48091'`
-  both exited 0, but the app stayed IDLE with an empty saved URL and sent no HTTP request.
-  A one-time LLDB call to the app delegate's URL handler delivered that same URL, outside
-  measurement; the debugger detached. The final three iOS legs then ran normally using the
-  persisted URL, with no debugger attached. This does not verify unattended first launch on
-  a clean install. The operator's editable URL / Connect path remains available.
+The clean-install iOS smoke with `openurl` alone exited 1: `No launch PID within 60000ms`.
+No `/job` request arrived. A follow-up `openurl` produced the system confirmation
+“Open in ‘wcpos-spike-2091’?” in SpringBoard's log. No manual connection or debugger was used.
+This is not a storage verdict; the current iOS smoke JSON records the incomplete recheck.
 
 <!-- generated:start -->
 The RxDB mocha suite was not run on device: it is not hosted by React Native. Leg 1 is the eight-scenario binding smoke, three divergence probes, and leg 3 content checks.
@@ -97,11 +96,11 @@ Android stops use ActivityManager `am force-stop` (no lifecycle callbacks), not 
 
 Run complete.
 
-| Row | Trials | ok | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| expo-filesystem-js | 5 | 4 | 0 | 0 | 1 | 0 | 5 | 1 / 0 | 0 / 5 | 0 / 0 / 0 | 1163.83 |
-| worklet-filesystem | 5 | 5 | 0 | 0 | 0 | 0 | 5 | 0 / 0 | 1 / 4 | 0 / 0 / 0 | 1198.26 |
-| expo-sqlite | 5 | 5 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 1 / 4 | 0 / 0 / 0 | 169.11 |
+| Row | Trials | Acked tx / rows | ok | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| expo-filesystem-js | 5 | 114 / 11772 | 4 | 0 | 0 | 1 | 0 | 5 | 1 / 0 | 0 / 5 | 0 / 0 / 0 | 1163.83 |
+| worklet-filesystem | 5 | 228 / 26682 | 5 | 0 | 0 | 0 | 0 | 5 | 0 / 0 | 1 / 4 | 0 / 0 / 0 | 1198.26 |
+| expo-sqlite | 5 | 251 / 28856 | 5 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 1 / 4 | 0 / 0 / 0 | 169.11 |
 
 ### results.android.emulator-5554.json
 
@@ -168,11 +167,7 @@ Run complete.
 | --- | --- | --- | --- | --- |
 | expo-filesystem-js | 11 | 0 | 0 | 0 |
 | worklet-filesystem | 11 | 0 | 0 | 0 |
-| expo-sqlite | 11 | 4 | 0 | 4 |
-
-- expo-sqlite / attachments: fetch failed: Call to function 'NativeRequest.start' has been rejected.
-→ Caused by: The 2nd argument cannot be cast to type class java.net.URL (received class java.lang.String)
-→ Caused by: java.net.MalformedURLException: unknown protocol: data
+| expo-sqlite | 11 | 3 | 0 | 3 |
 
 - expo-sqlite / exists-explicit-null: {"query":{"selector":{"value":{"$exists":false}}},"expected":["p1"],"actual":["p0","p1"],"pass":false}; {"query":{"selector":{"value":{"$exists":true}}},"expected":["p0","p2","p3","p4","p5","p6","p7"],"actual":["p2","p3","p4","p5","p6","p7"],"pass":false}
 
@@ -208,11 +203,11 @@ Run complete.
 
 Run complete.
 
-| Row | Trials | ok | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| expo-filesystem-js | 5 | 5 | 0 | 0 | 0 | 0 | 4 | 0 / 0 | 0 / 4 | 0 / 1 / 0 | 2942.28 |
-| worklet-filesystem | 5 | 4 | 0 | 0 | 1 | 0 | 5 | 1 / 0 | 2 / 3 | 0 / 0 / 0 | 1012.62 |
-| expo-sqlite | 5 | 5 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 1 / 2 | 0 / 2 / 0 | 114.70 |
+| Row | Trials | Acked tx / rows | ok | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| expo-filesystem-js | 5 | 187 / 21344 | 5 | 0 | 0 | 0 | 0 | 4 | 0 / 0 | 0 / 4 | 0 / 1 / 0 | 2942.28 |
+| worklet-filesystem | 5 | 216 / 26568 | 4 | 0 | 0 | 1 | 0 | 5 | 1 / 0 | 2 / 3 | 0 / 0 / 0 | 1012.62 |
+| expo-sqlite | 5 | 201 / 23456 | 5 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 1 / 2 | 0 / 2 / 0 | 114.70 |
 
 ### results.ios.DDC18EF3-759A-494B-A0B1-E5139EA0A74F.json
 
@@ -273,19 +268,17 @@ All available cross-row cells match on canonical revision-independent SHA-256 co
 
 ### smoke.ios.DDC18EF3-759A-494B-A0B1-E5139EA0A74F.json
 
-Run complete.
+**Incomplete:** Error: No launch PID within 60000ms: DDC18EF3-759A-494B-A0B1-E5139EA0A74F
+    at Object.launch (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/ios.mjs:42:25)
+    at async start (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:83:3)
+    at async run (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:101:23)
+    at async file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:133:50
 
 | Row | Scenarios | Smoke/probe divergences | Leg 3 content mismatches | Total divergences |
 | --- | --- | --- | --- | --- |
-| expo-filesystem-js | 11 | 0 | 0 | 0 |
-| worklet-filesystem | 11 | 0 | 0 | 0 |
-| expo-sqlite | 11 | 3 | 0 | 3 |
-
-- expo-sqlite / exists-explicit-null: {"query":{"selector":{"value":{"$exists":false}}},"expected":["p1"],"actual":["p0","p1"],"pass":false}; {"query":{"selector":{"value":{"$exists":true}}},"expected":["p0","p2","p3","p4","p5","p6","p7"],"actual":["p2","p3","p4","p5","p6","p7"],"pass":false}
-
-- expo-sqlite / in-nin-missing: {"query":{"selector":{"value":{"$in":["blue",2]}}},"expected":["p2","p4"],"actual":["p2","p4"],"pass":true}; {"query":{"selector":{"value":{"$nin":["blue",2]}}},"expected":["p0","p1","p3","p5","p6","p7"],"actual":["p3","p5","p6","p7"],"pass":false}
-
-- expo-sqlite / sort-case-accents-mixed-types: {"query":{"selector":{},"sort":[{"name":"asc"}]},"expected":["p1","p4","p0","p3","p5","p6","p7","p2"],"actual":["p1","p4","p0","p3","p5","p6","p7","p2"],"pass":true}; {"query":{"selector":{},"sort":[{"value":"asc"}]},"expected":["p1","p0","p4","p6","p7","p5","p2","p3"],"actual":["p0","p1","p4","p6","p7","p5","p2","p3"],"pass":false}
+| expo-filesystem-js | not run | not run | 0 | not evaluated |
+| worklet-filesystem | not run | not run | 0 | not evaluated |
+| expo-sqlite | not run | not run | 0 | not evaluated |
 
 ## Cross-device summary
 

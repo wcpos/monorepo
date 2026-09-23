@@ -1,6 +1,6 @@
 import { readFile, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { bundle, command, confirmStopped } from './control.mjs';
+import { bundle, command, confirmStopped, sleep } from './control.mjs';
 export async function ios(device, simulator) {
   let pid;
   const jsonPath = fileURLToPath(new URL('../.deps/devicectl.json', import.meta.url));
@@ -29,10 +29,17 @@ export async function ios(device, simulator) {
     environment, alive, memory: async () => null,
     async launch(url) {
       if (simulator) {
-        const text = await command('xcrun', ['simctl', 'launch', device, bundle]);
-        pid = Number(text.match(/:\s*(\d+)\s*$/)?.[1]);
-        if (!pid) throw new Error(`No launch PID: ${text}`);
+        const LAUNCH_BUDGET_MS = 60000, CHECK_MS = 100; // Same budget as device commands.
+        const started = performance.now();
+        pid = undefined;
         await command('xcrun', ['simctl', 'openurl', device, url]);
+        while (!pid && performance.now() - started < LAUNCH_BUDGET_MS) {
+          const list = await command('xcrun', ['simctl', 'spawn', device, 'launchctl', 'list']);
+          const entry = list.split('\n').find(line => line.includes(`UIKitApplication:${bundle}[`));
+          pid = Number(entry?.match(/^\s*(\d+)\s/)?.[1]);
+          if (!pid) await sleep(CHECK_MS);
+        }
+        if (!pid) throw new Error(`No launch PID within ${LAUNCH_BUDGET_MS}ms: ${device}`);
       } else {
         const result = await devicectl(['device', 'process', 'launch', '--device', device, '--payload-url', url, bundle]);
         pid = result.process?.processIdentifier;

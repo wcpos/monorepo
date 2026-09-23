@@ -18,7 +18,7 @@
     "premiumMarkers": 47,
     "expoOpfsShippedPatch": true,
     "beginRetryConsoleDir": false,
-    "measuredAt": "2026-09-23T18:10:04.675Z",
+    "measuredAt": "2026-09-23T18:30:36.493Z",
     "sqlite": "3.50.3"
   },
   "rows": [
@@ -30,8 +30,8 @@
   "results": [
     {
       "engine": "expo-filesystem-js",
-      "dir": "spike-2091/smoke/expo-filesystem-js/spike-87e69d35-86b6-46c6-a8cc-6d3f2e9353ca",
-      "db": "spike-87e69d35-86b6-46c6-a8cc-6d3f2e9353ca",
+      "dir": "spike-2091/smoke/expo-filesystem-js/spike-deeb7ba8-abc1-4acf-a912-3baa489aae5c",
+      "db": "spike-deeb7ba8-abc1-4acf-a912-3baa489aae5c",
       "scenarios": [
         {
           "name": "bulk-write",
@@ -94,8 +94,8 @@
     },
     {
       "engine": "worklet-filesystem",
-      "dir": "spike-2091/smoke/worklet-filesystem/spike-4a1fac17-c1bf-43d8-af1e-a776c21e97a3",
-      "db": "spike-4a1fac17-c1bf-43d8-af1e-a776c21e97a3",
+      "dir": "spike-2091/smoke/worklet-filesystem/spike-ebe67c81-774b-4929-9463-17e8de8bd253",
+      "db": "spike-ebe67c81-774b-4929-9463-17e8de8bd253",
       "scenarios": [
         {
           "name": "bulk-write",
@@ -158,8 +158,8 @@
     },
     {
       "engine": "expo-sqlite",
-      "dir": "spike-2091/smoke/expo-sqlite/spike-5bbf509b-f191-47ae-8d7e-1c57a35267bd",
-      "db": "spike-5bbf509b-f191-47ae-8d7e-1c57a35267bd",
+      "dir": "spike-2091/smoke/expo-sqlite/spike-c0f26478-6bef-4825-995a-a7f50ee8b1ae",
+      "db": "spike-c0f26478-6bef-4825-995a-a7f50ee8b1ae",
       "scenarios": [
         {
           "name": "bulk-write",
@@ -188,8 +188,8 @@
         },
         {
           "name": "attachments",
-          "pass": false,
-          "detail": "fetch failed: Call to function 'NativeRequest.start' has been rejected.\n→ Caused by: The 2nd argument cannot be cast to type class java.net.URL (received class java.lang.String)\n→ Caused by: java.net.MalformedURLException: unknown protocol: data"
+          "pass": true,
+          "detail": "32 KB write/read/remove"
         },
         {
           "name": "cleanup",

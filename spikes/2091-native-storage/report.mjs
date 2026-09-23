@@ -82,9 +82,9 @@ export async function main(directory = new URL('.', import.meta.url)) {
         for (const row of r.results) for (const scenario of row.scenarios.filter(s => !s.pass)) lines.push(`- ${row.engine} / ${scenario.name}: ${scenario.detail}`);
       }
       if (r.file.startsWith('crash.')) {
-        lines.push(table(['Row', 'Trials', 'ok', 'open-failed', 'integrity-failed', 'lost', 'partial', 'Repaired on reopen', 'Ledger lost / partial', 'In-flight present / absent', 'In-flight partial / none / unknown', 'Median reopen ms'], ENGINES.map(row => {
+        lines.push(table(['Row', 'Trials', 'Acked tx / rows', 'ok', 'open-failed', 'integrity-failed', 'lost', 'partial', 'Repaired on reopen', 'Ledger lost / partial', 'In-flight present / absent', 'In-flight partial / none / unknown', 'Median reopen ms'], ENGINES.map(row => {
           const ts = r.trials.filter(t => t.row === row);
-          return [row, ts.length, ...['ok', 'open-failed', 'integrity-failed', 'lost', 'partial'].map(o => ts.filter(t => t.outcome === o).length),
+          return [row, ts.length, `${ts.reduce((n, t) => n + t.ackedCount, 0)} / ${ts.flatMap(t => t.acked).reduce((n, t) => n + t.n, 0)}`, ...['ok', 'open-failed', 'integrity-failed', 'lost', 'partial'].map(o => ts.filter(t => t.outcome === o).length),
             ts.filter(t => t.repairs > 0).length, ['lost','partial'].map(o => ts.filter(t => t.ledger === o).length).join(' / '),
             ['present','absent'].map(p => ts.filter(t => t.inflightPresence === p).length).join(' / '),
             ['partial','none','unknown'].map(p => ts.filter(t => t.inflightPresence === p).length).join(' / '), number(median(ts.map(t => t.reopenMs)))];

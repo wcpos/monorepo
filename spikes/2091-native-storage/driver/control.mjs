@@ -15,3 +15,9 @@ export async function confirmStopped(alive) {
     await sleep(CHECK_MS);
   }
 }
+
+const TRIAL_LOG_LIMIT = 20; // Keep reopen diagnostics bounded in committed crash evidence.
+export function compactTrial({ snapshot, logs = [], ...record }) {
+  return { ...record, acked: snapshot.acked.map(({ tx, n }) => ({ tx, n })),
+    logs: logs.slice(0, TRIAL_LOG_LIMIT), logsTruncated: Math.max(0, logs.length - TRIAL_LOG_LIMIT) };
+}
