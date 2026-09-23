@@ -88,11 +88,14 @@ for (const name of themeNames) {
 	});
 }
 
-test('both imperative table-row-alt reads still name a mapped token', () => {
+// The token pass (roadmap#357) aliased table-row-alt to the background and kept the two
+// imperative reads alive; the overlays tier (roadmap#379) retired the stripe and both reads.
+// The alias stays mapped until the housekeeping PR that removes it reads zero consumers.
+test('the table-row-alt alias stays mapped and no imperative read names it', () => {
 	assert.match(themeBody, /--color-table-row-alt\s*:\s*var\(--table-row-alt\)\s*;/);
 	for (const file of ['index.tsx', 'pulse-row.tsx']) {
 		const source = readFileSync(new URL(`../packages/components/src/table/${file}`, import.meta.url), 'utf8');
-		assert.match(source, /useCSSVariable\(\s*\[[^\]]*['"]--color-table-row-alt['"][^\]]*\]/, file);
+		assert.doesNotMatch(source, /table-row-alt/, file);
 	}
 });
 

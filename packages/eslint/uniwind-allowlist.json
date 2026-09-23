@@ -24,11 +24,6 @@
   "packages/components/src/modal/index.tsx": {
     "duration-literal": 2
   },
-  "packages/components/src/panels/index.tsx": {
-    "duration-literal": 1,
-    "group-*": 10,
-    "missing-animation:fadeIn": 1
-  },
   "packages/components/src/select/index.tsx": {
     "group-*": 1
   },
@@ -40,10 +35,6 @@
   },
   "packages/components/src/table/pulse-row.tsx": {
     "duration-literal": 3
-  },
-  "packages/components/src/tabs/index.tsx": {
-    "focus-visible:": 8,
-    "whitespace-nowrap": 1
   },
   "packages/components/src/toggle-group/index.tsx": {
     "focus-visible:": 4,

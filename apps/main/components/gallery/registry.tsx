@@ -41,11 +41,19 @@ import { stories as progress } from '@wcpos/components/progress/gallery';
 import { stories as sortIcon } from '@wcpos/components/sort-icon/gallery';
 import { stories as docsLink } from '@wcpos/components/docs-link/gallery';
 import { stories as card } from '@wcpos/components/card/gallery';
+import { stories as tabs } from '@wcpos/components/tabs/gallery';
+import { stories as panels } from '@wcpos/components/panels/gallery';
+import { stories as table } from '@wcpos/components/table/gallery';
+import { stories as listItem } from '@wcpos/components/list-item/gallery';
 
 import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
 
 const registry: Record<string, Story[]> = {
+	tabs,
+	panels,
+	table,
+	'list-item': listItem,
 	badge,
 	avatar,
 	loader,
