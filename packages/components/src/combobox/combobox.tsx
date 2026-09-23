@@ -101,7 +101,7 @@ function Combobox<T = undefined>({
 function ComboboxTrigger({ className, disabled, ...props }: PopoverPrimitive.TriggerProps) {
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(disabled && 'web:cursor-not-allowed opacity-50', className)}
+			className={cn(disabled && 'web:cursor-not-allowed opacity-45', className)}
 			disabled={disabled}
 			{...props}
 		/>
@@ -116,6 +116,7 @@ function ComboboxValue({
 	...props
 }: ComboboxValueProps) {
 	const { multiple, value, decodeLabels } = useComboboxRootContext();
+	const { open } = PopoverPrimitive.useRootContext();
 	const Component = asChild ? Slot : Text;
 
 	const displayText = React.useMemo(() => {
@@ -133,13 +134,14 @@ function ComboboxValue({
 	return (
 		<View
 			className={cn(
-				'border-border bg-card web:ring-offset-background h-ctl w-full flex-row items-center rounded-lg border px-2',
+				'border-border bg-card h-ctl w-full flex-row items-center rounded-lg border px-3',
+				open && 'border-ring',
 				className
 			)}
 		>
 			<View className="flex-1">
 				<TextClassContext.Provider
-					value={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground', className)}
+					value={cn('text-base', hasValue ? 'text-foreground' : 'text-muted-foreground', className)}
 				>
 					{/* Same decode as ComboboxItemText, off the same `decodeLabels` switch:
 					    the label shown once chosen is the label that was listed, and a term
@@ -152,7 +154,7 @@ function ComboboxValue({
 					</Component>
 				</TextClassContext.Provider>
 			</View>
-			<Icon name="chevronDown" />
+			<Icon name="chevronDown" className="text-muted-foreground" />
 		</View>
 	);
 }

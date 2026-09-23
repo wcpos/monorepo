@@ -38,12 +38,15 @@ function Slider({
 			max={max}
 			step={step}
 			disabled={disabled}
-			className={cn('flex-row items-center', className)}
+			className={cn('flex-row items-center', disabled && 'opacity-45', className)}
 		>
 			<SliderPrimitive.Track className="bg-muted relative h-2 w-full rounded-full">
 				<SliderPrimitive.Range className="bg-primary absolute h-full rounded-full" />
 			</SliderPrimitive.Track>
-			<SliderPrimitive.Thumb className="bg-background border-primary block h-5 w-5 rounded-full border-2 shadow" />
+			<SliderPrimitive.Thumb
+				hitSlop={12}
+				className="bg-card border-primary block size-5 rounded-full border"
+			/>
 		</SliderPrimitive.Root>
 	);
 }

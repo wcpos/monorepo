@@ -1,5 +1,4 @@
 import React from 'react';
-import { Platform } from 'react-native';
 
 import { format, parseISO } from 'date-fns';
 import { CalendarProps, Calendar as RNCalendar } from 'react-native-calendars';
@@ -28,6 +27,9 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 		foregroundColor,
 		mutedForegroundColor,
 		borderColor,
+		base,
+		xs,
+		spacing,
 	] = useCSSVariable([
 		'--color-primary',
 		'--color-primary-foreground',
@@ -35,7 +37,17 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 		'--color-foreground',
 		'--color-muted-foreground',
 		'--color-border',
+		'--text-base',
+		'--text-xs',
+		'--spacing',
 	]).map(String);
+
+	const px = (value: string) => {
+		// Web keeps the derived xs token as calc(<base>px * <ratio>).
+		const [length, multiplier = '1'] = value.replace('calc(', '').split('*');
+		return parseFloat(length) * parseFloat(multiplier);
+	};
+	const [baseSize, headerSize, unit] = [base, xs, spacing].map(px);
 
 	// Update locale configuration when language changes
 	React.useEffect(() => {
@@ -149,21 +161,21 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 					'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
 				textDayHeaderFontFamily:
 					'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
-				textDayFontWeight: '300',
+				textDayFontWeight: '400',
 				textMonthFontWeight: '500',
-				textDayHeaderFontWeight: '300',
-				textDayFontSize: 14,
-				textMonthFontSize: 14,
-				textDayHeaderFontSize: Platform.OS === 'web' ? 12 : 14,
-				weekVerticalMargin: 2,
+				textDayHeaderFontWeight: '500',
+				textDayFontSize: baseSize,
+				textMonthFontSize: baseSize,
+				textDayHeaderFontSize: headerSize,
+				weekVerticalMargin: unit / 2,
 				// react-native-calendars supports stylesheet overrides but they're not in the Theme type
 				...({
 					'stylesheet.calendar.header': {
 						header: {
 							flexDirection: 'row',
 							justifyContent: 'space-between',
-							paddingLeft: 10,
-							paddingRight: 10,
+							paddingLeft: unit * 2.5,
+							paddingRight: unit * 2.5,
 							marginTop: 0,
 							alignItems: 'center',
 						},

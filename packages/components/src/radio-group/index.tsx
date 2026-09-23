@@ -36,7 +36,7 @@ function RadioGroup({
 	return (
 		<RadioGroupContext.Provider value={{ value, onValueChange, disabled }}>
 			<RadioGroupPrimitive.Root
-				className={cn('web:grid gap-2', className)}
+				className={cn('gap-2', className)}
 				value={value}
 				onValueChange={onValueChange ?? noopOnValueChange}
 				disabled={disabled}
@@ -50,17 +50,20 @@ function RadioGroupItem({
 	className,
 	...props
 }: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {
+	const { value: selectedValue, disabled } = useRadioGroupContext();
 	return (
 		<RadioGroupPrimitive.Item
+			hitSlop={12}
 			className={cn(
-				'native:h-5 native:w-5 web:ring-offset-background web:focus:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 border-primary text-primary aspect-square h-4 w-4 items-center justify-center rounded-full border',
-				props.disabled && 'web:cursor-not-allowed opacity-50',
+				'border-border bg-card size-5 items-center justify-center rounded-full border',
+				props.value === selectedValue && 'border-primary',
+				(props.disabled || disabled) && 'web:cursor-not-allowed opacity-45',
 				className
 			)}
 			{...props}
 		>
 			<RadioGroupPrimitive.Indicator className="flex items-center justify-center">
-				<View className="native:h-[10] native:w-[10] bg-primary aspect-square h-[9px] w-[9px] rounded-full" />
+				<View className="bg-primary size-2.5 rounded-full" />
 			</RadioGroupPrimitive.Indicator>
 		</RadioGroupPrimitive.Item>
 	);
@@ -98,7 +101,7 @@ function RadioGroupOption({
 	const isDisabled = groupDisabled || disabled;
 
 	return (
-		<HStack className={cn('items-start', isDisabled && 'opacity-50', className)} space="sm">
+		<HStack className={cn('items-start', isDisabled && 'opacity-45', className)} space="sm">
 			<RadioGroupItem
 				aria-describedby={descriptionID}
 				aria-labelledby={labelID}

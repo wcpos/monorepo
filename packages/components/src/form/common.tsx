@@ -7,6 +7,7 @@ import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 
 import { FormItemContext, useFormField } from './context';
 import { Label } from '../label';
+import { CROSSFADE } from '../lib/motion';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 
@@ -45,7 +46,7 @@ function FormItem({ className, ...props }: ViewProps) {
 
 	return (
 		<FormItemContext.Provider value={{ nativeID }}>
-			<View className={cn('gap-1', className)} {...props} />
+			<View className={cn('gap-1.5', className)} {...props} />
 		</FormItemContext.Provider>
 	);
 }
@@ -59,7 +60,7 @@ function FormLabel({
 
 	return (
 		<Label
-			className={cn('p-1', error && 'text-destructive', className)}
+			className={cn('p-0', error && 'text-destructive', className)}
 			nativeID={formItemNativeID}
 			{...props}
 		/>
@@ -72,7 +73,7 @@ function FormDescription({ className, ...props }: TextProps) {
 	return (
 		<Text
 			nativeID={formDescriptionNativeID}
-			className={cn('text-muted-foreground pt-1 text-sm', className)}
+			className={cn('text-muted-foreground text-sm', className)}
 			{...props}
 		/>
 	);
@@ -93,7 +94,7 @@ function FormMessage({
 	return (
 		<Animated.Text
 			entering={FadeInDown}
-			exiting={FadeOut.duration(275)}
+			exiting={FadeOut.duration(CROSSFADE)}
 			nativeID={formMessageNativeID}
 			className={cn('text-destructive text-sm font-medium', className)}
 			{...props}

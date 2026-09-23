@@ -26,7 +26,7 @@ function Value({
 
 	return (
 		<TextClassContext.Provider
-			value={cn(textClass, 'text-sm', !value?.value && 'text-muted-foreground', className)}
+			value={cn(textClass, 'text-base', !value?.value && 'text-muted-foreground', className)}
 		>
 			{/* An empty `value` is the cleared-selection sentinel, so it reads as no selection. */}
 			<Component {...props}>{value?.value ? value.label : placeholder}</Component>
@@ -34,5 +34,9 @@ function Value({
 	);
 }
 
-export { Trigger } from '@rn-primitives/select';
+function Trigger({ className, ...props }: SelectPrimitive.TriggerProps) {
+	const { open } = SelectPrimitive.useRootContext();
+	return <SelectPrimitive.Trigger {...props} className={cn(className, open && 'border-ring')} />;
+}
+export { Trigger };
 export { Value };

@@ -236,7 +236,7 @@ function TreeComboboxTrigger({
 
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(disabled && 'web:cursor-not-allowed opacity-50', className)}
+			className={cn(disabled && 'web:cursor-not-allowed opacity-45', className)}
 			disabled={disabled}
 			onLayout={handleLayout}
 			{...props}

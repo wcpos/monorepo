@@ -124,3 +124,14 @@ test('no source file reads a retired token by name', () => {
 	}
 	assert.deepEqual(offenders, []);
 });
+
+test('controls share the web keyboard focus outline', () => {
+	assert.match(
+		css,
+		/:focus-visible\s*\{\s*outline: 2px solid var\(--ring\);\s*outline-offset: 2px;/
+	);
+	assert.match(
+		css,
+		/:where\(input, textarea, \[contenteditable\]\):focus-visible\s*\{\s*outline: none;/
+	);
+});

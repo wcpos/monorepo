@@ -24,7 +24,7 @@ import type { VariantProps } from 'class-variance-authority';
 const ButtonText = Text;
 
 const buttonVariants = cva(
-	'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 web:transition-colors group flex max-w-full shrink items-center justify-center rounded-lg',
+	'web:transition-colors flex max-w-full shrink items-center justify-center rounded-lg',
 	{
 		variants: {
 			variant: {
@@ -33,8 +33,8 @@ const buttonVariants = cva(
 				 */
 				default: 'bg-primary web:hover:opacity-90 active:opacity-90',
 				destructive: 'bg-destructive web:hover:opacity-90 active:opacity-90',
-				secondary: 'bg-secondary web:hover:opacity-80 active:opacity-80',
-				muted: 'bg-muted web:hover:opacity-80 active:opacity-80',
+				secondary: 'bg-secondary web:hover:opacity-90 active:opacity-90',
+				muted: 'bg-muted web:hover:opacity-90 active:opacity-90',
 				success: 'bg-success web:hover:opacity-90 active:opacity-90',
 				info: 'bg-info web:hover:opacity-90 active:opacity-90',
 				attention: 'bg-attention web:hover:opacity-90 active:opacity-90',
@@ -44,31 +44,25 @@ const buttonVariants = cva(
 				/**
 				 * Outline buttons
 				 */
-				outline:
-					'border-border bg-card web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent border',
-				'outline-primary':
-					'border-primary bg-card web:hover:bg-primary/90 web:hover:text-primary-foreground active:bg-primary border',
+				outline: 'border-border bg-card web:hover:bg-muted active:bg-muted border',
+				'outline-primary': 'border-primary bg-card web:hover:bg-primary active:bg-primary border',
 				'outline-secondary':
-					'border-secondary bg-card web:hover:bg-secondary/90 web:hover:text-secondary-foreground active:bg-secondary border',
-				'outline-muted':
-					'border-muted bg-card web:hover:bg-muted/90 web:hover:text-muted-foreground active:bg-muted border',
-				'outline-success':
-					'border-success bg-card web:hover:bg-success/90 web:hover:text-success-foreground active:bg-success border',
+					'border-secondary bg-card web:hover:bg-secondary active:bg-secondary border',
+				'outline-muted': 'border-muted bg-card web:hover:bg-muted active:bg-muted border',
+				'outline-success': 'border-success bg-card web:hover:bg-success active:bg-success border',
 				'outline-destructive':
-					'border-destructive bg-card web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive border',
-				'outline-info':
-					'border-info bg-card web:hover:bg-info/90 web:hover:text-info-foreground active:bg-info border',
+					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
+				'outline-info': 'border-info bg-card web:hover:bg-info active:bg-info border',
 				'outline-attention':
-					'border-attention bg-card web:hover:bg-attention/90 web:hover:text-attention-foreground active:bg-attention border',
-				'outline-warning':
-					'border-warning bg-card web:hover:bg-warning/90 web:hover:text-warning-foreground active:bg-warning border',
+					'border-attention bg-card web:hover:bg-attention active:bg-attention border',
+				'outline-warning': 'border-warning bg-card web:hover:bg-warning active:bg-warning border',
 				'outline-error':
-					'border-destructive bg-card web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive border',
+					'border-destructive bg-card web:hover:bg-destructive active:bg-destructive border',
 
 				/**
 				 * Ghost buttons
 				 */
-				ghost: 'web:hover:bg-accent/90 web:hover:text-accent-foreground active:bg-accent',
+				ghost: 'web:hover:bg-muted active:bg-muted',
 				'ghost-primary': 'bg-primary/15 web:hover:bg-primary active:bg-primary',
 				'ghost-secondary': 'bg-secondary/15 web:hover:bg-secondary active:bg-secondary',
 				'ghost-muted': 'bg-muted/15 web:hover:bg-muted active:bg-muted',
@@ -85,7 +79,7 @@ const buttonVariants = cva(
 				 * quietens only the text, for secondary actions sitting beside a
 				 * primary one in a row.
 				 */
-				'ghost-quiet': 'web:hover:bg-accent/90 active:bg-accent',
+				'ghost-quiet': 'web:hover:bg-muted active:bg-muted',
 
 				/**
 				 * For buttons living on the sidebar / header surface, which is dark in
@@ -132,84 +126,121 @@ const buttonVariants = cva(
 	}
 );
 
-const buttonTextVariants = cva(
-	'web:whitespace-nowrap text-foreground web:transition-colors truncate text-base',
-	{
-		variants: {
-			variant: {
-				/**
-				 * Solid buttons
-				 */
-				default: 'text-primary-foreground',
-				destructive: 'text-destructive-foreground',
-				secondary: 'text-secondary-foreground group-active:text-secondary-foreground',
-				muted: 'text-muted-foreground group-active:text-muted-foreground',
-				success: 'text-success-foreground',
-				info: 'text-info-foreground',
-				attention: 'text-attention-foreground',
-				warning: 'text-warning-foreground',
-				error: 'text-destructive-foreground',
+const buttonTextVariants = cva('text-foreground web:transition-colors text-base font-medium', {
+	variants: {
+		pressed: { true: '', false: '' },
+		hovered: { true: '', false: '' },
+		variant: {
+			/**
+			 * Solid buttons
+			 */
+			default: 'text-primary-foreground font-semibold',
+			destructive: 'text-destructive-foreground',
+			secondary: 'text-secondary-foreground',
+			muted: 'text-muted-foreground',
+			success: 'text-success-foreground',
+			info: 'text-info-foreground',
+			attention: 'text-attention-foreground',
+			warning: 'text-warning-foreground',
+			error: 'text-destructive-foreground',
 
-				/**
-				 * Outline buttons
-				 */
-				outline: 'group-active:text-accent-foreground',
-				'outline-primary': 'group-active:text-primary-foreground',
-				'outline-secondary': 'group-active:text-secondary-foreground',
-				'outline-muted': 'group-active:text-muted-foreground',
-				'outline-success': 'group-active:text-success-foreground',
-				'outline-destructive': 'group-active:text-destructive-foreground',
-				'outline-info': 'group-active:text-info-foreground',
-				'outline-attention': 'group-active:text-attention-foreground',
-				'outline-warning': 'group-active:text-warning-foreground',
-				'outline-error': 'group-active:text-destructive-foreground',
+			/**
+			 * Outline buttons
+			 */
+			outline: '',
+			'outline-primary': '',
+			'outline-secondary': '',
+			'outline-muted': '',
+			'outline-success': '',
+			'outline-destructive': '',
+			'outline-info': '',
+			'outline-attention': '',
+			'outline-warning': '',
+			'outline-error': '',
 
-				/**
-				 * Ghost buttons
-				 */
-				ghost: 'web:group-hover:text-accent-foreground group-active:text-accent-foreground',
-				'ghost-primary':
-					'text-primary web:group-hover:text-primary-foreground group-active:text-primary-foreground',
-				'ghost-secondary':
-					'text-secondary web:group-hover:text-secondary-foreground group-active:text-secondary-foreground',
-				'ghost-muted':
-					'text-muted web:group-hover:text-muted-foreground group-active:text-muted-foreground',
-				'ghost-success':
-					'text-success web:group-hover:text-success-foreground group-active:text-success-foreground',
-				'ghost-destructive':
-					'text-destructive web:group-hover:text-destructive-foreground group-active:text-destructive-foreground',
-				'ghost-info':
-					'text-info web:group-hover:text-info-foreground group-active:text-info-foreground',
-				'ghost-attention':
-					'text-attention web:group-hover:text-attention-foreground group-active:text-attention-foreground',
-				'ghost-warning':
-					'text-warning web:group-hover:text-warning-foreground group-active:text-warning-foreground',
-				'ghost-error':
-					'text-destructive web:group-hover:text-destructive-foreground group-active:text-destructive-foreground',
-				'ghost-quiet':
-					'text-muted-foreground web:group-hover:text-accent-foreground group-active:text-accent-foreground',
-				sidebar: 'text-sidebar-foreground',
-				'sidebar-solid': 'text-sidebar',
-				'sidebar-quiet': 'text-sidebar-foreground',
-				'sidebar-key': 'text-sidebar-foreground',
-				link: 'text-primary web:hover:underline',
-			},
-			size: {
-				default: '',
-				xs: 'text-xs',
-				compact: 'text-xs',
-				sm: 'text-sm',
-				lg: 'text-lg',
-				xl: 'text-xl',
-				key: 'text-3xl font-medium',
-			},
+			/**
+			 * Ghost buttons
+			 */
+			ghost: '',
+			'ghost-primary': 'text-primary',
+			'ghost-secondary': 'text-secondary',
+			'ghost-muted': 'text-muted',
+			'ghost-success': 'text-success',
+			'ghost-destructive': 'text-destructive',
+			'ghost-info': 'text-info',
+			'ghost-attention': 'text-attention',
+			'ghost-warning': 'text-warning',
+			'ghost-error': 'text-destructive',
+			'ghost-quiet': 'text-muted-foreground',
+			sidebar: 'text-sidebar-foreground',
+			'sidebar-solid': 'text-sidebar',
+			'sidebar-quiet': 'text-sidebar-foreground',
+			'sidebar-key': 'text-sidebar-foreground',
+			link: 'text-primary web:hover:underline',
 		},
-		defaultVariants: {
-			variant: 'default',
-			size: 'default',
+		size: {
+			default: '',
+			xs: 'text-xs',
+			compact: 'text-xs',
+			sm: 'text-sm',
+			lg: 'text-lg',
+			xl: 'text-xl',
+			key: 'text-3xl font-medium',
 		},
-	}
-);
+	},
+	compoundVariants: [
+		{ variant: 'outline', pressed: true, class: 'text-foreground' },
+		{ variant: 'outline', hovered: true, class: 'text-foreground' },
+		{ variant: 'ghost', pressed: true, class: 'text-foreground' },
+		{ variant: 'ghost', hovered: true, class: 'text-foreground' },
+		{ variant: 'ghost-quiet', pressed: true, class: 'text-foreground' },
+		{ variant: 'ghost-quiet', hovered: true, class: 'text-foreground' },
+		{ variant: 'secondary', pressed: true, class: 'text-secondary-foreground' },
+		{ variant: 'secondary', hovered: true, class: 'text-secondary-foreground' },
+		{ variant: 'muted', pressed: true, class: 'text-muted-foreground' },
+		{ variant: 'muted', hovered: true, class: 'text-muted-foreground' },
+		{ variant: 'outline-primary', pressed: true, class: 'text-primary-foreground' },
+		{ variant: 'outline-primary', hovered: true, class: 'text-primary-foreground' },
+		{ variant: 'outline-secondary', pressed: true, class: 'text-secondary-foreground' },
+		{ variant: 'outline-secondary', hovered: true, class: 'text-secondary-foreground' },
+		{ variant: 'outline-muted', pressed: true, class: 'text-muted-foreground' },
+		{ variant: 'outline-muted', hovered: true, class: 'text-muted-foreground' },
+		{ variant: 'outline-success', pressed: true, class: 'text-success-foreground' },
+		{ variant: 'outline-success', hovered: true, class: 'text-success-foreground' },
+		{ variant: 'outline-destructive', pressed: true, class: 'text-destructive-foreground' },
+		{ variant: 'outline-destructive', hovered: true, class: 'text-destructive-foreground' },
+		{ variant: 'outline-info', pressed: true, class: 'text-info-foreground' },
+		{ variant: 'outline-info', hovered: true, class: 'text-info-foreground' },
+		{ variant: 'outline-attention', pressed: true, class: 'text-attention-foreground' },
+		{ variant: 'outline-attention', hovered: true, class: 'text-attention-foreground' },
+		{ variant: 'outline-warning', pressed: true, class: 'text-warning-foreground' },
+		{ variant: 'outline-warning', hovered: true, class: 'text-warning-foreground' },
+		{ variant: 'outline-error', pressed: true, class: 'text-destructive-foreground' },
+		{ variant: 'outline-error', hovered: true, class: 'text-destructive-foreground' },
+		{ variant: 'ghost-primary', pressed: true, class: 'text-primary-foreground' },
+		{ variant: 'ghost-primary', hovered: true, class: 'text-primary-foreground' },
+		{ variant: 'ghost-secondary', pressed: true, class: 'text-secondary-foreground' },
+		{ variant: 'ghost-secondary', hovered: true, class: 'text-secondary-foreground' },
+		{ variant: 'ghost-muted', pressed: true, class: 'text-muted-foreground' },
+		{ variant: 'ghost-muted', hovered: true, class: 'text-muted-foreground' },
+		{ variant: 'ghost-success', pressed: true, class: 'text-success-foreground' },
+		{ variant: 'ghost-success', hovered: true, class: 'text-success-foreground' },
+		{ variant: 'ghost-destructive', pressed: true, class: 'text-destructive-foreground' },
+		{ variant: 'ghost-destructive', hovered: true, class: 'text-destructive-foreground' },
+		{ variant: 'ghost-info', pressed: true, class: 'text-info-foreground' },
+		{ variant: 'ghost-info', hovered: true, class: 'text-info-foreground' },
+		{ variant: 'ghost-attention', pressed: true, class: 'text-attention-foreground' },
+		{ variant: 'ghost-attention', hovered: true, class: 'text-attention-foreground' },
+		{ variant: 'ghost-warning', pressed: true, class: 'text-warning-foreground' },
+		{ variant: 'ghost-warning', hovered: true, class: 'text-warning-foreground' },
+		{ variant: 'ghost-error', pressed: true, class: 'text-destructive-foreground' },
+		{ variant: 'ghost-error', hovered: true, class: 'text-destructive-foreground' },
+	],
+	defaultVariants: {
+		variant: 'default',
+		size: 'default',
+	},
+});
 
 /**
  *
@@ -242,6 +273,7 @@ function Button({
 	// (opacity is className-driven) and to JS touch handling, but TalkBack
 	// announces the button as disabled and E2E `enabled: true` waits never
 	// pass (monorepo#1614, defect 1).
+	const [hovered, setHovered] = React.useState(false);
 	const disabled = !!(props.disabled || loading);
 
 	/**
@@ -284,27 +316,36 @@ function Button({
 	);
 
 	return (
-		<TextClassContext.Provider
-			value={buttonTextVariants({
-				variant,
-				size,
-				className: 'web:pointer-events-none',
-			})}
+		<Pressable
+			className={cn(
+				buttonVariants({ variant, size, className }),
+				disabled && 'web:pointer-events-none web:cursor-not-allowed opacity-45'
+			)}
+			role="button"
+			{...props}
+			onHoverIn={(event) => {
+				setHovered(true);
+				props.onHoverIn?.(event);
+			}}
+			onHoverOut={(event) => {
+				setHovered(false);
+				props.onHoverOut?.(event);
+			}}
+			onPress={handlePress}
+			aria-disabled={disabled}
+			disabled={disabled}
 		>
-			<Pressable
-				className={cn(
-					buttonVariants({ variant, size, className }),
-					disabled &&
-						'web:pointer-events-none web:cursor-not-allowed web:hover:opacity-50 opacity-50 active:opacity-50'
-				)}
-				role="button"
-				{...props}
-				onPress={handlePress}
-				aria-disabled={disabled}
-				disabled={disabled}
-			>
-				{(pressableState) =>
-					leftIcon || rightIcon || loading ? (
+			{(pressableState) => (
+				<TextClassContext.Provider
+					value={buttonTextVariants({
+						variant,
+						size,
+						pressed: pressableState.pressed,
+						hovered,
+						className: 'web:pointer-events-none',
+					})}
+				>
+					{leftIcon || rightIcon || loading ? (
 						<HStack className="max-w-full">
 							{loading ? (
 								<Loader
@@ -319,10 +360,10 @@ function Button({
 						</HStack>
 					) : (
 						renderChildren(pressableState)
-					)
-				}
-			</Pressable>
-		</TextClassContext.Provider>
+					)}
+				</TextClassContext.Provider>
+			)}
+		</Pressable>
 	);
 }
 

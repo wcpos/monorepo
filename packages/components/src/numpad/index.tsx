@@ -3,8 +3,6 @@ import {
 	NativeSyntheticEvent,
 	TextInput as RNTextInput,
 	TextInputKeyPressEventData,
-	View,
-	ViewStyle,
 } from 'react-native';
 
 import toNumber from 'lodash/toNumber';
@@ -12,12 +10,10 @@ import toNumber from 'lodash/toNumber';
 import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 
 import { useCalculator } from './use-calculator';
-import { Button, ButtonText } from '../button';
 import { HStack } from '../hstack';
-import { Icon, IconName } from '../icon';
 import { IconButton } from '../icon-button';
 import { Input, InputProps } from '../input';
-import { Text } from '../text';
+import { Keypad } from '../keypad';
 import { VStack } from '../vstack';
 
 type TextInputKeyPressEvent = NativeSyntheticEvent<TextInputKeyPressEventData>;
@@ -74,31 +70,6 @@ function Display({ selection, onSelectionChange, className, disabled, ref, ...pr
 
 Display.displayName = 'NumpadDisplay';
 
-interface NumpadKeyProps {
-	label?: string;
-	icon?: IconName;
-	onPress: () => void;
-	discount?: boolean;
-	/** Overrides the label-derived id, for keys whose label is locale-dependent. */
-	testID?: string;
-}
-
-function Key({ label, icon, onPress, discount, testID }: NumpadKeyProps) {
-	const keyId = label ?? (icon ? `icon-${icon}` : undefined);
-	return (
-		<Button
-			testID={testID ?? (keyId ? `numpad-key-${keyId}` : undefined)}
-			variant="muted"
-			onPress={onPress}
-			rightIcon={discount ? 'percent' : undefined}
-		>
-			{icon ? <Icon name={icon} /> : <ButtonText>{label}</ButtonText>}
-		</Button>
-	);
-}
-
-Key.displayName = 'NumpadKey';
-
 interface NumpadProps {
 	ref?: React.Ref<{ getValue: () => number } | null>;
 	initialValue?: number;
@@ -108,7 +79,6 @@ interface NumpadProps {
 	decimalSeparator?: string;
 	discounts?: number[];
 	precision?: number;
-	columnSize?: number;
 	formatDisplay?: (value: number) => string;
 }
 
@@ -125,7 +95,6 @@ function Numpad({
 	onSubmitEditing,
 	discounts,
 	precision = 6,
-	columnSize = 45,
 	formatDisplay = (value) => String(value),
 }: NumpadProps) {
 	const { currentOperand, addDigit, switchSign, deleteDigit, applyDiscount } = useCalculator({
@@ -216,7 +185,7 @@ function Numpad({
 	 *
 	 */
 	return (
-		<VStack style={{ width: hasDiscounts ? '222px' : '146px' } as unknown as ViewStyle}>
+		<VStack className="gap-2 self-start">
 			<Display
 				ref={localRef}
 				value={formatDisplay(currentValue)}
@@ -225,44 +194,34 @@ function Numpad({
 				// selection={selection}
 				// onSelectionChange={setSelection}
 			/>
-			<HStack className="gap-1">
-				<View className="grid grid-cols-3 gap-1" style={{ width: '146px' } as unknown as ViewStyle}>
-					{[
-						['1', '2', '3'],
-						['4', '5', '6'],
-						['7', '8', '9'],
-						['+/-', '0', decimalSeparator],
-					].map((row, rowIndex) =>
-						row.map((value, colIndex) => (
-							<Key
-								key={`${rowIndex}-${colIndex}`}
-								label={value === '+/-' ? undefined : value}
-								icon={value === '+/-' ? 'plusMinus' : undefined}
-								// The decimal key's label IS the store's separator, so its derived
-								// testID is `numpad-key-.` on one store and `numpad-key-,` on the
-								// next. A test that needs "the decimal key" cannot name it. Digits
-								// are stable already; this gives the separator a ROLE-based id so a
-								// spec can enter 9.99 on an fr_FR store without knowing the locale.
-								testID={value === decimalSeparator ? 'numpad-key-decimal' : undefined}
-								onPress={() => handleButtonPress(value)}
-							/>
-						))
-					)}
-				</View>
+			<HStack className="gap-2">
+				<Keypad
+					className="w-52"
+					fit="tile"
+					onPress={handleButtonPress}
+					rows={[
+						...['123', '456', '789'].map((row) =>
+							[...row].map((value) => ({ value, label: value, testID: `numpad-key-${value}` }))
+						),
+						[
+							{
+								value: '+/-',
+								icon: 'plusMinus',
+								accessibilityLabel: '+/-',
+								testID: 'numpad-key-icon-plusMinus',
+							},
+							{ value: '0', label: '0', testID: 'numpad-key-0' },
+							{ value: decimalSeparator, label: decimalSeparator, testID: 'numpad-key-decimal' },
+						],
+					]}
+				/>
 				{hasDiscounts && (
-					<View
-						className="grid grid-cols-1 gap-1"
-						style={{ width: '72px' } as unknown as ViewStyle}
-					>
-						{discounts.map((discount) => (
-							<Button key={discount} variant="muted" onPress={() => applyDiscount(discount)}>
-								<HStack className="gap-0.5">
-									<Text>{String(discount)}</Text>
-									<Icon name="percent" />
-								</HStack>
-							</Button>
-						))}
-					</View>
+					<Keypad
+						className="w-tile"
+						fit="tile"
+						onPress={(value) => applyDiscount(Number(value))}
+						rows={discounts.map((discount) => [{ value: String(discount), label: `${discount}%` }])}
+					/>
 				)}
 			</HStack>
 		</VStack>
