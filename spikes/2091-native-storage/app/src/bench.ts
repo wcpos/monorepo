@@ -56,8 +56,12 @@ export async function runBench(job: Job, send: Send) {
 		for (const name of ['products', 'orders', 'mutations']) instances[name] = await create(name);
 		await session.proveWal();
 		const seedLag = scale === 'large' && !job.simulator ? lagSampler() : undefined;
-		for (const name of ['products', 'orders'] as const) await seed(instances[name], data[name]);
-		const seedWindow = seedLag?.();
+		let seedWindow: ReturnType<ReturnType<typeof lagSampler>> | undefined;
+		try {
+			for (const name of ['products', 'orders'] as const) await seed(instances[name], data[name]);
+		} finally {
+			seedWindow = seedLag?.();
+		}
 		const lag: Record<string, unknown> = {
 			seed: seedWindow
 				? { maxLagMs: seedWindow.maxLagMs, ticksOver50Ms: seedWindow.ticksOver50Ms }
@@ -115,9 +119,13 @@ export async function runBench(job: Job, send: Send) {
 				const gridLag =
 					name === 'products-grid-asShipped' && i > 0 && !job.simulator ? lagSampler() : undefined;
 				const start = performance.now();
-				const result = await run(),
+				let result: unknown, ms: number;
+				try {
+					result = await run();
 					ms = performance.now() - start;
-				if (gridLag) gridWindows.push(gridLag());
+				} finally {
+					if (gridLag) gridWindows.push(gridLag());
+				}
 				const value = await check(result);
 				cell.signatures.push(await signature(value));
 				cell.setSignatures.push(

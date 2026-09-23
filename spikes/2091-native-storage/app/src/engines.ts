@@ -27,7 +27,7 @@ type Condition = {
 	$elemMatch?: Record<string, string | { $eq: string }>;
 };
 type Selector = Record<string, Condition | Selector[]>;
-// 2210's translated subset, unchanged: unsupported selectors still exercise premium.
+// 2210's translated subset with grouped logical terms; unsupported selectors exercise premium.
 function predicate(
 	selector: Selector,
 	params: (string | number | boolean)[],
@@ -38,9 +38,13 @@ function predicate(
 		Object.entries(selector)
 			.map(([field, raw]) => {
 				if (field === '$and' || field === '$or')
-					return (raw as Selector[])
-						.map((s) => predicate(s, params, primary))
-						.join(field === '$and' ? ' AND ' : ' OR ');
+					return (
+						'(' +
+						(raw as Selector[])
+							.map((s) => predicate(s, params, primary))
+							.join(field === '$and' ? ' AND ' : ' OR ') +
+						')'
+					);
 				const value = raw as Condition,
 					column =
 						field === '_deleted'

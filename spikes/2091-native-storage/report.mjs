@@ -75,9 +75,12 @@ export async function main(directory = new URL('.', import.meta.url)) {
         const bench = group.find(x => x.file.startsWith('results.'));
         lines.push(table(['Row', 'Scenarios', 'Smoke/probe divergences', 'Leg 3 content mismatches', 'Total divergences'], ENGINES.map(engine => {
           const scenarios = r.results.find(x => x.engine === engine)?.scenarios;
-          const mismatch = bench?.results.filter(x => x.engine === engine).flatMap(x => x.cells).filter(c => c.contentMismatch).length;
+          const rows = bench?.results.filter(x => x.engine === engine);
+          const measured = rows?.length && rows.every(x => x.cells?.length) && bench.results.every(other =>
+            rows.some(row => row.scale === other.scale && other.cells.every(cell => row.cells.some(c => c.name === cell.name))));
+          const mismatch = measured ? rows.flatMap(x => x.cells).filter(c => c.contentMismatch).length : undefined;
           const count = scenarios?.filter(s => !s.pass).length;
-          return [engine, scenarios?.length ?? 'not run', count ?? 'not run', mismatch ?? 'not run', count === undefined ? 'not evaluated' : count + (mismatch ?? 0)];
+          return [engine, scenarios?.length ?? 'not run', count ?? 'not run', mismatch ?? 'not run', count === undefined || mismatch === undefined ? 'not evaluated' : count + mismatch];
         })));
         for (const row of r.results) for (const scenario of row.scenarios.filter(s => !s.pass)) lines.push(`- ${row.engine} / ${scenario.name}: ${scenario.detail}`);
       }

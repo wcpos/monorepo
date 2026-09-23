@@ -44,6 +44,15 @@ _Operator: apply the stability gate and the “wins clearly, not narrowly” bar
 - Benchmark compaction retains timings, verdicts and mismatch diagnostics, not sample id/hash
   arrays. Crash records retain transaction counts/sizes and the first 20 log lines with a
   truncation count; full ID snapshots are used only while scoring. Existing scores are unchanged.
+- Repair counts now include only index-rebuild/storage-recovery hooks and non-hook
+  `rebuilt|salvag` messages, not the shared `recovery` prefix or run-failure hooks. They count
+  log lines, not unique repair operations. Recomputed all 30 committed crash trials from
+  their untruncated logs: counts and outcomes are unchanged (filesystem repair evidence is
+  index rebuilds). The 2210 port shares the prefix issue; follow up there, without a re-measure:
+  its control's recorded repairs were index rebuilds, which are repairs.
+- SQL translation now groups `$or`/`$and` terms before combining sibling fields. The 2143/2210
+  `predicate()` has the same ungrouped shape; no measured cell there or here issued a mixed
+  field-plus-`$or` selector. Their recorded cross-row content checks passed; no timings were rerun.
 - Installed RxDB's BEGIN retry helper has no `console.dir`; results record retry counts.
 - Physical signing/USB controls and large-scale measurements remain for the operator.
 
@@ -59,6 +68,13 @@ Observed: after uninstall/reinstall, the iOS release smoke fetched `/job` unaide
 rows, without a manual connection or debugger. All eight binding scenarios pass on every row;
 the same three SQLite query probes fail, with zero filesystem divergences. iOS now uses the
 Documents-file handoff instead of a custom-scheme launch. Bench and crash evidence is unchanged.
+
+Round 3 (standalone verification only): absent benchmark rows/cells and smoke-only totals no
+longer imply zero divergences. Failed sampled operations stop their timers; malformed launch
+URLs leave polling available for Connect; cleanup failures retain smoke results. Console capture
+and worklet forwarding preserve error text/stacks and handle circular values, ignore passing
+assertions, and classify recovery hooks separately from failures. These error paths were tested
+under Node with native boundaries replaced, not rerun in a simulator or on a physical device.
 
 ## Blocked
 

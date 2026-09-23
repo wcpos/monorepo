@@ -86,6 +86,11 @@ export async function writer(args: Job, send: Send) {
 	}
 }
 
+function isRepairLog(line: string): boolean {
+	return line.startsWith('recovery __wcposOn')
+		? /^recovery __wcposOn(StorageRecovery|IndexRebuild):/.test(line)
+		: /rebuilt|salvag/i.test(line);
+}
 export async function scorer(args: Job, send: Send) {
 	if (!args.snapshot) throw new Error('Missing driver snapshot');
 	const capture = captureLogs(() => {
@@ -142,13 +147,16 @@ export async function scorer(args: Job, send: Send) {
 		} else {
 			integrity = capture.logs.filter(
 				(l) =>
-					/pars(e|ing).*fail|syntaxerror|corrupt|invalid json|storage error|_decode\(\) failed|failed|error/i.test(
+					/^recovery __wcposOnStorageRunFailure:/.test(l) ||
+					(/pars(e|ing).*fail|syntaxerror|corrupt|invalid json|storage error|_decode\(\) failed|failed|error/i.test(
 						l
-					) && !/rebuilt|salvaged|recovered/i.test(l)
+					) &&
+						!isRepairLog(l) &&
+						!/recovered/i.test(l))
 			);
 			if (!integrity.length) integrity = ['ok'];
 		}
-		const repairs = capture.logs.filter((l) => /rebuilt|salvag|recover/i.test(l)).length;
+		const repairs = capture.logs.filter(isRepairLog).length;
 		const ledger = score(args.snapshot, docs);
 		const result =
 			integrity.length === 1 && integrity[0] === 'ok'

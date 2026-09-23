@@ -18,6 +18,9 @@ import {
 	createWorkletOpfs,
 	installWorkletRuntimePolyfills,
 } from '@wcpos/worklet-opfs';
+
+import { logText } from './logs';
+
 // Same construction as example/src/storage-runtime.ts; only the per-job root is parameterized.
 function receiveLog(message: string) {
 	console.info(message);
@@ -34,11 +37,13 @@ function exposeStorage(
 		installWorkletRuntimePolyfills({ fs: getWorkletFs() });
 		// Reopen evidence lives on this runtime too; forward it to the RN capture, not a log scraper.
 		for (const method of ['log', 'info', 'warn', 'error', 'debug', 'trace', 'assert'] as const)
-			console[method] = (...values: unknown[]) =>
-				scheduleOnRN(
-					logOnRN,
-					values.map((v) => (typeof v === 'string' ? v : JSON.stringify(v))).join(' ')
-				);
+			console[method] = (...values: unknown[]) => {
+				if (method === 'assert') {
+					if (values[0]) return;
+					values = values.slice(1);
+				}
+				scheduleOnRN(logOnRN, values.map(logText).join(' '));
+			};
 		const globals = globalThis as unknown as Record<string, unknown>;
 		for (const hook of [
 			'__wcposOnStorageRecovery',
@@ -46,7 +51,7 @@ function exposeStorage(
 			'__wcposOnStorageRunFailure',
 		])
 			globals[hook] = (event: unknown) =>
-				scheduleOnRN(logOnRN, `recovery ${hook}: ${JSON.stringify(event)}`);
+				scheduleOnRN(logOnRN, `recovery ${hook}: ${logText(event)}`);
 		const storage = getRxStorageAbstractFilesystem({
 			name: 'worklet-filesystem',
 			abstractFilesystem: createAbstractFilesystemAdapter(createWorkletOpfs({ rootDirectory })),

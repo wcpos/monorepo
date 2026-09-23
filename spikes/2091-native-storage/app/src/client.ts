@@ -119,5 +119,5 @@ Linking.addEventListener('url', (event) => {
 });
 void Linking.getInitialURL()
 	.then(launchURL)
-	.then(poll)
-	.catch((error) => update({ status: 'ERROR', event: String(error) }));
+	.catch((error) => update({ status: 'ERROR', event: String(error) }))
+	.then(poll);

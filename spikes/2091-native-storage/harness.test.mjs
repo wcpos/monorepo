@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { join } from 'node:path';
 const here = new URL('.', import.meta.url);
 // Catches a port changing the deterministic workload's bytes, not merely its counts.
 test('fixture port is byte-identical to both accepted workloads', async () => {
@@ -38,6 +39,7 @@ test('comparison records same-id content drift and suppresses winners', async ()
 // Catches losing the failure verdict when bulky comparison evidence is compacted for commit.
 test('report preserves mismatch diagnostics and failure exit on a second regeneration', async () => {
   const { mkdtemp, mkdir, writeFile, readFile, rm } = await import('node:fs/promises');
+  await mkdir(new URL('.deps/', here), { recursive: true });
   const directory = await mkdtemp(new URL('.deps/report-test-', here));
   try {
     await mkdir(directory + '/results');
@@ -54,27 +56,31 @@ test('report preserves mismatch diagnostics and failure exit on a second regener
     assert.equal(await main(new URL('file://' + directory + '/')), 1);
   } finally { await rm(directory, { recursive: true }); }
 });
-// Catches reintroducing the launch/openurl race or accepting a missing simulator PID.
-test('simulator launches via openurl only and waits for its PID', async () => {
+// Catches regressing the accepted Documents handoff or accepting a missing launch PID.
+test('simulator writes the driver address before plain launch and requires a PID', async () => {
   const source = readFileSync(new URL('driver/ios.mjs', here), 'utf8').replace(/^import .*;\n/gm, '').replace('export async function', 'async function').replaceAll('import.meta.url', JSON.stringify(new URL('driver/ios.mjs', here).href));
   const calls = [];
-  let polls = 0, elapsed = 0;
-  const context = { URL, fileURLToPath: u => u.pathname, bundle: 'com.wcpos.spike2091', performance: { now: () => elapsed },
-    sleep: async ms => { elapsed += ms; },
+  let launchResult = 'com.wcpos.spike2091: 123';
+  const context = { URL, join, fileURLToPath: u => u.pathname, bundle: 'com.wcpos.spike2091',
+    mkdir: async (...args) => calls.push(['mkdir', ...args]),
+    writeFile: async (...args) => calls.push(['write', ...args]),
     command: async (_file, args) => {
       calls.push(args);
       if (args[1] === 'list') return JSON.stringify({ devices: { runtime: [{ udid: 'test', state: 'Booted' }] } });
-      if (args[1] === 'launch') return 'com.wcpos.spike2091: 123';
-      if (args.includes('launchctl')) return ++polls > 1 ? '123\t0\tUIKitApplication:com.wcpos.spike2091[abc]' : '';
-      return '';
+      if (args[1] === 'get_app_container') return '/container';
+      if (args[1] === 'launch') return launchResult;
+      throw new Error(`Unexpected command: ${args}`);
     } };
-  const ios = vm.runInNewContext(source + '; ios', context);
-  const device = await ios('test', true);
-  await device.launch('spike2091://driver');
-  assert.equal(calls.some(args => args[1] === 'launch'), false);
-  assert.equal(polls, 2);
-  polls = -100000;
-  await assert.rejects(device.launch('spike2091://driver'), /No launch PID/);
+  const device = await vm.runInNewContext(source + '; ios', context)('test', true);
+  await device.launch('http://localhost:48091');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.slice(1))), [
+    ['simctl', 'get_app_container', 'test', 'com.wcpos.spike2091', 'data'],
+    ['mkdir', '/container/Documents', { recursive: true }],
+    ['write', '/container/Documents/spike2091-driver.txt', 'http://localhost:48091'],
+    ['simctl', 'launch', 'test', 'com.wcpos.spike2091'],
+  ]);
+  launchResult = 'no pid';
+  await assert.rejects(device.launch('http://localhost:48091'), /No launch PID/);
 });
 // Catches serializing the scorer's full ID ledger or unbounded logs into trial files.
 test('crash records retain counts and outcomes but not snapshot IDs', async () => {
@@ -106,4 +112,159 @@ test('data fetch returns a decoded Blob and passes network requests through', as
   const options = { method: 'POST', body: 'test' };
   assert.equal(await context.fetch('http://localhost/job', options), network);
   assert.deepEqual(calls, [['http://localhost/job', options]]);
+});
+
+// Native dependencies are replaced at the runtime boundary; execute the actual TS module.
+async function loadTS(file, dependencies = {}, globals = {}, extra = '') {
+  const ts = (await import('./app/node_modules/typescript/lib/typescript.js')).default;
+  const source = readFileSync(new URL(`app/src/${file}.ts`, here), 'utf8');
+  const context = { exports: {}, console: { ...console }, Error, URL, performance,
+    require: name => { if (!(name in dependencies)) throw new Error(`Unexpected import: ${name}`); return dependencies[name]; },
+    ...globals };
+  vm.runInNewContext(ts.transpile(source + extra, { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }), context);
+  return context;
+}
+const core = { fillWithDefaultSettings: x => x, normalizeMangoQuery: (_s, q) => q, prepareQuery: (_s, q) => ({ query: q }) };
+
+test('mixed field and OR selector keeps OR inside its own SQL group', async () => {
+  const { exports: { predicate } } = await loadTS('engines', Object.fromEntries([
+    'expo-file-system', 'expo-opfs', 'expo-sqlite', 'rxdb/plugins/core',
+    'rxdb-premium/plugins/storage-filesystem-expo', 'rxdb-premium/plugins/storage-sqlite',
+    './storage-runtime', './sqlite-basics-expo'].map(name => [name, {}])), {}, '\nexports.predicate = predicate;');
+  const params = [];
+  assert.equal(predicate({ stockStatus: { $eq: 'instock' }, $or: [{ id: { $eq: 'a' } }, { id: { $eq: 'b' } }] }, params, 'id'),
+    "(JSON_EXTRACT(data, '$.stockStatus') = ? AND ((id = ?) OR (id = ?)))");
+  assert.deepEqual(params, ['instock', 'a', 'b']);
+});
+
+test('report leaves missing benchmark rows/cells and smoke-only totals unevaluated', async () => {
+  const { mkdtemp, mkdir, writeFile, readFile, rm } = await import('node:fs/promises');
+  await mkdir(new URL('.deps/', here), { recursive: true });
+  const directory = await mkdtemp(new URL('.deps/report-test-', here));
+  try {
+    await mkdir(directory + '/results');
+    await writeFile(directory + '/RESULTS.md', '<!-- generated:start --><!-- generated:end -->');
+    const environment = { platform: 'ios', device: 'test', simulator: true };
+    await writeFile(directory + '/results/smoke.ios.test.json', JSON.stringify({ environment, complete: true,
+      results: [{ engine: 'expo-sqlite', scenarios: [{ pass: true }] }] }));
+    const { main } = await import('./report.mjs');
+    for (const results of [null, [], [{ engine: 'expo-sqlite', scale: 'small', cells: [] }]]) {
+      if (results) await writeFile(directory + '/results/results.ios.test.json', JSON.stringify({ environment, complete: false, results }));
+      assert.equal(await main(new URL('file://' + directory + '/')), 0);
+      assert.match(await readFile(directory + '/RESULTS.md', 'utf8'), /expo-sqlite \| 1 \| 0 \| not run \| not evaluated/);
+    }
+  } finally { await rm(directory, { recursive: true }); }
+});
+
+test('capture preserves errors, circular values and failed assertions without throwing', async () => {
+  const context = await loadTS('logs');
+  const capture = context.exports.captureLogs(() => { throw new Error('observer failed'); });
+  const error = new Error('corrupt data'), circular = {}; circular.self = circular;
+  try {
+    context.console.error(error);
+    assert.match(capture.logs[0], /corrupt data/);
+    assert.ok(capture.logs[0].includes(error.stack));
+    assert.doesNotThrow(() => context.console.info(circular, undefined, 1n));
+    context.__wcposOnStorageRunFailure({ error, circular });
+    assert.match(capture.logs.at(-1), /corrupt data/);
+    const before = capture.logs.length;
+    context.console.assert(true, 'error passing assertion');
+    assert.equal(capture.logs.length, before);
+    context.console.assert(false, 'failed assertion');
+    assert.equal(capture.logs.at(-1), 'failed assertion');
+    assert.doesNotThrow(() => context.console.warn('open transaction error (will retry)'));
+    assert.equal(capture.logs.length, before + 2);
+  } finally { capture.restore(); }
+});
+
+test('worklet forwarding retains errors and circular hook events', async () => {
+  const logs = [], dependencies = {
+    './logs': (await loadTS('logs')).exports,
+    'react-native-worklets': { scheduleOnRN: (fn, ...args) => fn(...args) },
+    'rxdb-premium/plugins/storage-abstract-filesystem': { getRxStorageAbstractFilesystem: () => ({}) },
+    '@wcpos/rxdb-storage-worklet': { exposeWorkletRxStorage: async () => {} },
+    '@wcpos/react-native-worklet-fs': { getWorkletFs: () => ({}) },
+    '@wcpos/worklet-opfs': { installWorkletRuntimePolyfills() {}, createAbstractFilesystemAdapter() {}, createWorkletOpfs() {}, createPromiseQueueLock() {} },
+  };
+  const context = await loadTS('storage-runtime', dependencies, {}, '\nexports.exposeStorage = exposeStorage;');
+  context.exports.exposeStorage('/test', 'receive', () => {}, () => {}, line => logs.push(line));
+  const error = new Error('corrupt worklet'), circular = {}; circular.self = circular;
+  context.console.error(error);
+  assert.ok(logs[0].includes(error.stack));
+  assert.doesNotThrow(() => context.console.info(circular));
+  assert.doesNotThrow(() => context.__wcposOnStorageRunFailure({ error, circular }));
+  assert.match(logs.at(-1), /corrupt worklet/);
+  const before = logs.length;
+  context.console.assert(true, 'error passing assertion');
+  assert.equal(logs.length, before);
+});
+
+test('crash scorer distinguishes repair hooks from run failures', async () => {
+  for (const [line, repairs, outcome] of [
+    ['recovery __wcposOnStorageRunFailure: {"error":"failed after rebuilt"}', 0, 'integrity-failed'],
+    ['recovery __wcposOnStorageRecovery: {"error":"failed parse"}', 1, 'ok'],
+    ['recovery __wcposOnIndexRebuild: {"error":"failed parse"}', 1, 'ok'],
+    ['rebuilt indexes', 1, 'ok'], ['salvaged records', 1, 'ok'], ['recover pending', 0, 'ok'],
+  ]) {
+    const { exports: { scorer } } = await loadTS('crash', {
+      'rxdb/plugins/core': core, 'rxdb-premium/plugins/storage-sqlite': {}, './fixtures': {},
+      './ledger': { score: () => ({ outcome: 'ok' }) },
+      './logs': { captureLogs: () => ({ logs: [line], restore() {} }) },
+      './engines': { openEngine: async () => ({ create: async () => ({ query: async () => ({ documents: [] }), changeStream: () => ({ subscribe: () => ({ unsubscribe() {} }) }) }), proveWal: async () => {} }) },
+    });
+    const result = await scorer({ row: 'expo-filesystem-js', snapshot: {} }, async () => {});
+    assert.equal(result.repairs, repairs, line);
+    assert.equal(result.outcome, outcome, line);
+  }
+});
+
+test('benchmark stops seed and grid lag samplers on failure', async () => {
+  for (const failure of ['seed', 'grid']) {
+    let active = 0, queries = 0;
+    const { exports: { runBench } } = await loadTS('bench', {
+      'rxdb/plugins/core': core, './schemas': { schemas: {} }, './fixtures': { fixtures: () => ({ products: [{}], orders: [{}] }) },
+      './metrics': { heap: () => ({}), diskBytes: () => ({}), signature: async () => 'hash' },
+      './lag-sampler': { lagSampler: () => { active++; return () => { active--; return { maxLagMs: 0, ticksOver50Ms: 0 }; }; } },
+      './engines': { openEngine: async () => ({
+        create: async () => ({ bulkWrite: async () => { if (failure === 'seed') throw new Error('seed failed'); return { error: [] }; },
+          query: async () => { if (++queries === 2) throw new Error('grid failed'); return { documents: [] }; } }),
+        proveWal: async () => {}, analyze: async () => {}, close: async () => {},
+      }) },
+    });
+    await assert.rejects(runBench({ scale: 'large', simulator: false }, async () => {}), new RegExp(`${failure} failed`));
+    assert.equal(active, 0, failure);
+  }
+});
+
+test('malformed initial URL still allows Connect to start fetching jobs', async () => {
+  const timers = [], fetched = [];
+  const context = await loadTS('client', {
+    'expo-linking': { addEventListener() {}, getInitialURL: async () => 'spike2091://driver?url=bad', parse: () => ({ queryParams: { url: 'bad' } }) },
+    'expo-file-system': { Paths: {}, File: class { exists = false; write() {} } },
+    './logs': {}, './polyfills': {}, './versions.json': {},
+  }, { setTimeout: fn => timers.push(fn), fetch: async url => { fetched.push(url); return { status: 204 }; } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(context.exports.getState().status, 'ERROR');
+  context.exports.connect('http://localhost:48091');
+  assert.equal(timers.length, 1, 'poll was started despite invalid URL');
+  timers.shift()();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(fetched, ['http://localhost:48091/job']);
+});
+
+test('smoke keeps recorded results when cleanup rejects and closes after WAL failure', async () => {
+  const { exports: { runConformanceSmoke } } = await loadTS('conformance-smoke', {
+    'rxdb/plugins/core': core, 'rxdb/plugins/test-utils': { human: {} },
+  }, { console: { error() {} } });
+  for (const walFailure of [false, true]) {
+    let closed = 0;
+    const instance = { changeStream: () => ({ subscribe: () => ({ unsubscribe() {} }) }),
+      close: async () => { closed++; throw new Error('close failed'); }, remove: async () => { throw new Error('remove failed'); } };
+    const observed = [];
+    const result = await runConformanceSmoke({ create: async () => instance,
+      proveWal: async () => { if (walFailure) throw new Error('WAL failed'); } }, r => observed.push(r));
+    assert.equal(result.length, walFailure ? 1 : 8);
+    assert.deepEqual([...result], observed);
+    assert.ok(closed > 0);
+  }
 });

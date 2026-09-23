@@ -71,11 +71,12 @@ export async function runConformanceSmoke(
 		}
 	};
 
-	let instance: Awaited<ReturnType<typeof open>>;
+	let instance!: Awaited<ReturnType<typeof open>>;
 	try {
 		instance = await open();
 		await session.proveWal();
 	} catch (error) {
+		await instance?.close().catch(() => {});
 		const result = { name: 'initialization', pass: false, detail: String(error) };
 		console.error(`CONFORMANCE initialization FAIL ${result.detail}`);
 		results.push(result);
@@ -267,7 +268,7 @@ export async function runConformanceSmoke(
 	try {
 		await instance.remove();
 	} catch {
-		await instance.close();
+		await instance.close().catch(() => {});
 	}
 	return results;
 }
