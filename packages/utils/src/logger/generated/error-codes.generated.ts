@@ -143,8 +143,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		symbol: 'LOCAL_DB_CORRUPTED',
 		domain: 'SYNC',
 		severity: 'error',
-		actionHint:
-			'Once nothing is waiting to send, use Clear & re-download… on just the damaged row in Store health → Database.',
+		actionHint: 'Read the help page before using Clear & re-download… on the damaged data.',
 		dataSafety: 'data-at-risk',
 		summary: 'Local store data is damaged and needs repair before syncing can continue.',
 	},

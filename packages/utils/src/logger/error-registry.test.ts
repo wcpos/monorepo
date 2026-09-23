@@ -316,6 +316,18 @@ describe('error registry', () => {
 		}
 	);
 
+	// SYNC111's fix is a per-collection Clear & re-download…, which is safe only
+	// once nothing is waiting to send and every open cart is saved (clearing
+	// Orders deletes a never-saved cart). A one-line hint cannot carry both
+	// checks, and toasts show it without the steps, so it points at the page.
+	it('sends SYNC111 to the help page before any Clear & re-download', () => {
+		const entry = entryFor('SYNC111');
+		expect(entry.actionHint).toMatch(/^Read the help page before using Clear & re-download/);
+		const guidance = entry.troubleshooting.join(' ');
+		expect(guidance).toContain('changes waiting to send is 0');
+		expect(guidance).toContain('save every open cart with Save to Server');
+	});
+
 	it('documents the passive SYNC411 flood alarm without implying throttling', () => {
 		const entry = entryFor('SYNC411');
 		const guidance = entry.troubleshooting.join(' ');

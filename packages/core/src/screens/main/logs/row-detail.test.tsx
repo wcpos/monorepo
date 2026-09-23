@@ -280,7 +280,7 @@ describe('RowDetail', () => {
 
 		expect(
 			screen.getByText(
-				"Don't clear or reload this device's data. Once nothing is waiting to send, use Clear & re-download… on just the damaged row in Store health → Database."
+				"Don't clear or reload this device's data. Read the help page before using Clear & re-download… on the damaged data."
 			)
 		).not.toBeNull();
 		expect(screen.queryByText(/Contact support/)).toBeNull();
