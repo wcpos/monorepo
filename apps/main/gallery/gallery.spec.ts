@@ -54,38 +54,23 @@ test('gallery cells', async ({ page }, testInfo) => {
 				]),
 			SETTLE_BOUND_MS
 		);
-		// An open sheet or popover with a search field is shot with that field focused and
-		// its ring painted. The Input paints the ring from React state that only the DOM
-		// focus event sets; React focuses the field at mount, and on the runner some
-		// navigations had not handed the page window focus by then, so the field was active
-		// with no event ever fired (every DOM fact read true, the ring was missing). Blur and
-		// focus again now, with the page focused, so the event reaches React.
+		// An isolated cell is shot with no field focused. An open sheet or popover focuses
+		// its search field on mount, and the runner paints that field's ring or not from one
+		// shoot to the next with the ring's class present either way (the update run of
+		// 5d2bc0e5e held the class on every cell and drew the ring on two of twelve dark sheet
+		// cells), so the focused look is the Input's own story and the overlay's cell shows
+		// the panel. The blur is asserted, so a shot never carries focus into a baseline.
 		if (isolated) {
-			const focus = await page.evaluate(async (cellId) => {
+			const focused = await page.evaluate(async (cellId) => {
 				const root = document.querySelector<HTMLElement>(`[data-cell-id="${cellId}"]`);
 				const field = root?.querySelector<HTMLElement>('input,textarea');
-				if (!field) return null;
+				if (!field) return false;
 				field.blur();
-				field.focus({ preventScroll: true });
-				// React flushes the event's state after this task; the ring is a box-shadow on
-				// the field's wrapper, read once the next frame has styled it.
+				// React flushes the blur's state after this task; the ring leaves on the next frame.
 				await new Promise((resolve) => requestAnimationFrame(resolve));
-				const painted = [field, field.parentElement, field.parentElement?.parentElement].some(
-					(el) => el != null && getComputedStyle(el).boxShadow !== 'none'
-				);
-				return {
-					active: document.activeElement === field,
-					pageFocus: document.hasFocus(),
-					painted,
-				};
+				return root!.contains(document.activeElement);
 			}, id);
-			// A shot without its precondition is not a baseline: fail before the capture.
-			if (focus)
-				expect(focus, `focus not settled on ${id}-${theme}`).toEqual({
-					active: true,
-					pageFocus: true,
-					painted: true,
-				});
+			expect(focused, `a field still holds focus in ${id}-${theme}`).toBe(false);
 		}
 		if (smoke)
 			await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
