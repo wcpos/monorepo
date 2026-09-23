@@ -29,6 +29,7 @@ jest.mock('@rn-primitives/types', () => ({}));
 
 jest.mock('tailwind-merge', () => ({
 	twMerge: (...args: string[]) => args.filter(Boolean).join(' '),
+	extendTailwindMerge: () => (...args: string[]) => args.filter(Boolean).join(' '),
 }));
 
 jest.mock('clsx', () => ({
