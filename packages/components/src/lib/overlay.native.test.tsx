@@ -31,7 +31,7 @@ jest.mock('react-native', () => {
 	};
 });
 jest.mock('react-native-safe-area-context', () => ({
-	useSafeAreaInsets: () => ({ top: 20, bottom: 34, left: 0, right: 0 }),
+	useSafeAreaInsets: () => ({ top: 20, bottom: 34, left: 12, right: 12 }),
 }));
 jest.mock('../keyboard-controller', () => ({
 	KeyboardAvoidingView: jest.requireMock('react-native').View,
@@ -99,11 +99,22 @@ it.each([true, false])('pins a real root wrapper only when pinned=%s', (pinned) 
 	);
 	const wrappers = mockViews.filter((props) => props.collapsable === false);
 	expect(wrappers).toHaveLength(pinned ? 1 : 0);
-	if (pinned) {
-		expect(wrappers[0].style).toBe(StyleSheet.absoluteFill);
-		expect(container.firstElementChild).toContainElement(screen.getByTestId('d-scrim'));
-		expect(container.firstElementChild).not.toBe(screen.getByTestId('d-scrim'));
-	} else expect(container.firstElementChild).toBe(screen.getByTestId('d-scrim'));
+	expect(mockViews[0].collapsable).toBe(pinned ? false : undefined);
+	expect(StyleSheet.flatten(mockViews[0].style)).toMatchObject(StyleSheet.absoluteFill);
+	expect(container.firstElementChild).toBe(screen.getByTestId('d-scrim').parentElement);
+	expect(container.firstElementChild).toContainElement(screen.getByTestId('panel'));
+});
+
+it('keeps the panel outside the hidden sibling scrim', () => {
+	render(
+		<OverlayShell presentation="right" open Scrim={Pressable} testID="d">
+			<View testID="panel" />
+		</OverlayShell>
+	);
+	const scrim = screen.getByTestId('d-scrim');
+	expect(scrim).not.toContainElement(screen.getByTestId('panel'));
+	expect(scrim).toBeEmptyDOMElement();
+	expect(mockScrimProps.at(-1)?.children).toBeUndefined();
 });
 
 function Probe() {
@@ -114,7 +125,7 @@ function Probe() {
 it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
 	'%s configures native insets, accessibility, keyboard and panel motion',
 	(presentation) => {
-		render(
+		const { container } = render(
 			<OverlayShell presentation={presentation} open Scrim={Pressable} testID="d">
 				<Probe />
 			</OverlayShell>
@@ -126,13 +137,18 @@ it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
 			accessibilityElementsHidden: true,
 		});
 		expect(scrim.onPress).toBeUndefined();
-		expect(StyleSheet.flatten(scrim.style as ViewProps['style'])).toMatchObject({
+		expect(scrim.style).toBe(StyleSheet.absoluteFill);
+		expect(StyleSheet.flatten(mockViews[0].style)).toMatchObject({
 			paddingTop: 20,
 			paddingBottom: 34,
+			paddingLeft: 12,
+			paddingRight: 12,
 		});
-		expect(screen.getByTestId('d-scrim')).toHaveStyle({
+		expect(container.firstElementChild).toHaveStyle({
 			paddingTop: '20px',
 			paddingBottom: '34px',
+			paddingLeft: '12px',
+			paddingRight: '12px',
 		});
 		const fullHeight = ['left', 'right', 'page'].includes(presentation);
 		expect(mockViews).toContainEqual(
@@ -140,9 +156,11 @@ it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
 				behavior: 'padding',
 				keyboardVerticalOffset: 34,
 				className: fullHeight ? 'h-full' : undefined,
+				pointerEvents: 'box-none',
 			})
 		);
 		const panel = mockAnimatedViews.at(-1)!;
+		expect(panel.pointerEvents).toBe('box-none');
 		expect(panel.entering).toBe(OVERLAY_MOTION[presentation].entering);
 		expect(panel.exiting).toBe(OVERLAY_MOTION[presentation].exiting);
 		expect(panel.className?.split(' ')).toEqual(

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { ScrollView, type ScrollViewProps, View, type ViewProps } from 'react-native';
 
 import * as DialogPrimitive from '@rn-primitives/dialog';
+import { useComposedRefs } from '@rn-primitives/hooks';
 import { Slot } from '@rn-primitives/slot';
 import { router } from 'expo-router';
 
@@ -18,7 +19,8 @@ import type { SlottablePressableProps, SlottableTextProps } from '@rn-primitives
 export type DialogSide = 'center' | 'left' | 'right' | 'bottom';
 export type DialogSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
 export type DialogProps = DialogPrimitive.RootProps & { route?: boolean; onClose?: () => void };
-export type DialogContentProps = Omit<DialogPrimitive.ContentProps, 'children'> & {
+export type DialogContentProps = Omit<DialogPrimitive.ContentProps, 'children' | 'asChild'> & {
+	ref?: React.Ref<DialogPrimitive.ContentRef>;
 	side?: DialogSide;
 	size?: DialogSize;
 	portalHost?: string;
@@ -79,6 +81,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element {
 	const presentation: OverlayPresentation =
 		phone && (side === 'left' || side === 'right') ? 'page' : side;
 	const { route } = React.useContext(RouteContext);
+	const renderInline = route || (inline ?? false);
 	const { open } = DialogPrimitive.useRootContext();
 	const container = usePortalContainer(portalHost);
 	const shell = (
@@ -92,7 +95,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element {
 			<DialogPanel testID={testID} {...props} />
 		</OverlayShell>
 	);
-	return (inline ?? route) ? (
+	return renderInline ? (
 		shell
 	) : (
 		<DialogPrimitive.Portal hostName={portalHost} container={container}>
@@ -102,8 +105,12 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element {
 }
 function DialogPanel(allProps: DialogContentProps) {
 	const { size = 'md', className, children, ...rest } = allProps;
-	const { closeLabel, closeButtonProps, onOpenAutoFocus, testID, ...props } = rest;
+	const { closeLabel, closeButtonProps, onOpenAutoFocus, testID, ref, ...props } = rest;
 	const { presentation, deferAutoFocus, onPanelNode } = useOverlay();
+	const composedRef = useComposedRefs(
+		ref,
+		onPanelNode as unknown as React.Ref<DialogPrimitive.ContentRef>
+	);
 	const { open } = DialogPrimitive.useRootContext();
 	const sizeClass =
 		presentation === 'center' || presentation === 'left' || presentation === 'right'
@@ -111,7 +118,7 @@ function DialogPanel(allProps: DialogContentProps) {
 			: undefined;
 	return (
 		<DialogPrimitive.Content
-			ref={onPanelNode as unknown as React.Ref<DialogPrimitive.ContentRef>}
+			ref={composedRef}
 			onOpenAutoFocus={
 				deferAutoFocus
 					? (event) => {
@@ -131,12 +138,13 @@ function DialogPanel(allProps: DialogContentProps) {
 			{...props}
 		>
 			{children}
-			<View className="absolute top-2 right-2">
+			<View className="absolute top-1 right-1">
 				<DialogClose asChild>
 					<IconButton
 						name="xmark"
+						className="h-ctl w-ctl items-center justify-center"
 						aria-label={closeLabel ?? 'Close'}
-						testID={closeButtonProps?.testID ?? (testID ? `${testID}-close` : undefined)}
+						testID={closeButtonProps?.testID ?? (testID ? `${testID}-close` : 'dialog-close')}
 						{...closeButtonProps}
 					/>
 				</DialogClose>

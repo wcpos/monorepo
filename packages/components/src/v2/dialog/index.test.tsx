@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import * as React from 'react';
-import type { ScrollViewProps, TextProps, ViewProps } from 'react-native';
+import type { PressableProps, ScrollViewProps, TextProps, ViewProps } from 'react-native';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { router } from 'expo-router';
@@ -26,12 +26,17 @@ import type * as Primitive from '@rn-primitives/dialog';
 const mockPortalCalls: Primitive.PortalProps[] = [];
 const mockAutoFocusEvents: { preventDefault: jest.Mock }[] = [];
 const mockScrimProps: Primitive.OverlayProps[] = [];
+const mockPressableProps: PressableProps[] = [];
 
 jest.mock('react-native', () => {
 	const actual = jest.requireActual<typeof import('react-native')>('react-native');
 	return {
 		...actual,
 		useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
+		Pressable: (props: PressableProps) => {
+			mockPressableProps.push(props);
+			return <actual.Pressable {...props} />;
+		},
 		// Like page-bar's harness, preserve classes that RN-web drops without Uniwind.
 		View: ({ children, className, testID }: ViewProps) => (
 			<div className={className} data-testid={testID}>
@@ -234,6 +239,7 @@ beforeEach(() => {
 	mockPortalCalls.length = 0;
 	mockAutoFocusEvents.length = 0;
 	mockScrimProps.length = 0;
+	mockPressableProps.length = 0;
 });
 afterEach(() => jest.useRealTimers());
 
@@ -292,17 +298,22 @@ it('3. useDialog throws outside Dialog', () => {
 	expect(() => render(<CloseFromContext />)).toThrow('Dialog context is missing');
 });
 
-it('4. route mode opens inline and closes with router.back', () => {
-	render(
-		<Dialog route>
-			<DialogContent testID="d">Task</DialogContent>
-		</Dialog>
-	);
-	expect(screen.getByTestId('d')).toBeInTheDocument();
-	expect(mockPortalCalls).toHaveLength(0);
-	fireEvent.click(screen.getByTestId('d-close'));
-	expect(router.back).toHaveBeenCalledTimes(1);
-});
+it.each([undefined, false])(
+	'4. route mode forces inline=%s and closes with router.back',
+	(inline) => {
+		render(
+			<Dialog route>
+				<DialogContent inline={inline} testID="d">
+					Task
+				</DialogContent>
+			</Dialog>
+		);
+		expect(screen.getByTestId('d')).toBeInTheDocument();
+		expect(mockPortalCalls).toHaveLength(0);
+		fireEvent.click(screen.getByTestId('d-close'));
+		expect(router.back).toHaveBeenCalledTimes(1);
+	}
+);
 it('4. route mode uses the supplied onClose', () => {
 	const onClose = jest.fn();
 	render(
@@ -401,6 +412,9 @@ it('7. names the close control and lets callers override its label and testID', 
 		</Dialog>
 	);
 	expect(screen.getByTestId('d-close')).toHaveAttribute('aria-label', 'Close');
+	expect(
+		mockPressableProps.find((props) => props.testID === 'd-close')?.className?.split(' ')
+	).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl']));
 	rerender(
 		<Dialog open>
 			<DialogContent inline testID="d" closeLabel="Dismiss" closeButtonProps={{ testID: 'custom' }}>
@@ -410,6 +424,12 @@ it('7. names the close control and lets callers override its label and testID', 
 	);
 	expect(screen.getByTestId('custom')).toHaveAttribute('aria-label', 'Dismiss');
 	expect(screen.queryByTestId('d-close')).not.toBeInTheDocument();
+	rerender(
+		<Dialog open>
+			<DialogContent inline>Task</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('dialog-close')).toBeInTheDocument();
 });
 
 it.each(['right', 'center'] as const)(
@@ -491,6 +511,21 @@ it.each(['animation', 'timer'] as const)(
 		expect(focus).toHaveBeenCalledTimes(1);
 	}
 );
+it('11. composes the caller ref with focus after the right panel settles', () => {
+	jest.useFakeTimers();
+	const ref = React.createRef<Primitive.ContentRef>();
+	render(
+		<Dialog open>
+			<DialogContent inline testID="d" side="right" ref={ref}>
+				<Input data-testid="field" placeholder="Email address" />
+			</DialogContent>
+		</Dialog>
+	);
+	expect(ref.current).toBe(screen.getByTestId('d'));
+	expect(screen.getByTestId('field')).not.toHaveFocus();
+	fireEvent.animationEnd(screen.getByTestId('d'));
+	expect(screen.getByTestId('field')).toHaveFocus();
+});
 it('11. center does not defer or focus through the settle path', () => {
 	jest.useFakeTimers();
 	render(
@@ -509,6 +544,7 @@ it('11. center does not defer or focus through the settle path', () => {
 it('12. keeps the platform boundary in the shell and exports only the new dialog API', () => {
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
 	const shell = readFileSync(`${__dirname}/../../lib/overlay.tsx`, 'utf8');
+	expect(source).toContain("'children' | 'asChild'");
 	expect(source).not.toContain('Platform');
 	expect(shell.match(/Platform\.OS/g)).toHaveLength(1);
 	expect(source).not.toMatch(

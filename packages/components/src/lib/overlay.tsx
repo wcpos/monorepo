@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, type StyleProp, StyleSheet, View, type ViewStyle } from 'react-native';
 
 import Animated, {
 	FadeIn,
@@ -18,7 +18,17 @@ import { OVERLAY_FADE, PANEL_SLIDE, PANEL_SLIDE_OUT, SHEET_RISE } from './motion
 import { cn } from './utils';
 const isWeb = Platform.OS === 'web';
 export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page';
-export type OverlayScrimComponent = React.ComponentType<any>;
+export type OverlayScrimProps = {
+	children?: React.ReactNode;
+	className?: string;
+	style?: StyleProp<ViewStyle>;
+	testID?: string;
+	focusable?: boolean;
+	accessible?: boolean;
+	importantForAccessibility?: 'auto' | 'yes' | 'no' | 'no-hide-descendants';
+	accessibilityElementsHidden?: boolean;
+};
+export type OverlayScrimComponent = React.ComponentType<OverlayScrimProps>;
 export type OverlayShellProps = {
 	presentation: OverlayPresentation;
 	open: boolean;
@@ -132,6 +142,19 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			node.removeEventListener('animationend', onAnimationEnd);
 		};
 	}, [node, open, presentation]);
+	/**
+	 * `collapsable={false}` below is load-bearing on Android/Fabric, not a style choice.
+	 * This scrim is the screen's root view. Until its background lands it is layout-only,
+	 * so Fabric flattens it away and mounts its child straight into RNSScreenContentWrapper;
+	 * the commit that gives it a background un-flattens it, and Fabric then re-parents that
+	 * child into the newly created view. A re-parent inside a screen that react-native-screens
+	 * has put into a removal transition is fatal: `Screen.startRemovalTransition()` calls
+	 * `startViewTransition()` on every descendant, so Android leaves `mParent` set on
+	 * `removeView` and the follow-up insert throws "View already has a parent"
+	 * (software-mansion/react-native-screens#3249). The POS checkout -> receipt
+	 * `router.replace` hits exactly that window. Pinning the view means there is no
+	 * re-parent to defeat.
+	 */
 	const shell = isWeb ? (
 		<Scrim
 			className={cn(
@@ -150,20 +173,35 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			{children}
 		</Scrim>
 	) : (
-		<Scrim
-			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
-			className={cn('bg-scrim flex', align[presentation])}
-			accessible={false}
-			importantForAccessibility="no"
-			accessibilityElementsHidden
-			testID={testID ? `${testID}-scrim` : undefined}
+		<View
+			collapsable={pinned ? false : undefined}
+			style={[
+				StyleSheet.absoluteFill,
+				{
+					paddingTop: insets.top,
+					paddingBottom: insets.bottom,
+					paddingLeft: insets.left,
+					paddingRight: insets.right,
+				},
+			]}
+			className={cn('flex bg-transparent', align[presentation])}
 		>
+			<Scrim
+				style={StyleSheet.absoluteFill}
+				className="bg-scrim"
+				accessible={false}
+				importantForAccessibility="no"
+				accessibilityElementsHidden
+				testID={testID ? `${testID}-scrim` : undefined}
+			/>
 			<KeyboardAvoidingView
+				pointerEvents="box-none"
 				behavior="padding"
 				keyboardVerticalOffset={insets.bottom}
 				className={fullHeight ? 'h-full' : undefined}
 			>
 				<Animated.View
+					pointerEvents="box-none"
 					entering={OVERLAY_MOTION[presentation].entering}
 					exiting={OVERLAY_MOTION[presentation].exiting}
 					className={cn('max-h-full max-w-full', fullHeight && 'h-full')}
@@ -171,24 +209,11 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 					{children}
 				</Animated.View>
 			</KeyboardAvoidingView>
-		</Scrim>
+		</View>
 	);
-	/**
-	 * `collapsable={false}` below is load-bearing on Android/Fabric, not a style choice.
-	 * This scrim is the screen's root view. Until its background lands it is layout-only,
-	 * so Fabric flattens it away and mounts its child straight into RNSScreenContentWrapper;
-	 * the commit that gives it a background un-flattens it, and Fabric then re-parents that
-	 * child into the newly created view. A re-parent inside a screen that react-native-screens
-	 * has put into a removal transition is fatal: `Screen.startRemovalTransition()` calls
-	 * `startViewTransition()` on every descendant, so Android leaves `mParent` set on
-	 * `removeView` and the follow-up insert throws "View already has a parent"
-	 * (software-mansion/react-native-screens#3249). The POS checkout -> receipt
-	 * `router.replace` hits exactly that window. Pinning the view means there is no
-	 * re-parent to defeat.
-	 */
 	return (
 		<OverlayContext.Provider value={{ presentation, deferAutoFocus, onPanelNode }}>
-			{pinned ? (
+			{isWeb && pinned ? (
 				<View collapsable={false} style={StyleSheet.absoluteFill}>
 					{shell}
 				</View>
