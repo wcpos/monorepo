@@ -162,7 +162,9 @@ function SwitchNative({ className, size = 'default', ref, ...props }: SwitchNati
 			}}
 		>
 			<SwitchPrimitives.Root
-				className={cn(nativeSwitchVariants({ size }), 'absolute inset-0 bg-transparent')}
+				// No size of its own: it fills whatever the wrapper measures, so a caller's
+				// width lands on the same track the thumb's travel is read from.
+				className="absolute inset-0 flex-row items-center bg-transparent p-0.5"
 				{...props}
 				ref={ref}
 			>
