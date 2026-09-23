@@ -17,7 +17,7 @@
     "premiumMarkers": 47,
     "expoOpfsShippedPatch": true,
     "beginRetryConsoleDir": false,
-    "measuredAt": "2026-09-23T18:57:33.005Z",
+    "measuredAt": "2026-09-23T20:08:44.202Z",
     "sqlite": "3.50.3"
   },
   "rows": [
@@ -29,8 +29,8 @@
   "results": [
     {
       "engine": "expo-filesystem-js",
-      "dir": "spike-2091/smoke/expo-filesystem-js/spike-0eb68441-f8a4-4c70-8822-7198070f32bd",
-      "db": "spike-0eb68441-f8a4-4c70-8822-7198070f32bd",
+      "dir": "spike-2091/smoke/expo-filesystem-js/spike-a2ee84d5-1881-4d04-a6db-9c814e6fc345",
+      "db": "spike-a2ee84d5-1881-4d04-a6db-9c814e6fc345",
       "scenarios": [
         {
           "name": "bulk-write",
@@ -93,8 +93,8 @@
     },
     {
       "engine": "worklet-filesystem",
-      "dir": "spike-2091/smoke/worklet-filesystem/spike-5c554dd5-8088-42e0-837b-c6d3ad6b615b",
-      "db": "spike-5c554dd5-8088-42e0-837b-c6d3ad6b615b",
+      "dir": "spike-2091/smoke/worklet-filesystem/spike-5db14bd8-60b6-4152-8eb0-061499830a10",
+      "db": "spike-5db14bd8-60b6-4152-8eb0-061499830a10",
       "scenarios": [
         {
           "name": "bulk-write",
@@ -157,8 +157,8 @@
     },
     {
       "engine": "expo-sqlite",
-      "dir": "spike-2091/smoke/expo-sqlite/spike-4461f595-7600-4de9-8d8c-c86ba335f9e0",
-      "db": "spike-4461f595-7600-4de9-8d8c-c86ba335f9e0",
+      "dir": "spike-2091/smoke/expo-sqlite/spike-0c0ee2c0-b2a1-4446-9e4e-d71b2b1b1540",
+      "db": "spike-0c0ee2c0-b2a1-4446-9e4e-d71b2b1b1540",
       "scenarios": [
         {
           "name": "bulk-write",

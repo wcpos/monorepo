@@ -6,6 +6,7 @@ import { parseArgs } from 'node:util';
 import { ios } from './ios.mjs';
 import { android } from './android.mjs';
 import { compactTrial, sleep } from './control.mjs';
+import { compactBench } from '../report.mjs';
 const ROWS = ['expo-filesystem-js', 'worklet-filesystem', 'expo-sqlite'];
 const PORT = 48091; // Fixed in the app launch URL and USB forwarding contract.
 const DEFAULT_TRIALS = 30, RANDOM_STOP_MAX_MS = 3000, COLD_SAMPLES = 3; // Brief and 2210 sample sizes.
@@ -32,7 +33,7 @@ const out = new URL(`../results/${leg === 'bench' ? 'results' : leg}.${args.plat
 const versions = JSON.parse(await readFile(new URL('../app/src/versions.json', import.meta.url), 'utf8'));
 const report = { environment: { platform: args.platform, device: args.device, ...device.environment, simulator, ...versions, measuredAt: new Date().toISOString() },
   rows, requestedTrials: leg === 'crash' ? trials : undefined, complete: false, results: [], trials: [] };
-const save = () => writeFile(out, JSON.stringify(report, null, leg === 'crash' ? undefined : 2) + '\n');
+const save = () => writeFile(out, JSON.stringify(leg === 'bench' ? compactBench(report) : report, null, leg === 'crash' ? undefined : 2) + '\n');
 let active;
 function settle(error, value) {
   if (!active || active.finished) return;
@@ -117,7 +118,19 @@ try {
         }
         await sleep(Math.max(0, targetStopMs - (performance.now() - active.seededAt)));
         const stopMs = performance.now() - active.seededAt;
-        await device.stop();
+        try {
+          await device.stop();
+        } catch (error) {
+          if (error.code !== 'ESRCH' && !/No such process|target exited before requested stop/i.test(String(error))) throw error;
+          active.finished = true;
+          const snapshot = { acked: active.started.filter(t => active.acked.has(t.tx)),
+            inflight: active.started.find(t => !active.acked.has(t.tx)) ?? null };
+          report.trials.push(compactTrial({ row, trial, targetStopMs, stopMs, snapshot,
+            ackedCount: snapshot.acked.length, inflightTx: snapshot.inflight?.tx ?? null,
+            inflightSize: snapshot.inflight?.n ?? 0, outcome: 'harness-failed', error: String(error.stack ?? error) }));
+          await save(); console.error(row, trial, 'harness-failed', String(error));
+          continue;
+        }
         const stopped = active;
         if (stopped.finished) { await promise; throw new Error('Writer returned before requested stop'); }
         stopped.finished = true;
@@ -142,7 +155,9 @@ try {
       }
     }
   }
-  report.complete = true; await save();
+  report.complete = !report.trials.some(t => t.outcome === 'harness-failed');
+  if (!report.complete) process.exitCode = 1;
+  await save();
 } catch (error) { report.fatal = String(error.stack ?? error); await save(); process.exitCode = 1; console.error(error); }
 finally {
   if (await device.alive()) await device.stop();

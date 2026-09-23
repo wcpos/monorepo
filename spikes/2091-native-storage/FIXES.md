@@ -153,3 +153,41 @@ standalone tests, app typecheck and lint. Commit (include `FIXES.md`); do not pu
 on the PR — the owner replies and resolves the threads.
 
 When done, print: the commit hash and one line per comment id saying what changed.
+
+# Round 4 (first physical iPad run, 2026-09-23 evening)
+
+The iPad smoke completed on the device (0 / 0 / 3, same as the simulators, committed). The bench
+then stalled 25 minutes into the incumbent's large scale ("Harness timeout while launching") and
+the crash leg's first writer disappeared before the stop signal (`devicectl … signal` answered
+"No such process"). Cause: the iPad auto-locked; afterwards `devicectl` reported it could not take
+a power assertion and the app was gone. Harness failures, not storage verdicts. Same constraints
+as before: commit at the end (include `FIXES.md`), do not push, do not touch the PR, no physical
+devices (the iPad is asleep; the owner installs the rebuilt app).
+
+## 1. Keep the screen awake while a job runs
+
+Add `expo-keep-awake` (SDK 57's bundled version) to the app and call its `activateKeepAwakeAsync`
+when a job starts and `deactivateKeepAwake` when it ends (or `useKeepAwake()` at the root — pick
+the one that also covers the crash writer, which runs until it is killed). Note in
+`DEVICE-RUN.md` that the app keeps the display on during a job, that the device must still be
+unlocked and on power when a leg starts, and that a lock during a run shows up as
+"Harness timeout while launching" or "No such process" at the stop, never as a storage outcome.
+Prebuild, build for the iOS simulator, run the smoke there to prove nothing else moved, shut the
+simulator down. Do not run on the Android emulator unless the change touches Android code.
+
+## 2. Compact the bench file on every write
+
+`results.ios.<udid>.json` is 11 MB after one incomplete row because the per-sample id and hash
+arrays are only stripped when all rows finish. Run the compaction on every save so an incomplete
+file is small too; the cross-row comparison must keep working from what remains (signatures per
+sample, not ids), or keep the ids in a separate gitignored sidecar the report reads when present.
+
+## 3. A stop that finds no process is one failed trial, not the end of the run
+
+In the crash driver, when `alive()` said yes but the signal reports the process is already gone,
+record that trial as `harness-failed` with the error, mark the run `complete: false`, and
+continue with the next trial rather than aborting the leg. Keep 2210's rule that such trials never
+count as storage outcomes; `report.mjs` shows a `harness-failed` column when any exist.
+
+When done, print: the simulator smoke divergence counts, the size of an incomplete bench file
+written by a one-row `--rows expo-filesystem-js --scale small` run, and the commit hash.

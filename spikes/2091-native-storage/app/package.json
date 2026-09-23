@@ -23,7 +23,8 @@
     "rxjs": "7.8.2",
     "@wcpos/worklet-opfs": "0.1.1",
     "expo-sqlite": "~57.0.1",
-    "expo-linking": "~57.0.10"
+    "expo-linking": "~57.0.10",
+    "expo-keep-awake": "~57.0.2"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

@@ -241,7 +241,7 @@ test('malformed initial URL still allows Connect to start fetching jobs', async 
   const context = await loadTS('client', {
     'expo-linking': { addEventListener() {}, getInitialURL: async () => 'spike2091://driver?url=bad', parse: () => ({ queryParams: { url: 'bad' } }) },
     'expo-file-system': { Paths: {}, File: class { exists = false; write() {} } },
-    './logs': {}, './polyfills': {}, './versions.json': {},
+    'expo-keep-awake': {}, './logs': {}, './polyfills': {}, './versions.json': {},
   }, { setTimeout: fn => timers.push(fn), fetch: async url => { fetched.push(url); return { status: 204 }; } });
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(context.exports.getState().status, 'ERROR');
@@ -266,5 +266,99 @@ test('smoke keeps recorded results when cleanup rejects and closes after WAL fai
     assert.equal(result.length, walFailure ? 1 : 8);
     assert.deepEqual([...result], observed);
     assert.ok(closed > 0);
+  }
+});
+
+// Removing save-time compaction must fail even when the leg has not finished.
+test('every bench save is compact and retained signatures still compare after reload', async () => {
+  const reporting = await import('./report.mjs');
+  const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
+  const cell = hash => ({ name: 'read', samples: [{ ms: 1 }], signatures: [hash], setSignatures: [hash], idSets: [['a']], docHashes: [[['a', hash]]] });
+  let saved;
+  const report = { complete: false, results: [{ engine: 'expo-filesystem-js', scale: 'small', cells: [cell('same')] }] };
+  const save = vm.runInNewContext(source.slice(source.indexOf('const save ='), source.indexOf('let active;')) + '; save', {
+    report, leg: 'bench', out: 'unused', ...reporting, writeFile: async (_path, data) => { saved = JSON.parse(data); },
+  });
+  await save();
+  assert.equal(saved.complete, false);
+  assert.equal(saved.results[0].cells[0].idSets, undefined);
+  assert.equal(saved.results[0].cells[0].docHashes, undefined);
+  assert.deepEqual(saved.results[0].cells[0].setSignatures, ['same']);
+  saved.results.push({ engine: 'worklet-filesystem', scale: 'small', cells: [cell('same')] });
+  assert.equal(reporting.compare(saved).length, 0);
+  saved.results.push({ engine: 'expo-sqlite', scale: 'small', cells: [cell('different')] });
+  assert.equal(reporting.compare(saved).length, 1);
+  assert.equal(reporting.winner(saved, 'small/read'), 'not compared');
+});
+
+// Exercise the real trial loop; the OS boundary loses the first writer between alive and signal.
+test('vanished stop target is saved as harness-failed and next trial is scored', async () => {
+  const { compactTrial } = await import('./driver/control.mjs');
+  const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
+  const loop = source.slice(source.indexOf('try {\n  for (const row'), source.indexOf('\nfinally {'));
+  let stops = 0, scored = 0;
+  const saved = [], context = { rows: ['expo-filesystem-js'], leg: 'crash', trials: 2,
+    report: { complete: false, trials: [] }, process: {}, console: { info() {}, error() {} },
+    spec: row => ({ row }), randomInt: () => 0, RANDOM_STOP_MAX_MS: 3000, performance,
+    sleep: async () => {}, compactTrial, save: async () => saved.push(structuredClone(context.report)),
+    device: { stop: async () => { if (++stops === 1) throw new Error('devicectl signal: No such process'); } },
+    start: async () => { context.active = { seededAt: performance.now(), started: [{ tx: 1, n: 1, ids: ['a'] }], acked: new Set([1]), beginRetries: 0 }; return { promise: new Promise(() => {}), seeded: Promise.resolve() }; },
+    run: async () => { scored++; return { outcome: 'ok', ledger: 'ok', reopenMs: 1 }; },
+  };
+  await vm.runInNewContext('(async () => {' + loop + '})()', context);
+  assert.equal(context.report.trials.length, 2);
+  assert.equal(context.report.trials[0].outcome, 'harness-failed');
+  assert.match(context.report.trials[0].error, /No such process/);
+  assert.equal(context.report.trials[0].ledger, undefined);
+  assert.equal(context.report.trials[1].outcome, 'ok');
+  assert.equal(scored, 1);
+  assert.equal(saved[0].trials[0].outcome, 'harness-failed');
+  assert.equal(context.report.complete, false);
+  assert.equal(context.process.exitCode, 1);
+});
+
+test('crash report separates harness failures from storage outcomes', async () => {
+  const { mkdtemp, mkdir, writeFile, readFile, rm } = await import('node:fs/promises');
+  await mkdir(new URL('.deps/', here), { recursive: true });
+  const directory = await mkdtemp(new URL('.deps/report-test-', here));
+  try {
+    await mkdir(directory + '/results');
+    await writeFile(directory + '/RESULTS.md', '<!-- generated:start --><!-- generated:end -->');
+    await writeFile(directory + '/results/crash.ios.test.json', JSON.stringify({
+      environment: { platform: 'ios', device: 'test' }, complete: false,
+      trials: [{ row: 'expo-filesystem-js', outcome: 'harness-failed', ackedCount: 0, acked: [], error: 'No such process' }],
+    }));
+    const { main } = await import('./report.mjs');
+    assert.equal(await main(new URL('file://' + directory + '/')), 0);
+    const output = await readFile(directory + '/RESULTS.md', 'utf8');
+    assert.match(output, /\| partial \| harness-failed \|/);
+    assert.match(output, /expo-filesystem-js \| 1 \| 0 \/ 0 \| 0 \| 0 \| 0 \| 0 \| 0 \| 1 \|/);
+  } finally { await rm(directory, { recursive: true }); }
+});
+
+// Dropping activation, cleanup, or awaiting the writer must break this lifecycle test.
+test('job keeps awake through a pending writer and releases on success or error', async () => {
+  for (const fails of [false, true]) {
+    const events = [], posted = [];
+    let finish;
+    const writer = new Promise((resolve, reject) => { finish = () => fails ? reject(new Error('writer failed')) : resolve({}); });
+    await loadTS('client', {
+      'expo-linking': { addEventListener() {}, getInitialURL: async () => null },
+      'expo-file-system': { Paths: {}, File: class { exists = true; textSync() { return 'http://localhost:48091'; } } },
+      'expo-keep-awake': { activateKeepAwakeAsync: async () => events.push('awake'), deactivateKeepAwake: async () => events.push('released') },
+      './logs': { captureLogs: () => ({ logs: [], restore() {} }) }, './polyfills': { installPolyfills() {} }, './versions.json': {},
+      './bench': {}, './crash': { writer: () => { events.push('writer'); return writer; } }, './engines': {}, './conformance-smoke': {}, './divergence': {},
+    }, { setTimeout() {}, fetch: async (url, options) => {
+      if (url.endsWith('/job')) return { ok: true, status: 200, json: async () => ({ id: 'test', type: 'crash-write' }) };
+      posted.push(JSON.parse(options.body)); return { ok: true };
+    } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(events, ['awake', 'writer']);
+    assert.equal(posted.length, 0);
+    finish();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(events, ['awake', 'writer', 'released']);
+    assert.equal(posted.length, 1);
+    if (fails) assert.match(posted[0].error, /writer failed/);
   }
 });

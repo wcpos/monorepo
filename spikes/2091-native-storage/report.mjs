@@ -27,7 +27,12 @@ export function compare(report) {
     if (!cell.contentMismatch) continue;
     mismatches.push(`${row.engine}/${key}`);
     const i = cell.setSignatures.findIndex((s, j) => s !== prior.setSignatures[j]);
-    const here = cell.idSets?.[i] ?? [], there = prior.idSets?.[i] ?? [];
+    // Saved runs retain signatures, not full IDs. Keep existing diagnostics when regenerating.
+    if (!cell.idSets || !prior.idSets) {
+      cell.mismatch ??= { sample: i, detail: 'IDs/hashes omitted; content signatures differ' };
+      continue;
+    }
+    const here = cell.idSets[i] ?? [], there = prior.idSets[i] ?? [];
     if (here.length <= SMALL_RESULT && there.length <= SMALL_RESULT) cell.mismatch = { sample: i, ids: here, priorIds: there };
     else { const a = new Set(here), b = new Set(there); cell.mismatch = { sample: i, rows: here.length, priorRows: there.length,
       onlyHere: here.filter(x => !b.has(x)).slice(0, ID_DIFF_LIMIT), onlyPrior: there.filter(x => !a.has(x)).slice(0, ID_DIFF_LIMIT) }; }
@@ -35,6 +40,13 @@ export function compare(report) {
     cell.mismatch.differingDocs = [...hs].filter(([id, h]) => ps.has(id) && ps.get(id) !== h).map(([id]) => id).slice(0, DOC_DIFF_LIMIT);
   }
   return mismatches;
+}
+// Compare before stripping bulky evidence; signatures permit comparison after every partial save.
+export function compactBench(report) {
+  compare(report);
+  return { ...report, results: report.results.map(row => ({ ...row,
+    cells: row.cells.map(({ idSets, docHashes, ...cell }) => cell),
+  })) };
 }
 export function winner(report, key) {
   const [scale, name] = key.split('/');
@@ -54,12 +66,7 @@ export async function main(directory = new URL('.', import.meta.url)) {
         : data.results.length && ENGINES.every(e => data.results.some(r => r.engine === e))
           ? 'All available cross-row cells match on canonical revision-independent SHA-256 content; returned-order differences and normalized-sort violations recorded separately.'
           : 'Cross-row equality not fully evaluated: missing rows.';
-      // Like 2210, retain verdicts/diagnostics, not every returned id/hash after comparison.
-      // Without compaction a large-scale JSON exceeds GitHub's per-file limit.
-      if (data.complete && ENGINES.every(e => data.results.some(r => r.engine === e)))
-        for (const row of data.results) for (const cell of row.cells)
-          for (const key of ['signatures', 'setSignatures', 'idSets', 'docHashes']) delete cell[key];
-      await writeFile(path, JSON.stringify(data, null, 2) + '\n');
+      await writeFile(path, JSON.stringify(compactBench(data), null, 2) + '\n');
     }
     reports.push({ file, ...data });
   }
@@ -85,9 +92,11 @@ export async function main(directory = new URL('.', import.meta.url)) {
         for (const row of r.results) for (const scenario of row.scenarios.filter(s => !s.pass)) lines.push(`- ${row.engine} / ${scenario.name}: ${scenario.detail}`);
       }
       if (r.file.startsWith('crash.')) {
-        lines.push(table(['Row', 'Trials', 'Acked tx / rows', 'ok', 'open-failed', 'integrity-failed', 'lost', 'partial', 'Repaired on reopen', 'Ledger lost / partial', 'In-flight present / absent', 'In-flight partial / none / unknown', 'Median reopen ms'], ENGINES.map(row => {
+        const outcomes = ['ok', 'open-failed', 'integrity-failed', 'lost', 'partial'];
+        if (r.trials.some(t => t.outcome === 'harness-failed')) outcomes.push('harness-failed');
+        lines.push(table(['Row', 'Trials', 'Acked tx / rows', ...outcomes, 'Repaired on reopen', 'Ledger lost / partial', 'In-flight present / absent', 'In-flight partial / none / unknown', 'Median reopen ms'], ENGINES.map(row => {
           const ts = r.trials.filter(t => t.row === row);
-          return [row, ts.length, `${ts.reduce((n, t) => n + t.ackedCount, 0)} / ${ts.flatMap(t => t.acked).reduce((n, t) => n + t.n, 0)}`, ...['ok', 'open-failed', 'integrity-failed', 'lost', 'partial'].map(o => ts.filter(t => t.outcome === o).length),
+          return [row, ts.length, `${ts.reduce((n, t) => n + t.ackedCount, 0)} / ${ts.flatMap(t => t.acked).reduce((n, t) => n + t.n, 0)}`, ...outcomes.map(o => ts.filter(t => t.outcome === o).length),
             ts.filter(t => t.repairs > 0).length, ['lost','partial'].map(o => ts.filter(t => t.ledger === o).length).join(' / '),
             ['present','absent'].map(p => ts.filter(t => t.inflightPresence === p).length).join(' / '),
             ['partial','none','unknown'].map(p => ts.filter(t => t.inflightPresence === p).length).join(' / '), number(median(ts.map(t => t.reopenMs)))];

@@ -2,7 +2,9 @@
 
 Use an unlocked iPad and Pixel. Run one platform at a time, with other simulators,
 emulators and benchmarks stopped. Keep the device powered and the release app foregrounded;
-do not interact during measurement. No Metro server is needed.
+do not interact during measurement. The app keeps the display on during a job, including the
+crash writer until it is stopped. The device must still be unlocked and on power when each leg
+starts. No Metro server is needed.
 
 Allow 5–15 minutes for install/prebuild, 5–20 minutes for each first native build, and
 30–90 minutes per device for the three legs (estimates).
@@ -76,6 +78,10 @@ The app uses npm, not pnpm. Installation applies patches and requires 47 premium
 ## Failures and what to send back
 
 The driver prints jobs, cells and trials; the app shows IDLE / RUNNING / DONE or ERROR.
+A lock during a run can appear as "Harness timeout while launching" or "No such process" at
+the stop: these are harness failures, never storage outcomes. A vanished stop target is recorded
+as `harness-failed`; the driver continues with the next trial but leaves `complete: false` and
+exits 1. The crash report adds a `harness-failed` column when needed.
 Fatal launch/job timeouts are harness failures, not storage verdicts. The scorer's 10-second
 open/first-read timeout is instead recorded as the storage outcome `open-failed`. A completed
 smoke command may still contain failed scenarios: read the report.

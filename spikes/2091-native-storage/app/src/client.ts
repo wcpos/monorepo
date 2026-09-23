@@ -1,4 +1,5 @@
 import * as Linking from 'expo-linking';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { File, Paths } from 'expo-file-system';
 
 import { captureLogs } from './logs';
@@ -90,7 +91,12 @@ async function poll() {
 					});
 					let result: unknown, error: string | undefined;
 					try {
-						result = await run(job, send);
+						await activateKeepAwakeAsync();
+						try {
+							result = await run(job, send);
+						} finally {
+							await deactivateKeepAwake();
+						}
 					} catch (e) {
 						error = e instanceof Error ? e.stack : String(e);
 					} finally {

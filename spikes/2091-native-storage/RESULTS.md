@@ -41,9 +41,9 @@ _Operator: apply the stability gate and the “wins clearly, not narrowly” bar
   requests pass through. This is runtime adaptation, not a query-semantics divergence.
 - Seed batches are 1000; ingest-100 uses a second fresh instance. Timing includes native/worklet
   calls; SHA-256 comparisons are outside timings. Cold open ends at first read, with OS cache warm.
-- Benchmark compaction retains timings, verdicts and mismatch diagnostics, not sample id/hash
-  arrays. Crash records retain transaction counts/sizes and the first 20 log lines with a
-  truncation count; full ID snapshots are used only while scoring. Existing scores are unchanged.
+- Benchmark saves, including incomplete runs, retain timings, per-sample signatures, verdicts
+  and mismatch diagnostics, not sample id/hash arrays. Crash records retain transaction counts/sizes
+  and the first 20 log lines with a truncation count; full ID snapshots are used only while scoring. Existing scores are unchanged.
 - Repair counts now include only index-rebuild/storage-recovery hooks and non-hook
   `rebuilt|salvag` messages, not the shared `recovery` prefix or run-failure hooks. They count
   log lines, not unique repair operations. Recomputed all 30 committed crash trials from
@@ -75,6 +75,14 @@ URLs leave polling available for Connect; cleanup failures retain smoke results.
 and worklet forwarding preserve error text/stacks and handle circular values, ignore passing
 assertions, and classify recovery hooks separately from failures. These error paths were tested
 under Node with native boundaries replaced, not rerun in a simulator or on a physical device.
+
+Round 4: jobs now hold keep-awake until completion (or process termination for a crash writer).
+Bench files are compact on every save; retained signatures still support cross-row comparison.
+A vanished stop target is `harness-failed`, not a storage outcome; later trials continue and the
+run remains incomplete. Observed: rebuilt iOS simulator smoke is again 0 / 0 / 3, with every
+scenario name, pass flag and detail equal to the prior committed simulator smoke. The standalone
+suite checks keep-awake success/error cleanup and a pending writer, partial-save comparison,
+and continuation after a missing stop target. Physical-device auto-lock prevention is unverified.
 
 ## Blocked
 
