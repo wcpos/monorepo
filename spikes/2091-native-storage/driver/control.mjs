@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { execFile } from 'node:child_process';
-import { isDeepStrictEqual, promisify } from 'node:util';
+import { format, isDeepStrictEqual, promisify } from 'node:util';
 export const bundle = 'com.wcpos.spike2091';
 const COMMAND_TIMEOUT_MS = 60000; // Device commands must not leave a run waiting indefinitely.
 export async function command(file, args, allowFailure = false, timeout = COMMAND_TIMEOUT_MS, signal) {
@@ -39,4 +39,26 @@ export function prepareReport(current, previous, versions, scales) {
     requestedTrials: Math.max(previous.requestedTrials ?? 0, current.requestedTrials ?? 0) || undefined,
     environment: { ...previous.environment, ...current.environment, runs: [...runs, run] },
     results: previous.results ?? [], trials: previous.trials ?? [] };
+}
+
+export const IDLE_BUDGET_MS = 10 * 60 * 1000; // Long jobs stay alive only while the app reports work.
+export const JOB_HARD_CAP_MS = 4 * 60 * 60 * 1000; // Bound even a continuously reporting job.
+const SEED_LOG_MS = 60 * 1000; // One seed progress line per minute per job, not per collection.
+export function log(level, ...values) {
+  for (const line of format(...values).split('\n')) console[level](new Date().toISOString(), line);
+}
+export function jobMessage(active, message, now) {
+  active.lastMessageAt = now;
+  if (['bench', 'smoke', 'cold-open'].includes(active.job.type)) active.phase = 'running';
+  if (message.type === 'progress' && message.stage === 'seed'
+    && (active.seedLoggedAt === undefined || now - active.seedLoggedAt >= SEED_LOG_MS)) {
+    active.seedLoggedAt = now;
+    return `${active.job.row} ${active.job.scale} seed ${message.collection} ${message.done}/${message.total}`;
+  }
+}
+export function jobTimeout(active, now) {
+  if (now - active.launchedAt >= JOB_HARD_CAP_MS)
+    return new Error(`Harness timeout: job exceeded 4 hours while ${active.phase}`);
+  if (now - (active.lastMessageAt ?? active.launchedAt) >= IDLE_BUDGET_MS)
+    return new Error(`Harness timeout: no message from the app for 10 minutes while ${active.phase}`);
 }

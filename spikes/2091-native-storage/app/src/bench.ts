@@ -56,9 +56,25 @@ export async function runBench(job: Job, send: Send) {
 		for (const name of ['products', 'orders', 'mutations']) instances[name] = await create(name);
 		await session.proveWal();
 		const seedLag = scale === 'large' && !job.simulator ? lagSampler() : undefined;
+		const seedMs = { products: 0, orders: 0 };
 		let seedWindow: ReturnType<ReturnType<typeof lagSampler>> | undefined;
 		try {
-			for (const name of ['products', 'orders'] as const) await seed(instances[name], data[name]);
+			for (const collection of ['products', 'orders'] as const) {
+				const documents = data[collection],
+					start = performance.now();
+				// Keep seed() (also a timed cell) untouched; report between its original 1000-row batches.
+				for (let offset = 0; offset < documents.length; offset += SEED_BATCH) {
+					await seed(instances[collection], documents.slice(offset, offset + SEED_BATCH));
+					await send({
+						type: 'progress',
+						stage: 'seed',
+						collection,
+						done: Math.min(offset + SEED_BATCH, documents.length),
+						total: documents.length,
+					});
+				}
+				seedMs[collection] = performance.now() - start;
+			}
 		} finally {
 			seedWindow = seedLag?.();
 		}
@@ -116,6 +132,7 @@ export async function runBench(job: Job, send: Send) {
 			};
 			for (let i = 0; i <= count; i++) {
 				const { run, check = checkedValue } = await setup(i);
+				await send({ type: 'progress', stage: 'sample', cell: name, i, n: count });
 				const gridLag =
 					name === 'products-grid-asShipped' && i > 0 && !job.simulator ? lagSampler() : undefined;
 				const start = performance.now();
@@ -307,13 +324,30 @@ export async function runBench(job: Job, send: Send) {
 				const rows = data.products
 					.slice(offset, offset + INGEST_BATCH)
 					.map((document) => ({ document }));
+				await send({
+					type: 'progress',
+					stage: 'sample',
+					cell: 'ingest-100',
+					i: offset / INGEST_BATCH,
+					n: Math.ceil(data.products.length / INGEST_BATCH),
+				});
 				const start = performance.now();
 				await write(target, rows);
 				ingest.push(performance.now() - start);
 			}
 			await target.remove();
 		}
-		return { cells, seedBytes, disk, ...session.proofs, lag, heapAfterSeed, heapAfterLast, ingest };
+		return {
+			cells,
+			seedMs,
+			seedBytes,
+			disk,
+			...session.proofs,
+			lag,
+			heapAfterSeed,
+			heapAfterLast,
+			ingest,
+		};
 	} finally {
 		await session.close();
 	}

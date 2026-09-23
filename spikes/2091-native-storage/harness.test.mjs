@@ -298,7 +298,7 @@ test('vanished stop target is saved as harness-failed and next trial is scored',
   const loop = source.slice(source.indexOf('try {\n  for (const row'), source.indexOf('\nfinally {'));
   let stops = 0, scored = 0;
   const saved = [], context = { physicalIos: false, AbortController, ...control, args: { resume: false }, watchMs: 250, WATCH_MS: 250, rows: ['expo-filesystem-js'], leg: 'crash', trials: 2,
-    report: { complete: false, trials: [] }, process: {}, console: { info() {}, error() {} },
+    report: { complete: false, results: [], trials: [] }, process: {}, console: { info() {}, error() {} },
     spec: row => ({ row }), randomInt: () => 0, RANDOM_STOP_MAX_MS: 3000, performance,
     sleep: async () => {}, save: async () => saved.push(structuredClone(context.report)),
     device: { stop: async () => { if (++stops === 1) throw new Error('devicectl signal: No such process'); } },
@@ -512,7 +512,7 @@ test('during opening a vanished scorer is open-failed and an unreachable device 
     const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
     promise.catch(() => {});
     const context = { active: { phase: 'opening', openedAt: 0, launchedAt: 0 }, physicalIos: true,
-      performance: { now: () => 12000 }, OPEN_BUDGET_MS: 10000, JOB_BUDGET_MS: 1800000,
+      performance: { now: () => 12000 }, OPEN_BUDGET_MS: 10000,
       watchMs: 2000, sleep: async () => {},
       device: { alive: async () => { if (unreachable) throw new Error('Harness failure: device unreachable'); return false; } },
       settle: (error, result) => { context.active.finished = true; if (error) reject(error); else resolve(result); },
@@ -531,7 +531,7 @@ test('physical writer keeps the seeded race on the fast interval', async () => {
   const context = { physicalIos: false, AbortController, ...control, rows: ['expo-sqlite'], leg: 'crash', trials: 1, args: {},
     report: { results: [], trials: [] }, process: {}, console: { info() {}, error() {} },
     spec: row => ({ row }), randomInt: () => 10, RANDOM_STOP_MAX_MS: 3000,
-    WATCH_MS: 250, watchMs: 2000, JOB_BUDGET_MS: 1800000, performance: { now: () => now },
+    WATCH_MS: 250, watchMs: 2000, performance: { now: () => now },
     save: async () => {}, run: async () => ({ outcome: 'ok' }),
     device: { alive: async () => { polls++; return true; }, stop: async () => { stoppedAt = now; } },
     start: async () => { context.active = { launchedAt: now, started: [], acked: new Set() }; return { promise: new Promise(() => {}), seeded: new Promise(() => {}) }; },
@@ -551,7 +551,7 @@ test('seed arrival cancels a physical liveness retry before the chosen stop', as
   const context = { physicalIos: false, AbortController, ...control, AbortController, physicalIos: true, rows: ['expo-sqlite'], leg: 'crash', trials: 1, args: {},
     report: { rows: ['expo-sqlite'], results: [], trials: [] }, process: {}, console: { info() {}, error() {} },
     spec: row => ({ row }), randomInt: () => 1000, RANDOM_STOP_MAX_MS: 3000,
-    WATCH_MS: 250, watchMs: 2000, JOB_BUDGET_MS: 1800000, performance: { now: () => now },
+    WATCH_MS: 250, watchMs: 2000, performance: { now: () => now },
     save: async () => {}, run: async () => ({ outcome: 'ok' }),
     device: { alive: signal => {
       now = 100; context.active.seededAt = now; seededResolve();
@@ -573,4 +573,169 @@ test('narrowed resume cannot mark preserved missing trials complete', async () =
   const report = { rows: ['expo-sqlite'], requestedTrials: 30, results: [], trials: [{ row: 'expo-sqlite', trial: 1, outcome: 'ok' }] };
   await runDriverLoop(report, 'crash', async () => { throw new Error('must skip'); }, { trials: 1 });
   assert.equal(report.complete, false);
+});
+
+// Exercise the real HTTP handler and wait loop, without binding a port or contacting a device.
+async function jobHarness(type = 'bench') {
+  const control = await import('./driver/control.mjs');
+  const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
+  let now = 0, handler;
+  const logs = [];
+  const context = { ...control, Buffer, Date, randomUUID: () => 'job', url: 'unused', report: { environment: {} },
+    performance: { now: () => now }, console: { info: (...args) => logs.push(args.join(' ')), error: (...args) => logs.push(args.join(' ')) },
+    log: (...args) => logs.push(args.join(' ')),
+    OPEN_BUDGET_MS: 10000, watchMs: 250,
+    device: { launch: async () => {}, alive: async () => true, memory: async () => 1 },
+    createServer: callback => { handler = callback; return {}; },
+    sleep: async ms => { now += ms; },
+  };
+  const functions = source.slice(source.indexOf('let active;'), source.indexOf("await new Promise((resolve, reject) => { server.once"))
+    + source.slice(source.indexOf('async function start('), source.indexOf('async function run('));
+  vm.runInNewContext(functions + '; globalThis.api = { start, waitResult, state: () => active };', context);
+  const pending = await context.api.start({ type, row: 'expo-filesystem-js', scale: 'large' });
+  return { context, logs, pending, ...context.api, time: value => { now = value; }, now: () => now,
+    message: async (message, path = '/event') => {
+      let status;
+      await handler({ method: 'POST', url: path, async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify({ id: 'job', ...message })); } },
+        { writeHead: code => { status = code; return { end() {} }; } });
+      assert.equal(status, 200);
+    } };
+}
+
+// Dropping receive-time updates or ignoring any message type expires an active job too early.
+test('idle budget resets on every event and result, then fires after silence', async () => {
+  const h = await jobHarness();
+  for (const [time, message] of [[590000, { type: 'cell', name: 'read' }], [1180000, { type: 'progress', stage: 'sample' }]]) {
+    h.time(time); await h.message(message);
+    assert.equal(h.state().lastMessageAt, time);
+  }
+  await assert.rejects(h.waitResult(h.pending.promise), /Harness timeout: no message from the app for 10 minutes while running/);
+  assert.equal(h.now(), 1780000);
+  const result = await jobHarness();
+  result.time(123); await result.message({ result: { done: true } }, '/result');
+  assert.equal(result.state().lastMessageAt, 123);
+  assert.equal((await result.waitResult(result.pending.promise)).done, true);
+});
+
+// Continued events must not let a job exceed the absolute cap.
+test('hard cap ends a job even while messages keep arriving', async () => {
+  const h = await jobHarness();
+  h.time(14400000); await h.message({ type: 'progress', stage: 'sample' });
+  await assert.rejects(h.waitResult(h.pending.promise), /Harness timeout: job exceeded 4 hours while running/);
+});
+
+test('ordinary jobs switch from launching to running on first message, crash phases stay unchanged', async () => {
+  for (const type of ['bench', 'smoke', 'cold-open', 'crash-write', 'crash-score']) {
+    const h = await jobHarness(type);
+    assert.equal(h.state().phase, 'launching');
+    await h.message({ type: 'begin-retry' });
+    assert.equal(h.state().phase, type.startsWith('crash-') ? 'launching' : 'running');
+    if (type === 'crash-score') {
+      await h.message({ type: 'scoring' }); assert.equal(h.state().phase, 'opening');
+      await h.message({ type: 'read' }); assert.equal(h.state().phase, 'scored');
+    }
+  }
+  const silent = await jobHarness();
+  await assert.rejects(silent.waitResult(silent.pending.promise), /10 minutes while launching/);
+  assert.equal(silent.now(), 600000);
+});
+
+// A collection change must not bypass the per-job throttle; sample events stay silent.
+test('seed progress logs at most once a minute per job and samples never log', async () => {
+  const h = await jobHarness();
+  for (const [time, collection, done] of [[0, 'products', 1000], [59999, 'orders', 1000], [60000, 'products', 12000]]) {
+    h.time(time); await h.message({ type: 'progress', stage: 'seed', collection, done, total: 20000 });
+  }
+  h.time(120000); await h.message({ type: 'progress', stage: 'sample', cell: 'read', i: 1, n: 7 });
+  assert.equal(h.logs.length, 2);
+  assert.match(h.logs[0], /expo-filesystem-js large seed products 1000\/20000/);
+  assert.match(h.logs[1], /expo-filesystem-js large seed products 12000\/20000/);
+  await h.start({ type: 'bench', row: 'expo-sqlite', scale: 'large' });
+  await h.message({ type: 'progress', stage: 'seed', collection: 'products', done: 1000, total: 20000 });
+  assert.equal(h.logs.length, 3);
+});
+
+// Seed wall-clock belongs outside both the cell table and winner summary, including old files.
+test('report renders seed wall-clock per scale without treating it as a compared cell', async () => {
+  const { mkdtemp, mkdir, writeFile, readFile, rm } = await import('node:fs/promises');
+  await mkdir(new URL('.deps/', here), { recursive: true });
+  const directory = await mkdtemp(new URL('.deps/report-test-', here));
+  try {
+    await mkdir(directory + '/results');
+    await writeFile(directory + '/RESULTS.md', '<!-- generated:start --><!-- generated:end -->');
+    const report = { environment: { platform: 'ios', device: 'test' }, complete: true, results: [
+      { engine: 'expo-filesystem-js', scale: 'small', seedMs: { products: 1200, orders: 2400 }, cells: [{ name: 'read', samples: [{ ms: 1 }] }] },
+      { engine: 'expo-filesystem-js', scale: 'large', seedMs: { products: 12000, orders: 24000 }, cells: [] },
+      { engine: 'expo-sqlite', scale: 'small', cells: [] },
+    ] };
+    await writeFile(directory + '/results/results.ios.test.json', JSON.stringify(report));
+    const { main } = await import('./report.mjs');
+    assert.equal(await main(new URL('file://' + directory + '/')), 0);
+    const output = await readFile(directory + '/RESULTS.md', 'utf8');
+    assert.match(output, /- expo-filesystem-js seed wall-clock ms: products 1200\.00; orders 2400\.00/);
+    assert.match(output, /#### large[\s\S]*seed wall-clock ms: products 12000\.00; orders 24000\.00/);
+    assert.doesNotMatch(output.split('## Cross-device summary')[1], /seed/);
+    assert.doesNotMatch(output, /\|[^\n]*seed wall-clock/);
+  } finally { await rm(directory, { recursive: true }); }
+});
+
+// Network time must not enter sample timings, and seed progress must describe completed writes.
+test('benchmark reports seed batches, wall-clock and every sample outside timing', async () => {
+  const fixtures = await import('./app/src/fixtures.ts');
+  let now = 0;
+  const events = [], writes = [];
+  const { exports: { runBench } } = await loadTS('bench', {
+    'rxdb/plugins/core': core, './schemas': { schemas: {} },
+    './fixtures': { ...fixtures, fixtures: () => fixtures.fixtures(2001) },
+    './metrics': { heap: () => ({}), diskBytes: () => ({}), signature: async () => 'hash', sorted: docs => docs },
+    './lag-sampler': {},
+    './engines': { openEngine: async () => ({
+      create: async (collection, _schema, suffix) => {
+        const docs = new Map();
+        return {
+          bulkWrite: async rows => {
+            writes.push({ collection, suffix, size: rows.length }); now += 10;
+            for (const { document } of rows) docs.set(document.uuid ?? document.id, document);
+            return { error: [] };
+          },
+          query: async () => { now += 5; return { documents: [...docs.values()] }; },
+          findDocumentsById: async ids => { now += 5; return ids.map(id => docs.get(id)).filter(Boolean); },
+          count: async () => { now += 5; return { count: docs.size }; }, remove: async () => {},
+        };
+      },
+      projection: async () => { now += 5; return []; },
+      proveWal: async () => {}, analyze: async () => {}, close: async () => {},
+    }) },
+  }, { structuredClone, performance: { now: () => now } });
+  const result = await runBench({ scale: 'large', simulator: true }, async event => {
+    events.push({ ...event, written: writes.length }); now += 50; // Observable HTTP overhead.
+  });
+  const seed = events.filter(e => e.stage === 'seed');
+  assert.deepEqual(seed.map(e => [e.collection, e.done, e.total, e.written]), [
+    ['products', 1000, 2001, 1], ['products', 2000, 2001, 2], ['products', 2001, 2001, 3],
+    ['orders', 1000, 2001, 4], ['orders', 2000, 2001, 5], ['orders', 2001, 2001, 6],
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.seedMs)), { products: 180, orders: 180 });
+  assert.deepEqual(writes.slice(0, 6).map(w => w.size), [1000, 1000, 1, 1000, 1000, 1]);
+  for (const cell of result.cells) {
+    const samples = events.filter(e => e.stage === 'sample' && e.cell === cell.name);
+    assert.equal(samples.length, cell.samples.length + 1, `${cell.name}: warmup + samples`);
+    assert.deepEqual(samples.map(e => e.i), Array.from({ length: cell.samples.length + 1 }, (_, i) => i));
+    assert.ok(samples.every(e => e.n === cell.samples.length));
+    assert.ok(cell.samples.every(s => s.ms < 50), `${cell.name}: excludes HTTP overhead`);
+  }
+  const ingest = events.filter(e => e.stage === 'sample' && e.cell === 'ingest-100');
+  assert.equal(ingest.length, result.ingest.length);
+  assert.ok(result.ingest.every(ms => ms === 10));
+});
+
+test('driver logger timestamps every physical line including error stacks', async () => {
+  const { format } = await import('node:util');
+  const lines = [];
+  const source = readFileSync(new URL('driver/control.mjs', here), 'utf8');
+  const fragment = source.slice(source.indexOf('export function log('), source.indexOf('export function jobMessage')).replace('export ', '');
+  const log = vm.runInNewContext(fragment + '; log', { format, Date, console: { error: (...args) => lines.push(args.join(' ')) } });
+  log('error', new Error('two\nlines'));
+  assert.ok(lines.length > 2);
+  assert.ok(lines.every(line => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z /.test(line)));
 });

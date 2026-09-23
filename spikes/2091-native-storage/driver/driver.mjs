@@ -5,12 +5,12 @@ import { networkInterfaces } from 'node:os';
 import { parseArgs } from 'node:util';
 import { ios } from './ios.mjs';
 import { android } from './android.mjs';
-import { compactTrial, sleep, hasResult, isHarnessFailure, prepareReport } from './control.mjs';
+import { compactTrial, sleep, hasResult, isHarnessFailure, prepareReport, jobMessage, jobTimeout, log } from './control.mjs';
 import { compactBench } from '../report.mjs';
 const ROWS = ['expo-filesystem-js', 'worklet-filesystem', 'expo-sqlite'];
 const PORT = 48091; // Fixed in the app launch URL and USB forwarding contract.
 const DEFAULT_TRIALS = 30, RANDOM_STOP_MAX_MS = 3000, COLD_SAMPLES = 3; // Brief and 2210 sample sizes.
-const OPEN_BUDGET_MS = 10000, JOB_BUDGET_MS = 30 * 60 * 1000, WATCH_MS = 250; // Opening verdict vs harness timeout.
+const OPEN_BUDGET_MS = 10000, WATCH_MS = 250; // Opening verdict vs harness timeout.
 const PHYSICAL_WATCH_MS = 2000; // CoreDevice over Wi-Fi must not be polled four times a second.
 const { values: args, positionals } = parseArgs({ allowPositionals: true, options: {
   resume: { type: 'boolean', default: false }, platform: { type: 'string' }, device: { type: 'string' }, simulator: { type: 'boolean', default: false },
@@ -53,13 +53,15 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/job') {
       if (!active || active.delivered || active.finished) { res.writeHead(204).end(); return; }
-      console.info('GET /job', active.job.type, active.job.row);
+      log('info', 'GET /job', active.job.type, active.job.row);
       active.delivered = true; res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(active.job)); return;
     }
     if (req.method !== 'POST' || !['/event', '/result'].includes(req.url)) { res.writeHead(404).end(); return; }
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
     const m = JSON.parse(Buffer.concat(chunks).toString());
     if (!active || m.id !== active.job.id || active.finished) { res.writeHead(409).end(); return; }
+    const progress = jobMessage(active, m, performance.now());
+    if (progress) log('info', progress);
     if (req.url === '/event') {
       if (m.type === 'seeded') { active.seededAt = performance.now(); active.wal = m.wal; active.seededResolve(); }
       if (m.type === 'started') active.started.push({ tx: m.tx, n: m.n, ids: m.ids });
@@ -68,7 +70,7 @@ const server = createServer(async (req, res) => {
       if (m.type === 'scoring') { active.phase = 'opening'; active.openedAt = performance.now(); }
       if (m.type === 'read') active.phase = 'scored';
       if (m.type === 'memory') active.memory[m.window] = await device.memory();
-      if (m.type === 'cell') console.info(active.job.row, active.job.scale, m.name);
+      if (m.type === 'cell') log('info', active.job.row, active.job.scale, m.name);
     } else {
       Object.assign(report.environment, m.versions);
       if (m.result?.sqlite) report.environment.sqlite = m.result.sqlite;
@@ -78,7 +80,7 @@ const server = createServer(async (req, res) => {
   } catch (error) { res.writeHead(500).end(String(error)); settle(error); }
 });
 await new Promise((resolve, reject) => { server.once('error', reject); server.listen(PORT, '0.0.0.0', resolve); });
-console.info(`Driver http://${host}:${PORT}; ${out.pathname}; ${simulator ? 'simulator — not evidence' : 'physical device'}`);
+log('info', `Driver http://${host}:${PORT}; ${out.pathname}; ${simulator ? 'simulator — not evidence' : 'physical device'}`);
 await save();
 function spec(row, scale) {
   const db = `spike-${randomUUID()}`;
@@ -104,7 +106,10 @@ async function waitResult(promise) {
     } else if (!await device.alive() && !active.finished) {
       if (active.phase === 'opening') settle(null, { outcome: 'open-failed', reopenMs: null, integrity: 'not checked', inflightPresence: 'unknown', error: 'Process exited during open/first read' });
       else settle(new Error(`Harness failure: process died while ${active.phase}`));
-    } else if (now - active.launchedAt > JOB_BUDGET_MS) settle(new Error(`Harness timeout while ${active.phase}`));
+    } else {
+      const timeout = jobTimeout(active, performance.now());
+      if (timeout) settle(timeout);
+    }
     if (!active.finished) await sleep(watchMs);
   }
   return promise;
@@ -139,7 +144,8 @@ try {
               if (!living) throw new Error('Harness failure: process died while seeding');
               nextAliveAt = performance.now() + watchMs;
             }
-            if (performance.now() - active.launchedAt > JOB_BUDGET_MS) throw new Error('Harness failure before seeded event');
+            const timeout = jobTimeout(active, performance.now());
+            if (timeout) throw timeout;
             await Promise.race([seeded, sleep(WATCH_MS)]);
           }
           await sleep(Math.max(0, targetStopMs - (performance.now() - active.seededAt)));
@@ -154,7 +160,7 @@ try {
           const recovered = await run({ ...input, type: 'crash-score', snapshot });
           const record = compactTrial({ row, trial, targetStopMs, stopMs, snapshot, ackedCount: snapshot.acked.length, wal: stopped.wal, writerBeginRetries: stopped.beginRetries,
             inflightTx: snapshot.inflight?.tx ?? null, inflightSize: snapshot.inflight?.n ?? 0, ...recovered });
-          report.trials.push(record); await save(); console.info(row, trial, record.outcome, `acked=${record.ackedCount}`);
+          report.trials.push(record); await save(); log('info', row, trial, record.outcome, `acked=${record.ackedCount}`);
         } catch (error) {
           if (!isHarnessFailure(error) && error.code !== 'ESRCH' && !/No such process/i.test(String(error))) throw error;
           if (active) active.finished = true;
@@ -163,7 +169,7 @@ try {
           report.trials.push(compactTrial({ row, trial, targetStopMs, stopMs, snapshot,
             ackedCount: snapshot.acked.length, inflightTx: snapshot.inflight?.tx ?? null,
             inflightSize: snapshot.inflight?.n ?? 0, outcome: 'harness-failed', error: String(error.stack ?? error) }));
-          await save(); console.error(row, trial, 'harness-failed', String(error));
+          await save(); log('error', row, trial, 'harness-failed', String(error));
         }
       }
     } else {
@@ -178,12 +184,12 @@ try {
             result.cells.push({ name: 'cold-open-first-read', samples });
           }
           report.results.push({ engine: row, scale, dir: input.dir, db: input.db, ...result }); await save();
-          if (leg === 'smoke') console.info(row, result.scenarios.filter(s => !s.pass).length, 'divergences');
+          if (leg === 'smoke') log('info', row, result.scenarios.filter(s => !s.pass).length, 'divergences');
         } catch (error) {
           if (!isHarnessFailure(error)) throw error;
           if (active) active.finished = true;
           report.results.push({ engine: row, scale, outcome: 'harness-failed', error: String(error.stack ?? error) });
-          await save(); console.error(row, scale, 'harness-failed', String(error));
+          await save(); log('error', row, scale, 'harness-failed', String(error));
         }
       }
     }
@@ -195,9 +201,9 @@ try {
       (leg === 'smoke' ? [undefined] : run.scales).every(scale => report.results.some(r => r.engine === row && r.scale === scale && hasResult(r, leg))))));
   if (!report.complete) process.exitCode = 1;
   await save();
-} catch (error) { report.fatal = String(error.stack ?? error); await save(); process.exitCode = 1; console.error(error); }
+} catch (error) { report.fatal = String(error.stack ?? error); await save(); process.exitCode = 1; log('error', error); }
 finally {
   try { if (await device.alive()) await device.stop(); }
-  catch (error) { report.complete = false; report.fatal = String(error); await save(); process.exitCode = 1; console.error(error); }
+  catch (error) { report.complete = false; report.fatal = String(error); await save(); process.exitCode = 1; log('error', error); }
   finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }

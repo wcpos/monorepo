@@ -261,3 +261,64 @@ skipping complete rows while re-running failed ones and refusing a mismatched de
 
 When done, print: the harness test count and result, the new constants with their values, and the
 commit hash.
+
+# Round 6 (the incumbent's 20k row exceeds the job budget on both devices, 2026-09-23 night)
+
+Round 5 is accepted and committed (`1dff75ebb`, phase-rule follow-up `4a0145c15`). On the Pixel 10
+the `expo-filesystem-js` large-scale bench job posted no message for 30 minutes with the app alive
+and in the foreground, so the driver reported `Harness timeout while launching` and (pre-round-5
+process) aborted the leg. The first iPad run failed the same way on the same job; the second iPad
+run got the seed plus four cells out of that job in about 25 minutes before the tunnel dropped.
+So the shipped engine's 20k seed plus cells takes longer than 30 minutes on a physical device, and
+the driver cannot tell a long seed from a stuck app because the app is silent while seeding.
+
+Rules as before: commit at the end (include `FIXES.md`), do not push, do not open or edit a PR,
+do not reply on any PR. No physical devices: the Pixel is running the crash leg on port 48091 from
+this tree right now, so do not start any leg, do not bind that port, do not touch `results/`, do
+not run `adb install`, do not run `devicectl … install`, and no simulators or emulators this round
+(the port is taken). Keep `driver/driver.mjs` importable and Android behaviour unchanged at every
+save; run `node --test harness.test.mjs` after each edit. Measured code must not move: the seed
+function body, every cell's timed `run`, the crash writer and scorer stay as they are; the only
+app change is messages sent outside timed windows.
+
+## 1. The app reports progress while it works
+
+In `app/src/bench.ts` send `{ type: 'progress', stage: 'seed', collection, done, total }` after
+every 1000 documents of the initial seed and once at the end of each collection, and
+`{ type: 'progress', stage: 'sample', cell, i, n }` before each timed sample. Sends sit outside
+the timed windows (a sample's timing wraps its `run`; the seed is not a cell). Record the seed's
+wall-clock per collection as `seedMs: { products, orders }` on the bench result — it is a real
+number (ingest of the whole catalogue at that scale) and `report.mjs` renders it as its own line
+under each scale, outside the compared cells and never a winner column.
+
+## 2. The driver's budget is inactivity, not total time
+
+Replace `JOB_BUDGET_MS` with `IDLE_BUDGET_MS = 10 * 60 * 1000` measured from the last message the
+active job delivered (any `/event` or the `/result`), plus a hard cap `JOB_HARD_CAP_MS = 4 h`. The
+phase for bench, smoke and cold-open jobs is `launching` until the first message and `running`
+after it; crash jobs keep their phases. Timeout text: `Harness timeout: no message from the app
+for 10 minutes while <phase>` and `Harness timeout: job exceeded 4 hours while <phase>`. Prefix
+every driver log line with an ISO timestamp. Log seed progress at most once per minute per job
+(`<row> <scale> seed products 12000/20000`) and do not log sample progress at all.
+
+## 3. Documents
+
+`DEVICE-RUN.md`: say that the shipped engine's 20k row is an hours-long job on a physical device,
+that the large scale should be left to run unattended (device on power, `--resume` on any
+failure), and what the two timeout messages mean. Keep the section short.
+
+## 4. Tests
+
+Harness tests for: the idle budget resetting on each message and firing when silent; the hard
+cap; the `launching → running` transition; the once-a-minute progress log throttle; and the
+report's seed wall-clock line. Keep every existing test green.
+
+## 5. Builds, no installs
+
+After the tests: build the iOS device app with the exact `xcodebuild` line `run.sh` uses for
+`ios-device` (device id `00008027-000A49223631002E`, derived data under `app/.build/ios`) and stop
+before the `devicectl … install` step; build the Android release APK with `./gradlew assembleRelease`
+in `app/android` and stop before `adb install`. One build at a time. The owner installs both.
+
+When done, print: the harness test count and result, the two build output paths with their
+modification times, and the commit hash.

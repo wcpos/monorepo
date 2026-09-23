@@ -116,6 +116,7 @@ export async function main(directory = new URL('.', import.meta.url)) {
               ...[0, 1].map(i => comparable ? number(cells[i].p50 / cells[2].p50) : '—')];
           })));
           for (const row of rows) {
+            if (row.seedMs) lines.push(`- ${row.engine} seed wall-clock ms: products ${number(row.seedMs.products)}; orders ${number(row.seedMs.orders)} (whole collection, including progress delivery; not compared).`);
             lines.push(`- ${row.engine}: WAL ${row.wal ?? 'n/a'}; seed bytes ${JSON.stringify(row.seedBytes)}; BEGIN retries ${row.beginRetries ?? 'not captured'}.`);
             for (const field of ['disk','lag','heapAfterSeed','heapAfterLast','memory']) if (row[field]) lines.push(`- ${row.engine} ${field}: ${JSON.stringify(row[field])}`);
             if (row.ingest?.length) lines.push(`- ${row.engine} ingest-100 p50 / p95 / max ms: ${Object.values(stats(row.ingest)).map(number).join(' / ')}; ${row.ingest.length} batches in a second fresh seed (original seed uses 1000).`);

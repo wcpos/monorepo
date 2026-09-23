@@ -7,7 +7,7 @@ crash writer until it is stopped. The device must still be unlocked and on power
 starts. No Metro server is needed.
 
 Allow 5–15 minutes for install/prebuild, 5–20 minutes for each first native build, and
-30–90 minutes per device for the three legs (estimates).
+hours per device for all three legs (estimates).
 
 ## Once, on the Mac
 
@@ -75,10 +75,20 @@ The app uses npm, not pnpm. Installation applies patches and requires 47 premium
    ./run.sh crash --platform android --device "$PIXEL" --trials 30
    ```
 
+## Large-scale bench
+
+The shipped engine's 20k row is an hours-long job on a physical device. Leave the large scale
+running unattended, device on power; resume any failure with the original command plus `--resume`.
+Timestamped seed progress is logged at most once a minute; sample progress only resets the idle timer.
+`Harness timeout: no message from the app for 10 minutes while <phase>` means the active job
+has been silent for ten minutes, not necessarily that the process died. `Harness timeout: job
+exceeded 4 hours while <phase>` is the total job cap, even with progress. Ordinary jobs are
+`launching` until their first message, then `running`. Both timeouts are harness failures.
+
 ## Failures and what to send back
 
 The driver prints jobs, cells and trials; the app shows IDLE / RUNNING / DONE or ERROR.
-A lock during a run can appear as "Harness timeout while launching" or "No such process" at
+A lock during a run can appear as a no-message timeout or "No such process" at
 the stop: these are harness failures, never storage outcomes. A vanished stop target is recorded
 as `harness-failed`; the driver continues with the next trial but leaves `complete: false` and
 exits 1. The crash report adds a `harness-failed` column when needed.
