@@ -54,6 +54,16 @@ test('gallery cells', async ({ page }, testInfo) => {
 						return { ua: navigator.userAgent, html: el.outerHTML.slice(0, 14000), chain };
 					});
 					await testInfo.attach(`${id}-${theme}.json`, { body: JSON.stringify(dump, null, 1), contentType: 'application/json' });
+					const shotA = await cell.screenshot({ animations: 'disabled', caret: 'hide' });
+					await testInfo.attach(`${id}-${theme}-A-disabled.png`, { body: shotA, contentType: 'image/png' });
+					await page.waitForTimeout(1500);
+					const shotB = await cell.screenshot({ animations: 'allow', caret: 'hide' });
+					await testInfo.attach(`${id}-${theme}-B-allow-after-1500ms.png`, { body: shotB, contentType: 'image/png' });
+					const anims = await cell.evaluate((el) => el.getAnimations({ subtree: true }).map((a) => `${(a as CSSAnimation).animationName ?? a.id}:${a.playState}:${a.currentTime}`));
+					await testInfo.attach(`${id}-${theme}-animations.txt`, { body: anims.join('\n') || '(none)', contentType: 'text/plain' });
+					await cell.evaluate((el) => el.getAnimations({ subtree: true }).forEach((a) => a.finish()));
+					const shotC = await cell.screenshot({ animations: 'disabled', caret: 'hide' });
+					await testInfo.attach(`${id}-${theme}-C-finished-then-disabled.png`, { body: shotC, contentType: 'image/png' });
 				}
 				count++;
 			}
