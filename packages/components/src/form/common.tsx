@@ -60,7 +60,9 @@ function FormLabel({
 
 	return (
 		<Label
-			className={cn('p-0', error && 'text-destructive', className)}
+			// The label is a press target for the control beside it (focus, toggle): it keeps
+			// a little vertical padding for the finger; the horizontal inset is gone.
+			className={cn('py-1', error && 'text-destructive', className)}
 			nativeID={formItemNativeID}
 			{...props}
 		/>

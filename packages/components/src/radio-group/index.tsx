@@ -101,7 +101,8 @@ function RadioGroupOption({
 	const isDisabled = groupDisabled || disabled;
 
 	return (
-		<HStack className={cn('items-start', isDisabled && 'opacity-45', className)} space="sm">
+		// The item dims itself; the row dims only the text beside it, so nothing compounds.
+		<HStack className={cn('items-start', className)} space="sm">
 			<RadioGroupItem
 				aria-describedby={descriptionID}
 				aria-labelledby={labelID}
@@ -110,7 +111,7 @@ function RadioGroupOption({
 				className={itemClassName}
 				{...props}
 			/>
-			<VStack className="flex-1" space="xs">
+			<VStack className={cn('flex-1', isDisabled && 'opacity-45')} space="xs">
 				<Label
 					nativeID={labelID}
 					className={labelClassName}

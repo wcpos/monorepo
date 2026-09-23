@@ -156,7 +156,8 @@ function InputField({
 			editable={editable}
 			className={cn(
 				'text-foreground placeholder:text-muted-foreground w-full flex-1 bg-transparent px-3 py-2 text-base leading-none outline-none',
-				!editable && 'web:cursor-not-allowed opacity-45',
+				// The root carries the disabled opacity; a second one here would compound to 20 %.
+				!editable && 'web:cursor-not-allowed',
 				className
 			)}
 			// placeholderTextColor={placeholderTextColor || 'text-muted-foreground'}

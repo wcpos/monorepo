@@ -787,7 +787,7 @@
     }
   }
   /* Controls tier: wcpos/roadmap#376, shared keyboard focus. */
-  :where([role="button"], [role="checkbox"], [role="radio"], [role="switch"], [role="combobox"], [role="tab"], [role="menuitem"], [role="option"], button, a, summary):focus-visible {
+  :where([role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="switch"], [role="combobox"], [role="tab"], [role="menuitem"], [role="option"], button, a, summary):focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }

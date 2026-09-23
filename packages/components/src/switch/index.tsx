@@ -123,7 +123,7 @@ type SwitchNativeProps = SwitchPrimitives.RootProps &
 		ref?: React.Ref<SwitchPrimitives.RootRef>;
 	};
 
-function SwitchNative({ className, size = 'default', ref, ...props }: SwitchNativeProps) {
+function SwitchNative({ className, size = 'default', ref, style, ...props }: SwitchNativeProps) {
 	const [borderColor, primaryColor] = useCSSVariable([
 		'--color-border',
 		'--color-primary',
@@ -151,9 +151,13 @@ function SwitchNative({ className, size = 'default', ref, ...props }: SwitchNati
 			},
 		],
 	}));
+	// A plain style object belongs to the wrapper (layout, margins, overrides); a
+	// pressed-state style function stays on the primitive that owns the press.
+	const wrapperStyle = typeof style === 'function' ? undefined : style;
+	const pressableStyle = typeof style === 'function' ? style : undefined;
 	return (
 		<Animated.View
-			style={animatedRootStyle}
+			style={[animatedRootStyle, wrapperStyle]}
 			// The caller's classes land on the wrapper that owns the layout and paints the
 			// track, as they do on the web root; the primitive underneath is only the hit area.
 			className={cn(nativeSwitchVariants({ size }), props.disabled && 'opacity-45', className)}
@@ -165,6 +169,7 @@ function SwitchNative({ className, size = 'default', ref, ...props }: SwitchNati
 				// No size of its own: it fills whatever the wrapper measures, so a caller's
 				// width lands on the same track the thumb's travel is read from.
 				className="absolute inset-0 flex-row items-center bg-transparent p-0.5"
+				style={pressableStyle}
 				{...props}
 				ref={ref}
 			>
