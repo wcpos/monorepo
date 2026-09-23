@@ -1,10 +1,9 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import * as PopoverPrimitive from '@rn-primitives/popover';
 
 import { useIsPhone } from '../lib/device';
-import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
@@ -42,17 +41,9 @@ function PopoverContent({
 		>
 			<TextClassContext.Provider value="text-foreground">
 				{phone ? (
-					<View
-						testID={props.testID}
-						className={cn(
-							className,
-							OVERLAY_PANEL.bottom,
-							open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
-							'z-50'
-						)}
-					>
+					<OverlaySheetPanel testID={props.testID} className={className}>
 						{children}
-					</View>
+					</OverlaySheetPanel>
 				) : (
 					<PopoverPrimitive.Content
 						align={align}

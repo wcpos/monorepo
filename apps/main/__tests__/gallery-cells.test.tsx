@@ -51,3 +51,40 @@ it('renders every text story in six scoped cells with floored scale values', () 
 		renderer!.unmount();
 	});
 });
+
+// An isolated story (an open overlay) is a link on the full page and the story alone on
+// its own `?cell=` page; both carry the cell id and the flag the shoot discovers.
+jest.mock('expo-router', () => ({
+	Link: ({ children }: React.PropsWithChildren) => children,
+}));
+it('renders an isolated story as a link on the full page and mounts it only on its cell page', () => {
+	const isolated = [
+		{ id: 'open', isolated: true, render: () => <ScopedVariables variables={{}} /> },
+	];
+	let renderer: ReactTestRenderer;
+	act(() => {
+		renderer = create(<GalleryCells component="popover" stories={isolated} />);
+	});
+	const cells = renderer!.root.findAll(
+		(node) => node.props?.dataSet?.cellId === 'popover--open--regular-fine'
+	);
+	// The composite View and its host node both carry the props: one cell, two matches.
+	expect(cells.length).toBeGreaterThan(0);
+	expect(cells[0].props.dataSet).toEqual({
+		cellId: 'popover--open--regular-fine',
+		isolated: 'true',
+	});
+	expect(renderer!.root.findAllByType(ScopedVariables)).toHaveLength(0);
+	act(() => {
+		renderer!.unmount();
+	});
+	act(() => {
+		renderer = create(
+			<GalleryCells component="popover" stories={isolated} cell="popover--open--regular-fine" />
+		);
+	});
+	expect(renderer!.root.findAllByType(ScopedVariables).length).toBeGreaterThan(0);
+	act(() => {
+		renderer!.unmount();
+	});
+});

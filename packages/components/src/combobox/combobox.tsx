@@ -18,7 +18,7 @@ import {
 	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
 import { defaultFilter } from './utils/filter';
-import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { useIsPhone } from '../lib/device';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -197,19 +197,14 @@ function ComboboxContent({
 		>
 			<TextClassContext.Provider value="text-foreground">
 				{isPhone ? (
-					<View
+					<OverlaySheetPanel
 						testID={props.testID}
-						className={cn(
-							className,
-							OVERLAY_PANEL.bottom,
-							open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
-							'z-50'
-						)}
+						className={className}
 						// The shell pads the safe area; the panel adds only its own inset.
 						style={[{ maxHeight: sheet.maxHeight }, style]}
 					>
 						{content}
-					</View>
+					</OverlaySheetPanel>
 				) : (
 					<PopoverPrimitive.Content
 						align={align}

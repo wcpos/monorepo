@@ -19,7 +19,7 @@ import {
 	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
 import { useIsPhone } from '../lib/device';
-import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 import * as VirtualizedListPrimitive from '../virtualized-list';
@@ -489,18 +489,13 @@ function TreeComboboxContent<T>({
 		>
 			<TextClassContext.Provider value="text-foreground">
 				{phone ? (
-					<View
-						className={cn(
-							className,
-							OVERLAY_PANEL.bottom,
-							open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
-							'z-50'
-						)}
+					<OverlaySheetPanel
+						className={className}
 						// The shell pads the safe area; the panel adds only its own inset.
 						style={{ maxHeight: sheet.maxHeight }}
 					>
 						{content}
-					</View>
+					</OverlaySheetPanel>
 				) : (
 					<PopoverPrimitive.Content
 						align="center"

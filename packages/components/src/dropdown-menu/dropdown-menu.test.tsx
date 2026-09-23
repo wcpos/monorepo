@@ -35,3 +35,12 @@ it('keeps destructive text red on an ordinary muted row', () => {
 	for (const file of ['index.tsx', 'item.tsx'])
 		expect(readFileSync(`${__dirname}/${file}`, 'utf8')).not.toMatch(/group|Platform|accent/);
 });
+
+it('keeps one scrim component identity across renders', () => {
+	// A scrim created per render (useMemo on the caller's overlay props) would remount the
+	// menu on web whenever an inline overlayStyle changed identity (CodeRabbit on #2212).
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	expect(source).toMatch(/^function MenuScrim\(/m);
+	expect(source).toMatch(/Scrim=\{MenuScrim\}/);
+	expect(source).not.toMatch(/useMemo\(\(\) => \{\s*function/);
+});

@@ -30,6 +30,23 @@ const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 const useRootContext = DropdownMenuPrimitive.useRootContext;
 
+// The scrim must keep one component identity across renders (on web it wraps the menu, so a
+// new type remounts it and replays the entrance); the caller's overlay props reach it here.
+const OverlayPropsContext = React.createContext<{
+	className?: string;
+	style?: StyleProp<ViewStyle>;
+}>({});
+function MenuScrim(p: OverlayScrimProps) {
+	const overlay = React.useContext(OverlayPropsContext);
+	return (
+		<DropdownMenuPrimitive.Overlay
+			{...p}
+			className={cn(overlay.className, p.className)}
+			style={[p.style, overlay.style]}
+		/>
+	);
+}
+
 function DropdownMenuSubTrigger({
 	className,
 	inset,
@@ -89,31 +106,25 @@ function DropdownMenuContent({
 	inline?: boolean;
 }) {
 	const { open } = DropdownMenuPrimitive.useRootContext();
-	const Scrim = React.useMemo(() => {
-		function Scrim(p: OverlayScrimProps) {
-			return (
-				<DropdownMenuPrimitive.Overlay
-					{...p}
-					className={cn(overlayClassName, p.className)}
-					style={[p.style, overlayStyle]}
-				/>
-			);
-		}
-		return Scrim;
-	}, [overlayClassName, overlayStyle]);
+	const overlay = React.useMemo(
+		() => ({ className: overlayClassName, style: overlayStyle }),
+		[overlayClassName, overlayStyle]
+	);
 	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
 	const shell = (
-		<OverlayShell presentation="anchored" open={open} Scrim={Scrim} testID={props.testID}>
-			<DropdownMenuPrimitive.Content
-				className={cn(
-					OVERLAY_PANEL.anchored,
-					'z-50 min-w-50 overflow-hidden p-1.5',
-					open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
-					className
-				)}
-				{...props}
-			/>
-		</OverlayShell>
+		<OverlayPropsContext.Provider value={overlay}>
+			<OverlayShell presentation="anchored" open={open} Scrim={MenuScrim} testID={props.testID}>
+				<DropdownMenuPrimitive.Content
+					className={cn(
+						OVERLAY_PANEL.anchored,
+						'z-50 min-w-50 overflow-hidden p-1.5',
+						open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+						className
+					)}
+					{...props}
+				/>
+			</OverlayShell>
+		</OverlayPropsContext.Provider>
 	);
 	return inline ? (
 		shell

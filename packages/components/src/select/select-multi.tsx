@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
@@ -7,7 +7,7 @@ import { Slot } from '@rn-primitives/slot';
 
 import { Checkbox } from '../checkbox';
 import { getDisplayLabel, getDisplayLabelEllipsis, toggleMultiValue } from '../lib/multi-select';
-import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
 import { useIsPhone } from '../lib/device';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
@@ -143,6 +143,9 @@ function SelectMultiContent({
 	...props
 }: PopoverPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const context = useMultiSelectContext();
+	// The popover root owns the open state; the multi context mirrors it. A dismiss must go
+	// through the root, or the trigger's next press closes a popover that is already hidden.
+	const { open, onOpenChange } = PopoverPrimitive.useRootContext();
 	const phone = useIsPhone();
 	const presentation = phone ? 'bottom' : 'anchored';
 	if (!context.open) return null;
@@ -153,24 +156,16 @@ function SelectMultiContent({
 	const shell = (
 		<OverlayShell
 			presentation={presentation}
-			open={context.open}
+			open={open}
 			Scrim={PopoverPrimitive.Overlay}
-			onDismiss={phone ? () => context.onOpenChange(false) : undefined}
+			onDismiss={phone ? () => onOpenChange(false) : undefined}
 			testID={props.testID}
 		>
 			<TextClassContext.Provider value="text-foreground">
 				{phone ? (
-					<View
-						testID={props.testID}
-						className={cn(
-							className,
-							OVERLAY_PANEL.bottom,
-							context.open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
-							'z-50'
-						)}
-					>
+					<OverlaySheetPanel testID={props.testID} className={className}>
 						{content}
-					</View>
+					</OverlaySheetPanel>
 				) : (
 					<PopoverPrimitive.Content
 						align={align}
@@ -178,7 +173,7 @@ function SelectMultiContent({
 						className={cn(
 							OVERLAY_PANEL.anchored,
 							'z-50 max-h-96 min-w-32 p-1.5',
-							context.open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
 							className
 						)}
 						{...props}

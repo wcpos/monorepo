@@ -1,13 +1,14 @@
 import * as React from 'react';
 import { Pressable, type PressableProps, View } from 'react-native';
 
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 import { BEATS, INDETERMINATE, SPINNER, WEB_ANIMATIONS } from './motion';
 import {
 	OVERLAY_MOTION,
 	OVERLAY_PANEL,
 	type OverlayPresentation,
+	OverlaySheetPanel,
 	OverlayShell,
 	useOverlay,
 	useOverlayPresentation,
@@ -218,4 +219,51 @@ it('dismisses on the backdrop only: a press bubbling up from the panel is ignore
 	expect(onDismiss).not.toHaveBeenCalled();
 	mockScrimProps.at(-1)?.onPress?.({ target: scrim, currentTarget: scrim } as never);
 	expect(onDismiss).toHaveBeenCalledTimes(1);
+});
+
+it('closes a sheet that owns its dismiss on Escape, and leaves the key alone otherwise', () => {
+	const onDismiss = jest.fn();
+	const { unmount } = render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={onDismiss} testID="e">
+			<Probe />
+		</OverlayShell>
+	);
+	document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+	expect(onDismiss).toHaveBeenCalledTimes(1);
+	document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+	expect(onDismiss).toHaveBeenCalledTimes(1);
+	unmount();
+	document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+	expect(onDismiss).toHaveBeenCalledTimes(1);
+	const quiet = jest.fn();
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} testID="q">
+			<Probe />
+		</OverlayShell>
+	);
+	document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+	expect(quiet).not.toHaveBeenCalled();
+});
+
+it('focuses the first field of a sheet that owns its dismiss once the rise settles', () => {
+	jest.useFakeTimers();
+	try {
+		render(
+			<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={jest.fn()} testID="s">
+				<OverlaySheetPanel testID="sheet" className="w-80">
+					<input data-testid="field" />
+				</OverlaySheetPanel>
+			</OverlayShell>
+		);
+		// The panel's classes are pinned in popover.test.tsx (this harness drops them); the
+		// focus hand-off is the shell's and is pinned here.
+		const sheet = screen.getByTestId('sheet');
+		expect(document.activeElement).not.toBe(screen.getByTestId('field'));
+		act(() => {
+			sheet.dispatchEvent(new Event('animationend', { bubbles: false }));
+		});
+		expect(document.activeElement).toBe(screen.getByTestId('field'));
+	} finally {
+		jest.useRealTimers();
+	}
 });

@@ -1,8 +1,10 @@
 import type * as React from 'react';
 import { View } from 'react-native';
 
+import { Link } from 'expo-router';
 import { ScopedVariables } from 'uniwind';
 
+import { Text } from '@wcpos/components/text';
 import {
 	type Pointer,
 	POINTER_FLOORS,
@@ -32,13 +34,22 @@ export function GalleryCells({
 			(Object.keys(POINTER_FLOORS) as Pointer[]).map((pointer) => {
 				const id = `${component}--${story.id}--${step}-${pointer}`;
 				if (cell && cell !== id) return null;
+				const dataSet = { cellId: id, ...(story.isolated ? { isolated: 'true' } : {}) };
+				// On the full page an isolated story is a link to its own cell, not a mounted
+				// overlay: six open ones would close or cover each other. The cell keeps its id
+				// and flag so the shoot still discovers it here and navigates to `?cell=`.
+				if (story.isolated && !cell) {
+					return (
+						<View key={id} testID={id} {...{ dataSet }} className="bg-background p-4">
+							<Link href={{ pathname: '/gallery/[component]', params: { component, cell: id } }}>
+								<Text className="text-primary web:underline">{id}</Text>
+							</Link>
+						</View>
+					);
+				}
 				return (
 					<ScopedVariables key={id} variables={scaleVariables(step, pointer)}>
-						<View
-							testID={id}
-							{...{ dataSet: { cellId: id, ...(story.isolated ? { isolated: 'true' } : {}) } }}
-							className="bg-background p-4"
-						>
+						<View testID={id} {...{ dataSet }} className="bg-background p-4">
 							{story.render()}
 						</View>
 					</ScopedVariables>

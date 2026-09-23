@@ -63,6 +63,7 @@ export type OverlayShellProps = {
 };
 export type OverlayContextValue = {
 	presentation: OverlayPresentation;
+	open: boolean;
 	deferAutoFocus: boolean;
 	onPanelNode: (node: HTMLElement | null) => void;
 };
@@ -125,6 +126,40 @@ export const OVERLAY_MOTION: Record<
 		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT).easing(EASE),
 	},
 };
+/**
+ * The phone sheet's panel for an overlay that mounts no primitive `Content` (the popover
+ * family under the phone width): the drawn sheet skin, the rise from `open`, the caller's
+ * classes first so the sheet's geometry wins, and the node handed to the shell so it can
+ * focus the first field once the rise settles.
+ */
+export function OverlaySheetPanel({
+	className,
+	style,
+	testID,
+	children,
+}: {
+	className?: string;
+	style?: StyleProp<ViewStyle>;
+	testID?: string;
+	children: React.ReactNode;
+}) {
+	const { open, onPanelNode } = useOverlay();
+	return (
+		<View
+			ref={onPanelNode as unknown as React.Ref<View>}
+			testID={testID}
+			className={cn(
+				className,
+				OVERLAY_PANEL.bottom,
+				open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
+				'z-50'
+			)}
+			style={style}
+		>
+			{children}
+		</View>
+	);
+}
 const align: Record<OverlayPresentation, string> = {
 	anchored: '',
 	center: 'items-center justify-center p-2',
@@ -137,7 +172,7 @@ const TEXT_FIELD =
 	'input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled])';
 const TABBABLE = `a[href],button:not([disabled]),${TEXT_FIELD},[tabindex]:not([tabindex="-1"])`;
 /**
- * Web only, side panels only. Radix focuses the first tabbable the moment the content
+ * Web only, side panels and the sheets that own their dismiss. Radix focuses the first tabbable the moment the content
  * mounts, while `slide-in-from-*` still has the panel translated a full width off-screen.
  * The browser then scrolls the nearest scrollable ancestor (in the POS that is a
  * react-native-screens wrapper) to reveal the focused element, and the whole screen
@@ -164,7 +199,15 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		[onDismiss]
 	);
 	React.useEffect(() => {
-		if (isWeb || !open || !onDismiss) return;
+		if (!open || !onDismiss) return;
+		if (isWeb) {
+			// A sheet without primitive Content has no Radix dismissable layer: Escape is ours.
+			const onKey = (event: KeyboardEvent) => {
+				if (event.key === 'Escape') onDismiss();
+			};
+			document.addEventListener('keydown', onKey);
+			return () => document.removeEventListener('keydown', onKey);
+		}
 		const back = BackHandler.addEventListener('hardwareBackPress', () => {
 			onDismiss();
 			return true;
@@ -173,8 +216,9 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	}, [open, onDismiss]);
 	// The external animation event (or reduced-motion timer) determines when focus is safe.
 	React.useEffect(() => {
-		if (presentation === 'anchored') return;
-		if (!isWeb || presentation === 'center' || presentation === 'bottom' || !open || !node) return;
+		// Side panels, and a sheet that owns its dismiss (no primitive Content to focus it).
+		const ownsSheet = presentation === 'bottom' && Boolean(onDismiss);
+		if (!isWeb || !open || !node || !(fullHeight || ownsSheet)) return;
 		let done = false;
 		const focusFirst = () => {
 			if (done) return;
@@ -197,7 +241,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			clearTimeout(timer);
 			node.removeEventListener('animationend', onAnimationEnd);
 		};
-	}, [node, open, presentation]);
+	}, [node, open, presentation, fullHeight, onDismiss]);
 	if (presentation === 'anchored') {
 		/**
 		 * The primitive positions the panel; the shell supplies only the plumbing the
@@ -215,7 +259,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		 * dropdown menu; those ledger lines now point here.
 		 */
 		return (
-			<OverlayContext.Provider value={{ presentation, deferAutoFocus, onPanelNode }}>
+			<OverlayContext.Provider value={{ presentation, open, deferAutoFocus, onPanelNode }}>
 				{isWeb ? (
 					<Scrim
 						focusable={false}
@@ -319,7 +363,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		</View>
 	);
 	return (
-		<OverlayContext.Provider value={{ presentation, deferAutoFocus, onPanelNode }}>
+		<OverlayContext.Provider value={{ presentation, open, deferAutoFocus, onPanelNode }}>
 			{isWeb && pinned ? (
 				<View collapsable={false} style={StyleSheet.absoluteFill}>
 					{shell}
