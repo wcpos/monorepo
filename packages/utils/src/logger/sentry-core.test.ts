@@ -48,6 +48,20 @@ describe('describeBareException', () => {
 		expect(event).toHaveProperty('contexts.thrown.typeof', 'object');
 	});
 
+	it('redacts tokens in code and keys and strips origins from the stack head', () => {
+		const event = { exception: { values: [{ value: 'No error message' }] } };
+		const error = Object.assign(new Error(''), { code: 'Bearer code-secret' });
+		Object.defineProperty(error, 'Bearer key-secret', { value: 1, enumerable: true });
+		error.stack = 'Error\n    at render (https://shop.example/wp-content/plugins/pos/app.js:1:2)';
+		describeBareException(event, { originalException: error });
+		expect(event).toHaveProperty('contexts.thrown.code', 'Bearer [REDACTED]');
+		expect(event).toHaveProperty('contexts.thrown.keys', ['code', 'Bearer [REDACTED]']);
+		expect(event).toHaveProperty(
+			'contexts.thrown.stackHead',
+			'Error\n    at render ({}/wp-content/plugins/pos/app.js:1:2)'
+		);
+	});
+
 	it('prepares diagnostics and redacts exception values together', () => {
 		const event = {
 			exception: {

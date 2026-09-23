@@ -35,22 +35,33 @@ function toRow({ id, name }: ScannedDevice): DiscoveredPrinter {
 type BleManager = Awaited<ReturnType<typeof getBleManager>>;
 type BleState = Awaited<ReturnType<BleManager['state']>>;
 
-async function waitForBleState(manager: BleManager, budgetMs: number): Promise<BleState> {
-	let state: BleState = await manager.state();
-	if (state !== 'Unknown' && state !== 'Resetting') return state;
+const settled = (state: BleState) => state !== 'Unknown' && state !== 'Resetting';
+
+/**
+ * Subscribes before reading the snapshot: ble-plx only emits future changes, so a transition
+ * landing between the two would otherwise go unseen until the budget ran out.
+ */
+function waitForBleState(manager: BleManager, budgetMs: number): Promise<BleState> {
 	return new Promise<BleState>((resolve) => {
-		let subscription: { remove(): void } | undefined;
+		// ble-plx types State as an enum; the literal is what the native side reports before its delegate fires.
+		let state = 'Unknown' as BleState;
 		let timer: ReturnType<typeof setTimeout> | undefined;
+		let subscription: { remove(): void } | undefined;
+		let done = false;
 		const finish = () => {
+			if (done) return;
+			done = true;
 			clearTimeout(timer);
 			subscription?.remove();
 			resolve(state);
 		};
-		subscription = manager.onStateChange((next) => {
+		const see = (next: BleState) => {
 			state = next;
-			if (state !== 'Unknown' && state !== 'Resetting') finish();
-		}, false);
+			if (settled(state)) finish();
+		};
+		subscription = manager.onStateChange(see, false);
 		timer = setTimeout(finish, budgetMs);
+		manager.state().then(see, () => finish());
 	});
 }
 
@@ -99,7 +110,8 @@ async function scanOnce(
  * GATT print services first; printers that advertise only a name (most clones do) are picked up by
  * the unfiltered second pass. Loaded through a dynamic import, like the vendor SDK discoveries.
  * CoreBluetooth starts Unknown on iOS; let it settle, including time for the permission alert,
- * before scanning, using the scan timeout as the wait budget too.
+ * before scanning. The wait has its own budget equal to the scan's, so the worst case is twice
+ * `timeoutMs`; the Epson pass runs for ten seconds alongside, so the setup step is not slower.
  */
 export async function discover({
 	timeoutMs = BLE_SCAN_TIMEOUT_MS,

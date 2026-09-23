@@ -99,6 +99,24 @@ describe('generic BLE discovery', () => {
 		expect(remove).toHaveBeenCalledTimes(1);
 	});
 
+	it('sees a transition that lands while the state snapshot is still pending', async () => {
+		const remove = vi.fn();
+		let listener: (state: string) => void = () => {};
+		manager.onStateChange.mockImplementation((callback) => {
+			listener = callback;
+			return { remove };
+		});
+		// The snapshot answers Unknown only after the adapter has already announced PoweredOn.
+		manager.state.mockImplementation(async () => {
+			listener('PoweredOn');
+			return 'Unknown';
+		});
+		state.filtered = [{ id: 'aa:11', name: 'NT-1809' }];
+		expect((await discover({ timeoutMs: 200 })).map((row) => row.address)).toEqual(['ble:aa:11']);
+		expect(manager.startDeviceScan).toHaveBeenCalledTimes(1);
+		expect(remove).toHaveBeenCalledTimes(1);
+	});
+
 	it('skips scanning when Bluetooth is PoweredOff', async () => {
 		manager.state.mockResolvedValue('PoweredOff');
 		await expect(discover({ timeoutMs: 30 })).resolves.toEqual([]);
