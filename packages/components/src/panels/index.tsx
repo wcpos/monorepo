@@ -32,6 +32,12 @@ function PanelResizeHandle({
 		disableDoubleTap,
 		hitTargetSize,
 		onDragging: setDragging,
+		// On the whole 8 px handle, not the 4 px bar: the pointer can rest on the hit target
+		// without crossing the bar (CodeRabbit on #2213).
+		onPointerEnter: () => {
+			if (pointer === 'fine') setHovered(true);
+		},
+		onPointerLeave: () => setHovered(false),
 		style: {
 			width: direction === 'horizontal' ? 8 : '100%',
 			height: direction === 'horizontal' ? '100%' : 8,
@@ -45,10 +51,6 @@ function PanelResizeHandle({
 	return (
 		<PanelPrimitives.PanelResizeHandle {...handleProps}>
 			<View
-				onPointerEnter={() => {
-					if (pointer === 'fine') setHovered(true);
-				}}
-				onPointerLeave={() => setHovered(false)}
 				className={cn(
 					'web:transition-colors rounded-full',
 					direction === 'horizontal'

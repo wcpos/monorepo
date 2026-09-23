@@ -20,8 +20,16 @@ jest.mock('react-native', () => ({
 	}) => <div {...props} data-testid={testID} onClick={disabled ? undefined : onPress} />,
 }));
 jest.mock('../icon-button', () => ({
-	IconButton: ({ onPress }: { onPress: React.MouseEventHandler<HTMLButtonElement> }) => (
-		<button onClick={onPress}>Remove</button>
+	IconButton: ({
+		onPress,
+		disabled,
+	}: {
+		onPress: React.MouseEventHandler<HTMLButtonElement>;
+		disabled?: boolean;
+	}) => (
+		<button onClick={onPress} disabled={disabled}>
+			Remove
+		</button>
 	),
 }));
 jest.mock('../text', () => ({
@@ -52,4 +60,12 @@ it('removes without activating the row', () => {
 
 it('retires the background surface and tiny subtitle', () => {
 	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/bg-background|text-xs/);
+});
+
+it('cannot remove a disabled row', () => {
+	const onRemove = jest.fn();
+	const { getByRole } = render(<ListItem removable disabled onRemove={onRemove} />);
+	expect(getByRole('button')).toBeDisabled();
+	fireEvent.click(getByRole('button'));
+	expect(onRemove).not.toHaveBeenCalled();
 });

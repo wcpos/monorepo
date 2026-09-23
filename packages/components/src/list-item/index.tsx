@@ -113,6 +113,8 @@ export function ListItem({
 					name="xmark"
 					size="xs"
 					variant="destructive"
+					// A disabled row cannot be removed either (CodeRabbit on #2213).
+					disabled={pressableProps.disabled ?? undefined}
 					onPress={(e) => {
 						e.stopPropagation();
 						onRemove?.();
