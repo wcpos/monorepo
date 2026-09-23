@@ -1,0 +1,1452 @@
+{
+  "environment": {
+    "os": "darwin 27.0.0 arm64",
+    "platform": "mac",
+    "cpu": "Apple M4 Pro",
+    "node": "24.14.0",
+    "sqlite": "3.51.2",
+    "rxdb": "17.4.0",
+    "rxdb-premium": "17.4.0",
+    "esbuild": "0.28.2",
+    "premiumPatchMarkerCount": 0,
+    "measuredAt": "2026-09-23T14:57:20.351Z"
+  },
+  "requestedTrials": 30,
+  "rows": [
+    "filesystem-node",
+    "sqlite-node"
+  ],
+  "complete": true,
+  "trials": [
+    {
+      "row": "filesystem-node",
+      "trial": 1,
+      "targetStopMs": 2562,
+      "stopMs": 2562.879584,
+      "wal": null,
+      "ackedCount": 383,
+      "inflightTx": 384,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 563.124,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-9d00ae19-7651-43e3-9942-5040d04d1534',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 41904,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-9d00ae19-7651-43e3-9942-5040d04d1534/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 41904,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 2,
+      "targetStopMs": 2927,
+      "stopMs": 2928.6046250000004,
+      "wal": null,
+      "ackedCount": 415,
+      "inflightTx": 416,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 645.6156249999999,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-d67e7557-aa91-4e7c-a86d-958aacdcf80a',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 45296,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-d67e7557-aa91-4e7c-a86d-958aacdcf80a/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 45296,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 3,
+      "targetStopMs": 1717,
+      "stopMs": 1719.2885830000005,
+      "wal": null,
+      "ackedCount": 311,
+      "inflightTx": 312,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 477.31649999999996,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-c0aa4ee8-deff-4a5d-adf8-966e7ed7c578',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 34272,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-c0aa4ee8-deff-4a5d-adf8-966e7ed7c578/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 34272,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 4,
+      "targetStopMs": 2043,
+      "stopMs": 2042.9710830000004,
+      "wal": null,
+      "ackedCount": 343,
+      "inflightTx": 344,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "lost",
+      "missing": [
+        [
+          "t342-0",
+          342
+        ],
+        [
+          "t343-0",
+          343
+        ]
+      ],
+      "missingCount": 2,
+      "ledger": "lost",
+      "repairs": 2,
+      "reopenMs": 524.42875,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-0b5b298d-6f5f-454d-92ce-5a50b550671b',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 37622,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-0b5b298d-6f5f-454d-92ce-5a50b550671b/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 37622,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 5,
+      "targetStopMs": 1700,
+      "stopMs": 1701.8505829999995,
+      "wal": null,
+      "ackedCount": 308,
+      "inflightTx": 309,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 455.859458,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-7a9de3ac-ec1d-4ff5-9cec-7e97bdd81687',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 34230,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-7a9de3ac-ec1d-4ff5-9cec-7e97bdd81687/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 34230,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 6,
+      "targetStopMs": 1680,
+      "stopMs": 1681.8729160000003,
+      "wal": null,
+      "ackedCount": 300,
+      "inflightTx": 301,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 446.49875,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-6af6264f-1897-43ba-a0d9-d7520f385f04',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 33382,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-6af6264f-1897-43ba-a0d9-d7520f385f04/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 33382,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 7,
+      "targetStopMs": 2837,
+      "stopMs": 2839.0331250000017,
+      "wal": null,
+      "ackedCount": 407,
+      "inflightTx": 408,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 602.4206250000001,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-efad4e9c-825b-4c00-87dd-1858ec949d26',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 44448,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-efad4e9c-825b-4c00-87dd-1858ec949d26/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 44448,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 8,
+      "targetStopMs": 2377,
+      "stopMs": 2378.7740840000006,
+      "wal": null,
+      "ackedCount": 372,
+      "inflightTx": 373,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 580.6497079999999,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-d79aff76-fd79-44aa-87cf-476c3a8886e5',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 41014,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-d79aff76-fd79-44aa-87cf-476c3a8886e5/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 41014,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 9,
+      "targetStopMs": 733,
+      "stopMs": 735.0864580000016,
+      "wal": null,
+      "ackedCount": 180,
+      "inflightTx": 181,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 283.962291,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-d1741f0a-c75c-4646-9dbd-afb98cc8b526',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 20662,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-d1741f0a-c75c-4646-9dbd-afb98cc8b526/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 20662,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 10,
+      "targetStopMs": 692,
+      "stopMs": 693.9108750000014,
+      "wal": null,
+      "ackedCount": 175,
+      "inflightTx": 176,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 271.025625,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-c57d59b3-6c4e-40da-92a8-95af1dbb35dd',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 19856,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-c57d59b3-6c4e-40da-92a8-95af1dbb35dd/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 19856,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 11,
+      "targetStopMs": 1578,
+      "stopMs": 1580.5755839999983,
+      "wal": null,
+      "ackedCount": 287,
+      "inflightTx": 288,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 429.325875,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-cbbe33d2-92e1-4e56-9945-e3bbfea71389',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 31728,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-cbbe33d2-92e1-4e56-9945-e3bbfea71389/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 31728,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 12,
+      "targetStopMs": 2249,
+      "stopMs": 2249.386708000002,
+      "wal": null,
+      "ackedCount": 359,
+      "inflightTx": 360,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "lost",
+      "missing": [
+        [
+          "t358-0",
+          358
+        ],
+        [
+          "t359-0",
+          359
+        ]
+      ],
+      "missingCount": 2,
+      "ledger": "lost",
+      "repairs": 2,
+      "reopenMs": 549.171292,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-1cc9d49d-d5a2-4aad-8685-3a80b39a74d2',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 39318,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-1cc9d49d-d5a2-4aad-8685-3a80b39a74d2/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 39318,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 13,
+      "targetStopMs": 2513,
+      "stopMs": 2513.3764580000025,
+      "wal": null,
+      "ackedCount": 388,
+      "inflightTx": 389,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "lost",
+      "missing": [
+        [
+          "t385-0",
+          385
+        ],
+        [
+          "t386-0",
+          386
+        ],
+        [
+          "t387-0",
+          387
+        ],
+        [
+          "t387-1",
+          387
+        ],
+        [
+          "t387-2",
+          387
+        ],
+        [
+          "t388-0",
+          388
+        ]
+      ],
+      "missingCount": 6,
+      "ledger": "lost",
+      "repairs": 2,
+      "reopenMs": 591.826708,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-9f6dc2d2-a141-4fef-a879-7036e1b23f6d',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 41904,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-9f6dc2d2-a141-4fef-a879-7036e1b23f6d/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 41904,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 14,
+      "targetStopMs": 255,
+      "stopMs": 254.62133399999584,
+      "wal": null,
+      "ackedCount": 84,
+      "inflightTx": 85,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "lost",
+      "missing": [
+        [
+          "t81-0",
+          81
+        ],
+        [
+          "t82-0",
+          82
+        ],
+        [
+          "t83-0",
+          83
+        ],
+        [
+          "t83-1",
+          83
+        ],
+        [
+          "t83-2",
+          83
+        ],
+        [
+          "t84-0",
+          84
+        ]
+      ],
+      "missingCount": 6,
+      "ledger": "lost",
+      "repairs": 2,
+      "reopenMs": 155.736834,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-9b5dfa2c-b9ba-492f-b3ee-5736d5d59af1',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 9680,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-9b5dfa2c-b9ba-492f-b3ee-5736d5d59af1/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 9680,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 15,
+      "targetStopMs": 803,
+      "stopMs": 804.7453339999993,
+      "wal": null,
+      "ackedCount": 191,
+      "inflightTx": 192,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 292.33695800000004,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-429d16e3-9b38-4d03-9399-15109dd9f720',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 21552,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-429d16e3-9b38-4d03-9399-15109dd9f720/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 21552,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 16,
+      "targetStopMs": 2431,
+      "stopMs": 2433.1643750000003,
+      "wal": null,
+      "ackedCount": 375,
+      "inflightTx": 376,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 560.069084,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-0c752bd4-9b5e-4831-a1ba-6399cd768bcb',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 41056,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-0c752bd4-9b5e-4831-a1ba-6399cd768bcb/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 41056,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 17,
+      "targetStopMs": 1970,
+      "stopMs": 1972.4022500000065,
+      "wal": null,
+      "ackedCount": 332,
+      "inflightTx": 333,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 484.7163330000001,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-d7e20abf-1c4b-4583-8767-4303b138af03',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 36774,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-d7e20abf-1c4b-4583-8767-4303b138af03/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 36774,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 18,
+      "targetStopMs": 404,
+      "stopMs": 404.17087499999616,
+      "wal": null,
+      "ackedCount": 119,
+      "inflightTx": 120,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "lost",
+      "missing": [
+        [
+          "t118-0",
+          118
+        ],
+        [
+          "t119-0",
+          119
+        ]
+      ],
+      "missingCount": 2,
+      "ledger": "lost",
+      "repairs": 2,
+      "reopenMs": 196.072583,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-7e5a1a06-1216-496e-884b-8ffce264b7dc',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 13878,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-7e5a1a06-1216-496e-884b-8ffce264b7dc/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 13878,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 19,
+      "targetStopMs": 1627,
+      "stopMs": 1628.5594169999968,
+      "wal": null,
+      "ackedCount": 295,
+      "inflightTx": 296,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 432.965375,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-23869003-5982-44fb-9589-2bb0b151b612',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 32576,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-23869003-5982-44fb-9589-2bb0b151b612/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 32576,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 20,
+      "targetStopMs": 992,
+      "stopMs": 993.7325829999972,
+      "wal": null,
+      "ackedCount": 220,
+      "inflightTx": 221,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 339.653209,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-0a92dda3-5cb0-4913-ba40-bb8b47b1117f',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 24902,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-0a92dda3-5cb0-4913-ba40-bb8b47b1117f/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 24902,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 21,
+      "targetStopMs": 2936,
+      "stopMs": 2938.7961670000004,
+      "wal": null,
+      "ackedCount": 415,
+      "inflightTx": 416,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 645.878375,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-a95104f7-e822-4a55-b404-5c9ea0c0a8aa',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 45296,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-a95104f7-e822-4a55-b404-5c9ea0c0a8aa/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 45296,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 22,
+      "targetStopMs": 148,
+      "stopMs": 148.21949999999924,
+      "wal": null,
+      "ackedCount": 53,
+      "inflightTx": 54,
+      "inflightSize": 1,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 107.980375,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-6dc7a760-35a1-401f-8ee2-82a968a9b27e',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 7094,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-6dc7a760-35a1-401f-8ee2-82a968a9b27e/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 7094,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 23,
+      "targetStopMs": 1783,
+      "stopMs": 1784.4564580000006,
+      "wal": null,
+      "ackedCount": 311,
+      "inflightTx": 312,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 472.026,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-b973849f-159e-407c-a1af-20f6fb19c76e',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 34272,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-b973849f-159e-407c-a1af-20f6fb19c76e/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 34272,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 24,
+      "targetStopMs": 2047,
+      "stopMs": 2046.8652920000022,
+      "wal": null,
+      "ackedCount": 340,
+      "inflightTx": 341,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "lost",
+      "missing": [
+        [
+          "t336-806",
+          336
+        ],
+        [
+          "t336-807",
+          336
+        ],
+        [
+          "t336-808",
+          336
+        ],
+        [
+          "t336-809",
+          336
+        ],
+        [
+          "t336-810",
+          336
+        ],
+        [
+          "t336-811",
+          336
+        ],
+        [
+          "t336-812",
+          336
+        ],
+        [
+          "t336-813",
+          336
+        ],
+        [
+          "t336-814",
+          336
+        ],
+        [
+          "t336-815",
+          336
+        ],
+        [
+          "t336-816",
+          336
+        ],
+        [
+          "t336-817",
+          336
+        ],
+        [
+          "t336-818",
+          336
+        ],
+        [
+          "t336-819",
+          336
+        ],
+        [
+          "t336-820",
+          336
+        ],
+        [
+          "t336-821",
+          336
+        ],
+        [
+          "t336-822",
+          336
+        ],
+        [
+          "t336-823",
+          336
+        ],
+        [
+          "t336-824",
+          336
+        ],
+        [
+          "t336-825",
+          336
+        ]
+      ],
+      "missingCount": 200,
+      "ledger": "lost",
+      "repairs": 2,
+      "reopenMs": 553.0426249999999,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-78a55c98-99c0-4f61-b541-f76e231f9c90',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 37622,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-78a55c98-99c0-4f61-b541-f76e231f9c90/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 37622,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 25,
+      "targetStopMs": 438,
+      "stopMs": 438.7406669999982,
+      "wal": null,
+      "ackedCount": 127,
+      "inflightTx": 128,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "lost",
+      "missing": [
+        [
+          "t126-0",
+          126
+        ],
+        [
+          "t127-0",
+          127
+        ]
+      ],
+      "missingCount": 2,
+      "ledger": "lost",
+      "repairs": 2,
+      "reopenMs": 205.314708,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-62e16aea-faab-4938-9dc9-76d46c751896',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 14726,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-62e16aea-faab-4938-9dc9-76d46c751896/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 14726,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 26,
+      "targetStopMs": 2668,
+      "stopMs": 2669.2129579999964,
+      "wal": null,
+      "ackedCount": 396,
+      "inflightTx": 397,
+      "inflightSize": 50,
+      "inflightPresence": "absent",
+      "outcome": "lost",
+      "missing": [
+        [
+          "t393-0",
+          393
+        ],
+        [
+          "t394-0",
+          394
+        ],
+        [
+          "t395-0",
+          395
+        ],
+        [
+          "t395-1",
+          395
+        ],
+        [
+          "t395-2",
+          395
+        ],
+        [
+          "t396-0",
+          396
+        ]
+      ],
+      "missingCount": 6,
+      "ledger": "lost",
+      "repairs": 2,
+      "reopenMs": 594.904875,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-71b3ea08-fbe3-4e87-bcd2-b4fcc12102b5',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 42752,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-71b3ea08-fbe3-4e87-bcd2-b4fcc12102b5/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 42752,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 27,
+      "targetStopMs": 188,
+      "stopMs": 189.49637499999517,
+      "wal": null,
+      "ackedCount": 63,
+      "inflightTx": 64,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 122.74199999999999,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-c6114b62-5464-444e-a03b-f296380a728e',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 7984,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-c6114b62-5464-444e-a03b-f296380a728e/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 7984,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 28,
+      "targetStopMs": 2987,
+      "stopMs": 2988.3778749999983,
+      "wal": null,
+      "ackedCount": 423,
+      "inflightTx": 424,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 623.555959,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-c10ad9ca-a2ee-4cdc-893c-ec392633092e',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 46144,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-c10ad9ca-a2ee-4cdc-893c-ec392633092e/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 46144,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 29,
+      "targetStopMs": 2243,
+      "stopMs": 2244.266791999995,
+      "wal": null,
+      "ackedCount": 359,
+      "inflightTx": 360,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 536.190875,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-0f16272b-51ff-41b2-bfe1-0cc6a7175b04',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 39360,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-0f16272b-51ff-41b2-bfe1-0cc6a7175b04/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 39360,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "filesystem-node",
+      "trial": 30,
+      "targetStopMs": 2306,
+      "stopMs": 2308.880416999993,
+      "wal": null,
+      "ackedCount": 364,
+      "inflightTx": 365,
+      "inflightSize": 50,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 2,
+      "reopenMs": 548.017916,
+      "integrity": "ok",
+      "logs": [
+        "[wcpos] rebuilt storage indexes from documents.json {\n  db: 'crash-d5720b4b-eee1-4e4a-a740-b55c071ce41e',\n  col: 'docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 40166,\n  skipped: 0\n}",
+        "recovery __wcposOnIndexRebuild: {\n  target: 'crash-d5720b4b-eee1-4e4a-a740-b55c071ce41e/docs',\n  reason: 'stale-changelog-op:A:index-1',\n  documents: 40166,\n  skipped: 0\n}"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 1,
+      "targetStopMs": 1665,
+      "stopMs": 1666.4127080000035,
+      "wal": "wal",
+      "ackedCount": 415,
+      "inflightTx": 416,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 557.2840000000001,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 2,
+      "targetStopMs": 68,
+      "stopMs": 68.61245900001086,
+      "wal": "wal",
+      "ackedCount": 16,
+      "inflightTx": 17,
+      "inflightSize": 1,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 41.75366700000001,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 3,
+      "targetStopMs": 1975,
+      "stopMs": 1977.7769999999873,
+      "wal": "wal",
+      "ackedCount": 503,
+      "inflightTx": 504,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 680.712458,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 4,
+      "targetStopMs": 2673,
+      "stopMs": 2673.408291999993,
+      "wal": "wal",
+      "ackedCount": 687,
+      "inflightTx": 688,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 947.291084,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 5,
+      "targetStopMs": 1856,
+      "stopMs": 1857.4185419999994,
+      "wal": "wal",
+      "ackedCount": 479,
+      "inflightTx": 480,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 665.9285,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 6,
+      "targetStopMs": 1885,
+      "stopMs": 1886.8367920000019,
+      "wal": "wal",
+      "ackedCount": 479,
+      "inflightTx": 480,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 672.040708,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 7,
+      "targetStopMs": 2842,
+      "stopMs": 2842.4963750000024,
+      "wal": "wal",
+      "ackedCount": 733,
+      "inflightTx": 734,
+      "inflightSize": 1,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 1024.318708,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 8,
+      "targetStopMs": 85,
+      "stopMs": 87.17233400000259,
+      "wal": "wal",
+      "ackedCount": 23,
+      "inflightTx": 24,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 50.10975,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 9,
+      "targetStopMs": 2812,
+      "stopMs": 2812.177958,
+      "wal": "wal",
+      "ackedCount": 712,
+      "inflightTx": 713,
+      "inflightSize": 1,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 1005.17775,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 10,
+      "targetStopMs": 2816,
+      "stopMs": 2818.2767500000045,
+      "wal": "wal",
+      "ackedCount": 719,
+      "inflightTx": 720,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 991.0774170000001,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 11,
+      "targetStopMs": 256,
+      "stopMs": 257.90095900000597,
+      "wal": "wal",
+      "ackedCount": 63,
+      "inflightTx": 64,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 93.232833,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 12,
+      "targetStopMs": 635,
+      "stopMs": 637.4275830000115,
+      "wal": "wal",
+      "ackedCount": 159,
+      "inflightTx": 160,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 212.64749999999998,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 13,
+      "targetStopMs": 1594,
+      "stopMs": 1596.2667089999886,
+      "wal": "wal",
+      "ackedCount": 407,
+      "inflightTx": 408,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 554.316958,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 14,
+      "targetStopMs": 2683,
+      "stopMs": 2684.963917000001,
+      "wal": "wal",
+      "ackedCount": 671,
+      "inflightTx": 672,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 930.9756669999999,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 15,
+      "targetStopMs": 1387,
+      "stopMs": 1387.423542000004,
+      "wal": "wal",
+      "ackedCount": 352,
+      "inflightTx": 353,
+      "inflightSize": 1,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 478.89616699999993,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 16,
+      "targetStopMs": 563,
+      "stopMs": 564.3368750000081,
+      "wal": "wal",
+      "ackedCount": 143,
+      "inflightTx": 144,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 198.18725,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 17,
+      "targetStopMs": 1116,
+      "stopMs": 1115.6405410000007,
+      "wal": "wal",
+      "ackedCount": 279,
+      "inflightTx": 280,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 378.996167,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 18,
+      "targetStopMs": 1315,
+      "stopMs": 1315.1161250000005,
+      "wal": "wal",
+      "ackedCount": 336,
+      "inflightTx": 337,
+      "inflightSize": 1,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 460.7825,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 19,
+      "targetStopMs": 1657,
+      "stopMs": 1657.2469169999968,
+      "wal": "wal",
+      "ackedCount": 431,
+      "inflightTx": 432,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 580.476333,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 20,
+      "targetStopMs": 1858,
+      "stopMs": 1858.6334170000046,
+      "wal": "wal",
+      "ackedCount": 471,
+      "inflightTx": 472,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 640.671833,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 21,
+      "targetStopMs": 1541,
+      "stopMs": 1543.1667920000036,
+      "wal": "wal",
+      "ackedCount": 383,
+      "inflightTx": 384,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 523.6156669999999,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 22,
+      "targetStopMs": 1076,
+      "stopMs": 1076.2102500000037,
+      "wal": "wal",
+      "ackedCount": 271,
+      "inflightTx": 272,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 368.700833,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 23,
+      "targetStopMs": 29,
+      "stopMs": 31.357665999996243,
+      "wal": "wal",
+      "ackedCount": 7,
+      "inflightTx": 8,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 43.084125,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 24,
+      "targetStopMs": 1374,
+      "stopMs": 1375.9042920000065,
+      "wal": "wal",
+      "ackedCount": 343,
+      "inflightTx": 344,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 469.98991600000005,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 25,
+      "targetStopMs": 98,
+      "stopMs": 97.88275000000431,
+      "wal": "wal",
+      "ackedCount": 31,
+      "inflightTx": null,
+      "inflightSize": 0,
+      "inflightPresence": "none",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 51.30583299999999,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 26,
+      "targetStopMs": 2466,
+      "stopMs": 2468.349583999996,
+      "wal": "wal",
+      "ackedCount": 631,
+      "inflightTx": 632,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 873.3117080000001,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 27,
+      "targetStopMs": 2014,
+      "stopMs": 2013.9519999999902,
+      "wal": "wal",
+      "ackedCount": 519,
+      "inflightTx": 520,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 696.592042,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 28,
+      "targetStopMs": 1269,
+      "stopMs": 1271.5222919999796,
+      "wal": "wal",
+      "ackedCount": 327,
+      "inflightTx": 328,
+      "inflightSize": 1000,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 440.610958,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 29,
+      "targetStopMs": 2051,
+      "stopMs": 2052.8116670000018,
+      "wal": "wal",
+      "ackedCount": 527,
+      "inflightTx": 528,
+      "inflightSize": 1000,
+      "inflightPresence": "present",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 730.052584,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    },
+    {
+      "row": "sqlite-node",
+      "trial": 30,
+      "targetStopMs": 127,
+      "stopMs": 126.37245900000562,
+      "wal": "wal",
+      "ackedCount": 32,
+      "inflightTx": 33,
+      "inflightSize": 1,
+      "inflightPresence": "absent",
+      "outcome": "ok",
+      "ledger": "ok",
+      "missingCount": 0,
+      "repairs": 0,
+      "reopenMs": 59.330583,
+      "integrity": "ok",
+      "logs": [
+        "spike-2210 WAL proof: sqlite-node journal_mode=wal"
+      ]
+    }
+  ]
+}

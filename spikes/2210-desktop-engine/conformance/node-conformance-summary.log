@@ -1,34 +1,29 @@
 # Node conformance summary (rxdb 17.4.0, DEFAULT_STORAGE=custom)
 spike-2210 runtime: electron=43.4.0 node=24.18.1 sqlite=3.53.1 journal_mode=wal
 spike-2210 runtime: electron=43.4.0 node=24.18.1 sqlite=3.53.1 journal_mode=wal
-init.test.ts;util.test.js;vector-distance.test.ts;custom-index.test.ts;query-planner.test.js;doc-cache.test.ts;internal-indexes.test.js;rx-storage-implementations.test.ts (implementation: sqlite-node-native);rx-storage-query-correctness.test.ts;rx-storage-helper.test.ts;instance-of-check.test.js;rx-schema.test.ts;bug-report.test.js;rx-database.test.ts;rx-document.test.js;rx-collection.test.ts;validate.test.js (ajv) ;validate.test.js (z-schema) ;validate.test.js (custom formats) ;rx-query.test.ts;cross-instance.test.js;local-documents.test.ts;change-event-buffer.test.js;reactive-query.test.js;key-compression.test.js;event-reduce.test.js;cache-replacement-policy.test.js;query-builder.test.js;idle-queue.test.js;reactivity.test.ts;reactive-collection.test.js;reactive-document.test.js;cleanup.test.js;hooks.test.js;rx-pipeline.test.js;orm.test.js;replication-protocol.test.ts (implementation: sqlite-node-native);replication.test.ts;replication-multiinstance.test.ts;replication-graphql.test.ts;replication-websocket.test.ts;replication-webrtc.test.ts;
+init.test.ts;util.test.js;vector-distance.test.ts;custom-index.test.ts;query-planner.test.js;doc-cache.test.ts;internal-indexes.test.js;rx-storage-implementations.test.ts (implementation: sqlite-node-native);rx-storage-query-correctness.test.ts;rx-storage-helper.test.ts;instance-of-check.test.js;rx-schema.test.ts;bug-report.test.js;rx-database.test.ts;rx-document.test.js;rx-collection.test.ts;validate.test.js (ajv) ;validate.test.js (z-schema) ;validate.test.js (custom formats) ;rx-query.test.ts;cross-instance.test.js;local-documents.test.ts;change-event-buffer.test.js;reactive-query.test.js;key-compression.test.js;event-reduce.test.js;cache-replacement-policy.test.js;query-builder.test.js;idle-queue.test.js;reactivity.test.ts;reactive-collection.test.js;reactive-document.test.js;cleanup.test.js;hooks.test.js;rx-pipeline.test.js;orm.test.js;replication-protocol.test.ts (implementation: sqlite-node-native);replication.test.ts;replication-multiinstance.test.ts;replication-graphql.test.ts;replication-websocket.test.ts;replication-webrtc.test.ts;encryption.test.ts;rx-state.test.ts (useSchemaValidator: true);rx-state.test.ts (useSchemaValidator: false);migration-schema.test.ts;attachments.test.ts;attachments-compression.test.ts (mode: deflate);attachments-compression.test.ts (mode: gzip);migration-storage.test.ts (prev-major to newest (dexie));migration-storage.test.ts (newest to newest);webmcp.test.ts;crdt.test.ts;population.test.js;leader-election.test.js;backup.test.ts;import-export.test.js;database-lifecycle.ts;plugin.test.js;
 conformance block ticks: 62
-  1098 passing (1m)
+  1411 passing (2m)
   1 failing
 Node suite exit code: 1
 Electron runtime evidence check exit code: 0
 First failure (verbatim from the bail log):
   1 failing
 
-  1) replication-webrtc.test.ts
-       init
-         import WebRTC polyfills on Node.js:
-     Error: Cannot find module '../../../build/Release/node_datachannel.node'
-Require stack:
-- /Users/kilbot/Projects/monorepo-v2-worktrees/research-2210-desktop-engine/spikes/2210-desktop-engine/conformance/.rxdb-src/node_modules/node-datachannel/dist/esm/lib/node-datachannel.mjs
-      at Module._resolveFilename (node:internal/modules/cjs/loader:1524:15)
-      at wrapResolveFilename (node:internal/modules/cjs/loader:1078:27)
-      at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1102:10)
-      at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1129:12)
-      at Module._load (node:internal/modules/cjs/loader:1301:5)
-      at Module.c._load (node:electron/js2c/node_init:2:18068)
-      at wrapModuleLoad (node:internal/modules/cjs/loader:262:19)
-      at Module.require (node:internal/modules/cjs/loader:1624:12)
-      at require (node:internal/modules/helpers:153:16)
-      at file:///Users/kilbot/Projects/monorepo-v2-worktrees/research-2210-desktop-engine/spikes/2210-desktop-engine/conformance/.rxdb-src/node_modules/node-datachannel/src/lib/node-datachannel.ts:2:1
-      at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
-      at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:643:26)
-      at Context.<anonymous> (file:///Users/kilbot/Projects/monorepo-v2-worktrees/research-2210-desktop-engine/spikes/2210-desktop-engine/conformance/.rxdb-src/test/unit/replication-webrtc.test.ts:58:36)
+  1) plugin.test.js
+       full.node.ts
+         full.node.ts should run without errors:
+     Error: could not run full.node.js.
+                    # Error: Error: spawn mocha ENOENT
+                    # Output: 
+                    # ErrOut: 
+                    
+      at Context.<anonymous> (file:///Users/kilbot/Projects/monorepo-v2-worktrees/research-2210-desktop-engine/spikes/2210-desktop-engine/conformance/.rxdb-src/test/unit/plugin.test.ts:67:23)
+      at processTicksAndRejections (node:internal/process/task_queues:104:5)
+     Caused by: Error: spawn mocha ENOENT
+      at Process.ChildProcess._handle.onexit (node:internal/child_process:287:19)
+      at onErrorNT (node:internal/child_process:508:16)
+      at processTicksAndRejections (node:internal/process/task_queues:90:21)
 
 
 

@@ -46,8 +46,14 @@ ELECTRON="$(node -p "require('$SPIKE/.deps/node_modules/electron')")"
 MOCHA_COMMAND="$(node -e 'const s=require("./package.json").scripts["test:node:custom"]; if(!s.includes("cross-env DEFAULT_STORAGE=custom mocha ")) throw Error(s); console.log(s.split(" mocha ")[1]);')"
 read -r -a MOCHA_ARGS <<< "$MOCHA_COMMAND"
 if [ -n "${MOCHA_GREP:-}" ]; then MOCHA_ARGS+=(--grep "$MOCHA_GREP"); fi
+# plugin.test.ts spawns `mocha` from PATH (npm run would have put node_modules/.bin there), and
+# that mocha runs `node` from PATH: a shim makes both resolve to Electron's Node, not the Mac's.
+SHIM="$SPIKE/.deps/electron-node"
+mkdir -p "$SHIM"
+printf '#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "%s" "$@"\n' "$ELECTRON" > "$SHIM/node"
+chmod +x "$SHIM/node"
 set +e
-ELECTRON_RUN_AS_NODE=1 DEFAULT_STORAGE=custom "$ELECTRON" node_modules/.bin/mocha "${MOCHA_ARGS[@]}" >> "$HERE/node.log" 2>&1
+PATH="$SHIM:$PWD/node_modules/.bin:$PATH" ELECTRON_RUN_AS_NODE=1 DEFAULT_STORAGE=custom "$ELECTRON" node_modules/.bin/mocha "${MOCHA_ARGS[@]}" >> "$HERE/node.log" 2>&1
 node_code=$?
 set -e
 printf '\nNode suite exit code: %s\n' "$node_code" >> "$HERE/node.log"

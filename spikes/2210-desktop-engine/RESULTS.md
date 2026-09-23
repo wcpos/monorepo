@@ -123,7 +123,143 @@ execution remain unverified until the operator runs them. No broad engine compat
 <!-- generated:start -->
 ## Leg 1
 
-Not run. Operator must run the Electron-Node suite.
+```text
+# Node conformance summary (rxdb 17.4.0, DEFAULT_STORAGE=custom)
+spike-2210 runtime: electron=43.4.0 node=24.18.1 sqlite=3.53.1 journal_mode=wal
+spike-2210 runtime: electron=43.4.0 node=24.18.1 sqlite=3.53.1 journal_mode=wal
+init.test.ts;util.test.js;vector-distance.test.ts;custom-index.test.ts;query-planner.test.js;doc-cache.test.ts;internal-indexes.test.js;rx-storage-implementations.test.ts (implementation: sqlite-node-native);rx-storage-query-correctness.test.ts;rx-storage-helper.test.ts;instance-of-check.test.js;rx-schema.test.ts;bug-report.test.js;rx-database.test.ts;rx-document.test.js;rx-collection.test.ts;validate.test.js (ajv) ;validate.test.js (z-schema) ;validate.test.js (custom formats) ;rx-query.test.ts;cross-instance.test.js;local-documents.test.ts;change-event-buffer.test.js;reactive-query.test.js;key-compression.test.js;event-reduce.test.js;cache-replacement-policy.test.js;query-builder.test.js;idle-queue.test.js;reactivity.test.ts;reactive-collection.test.js;reactive-document.test.js;cleanup.test.js;hooks.test.js;rx-pipeline.test.js;orm.test.js;replication-protocol.test.ts (implementation: sqlite-node-native);replication.test.ts;replication-multiinstance.test.ts;replication-graphql.test.ts;replication-websocket.test.ts;replication-webrtc.test.ts;encryption.test.ts;rx-state.test.ts (useSchemaValidator: true);rx-state.test.ts (useSchemaValidator: false);migration-schema.test.ts;attachments.test.ts;attachments-compression.test.ts (mode: deflate);attachments-compression.test.ts (mode: gzip);migration-storage.test.ts (prev-major to newest (dexie));migration-storage.test.ts (newest to newest);webmcp.test.ts;crdt.test.ts;population.test.js;leader-election.test.js;backup.test.ts;import-export.test.js;database-lifecycle.ts;plugin.test.js;
+conformance block ticks: 62
+  1411 passing (2m)
+  1 failing
+Node suite exit code: 1
+Electron runtime evidence check exit code: 0
+First failure (verbatim from the bail log):
+  1 failing
+
+  1) plugin.test.js
+       full.node.ts
+         full.node.ts should run without errors:
+     Error: could not run full.node.js.
+                    # Error: Error: spawn mocha ENOENT
+                    # Output: 
+                    # ErrOut: 
+                    
+      at Context.<anonymous> (file:///Users/kilbot/Projects/monorepo-v2-worktrees/research-2210-desktop-engine/spikes/2210-desktop-engine/conformance/.rxdb-src/test/unit/plugin.test.ts:67:23)
+      at processTicksAndRejections (node:internal/process/task_queues:104:5)
+     Caused by: Error: spawn mocha ENOENT
+      at Process.ChildProcess._handle.onexit (node:internal/child_process:287:19)
+      at onErrorNT (node:internal/child_process:508:16)
+      at processTicksAndRejections (node:internal/process/task_queues:90:21)
+
+
+
+
+Node suite exit code: 1
+Leg 1 failed: select better-sqlite3 per the brief.
+```
+
+**Leg 1 failed: selects better-sqlite3 per the brief.**
+
+
+## mac
+
+### Leg 3 — results.mac.json
+
+| Environment | Value |
+| --- | --- |
+| os | darwin 27.0.0 arm64 |
+| platform | mac |
+| cpu | Apple M4 Pro |
+| node | 24.14.0 |
+| sqlite | 3.51.2 |
+| rxdb | 17.4.0 |
+| rxdb-premium | 17.4.0 |
+| esbuild | 0.28.2 |
+| premiumPatchMarkerCount | 0 |
+| measuredAt | 2026-09-23T14:56:18.980Z |
+
+All warmups and samples matched across both engines on content (SHA-256 of canonical revision-independent rows sorted by primary key); cells whose RETURNED order differed between engines carry orderMismatch, and each engine's unsortedSamples counts results not in primary-key order. Cold reads assert the exact seeded product.
+
+#### small
+
+| Cell (p50 / p95 ms) | filesystem-node | sqlite-node | filesystem-node ÷ sqlite-node (p50) |
+| --- | --- | --- | --- |
+| products-grid-asShipped | 6.10 / 6.53 | 16.85 / 19.85 | 0.36 |
+| products-grid-pushed-10 | 5.94 / 6.72 ⚠ 8/8 unsorted | 0.12 / 0.14 ⚠ 8/8 unsorted | 48.77 |
+| products-grid-pushed-50 | 5.88 / 6.54 ⚠ 8/8 unsorted | 0.55 / 0.58 ⚠ 8/8 unsorted | 10.71 |
+| products-catalogue-blob | 5.08 / 6.29 ⚠ 8/8 unsorted | 24.05 / 28.24 ⚠ 8/8 unsorted | 0.21 |
+| products-catalogue-projection — projection (condition ii) | 5.02 / 5.93 | 5.98 / 6.05 | 0.84 |
+| products-findByIds-10 | 0.03 / 0.04 | 0.10 / 0.11 | 0.32 |
+| products-findByIds-50 | 0.13 / 0.14 | 0.37 / 0.48 | 0.34 |
+| products-remoteId-in-find | 8.14 / 8.77 | 0.91 / 1.00 | 8.95 |
+| products-remoteId-in-count | 8.34 / 8.68 | 0.44 / 0.44 | 19.06 |
+| seed-products | 17.68 / 20.05 | 42.54 / 43.27 | 0.42 |
+| orders-default-find-10 | 13.15 / 16.76 ⚠ 8/8 unsorted | 0.91 / 0.93 ⚠ 8/8 unsorted | 14.43 |
+| orders-default-find-50 | 12.81 / 14.12 ⚠ 8/8 unsorted | 4.53 / 4.62 ⚠ 8/8 unsorted | 2.83 |
+| orders-default-count | 12.76 / 13.44 | 20.47 / 20.96 | 0.62 |
+| orders-open-status | 7.11 / 7.26 | 18.95 / 21.32 | 0.38 |
+| order-line-add | 2.38 / 3.47 | 0.22 / 0.25 | 10.69 |
+| order-create | 0.05 / 0.11 | 0.10 / 0.13 | 0.53 |
+
+- filesystem-node: WAL proof not applicable; mean seed JSON bytes {"products":2000,"orders":2758.653}.
+
+- sqlite-node: WAL proof wal; mean seed JSON bytes {"products":2000,"orders":2758.653}.
+
+#### large
+
+| Cell (p50 / p95 ms) | filesystem-node | sqlite-node | filesystem-node ÷ sqlite-node (p50) |
+| --- | --- | --- | --- |
+| products-grid-asShipped (returned order differed) | 124.79 / 139.13 ⚠ 5/8 unsorted | 199.63 / 201.02 | 0.63 |
+| products-grid-pushed-10 | 216.19 / 224.83 ⚠ 8/8 unsorted | 0.15 / 0.17 ⚠ 8/8 unsorted | 1468.18 |
+| products-grid-pushed-50 | 219.77 / 240.71 ⚠ 8/8 unsorted | 0.72 / 0.85 ⚠ 8/8 unsorted | 306.29 |
+| products-catalogue-blob | 59.27 / 88.07 ⚠ 8/8 unsorted | 328.33 / 338.70 ⚠ 8/8 unsorted | 0.18 |
+| products-catalogue-projection — projection (condition ii) | 60.09 / 94.98 | 64.39 / 65.33 | 0.93 |
+| products-findByIds-10 | 0.03 / 0.04 | 0.11 / 0.13 | 0.30 |
+| products-findByIds-50 | 0.13 / 0.18 | 0.45 / 0.49 | 0.29 |
+| products-remoteId-in-find | 97.21 / 117.85 | 1.08 / 1.09 | 89.98 |
+| products-remoteId-in-count | 98.19 / 117.72 | 0.57 / 0.58 | 171.44 |
+| seed-products | 1134.90 / 1136.92 | 513.89 / 537.00 | 2.21 |
+| orders-default-find-10 | 232.48 / 236.28 ⚠ 8/8 unsorted | 1.05 / 1.07 ⚠ 8/8 unsorted | 221.76 |
+| orders-default-find-50 | 229.66 / 238.45 ⚠ 8/8 unsorted | 5.35 / 7.30 ⚠ 8/8 unsorted | 42.97 |
+| orders-default-count | 227.20 / 242.60 | 236.03 / 252.80 | 0.96 |
+| orders-open-status | 139.39 / 183.74 | 179.47 / 196.31 | 0.78 |
+| order-line-add | 27.81 / 36.34 | 0.23 / 0.27 | 119.62 |
+| order-create | 0.10 / 0.25 | 0.09 / 0.12 | 1.11 |
+| cold-open-first-read | 139.88 / 155.01 | 2.78 / 2.88 | 50.23 |
+
+- filesystem-node: WAL proof not applicable; mean seed JSON bytes {"products":2000,"orders":2714.56025}.
+
+- filesystem-node disk-bytes after large seed: 151012993; files: 26.
+
+- filesystem-node cold-open-first-read: 139.88 / 155.01 ms; N=3, fresh Node processes, warm OS page cache.
+
+- sqlite-node: WAL proof wal; mean seed JSON bytes {"products":2000,"orders":2714.56025}.
+
+- sqlite-node disk-bytes after large seed: 201168360; files: 3.
+
+- sqlite-node cold-open-first-read: 2.78 / 2.88 ms; N=3, fresh Node processes, warm OS page cache.
+
+### Leg 2 — crash.mac.json
+
+| Environment | Value |
+| --- | --- |
+| os | darwin 27.0.0 arm64 |
+| platform | mac |
+| cpu | Apple M4 Pro |
+| node | 24.14.0 |
+| sqlite | 3.51.2 |
+| rxdb | 17.4.0 |
+| rxdb-premium | 17.4.0 |
+| esbuild | 0.28.2 |
+| premiumPatchMarkerCount | 0 |
+| measuredAt | 2026-09-23T14:57:20.351Z |
+
+Complete: 30 trials requested per selected row.
+
+| Row | Trials | ok | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present | In-flight absent | In-flight partial / none / unknown | Median reopen ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| filesystem-node | 30 | 22 | 0 | 0 | 8 | 0 | 30 | 8 / 0 | 2 | 28 | 0 / 0 / 0 | 481.02 |
+| sqlite-node | 30 | 30 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 11 | 18 | 0 / 1 / 0 | 538.97 |
 
 
 ## Cross-platform summary
@@ -132,6 +268,37 @@ Lowest p50, descriptive only; Windows decides when Mac and Windows disagree (map
 
 | Scale / cell | Mac winner (source) | Windows winner (source) | straddles |
 | --- | --- | --- | --- |
-
-No measurements yet — filled by `node report.mjs` after operator runs.
+| small/products-grid-asShipped | filesystem-node (results.mac.json) | not measured | not evaluated |
+| small/products-grid-pushed-10 | sqlite-node (results.mac.json) | not measured | not evaluated |
+| small/products-grid-pushed-50 | sqlite-node (results.mac.json) | not measured | not evaluated |
+| small/products-catalogue-blob | filesystem-node (results.mac.json) | not measured | not evaluated |
+| small/products-catalogue-projection | filesystem-node (results.mac.json) | not measured | not evaluated |
+| small/products-findByIds-10 | filesystem-node (results.mac.json) | not measured | not evaluated |
+| small/products-findByIds-50 | filesystem-node (results.mac.json) | not measured | not evaluated |
+| small/products-remoteId-in-find | sqlite-node (results.mac.json) | not measured | not evaluated |
+| small/products-remoteId-in-count | sqlite-node (results.mac.json) | not measured | not evaluated |
+| small/seed-products | filesystem-node (results.mac.json) | not measured | not evaluated |
+| small/orders-default-find-10 | sqlite-node (results.mac.json) | not measured | not evaluated |
+| small/orders-default-find-50 | sqlite-node (results.mac.json) | not measured | not evaluated |
+| small/orders-default-count | filesystem-node (results.mac.json) | not measured | not evaluated |
+| small/orders-open-status | filesystem-node (results.mac.json) | not measured | not evaluated |
+| small/order-line-add | sqlite-node (results.mac.json) | not measured | not evaluated |
+| small/order-create | filesystem-node (results.mac.json) | not measured | not evaluated |
+| large/products-grid-asShipped | filesystem-node (results.mac.json) | not measured | not evaluated |
+| large/products-grid-pushed-10 | sqlite-node (results.mac.json) | not measured | not evaluated |
+| large/products-grid-pushed-50 | sqlite-node (results.mac.json) | not measured | not evaluated |
+| large/products-catalogue-blob | filesystem-node (results.mac.json) | not measured | not evaluated |
+| large/products-catalogue-projection | filesystem-node (results.mac.json) | not measured | not evaluated |
+| large/products-findByIds-10 | filesystem-node (results.mac.json) | not measured | not evaluated |
+| large/products-findByIds-50 | filesystem-node (results.mac.json) | not measured | not evaluated |
+| large/products-remoteId-in-find | sqlite-node (results.mac.json) | not measured | not evaluated |
+| large/products-remoteId-in-count | sqlite-node (results.mac.json) | not measured | not evaluated |
+| large/seed-products | sqlite-node (results.mac.json) | not measured | not evaluated |
+| large/orders-default-find-10 | sqlite-node (results.mac.json) | not measured | not evaluated |
+| large/orders-default-find-50 | sqlite-node (results.mac.json) | not measured | not evaluated |
+| large/orders-default-count | filesystem-node (results.mac.json) | not measured | not evaluated |
+| large/orders-open-status | filesystem-node (results.mac.json) | not measured | not evaluated |
+| large/order-line-add | sqlite-node (results.mac.json) | not measured | not evaluated |
+| large/order-create | sqlite-node (results.mac.json) | not measured | not evaluated |
+| large/cold-open-first-read | sqlite-node (results.mac.json) | not measured | not evaluated |
 <!-- generated:end -->

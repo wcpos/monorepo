@@ -33,7 +33,8 @@ for (const platform of [...new Set([...benchmarks, ...crashes].map(r => r.enviro
       lines.push(`#### ${scale}`, table(['Cell (p50 / p95 ms)', ...engines, 'filesystem-node ÷ sqlite-node (p50)'], names.map(name => {
         const cells = engines.map(engine => rows.find(r => r.engine === engine)?.cells.find(c => c.name === name));
         const flag = c => c?.unsortedSamples ? ` ⚠ ${c.unsortedSamples}/${c.samples.length + 1} unsorted` : '';
-        return [label(name) + (cells.some(c => c?.orderMismatch) ? ' (returned order differed)' : ''), ...cells.map(c => c ? `${number(c.p50)} / ${number(c.p95)}${flag(c)}` : '—'), cells.every(Boolean) ? number(cells[0].p50 / cells[1].p50) : '—'];
+        const note = cells.some(c => c?.contentMismatch) ? ' **(CONTENT MISMATCH — not comparable)**' : cells.some(c => c?.orderMismatch) ? ' (returned order differed)' : '';
+        return [label(name) + note, ...cells.map(c => c ? `${number(c.p50)} / ${number(c.p95)}${flag(c)}` : '—'), cells.every(Boolean) ? number(cells[0].p50 / cells[1].p50) : '—'];
       })));
       for (const row of rows) {
         lines.push(`- ${row.engine}: WAL proof ${row.wal ?? 'not applicable'}; mean seed JSON bytes ${JSON.stringify(row.seedBytes)}.`);

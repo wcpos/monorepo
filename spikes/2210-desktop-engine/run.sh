@@ -27,9 +27,13 @@ node --input-type=module - "$ROOT" "$BUILD" <<'JS'
 import { readFileSync, writeFileSync } from 'node:fs';
 const [root, build] = process.argv.slice(2), versions = {};
 for (const name of ['rxdb', 'rxdb-premium', 'esbuild']) versions[name] = JSON.parse(readFileSync(`${root}/node_modules/${name}/package.json`)).version;
-// Exactly grep -c __wcpos on index.js: matching LINES, not occurrences or all plugin files.
-const index = readFileSync(`${root}/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem/index.js`, 'utf8');
-versions.premiumPatchMarkerCount = index.split('\n').filter(line => line.includes('__wcpos')).length;
+// The seven install-time patches mark the files they rewrite with `__wcpos…` identifiers; count
+// the marked LINES across the abstract-filesystem plugin (cleanup, bulk-write, helpers, changelog,
+// task-queue, index-state — index.js itself carries none). 0 means an unpatched premium.
+const { readdirSync } = await import('node:fs');
+const plugin = `${root}/node_modules/rxdb-premium/dist/esm/plugins/storage-abstract-filesystem`;
+versions.premiumPatchMarkerCount = readdirSync(plugin).filter(f => f.endsWith('.js'))
+  .reduce((n, f) => n + readFileSync(`${plugin}/${f}`, 'utf8').split('\n').filter(line => line.includes('__wcpos')).length, 0);
 writeFileSync(`${build}/versions.json`, JSON.stringify(versions, null, 2) + '\n');
 JS
 for FILE in bench-node.js crash-node.js crash-child.js; do

@@ -94,24 +94,35 @@ async function runBench({ engine, scale, databaseName, dir }) {
   await session.analyze(instances.products);
   const disk = scale === 'large' ? await diskBytes(dir) : undefined;
   const seedBytes = Object.fromEntries(Object.entries(data).map(([k, docs]) => [k, docs.reduce((a, d) => a + JSON.stringify(d).length, 0) / n]));
-  async function sample(name, count, setup) {
+  // Is `docs` in the order RxDB's normalized `sort` promises? (No-sort queries normalize to an
+  // index-led sort such as [_deleted, stockStatus, uuid], not to the primary key alone.)
+  const get = (doc, path) => path.split('.').reduce((v, k) => v?.[k], doc);
+  const inSortOrder = (docs, sort) => docs.every((d, j) => j === 0 || sort.reduce((cmp, s) => {
+    if (cmp !== 0) return cmp;
+    const [field, dir] = Object.entries(s)[0], a = get(docs[j - 1], field), b = get(d, field);
+    return (a < b ? -1 : a > b ? 1 : 0) * (dir === 'desc' ? -1 : 1);
+  }, 0) <= 0);
+  async function sample(name, count, setup, sort = null) {
     // `signatures` hash the result AS RETURNED (order included, 2143's rule); `setSignatures` hash
     // the same rows sorted by primary key. Content must match across engines on the set; a
-    // returned-order difference is recorded as `unsortedSamples` (the incumbent violates RxDB's
-    // primary-key sort on whole-set reads in Node — seen on Mac and Windows, 2026-09-23).
+    // returned-order difference between engines is recorded on the cell as `orderMismatch`, and
+    // `unsortedSamples` counts results that violate the query's own normalized sort (the incumbent
+    // returns whole-set finds in an unstable order in Node — seen on Mac and Windows, 2026-09-23).
     const cell = { name, samples: [], signatures: [], setSignatures: [], unsortedSamples: 0 };
     for (let i = 0; i <= count; i++) {
       const { run, check = r => r.documents ?? r.count ?? r } = await setup(i), start = performance.now();
       const result = await run(), ms = performance.now() - start, value = await check(result);
       cell.signatures.push(await signature(value));
       cell.setSignatures.push(await signature(Array.isArray(value) && value[0] && typeof value[0] === 'object' ? sorted(value) : value));
-      if (Array.isArray(value) && value.some((d, j) => j > 0 && (d.uuid ?? d.id) < (value[j - 1].uuid ?? value[j - 1].id))) cell.unsortedSamples++;
+      if (sort && Array.isArray(value) && !inSortOrder(value, sort)) cell.unsortedSamples++;
       if (i) cell.samples.push({ ms, ...(Array.isArray(result?.documents ?? result) ? { rows: (result.documents ?? result).length } : {}) });
+      // Keep the returned ids of small (limited) results so a cross-engine mismatch can be judged offline.
+      if (Array.isArray(value) && value.length <= 100 && value[0] && typeof value[0] === 'object') (cell.ids ??= []).push(value.map(d => d.uuid ?? d.id));
     }
     cells.push(cell);
     console.info('CELL', engine, scale, name, cell.unsortedSamples ? `UNSORTED ${cell.unsortedSamples}/${count + 1}` : '');
   }
-  const find = (name, collection, selector, extra) => { const q = prepared(collection, selector, extra); return sample(name, 7, () => ({ run: () => instances[collection].query(q) })); };
+  const find = (name, collection, selector, extra) => { const q = prepared(collection, selector, extra); return sample(name, 7, () => ({ run: () => instances[collection].query(q) }), q.query.sort); };
   const grid = { $and: [{ 'payload.status': 'publish' }, { stockStatus: 'instock' }] };
   await find('products-grid-asShipped', 'products', grid);
   for (const limit of [10, 50]) await find(`products-grid-pushed-${limit}`, 'products', grid, { sort: [{ 'payload.name': 'asc' }, { uuid: 'asc' }], limit });
@@ -185,7 +196,7 @@ async function main() {
   assert(['small', 'large', 'both'].includes(args.scale), 'Invalid scale');
   assert(args.rows.split(',').every(r => rows.includes(r)), 'Invalid rows');
   const selected = rows.filter(r => args.rows.split(',').includes(r));
-  const env = await environment(), expected = new Map(), results = [];
+  const env = await environment(), expected = new Map(), results = [], mismatches = [];
   for (const engine of selected) for (const scale of args.scale === 'both' ? ['small', 'large'] : [args.scale]) {
     const databaseName = `bench-${randomUUID()}`, dir = join(directory, '.data', 'bench', engine, databaseName);
     const input = { engine, scale, databaseName, dir };
@@ -201,10 +212,13 @@ async function main() {
       if (cell.signatures) {
         if (expected.has(key)) {
           const prior = expected.get(key);
-          assert.deepEqual(cell.setSignatures, prior.setSignatures, `Cross-engine CONTENT mismatch: ${engine}/${key}`);
-          cell.orderMismatch = cell.signatures.some((s, i) => s !== prior.signatures[i]);
-          console.info(cell.orderMismatch ? 'EQUALITY PASS (content only; returned order differs)' : 'EQUALITY PASS', key);
-        } else expected.set(key, { signatures: cell.signatures, setSignatures: cell.setSignatures });
+          // A content mismatch fails the run (exit 1 after the JSON is written) but does not abort it:
+          // the cell keeps both engines' returned ids so the deviating engine can be identified.
+          cell.contentMismatch = cell.setSignatures.some((s, i) => s !== prior.setSignatures[i]);
+          if (cell.contentMismatch) { mismatches.push(key); cell.priorIds = prior.ids; console.error('CROSS-ENGINE CONTENT MISMATCH', engine, key); }
+          cell.orderMismatch = !cell.contentMismatch && cell.signatures.some((s, i) => s !== prior.signatures[i]);
+          if (!cell.contentMismatch) console.info(cell.orderMismatch ? 'EQUALITY PASS (content only; returned order differs)' : 'EQUALITY PASS', key);
+        } else expected.set(key, { signatures: cell.signatures, setSignatures: cell.setSignatures, ids: cell.ids });
         delete cell.signatures; delete cell.setSignatures;
       }
       const samples = cell.samples.map(s => s.ms).sort((a, b) => a - b);
@@ -213,10 +227,12 @@ async function main() {
     results.push({ engine, scale, ...result });
   }
   const out = args.out ?? join(directory, `results.${env.platform}.json`);
-  await writeFile(out, JSON.stringify({ environment: env, equality: selected.length === 2
-    ? 'All warmups and samples matched across both engines on content (SHA-256 of canonical revision-independent rows sorted by primary key); cells whose RETURNED order differed between engines carry orderMismatch, and each engine\'s unsortedSamples counts results not in primary-key order. Cold reads assert the exact seeded product.'
-    : 'Single engine only: cross-engine equality NOT evaluated.', results }, null, 2) + '\n');
+  await writeFile(out, JSON.stringify({ environment: env, equality: selected.length !== 2 ? 'Single engine only: cross-engine equality NOT evaluated.'
+    : mismatches.length ? `CONTENT MISMATCH in ${mismatches.join(', ')} — the numbers for those cells are not comparable; see the cells' ids/priorIds.`
+    : 'All warmups and samples matched across both engines on content (SHA-256 of canonical revision-independent rows sorted by primary key); cells whose RETURNED order differed between engines carry orderMismatch, and each engine\'s unsortedSamples counts results that violate the query\'s normalized sort. Cold reads assert the exact seeded product.',
+    results }, null, 2) + '\n');
   console.info('Wrote', out);
+  if (mismatches.length) { console.error(`Cross-engine content mismatch: ${mismatches.join(', ')}`); process.exitCode = 1; }
 }
 // The crash child imports fixtures; bundled imports share import.meta.url with that entry point.
 if (/^bench-node\.(mjs|js)$/.test(basename(fileURLToPath(import.meta.url))) && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
