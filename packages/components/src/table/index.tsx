@@ -69,8 +69,9 @@ function TableRow({
 	return (
 		<Component
 			role="row"
+			// A static row: header and plain rows take no hover; the pressable row does.
 			className={cn(
-				'web:transition-colors web:hover:bg-muted web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
+				'web:transition-colors web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
 				className
 			)}
 			{...props}

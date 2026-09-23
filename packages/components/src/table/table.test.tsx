@@ -31,11 +31,16 @@ it('renders hairline rows without stripes or inline background paint', () => {
 			<PressableTableRow index={1} />
 		</>
 	);
-	for (const row of getAllByRole('row')) {
-		expect(row).toHaveClass('min-h-row', 'border-b', 'web:hover:bg-muted');
+	const [staticRow, pressableRow] = getAllByRole('row');
+	for (const row of [staticRow, pressableRow]) {
+		expect(row).toHaveClass('min-h-row', 'border-b');
 		expect(row.style.backgroundColor).toBe('');
 		expect(row).not.toHaveClass('bg-muted/40');
 	}
+	// Only the pressable row lifts under the pointer; a header or plain row wraps TableHead
+	// in the static one and must not look interactive (Codex review on #2213).
+	expect(pressableRow).toHaveClass('web:hover:bg-muted');
+	expect(staticRow).not.toHaveClass('web:hover:bg-muted');
 });
 
 it('renders an unfilled uppercase head and padded column cell', () => {
