@@ -28,17 +28,17 @@
 		"symbol": "LOCAL_DB_CORRUPTED",
 		"domain": "SYNC",
 		"severity": "error",
-		"actionHint": "Repair from Store health → Database.",
+		"actionHint": "Read the help page before using Clear & re-download… on the damaged data.",
 		"retryPolicy": "after-change",
 		"dataSafety": "data-at-risk",
 		"escalation": "support-with-export",
 		"summary": "Local store data is damaged and needs repair before syncing can continue.",
-		"docsBody": "Run the targeted repair for the affected data, and reset that local data only if the problem returns.",
+		"docsBody": "Clear and re-download just the affected data from Store health, once nothing is waiting to be sent; contact support if the damage comes back.",
 		"troubleshooting": [
-			"Open Store health → Database and run the targeted repair for the affected data; a full reset discards more than the repair does.",
-			"Retry the action that failed, then watch Store health → Logs for a repeat of this code.",
-			"If the same data is flagged again, reset just that local data so it downloads fresh from your store — but only after any unsent changes have been noted.",
-			"Corruption that keeps returning points at failing device storage: export debug info and contact support."
+			"Open Store health → Database and check that changes waiting to send is 0 and no \"… changes never reached your server\" or \"… changes were held\" panel is showing — those changes exist only on this device. If the count does not go down within a few minutes, clear nothing and go to the last step.",
+			"The log entry does not say which data is damaged. Only if one kind of data is clearly broken on its own — for example the product list will not load while everything else works — open the ⋮ menu on that row and choose Clear & re-download…: only that data is cleared and downloaded again, and you stay signed in. If it is Orders, first save every open cart with Save to Server (or finish it) — clearing Orders deletes a cart never saved to your store; if a cart cannot be saved, go to the last step.",
+			"Retry the action that failed. If you cannot tell which data is broken, do not guess — go to the last step.",
+			"If you cannot tell which data is damaged, if the same data is damaged again after a re-download, or if you could not clear it safely, do not clear everything: on the Logs tab, use Copy debug info and contact support."
 		],
 		"logSources": [
 			"browser-console"
@@ -131,10 +131,11 @@
 		"summary": "This record was rejected by your store and is saved only on this device.",
 		"docsBody": "Correct the reason shown for the named record, then retry it. Export diagnostics if it remains rejected.",
 		"troubleshooting": [
-			"Expand the log entry: it names the rejected record and carries the store's own reason (serverCode) for refusing it.",
-			"Rejected records are listed in Store health — open the record, correct the detail the store refused, and retry it from there.",
-			"If the reason mentions a field the POS does not show, open the same record in WP Admin and check it there — another plugin may have added validation the POS cannot see.",
-			"If it stays rejected after editing, use Copy debug info and contact support, including the serverCode."
+			"If a toast said \"Change rejected by your store — reverted\" (edits to products, variations, customers and coupons), the till has already put the store's version back and there is nothing to resend: read the reason, correct it, and save the edit again only if you still need it.",
+			"Otherwise — an order, or a record created on this device — open Store health → Database: the refused change is listed under \"… changes never reached your server\" with your store's reason. Fix what the reason names on the record itself while the change stays listed.",
+			"Then press Send again on that row — it rebuilds the change from what is now on this device and sends it. If the change is no longer wanted, press Discard instead, and read the confirmation first: for a record the store never saved, discarding deletes it from this device.",
+			"Site admin: if the reason says the user is not allowed to make the change, their role lacks that task (see AUTH201). If it mentions a field the POS does not show, open the same record in WP Admin — another plugin may add validation the POS cannot see.",
+			"If it is still refused, use Copy debug info on the Logs tab and contact support, including the serverCode."
 		],
 		"logSources": [
 			"network-inspector",
@@ -156,9 +157,10 @@
 		"docsBody": "Fix the named field and retry the record; the local copy remains available until it syncs.",
 		"troubleshooting": [
 			"Expand the log entry and check the endpoint and server response first: this code can also represent an HTTP 400 from a settings, authentication or other non-record request.",
-			"If the context names a record or field, edit that field in the POS — common causes are a value out of range, a rejected format or a required option left empty — then retry.",
-			"If it is not a record request, follow the server's message for the named endpoint instead. Use the Network inspector when the response details are not present in the POS log.",
-			"If a named field looks correct in the POS, compare it with the same record in WP Admin: plugin-added validation on the store can reject values the POS considers fine."
+			"If the context names a record or field, edit that field in the POS — common causes are a value out of range, a rejected format or a required option left empty. A refused edit to a product, variation, customer or coupon was already undone, so correct the field and save it again; for an order or a newly created record, press Send again on its row under \"… changes never reached your server\" in Store health → Database.",
+			"If the record is instead listed under \"… changes were held\" with \"Your store required a current version\", no field is at fault — decide between Send again and Discard device change as described for SYNC221.",
+			"If it is not a record request, follow the server's message for the named endpoint instead. The browser's developer tools (Network tab) — or Advanced → Toggle Developer Tools in the desktop app — show the response when the details are not in the POS log.",
+			"Site admin: if a named field looks correct in the POS, compare it with the same record in WP Admin — plugin-added validation on the store can reject values the POS considers fine."
 		],
 		"logSources": [
 			"network-inspector"
@@ -178,10 +180,11 @@
 		"summary": "Some older store changes were skipped and must be downloaded again.",
 		"docsBody": "Run a targeted download for the affected data and export diagnostics if the gap remains.",
 		"troubleshooting": [
-			"Expand the log entry — its context records how far behind the till fell and whether changes were skipped.",
-			"Run a targeted download for the affected data so the skipped store changes are fetched again.",
-			"Afterwards, spot-check a few recently-edited records against WP Admin to confirm the gap closed.",
-			"If the gap reappears, export debug info and contact support rather than resetting anything."
+			"Keep selling — nothing on this device is lost. The log entry may say how many store changes were skipped; they can be any kind of data, and the log does not say which.",
+			"Open Store health → Database. Before re-downloading anything, wait until changes waiting to send is 0 and no \"… changes never reached your server\" or \"… changes were held\" panel is showing.",
+			"At a quiet moment — no sales or edits on this device until you finish — re-download every row: immediately before each one, repeat the checks from the previous step, then open its ⋮ menu, choose Clear & re-download… and wait for it to finish. Start with Products, Variations and Tax rates, which affect prices at the till.",
+			"Before clearing Orders, save every open cart on this device with Save to Server (or finish it) — a cart never saved to your store is not counted in those checks, and clearing Orders deletes it. If a cart cannot be saved, skip the Orders row and contact support.",
+			"If the code keeps reappearing, use Copy debug info on the Logs tab and contact support rather than clearing more data."
 		],
 		"logSources": [],
 		"evidence": "monorepo#804",
@@ -192,17 +195,17 @@
 		"symbol": "SCHEMA_MISMATCH",
 		"domain": "SYNC",
 		"severity": "error",
-		"actionHint": "Clear the local database and reopen. This loses any unsynced sales.",
+		"actionHint": "Update WCPOS; if it still won't open, read the help page before clearing local data.",
 		"retryPolicy": "after-change",
 		"dataSafety": "no-impact",
 		"escalation": "support-with-export",
 		"summary": "Local data is from an incompatible version and cannot open yet.",
-		"docsBody": "Do not reset the affected local collection when this device may hold changes that never reached your store — resetting deletes the only local copy. Export diagnostics to help support investigate, then contact support for recovery guidance.",
+		"docsBody": "Update WCPOS on this device first. If the data still will not open, clearing the local database and reopening fixes it — but clearing permanently deletes anything not yet synced to your store, such as sales taken offline, so contact support first if important sales may be unsent.",
 		"troubleshooting": [
-			"Do not reset or delete the affected collection — if this device holds changes that never reached the store, the local copy is the only copy.",
-			"Check whether the app was recently updated or downgraded on this device; a version mismatch between the app and its stored data is the usual trigger.",
-			"Update WCPOS to the newest version on this device and reopen the store.",
-			"If the collection still will not open, use Copy debug info and contact support for recovery guidance before touching local data."
+			"Make sure WCPOS is on the current version on this device — a schema mismatch usually follows an app update or downgrade.",
+			"Before clearing anything, think about whether this device took sales or changes that may not have reached your store — for example while offline. The database cannot open, so they cannot be synced first: clearing deletes them permanently. If important sales may be unsent, contact support before clearing.",
+			"Otherwise clear the local database and reopen — follow Clear All Local Data in the WCPOS docs, which covers the in-app button, the web app and the desktop app. WCPOS re-downloads your store's data automatically.",
+			"If the error returns after clearing, use Copy debug info and contact support."
 		],
 		"logSources": [
 			"browser-console"
@@ -222,9 +225,11 @@
 		"summary": "Some records synced, but one or more records did not.",
 		"docsBody": "Review the named records and their reasons before retrying only the records that did not sync.",
 		"troubleshooting": [
-			"Expand the log entry to list which records did not sync and the reason each one gives.",
-			"Handle each named record by its own reason — an invalid field needs editing, a conflict needs comparing with the store.",
-			"Retry only the records that failed; the rest are already synced and need nothing."
+			"For a \"Gave up on a stuck data request\" entry, no action is needed unless a screen stays stuck; then reload the app (the browser tab on web, or close and reopen the app on desktop and mobile).",
+			"For a partial sync, open Store health → Database: records that did not sync appear at the top — the \"… records need attention\" callout names the first one with its reason (fix it and the next one appears), and the \"… changes never reached your server\" and \"… changes were held\" panels list theirs. The records that did sync need nothing.",
+			"Handle each record by its own reason: Fix record (where shown) in the callout opens it to edit, a refused change is corrected on the record itself, and a held change is compared with the store (see SYNC221).",
+			"Then send them again with Retry in the callout (this runs a sync) or Send again on the record's row. A record the callout says can't download from your store has no Retry — the till tries it again on its next sync, or use ⋮ → Check for changes now on its collection row.",
+			"If a record still does not sync, use Copy debug info on the Logs tab and contact support."
 		],
 		"logSources": [],
 		"evidence": "spec validation set: 89 of 99",
@@ -242,12 +247,12 @@
 		"summary": "This record on the device does not match your store and needs local repair.",
 		"docsBody": "Nothing you entered is waiting to be sent. The device's copy of a record your store owns has drifted from the store's copy; repair it according to the status shown in the log.",
 		"troubleshooting": [
-			"Expand the log entry - its context names the collection, the record id, the status and the detector that spotted the difference.",
-			"For a changed or missing record, run a targeted download for the affected collection so the device replaces its copy with the store's.",
-			"For a deleted record, remove the local copy; the server tombstone must not be downloaded.",
-			"Compare the record in WP Admin with what the POS shows; a price or stock difference is the visible symptom.",
-			"If the SAME records keep reappearing after repair, the store's stored digests are stale - this happens after a bulk write that skips WooCommerce's save hooks (a CSV import, a migration plugin, WP-CLI or direct SQL). The record itself is usually fine; a site administrator can clear it by rebuilding the integrity index, and WCPOS schedules that rebuild automatically once a range keeps reporting the same difference.",
-			"If it still returns after a rebuild, export debug info and contact support."
+			"Keep selling. Open Store health → Database: the record is named at the top — \"… can't download from your store\" for a record whose copy differs, or \"… must be removed from this device\" for one your store has deleted.",
+			"Before selling that item, check its price and stock against the shelf or with whoever manages the store (they can compare it with WP Admin).",
+			"Before clearing anything, check that changes waiting to send is 0 and no \"… changes never reached your server\" or \"… changes were held\" panel is showing, and settle any listed change first (SYNC201, SYNC221). Before clearing Orders, also save every open cart with Save to Server (or finish it) — clearing Orders deletes a cart never saved to your store; if one cannot be saved, skip Orders and contact support.",
+			"Then open the ⋮ menu on the record's collection row (for example Products) and choose Clear & re-download…: the device drops its copy and fetches the store's, and a deleted record is removed rather than downloaded. The entry can stay listed until the next background check — judge by whether the price and stock now match. If the callout then names a record in another collection, repeat the checks and this step there.",
+			"Site admin: if the same records keep coming back after a re-download, the cause is usually a bulk change that bypassed WooCommerce's save hooks — a CSV import, a migration plugin, WP-CLI or direct SQL. Prefer editing through WooCommerce; WCPOS rebuilds its integrity data by itself once the same difference keeps repeating.",
+			"If the till keeps showing a wrong price or stock after a re-download, use Copy debug info on the Logs tab and contact support."
 		],
 		"logSources": [],
 		"evidence": "monorepo: dev-pro session 2026-08-19, 138 products escalated per sweep",
@@ -288,10 +293,12 @@
 		"dataSafety": "no-impact",
 		"escalation": "none",
 		"summary": "Your session ended and you need to sign in again.",
-		"docsBody": "Sign in again and repeat the request; no local data was lost.",
+		"docsBody": "Sign in again to carry on. Anything you had already saved stays on the till and is sent for you once you are back in.",
 		"troubleshooting": [
-			"Sign in again when prompted, then repeat the action — nothing on the till was lost.",
-			"Frequent expiries (several per day) usually come from the site: a security plugin shortening session lifetimes or clearing tokens. Ask the site administrator which security plugins run on the store."
+			"Sign in again. WCPOS opens the WordPress sign-in window by itself; if you closed it, a Please log in to continue toast offers Login. Sign in as the same cashier.",
+			"You do not need to re-enter or re-save anything: a sale that was waiting sends itself once you are back in, and changes waiting to send in Store health → Database drops to 0.",
+			"If a sale is listed under \"… changes never reached your server\" instead, press Send again on its row.",
+			"Frequent expiries (several per day) usually come from the site: a security plugin shortening session lifetimes or clearing tokens. Ask the site administrator which security plugins run on the store, and to check WP Admin > POS > Settings > Tools > Logs — a refused sign-in is recorded there with its reason."
 		],
 		"logSources": [
 			"network-inspector"
@@ -311,9 +318,10 @@
 		"summary": "Your account does not have permission to perform this action.",
 		"docsBody": "Ask a store administrator to grant the required POS capability, then try again.",
 		"troubleshooting": [
-			"Note which action was refused — the log entry records the request and the permission check that failed.",
-			"Ask a store administrator to review the account's role: POS cashiers need the POS capabilities WCPOS registers, and role-editing plugins can strip them.",
-			"After the role is corrected, sign out and back in on the till, then try again."
+			"At the till: note what you were doing when it was refused and which account is signed in — if it appeared during sync, the entry in Store health → Logs records the refused request — and pass both to your administrator. Carry on selling if the refused action was not part of the sale.",
+			"Site administrator: first decide whether this account should be allowed to do it; if not, the refusal is working as intended. If it should, go to WP Admin > POS > Settings > Access, select the account's role and tick the task that covers the refused action (Use the POS, Create & edit products, Manage orders, Manage customers …); a dash with a badge such as 3 of 7 means the task is only partly granted. On a custom role, Restore defaults removes POS access.",
+			"Site administrator: if the account can sign in but every product, customer or order request is refused, check whether it holds more than one role — role-editor plugins such as Members apply a Deny on any one role to the whole account. Remove the extra role or clear the Deny marks.",
+			"Back at the till: sign out and sign in again so the new permissions apply, then retry the refused action."
 		],
 		"logSources": [
 			"network-inspector",
@@ -431,11 +439,12 @@
 		"summary": "WCPOS could not confirm whether checkout completed.",
 		"docsBody": "Do not retry blindly. Check the store for the order first, then export diagnostics if its outcome is still unclear.",
 		"troubleshooting": [
-			"Do not retry checkout yet, and do not charge the customer again.",
-			"Open WooCommerce → Orders in WP Admin and look for the order — search by the total and the last few minutes.",
-			"If the order exists, the sale went through — do not create it again; sync the POS so it appears on the till.",
-			"If no order exists after a sync, retry checkout once.",
-			"Still unclear? Export debug info and contact support before another attempt."
+			"Do not press Process Payment again and do not charge the customer again until you know what happened.",
+			"Check the payment side first — the payment provider's own screen, receipt or dashboard shows whether the customer was charged.",
+			"Refresh the till's orders: in Store health → Database, open the ⋮ menu on the Orders row and choose Check for changes now. An order that arrives as paid normally leaves the cart and, on WCPOS Pro, shows as paid in Orders; without Pro, ask someone to check WooCommerce → Orders in WP Admin, searching by the total and the last few minutes.",
+			"If the provider shows a charge, do not charge again: reload the app and refresh the orders again — the sale is complete once the order shows as paid. If money was taken but no paid order appears, go to the last step.",
+			"If the order is not paid and the provider shows no charge, retry checkout once.",
+			"If it is still unclear, use Copy debug info in Store health → Logs and contact support before another attempt."
 		],
 		"logSources": [
 			"network-inspector",
@@ -494,16 +503,18 @@
 		"symbol": "PAYMENT_OK_STATUS_CHECK_FAILED",
 		"domain": "PAYMENT",
 		"severity": "info",
-		"actionHint": "No action needed — the payment succeeded; reopen to refresh.",
+		"actionHint": "No action needed — the payment succeeded; do not charge again.",
 		"retryPolicy": "never",
 		"dataSafety": "money-moved",
 		"escalation": "none",
 		"summary": "Payment succeeded, but WCPOS could not refresh its status afterward.",
 		"docsBody": "The payment completed and should not be charged again; no action is required unless the displayed status stays stale.",
 		"troubleshooting": [
-			"No action is needed — the payment completed; only the follow-up status refresh failed.",
-			"Do not charge the customer again.",
-			"If the order's status looks stale on the till, reopen or sync the order; the store already has the correct status."
+			"Do not charge the customer again. The store's payment page confirmed the payment (the Payment completed for order #… toast); only the till's follow-up update failed.",
+			"Carry on with the next sale. If the paid order still shows as an open order in the cart, open Store health → Database, open the ⋮ menu on the Orders row and choose Check for changes now; once the paid status arrives, the order leaves the cart.",
+			"On WCPOS Pro you can refresh just that order instead: in Orders, open the order's ⋮ menu and choose Sync.",
+			"If it is still shown as open, reload the app (the browser tab on web; close and reopen the app on desktop and mobile) — on start, the till finishes any sale whose payment it recorded.",
+			"Site administrator: to be certain, open the order in WooCommerce → Orders — it shows as paid there."
 		],
 		"logSources": [],
 		"evidence": "monorepo#509",
@@ -522,8 +533,10 @@
 		"docsBody": "The payment reached the store and is on the order; only the till's local copy of the order failed to update. Never take the payment again — WCPOS refreshes the order from the store, and the till catches up on its own.",
 		"troubleshooting": [
 			"Do not take the payment again: the store already has it.",
-			"Check the order in WooCommerce — the payment is on its ledger.",
-			"If the till still shows a balance after the order refreshes, reopen the order or sync it."
+			"Carry on from the balance the payment pane shows — it already counts this payment. Take whatever is still owed; if nothing is, the sale completes.",
+			"Do not use the close button (X) to reopen the order: with a payment on it, closing opens Cancel payment, which gives money back rather than refreshing anything.",
+			"If the till still looks out of date after the sale, open Store health → Database, open the ⋮ menu on the Orders row and choose Check for changes now.",
+			"Site administrator: nothing needs repairing on the store — it accepted the payment. If a till repeatedly fails to save its own copy, check that device's storage used figure in Store health → Database and its free space."
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#294",
@@ -534,16 +547,19 @@
 		"symbol": "PAYMENT_CAPTURED_ORDER_UNFINISHED",
 		"domain": "PAYMENT",
 		"severity": "error",
-		"actionHint": "Do not charge again — open the order and finish it.",
+		"actionHint": "Do not charge again — reload the app and the till finishes the order.",
 		"retryPolicy": "manual",
 		"dataSafety": "money-moved",
 		"escalation": "none",
 		"summary": "The card was charged, but the order did not finish.",
 		"docsBody": "The terminal captured the payment and the store has it, but the step that completes the order afterwards failed. The customer has paid. Charging again would take the money twice; the order simply needs finishing. The app finishes the order by itself the next time this store is opened on this device; if this notice is still showing after a restart, contact support.",
 		"troubleshooting": [
-			"Do not take the payment again — the card was charged.",
-			"Open the order from the orders list and complete it.",
-			"If it still will not complete, check the order in WooCommerce; the payment is on its ledger."
+			"Do not take the payment again, and do not use the close button (X) on the payment pane — with a payment on the order, closing opens Cancel payment, which reverses it.",
+			"Reload the app (the browser tab on web; close and reopen the app on desktop and mobile). On start, the till retries finishing any sale whose card payment it recorded, and the finished order leaves the cart.",
+			"If the order is still open after reloading, open Store health → Database, open the ⋮ menu on the Orders row and choose Check for changes now, then reload once more.",
+			"If it is still open, serve the customer and leave the order as it is — the money is taken — and ask whoever manages the store to finish it.",
+			"Site administrator: open the order in WooCommerce → Orders and confirm the charge in the payment provider's dashboard (in a split sale, that every part was paid). Then set it to the status your POS uses for sales paid that way — the Order Status column of the Gateways table in WP Admin > POS > Settings > Checkout, on that gateway's row.",
+			"To find out why, expand Support details on the notice at the till, or the entry in Store health → Logs; include it if you contact support."
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
@@ -626,9 +642,11 @@
 		"summary": "The selected payment gateway is unavailable for this store.",
 		"docsBody": "Ask the site administrator to verify that the gateway is supported, enabled, and correctly configured.",
 		"troubleshooting": [
-			"Ask the site administrator to check the gateway in WooCommerce → Settings → Payments: it must be installed, enabled, and enabled for POS use in the POS settings.",
-			"Complete the sale meanwhile with another method, such as cash.",
-			"If the gateway worked yesterday, check whether it or WooCommerce updated — WooCommerce → Status → Logs records gateway initialization errors."
+			"At the till: complete the sale meanwhile with another method, such as cash.",
+			"If the method is greyed out under \"… not available right now\" in the payment pane, that is a problem on this till, not this error — the reason shown (for example Needs a connection) tells you what to fix.",
+			"Site administrator: in WP Admin > POS > Settings > Checkout, the gateway must be listed under Gateways with its Enabled switch on. If it is not listed, check that its plugin is installed and the gateway is enabled in WooCommerce → Settings → Payments. On WCPOS Free only the built-in cash and card methods can be enabled; other gateways need WCPOS Pro.",
+			"If the gateway worked yesterday, check whether it or WooCommerce updated — WooCommerce → Status → Logs may record gateway start-up errors.",
+			"Once it is fixed, reload the app on the till so it picks up the gateway again."
 		],
 		"logSources": [
 			"wp-admin-pos-logs",
@@ -671,9 +689,11 @@
 		"summary": "The order was already paid online, so an additional payment was also taken at the till.",
 		"docsBody": "The store reported that the order was already paid after the till took a manual payment. The manual payment is kept in the order's ledger as failed (order_already_paid) so nothing is hidden; the cashier refunds the additional payment.",
 		"troubleshooting": [
-			"Open the order from the attention list.",
-			"Confirm the online payment in WooCommerce.",
-			"Refund the till payment and note it on the order."
+			"Tell the customer the order was already paid online and that the second payment will be refunded.",
+			"Check the amount and method taken at the till: Store health → Database lists the order under \"… needs attention\", and the same line is in Store health → Logs.",
+			"Give that payment back the way it was taken: cash from the drawer, or a refund of that charge on the card machine or in the payment provider's dashboard. Do not record a paid out for cash handed back — the refused payment was never counted in the drawer's expected cash.",
+			"Do not use Refund on the order in WCPOS for this — it refunds against the order's legitimate online payment, not the till payment your store refused. Do not void or delete the order either.",
+			"Site administrator: confirm the online payment in WooCommerce and add an order note saying the duplicate till payment was returned, how and when. If this happens repeatedly, orders are being paid online while already open on a till."
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#105",
@@ -689,11 +709,12 @@
 		"dataSafety": "no-impact",
 		"escalation": "none",
 		"summary": "Automatic printing did not start for this receipt.",
-		"docsBody": "Check the selected printer, template, and connection, then use Print now to print the receipt manually.",
+		"docsBody": "Print the receipt by hand with Print Receipt, then check the automatic-printing settings and the printer.",
 		"troubleshooting": [
-			"Use Print now to print the receipt by hand — the sale is unaffected.",
-			"Check the printing settings: the right printer is selected and a receipt template is chosen.",
-			"If auto-print fails on every sale, note whether manual printing works — manual-works-but-auto-fails is a settings problem; both failing is a printer problem."
+			"On the receipt shown after the sale, press Print Receipt to print it by hand — the sale is unaffected. If no receipt is on screen, on WCPOS Pro open Orders, use the order's Receipt action and press Print Receipt.",
+			"If no receipt appears after sales at all, or the till never tries to print, open the cart's settings (the sliders icon above the cart) and turn on both Automatically show receipt after checkout and Automatically print receipt after checkout — automatic printing happens on that receipt, so it needs both.",
+			"Check the printer in Settings → Printing: the printer you expect is listed under Printers, and Test Print on its Edit screen prints.",
+			"If Print Receipt fails too, it is the printer or its connection (see PRINT301). If manual printing works but automatic printing keeps failing with both settings on, use Copy debug info in Store health → Logs and contact support."
 		],
 		"logSources": [],
 		"evidence": "monorepo#121",
@@ -713,7 +734,7 @@
 		"troubleshooting": [
 			"Look at the printer before retrying — the job may have printed even though no confirmation came back, and a blind retry prints the receipt twice.",
 			"Check paper, covers and error lights on the printer.",
-			"If nothing printed, retry once from the order's receipt screen.",
+			"If nothing printed, retry once: press Print Receipt (or Print again) on the receipt shown after the sale. Once you have left that receipt, on WCPOS Pro open Orders, use the order's Receipt action and press Print Receipt; without Pro, the receipt cannot be reopened.",
 			"For repeated failures, power-cycle the printer and check its connection to the till."
 		],
 		"logSources": [],
@@ -733,9 +754,9 @@
 		"docsBody": "Check that the printer is powered on and connected, then try printing again.",
 		"troubleshooting": [
 			"Check the printer is powered on and its cable or network connection is seated.",
-			"For network printers, confirm the till and printer are on the same network and the printer's address has not changed — DHCP renewals can move it.",
-			"Print a self-test from the printer itself to confirm the hardware works, then try again from the POS.",
-			"If the printer's address changed, update it in the POS printing settings."
+			"Print a self-test from the printer itself (see its manual); on most network printers the self-test page also shows its current IP address.",
+			"For a network printer, confirm the till and printer are on the same network. Then open Settings → Printing, press Edit on the printer under Printers, and check that IP Address (and Port, if the page shows one) matches the self-test page — a router can hand the printer a new address after a restart. Correct them, or use Scan Network, then press Save.",
+			"Press Test Print on the printer's Edit screen, then print the receipt again."
 		],
 		"logSources": [],
 		"evidence": "email: Waiting for printer",
@@ -823,10 +844,11 @@
 		"summary": "No products matched the current search and filters.",
 		"docsBody": "Review spaces, category filters, and whether the local product index has finished syncing before searching again.",
 		"troubleshooting": [
-			"The scanned code is placed in the search box, so start with the filters: a category or stock filter silently narrows every search.",
-			"Look the product up by name — if it appears, its barcode field in the store does not contain the scanned value; add the barcode to the product in WP Admin.",
-			"Check the barcode field in the POS barcode settings — if your store keeps barcodes in a different field, the POS reads the wrong one and every scan misses.",
-			"If the product is brand new, the local index may still be syncing: give the first sync time to finish, then scan again."
+			"At the till: clear the filters first — a category or stock filter silently narrows every search, and a scanned code goes into the same search box.",
+			"Look the product up by name. If it appears but a scan missed it, its barcode in the store doesn't match the scanned value; if you typed the search, check spelling and stray spaces.",
+			"If the product is brand new, the local index may still be syncing — give the first sync time to finish, then try again.",
+			"Site admin: if the barcode is missing, add the scanned value in WP Admin, in the field named in Barcode Field — for an item with variations, on that variation itself, not the parent product.",
+			"Site admin: if every scan misses, check WP Admin > POS > Settings > General > Barcode Field — it should name the field your products keep barcodes in (for example _global_unique_id for GTIN, _sku or _barcode)."
 		],
 		"logSources": [],
 		"evidence": "plugin#1114; monorepo#750",
@@ -844,9 +866,10 @@
 		"summary": "The displayed stock may be older than the store stock.",
 		"docsBody": "Verify current stock in the store before completing a sale that could oversell the item.",
 		"troubleshooting": [
-			"Before selling a low-stock item, check its live stock in WP Admin — the till's number may be older than the store's.",
-			"Stale stock usually means sync has been failing or paused: look for sync errors in Store health → Logs and fix those first.",
-			"After sync recovers, the stock display catches up on its own."
+			"At the till: before selling a low-stock item, confirm the real quantity — check the shelf, or the product's stock in WP Admin — rather than trusting the till's number.",
+			"Refresh the till's copy: in Store health → Database, choose ⋮ → Check for changes now on the Products row, and on the Variations row for a product with variations.",
+			"If the figures still lag, sync is failing or paused: on the Logs tab, choose Errors or Sync and deal with the codes you find there. Stock catches up on its own once sync recovers.",
+			"Site administrator: if several tills or your online shop sell the same stock, turn on Prevent overselling in WP Admin > POS > Settings > Checkout — the store then refuses a sale whose quantities exceed its stock, checked at checkout while the till is online. A sale completed offline is not reliably checked when it syncs, so confirm stock by hand before selling low-stock items offline."
 		],
 		"logSources": [
 			"wp-admin-pos-logs"
@@ -866,10 +889,11 @@
 		"summary": "Your WCPOS Pro license is not active for this store or device.",
 		"docsBody": "Check the local, licensing-server, and updater status, then activate the license for the named store.",
 		"troubleshooting": [
-			"Check the license status in the POS settings in WP Admin — it should show active for this store's exact URL.",
-			"A site URL change (http to https, adding or dropping www, a domain move, a staging copy) deactivates the license for the new address — re-activate it for the current one.",
-			"If the license shows active but the POS disagrees, deactivate and re-activate once, then reload the till.",
-			"Still locked? Export debug info and contact support with your license reference."
+			"Site administrator or license holder: go to WP Admin > POS > Settings > License. An active license shows \"License … has been activated\"; otherwise the page shows the License Key field. (An upgrade card instead means WCPOS Pro is not active — activate it in WP Admin → Plugins first.)",
+			"If it is not active, paste the key from your WCPOS account into License Key and press Activate.",
+			"A site URL change (http to https, adding or dropping www, a domain move, a staging copy) leaves the license on the old address. Deactivate it there first — on the old site's License page, or from your WCPOS account page; email support@wcpos.com if the old site is gone — then enter the full key on this site and press Activate (if this site shows it as activated, press Deactivate first).",
+			"If the license shows active but the POS still disagrees, copy the full key from your WCPOS account first (the page shows only a shortened one, and Deactivate clears it), then press Deactivate, paste the key into License Key and press Activate.",
+			"After the license is activated, reload the app on the till. Still locked? Use Copy debug info in Store health → Logs and contact support with your license reference."
 		],
 		"logSources": [
 			"wp-admin-pos-logs"
@@ -911,7 +935,7 @@
 		"summary": "The updater is not authorized to download WCPOS Pro updates.",
 		"docsBody": "Re-authorize the updater for this store, then check for updates again.",
 		"troubleshooting": [
-			"Re-enter or re-activate the license key in the POS settings so the updater can authenticate.",
+			"Go to WP Admin > POS > Settings > License. If the page shows the License Key field, enter your key and press Activate; if it already shows the license as activated, copy the full key from your WCPOS account first (the page shows only a shortened one), press Deactivate, then enter the key again and press Activate.",
 			"Check for updates again from WP Admin → Dashboard → Updates.",
 			"If authorization keeps failing, the site may be blocking outbound requests to the update server — ask the host whether outbound HTTPS is restricted."
 		],
@@ -926,17 +950,17 @@
 		"symbol": "APP_START_FAILED",
 		"domain": "CLIENT",
 		"severity": "error",
-		"actionHint": "Restart; if it won't start, clear the local database. This loses any unsynced sales.",
+		"actionHint": "Restart; if it still won't start, open the help page before clearing local data.",
 		"retryPolicy": "manual",
 		"dataSafety": "local-only",
 		"escalation": "support-with-export",
 		"summary": "WCPOS could not finish starting.",
-		"docsBody": "Restart once, then export diagnostics with the app version and device engine if startup still fails.",
+		"docsBody": "Restart once. If it still will not start, the local database most likely cannot be opened: clearing it and reopening fixes that, but permanently deletes anything not yet synced to your store, such as sales taken offline — contact support first if important sales may be unsent.",
 		"troubleshooting": [
-			"Restart the app once; on web, fully reload the tab.",
-			"If startup fails again, note the app version and the device — the browser console records the startup error even when the POS cannot show it.",
-			"Do not clear site data or reinstall to fix startup — a till with unsent sales loses them; contact support first.",
-			"Export debug info if the app gets far enough to open the Logs screen; otherwise contact support with the console error."
+			"Restart the app once; on web, fully reload the tab — a transient startup failure often clears on its own.",
+			"If it still will not start, the local database most likely cannot be opened. Before clearing it, think about whether this device took sales that may not have reached your store — for example while offline. The app cannot open, so they cannot be synced first: clearing deletes them permanently. If important sales may be unsent, contact support before clearing.",
+			"Otherwise clear the local database and reopen — follow Clear All Local Data in the WCPOS docs, which covers the in-app button, the web app and the desktop app. WCPOS re-downloads your store's data automatically.",
+			"If startup still fails after clearing, use Copy debug info — or the browser console error, if the app cannot open its own logs — and contact support."
 		],
 		"logSources": [
 			"browser-console"
@@ -1082,16 +1106,19 @@
 		"symbol": "PAYMENT_EXCEEDS_BALANCE",
 		"domain": "PAYMENT",
 		"severity": "error",
-		"actionHint": "Refund the difference — the store only owed part of what was taken.",
+		"actionHint": "Record the balance owed from the money taken, then refund the difference.",
 		"retryPolicy": "manual",
 		"dataSafety": "money-moved",
 		"escalation": "none",
 		"summary": "More was taken at the till than the order still owed.",
-		"docsBody": "The till took a payment larger than the order's remaining balance, and the store refused to apply it: the attempt is kept on the order as a failed row. The money is already in the drawer or on the customer's card, so the difference has to go back. This happens when the order changed elsewhere after the till read it.",
+		"docsBody": "The till took a payment larger than the order's remaining balance, and the store refused to apply it: the attempt is kept on the order as a failed row. The money is already in the drawer or on the customer's card, so the part genuinely owed is recorded against the order from that money, and the difference goes back. This happens when the order changed elsewhere after the till read it.",
 		"troubleshooting": [
-			"Check what the store says the order still owed.",
-			"Refund the difference to the customer.",
-			"If the two totals still disagree, refresh the order on the till before taking another payment."
+			"Do not ask the customer to pay again: the refused payment was never applied, but the money for it is already in your drawer or on their card.",
+			"Check what your store says the order owed — the line in Store health → Logs usually gives it (for example \"Order #… only had … outstanding\"); if not, the refreshed payment pane does.",
+			"Refresh the order first: open Store health → Database, open the ⋮ menu on the Orders row and choose Check for changes now, so the payment pane shows the store's balance.",
+			"Record that balance from the money you already hold: choose the same record-only method (such as cash or a manually entered card), tap Exact … (cash) or Full balance …, and take it. Never pick a card-terminal or gateway method for this — that starts a new charge.",
+			"Give the customer back the difference between what you took and what the order owed — cash from the drawer, or a refund of the difference on the card machine or in the payment provider's dashboard.",
+			"Site administrator: if this keeps happening on one order, something else is settling it at the same time — a second till, or an online payment landing while the order is open at the counter."
 		],
 		"logSources": [],
 		"evidence": "wcpos/roadmap#295",
@@ -1175,8 +1202,9 @@
 		"docsBody": "The POS keeps working. If Pro features stay locked, re-enter your license key, then contact support.",
 		"troubleshooting": [
 			"Keep working — the POS does not lock up over license checks.",
-			"If Pro features stay locked, re-enter the license key in the POS settings.",
-			"If that does not clear it, export debug info and contact support."
+			"If Pro features stay locked, ask whoever manages the store to open WP Admin > POS > Settings > License. If it shows as activated, have the full key from your WCPOS account ready (the page shows only a shortened one) and press Deactivate first; then enter the key in License Key and press Activate.",
+			"Reload the app on the till so it picks up the license again.",
+			"If Pro features are still locked, use Copy debug info in Store health → Logs and contact support with your license reference."
 		],
 		"logSources": [],
 		"evidence": "coverage net (map #1136, A1.1)",
@@ -1229,16 +1257,17 @@
 		"symbol": "RECORD_CONFLICT",
 		"domain": "SYNC",
 		"severity": "warn",
-		"actionHint": "Compare with the store, then re-apply the correct values once.",
+		"actionHint": "Compare with the store, then choose Send again or Use server version in Store health → Database.",
 		"retryPolicy": "after-change",
 		"dataSafety": "order-safe",
 		"escalation": "none",
 		"summary": "A change on this device clashed with an edit made in your store.",
 		"docsBody": "Open the record and check which version is correct. The POS keeps both sides safe until the clash is settled — nothing is lost.",
 		"troubleshooting": [
-			"Open the record named in the log entry and compare it with the same record in WP Admin.",
-			"Decide which version is right — the till's or the store's — and re-apply the correct values once; the POS keeps both sides safe, and further edits to that record are held until the clash is settled.",
-			"Frequent conflicts on the same records usually mean two people edit the same data in parallel; agree on where each kind of edit happens."
+			"Open Store health → Database. If a \"… changes were held\" panel names the record, continue below; if none is showing, the clash was settled automatically — orders are resent on top of the store's version by themselves — and nothing needs doing.",
+			"Press Open record (where shown) to see this device's version, and compare it with the same record in WP Admin (a site admin may need to do this).",
+			"If this device's version is right, press Send again — it replaces the store's values for the fields this device changed. If the store's version is right, press Use server version (some rows say Discard device change) and confirm; this device's change is dropped.",
+			"Frequent conflicts on the same records usually mean two people edit the same data in parallel — for example stock on the till and in WP Admin; agree on where each kind of edit happens."
 		],
 		"logSources": [],
 		"evidence": "monorepo#1137 inventory: push.conflict, queue.write.conflict-transition",
@@ -1407,7 +1436,7 @@
 		"summary": "This store's WCPOS plugin is too old for this version of the app.",
 		"docsBody": "The app has been updated but the WCPOS plugin on the store has not, and the two versions no longer work together. Ask whoever manages the site to update the WCPOS plugin in WP Admin, then connect again. Nothing needs to change on the till.",
 		"troubleshooting": [
-			"Update WCPOS on the store: WP Admin → Plugins → update WCPOS to 1.10.0 or later. If WCPOS Pro is installed, update it to a matching version at the same time.",
+			"Update WCPOS on the store: WP Admin → Plugins → update WCPOS to the latest version. If WCPOS Pro is installed, update it to a matching version at the same time.",
 			"If no update is offered, check WP Admin → Dashboard → Updates; for Pro, an unauthorized updater blocks updates (see LICENSE301) — fix that first.",
 			"After updating, reconnect from the till — you do not need to type the store address again.",
 			"If the store cannot be updated yet, contact support: the till needs an app version that matches the plugin, and support can tell you which one."
@@ -1424,16 +1453,16 @@
 		"symbol": "STORE_URL_INVALID",
 		"domain": "AUTH",
 		"severity": "error",
-		"actionHint": "Check the store address for typos.",
+		"actionHint": "Enter the store address; if it is already filled in, ask the site admin to update WCPOS.",
 		"retryPolicy": "manual",
 		"dataSafety": "no-impact",
 		"escalation": "none",
 		"summary": "The store address is missing or not a valid URL.",
-		"docsBody": "Check the address for typos and include the full https:// URL of the store's WordPress site, then try again.",
+		"docsBody": "Either the address field was empty, or your store answered but its WCPOS sign-in address is invalid — which is fixed on the store, not at the till.",
 		"troubleshooting": [
-			"Check the address for typos and enter the full URL including https:// — for example https://shop.example.com.",
-			"Use the site's WordPress address, not an admin page or a checkout URL.",
-			"If the site lives in a subdirectory (for example /shop), include it."
+			"Type the store's address into Enter the URL of your WooCommerce store — for example shop.example.com — and press Connect. A field holding only spaces counts as empty.",
+			"If the address is filled in and the message reads \"WCPOS login URL is invalid. Please ensure WCPOS plugin is properly configured\", the problem is on the store. Site administrator: update WCPOS to the latest version in WP Admin → Plugins, then press Connect again. Do not deactivate and reactivate it to fix this — reactivating resets every role's POS permissions to the defaults.",
+			"Site administrator: if that does not clear it, open the store's address followed by /wp-json/ in a browser (or /?rest_route=/ if that returns a 404). Under authentication → wcpos → endpoints, authorization should be a plain web address; if it is a list, an object or a number, a security, caching or REST-customising plugin is changing that response — disable those one at a time on a staging copy to find it."
 		],
 		"logSources": [],
 		"evidence": "monorepo#1151 legacy-table migration",
@@ -1772,9 +1801,10 @@
 		"summary": "More than one product matches this barcode.",
 		"docsBody": "WCPOS cannot pick between them safely, so nothing was added. Search for the product by name, and give each product a unique barcode in the store to fix the clash.",
 		"troubleshooting": [
-			"Search for the product by name to complete this sale — the scan added nothing because the barcode matches more than one product.",
-			"The log entry records the scanned code and how many products matched; searching the POS for the barcode value shows which ones they are.",
-			"In WP Admin, give each of those products its own unique barcode, then rescan to confirm only one match remains."
+			"The scan added nothing and a Several matches toast appeared. The scanned code is now in the product search box, so the products that share it are listed — add the right one by hand and finish the sale.",
+			"Clear any category or stock filters first — they narrow the same search and can hide some of the matches — then note every product name in the list for whoever manages the store.",
+			"Site administrator: in WP Admin, give each of those products its own barcode in the field named by WP Admin > POS > Settings > General > Barcode Field (by default the GTIN, _global_unique_id). A duplicate in the SKU or another barcode field can also match, so check those too.",
+			"Back at the till: in Store health → Database, choose ⋮ → Check for changes now on the Products row (and on Variations if any match was a variation), then rescan — the scan should now add the product directly."
 		],
 		"logSources": [],
 		"evidence": "monorepo#1151 legacy-table migration",

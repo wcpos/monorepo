@@ -294,8 +294,38 @@ describe('error registry', () => {
 		const entry = entryFor('SYNC331');
 		const guidance = entry.troubleshooting.join(' ');
 		expect(entry.summary).not.toContain('downloading');
-		expect(guidance).toContain('deleted record');
-		expect(guidance).toContain('must not be downloaded');
+		expect(guidance).toContain('must be removed from this device');
+		expect(guidance).toContain('a deleted record is removed rather than downloaded');
+	});
+
+	// Clearing local data deletes sales that never reached the store, and on a
+	// database that cannot open there is no way to send them first. The in-app
+	// hint is one line (toast and log row), so it must never say "clear" without
+	// sending the cashier to the help page's unsent-sales check first, and the
+	// troubleshooting steps must put that check before the clear (docs#444).
+	it.each(['CLIENT101', 'SYNC311'])(
+		'never tells a cashier to clear local data without the unsent-sales check (%s)',
+		(code) => {
+			const entry = entryFor(code);
+			expect(entry.actionHint).toMatch(/help page before clearing local data/);
+			const steps = entry.troubleshooting;
+			const check = steps.findIndex((step) => step.includes('contact support before clearing'));
+			const clear = steps.findIndex((step) => /clear the local database and reopen/i.test(step));
+			expect(check).toBeGreaterThanOrEqual(0);
+			expect(clear).toBeGreaterThan(check);
+		}
+	);
+
+	// SYNC111's fix is a per-collection Clear & re-download…, which is safe only
+	// once nothing is waiting to send and every open cart is saved (clearing
+	// Orders deletes a never-saved cart). A one-line hint cannot carry both
+	// checks, and toasts show it without the steps, so it points at the page.
+	it('sends SYNC111 to the help page before any Clear & re-download', () => {
+		const entry = entryFor('SYNC111');
+		expect(entry.actionHint).toMatch(/^Read the help page before using Clear & re-download/);
+		const guidance = entry.troubleshooting.join(' ');
+		expect(guidance).toContain('changes waiting to send is 0');
+		expect(guidance).toContain('save every open cart with Save to Server');
 	});
 
 	it('documents the passive SYNC411 flood alarm without implying throttling', () => {

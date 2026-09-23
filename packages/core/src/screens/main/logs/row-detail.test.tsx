@@ -262,7 +262,7 @@ describe('RowDetail', () => {
 				'Do not clear or reload local data. Export diagnostics and contact support before retrying or repairing anything.'
 			)
 		).toBeNull();
-		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
+		expect(screen.queryByText(/Clear & re-download/)).toBeNull();
 	});
 
 	it('pairs the local-data warning with the per-code action on a local-only code', () => {
@@ -280,7 +280,7 @@ describe('RowDetail', () => {
 
 		expect(
 			screen.getByText(
-				"Don't clear or reload this device's data. Repair from Store health → Database."
+				"Don't clear or reload this device's data. Read the help page before using Clear & re-download… on the damaged data."
 			)
 		).not.toBeNull();
 		expect(screen.queryByText(/Contact support/)).toBeNull();
@@ -304,17 +304,19 @@ describe('RowDetail', () => {
 		}
 	);
 
-	it('renders the per-code database reset action for SYNC311', () => {
+	it('sends SYNC311 to the help page before any local-data reset', () => {
 		render(<RowDetail row={{ ...row, code: 'SYNC311' }} kind="error" />);
 
+		// Clearing deletes unsent sales, so the one-line hint never says "clear"
+		// without the help page's unsent-sales check in front of it.
 		expect(
-			screen.getByText('Clear the local database and reopen. This loses any unsynced sales.')
-		).not.toBeNull();
-		expect(
-			screen.queryByText(
-				'Do not reset the affected local collection when this device may hold changes that never reached your store — resetting deletes the only local copy. Export diagnostics to help support investigate, then contact support for recovery guidance.'
+			screen.getByText(
+				"Update WCPOS; if it still won't open, read the help page before clearing local data."
 			)
-		).toBeNull();
-		expect(screen.queryByText(/Repair from Store health/)).toBeNull();
+		).not.toBeNull();
+		expect(screen.queryByText(/^Clear the local database/)).toBeNull();
+		// The registry docs body renders on the linked docs page, not in the app.
+		expect(screen.queryByText(/clearing the local database and reopening fixes it/)).toBeNull();
+		expect(screen.queryByText(/Clear & re-download/)).toBeNull();
 	});
 });
