@@ -3,16 +3,22 @@ import { Platform, View } from 'react-native';
 
 import * as ProgressPrimitive from '@rn-primitives/progress';
 import Animated, {
+	cancelAnimation,
 	Extrapolation,
 	interpolate,
+	ReduceMotion,
 	type SharedValue,
 	useAnimatedReaction,
 	useAnimatedStyle,
 	useDerivedValue,
+	useSharedValue,
+	withRepeat,
 	withSpring,
+	withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { EASE, INDETERMINATE } from '../lib/motion';
 import { cn } from '../lib/utils';
 
 export function Progress({
@@ -20,20 +26,27 @@ export function Progress({
 	value,
 	sharedValue,
 	indicatorClassName,
+	indeterminate,
 	...props
 }: ProgressPrimitive.RootProps & {
 	indicatorClassName?: string;
+	indeterminate?: boolean;
 	sharedValue?: SharedValue<number>;
 }) {
 	return (
 		<ProgressPrimitive.Root
 			className={cn(
-				'bg-secondary/20 relative h-2.5 w-full overflow-hidden rounded-full',
+				'relative w-full overflow-hidden rounded-full',
+				indeterminate ? 'bg-border h-0.5' : 'bg-muted h-2',
 				className
 			)}
 			{...props}
 		>
-			<Indicator value={value} sharedValue={sharedValue} className={indicatorClassName} />
+			{indeterminate ? (
+				<Sweep />
+			) : (
+				<Indicator value={value} sharedValue={sharedValue} className={indicatorClassName} />
+			)}
 		</ProgressPrimitive.Root>
 	);
 }
@@ -109,4 +122,45 @@ function NativeIndicator({ value, sharedValue, className }: IndicatorProps) {
 
 function NullIndicator(_props: IndicatorProps) {
 	return <></>;
+}
+
+function Sweep() {
+	return Platform.select({
+		web: <View className="bg-primary web:animate-indeterminate absolute h-full w-1/3" />,
+		native: <NativeSweep />,
+		default: null,
+	});
+}
+
+function NativeSweep() {
+	// The measured track width is React state so the effect below owns the shared
+	// value's mutations (the loader's pattern); the repeat starts once the track has
+	// a width and stops on unmount.
+	const [trackWidth, setTrackWidth] = React.useState(0);
+	const translateX = useSharedValue(0);
+	React.useEffect(() => {
+		if (!trackWidth) return;
+		translateX.value = -trackWidth / 3;
+		translateX.value = withRepeat(
+			withTiming(trackWidth, {
+				duration: INDETERMINATE,
+				easing: EASE,
+				reduceMotion: ReduceMotion.Never,
+			}),
+			-1,
+			false,
+			undefined,
+			ReduceMotion.Never
+		);
+		return () => cancelAnimation(translateX);
+	}, [trackWidth, translateX]);
+	const sweepStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
+	return (
+		<View
+			className="absolute inset-0"
+			onLayout={({ nativeEvent: { layout } }) => setTrackWidth(layout.width)}
+		>
+			<Animated.View className="bg-primary absolute h-full w-1/3" style={sweepStyle} />
+		</View>
+	);
 }

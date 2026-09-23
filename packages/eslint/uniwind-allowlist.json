@@ -6,12 +6,6 @@
   "packages/components/src/alert-dialog/index.tsx": {
     "duration-literal": 1
   },
-  "packages/components/src/avatar/index.tsx": {
-    "arbitrary-px": 2
-  },
-  "packages/components/src/badge/index.tsx": {
-    "arbitrary-px": 1
-  },
   "packages/components/src/combobox/combobox.tsx": {
     "arbitrary-px": 1,
     "group-*": 2
@@ -26,9 +20,6 @@
   },
   "packages/components/src/dropdown-menu/item.tsx": {
     "group-*": 3
-  },
-  "packages/components/src/loader/index.tsx": {
-    "duration-literal": 1
   },
   "packages/components/src/modal/index.tsx": {
     "duration-literal": 2
@@ -53,9 +44,6 @@
   "packages/components/src/tabs/index.tsx": {
     "focus-visible:": 8,
     "whitespace-nowrap": 1
-  },
-  "packages/components/src/text/index.tsx": {
-    "group-*": 1
   },
   "packages/components/src/toggle-group/index.tsx": {
     "focus-visible:": 4,

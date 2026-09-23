@@ -10,6 +10,7 @@ import { cn } from '../lib/utils';
 type DocsLinkProps = {
 	/** Absolute URL into the documentation site. */
 	href: string;
+	code?: string;
 	/** The (translated) link label. */
 	children: string;
 	testID?: string;
@@ -22,7 +23,7 @@ type DocsLinkProps = {
  * same wherever it appears. Routes through `openExternalURL`, which owns the
  * per-platform hand-off to the system browser.
  */
-function DocsLink({ href, children, testID, className }: DocsLinkProps) {
+function DocsLink({ href, children, code, testID, className }: DocsLinkProps) {
 	return (
 		<Button
 			variant="link"
@@ -34,6 +35,7 @@ function DocsLink({ href, children, testID, className }: DocsLinkProps) {
 		>
 			<HStack space="xs">
 				<ButtonText>{children}</ButtonText>
+				{code ? <ButtonText className="text-muted-foreground">{` · ${code}`}</ButtonText> : null}
 				<Icon name="arrowUpRight" size="xs" />
 			</HStack>
 		</Button>

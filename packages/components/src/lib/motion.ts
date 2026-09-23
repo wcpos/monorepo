@@ -11,6 +11,8 @@ export const PANEL_SLIDE = 250;
 export const PANEL_SLIDE_OUT = 200;
 export const PANE = 280;
 export const STAMP = 380;
+export const SPINNER = 1000;
+export const INDETERMINATE = 1100;
 
 export const EASE = Easing.bezier(0.2, 0.7, 0.2, 1);
 export const EASE_CSS = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
@@ -197,7 +199,7 @@ export const BEATS = {
 	// Functional indefinite wait: retain the 1s linear revolution under reduce-motion.
 	spinner: {
 		name: 'Spinner',
-		duration: 1000,
+		duration: SPINNER,
 		easing: 'linear',
 		class: 'waiting',
 		waitingPath: true,
@@ -206,7 +208,7 @@ export const BEATS = {
 	// Functional indefinite wait: the drawing's 1.1s cycle, also exempt.
 	indeterminateProgress: {
 		name: 'Indeterminate progress bar',
-		duration: 1100,
+		duration: INDETERMINATE,
 		easing: EASE,
 		class: 'waiting',
 		waitingPath: true,
@@ -225,6 +227,7 @@ export const BEATS = {
 
 // Preserve today's accordion easing and duration; no component adopts new motion yet.
 export const WEB_ANIMATIONS = {
+	indeterminate: `indeterminate ${INDETERMINATE}ms ${EASE_CSS} infinite`,
 	'accordion-down': `accordion-down ${CROSSFADE}ms ease-out`,
 	'accordion-up': `accordion-up ${CROSSFADE}ms ease-out`,
 	'overlay-in': `overlay-in ${OVERLAY_FADE}ms ${EASE_CSS}`,

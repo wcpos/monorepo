@@ -3,7 +3,7 @@ import { Pressable, type PressableProps, View } from 'react-native';
 
 import { render, screen } from '@testing-library/react';
 
-import { WEB_ANIMATIONS } from './motion';
+import { BEATS, INDETERMINATE, SPINNER, WEB_ANIMATIONS } from './motion';
 import { OVERLAY_MOTION, type OverlayPresentation, OverlayShell, useOverlay } from './overlay';
 
 const mockScrimProps: PressableProps[] = [];
@@ -136,3 +136,11 @@ it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
 		}
 	}
 );
+
+it('names the functional wait beats and the web progress sweep', () => {
+	expect(SPINNER).toBe(1000);
+	expect(INDETERMINATE).toBe(1100);
+	expect(BEATS.spinner.duration).toBe(SPINNER);
+	expect(BEATS.indeterminateProgress.duration).toBe(INDETERMINATE);
+	expect(WEB_ANIMATIONS['indeterminate']).toContain('1100ms');
+});
