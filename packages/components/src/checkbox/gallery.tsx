@@ -14,6 +14,11 @@ const examples: ({ id: string } & Omit<
 export const stories = examples.map(({ id, ...props }) => ({
 	id,
 	render: () => (
-		<Checkbox onCheckedChange={() => {}} {...props} testID={`gallery-checkbox-${id}`} />
+		<Checkbox
+			onCheckedChange={() => {}}
+			accessibilityLabel="Track stock"
+			{...props}
+			testID={`gallery-checkbox-${id}`}
+		/>
 	),
 }));

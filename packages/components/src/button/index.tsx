@@ -20,8 +20,13 @@ import type { VariantProps } from 'class-variance-authority';
  * (`<Button size="sm"><ButtonText className="text-sm">` is redundant, and
  * `className="text-destructive"` on a solid variant paints red text on a
  * primary fill). Reach for a different `variant`/`size`, or add one here.
+ *
+ * One line by default: a label never wraps inside a fixed-height button, in
+ * any locale. A caller that wants more passes `numberOfLines` itself.
  */
-const ButtonText = Text;
+function ButtonText(props: React.ComponentProps<typeof Text>) {
+	return <Text numberOfLines={1} {...props} />;
+}
 
 const buttonVariants = cva(
 	'web:transition-colors flex max-w-full shrink items-center justify-center rounded-lg',

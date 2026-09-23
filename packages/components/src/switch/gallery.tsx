@@ -11,7 +11,14 @@ const examples: ({ id: string } & Omit<React.ComponentProps<typeof Switch>, 'onC
 	];
 export const stories = examples.map(({ id, ...props }) => ({
 	id,
-	render: () => <Switch onCheckedChange={() => {}} {...props} testID={`gallery-switch-${id}`} />,
+	render: () => (
+		<Switch
+			onCheckedChange={() => {}}
+			accessibilityLabel="Track stock"
+			{...props}
+			testID={`gallery-switch-${id}`}
+		/>
+	),
 }));
 stories.push({
 	id: 'label',

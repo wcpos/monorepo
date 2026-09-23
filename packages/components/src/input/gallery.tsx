@@ -6,7 +6,7 @@ import { Input } from './index';
 const examples: ({ id: string } & React.ComponentProps<typeof Input>)[] = [
 	{ id: 'default', value: 'Canvas tote' },
 	{ id: 'placeholder', placeholder: 'Product name' },
-	{ id: 'clearable', value: 'Canvas tote', clearable: true },
+	{ id: 'clearable', defaultValue: 'Canvas tote', clearable: true },
 	{ id: 'disabled', value: 'Canvas tote', disabled: true },
 ];
 export const stories = examples.map(({ id, ...props }) => ({

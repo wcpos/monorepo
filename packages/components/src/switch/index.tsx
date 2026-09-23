@@ -6,6 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import Animated, {
 	interpolateColor,
 	useAnimatedStyle,
+	useDerivedValue,
 	useSharedValue,
 	withTiming,
 } from 'react-native-reanimated';
@@ -130,13 +131,13 @@ function SwitchNative({ className, size = 'default', ref, ...props }: SwitchNati
 	const trackWidth = useSharedValue(0);
 	const thumbWidth = useSharedValue(0);
 	const padding = useSharedValue(0);
-	// The track colour crosses on the same clock as the thumb, so neither leads.
+	// The track colour crosses on the same clock as the thumb, so neither leads:
+	// a shared progress value animates and interpolateColor reads the number.
+	const progress = useDerivedValue(() =>
+		withTiming(props.checked ? 1 : 0, { duration: CROSSFADE, easing: EASE })
+	);
 	const animatedRootStyle = useAnimatedStyle(() => ({
-		backgroundColor: interpolateColor(
-			withTiming(props.checked ? 1 : 0, { duration: CROSSFADE, easing: EASE }),
-			[0, 1],
-			[borderColor, primaryColor]
-		),
+		backgroundColor: interpolateColor(progress.value, [0, 1], [borderColor, primaryColor]),
 	}));
 	const animatedThumbStyle = useAnimatedStyle(() => ({
 		transform: [
@@ -153,13 +154,15 @@ function SwitchNative({ className, size = 'default', ref, ...props }: SwitchNati
 	return (
 		<Animated.View
 			style={animatedRootStyle}
-			className={cn(nativeSwitchVariants({ size }), props.disabled && 'opacity-45')}
+			// The caller's classes land on the wrapper that owns the layout and paints the
+			// track, as they do on the web root; the primitive underneath is only the hit area.
+			className={cn(nativeSwitchVariants({ size }), props.disabled && 'opacity-45', className)}
 			onLayout={({ nativeEvent: { layout } }) => {
 				trackWidth.value = layout.width;
 			}}
 		>
 			<SwitchPrimitives.Root
-				className={cn(nativeSwitchVariants({ size }), 'absolute inset-0 bg-transparent', className)}
+				className={cn(nativeSwitchVariants({ size }), 'absolute inset-0 bg-transparent')}
 				{...props}
 				ref={ref}
 			>

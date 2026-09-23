@@ -11,5 +11,6 @@ it('uses the controls-tier skin', () => {
 	expect(source).not.toContain('222px');
 	expect(source).not.toContain('146px');
 	expect(source).not.toContain('72px');
-	expect(source).not.toContain('columnSize');
+	// The prop survives as a deprecated, ignored type member; nothing reads it.
+	expect(source).not.toMatch(/columnSize\s*[=,}]/);
 });

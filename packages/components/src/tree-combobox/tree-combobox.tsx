@@ -225,6 +225,7 @@ function TreeComboboxTrigger({
 	...props
 }: PopoverPrimitive.TriggerProps) {
 	const { setTriggerWidth } = React.useContext(TreeComboboxWidthContext);
+	const { open } = PopoverPrimitive.useRootContext();
 
 	const handleLayout = React.useCallback(
 		(e: import('react-native').LayoutChangeEvent) => {
@@ -236,7 +237,11 @@ function TreeComboboxTrigger({
 
 	return (
 		<PopoverPrimitive.Trigger
-			className={cn(disabled && 'web:cursor-not-allowed opacity-45', className)}
+			className={cn(
+				className,
+				open && 'border-ring',
+				disabled && 'web:cursor-not-allowed opacity-45'
+			)}
 			disabled={disabled}
 			onLayout={handleLayout}
 			{...props}

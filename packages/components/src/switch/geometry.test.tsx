@@ -21,6 +21,7 @@ jest.mock('react-native-reanimated', () => ({
 	},
 	Easing: { bezier: () => (value: number) => value },
 	useSharedValue: (value: number) => ({ value }),
+	useDerivedValue: (callback: () => number) => ({ value: callback() }),
 	useAnimatedStyle: (callback: () => object) => {
 		styles.push(callback);
 		return {};

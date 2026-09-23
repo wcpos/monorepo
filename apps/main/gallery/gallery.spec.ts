@@ -21,6 +21,9 @@ test('gallery cells', async ({ page }, testInfo) => {
 	const components = await links.evaluateAll((nodes) =>
 		nodes.map((node) => node.getAttribute('data-gallery-component')!)
 	);
+	// One test shoots every page: the budget grows with the inventory, twenty
+	// seconds a page and theme, so a new component never trips a fixed clock.
+	test.setTimeout(components.length * 2 * 20_000);
 	let count = 0;
 	const shot = new Set<string>();
 	for (const component of components) {

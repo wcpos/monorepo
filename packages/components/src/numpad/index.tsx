@@ -79,6 +79,8 @@ interface NumpadProps {
 	decimalSeparator?: string;
 	discounts?: number[];
 	precision?: number;
+	/** @deprecated Ignored: the keys are at the tile token and the width follows the step. */
+	columnSize?: number;
 	formatDisplay?: (value: number) => string;
 }
 

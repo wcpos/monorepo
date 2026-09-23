@@ -42,12 +42,19 @@ export function Calendar({ dateRange, onDateRangeChange, locale, theme, ...props
 		'--spacing',
 	]).map(String);
 
-	const px = (value: string) => {
+	// A token that the sheet (or a test that mocks it away) does not supply leaves the
+	// library's own default in place rather than a NaN size.
+	const px = (value: unknown): number | undefined => {
+		if (typeof value !== 'string') return undefined;
 		// Web keeps the derived xs token as calc(<base>px * <ratio>).
 		const [length, multiplier = '1'] = value.replace('calc(', '').split('*');
-		return parseFloat(length) * parseFloat(multiplier);
+		const number = parseFloat(length) * parseFloat(multiplier);
+		return Number.isFinite(number) ? number : undefined;
 	};
-	const [baseSize, headerSize, unit] = [base, xs, spacing].map(px);
+	// The Regular numbers, only when no sheet is present.
+	const baseSize = px(base) ?? 14;
+	const headerSize = px(xs) ?? 12;
+	const unit = px(spacing) ?? 4;
 
 	// Update locale configuration when language changes
 	React.useEffect(() => {
