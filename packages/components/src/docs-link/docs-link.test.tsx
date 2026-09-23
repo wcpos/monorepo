@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import * as React from 'react';
 
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -70,6 +72,12 @@ it('renders code after the label in muted colour with the arrow last', () => {
 	expect(parts[1].textContent).toBe(' · HOST121');
 	expect(parts[1]).toHaveClass('text-muted-foreground');
 	expect(parts[2]).toHaveAttribute('data-icon', 'arrowUpRight');
+});
+
+it('wraps a long label instead of truncating it', () => {
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	expect(source).toContain('flex-wrap');
+	expect(source.match(/numberOfLines=\{0\}/g)).toHaveLength(2);
 });
 
 it('renders only the label and arrow without a code', () => {

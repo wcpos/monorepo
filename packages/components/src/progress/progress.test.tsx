@@ -9,9 +9,11 @@ const mockPlatform = { OS: 'web' };
 const mockLayouts: NonNullable<ViewProps['onLayout']>[] = [];
 const mockSharedValues: { value: unknown }[] = [];
 const mockStyles: (() => object)[] = [];
+const mockDerived: { value: unknown; factory: () => unknown }[] = [];
 const mockTiming = jest.fn((toValue: number, config: unknown) => ({ toValue, config }));
 const mockRepeat = jest.fn((...args: unknown[]) => ({ args }));
 const mockCancel = jest.fn();
+const mockRootProps: Record<string, unknown>[] = [];
 
 jest.mock('react-native', () => ({
 	Platform: {
@@ -28,7 +30,8 @@ jest.mock('react-native', () => ({
 	},
 }));
 jest.mock('@rn-primitives/progress', () => ({
-	Root: ({ children, className, onLayout }: ViewProps) => {
+	Root: ({ children, className, onLayout, ...rest }: ViewProps & Record<string, unknown>) => {
+		mockRootProps.push(rest);
 		if (onLayout) mockLayouts.push(onLayout);
 		return (
 			<div data-testid="track" className={className}>
@@ -55,6 +58,12 @@ jest.mock('react-native-reanimated', () => ({
 		mockStyles.push(factory);
 		return factory();
 	},
+	useDerivedValue: (factory: () => unknown) => {
+		const shared = React.useRef({ value: 0 as unknown, factory }).current;
+		shared.factory = factory;
+		if (!mockDerived.includes(shared)) mockDerived.push(shared);
+		return shared;
+	},
 	useSharedValue: (value: unknown) => {
 		const shared = React.useRef({ value }).current;
 		if (!mockSharedValues.includes(shared)) mockSharedValues.push(shared);
@@ -73,6 +82,8 @@ beforeEach(() => {
 	mockLayouts.length = 0;
 	mockSharedValues.length = 0;
 	mockStyles.length = 0;
+	mockDerived.length = 0;
+	mockRootProps.length = 0;
 	jest.clearAllMocks();
 });
 
@@ -104,7 +115,10 @@ it('starts the native sweep from measured layout and cancels on unmount', () => 
 	expect(queryByTestId('indicator')).toBeNull();
 	expect(mockRepeat).not.toHaveBeenCalled();
 	act(() => mockLayouts.at(-1)!({ nativeEvent: { layout: { width: 300 } } } as LayoutChangeEvent));
-	expect(mockTiming).toHaveBeenCalledWith(300, {
+	// The derived value re-runs on the UI thread when the width changes; the mock re-runs it here.
+	const translateX = mockDerived.at(-1)!;
+	translateX.value = translateX.factory();
+	expect(mockTiming).toHaveBeenCalledWith(400, {
 		duration: 1100,
 		easing: 'standard-easing',
 		reduceMotion: 'never',
@@ -116,14 +130,27 @@ it('starts the native sweep from measured layout and cancels on unmount', () => 
 		undefined,
 		'never'
 	);
-	const animated = mockSharedValues.find(
-		(shared) => shared.value === mockRepeat.mock.results[0].value
-	)!;
-	expect(animated).toBeDefined();
-	animated.value = -100;
+	expect(translateX.value).toBe(mockRepeat.mock.results[0].value);
+	translateX.value = -100;
 	expect(mockStyles.at(-1)!()).toEqual({ transform: [{ translateX: -100 }] });
 	unmount();
-	expect(mockCancel).toHaveBeenCalledWith(animated);
+	expect(mockCancel).toHaveBeenCalledWith(translateX);
+});
+
+it('announces an indeterminate wait as busy with no current value on native', () => {
+	mockPlatform.OS = 'ios';
+	render(<Progress indeterminate value={60} />);
+	const root = mockRootProps.at(-1)!;
+	expect(root.value).toBeUndefined();
+	expect(root.accessibilityState).toEqual({ busy: true });
+	expect(root.accessibilityValue).toEqual({ min: 0, max: 100 });
+	expect(root['aria-valuenow']).toBeUndefined();
+	expect(root['aria-valuetext']).toBeUndefined();
+});
+
+it('passes indicatorClassName to the sweep', () => {
+	const { getByTestId } = render(<Progress indeterminate indicatorClassName="bg-success" />);
+	expect(getByTestId('track').querySelector('.bg-success')).not.toBeNull();
 });
 
 it('uses named durations only', () => {

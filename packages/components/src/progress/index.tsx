@@ -40,10 +40,22 @@ export function Progress({
 				indeterminate ? 'bg-border h-0.5' : 'bg-muted h-2',
 				className
 			)}
+			value={indeterminate ? undefined : value}
 			{...props}
+			// The native primitive normalises a missing value to 0 and announces "0%";
+			// an unknown wait is busy with no current value (web's Radix root already
+			// treats a missing value as indeterminate).
+			{...(indeterminate
+				? {
+						accessibilityValue: { min: 0, max: props.max ?? 100 },
+						accessibilityState: { busy: true },
+						'aria-valuenow': undefined,
+						'aria-valuetext': undefined,
+					}
+				: {})}
 		>
 			{indeterminate ? (
-				<Sweep />
+				<Sweep className={indicatorClassName} />
 			) : (
 				<Indicator value={value} sharedValue={sharedValue} className={indicatorClassName} />
 			)}
@@ -124,43 +136,51 @@ function NullIndicator(_props: IndicatorProps) {
 	return <></>;
 }
 
-function Sweep() {
+function Sweep({ className }: { className?: string }) {
 	return Platform.select({
-		web: <View className="bg-primary web:animate-indeterminate absolute h-full w-1/3" />,
-		native: <NativeSweep />,
+		web: (
+			<View
+				className={cn('bg-primary web:animate-indeterminate absolute h-full w-1/3', className)}
+			/>
+		),
+		native: <NativeSweep className={className} />,
 		default: null,
 	});
 }
 
-function NativeSweep() {
-	// The measured track width is React state so the effect below owns the shared
-	// value's mutations (the loader's pattern); the repeat starts once the track has
-	// a width and stops on unmount.
-	const [trackWidth, setTrackWidth] = React.useState(0);
-	const translateX = useSharedValue(0);
-	React.useEffect(() => {
-		if (!trackWidth) return;
-		translateX.value = -trackWidth / 3;
-		translateX.value = withRepeat(
-			withTiming(trackWidth, {
-				duration: INDETERMINATE,
-				easing: EASE,
-				reduceMotion: ReduceMotion.Never,
-			}),
-			-1,
-			false,
-			undefined,
-			ReduceMotion.Never
-		);
-		return () => cancelAnimation(translateX);
-	}, [trackWidth, translateX]);
+function NativeSweep({ className }: { className?: string }) {
+	const trackWidth = useSharedValue(0);
+	// The layout handler writes the measured width and the derived value starts the
+	// repeat from it: the sweep sits one third off the left edge and travels the track
+	// plus its own width, so nothing waits on a render. Unmount cancels the repeat.
+	const translateX = useDerivedValue(() =>
+		trackWidth.value
+			? withRepeat(
+					withTiming((trackWidth.value * 4) / 3, {
+						duration: INDETERMINATE,
+						easing: EASE,
+						reduceMotion: ReduceMotion.Never,
+					}),
+					-1,
+					false,
+					undefined,
+					ReduceMotion.Never
+				)
+			: 0
+	);
+	React.useEffect(() => () => cancelAnimation(translateX), [translateX]);
 	const sweepStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
 	return (
 		<View
 			className="absolute inset-0"
-			onLayout={({ nativeEvent: { layout } }) => setTrackWidth(layout.width)}
+			onLayout={({ nativeEvent: { layout } }) => {
+				trackWidth.value = layout.width;
+			}}
 		>
-			<Animated.View className="bg-primary absolute h-full w-1/3" style={sweepStyle} />
+			<Animated.View
+				className={cn('bg-primary absolute -left-1/3 h-full w-1/3', className)}
+				style={sweepStyle}
+			/>
 		</View>
 	);
 }
