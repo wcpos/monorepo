@@ -191,3 +191,73 @@ count as storage outcomes; `report.mjs` shows a `harness-failed` column when any
 
 When done, print: the simulator smoke divergence counts, the size of an incomplete bench file
 written by a one-row `--rows expo-filesystem-js --scale small` run, and the commit hash.
+
+# Round 5 (second physical iPad run, 2026-09-23 night)
+
+Round 4 is accepted and committed (`5cabc7709`). The second iPad run reached the incumbent's
+large scale and posted four cells (grid-asShipped, pushed-10, pushed-50, catalogue-blob), then the
+driver's liveness poll threw `xcrun devicectl … info processes` → `CoreDeviceError 4000 (the
+device disconnected immediately after connecting)`, the bench aborted with the small-scale row as
+its only result, and the crash leg's file drop then failed with `CoreDeviceError 4016 (not able
+to fulfill the requested usage assertion requirements)`. The device is now listed `unavailable`.
+Whether the app was killed by the OS on the 20k read or the Wi-Fi tunnel simply dropped cannot be
+told apart from the log, and either way one failed `devicectl` call must not end a two-hour run.
+
+Rules as before: commit at the end (include `FIXES.md`), do not push, do not open or edit a PR,
+do not reply on any PR, no physical devices, no simulators or emulators this round (the Pixel is
+running a leg on port 48091 from this same tree; do not start any leg, do not bind that port, and
+do not touch `results/`). Work in `driver/`, `harness.test.mjs`, `report.mjs`, `DEVICE-RUN.md`
+only — no app code, no rebuild. The Android crash leg will start `node driver/driver.mjs` from
+this tree while you work, so keep `driver.mjs` importable and Android behaviour unchanged at
+every save; run `node --test harness.test.mjs` after each edit.
+
+## 1. Physical-device liveness must survive a transient `devicectl` failure
+
+`ios.mjs` `alive()` on a physical device calls `devicectl device info processes` every
+`WATCH_MS` (250 ms) over Wi-Fi with no retry. Change it so that on a physical device:
+
+- a failed `devicectl` call is retried with backoff for up to `DEVICE_REACH_BUDGET_MS`
+  (name the constant; 30 s is the floor — a Wi-Fi tunnel renegotiation takes seconds) before
+  the poll concludes anything; a `CurrentlyAssertableStates = ( )` / 4016 error means the
+  device is locked, asleep or unpaired, and the thrown error must say so in plain words;
+- the poll interval on a physical device is a separate constant of at least 2 s
+  (`PHYSICAL_WATCH_MS`); simulators and Android keep 250 ms;
+- "device unreachable" and "process gone" are different errors: the first is
+  `Harness failure: device unreachable …`, the second stays `process died while <phase>`.
+  Both must reach the caller as harness failures, never as storage outcomes.
+
+The crash writer's stop timing (`targetStopMs`) must not be skewed by the slower poll: the
+writer's seeded wait already races `seeded` against `sleep(WATCH_MS)`; keep that race on the
+fast constant and only slow the `alive()` cadence.
+
+## 2. A failed bench row is one recorded failure, not the end of the run
+
+Mirror round 4's rule for the bench and smoke legs: when `run()` rejects with a harness failure
+for a (row, scale), push `{ engine: row, scale, outcome: 'harness-failed', error }` to
+`report.results`, save, log it, and continue with the next (row, scale). `complete` is false when
+any result is `harness-failed` (extend the existing rule that reads `trials`). `report.mjs` must
+render such rows as a `harness-failed` line and never compare them. If the device is unreachable
+the remaining rows will fail fast; that is fine — they are recorded and the resume below fixes it.
+
+## 3. `--resume`: rerun only what is missing
+
+Add `--resume` to `bench`, `smoke` and `crash`. With it, the driver loads the existing results
+file for that device, keeps every result that is complete (bench/smoke: a row+scale with cells and
+no `harness-failed`; crash: every trial that is not `harness-failed`), skips those, runs only the
+missing ones, and writes the merged file with a fresh `measuredAt` per run kept under
+`environment.runs[]` (array of `{ startedAt, rows, scales }`) so the evidence says it was gathered
+across runs. Without `--resume` behaviour is unchanged (overwrite). Refuse to resume a file whose
+`environment.device`, `platform`, or dependency versions differ from the current run. Pass the
+flag through `run.sh`. Document it in `DEVICE-RUN.md` next to the "Rerunning a leg on the same
+device overwrites its JSON" paragraph, and add a short "Physical iPad over Wi-Fi" note: prefer
+USB; a `4000`/`4016` devicectl error is the device going away, not a storage result; and the rerun
+command for each leg is `./run.sh <leg> --platform ios --device <udid> … --resume`.
+
+## 4. Tests
+
+Add harness tests for: the retry-then-give-up path of the physical `alive()` (stub the command
+runner), a bench row failure being recorded and the next row still running, and `--resume`
+skipping complete rows while re-running failed ones and refusing a mismatched device.
+
+When done, print: the harness test count and result, the new constants with their values, and the
+commit hash.

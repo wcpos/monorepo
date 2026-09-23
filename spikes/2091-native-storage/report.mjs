@@ -16,7 +16,7 @@ function stats(samples) {
 }
 export function compare(report) {
   const expected = new Map(), mismatches = [];
-  for (const row of report.results) for (const cell of row.cells ?? []) {
+  for (const row of report.results.filter(r => r.outcome !== 'harness-failed')) for (const cell of row.cells ?? []) {
     Object.assign(cell, stats(cell.samples.map(s => s.ms)));
     const key = `${row.scale}/${cell.name}`;
     if (!cell.signatures) { if (cell.contentMismatch) mismatches.push(`${row.engine}/${key}`); continue; }
@@ -44,13 +44,13 @@ export function compare(report) {
 // Compare before stripping bulky evidence; signatures permit comparison after every partial save.
 export function compactBench(report) {
   compare(report);
-  return { ...report, results: report.results.map(row => ({ ...row,
+  return { ...report, results: report.results.map(row => row.outcome === 'harness-failed' ? row : ({ ...row,
     cells: row.cells.map(({ idSets, docHashes, ...cell }) => cell),
   })) };
 }
 export function winner(report, key) {
   const [scale, name] = key.split('/');
-  const cells = ENGINES.map(engine => report.results.find(r => r.engine === engine && r.scale === scale)?.cells.find(c => c.name === name));
+  const cells = ENGINES.map(engine => report.results.find(r => r.engine === engine && r.scale === scale && r.outcome !== 'harness-failed')?.cells?.find(c => c.name === name));
   if (!cells.every(c => c && Number.isFinite(c.p50)) || cells.some(c => c.contentMismatch)) return 'not compared';
   const min = Math.min(...cells.map(c => c.p50)), wins = ENGINES.filter((_, i) => cells[i].p50 === min);
   return wins.length === 1 ? wins[0] : 'tie';
@@ -63,7 +63,7 @@ export async function main(directory = new URL('.', import.meta.url)) {
     if (file.startsWith('results.')) {
       const mismatches = compare(data); failed ||= mismatches.length > 0;
       data.equality = mismatches.length ? `CONTENT MISMATCH: ${mismatches.join(', ')} — not comparable`
-        : data.results.length && ENGINES.every(e => data.results.some(r => r.engine === e))
+        : data.results.length && ENGINES.every(e => data.results.some(r => r.engine === e && r.outcome !== 'harness-failed'))
           ? 'All available cross-row cells match on canonical revision-independent SHA-256 content; returned-order differences and normalized-sort violations recorded separately.'
           : 'Cross-row equality not fully evaluated: missing rows.';
       await writeFile(path, JSON.stringify(compactBench(data), null, 2) + '\n');
@@ -78,18 +78,19 @@ export async function main(directory = new URL('.', import.meta.url)) {
       table(['Environment', 'Value'], Object.entries(env).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : v])));
     for (const r of group) {
       lines.push(`### ${r.file}`, r.complete ? 'Run complete.' : `**Incomplete:** ${r.fatal ?? 'interrupted'}`);
+      for (const row of r.results ?? []) if (row.outcome === 'harness-failed') lines.push(`- ${row.engine} ${row.scale ?? ''}: harness-failed — ${escape(row.error)}`);
       if (r.file.startsWith('smoke.')) {
         const bench = group.find(x => x.file.startsWith('results.'));
         lines.push(table(['Row', 'Scenarios', 'Smoke/probe divergences', 'Leg 3 content mismatches', 'Total divergences'], ENGINES.map(engine => {
           const scenarios = r.results.find(x => x.engine === engine)?.scenarios;
           const rows = bench?.results.filter(x => x.engine === engine);
           const measured = rows?.length && rows.every(x => x.cells?.length) && bench.results.every(other =>
-            rows.some(row => row.scale === other.scale && other.cells.every(cell => row.cells.some(c => c.name === cell.name))));
+            rows.some(row => row.scale === other.scale && other.outcome !== 'harness-failed' && (other.cells ?? []).every(cell => row.cells.some(c => c.name === cell.name))));
           const mismatch = measured ? rows.flatMap(x => x.cells).filter(c => c.contentMismatch).length : undefined;
           const count = scenarios?.filter(s => !s.pass).length;
           return [engine, scenarios?.length ?? 'not run', count ?? 'not run', mismatch ?? 'not run', count === undefined || mismatch === undefined ? 'not evaluated' : count + mismatch];
         })));
-        for (const row of r.results) for (const scenario of row.scenarios.filter(s => !s.pass)) lines.push(`- ${row.engine} / ${scenario.name}: ${scenario.detail}`);
+        for (const row of r.results) for (const scenario of (row.scenarios ?? []).filter(s => !s.pass)) lines.push(`- ${row.engine} / ${scenario.name}: ${scenario.detail}`);
       }
       if (r.file.startsWith('crash.')) {
         const outcomes = ['ok', 'open-failed', 'integrity-failed', 'lost', 'partial'];
@@ -105,7 +106,7 @@ export async function main(directory = new URL('.', import.meta.url)) {
       if (r.file.startsWith('results.')) {
         lines.push(r.equality);
         for (const scale of ['small', 'large']) {
-          const rows = r.results.filter(x => x.scale === scale), names = [...new Set(rows.flatMap(x => x.cells.map(c => c.name)))];
+          const rows = r.results.filter(x => x.scale === scale && x.outcome !== 'harness-failed'), names = [...new Set(rows.flatMap(x => x.cells.map(c => c.name)))];
           if (!rows.length) continue;
           lines.push(`#### ${scale}`, table(['Cell — p50 / p95 ms', ...ENGINES, 'expo-filesystem-js ÷ expo-sqlite', 'worklet-filesystem ÷ expo-sqlite'], names.map(name => {
             const cells = ENGINES.map(engine => rows.find(x => x.engine === engine)?.cells.find(c => c.name === name));
@@ -124,7 +125,7 @@ export async function main(directory = new URL('.', import.meta.url)) {
     }
   }
   const benchmarks = reports.filter(r => r.file.startsWith('results.'));
-  const cells = [...new Set(benchmarks.flatMap(r => r.results.flatMap(row => row.cells.map(c => `${row.scale}/${c.name}`))))];
+  const cells = [...new Set(benchmarks.flatMap(r => r.results.filter(row => row.outcome !== 'harness-failed').flatMap(row => (row.cells ?? []).map(c => `${row.scale}/${c.name}`))))];
   lines.push('## Cross-device summary', 'Lowest p50, descriptive only. Simulator files are listed for harness verification, not the platform decision.',
     table(['Scale / cell', ...benchmarks.map(r => `${r.environment.platform}/${r.environment.device}${r.environment.simulator ? ' — simulator — not evidence' : ''}`)], cells.map(key => [key, ...benchmarks.map(r => winner(r, key))])));
   if (!reports.length) lines.push('No measurements available.');

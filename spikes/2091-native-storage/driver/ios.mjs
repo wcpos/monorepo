@@ -1,20 +1,41 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bundle, command, confirmStopped } from './control.mjs';
+import { bundle, command, confirmStopped, sleep } from './control.mjs';
+const DEVICE_REACH_BUDGET_MS = 30000; // Wi-Fi tunnel renegotiation can take seconds.
+const DEVICE_RETRY_MS = 500, DEVICE_RETRY_MAX_MS = 2000; // Back off without flooding CoreDevice.
 export async function ios(device, simulator) {
   let pid;
   const jsonPath = fileURLToPath(new URL('../.deps/devicectl.json', import.meta.url));
-  async function devicectl(args) {
+  async function devicectl(args, timeout, signal) {
     await rm(jsonPath, { force: true });
-    await command('xcrun', ['devicectl', ...args, '--json-output', jsonPath]);
+    try { await command('xcrun', ['devicectl', ...args, '--json-output', jsonPath], false, timeout, signal); }
+    catch (error) {
+      if (signal?.aborted) throw error;
+      const detail = String(error);
+      const hint = /4016|CurrentlyAssertableStates\s*=\s*\(\s*\)/.test(detail) ? ' (device locked, asleep or unpaired; unlock and reconnect)' : '';
+      throw new Error(`Harness failure: device unreachable${hint}: ${detail}`, { cause: error });
+    }
     return JSON.parse(await readFile(jsonPath, 'utf8')).result;
   }
-  async function alive() {
+  async function alive(signal) {
     if (!pid) return false;
     if (simulator) { try { process.kill(pid, 0); return true; } catch (error) { if (error.code === 'ESRCH') return false; throw error; } }
-    const result = await devicectl(['device', 'info', 'processes', '--device', device]);
-    return result.runningProcesses.some(p => p.processIdentifier === pid);
+    const deadline = performance.now() + DEVICE_REACH_BUDGET_MS;
+    let delay = DEVICE_RETRY_MS;
+    for (;;) {
+      try {
+        const result = await devicectl(['device', 'info', 'processes', '--device', device], Math.max(1, Math.ceil(deadline - performance.now())), signal);
+        return result.runningProcesses.some(p => p.processIdentifier === pid);
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        const remaining = deadline - performance.now();
+        if (remaining <= 0) throw error;
+        await sleep(Math.min(delay, remaining), signal);
+        if (performance.now() >= deadline) throw error;
+        delay = Math.min(delay * 2, DEVICE_RETRY_MAX_MS);
+      }
+    }
   }
   let environment;
   if (simulator) {
@@ -54,7 +75,8 @@ export async function ios(device, simulator) {
     async stop() {
       if (!pid || !await alive()) throw new Error('Harness failure: target exited before requested stop');
       if (simulator) process.kill(pid, 'SIGKILL');
-      else await command('xcrun', ['devicectl', 'device', 'process', 'signal', '--device', device, '--pid', String(pid), '--signal', 'SIGKILL']);
+      else try { await command('xcrun', ['devicectl', 'device', 'process', 'signal', '--device', device, '--pid', String(pid), '--signal', 'SIGKILL']); }
+      catch (error) { throw new Error(`Harness failure: stop: ${error}`, { cause: error }); }
       await confirmStopped(alive); pid = undefined;
     },
   };

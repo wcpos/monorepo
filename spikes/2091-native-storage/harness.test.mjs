@@ -293,14 +293,14 @@ test('every bench save is compact and retained signatures still compare after re
 
 // Exercise the real trial loop; the OS boundary loses the first writer between alive and signal.
 test('vanished stop target is saved as harness-failed and next trial is scored', async () => {
-  const { compactTrial } = await import('./driver/control.mjs');
+  const control = await import('./driver/control.mjs');
   const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
   const loop = source.slice(source.indexOf('try {\n  for (const row'), source.indexOf('\nfinally {'));
   let stops = 0, scored = 0;
-  const saved = [], context = { rows: ['expo-filesystem-js'], leg: 'crash', trials: 2,
+  const saved = [], context = { physicalIos: false, AbortController, ...control, args: { resume: false }, watchMs: 250, WATCH_MS: 250, rows: ['expo-filesystem-js'], leg: 'crash', trials: 2,
     report: { complete: false, trials: [] }, process: {}, console: { info() {}, error() {} },
     spec: row => ({ row }), randomInt: () => 0, RANDOM_STOP_MAX_MS: 3000, performance,
-    sleep: async () => {}, compactTrial, save: async () => saved.push(structuredClone(context.report)),
+    sleep: async () => {}, save: async () => saved.push(structuredClone(context.report)),
     device: { stop: async () => { if (++stops === 1) throw new Error('devicectl signal: No such process'); } },
     start: async () => { context.active = { seededAt: performance.now(), started: [{ tx: 1, n: 1, ids: ['a'] }], acked: new Set([1]), beginRetries: 0 }; return { promise: new Promise(() => {}), seeded: Promise.resolve() }; },
     run: async () => { scored++; return { outcome: 'ok', ledger: 'ok', reopenMs: 1 }; },
@@ -361,4 +361,214 @@ test('job keeps awake through a pending writer and releases on success or error'
     assert.equal(posted.length, 1);
     if (fails) assert.match(posted[0].error, /writer failed/);
   }
+});
+
+// Removing retries must expose the first tunnel failure rather than recover or exhaust the budget.
+test('physical alive retries transient commands and distinguishes unreachable from gone', async () => {
+  const source = readFileSync(new URL('driver/ios.mjs', here), 'utf8').replace(/^import .*;\n/gm, '').replace('export async function', 'async function').replaceAll('import.meta.url', JSON.stringify(new URL('driver/ios.mjs', here).href));
+  let now = 0, failures = 0, gone = false, response;
+  const waits = [];
+  const context = { URL, join, fileURLToPath: u => u.pathname, bundle: 'test',
+    performance: { now: () => { now += 0.125; return now; } }, sleep: async ms => { now += ms; waits.push(ms); },
+    rm: async () => {}, writeFile: async () => {}, readFile: async () => JSON.stringify({ result: response }),
+    command: async (_file, args, _allowFailure, timeout) => {
+      if (args.includes('signal')) throw new Error('CoreDeviceError 4000: disconnected');
+      if (args.includes('processes')) {
+        assert.ok(Number.isInteger(timeout) && timeout > 0, 'execFile needs an unsigned integer timeout');
+        if (failures-- > 0) throw new Error('CoreDeviceError 4016 CurrentlyAssertableStates = ( )');
+        response = { runningProcesses: gone ? [] : [{ processIdentifier: 123 }] };
+      } else response = { deviceProperties: {}, process: { processIdentifier: 123 } };
+    } };
+  const device = await vm.runInNewContext(source + '; ios("test", false)', context);
+  await device.launch('http://test');
+  failures = 2;
+  assert.equal(await device.alive(), true);
+  assert.ok(waits.length >= 2 && waits[1] > waits[0], 'transient failures back off');
+  failures = Infinity; now = 0; waits.length = 0;
+  await assert.rejects(device.alive(), /Harness failure: device unreachable.*locked, asleep or unpaired/s);
+  assert.ok(now >= 30000 && now <= 31000, 'bounded reachability budget');
+  failures = 0;
+  await assert.rejects(device.stop(), /Harness failure:.*4000/);
+  gone = true;
+  assert.equal(await device.alive(), false, 'a successful process listing can prove process death');
+});
+
+async function runDriverLoop(report, leg, run, extra = {}) {
+  const control = await import('./driver/control.mjs');
+  const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
+  const loop = source.slice(source.indexOf('try {\n  for (const row'), source.indexOf('\nfinally {'));
+  const saved = [], context = { physicalIos: false, AbortController, ...control, rows: report.rows, scales: leg === 'smoke' ? [undefined] : ['small'], leg, trials: 2,
+    args: { scale: 'small', resume: true }, active: undefined, report, process: {}, console: { info() {}, error() {} },
+    spec: (row, scale) => ({ row, scale }), run, save: async () => saved.push(structuredClone(report)), ...extra };
+  await vm.runInNewContext('(async () => {' + loop + '})()', context);
+  return { saved, context };
+}
+
+// A per-row disconnect must not drop the next row or claim a complete run.
+test('bench and smoke record harness failures and continue to the next row', async () => {
+  for (const leg of ['bench', 'smoke']) {
+    const report = { rows: ['expo-filesystem-js', 'expo-sqlite'], results: [], trials: [] };
+    const seen = [];
+    const { saved } = await runDriverLoop(report, leg, async job => {
+      seen.push(job.row);
+      if (job.row === 'expo-filesystem-js') throw new Error('Harness failure: device unreachable');
+      return leg === 'bench' ? { cells: [{ name: 'read', samples: [{ ms: 1 }] }] } : { scenarios: [{ pass: true }] };
+    });
+    assert.deepEqual(seen, ['expo-filesystem-js', 'expo-sqlite']);
+    assert.equal(saved[0].results[0].outcome, 'harness-failed');
+    assert.equal(report.results.length, 2);
+    assert.equal(report.complete, false);
+  }
+});
+
+// Resume must preserve successful evidence, rerun failed/missing work, and reject a different environment.
+test('resume merges run provenance and refuses device, platform or dependency mismatches', async () => {
+  const { prepareReport } = await import('./driver/control.mjs');
+  assert.equal(typeof prepareReport, 'function');
+  const current = { environment: { device: 'ipad', platform: 'ios', rxdb: 'installed', measuredAt: 'new' }, rows: ['expo-sqlite'], results: [], trials: [] };
+  const previous = { ...structuredClone(current), environment: { ...current.environment, measuredAt: 'old' }, complete: false, fatal: 'disconnect' };
+  previous.results = [{ engine: 'expo-sqlite', scale: 'small', cells: [{ name: 'read' }] }];
+  const merged = prepareReport(current, previous, { rxdb: 'installed' }, ['small']);
+  assert.deepEqual(merged.results, previous.results);
+  assert.deepEqual(merged.environment.runs.map(r => r.startedAt), ['old', 'new']);
+  assert.equal(merged.environment.measuredAt, 'new');
+  assert.equal(merged.fatal, undefined);
+  for (const [key, value] of [['device', 'other'], ['platform', 'android'], ['rxdb', 'different']]) {
+    const wrong = structuredClone(previous); wrong.environment[key] = value;
+    assert.throws(() => prepareReport(current, wrong, { rxdb: 'installed' }, ['small']), /Cannot resume/);
+  }
+});
+
+test('resume skips completed bench and smoke rows and replaces failed rows', async () => {
+  for (const leg of ['bench', 'smoke']) {
+    const good = leg === 'bench' ? { cells: [{ name: 'read', samples: [{ ms: 1 }] }] } : { scenarios: [{ pass: false }] };
+    const scale = leg === 'bench' ? 'small' : undefined;
+    const report = { rows: ['expo-filesystem-js', 'worklet-filesystem', 'expo-sqlite'], trials: [], results: [
+      { engine: 'expo-filesystem-js', scale, ...good },
+      { engine: 'worklet-filesystem', scale, outcome: 'harness-failed', error: 'offline' },
+    ] };
+    const seen = [];
+    await runDriverLoop(report, leg, async job => { seen.push(job.row); return good; });
+    assert.deepEqual(seen, ['worklet-filesystem', 'expo-sqlite']);
+    assert.equal(report.results.length, 3);
+    assert.equal(report.complete, true);
+    assert.ok(report.results.every(r => r.outcome !== 'harness-failed'));
+  }
+});
+
+test('failed bench and smoke rows render as harness failures and are never compared', async () => {
+  const { mkdtemp, mkdir, writeFile, readFile, rm } = await import('node:fs/promises');
+  await mkdir(new URL('.deps/', here), { recursive: true });
+  const directory = await mkdtemp(new URL('.deps/report-test-', here));
+  try {
+    await mkdir(directory + '/results');
+    await writeFile(directory + '/RESULTS.md', '<!-- generated:start --><!-- generated:end -->');
+    const report = { environment: { device: 'test', platform: 'ios' }, complete: false, results: [
+      { engine: 'expo-filesystem-js', scale: 'small', outcome: 'harness-failed', error: 'offline' },
+      { engine: 'expo-sqlite', scale: 'small', cells: [{ name: 'read', samples: [{ ms: 1 }] }], scenarios: [{ pass: true }] },
+    ] };
+    for (const leg of ['smoke', 'results']) await writeFile(`${directory}/results/${leg}.ios.test.json`, JSON.stringify(report));
+    const { main, winner } = await import('./report.mjs');
+    assert.equal(await main(new URL('file://' + directory + '/')), 0);
+    const output = await readFile(directory + '/RESULTS.md', 'utf8');
+    assert.match(output, /expo-filesystem-js.*harness-failed.*offline/);
+    assert.match(output, /not evaluated/);
+    assert.equal(winner(report, 'small/read'), 'not compared');
+  } finally { await rm(directory, { recursive: true }); }
+});
+
+// Resume keeps even non-ok storage outcomes, but must replace harness failures at the same trial number.
+test('crash resume retains scored trials and reruns only failed and missing trials', async () => {
+  const report = { rows: ['expo-sqlite'], results: [], trials: [
+    { row: 'expo-sqlite', trial: 1, outcome: 'lost' },
+    { row: 'expo-sqlite', trial: 2, outcome: 'harness-failed' },
+  ] };
+  let launches = 0;
+  const extra = { trials: 3, randomInt: () => 0, RANDOM_STOP_MAX_MS: 3000, performance,
+    sleep: async () => {}, watchMs: 2000, WATCH_MS: 250,
+    device: { stop: async () => {} },
+  };
+  const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
+  const control = await import('./driver/control.mjs');
+  const context = { physicalIos: false, AbortController, ...control, ...extra, args: { resume: true }, rows: report.rows, leg: 'crash', report,
+    process: {}, console: { info() {}, error() {} }, spec: row => ({ row }), save: async () => {},
+    start: async () => { launches++; context.active = { seededAt: performance.now(), started: [], acked: new Set(), beginRetries: 0 }; return { promise: new Promise(() => {}), seeded: Promise.resolve() }; },
+    run: async () => ({ outcome: 'ok' }),
+  };
+  const loop = source.slice(source.indexOf('try {\n  for (const row'), source.indexOf('\nfinally {'));
+  await vm.runInNewContext('(async () => {' + loop + '})()', context);
+  assert.equal(launches, 2);
+  assert.deepEqual(report.trials.map(t => [t.trial, t.outcome]), [[1, 'lost'], [2, 'ok'], [3, 'ok']]);
+  assert.equal(report.complete, true);
+});
+
+// Process absence/unreachability must not turn into a storage verdict at the open deadline.
+test('physical liveness failures stay harness failures even at the opening deadline', async () => {
+  const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
+  const wait = source.slice(source.indexOf('async function waitResult'), source.indexOf('async function run('));
+  for (const unreachable of [false, true]) {
+    let resolve, reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    promise.catch(() => {});
+    const context = { active: { phase: 'opening', openedAt: 0, launchedAt: 0 }, physicalIos: true,
+      performance: { now: () => 12000 }, OPEN_BUDGET_MS: 10000, JOB_BUDGET_MS: 1800000,
+      watchMs: 2000, sleep: async () => {},
+      device: { alive: async () => { if (unreachable) throw new Error('Harness failure: device unreachable'); return false; } },
+      settle: (error, result) => { context.active.finished = true; if (error) reject(error); else resolve(result); },
+    };
+    const waitResult = vm.runInNewContext(wait + '; waitResult', context);
+    await assert.rejects(waitResult(promise), unreachable ? /Harness failure: device unreachable/ : /Harness failure: process died while opening/);
+  }
+});
+
+// A two-second liveness cadence must not delay seed delivery or the chosen stop time.
+test('physical writer keeps the seeded race on the fast interval', async () => {
+  const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
+  const control = await import('./driver/control.mjs');
+  let now = 1, polls = 0, stoppedAt;
+  const context = { physicalIos: false, AbortController, ...control, rows: ['expo-sqlite'], leg: 'crash', trials: 1, args: {},
+    report: { results: [], trials: [] }, process: {}, console: { info() {}, error() {} },
+    spec: row => ({ row }), randomInt: () => 10, RANDOM_STOP_MAX_MS: 3000,
+    WATCH_MS: 250, watchMs: 2000, JOB_BUDGET_MS: 1800000, performance: { now: () => now },
+    save: async () => {}, run: async () => ({ outcome: 'ok' }),
+    device: { alive: async () => { polls++; return true; }, stop: async () => { stoppedAt = now; } },
+    start: async () => { context.active = { launchedAt: now, started: [], acked: new Set() }; return { promise: new Promise(() => {}), seeded: new Promise(() => {}) }; },
+    sleep: async ms => { now += ms; context.active.seededAt ??= now; },
+  };
+  const loop = source.slice(source.indexOf('try {\n  for (const row'), source.indexOf('\nfinally {'));
+  await vm.runInNewContext('(async () => {' + loop + '})()', context);
+  assert.equal(context.report.complete, true);
+  assert.equal(stoppedAt, 261);
+  assert.equal(polls, 1);
+});
+
+test('seed arrival cancels a physical liveness retry before the chosen stop', async () => {
+  const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
+  const control = await import('./driver/control.mjs');
+  let now = 1, seededResolve, stoppedAt;
+  const context = { physicalIos: false, AbortController, ...control, AbortController, physicalIos: true, rows: ['expo-sqlite'], leg: 'crash', trials: 1, args: {},
+    report: { rows: ['expo-sqlite'], results: [], trials: [] }, process: {}, console: { info() {}, error() {} },
+    spec: row => ({ row }), randomInt: () => 1000, RANDOM_STOP_MAX_MS: 3000,
+    WATCH_MS: 250, watchMs: 2000, JOB_BUDGET_MS: 1800000, performance: { now: () => now },
+    save: async () => {}, run: async () => ({ outcome: 'ok' }),
+    device: { alive: signal => {
+      now = 100; context.active.seededAt = now; seededResolve();
+      return new Promise(resolve => {
+        signal?.addEventListener('abort', () => resolve(true), { once: true });
+        setImmediate(() => { if (!signal?.aborted) { now = 5000; resolve(true); } });
+      });
+    }, stop: async () => { stoppedAt = now; } },
+    start: async () => { context.active = { launchedAt: now, started: [], acked: new Set() }; return { promise: new Promise(() => {}), seeded: new Promise(resolve => { seededResolve = resolve; }) }; },
+    sleep: async ms => { now += ms; },
+  };
+  const loop = source.slice(source.indexOf('try {\n  for (const row'), source.indexOf('\nfinally {'));
+  await vm.runInNewContext('(async () => {' + loop + '})()', context);
+  assert.equal(context.report.complete, true);
+  assert.equal(stoppedAt, 1100);
+});
+
+test('narrowed resume cannot mark preserved missing trials complete', async () => {
+  const report = { rows: ['expo-sqlite'], requestedTrials: 30, results: [], trials: [{ row: 'expo-sqlite', trial: 1, outcome: 'ok' }] };
+  await runDriverLoop(report, 'crash', async () => { throw new Error('must skip'); }, { trials: 1 });
+  assert.equal(report.complete, false);
 });

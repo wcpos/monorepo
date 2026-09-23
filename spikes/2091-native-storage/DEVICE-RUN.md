@@ -82,14 +82,37 @@ A lock during a run can appear as "Harness timeout while launching" or "No such 
 the stop: these are harness failures, never storage outcomes. A vanished stop target is recorded
 as `harness-failed`; the driver continues with the next trial but leaves `complete: false` and
 exits 1. The crash report adds a `harness-failed` column when needed.
-Fatal launch/job timeouts are harness failures, not storage verdicts. The scorer's 10-second
+Bench and smoke record a failed row as `harness-failed` and continue; any such failure leaves
+`complete: false` and exits 1. Launch/job timeouts are harness failures, not storage verdicts. The scorer's 10-second
 open/first-read timeout is instead recorded as the storage outcome `open-failed`. A completed
 smoke command may still contain failed scenarios: read the report.
 
 JSON is saved under `results/`, after every scored crash trial. **Rerunning a leg on the same
-device overwrites its JSON.** Preserve failed files before rerunning. Startup failures can
+device overwrites its JSON unless you add `--resume`.** Resume keeps completed row/scale results
+(including smoke divergences) and scored crash trials (including storage failures), rerunning
+missing or `harness-failed` entries within the requested rows, scales and trial count. Reuse the
+original selection to finish the whole leg. A missing file starts a new run; a different device,
+platform or dependency version is refused. Each invocation is recorded in `environment.runs`
+with its start time, rows and scales; `measuredAt` is the latest invocation's start time.
+Preserve failed files before an overwrite. Startup failures can
 precede file creation: keep the terminal error and check `measuredAt` to avoid returning an
 older run. Uninstalling the app removes its stored trial data.
+
+### Physical iPad over Wi-Fi
+
+Prefer USB for device control; keep the shared Wi-Fi route for the app's HTTP connection.
+A `4000`/`4016` devicectl error means the device has gone away, not a storage result. `4016`
+can mean locked, asleep or unpaired: unlock, reconnect and restore trust before resuming.
+Physical liveness checks run every 2 seconds and retry command failures with backoff for up to
+30 seconds. No simulator or Android polling interval changes.
+
+From this spike directory, with the same device and original row/scale/trial selection:
+
+```sh
+./run.sh smoke --platform ios --device "$IPAD" --resume
+./run.sh bench --platform ios --device "$IPAD" --scale both --resume
+./run.sh crash --platform ios --device "$IPAD" --trials 30 --resume
+```
 
 After both devices:
 
