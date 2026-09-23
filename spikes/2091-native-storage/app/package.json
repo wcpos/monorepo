@@ -35,6 +35,7 @@
   },
   "overrides": {
     "elliptic": ">=6.6.1",
+    "secp256k1": ">=3.8.1 <4",
     "metro": "0.84.5",
     "metro-runtime": "0.84.5",
     "rxdb": "17.4.0",
