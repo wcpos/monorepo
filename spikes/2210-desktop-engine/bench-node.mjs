@@ -118,7 +118,11 @@ async function runBench({ engine, scale, databaseName, dir }) {
       if (i) cell.samples.push({ ms, ...(Array.isArray(result?.documents ?? result) ? { rows: (result.documents ?? result).length } : {}) });
       // Keep every sample's returned ids in memory so a cross-engine content mismatch can be judged
       // offline: small (limited) results are written whole, large ones as a set difference.
-      if (Array.isArray(value) && value[0] && typeof value[0] === 'object') (cell.idSets ??= []).push(value.map(d => d.uuid ?? d.id));
+      if (Array.isArray(value) && value[0] && typeof value[0] === 'object') {
+        (cell.idSets ??= []).push(value.map(d => d.uuid ?? d.id));
+        // Per-document hashes too, so a same-ids-different-content mismatch names the document.
+        (cell.docHashes ??= []).push(new Map(await Promise.all(value.map(async d => [d.uuid ?? d.id, await signature(d)]))));
+      }
     }
     cells.push(cell);
     console.info('CELL', engine, scale, name, cell.unsortedSamples ? `UNSORTED ${cell.unsortedSamples}/${count + 1}` : '');
@@ -221,11 +225,14 @@ async function main() {
             const i = cell.setSignatures.findIndex((s, j) => s !== prior.setSignatures[j]), here = cell.idSets?.[i] ?? [], there = prior.idSets?.[i] ?? [];
             if (here.length <= 100 && there.length <= 100) cell.mismatch = { sample: i, ids: here, priorIds: there };
             else { const a = new Set(here), b = new Set(there); cell.mismatch = { sample: i, rows: here.length, priorRows: there.length, onlyHere: here.filter(x => !b.has(x)).slice(0, 200), onlyPrior: there.filter(x => !a.has(x)).slice(0, 200) }; }
+            // Same ids, different content: name the documents whose canonical hash differs.
+            const hs = cell.docHashes?.[i], ps = prior.docHashes?.[i];
+            if (hs && ps) cell.mismatch.differingDocs = [...hs].filter(([id, h]) => ps.has(id) && ps.get(id) !== h).map(([id]) => id).slice(0, 50);
           }
           cell.orderMismatch = !cell.contentMismatch && cell.signatures.some((s, i) => s !== prior.signatures[i]);
           if (!cell.contentMismatch) console.info(cell.orderMismatch ? 'EQUALITY PASS (content only; returned order differs)' : 'EQUALITY PASS', key);
-        } else expected.set(key, { signatures: cell.signatures, setSignatures: cell.setSignatures, idSets: cell.idSets });
-        delete cell.signatures; delete cell.setSignatures; delete cell.idSets;
+        } else expected.set(key, { signatures: cell.signatures, setSignatures: cell.setSignatures, idSets: cell.idSets, docHashes: cell.docHashes });
+        delete cell.signatures; delete cell.setSignatures; delete cell.idSets; delete cell.docHashes;
       }
       const samples = cell.samples.map(s => s.ms).sort((a, b) => a - b);
       Object.assign(cell, { p50: samples[Math.ceil(samples.length * .5) - 1], p95: samples[Math.ceil(samples.length * .95) - 1], max: samples.at(-1) });
