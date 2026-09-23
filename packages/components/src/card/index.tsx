@@ -14,7 +14,7 @@ function Card({ className, ...props }: ViewProps) {
 }
 
 function CardHeader({ className, ...props }: ViewProps) {
-	return <View className={cn('flex flex-col rounded-t-lg p-6', className)} {...props} />;
+	return <View className={cn('flex flex-col rounded-t-lg p-4', className)} {...props} />;
 }
 
 function CardTitle({ className, ...props }: TextProps) {
@@ -22,10 +22,7 @@ function CardTitle({ className, ...props }: TextProps) {
 		<Text
 			role="heading"
 			aria-level={3}
-			className={cn(
-				'text-card-foreground text-2xl leading-none font-semibold tracking-tight',
-				className
-			)}
+			className={cn('text-card-foreground text-lg leading-none font-semibold', className)}
 			{...props}
 		/>
 	);
@@ -38,13 +35,13 @@ function CardDescription({ className, ...props }: TextProps) {
 function CardContent({ className, ...props }: ViewProps) {
 	return (
 		<TextClassContext.Provider value="text-card-foreground">
-			<View className={cn('p-6 pt-0', className)} {...props} />
+			<View className={cn('p-4 pt-0', className)} {...props} />
 		</TextClassContext.Provider>
 	);
 }
 
 function CardFooter({ className, ...props }: ViewProps) {
-	return <View className={cn('flex flex-row items-center p-6 pt-0', className)} {...props} />;
+	return <View className={cn('flex flex-row items-center p-4 pt-0', className)} {...props} />;
 }
 
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle };

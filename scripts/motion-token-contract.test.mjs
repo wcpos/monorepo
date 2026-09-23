@@ -38,7 +38,11 @@ test('web reduce-motion zeroes motion but excludes the two functional waits', ()
 	const rule = media.cssRules[0];
 	const selector = rule.selectorText.split(',')[0];
 	const element = document.createElement('div');
-	for (const name of ['web:animate-in', 'web:animate-spin', 'web:animate-indeterminate']) {
+	for (const name of [
+		'web:animate-in',
+		'web:animate-spin',
+		'web:animate-indeterminate',
+	]) {
 		element.className = name;
 		assert.equal(element.matches(selector), name === 'web:animate-in');
 	}
@@ -52,4 +56,10 @@ test('web reduce-motion zeroes motion but excludes the two functional waits', ()
 		assert.equal(rule.style.getPropertyPriority(property), 'important');
 	}
 	dom.window.close();
+});
+
+test('the sheet defines the progress sweep animation and keyframes', () => {
+	const sheet = readFileSync(sheetPath, 'utf8');
+	assert.match(sheet, /--animate-indeterminate:/);
+	assert.match(sheet, /@keyframes indeterminate/);
 });

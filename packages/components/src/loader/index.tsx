@@ -17,6 +17,7 @@ import { useCSSVariable } from 'uniwind';
 import { Platform } from '@wcpos/utils/platform';
 
 import { getColorVariableFromClassName } from '../lib/get-color-variable';
+import { SPINNER } from '../lib/motion';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
@@ -42,7 +43,7 @@ const loaderVariants = cva('inset-0 content-center items-center', {
 			primary: 'text-primary',
 			destructive: 'text-destructive',
 			secondary: 'text-secondary',
-			muted: 'text-muted',
+			muted: 'text-muted-foreground',
 			success: 'text-success',
 		},
 		size: {
@@ -94,7 +95,11 @@ export function Loader({ className, variant = 'default', size, ...props }: Loade
 		// from the timing's): a spinner is a functional progress indicator, and
 		// web's CSS animation ignores reduce-motion too.
 		rotation.value = withRepeat(
-			withTiming(360, { duration: 1000, easing: Easing.linear, reduceMotion: ReduceMotion.Never }),
+			withTiming(360, {
+				duration: SPINNER,
+				easing: Easing.linear,
+				reduceMotion: ReduceMotion.Never,
+			}),
 			-1,
 			false,
 			undefined,

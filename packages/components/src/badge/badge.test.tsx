@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import * as React from 'react';
 
 import { render, screen } from '@testing-library/react';
@@ -108,5 +110,23 @@ describe('badge colour contract', () => {
 		);
 
 		expect(textClassOf('host')).toContain('text-destructive-foreground');
+	});
+});
+
+describe('badge atoms skin', () => {
+	it('uses ramp text and fixed-width bold digits for small counts', () => {
+		const { container } = render(<Badge count={3} size="sm" />);
+		expect(container.querySelector('span')).toHaveClass('text-2xs', 'font-bold', 'tabular-nums');
+	});
+
+	it('uses a single scaled size for the dot', () => {
+		const { container } = render(<Badge dot />);
+		expect(container.firstChild).toHaveClass('size-2.5');
+	});
+
+	it('contains no arbitrary text sizes or palette greys', () => {
+		const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+		expect(source).not.toContain('text-[');
+		expect(source).not.toContain('gray');
 	});
 });

@@ -34,11 +34,25 @@ import { stories as select } from '@wcpos/components/select/gallery';
 import { Text } from '@wcpos/components/text';
 import { stories as text } from '@wcpos/components/text/gallery';
 import { stories as dialogV2 } from '@wcpos/components/v2/dialog/gallery';
+import { stories as badge } from '@wcpos/components/badge/gallery';
+import { stories as avatar } from '@wcpos/components/avatar/gallery';
+import { stories as loader } from '@wcpos/components/loader/gallery';
+import { stories as progress } from '@wcpos/components/progress/gallery';
+import { stories as sortIcon } from '@wcpos/components/sort-icon/gallery';
+import { stories as docsLink } from '@wcpos/components/docs-link/gallery';
+import { stories as card } from '@wcpos/components/card/gallery';
 
 import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
 
 const registry: Record<string, Story[]> = {
+	badge,
+	avatar,
+	loader,
+	progress,
+	'sort-icon': sortIcon,
+	'docs-link': docsLink,
+	card,
 	label,
 	form,
 	calendar,

@@ -28,17 +28,17 @@ import { Text } from '../text';
 const avatarVariants = cva('items-center justify-center overflow-hidden', {
 	variants: {
 		size: {
-			xs: 'h-5 w-5',
-			sm: 'h-7 w-7',
-			md: 'h-9 w-9',
-			lg: 'h-10 w-10',
+			xs: 'size-5',
+			sm: 'size-7',
+			md: 'size-9',
+			lg: 'size-10',
 		},
 		shape: {
 			circle: 'rounded-full',
 			rounded: 'rounded-lg',
 		},
 		variant: {
-			default: 'bg-primary/15',
+			default: 'bg-muted',
 			success: 'bg-success/15',
 			warning: 'bg-warning/15',
 			error: 'bg-destructive/15',
@@ -56,7 +56,7 @@ const fallbackTextVariants: Record<
 	NonNullable<VariantProps<typeof avatarVariants>['variant']>,
 	string
 > = {
-	default: 'text-primary',
+	default: 'text-foreground',
 	success: 'text-success',
 	warning: 'text-warning',
 	error: 'text-destructive',
@@ -67,8 +67,8 @@ const fallbackTextSizeVariants: Record<
 	NonNullable<VariantProps<typeof avatarVariants>['size']>,
 	string
 > = {
-	xs: 'text-[9px]',
-	sm: 'text-[10px]',
+	xs: 'text-3xs',
+	sm: 'text-2xs',
 	md: 'text-xs',
 	lg: 'text-sm',
 };
