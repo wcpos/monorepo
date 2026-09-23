@@ -48,11 +48,14 @@ const siteData = {
 	_links: {},
 };
 
+// Both probes are unauthenticated: discovery runs before there is a session, so a
+// dead session's authFailed latch must not be able to block it.
 const siteRequestOptions = {
 	params: { wcpos: 1, wcpos_protocol: 2, wcpos_client: 'web/0.0.0' },
 	timeout: 15_000,
+	unauthenticated: true,
 };
-const requestOptions = { params: { wcpos: 1 }, timeout: 15_000 };
+const requestOptions = { params: { wcpos: 1 }, timeout: 15_000, unauthenticated: true };
 
 describe('useApiDiscovery', () => {
 	beforeEach(() => {
