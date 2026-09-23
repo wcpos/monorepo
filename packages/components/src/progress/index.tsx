@@ -150,26 +150,24 @@ function Sweep({ className }: { className?: string }) {
 
 function NativeSweep({ className }: { className?: string }) {
 	const trackWidth = useSharedValue(0);
-	// The layout handler writes the measured width and the derived value starts the
-	// repeat from it: the sweep sits one third off the left edge and travels the track
-	// plus its own width, so nothing waits on a render. Unmount cancels the repeat.
-	const translateX = useDerivedValue(() =>
-		trackWidth.value
-			? withRepeat(
-					withTiming((trackWidth.value * 4) / 3, {
-						duration: INDETERMINATE,
-						easing: EASE,
-						reduceMotion: ReduceMotion.Never,
-					}),
-					-1,
-					false,
-					undefined,
-					ReduceMotion.Never
-				)
-			: 0
+	// A width-free loop: the repeat runs 0 → 1 from mount on the UI thread and the
+	// style scales it by the measured track, so a track that resizes mid-loop
+	// (rotation, split view) changes the distance and never the phase. The sweep
+	// sits one third off the left edge and travels the track plus its own width;
+	// before the first layout the width is 0 and it stays off-screen.
+	const progress = useDerivedValue(() =>
+		withRepeat(
+			withTiming(1, { duration: INDETERMINATE, easing: EASE, reduceMotion: ReduceMotion.Never }),
+			-1,
+			false,
+			undefined,
+			ReduceMotion.Never
+		)
 	);
-	React.useEffect(() => () => cancelAnimation(translateX), [translateX]);
-	const sweepStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
+	React.useEffect(() => () => cancelAnimation(progress), [progress]);
+	const sweepStyle = useAnimatedStyle(() => ({
+		transform: [{ translateX: progress.value * ((trackWidth.value * 4) / 3) }],
+	}));
 	return (
 		<View
 			className="absolute inset-0"

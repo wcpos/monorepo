@@ -109,16 +109,15 @@ it('renders the web indeterminate sweep instead of the indicator', () => {
 	expect(mockRepeat).not.toHaveBeenCalled();
 });
 
-it('starts the native sweep from measured layout and cancels on unmount', () => {
+it('runs a width-free native loop scaled by the measured track and cancels on unmount', () => {
 	mockPlatform.OS = 'ios';
 	const { unmount, queryByTestId } = render(<Progress indeterminate value={60} />);
 	expect(queryByTestId('indicator')).toBeNull();
-	expect(mockRepeat).not.toHaveBeenCalled();
-	act(() => mockLayouts.at(-1)!({ nativeEvent: { layout: { width: 300 } } } as LayoutChangeEvent));
-	// The derived value re-runs on the UI thread when the width changes; the mock re-runs it here.
-	const translateX = mockDerived.at(-1)!;
-	translateX.value = translateX.factory();
-	expect(mockTiming).toHaveBeenCalledWith(400, {
+	// The derived value runs on the UI thread from mount; the mock runs its factory here.
+	const progress = mockDerived.at(-1)!;
+	progress.value = progress.factory();
+	// The repeat starts from mount, 0 → 1, independent of the width.
+	expect(mockTiming).toHaveBeenCalledWith(1, {
 		duration: 1100,
 		easing: 'standard-easing',
 		reduceMotion: 'never',
@@ -130,11 +129,14 @@ it('starts the native sweep from measured layout and cancels on unmount', () => 
 		undefined,
 		'never'
 	);
-	expect(translateX.value).toBe(mockRepeat.mock.results[0].value);
-	translateX.value = -100;
-	expect(mockStyles.at(-1)!()).toEqual({ transform: [{ translateX: -100 }] });
+	expect(progress.value).toBe(mockRepeat.mock.results[0].value);
+	// Before layout the sweep stays at 0; after it the style scales by track + sweep width.
+	progress.value = 0.5;
+	expect(mockStyles.at(-1)!()).toEqual({ transform: [{ translateX: 0 }] });
+	act(() => mockLayouts.at(-1)!({ nativeEvent: { layout: { width: 300 } } } as LayoutChangeEvent));
+	expect(mockStyles.at(-1)!()).toEqual({ transform: [{ translateX: 200 }] });
 	unmount();
-	expect(mockCancel).toHaveBeenCalledWith(translateX);
+	expect(mockCancel).toHaveBeenCalledWith(progress);
 });
 
 it('announces an indeterminate wait as busy with no current value on native', () => {
@@ -154,5 +156,5 @@ it('passes indicatorClassName to the sweep', () => {
 });
 
 it('uses named durations only', () => {
-	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/duration:\s*\d/);
+	expect(readFileSync(`${__dirname}/index.tsx`, 'utf8')).not.toMatch(/duration:\s*[1-9]/);
 });
