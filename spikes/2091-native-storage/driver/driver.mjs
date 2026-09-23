@@ -25,7 +25,8 @@ const simulator = args.simulator || device.environment.emulator === true;
 const host = args.platform === 'android' || simulator ? '127.0.0.1' : Object.values(networkInterfaces()).flat().find(a => a.family === 'IPv4' && !a.internal && a.address.startsWith('192.168.'))?.address
   ?? Object.values(networkInterfaces()).flat().find(a => a.family === 'IPv4' && !a.internal)?.address;
 if (!host) throw new Error('No Mac LAN address found');
-const url = `spike2091://driver?url=${encodeURIComponent(`http://${host}:${PORT}`)}`;
+const origin = `http://${host}:${PORT}`;
+const url = args.platform === 'ios' ? origin : `spike2091://driver?url=${encodeURIComponent(origin)}`;
 const safeDevice = args.device.replace(/[^\w-]/g, '_');
 const out = new URL(`../results/${leg === 'bench' ? 'results' : leg}.${args.platform}.${safeDevice}.json`, import.meta.url);
 const versions = JSON.parse(await readFile(new URL('../app/src/versions.json', import.meta.url), 'utf8'));

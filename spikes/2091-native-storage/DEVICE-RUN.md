@@ -36,6 +36,8 @@ The app uses npm, not pnpm. Installation applies patches and requires 47 premium
    complete provisioning, and rerun the build. Save the exact error if this fails.
 
 2. Keep Mac and iPad on the same Wi-Fi, without client isolation or a VPN route between them.
+   Before each plain launch, the driver copies its address to the app's
+   `Documents/spike2091-driver.txt`; no URL scheme is used for iOS launches.
    Allow the app's local-network and Mac's Node incoming-network prompts. The driver prints
    its Mac address. If unreachable, enter `http://<Mac's Wi-Fi address>:48091` in the app's
    Driver URL field and tap **Connect** while the driver runs, for diagnosis only. Each

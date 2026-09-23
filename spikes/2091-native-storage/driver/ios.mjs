@@ -1,6 +1,7 @@
-import { readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bundle, command, confirmStopped, sleep } from './control.mjs';
+import { bundle, command, confirmStopped } from './control.mjs';
 export async function ios(device, simulator) {
   let pid;
   const jsonPath = fileURLToPath(new URL('../.deps/devicectl.json', import.meta.url));
@@ -27,21 +28,25 @@ export async function ios(device, simulator) {
   }
   return {
     environment, alive, memory: async () => null,
-    async launch(url) {
+    async launch(origin) {
       if (simulator) {
-        const LAUNCH_BUDGET_MS = 60000, CHECK_MS = 100; // Same budget as device commands.
-        const started = performance.now();
-        pid = undefined;
-        await command('xcrun', ['simctl', 'openurl', device, url]);
-        while (!pid && performance.now() - started < LAUNCH_BUDGET_MS) {
-          const list = await command('xcrun', ['simctl', 'spawn', device, 'launchctl', 'list']);
-          const entry = list.split('\n').find(line => line.includes(`UIKitApplication:${bundle}[`));
-          pid = Number(entry?.match(/^\s*(\d+)\s/)?.[1]);
-          if (!pid) await sleep(CHECK_MS);
-        }
-        if (!pid) throw new Error(`No launch PID within ${LAUNCH_BUDGET_MS}ms: ${device}`);
+        const container = await command('xcrun', ['simctl', 'get_app_container', device, bundle, 'data']);
+        const documents = join(container, 'Documents');
+        await mkdir(documents, { recursive: true });
+        await writeFile(join(documents, 'spike2091-driver.txt'), origin);
+        const result = await command('xcrun', ['simctl', 'launch', device, bundle]);
+        pid = Number(result.match(/:\s*(\d+)\s*$/)?.[1]);
+        if (!pid) throw new Error(`No launch PID: ${result}`);
       } else {
-        const result = await devicectl(['device', 'process', 'launch', '--device', device, '--payload-url', url, bundle]);
+        const source = fileURLToPath(new URL('../.deps/spike2091-driver.txt', import.meta.url));
+        await writeFile(source, origin);
+        try {
+          await devicectl(['device', 'copy', 'to', '--device', device, '--domain-type', 'appDataContainer',
+            '--domain-identifier', bundle, '--source', source, '--destination', 'Documents/spike2091-driver.txt']);
+        } finally {
+          await rm(source, { force: true });
+        }
+        const result = await devicectl(['device', 'process', 'launch', '--device', device, bundle]);
         pid = result.process?.processIdentifier;
         if (!pid) throw new Error(`No launch PID: ${JSON.stringify(result)}`);
       }

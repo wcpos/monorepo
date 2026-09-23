@@ -23,12 +23,15 @@ _Operator: apply the stability gate and the “wins clearly, not narrowly” bar
 
 | Target | OS | Verification |
 | --- | --- | --- |
-| iPad Pro 13-inch (M5), simulator | iOS 26.5 | Earlier release smoke, small bench and 5 stops per row; clean-install recheck blocked below |
+| iPad Pro 13-inch (M5), simulator | iOS 26.5 | Clean-install release smoke complete; earlier small bench and 5 stops per row |
 | Pixel_Tablet_API_35 (`emulator-5554`), emulator | Android 15 / API 35 | Updated release smoke complete; earlier small bench and 5 stops per row |
 
 ## Method notes
 
 - Release Hermes bytecode, no Metro. All rows share the premium distribution with 47 patch markers.
+- iOS launches read the driver address from `Documents/spike2091-driver.txt`, placed by the
+  driver before a plain launch; Android reads it from the launch intent. Physical iOS file
+  copy/launch, including fresh-install directory handling, remains unverified.
 - Sources: spikes 2143/2210 and `wcpos/rxdb-storage-worklet` commit `acbbc93d642511d1d37bb119abc805e085235f6c`.
 - Expo control: shipped expo-opfs copy/move/recovery patch, but raw storage with no recovery/probe
   wrapper and a no-op flush. Its root directory is the only engine configuration change.
@@ -52,15 +55,14 @@ power-loss durability or physical-device performance improvements.
 Observed: the updated Android release smoke passes all eight binding scenarios on every row,
 including SQLite attachments. The three SQLite query divergences (explicit-null existence,
 missing/null membership and mixed-type ordering) remain; filesystem rows have none.
-The earlier iOS run passed all eight binding scenarios with the same three SQLite probe
-failures; its clean-install recheck below did not reach a job.
+Observed: after uninstall/reinstall, the iOS release smoke fetched `/job` unaided on all three
+rows, without a manual connection or debugger. All eight binding scenarios pass on every row;
+the same three SQLite query probes fail, with zero filesystem divergences. iOS now uses the
+Documents-file handoff instead of a custom-scheme launch. Bench and crash evidence is unchanged.
 
 ## Blocked
 
-The clean-install iOS smoke with `openurl` alone exited 1: `No launch PID within 60000ms`.
-No `/job` request arrived. A follow-up `openurl` produced the system confirmation
-“Open in ‘wcpos-spike-2091’?” in SpringBoard's log. No manual connection or debugger was used.
-This is not a storage verdict; the current iOS smoke JSON records the incomplete recheck.
+None.
 
 <!-- generated:start -->
 The RxDB mocha suite was not run on device: it is not hosted by React Native. Leg 1 is the eight-scenario binding smoke, three divergence probes, and leg 3 content checks.
@@ -268,17 +270,19 @@ All available cross-row cells match on canonical revision-independent SHA-256 co
 
 ### smoke.ios.DDC18EF3-759A-494B-A0B1-E5139EA0A74F.json
 
-**Incomplete:** Error: No launch PID within 60000ms: DDC18EF3-759A-494B-A0B1-E5139EA0A74F
-    at Object.launch (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/ios.mjs:42:25)
-    at async start (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:83:3)
-    at async run (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:101:23)
-    at async file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:133:50
+Run complete.
 
 | Row | Scenarios | Smoke/probe divergences | Leg 3 content mismatches | Total divergences |
 | --- | --- | --- | --- | --- |
-| expo-filesystem-js | not run | not run | 0 | not evaluated |
-| worklet-filesystem | not run | not run | 0 | not evaluated |
-| expo-sqlite | not run | not run | 0 | not evaluated |
+| expo-filesystem-js | 11 | 0 | 0 | 0 |
+| worklet-filesystem | 11 | 0 | 0 | 0 |
+| expo-sqlite | 11 | 3 | 0 | 3 |
+
+- expo-sqlite / exists-explicit-null: {"query":{"selector":{"value":{"$exists":false}}},"expected":["p1"],"actual":["p0","p1"],"pass":false}; {"query":{"selector":{"value":{"$exists":true}}},"expected":["p0","p2","p3","p4","p5","p6","p7"],"actual":["p2","p3","p4","p5","p6","p7"],"pass":false}
+
+- expo-sqlite / in-nin-missing: {"query":{"selector":{"value":{"$in":["blue",2]}}},"expected":["p2","p4"],"actual":["p2","p4"],"pass":true}; {"query":{"selector":{"value":{"$nin":["blue",2]}}},"expected":["p0","p1","p3","p5","p6","p7"],"actual":["p3","p5","p6","p7"],"pass":false}
+
+- expo-sqlite / sort-case-accents-mixed-types: {"query":{"selector":{},"sort":[{"name":"asc"}]},"expected":["p1","p4","p0","p3","p5","p6","p7","p2"],"actual":["p1","p4","p0","p3","p5","p6","p7","p2"],"pass":true}; {"query":{"selector":{},"sort":[{"value":"asc"}]},"expected":["p1","p0","p4","p6","p7","p5","p2","p3"],"actual":["p0","p1","p4","p6","p7","p5","p2","p3"],"pass":false}
 
 ## Cross-device summary
 
