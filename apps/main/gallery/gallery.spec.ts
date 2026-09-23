@@ -31,7 +31,7 @@ test('gallery cells', async ({ page }, testInfo) => {
 	test.setTimeout(components.length * 2 * 60_000);
 	let count = 0;
 	const shot = new Set<string>();
-	const shoot = async (id: string, theme: string) => {
+	const shoot = async (id: string, theme: string, isolated = false) => {
 		const cell = page.getByTestId(id);
 		// An overlay's rise and the focus it hands over once the rise ends both settle after
 		// the page's animations; the first cells on a page were shot before that. Only a
@@ -54,6 +54,17 @@ test('gallery cells', async ({ page }, testInfo) => {
 				]),
 			SETTLE_BOUND_MS
 		);
+		// An open sheet or popover with a search field owns the page's focus through that
+		// field (React focuses it on mount). Locally it holds every time; on the runner some
+		// shots found it gone, so the shot states its precondition: the cell's first text
+		// field is focused, and the spec puts it there when the page did not.
+		if (isolated) {
+			await page.evaluate((cellId) => {
+				const root = document.querySelector<HTMLElement>(`[data-cell-id="${cellId}"]`);
+				const field = root?.querySelector<HTMLElement>('input,textarea');
+				if (field && document.activeElement !== field) field.focus({ preventScroll: true });
+			}, id);
+		}
 		if (smoke)
 			await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
 		else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
@@ -78,7 +89,7 @@ test('gallery cells', async ({ page }, testInfo) => {
 				if (!isolated) continue;
 				await page.goto(`/gallery/${component}?theme=${theme}&cell=${id}`);
 				await expect(page.getByTestId(id)).toBeVisible();
-				await shoot(id, theme);
+				await shoot(id, theme, true);
 			}
 		}
 	}
