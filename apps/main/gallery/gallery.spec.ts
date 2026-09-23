@@ -29,6 +29,13 @@ test('gallery cells', async ({ page }, testInfo) => {
 	const shot = new Set<string>();
 	const shoot = async (id: string, theme: string) => {
 		const cell = page.getByTestId(id);
+		// An overlay's rise and the focus it hands over once the rise ends both settle after
+		// the page's animations; the first cells on a page were shot before that.
+		await page.evaluate(() =>
+			Promise.all(
+				document.getAnimations().map((animation) => animation.finished.catch(() => undefined))
+			)
+		);
 		if (smoke)
 			await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
 		else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
