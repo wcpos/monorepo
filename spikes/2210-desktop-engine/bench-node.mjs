@@ -95,15 +95,21 @@ async function runBench({ engine, scale, databaseName, dir }) {
   const disk = scale === 'large' ? await diskBytes(dir) : undefined;
   const seedBytes = Object.fromEntries(Object.entries(data).map(([k, docs]) => [k, docs.reduce((a, d) => a + JSON.stringify(d).length, 0) / n]));
   async function sample(name, count, setup) {
-    const cell = { name, samples: [], signatures: [] };
+    // `signatures` hash the result AS RETURNED (order included, 2143's rule); `setSignatures` hash
+    // the same rows sorted by primary key. Content must match across engines on the set; a
+    // returned-order difference is recorded as `unsortedSamples` (the incumbent violates RxDB's
+    // primary-key sort on whole-set reads in Node — seen on Mac and Windows, 2026-09-23).
+    const cell = { name, samples: [], signatures: [], setSignatures: [], unsortedSamples: 0 };
     for (let i = 0; i <= count; i++) {
       const { run, check = r => r.documents ?? r.count ?? r } = await setup(i), start = performance.now();
       const result = await run(), ms = performance.now() - start, value = await check(result);
       cell.signatures.push(await signature(value));
+      cell.setSignatures.push(await signature(Array.isArray(value) && value[0] && typeof value[0] === 'object' ? sorted(value) : value));
+      if (Array.isArray(value) && value.some((d, j) => j > 0 && (d.uuid ?? d.id) < (value[j - 1].uuid ?? value[j - 1].id))) cell.unsortedSamples++;
       if (i) cell.samples.push({ ms, ...(Array.isArray(result?.documents ?? result) ? { rows: (result.documents ?? result).length } : {}) });
     }
     cells.push(cell);
-    console.info('CELL', engine, scale, name);
+    console.info('CELL', engine, scale, name, cell.unsortedSamples ? `UNSORTED ${cell.unsortedSamples}/${count + 1}` : '');
   }
   const find = (name, collection, selector, extra) => { const q = prepared(collection, selector, extra); return sample(name, 7, () => ({ run: () => instances[collection].query(q) })); };
   const grid = { $and: [{ 'payload.status': 'publish' }, { stockStatus: 'instock' }] };
@@ -193,9 +199,13 @@ async function main() {
     for (const cell of result.cells) {
       const key = `${scale}/${cell.name}`;
       if (cell.signatures) {
-        if (expected.has(key)) { assert.deepEqual(cell.signatures, expected.get(key), `Cross-engine mismatch: ${engine}/${key}`); console.info('EQUALITY PASS', key); }
-        else expected.set(key, cell.signatures);
-        delete cell.signatures;
+        if (expected.has(key)) {
+          const prior = expected.get(key);
+          assert.deepEqual(cell.setSignatures, prior.setSignatures, `Cross-engine CONTENT mismatch: ${engine}/${key}`);
+          cell.orderMismatch = cell.signatures.some((s, i) => s !== prior.signatures[i]);
+          console.info(cell.orderMismatch ? 'EQUALITY PASS (content only; returned order differs)' : 'EQUALITY PASS', key);
+        } else expected.set(key, { signatures: cell.signatures, setSignatures: cell.setSignatures });
+        delete cell.signatures; delete cell.setSignatures;
       }
       const samples = cell.samples.map(s => s.ms).sort((a, b) => a - b);
       Object.assign(cell, { p50: samples[Math.ceil(samples.length * .5) - 1], p95: samples[Math.ceil(samples.length * .95) - 1], max: samples.at(-1) });
@@ -204,7 +214,7 @@ async function main() {
   }
   const out = args.out ?? join(directory, `results.${env.platform}.json`);
   await writeFile(out, JSON.stringify({ environment: env, equality: selected.length === 2
-    ? 'All warmups and samples matched across both engines (SHA-256 of canonical revision-independent content); cold reads assert the exact seeded product.'
+    ? 'All warmups and samples matched across both engines on content (SHA-256 of canonical revision-independent rows sorted by primary key); cells whose RETURNED order differed between engines carry orderMismatch, and each engine\'s unsortedSamples counts results not in primary-key order. Cold reads assert the exact seeded product.'
     : 'Single engine only: cross-engine equality NOT evaluated.', results }, null, 2) + '\n');
   console.info('Wrote', out);
 }
