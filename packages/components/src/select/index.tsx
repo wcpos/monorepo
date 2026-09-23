@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Trigger as SelectPrimitiveTrigger, Value as SelectPrimitiveValue } from './trigger';
 import { toControlledSingleProps } from './controlled-value';
@@ -17,7 +16,8 @@ import {
 import { Button } from '../button';
 import { Icon } from '../icon';
 import { useLayoutWidth } from '../lib/use-layout-width';
-import { POPOVER_FADE } from '../lib/motion';
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
+import { webTestID } from '../lib/test-id';
 import { cn } from '../lib/utils';
 
 import type { ButtonProps } from '../button';
@@ -162,58 +162,58 @@ function SelectSingleContent({
 	position = 'popper',
 	portalHost,
 	matchWidth,
+	inline,
 	...props
-}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean }) {
+}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean; inline?: boolean }) {
 	const { open } = SelectPrimitive.useRootContext();
 	const triggerWidth = React.useContext(SelectWidthContext);
 
 	if (!open) return null;
 
-	return (
-		<SelectPrimitive.Portal hostName={portalHost}>
-			<SelectPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={Platform.OS !== 'web' ? FadeIn.duration(POPOVER_FADE) : undefined}
-					exiting={Platform.OS !== 'web' ? FadeOut.duration(POPOVER_FADE) : undefined}
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
+	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
+	const shell = (
+		<OverlayShell
+			presentation="anchored"
+			open={open}
+			Scrim={SelectPrimitive.Overlay}
+			testID={props.testID}
+		>
+			<SelectPrimitive.Content
+				className={cn(
+					OVERLAY_PANEL.anchored,
+					'relative z-50 max-h-96 min-w-32 p-1.5',
+					position === 'popper' &&
+						'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
+					open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+					className
+				)}
+				style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
+				position={position}
+				{...props}
+			>
+				<SelectPrimitive.Viewport
+					className={cn(
+						'p-0',
+						position === 'popper' &&
+							'h-(--radix-select-trigger-height) w-full min-w-(--radix-select-trigger-width)'
+					)}
 				>
-					<SelectPrimitive.Content
-						className={cn(
-							'border-border bg-popover data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-96 min-w-32 rounded-md border px-1 py-2 shadow-md',
-							position === 'popper' &&
-								'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
-							open
-								? 'web:zoom-in-95 web:animate-in web:fade-in-0'
-								: 'web:zoom-out-95 web:animate-out web:fade-out-0',
-							className
-						)}
-						style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
-						position={position}
-						{...props}
-					>
-						<SelectPrimitive.Viewport
-							className={cn(
-								'p-1',
-								position === 'popper' &&
-									'h-(--radix-select-trigger-height) w-full min-w-(--radix-select-trigger-width)'
-							)}
-						>
-							{children}
-						</SelectPrimitive.Viewport>
-					</SelectPrimitive.Content>
-				</Animated.View>
-			</SelectPrimitive.Overlay>
-		</SelectPrimitive.Portal>
+					{children}
+				</SelectPrimitive.Viewport>
+			</SelectPrimitive.Content>
+		</OverlayShell>
+	);
+	return inline ? (
+		shell
+	) : (
+		<SelectPrimitive.Portal hostName={portalHost}>{shell}</SelectPrimitive.Portal>
 	);
 }
 
 function SelectContent({
 	matchWidth,
 	...props
-}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean }) {
+}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean; inline?: boolean }) {
 	const isMulti = React.useContext(MultiModeContext);
 	const triggerWidth = React.useContext(SelectWidthContext);
 
@@ -237,7 +237,7 @@ function SelectContent({
 function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
 	return (
 		<SelectPrimitive.Label
-			className={cn('text-popover-foreground py-1.5 pr-2 pl-8 text-sm font-semibold', className)}
+			className={cn('text-foreground py-1.5 pr-2 pl-8 text-sm font-semibold', className)}
 			{...props}
 		/>
 	);
@@ -259,40 +259,32 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 		);
 	}
 
-	/**
-	 * On web this Item is a Radix node, not a react-native-web Pressable, so nothing translates
-	 * `testID` into the `data-testid` that RNW gives every other control — the prop reaches the
-	 * DOM as an inert `testid` attribute and no test can address the option. Selecting the option
-	 * by its visible text instead is not available to us: the labels are translated, and the repo
-	 * forbids localized text as an E2E selector.
-	 */
-	const webTestProps = (
-		Platform.OS === 'web' && props.testID ? { 'data-testid': props.testID } : {}
-	) as Record<string, unknown>;
-
 	return (
 		<SelectPrimitive.Item
 			className={cn(
-				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
-				props.disabled && 'web:pointer-events-none opacity-50',
+				'web:cursor-default web:select-none web:hover:bg-muted web:outline-none web:focus:bg-muted active:bg-muted min-h-row relative flex w-full flex-row items-center rounded-md py-1.5 pr-2 pl-8',
+				props.disabled && 'web:pointer-events-none opacity-45',
 				className
 			)}
 			{...props}
-			{...webTestProps}
+			{...webTestID(props.testID)}
 		>
 			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
 				<SelectPrimitive.ItemIndicator>
-					<Icon name="check" className="text-popover-foreground" />
+					<Icon name="check" className="text-primary" />
 				</SelectPrimitive.ItemIndicator>
 			</View>
-			<SelectPrimitive.ItemText className="web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
+			<SelectPrimitive.ItemText className="text-foreground text-base" />
 		</SelectPrimitive.Item>
 	);
 }
 
 function SelectSeparator({ className, ...props }: SelectPrimitive.SeparatorProps) {
 	return (
-		<SelectPrimitive.Separator className={cn('bg-muted -mx-1 my-1 h-px', className)} {...props} />
+		<SelectPrimitive.Separator
+			className={cn('bg-border -mx-1.5 my-1 h-px', className)}
+			{...props}
+		/>
 	);
 }
 

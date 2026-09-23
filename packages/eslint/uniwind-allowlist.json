@@ -3,13 +3,6 @@
     "duration-literal": 5,
     "focus-visible:": 3
   },
-  "packages/components/src/alert-dialog/index.tsx": {
-    "duration-literal": 1
-  },
-  "packages/components/src/combobox/combobox.tsx": {
-    "arbitrary-px": 1,
-    "group-*": 2
-  },
   "packages/components/src/dnd/web/drop-indicator.tsx": {
     "arbitrary-px": 13,
     "before:/after:": 14
@@ -18,9 +11,6 @@
     "duration-literal": 1,
     "hover:": 2
   },
-  "packages/components/src/dropdown-menu/item.tsx": {
-    "group-*": 3
-  },
   "packages/components/src/modal/index.tsx": {
     "duration-literal": 2
   },
@@ -28,12 +18,6 @@
     "duration-literal": 1,
     "group-*": 10,
     "missing-animation:fadeIn": 1
-  },
-  "packages/components/src/select/index.tsx": {
-    "group-*": 1
-  },
-  "packages/components/src/select/select-multi.tsx": {
-    "group-*": 1
   },
   "packages/components/src/status-badge/index.tsx": {
     "arbitrary-px": 1
@@ -48,9 +32,6 @@
   "packages/components/src/toggle-group/index.tsx": {
     "focus-visible:": 4,
     "group-*": 3
-  },
-  "packages/components/src/tree-combobox/tree-combobox.tsx": {
-    "arbitrary-px": 1
   },
   "packages/core/src/screens/auth/connect.tsx": {
     "arbitrary-px": 1

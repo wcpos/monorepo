@@ -6,6 +6,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Uniwind } from 'uniwind';
 
+import { stories as popover } from '@wcpos/components/popover/gallery';
+import { stories as hoverCard } from '@wcpos/components/hover-card/gallery';
+import { stories as dropdownMenu } from '@wcpos/components/dropdown-menu/gallery';
+import { stories as alertDialog } from '@wcpos/components/alert-dialog/gallery';
 import { stories as label } from '@wcpos/components/label/gallery';
 import { stories as form } from '@wcpos/components/form/gallery';
 import { stories as calendar } from '@wcpos/components/calendar/gallery';
@@ -46,6 +50,10 @@ import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
 
 const registry: Record<string, Story[]> = {
+	'alert-dialog': alertDialog,
+	'dropdown-menu': dropdownMenu,
+	'hover-card': hoverCard,
+	popover,
 	badge,
 	avatar,
 	loader,

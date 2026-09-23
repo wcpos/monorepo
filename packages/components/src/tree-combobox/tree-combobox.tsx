@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 
 import { Platform } from '@wcpos/utils/platform';
@@ -17,8 +16,10 @@ import {
 	getNativeListHeight,
 	NATIVE_LIST_MAX_HEIGHT,
 	NATIVE_POPOVER_MAX_HEIGHT,
+	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
-import { POPOVER_FADE } from '../lib/motion';
+import { useIsPhone } from '../lib/device';
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 import * as VirtualizedListPrimitive from '../virtualized-list';
@@ -323,14 +324,17 @@ function TreeComboboxContent<T>({
 	portalHost,
 	className,
 	matchWidth,
+	inline,
 	searchPlaceholder = 'Search...',
 	emptyMessage = 'No results found',
 	estimatedItemSize = 36,
 	renderItem,
-}: TreeComboboxContentProps<T>) {
+}: TreeComboboxContentProps<T> & { inline?: boolean }) {
 	const ctx = useTreeComboboxContext();
 	const widthCtx = React.useContext(TreeComboboxWidthContext);
-	const { onOpenChange } = PopoverPrimitive.useRootContext();
+	const { open, onOpenChange } = PopoverPrimitive.useRootContext();
+	const phone = useIsPhone();
+	const sheet = usePhoneSheetMetrics();
 	const isNative = Platform.OS !== 'web';
 	const isAndroid = Platform.OS === 'android';
 
@@ -374,7 +378,7 @@ function TreeComboboxContent<T>({
 							// policy). Only one tree popover can be open at a time, so the value alone
 							// addresses the row unambiguously.
 							testID={`tree-combobox-item-${flatItem.value}`}
-							className="web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex-1 flex-row items-center gap-2 rounded-sm px-2 py-1.5"
+							className="web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-1 flex-row items-center gap-2 rounded-md px-2.5 py-1.5"
 						>
 							{ctx.multiple ? (
 								<Checkbox
@@ -384,11 +388,11 @@ function TreeComboboxContent<T>({
 								/>
 							) : (
 								<View className="h-4 w-4 items-center justify-center">
-									{selected && <Icon name="check" className="text-popover-foreground" size="xs" />}
+									{selected && <Icon name="check" className="text-primary" size="xs" />}
 								</View>
 							)}
 							<View className="flex-1">
-								<Text className="text-popover-foreground text-sm" decodeHtml>
+								<Text className="text-foreground text-base" decodeHtml>
 									{flatItem.label}
 								</Text>
 								{ctx.isSearching && ctx.searchMode === 'flat' && flatItem.parentId && (
@@ -424,75 +428,95 @@ function TreeComboboxContent<T>({
 		[ctx, onOpenChange, renderItem]
 	);
 
-	return (
-		<PopoverPrimitive.Portal hostName={portalHost}>
-			<PopoverPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={FadeIn.duration(POPOVER_FADE)}
-					exiting={FadeOut.duration(POPOVER_FADE)}
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				>
-					<TextClassContext.Provider value="text-popover-foreground">
-						<PopoverPrimitive.Content
-							align="center"
-							sideOffset={4}
-							style={contentStyle}
-							className={cn(
-								'border-border bg-popover web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none z-50 max-h-[300px] w-72 rounded-md border p-2 shadow-md',
-								className
-							)}
-						>
-							{children}
-							<TreeComboboxSearchInput
-								key={ctx.searchResetKey}
-								onFilterChange={ctx.onFilterChange}
-								placeholder={searchPlaceholder}
+	const content = (
+		<>
+			{children}
+			<TreeComboboxSearchInput
+				key={ctx.searchResetKey}
+				onFilterChange={ctx.onFilterChange}
+				placeholder={searchPlaceholder}
+			/>
+			{ctx.displayItems.length > 0 ? (
+				isNative ? (
+					<View
+						style={{
+							height: getNativeListHeight(
+								ctx.displayItems.length,
+								estimatedItemSize,
+								phone ? sheet.listMaxHeight : NATIVE_LIST_MAX_HEIGHT
+							),
+							maxHeight: phone ? sheet.listMaxHeight : NATIVE_LIST_MAX_HEIGHT,
+						}}
+					>
+						<VirtualizedListPrimitive.Root className="flex-1">
+							<VirtualizedListPrimitive.List
+								data={ctx.displayItems}
+								estimatedItemSize={estimatedItemSize}
+								renderItem={renderTreeItem as any}
+								parentProps={{ style: { height: '100%' } }}
+								renderScrollComponent={isAndroid ? GestureHandlerScrollView : undefined}
 							/>
-							{ctx.displayItems.length > 0 ? (
-								isNative ? (
-									<View
-										style={{
-											height: getNativeListHeight(ctx.displayItems.length, estimatedItemSize),
-											maxHeight: NATIVE_LIST_MAX_HEIGHT,
-										}}
-									>
-										<VirtualizedListPrimitive.Root className="flex-1">
-											<VirtualizedListPrimitive.List
-												data={ctx.displayItems}
-												estimatedItemSize={estimatedItemSize}
-												renderItem={renderTreeItem as any}
-												parentProps={{ style: { height: '100%' } }}
-												renderScrollComponent={isAndroid ? GestureHandlerScrollView : undefined}
-											/>
-										</VirtualizedListPrimitive.Root>
-									</View>
-								) : (
-									<VirtualizedListPrimitive.Root className="flex-1">
-										<VirtualizedListPrimitive.List
-											data={ctx.displayItems}
-											estimatedItemSize={estimatedItemSize}
-											renderItem={renderTreeItem as any}
-											parentProps={{
-												style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
-											}}
-										/>
-									</VirtualizedListPrimitive.Root>
-								)
-							) : (
-								ctx.isSearching && (
-									<View className="px-2 py-1.5">
-										<Text className="text-popover-foreground text-sm">{emptyMessage}</Text>
-									</View>
-								)
-							)}
-						</PopoverPrimitive.Content>
-					</TextClassContext.Provider>
-				</Animated.View>
-			</PopoverPrimitive.Overlay>
-		</PopoverPrimitive.Portal>
+						</VirtualizedListPrimitive.Root>
+					</View>
+				) : (
+					<VirtualizedListPrimitive.Root className="flex-1">
+						<VirtualizedListPrimitive.List
+							data={ctx.displayItems}
+							estimatedItemSize={estimatedItemSize}
+							renderItem={renderTreeItem as any}
+							parentProps={{
+								style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
+							}}
+						/>
+					</VirtualizedListPrimitive.Root>
+				)
+			) : (
+				ctx.isSearching && (
+					<View className="px-2 py-1.5">
+						<Text className="text-foreground text-base">{emptyMessage}</Text>
+					</View>
+				)
+			)}
+		</>
+	);
+	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
+	const shell = (
+		<OverlayShell
+			presentation={phone ? 'bottom' : 'anchored'}
+			open={open}
+			Scrim={PopoverPrimitive.Overlay}
+			onDismiss={phone ? () => onOpenChange(false) : undefined}
+		>
+			<TextClassContext.Provider value="text-foreground">
+				{phone ? (
+					<View
+						className={cn(OVERLAY_PANEL.bottom, OVERLAY_MOTION.bottom.enter, 'z-50', className)}
+						style={{ maxHeight: sheet.maxHeight, paddingBottom: Math.max(sheet.bottomInset, 8) }}
+					>
+						{content}
+					</View>
+				) : (
+					<PopoverPrimitive.Content
+						align="center"
+						sideOffset={4}
+						style={contentStyle}
+						className={cn(
+							OVERLAY_PANEL.anchored,
+							'web:cursor-auto web:outline-none z-50 max-h-75 w-80',
+							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+							className
+						)}
+					>
+						{content}
+					</PopoverPrimitive.Content>
+				)}
+			</TextClassContext.Provider>
+		</OverlayShell>
+	);
+	return inline ? (
+		shell
+	) : (
+		<PopoverPrimitive.Portal hostName={portalHost}>{shell}</PopoverPrimitive.Portal>
 	);
 }
 

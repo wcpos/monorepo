@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 import { Slot } from '@rn-primitives/slot';
 
@@ -19,8 +18,7 @@ import {
 	usePhoneSheetMetrics,
 } from '../lib/native-popover-sizing';
 import { defaultFilter } from './utils/filter';
-import { POPOVER_FADE } from '../lib/motion';
-import { PhoneSheetShell } from '../lib/phone-sheet';
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { useIsPhone } from '../lib/device';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -166,10 +164,12 @@ function ComboboxContent({
 	portalHost,
 	children,
 	style,
+	inline,
 	...props
-}: PopoverPrimitive.ContentProps & { portalHost?: string }) {
+}: PopoverPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const context = useComboboxRootContext();
-	const { onOpenChange } = PopoverPrimitive.useRootContext();
+	const { open, onOpenChange } = PopoverPrimitive.useRootContext();
+	const sheet = usePhoneSheetMetrics();
 	const isPhone = useIsPhone();
 	const isNative = Platform.OS !== 'web';
 	const contentStyle = React.useMemo(() => {
@@ -183,55 +183,53 @@ function ComboboxContent({
 	// Enable arrow key navigation when combobox is open
 	useArrowKeyNavigation();
 
-	return (
-		<PopoverPrimitive.Portal hostName={portalHost}>
-			<PopoverPrimitive.Overlay
-				style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				className={isPhone ? (isNative ? 'bg-black/50' : 'web:fixed inset-0 z-50') : undefined}
-			>
+	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
+	const content = (
+		<ComboboxRootContext.Provider value={context}>{children}</ComboboxRootContext.Provider>
+	);
+	const shell = (
+		<OverlayShell
+			presentation={isPhone ? 'bottom' : 'anchored'}
+			open={open}
+			Scrim={PopoverPrimitive.Overlay}
+			onDismiss={isPhone ? () => onOpenChange(false) : undefined}
+			testID={props.testID}
+		>
+			<TextClassContext.Provider value="text-foreground">
 				{isPhone ? (
-					<PhoneSheetShell
-						onDismiss={() => onOpenChange(false)}
-						className={className}
-						style={style}
+					<View
 						testID={props.testID}
+						className={cn(OVERLAY_PANEL.bottom, OVERLAY_MOTION.bottom.enter, 'z-50', className)}
+						style={[
+							{ maxHeight: sheet.maxHeight, paddingBottom: Math.max(sheet.bottomInset, 8) },
+							style,
+						]}
 					>
-						<TextClassContext.Provider value="text-popover-foreground">
-							<ComboboxRootContext.Provider value={context}>
-								{children}
-							</ComboboxRootContext.Provider>
-						</TextClassContext.Provider>
-					</PhoneSheetShell>
+						{content}
+					</View>
 				) : (
-					/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-					   a11y prunes out-of-bounds children — see popover/index.tsx. */
-					<Animated.View
-						entering={FadeIn.duration(POPOVER_FADE)}
-						exiting={FadeOut.duration(POPOVER_FADE)}
-						pointerEvents="box-none"
-						style={isNative ? StyleSheet.absoluteFill : undefined}
+					<PopoverPrimitive.Content
+						align={align}
+						sideOffset={sideOffset}
+						style={contentStyle}
+						className={cn(
+							OVERLAY_PANEL.anchored,
+							'web:cursor-auto web:outline-none z-50 max-h-75 w-80',
+							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+							className
+						)}
+						{...props}
 					>
-						<TextClassContext.Provider value="text-popover-foreground">
-							<PopoverPrimitive.Content
-								align={align}
-								sideOffset={sideOffset}
-								style={contentStyle}
-								className={cn(
-									'border-border bg-popover web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none z-50 max-h-[300px] w-72 rounded-md border p-2 shadow-md',
-									className
-								)}
-								{...props}
-							>
-								<ComboboxRootContext.Provider value={context}>
-									{children}
-								</ComboboxRootContext.Provider>
-								{/* <Arrow className={cn('fill-white')} /> */}
-							</PopoverPrimitive.Content>
-						</TextClassContext.Provider>
-					</Animated.View>
+						{content}
+					</PopoverPrimitive.Content>
 				)}
-			</PopoverPrimitive.Overlay>
-		</PopoverPrimitive.Portal>
+			</TextClassContext.Provider>
+		</OverlayShell>
+	);
+	return inline ? (
+		shell
+	) : (
+		<PopoverPrimitive.Portal hostName={portalHost}>{shell}</PopoverPrimitive.Portal>
 	);
 }
 
@@ -353,9 +351,7 @@ function ComboboxList({
 function ComboboxEmpty({ children, className, ...props }: ComboboxEmptyProps) {
 	return (
 		<View className={cn('prx-2 py-1.5', className)} {...props}>
-			<Text className="web:group-focus:text-accent-foreground text-popover-foreground text-sm">
-				{children}
-			</Text>
+			<Text className="text-foreground text-base">{children}</Text>
 		</View>
 	);
 }
@@ -383,16 +379,16 @@ function ComboboxItem({ value, label, item, className, children, ...props }: Com
 				role="option"
 				aria-selected={selected}
 				className={cn(
-					'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex w-full flex-row items-center rounded-sm px-2 py-1.5',
+					'web:cursor-default web:select-none web:hover:bg-muted web:outline-none web:focus:bg-muted active:bg-muted min-h-row relative flex w-full flex-row items-center gap-2 rounded-md px-2.5 py-1.5',
 					multiple && 'pl-8',
-					props.disabled && 'web:pointer-events-none opacity-50',
+					props.disabled && 'web:pointer-events-none opacity-45',
 					className
 				)}
 				{...props}
 			>
 				{multiple && (
 					<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-						{selected && <Icon name="check" className="text-popover-foreground" />}
+						{selected && <Icon name="check" className="text-primary" />}
 					</View>
 				)}
 				{children}
@@ -407,10 +403,7 @@ function ComboboxItemText({ className, ...props }: ComboboxItemTextProps) {
 
 	return (
 		<Text
-			className={cn(
-				'web:group-focus:text-accent-foreground text-popover-foreground text-sm',
-				className
-			)}
+			className={cn('text-foreground text-base', className)}
 			decodeHtml={decodeLabels}
 			{...props}
 		>

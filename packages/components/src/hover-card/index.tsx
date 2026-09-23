@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { Platform, StyleSheet } from 'react-native';
 
 import * as HoverCardPrimitive from '@rn-primitives/hover-card';
-import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
@@ -16,40 +15,35 @@ function HoverCardContent({
 	align = 'center',
 	sideOffset = 4,
 	ref,
+	inline,
 	...props
-}: React.ComponentProps<typeof HoverCardPrimitive.Content>) {
+}: React.ComponentProps<typeof HoverCardPrimitive.Content> & { inline?: boolean }) {
 	const { open } = HoverCardPrimitive.useRootContext();
-	return (
-		<HoverCardPrimitive.Portal>
-			<HoverCardPrimitive.Overlay
-				style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-			>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={FadeIn}
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				>
-					<TextClassContext.Provider value="text-popover-foreground">
-						<HoverCardPrimitive.Content
-							ref={ref}
-							align={align}
-							sideOffset={sideOffset}
-							className={cn(
-								'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 web:outline-none web:cursor-auto border-border bg-popover z-50 w-64 max-w-full rounded-md border p-2 shadow-md',
-								open
-									? 'web:animate-in web:fade-in-0 web:zoom-in-95'
-									: 'web:animate-out web:fade-out-0 web:zoom-out-95',
-								className
-							)}
-							{...props}
-						/>
-					</TextClassContext.Provider>
-				</Animated.View>
-			</HoverCardPrimitive.Overlay>
-		</HoverCardPrimitive.Portal>
+	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
+	const shell = (
+		<OverlayShell
+			presentation="anchored"
+			open={open}
+			Scrim={HoverCardPrimitive.Overlay}
+			testID={props.testID}
+		>
+			<TextClassContext.Provider value="text-foreground">
+				<HoverCardPrimitive.Content
+					ref={ref}
+					align={align}
+					sideOffset={sideOffset}
+					className={cn(
+						OVERLAY_PANEL.anchored,
+						'web:outline-none web:cursor-auto z-50 w-64 max-w-full',
+						open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+						className
+					)}
+					{...props}
+				/>
+			</TextClassContext.Provider>
+		</OverlayShell>
 	);
+	return inline ? shell : <HoverCardPrimitive.Portal>{shell}</HoverCardPrimitive.Portal>;
 }
 HoverCardContent.displayName = HoverCardPrimitive.Content.displayName;
 

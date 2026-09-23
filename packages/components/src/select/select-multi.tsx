@@ -1,14 +1,14 @@
 import * as React from 'react';
-import { Platform, Pressable, StyleSheet } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import { Slot } from '@rn-primitives/slot';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Checkbox } from '../checkbox';
 import { getDisplayLabel, getDisplayLabelEllipsis, toggleMultiValue } from '../lib/multi-select';
-import { POPOVER_FADE } from '../lib/motion';
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
+import { useIsPhone } from '../lib/device';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -139,39 +139,55 @@ function SelectMultiContent({
 	align = 'start',
 	sideOffset = 4,
 	portalHost,
+	inline,
 	...props
-}: PopoverPrimitive.ContentProps & { portalHost?: string }) {
+}: PopoverPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const context = useMultiSelectContext();
-
+	const phone = useIsPhone();
+	const presentation = phone ? 'bottom' : 'anchored';
 	if (!context.open) return null;
-
-	return (
-		<PopoverPrimitive.Portal hostName={portalHost}>
-			<PopoverPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={FadeIn.duration(POPOVER_FADE)}
-					exiting={FadeOut.duration(POPOVER_FADE)}
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				>
-					<TextClassContext.Provider value="text-popover-foreground">
-						<PopoverPrimitive.Content
-							align={align}
-							sideOffset={sideOffset}
-							className={cn(
-								'border-border bg-popover web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0 z-50 max-h-96 min-w-32 rounded-md border px-1 py-2 shadow-md',
-								className
-							)}
-							{...props}
-						>
-							<SelectMultiContext.Provider value={context}>{children}</SelectMultiContext.Provider>
-						</PopoverPrimitive.Content>
-					</TextClassContext.Provider>
-				</Animated.View>
-			</PopoverPrimitive.Overlay>
-		</PopoverPrimitive.Portal>
+	const content = (
+		<SelectMultiContext.Provider value={context}>{children}</SelectMultiContext.Provider>
+	);
+	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
+	const shell = (
+		<OverlayShell
+			presentation={presentation}
+			open={context.open}
+			Scrim={PopoverPrimitive.Overlay}
+			onDismiss={phone ? () => context.onOpenChange(false) : undefined}
+			testID={props.testID}
+		>
+			<TextClassContext.Provider value="text-foreground">
+				{phone ? (
+					<View
+						testID={props.testID}
+						className={cn(OVERLAY_PANEL.bottom, OVERLAY_MOTION.bottom.enter, 'z-50', className)}
+					>
+						{content}
+					</View>
+				) : (
+					<PopoverPrimitive.Content
+						align={align}
+						sideOffset={sideOffset}
+						className={cn(
+							OVERLAY_PANEL.anchored,
+							'z-50 max-h-96 min-w-32 p-1.5',
+							context.open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+							className
+						)}
+						{...props}
+					>
+						{content}
+					</PopoverPrimitive.Content>
+				)}
+			</TextClassContext.Provider>
+		</OverlayShell>
+	);
+	return inline ? (
+		shell
+	) : (
+		<PopoverPrimitive.Portal hostName={portalHost}>{shell}</PopoverPrimitive.Portal>
 	);
 }
 
@@ -207,8 +223,8 @@ function SelectMultiItem({
 		<Pressable
 			onPress={handlePress}
 			className={cn(
-				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center gap-2 rounded-sm py-1.5 pr-2 pl-2',
-				itemDisabled && 'web:pointer-events-none opacity-50',
+				'web:cursor-default web:select-none web:hover:bg-muted web:outline-none web:focus:bg-muted active:bg-muted min-h-row relative flex w-full flex-row items-center gap-2 rounded-md py-1.5 pr-2 pl-2',
+				itemDisabled && 'web:pointer-events-none opacity-45',
 				className
 			)}
 			disabled={itemDisabled}
@@ -219,9 +235,7 @@ function SelectMultiItem({
 				onCheckedChange={() => handlePress()}
 				className="pointer-events-none"
 			/>
-			<Text className="web:group-focus:text-accent-foreground text-popover-foreground text-sm">
-				{children ?? label}
-			</Text>
+			<Text className="text-foreground text-base">{children ?? label}</Text>
 		</Pressable>
 	);
 }

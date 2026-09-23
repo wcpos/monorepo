@@ -9,3 +9,15 @@ it('uses the controls-tier skin', () => {
 	expect(source).not.toContain('web:focus:ring');
 	expect(source).not.toContain('ring-offset');
 });
+
+it('uses the overlay-tier rows in index.tsx', () => {
+	const content = fs.readFileSync(path.join(__dirname, 'index.tsx'), 'utf8');
+	expect(content).not.toMatch(/web:group|bg-popover|accent|PhoneSheetShell/);
+	expect(content).toContain('min-h-row');
+});
+
+it('uses the overlay-tier rows in select-multi.tsx', () => {
+	const content = fs.readFileSync(path.join(__dirname, 'select-multi.tsx'), 'utf8');
+	expect(content).not.toMatch(/web:group|bg-popover|accent|PhoneSheetShell/);
+	expect(content).toContain('min-h-row');
+});

@@ -3,12 +3,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import * as React from 'react';
+import { StyleSheet, type ViewProps } from 'react-native';
 
+const mockViews: ViewProps[] = [];
+const mockAnimation = { duration: jest.fn().mockReturnThis(), easing: jest.fn().mockReturnThis() };
 const mockPlatform = { OS: 'ios' };
 const mockGestureHandlerScrollView = jest.fn();
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import { DeviceScope } from '../lib/device';
 import {
 	Combobox,
 	ComboboxContent,
@@ -27,9 +31,20 @@ jest.mock(
 );
 
 // These existing tests exercise the anchored popover, not the phone sheet.
-jest.mock('react-native', () => ({
-	...jest.requireActual('react-native'),
-	useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
+jest.mock('react-native', () => {
+	const actual = jest.requireActual('react-native');
+	return {
+		...actual,
+		Platform: { ...actual.Platform, OS: 'ios' },
+		View: (props: ViewProps) => {
+			mockViews.push(props);
+			return <actual.View {...props} />;
+		},
+		useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
+	};
+});
+jest.mock('../keyboard-controller', () => ({
+	KeyboardAvoidingView: jest.requireMock('react-native').View,
 }));
 
 jest.mock('react-native-gesture-handler', () => ({
@@ -39,7 +54,8 @@ jest.mock('react-native-gesture-handler', () => ({
 // Native-only package with untransformed Flow syntax; the combobox reads the insets
 // context and tolerates a null value (no provider).
 jest.mock('react-native-safe-area-context', () => ({
-	SafeAreaInsetsContext: require('react').createContext(null),
+	SafeAreaInsetsContext: React.createContext(null),
+	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
 jest.mock('react-native-reanimated', () => ({
@@ -47,9 +63,13 @@ jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
 	default: {
 		View: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+		createAnimatedComponent: (component: React.ComponentType) => component,
 	},
-	FadeIn: { duration: () => ({}) },
-	FadeOut: { duration: () => ({}) },
+	...Object.fromEntries(
+		'FadeIn FadeOut SlideInLeft SlideOutLeft SlideInRight SlideOutRight SlideInDown SlideOutDown'
+			.split(' ')
+			.map((name) => [name, mockAnimation])
+	),
 }));
 
 jest.mock('@rn-primitives/slot', () => ({
@@ -73,7 +93,7 @@ jest.mock('@rn-primitives/popover', () => ({
 			{children}
 		</div>
 	),
-	useRootContext: () => ({ onOpenChange: jest.fn() }),
+	useRootContext: () => ({ open: true, onOpenChange: jest.fn() }),
 }));
 
 jest.mock('../input', () => ({
@@ -135,6 +155,7 @@ jest.mock('../lib/use-arrow-key-navigation', () => ({
 describe('Combobox native content', () => {
 	beforeEach(() => {
 		mockPlatform.OS = 'ios';
+		mockViews.length = 0;
 	});
 
 	it('caps the native virtualized list height for long lists', () => {
@@ -302,4 +323,29 @@ describe('Combobox control height', () => {
 		expect(source).not.toContain('h-10');
 		expect(source).toContain('rounded-lg');
 	});
+});
+
+it('renders the phone sheet as a View with phone metrics, not primitive Content', () => {
+	render(
+		<DeviceScope phone>
+			<Combobox>
+				<ComboboxContent inline testID="phone-panel" />
+			</Combobox>
+		</DeviceScope>
+	);
+	expect(screen.queryByTestId('combobox-content')).toBeNull();
+	const panel = mockViews.find((p) => p.testID === 'phone-panel');
+	expect(panel?.className).toContain('rounded-t-2xl');
+	expect(StyleSheet.flatten(panel?.style)).toMatchObject({ maxHeight: 538, paddingBottom: 8 });
+});
+it('keeps the native anchored wrapper full-bleed and box-none', () => {
+	mockViews.length = 0;
+	render(
+		<Combobox>
+			<ComboboxContent inline />
+		</Combobox>
+	);
+	expect(mockViews).toContainEqual(
+		expect.objectContaining({ style: StyleSheet.absoluteFill, pointerEvents: 'box-none' })
+	);
 });

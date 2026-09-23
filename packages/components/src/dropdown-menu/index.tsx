@@ -1,12 +1,16 @@
 import * as React from 'react';
-import { Platform, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { StyleProp, Text, View, ViewStyle } from 'react-native';
 
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { DropdownMenuItem } from './item';
 import { Icon } from '../icon';
-import { OVERLAY_FADE } from '../lib/motion';
+import {
+	OVERLAY_MOTION,
+	OVERLAY_PANEL,
+	type OverlayScrimProps,
+	OverlayShell,
+} from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
@@ -36,13 +40,12 @@ function DropdownMenuSubTrigger({
 	children?: React.ReactNode;
 }) {
 	const { open } = DropdownMenuPrimitive.useSubContext();
-	// const Icon = Platform.OS === 'web' ? ChevronRight : open ? ChevronUp : ChevronDown;
 	return (
-		<TextClassContext.Provider value={cn('select-none', open && 'native:text-accent-foreground')}>
+		<TextClassContext.Provider value={cn('text-foreground text-base select-none')}>
 			<DropdownMenuPrimitive.SubTrigger
 				className={cn(
-					'web:cursor-default web:select-none web:focus:bg-accent web:hover:bg-accent active:bg-accent web:outline-none flex flex-row items-center gap-2 rounded-sm px-2 py-1.5',
-					open && 'bg-accent',
+					'web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-row items-center gap-2 rounded-md px-2.5 py-1.5',
+					open && 'bg-muted',
 					inset && 'pl-8',
 					className
 				)}
@@ -62,10 +65,9 @@ function DropdownMenuSubContent({ className, ...props }: DropdownMenuPrimitive.S
 	return (
 		<DropdownMenuPrimitive.SubContent
 			className={cn(
-				'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 border-border bg-popover z-50 mt-1 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
-				open
-					? 'web:animate-in web:fade-in-0 web:zoom-in-95'
-					: 'web:animate-out web:fade-out-0 web:zoom-out',
+				OVERLAY_PANEL.anchored,
+				'z-50 mt-1 min-w-50 overflow-hidden p-1.5',
+				open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
 				className
 			)}
 			{...props}
@@ -78,49 +80,45 @@ function DropdownMenuContent({
 	overlayClassName,
 	overlayStyle,
 	portalHost,
+	inline,
 	...props
 }: DropdownMenuPrimitive.ContentProps & {
 	overlayStyle?: StyleProp<ViewStyle>;
 	overlayClassName?: string;
 	portalHost?: string;
+	inline?: boolean;
 }) {
 	const { open } = DropdownMenuPrimitive.useRootContext();
-	return (
-		<DropdownMenuPrimitive.Portal hostName={portalHost}>
-			<DropdownMenuPrimitive.Overlay
-				style={
-					overlayStyle
-						? StyleSheet.flatten([
-								Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined,
-								overlayStyle,
-							] as ViewStyle[])
-						: Platform.OS !== 'web'
-							? StyleSheet.absoluteFill
-							: undefined
-				}
-				className={overlayClassName}
-			>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={Platform.OS !== 'web' ? FadeIn.duration(OVERLAY_FADE) : undefined}
-					exiting={Platform.OS !== 'web' ? FadeOut.duration(OVERLAY_FADE) : undefined}
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				>
-					<DropdownMenuPrimitive.Content
-						className={cn(
-							'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 border-border bg-popover z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
-							open
-								? 'web:animate-in web:fade-in-0 web:zoom-in-95'
-								: 'web:animate-out web:fade-out-0 web:zoom-out-95',
-							className
-						)}
-						{...props}
-					/>
-				</Animated.View>
-			</DropdownMenuPrimitive.Overlay>
-		</DropdownMenuPrimitive.Portal>
+	const Scrim = React.useMemo(() => {
+		function Scrim(p: OverlayScrimProps) {
+			return (
+				<DropdownMenuPrimitive.Overlay
+					{...p}
+					className={cn(overlayClassName, p.className)}
+					style={[p.style, overlayStyle]}
+				/>
+			);
+		}
+		return Scrim;
+	}, [overlayClassName, overlayStyle]);
+	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
+	const shell = (
+		<OverlayShell presentation="anchored" open={open} Scrim={Scrim} testID={props.testID}>
+			<DropdownMenuPrimitive.Content
+				className={cn(
+					OVERLAY_PANEL.anchored,
+					'z-50 min-w-50 overflow-hidden p-1.5',
+					open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+					className
+				)}
+				{...props}
+			/>
+		</OverlayShell>
+	);
+	return inline ? (
+		shell
+	) : (
+		<DropdownMenuPrimitive.Portal hostName={portalHost}>{shell}</DropdownMenuPrimitive.Portal>
 	);
 }
 
@@ -133,17 +131,16 @@ function DropdownMenuCheckboxItem({
 	return (
 		<DropdownMenuPrimitive.CheckboxItem
 			className={cn(
-				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
-				props.disabled && 'web:pointer-events-none opacity-50',
+				'web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-row items-center gap-2 rounded-md py-1.5 pr-2 pl-8',
+				props.disabled && 'web:pointer-events-none opacity-45',
 				className
 			)}
 			checked={checked}
 			{...props}
 		>
-			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+			<View className="absolute left-2 flex size-4 items-center justify-center">
 				<DropdownMenuPrimitive.ItemIndicator>
-					<Icon name="check" />
-					{/* <Check size={14} strokeWidth={3} className="text-foreground" /> */}
+					<Icon name="check" className="text-primary" />
 				</DropdownMenuPrimitive.ItemIndicator>
 			</View>
 			<>{children}</>
@@ -159,15 +156,15 @@ function DropdownMenuRadioItem({
 	return (
 		<DropdownMenuPrimitive.RadioItem
 			className={cn(
-				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
-				props.disabled && 'web:pointer-events-none opacity-50',
+				'web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-row items-center gap-2 rounded-md py-1.5 pr-2 pl-8',
+				props.disabled && 'web:pointer-events-none opacity-45',
 				className
 			)}
 			{...props}
 		>
-			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+			<View className="absolute left-2 flex size-4 items-center justify-center">
 				<DropdownMenuPrimitive.ItemIndicator>
-					<View className="bg-foreground h-2 w-2 rounded-full" />
+					<View className="bg-primary h-2 w-2 rounded-full" />
 				</DropdownMenuPrimitive.ItemIndicator>
 			</View>
 			<>{children}</>
@@ -183,7 +180,7 @@ function DropdownMenuLabel({
 	return (
 		<DropdownMenuPrimitive.Label
 			className={cn(
-				'text-foreground web:cursor-default px-2 py-1.5 text-base font-semibold',
+				'text-foreground web:cursor-default px-2.5 py-1.5 text-sm font-semibold',
 				inset && 'pl-8',
 				className
 			)}
@@ -195,19 +192,14 @@ function DropdownMenuLabel({
 function DropdownMenuSeparator({ className, ...props }: DropdownMenuPrimitive.SeparatorProps) {
 	return (
 		<DropdownMenuPrimitive.Separator
-			className={cn('bg-border -mx-1 my-1 h-px', className)}
+			className={cn('bg-border -mx-1.5 my-1 h-px', className)}
 			{...props}
 		/>
 	);
 }
 
 function DropdownMenuShortcut({ className, ...props }: TextProps) {
-	return (
-		<Text
-			className={cn('text-muted-foreground ml-auto text-xs tracking-widest', className)}
-			{...props}
-		/>
-	);
+	return <Text className={cn('text-muted-foreground ml-auto text-sm', className)} {...props} />;
 }
 
 export {

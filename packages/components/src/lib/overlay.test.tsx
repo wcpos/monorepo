@@ -4,7 +4,14 @@ import { Pressable, type PressableProps, View } from 'react-native';
 import { render, screen } from '@testing-library/react';
 
 import { BEATS, INDETERMINATE, SPINNER, WEB_ANIMATIONS } from './motion';
-import { OVERLAY_MOTION, type OverlayPresentation, OverlayShell, useOverlay } from './overlay';
+import {
+	OVERLAY_MOTION,
+	OVERLAY_PANEL,
+	type OverlayPresentation,
+	OverlayShell,
+	useOverlay,
+	useOverlayPresentation,
+} from './overlay';
 
 const mockScrimProps: PressableProps[] = [];
 jest.mock('react-native', () => {
@@ -143,4 +150,57 @@ it('names the functional wait beats and the web progress sweep', () => {
 	expect(BEATS.spinner.duration).toBe(SPINNER);
 	expect(BEATS.indeterminateProgress.duration).toBe(INDETERMINATE);
 	expect(WEB_ANIMATIONS['indeterminate']).toContain('1100ms');
+});
+
+it('leaves anchored positioning to the primitive without deferring focus', () => {
+	render(
+		<OverlayShell presentation="anchored" open Scrim={Pressable} testID="anchor">
+			<Probe />
+		</OverlayShell>
+	);
+	expect(mockScrimProps.at(-1)?.className).toBeUndefined();
+	expect(mockScrimProps.at(-1)?.focusable).toBe(false);
+	expect(screen.getByTestId('probe').parentElement).toBe(screen.getByTestId('anchor-scrim'));
+	expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', 'false');
+	expect(OVERLAY_MOTION.anchored.enter).toBe('web:animate-pop-in');
+	expect(OVERLAY_MOTION.anchored.exit).toBe('web:animate-pop-out');
+	expect(OVERLAY_PANEL.anchored).toContain('bg-card');
+	expect(OVERLAY_PANEL.anchored).toContain('shadow-md');
+	expect(OVERLAY_PANEL.bottom).toContain('rounded-t-2xl');
+	expect(OVERLAY_PANEL.bottom).not.toContain('shadow');
+});
+
+it('offers an optional presentation without exporting the context', () => {
+	const values: (string | undefined)[] = [];
+	function OptionalProbe() {
+		values.push(useOverlayPresentation());
+		return null;
+	}
+	render(
+		<>
+			<OptionalProbe />
+			<OverlayShell presentation="bottom" open Scrim={Pressable}>
+				<OptionalProbe />
+			</OverlayShell>
+		</>
+	);
+	expect(values).toEqual([undefined, 'bottom']);
+});
+
+it('hands a sheet dismiss to the web scrim as its press, and nothing when unset', () => {
+	const onDismiss = jest.fn();
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={onDismiss} testID="s">
+			<Probe />
+		</OverlayShell>
+	);
+	mockScrimProps.at(-1)?.onPress?.({} as never);
+	expect(onDismiss).toHaveBeenCalledTimes(1);
+	render(
+		<OverlayShell presentation="anchored" open Scrim={Pressable} onDismiss={onDismiss} testID="a">
+			<Probe />
+		</OverlayShell>
+	);
+	mockScrimProps.at(-1)?.onPress?.({} as never);
+	expect(onDismiss).toHaveBeenCalledTimes(2);
 });
