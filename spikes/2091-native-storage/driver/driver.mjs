@@ -100,10 +100,9 @@ async function waitResult(promise) {
     const now = performance.now();
     if (active.phase === 'opening' && now - active.openedAt >= OPEN_BUDGET_MS) {
       if (await device.alive()) await device.stop();
-      else if (physicalIos) throw new Error(`Harness failure: process died while ${active.phase}`);
       settle(null, { outcome: 'open-failed', reopenMs: null, integrity: 'not checked', inflightPresence: 'unknown', error: 'Reopen/first-read exceeded 10 seconds' });
     } else if (!await device.alive() && !active.finished) {
-      if (!physicalIos && active.phase === 'opening') settle(null, { outcome: 'open-failed', reopenMs: null, integrity: 'not checked', inflightPresence: 'unknown', error: 'Process exited during open/first read' });
+      if (active.phase === 'opening') settle(null, { outcome: 'open-failed', reopenMs: null, integrity: 'not checked', inflightPresence: 'unknown', error: 'Process exited during open/first read' });
       else settle(new Error(`Harness failure: process died while ${active.phase}`));
     } else if (now - active.launchedAt > JOB_BUDGET_MS) settle(new Error(`Harness timeout while ${active.phase}`));
     if (!active.finished) await sleep(watchMs);

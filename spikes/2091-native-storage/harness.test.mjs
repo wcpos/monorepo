@@ -502,8 +502,9 @@ test('crash resume retains scored trials and reruns only failed and missing tria
   assert.equal(report.complete, true);
 });
 
-// Process absence/unreachability must not turn into a storage verdict at the open deadline.
-test('physical liveness failures stay harness failures even at the opening deadline', async () => {
+// BRIEF phase rule on every device: a scorer gone between 'opening' and 'read' is the storage verdict
+// open-failed; an unreachable device is a harness failure, never a verdict.
+test('during opening a vanished scorer is open-failed and an unreachable device is a harness failure', async () => {
   const source = readFileSync(new URL('driver/driver.mjs', here), 'utf8');
   const wait = source.slice(source.indexOf('async function waitResult'), source.indexOf('async function run('));
   for (const unreachable of [false, true]) {
@@ -517,7 +518,8 @@ test('physical liveness failures stay harness failures even at the opening deadl
       settle: (error, result) => { context.active.finished = true; if (error) reject(error); else resolve(result); },
     };
     const waitResult = vm.runInNewContext(wait + '; waitResult', context);
-    await assert.rejects(waitResult(promise), unreachable ? /Harness failure: device unreachable/ : /Harness failure: process died while opening/);
+    if (unreachable) await assert.rejects(waitResult(promise), /Harness failure: device unreachable/);
+    else assert.deepEqual((await waitResult(promise)).outcome, 'open-failed');
   }
 });
 
