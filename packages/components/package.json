@@ -34,6 +34,7 @@
     "./keypad": "./src/keypad/index.tsx",
     "./label": "./src/label/index.tsx",
     "./lib/device": "./src/lib/device.ts",
+    "./lib/overlay": "./src/lib/overlay.tsx",
     "./lib/portal-container": "./src/lib/portal-container.ts",
     "./lib/scale": "./src/lib/scale.ts",
     "./lib/set-ref-value": "./src/lib/set-ref-value.ts",
@@ -72,7 +73,8 @@
     "./tree-combobox": "./src/tree-combobox/index.ts",
     "./virtualized-list": "./src/virtualized-list/index.ts",
     "./vstack": "./src/vstack/index.tsx",
-    "./webview": "./src/webview/index.tsx"
+    "./webview": "./src/webview/index.tsx",
+    "./v2/dialog": "./src/v2/dialog/index.tsx"
   },
   "scripts": {
     "build:css": "tailwindcss -i ./src/index.css -o ./dist/styles.css --minify",

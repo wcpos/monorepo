@@ -22,6 +22,7 @@ import { PortalHost } from '@wcpos/components/portal';
 import { stories as select } from '@wcpos/components/select/gallery';
 import { Text } from '@wcpos/components/text';
 import { stories as text } from '@wcpos/components/text/gallery';
+import { stories as dialogV2 } from '@wcpos/components/v2/dialog/gallery';
 
 import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
@@ -41,6 +42,7 @@ const registry: Record<string, Story[]> = {
 	notice,
 	breadcrumb,
 	'page-bar': pageBar,
+	'v2-dialog': dialogV2,
 };
 
 function GalleryPage({ children }: React.PropsWithChildren) {

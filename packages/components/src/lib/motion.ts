@@ -13,6 +13,7 @@ export const PANE = 280;
 export const STAMP = 380;
 
 export const EASE = Easing.bezier(0.2, 0.7, 0.2, 1);
+export const EASE_CSS = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
 export const EASE_BEAT = Easing.bezier(0.2, 0.9, 0.3, 1.1);
 
 type Beat = {
@@ -226,4 +227,14 @@ export const BEATS = {
 export const WEB_ANIMATIONS = {
 	'accordion-down': `accordion-down ${CROSSFADE}ms ease-out`,
 	'accordion-up': `accordion-up ${CROSSFADE}ms ease-out`,
+	'overlay-in': `overlay-in ${OVERLAY_FADE}ms ${EASE_CSS}`,
+	'overlay-out': `overlay-out ${OVERLAY_FADE}ms ${EASE_CSS} forwards`,
+	'dialog-in': `dialog-in ${OVERLAY_FADE}ms ${EASE_CSS}`,
+	'dialog-out': `dialog-out ${OVERLAY_FADE}ms ${EASE_CSS} forwards`,
+	'panel-in-left': `panel-in-left ${PANEL_SLIDE}ms ${EASE_CSS}`,
+	'panel-in-right': `panel-in-right ${PANEL_SLIDE}ms ${EASE_CSS}`,
+	'panel-out-left': `panel-out-left ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
+	'panel-out-right': `panel-out-right ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
+	'sheet-in': `sheet-in ${SHEET_RISE}ms ${EASE_CSS}`,
+	'sheet-out': `sheet-out ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
 };
