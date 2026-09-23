@@ -187,6 +187,8 @@ const align: Record<OverlayPresentation, string> = {
 const TEXT_FIELD =
 	'input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled])';
 const TABBABLE = `a[href],button:not([disabled]),${TEXT_FIELD},[tabindex]:not([tabindex="-1"])`;
+/** The open sheets that own their dismiss, oldest first; the last one owns the keys. */
+const keyOwners: object[] = [];
 /**
  * Web only, side panels and the sheets that own their dismiss. Radix focuses the first tabbable the moment the content
  * mounts, while `slide-in-from-*` still has the panel translated a full width off-screen.
@@ -224,7 +226,13 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		if (isWeb) {
 			// A sheet without primitive Content has no Radix dismissable layer or focus scope:
 			// Escape is ours, and Tab stays inside the modal sheet, wrapping at either end.
+			// Every open sheet listens on the document, so only the newest one (a sheet opened
+			// from a sheet sits above it) acts; native's BackHandler already serves its newest
+			// subscriber first.
+			const owner = {};
+			keyOwners.push(owner);
 			const onKey = (event: KeyboardEvent) => {
+				if (keyOwners[keyOwners.length - 1] !== owner) return;
 				if (event.key === 'Escape') {
 					onDismissRef.current?.();
 					return;
@@ -247,7 +255,10 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				}
 			};
 			document.addEventListener('keydown', onKey);
-			return () => document.removeEventListener('keydown', onKey);
+			return () => {
+				keyOwners.splice(keyOwners.indexOf(owner), 1);
+				document.removeEventListener('keydown', onKey);
+			};
 		}
 		const back = BackHandler.addEventListener('hardwareBackPress', () => {
 			onDismissRef.current?.();

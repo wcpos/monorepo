@@ -245,6 +245,28 @@ it('closes a sheet that owns its dismiss on Escape, and leaves the key alone oth
 	expect(quiet).not.toHaveBeenCalled();
 });
 
+it('hands the keys to the newest sheet: Escape closes the one opened from a sheet, then the sheet', () => {
+	const closeOuter = jest.fn();
+	const closeInner = jest.fn();
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={closeOuter} testID="o">
+			<Probe />
+		</OverlayShell>
+	);
+	const inner = render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={closeInner} testID="i">
+			<Probe />
+		</OverlayShell>
+	);
+	document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+	expect(closeInner).toHaveBeenCalledTimes(1);
+	expect(closeOuter).not.toHaveBeenCalled();
+	inner.unmount();
+	document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+	expect(closeOuter).toHaveBeenCalledTimes(1);
+	expect(closeInner).toHaveBeenCalledTimes(1);
+});
+
 it('focuses the first field of a sheet that owns its dismiss once the rise settles', () => {
 	jest.useFakeTimers();
 	try {

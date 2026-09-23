@@ -3,6 +3,10 @@ import { join } from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
+// The longest rise is the panel slide (PANEL_SLIDE, 250 ms) plus the focus hand-over
+// after it; two seconds leaves every entrance well finished without stalling a page.
+const SETTLE_BOUND_MS = 2_000;
+
 test('gallery cells', async ({ page }, testInfo) => {
 	const smoke = testInfo.project.ignoreSnapshots && !process.env.CI;
 	if (!smoke && process.platform !== 'linux') {
@@ -30,11 +34,25 @@ test('gallery cells', async ({ page }, testInfo) => {
 	const shoot = async (id: string, theme: string) => {
 		const cell = page.getByTestId(id);
 		// An overlay's rise and the focus it hands over once the rise ends both settle after
-		// the page's animations; the first cells on a page were shot before that.
-		await page.evaluate(() =>
-			Promise.all(
-				document.getAnimations().map((animation) => animation.finished.catch(() => undefined))
-			)
+		// the page's animations; the first cells on a page were shot before that. Only a
+		// running, finite animation can finish (the indeterminate progress sweep never does,
+		// a paused one never will), and the wait is bounded well past the longest rise.
+		await page.evaluate(
+			(bound) =>
+				Promise.race([
+					Promise.all(
+						document
+							.getAnimations()
+							.filter(
+								(animation) =>
+									animation.playState === 'running' &&
+									animation.effect?.getComputedTiming().iterations !== Infinity
+							)
+							.map((animation) => animation.finished.catch(() => undefined))
+					),
+					new Promise((resolve) => setTimeout(resolve, bound)),
+				]),
+			SETTLE_BOUND_MS
 		);
 		if (smoke)
 			await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
