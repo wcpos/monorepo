@@ -380,8 +380,9 @@ describe('useCheckoutSession', () => {
 
 		expect(mockCheckoutError).toHaveBeenCalledWith(
 			'Request failed with status code 400',
-			expect.objectContaining({ code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN })
+			expect.objectContaining({ code: ERROR_CODES.CHECKOUT_OUTCOME_UNKNOWN, showToast: true })
 		);
+		expect(result.current.loading).toBe(false);
 	});
 
 	/**
