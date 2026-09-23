@@ -35,17 +35,18 @@ const options = ['Canvas tote', 'Coffee', 'Notebook', 'Pencil', 'Water bottle'].
 export const stories = closed.concat(
 	['open', 'sheet'].map((id) => ({
 		id,
+		isolated: id === 'open',
 		render: () => (
 			<DeviceScope phone={id === 'sheet'}>
 				<View
-					className={`border-border bg-background relative h-96 ${id === 'sheet' ? 'w-80' : 'w-full'} overflow-hidden rounded-lg border`}
+					className={`border-border bg-background relative h-96 ${id === 'sheet' ? 'w-80' : 'w-full'} overflow-hidden rounded-lg border [&>*]:flex-1`}
 				>
 					<C.Combobox value={options[0]}>
 						<Open />
 						<C.ComboboxTrigger testID="products">
 							<C.ComboboxValue placeholder="Choose product" />
 						</C.ComboboxTrigger>
-						<C.ComboboxContent inline align="start">
+						<C.ComboboxContent inline align="start" avoidCollisions={false}>
 							<C.ComboboxInput />
 							<C.ComboboxList
 								data={options}

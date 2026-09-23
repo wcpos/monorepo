@@ -199,3 +199,28 @@ it('keeps anchored native content full-bleed and reachable without keyboard or i
 	});
 	expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', 'false');
 });
+
+it('closes a sheet on the hardware back and the accessibility escape when it owns its dismiss', () => {
+	const { BackHandler } = jest.requireActual<typeof import('react-native')>('react-native');
+	const remove = jest.fn();
+	const add = jest.spyOn(BackHandler, 'addEventListener').mockReturnValue({ remove });
+	const onDismiss = jest.fn();
+	const { unmount } = render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={onDismiss} testID="s">
+			<View testID="panel" />
+		</OverlayShell>
+	);
+	expect(add).toHaveBeenCalledWith('hardwareBackPress', expect.any(Function));
+	expect((add.mock.calls.at(-1)?.[1] as () => boolean)()).toBe(true);
+	expect(onDismiss).toHaveBeenCalledTimes(1);
+	unmount();
+	expect(remove).toHaveBeenCalled();
+	add.mockClear();
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} testID="t">
+			<View testID="panel" />
+		</OverlayShell>
+	);
+	expect(add).not.toHaveBeenCalled();
+	add.mockRestore();
+});

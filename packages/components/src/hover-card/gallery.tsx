@@ -14,7 +14,7 @@ function Panel() {
 			<C.HoverCardTrigger testID="customer">
 				<Text>Paul K</Text>
 			</C.HoverCardTrigger>
-			<C.HoverCardContent inline align="start" testID="gallery-hover-card">
+			<C.HoverCardContent inline align="start" avoidCollisions={false} testID="gallery-hover-card">
 				<Text>Paul K</Text>
 				<Text>Customer since 2024</Text>
 			</C.HoverCardContent>
@@ -24,6 +24,7 @@ function Panel() {
 export const stories = [
 	{
 		id: 'card',
+		isolated: true,
 		render: () => (
 			<C.HoverCard>
 				<Panel />

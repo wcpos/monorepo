@@ -11,7 +11,12 @@ import {
 	scaleVariables,
 } from '@wcpos/components/lib/scale';
 
-export type Story = { id: string; render: () => React.ReactNode };
+/**
+ * `isolated`: the shoot renders this story's cells one per page (`?cell=`). An open
+ * Radix popover, select or dialog owns the document's focus, so six of them on one
+ * page close or hide each other; the anchored overlays' open stories ask for it.
+ */
+export type Story = { id: string; render: () => React.ReactNode; isolated?: boolean };
 
 export function GalleryCells({
 	component,
@@ -29,7 +34,11 @@ export function GalleryCells({
 				if (cell && cell !== id) return null;
 				return (
 					<ScopedVariables key={id} variables={scaleVariables(step, pointer)}>
-						<View testID={id} {...{ dataSet: { cellId: id } }} className="bg-background p-4">
+						<View
+							testID={id}
+							{...{ dataSet: { cellId: id, ...(story.isolated ? { isolated: 'true' } : {}) } }}
+							className="bg-background p-4"
+						>
 							{story.render()}
 						</View>
 					</ScopedVariables>

@@ -21,26 +21,39 @@ test('gallery cells', async ({ page }, testInfo) => {
 	const components = await links.evaluateAll((nodes) =>
 		nodes.map((node) => node.getAttribute('data-gallery-component')!)
 	);
-	// One test shoots every page: the budget grows with the inventory, twenty
-	// seconds a page and theme, so a new component never trips a fixed clock.
-	test.setTimeout(components.length * 2 * 20_000);
+	// One test shoots every page: the budget grows with the inventory, a minute a
+	// page and theme (its isolated cells included), so a new component never trips
+	// a fixed clock.
+	test.setTimeout(components.length * 2 * 60_000);
 	let count = 0;
 	const shot = new Set<string>();
+	const shoot = async (id: string, theme: string) => {
+		const cell = page.getByTestId(id);
+		if (smoke)
+			await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
+		else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
+		shot.add(`${id}-${theme}-linux.png`);
+		count++;
+	};
 	for (const component of components) {
 		for (const theme of ['light', 'dark']) {
 			await page.goto(`/gallery/${component}?theme=${theme}`);
 			const cells = page.locator('[data-cell-id]');
 			await expect(cells.first()).toBeVisible();
 			const ids = await cells.evaluateAll((nodes) =>
-				nodes.map((node) => node.getAttribute('data-cell-id')!)
+				nodes.map((node) => ({
+					id: node.getAttribute('data-cell-id')!,
+					isolated: node.getAttribute('data-isolated') === 'true',
+				}))
 			);
-			for (const id of ids) {
-				const cell = page.getByTestId(id);
-				if (smoke)
-					await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
-				else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
-				shot.add(`${id}-${theme}-linux.png`);
-				count++;
+			for (const { id, isolated } of ids) if (!isolated) await shoot(id, theme);
+			// An isolated story (an open popover, select or dialog: it owns the document's
+			// focus) is shot one cell per page, so its siblings cannot close or cover it.
+			for (const { id, isolated } of ids) {
+				if (!isolated) continue;
+				await page.goto(`/gallery/${component}?theme=${theme}&cell=${id}`);
+				await expect(page.getByTestId(id)).toBeVisible();
+				await shoot(id, theme);
 			}
 		}
 	}

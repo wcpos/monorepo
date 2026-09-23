@@ -18,7 +18,7 @@ function Panel() {
 					<Text>Cart settings</Text>
 				</Button>
 			</C.PopoverTrigger>
-			<C.PopoverContent inline align="start" testID="gallery-popover">
+			<C.PopoverContent inline align="start" avoidCollisions={false} testID="gallery-popover">
 				{['Cart settings', 'Prices include tax', 'Receipts print automatically'].map((line) => (
 					<Text key={line}>{line}</Text>
 				))}
@@ -28,10 +28,11 @@ function Panel() {
 }
 export const stories = ['anchored', 'sheet'].map((id) => ({
 	id,
+	isolated: id === 'anchored',
 	render: () => (
 		<DeviceScope phone={id === 'sheet'}>
 			<View
-				className={`border-border bg-background relative h-96 ${id === 'sheet' ? 'w-80' : 'w-full'} overflow-hidden rounded-lg border`}
+				className={`border-border bg-background relative h-96 ${id === 'sheet' ? 'w-80' : 'w-full'} overflow-hidden rounded-lg border [&>*]:flex-1`}
 			>
 				<C.Popover>
 					<Panel />

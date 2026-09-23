@@ -15,7 +15,7 @@ function Panel() {
 			<C.DropdownMenuTrigger asChild>
 				<IconButton name="ellipsisVertical" aria-label="⋯" testID="order-menu" />
 			</C.DropdownMenuTrigger>
-			<C.DropdownMenuContent inline align="start" testID="gallery-menu">
+			<C.DropdownMenuContent inline align="start" avoidCollisions={false} testID="gallery-menu">
 				<C.DropdownMenuLabel>Order</C.DropdownMenuLabel>
 				<C.DropdownMenuItem testID="edit">
 					<Text>Edit</Text>
@@ -46,6 +46,7 @@ function Panel() {
 export const stories = [
 	{
 		id: 'menu',
+		isolated: true,
 		render: () => (
 			<C.DropdownMenu>
 				<Panel />

@@ -336,7 +336,9 @@ it('renders the phone sheet as a View with phone metrics, not primitive Content'
 	expect(screen.queryByTestId('combobox-content')).toBeNull();
 	const panel = mockViews.find((p) => p.testID === 'phone-panel');
 	expect(panel?.className).toContain('rounded-t-2xl');
-	expect(StyleSheet.flatten(panel?.style)).toMatchObject({ maxHeight: 538, paddingBottom: 8 });
+	expect(StyleSheet.flatten(panel?.style)).toMatchObject({ maxHeight: 538 });
+	// The shell pads the safe area; the panel must not add the inset a second time.
+	expect(StyleSheet.flatten(panel?.style)).not.toHaveProperty('paddingBottom');
 });
 it('keeps the native anchored wrapper full-bleed and box-none', () => {
 	mockViews.length = 0;

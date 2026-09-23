@@ -32,3 +32,13 @@ it('uses a sheet View, not positioned primitive content, on phones', () => {
 	const { useRootContext } = jest.requireMock('@rn-primitives/popover');
 	expect(useRootContext().onOpenChange).toHaveBeenCalledWith(false);
 });
+
+it('lets the sheet geometry win over an anchored caller width', () => {
+	render(
+		<DeviceScope phone>
+			<C.PopoverContent inline testID="panel" className="w-80" />
+		</DeviceScope>
+	);
+	expect(screen.getByTestId('panel')).toHaveClass('w-full');
+	expect(screen.getByTestId('panel')).not.toHaveClass('w-80');
+});

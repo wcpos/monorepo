@@ -204,3 +204,18 @@ it('hands a sheet dismiss to the web scrim as its press, and nothing when unset'
 	mockScrimProps.at(-1)?.onPress?.({} as never);
 	expect(onDismiss).toHaveBeenCalledTimes(2);
 });
+
+it('dismisses on the backdrop only: a press bubbling up from the panel is ignored', () => {
+	const onDismiss = jest.fn();
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={onDismiss} testID="b">
+			<Probe />
+		</OverlayShell>
+	);
+	const scrim = {};
+	const panel = {};
+	mockScrimProps.at(-1)?.onPress?.({ target: panel, currentTarget: scrim } as never);
+	expect(onDismiss).not.toHaveBeenCalled();
+	mockScrimProps.at(-1)?.onPress?.({ target: scrim, currentTarget: scrim } as never);
+	expect(onDismiss).toHaveBeenCalledTimes(1);
+});

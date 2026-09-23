@@ -490,8 +490,14 @@ function TreeComboboxContent<T>({
 			<TextClassContext.Provider value="text-foreground">
 				{phone ? (
 					<View
-						className={cn(OVERLAY_PANEL.bottom, OVERLAY_MOTION.bottom.enter, 'z-50', className)}
-						style={{ maxHeight: sheet.maxHeight, paddingBottom: Math.max(sheet.bottomInset, 8) }}
+						className={cn(
+							className,
+							OVERLAY_PANEL.bottom,
+							open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
+							'z-50'
+						)}
+						// The shell pads the safe area; the panel adds only its own inset.
+						style={{ maxHeight: sheet.maxHeight }}
 					>
 						{content}
 					</View>

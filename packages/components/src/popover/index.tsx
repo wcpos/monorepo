@@ -44,7 +44,12 @@ function PopoverContent({
 				{phone ? (
 					<View
 						testID={props.testID}
-						className={cn(OVERLAY_PANEL.bottom, OVERLAY_MOTION.bottom.enter, 'z-50', className)}
+						className={cn(
+							className,
+							OVERLAY_PANEL.bottom,
+							open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
+							'z-50'
+						)}
 					>
 						{children}
 					</View>

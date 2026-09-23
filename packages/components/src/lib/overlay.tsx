@@ -1,5 +1,13 @@
 import * as React from 'react';
-import { Platform, type StyleProp, StyleSheet, View, type ViewStyle } from 'react-native';
+import {
+	BackHandler,
+	type GestureResponderEvent,
+	Platform,
+	type StyleProp,
+	StyleSheet,
+	View,
+	type ViewStyle,
+} from 'react-native';
 
 import Animated, {
 	FadeIn,
@@ -34,7 +42,7 @@ export type OverlayScrimProps = {
 	accessible?: boolean;
 	importantForAccessibility?: 'auto' | 'yes' | 'no' | 'no-hide-descendants';
 	accessibilityElementsHidden?: boolean;
-	onPress?: () => void;
+	onPress?: (event: GestureResponderEvent) => void;
 };
 export type OverlayScrimComponent = React.ComponentType<OverlayScrimProps>;
 export type OverlayShellProps = {
@@ -42,10 +50,11 @@ export type OverlayShellProps = {
 	open: boolean;
 	Scrim: OverlayScrimComponent;
 	/**
-	 * Web only: a press on the scrim. The popover-family primitives' web `Overlay` is a bare
-	 * Pressable with no dismiss of its own (their Radix `Content` owns outside-click, and a
-	 * phone sheet renders no `Content`), so a sheet passes `() => onOpenChange(false)` here.
-	 * Radix dialog overlays and every native `Overlay` dismiss on their own: leave it unset.
+	 * A sheet's own dismiss, for a panel that mounts no primitive `Content`: on web the
+	 * popover-family `Overlay` is a bare Pressable, so a press on the backdrop itself (not
+	 * one bubbling up from the panel) calls it; on native the hardware back and the
+	 * accessibility escape call it, the jobs `Content` would have done. Radix dialog
+	 * overlays and every native `Overlay` already dismiss on a press: leave it unset there.
 	 */
 	onDismiss?: () => void;
 	pinned?: boolean;
@@ -145,6 +154,23 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
 	const deferAutoFocus = isWeb && fullHeight;
+	const onScrimPress = React.useCallback(
+		(event?: GestureResponderEvent) => {
+			// On web the scrim is the panel's ancestor, so a press inside the panel bubbles
+			// here too; only the backdrop itself dismisses.
+			if (event?.target && event.currentTarget && event.target !== event.currentTarget) return;
+			onDismiss?.();
+		},
+		[onDismiss]
+	);
+	React.useEffect(() => {
+		if (isWeb || !open || !onDismiss) return;
+		const back = BackHandler.addEventListener('hardwareBackPress', () => {
+			onDismiss();
+			return true;
+		});
+		return () => back.remove();
+	}, [open, onDismiss]);
 	// The external animation event (or reduced-motion timer) determines when focus is safe.
 	React.useEffect(() => {
 		if (presentation === 'anchored') return;
@@ -193,7 +219,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				{isWeb ? (
 					<Scrim
 						focusable={false}
-						onPress={onDismiss}
+						onPress={onDismiss ? onScrimPress : undefined}
 						testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 					>
 						{children}
@@ -210,6 +236,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 						<Animated.View
 							style={StyleSheet.absoluteFill}
 							pointerEvents="box-none"
+							onAccessibilityEscape={onDismiss}
 							entering={OVERLAY_MOTION.anchored.entering}
 							exiting={OVERLAY_MOTION.anchored.exiting}
 						>
@@ -246,7 +273,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			// opened the dialog can land on it and focus it. A focus during a side panel's
 			// enter animation scrolls the nearest scrollable ancestor (see focusAfterSlideIn).
 			focusable={false}
-			onPress={onDismiss}
+			onPress={onDismiss ? onScrimPress : undefined}
 			testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 		>
 			{children}
@@ -281,6 +308,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			>
 				<Animated.View
 					pointerEvents="box-none"
+					onAccessibilityEscape={onDismiss}
 					entering={OVERLAY_MOTION[presentation].entering}
 					exiting={OVERLAY_MOTION[presentation].exiting}
 					className={cn('max-h-full max-w-full', fullHeight && 'h-full')}
