@@ -37,6 +37,24 @@ test('gallery cells', async ({ page }, testInfo) => {
 					await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
 				else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
 				shot.add(`${id}-${theme}-linux.png`);
+				if (/^v2-dialog--(page|right|phone-center)--regular-coarse$/.test(id)) {
+					// DIAG (#2200): the page cell renders collapsed on Linux only; dump its layout chain.
+					const dump = await cell.evaluate((el) => {
+						const box = (n: Element) => {
+							const r = n.getBoundingClientRect();
+							return `${Math.round(r.width)}x${Math.round(r.height)}@${Math.round(r.left)},${Math.round(r.top)}`;
+						};
+						const chain: unknown[] = [];
+						let n: Element | null = el.querySelector('input') ?? el.querySelector('[role="dialog"]');
+						for (let i = 0; n && i < 12; i++) {
+							const cs = getComputedStyle(n);
+							chain.push({ tag: n.tagName, cls: (n.getAttribute('class') ?? '').slice(0, 200), box: box(n), disp: cs.display, pos: cs.position, flex: cs.flex, h: cs.height, w: cs.width, ov: cs.overflowY, vis: cs.visibility, op: cs.opacity, tr: cs.transform });
+							n = n.parentElement;
+						}
+						return { ua: navigator.userAgent, html: el.outerHTML.slice(0, 14000), chain };
+					});
+					await testInfo.attach(`${id}-${theme}.json`, { body: JSON.stringify(dump, null, 1), contentType: 'application/json' });
+				}
 				count++;
 			}
 		}
