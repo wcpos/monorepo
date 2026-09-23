@@ -3,6 +3,7 @@ import { Pressable, type PressableProps, StyleSheet, View, type ViewProps } from
 
 import { render, screen } from '@testing-library/react';
 
+import { EASE } from './motion';
 import { OVERLAY_MOTION, type OverlayPresentation, OverlayShell, useOverlay } from './overlay';
 
 const mockViews: ViewProps[] = [];
@@ -65,6 +66,7 @@ jest.mock('react-native-reanimated', () => {
 					duration() {
 						return this;
 					},
+					easing: jest.fn().mockReturnThis(),
 				},
 			])
 		),
@@ -163,6 +165,8 @@ it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
 		expect(panel.pointerEvents).toBe('box-none');
 		expect(panel.entering).toBe(OVERLAY_MOTION[presentation].entering);
 		expect(panel.exiting).toBe(OVERLAY_MOTION[presentation].exiting);
+		expect((panel.entering as { easing: jest.Mock }).easing).toHaveBeenCalledWith(EASE);
+		expect((panel.exiting as { easing: jest.Mock }).easing).toHaveBeenCalledWith(EASE);
 		expect(panel.className?.split(' ')).toEqual(
 			expect.arrayContaining(['max-h-full', 'max-w-full'])
 		);

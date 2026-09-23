@@ -48,6 +48,7 @@ jest.mock('react-native-reanimated', () => {
 					duration() {
 						return this;
 					},
+					easing: jest.fn().mockReturnThis(),
 				},
 			])
 		),
@@ -96,10 +97,18 @@ it.each([
 	expect(classes).toContain('web:animate-overlay-in');
 	expect(screen.getByTestId('probe')).toHaveAttribute('data-presentation', presentation);
 	expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', String(deferred));
-	if (presentation === 'center') expect(classes).not.toContain('[&>[role=dialog]]:contents');
-	else expect(classes).toContain('[&>[role=dialog]]:contents');
+	expect(classes).toContain('[&>[role=dialog]]:contents');
 	expect(mockScrimProps.at(-1)).toMatchObject({ focusable: false });
 	expect(mockScrimProps.at(-1)?.onPress).toBeUndefined();
+});
+
+it('provides a fallback scrim test ID', () => {
+	render(
+		<OverlayShell presentation="center" open Scrim={Pressable}>
+			<View />
+		</OverlayShell>
+	);
+	expect(screen.getByTestId('overlay-scrim')).toBeInTheDocument();
 });
 
 it('uses the scrim exit animation when closed', () => {

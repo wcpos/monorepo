@@ -14,7 +14,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAvoidingView } from '../keyboard-controller';
-import { OVERLAY_FADE, PANEL_SLIDE, PANEL_SLIDE_OUT, SHEET_RISE } from './motion';
+import { EASE, OVERLAY_FADE, PANEL_SLIDE, PANEL_SLIDE_OUT, SHEET_RISE } from './motion';
 import { cn } from './utils';
 const isWeb = Platform.OS === 'web';
 export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page';
@@ -60,32 +60,32 @@ export const OVERLAY_MOTION: Record<
 	center: {
 		enter: 'web:animate-dialog-in',
 		exit: 'web:animate-dialog-out',
-		entering: FadeIn.duration(OVERLAY_FADE),
-		exiting: FadeOut.duration(OVERLAY_FADE),
+		entering: FadeIn.duration(OVERLAY_FADE).easing(EASE),
+		exiting: FadeOut.duration(OVERLAY_FADE).easing(EASE),
 	},
 	left: {
 		enter: 'web:animate-panel-in-left',
 		exit: 'web:animate-panel-out-left',
-		entering: SlideInLeft.duration(PANEL_SLIDE),
-		exiting: SlideOutLeft.duration(PANEL_SLIDE_OUT),
+		entering: SlideInLeft.duration(PANEL_SLIDE).easing(EASE),
+		exiting: SlideOutLeft.duration(PANEL_SLIDE_OUT).easing(EASE),
 	},
 	right: {
 		enter: 'web:animate-panel-in-right',
 		exit: 'web:animate-panel-out-right',
-		entering: SlideInRight.duration(PANEL_SLIDE),
-		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT),
+		entering: SlideInRight.duration(PANEL_SLIDE).easing(EASE),
+		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT).easing(EASE),
 	},
 	bottom: {
 		enter: 'web:animate-sheet-in',
 		exit: 'web:animate-sheet-out',
-		entering: SlideInDown.duration(SHEET_RISE),
-		exiting: SlideOutDown.duration(PANEL_SLIDE_OUT),
+		entering: SlideInDown.duration(SHEET_RISE).easing(EASE),
+		exiting: SlideOutDown.duration(PANEL_SLIDE_OUT).easing(EASE),
 	},
 	page: {
 		enter: 'web:animate-panel-in-right',
 		exit: 'web:animate-panel-out-right',
-		entering: SlideInRight.duration(PANEL_SLIDE),
-		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT),
+		entering: SlideInRight.duration(PANEL_SLIDE).easing(EASE),
+		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT).easing(EASE),
 	},
 };
 const align: Record<OverlayPresentation, string> = {
@@ -161,14 +161,14 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				'bg-scrim absolute top-0 right-0 bottom-0 left-0 flex',
 				align[presentation],
 				open ? 'web:animate-overlay-in' : 'web:animate-overlay-out',
-				// Radix inserts an auto-height [role=dialog] wrapper; flatten it so the panel's h-full / max-h-[92%] resolve against the overlay (dialog ledger line 5).
-				presentation !== 'center' && '[&>[role=dialog]]:contents'
+				// Radix inserts an auto-height [role=dialog] wrapper; flatten it on every presentation so the panel's h-full / max-h-[92%] / max-w-full resolve against the overlay (dialog ledger line 5).
+				'[&>[role=dialog]]:contents'
 			)}
 			// The scrim is a Pressable, so RN-web would give it tabIndex=0 and the click that
 			// opened the dialog can land on it and focus it. A focus during a side panel's
 			// enter animation scrolls the nearest scrollable ancestor (see focusAfterSlideIn).
 			focusable={false}
-			testID={testID ? `${testID}-scrim` : undefined}
+			testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 		>
 			{children}
 		</Scrim>
@@ -192,7 +192,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				accessible={false}
 				importantForAccessibility="no"
 				accessibilityElementsHidden
-				testID={testID ? `${testID}-scrim` : undefined}
+				testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 			/>
 			<KeyboardAvoidingView
 				pointerEvents="box-none"

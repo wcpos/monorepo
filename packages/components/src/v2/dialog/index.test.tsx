@@ -102,6 +102,7 @@ jest.mock('react-native-reanimated', () => {
 					duration() {
 						return this;
 					},
+					easing: jest.fn().mockReturnThis(),
 				},
 			])
 		),
@@ -166,6 +167,7 @@ jest.mock('@rn-primitives/dialog', () => {
 			defaultOpen = false,
 			onOpenChange,
 			children,
+			asChild,
 		}: Primitive.RootProps) => {
 			const [internal, setInternal] = React.useState(defaultOpen);
 			return (
@@ -178,7 +180,7 @@ jest.mock('@rn-primitives/dialog', () => {
 						},
 					}}
 				>
-					{children}
+					{asChild ? children : <div data-testid="primitive-root">{children}</div>}
 				</Context.Provider>
 			);
 		},
@@ -253,10 +255,26 @@ it('1. opens from a trigger and closes from the generated close control', () => 
 		</Dialog>
 	);
 	expect(screen.queryByTestId('d')).not.toBeInTheDocument();
+	expect(screen.queryByTestId('d-scrim')).not.toBeInTheDocument();
+	expect(screen.getByTestId('primitive-root')).toBeInTheDocument();
 	fireEvent.click(screen.getByTestId('trigger'));
 	expect(screen.getByTestId('d')).toBeInTheDocument();
+	expect(screen.getByTestId('d-scrim')).toBeInTheDocument();
 	fireEvent.click(screen.getByTestId('d-close'));
 	expect(screen.queryByTestId('d')).not.toBeInTheDocument();
+	expect(screen.queryByTestId('d-scrim')).not.toBeInTheDocument();
+});
+
+it('1. slots a single content child without a primitive root wrapper', () => {
+	render(
+		<Dialog open>
+			<DialogContent inline testID="d">
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(screen.getByTestId('d')).toBeInTheDocument();
+	expect(screen.queryByTestId('primitive-root')).not.toBeInTheDocument();
 });
 
 it('2. passes controlled open and onOpenChange through', () => {
@@ -430,6 +448,19 @@ it('7. names the close control and lets callers override its label and testID', 
 		</Dialog>
 	);
 	expect(screen.getByTestId('dialog-close')).toBeInTheDocument();
+});
+
+it('7. merges caller close classes with the control dimensions', () => {
+	render(
+		<Dialog open>
+			<DialogContent inline testID="d" closeButtonProps={{ className: 'opacity-70' }}>
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	expect(
+		mockPressableProps.find((props) => props.testID === 'd-close')?.className?.split(' ')
+	).toEqual(expect.arrayContaining(['h-ctl', 'w-ctl', 'opacity-70']));
 });
 
 it.each(['right', 'center'] as const)(

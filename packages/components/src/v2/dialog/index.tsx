@@ -52,10 +52,10 @@ export function Dialog(allProps: DialogProps): React.JSX.Element {
 		<RouteContext.Provider value={{ route }}>
 			<DialogPrimitive.Root
 				{...props}
+				asChild={React.Children.count(children) === 1 && React.isValidElement(children)}
 				{...(route
 					? {
 							open: true,
-							asChild: React.Children.count(children) === 1 && React.isValidElement(children),
 							onOpenChange: (next: boolean) => {
 								if (!next) {
 									if (onClose) onClose();
@@ -75,7 +75,7 @@ export function useDialog(): { open: boolean; close: () => void } {
 	const { open, onOpenChange } = DialogPrimitive.useRootContext();
 	return { open, close: () => onOpenChange(false) };
 }
-export function DialogContent(allProps: DialogContentProps): React.JSX.Element {
+export function DialogContent(allProps: DialogContentProps): React.JSX.Element | null {
 	const { side = 'center', portalHost, inline, testID, ...props } = allProps;
 	const phone = useIsPhone();
 	const presentation: OverlayPresentation =
@@ -84,6 +84,7 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element {
 	const renderInline = route || (inline ?? false);
 	const { open } = DialogPrimitive.useRootContext();
 	const container = usePortalContainer(portalHost);
+	if (!open && !route) return null;
 	const shell = (
 		<OverlayShell
 			Scrim={DialogPrimitive.Overlay}
@@ -106,6 +107,11 @@ export function DialogContent(allProps: DialogContentProps): React.JSX.Element {
 function DialogPanel(allProps: DialogContentProps) {
 	const { size = 'md', className, children, ...rest } = allProps;
 	const { closeLabel, closeButtonProps, onOpenAutoFocus, testID, ref, ...props } = rest;
+	const {
+		className: closeButtonClassName,
+		testID: closeButtonTestID,
+		...closeProps
+	} = closeButtonProps ?? {};
 	const { presentation, deferAutoFocus, onPanelNode } = useOverlay();
 	const composedRef = useComposedRefs(
 		ref,
@@ -142,10 +148,10 @@ function DialogPanel(allProps: DialogContentProps) {
 				<DialogClose asChild>
 					<IconButton
 						name="xmark"
-						className="h-ctl w-ctl items-center justify-center"
+						className={cn('h-ctl w-ctl items-center justify-center', closeButtonClassName)}
 						aria-label={closeLabel ?? 'Close'}
-						testID={closeButtonProps?.testID ?? (testID ? `${testID}-close` : 'dialog-close')}
-						{...closeButtonProps}
+						testID={closeButtonTestID ?? (testID ? `${testID}-close` : 'dialog-close')}
+						{...closeProps}
 					/>
 				</DialogClose>
 			</View>
