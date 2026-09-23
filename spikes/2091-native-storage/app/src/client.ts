@@ -1,5 +1,6 @@
 import * as Linking from 'expo-linking';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { getBrightnessAsync, setBrightnessAsync } from 'expo-brightness';
 import { File, Paths } from 'expo-file-system';
 
 import { captureLogs } from './logs';
@@ -91,11 +92,17 @@ async function poll() {
 					});
 					let result: unknown, error: string | undefined;
 					try {
-						await activateKeepAwakeAsync();
+						const brightness = await getBrightnessAsync();
 						try {
-							result = await run(job, send);
+							await setBrightnessAsync(0);
+							await activateKeepAwakeAsync();
+							try {
+								result = await run(job, send);
+							} finally {
+								await deactivateKeepAwake();
+							}
 						} finally {
-							await deactivateKeepAwake();
+							await setBrightnessAsync(brightness);
 						}
 					} catch (e) {
 						error = e instanceof Error ? e.stack : String(e);

@@ -385,3 +385,55 @@ release that contains the fix. Do not write any conclusion about the engines.
 When done, print: the harness test count and result, the patch file name and its line count, the
 gradle lines proving the expo-modules-core C++ compile ran, the APK path with its modification
 time, and the commit hash.
+
+# Round 8 (the iPad ran its battery flat twice under the harness, 2026-09-24 small hours)
+
+Round 7 is accepted and committed (`efd714f0b`; idle budget follow-up `e9e0dcb08`). The iPad's
+system crash logs (pulled with `devicectl device copy from --domain-type systemCrashLogs`) explain
+both "process died, then device unreachable" endings: `LowBatteryLog-2026-09-23-224621.ips`
+(second run: `Capacity: 1`, `Voltage: 3439 mV`, `Screen Brightness: 1.000000`, foreground app
+`com.wcpos.spike2091`, "prevent sleep while in usb device mode held for 00:43:51") and a
+`log-power-2026-09-24-005201.session` written at the minute the third run's process vanished. The
+iPad Pro 12.9 (2018) drains faster on the Mac's USB port than it charges while `expo-keep-awake`
+holds the display at full brightness and the app runs at 95% CPU. There was also a
+`JetsamEvent-2026-09-23-213137.ips` during the first run: reason `highwater`, victim Spotlight, the
+app at 124349 resident pages of 16 KB (about 1.9 GB) and not killed; and a
+`wcposspike2091.diskwrites_resource` report (1.07 GB of file-backed writes in 4104 s). Those two are
+data for the write-up, not defects.
+
+Rules as before: commit at the end (include `FIXES.md`), do not push, do not open or edit a PR, do
+not reply on any PR, no physical devices (installs are the owner's), no simulators or emulators,
+do not touch `results/`. Measured code must not move; the only app change is around a job's
+lifetime, outside every timed window.
+
+## 1. Minimum screen brightness while a job runs
+
+Add `expo-brightness` (SDK 57's bundled version) and, where the app activates keep-awake for a
+job, first read the current brightness and set it to 0 (`setBrightnessAsync(0)`); restore the
+saved value where keep-awake is released, including on error. Do not use the system-brightness
+(Android `WRITE_SETTINGS`) path; the in-app window brightness is enough and needs no permission.
+The crash writer runs until it is killed, so a restore may never happen for it: that is fine, the
+next launch sets it again and the OS restores window brightness when the process ends. Keep the
+change small.
+
+## 2. Documents
+
+`DEVICE-RUN.md`: one short paragraph stating that a physical device must be on a wall charger,
+not the Mac's USB port, for the large scale and the crash leg (with the 22:46 and 00:52 evidence
+in one sentence), that the app dims its own window to minimum during a job, and that a
+`LowBatteryLog-*.ips` or `log-power-*.session` in `systemCrashLogs` at the failure minute is the
+tell, pulled with `xcrun devicectl device copy from --device <udid> --domain-type systemCrashLogs --source . --destination <dir>`.
+Add the highwater jetsam and disk-writes facts to the method notes of `RESULTS.md` as device
+observations (no conclusion about the engines).
+
+## 3. Tests and builds
+
+Add a harness-side test only if the driver changes (it should not). Run `npm run typecheck` in
+`app/`. Then build the iOS device app with the exact `xcodebuild` line `run.sh` uses for
+`ios-device` (device id `00008027-000A49223631002E`, derived data under `app/.build/ios`) and stop
+before the `devicectl ... install` step; build the Android release APK with `./gradlew assembleRelease`
+in `app/android` and stop before `adb install`. One build at a time. If `expo-brightness` needs a
+prebuild (a new native module), run `./run.sh prebuild` first and say so.
+
+When done, print: the typecheck result, whether a prebuild was needed, both build output paths
+with modification times, and the commit hash.

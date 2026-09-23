@@ -28,6 +28,12 @@ _Operator: apply the stability gate and the “wins clearly, not narrowly” bar
 
 ## Method notes
 
+- Device observations from the physical iPad Pro 12.9 (2018), as recorded in Round 8 of
+  `FIXES.md`: `JetsamEvent-2026-09-23-213137.ips` reports `highwater`, with Spotlight the victim;
+  the spike app had 124349 resident pages of 16 KB (about 1.9 GB) and was not killed.
+  `wcposspike2091.diskwrites_resource` reports 1.07 GB of file-backed writes in 4104 seconds.
+  These are device observations, not conclusions about the engines.
+
 - The Android build carries the spike-only [expo/expo #50513](https://github.com/expo/expo/pull/50513)
   shared-object lifetime backport. Subsequent SQLite Android crash and bench results must be
   gathered with this patched APK; existing measurements have not been rerun here. The shipped
@@ -62,6 +68,10 @@ _Operator: apply the stability gate and the “wins clearly, not narrowly” bar
 - Physical signing/USB controls and large-scale measurements remain for the operator.
 
 ## Behavior changes / regressions
+
+Round 8: jobs now dim brightness to minimum before keeping the display awake and restore the
+saved value on completion or error, outside measured work. A killed crash writer cannot run
+cleanup. Physical-device dimming, restoration and battery endurance have not been verified here.
 
 No shipping application code changed. This spike does not establish broad compatibility,
 power-loss durability or physical-device performance improvements.

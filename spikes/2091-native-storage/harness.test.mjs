@@ -241,7 +241,7 @@ test('malformed initial URL still allows Connect to start fetching jobs', async 
   const context = await loadTS('client', {
     'expo-linking': { addEventListener() {}, getInitialURL: async () => 'spike2091://driver?url=bad', parse: () => ({ queryParams: { url: 'bad' } }) },
     'expo-file-system': { Paths: {}, File: class { exists = false; write() {} } },
-    'expo-keep-awake': {}, './logs': {}, './polyfills': {}, './versions.json': {},
+    'expo-keep-awake': {}, 'expo-brightness': {}, './logs': {}, './polyfills': {}, './versions.json': {},
   }, { setTimeout: fn => timers.push(fn), fetch: async url => { fetched.push(url); return { status: 204 }; } });
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(context.exports.getState().status, 'ERROR');
@@ -346,6 +346,7 @@ test('job keeps awake through a pending writer and releases on success or error'
       'expo-linking': { addEventListener() {}, getInitialURL: async () => null },
       'expo-file-system': { Paths: {}, File: class { exists = true; textSync() { return 'http://localhost:48091'; } } },
       'expo-keep-awake': { activateKeepAwakeAsync: async () => events.push('awake'), deactivateKeepAwake: async () => events.push('released') },
+      'expo-brightness': { getBrightnessAsync: async () => 0.5, setBrightnessAsync: async () => {} },
       './logs': { captureLogs: () => ({ logs: [], restore() {} }) }, './polyfills': { installPolyfills() {} }, './versions.json': {},
       './bench': {}, './crash': { writer: () => { events.push('writer'); return writer; } }, './engines': {}, './conformance-smoke': {}, './divergence': {},
     }, { setTimeout() {}, fetch: async (url, options) => {

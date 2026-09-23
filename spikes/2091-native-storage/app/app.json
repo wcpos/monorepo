@@ -17,6 +17,7 @@
     },
     "android": {
       "package": "com.wcpos.spike2091",
+      "blockedPermissions": ["android.permission.WRITE_SETTINGS"],
       "predictiveBackGestureEnabled": false
     },
     "scheme": "spike2091",

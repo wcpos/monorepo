@@ -6,6 +6,14 @@ do not interact during measurement. The app keeps the display on during a job, i
 crash writer until it is stopped. The device must still be unlocked and on power when each leg
 starts. No Metro server is needed.
 
+For the large scale and crash leg, a physical device must be on a wall charger, not powered by
+the Mac's USB port (use a wall-powered USB data connection when USB control is needed).
+The iPad ran flat at 22:46 on September 23 and 00:52 on September 24, 2026, despite Mac USB power.
+The app dims its own window to minimum during a job and restores the saved brightness on completion
+or error. A `LowBatteryLog-*.ips` or `log-power-*.session` in `systemCrashLogs` at the failure minute
+is the tell; after recharging and reconnecting, pull it with
+`xcrun devicectl device copy from --device <udid> --domain-type systemCrashLogs --source . --destination <dir>`.
+
 Allow 5–15 minutes for install/prebuild, 5–20 minutes for each first native build, and
 hours per device for all three legs (estimates).
 
@@ -120,7 +128,8 @@ older run. Uninstalling the app removes its stored trial data.
 
 ### Physical iPad over Wi-Fi
 
-Prefer USB for device control; keep the shared Wi-Fi route for the app's HTTP connection.
+Prefer wall-powered USB for device control; otherwise use Wi-Fi control with a wall charger.
+Keep the shared Wi-Fi route for the app's HTTP connection.
 A `4000`/`4016` devicectl error means the device has gone away, not a storage result. `4016`
 can mean locked, asleep or unpaired: unlock, reconnect and restore trust before resuming.
 Physical liveness checks run every 2 seconds and retry command failures with backoff for up to
