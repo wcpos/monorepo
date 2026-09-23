@@ -78,6 +78,8 @@ it('wraps a long label instead of truncating it', () => {
 	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
 	expect(source).toContain('flex-wrap');
 	expect(source.match(/numberOfLines=\{0\}/g)).toHaveLength(2);
+	// Yoga's default flexShrink is 0: without `shrink` a long label overflows on native.
+	expect(source.match(/className="[^"]*\bshrink\b/g)).toHaveLength(2);
 });
 
 it('renders only the label and arrow without a code', () => {

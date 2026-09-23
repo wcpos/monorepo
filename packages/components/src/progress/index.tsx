@@ -48,7 +48,7 @@ export function Progress({
 			{...(indeterminate
 				? {
 						accessibilityValue: { min: 0, max: props.max ?? 100 },
-						accessibilityState: { busy: true },
+						accessibilityState: { ...props.accessibilityState, busy: true },
 						'aria-valuenow': undefined,
 						'aria-valuetext': undefined,
 					}
@@ -164,7 +164,10 @@ function NativeSweep({ className }: { className?: string }) {
 			ReduceMotion.Never
 		)
 	);
-	React.useEffect(() => () => cancelAnimation(progress), [progress]);
+	// Mount-only cleanup: the shared value is captured in a ref so a re-render can
+	// never cancel a live sweep; only unmount does.
+	const progressRef = React.useRef(progress);
+	React.useEffect(() => () => cancelAnimation(progressRef.current), []);
 	const sweepStyle = useAnimatedStyle(() => ({
 		transform: [{ translateX: progress.value * ((trackWidth.value * 4) / 3) }],
 	}));

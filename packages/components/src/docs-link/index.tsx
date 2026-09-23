@@ -35,10 +35,12 @@ function DocsLink({ href, children, code, testID, className }: DocsLinkProps) {
 		>
 			{/* A feedback line's link wraps rather than truncates: a long translated label
 			    in a narrow notice keeps every word. */}
-			<HStack space="xs" className="flex-wrap">
-				<ButtonText numberOfLines={0}>{children}</ButtonText>
+			<HStack space="xs" className="max-w-full flex-wrap">
+				<ButtonText numberOfLines={0} className="shrink">
+					{children}
+				</ButtonText>
 				{code ? (
-					<ButtonText numberOfLines={0} className="text-muted-foreground">
+					<ButtonText numberOfLines={0} className="text-muted-foreground shrink">
 						{` · ${code}`}
 					</ButtonText>
 				) : null}
