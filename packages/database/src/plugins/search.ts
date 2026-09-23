@@ -399,12 +399,16 @@ async function createSearchInstance(
 		}
 	} catch (error) {
 		try {
-			if (searchInstance) {
-				// The destination's onClose hook must not rethrow the failed storage read.
-				searchInstance.queue = searchInstance.queue.catch(() => undefined);
-				await closeSearchInstance(searchInstance);
+			try {
+				if (searchInstance) {
+					// The destination's onClose hook must not rethrow the failed storage read.
+					searchInstance.queue = searchInstance.queue.catch(() => undefined);
+					await closeSearchInstance(searchInstance);
+				}
+			} finally {
+				// Even if closing failed: a kept checkpoint would resume the rebuild past the source rows.
+				await resetPipelineCheckpoint();
 			}
-			await resetPipelineCheckpoint();
 		} catch (cleanupError) {
 			searchLogger.warn('Could not dispose failed search instance', {
 				context: { collection: collection.name, locale, error: String(cleanupError) },
