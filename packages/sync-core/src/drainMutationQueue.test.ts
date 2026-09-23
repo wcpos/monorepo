@@ -660,18 +660,19 @@ describe('drainMutationQueue — retry backoff (ADR 0012)', () => {
 	it('a fresh explicit row releases only its own backoff chain once, in FIFO order', async () => {
 		const q = await queueWith(
 			mut({ mutationId: 'head' }),
-			mut({ mutationId: 'checkout' }),
+			mut({ mutationId: 'checkout', queuedAt: at(95_000) }),
 			// Same record id, different collection: this chain must stay in backoff.
 			mut({ mutationId: 'unrelated', collectionName: 'customers' })
 		);
 		const [head, checkout, unrelated] = await q.pending();
 		await q.replace({ ...checkout, explicit: true });
-		await q.reschedule({ ...head, attempts: 3, nextAttemptAt: at(60_000) });
-		await q.reschedule({ ...unrelated, attempts: 1, nextAttemptAt: at(60_000) });
+		// The head last failed at 90 s (7th attempt, 60 s cap), before checkout was pressed at 95 s.
+		await q.reschedule({ ...head, attempts: 7, nextAttemptAt: at(150_000) });
+		await q.reschedule({ ...unrelated, attempts: 1, nextAttemptAt: at(160_000) });
 		const pushed: string[] = [];
 		const input = {
 			queue: q,
-			now: () => 1_000,
+			now: () => 100_000,
 			backoff: NO_JITTER_BACKOFF,
 			push: async (mutation: RecordMutation) => {
 				pushed.push(mutation.mutationId);
@@ -682,12 +683,35 @@ describe('drainMutationQueue — retry backoff (ADR 0012)', () => {
 		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 1, failed: 1, deferred: 1 });
 		expect(pushed).toEqual(['head', 'checkout']);
 		expect(await q.pending()).toEqual([
-			expect.objectContaining({ mutationId: 'checkout', attempts: 1, nextAttemptAt: at(2_000) }),
-			expect.objectContaining({ mutationId: 'unrelated', attempts: 1, nextAttemptAt: at(60_000) }),
+			expect.objectContaining({ mutationId: 'checkout', attempts: 1, nextAttemptAt: at(101_000) }),
+			expect.objectContaining({ mutationId: 'unrelated', attempts: 1, nextAttemptAt: at(160_000) }),
 		]);
 
 		pushed.length = 0;
 		expect(await drainMutationQueue(input)).toMatchObject({ pushed: 0, failed: 0, deferred: 2 });
+		expect(pushed).toEqual([]);
+	});
+
+	it('releases nothing for an explicit row queued ahead of the drain clock', async () => {
+		const q = await queueWith(
+			mut({ mutationId: 'head' }),
+			// The device clock stepped back after the press: queuedAt is in the drain's future.
+			mut({ mutationId: 'checkout', queuedAt: at(200_000) })
+		);
+		const [head, checkout] = await q.pending();
+		await q.replace({ ...checkout, explicit: true });
+		await q.reschedule({ ...head, attempts: 7, nextAttemptAt: at(150_000) });
+		const pushed: string[] = [];
+		const result = await drainMutationQueue({
+			queue: q,
+			now: () => 100_000,
+			backoff: NO_JITTER_BACKOFF,
+			push: async (mutation: RecordMutation) => {
+				pushed.push(mutation.mutationId);
+				return ok(mutation);
+			},
+		});
+		expect(result).toMatchObject({ pushed: 0, deferred: 1 });
 		expect(pushed).toEqual([]);
 	});
 

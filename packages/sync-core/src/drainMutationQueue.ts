@@ -579,6 +579,9 @@ export async function drainMutationQueue(input: {
 		if (mutation.explicit !== true || (mutation.attempts ?? 0) !== 0) continue;
 		const key = recordKey(mutation);
 		const queuedAt = Date.parse(mutation.queuedAt);
+		// A queue time ahead of the drain clock (the clock stepped back) releases nothing, so a
+		// skewed clock can only miss the release, never repeat it on every drain.
+		if (!(queuedAt <= now())) continue;
 		freshExplicitQueuedAt.set(key, Math.max(queuedAt, freshExplicitQueuedAt.get(key) ?? -Infinity));
 	}
 	// When a backing-off row last failed: its gate minus the (deterministic) delay that set it.

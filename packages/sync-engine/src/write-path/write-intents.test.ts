@@ -362,6 +362,7 @@ describe('enqueueWriteIntent', () => {
 		});
 		await enqueueWriteIntent({
 			...deps,
+			now: () => '2026-08-04T00:00:05.000Z',
 			intent: {
 				collection: 'orders',
 				operation: 'update',
@@ -370,6 +371,11 @@ describe('enqueueWriteIntent', () => {
 				...(incomingExplicit ? { explicit: true } : {}),
 			} as never,
 		});
+		// An explicit write is stamped with its own time even when it coalesces (the drain's
+		// backoff release keys on it); an ordinary coalesce keeps the original queue time.
+		expect(queued.get('mutation-2')?.queuedAt).toBe(
+			priorExplicit || incomingExplicit ? '2026-08-04T00:00:05.000Z' : '2026-08-04T00:00:00.000Z'
+		);
 
 		expect([...queued.values()].map((row) => row.mutationId)).toEqual(
 			priorExplicit ? ['mutation-1', 'mutation-2'] : ['mutation-2']

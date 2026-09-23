@@ -27,10 +27,13 @@ export function decideWritePlacement(input: {
 
 	const pendingRows = rows.filter((row) => row.status === undefined || row.status === 'pending');
 	const candidate = pendingRows.at(-1);
+	// An explicit row is awaited by its mutationId, and coalescing replaces that id, so a new
+	// edit queues behind it. A recovery still coalesces: a recovered create must stay ahead of
+	// the update it folds into, and that outranks the waiter.
 	const canUseCandidate =
 		canCoalesce &&
 		candidate !== undefined &&
-		candidate.explicit !== true &&
+		(isRecovery || candidate.explicit !== true) &&
 		(candidate.attempts ?? 0) === 0;
 	if (
 		canUseCandidate &&
