@@ -47,6 +47,51 @@ type SentryEventLike = {
 	contexts?: Record<string, unknown>;
 };
 
+export function describeBareException<T extends SentryEventLike>(
+	event: T,
+	hint?: { originalException?: unknown }
+): T {
+	try {
+		const err = hint?.originalException;
+		const bare = event.exception?.values?.some(
+			({ value }) => !value || value === 'No error message'
+		);
+		if (err === undefined || !bare) return event;
+		const fields = err as { name?: unknown; code?: unknown; stack?: unknown } | null;
+		const thrown: Record<string, unknown> = { keys: [], hasStack: false };
+		const readers: Record<string, () => unknown> = {
+			typeof: () => typeof err,
+			tag: () => Object.prototype.toString.call(err),
+			constructor: () => fields?.constructor?.name ?? null,
+			name: () => (typeof fields?.name === 'string' ? fields.name : null),
+			code: () => (['string', 'number'].includes(typeof fields?.code) ? fields?.code : null),
+			keys: () => (err !== null && typeof err === 'object' ? Object.keys(err).slice(0, 20) : []),
+			hasStack: () => typeof fields?.stack === 'string' && fields.stack.length > 0,
+			stackHead: () =>
+				thrown.hasStack ? redactSensitiveText(String(fields?.stack)).slice(0, 500) : null,
+			string: () => redactSensitiveText(String(err)).slice(0, 200),
+		};
+		for (const [key, read] of Object.entries(readers)) {
+			try {
+				thrown[key] = read();
+			} catch {
+				thrown[key] = thrown[key] ?? null;
+			}
+		}
+		event.contexts = { ...event.contexts, thrown };
+	} catch {
+		// A diagnostic must never hide the event it was meant to explain.
+	}
+	return event;
+}
+
+export function prepareEvent<T extends SentryEventLike>(
+	event: T,
+	hint?: { originalException?: unknown }
+): T {
+	return scrubEvent(describeBareException(event, hint));
+}
+
 function stripOrigin(url: string): string {
 	try {
 		const parsedUrl = new URL(url);

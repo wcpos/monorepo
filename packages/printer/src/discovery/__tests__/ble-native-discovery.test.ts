@@ -5,6 +5,8 @@ import { discover } from '../ble-native-discovery';
 const { manager, state } = vi.hoisted(() => {
 	const state: { filtered: unknown[]; unfiltered: unknown[] } = { filtered: [], unfiltered: [] };
 	const manager = {
+		state: vi.fn(),
+		onStateChange: vi.fn(),
 		startDeviceScan: vi.fn(
 			async (
 				uuids: string[] | null,
@@ -28,6 +30,8 @@ vi.mock('react-native-ble-plx', () => ({
 }));
 
 beforeEach(() => {
+	manager.state.mockReset().mockResolvedValue('PoweredOn');
+	manager.onStateChange.mockReset();
 	state.filtered = [];
 	state.unfiltered = [];
 	manager.startDeviceScan.mockClear();
@@ -75,5 +79,38 @@ describe('generic BLE discovery', () => {
 		expect(manager.startDeviceScan).toHaveBeenCalledTimes(2);
 		expect(manager.startDeviceScan.mock.calls[1][0]).toBeNull();
 		expect(manager.stopDeviceScan).toHaveBeenCalledTimes(2);
+	});
+
+	it('waits for Unknown to become PoweredOn before scanning', async () => {
+		manager.state.mockResolvedValue('Unknown');
+		const remove = vi.fn();
+		let listener: (state: string) => void = () => {};
+		manager.onStateChange.mockImplementation((callback) => {
+			listener = callback;
+			return { remove };
+		});
+		state.filtered = [{ id: 'aa:11', name: 'NT-1809' }];
+		const pending = discover({ timeoutMs: 200 });
+		await vi.waitFor(() => expect(manager.onStateChange).toHaveBeenCalled());
+		expect(manager.startDeviceScan).not.toHaveBeenCalled();
+		listener('PoweredOn');
+		expect((await pending).map((row) => row.address)).toEqual(['ble:aa:11']);
+		expect(manager.startDeviceScan).toHaveBeenCalledTimes(1);
+		expect(remove).toHaveBeenCalledTimes(1);
+	});
+
+	it('skips scanning when Bluetooth is PoweredOff', async () => {
+		manager.state.mockResolvedValue('PoweredOff');
+		await expect(discover({ timeoutMs: 30 })).resolves.toEqual([]);
+		expect(manager.startDeviceScan).not.toHaveBeenCalled();
+	});
+
+	it('stops waiting when Unknown outlasts the budget', async () => {
+		manager.state.mockResolvedValue('Unknown');
+		const remove = vi.fn();
+		manager.onStateChange.mockReturnValue({ remove });
+		await expect(discover({ timeoutMs: 30 })).resolves.toEqual([]);
+		expect(manager.startDeviceScan).not.toHaveBeenCalled();
+		expect(remove).toHaveBeenCalledTimes(1);
 	});
 });
