@@ -5,6 +5,7 @@ import { useRootContext as usePopoverRoot } from '@rn-primitives/popover';
 import { useRootContext as useSelectRoot } from '@rn-primitives/select';
 
 import * as C from './index';
+import { DeviceScope } from '../lib/device';
 import { Select, SelectTrigger, SelectValue } from './index';
 
 const examples = [
@@ -34,8 +35,9 @@ function OpenMulti() {
 	return null;
 }
 const sizes = ['Small', 'Medium', 'Large', 'Extra large'].map((label) => ({ value: label, label }));
-export const stories = closed.concat(
-	[false, true].map((multiple) => ({
+export const stories = [
+	...closed,
+	...[false, true].map((multiple) => ({
 		id: multiple ? 'multi-open' : 'open',
 		isolated: true,
 		render: () => (
@@ -61,5 +63,26 @@ export const stories = closed.concat(
 				</C.Select>
 			</View>
 		),
-	}))
-);
+	})),
+	{
+		id: 'sheet',
+		isolated: true,
+		render: () => (
+			<DeviceScope phone>
+				<View className="border-border bg-background relative h-96 w-full overflow-hidden rounded-lg border [&>*]:flex-1">
+					<C.Select value={sizes[2]}>
+						<OpenSingle />
+						<C.SelectTrigger testID="sheet-size">
+							<C.SelectValue placeholder="Size" />
+						</C.SelectTrigger>
+						<C.SelectContent inline>
+							{[...sizes, { value: 'XXL', label: 'XXL' }].map((option, index) => (
+								<C.SelectItem key={option.value} {...option} disabled={index === 4} />
+							))}
+						</C.SelectContent>
+					</C.Select>
+				</View>
+			</DeviceScope>
+		),
+	},
+];
