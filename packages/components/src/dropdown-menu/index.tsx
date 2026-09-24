@@ -65,8 +65,11 @@ function MenuScrim(p: OverlayScrimProps) {
 
 /** Text-only children (a string, a number, an interpolation's array of them) need a Text. */
 function isTextChildren(children: React.ReactNode): boolean {
-	const parts = Array.isArray(children) ? children : [children];
-	return parts.every((part) => typeof part === 'string' || typeof part === 'number');
+	// toArray drops a conditional's false, null and undefined, so `{flag && <Icon />}` beside a
+	// string still reads as text when the flag is off.
+	return React.Children.toArray(children).every(
+		(part) => typeof part === 'string' || typeof part === 'number'
+	);
 }
 
 function DropdownMenuSubTrigger(props: React.ComponentProps<typeof AnchoredSubTrigger>) {
