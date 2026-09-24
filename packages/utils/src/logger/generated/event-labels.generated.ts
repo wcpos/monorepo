@@ -298,7 +298,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Cancelled a sale',
 		descriptionKey: 'health.logs.event_description.checkout_cancelled',
 		description: 'The sale was abandoned and its payments reversed.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'checkout.completed': {
 		type: 'checkout.completed',
@@ -307,14 +307,14 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Completed a sale',
 		descriptionKey: 'health.logs.event_description.checkout_completed',
 		description: 'Every payment on the order was taken and the order was closed.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'checkout.opened': {
 		type: 'checkout.opened',
 		domain: 'CHECKOUT',
 		key: 'health.logs.event.checkout_opened',
 		label: 'Started taking payment',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'checkout.order-refresh': {
 		type: 'checkout.order-refresh',
@@ -324,7 +324,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.checkout_order_refresh',
 		description:
 			'After a payment, the till asked your store for its copy of the order. A refresh that fails or times out is not a problem on its own — the sale completes from the local record.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'checkout.provenance-skipped': {
 		type: 'checkout.provenance-skipped',
@@ -334,7 +334,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.checkout_provenance_skipped',
 		description:
 			'This till is not bound to a register, so the sale carries no register or sale number.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'checkout.split-planned': {
 		type: 'checkout.split-planned',
@@ -343,7 +343,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Split the bill',
 		descriptionKey: 'health.logs.event_description.checkout_split_planned',
 		description: 'The sale was divided — evenly, by amount, by percentage, or by item.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'connectivity.device-offline': {
 		type: 'connectivity.device-offline',
@@ -683,14 +683,14 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.payment_authorized_offline',
 		description:
 			'The reader approved the card with no connection to your store. The money is committed on the card and is claimed once the connection returns.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.cancelled': {
 		type: 'payment.cancelled',
 		domain: 'CHECKOUT',
 		key: 'health.logs.event.payment_cancelled',
 		label: 'Cashier cancelled a card payment',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.captured': {
 		type: 'payment.captured',
@@ -699,7 +699,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Card payment taken',
 		descriptionKey: 'health.logs.event_description.payment_captured',
 		description: 'The terminal charged the card and your store recorded the payment.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.declined': {
 		type: 'payment.declined',
@@ -708,7 +708,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'The terminal did not take the payment',
 		descriptionKey: 'health.logs.event_description.payment_declined',
 		description: 'The card was declined, cancelled on the reader, or the payment expired.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.not-mirrored': {
 		type: 'payment.not-mirrored',
@@ -718,7 +718,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.payment_not_mirrored',
 		description:
 			'Your store recorded the payment; this till could not save its own copy of the order and refreshes it from the store.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.recorded': {
 		type: 'payment.recorded',
@@ -727,7 +727,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Took a payment',
 		descriptionKey: 'health.logs.event_description.payment_recorded',
 		description: 'A payment was taken at the till and added to the order.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.recorded-offline': {
 		type: 'payment.recorded-offline',
@@ -737,7 +737,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.payment_recorded_offline',
 		description:
 			'A payment was taken with no connection to your store. It is held on this device and sent when the connection returns.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.refused': {
 		type: 'payment.refused',
@@ -747,7 +747,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.payment_refused',
 		description:
 			'The store would not apply a payment taken at the till — usually because the order was already paid, or the amount was more than it owed.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.released': {
 		type: 'payment.released',
@@ -756,7 +756,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'Released a card approval',
 		descriptionKey: 'health.logs.event_description.payment_released',
 		description: 'An approval the till was holding was given up, so the money is no longer held.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.settlement': {
 		type: 'payment.settlement',
@@ -766,7 +766,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.payment_settlement',
 		description:
 			'An offline card approval is being claimed from your store. It retries on its own; only a settlement that gives up needs your attention.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.void-refused': {
 		type: 'payment.void-refused',
@@ -775,7 +775,7 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		label: 'A payment could not be reversed',
 		descriptionKey: 'health.logs.event_description.payment_void_refused',
 		description: 'Your store refused to reverse a payment, so that money is still held.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.void-unknown': {
 		type: 'payment.void-unknown',
@@ -785,14 +785,14 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		descriptionKey: 'health.logs.event_description.payment_void_unknown',
 		description:
 			'The till asked your store to reverse a payment and the answer never arrived, so the money may or may not still be held. Check the order before refunding by hand.',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'payment.voided': {
 		type: 'payment.voided',
 		domain: 'CHECKOUT',
 		key: 'health.logs.event.payment_voided',
 		label: 'Reversed a payment',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'product.browse-window.approximate': {
 		type: 'product.browse-window.approximate',
@@ -1012,21 +1012,21 @@ export const EVENT_LABELS: Record<SyncEventType, EventLabelEntry> = {
 		domain: 'CHECKOUT',
 		key: 'health.logs.event.reader_battery_low',
 		label: 'Card reader battery is low',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'reader.connected': {
 		type: 'reader.connected',
 		domain: 'CHECKOUT',
 		key: 'health.logs.event.reader_connected',
 		label: 'Card reader connected',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'reader.disconnected': {
 		type: 'reader.disconnected',
 		domain: 'CHECKOUT',
 		key: 'health.logs.event.reader_disconnected',
 		label: 'Card reader disconnected',
-		introducedIn: '1.11.0',
+		introducedIn: '2.0.0',
 	},
 	'register.approval-granted': {
 		type: 'register.approval-granted',

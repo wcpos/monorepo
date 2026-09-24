@@ -4,7 +4,7 @@ import semver from 'semver';
 /**
  * Oldest WCPOS plugin release this app can talk to.
  *
- * Requires the 1.11.0 wire contract: bare variation records with
+ * Requires the 2.0.0 wire contract: bare variation records with
  * `_rxdb_revision`, a bare `/resolve/barcode` match, and a unified
  * `/orders/pull` checkpoint. The `wcpos/v2` namespace alone is insufficient.
  *
@@ -12,7 +12,7 @@ import semver from 'semver';
  * before any app state exists, and importing it from `use-app-info` would pull
  * the whole app-state context in with it.
  */
-export const MINIMUM_WCPOS_PLUGIN_VERSION = '1.11.0';
+export const MINIMUM_WCPOS_PLUGIN_VERSION = '2.0.0';
 
 export function isWcposPluginCompatible(pluginVersion: string | undefined): boolean {
 	if (!pluginVersion) return false;
