@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, type Role, ScrollView, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
 
@@ -57,6 +57,10 @@ function Select({ multiple, ...props }: SelectRootProps) {
 const useRootContext = SelectPrimitive.useRootContext;
 
 const SelectSheetContext = React.createContext<{ close: () => void } | null>(null);
+// The sheet's rows are options; web gives them the listbox parent ARIA asks for, native the
+// list role it has. An accessibility table beside the scroll-button reads, not overlay plumbing.
+const SHEET_LIST_ROLE: Role = Platform.OS === 'web' ? ('listbox' as Role) : 'list';
+const SHEET_LABEL_TEXT = 'text-muted-foreground text-sm font-semibold tracking-wide uppercase';
 function SelectGroup(props: SelectPrimitive.GroupProps) {
 	if (React.useContext(SelectSheetContext)) return <View {...props} role="group" />;
 	return <SelectPrimitive.Group {...props} />;
@@ -188,8 +192,12 @@ function SelectSingleContent({
 		>
 			{phone ? (
 				<SelectSheetContext.Provider value={{ close: () => onOpenChange(false) }}>
-					<OverlaySheetPanel testID={props.testID} className={className}>
-						<ScrollView>{children}</ScrollView>
+					<OverlaySheetPanel testID={props.testID} className={className} style={props.style}>
+						<ScrollView>
+							<View role={SHEET_LIST_ROLE} className="gap-2">
+								{children}
+							</View>
+						</ScrollView>
 					</OverlaySheetPanel>
 				</SelectSheetContext.Provider>
 			) : (
@@ -254,9 +262,7 @@ function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
 	if (React.useContext(SelectSheetContext))
 		return (
 			<View testID={props.testID} className={cn('h-9 justify-center px-2', className)}>
-				<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-					{props.children}
-				</Text>
+				<Text className={SHEET_LABEL_TEXT}>{props.children}</Text>
 			</View>
 		);
 	return (
@@ -324,12 +330,13 @@ function SelectSheetItem({ className, children, ...props }: SelectPrimitive.Item
 				props.disabled && 'web:pointer-events-none opacity-45',
 				className
 			)}
-			onPress={() => {
+			onPress={(e) => {
+				props.onPress?.(e);
 				onValueChange({ value: props.value, label: props.label });
-				onOpenChange(false);
+				if (props.closeOnPress !== false) onOpenChange(false);
 			}}
 		>
-			<Text className="text-foreground text-base">
+			<Text className="text-foreground flex-1 text-base">
 				{(children as React.ReactNode) ?? props.label}
 			</Text>
 			{value?.value === props.value && <Icon name="check" className="text-primary ml-auto" />}

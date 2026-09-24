@@ -14,6 +14,7 @@ beforeEach(() => {
 });
 // Wrong payloads, missing selection marks, and accidental Radix sheet children must fail.
 it('emits an option before closing and marks only the selected row', () => {
+	const pressed = jest.fn();
 	render(
 		<C.SelectContent inline testID="panel">
 			<C.SelectGroup>
@@ -22,11 +23,21 @@ it('emits an option before closing and marks only the selected row', () => {
 				<C.SelectItem testID="a" value="a" label="A" />
 				<C.SelectItem testID="b" value="b" label="B" />
 				<C.SelectItem testID="disabled" value="c" label="C" disabled />
+				<C.SelectItem testID="stay" value="d" label="D" closeOnPress={false} onPress={pressed} />
 			</C.SelectGroup>
 		</C.SelectContent>
 	);
 	expect(screen.getAllByRole('dialog')).toHaveLength(1);
+	// The rows sit in a listbox on web; the label reads at the floor.
+	expect(screen.getByRole('listbox')).toBeInTheDocument();
 	expect(screen.getByRole('group')).toBeInTheDocument();
+	expect(screen.getByTestId('label').querySelector('.text-sm')).not.toBeNull();
+	// A caller's press handler runs, and closeOnPress={false} keeps the sheet open.
+	fireEvent.click(screen.getByTestId('stay'));
+	expect(pressed).toHaveBeenCalledTimes(1);
+	expect(mockRoot.onValueChange).toHaveBeenCalledWith({ value: 'd', label: 'D' });
+	expect(mockRoot.onOpenChange).not.toHaveBeenCalled();
+	mockRoot.onValueChange.mockClear();
 	expect(document.querySelector('[data-primitive]')).toBeNull();
 	expect(screen.getByTestId('b')).toHaveAttribute('aria-selected', 'true');
 	expect(screen.getByTestId('b').querySelector('[data-icon="check"]')).toHaveClass('ml-auto');

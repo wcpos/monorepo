@@ -1,11 +1,10 @@
 import * as React from 'react';
-import { Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleProp, Text, View, ViewStyle } from 'react-native';
 
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 
 import { DropdownMenuItem } from './item';
-import { SheetContext, useMenuSheet } from './sheet-context';
-import { Checkbox } from '../checkbox';
+import { SHEET_LABEL_TEXT, SHEET_ROW_ROLES, SheetContext, useMenuSheet } from './sheet-context';
 import { useIsPhone } from '../lib/device';
 import { Icon } from '../icon';
 import {
@@ -16,7 +15,7 @@ import {
 	OverlayShell,
 } from '../lib/overlay';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext, Text as ThemedText } from '../text';
 
 import type { TextProps } from '../text';
 
@@ -67,7 +66,11 @@ function MenuScrim(p: OverlayScrimProps) {
 function DropdownMenuSubTrigger(props: React.ComponentProps<typeof AnchoredSubTrigger>) {
 	return useMenuSheet() ? (
 		<DropdownMenuLabel inset={props.inset} testID={props.testID} className={props.className}>
-			<View className="flex-row items-center gap-2">{props.children}</View>
+			{typeof props.children === 'string' ? (
+				props.children
+			) : (
+				<View className="flex-row items-center gap-2">{props.children}</View>
+			)}
 		</DropdownMenuLabel>
 	) : (
 		<AnchoredSubTrigger {...props} />
@@ -158,8 +161,14 @@ function DropdownMenuContent({
 			>
 				{phone ? (
 					<SheetContext.Provider value={{ close: () => onOpenChange(false) }}>
-						<OverlaySheetPanel testID={props.testID} className={className}>
-							{props.children as React.ReactNode}
+						<OverlaySheetPanel testID={props.testID} className={className} style={props.style}>
+							{/* A long menu (the user menu's stores) scrolls inside the bounded panel; the rows
+							    sit in a menu container, eight points apart (the design rule's target gap). */}
+							<ScrollView>
+								<View role="menu" className="gap-2">
+									{props.children as React.ReactNode}
+								</View>
+							</ScrollView>
 						</OverlaySheetPanel>
 					</SheetContext.Provider>
 				) : (
@@ -195,7 +204,7 @@ function DropdownMenuCheckboxItem({
 	if (sheet)
 		return (
 			<Pressable
-				role={'menuitemcheckbox' as React.ComponentProps<typeof Pressable>['role']}
+				role={SHEET_ROW_ROLES.checkbox}
 				aria-checked={checked}
 				disabled={props.disabled}
 				testID={props.testID}
@@ -204,12 +213,23 @@ function DropdownMenuCheckboxItem({
 					props.disabled && 'web:pointer-events-none opacity-45',
 					className
 				)}
-				onPress={() => {
+				onPress={(e) => {
+					props.onPress?.(e);
 					props.onCheckedChange?.(!checked);
 					if (props.closeOnPress !== false) sheet.close();
 				}}
 			>
-				<Checkbox checked={checked} onCheckedChange={() => {}} className="pointer-events-none" />
+				{/* The row is the control: a presentational mark in the checkbox's skin, not a
+				    second focusable Checkbox inside a menu item (CodeRabbit, #2215). */}
+				<View
+					aria-hidden
+					className={cn(
+						'border-border bg-card size-5 items-center justify-center rounded-sm border',
+						checked && 'bg-primary border-primary'
+					)}
+				>
+					{checked && <Icon name="check" className="text-primary-foreground size-3" />}
+				</View>
 				<>{children}</>
 			</Pressable>
 		);
@@ -243,7 +263,7 @@ function DropdownMenuRadioItem({
 	if (sheet)
 		return (
 			<Pressable
-				role={'menuitemradio' as React.ComponentProps<typeof Pressable>['role']}
+				role={SHEET_ROW_ROLES.radio}
 				aria-checked={radio?.value === props.value}
 				disabled={props.disabled}
 				testID={props.testID}
@@ -252,7 +272,8 @@ function DropdownMenuRadioItem({
 					props.disabled && 'web:pointer-events-none opacity-45',
 					className
 				)}
-				onPress={() => {
+				onPress={(e) => {
+					props.onPress?.(e);
 					radio?.onValueChange(props.value);
 					if (props.closeOnPress !== false) sheet.close();
 				}}
@@ -293,9 +314,15 @@ function DropdownMenuLabel({
 				testID={props.testID}
 				className={cn('h-9 justify-center px-2', inset && 'pl-8', className)}
 			>
-				<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-					{props.children}
-				</Text>
+				{/* A composed child (an icon and a Text) reads the label style from context; RN
+				    text styles do not pass through a View (CodeRabbit, #2215). */}
+				<TextClassContext.Provider value={SHEET_LABEL_TEXT}>
+					{typeof props.children === 'string' ? (
+						<ThemedText className={SHEET_LABEL_TEXT}>{props.children}</ThemedText>
+					) : (
+						props.children
+					)}
+				</TextClassContext.Provider>
 			</View>
 		);
 	return (

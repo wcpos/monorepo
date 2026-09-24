@@ -92,14 +92,20 @@ describe('phone sheet', () => {
 	});
 	it('toggles checkbox and renders the selected radio dot', () => {
 		const checked = jest.fn(),
-			selected = jest.fn();
+			selected = jest.fn(),
+			pressed = jest.fn();
 		render(
 			<C.DropdownMenuContent inline>
-				<C.DropdownMenuCheckboxItem testID="checkbox" checked={false} onCheckedChange={checked}>
+				<C.DropdownMenuCheckboxItem
+					testID="checkbox"
+					checked={false}
+					onCheckedChange={checked}
+					onPress={pressed}
+				>
 					Check
 				</C.DropdownMenuCheckboxItem>
 				<C.DropdownMenuRadioGroup value="b" onValueChange={selected}>
-					<C.DropdownMenuRadioItem testID="a" value="a">
+					<C.DropdownMenuRadioItem testID="a" value="a" onPress={pressed}>
 						A
 					</C.DropdownMenuRadioItem>
 					<C.DropdownMenuRadioItem testID="b" value="b">
@@ -109,6 +115,12 @@ describe('phone sheet', () => {
 			</C.DropdownMenuContent>
 		);
 		expect(document.querySelector('[data-primitive]')).toBeNull();
+		// The rows sit in a menu container; the check mark is presentational, not a nested control.
+		expect(screen.getByRole('menu')).toBeInTheDocument();
+		expect(screen.getByTestId('checkbox')).toHaveAttribute('role', 'menuitemcheckbox');
+		expect(screen.getByTestId('checkbox').querySelector('[role]')).toBeNull();
+		expect(screen.getByTestId('checkbox').querySelector('[data-icon="check"]')).toBeNull();
+		expect(screen.getByTestId('a')).toHaveAttribute('role', 'menuitemradio');
 		expect(screen.getByTestId('a').querySelector('.bg-primary')).toBeNull();
 		expect(screen.getByTestId('b').querySelector('.bg-primary')).not.toBeNull();
 		expect(screen.getByTestId('b')).toHaveAttribute('aria-checked', 'true');
@@ -116,6 +128,9 @@ describe('phone sheet', () => {
 		expect(checked).toHaveBeenCalledWith(true);
 		fireEvent.click(screen.getByTestId('a'));
 		expect(selected).toHaveBeenCalledWith('a');
+		// The caller's own press handler runs on both row kinds, before the update and the close.
+		expect(pressed).toHaveBeenCalledTimes(2);
+		expect(pressed.mock.invocationCallOrder[0]).toBeLessThan(checked.mock.invocationCallOrder[0]);
 		expect(mockRoot.onOpenChange.mock.calls).toEqual([[false], [false]]);
 	});
 	it('flattens submenus and keeps label, separator and hint styling', () => {
@@ -135,6 +150,9 @@ describe('phone sheet', () => {
 		expect(document.querySelector('[data-primitive]')).toBeNull();
 		expect(screen.getByTestId('section')).toHaveTextContent('Section');
 		expect(screen.getByTestId('section').querySelector('.uppercase')).not.toBeNull();
+		// The label reads at the floor (text-sm), not below it (the design rule; Codex on #2215).
+		expect(screen.getByTestId('section').querySelector('.text-sm')).not.toBeNull();
+		expect(screen.getByTestId('section').querySelector('.text-xs')).toBeNull();
 		expect(screen.getByTestId('nested')).toHaveAttribute('role', 'menuitem');
 		expect(screen.getByTestId('hint')).toHaveClass('ml-auto');
 		expect(screen.getByTestId('separator')).toHaveClass('-mx-2');
