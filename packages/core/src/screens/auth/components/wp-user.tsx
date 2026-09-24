@@ -14,6 +14,7 @@ import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { Loader } from '@wcpos/components/loader';
+import { Text } from '@wcpos/components/text';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
@@ -51,7 +52,6 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 
 	const displayName = wpUser.display_name || 'Unknown User';
 	const initials = getInitials(displayName);
-	const avatarVariant = isValid ? 'success' : 'warning';
 	const showReauth = !isLoading && !isValid;
 	const roleLabel = React.useMemo(() => {
 		const roles = (wpUser as unknown as { roles?: string[] }).roles;
@@ -134,12 +134,10 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 		});
 	}, [wpUser, site]);
 
-	const trailing = isLoading ? (
-		<Loader size="xs" variant="muted" />
-	) : showReauth ? (
+	const trailing = showReauth ? (
 		<Button
-			size="xs"
-			variant="outline-warning"
+			size="sm"
+			variant="outline"
 			onPress={(e) => {
 				e.stopPropagation();
 				void promptAsync();
@@ -147,14 +145,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 		>
 			<ButtonText>{t('auth.re_authenticate', { _tags: 'core' })}</ButtonText>
 		</Button>
-	) : (
-		<StatusBadge
-			label={
-				isValid ? t('common.logged_in', { _tags: 'core' }) : t('common.expired', { _tags: 'core' })
-			}
-			variant={isValid ? 'success' : 'warning'}
-		/>
-	);
+	) : null;
 
 	return (
 		<>
@@ -166,21 +157,29 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 				// so only apply the warning variant to unselected expired rows —
 				// otherwise the currently-selected expired user loses its selected
 				// highlight despite driving StoreSelect below.
-				variant={showReauth && !isSelected ? 'warning' : undefined}
+				variant={isSelected ? 'selected' : showReauth ? 'warning' : 'default'}
 				leading={
 					<Avatar
 						source={wpUser.avatar_url ? { uri: wpUser.avatar_url } : undefined}
 						fallback={initials}
-						variant={avatarVariant}
 						size="md"
 					/>
 				}
-				title={displayName}
-				subtitle={roleLabel}
 				trailing={trailing}
 				removable
 				onRemove={() => setDeleteDialogOpened(true)}
-			/>
+			>
+				<Text className="text-base font-medium">{displayName}</Text>
+				{roleLabel && <Text className="text-muted-foreground text-sm">{roleLabel}</Text>}
+				{isLoading ? (
+					<Loader size="xs" variant="muted" />
+				) : (
+					<StatusBadge
+						label={isValid ? t('auth.signed_in') : t('auth.sign_in_again')}
+						variant={isValid ? 'success' : 'warning'}
+					/>
+				)}
+			</ListItem>
 
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>

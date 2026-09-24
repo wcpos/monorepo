@@ -51,7 +51,7 @@ export function WPUsers({ site }: WpUsersProps) {
 		<VStack space="md">
 			{/* Users Section */}
 			<VStack space="sm">
-				<Text className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+				<Text className="text-sm font-semibold">
 					{t('auth.wordpress_users', { _tags: 'core' })}
 				</Text>
 

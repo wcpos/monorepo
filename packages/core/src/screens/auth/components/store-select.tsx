@@ -6,7 +6,7 @@ import { of } from 'rxjs';
 import { distinctUntilChanged, map, startWith, switchMap, tap } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Icon } from '@wcpos/components/icon';
+import { EmptyState } from '@wcpos/components/empty-state';
 import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -163,21 +163,24 @@ export function StoreSelect({
 		<VStack space="md">
 			{/* Store Selection */}
 			<VStack space="sm">
-				<Text className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+				<Text className="text-sm font-semibold">
 					{stores.length > 1
 						? t('auth.select_a_store', { _tags: 'core' })
 						: t('auth.store', { _tags: 'core' })}
 				</Text>
 				{stores.length === 0 ? (
-					<Text className="text-muted-foreground text-sm">
-						{t('auth.no_stores_available', { _tags: 'core' })}
-					</Text>
+					<EmptyState
+						kind="empty"
+						size="inline"
+						title={t('auth.no_stores_available')}
+						description={t('auth.set_up_store_on_server')}
+					/>
 				) : (
 					<RadioGroup
 						value={selectedStoreLocalID ?? ''}
 						onValueChange={(val) => onStoreSelect(val)}
 					>
-						<VStack space="xs">
+						<VStack space="sm">
 							{stores.map((store) => (
 								<Pressable
 									key={store.localID}
@@ -189,20 +192,20 @@ export function StoreSelect({
 									// (woocommerce-pos#1548).
 									testID={store.id != null ? `store-option-${store.id}` : undefined}
 									onPress={() => onStoreSelect(store.localID ?? null)}
-									className={`web:cursor-pointer web:transition-colors rounded-lg border p-3 ${
+									className={`active:bg-muted min-h-row justify-center rounded-lg border px-3 py-2 ${
 										selectedStoreLocalID === store.localID
-											? 'border-primary bg-primary/10'
-											: 'border-border web:hover:border-primary/40 web:hover:bg-primary/5'
+											? 'border-primary bg-muted'
+											: 'border-border bg-card'
 									}`}
 								>
 									<RadioGroupOption
 										value={store.localID ?? ''}
 										label={store.name ?? t('common.default')}
 										className="items-center"
-										labelClassName="text-sm font-medium"
+										labelClassName="text-base"
 										right={
 											store.id != null ? (
-												<Text className="text-muted-foreground text-xs">#{store.id}</Text>
+												<Text className="text-muted-foreground ml-auto text-sm">#{store.id}</Text>
 											) : null
 										}
 									/>
@@ -221,7 +224,7 @@ export function StoreSelect({
 				}}
 				disabled={!canLogin}
 				size="lg"
-				rightIcon={<Icon name="arrowRight" size="sm" className="fill-primary-foreground" />}
+				className="w-full"
 			>
 				<ButtonText>{t('auth.open_pos', { _tags: 'core' })}</ButtonText>
 			</Button>

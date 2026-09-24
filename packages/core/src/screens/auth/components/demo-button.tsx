@@ -1,8 +1,6 @@
 import * as React from 'react';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Icon } from '@wcpos/components/icon';
-import { Loader } from '@wcpos/components/loader';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -116,15 +114,9 @@ export function DemoButton() {
 			testID="enter-demo-store-button"
 			onPress={handleDemoLogin}
 			disabled={loading}
-			variant="muted"
+			variant="ghost"
 			size="sm"
-			rightIcon={
-				loading ? (
-					<Loader variant="muted" size="xs" />
-				) : (
-					<Icon variant="muted" size="xs" name="arrowRight" />
-				)
-			}
+			loading={loading}
 		>
 			<ButtonText>{t('auth.enter_demo_store')}</ButtonText>
 		</Button>
