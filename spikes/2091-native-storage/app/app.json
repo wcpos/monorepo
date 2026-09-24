@@ -25,7 +25,8 @@
     "jsEngine": "hermes",
     "plugins": [
       "expo-sqlite",
-      "./with-cleartext"
+      "./with-cleartext",
+      "./with-show-when-locked"
     ]
   }
 }

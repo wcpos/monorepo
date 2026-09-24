@@ -127,8 +127,14 @@ async function waitResult(promise) {
 }
 async function run(job) {
   const { promise } = await start(job);
-  const result = await waitResult(promise);
-  if (await device.alive()) await device.stop();
+  let result;
+  try { result = await waitResult(promise); }
+  finally {
+    // A timed-out job leaves the app alive and busy; the next launch would only deliver an intent
+    // to that instance and hang (Pixel, 2026-09-24). Stop it whatever the outcome; a device that
+    // cannot be reached here has already produced its own error.
+    try { if (await device.alive()) await device.stop(); } catch {}
+  }
   return result;
 }
 try {

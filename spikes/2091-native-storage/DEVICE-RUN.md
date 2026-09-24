@@ -80,6 +80,14 @@ a published `expo-modules-core` release containing this fix, not this spike patc
    The local release APK uses the debug keystore. The driver sets
    `adb reverse tcp:48091 tcp:48091` and uses `http://127.0.0.1:48091`; keep USB connected.
 
+   Between rows the Pixel may lock and doze (or start its charging screen saver), and a launch
+   behind a secure lock screen never becomes visible. The app's activity therefore shows over
+   the keyguard and turns the screen on (`app/with-show-when-locked.js`), and the driver sends
+   `KEYCODE_WAKEUP` before each launch. If the phone has a screen saver enabled for charging,
+   turn it off for the run (`settings put secure screensaver_enabled 0`, restore to `1` after):
+   a running screen saver holds the foreground and `am start -W` waits on it until the driver's
+   command timeout fails the row.
+
 2. Run:
 
    ```sh

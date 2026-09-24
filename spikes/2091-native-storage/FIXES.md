@@ -511,3 +511,25 @@ No prebuild is needed (no native change).
 
 When done, print: the harness test count and result, both build output paths with modification
 times, and the commit hash.
+
+# Round 11 (the Pixel locked between rows and the driver left a busy app behind, 2026-09-24 morning)
+
+Owner round, applied directly (no Codex delegation). Two failures on the Pixel's resumed bench:
+
+- The shipped engine's 20k row timed out in its fresh-seed cell (30 minutes silent, nine cells
+  kept, the same shape as on the iPad). `run()` threw from `waitResult` before its stop call, so
+  the busy app instance stayed alive; the next row's `am start -W` only delivered an intent to it
+  and hung until the driver's 60 s command timeout, failing that row as a launch failure. `run()`
+  now stops a live target in a `finally`, whatever the outcome (a device that cannot be reached
+  there has already produced its own error).
+- Once the app was stopped the phone started its charging screen saver, then locked and dozed. An
+  activity launched behind a secure keyguard never becomes visible, and `wm dismiss-keyguard`
+  cannot clear a secure lock. The app now calls `setShowWhenLocked(true)` and
+  `setTurnScreenOn(true)` in `MainActivity.onCreate` through a config plugin
+  (`app/with-show-when-locked.js`, applied to the generated activity as well), and the Android
+  driver sends `KEYCODE_WAKEUP` before every launch. The screen saver was disabled on the device
+  for the run (`settings put secure screensaver_enabled 0`, restored afterwards) and is recorded
+  in `DEVICE-RUN.md`.
+
+Harness tests 44/44. Android rebuilt and installed; the resumed Pixel rows run on this build,
+which changes only the activity's lock-screen flags. No measured code moved.

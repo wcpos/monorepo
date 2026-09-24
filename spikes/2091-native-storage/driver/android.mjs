@@ -11,6 +11,9 @@ export async function android(device, port = 48091) {
       emulator: await call(['shell', 'getprop', 'ro.kernel.qemu']) === '1' },
     alive,
     async launch(url) {
+      // A docked Pixel dozes between rows; a launch behind the lock screen never becomes visible
+      // (the activity shows over the keyguard, see app/with-show-when-locked.js, but only once awake).
+      await call(['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP']);
       const result = await call(['shell', 'am', 'start', '-W', '-a', 'android.intent.action.VIEW', '-d', url, bundle]);
       if (/Error:/.test(result) || !await alive()) throw new Error(`Android launch failed: ${result}`);
     },

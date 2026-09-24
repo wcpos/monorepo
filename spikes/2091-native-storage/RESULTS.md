@@ -27,8 +27,8 @@ write the app had acknowledged is missing after reopen. Process termination, not
 
 | Row | iPad Pro 12.9 (2018): lost / 30 | repairs on reopen | reopen p50 | Pixel 10: lost / 30 | repairs | reopen p50 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Shipped filesystem engine (JS) | 2 | 30 of 30 reopens rebuilt indexes (`stale-changelog-op`; 60 repair lines) | 2.2 s | 8 | _pending Pixel report_ | _pending_ |
-| Worklet filesystem | 4 | 30 of 30 reopens rebuilt indexes (60 lines) | 2.0 s | 3 | _pending_ | _pending_ |
+| Shipped filesystem engine (JS) | 2 | 30 of 30 reopens rebuilt indexes (`stale-changelog-op`; 60 repair lines) | 2.2 s | 8 (19 acked rows missing) | 30 of 30 reopens rebuilt indexes (60 lines) | 1.8 s |
+| Worklet filesystem | 4 | 30 of 30 reopens rebuilt indexes (60 lines) | 2.0 s | 3 | 30 of 30 reopens rebuilt indexes (60 lines) | 1.0 s |
 | Premium SQLite (expo-sqlite, WAL) | 0 | 0 | 0.29 s | 0 of 2 scored; 28 to run on the patched build | 0 | _pending_ |
 
 Integrity was `ok` in every trial on every row (filesystem rows: no parse or salvage failure
@@ -74,25 +74,32 @@ that materialise the largest result sets into JavaScript; the pushed grid varian
 query is 1 ms, so the as-shipped grid loss is the query shape, not the engine.
 
 **iPad, 20k products / 20k orders.** SQLite completed the row (seed 2.2 s for products and 2.4 s
-for orders, 201 MB on disk in three files). The shipped engine was silent for 30 minutes on its
-fresh-seed cell on two separate attempts after two and a half hours of measured cells each time,
-so its row is recorded as failed and the nine cells it did complete are kept as partial; the
-worklet row is pending a rerun (its first attempt lost its cells to the harness, its second died
-at launch behind the shipped engine's killed process).
+for orders, 201 MB on disk in three files). Neither filesystem row completed: each went silent for
+30 minutes inside the fresh-seed cell (the shipped engine on two separate attempts, after two and
+a half hours of measured cells each time; the worklet once, after 32 minutes), so both rows are
+recorded as failed and the nine cells each did complete are kept as partial. The fresh-seed cell
+writes the 20,000-document catalogue into a fresh instance in one bulk write; the initial seed of
+the same data in 1,000-document batches took the worklet about two minutes.
 
-| Cell, 20k | Shipped engine (partial) | Premium SQLite |
-| --- | --- | --- |
-| Products grid, as shipped | 7,929 | 4,268 (samples rose 0.7 s → 11.9 s) |
-| Products grid, pushed 10 / 50 | 41,260 / 40,239 | **1 / 17** |
-| Whole-catalogue read (20,000 rows) | **20,680** | 30,399 (17 s – 102 s) |
-| Catalogue projection | 73,834 | **4,237** |
-| findByIds 10 / 50 | 19 / 23 | **1 / 3** |
-| Remote-id find / count | 239,962 / 238,784 | **39 / 4** |
-| Fresh seed of the catalogue | silent > 30 min | 5,800 |
-| Orders default find 10 / 50 / count | — | 3 / 14 / 529 |
-| Orders open-status (12,000 rows) | — | 48,310 (7 s – 182 s) |
-| Order line add / order create | — | 6 / 3 |
-| Cold open to first read | — | 19 |
+| Cell, 20k | Shipped engine (partial) | Worklet filesystem (partial) | Premium SQLite |
+| --- | --- | --- | --- |
+| Products grid, as shipped | 7,929 | 4,737 | **4,268** (samples rose 0.7 s → 11.9 s) |
+| Products grid, pushed 10 / 50 | 41,260 / 40,239 | 4,105 / 3,945 | **1 / 17** |
+| Whole-catalogue read (20,000 rows) | 20,680 | **22,259** | 30,399 (17 s – 102 s) |
+| Catalogue projection | 73,834 | 92,940 | **4,237** |
+| findByIds 10 / 50 | 19 / 23 | 2 / 34 | **1 / 3** |
+| Remote-id find / count | 239,962 / 238,784 | 1,052 / 922 | **39 / 4** |
+| Fresh seed of the catalogue | silent > 30 min | silent > 30 min | 5,800 |
+| Orders default find 10 / 50 / count | — | — | 3 / 14 / 529 |
+| Orders open-status (12,000 rows) | — | — | 48,310 (7 s – 182 s) |
+| Order line add / order create | — | — | 6 / 3 |
+| Cold open to first read | — | — | 19 |
+
+At 20k the whole-catalogue read is the only cell a filesystem row wins, and the shipped engine's
+20.7 s there is inside SQLite's sample spread. On the indexed cells (pushed grid, findByIds,
+remote-id) SQLite is 11 to 4,100 times faster than the worklet and 8 to 60,000 times faster than
+the shipped engine; the as-shipped grid, which materialises 15,337 documents, is within 2× across
+all three rows, and the projection read is 17 to 22 times faster on SQLite.
 
 Ingest of 100-document batches on SQLite at 20k: p50 140 ms, p95 331 ms, 29 s for the 200
 batches.
@@ -114,10 +121,16 @@ _Operator: apply the stability gate and the “wins clearly, not narrowly” bar
 
 ## Environments
 
-| Target | OS | Verification |
+| Target | OS | Evidence |
 | --- | --- | --- |
-| iPad Pro 13-inch (M5), simulator | iOS 26.5 | Clean-install release smoke complete; earlier small bench and 5 stops per row |
-| Pixel_Tablet_API_35 (`emulator-5554`), emulator | Android 15 / API 35 | Updated release smoke complete; earlier small bench and 5 stops per row |
+| iPad Pro 12.9-inch (3rd generation, 2018, A12X, `iPad8,5`), physical, Wi-Fi via `devicectl` | iPadOS 26.6.2 | Release build; smoke, 30 stops per row, 2k and 20k bench for all three rows, cold open and ingest |
+| Pixel 10, physical, USB via `adb` | Android 17 | Release build with the expo-modules-core backport; smoke, 30 stops per row (SQLite rerun on the patched build), 2k and 20k bench for all three rows |
+| iPad Pro 13-inch (M5), simulator | iOS 26.5 | Harness verification only: clean-install release smoke, small bench, 5 stops per row. Not evidence |
+| Pixel_Tablet_API_35 (`emulator-5554`), emulator | Android 15 / API 35 | Harness verification only: release smoke, small bench, 5 stops per row. Not evidence |
+
+Library versions on every device: Expo 57.0.24, React Native 0.86.3, expo-sqlite 57.0.3 (SQLite
+3.50.3), expo-file-system 57.0.7, expo-opfs 1.0.9, rxdb and rxdb-premium 17.4.0 (47 patch
+markers), react-native-worklets 0.11.4, `@wcpos/rxdb-storage-worklet` 0.1.1.
 
 ## Method notes
 
@@ -134,8 +147,11 @@ _Operator: apply the stability gate and the “wins clearly, not narrowly” bar
 
 - Release Hermes bytecode, no Metro. All rows share the premium distribution with 47 patch markers.
 - iOS launches read the driver address from `Documents/spike2091-driver.txt`, placed by the
-  driver before a plain launch; Android reads it from the launch intent. Physical iOS file
-  copy/launch, including fresh-install directory handling, remains unverified.
+  driver before a plain launch; Android reads it from the launch intent. Both paths are verified
+  on the physical devices (every iPad launch in `results/` went through the file drop over Wi-Fi).
+- Seed-thread lag is sampled only at 20k. The 2k rows' `lag.seed` field carries the placeholder
+  string `simulator — not meaningful` on the physical devices too; read it as "not sampled at
+  2k", not as a simulator label. The 2k `lag.grid` numbers are real.
 - Sources: spikes 2143/2210 and `wcpos/rxdb-storage-worklet` commit `acbbc93d642511d1d37bb119abc805e085235f6c`.
 - Expo control: shipped expo-opfs copy/move/recovery patch, but raw storage with no recovery/probe
   wrapper and a no-op flush. Its root directory is the only engine configuration change.
