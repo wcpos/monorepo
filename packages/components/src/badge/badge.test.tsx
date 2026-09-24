@@ -98,7 +98,7 @@ describe('badge colour contract', () => {
 		);
 
 		const className = textClassOf('host');
-		expect(className).toContain('text-success');
+		expect(className).toContain('text-foreground');
 		expect(className).not.toMatch(/group-(hover|active):text-/);
 	});
 
