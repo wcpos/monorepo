@@ -6,10 +6,14 @@ const { withMainActivity } = require('expo/config-plugins');
 module.exports = (config) =>
 	withMainActivity(config, (mod) => {
 		const anchor = 'super.onCreate(null)';
-		if (!mod.modResults.contents.includes('setShowWhenLocked(true)'))
+		if (!mod.modResults.contents.includes('setShowWhenLocked(true)')) {
+			// A silent no-op here would surface only as the am start -W hang this plugin prevents.
+			if (!mod.modResults.contents.includes(anchor))
+				throw new Error(`with-show-when-locked: '${anchor}' not found in MainActivity`);
 			mod.modResults.contents = mod.modResults.contents.replace(
 				anchor,
 				`${anchor}\n    setShowWhenLocked(true)\n    setTurnScreenOn(true)`
 			);
+		}
 		return mod;
 	});

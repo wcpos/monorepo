@@ -186,6 +186,10 @@ try {
         } catch (error) {
           if (error.outcome !== 'writer-failed' && !isHarnessFailure(error) && error.code !== 'ESRCH' && !/No such process/i.test(String(error))) throw error;
           if (active) active.finished = true;
+          // As in run(): a writer left alive (timed out while seeding, or writer-failed) would
+          // receive the next trial's launch intent and run it warm.
+          try { if (device.alive && await device.alive()) await device.stop(); }
+          catch (stopError) { log('warn', `stop after failed trial also failed: ${stopError.message}`); }
           const snapshot = { acked: writer?.started.filter(t => writer.acked.has(t.tx)) ?? [],
             inflight: writer?.started.find(t => !writer.acked.has(t.tx)) ?? null };
           const outcome = error.outcome === 'writer-failed' ? 'writer-failed' : 'harness-failed';

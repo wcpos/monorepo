@@ -559,3 +559,27 @@ against `9d6be9cc8..HEAD` from `REVIEW-BRIEF.md`. Four findings, all applied:
 
 Harness tests 44/44 (Node 24; Node 22 fails three TypeScript imports, so use the installed
 Node 24). No measured code moved; no rerun.
+
+# Round 13 (Codex connector and CodeRabbit on `980a5823d`, 2026-09-24 morning)
+
+Five threads; one (Codex, the swallowed post-job stop) was already fixed in round 12. The other
+four, applied:
+
+- **Codex, `driver/android.mjs` `alive()`:** `allowFailure` turned every adb exit-1 into "not
+  alive", so a device going offline or unauthorized while a crash scorer was opening would have
+  recorded `open-failed` as a storage verdict. `alive()` now treats exit 1 with empty stderr as an
+  absent process and anything adb says on stderr as `Harness failure: device unreachable`, the
+  iOS rule. Pinned by a new harness test (45 total).
+- **Codex, `harness.test.mjs`:** the polyfill test imported TypeScript from the gitignored
+  `app/node_modules`, so a clean checkout failed ten tests without `./run.sh install`. It now
+  resolves the monorepo's TypeScript through `createRequire`.
+- **CodeRabbit, `driver/driver.mjs` crash loop:** a trial that timed out while seeding, or a
+  `writer-failed` trial, left the writer alive for the next trial's launch intent (the round-11
+  Pixel hang). The catch block now stops a live target, logging a stop failure beside the trial's
+  own error; stubs without `alive` skip it.
+- **CodeRabbit, `app/with-show-when-locked.js`:** the plugin now throws when the
+  `super.onCreate(null)` anchor is missing instead of silently adding nothing.
+
+No measured code moved; no rerun. The committed Pixel crash trials had no failed trial after
+seeding (all 30 SQLite trials `ok`, filesystem rows `ok`/`lost` only), so the crash-loop stop
+never had a case to act on in the evidence.

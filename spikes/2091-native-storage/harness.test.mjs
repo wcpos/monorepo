@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 const here = new URL('.', import.meta.url);
 // Catches a port changing the deterministic workload's bytes, not merely its counts.
@@ -98,7 +99,8 @@ test('crash records retain counts and outcomes but not snapshot IDs', async () =
 });
 // Catches sending RxDB's base64 data URL to Expo's Android network fetch.
 test('data fetch returns a decoded Blob and passes network requests through', async () => {
-  const ts = await import('./app/node_modules/typescript/lib/typescript.js');
+  // The monorepo's own TypeScript, so the harness runs on a clean checkout without ./run.sh install.
+  const ts = await import(createRequire(import.meta.url).resolve('typescript'));
   const source = readFileSync(new URL('app/src/polyfills.ts', here), 'utf8').replace(/^import .*;\n/gm, '').replace('export function', 'function');
   const calls = [], network = new Response('network');
   const context = { Crypto: { digest() {} }, installWorkletFs() {}, getWorkletFs() {}, installWorkletRuntimePolyfills() {},
@@ -955,4 +957,23 @@ test('report renders partial cells separately with missing timings unevaluated',
     assert.doesNotMatch(output.split('## Cross-device summary')[1], /metadata-only/);
     assert.match(output.split('## Cross-device summary')[1], /large\/read \| not compared/);
   } finally { await rm(directory, { recursive: true }); }
+});
+// Catches an adb transport failure being read as process death (a scorer in its opening phase
+// would then record open-failed as a storage verdict instead of a harness failure).
+test('android alive distinguishes an absent process from an unreachable device', async () => {
+  const source = readFileSync(new URL('driver/android.mjs', here), 'utf8').replace(/^import .*;\n/gm, '').replace('export async function', 'async function');
+  let pidof = { code: 1, stderr: '' };
+  const context = { homedir: () => '/h', bundle: 'test', confirmStopped: async () => {},
+    command: async (_file, args) => {
+      if (args.includes('pidof')) { if (pidof === null) return '123'; throw Object.assign(new Error('Command failed'), pidof); }
+      return '';
+    } };
+  const device = await vm.runInNewContext(source + '; android("test", 48092)', context);
+  assert.equal(await device.alive(), false, 'pidof exit 1 with no stderr is an absent process');
+  pidof = null;
+  assert.equal(await device.alive(), true);
+  pidof = { code: 1, stderr: 'adb: device offline' };
+  await assert.rejects(device.alive(), /Harness failure: device unreachable \(adb: adb: device offline\)/);
+  pidof = { code: 1, stderr: "error: device '5C27' not found" };
+  await assert.rejects(device.alive(), /Harness failure: device unreachable/);
 });

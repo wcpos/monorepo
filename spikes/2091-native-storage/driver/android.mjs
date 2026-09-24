@@ -3,7 +3,18 @@ import { bundle, command, confirmStopped } from './control.mjs';
 export async function android(device, port = 48091) {
   const adb = homedir() + '/Library/Android/sdk/platform-tools/adb';
   const call = (args, fail = false) => command(adb, ['-s', device, ...args], fail);
-  const alive = async () => Boolean(await call(['shell', 'pidof', bundle], true));
+  const alive = async () => {
+    try { return Boolean(await call(['shell', 'pidof', bundle])); }
+    catch (error) {
+      // pidof exits 1 and prints nothing when the process is absent. adb's own failures (device
+      // offline, unauthorized, not found) also exit 1 but say so on stderr; those are harness
+      // failures, never a process death, so a scorer in its opening phase cannot record them as
+      // open-failed.
+      const stderr = String(error.stderr ?? '').trim();
+      if (error.code === 1 && !stderr) return false;
+      throw new Error(`Harness failure: device unreachable (adb: ${stderr || error.message})`, { cause: error });
+    }
+  };
   // USB works for physical devices; reverse avoids depending on their Wi-Fi route.
   await call(['reverse', `tcp:${port}`, `tcp:${port}`]);
   return {
