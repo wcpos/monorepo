@@ -17,8 +17,9 @@ lane, not an engine verdict. Android needed one runtime adaptation for attachmen
 equality on the timed cells is reported per file in the generated section below: on the iPad,
 every compared cell across the three rows at 2k and the SQLite row at 20k matched on canonical
 SHA-256 content, no cell was excluded for a mismatch, and no returned result violated its
-query's own sort order. The Pixel comparison is stated in the generated section once its
-remaining rows land.
+query's own sort order. On the Pixel every available cross-row cell matched as well: the three
+rows at 2k, and the worklet and SQLite rows against each other at 20k (the shipped engine's nine
+partial 20k cells are reported but never compared on either device).
 
 ## Leg 2 — stability
 
@@ -29,21 +30,22 @@ write the app had acknowledged is missing after reopen. Process termination, not
 | --- | --- | --- | --- | --- | --- | --- |
 | Shipped filesystem engine (JS) | 2 | 30 of 30 reopens rebuilt indexes (`stale-changelog-op`; 60 repair lines) | 2.2 s | 8 (19 acked rows missing) | 30 of 30 reopens rebuilt indexes (60 lines) | 1.8 s |
 | Worklet filesystem | 4 | 30 of 30 reopens rebuilt indexes (60 lines) | 2.0 s | 3 | 30 of 30 reopens rebuilt indexes (60 lines) | 1.0 s |
-| Premium SQLite (expo-sqlite, WAL) | 0 | 0 | 0.29 s | 0 of 2 scored; 28 to run on the patched build | 0 | _pending_ |
+| Premium SQLite (expo-sqlite, WAL) | 0 | 0 | 0.29 s | 0 (2 on the unpatched build, 28 on the backport) | 0 | 0.21 s |
 
 Integrity was `ok` in every trial on every row (filesystem rows: no parse or salvage failure
 lines; SQLite: `PRAGMA integrity_check` on a fresh connection returned one `ok` row). The two
 filesystem rows lose acknowledged writes on both devices, and every one of their reopens is a
 repair (the changelog is discarded and indexes are rebuilt from `documents.json`), which is what
-the 2 s reopen is. Premium SQLite lost nothing in 30 stops on the iPad and needed no repair.
+the 1 to 2 s reopen is. Premium SQLite lost nothing in 30 stops on either device and needed no
+repair; its reopen is the WAL replay, 0.2 to 0.3 s.
 
 On the Pixel, the SQLite row's third trial hit an Android platform bug, not a storage outcome:
 expo-modules-core's shared-object garbage-collection race
 ([expo/expo #49799](https://github.com/expo/expo/issues/49799), fixed upstream in
 [#50513](https://github.com/expo/expo/pull/50513) on 2026-09-23 and in no published 57.x). The
-remaining 28 Pixel trials run on a build carrying that fix as a spike-only patch, and are labelled
-so in the generated section. The shipped 2.0 app needs the `expo-modules-core` release that
-contains the fix before premium SQLite ships on Android.
+remaining 28 Pixel trials ran on a build carrying that fix as a spike-only patch (all 28 `ok`,
+no repair); the crash file's `environment.runs` records the two runs. The shipped 2.0 app needs the
+`expo-modules-core` release that contains the fix before premium SQLite ships on Android.
 
 ## Leg 3 — speed
 
@@ -112,12 +114,111 @@ SQLite over expo-sqlite is asynchronous but its rows are parsed into documents o
 so on the cells that return thousands of documents it blocks the UI as much as the shipped engine
 does; only the worklet row keeps the JS thread clear, because its parsing runs off-thread.
 
-**Pixel 10.** _Pending: 2k rows for the worklet and SQLite, and all 20k rows, run after the
-device returns to adb; the shipped engine's 2k row is complete._
+**Pixel 10, 2k products / 2.8k orders** (all three rows complete):
+
+| Cell | Shipped engine (JS) | Worklet filesystem | Premium SQLite |
+| --- | --- | --- | --- |
+| Products grid, as shipped | 296 | 238 | **142** |
+| Products grid, pushed 10 / 50 | 249 / 286 | 91 / 85 | **5 / 22** |
+| Whole-catalogue read | 260 | 185 | **182** |
+| Catalogue projection | 274 | 197 | **54** |
+| findByIds 10 / 50 | **5** / 16 | 10 / 25 | 7 / 16 |
+| Remote-id find / count | 296 / 297 | 102 / 90 | **32 / 15** |
+| Fresh seed of the catalogue | **357** | 365 | 389 |
+| Orders default find 10 / 50 | 442 / 467 | 150 / 169 | **21 / 39** |
+| Orders default count | 421 | 145 | **71** |
+| Orders open-status | 314 | 226 | **150** |
+| Order line add / order create | 283 / **1** | 63 / 12 | **30** / 23 |
+
+The Pixel is faster than the 2018 iPad on every row, and the gaps narrow: SQLite is fastest on
+twelve of sixteen cells, the whole-catalogue read is a tie with the worklet, and the shipped
+engine keeps only the three cells that touch one or ten documents by primary key (findByIds 10,
+order create) or write the catalogue once (fresh seed).
+
+**Pixel 10, 20k products / 20k orders.** The worklet and SQLite rows completed. The shipped
+engine went silent for 30 minutes inside the fresh-seed cell, as on the iPad, and keeps its nine
+measured cells as partial. The worklet took 7.6 s for the same cell here, so the silence is the
+engine on the JS thread at this scale, not the cell.
+
+| Cell, 20k | Shipped engine (partial) | Worklet filesystem | Premium SQLite |
+| --- | --- | --- | --- |
+| Products grid, as shipped | 5,749 | 1,934 | **880** |
+| Products grid, pushed 10 / 50 | 10,660 / 10,776 | 1,447 / 1,454 | **11 / 19** |
+| Whole-catalogue read (20,000 rows) | 8,036 | 4,827 | **2,369** (1.8 s – 7.6 s) |
+| Catalogue projection | 8,443 | 3,587 | **335** |
+| findByIds 10 / 50 | 9 / 32 | 10 / 26 | **4 / 13** |
+| Remote-id find / count | 10,655 / 9,918 | 702 / 616 | **21 / 12** |
+| Fresh seed of the catalogue | silent > 30 min | 7,553 | **3,544** |
+| Orders default find 10 / 50 / count | — | 969 / 957 / 1,001 | **18 / 40 / 363** |
+| Orders open-status (12,000 rows) | — | **2,206** | 2,916 |
+| Order line add / order create | — | 210 / **12** | **30** / 18 |
+| Cold open to first read | — | 982 | **37** |
+| Ingest per 100 documents, p50 / p95 | — | 195 / 345 | **51 / 140** |
+
+At 20k on the Pixel SQLite is fastest on fifteen of seventeen cells; the worklet keeps the
+open-status read (12,000 documents materialised) and order create. Against the shipped engine's
+nine cells SQLite is 2 to 970 times faster; against the worklet 2 to 130 times on the indexed
+cells and 2 to 27 times on the whole-catalogue, projection and cold-open reads.
+
+**JS thread, heap and disk on the Pixel.** Worst grid tick at 2k: shipped 320 ms (107 ticks over
+50 ms), worklet 112 ms (13), SQLite 66 ms (1). At 20k: worklet 3.8 s (458 ticks), SQLite 1.0 s
+(264 ticks); the seed window was under 130 ms on both. JS heap after the last cell: 106 / 38 /
+43 MB at 2k; 351 MB (worklet) and 348 MB (SQLite) at 20k. Process PSS after the last 20k cell:
+1.25 GB worklet, 926 MB SQLite. Disk at 20k: worklet 152 MB in 26 files, SQLite 201 MB in three
+files (WAL). The worklet's JS-thread advantage at 2k disappears at 20k on this device: its own
+grid cell materialises the same 15,337 documents on the JS thread once the worklet returns them.
 
 ## The answer
 
-_Operator: apply the stability gate and the “wins clearly, not narrowly” bar._
+**Premium SQLite over `expo-sqlite` is the native engine for 2.0.** It is the only row that clears
+the stability gate, and on the queries the till runs it beats both filesystem rows by one to four
+orders of magnitude at 20k on both devices. It does not win every cell: the reads that materialise
+thousands of documents are where a filesystem row can still tie or win, and those are the query
+shapes 2.0 retires whatever the engine.
+
+**Stability gate.** SQLite lost nothing in 30 signal-9 stops on the iPad and 0 in 30 on
+the Pixel, with no repair on any reopen and a clean `PRAGMA integrity_check` every time. Both
+filesystem rows lose acknowledged writes on both devices (shipped engine 2 and 8 of 30, worklet 4
+and 3 of 30) and rebuilt their indexes on every one of the 120 reopens measured. The gate is
+failed, so neither is a candidate at any speed; hosting the filesystem engine on a worklet moves
+the thread, not the durability.
+
+**Speed against the shipped engine.** Not narrow. At 20k the shipped engine could not finish its
+row on either device (silent past the 30-minute budget in the fresh-seed cell, three attempts),
+so it has nine cells at that scale. On those nine, SQLite is 2 to 970 times faster on the Pixel
+and 2 to 60,000 times faster on the iPad; the pushed grid the till actually issues is 11 ms
+against 10,660 ms on the Pixel and 1 ms against 41,260 ms on the iPad. The one cell the shipped
+engine wins anywhere is the iPad's whole-catalogue read (20.7 s against 30.4 s, inside SQLite's
+sample spread); on the Pixel SQLite wins that cell too (2.4 s against 8.0 s).
+
+**Speed against the worklet.** At 2k the worklet keeps four cells on the iPad (as-shipped grid,
+whole-catalogue read, fresh seed, open-status) and none outright on the Pixel. At 20k it completed
+its row only on the Pixel, where SQLite is 2 to 130 times faster on the indexed and orders cells,
+2 to 27 times faster on the catalogue, projection and cold-open reads, and loses only open-status
+(2.9 s against 2.2 s for 12,000 documents) and order create. On the iPad the worklet's nine 20k
+cells lose to SQLite by 11 to 4,100 times except the whole-catalogue read (22.3 s against 30.4 s).
+The worklet's real advantage is the JS thread at small scale (113 ms worst tick against SQLite's
+656 ms on the iPad at 2k); at 20k that advantage is gone on the Pixel (3.8 s against 1.0 s),
+because the worklet still hands 15,337 parsed documents to the JS thread, and on the iPad SQLite's
+as-shipped grid held the thread for 6.8 s. That is the cost of the query shape, not the engine.
+
+**What this decides and what it does not.** The engine is decided. Three query shapes must not
+survive into 2.0 on any engine, because at 20k they either block the JS thread or read the whole
+catalogue: the as-shipped products grid (15,337 documents returned without a limit; the pushed
+variant of the same selector is 1 to 11 ms), the open-status orders read (12,000 documents for a
+count), and the whole-catalogue read (the substring search index's input, 2.4 to 30 s). The Leg 1
+migration items (`$exists: false` against explicit null, `$nin` and missing fields, mixed-type
+sort order) are query-layer and shared with web and desktop. Two Android conditions ride with the
+decision: a published `expo-modules-core` carrying expo/expo #50513 before SQLite ships there
+(the spike measured on a backport; without it the shared-object race rejects `prepareAsync`
+within minutes), and the `data:` URL fetch polyfill for premium's base64 attachment path.
+Hosting SQLite's document parsing off the JS thread is a separate question the map does not yet
+hold; the numbers say it is worth asking only after the three query shapes are gone.
+
+**Footprint at 20k.** SQLite 201 MB on disk in three files on both devices (WAL); JS heap after
+the last cell 348 MB on the Pixel and 501 MB on the iPad, against the worklet's 351 MB and 152 MB
+in 26 files on the Pixel. Cold open to first read: 19 ms on the iPad, 37 ms on the Pixel, against
+982 ms for the worklet. Ingest of 100-document batches: 51 ms p50 on the Pixel, 140 ms on the iPad.
 
 ## Environments
 
@@ -180,7 +281,11 @@ markers), react-native-worklets 0.11.4, `@wcpos/rxdb-storage-worklet` 0.1.1.
 
 Round 8: jobs now dim brightness to minimum before keeping the display awake and restore the
 saved value on completion or error, outside measured work. A killed crash writer cannot run
-cleanup. Physical-device dimming, restoration and battery endurance have not been verified here.
+cleanup. Verified on the physical iPad: with the screen dimmed and the iPad on a wall charger,
+every remaining leg ran to its end without a power event (the two earlier battery-flat stops were
+at full brightness on the Mac's USB port). Round 11: the Android activity shows over the lock
+screen and turns the screen on, and the driver stops a timed-out app before the next launch;
+verified by the resumed Pixel rows launching from a locked, dozing phone.
 
 No shipping application code changed. This spike does not establish broad compatibility,
 power-loss durability or physical-device performance improvements.
@@ -206,7 +311,8 @@ A vanished stop target is `harness-failed`, not a storage outcome; later trials 
 run remains incomplete. Observed: rebuilt iOS simulator smoke is again 0 / 0 / 3, with every
 scenario name, pass flag and detail equal to the prior committed simulator smoke. The standalone
 suite checks keep-awake success/error cleanup and a pending writer, partial-save comparison,
-and continuation after a missing stop target. Physical-device auto-lock prevention is unverified.
+and continuation after a missing stop target. Keep-awake held both physical devices through
+every job; the only lock seen was on the Pixel between rows, after a job's app had been stopped.
 
 ## Blocked
 
@@ -216,6 +322,191 @@ None.
 The RxDB mocha suite was not run on device: it is not hosted by React Native. Leg 1 is the eight-scenario binding smoke, three divergence probes, and leg 3 content checks.
 
 Android stops use ActivityManager `am force-stop` (no lifecycle callbacks), not a direct POSIX signal. Cold opens restart the app; OS page cache remains warm. Simulator timer samples reflect display-link cadence and are not meaningful JS-lag evidence.
+
+## android/5C270DLCR0020Q
+
+| Environment | Value |
+| --- | --- |
+| platform | android |
+| device | 5C270DLCR0020Q |
+| deviceName | Pixel 10 |
+| os | 17 |
+| emulator | false |
+| simulator | false |
+| expo | 57.0.24 |
+| react-native | 0.86.3 |
+| expo-sqlite | 57.0.3 |
+| expo-file-system | 57.0.7 |
+| expo-opfs | 1.0.9 |
+| rxdb | 17.4.0 |
+| rxdb-premium | 17.4.0 |
+| rxjs | 7.8.2 |
+| react-native-worklets | 0.11.4 |
+| premiumMarkers | 47 |
+| expoOpfsShippedPatch | true |
+| beginRetryConsoleDir | false |
+| measuredAt | 2026-09-24T07:52:57.867Z |
+| runs | [{"startedAt":"2026-09-23T21:18:15.970Z","rows":["expo-filesystem-js","worklet-filesystem","expo-sqlite"],"scales":[]},{"startedAt":"2026-09-24T07:52:57.867Z","rows":["expo-filesystem-js","worklet-filesystem","expo-sqlite"],"scales":[]}] |
+| sqlite | 3.50.3 |
+
+### crash.android.5C270DLCR0020Q.json
+
+Run complete.
+
+| Row | Trials | Acked tx / rows | ok | writer-failed | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| expo-filesystem-js | 30 | 503 / 52581 | 22 | 0 | 0 | 0 | 8 | 0 | 30 | 8 / 0 | 0 / 19 | 0 / 11 / 0 | 1766.88 |
+| worklet-filesystem | 30 | 678 / 73903 | 27 | 0 | 0 | 0 | 3 | 0 | 30 | 3 / 0 | 3 / 22 | 0 / 5 / 0 | 1036.43 |
+| expo-sqlite | 30 | 778 / 81614 | 30 | 0 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 3 / 22 | 0 / 5 / 0 | 211.70 |
+
+### results.android.5C270DLCR0020Q.json
+
+**Incomplete:** interrupted
+
+- expo-filesystem-js large: harness-failed — Error: Harness timeout: no message from the app for 30 minutes while running     at jobTimeout (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/control.mjs:63:12)     at waitResult (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:121:23)     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)     at async run (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:130:18)     at async file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:197:26
+
+#### expo-filesystem-js large — partial (row failed)
+
+Measured before the failure; not compared. — means samples/timings were not posted.
+
+| Cell | Samples | p50 ms | p95 ms |
+| --- | --- | --- | --- |
+| products-grid-asShipped | 7 | 5748.72 | 7116.59 |
+| products-grid-pushed-10 | 7 | 10660.07 | 11312.36 |
+| products-grid-pushed-50 | 7 | 10776.09 | 11390.92 |
+| products-catalogue-blob | 7 | 8036.19 | 10651.50 |
+| products-catalogue-projection | 7 | 8443.27 | 10810.64 |
+| products-findByIds-10 | 7 | 8.93 | 11.30 |
+| products-findByIds-50 | 7 | 32.40 | 36.60 |
+| products-remoteId-in-find | 7 | 10655.42 | 11599.70 |
+| products-remoteId-in-count | 7 | 9917.93 | 10484.53 |
+
+All available cross-row cells match on canonical revision-independent SHA-256 content; returned-order differences and normalized-sort violations recorded separately.
+
+#### small
+
+| Cell — p50 / p95 ms | expo-filesystem-js | worklet-filesystem | expo-sqlite | expo-filesystem-js ÷ expo-sqlite | worklet-filesystem ÷ expo-sqlite |
+| --- | --- | --- | --- | --- | --- |
+| products-grid-asShipped | 295.83 / 336.31 | 238.38 / 272.06 | 142.46 / 145.81 | 2.08 | 1.67 |
+| products-grid-pushed-10 | 248.56 / 347.68 | 90.72 / 98.39 | 4.61 / 8.02 | 53.95 | 19.69 |
+| products-grid-pushed-50 | 286.26 / 324.20 | 85.29 / 109.40 | 21.57 / 23.58 | 13.27 | 3.95 |
+| products-catalogue-blob | 260.00 / 337.36 | 185.27 / 217.52 | 181.80 / 216.95 | 1.43 | 1.02 |
+| products-catalogue-projection | 274.19 / 368.44 | 196.97 / 246.38 | 54.21 / 68.72 | 5.06 | 3.63 |
+| products-findByIds-10 | 5.21 / 11.99 | 9.69 / 12.47 | 7.10 / 10.93 | 0.73 | 1.36 |
+| products-findByIds-50 | 15.75 / 29.78 | 25.03 / 28.84 | 15.68 / 19.73 | 1.00 | 1.60 |
+| products-remoteId-in-find | 296.31 / 384.55 | 102.32 / 123.66 | 31.87 / 40.33 | 9.30 | 3.21 |
+| products-remoteId-in-count | 296.89 / 351.08 | 89.66 / 127.63 | 15.05 / 27.01 | 19.72 | 5.96 |
+| seed-products | 357.19 / 364.30 | 365.28 / 430.69 | 389.47 / 460.81 | 0.92 | 0.94 |
+| orders-default-find-10 | 442.11 / 503.48 | 150.13 / 195.61 | 20.98 / 22.92 | 21.08 | 7.16 |
+| orders-default-find-50 | 466.84 / 603.50 | 169.08 / 179.02 | 38.62 / 53.61 | 12.09 | 4.38 |
+| orders-default-count | 420.52 / 532.91 | 144.67 / 162.26 | 71.30 / 73.78 | 5.90 | 2.03 |
+| orders-open-status | 314.22 / 346.64 | 226.29 / 244.50 | 150.31 / 174.25 | 2.09 | 1.51 |
+| order-line-add | 283.43 / 321.06 | 63.11 / 75.76 | 29.90 / 45.39 | 9.48 | 2.11 |
+| order-create | 0.59 / 1.65 | 12.46 / 22.26 | 22.53 / 29.89 | 0.03 | 0.55 |
+
+- expo-filesystem-js: WAL n/a; seed bytes {"products":2000,"orders":2758.653}; BEGIN retries 0.
+
+- expo-filesystem-js lag: {"seed":"simulator — not meaningful","grid":{"maxLagMs":320.37315198779106,"ticksOver50Ms":107}}
+
+- expo-filesystem-js heapAfterSeed: {"js_heapSize":33554432,"js_allocatedBytes":33707208,"gcCount":53,"raw":{"js_VMExperiments":0,"js_numGCs":53,"js_gcCPUTime":0.04221600000000002,"js_gcTime":0.04170997700000001,"js_totalAllocatedBytes":158118000,"js_allocatedBytes":33707208,"js_heapSize":33554432,"js_mallocSizeEstimate":0,"js_vaSize":33554432,"js_externalBytes":23021481,"js_markStackOverflows":0}}
+
+- expo-filesystem-js heapAfterLast: {"js_heapSize":134217728,"js_allocatedBytes":111380344,"gcCount":3841,"raw":{"js_VMExperiments":0,"js_numGCs":3841,"js_gcCPUTime":4.190036999999989,"js_gcTime":4.19400720200001,"js_totalAllocatedBytes":13590713128,"js_allocatedBytes":111380344,"js_heapSize":134217728,"js_mallocSizeEstimate":0,"js_vaSize":134217728,"js_externalBytes":87383198,"js_markStackOverflows":0}}
+
+- expo-filesystem-js memory: {"after-seed":{"totalPssKiB":272861},"after-last":{"totalPssKiB":435273}}
+
+- worklet-filesystem seed wall-clock ms: products 424.54; orders 591.70 (whole collection, including progress delivery; not compared).
+
+- worklet-filesystem: WAL n/a; seed bytes {"products":2000,"orders":2758.653}; BEGIN retries 0.
+
+- worklet-filesystem lag: {"seed":"simulator — not meaningful","grid":{"maxLagMs":112.112733989954,"ticksOver50Ms":13}}
+
+- worklet-filesystem heapAfterSeed: {"js_heapSize":29360128,"js_allocatedBytes":21958256,"gcCount":33,"raw":{"js_VMExperiments":0,"js_numGCs":33,"js_gcCPUTime":0.03530899999999999,"js_gcTime":0.038160311,"js_totalAllocatedBytes":66534848,"js_allocatedBytes":21958256,"js_heapSize":29360128,"js_mallocSizeEstimate":0,"js_vaSize":29360128,"js_externalBytes":14572931,"js_markStackOverflows":0}}
+
+- worklet-filesystem heapAfterLast: {"js_heapSize":62914560,"js_allocatedBytes":39595088,"gcCount":991,"raw":{"js_VMExperiments":0,"js_numGCs":991,"js_gcCPUTime":1.5302600000000015,"js_gcTime":1.5380723949999993,"js_totalAllocatedBytes":3394208072,"js_allocatedBytes":39595088,"js_heapSize":62914560,"js_mallocSizeEstimate":0,"js_vaSize":62914560,"js_externalBytes":6528520,"js_markStackOverflows":0}}
+
+- worklet-filesystem memory: {"after-seed":{"totalPssKiB":288466},"after-last":{"totalPssKiB":402529}}
+
+- expo-sqlite seed wall-clock ms: products 188.76; orders 250.07 (whole collection, including progress delivery; not compared).
+
+- expo-sqlite: WAL wal; seed bytes {"products":2000,"orders":2758.653}; BEGIN retries 0.
+
+- expo-sqlite lag: {"seed":"simulator — not meaningful","grid":{"maxLagMs":65.53513100743294,"ticksOver50Ms":1}}
+
+- expo-sqlite heapAfterSeed: {"js_heapSize":29360128,"js_allocatedBytes":25391808,"gcCount":16,"raw":{"js_VMExperiments":0,"js_numGCs":16,"js_gcCPUTime":0.023857,"js_gcTime":0.024277135000000002,"js_totalAllocatedBytes":57146560,"js_allocatedBytes":25391808,"js_heapSize":29360128,"js_mallocSizeEstimate":0,"js_vaSize":29360128,"js_externalBytes":138804,"js_markStackOverflows":0}}
+
+- expo-sqlite heapAfterLast: {"js_heapSize":71303168,"js_allocatedBytes":44640144,"gcCount":885,"raw":{"js_VMExperiments":0,"js_numGCs":885,"js_gcCPUTime":2.7520980000000024,"js_gcTime":2.769868174,"js_totalAllocatedBytes":3335418816,"js_allocatedBytes":44640144,"js_heapSize":71303168,"js_mallocSizeEstimate":0,"js_vaSize":71303168,"js_externalBytes":13043074,"js_markStackOverflows":0}}
+
+- expo-sqlite memory: {"after-seed":{"totalPssKiB":206249},"after-last":{"totalPssKiB":341432}}
+
+#### large
+
+| Cell — p50 / p95 ms | expo-filesystem-js | worklet-filesystem | expo-sqlite | expo-filesystem-js ÷ expo-sqlite | worklet-filesystem ÷ expo-sqlite |
+| --- | --- | --- | --- | --- | --- |
+| products-grid-asShipped | — | 1933.98 / 5636.01 | 879.96 / 1738.53 | — | — |
+| products-grid-pushed-10 | — | 1447.29 / 1555.24 | 10.88 / 11.22 | — | — |
+| products-grid-pushed-50 | — | 1453.88 / 1813.80 | 19.39 / 62.67 | — | — |
+| products-catalogue-blob | — | 4827.22 / 6545.52 | 2369.17 / 7609.10 | — | — |
+| products-catalogue-projection | — | 3586.57 / 6610.46 | 335.17 / 420.43 | — | — |
+| products-findByIds-10 | — | 10.35 / 16.64 | 4.11 / 5.55 | — | — |
+| products-findByIds-50 | — | 26.43 / 32.15 | 13.48 / 22.90 | — | — |
+| products-remoteId-in-find | — | 702.45 / 852.90 | 21.09 / 27.71 | — | — |
+| products-remoteId-in-count | — | 616.04 / 659.97 | 11.74 / 17.57 | — | — |
+| seed-products | — | 7553.38 / 7637.42 | 3543.66 / 3868.19 | — | — |
+| orders-default-find-10 | — | 969.06 / 1149.93 | 17.68 / 25.69 | — | — |
+| orders-default-find-50 | — | 956.93 / 1029.45 | 39.85 / 47.39 | — | — |
+| orders-default-count | — | 1000.63 / 1037.63 | 362.64 / 373.84 | — | — |
+| orders-open-status | — | 2205.71 / 2287.66 | 2915.95 / 4955.92 | — | — |
+| order-line-add | — | 209.80 / 224.00 | 29.89 / 50.25 | — | — |
+| order-create | — | 12.12 / 17.51 | 17.51 / 39.13 | — | — |
+| cold-open-first-read | — | 982.26 / 1102.80 | 37.44 / 48.52 | — | — |
+
+- worklet-filesystem seed wall-clock ms: products 6230.52; orders 6548.93 (whole collection, including progress delivery; not compared).
+
+- worklet-filesystem: WAL n/a; seed bytes {"products":2000,"orders":2714.56025}; BEGIN retries 0.
+
+- worklet-filesystem disk: {"bytes":151917487,"files":26}
+
+- worklet-filesystem lag: {"seed":{"maxLagMs":129.58118000626564,"ticksOver50Ms":163},"grid":{"maxLagMs":3796.11362400651,"ticksOver50Ms":458}}
+
+- worklet-filesystem heapAfterSeed: {"js_heapSize":205520896,"js_allocatedBytes":170656136,"gcCount":266,"raw":{"js_VMExperiments":0,"js_numGCs":266,"js_gcCPUTime":0.3263740000000001,"js_gcTime":0.32953976800000045,"js_totalAllocatedBytes":634746704,"js_allocatedBytes":170656136,"js_heapSize":205520896,"js_mallocSizeEstimate":0,"js_vaSize":205520896,"js_externalBytes":54193770,"js_markStackOverflows":0}}
+
+- worklet-filesystem heapAfterLast: {"js_heapSize":574619648,"js_allocatedBytes":367858400,"gcCount":9806,"raw":{"js_VMExperiments":0,"js_numGCs":9806,"js_gcCPUTime":144.0244689999993,"js_gcTime":144.47840251999924,"js_totalAllocatedBytes":32231469504,"js_allocatedBytes":367858400,"js_heapSize":574619648,"js_mallocSizeEstimate":0,"js_vaSize":574619648,"js_externalBytes":64311614,"js_markStackOverflows":0}}
+
+- worklet-filesystem memory: {"after-seed":{"totalPssKiB":754832},"after-last":{"totalPssKiB":1251582}}
+
+- worklet-filesystem ingest-100 p50 / p95 / max ms: 195.05 / 345.35 / 401.08; 200 batches in a second fresh seed (original seed uses 1000).
+
+- expo-sqlite seed wall-clock ms: products 3552.50; orders 3822.14 (whole collection, including progress delivery; not compared).
+
+- expo-sqlite: WAL wal; seed bytes {"products":2000,"orders":2714.56025}; BEGIN retries 0.
+
+- expo-sqlite disk: {"bytes":201160168,"files":3}
+
+- expo-sqlite lag: {"seed":{"maxLagMs":106.73435500264168,"ticksOver50Ms":30},"grid":{"maxLagMs":1015.7846629917622,"ticksOver50Ms":264}}
+
+- expo-sqlite heapAfterSeed: {"js_heapSize":251658240,"js_allocatedBytes":240151536,"gcCount":139,"raw":{"js_VMExperiments":0,"js_numGCs":139,"js_gcCPUTime":0.272817,"js_gcTime":0.27444307300000015,"js_totalAllocatedBytes":536072584,"js_allocatedBytes":240151536,"js_heapSize":251658240,"js_mallocSizeEstimate":0,"js_vaSize":251658240,"js_externalBytes":1664822,"js_markStackOverflows":0}}
+
+- expo-sqlite heapAfterLast: {"js_heapSize":645922816,"js_allocatedBytes":364651160,"gcCount":9377,"raw":{"js_VMExperiments":0,"js_numGCs":9377,"js_gcCPUTime":151.24025999999958,"js_gcTime":151.85879905399955,"js_totalAllocatedBytes":31604972040,"js_allocatedBytes":364651160,"js_heapSize":645922816,"js_mallocSizeEstimate":0,"js_vaSize":645922816,"js_externalBytes":21055,"js_markStackOverflows":0}}
+
+- expo-sqlite memory: {"after-seed":{"totalPssKiB":488432},"after-last":{"totalPssKiB":926029}}
+
+- expo-sqlite ingest-100 p50 / p95 / max ms: 51.19 / 139.81 / 157.27; 200 batches in a second fresh seed (original seed uses 1000).
+
+### smoke.android.5C270DLCR0020Q.json
+
+Run complete.
+
+| Row | Scenarios | Smoke/probe divergences | Leg 3 content mismatches | Total divergences |
+| --- | --- | --- | --- | --- |
+| expo-filesystem-js | 11 | 0 | not run | not evaluated |
+| worklet-filesystem | 11 | 0 | not run | not evaluated |
+| expo-sqlite | 11 | 3 | not run | not evaluated |
+
+- expo-sqlite / exists-explicit-null: {"query":{"selector":{"value":{"$exists":false}}},"expected":["p1"],"actual":["p0","p1"],"pass":false}; {"query":{"selector":{"value":{"$exists":true}}},"expected":["p0","p2","p3","p4","p5","p6","p7"],"actual":["p2","p3","p4","p5","p6","p7"],"pass":false}
+
+- expo-sqlite / in-nin-missing: {"query":{"selector":{"value":{"$in":["blue",2]}}},"expected":["p2","p4"],"actual":["p2","p4"],"pass":true}; {"query":{"selector":{"value":{"$nin":["blue",2]}}},"expected":["p0","p1","p3","p5","p6","p7"],"actual":["p3","p5","p6","p7"],"pass":false}
+
+- expo-sqlite / sort-case-accents-mixed-types: {"query":{"selector":{},"sort":[{"name":"asc"}]},"expected":["p1","p4","p0","p3","p5","p6","p7","p2"],"actual":["p1","p4","p0","p3","p5","p6","p7","p2"],"pass":true}; {"query":{"selector":{},"sort":[{"value":"asc"}]},"expected":["p1","p0","p4","p6","p7","p5","p2","p3"],"actual":["p0","p1","p4","p6","p7","p5","p2","p3"],"pass":false}
 
 ## android/emulator-5554 — simulator — not evidence
 
@@ -246,11 +537,11 @@ Android stops use ActivityManager `am force-stop` (no lifecycle callbacks), not 
 
 Run complete.
 
-| Row | Trials | Acked tx / rows | ok | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| expo-filesystem-js | 5 | 114 / 11772 | 4 | 0 | 0 | 1 | 0 | 5 | 1 / 0 | 0 / 5 | 0 / 0 / 0 | 1163.83 |
-| worklet-filesystem | 5 | 228 / 26682 | 5 | 0 | 0 | 0 | 0 | 5 | 0 / 0 | 1 / 4 | 0 / 0 / 0 | 1198.26 |
-| expo-sqlite | 5 | 251 / 28856 | 5 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 1 / 4 | 0 / 0 / 0 | 169.11 |
+| Row | Trials | Acked tx / rows | ok | writer-failed | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| expo-filesystem-js | 5 | 114 / 11772 | 4 | 0 | 0 | 0 | 1 | 0 | 5 | 1 / 0 | 0 / 5 | 0 / 0 / 0 | 1163.83 |
+| worklet-filesystem | 5 | 228 / 26682 | 5 | 0 | 0 | 0 | 0 | 0 | 5 | 0 / 0 | 1 / 4 | 0 / 0 / 0 | 1198.26 |
+| expo-sqlite | 5 | 251 / 28856 | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 1 / 4 | 0 / 0 / 0 | 169.11 |
 
 ### results.android.emulator-5554.json
 
@@ -325,6 +616,193 @@ Run complete.
 
 - expo-sqlite / sort-case-accents-mixed-types: {"query":{"selector":{},"sort":[{"name":"asc"}]},"expected":["p1","p4","p0","p3","p5","p6","p7","p2"],"actual":["p1","p4","p0","p3","p5","p6","p7","p2"],"pass":true}; {"query":{"selector":{},"sort":[{"value":"asc"}]},"expected":["p1","p0","p4","p6","p7","p5","p2","p3"],"actual":["p0","p1","p4","p6","p7","p5","p2","p3"],"pass":false}
 
+## ios/00008027-000A49223631002E
+
+| Environment | Value |
+| --- | --- |
+| platform | ios |
+| device | 00008027-000A49223631002E |
+| deviceName | iPad |
+| os | 26.6.2 |
+| hardware | {"cpuType":{"name":"arm64e","subType":-2147483646,"type":16777228},"deviceType":"iPad","ecid":2895161054003246,"hardwareModel":"J320AP","internalStorageCapacity":256000000000,"isProductionFused":true,"marketingName":"iPad Pro (12.9-inch) (3rd generation)","platform":"iOS","productType":"iPad8,5","reality":"physical","serialNumber":"DLXY9127K7RG","supportedCPUTypes":[{"name":"arm64e","subType":-2147483646,"type":16777228},{"name":"arm64","subType":0,"type":16777228}],"supportedDeviceFamilies":[1,2],"thinningProductType":"iPad8,5","udid":"00008027-000A49223631002E"} |
+| simulator | false |
+| expo | 57.0.24 |
+| react-native | 0.86.3 |
+| expo-sqlite | 57.0.3 |
+| expo-file-system | 57.0.7 |
+| expo-opfs | 1.0.9 |
+| rxdb | 17.4.0 |
+| rxdb-premium | 17.4.0 |
+| rxjs | 7.8.2 |
+| react-native-worklets | 0.11.4 |
+| premiumMarkers | 47 |
+| expoOpfsShippedPatch | true |
+| beginRetryConsoleDir | false |
+| measuredAt | 2026-09-24T03:23:06.519Z |
+| runs | [{"startedAt":"2026-09-23T20:46:22.250Z","rows":["expo-filesystem-js","worklet-filesystem","expo-sqlite"],"scales":[]},{"startedAt":"2026-09-23T22:51:41.008Z","rows":["expo-filesystem-js","worklet-filesystem","expo-sqlite"],"scales":[]},{"startedAt":"2026-09-24T03:23:06.519Z","rows":["expo-filesystem-js","worklet-filesystem","expo-sqlite"],"scales":[]}] |
+| sqlite | 3.50.3 |
+
+### crash.ios.00008027-000A49223631002E.json
+
+Run complete.
+
+| Row | Trials | Acked tx / rows | ok | writer-failed | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| expo-filesystem-js | 30 | 405 / 40878 | 28 | 0 | 0 | 0 | 2 | 0 | 30 | 2 / 0 | 0 / 26 | 0 / 4 / 0 | 2183.97 |
+| worklet-filesystem | 30 | 1116 / 130146 | 26 | 0 | 0 | 0 | 4 | 0 | 30 | 4 / 0 | 2 / 24 | 0 / 4 / 0 | 1969.51 |
+| expo-sqlite | 30 | 1406 / 168134 | 30 | 0 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 4 / 23 | 0 / 3 / 0 | 281.36 |
+
+### results.ios.00008027-000A49223631002E.json
+
+**Incomplete:** interrupted
+
+- expo-filesystem-js large: harness-failed — Error: Harness timeout: no message from the app for 30 minutes while running     at jobTimeout (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/control.mjs:63:12)     at waitResult (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:121:23)     at async run (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:130:18)     at async file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:197:26
+
+#### expo-filesystem-js large — partial (row failed)
+
+Measured before the failure; not compared. — means samples/timings were not posted.
+
+| Cell | Samples | p50 ms | p95 ms |
+| --- | --- | --- | --- |
+| products-grid-asShipped | 7 | 7928.68 | 10553.01 |
+| products-grid-pushed-10 | 7 | 41259.62 | 43830.83 |
+| products-grid-pushed-50 | 7 | 40238.75 | 42846.89 |
+| products-catalogue-blob | 7 | 20680.05 | 112078.17 |
+| products-catalogue-projection | 7 | 73834.43 | 379132.79 |
+| products-findByIds-10 | 7 | 19.41 | 33.61 |
+| products-findByIds-50 | 7 | 23.21 | 33.52 |
+| products-remoteId-in-find | 7 | 239961.63 | 248011.46 |
+| products-remoteId-in-count | 7 | 238783.64 | 243929.77 |
+
+- worklet-filesystem large: harness-failed — Error: Harness timeout: no message from the app for 30 minutes while running     at jobTimeout (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/control.mjs:63:12)     at waitResult (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:121:23)     at async run (file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:130:18)     at async file:///Users/kilbot/Projects/monorepo-v2/.claude/worktrees/research-2091-native-storage/spikes/2091-native-storage/driver/driver.mjs:197:26
+
+#### worklet-filesystem large — partial (row failed)
+
+Measured before the failure; not compared. — means samples/timings were not posted.
+
+| Cell | Samples | p50 ms | p95 ms |
+| --- | --- | --- | --- |
+| products-grid-asShipped | 7 | 4736.52 | 9729.64 |
+| products-grid-pushed-10 | 7 | 4104.96 | 5484.29 |
+| products-grid-pushed-50 | 7 | 3944.78 | 4591.81 |
+| products-catalogue-blob | 7 | 22258.63 | 117854.45 |
+| products-catalogue-projection | 7 | 92939.52 | 133048.64 |
+| products-findByIds-10 | 7 | 2.45 | 4.51 |
+| products-findByIds-50 | 7 | 33.60 | 118.04 |
+| products-remoteId-in-find | 7 | 1052.33 | 1290.36 |
+| products-remoteId-in-count | 7 | 922.04 | 1646.70 |
+
+All available cross-row cells match on canonical revision-independent SHA-256 content; returned-order differences and normalized-sort violations recorded separately.
+
+#### small
+
+| Cell — p50 / p95 ms | expo-filesystem-js | worklet-filesystem | expo-sqlite | expo-filesystem-js ÷ expo-sqlite | worklet-filesystem ÷ expo-sqlite |
+| --- | --- | --- | --- | --- | --- |
+| products-grid-asShipped | 421.49 / 547.07 | 169.00 / 224.68 | 345.13 / 707.55 | 1.22 | 0.49 |
+| products-grid-pushed-10 | 463.63 / 615.32 | 54.84 / 61.27 | 1.03 / 1.11 | 449.07 | 53.12 |
+| products-grid-pushed-50 | 458.90 / 602.68 | 61.02 / 70.57 | 2.71 / 6.02 | 169.43 | 22.53 |
+| products-catalogue-blob | 627.76 / 683.71 | 137.90 / 289.96 | 202.43 / 546.29 | 3.10 | 0.68 |
+| products-catalogue-projection | 598.35 / 1010.58 | 134.58 / 169.79 | 30.20 / 35.44 | 19.81 | 4.46 |
+| products-findByIds-10 | 3.25 / 7.90 | 3.15 / 4.51 | 1.04 / 1.12 | 3.11 | 3.02 |
+| products-findByIds-50 | 15.80 / 16.16 | 5.76 / 18.38 | 2.39 / 4.02 | 6.60 | 2.41 |
+| products-remoteId-in-find | 829.67 / 927.24 | 82.44 / 158.93 | 4.50 / 5.82 | 184.53 | 18.34 |
+| products-remoteId-in-count | 728.25 / 771.11 | 72.12 / 78.87 | 2.21 / 2.30 | 329.02 | 32.58 |
+| seed-products | 663.16 / 1367.43 | 522.11 / 599.73 | 622.97 / 744.20 | 1.06 | 0.84 |
+| orders-default-find-10 | 861.60 / 2452.10 | 106.57 / 111.03 | 3.10 / 4.68 | 277.95 | 34.38 |
+| orders-default-find-50 | 863.80 / 2523.73 | 127.01 / 188.19 | 11.47 / 17.60 | 75.32 | 11.07 |
+| orders-default-count | 886.91 / 1969.39 | 113.35 / 171.85 | 45.57 / 59.72 | 19.46 | 2.49 |
+| orders-open-status | 465.76 / 1344.48 | 565.85 / 683.38 | 725.39 / 1183.51 | 0.64 | 0.78 |
+| order-line-add | 317.87 / 568.67 | 22.38 / 29.19 | 4.31 / 11.91 | 73.73 | 5.19 |
+| order-create | 0.86 / 1.04 | 1.97 / 3.48 | 2.20 / 9.21 | 0.39 | 0.89 |
+
+- expo-filesystem-js: WAL n/a; seed bytes {"products":2000,"orders":2758.653}; BEGIN retries 0.
+
+- expo-filesystem-js lag: {"seed":"simulator — not meaningful","grid":{"maxLagMs":531.1364579999354,"ticksOver50Ms":176}}
+
+- expo-filesystem-js heapAfterSeed: {"js_heapSize":41943040,"js_allocatedBytes":34254424,"gcCount":63,"raw":{"js_VMExperiments":0,"js_numGCs":63,"js_gcCPUTime":0.026951,"js_gcTime":0.03712075100000002,"js_totalAllocatedBytes":211943720,"js_allocatedBytes":34254424,"js_heapSize":41943040,"js_mallocSizeEstimate":0,"js_vaSize":41943040,"js_externalBytes":23013465,"js_markStackOverflows":0}}
+
+- expo-filesystem-js heapAfterLast: {"js_heapSize":150994944,"js_allocatedBytes":92714672,"gcCount":5330,"raw":{"js_VMExperiments":0,"js_numGCs":5330,"js_gcCPUTime":53.642323000000005,"js_gcTime":53.895759704999975,"js_totalAllocatedBytes":21115873568,"js_allocatedBytes":92714672,"js_heapSize":150994944,"js_mallocSizeEstimate":0,"js_vaSize":150994944,"js_externalBytes":62775443,"js_markStackOverflows":0}}
+
+- expo-filesystem-js memory: {"after-seed":null,"after-last":null}
+
+- worklet-filesystem seed wall-clock ms: products 623.73; orders 1306.90 (whole collection, including progress delivery; not compared).
+
+- worklet-filesystem: WAL n/a; seed bytes {"products":2000,"orders":2758.653}; BEGIN retries 0.
+
+- worklet-filesystem lag: {"seed":"simulator — not meaningful","grid":{"maxLagMs":112.7357919998467,"ticksOver50Ms":13}}
+
+- worklet-filesystem heapAfterSeed: {"js_heapSize":675282944,"js_allocatedBytes":569798016,"gcCount":6141,"raw":{"js_VMExperiments":0,"js_numGCs":6141,"js_gcCPUTime":35.014762000000076,"js_gcTime":626.2869453209993,"js_totalAllocatedBytes":37133694880,"js_allocatedBytes":569798016,"js_heapSize":675282944,"js_mallocSizeEstimate":0,"js_vaSize":675282944,"js_externalBytes":344554459,"js_markStackOverflows":0}}
+
+- worklet-filesystem heapAfterLast: {"js_heapSize":805306368,"js_allocatedBytes":56841128,"gcCount":7818,"raw":{"js_VMExperiments":0,"js_numGCs":7818,"js_gcCPUTime":48.82299600000051,"js_gcTime":640.176819195999,"js_totalAllocatedBytes":43221239800,"js_allocatedBytes":56841128,"js_heapSize":805306368,"js_mallocSizeEstimate":0,"js_vaSize":805306368,"js_externalBytes":6375,"js_markStackOverflows":0}}
+
+- worklet-filesystem memory: {"after-seed":null,"after-last":null}
+
+- expo-sqlite seed wall-clock ms: products 439.81; orders 282.15 (whole collection, including progress delivery; not compared).
+
+- expo-sqlite: WAL wal; seed bytes {"products":2000,"orders":2758.653}; BEGIN retries 0.
+
+- expo-sqlite lag: {"seed":"simulator — not meaningful","grid":{"maxLagMs":655.8358749998733,"ticksOver50Ms":146}}
+
+- expo-sqlite heapAfterSeed: {"js_heapSize":671088640,"js_allocatedBytes":591075288,"gcCount":18595,"raw":{"js_VMExperiments":0,"js_numGCs":18595,"js_gcCPUTime":-1719.0282700000012,"js_gcTime":2581.603709299005,"js_totalAllocatedBytes":31175183248,"js_allocatedBytes":591075288,"js_heapSize":671088640,"js_mallocSizeEstimate":0,"js_vaSize":671088640,"js_externalBytes":159008991,"js_markStackOverflows":0}}
+
+- expo-sqlite heapAfterLast: {"js_heapSize":679477248,"js_allocatedBytes":57594552,"gcCount":21004,"raw":{"js_VMExperiments":0,"js_numGCs":21004,"js_gcCPUTime":-1671.9481389999266,"js_gcTime":2629.906469387003,"js_totalAllocatedBytes":37132404168,"js_allocatedBytes":57594552,"js_heapSize":679477248,"js_mallocSizeEstimate":0,"js_vaSize":679477248,"js_externalBytes":6523779,"js_markStackOverflows":0}}
+
+- expo-sqlite memory: {"after-seed":null,"after-last":null}
+
+#### large
+
+| Cell — p50 / p95 ms | expo-filesystem-js | worklet-filesystem | expo-sqlite | expo-filesystem-js ÷ expo-sqlite | worklet-filesystem ÷ expo-sqlite |
+| --- | --- | --- | --- | --- | --- |
+| products-grid-asShipped | — | — | 4268.27 / 11904.03 | — | — |
+| products-grid-pushed-10 | — | — | 1.15 / 13.53 | — | — |
+| products-grid-pushed-50 | — | — | 17.34 / 36.99 | — | — |
+| products-catalogue-blob | — | — | 30398.85 / 102456.16 | — | — |
+| products-catalogue-projection | — | — | 4236.56 / 5511.52 | — | — |
+| products-findByIds-10 | — | — | 1.14 / 1.96 | — | — |
+| products-findByIds-50 | — | — | 2.85 / 3.79 | — | — |
+| products-remoteId-in-find | — | — | 39.01 / 40.92 | — | — |
+| products-remoteId-in-count | — | — | 3.58 / 5.04 | — | — |
+| seed-products | — | — | 5800.43 / 15894.05 | — | — |
+| orders-default-find-10 | — | — | 3.37 / 66.31 | — | — |
+| orders-default-find-50 | — | — | 13.74 / 52.42 | — | — |
+| orders-default-count | — | — | 529.17 / 554.13 | — | — |
+| orders-open-status | — | — | 48310.02 / 181612.76 | — | — |
+| order-line-add | — | — | 6.39 / 113.77 | — | — |
+| order-create | — | — | 3.23 / 98.18 | — | — |
+| cold-open-first-read | — | — | 19.49 / 21.81 | — | — |
+
+- expo-sqlite seed wall-clock ms: products 2205.85; orders 2406.86 (whole collection, including progress delivery; not compared).
+
+- expo-sqlite: WAL wal; seed bytes {"products":2000,"orders":2714.56025}; BEGIN retries 0.
+
+- expo-sqlite disk: {"bytes":201160168,"files":3}
+
+- expo-sqlite lag: {"seed":{"maxLagMs":41.88462499901652,"ticksOver50Ms":0},"grid":{"maxLagMs":6848.100708000362,"ticksOver50Ms":2099}}
+
+- expo-sqlite heapAfterSeed: {"js_heapSize":314572800,"js_allocatedBytes":258529712,"gcCount":196,"raw":{"js_VMExperiments":0,"js_numGCs":196,"js_gcCPUTime":0.168083,"js_gcTime":0.20400466999999994,"js_totalAllocatedBytes":766491264,"js_allocatedBytes":258529712,"js_heapSize":314572800,"js_mallocSizeEstimate":0,"js_vaSize":314572800,"js_externalBytes":831323,"js_markStackOverflows":0}}
+
+- expo-sqlite heapAfterLast: {"js_heapSize":910163968,"js_allocatedBytes":525024656,"gcCount":40257,"raw":{"js_VMExperiments":0,"js_numGCs":40257,"js_gcCPUTime":45.50122199992356,"js_gcTime":4349.027564798007,"js_totalAllocatedBytes":57204930720,"js_allocatedBytes":525024656,"js_heapSize":910163968,"js_mallocSizeEstimate":0,"js_vaSize":910163968,"js_externalBytes":15701,"js_markStackOverflows":0}}
+
+- expo-sqlite memory: {"after-seed":null,"after-last":null}
+
+- expo-sqlite ingest-100 p50 / p95 / max ms: 138.38 / 330.40 / 353.61; 200 batches in a second fresh seed (original seed uses 1000).
+
+### smoke.ios.00008027-000A49223631002E.json
+
+Run complete.
+
+| Row | Scenarios | Smoke/probe divergences | Leg 3 content mismatches | Total divergences |
+| --- | --- | --- | --- | --- |
+| expo-filesystem-js | 11 | 0 | not run | not evaluated |
+| worklet-filesystem | 11 | 0 | not run | not evaluated |
+| expo-sqlite | 11 | 3 | not run | not evaluated |
+
+- expo-sqlite / exists-explicit-null: {"query":{"selector":{"value":{"$exists":false}}},"expected":["p1"],"actual":["p0","p1"],"pass":false}; {"query":{"selector":{"value":{"$exists":true}}},"expected":["p0","p2","p3","p4","p5","p6","p7"],"actual":["p2","p3","p4","p5","p6","p7"],"pass":false}
+
+- expo-sqlite / in-nin-missing: {"query":{"selector":{"value":{"$in":["blue",2]}}},"expected":["p2","p4"],"actual":["p2","p4"],"pass":true}; {"query":{"selector":{"value":{"$nin":["blue",2]}}},"expected":["p0","p1","p3","p5","p6","p7"],"actual":["p3","p5","p6","p7"],"pass":false}
+
+- expo-sqlite / sort-case-accents-mixed-types: {"query":{"selector":{},"sort":[{"name":"asc"}]},"expected":["p1","p4","p0","p3","p5","p6","p7","p2"],"actual":["p1","p4","p0","p3","p5","p6","p7","p2"],"pass":true}; {"query":{"selector":{},"sort":[{"value":"asc"}]},"expected":["p1","p0","p4","p6","p7","p5","p2","p3"],"actual":["p0","p1","p4","p6","p7","p5","p2","p3"],"pass":false}
+
 ## ios/DDC18EF3-759A-494B-A0B1-E5139EA0A74F — simulator — not evidence
 
 | Environment | Value |
@@ -353,11 +831,11 @@ Run complete.
 
 Run complete.
 
-| Row | Trials | Acked tx / rows | ok | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| expo-filesystem-js | 5 | 187 / 21344 | 5 | 0 | 0 | 0 | 0 | 4 | 0 / 0 | 0 / 4 | 0 / 1 / 0 | 2942.28 |
-| worklet-filesystem | 5 | 216 / 26568 | 4 | 0 | 0 | 1 | 0 | 5 | 1 / 0 | 2 / 3 | 0 / 0 / 0 | 1012.62 |
-| expo-sqlite | 5 | 201 / 23456 | 5 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 1 / 2 | 0 / 2 / 0 | 114.70 |
+| Row | Trials | Acked tx / rows | ok | writer-failed | open-failed | integrity-failed | lost | partial | Repaired on reopen | Ledger lost / partial | In-flight present / absent | In-flight partial / none / unknown | Median reopen ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| expo-filesystem-js | 5 | 187 / 21344 | 5 | 0 | 0 | 0 | 0 | 0 | 4 | 0 / 0 | 0 / 4 | 0 / 1 / 0 | 2942.28 |
+| worklet-filesystem | 5 | 216 / 26568 | 4 | 0 | 0 | 0 | 1 | 0 | 5 | 1 / 0 | 2 / 3 | 0 / 0 / 0 | 1012.62 |
+| expo-sqlite | 5 | 201 / 23456 | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 0 / 0 | 1 / 2 | 0 / 2 / 0 | 114.70 |
 
 ### results.ios.DDC18EF3-759A-494B-A0B1-E5139EA0A74F.json
 
@@ -436,22 +914,39 @@ Run complete.
 
 Lowest p50, descriptive only. Simulator files are listed for harness verification, not the platform decision.
 
-| Scale / cell | android/emulator-5554 — simulator — not evidence | ios/DDC18EF3-759A-494B-A0B1-E5139EA0A74F — simulator — not evidence |
-| --- | --- | --- |
-| small/products-grid-asShipped | expo-sqlite | expo-sqlite |
-| small/products-grid-pushed-10 | expo-sqlite | expo-sqlite |
-| small/products-grid-pushed-50 | expo-sqlite | expo-sqlite |
-| small/products-catalogue-blob | expo-sqlite | worklet-filesystem |
-| small/products-catalogue-projection | expo-sqlite | expo-sqlite |
-| small/products-findByIds-10 | expo-sqlite | expo-sqlite |
-| small/products-findByIds-50 | expo-sqlite | expo-sqlite |
-| small/products-remoteId-in-find | expo-sqlite | expo-sqlite |
-| small/products-remoteId-in-count | expo-sqlite | expo-sqlite |
-| small/seed-products | expo-sqlite | expo-sqlite |
-| small/orders-default-find-10 | expo-sqlite | expo-sqlite |
-| small/orders-default-find-50 | expo-sqlite | expo-sqlite |
-| small/orders-default-count | expo-sqlite | expo-sqlite |
-| small/orders-open-status | expo-sqlite | expo-sqlite |
-| small/order-line-add | expo-sqlite | expo-sqlite |
-| small/order-create | expo-filesystem-js | expo-sqlite |
+| Scale / cell | android/5C270DLCR0020Q | android/emulator-5554 — simulator — not evidence | ios/00008027-000A49223631002E | ios/DDC18EF3-759A-494B-A0B1-E5139EA0A74F — simulator — not evidence |
+| --- | --- | --- | --- | --- |
+| small/products-grid-asShipped | expo-sqlite | expo-sqlite | worklet-filesystem | expo-sqlite |
+| small/products-grid-pushed-10 | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/products-grid-pushed-50 | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/products-catalogue-blob | expo-sqlite | expo-sqlite | worklet-filesystem | worklet-filesystem |
+| small/products-catalogue-projection | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/products-findByIds-10 | expo-filesystem-js | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/products-findByIds-50 | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/products-remoteId-in-find | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/products-remoteId-in-count | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/seed-products | expo-filesystem-js | expo-sqlite | worklet-filesystem | expo-sqlite |
+| small/orders-default-find-10 | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/orders-default-find-50 | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/orders-default-count | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/orders-open-status | expo-sqlite | expo-sqlite | expo-filesystem-js | expo-sqlite |
+| small/order-line-add | expo-sqlite | expo-sqlite | expo-sqlite | expo-sqlite |
+| small/order-create | expo-filesystem-js | expo-filesystem-js | expo-filesystem-js | expo-sqlite |
+| large/products-grid-asShipped | not compared | not compared | not compared | not compared |
+| large/products-grid-pushed-10 | not compared | not compared | not compared | not compared |
+| large/products-grid-pushed-50 | not compared | not compared | not compared | not compared |
+| large/products-catalogue-blob | not compared | not compared | not compared | not compared |
+| large/products-catalogue-projection | not compared | not compared | not compared | not compared |
+| large/products-findByIds-10 | not compared | not compared | not compared | not compared |
+| large/products-findByIds-50 | not compared | not compared | not compared | not compared |
+| large/products-remoteId-in-find | not compared | not compared | not compared | not compared |
+| large/products-remoteId-in-count | not compared | not compared | not compared | not compared |
+| large/seed-products | not compared | not compared | not compared | not compared |
+| large/orders-default-find-10 | not compared | not compared | not compared | not compared |
+| large/orders-default-find-50 | not compared | not compared | not compared | not compared |
+| large/orders-default-count | not compared | not compared | not compared | not compared |
+| large/orders-open-status | not compared | not compared | not compared | not compared |
+| large/order-line-add | not compared | not compared | not compared | not compared |
+| large/order-create | not compared | not compared | not compared | not compared |
+| large/cold-open-first-read | not compared | not compared | not compared | not compared |
 <!-- generated:end -->
