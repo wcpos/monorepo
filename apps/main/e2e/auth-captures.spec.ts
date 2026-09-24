@@ -20,10 +20,12 @@ async function capture(page: Page, info: TestInfo, state: string, step: ScaleSte
 		.map(([name, value]) => `${name}: ${value}px !important;`)
 		.join('');
 	const style = await page.addStyleTag({ content: `:root, [style*="--spacing:"] { ${tokens} }` });
-	await info.attach(`connect-captures-${state}`, {
-		body: await page.screenshot({ fullPage: true }),
-		contentType: 'image/png',
-	});
+	// A file in the test's output dir survives a pass; an in-memory attachment does not.
+	// The output dir's name truncates the describe title, so the file carries the combination.
+	const combo = info.titlePath.find((title) => /^(tablet|phone)-/.test(title)) ?? 'unknown';
+	const path = info.outputPath(`${combo}--${state}.png`);
+	await page.screenshot({ path, fullPage: true });
+	await info.attach(`connect-captures-${state}`, { path, contentType: 'image/png' });
 	await style.evaluate((element) => element.parentNode?.removeChild(element));
 }
 
@@ -50,8 +52,15 @@ for (const [device, viewport] of Object.entries({
 				});
 				test('saved account, store selection and Open POS', async ({ page }, info) => {
 					await hydrateAuthenticatedPage(page, info, { waitForCatalogue: false });
-					// The connect route with a saved site: the sites region first, the address folded.
-					await page.goto('/connect');
+					// A live session is redirected off the auth routes, so sign out through
+					// the cashier sheet: the connect screen then shows the saved site first.
+					// The phone layout mounts two register bars; only one is on screen.
+					await page
+						.getByTestId('register-bar-avatar')
+						.locator('visible=true')
+						.first()
+						.click({ timeout: 60_000 });
+					await page.getByTestId('user-sheet-sign-out').click({ timeout: 60_000 });
 					await expect(page.getByTestId('wp-user-button').first()).toBeVisible({ timeout: 60_000 });
 					await capture(page, info, 'one-site-with-users', step);
 					await page.getByTestId('wp-user-button').first().click();

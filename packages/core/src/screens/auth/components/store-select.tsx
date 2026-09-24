@@ -165,14 +165,14 @@ export function StoreSelect({
 			<VStack space="sm">
 				<Text className="text-sm font-semibold">
 					{stores.length > 1
-						? t('auth.select_a_store', { _tags: 'core' })
+						? t('auth.choose_a_store', { _tags: 'core' })
 						: t('auth.store', { _tags: 'core' })}
 				</Text>
 				{stores.length === 0 ? (
 					<EmptyState
 						kind="empty"
 						size="surface"
-						title={t('auth.no_stores_available')}
+						title={t('auth.no_stores_for_this_user')}
 						description={t('auth.set_up_store_on_server')}
 					/>
 				) : (

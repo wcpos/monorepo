@@ -118,7 +118,7 @@ export function DemoButton() {
 			size="sm"
 			loading={loading}
 		>
-			<ButtonText>{t('auth.enter_demo_store')}</ButtonText>
+			<ButtonText>{t('auth.try_the_demo_store')}</ButtonText>
 		</Button>
 	);
 }

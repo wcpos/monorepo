@@ -26,7 +26,7 @@ export function UrlInput() {
 
 	return (
 		<VStack className="gap-2">
-			<Label nativeID="woo-store">{t('auth.enter_the_url_of_your_woocommerce')}</Label>
+			<Label nativeID="woo-store">{t('auth.your_stores_address')}</Label>
 			<Input
 				testID="store-url-input"
 				aria-labelledby="woo-store"

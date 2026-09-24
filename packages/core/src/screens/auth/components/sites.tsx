@@ -92,7 +92,9 @@ export function Sites({ user }: SitesProps) {
 	// Multiple sites: use accordion
 	return (
 		<VStack className="w-full gap-2" testID="logged-in-users-label">
-			<Text className="text-sm font-semibold">{t('auth.your_sites', { _tags: 'core' })}</Text>
+			<Text className="text-sm font-semibold">
+				{t('auth.your_sites_heading', { _tags: 'core' })}
+			</Text>
 			<Accordion
 				className="gap-2"
 				type="single"

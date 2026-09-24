@@ -175,6 +175,7 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 					<Loader size="xs" variant="muted" />
 				) : (
 					<StatusBadge
+						className="self-start"
 						label={isValid ? t('auth.signed_in') : t('auth.sign_in_again')}
 						variant={isValid ? 'success' : 'warning'}
 					/>
