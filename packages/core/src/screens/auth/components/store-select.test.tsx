@@ -35,10 +35,19 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/empty-state', () => ({
-	EmptyState: ({ title, description }: { title: string; description: string }) => (
+	// Mirrors the primitive: an inline empty state drops its description.
+	EmptyState: ({
+		title,
+		description,
+		size,
+	}: {
+		title: string;
+		description: string;
+		size?: string;
+	}) => (
 		<section>
 			{title}
-			<p>{description}</p>
+			{size !== 'inline' && <p>{description}</p>}
 		</section>
 	),
 }));

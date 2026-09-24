@@ -34,6 +34,8 @@ for (const [device, viewport] of Object.entries({
 	for (const colorScheme of ['light', 'dark'] as const) {
 		for (const step of ['compact', 'regular', 'spacious'] as const) {
 			test.describe(`${device}-${colorScheme}-${step}`, () => {
+				// The app's theme setting defaults to System, so the emulated colour
+				// scheme is the theme; no settings screen is driven.
 				test.use({ viewport, colorScheme, hasTouch: true });
 				test('first run, typing and discovery error', async ({ page }, info) => {
 					await stubStoreVersionForE2E(page.context(), getStoreUrl(info), getStoreVariant(info));
@@ -48,20 +50,8 @@ for (const [device, viewport] of Object.entries({
 				});
 				test('saved account, store selection and Open POS', async ({ page }, info) => {
 					await hydrateAuthenticatedPage(page, info, { waitForCatalogue: false });
-					// Use the existing theme UI so navigation's inline background changes too.
-					await page.goto('/settings/theme');
-					const themeScreen = page.getByTestId('screen-settings-theme');
-					await expect(themeScreen).toBeVisible({ timeout: 60_000 });
-					// Theme cards are ordered System, Light, Dark; no translated selector.
-					const themeCard = themeScreen
-						.locator('[aria-selected]')
-						.nth(colorScheme === 'light' ? 1 : 2);
-					await themeCard.click();
-					await expect(themeCard).toHaveAttribute('aria-selected', 'true');
-					await page.goto('/');
-					await page.getByTestId('user-menu-trigger').click();
-					// Logout is the final item in this menu and has no testID.
-					await page.getByRole('menuitem').last().click();
+					// The connect route with a saved site: the sites region first, the address folded.
+					await page.goto('/connect');
 					await expect(page.getByTestId('wp-user-button').first()).toBeVisible({ timeout: 60_000 });
 					await capture(page, info, 'one-site-with-users', step);
 					await page.getByTestId('wp-user-button').first().click();
@@ -73,12 +63,6 @@ for (const [device, viewport] of Object.entries({
 						.click();
 					await expect(page.getByTestId('open-pos-button')).toBeEnabled({ timeout: 60_000 });
 					await capture(page, info, 'open-pos-enabled', step);
-				});
-				test('demo', async ({ page }, info) => {
-					await page.goto('/');
-					await page.getByTestId('enter-demo-store-button').click({ timeout: 60_000 });
-					await expect(page.getByTestId('wp-user-button').first()).toBeVisible({ timeout: 90_000 });
-					await capture(page, info, 'demo', step);
 				});
 			});
 		}

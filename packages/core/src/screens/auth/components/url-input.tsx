@@ -53,7 +53,11 @@ export function UrlInput() {
 				<ButtonText>{t('auth.connect')}</ButtonText>
 			</Button>
 			{loading && (
-				<Text className="text-muted-foreground text-sm" testID="connect-progress">
+				<Text
+					className="text-muted-foreground text-sm"
+					testID="connect-progress"
+					accessibilityLiveRegion="polite"
+				>
 					{stages[status]}
 				</Text>
 			)}

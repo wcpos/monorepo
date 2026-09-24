@@ -171,7 +171,7 @@ export function StoreSelect({
 				{stores.length === 0 ? (
 					<EmptyState
 						kind="empty"
-						size="inline"
+						size="surface"
 						title={t('auth.no_stores_available')}
 						description={t('auth.set_up_store_on_server')}
 					/>
