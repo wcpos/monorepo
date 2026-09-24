@@ -29,8 +29,9 @@ export type DialogContentProps = Omit<DialogPrimitive.ContentProps, 'children' |
 	closeButtonProps?: Omit<React.ComponentProps<typeof IconButton>, 'name'>;
 	children: React.ReactNode;
 };
+type DialogPresentation = Exclude<OverlayPresentation, 'anchored'>;
 const RouteContext = React.createContext({ route: false });
-const byPresentation: Record<OverlayPresentation, string> = {
+const byPresentation: Record<DialogPresentation, string> = {
 	center: 'rounded-lg border',
 	left: 'h-full rounded-none border-r',
 	right: 'h-full rounded-none border-l',
@@ -80,7 +81,7 @@ export function useDialog(): { open: boolean; close: () => void } {
 export function DialogContent(allProps: DialogContentProps): React.JSX.Element | null {
 	const { side = 'center', portalHost, inline, testID, ...props } = allProps;
 	const phone = useIsPhone();
-	const presentation: OverlayPresentation =
+	const presentation: DialogPresentation =
 		phone && (side === 'left' || side === 'right') ? 'page' : side;
 	const { route } = React.useContext(RouteContext);
 	const renderInline = route || (inline ?? false);
@@ -138,7 +139,7 @@ function DialogPanel(allProps: DialogContentProps) {
 			}
 			className={cn(
 				'bg-card border-border web:cursor-default z-60 max-h-full max-w-full gap-4 py-4',
-				byPresentation[presentation],
+				byPresentation[presentation as DialogPresentation],
 				sizeClass,
 				open ? OVERLAY_MOTION[presentation].enter : OVERLAY_MOTION[presentation].exit,
 				className

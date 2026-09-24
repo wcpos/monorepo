@@ -124,7 +124,7 @@ function Probe() {
 	return <View testID="probe" {...{ dataSet: { defer: String(deferAutoFocus) } }} />;
 }
 
-it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
+it.each(['center', 'left', 'right', 'bottom', 'page'] as OverlayPresentation[])(
 	'%s configures native insets, accessibility, keyboard and panel motion',
 	(presentation) => {
 		const { container } = render(
@@ -174,3 +174,53 @@ it.each(Object.keys(OVERLAY_MOTION) as OverlayPresentation[])(
 		expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', 'false');
 	}
 );
+
+it('keeps anchored native content full-bleed and reachable without keyboard or inset layout', () => {
+	render(
+		<OverlayShell presentation="anchored" open Scrim={Pressable} testID="a">
+			<Probe />
+		</OverlayShell>
+	);
+	expect(mockViews[0].style).toBe(StyleSheet.absoluteFill);
+	expect(mockViews[0].pointerEvents).toBe('box-none');
+	expect(mockViews.some((p) => 'behavior' in p)).toBe(false);
+	expect(mockScrimProps.at(-1)).toMatchObject({
+		style: StyleSheet.absoluteFill,
+		accessible: false,
+		importantForAccessibility: 'no',
+		accessibilityElementsHidden: true,
+	});
+	expect(mockScrimProps.at(-1)?.className).toBeUndefined();
+	expect(mockAnimatedViews.at(-1)).toMatchObject({
+		style: StyleSheet.absoluteFill,
+		pointerEvents: 'box-none',
+		entering: OVERLAY_MOTION.anchored.entering,
+		exiting: OVERLAY_MOTION.anchored.exiting,
+	});
+	expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', 'false');
+});
+
+it('closes a sheet on the hardware back and the accessibility escape when it owns its dismiss', () => {
+	const { BackHandler } = jest.requireActual<typeof import('react-native')>('react-native');
+	const remove = jest.fn();
+	const add = jest.spyOn(BackHandler, 'addEventListener').mockReturnValue({ remove });
+	const onDismiss = jest.fn();
+	const { unmount } = render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={onDismiss} testID="s">
+			<View testID="panel" />
+		</OverlayShell>
+	);
+	expect(add).toHaveBeenCalledWith('hardwareBackPress', expect.any(Function));
+	expect((add.mock.calls.at(-1)?.[1] as () => boolean)()).toBe(true);
+	expect(onDismiss).toHaveBeenCalledTimes(1);
+	unmount();
+	expect(remove).toHaveBeenCalled();
+	add.mockClear();
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} testID="t">
+			<View testID="panel" />
+		</OverlayShell>
+	);
+	expect(add).not.toHaveBeenCalled();
+	add.mockRestore();
+});

@@ -1,5 +1,15 @@
 import * as React from 'react';
-import { Platform, type StyleProp, StyleSheet, View, type ViewStyle } from 'react-native';
+import {
+	AccessibilityInfo,
+	BackHandler,
+	findNodeHandle,
+	type GestureResponderEvent,
+	Platform,
+	type StyleProp,
+	StyleSheet,
+	View,
+	type ViewStyle,
+} from 'react-native';
 
 import Animated, {
 	FadeIn,
@@ -14,10 +24,17 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAvoidingView } from '../keyboard-controller';
-import { EASE, OVERLAY_FADE, PANEL_SLIDE, PANEL_SLIDE_OUT, SHEET_RISE } from './motion';
+import {
+	EASE,
+	OVERLAY_FADE,
+	PANEL_SLIDE,
+	PANEL_SLIDE_OUT,
+	POPOVER_FADE,
+	SHEET_RISE,
+} from './motion';
 import { cn } from './utils';
 const isWeb = Platform.OS === 'web';
-export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page';
+export type OverlayPresentation = 'center' | 'left' | 'right' | 'bottom' | 'page' | 'anchored';
 export type OverlayScrimProps = {
 	children?: React.ReactNode;
 	className?: string;
@@ -27,18 +44,28 @@ export type OverlayScrimProps = {
 	accessible?: boolean;
 	importantForAccessibility?: 'auto' | 'yes' | 'no' | 'no-hide-descendants';
 	accessibilityElementsHidden?: boolean;
+	onPress?: (event: GestureResponderEvent) => void;
 };
 export type OverlayScrimComponent = React.ComponentType<OverlayScrimProps>;
 export type OverlayShellProps = {
 	presentation: OverlayPresentation;
 	open: boolean;
 	Scrim: OverlayScrimComponent;
+	/**
+	 * A sheet's own dismiss, for a panel that mounts no primitive `Content`: on web the
+	 * popover-family `Overlay` is a bare Pressable, so a press on the backdrop itself (not
+	 * one bubbling up from the panel) calls it; on native the hardware back and the
+	 * accessibility escape call it, the jobs `Content` would have done. Radix dialog
+	 * overlays and every native `Overlay` already dismiss on a press: leave it unset there.
+	 */
+	onDismiss?: () => void;
 	pinned?: boolean;
 	testID?: string;
 	children: React.ReactNode;
 };
 export type OverlayContextValue = {
 	presentation: OverlayPresentation;
+	open: boolean;
 	deferAutoFocus: boolean;
 	onPanelNode: (node: HTMLElement | null) => void;
 };
@@ -48,6 +75,13 @@ export function useOverlay(): OverlayContextValue {
 	if (!context) throw new Error('useOverlay must be used within an OverlayShell');
 	return context;
 }
+export function useOverlayPresentation(): OverlayPresentation | undefined {
+	return React.useContext(OverlayContext)?.presentation;
+}
+export const OVERLAY_PANEL = {
+	anchored: 'bg-card border-border rounded-lg border p-2 shadow-md',
+	bottom: 'bg-card border-border w-full max-h-[92%] rounded-t-2xl border-t p-2',
+};
 export const OVERLAY_MOTION: Record<
 	OverlayPresentation,
 	{
@@ -57,6 +91,12 @@ export const OVERLAY_MOTION: Record<
 		exiting: NonNullable<React.ComponentProps<typeof Animated.View>['exiting']>;
 	}
 > = {
+	anchored: {
+		enter: 'web:animate-pop-in',
+		exit: 'web:animate-pop-out',
+		entering: FadeIn.duration(POPOVER_FADE).easing(EASE),
+		exiting: FadeOut.duration(POPOVER_FADE).easing(EASE),
+	},
 	center: {
 		enter: 'web:animate-dialog-in',
 		exit: 'web:animate-dialog-out',
@@ -88,7 +128,56 @@ export const OVERLAY_MOTION: Record<
 		exiting: SlideOutRight.duration(PANEL_SLIDE_OUT).easing(EASE),
 	},
 };
+/**
+ * The phone sheet's panel for an overlay that mounts no primitive `Content` (the popover
+ * family under the phone width): the drawn sheet skin, the rise from `open`, the caller's
+ * classes first so the sheet's geometry wins, and the node handed to the shell so it can
+ * focus the first field once the rise settles.
+ */
+export function OverlaySheetPanel({
+	className,
+	style,
+	testID,
+	children,
+}: {
+	className?: string;
+	style?: StyleProp<ViewStyle>;
+	testID?: string;
+	children: React.ReactNode;
+}) {
+	const { open, onPanelNode } = useOverlay();
+	const setNode = React.useCallback(
+		(panel: View | null) => {
+			onPanelNode(panel as unknown as HTMLElement | null);
+			// Native: the primitive Content moved accessibility focus into itself on open; the sheet does the same.
+			if (isWeb || !panel) return;
+			const tag = findNodeHandle(panel);
+			if (tag) AccessibilityInfo.setAccessibilityFocus(tag);
+		},
+		[onPanelNode]
+	);
+	return (
+		<View
+			ref={setNode}
+			role="dialog"
+			aria-modal
+			// Focusable itself, for a sheet with nothing tabbable inside (the settle fallback).
+			tabIndex={-1}
+			testID={testID}
+			className={cn(
+				className,
+				OVERLAY_PANEL.bottom,
+				open ? OVERLAY_MOTION.bottom.enter : OVERLAY_MOTION.bottom.exit,
+				'z-50'
+			)}
+			style={style}
+		>
+			{children}
+		</View>
+	);
+}
 const align: Record<OverlayPresentation, string> = {
+	anchored: '',
 	center: 'items-center justify-center p-2',
 	right: 'flex-row justify-end items-stretch p-0',
 	left: 'flex-row justify-start items-stretch p-0',
@@ -98,8 +187,10 @@ const align: Record<OverlayPresentation, string> = {
 const TEXT_FIELD =
 	'input:not([disabled]):not([type="hidden"]),textarea:not([disabled]),select:not([disabled])';
 const TABBABLE = `a[href],button:not([disabled]),${TEXT_FIELD},[tabindex]:not([tabindex="-1"])`;
+/** The open sheets that own their dismiss, oldest first; the last one owns the keys. */
+const keyOwners: object[] = [];
 /**
- * Web only, side panels only. Radix focuses the first tabbable the moment the content
+ * Web only, side panels and the sheets that own their dismiss. Radix focuses the first tabbable the moment the content
  * mounts, while `slide-in-from-*` still has the panel translated a full width off-screen.
  * The browser then scrolls the nearest scrollable ancestor (in the POS that is a
  * react-native-screens wrapper) to reveal the focused element, and the whole screen
@@ -111,14 +202,78 @@ const TABBABLE = `a[href],button:not([disabled]),${TEXT_FIELD},[tabindex]:not([t
  * keyed on `open` runs, and that effect would never re-run.
  */
 export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
-	const { presentation, open, Scrim, pinned, testID, children } = props;
+	const { presentation, open, Scrim, onDismiss, pinned, testID, children } = props;
 	const insets = useSafeAreaInsets();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
 	const deferAutoFocus = isWeb && fullHeight;
+	const ownsDismiss = Boolean(onDismiss);
+	const onDismissRef = React.useRef(onDismiss);
+	React.useEffect(() => {
+		onDismissRef.current = onDismiss;
+	});
+	const onScrimPress = React.useCallback(
+		(event?: GestureResponderEvent) => {
+			// On web the scrim is the panel's ancestor, so a press inside the panel bubbles
+			// here too; only the backdrop itself dismisses.
+			if (event?.target && event.currentTarget && event.target !== event.currentTarget) return;
+			onDismiss?.();
+		},
+		[onDismiss]
+	);
+	React.useEffect(() => {
+		if (!open || !ownsDismiss) return;
+		if (isWeb) {
+			// A sheet without primitive Content has no Radix dismissable layer or focus scope:
+			// Escape is ours, and Tab stays inside the modal sheet, wrapping at either end.
+			// Every open sheet listens on the document, so only the newest one (a sheet opened
+			// from a sheet sits above it) acts; native's BackHandler already serves its newest
+			// subscriber first.
+			const owner = {};
+			keyOwners.push(owner);
+			const onKey = (event: KeyboardEvent) => {
+				if (keyOwners[keyOwners.length - 1] !== owner) return;
+				if (event.key === 'Escape') {
+					onDismissRef.current?.();
+					return;
+				}
+				if (event.key !== 'Tab' || !node) return;
+				const tabbables = Array.from(node.querySelectorAll<HTMLElement>(TABBABLE));
+				const first = tabbables[0];
+				const last = tabbables[tabbables.length - 1];
+				const active = document.activeElement;
+				const inside = active instanceof Node && node.contains(active);
+				if (!first) {
+					event.preventDefault();
+					node.focus({ preventScroll: true });
+				} else if (event.shiftKey && (active === first || !inside)) {
+					event.preventDefault();
+					last.focus();
+				} else if (!event.shiftKey && (active === last || !inside)) {
+					event.preventDefault();
+					first.focus();
+				}
+			};
+			document.addEventListener('keydown', onKey);
+			return () => {
+				keyOwners.splice(keyOwners.indexOf(owner), 1);
+				document.removeEventListener('keydown', onKey);
+			};
+		}
+		const back = BackHandler.addEventListener('hardwareBackPress', () => {
+			onDismissRef.current?.();
+			return true;
+		});
+		return () => back.remove();
+	}, [open, ownsDismiss, node]);
 	// The external animation event (or reduced-motion timer) determines when focus is safe.
 	React.useEffect(() => {
-		if (!isWeb || presentation === 'center' || presentation === 'bottom' || !open || !node) return;
+		// Side panels, and a sheet that owns its dismiss (no primitive Content to focus it).
+		const ownsSheet = presentation === 'bottom' && ownsDismiss;
+		if (!isWeb || !open || !node || !(fullHeight || ownsSheet)) return;
+		// The primitive Content returned focus to the trigger on close; a sheet that owns its
+		// dismiss remembers the opener and hands focus back when it closes or unmounts.
+		const opener = ownsSheet ? (document.activeElement as HTMLElement | null) : null;
 		let done = false;
 		const focusFirst = () => {
 			if (done) return;
@@ -140,8 +295,65 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			done = true;
 			clearTimeout(timer);
 			node.removeEventListener('animationend', onAnimationEnd);
+			const active = document.activeElement;
+			if (
+				opener &&
+				opener !== document.body &&
+				(!active || active === document.body || node.contains(active))
+			) {
+				opener.focus({ preventScroll: true });
+			}
 		};
-	}, [node, open, presentation]);
+	}, [node, open, presentation, fullHeight, ownsDismiss]);
+	if (presentation === 'anchored') {
+		/**
+		 * The primitive positions the panel; the shell supplies only the plumbing the
+		 * popover family used to carry each on its own. On web that is nothing: the
+		 * primitive's `Overlay` is a passthrough and Radix Popper places the content.
+		 *
+		 * Native: full-bleed + box-none. Unsized, the wrapper measures width×0 — its
+		 * absolutely-positioned child still DRAWS (RN doesn't clip), but Android
+		 * accessibility intersects every node's bounds with its ancestors', so the entire
+		 * popover subtree is pruned from the a11y tree: invisible to TalkBack and to
+		 * testID-driven E2E while looking perfect on screen (monorepo#1614; proven via
+		 * `dumpsys activity top` showing the wrapper at 0,0-2560,0). box-none keeps
+		 * outside-taps falling through to the Overlay's dismiss. Fixed in monorepo#1623
+		 * for popover, hover-card, select, select-multi, combobox, tree-combobox and the
+		 * dropdown menu; those ledger lines now point here.
+		 */
+		return (
+			<OverlayContext.Provider value={{ presentation, open, deferAutoFocus, onPanelNode }}>
+				{isWeb ? (
+					<Scrim
+						focusable={false}
+						onPress={onDismiss ? onScrimPress : undefined}
+						testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
+					>
+						{children}
+					</Scrim>
+				) : (
+					<View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+						<Scrim
+							style={StyleSheet.absoluteFill}
+							accessible={false}
+							importantForAccessibility="no"
+							accessibilityElementsHidden
+							testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
+						/>
+						<Animated.View
+							style={StyleSheet.absoluteFill}
+							pointerEvents="box-none"
+							onAccessibilityEscape={onDismiss}
+							entering={OVERLAY_MOTION.anchored.entering}
+							exiting={OVERLAY_MOTION.anchored.exiting}
+						>
+							{children}
+						</Animated.View>
+					</View>
+				)}
+			</OverlayContext.Provider>
+		);
+	}
 	/**
 	 * `collapsable={false}` below is load-bearing on Android/Fabric, not a style choice.
 	 * This scrim is the screen's root view. Until its background lands it is layout-only,
@@ -168,6 +380,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			// opened the dialog can land on it and focus it. A focus during a side panel's
 			// enter animation scrolls the nearest scrollable ancestor (see focusAfterSlideIn).
 			focusable={false}
+			onPress={onDismiss ? onScrimPress : undefined}
 			testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 		>
 			{children}
@@ -202,6 +415,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			>
 				<Animated.View
 					pointerEvents="box-none"
+					onAccessibilityEscape={onDismiss}
 					entering={OVERLAY_MOTION[presentation].entering}
 					exiting={OVERLAY_MOTION[presentation].exiting}
 					className={cn('max-h-full max-w-full', fullHeight && 'h-full')}
@@ -212,7 +426,7 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		</View>
 	);
 	return (
-		<OverlayContext.Provider value={{ presentation, deferAutoFocus, onPanelNode }}>
+		<OverlayContext.Provider value={{ presentation, open, deferAutoFocus, onPanelNode }}>
 			{isWeb && pinned ? (
 				<View collapsable={false} style={StyleSheet.absoluteFill}>
 					{shell}

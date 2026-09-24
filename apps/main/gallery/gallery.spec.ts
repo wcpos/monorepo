@@ -3,6 +3,10 @@ import { join } from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
+// The longest rise is the panel slide (PANEL_SLIDE, 250 ms) plus the focus hand-over
+// after it; two seconds leaves every entrance well finished without stalling a page.
+const SETTLE_BOUND_MS = 2_000;
+
 test('gallery cells', async ({ page }, testInfo) => {
 	const smoke = testInfo.project.ignoreSnapshots && !process.env.CI;
 	if (!smoke && process.platform !== 'linux') {
@@ -21,26 +25,78 @@ test('gallery cells', async ({ page }, testInfo) => {
 	const components = await links.evaluateAll((nodes) =>
 		nodes.map((node) => node.getAttribute('data-gallery-component')!)
 	);
-	// One test shoots every page: the budget grows with the inventory, twenty
-	// seconds a page and theme, so a new component never trips a fixed clock.
-	test.setTimeout(components.length * 2 * 20_000);
+	// One test shoots every page: the budget grows with the inventory, a minute a
+	// page and theme (its isolated cells included), so a new component never trips
+	// a fixed clock.
+	test.setTimeout(components.length * 2 * 60_000);
 	let count = 0;
 	const shot = new Set<string>();
+	const shoot = async (id: string, theme: string, isolated = false) => {
+		const cell = page.getByTestId(id);
+		// An overlay's rise and the focus it hands over once the rise ends both settle after
+		// the page's animations; the first cells on a page were shot before that. Only a
+		// running, finite animation can finish (the indeterminate progress sweep never does,
+		// a paused one never will), and the wait is bounded well past the longest rise.
+		await page.evaluate(
+			(bound) =>
+				Promise.race([
+					Promise.all(
+						document
+							.getAnimations()
+							.filter(
+								(animation) =>
+									animation.playState === 'running' &&
+									animation.effect?.getComputedTiming().iterations !== Infinity
+							)
+							.map((animation) => animation.finished.catch(() => undefined))
+					),
+					new Promise((resolve) => setTimeout(resolve, bound)),
+				]),
+			SETTLE_BOUND_MS
+		);
+		// An isolated cell is shot with no field focused. An open sheet or popover focuses
+		// its search field on mount, and the runner paints that field's ring or not from one
+		// shoot to the next with the ring's class present either way (the update run of
+		// 5d2bc0e5e held the class on every cell and drew the ring on two of twelve dark sheet
+		// cells), so the focused look is the Input's own story and the overlay's cell shows
+		// the panel. The blur is asserted, so a shot never carries focus into a baseline.
+		if (isolated) {
+			const focused = await page.evaluate(async (cellId) => {
+				const root = document.querySelector<HTMLElement>(`[data-cell-id="${cellId}"]`);
+				const field = root?.querySelector<HTMLElement>('input,textarea');
+				if (!field) return false;
+				field.blur();
+				// React flushes the blur's state after this task; the ring leaves on the next frame.
+				await new Promise((resolve) => requestAnimationFrame(resolve));
+				return root!.contains(document.activeElement);
+			}, id);
+			expect(focused, `a field still holds focus in ${id}-${theme}`).toBe(false);
+		}
+		if (smoke)
+			await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
+		else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
+		shot.add(`${id}-${theme}-linux.png`);
+		count++;
+	};
 	for (const component of components) {
 		for (const theme of ['light', 'dark']) {
 			await page.goto(`/gallery/${component}?theme=${theme}`);
 			const cells = page.locator('[data-cell-id]');
 			await expect(cells.first()).toBeVisible();
 			const ids = await cells.evaluateAll((nodes) =>
-				nodes.map((node) => node.getAttribute('data-cell-id')!)
+				nodes.map((node) => ({
+					id: node.getAttribute('data-cell-id')!,
+					isolated: node.getAttribute('data-isolated') === 'true',
+				}))
 			);
-			for (const id of ids) {
-				const cell = page.getByTestId(id);
-				if (smoke)
-					await cell.screenshot({ animations: 'disabled', caret: 'hide' }); // Buffer only; no Mac PNGs.
-				else await expect(cell).toHaveScreenshot(`${id}-${theme}.png`);
-				shot.add(`${id}-${theme}-linux.png`);
-				count++;
+			for (const { id, isolated } of ids) if (!isolated) await shoot(id, theme);
+			// An isolated story (an open popover, select or dialog: it owns the document's
+			// focus) is shot one cell per page, so its siblings cannot close or cover it.
+			for (const { id, isolated } of ids) {
+				if (!isolated) continue;
+				await page.goto(`/gallery/${component}?theme=${theme}&cell=${id}`);
+				await expect(page.getByTestId(id)).toBeVisible();
+				await shoot(id, theme, true);
 			}
 		}
 	}
