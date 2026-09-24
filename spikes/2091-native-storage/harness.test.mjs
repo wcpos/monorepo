@@ -855,3 +855,92 @@ test('reports display app and writer failures without comparing failed cells', a
     assert.equal(winner(report, 'small/read'), 'not compared');
   } finally { await rm(directory, { recursive: true }); }
 });
+
+// Removing receive-time accumulation loses every cell when /result never arrives.
+test('cell events accumulate on their active job without transport metadata', async () => {
+  const h = await jobHarness();
+  const cells = [{ name: 'grid', unsortedSamples: 2 }, { name: 'read', unsortedSamples: 0, samples: [{ ms: 3 }], signatures: ['hash'] }];
+  for (const cell of cells) await h.message({ type: 'cell', ...cell });
+  assert.deepEqual(JSON.parse(JSON.stringify(h.state().partialCells)), cells);
+  await h.start({ type: 'bench', row: 'expo-sqlite', scale: 'large' });
+  assert.equal(h.state().partialCells.length, 0);
+});
+
+// Both failure paths must save posted evidence; repeated resume failures must not erase history.
+test('failed bench rows retain partial cells across failed resumes and discard them on success', async () => {
+  for (const outcome of ['harness-failed', 'app-failed']) {
+    const prior = { name: 'earlier', unsortedSamples: 0 };
+    const report = { rows: ['expo-filesystem-js'], trials: [], results: [
+      { engine: 'expo-filesystem-js', scale: 'small', outcome, partialCells: [prior] },
+    ] };
+    const logs = [];
+    const cell = { name: 'read', unsortedSamples: 0, samples: [{ ms: 3 }], signatures: ['h'], setSignatures: ['h'], idSets: [['a']], docHashes: [[['a', 'h']]] };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const error = Object.assign(new Error(outcome === 'app-failed' ? 'native rejected' : 'Harness timeout: silent'), { outcome });
+      const { saved } = await runDriverLoop(report, 'bench', async () => { throw error; }, {
+        active: { partialCells: [cell] }, log: (...args) => logs.push(args.join(' ')),
+      });
+      assert.deepEqual(saved[0].results[0].partialCells, [cell]);
+      assert.deepEqual(saved[0].results[0].previousPartialCells, [prior, ...Array(attempt).fill(cell)]);
+      assert.equal(report.complete, false);
+    }
+    assert.ok(logs.every(line => /kept 1 partial cells/.test(line)));
+    const { compactBench } = await import('./report.mjs');
+    const compact = JSON.parse(JSON.stringify(compactBench(report))).results[0];
+    for (const kept of [compact.partialCells[0], compact.previousPartialCells[1]]) {
+      assert.equal(kept.idSets, undefined);
+      assert.equal(kept.docHashes, undefined);
+      assert.deepEqual(kept.signatures, ['h']);
+      assert.deepEqual(kept.samples, [{ ms: 3 }]);
+    }
+    await runDriverLoop(report, 'bench', async () => ({ cells: [cell] }));
+    assert.equal(report.complete, true);
+    assert.equal(report.results[0].partialCells, undefined);
+    assert.equal(report.results[0].previousPartialCells, undefined);
+  }
+});
+
+// Starting the cold-open job must not erase cells posted by the preceding bench job.
+test('cold-open failure retains the bench jobs posted cells', async () => {
+  const cells = [{ name: 'read', unsortedSamples: 0 }];
+  const report = { rows: ['expo-filesystem-js'], results: [], trials: [] };
+  const active = { partialCells: cells };
+  await runDriverLoop(report, 'bench', async job => {
+    if (job.type === 'cold-open') { active.partialCells = []; throw new Error('Harness failure: disconnected'); }
+    return { cells: [] };
+  }, { active, scales: ['large'], COLD_SAMPLES: 3 });
+  assert.deepEqual(report.results[0].partialCells, cells);
+});
+
+// Partial-only names and deliberately different signatures must never enter comparisons.
+test('report renders partial cells separately with missing timings unevaluated', async () => {
+  const { mkdtemp, mkdir, writeFile, readFile, rm } = await import('node:fs/promises');
+  const directory = await mkdtemp(new URL('.deps/report-test-', here));
+  try {
+    await mkdir(directory + '/results');
+    await writeFile(directory + '/RESULTS.md', '<!-- generated:start --><!-- generated:end -->');
+    const report = { environment: { platform: 'ios', device: 'test' }, complete: false, results: [
+      { engine: 'expo-filesystem-js', scale: 'large', outcome: 'harness-failed', error: 'silent', partialCells: [
+        { name: 'metadata-only', unsortedSamples: 0 },
+        { name: 'read', samples: [{ ms: 9 }, { ms: 1 }, { ms: 4 }], signatures: ['different'], setSignatures: ['different'] },
+      ] },
+      ...['worklet-filesystem', 'expo-sqlite'].map(engine => ({ engine, scale: 'large', cells: [
+        { name: 'read', samples: [{ ms: 10 }], signatures: ['same'], setSignatures: ['same'] },
+      ] })),
+    ] };
+    await writeFile(directory + '/results/results.ios.test.json', JSON.stringify(report));
+    const { main, compare, winner } = await import('./report.mjs');
+    assert.deepEqual(compare(report), []);
+    assert.equal(winner(report, 'large/read'), 'not compared');
+    assert.equal(await main(new URL('file://' + directory + '/')), 0);
+    const output = await readFile(directory + '/RESULTS.md', 'utf8');
+    assert.match(output, /expo-filesystem-js large — partial \(row failed\)/);
+    assert.match(output, /[Mm]easured before the failure/);
+    assert.match(output, /\| Cell \| Samples \| p50 ms \| p95 ms \|/);
+    assert.match(output, /\| metadata-only \| — \| — \| — \|/);
+    assert.match(output, /\| read \| 3 \| 4\.00 \| 9\.00 \|/);
+    assert.doesNotMatch(output.split('#### large')[1], /metadata-only|4\.00|9\.00/);
+    assert.doesNotMatch(output.split('## Cross-device summary')[1], /metadata-only/);
+    assert.match(output.split('## Cross-device summary')[1], /large\/read \| not compared/);
+  } finally { await rm(directory, { recursive: true }); }
+});

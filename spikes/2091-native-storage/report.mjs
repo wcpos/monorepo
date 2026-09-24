@@ -45,9 +45,13 @@ export function compare(report) {
 // Compare before stripping bulky evidence; signatures permit comparison after every partial save.
 export function compactBench(report) {
   compare(report);
-  return { ...report, results: report.results.map(row => failedRow(row) ? row : ({ ...row,
-    cells: row.cells.map(({ idSets, docHashes, ...cell }) => cell),
-  })) };
+  return { ...report, results: report.results.map(row => {
+    const compact = { ...row };
+    for (const field of ['cells', 'partialCells', 'previousPartialCells']) {
+      if (row[field]) compact[field] = row[field].map(({ idSets, docHashes, ...cell }) => cell);
+    }
+    return compact;
+  }) };
 }
 export function winner(report, key) {
   const [scale, name] = key.split('/');
@@ -79,7 +83,15 @@ export async function main(directory = new URL('.', import.meta.url)) {
       table(['Environment', 'Value'], Object.entries(env).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : v])));
     for (const r of group) {
       lines.push(`### ${r.file}`, r.complete ? 'Run complete.' : `**Incomplete:** ${r.fatal ?? 'interrupted'}`);
-      for (const row of r.results ?? []) if (failedRow(row)) lines.push(`- ${row.engine} ${row.scale ?? ''}: ${row.outcome} — ${escape(row.error)}`);
+      for (const row of r.results ?? []) if (failedRow(row)) {
+        lines.push(`- ${row.engine} ${row.scale ?? ''}: ${row.outcome} — ${escape(row.error)}`);
+        if (row.partialCells?.length) lines.push(`#### ${row.engine} ${row.scale} — partial (row failed)`,
+          'Measured before the failure; not compared. — means samples/timings were not posted.',
+          table(['Cell', 'Samples', 'p50 ms', 'p95 ms'], row.partialCells.map(cell => {
+            const { p50, p95 } = stats((cell.samples ?? []).map(s => s.ms));
+            return [cell.name, cell.samples?.length ?? '—', number(p50), number(p95)];
+          })));
+      }
       if (r.file.startsWith('smoke.')) {
         const bench = group.find(x => x.file.startsWith('results.'));
         lines.push(table(['Row', 'Scenarios', 'Smoke/probe divergences', 'Leg 3 content mismatches', 'Total divergences'], ENGINES.map(engine => {

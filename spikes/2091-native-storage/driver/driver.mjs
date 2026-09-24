@@ -70,7 +70,11 @@ const server = createServer(async (req, res) => {
       if (m.type === 'scoring') { active.phase = 'opening'; active.openedAt = performance.now(); }
       if (m.type === 'read') active.phase = 'scored';
       if (m.type === 'memory') active.memory[m.window] = await device.memory();
-      if (m.type === 'cell') log('info', active.job.row, active.job.scale, m.name);
+      if (m.type === 'cell') {
+        const { id, type, ...cell } = m;
+        active.partialCells.push(cell);
+        log('info', active.job.row, active.job.scale, m.name);
+      }
     } else {
       Object.assign(report.environment, m.versions);
       if (m.result?.sqlite) report.environment.sqlite = m.result.sqlite;
@@ -96,7 +100,7 @@ function spec(row, scale) {
 async function start(job) {
   let seededResolve; const seeded = new Promise(resolve => { seededResolve = resolve; });
   const promise = new Promise((resolve, reject) => {
-    active = { job: { ...job, id: randomUUID() }, resolve, reject, started: [], acked: new Set(), phase: 'launching', memory: {}, beginRetries: 0, seededResolve, launchedAt: performance.now() };
+    active = { job: { ...job, id: randomUUID() }, resolve, reject, started: [], partialCells: [], acked: new Set(), phase: 'launching', memory: {}, beginRetries: 0, seededResolve, launchedAt: performance.now() };
   });
   // Install the rejection handler now, including for writers stopped without a result.
   promise.catch(() => {});
@@ -184,9 +188,14 @@ try {
     } else {
       for (const scale of scales) {
         if (args.resume && report.results.some(r => r.engine === row && r.scale === scale && hasResult(r, leg))) continue;
+        const previousResult = report.results.find(r => r.engine === row && r.scale === scale);
         report.results = report.results.filter(r => r.engine !== row || r.scale !== scale);
+        let partialCells = [];
         try {
-          const input = spec(row, scale), result = await run({ ...input, type: leg });
+          const input = spec(row, scale);
+          let result;
+          try { result = await run({ ...input, type: leg }); }
+          finally { if (leg === 'bench') partialCells = active?.partialCells ?? []; }
           if (leg === 'bench' && scale === 'large') {
             const samples = [];
             for (let i = 0; i <= COLD_SAMPLES; i++) { const cold = await run({ ...input, type: 'cold-open' }); if (i) samples.push({ ms: cold.ms, rows: 1 }); }
@@ -198,8 +207,10 @@ try {
           if (error.outcome !== 'app-failed' && !isHarnessFailure(error)) throw error;
           if (active) active.finished = true;
           const outcome = error.outcome === 'app-failed' ? 'app-failed' : 'harness-failed';
-          report.results.push({ engine: row, scale, outcome, error: String(error.stack ?? error) });
-          await save(); log('error', row, scale, outcome, String(error));
+          const previousPartialCells = [...(previousResult?.previousPartialCells ?? []), ...(previousResult?.partialCells ?? [])];
+          report.results.push({ engine: row, scale, outcome, error: String(error.stack ?? error),
+            ...(leg === 'bench' ? { partialCells, ...(previousPartialCells.length ? { previousPartialCells } : {}) } : {}) });
+          await save(); log('error', row, scale, outcome, String(error), ...(leg === 'bench' ? [`kept ${partialCells.length} partial cells`] : []));
         }
       }
     }

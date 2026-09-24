@@ -437,3 +437,40 @@ prebuild (a new native module), run `./run.sh prebuild` first and say so.
 
 When done, print: the typecheck result, whether a prebuild was needed, both build output paths
 with modification times, and the commit hash.
+
+# Round 9 (a failed 20k row must keep the cells it measured, 2026-09-24 small hours)
+
+Round 8 is accepted and committed (`44397286e`). On the iPad, wall charger, dimmed screen, the
+shipped engine's 20k row ran for two and a half hours and posted nine `cell` events (grid cells
+five to seven minutes each, whole-catalogue read 31 minutes, remote-id find and count 36 minutes
+each), then its fresh-seed cell went silent for 30 minutes and the row was recorded as
+`harness-failed`. Every one of those nine cells' samples was discarded, because a row's cells are
+only stored on the `/result`. The driver log has only their names and timestamps.
+
+Rules as before: commit at the end (include `FIXES.md`), do not push, do not open or edit a PR, do
+not reply on any PR, no physical devices, no simulators or emulators, do not touch `results/`,
+do not touch the app or either build. The iPad is running a leg on port 48091 from this tree:
+do not start any leg, do not bind that port; keep `driver/driver.mjs` importable at every save
+and run `node --test harness.test.mjs` after each edit.
+
+## 1. Keep every posted cell
+
+In the driver, store each `cell` event's `{ name, unsortedSamples }` on the active job as it
+arrives. When a bench job ends as `harness-failed` or `app-failed`, include those as
+`partialCells` on the recorded result (through `compactBench` like any cells: ids and hashes
+stripped, signatures kept if present), and log how many were kept. A `--resume` still reruns the
+row, and when it does, keep the earlier `partialCells` on the rerun's result under
+`previousPartialCells` only if the rerun also fails; a completed rerun replaces them.
+
+## 2. Report them, never compare them
+
+`report.mjs`: for a failed row with `partialCells`, print a table `<engine> <scale> — partial
+(row failed): cell, samples, p50, p95`, clearly marked as measured before the failure. Partial
+cells never enter the winner columns, the cross-row equality check, or the cross-device summary.
+
+## 3. Tests
+
+Harness tests for: cells accumulating on the active job; a failed bench row carrying them; the
+resume rule; the report rendering them apart from compared cells.
+
+When done, print: the harness test count and result, and the commit hash.
