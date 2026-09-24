@@ -17,6 +17,8 @@ it('isolates the gallery from store E2E and keeps a zero-pixel screenshot contra
 		maxDiffPixels: 0,
 		animations: 'disabled',
 		caret: 'hide',
+		// The unfocused look for a search field, below React (gallery/shoot.css).
+		stylePath: './gallery/shoot.css',
 	});
 	expect(config.snapshotPathTemplate).toBe('{testDir}/{testFilePath}-snapshots/{arg}-linux{ext}');
 });
