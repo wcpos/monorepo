@@ -1,10 +1,11 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 import { WpUser } from './wp-user';
 
+let mockValid = false;
 const mockWarn = jest.fn();
 const mockError = jest.fn();
 const mockHandleLoginSuccess = jest.fn().mockResolvedValue(undefined);
@@ -22,10 +23,32 @@ jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialogTitle: () => null,
 }));
 jest.mock('@wcpos/components/avatar', () => ({ Avatar: () => null, getInitials: () => 'AU' }));
-jest.mock('@wcpos/components/button', () => ({ Button: () => null, ButtonText: () => null }));
-jest.mock('@wcpos/components/list-item', () => ({ ListItem: () => null }));
+jest.mock('@wcpos/components/button', () => ({
+	Button: ({ children, variant }: React.PropsWithChildren<{ variant: string }>) => (
+		<button data-variant={variant}>{children}</button>
+	),
+	ButtonText: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+}));
+jest.mock('react-native', () => ({
+	Pressable: ({
+		children,
+		className,
+		testID,
+	}: React.PropsWithChildren<{ className?: string; testID?: string }>) => (
+		<div data-testid={testID} className={className}>
+			{children}
+		</div>
+	),
+	View: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+}));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+}));
+jest.mock('@wcpos/components/icon-button', () => ({ IconButton: () => null }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
-jest.mock('@wcpos/components/status-badge', () => ({ StatusBadge: () => null }));
+jest.mock('@wcpos/components/status-badge', () => ({
+	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
+}));
 jest.mock('@wcpos/hooks/use-http-client', () => ({
 	requestStateManager: {
 		setRefreshedToken: (...args: unknown[]) => mockSetRefreshedToken(...args),
@@ -47,7 +70,7 @@ jest.mock('../../../contexts/translations', () => ({
 	useT: () => (key: string) => key,
 }));
 jest.mock('../../../hooks/use-user-validation', () => ({
-	useUserValidation: () => ({ isValid: false, isLoading: false }),
+	useUserValidation: () => ({ isValid: mockValid, isLoading: false }),
 }));
 jest.mock('../../../hooks/use-wcpos-auth', () => ({
 	useWcposAuth: () => ({
@@ -88,5 +111,30 @@ describe('WpUser re-authentication', () => {
 		);
 		expect(mockSetRefreshedToken).not.toHaveBeenCalled();
 		expect(mockSetAuthFailed).not.toHaveBeenCalled();
+	});
+});
+
+describe('user row status', () => {
+	const site = { name: 'Store' } as import('@wcpos/database').SiteDocument;
+	const wpUser = {
+		id: 1,
+		uuid: 'u',
+		display_name: 'Alice',
+	} as import('@wcpos/database').WPCredentialsDocument;
+	it.each([true, false])('shows the valid=%s badge beneath the name', async (valid) => {
+		mockValid = valid;
+		render(<WpUser site={site} wpUser={wpUser} isSelected={false} onSelect={jest.fn()} />);
+		await waitFor(() =>
+			expect(screen.getByText(valid ? 'auth.signed_in' : 'auth.sign_in_again')).toBeTruthy()
+		);
+		if (!valid) expect(screen.getByRole('button').getAttribute('data-variant')).toBe('outline');
+	});
+	it('keeps border-primary on the selected invalid row', async () => {
+		mockValid = false;
+		render(<WpUser site={site} wpUser={wpUser} isSelected onSelect={jest.fn()} />);
+		await waitFor(() =>
+			expect(screen.getByTestId('wp-user-button').className).toContain('border-primary')
+		);
+		expect(screen.getByTestId('wp-user-button').className).not.toContain('border-warning');
 	});
 });

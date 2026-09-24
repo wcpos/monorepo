@@ -13,7 +13,8 @@ import {
 import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
+import { Notice } from '@wcpos/components/notice';
+import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -42,13 +43,13 @@ export function SiteHeader({ site }: { site: import('@wcpos/database').SiteDocum
 			<Avatar
 				source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url ?? '')}`}
 				fallback={getInitials(site.name ?? site.url ?? '')}
-				size="lg"
+				size="md"
 				shape="rounded"
 				variant="muted"
 			/>
 			<VStack className="flex-1 gap-0.5">
-				<Text className="leading-tight font-bold">{site.name}</Text>
-				<Text className="text-muted-foreground text-xs leading-tight">{site.url}</Text>
+				<Text className="text-base font-semibold">{site.name}</Text>
+				<Text className="text-muted-foreground text-sm">{site.url}</Text>
 			</VStack>
 		</HStack>
 	);
@@ -80,12 +81,12 @@ export function Site({ user, site }: Props) {
 
 	return (
 		<>
-			<VStack space="md" className="p-4">
+			<VStack className="gap-3">
 				{/* Site Header */}
 				<HStack space="md" className="items-center">
 					<SiteHeader site={site} />
 					<IconButton
-						name="circleXmark"
+						name="xmark"
 						size="lg"
 						variant="destructive"
 						onPress={() => setDeleteDialogOpened(true)}
@@ -100,12 +101,11 @@ export function Site({ user, site }: Props) {
 						</Suspense>
 					</ErrorBoundary>
 				) : (
-					<HStack space="sm" className="items-center">
-						<Icon name="triangleExclamation" className="fill-warning" />
-						<Text className="text-warning">
-							{t('common.please_update_your_woocommerce_pos_plugin')}
-						</Text>
-					</HStack>
+					<Notice
+						tone="warn"
+						title={t('auth.update_plugin_to_continue')}
+						docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('AUTH331') }}
+					/>
 				)}
 			</VStack>
 

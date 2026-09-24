@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, View } from 'react-native';
+import * as React from 'react';
+import { Pressable } from 'react-native';
 
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
@@ -85,15 +85,11 @@ export function AddUserButton({ site, hasExistingUsers, compact = false }: Props
 				compact
 					? 'active:bg-muted h-11 justify-center px-4'
 					: disabled
-						? 'border-border web:cursor-not-allowed flex-row items-center gap-3 rounded-lg border border-dashed p-3 opacity-60'
-						: 'border-border active:bg-primary/5 web:cursor-pointer web:transition-colors web:hover:border-primary/40 web:hover:bg-primary/5 flex-row items-center gap-3 rounded-lg border border-dashed p-3'
+						? 'border-border min-h-row w-full flex-row items-center gap-3 rounded-lg border border-dashed px-3 py-2 opacity-60'
+						: 'border-border active:bg-muted min-h-row w-full flex-row items-center gap-3 rounded-lg border border-dashed px-3 py-2'
 			}
 		>
-			{!compact && (
-				<View className="bg-primary/10 h-9 w-9 items-center justify-center rounded-full">
-					<Icon name="plus" size="sm" variant="primary" />
-				</View>
-			)}
+			{!compact && <Icon name="plus" size="sm" />}
 			<Text className="text-muted-foreground text-sm font-medium">
 				{isProcessing
 					? t('common.loading')
