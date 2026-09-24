@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
 
@@ -16,7 +16,9 @@ import {
 import { Button } from '../button';
 import { Icon } from '../icon';
 import { useLayoutWidth } from '../lib/use-layout-width';
-import { OVERLAY_MOTION, OVERLAY_PANEL, OverlayShell } from '../lib/overlay';
+import { OVERLAY_MOTION, OVERLAY_PANEL, OverlaySheetPanel, OverlayShell } from '../lib/overlay';
+import { useIsPhone } from '../lib/device';
+import { Text } from '../text';
 import { webTestID } from '../lib/test-id';
 import { cn } from '../lib/utils';
 
@@ -54,7 +56,12 @@ function Select({ multiple, ...props }: SelectRootProps) {
 
 const useRootContext = SelectPrimitive.useRootContext;
 
-const SelectGroup = SelectPrimitive.Group;
+const SelectSheetContext = React.createContext<{ close: () => void } | null>(null);
+const SHEET_LABEL_TEXT = 'text-muted-foreground text-sm font-semibold tracking-wide uppercase';
+function SelectGroup(props: SelectPrimitive.GroupProps) {
+	if (React.useContext(SelectSheetContext)) return <View {...props} role="group" />;
+	return <SelectPrimitive.Group {...props} />;
+}
 
 function SelectValue({
 	placeholder,
@@ -165,7 +172,8 @@ function SelectSingleContent({
 	inline,
 	...props
 }: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean; inline?: boolean }) {
-	const { open } = SelectPrimitive.useRootContext();
+	const { open, onOpenChange } = SelectPrimitive.useRootContext();
+	const phone = useIsPhone();
 	const triggerWidth = React.useContext(SelectWidthContext);
 
 	if (!open) return null;
@@ -173,34 +181,49 @@ function SelectSingleContent({
 	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
 	const shell = (
 		<OverlayShell
-			presentation="anchored"
+			presentation={phone ? 'bottom' : 'anchored'}
+			onDismiss={phone ? () => onOpenChange(false) : undefined}
 			open={open}
 			Scrim={SelectPrimitive.Overlay}
 			testID={props.testID}
 		>
-			<SelectPrimitive.Content
-				className={cn(
-					OVERLAY_PANEL.anchored,
-					'relative z-50 max-h-96 min-w-32 p-1.5',
-					position === 'popper' &&
-						'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
-					open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
-					className
-				)}
-				style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
-				position={position}
-				{...props}
-			>
-				<SelectPrimitive.Viewport
+			{phone ? (
+				<SelectSheetContext.Provider value={{ close: () => onOpenChange(false) }}>
+					<OverlaySheetPanel testID={props.testID} className={className} style={props.style}>
+						<ScrollView>
+							{/* The rows are options in a group, eight points apart; a listbox would promise
+							    the arrow-key navigation a touch sheet does not give (CodeRabbit, #2215). */}
+							<View role="group" className="gap-2">
+								{children}
+							</View>
+						</ScrollView>
+					</OverlaySheetPanel>
+				</SelectSheetContext.Provider>
+			) : (
+				<SelectPrimitive.Content
 					className={cn(
-						'p-0',
+						OVERLAY_PANEL.anchored,
+						'relative z-50 max-h-96 min-w-32 p-1.5',
 						position === 'popper' &&
-							'h-(--radix-select-trigger-height) w-full min-w-(--radix-select-trigger-width)'
+							'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
+						open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+						className
 					)}
+					style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
+					position={position}
+					{...props}
 				>
-					{children}
-				</SelectPrimitive.Viewport>
-			</SelectPrimitive.Content>
+					<SelectPrimitive.Viewport
+						className={cn(
+							'p-0',
+							position === 'popper' &&
+								'h-(--radix-select-trigger-height) w-full min-w-(--radix-select-trigger-width)'
+						)}
+					>
+						{children}
+					</SelectPrimitive.Viewport>
+				</SelectPrimitive.Content>
+			)}
 		</OverlayShell>
 	);
 	return inline ? (
@@ -235,6 +258,12 @@ function SelectContent({
 }
 
 function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
+	if (React.useContext(SelectSheetContext))
+		return (
+			<View testID={props.testID} className={cn('h-9 justify-center px-2', className)}>
+				<Text className={SHEET_LABEL_TEXT}>{props.children}</Text>
+			</View>
+		);
 	return (
 		<SelectPrimitive.Label
 			className={cn('text-foreground py-1.5 pr-2 pl-8 text-sm font-semibold', className)}
@@ -244,6 +273,7 @@ function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
 }
 
 function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps) {
+	const sheet = React.useContext(SelectSheetContext);
 	const isMulti = React.useContext(MultiModeContext);
 
 	if (isMulti) {
@@ -258,6 +288,13 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 			</SelectMultiItem>
 		);
 	}
+
+	if (sheet)
+		return (
+			<SelectSheetItem className={className} {...props}>
+				{children}
+			</SelectSheetItem>
+		);
 
 	return (
 		<SelectPrimitive.Item
@@ -279,7 +316,36 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 	);
 }
 
+function SelectSheetItem({ className, children, ...props }: SelectPrimitive.ItemProps) {
+	const { value, onValueChange, onOpenChange } = SelectPrimitive.useRootContext();
+	return (
+		<Pressable
+			role="option"
+			aria-selected={value?.value === props.value}
+			disabled={props.disabled}
+			testID={props.testID}
+			className={cn(
+				'active:bg-muted min-h-row w-full flex-row items-center gap-2 rounded-md px-2 py-1.5',
+				props.disabled && 'web:pointer-events-none opacity-45',
+				className
+			)}
+			onPress={(e) => {
+				props.onPress?.(e);
+				onValueChange({ value: props.value, label: props.label });
+				if (props.closeOnPress !== false) onOpenChange(false);
+			}}
+		>
+			<Text className="text-foreground flex-1 text-base">
+				{(children as React.ReactNode) ?? props.label}
+			</Text>
+			{value?.value === props.value && <Icon name="check" className="text-primary ml-auto" />}
+		</Pressable>
+	);
+}
+
 function SelectSeparator({ className, ...props }: SelectPrimitive.SeparatorProps) {
+	if (React.useContext(SelectSheetContext))
+		return <View {...props} className={cn('bg-border -mx-2 my-1 h-px', className)} />;
 	return (
 		<SelectPrimitive.Separator
 			className={cn('bg-border -mx-1.5 my-1 h-px', className)}
@@ -309,6 +375,7 @@ function SelectButton({ className, children, ...props }: ButtonProps) {
  * Platform: WEB ONLY
  */
 function SelectScrollUpButton({ className, ...props }: SelectPrimitive.ScrollUpButtonProps) {
+	if (React.useContext(SelectSheetContext)) return null;
 	if (Platform.OS !== 'web') {
 		return null;
 	}
@@ -326,6 +393,7 @@ function SelectScrollUpButton({ className, ...props }: SelectPrimitive.ScrollUpB
  * Platform: WEB ONLY
  */
 function SelectScrollDownButton({ className, ...props }: SelectPrimitive.ScrollDownButtonProps) {
+	if (React.useContext(SelectSheetContext)) return null;
 	if (Platform.OS !== 'web') {
 		return null;
 	}
