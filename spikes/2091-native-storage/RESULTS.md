@@ -47,7 +47,66 @@ contains the fix before premium SQLite ships on Android.
 
 ## Leg 3 — speed
 
-_Operator: compare physical-device cells and costs, including worklet round trips._
+Spike 2143's cell set, seven samples per cell (25 for the two order writes, three for the fresh
+seed and the cold open), p50 in milliseconds. Release Hermes bytecode on the physical device; the
+timing wraps the storage call, so worklet round trips and SQLite's JSI crossing are inside it.
+
+**iPad Pro 12.9 (2018), 2k products / 2.8k orders** (all three rows complete):
+
+| Cell | Shipped engine (JS) | Worklet filesystem | Premium SQLite |
+| --- | --- | --- | --- |
+| Products grid, as shipped | 421 | **169** | 345 |
+| Products grid, pushed 10 / 50 | 464 / 459 | 55 / 61 | **1 / 3** |
+| Whole-catalogue read | 628 | **138** | 202 |
+| Catalogue projection | 598 | 135 | **30** |
+| findByIds 10 / 50 | 3 / 16 | 3 / 6 | **1 / 2** |
+| Remote-id find / count | 830 / 728 | 82 / 72 | **4 / 2** |
+| Fresh seed of the catalogue | 663 | **522** | 623 |
+| Orders default find 10 / 50 | 862 / 864 | 107 / 127 | **3 / 11** |
+| Orders default count | 887 | 113 | **46** |
+| Orders open-status | **466** | 566 | 725 |
+| Order line add / order create | 318 / 1 | 22 / 2 | **4** / 2 |
+
+SQLite is fastest on twelve of sixteen cells, most by one to two orders of magnitude. The
+worklet beats it on the as-shipped grid query, the whole-catalogue read and the fresh seed, and
+the shipped engine beats both on orders open-status. The three cells SQLite loses are the ones
+that materialise the largest result sets into JavaScript; the pushed grid variant of the same
+query is 1 ms, so the as-shipped grid loss is the query shape, not the engine.
+
+**iPad, 20k products / 20k orders.** SQLite completed the row (seed 2.2 s for products and 2.4 s
+for orders, 201 MB on disk in three files). The shipped engine was silent for 30 minutes on its
+fresh-seed cell on two separate attempts after two and a half hours of measured cells each time,
+so its row is recorded as failed and the nine cells it did complete are kept as partial; the
+worklet row is pending a rerun (its first attempt lost its cells to the harness, its second died
+at launch behind the shipped engine's killed process).
+
+| Cell, 20k | Shipped engine (partial) | Premium SQLite |
+| --- | --- | --- |
+| Products grid, as shipped | 7,929 | 4,268 (samples rose 0.7 s → 11.9 s) |
+| Products grid, pushed 10 / 50 | 41,260 / 40,239 | **1 / 17** |
+| Whole-catalogue read (20,000 rows) | **20,680** | 30,399 (17 s – 102 s) |
+| Catalogue projection | 73,834 | **4,237** |
+| findByIds 10 / 50 | 19 / 23 | **1 / 3** |
+| Remote-id find / count | 239,962 / 238,784 | **39 / 4** |
+| Fresh seed of the catalogue | silent > 30 min | 5,800 |
+| Orders default find 10 / 50 / count | — | 3 / 14 / 529 |
+| Orders open-status (12,000 rows) | — | 48,310 (7 s – 182 s) |
+| Order line add / order create | — | 6 / 3 |
+| Cold open to first read | — | 19 |
+
+Ingest of 100-document batches on SQLite at 20k: p50 140 ms, p95 331 ms, 29 s for the 200
+batches.
+
+**JS thread and heap.** Lag sampler over the grid window, physical iPad: at 2k the shipped
+engine's worst tick was 531 ms with 176 ticks over 50 ms, the worklet's 113 ms with 13, and
+SQLite's 656 ms with 146. At 20k SQLite's worst tick was 6.8 s with 2,099 ticks over 50 ms. JS
+heap after the last cell: 88 / 54 / 55 MB at 2k; SQLite 501 MB at 20k (247 MB after the seed).
+SQLite over expo-sqlite is asynchronous but its rows are parsed into documents on the JS thread,
+so on the cells that return thousands of documents it blocks the UI as much as the shipped engine
+does; only the worklet row keeps the JS thread clear, because its parsing runs off-thread.
+
+**Pixel 10.** _Pending: 2k rows for the worklet and SQLite, and all 20k rows, run after the
+device returns to adb; the shipped engine's 2k row is complete._
 
 ## The answer
 
