@@ -5,11 +5,45 @@ Run the physical-device checklist in [DEVICE-RUN.md](DEVICE-RUN.md), then fill t
 
 ## Leg 1 — semantics
 
-_Operator: assess smoke, probes and cross-row content divergences._
+On both physical devices (iPad Pro 12.9 2018 on iPadOS 26.6.2, Pixel 10 on Android 17) the
+eleven smoke scenarios pass 11/11 on the shipped filesystem engine and 11/11 on the worklet
+engine, and premium SQLite diverges on the same three scenarios on each device, identically to
+the simulator runs: `$exists: false` also matches an explicit `null`; `$nin` drops documents
+that lack the field; a mixed-type sort orders `null` before missing. All three are SQL
+translation semantics of the premium engine on every platform, not device behaviour, and each is
+a query-shape migration item for 2.0, the same three that spike 2210 recorded for the desktop
+lane, not an engine verdict. Android needed one runtime adaptation for attachments (RxDB's
+`data:` URL fetch, polyfilled in the app), which is also a migration item. Cross-row content
+equality on the timed cells is reported per file in the generated section below: on the iPad,
+every compared cell across the three rows at 2k and the SQLite row at 20k matched on canonical
+SHA-256 content, no cell was excluded for a mismatch, and no returned result violated its
+query's own sort order. The Pixel comparison is stated in the generated section once its
+remaining rows land.
 
 ## Leg 2 — stability
 
-_Operator: assess acknowledged losses on iPad and Pixel; process termination is not power loss._
+Thirty random signal-9 stops per row, scored as in spikes 2144 and 2210: a stop is `lost` when a
+write the app had acknowledged is missing after reopen. Process termination, not power loss.
+
+| Row | iPad Pro 12.9 (2018): lost / 30 | repairs on reopen | reopen p50 | Pixel 10: lost / 30 | repairs | reopen p50 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Shipped filesystem engine (JS) | 2 | 30 of 30 reopens rebuilt indexes (`stale-changelog-op`; 60 repair lines) | 2.2 s | 8 | _pending Pixel report_ | _pending_ |
+| Worklet filesystem | 4 | 30 of 30 reopens rebuilt indexes (60 lines) | 2.0 s | 3 | _pending_ | _pending_ |
+| Premium SQLite (expo-sqlite, WAL) | 0 | 0 | 0.29 s | 0 of 2 scored; 28 to run on the patched build | 0 | _pending_ |
+
+Integrity was `ok` in every trial on every row (filesystem rows: no parse or salvage failure
+lines; SQLite: `PRAGMA integrity_check` on a fresh connection returned one `ok` row). The two
+filesystem rows lose acknowledged writes on both devices, and every one of their reopens is a
+repair (the changelog is discarded and indexes are rebuilt from `documents.json`), which is what
+the 2 s reopen is. Premium SQLite lost nothing in 30 stops on the iPad and needed no repair.
+
+On the Pixel, the SQLite row's third trial hit an Android platform bug, not a storage outcome:
+expo-modules-core's shared-object garbage-collection race
+([expo/expo #49799](https://github.com/expo/expo/issues/49799), fixed upstream in
+[#50513](https://github.com/expo/expo/pull/50513) on 2026-09-23 and in no published 57.x). The
+remaining 28 Pixel trials run on a build carrying that fix as a spike-only patch, and are labelled
+so in the generated section. The shipped 2.0 app needs the `expo-modules-core` release that
+contains the fix before premium SQLite ships on Android.
 
 ## Leg 3 — speed
 
