@@ -1,11 +1,11 @@
 import { homedir } from 'node:os';
 import { bundle, command, confirmStopped } from './control.mjs';
-export async function android(device) {
+export async function android(device, port = 48091) {
   const adb = homedir() + '/Library/Android/sdk/platform-tools/adb';
   const call = (args, fail = false) => command(adb, ['-s', device, ...args], fail);
   const alive = async () => Boolean(await call(['shell', 'pidof', bundle], true));
   // USB works for physical devices; reverse avoids depending on their Wi-Fi route.
-  await call(['reverse', 'tcp:48091', 'tcp:48091']);
+  await call(['reverse', `tcp:${port}`, `tcp:${port}`]);
   return {
     environment: { deviceName: await call(['shell', 'getprop', 'ro.product.model']), os: await call(['shell', 'getprop', 'ro.build.version.release']),
       emulator: await call(['shell', 'getprop', 'ro.kernel.qemu']) === '1' },

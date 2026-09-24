@@ -8,24 +8,24 @@ import { android } from './android.mjs';
 import { compactTrial, sleep, hasResult, isHarnessFailure, prepareReport, jobMessage, jobTimeout, log } from './control.mjs';
 import { compactBench } from '../report.mjs';
 const ROWS = ['expo-filesystem-js', 'worklet-filesystem', 'expo-sqlite'];
-const PORT = 48091; // Fixed in the app launch URL and USB forwarding contract.
+const DEFAULT_PORT = 48091; // The app learns the origin at launch (iOS: Documents file; Android: intent URL), so two devices can run at once on different ports.
 const DEFAULT_TRIALS = 30, RANDOM_STOP_MAX_MS = 3000, COLD_SAMPLES = 3; // Brief and 2210 sample sizes.
 const OPEN_BUDGET_MS = 10000, WATCH_MS = 250; // Opening verdict vs harness timeout.
 const PHYSICAL_WATCH_MS = 2000; // CoreDevice over Wi-Fi must not be polled four times a second.
 const { values: args, positionals } = parseArgs({ allowPositionals: true, options: {
-  resume: { type: 'boolean', default: false }, platform: { type: 'string' }, device: { type: 'string' }, simulator: { type: 'boolean', default: false },
+  resume: { type: 'boolean', default: false }, port: { type: 'string', default: String(DEFAULT_PORT) }, platform: { type: 'string' }, device: { type: 'string' }, simulator: { type: 'boolean', default: false },
   rows: { type: 'string', default: ROWS.join(',') }, scale: { type: 'string', default: 'both' }, trials: { type: 'string', default: String(DEFAULT_TRIALS) },
 } });
-const leg = positionals[0], requested = args.rows.split(','), trials = Number(args.trials);
+const leg = positionals[0], requested = args.rows.split(','), trials = Number(args.trials), PORT = Number(args.port);
 if (!['smoke', 'bench', 'crash'].includes(leg) || !['ios', 'android'].includes(args.platform) || !args.device
-  || !['small', 'large', 'both'].includes(args.scale) || !requested.length || requested.some(r => !ROWS.includes(r)) || !Number.isInteger(trials) || trials < 1) throw new Error('Invalid driver arguments');
+  || !Number.isInteger(PORT) || PORT < 1024 || PORT > 65535 || !['small', 'large', 'both'].includes(args.scale) || !requested.length || requested.some(r => !ROWS.includes(r)) || !Number.isInteger(trials) || trials < 1) throw new Error('Invalid driver arguments');
 const rows = ROWS.filter(r => requested.includes(r));
 const scales = leg === 'smoke' ? [undefined] : args.scale === 'both' ? ['small', 'large'] : [args.scale];
 const physicalIos = args.platform === 'ios' && !args.simulator;
 const watchMs = physicalIos ? PHYSICAL_WATCH_MS : WATCH_MS;
 await mkdir(new URL('../.deps/', import.meta.url), { recursive: true });
 await mkdir(new URL('../results/', import.meta.url), { recursive: true });
-const device = args.platform === 'ios' ? await ios(args.device, args.simulator) : await android(args.device);
+const device = args.platform === 'ios' ? await ios(args.device, args.simulator) : await android(args.device, PORT);
 const simulator = args.simulator || device.environment.emulator === true;
 const host = args.platform === 'android' || simulator ? '127.0.0.1' : Object.values(networkInterfaces()).flat().find(a => a.family === 'IPv4' && !a.internal && a.address.startsWith('192.168.'))?.address
   ?? Object.values(networkInterfaces()).flat().find(a => a.family === 'IPv4' && !a.internal)?.address;
