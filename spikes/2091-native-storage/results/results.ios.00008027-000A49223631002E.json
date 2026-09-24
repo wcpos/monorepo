@@ -5796,5 +5796,6 @@
       ]
     }
   ],
-  "trials": []
+  "trials": [],
+  "equality": "All available cross-row cells match on canonical revision-independent SHA-256 content; returned-order differences and normalized-sort violations recorded separately."
 }
