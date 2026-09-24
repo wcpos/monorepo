@@ -14,9 +14,6 @@
   "packages/components/src/modal/index.tsx": {
     "duration-literal": 2
   },
-  "packages/components/src/status-badge/index.tsx": {
-    "arbitrary-px": 1
-  },
   "packages/components/src/table/pulse-row.tsx": {
     "duration-literal": 3
   },

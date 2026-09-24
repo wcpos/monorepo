@@ -20,6 +20,7 @@ const registered = [
 	'loader',
 	'progress',
 	"'sort-icon': sortIcon",
+	"'status-badge': statusBadge",
 	"'docs-link': docsLink",
 	'card',
 	'label',

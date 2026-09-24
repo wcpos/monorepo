@@ -43,6 +43,7 @@ import { stories as avatar } from '@wcpos/components/avatar/gallery';
 import { stories as loader } from '@wcpos/components/loader/gallery';
 import { stories as progress } from '@wcpos/components/progress/gallery';
 import { stories as sortIcon } from '@wcpos/components/sort-icon/gallery';
+import { stories as statusBadge } from '@wcpos/components/status-badge/gallery';
 import { stories as docsLink } from '@wcpos/components/docs-link/gallery';
 import { stories as card } from '@wcpos/components/card/gallery';
 import { stories as tabs } from '@wcpos/components/tabs/gallery';
@@ -67,6 +68,7 @@ const registry: Record<string, Story[]> = {
 	loader,
 	progress,
 	'sort-icon': sortIcon,
+	'status-badge': statusBadge,
 	'docs-link': docsLink,
 	card,
 	label,
