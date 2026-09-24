@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, Pressable, type Role, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
 
@@ -57,9 +57,6 @@ function Select({ multiple, ...props }: SelectRootProps) {
 const useRootContext = SelectPrimitive.useRootContext;
 
 const SelectSheetContext = React.createContext<{ close: () => void } | null>(null);
-// The sheet's rows are options; web gives them the listbox parent ARIA asks for, native the
-// list role it has. An accessibility table beside the scroll-button reads, not overlay plumbing.
-const SHEET_LIST_ROLE: Role = Platform.OS === 'web' ? ('listbox' as Role) : 'list';
 const SHEET_LABEL_TEXT = 'text-muted-foreground text-sm font-semibold tracking-wide uppercase';
 function SelectGroup(props: SelectPrimitive.GroupProps) {
 	if (React.useContext(SelectSheetContext)) return <View {...props} role="group" />;
@@ -194,7 +191,9 @@ function SelectSingleContent({
 				<SelectSheetContext.Provider value={{ close: () => onOpenChange(false) }}>
 					<OverlaySheetPanel testID={props.testID} className={className} style={props.style}>
 						<ScrollView>
-							<View role={SHEET_LIST_ROLE} className="gap-2">
+							{/* The rows are options in a group, eight points apart; a listbox would promise
+							    the arrow-key navigation a touch sheet does not give (CodeRabbit, #2215). */}
+							<View role="group" className="gap-2">
 								{children}
 							</View>
 						</ScrollView>

@@ -63,10 +63,16 @@ function MenuScrim(p: OverlayScrimProps) {
 	);
 }
 
+/** Text-only children (a string, a number, an interpolation's array of them) need a Text. */
+function isTextChildren(children: React.ReactNode): boolean {
+	const parts = Array.isArray(children) ? children : [children];
+	return parts.every((part) => typeof part === 'string' || typeof part === 'number');
+}
+
 function DropdownMenuSubTrigger(props: React.ComponentProps<typeof AnchoredSubTrigger>) {
 	return useMenuSheet() ? (
 		<DropdownMenuLabel inset={props.inset} testID={props.testID} className={props.className}>
-			{typeof props.children === 'string' ? (
+			{isTextChildren(props.children) ? (
 				props.children
 			) : (
 				<View className="flex-row items-center gap-2">{props.children}</View>
@@ -317,7 +323,7 @@ function DropdownMenuLabel({
 				{/* A composed child (an icon and a Text) reads the label style from context; RN
 				    text styles do not pass through a View (CodeRabbit, #2215). */}
 				<TextClassContext.Provider value={SHEET_LABEL_TEXT}>
-					{typeof props.children === 'string' ? (
+					{isTextChildren(props.children) ? (
 						<ThemedText className={SHEET_LABEL_TEXT}>{props.children}</ThemedText>
 					) : (
 						props.children

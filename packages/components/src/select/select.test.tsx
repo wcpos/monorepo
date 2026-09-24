@@ -28,9 +28,9 @@ it('emits an option before closing and marks only the selected row', () => {
 		</C.SelectContent>
 	);
 	expect(screen.getAllByRole('dialog')).toHaveLength(1);
-	// The rows sit in a listbox on web; the label reads at the floor.
-	expect(screen.getByRole('listbox')).toBeInTheDocument();
-	expect(screen.getByRole('group')).toBeInTheDocument();
+	// The rows sit in a group (the sheet's container and the SelectGroup); the label reads at the floor.
+	expect(screen.getAllByRole('group')).toHaveLength(2);
+	expect(screen.queryByRole('listbox')).toBeNull();
 	expect(screen.getByTestId('label').querySelector('.text-sm')).not.toBeNull();
 	// A caller's press handler runs, and closeOnPress={false} keeps the sheet open.
 	fireEvent.click(screen.getByTestId('stay'));
