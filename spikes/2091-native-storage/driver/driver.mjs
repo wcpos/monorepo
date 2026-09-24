@@ -127,14 +127,18 @@ async function waitResult(promise) {
 }
 async function run(job) {
   const { promise } = await start(job);
-  let result;
-  try { result = await waitResult(promise); }
-  finally {
-    // A timed-out job leaves the app alive and busy; the next launch would only deliver an intent
-    // to that instance and hang (Pixel, 2026-09-24). Stop it whatever the outcome; a device that
-    // cannot be reached here has already produced its own error.
-    try { if (await device.alive()) await device.stop(); } catch {}
+  let result, failure;
+  try { result = await waitResult(promise); } catch (error) { failure = error; }
+  // A timed-out job leaves the app alive and busy; the next launch would only deliver an intent
+  // to that instance and hang (Pixel, 2026-09-24). Stop it whatever the outcome. A stop that fails
+  // after a successful job is a harness failure in its own right: the next launch (a cold open,
+  // say) could otherwise reuse the surviving process and record a warm number as cold.
+  try { if (await device.alive()) await device.stop(); }
+  catch (error) {
+    if (!failure) failure = new Error(`Harness failure: stop after job: ${error.message}`, { cause: error });
+    else log('warn', `stop after failed job also failed: ${error.message}`);
   }
+  if (failure) throw failure;
   return result;
 }
 try {

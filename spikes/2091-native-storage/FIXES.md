@@ -533,3 +533,29 @@ Owner round, applied directly (no Codex delegation). Two failures on the Pixel's
 
 Harness tests 44/44. Android rebuilt and installed; the resumed Pixel rows run on this build,
 which changes only the activity's lock-screen flags. No measured code moved.
+
+# Round 12 (Codex review of rounds 4–11, 2026-09-24 morning)
+
+CodeRabbit was rate-limited on the device-round commits, so an independent Codex review ran
+against `9d6be9cc8..HEAD` from `REVIEW-BRIEF.md`. Four findings, all applied:
+
+1. **Major, `driver/driver.mjs` `run()`:** round 11's `finally` swallowed a stop failure even after
+   a successful job, so a surviving process could have served the next launch (a cold open) warm.
+   A stop that fails after a successful job is now a harness failure; after a failed job it is
+   logged beside the original error. The committed cold-open samples were taken with the swallowing
+   code on the Pixel (worklet 20k, SQLite 2k/20k) but are consistent with fresh processes: the
+   worklet's 982 ms cold first read against its 10 ms warm findByIds, SQLite's 37 ms against 4 ms,
+   and `am force-stop` never left the app alive in any of the 90 confirmed crash-leg stops on the
+   same device. Consistent, not proven; stated in `RESULTS.md`.
+2. **Major, `RESULTS.md`:** the fresh-seed cell was described as one bulk write. It seeds in the same
+   1,000-document batches as the initial seed, then reads all 20,000 documents back, hashes them and
+   removes the instance, with no progress event inside the sample. The text now says the silence
+   identifies the sample, not the step.
+3. **Minor, `RESULTS.md`:** 2k rankings recounted from full-precision medians: SQLite fastest on
+   eleven of sixteen on the iPad (it also loses order create, 1 ms against 2, and the fresh seed)
+   and thirteen of sixteen on the Pixel.
+4. **Minor, `RESULTS.md`:** the 2k workload is 2k products and 2k orders (`fixtures(2000)` builds
+   one order per product); `seedBytes.orders` ≈ 2,759 is the average document size, not a count.
+
+Harness tests 44/44 (Node 24; Node 22 fails three TypeScript imports, so use the installed
+Node 24). No measured code moved; no rerun.

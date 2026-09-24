@@ -53,7 +53,7 @@ Spike 2143's cell set, seven samples per cell (25 for the two order writes, thre
 seed and the cold open), p50 in milliseconds. Release Hermes bytecode on the physical device; the
 timing wraps the storage call, so worklet round trips and SQLite's JSI crossing are inside it.
 
-**iPad Pro 12.9 (2018), 2k products / 2.8k orders** (all three rows complete):
+**iPad Pro 12.9 (2018), 2k products / 2k orders** (all three rows complete):
 
 | Cell | Shipped engine (JS) | Worklet filesystem | Premium SQLite |
 | --- | --- | --- | --- |
@@ -69,19 +69,24 @@ timing wraps the storage call, so worklet round trips and SQLite's JSI crossing 
 | Orders open-status | **466** | 566 | 725 |
 | Order line add / order create | 318 / 1 | 22 / 2 | **4** / 2 |
 
-SQLite is fastest on twelve of sixteen cells, most by one to two orders of magnitude. The
+SQLite is fastest on eleven of sixteen cells, most by one to two orders of magnitude. The
 worklet beats it on the as-shipped grid query, the whole-catalogue read and the fresh seed, and
-the shipped engine beats both on orders open-status. The three cells SQLite loses are the ones
-that materialise the largest result sets into JavaScript; the pushed grid variant of the same
-query is 1 ms, so the as-shipped grid loss is the query shape, not the engine.
+the shipped engine beats both on orders open-status and on order create (1 ms against 2). Three
+of the five cells SQLite loses are the ones that materialise the largest result sets into
+JavaScript; the pushed grid variant of the same query is 1 ms, so the as-shipped grid loss is the
+query shape, not the engine. The other two are a single-document write and the fresh seed, where
+the filesystem rows' append-only write is genuinely cheaper.
 
 **iPad, 20k products / 20k orders.** SQLite completed the row (seed 2.2 s for products and 2.4 s
 for orders, 201 MB on disk in three files). Neither filesystem row completed: each went silent for
 30 minutes inside the fresh-seed cell (the shipped engine on two separate attempts, after two and
 a half hours of measured cells each time; the worklet once, after 32 minutes), so both rows are
 recorded as failed and the nine cells each did complete are kept as partial. The fresh-seed cell
-writes the 20,000-document catalogue into a fresh instance in one bulk write; the initial seed of
-the same data in 1,000-document batches took the worklet about two minutes.
+seeds the 20,000-document catalogue into a fresh instance in the same 1,000-document batches as
+the initial seed, then reads all 20,000 documents back, hashes them against the fixture and
+removes the instance; none of those steps posts a progress event, so the silence says only that
+one sample did not finish inside 30 minutes, not which step stalled. The initial seed of the same
+data took the worklet about two minutes on this device.
 
 | Cell, 20k | Shipped engine (partial) | Worklet filesystem (partial) | Premium SQLite |
 | --- | --- | --- | --- |
@@ -114,7 +119,7 @@ SQLite over expo-sqlite is asynchronous but its rows are parsed into documents o
 so on the cells that return thousands of documents it blocks the UI as much as the shipped engine
 does; only the worklet row keeps the JS thread clear, because its parsing runs off-thread.
 
-**Pixel 10, 2k products / 2.8k orders** (all three rows complete):
+**Pixel 10, 2k products / 2k orders** (all three rows complete):
 
 | Cell | Shipped engine (JS) | Worklet filesystem | Premium SQLite |
 | --- | --- | --- | --- |
@@ -131,14 +136,17 @@ does; only the worklet row keeps the JS thread clear, because its parsing runs o
 | Order line add / order create | 283 / **1** | 63 / 12 | **30** / 23 |
 
 The Pixel is faster than the 2018 iPad on every row, and the gaps narrow: SQLite is fastest on
-twelve of sixteen cells, the whole-catalogue read is a tie with the worklet, and the shipped
-engine keeps only the three cells that touch one or ten documents by primary key (findByIds 10,
-order create) or write the catalogue once (fresh seed).
+thirteen of sixteen cells (the whole-catalogue read and findByIds 50 by a few hundredths of a
+millisecond), and the shipped engine keeps only the three cells that touch ten documents by
+primary key (findByIds 10), write one document (order create) or write the catalogue once (fresh
+seed).
 
 **Pixel 10, 20k products / 20k orders.** The worklet and SQLite rows completed. The shipped
 engine went silent for 30 minutes inside the fresh-seed cell, as on the iPad, and keeps its nine
-measured cells as partial. The worklet took 7.6 s for the same cell here, so the silence is the
-engine on the JS thread at this scale, not the cell.
+measured cells as partial. The same engine on the worklet took 7.6 s for the same cell on this
+device, so the silence is specific to running it on the JS thread at this scale; which step of
+the sample stalls (the batched writes, the 20,000-document verification read, or the instance
+removal) was not instrumented.
 
 | Cell, 20k | Shipped engine (partial) | Worklet filesystem | Premium SQLite |
 | --- | --- | --- | --- |
@@ -275,6 +283,11 @@ markers), react-native-worklets 0.11.4, `@wcpos/rxdb-storage-worklet` 0.1.1.
   `predicate()` has the same ungrouped shape; no measured cell there or here issued a mixed
   field-plus-`$or` selector. Their recorded cross-row content checks passed; no timings were rerun.
 - Installed RxDB's BEGIN retry helper has no `console.dir`; results record retry counts.
+- Cold-open samples on the Pixel rows run after 07:30Z on 2026-09-24 (worklet 20k, SQLite 2k and
+  20k) were taken while the driver swallowed a failed post-job stop (fixed in round 12). They are
+  consistent with fresh processes (the worklet's 982 ms cold first read against its 10 ms warm
+  findByIds; SQLite's 37 ms against 4 ms; `am force-stop` never left the app alive in any of
+  the 90 confirmed crash-leg stops on the same device), but that is consistency, not proof.
 - Physical signing/USB controls and large-scale measurements remain for the operator.
 
 ## Behavior changes / regressions
