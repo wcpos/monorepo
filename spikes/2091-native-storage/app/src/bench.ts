@@ -176,7 +176,8 @@ export async function runBench(job: Job, send: Send) {
 				}
 			}
 			cells.push(cell);
-			await send({ type: 'cell', name, unsortedSamples: cell.unsortedSamples });
+			const { idSets, docHashes, ...postedCell } = cell;
+			await send({ type: 'cell', ...postedCell });
 		}
 		const find = (name: string, collection: string, selector: object, extra: object = {}) => {
 			const q = prepared(collection, selector, extra);

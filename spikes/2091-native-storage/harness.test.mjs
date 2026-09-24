@@ -683,6 +683,7 @@ test('report renders seed wall-clock per scale without treating it as a compared
 // Network time must not enter sample timings, and seed progress must describe completed writes.
 test('benchmark reports seed batches, wall-clock and every sample outside timing', async () => {
   const fixtures = await import('./app/src/fixtures.ts');
+  const driver = await jobHarness();
   let now = 0;
   const events = [], writes = [];
   const { exports: { runBench } } = await loadTS('bench', {
@@ -709,7 +710,8 @@ test('benchmark reports seed batches, wall-clock and every sample outside timing
     }) },
   }, { structuredClone, performance: { now: () => now } });
   const result = await runBench({ scale: 'large', simulator: true }, async event => {
-    events.push({ ...event, written: writes.length }); now += 50; // Observable HTTP overhead.
+    events.push({ ...JSON.parse(JSON.stringify(event)), written: writes.length }); now += 50; // Observable HTTP overhead.
+    if (event.type === 'cell') await driver.message(JSON.parse(JSON.stringify(event)));
   });
   const seed = events.filter(e => e.stage === 'seed');
   assert.deepEqual(seed.map(e => [e.collection, e.done, e.total, e.written]), [
@@ -724,7 +726,17 @@ test('benchmark reports seed batches, wall-clock and every sample outside timing
     assert.deepEqual(samples.map(e => e.i), Array.from({ length: cell.samples.length + 1 }, (_, i) => i));
     assert.ok(samples.every(e => e.n === cell.samples.length));
     assert.ok(cell.samples.every(s => s.ms < 50), `${cell.name}: excludes HTTP overhead`);
+    // Dropping samples from the app event must fail here, not just pass a hand-built driver event.
+    const { idSets, docHashes, ...compactCell } = cell;
+    const posted = events.find(e => e.type === 'cell' && e.name === cell.name);
+    const { type, written, ...payload } = posted;
+    assert.deepEqual(payload, JSON.parse(JSON.stringify(compactCell)));
+    assert.ok(events.indexOf(posted) > events.indexOf(samples.at(-1)), 'posted after last sample');
   }
+  const partial = JSON.parse(JSON.stringify(driver.state().partialCells));
+  assert.equal(partial.length, result.cells.length);
+  assert.deepEqual(partial[0].samples, Array.from({ length: 7 }, () => ({ ms: 5, rows: 2001 })));
+  assert.deepEqual(partial[0].signatures, Array(8).fill('hash'));
   const ingest = events.filter(e => e.stage === 'sample' && e.cell === 'ingest-100');
   assert.equal(ingest.length, result.ingest.length);
   assert.ok(result.ingest.every(ms => ms === 10));

@@ -474,3 +474,40 @@ Harness tests for: cells accumulating on the active job; a failed bench row carr
 resume rule; the report rendering them apart from compared cells.
 
 When done, print: the harness test count and result, and the commit hash.
+
+# Round 10 (the cell event must carry its samples, 2026-09-24 small hours)
+
+Round 9 is accepted and committed (`d1775e9cb`). It stores each posted `cell` event on a failed
+row, but the app's `cell` event carries only `name` and `unsortedSamples`; the timings stay in the
+app until `/result`, so a failed row still keeps no numbers.
+
+Rules as before: commit at the end (include `FIXES.md`), do not push, do not open or edit a PR, do
+not reply on any PR, no physical devices (installs are the owner's), no simulators or emulators,
+do not touch `results/`. The iPad is running a leg on port 48091 from this tree: do not start any
+leg, do not bind that port; keep `driver/driver.mjs` importable at every save; run
+`node --test harness.test.mjs` after each edit. Measured code must not move.
+
+## 1. Post the samples with the cell
+
+In `app/src/bench.ts`, where the `cell` event is sent after a cell completes, include the cell's
+`samples` array (each `{ ms, rows? }`) and, if present, its `signatures`, so the driver's
+`partialCells` hold the same shape as a finished row's cells minus the bulky id and hash arrays.
+The send stays where it is, after the cell's last timed sample. Nothing else in the app changes.
+
+## 2. Driver and report
+
+The driver already stores the event; make sure `compactBench` treats `partialCells` exactly like
+`cells` (strip `idSets`/`docHashes`, keep `signatures`), and that `report.mjs` renders p50/p95
+from `samples` in the partial table. Keep the harness tests green and extend the partial-cell
+test with a sample-bearing event.
+
+## 3. Builds, no installs
+
+`npm run typecheck` in `app/`. Build the iOS device app with the exact `xcodebuild` line `run.sh`
+uses for `ios-device` (device id `00008027-000A49223631002E`, derived data under `app/.build/ios`)
+and stop before the `devicectl ... install` step; build the Android release APK with
+`./gradlew assembleRelease` in `app/android` and stop before `adb install`. One build at a time.
+No prebuild is needed (no native change).
+
+When done, print: the harness test count and result, both build output paths with modification
+times, and the commit hash.
