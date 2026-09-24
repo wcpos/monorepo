@@ -1,14 +1,18 @@
 import * as React from 'react';
-import { StyleProp, Text, View, ViewStyle } from 'react-native';
+import { Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
 
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 
 import { DropdownMenuItem } from './item';
+import { SheetContext, useMenuSheet } from './sheet-context';
+import { Checkbox } from '../checkbox';
+import { useIsPhone } from '../lib/device';
 import { Icon } from '../icon';
 import {
 	OVERLAY_MOTION,
 	OVERLAY_PANEL,
 	type OverlayScrimProps,
+	OverlaySheetPanel,
 	OverlayShell,
 } from '../lib/overlay';
 import { cn } from '../lib/utils';
@@ -24,9 +28,22 @@ const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 
 const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
 
-const DropdownMenuSub = DropdownMenuPrimitive.Sub;
+function DropdownMenuSub(props: DropdownMenuPrimitive.SubProps) {
+	return useMenuSheet() ? <>{props.children}</> : <DropdownMenuPrimitive.Sub {...props} />;
+}
 
-const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
+const RadioSheetContext = React.createContext<DropdownMenuPrimitive.RadioGroupProps | null>(null);
+function DropdownMenuRadioGroup(props: DropdownMenuPrimitive.RadioGroupProps) {
+	const sheet = useMenuSheet();
+	if (!sheet) return <DropdownMenuPrimitive.RadioGroup {...props} />;
+	// The sheet's rows read the value from context; the container is a plain View.
+	const { value: _value, onValueChange: _onValueChange, ...rest } = props;
+	return (
+		<RadioSheetContext.Provider value={props}>
+			<View {...rest} />
+		</RadioSheetContext.Provider>
+	);
+}
 
 const useRootContext = DropdownMenuPrimitive.useRootContext;
 
@@ -47,7 +64,16 @@ function MenuScrim(p: OverlayScrimProps) {
 	);
 }
 
-function DropdownMenuSubTrigger({
+function DropdownMenuSubTrigger(props: React.ComponentProps<typeof AnchoredSubTrigger>) {
+	return useMenuSheet() ? (
+		<DropdownMenuLabel inset={props.inset} testID={props.testID} className={props.className}>
+			<View className="flex-row items-center gap-2">{props.children}</View>
+		</DropdownMenuLabel>
+	) : (
+		<AnchoredSubTrigger {...props} />
+	);
+}
+function AnchoredSubTrigger({
 	className,
 	inset,
 	children,
@@ -77,7 +103,16 @@ function DropdownMenuSubTrigger({
 	);
 }
 
-function DropdownMenuSubContent({ className, ...props }: DropdownMenuPrimitive.SubContentProps) {
+function DropdownMenuSubContent(props: DropdownMenuPrimitive.SubContentProps) {
+	return useMenuSheet() ? (
+		<View className={props.className} testID={props.testID}>
+			{props.children as React.ReactNode}
+		</View>
+	) : (
+		<AnchoredSubContent {...props} />
+	);
+}
+function AnchoredSubContent({ className, ...props }: DropdownMenuPrimitive.SubContentProps) {
 	const { open } = DropdownMenuPrimitive.useSubContext();
 	return (
 		<DropdownMenuPrimitive.SubContent
@@ -105,7 +140,8 @@ function DropdownMenuContent({
 	portalHost?: string;
 	inline?: boolean;
 }) {
-	const { open } = DropdownMenuPrimitive.useRootContext();
+	const { open, onOpenChange } = DropdownMenuPrimitive.useRootContext();
+	const phone = useIsPhone();
 	const overlay = React.useMemo(
 		() => ({ className: overlayClassName, style: overlayStyle }),
 		[overlayClassName, overlayStyle]
@@ -113,21 +149,37 @@ function DropdownMenuContent({
 	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
 	const shell = (
 		<OverlayPropsContext.Provider value={overlay}>
-			<OverlayShell presentation="anchored" open={open} Scrim={MenuScrim} testID={props.testID}>
-				<DropdownMenuPrimitive.Content
-					className={cn(
-						OVERLAY_PANEL.anchored,
-						'z-50 min-w-50 overflow-hidden p-1.5',
-						open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
-						className
-					)}
-					{...props}
-				/>
+			<OverlayShell
+				presentation={phone ? 'bottom' : 'anchored'}
+				open={open}
+				Scrim={MenuScrim}
+				testID={props.testID}
+				onDismiss={phone ? () => onOpenChange(false) : undefined}
+			>
+				{phone ? (
+					<SheetContext.Provider value={{ close: () => onOpenChange(false) }}>
+						<OverlaySheetPanel testID={props.testID} className={className}>
+							{props.children as React.ReactNode}
+						</OverlaySheetPanel>
+					</SheetContext.Provider>
+				) : (
+					<DropdownMenuPrimitive.Content
+						className={cn(
+							OVERLAY_PANEL.anchored,
+							'z-50 min-w-50 overflow-hidden p-1.5',
+							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
+							className
+						)}
+						{...props}
+					/>
+				)}
 			</OverlayShell>
 		</OverlayPropsContext.Provider>
 	);
 	return inline ? (
-		shell
+		phone && !open ? null : (
+			shell
+		)
 	) : (
 		<DropdownMenuPrimitive.Portal hostName={portalHost}>{shell}</DropdownMenuPrimitive.Portal>
 	);
@@ -139,6 +191,28 @@ function DropdownMenuCheckboxItem({
 	checked,
 	...props
 }: DropdownMenuPrimitive.CheckboxItemProps) {
+	const sheet = useMenuSheet();
+	if (sheet)
+		return (
+			<Pressable
+				role={'menuitemcheckbox' as React.ComponentProps<typeof Pressable>['role']}
+				aria-checked={checked}
+				disabled={props.disabled}
+				testID={props.testID}
+				className={cn(
+					'active:bg-muted min-h-row w-full flex-row items-center gap-2 rounded-md px-2 py-1.5',
+					props.disabled && 'web:pointer-events-none opacity-45',
+					className
+				)}
+				onPress={() => {
+					props.onCheckedChange?.(!checked);
+					if (props.closeOnPress !== false) sheet.close();
+				}}
+			>
+				<Checkbox checked={checked} onCheckedChange={() => {}} className="pointer-events-none" />
+				<>{children}</>
+			</Pressable>
+		);
 	return (
 		<DropdownMenuPrimitive.CheckboxItem
 			className={cn(
@@ -164,6 +238,31 @@ function DropdownMenuRadioItem({
 	children,
 	...props
 }: DropdownMenuPrimitive.RadioItemProps) {
+	const sheet = useMenuSheet();
+	const radio = React.useContext(RadioSheetContext);
+	if (sheet)
+		return (
+			<Pressable
+				role={'menuitemradio' as React.ComponentProps<typeof Pressable>['role']}
+				aria-checked={radio?.value === props.value}
+				disabled={props.disabled}
+				testID={props.testID}
+				className={cn(
+					'active:bg-muted min-h-row w-full flex-row items-center gap-2 rounded-md px-2 py-1.5',
+					props.disabled && 'web:pointer-events-none opacity-45',
+					className
+				)}
+				onPress={() => {
+					radio?.onValueChange(props.value);
+					if (props.closeOnPress !== false) sheet.close();
+				}}
+			>
+				<View className="size-4 items-center justify-center">
+					{radio?.value === props.value && <View className="bg-primary h-2 w-2 rounded-full" />}
+				</View>
+				<>{children}</>
+			</Pressable>
+		);
 	return (
 		<DropdownMenuPrimitive.RadioItem
 			className={cn(
@@ -188,6 +287,17 @@ function DropdownMenuLabel({
 	inset,
 	...props
 }: DropdownMenuPrimitive.LabelProps & { inset?: boolean }) {
+	if (useMenuSheet())
+		return (
+			<View
+				testID={props.testID}
+				className={cn('h-9 justify-center px-2', inset && 'pl-8', className)}
+			>
+				<Text className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+					{props.children}
+				</Text>
+			</View>
+		);
 	return (
 		<DropdownMenuPrimitive.Label
 			className={cn(
@@ -201,6 +311,8 @@ function DropdownMenuLabel({
 }
 
 function DropdownMenuSeparator({ className, ...props }: DropdownMenuPrimitive.SeparatorProps) {
+	if (useMenuSheet())
+		return <View {...props} className={cn('bg-border -mx-2 my-1 h-px', className)} />;
 	return (
 		<DropdownMenuPrimitive.Separator
 			className={cn('bg-border -mx-1.5 my-1 h-px', className)}
