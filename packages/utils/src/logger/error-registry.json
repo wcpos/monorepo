@@ -1449,6 +1449,25 @@
 		"introducedIn": "1.10.0"
 	},
 	{
+		"code": "AUTH341",
+		"symbol": "SITE_IDENTITY_CLASH",
+		"domain": "AUTH",
+		"severity": "error",
+		"actionHint": "Update the WCPOS plugin on the copy, or remove the saved store first.",
+		"retryPolicy": "after-change",
+		"dataSafety": "no-impact",
+		"escalation": "site-admin",
+		"summary": "This store reports the same identity as a store already saved on this device.",
+		"docsBody": "The two stores share one identity because one is a copy of the other, such as a staging clone. Ask the site administrator to update the WCPOS plugin on the copy to give it its own identity. Removing the saved store and connecting again also works.",
+		"troubleshooting": [
+			"Ask the site administrator to update the WCPOS plugin on the copy, then connect again.",
+			"Alternatively, remove the saved store from this device before connecting the copy."
+		],
+		"logSources": [],
+		"evidence": "wcpos/roadmap#385: staging clones report the saved live store's uuid",
+		"introducedIn": "1.11.0"
+	},
+	{
 		"code": "AUTH411",
 		"symbol": "STORE_URL_INVALID",
 		"domain": "AUTH",
