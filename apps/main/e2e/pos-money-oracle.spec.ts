@@ -523,7 +523,7 @@ liveTest.describe('POS money oracle — line taxes survive the round trip (live 
 	 * published products used either — the classes were live and unreachable. Every
 	 * money assertion the suite had ever made ran on the standard class alone.
 	 *
-	 * This is also the shape the v1.11.0 quick-discount work needs (wcpos/roadmap#91):
+	 * This is also the shape the 2.0.0 quick-discount work needs (wcpos/roadmap#91):
 	 * the whole correctness argument for moving till discounts to `percent` coupons is
 	 * that they allocate pro rata by value across tax classes, and that claim cannot be
 	 * tested on a single-class basket.

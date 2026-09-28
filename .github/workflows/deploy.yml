@@ -91,7 +91,7 @@ jobs:
       # `codex/tender-pane-surface`) therefore ran a next-lane app against
       # dev-free/dev-pro, a plugin generation older than the app supports; 126
       # cases passed against the wrong store and the one that could not
-      # (the quick-discount coupon line, a 1.11.0 server feature) was read as a
+      # (the quick-discount coupon line, a 2.0.0 server feature) was read as a
       # plugin bug (roadmap#277). A run that belongs to neither trunk has NO
       # store; the e2e job refuses it before spending a runner on it.
       #

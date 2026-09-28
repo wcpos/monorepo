@@ -19,7 +19,7 @@ const mockUserLatest = { sites: [] as string[], incrementalUpdate: jest.fn() };
 const mockDiscoverWpApiUrl = jest.fn(async () => 'https://example.com/wp-json/');
 const mockDiscoverApiEndpoints = jest.fn(async () => ({
 	endpoints: { wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/' },
-	siteData: { uuid: 'site-uuid', url: 'https://example.com', wcpos_version: '1.11.0' },
+	siteData: { uuid: 'site-uuid', url: 'https://example.com', wcpos_version: '2.0.0' },
 }));
 
 jest.mock('../../../contexts/app-state', () => ({
@@ -129,7 +129,7 @@ describe('useSiteConnect', () => {
 		mockFindOneFix.mockResolvedValue({ url: 'https://live.example.com', name: 'Live' });
 		mockDiscoverApiEndpoints.mockResolvedValueOnce({
 			endpoints: { wcpos_api_url: 'https://staging.example.com/wp-json/wcpos/v2/' },
-			siteData: { uuid: 'site-uuid', url: 'https://staging.example.com', wcpos_version: '1.11.0' },
+			siteData: { uuid: 'site-uuid', url: 'https://staging.example.com', wcpos_version: '2.0.0' },
 		});
 		mockTestAuthorizationMethod.mockResolvedValue({ ok: true });
 		const { result } = renderHook(() => useSiteConnect());
@@ -156,7 +156,7 @@ describe('useSiteConnect', () => {
 		});
 		mockDiscoverApiEndpoints.mockResolvedValueOnce({
 			endpoints: { wcpos_api_url: 'https://staging.example.com/wp-json/wcpos/v2/' },
-			siteData: { uuid: 'site-uuid', url: 'https://example.com', wcpos_version: '1.11.0' },
+			siteData: { uuid: 'site-uuid', url: 'https://example.com', wcpos_version: '2.0.0' },
 		});
 		mockTestAuthorizationMethod.mockResolvedValue({ ok: true });
 		const { result } = renderHook(() => useSiteConnect());

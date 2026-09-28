@@ -4,7 +4,7 @@ import { authenticatedTest, getStoreUrl, hydrateAuthenticatedPage } from './fixt
 
 /**
  * The server's protocol-gate refusal (wcpos/woocommerce-pos#1752; client
- * mono#1599): a store whose plugin has crossed the 1.11.0 boundary answers
+ * mono#1599): a store whose plugin has crossed the 2.0.0 boundary answers
  * every sync request with a deliberate 426 `wcpos_update_required` envelope.
  * The client must render the blocking update screen and — the politeness
  * half — latch sync shut instead of hammering a store that will refuse
@@ -17,7 +17,7 @@ import { authenticatedTest, getStoreUrl, hydrateAuthenticatedPage } from './fixt
 const REFUSAL_BODY = JSON.stringify({
 	code: 'wcpos_update_required',
 	message: 'This store requires a newer version of WCPOS.',
-	data: { status: 426, min_protocol: 2, server_protocol: 2, plugin_version: '1.11.0' },
+	data: { status: 426, min_protocol: 2, server_protocol: 2, plugin_version: '2.0.0' },
 });
 
 const test = authenticatedTest.extend({

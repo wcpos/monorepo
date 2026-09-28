@@ -74,7 +74,7 @@ export async function pullCustomBatch(input: {
 	// A type assertion validates nothing at runtime: without this check a legacy
 	// envelope (no `complete`) would read as `hasMore: true` on every page.
 	if (typeof parsed.complete !== 'boolean') {
-		throw new Error('orders pull response has no boolean `complete` (plugin below 1.11.0?)');
+		throw new Error('orders pull response has no boolean `complete` (plugin below 2.0.0?)');
 	}
 	return {
 		...parsed,
