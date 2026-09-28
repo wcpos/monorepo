@@ -1,19 +1,24 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+if (!process.env.RXDB_PREMIUM) {
+	throw new Error('RXDB_PREMIUM must hold the RxDB Premium licence: the engine opens more than 16 collections, which open-source RxDB refuses (COL23).');
+}
+
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const tempDir = mkdtempSync(join(tmpdir(), 'sync-packages-publish-'));
+const filterOutput = (output) => output.split('\n').filter((line) => !/accesstoken/i.test(line)).join('\n');
 
 function run(command, args, { cwd = repoRoot, print = true } = {}) {
 	const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
 	if (result.error) throw result.error;
 	if (print) {
-		process.stdout.write(result.stdout);
-		process.stderr.write(result.stderr);
+		process.stdout.write(filterOutput(result.stdout));
+		process.stderr.write(filterOutput(result.stderr));
 	}
 	assert.equal(result.status, 0, `${command} ${args.join(' ')} failed`);
 	return result.stdout;
@@ -76,17 +81,22 @@ try {
 	const scratch = join(tempDir, 'scratch');
 	mkdirSync(scratch);
 	writeFileSync(join(scratch, 'package.json'), JSON.stringify({ name: 'sync-packages-smoke', private: true, type: 'module' }));
-	run('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts', ...tarballs, 'rxdb@17.4.0'], { cwd: scratch });
+	run('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts', ...tarballs, 'rxdb@17.4.0', 'rxdb-premium@17.4.0'], { cwd: scratch });
+	run('npm', ['rebuild', 'rxdb-premium'], { cwd: scratch });
+	assert.ok(existsSync(join(scratch, 'node_modules/rxdb-premium/plugins/shared')));
 	writeFileSync(join(scratch, 'smoke.mjs'), `
 import assert from 'node:assert/strict';
 import { scopeDatabaseName } from '@wcpos/sync-core';
 import { createFakePullServer, createFakeWriteServer } from '@wcpos/sync-core/testing';
 import { createRxdbSyncEngine, setSyncEngineLogger } from '@wcpos/sync-engine';
 import { createEngineHarness } from '@wcpos/sync-engine/testing';
+import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 for (const fn of [scopeDatabaseName, createFakePullServer, createFakeWriteServer,
 	createRxdbSyncEngine, setSyncEngineLogger, createEngineHarness]) {
 	assert.equal(typeof fn, 'function');
 }
+// Hosts also set the premium flag to avoid the COL23 collection limit.
+setPremiumFlag();
 const harness = await createEngineHarness({ mode: 'manual' });
 let timer;
 try {
