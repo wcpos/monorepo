@@ -1,5 +1,6 @@
 # Publishes @wcpos/sync-core and @wcpos/sync-engine on manual dispatch or sync-packages-v* tags.
 # Consumers need a token with read:packages. Versions are never committed by this workflow.
+# The build job runs installs with a read-only token; only the publish job, which runs no installed code, can write packages.
 name: Publish sync packages
 
 on:
@@ -20,19 +21,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      dist-tag: ${{ steps.version.outputs.dist-tag }}
+      sync-core: ${{ steps.pack.outputs.sync-core }}
+      sync-engine: ${{ steps.pack.outputs.sync-engine }}
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: 🛡 Require a merged trunk commit
         run: |
@@ -49,7 +53,6 @@ jobs:
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
         with:
-          expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
       - name: 🏷 Resolve version
@@ -102,8 +105,31 @@ jobs:
           mkdir -p "$RUNNER_TEMP/sync-packages"
           for package in sync-core sync-engine; do
             (cd "packages/$package" && pnpm pack --pack-destination "$RUNNER_TEMP/sync-packages")
-            echo "$package=$RUNNER_TEMP/sync-packages/wcpos-$package-$VERSION.tgz" >> "$GITHUB_OUTPUT"
+            echo "$package=wcpos-$package-$VERSION.tgz" >> "$GITHUB_OUTPUT"
           done
+
+      - name: 📤 Upload tarballs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sync-packages
+          path: ${{ runner.temp }}/sync-packages/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: 📥 Download tarballs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sync-packages
+          path: ${{ runner.temp }}/sync-packages
 
       - name: 🔏 Attest build provenance
         if: ${{ !inputs.dry-run }}
@@ -119,10 +145,10 @@ jobs:
       - name: 🚀 Publish @wcpos/sync-core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
-          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+          VERSION: ${{ needs.build.outputs.version }}
+          DIST_TAG: ${{ needs.build.outputs.dist-tag }}
           DRY_RUN: ${{ inputs.dry-run || false }}
-          TARBALL: ${{ steps.pack.outputs.sync-core }}
+          TARBALL: ${{ runner.temp }}/sync-packages/${{ needs.build.outputs.sync-core }}
         run: |
           if npm view "@wcpos/sync-core@$VERSION" version >/dev/null 2>&1; then
             echo "::warning::@wcpos/sync-core@$VERSION is already published; skipping upload."
@@ -135,10 +161,10 @@ jobs:
       - name: 🚀 Publish @wcpos/sync-engine
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
-          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+          VERSION: ${{ needs.build.outputs.version }}
+          DIST_TAG: ${{ needs.build.outputs.dist-tag }}
           DRY_RUN: ${{ inputs.dry-run || false }}
-          TARBALL: ${{ steps.pack.outputs.sync-engine }}
+          TARBALL: ${{ runner.temp }}/sync-packages/${{ needs.build.outputs.sync-engine }}
         run: |
           if npm view "@wcpos/sync-engine@$VERSION" version >/dev/null 2>&1; then
             echo "::warning::@wcpos/sync-engine@$VERSION is already published; skipping upload."
@@ -151,8 +177,8 @@ jobs:
       - name: 📝 Summary
         if: always()
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+          VERSION: ${{ needs.build.outputs.version }}
+          DIST_TAG: ${{ needs.build.outputs.dist-tag }}
           DRY_RUN: ${{ inputs.dry-run || false }}
         run: |
           {
