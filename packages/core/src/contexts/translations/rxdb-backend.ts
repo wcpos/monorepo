@@ -66,16 +66,23 @@ export class RxDBBackend {
 		// this instance has fetched the key.
 		const cached = this.translationsState?.[cacheKey];
 		const rolling = TRANSLATION_VERSION === ROLLING_TRANSLATION_REF;
-		if (cached != null && (!rolling || this.fetchedRolling.has(cacheKey))) {
+		// The refreshed set is keyed by namespace too, so a second namespace would still be
+		// fetched; the stored key stays language-only, as before this change.
+		const refreshedKey = `${cacheKey}|${namespace}`;
+		if (cached != null && (!rolling || this.fetchedRolling.has(refreshedKey))) {
 			callback(null, cached);
 			return;
 		}
-		if (rolling) this.fetchedRolling.add(cacheKey);
+		// A failed refresh leaves the key unset, so a later read tries the CDN again.
+		const refreshed = () => {
+			if (rolling) this.fetchedRolling.add(refreshedKey);
+		};
 
 		// Try the exact locale first, then fall back to base language (e.g. fr_CA -> fr)
 		this.fetchTranslations(language, namespace)
 			.then((data) => {
 				if (data && Object.keys(data).length > 0) {
+					refreshed();
 					this.cache(cacheKey, cached, data);
 					callback(null, data);
 					return;
@@ -91,6 +98,7 @@ export class RxDBBackend {
 				return this.fetchTranslations(baseLang, namespace).then((fallbackData) => {
 					if (fallbackData && Object.keys(fallbackData).length > 0) {
 						// Cache under the original language + version key.
+						refreshed();
 						this.cache(cacheKey, cached, fallbackData);
 						callback(null, fallbackData);
 					} else {
