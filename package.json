@@ -44,7 +44,6 @@
 		"!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
 	},
 	"devDependencies": {
-		"@react-native/assets-registry": "0.88.0-rc.2",
 		"@vitest/coverage-v8": "4.1.10",
 		"esbuild": "0.28.2",
 		"eslint": "^9.39.5",
