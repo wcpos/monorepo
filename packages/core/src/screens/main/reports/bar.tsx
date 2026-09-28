@@ -170,7 +170,8 @@ export function Bar({
 									row.name ?? '',
 									{
 										storeId: row.id,
-										registerId: row.id === store.id ? (binding.registerId ?? '') : '',
+										// Reselecting the current store keeps the scope as it is (on an unbound Free till, `unbound`).
+										registerId: row.id === store.id ? (binding.registerId ?? scope.registerId) : '',
 									},
 									row.id === store.id,
 									t('reports.other_stores'),

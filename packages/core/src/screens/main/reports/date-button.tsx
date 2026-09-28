@@ -119,6 +119,15 @@ export function DateButton({
 			inZone(timezone, storeDayBounds(calendarDate(parseISO(value)), timezone).from),
 			pattern
 		);
+	// Phone: the calendar column is the sheet's content width (window minus the sheet's p-2),
+	// and seven days plus the calendar's own 5-pt side padding must fit it: 44-pt days from
+	// 360 pt up, smaller only on narrower phones (302 pt at 320 → 42-pt days).
+	// A window without a measured width (jsdom) keeps the 44-pt days.
+	const calendarWidth = Math.min(360, (width || 360) - (phone ? 16 : 0)) - 2;
+	const daySize = Math.max(36, Math.min(44, Math.floor((calendarWidth - 10) / 7)));
+	// Phone: the body scrolls inside what the 92%-high sheet leaves after the footer and,
+	// when a lock is showing, the hint with See Pro; no floor, so a rotated phone still fits.
+	const bodyMaxHeight = Math.max(96, height * 0.92 - 80 - (locked || historyLimit ? 104 : 0));
 	const dates =
 		selected === 'thisMonth' || selected === 'lastMonth'
 			? date(scope.from, 'MMMM')
@@ -158,7 +167,7 @@ export function DateButton({
 				style={{ width: phone ? Math.min(360, width) : Math.min(556, width) }}
 			>
 				{/* On a short phone the stacked body scrolls inside the sheet; the footer and the hint stay reachable below it. */}
-				<PickerBody phone={phone} maxHeight={Math.max(240, height - 260)}>
+				<PickerBody phone={phone} maxHeight={bodyMaxHeight}>
 					<View className={phone ? 'flex-row flex-wrap gap-2 p-2' : 'w-48 shrink-0 p-2'}>
 						{Object.entries(ranges).map(([key, range]) => (
 							<Button
@@ -181,19 +190,21 @@ export function DateButton({
 						))}
 					</View>
 					{/* On phone the sheet is full width with its own p-2, so the calendar fits inside that. */}
-					<View
-						className="self-center"
-						style={{ width: Math.min(360, width - (phone ? 16 : 0)) - 2 }}
-					>
+					<View className="self-center" style={{ width: calendarWidth }}>
 						<Calendar
 							testID="reports-calendar"
 							minDate={license?.isPro ? min : today}
 							maxDate={today}
+							// Free: earlier days stay drawn as out of range, but their presses must reach the
+							// handler below to show the hint; the calendar swallows them otherwise.
+							allowSelectionOutOfRange={!license?.isPro}
 							dateRange={draft}
 							onDateRangeChange={setDraft}
 							theme={{
 								...({
-									'stylesheet.day.basic': { base: { width: 44, height: 44, alignItems: 'center' } },
+									'stylesheet.day.basic': {
+										base: { width: daySize, height: daySize, alignItems: 'center' },
+									},
 								} as Record<string, unknown>),
 							}}
 							{...(!license?.isPro
