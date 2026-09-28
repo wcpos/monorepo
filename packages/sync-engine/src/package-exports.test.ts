@@ -40,6 +40,10 @@ describe('package exports', () => {
 				// never by a copy of it in the UI (#1546).
 				'heldOpenCartMutations',
 				'OPEN_CART_ORDER_STATUS',
+				// The engine is published without @wcpos/utils, so the host hands it a
+				// logger instead of the engine importing the app's: apps/main routes this
+				// process-wide warn sink to the category the engine used before.
+				'setSyncEngineLogger',
 			].sort()
 		);
 	});
