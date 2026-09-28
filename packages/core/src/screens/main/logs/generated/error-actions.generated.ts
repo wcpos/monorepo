@@ -138,6 +138,8 @@ export function translateErrorAction(t: TranslateError, code: ErrorCode): string
 			return t('health.logs.error_action.AUTH321');
 		case 'AUTH331':
 			return t('health.logs.error_action.AUTH331');
+		case 'AUTH341':
+			return t('health.logs.error_action.AUTH341');
 		case 'AUTH411':
 			return t('health.logs.error_action.AUTH411');
 		case 'AUTH421':

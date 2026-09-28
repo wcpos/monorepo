@@ -16,6 +16,19 @@ import { useUrlDiscovery } from './use-url-discovery';
 
 const siteLogger = getLogger(['wcpos', 'auth', 'site']);
 
+/**
+ * The address as an identity: scheme dropped, host lower-cased, trailing
+ * slash dropped, port and path kept, so `example.com/staging` is another
+ * site and `https://Example.com/` is `example.com`. A missing address
+ * compares as empty rather than throwing inside the save.
+ */
+export function normalizeSiteAddress(url: string | undefined): string {
+	return (url ?? '')
+		.replace(/^https?:\/\//i, '')
+		.replace(/^[^/]+/, (host) => host.toLowerCase())
+		.replace(/\/$/, '');
+}
+
 type SiteDocument = import('@wcpos/database').SiteDocument;
 
 interface WpJsonResponse {
@@ -146,6 +159,17 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 
 				// Check if site already exists
 				const existingSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
+				if (
+					existingSite &&
+					normalizeSiteAddress(existingSite.url) !== normalizeSiteAddress(siteData.url)
+				) {
+					throw Object.assign(
+						new Error(t('auth.site_identity_clash', { name: existingSite.name })),
+						{
+							errorCode: ERROR_CODES.SITE_IDENTITY_CLASH,
+						}
+					);
+				}
 
 				/**
 				 * Merge the discovered details into the site document.
@@ -174,6 +198,12 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 
 				return siteDoc.getLatest();
 			} catch (err: unknown) {
+				if (
+					err instanceof Error &&
+					(err as Error & { errorCode?: ErrorCode }).errorCode === ERROR_CODES.SITE_IDENTITY_CLASH
+				) {
+					throw err;
+				}
 				// Determine error type and code
 				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED; // Default for DB operations
 
