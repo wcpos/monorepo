@@ -2,7 +2,12 @@ import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
+import { useCSSVariable } from 'uniwind';
 
+import { Chip } from '@wcpos/components/chip';
+import { Keypad, type KeypadKeyDescriptor } from '@wcpos/components/keypad';
+import { useIsPhone } from '@wcpos/components/lib/device';
+import { SCALE_STEPS } from '@wcpos/components/lib/scale';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
@@ -46,7 +51,7 @@ function useElapsed(active: boolean, ms: number): boolean {
 interface Props {
 	flow: TenderFlow;
 	format: (minor: number) => string;
-	/** Phones scroll the selector sideways and use a smaller entry. */
+	/** Compact host layout. */
 	compact?: boolean;
 }
 
@@ -63,8 +68,8 @@ export function TenderPane({ flow, format, compact }: Props) {
 	}
 	if (flow.saveState?.kind === 'saving') {
 		return (
-			<VStack space="md" className="flex-1">
-				<View className="flex-row flex-wrap gap-2">
+			<VStack space="md" className="bg-card flex-1">
+				<MethodRows>
 					{flow.tiles.length > 0
 						? flow.tiles.map((tile) => (
 								<PaymentTile
@@ -80,12 +85,10 @@ export function TenderPane({ flow, format, compact }: Props) {
 								<View
 									key={index}
 									testID="checkout-tile-skeleton"
-									className={`bg-muted h-[4.25rem] rounded-md ${
-										compact ? 'min-w-[45%] flex-1' : 'min-w-[9.5rem]'
-									}`}
+									className="bg-muted h-tile min-w-0 flex-1 rounded-lg"
 								/>
 							))}
-				</View>
+				</MethodRows>
 				{/* Each real tile already says it; the line below is for the skeleton fallback only. */}
 				{flow.tiles.length === 0 ? (
 					<Text className="text-muted-foreground text-sm">{t('pos_checkout.saving_order')}</Text>
@@ -109,6 +112,28 @@ export function TenderPane({ flow, format, compact }: Props) {
 		<SplitView flow={flow} format={format} compact={compact} />
 	) : (
 		<TenderKeypad flow={flow} format={format} compact={compact} />
+	);
+}
+
+// Keep each row at the same column count: percentage bases plus gaps wrap too early.
+function MethodRows({ children }: React.PropsWithChildren) {
+	const columns = useIsPhone() ? 3 : 5;
+	const tiles = React.Children.toArray(children);
+	const rows: React.ReactNode[][] = [];
+	for (let index = 0; index < tiles.length; index += columns) {
+		rows.push(tiles.slice(index, index + columns));
+	}
+	return (
+		<View className="w-full gap-2">
+			{rows.map((row, index) => (
+				<View key={index} className="flex-row gap-2">
+					{row}
+					{Array.from({ length: columns - row.length }, (_, spacer) => (
+						<View key={`spacer-${spacer}`} className="min-w-0 flex-1" />
+					))}
+				</View>
+			))}
+		</View>
 	);
 }
 
@@ -148,7 +173,6 @@ function PaymentTile({
 	tile,
 	selected,
 	saving,
-	compact,
 	onPress,
 }: {
 	tile: TenderTile;
@@ -169,13 +193,11 @@ function PaymentTile({
 			variant={selected ? 'outline-primary' : 'outline'}
 			disabled={saving || (tile.disabled && !canChooseOffline)}
 			onPress={onPress}
-			className={`h-auto items-stretch justify-start px-3 py-3 ${
-				compact ? 'min-w-[45%] flex-1' : 'min-w-[9.5rem]'
-			}`}
+			className={`h-tile border-border bg-background min-w-0 flex-1 items-stretch rounded-lg px-2 ${selected ? 'border-primary bg-muted' : ''} ${saving || (tile.disabled && !canChooseOffline) ? 'opacity-45' : ''}`}
 		>
 			<VStack space="xs" className="flex-1">
 				<HStack className="items-center justify-between gap-2">
-					<Text className="text-muted-foreground text-[10px] tracking-wider uppercase">
+					<Text className="text-muted-foreground text-xs tracking-wider uppercase">
 						{t(kindLabelKey(tile.method.kind))}
 					</Text>
 					{tile.settlesLater ? (
@@ -210,19 +232,37 @@ function PaymentTile({
 	);
 }
 
-const KEYPAD_ROWS = [
-	['1', '2', '3'],
-	['4', '5', '6'],
-	['7', '8', '9'],
-] as const;
+const KEYPAD_ROWS: readonly (readonly KeypadKeyDescriptor[])[] = [
+	...['123', '456', '789'].map((row) =>
+		[...row].map((value) => ({ value, label: value, testID: `checkout-key-${value}` }))
+	),
+	[
+		{ value: 'clear', label: 'C', testID: 'checkout-key-clear' },
+		{ value: '0', label: '0', testID: 'checkout-key-0' },
+		{ value: 'backspace', icon: 'deleteLeft', testID: 'checkout-key-backspace' },
+	],
+];
 
 /**
  * Digits shift in from the right, till-style: the entry is pre-filled with the
  * balance and the first keypress starts a fresh number. There is no decimal key
  * because there is no decimal to get wrong.
  */
-function TenderKeypad({ flow, format, compact }: Props) {
+function TenderKeypad({ flow, format }: Props) {
 	const t = useT();
+	const tile = useCSSVariable('--spacing-tile');
+	const ctl = useCSSVariable('--spacing-ctl');
+	const scale = Object.values(SCALE_STEPS).find((step) => step[4] === parseFloat(String(tile)));
+	const [paneHeight, setPaneHeight] = React.useState(0);
+	const [headHeight, setHeadHeight] = React.useState(0);
+	const [footHeight, setFootHeight] = React.useState(0);
+	const gap = scale ? scale[0] * 2 : 0;
+	const fixedHeight = headHeight + footHeight + gap * KEYPAD_ROWS.length;
+	const shrink =
+		!!scale && paneHeight > 0 && paneHeight < fixedHeight + KEYPAD_ROWS.length * scale[4];
+	const contentHeight = shrink
+		? Math.max(paneHeight, fixedHeight + KEYPAD_ROWS.length * parseFloat(String(ctl)))
+		: undefined;
 	const [choosingReader, setChoosingReader] = React.useState<string | null>(null);
 	const [unavailableOpen, setUnavailableOpen] = React.useState(false);
 	const method = flow.method;
@@ -257,8 +297,8 @@ function TenderKeypad({ flow, format, compact }: Props) {
 		return (
 			<Button
 				key={tile.method.id}
-				variant={selected ? 'sidebar-solid' : 'sidebar-quiet'}
-				className="h-12 shrink-0 flex-row gap-2 rounded-xl"
+				variant="outline"
+				className={`h-tile border-border bg-background min-w-0 flex-1 flex-col gap-1 rounded-lg px-2 ${selected ? 'border-primary bg-muted' : ''} ${flow.busy ? 'opacity-45' : ''}`}
 				testID={`checkout-method-${tile.method.id}`}
 				disabled={flow.busy}
 				onPress={() => {
@@ -300,15 +340,18 @@ function TenderKeypad({ flow, format, compact }: Props) {
 
 	return (
 		<ScrollView
-			className="bg-sidebar text-sidebar-foreground flex-1"
-			contentContainerClassName="items-center gap-2 pb-4"
+			testID="checkout-keypad-pane"
+			className="bg-card flex-1"
+			onLayout={(event) => setPaneHeight(event.nativeEvent.layout.height)}
+			contentContainerClassName="items-center gap-2"
+			contentContainerStyle={{ height: contentHeight }}
 			showsVerticalScrollIndicator={false}
 		>
 			<HStack className="flex-wrap items-center justify-center gap-2">
 				<Text
 					testID="checkout-label"
 					decodeHtml
-					className="text-sidebar-foreground/70 text-xs font-semibold tracking-wider uppercase"
+					className="text-muted-foreground text-xs font-semibold tracking-wider uppercase"
 				>
 					{plan
 						? `${flow.planLabel} · ${t('pos_checkout.amount_left', { amount: format(flow.balanceMinor) })}`
@@ -317,15 +360,14 @@ function TenderKeypad({ flow, format, compact }: Props) {
 									? 'pos_checkout.remaining'
 									: 'pos_checkout.to_pay'
 							)}{' '}
-					<Text testID="checkout-balance" className={plan ? 'hidden' : undefined}>
+					<Text testID="checkout-balance" className={plan ? 'hidden' : 'text-amt tabular-nums'}>
 						{format(flow.balanceMinor)}
 					</Text>
 				</Text>
 				{flow.balanceMinor > 0 ? (
-					<Button
-						variant="sidebar-quiet"
-						size="sm"
-						className="rounded-full"
+					<Chip
+						on={!!plan}
+						label={t('pos_checkout.split')}
 						testID="checkout-split-chip"
 						disabled={flow.busy}
 						onPress={() =>
@@ -333,9 +375,7 @@ function TenderKeypad({ flow, format, compact }: Props) {
 								type: 'open-split',
 							})
 						}
-					>
-						<ButtonText>{t('pos_checkout.split')}</ButtonText>
-					</Button>
+					/>
 				) : null}
 				{!flow.online ? (
 					<Text testID="checkout-offline" className="text-warning text-xs">
@@ -345,13 +385,13 @@ function TenderKeypad({ flow, format, compact }: Props) {
 			</HStack>
 			<Text
 				testID="checkout-entry"
-				className={`text-sidebar-foreground font-bold tabular-nums ${compact ? 'text-6xl' : 'text-8xl'} ${flow.state.entryDirty ? 'opacity-100' : 'opacity-70'}`}
+				className={`text-foreground text-amt font-bold tabular-nums ${flow.state.entryDirty ? 'opacity-100' : 'opacity-70'}`}
 			>
 				{format(flow.state.view === 'select' ? due : flow.state.entryMinor)}
 			</Text>
 			<Text
 				testID="checkout-entry-hint"
-				className={`min-h-6 text-sm ${noChange ? 'text-warning' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-sidebar-foreground/70'}`}
+				className={`min-h-6 text-sm ${noChange ? 'text-warning' : flow.entryChangeMinor > 0 ? 'text-success' : 'text-muted-foreground'}`}
 				decodeHtml
 			>
 				{hint}
@@ -365,14 +405,14 @@ function TenderKeypad({ flow, format, compact }: Props) {
 						<View
 							key={index}
 							testID={`checkout-plan-leg-${index}`}
-							className={`flex-row items-center gap-1 rounded-full border px-3 py-2 ${leg.state === 'done' ? 'bg-success/20 border-success/30' : leg.state === 'now' ? 'border-sidebar-foreground' : 'border-sidebar-border opacity-60'} ${leg.state === 'rest' ? 'border-dashed' : ''}`}
+							className={`flex-row items-center gap-1 rounded-full border px-3 py-2 ${leg.state === 'done' ? 'bg-success/20 border-success/30' : leg.state === 'now' ? 'border-primary' : 'border-border opacity-60'} ${leg.state === 'rest' ? 'border-dashed' : ''}`}
 						>
 							{leg.state === 'done' ? (
 								<Icon name="check" size="xs" className="text-success" />
 							) : null}
 							<Text
 								className={
-									leg.state === 'done' ? 'text-success text-xs' : 'text-sidebar-foreground text-xs'
+									leg.state === 'done' ? 'text-success text-xs' : 'text-foreground text-xs'
 								}
 								decodeHtml
 							>
@@ -384,7 +424,7 @@ function TenderKeypad({ flow, format, compact }: Props) {
 					))}
 					{flow.planMore ? (
 						<Button
-							variant="sidebar"
+							variant="ghost"
 							size="sm"
 							testID="checkout-plan-pick-items"
 							onPress={() => {
@@ -396,7 +436,7 @@ function TenderKeypad({ flow, format, compact }: Props) {
 						</Button>
 					) : null}
 					<Button
-						variant="sidebar"
+						variant="ghost"
 						size="sm"
 						testID="checkout-plan-change"
 						onPress={() => flow.dispatch({ type: 'open-split' })}
@@ -406,17 +446,11 @@ function TenderKeypad({ flow, format, compact }: Props) {
 				</View>
 			) : null}
 
-			{compact ? (
-				<ScrollView horizontal className="w-full grow-0" showsHorizontalScrollIndicator={false}>
-					<HStack className="gap-2">{pills}</HStack>
-				</ScrollView>
-			) : (
-				<View className="flex-row flex-wrap justify-center gap-2">{pills}</View>
-			)}
+			<MethodRows>{pills}</MethodRows>
 			{unavailable.length > 0 ? (
 				<VStack space="xs" className="w-full max-w-md">
 					<Button
-						variant="sidebar"
+						variant="ghost"
 						size="sm"
 						className="rounded-md"
 						testID="checkout-unavailable-toggle"
@@ -431,14 +465,14 @@ function TenderKeypad({ flow, format, compact }: Props) {
 								<View
 									key={tile.method.id}
 									testID={`checkout-unavailable-${tile.method.id}`}
-									className="bg-sidebar-foreground/10 flex-row items-center gap-2 rounded-md p-2"
+									className="bg-muted flex-row items-center gap-2 rounded-md p-2"
 								>
-									<Icon name={methodIcon(tile.method)} className="text-sidebar-foreground/70" />
-									<Text className="text-sidebar-foreground text-sm" decodeHtml>
+									<Icon name={methodIcon(tile.method)} className="text-muted-foreground" />
+									<Text className="text-foreground text-sm" decodeHtml>
 										{tile.method.title}
 									</Text>
 									<MethodStatus tile={tile} />
-									<Text className="text-sidebar-foreground/70 flex-1 text-xs">
+									<Text className="text-muted-foreground flex-1 text-xs">
 										{tile.reason
 											? t(disabledReasonKey(tile.reason), {
 													title: tile.method.title,
@@ -473,7 +507,7 @@ function TenderKeypad({ flow, format, compact }: Props) {
 						<HStack className="items-center gap-2">
 							<Text
 								testID={locked ? 'checkout-reader-locked' : 'checkout-reader-selected'}
-								className="text-sidebar-foreground/70 text-sm"
+								className="text-muted-foreground text-sm"
 							>
 								{t('pos_checkout.reader_line', {
 									label: (locked ? flow.readers[0] : selectedReader)?.label ?? '',
@@ -506,7 +540,7 @@ function TenderKeypad({ flow, format, compact }: Props) {
 									</Button>
 									{reader.inUseBy !== null ? (
 										<Text
-											className="text-sidebar-foreground/70 text-xs"
+											className="text-muted-foreground text-xs"
 											testID={`checkout-reader-${reader.id}-reason`}
 										>
 											{t('pos_checkout.reader_in_use', { number: reader.inUseBy })}
@@ -517,7 +551,7 @@ function TenderKeypad({ flow, format, compact }: Props) {
 						</View>
 					)}
 					{needsReader ? (
-						<Text className="text-sidebar-foreground/70 text-sm">
+						<Text className="text-muted-foreground text-sm">
 							{t('pos_checkout.choose_a_terminal')}
 						</Text>
 					) : null}
@@ -527,104 +561,57 @@ function TenderKeypad({ flow, format, compact }: Props) {
 			{method ? (
 				<View className="flex-row flex-wrap justify-center gap-2">
 					{(givesChange && !remote ? flow.quickAmountsMinor : []).map((minor) => (
-						<Button
+						<Chip
 							key={minor}
-							variant="sidebar-quiet"
-							size="sm"
-							className="rounded-full"
+							label={format(minor)}
 							testID={`checkout-quick-${fromMinor(minor, flow.dp)}`}
 							disabled={flow.busy}
 							onPress={() => flow.dispatch({ type: 'set-entry', minor })}
-						>
-							<ButtonText>{format(minor)}</ButtonText>
-						</Button>
+						/>
 					))}
-					<Button
-						variant="sidebar-quiet"
-						size="sm"
-						className="rounded-full"
+					<Chip
+						label={t(
+							(givesChange && !remote) || plan
+								? 'pos_checkout.exact_amount'
+								: 'pos_checkout.full_balance',
+							{ amount: format(due) }
+						)}
 						testID={givesChange && !remote ? 'checkout-quick-exact' : 'checkout-quick-balance'}
 						disabled={flow.busy}
 						onPress={() => flow.dispatch({ type: 'set-entry', minor: due })}
-					>
-						<ButtonText>
-							{t(
-								(givesChange && !remote) || plan
-									? 'pos_checkout.exact_amount'
-									: 'pos_checkout.full_balance',
-								{ amount: format(due) }
-							)}
-						</ButtonText>
-					</Button>
+					/>
 				</View>
 			) : null}
 
-			<VStack space="xs" testID="checkout-keypad" className="min-h-56 w-full max-w-md">
-				{KEYPAD_ROWS.map((row) => (
-					<HStack key={row[0]} className="gap-2">
-						{row.map((key) => (
-							<KeypadKey key={key} flow={flow} value={key} label={key} />
-						))}
-					</HStack>
-				))}
-				<HStack className="gap-2">
-					<KeypadKey flow={flow} value="clear" label="C" testID="checkout-key-clear" />
-					<KeypadKey flow={flow} value="0" label="0" />
-					<KeypadKey
-						flow={flow}
-						value="backspace"
-						icon="deleteLeft"
-						testID="checkout-key-backspace"
-					/>
-				</HStack>
-			</VStack>
-
-			<Button
-				variant="sidebar-solid"
-				size="lg"
-				className="h-14 w-full max-w-md"
-				testID="checkout-commit"
-				loading={flow.busy}
-				disabled={
-					!method ||
-					flow.busy ||
-					flow.entryAppliedMinor <= 0 ||
-					needsReader ||
-					Boolean(reason) ||
-					noChange
-				}
-				onPress={() => void flow.takeTender()}
-			>
-				<ButtonText decodeHtml>{commit}</ButtonText>
-			</Button>
+			<Keypad
+				rows={KEYPAD_ROWS.map((row) => row.map((key) => ({ ...key, disabled: flow.busy })))}
+				onPress={(value) => flow.dispatch({ type: 'key', key: value as TenderKey })}
+				fit={shrink ? 'shrink' : 'tile'}
+				testID="checkout-keypad"
+				onLayout={(event) => setHeadHeight(event.nativeEvent.layout.y)}
+				className="w-full"
+			/>
+			<View className="w-full" onLayout={(event) => setFootHeight(event.nativeEvent.layout.height)}>
+				<Button
+					variant="default"
+					size="lg"
+					className="w-full"
+					testID="checkout-commit"
+					loading={flow.busy}
+					disabled={
+						!method ||
+						flow.busy ||
+						flow.entryAppliedMinor <= 0 ||
+						needsReader ||
+						Boolean(reason) ||
+						noChange
+					}
+					onPress={() => void flow.takeTender()}
+				>
+					<ButtonText decodeHtml>{commit}</ButtonText>
+				</Button>
+			</View>
 		</ScrollView>
-	);
-}
-
-function KeypadKey({
-	flow,
-	value,
-	label,
-	icon,
-	testID,
-}: {
-	flow: TenderFlow;
-	value: TenderKey;
-	label?: string;
-	icon?: 'deleteLeft';
-	testID?: string;
-}) {
-	return (
-		<Button
-			variant="sidebar-key"
-			size="key"
-			className={`flex-1 ${value === 'clear' || icon ? 'opacity-60' : ''}`}
-			disabled={flow.busy}
-			testID={testID ?? `checkout-key-${value}`}
-			onPress={() => flow.dispatch({ type: 'key', key: value })}
-		>
-			{icon ? <Icon name={icon} /> : <ButtonText>{label}</ButtonText>}
-		</Button>
 	);
 }
 
@@ -651,7 +638,7 @@ function MethodStatus({ tile, selected }: { tile: TenderTile; selected?: boolean
 		<View testID={`checkout-method-status-${method.id}`} className="flex-row items-center gap-1">
 			<View className={`size-2 rounded-full ${connected ? 'bg-success' : 'bg-muted-foreground'}`} />
 			{!tile.disabled && status.reader?.battery != null ? (
-				<Text className={`text-xs ${selected ? 'text-sidebar' : 'text-sidebar-foreground'}`}>
+				<Text className={`text-xs ${selected ? 'text-primary' : 'text-foreground'}`}>
 					{t('pos_checkout.reader_battery_percent', { battery: status.reader.battery })}
 				</Text>
 			) : null}

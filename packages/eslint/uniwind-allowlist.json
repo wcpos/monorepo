@@ -93,20 +93,6 @@
   "packages/core/src/screens/main/pos/cart/cells/fee-name.tsx": {
     "grid/grid-cols-*": 2
   },
-  "packages/core/src/screens/main/pos/checkout/column/checkout-column.tsx": {
-    "arbitrary-px": 2
-  },
-  "packages/core/src/screens/main/pos/checkout/receipt-stage/receipt-stage.tsx": {
-    "arbitrary-px": 1,
-    "duration-literal": 2
-  },
-  "packages/core/src/screens/main/pos/checkout/tender/tender-pane.tsx": {
-    "arbitrary-px": 1
-  },
-  "packages/core/src/screens/main/pos/checkout/tender/terminal-leg-view.tsx": {
-    "arbitrary-px": 5,
-    "duration-literal": 2
-  },
   "packages/core/src/screens/main/pos/products/cells/variations-popover/index.tsx": {
     "bare-Suspense": 1
   },

@@ -1,6 +1,10 @@
 import * as React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import Svg, { Circle } from 'react-native-svg';
+import { useCSSVariable } from 'uniwind';
+
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
@@ -8,7 +12,7 @@ import { Text } from '@wcpos/components/text';
 import { evenSplitShareMinor } from './tender-state';
 import { useT } from '../../../../../contexts/translations';
 
-import type { TenderPlan } from './tender-state';
+import type { SplitTab, TenderPlan } from './tender-state';
 import type { TenderFlow } from './use-tender-flow';
 
 type SplitFlow = Pick<
@@ -22,6 +26,7 @@ type SplitFlow = Pick<
 	| 'lines'
 	| 'linesPaidBy'
 	| 'plan'
+	| 'planLegs'
 	| 'busy'
 >;
 
@@ -35,6 +40,10 @@ export function SplitView({
 	compact?: boolean;
 }) {
 	const t = useT();
+	const primary = String(useCSSVariable('--color-primary'));
+	const muted = String(useCSSVariable('--color-muted'));
+	const ringLegs = flow.planLegs.filter((leg) => leg.state !== 'done');
+	const circumference = 2 * Math.PI * 46;
 	const { splitTab: tab, pickedLineIds } = flow.state;
 	const balance = flow.balanceMinor;
 	const picked = flow.lines.filter(
@@ -72,38 +81,63 @@ export function SplitView({
 					}[tab]
 				);
 	return (
-		<ScrollView className="bg-sidebar flex-1" contentContainerClassName="items-center gap-4 pb-4">
-			<Text className="text-sidebar-foreground/70 text-xs font-semibold tracking-wider uppercase">
+		<ScrollView className="bg-card flex-1" contentContainerClassName="items-center gap-4 pb-4">
+			<Text className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
 				{t(flow.paidMinor > 0 ? 'pos_checkout.split_the_remaining' : 'pos_checkout.split')}
 			</Text>
-			<Text
-				className={`text-sidebar-foreground font-bold tabular-nums ${compact ? 'text-6xl' : 'text-8xl'}`}
-			>
-				{format(balance)}
-			</Text>
+			<View className="size-48 items-center justify-center">
+				{flow.plan || flow.paidMinor > 0 ? (
+					<View className="absolute inset-0">
+						<Svg width="100%" height="100%" viewBox="0 0 100 100">
+							<Circle cx={50} cy={50} r={46} fill="none" stroke={muted} strokeWidth={3} />
+							{ringLegs.map((leg, index) => {
+								const length =
+									flow.balanceMinor > 0 ? (leg.minor / flow.balanceMinor) * circumference : 0;
+								const start = ringLegs
+									.slice(0, index)
+									.reduce(
+										(offset, previous) =>
+											offset +
+											(flow.balanceMinor > 0
+												? (previous.minor / flow.balanceMinor) * circumference
+												: 0),
+										0
+									);
+								return (
+									<Circle
+										key={index}
+										cx={50}
+										cy={50}
+										r={46}
+										fill="none"
+										stroke={primary}
+										strokeWidth={3}
+										strokeDasharray={`${Math.max(0, length - 3)} ${circumference}`}
+										strokeDashoffset={-start}
+										rotation={-90}
+										origin="50, 50"
+									/>
+								);
+							})}
+						</Svg>
+					</View>
+				) : null}
+				<Text className="text-foreground text-amt font-bold tabular-nums">{format(balance)}</Text>
+			</View>
 			<View className="w-full max-w-2xl gap-4">
-				<View className="bg-sidebar-foreground/10 flex-row rounded-2xl p-1">
-					{(['even', 'amount', 'percent', 'item'] as const).map((value) => (
-						<Button
-							key={value}
-							variant={tab === value ? 'sidebar-solid' : 'sidebar-quiet'}
-							className="h-12 flex-1 rounded-xl px-1"
-							testID={`checkout-split-tab-${value}`}
-							onPress={() => flow.dispatch({ type: 'set-split-tab', tab: value })}
-						>
-							<ButtonText>
-								{t(
-									{
-										even: 'pos_checkout.split_even',
-										amount: 'pos_checkout.split_amount',
-										percent: 'pos_checkout.split_percent',
-										item: 'pos_checkout.split_item',
-									}[value]
-								)}
-							</ButtonText>
-						</Button>
-					))}
-				</View>
+				<SegmentedControl
+					value={tab}
+					onValueChange={(value) =>
+						flow.dispatch({ type: 'set-split-tab', tab: value as SplitTab })
+					}
+					segments={
+						(['even', 'amount', 'percent', 'item'] as const).map((value) => ({
+							value,
+							label: t(`pos_checkout.split_${value}`),
+							testID: `checkout-split-tab-${value}`,
+						})) as [Segment, Segment, Segment, Segment]
+					}
+				/>
 				{tab === 'item' ? (
 					<>
 						<View className="gap-2">
@@ -118,26 +152,26 @@ export function SplitView({
 										accessibilityState={{ checked, disabled: Boolean(paid) || flow.busy }}
 										disabled={Boolean(paid) || flow.busy}
 										onPress={() => flow.dispatch({ type: 'toggle-split-line', lineId: line.id })}
-										className={`bg-sidebar-foreground/10 min-h-14 flex-row items-center gap-3 rounded-xl p-3 ${paid ? 'opacity-40' : ''}`}
+										className={`bg-muted min-h-14 flex-row items-center gap-3 rounded-xl p-3 ${paid ? 'opacity-40' : ''}`}
 									>
 										<View
-											className={`size-5 items-center justify-center rounded border ${checked ? 'bg-success border-success' : 'border-sidebar-border'}`}
+											className={`size-5 items-center justify-center rounded border ${checked ? 'bg-success border-success' : 'border-border'}`}
 										>
 											{checked ? (
 												<Icon name="check" size="xs" className="text-success-foreground" />
 											) : null}
 										</View>
 										<View className="flex-1">
-											<Text className="text-sidebar-foreground font-semibold" decodeHtml>
+											<Text className="text-foreground font-semibold" decodeHtml>
 												{line.name}
 											</Text>
 											{paid ? (
-												<Text className="text-sidebar-foreground/70 text-xs" decodeHtml>
+												<Text className="text-muted-foreground text-xs" decodeHtml>
 													{t('pos_checkout.line_paid_by', { methods: paid.join(' + ') })}
 												</Text>
 											) : null}
 										</View>
-										<Text className="text-sidebar-foreground font-semibold tabular-nums">
+										<Text className="text-foreground font-semibold tabular-nums">
 											{format(line.totalMinor)}
 										</Text>
 									</Pressable>
@@ -145,7 +179,7 @@ export function SplitView({
 							})}
 						</View>
 						<Button
-							variant="sidebar-solid"
+							variant="default"
 							className="h-14"
 							testID="checkout-split-items-go"
 							disabled={sum <= 0 || flow.busy}
@@ -159,13 +193,13 @@ export function SplitView({
 						</Button>
 						{sum > 0 ? (
 							<View className="flex-row flex-wrap items-center justify-center gap-2">
-								<Text className="text-sidebar-foreground/70 text-sm">
+								<Text className="text-muted-foreground text-sm">
 									{t('pos_checkout.share_these_between')}
 								</Text>
 								{[2, 3, 4].map((ways) => (
 									<Button
 										key={ways}
-										variant="sidebar-quiet"
+										variant="outline"
 										className="rounded-full"
 										size="sm"
 										testID={`checkout-split-share-${ways}`}
@@ -205,8 +239,8 @@ export function SplitView({
 							return (
 								<Button
 									key={value}
-									variant={selected ? 'sidebar-solid' : 'sidebar-quiet'}
-									className={`h-24 flex-col gap-1 rounded-2xl ${tab === 'even' && !compact ? 'min-w-20 flex-1' : 'min-w-[30%] grow'}`}
+									variant={selected ? 'outline-primary' : 'outline'}
+									className={`h-tile flex-col gap-1 rounded-lg ${tab === 'even' && !compact ? 'min-w-20 flex-1' : 'grow basis-1/3'}`}
 									testID={`checkout-split-option-${value}`}
 									disabled={flow.busy || minor <= 0}
 									onPress={() =>
@@ -233,8 +267,8 @@ export function SplitView({
 						{tab === 'amount' ? (
 							<>
 								<Button
-									variant="sidebar-quiet"
-									className="h-24 min-w-[30%] grow flex-col gap-1 rounded-2xl"
+									variant="outline"
+									className="h-tile grow basis-1/3 flex-col gap-1 rounded-lg"
 									testID="checkout-split-option-half"
 									onPress={() => fixed(evenSplitShareMinor(balance, 2))}
 								>
@@ -244,8 +278,8 @@ export function SplitView({
 									</ButtonText>
 								</Button>
 								<Button
-									variant="sidebar-quiet"
-									className="h-20 w-full flex-col gap-1 rounded-2xl"
+									variant="outline"
+									className="h-tile w-full flex-col gap-1 rounded-lg"
 									testID="checkout-split-option-custom"
 									onPress={() => flow.dispatch({ type: 'arm-custom' })}
 								>
@@ -258,10 +292,10 @@ export function SplitView({
 						) : null}
 					</View>
 				)}
-				<Text className="text-sidebar-foreground/70 text-center text-sm">{hint}</Text>
+				<Text className="text-muted-foreground text-center text-sm">{hint}</Text>
 				{flow.plan ? (
 					<Button
-						variant="sidebar"
+						variant="ghost"
 						size="sm"
 						testID="checkout-split-none"
 						onPress={() => flow.dispatch({ type: 'clear-plan', balanceMinor: balance })}

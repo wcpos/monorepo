@@ -4,7 +4,7 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { SplitView } from './split-view';
-import { initialTenderState, tenderReducer } from './tender-state';
+import { initialTenderState, planLegs, tenderReducer } from './tender-state';
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
 }));
@@ -76,6 +76,7 @@ function Harness() {
 					send(action);
 				},
 				plan: state.plan,
+				planLegs: state.plan ? planLegs(state.plan, [], 4600).legs : [],
 				balanceMinor: 4600,
 				paidMinor: 100,
 				dp: 2,
@@ -142,3 +143,12 @@ it('disables paid lines and empty selection, then pays or shares the selected gr
 		});
 	}
 });
+
+jest.mock('uniwind', () => ({
+	useCSSVariable: (name: string) =>
+		name === '--spacing-tile' ? 64 : name === '--spacing-ctl' ? 44 : 'currentColor',
+}));
+jest.mock('react-native-svg', () => ({ __esModule: true, default: 'svg', Circle: 'circle' }));
+jest.mock('../../../../../hooks/use-local-date', () => ({
+	useLocalDate: () => ({ formatDate: () => '14:04' }),
+}));

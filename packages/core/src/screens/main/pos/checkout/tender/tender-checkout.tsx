@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
-import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
+import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { fromMinor } from '@wcpos/order-math';
@@ -117,7 +117,7 @@ export function TenderCheckout({ order }: Props) {
 		if (compact) {
 			return (
 				// The pane's own label row now carries the balance; no bar above it on a phone.
-				<View className="bg-sidebar flex-1 px-3">
+				<View className="bg-card flex-1 px-3">
 					<TenderPane flow={flow} format={format} compact />
 				</View>
 			);
@@ -161,20 +161,22 @@ export function TenderCheckout({ order }: Props) {
 									: t('pos_checkout.checkout')}
 							</Text>
 						</ModalTitle>
-						<Tabs
+						<SegmentedControl
 							value={flow.state.tab}
 							onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
-						>
-							{/* TabsList sets no direction of its own; on web a View defaults to a column. */}
-							<TabsList className="flex-row">
-								<TabsTrigger value="payments" testID="checkout-tab-payments">
-									<Text>{t('pos_checkout.payments_tab')}</Text>
-								</TabsTrigger>
-								<TabsTrigger value="legacy" testID="checkout-tab-legacy">
-									<Text>{t('pos_checkout.legacy_tab')}</Text>
-								</TabsTrigger>
-							</TabsList>
-						</Tabs>
+							segments={[
+								{
+									value: 'payments',
+									label: t('pos_checkout.payments_tab'),
+									testID: 'checkout-tab-payments',
+								},
+								{
+									value: 'legacy',
+									label: t('pos_checkout.legacy_tab'),
+									testID: 'checkout-tab-legacy',
+								},
+							]}
+						/>
 						{flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
 							<Button
 								variant="ghost-destructive"

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -36,21 +37,32 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 	);
 	return (
 		<Card className="flex-1">
-			<CardHeader className="bg-card-header p-2" testID="checkout-ledger-header">
+			<CardHeader
+				className="bg-card border-border border-b px-2 py-2"
+				testID="checkout-ledger-header"
+			>
 				{/* Same height as the cart header it replaces, so the strip and totals below
 				    do not move when the column swaps. */}
-				<HStack className="min-h-8 items-center gap-2">
+				<HStack className="h-ctl items-center gap-2">
 					{saving && !payload.number ? (
 						<View className="bg-muted h-4 w-12 rounded" testID="checkout-ledger-number-skeleton" />
 					) : (
-						<Text className="font-bold">{`#${payload.number ?? ''}`}</Text>
+						<Chip disabled label={`#${payload.number ?? ''}`} />
 					)}
-					<Text className="text-muted-foreground flex-1" numberOfLines={1}>
-						{formatName({ ...payload.billing, customer_id: 0 })}
-					</Text>
+					<Chip disabled label={formatName({ ...payload.billing, customer_id: 0 })} />
 				</HStack>
 			</CardHeader>
-			<CardContent className="border-border flex-1 border-t p-0">
+			<CardContent className="flex-1 p-0">
+				<HStack className="border-border min-h-row items-center gap-2 border-b px-4">
+					{(['qty', 'item', 'price', 'total'] as const).map((column) => (
+						<Text
+							key={column}
+							className={`text-muted-foreground text-xs tracking-wide uppercase ${column === 'item' ? 'flex-1' : ''}`}
+						>
+							{t(`pos_cart.col_${column}`)}
+						</Text>
+					))}
+				</HStack>
 				<ScrollView className="flex-1" contentContainerClassName="gap-4 p-4">
 					<LedgerLines
 						lines={lines}

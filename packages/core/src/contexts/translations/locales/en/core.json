@@ -1,4 +1,12 @@
 {
+	"pos_cart.col_qty": "Qty",
+	"pos_cart.col_item": "Item",
+	"pos_cart.col_price": "Price",
+	"pos_cart.col_total": "Total",
+	"pos_checkout.paid_in_full_at": "Paid in full · {time}",
+	"pos_checkout.next_leg": "Next",
+	"pos_checkout.paid_and_left": "Paid {paid} · {left} left",
+	"pos_checkout.paid_in_full": "Paid in full",
 	"reports.unavailable_offline": "Unavailable offline",
 	"reports.load_failed": "Could not load closures",
 	"reports.load_more": "Load more",
