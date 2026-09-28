@@ -105,9 +105,24 @@ it.each([
 	expect(classes).toContain('web:animate-overlay-in');
 	expect(screen.getByTestId('probe')).toHaveAttribute('data-presentation', presentation);
 	expect(screen.getByTestId('probe')).toHaveAttribute('data-defer', String(deferred));
-	expect(classes).toContain('[&>[role=dialog]]:contents');
+	expect(classes).toContain('[&>[role=dialog]:not([data-sheet])]:contents');
 	expect(mockScrimProps.at(-1)).toMatchObject({ focusable: false });
 	expect(mockScrimProps.at(-1)?.onPress).toBeUndefined();
+});
+
+it('marks the phone sheet out of the scrim rule that flattens a Radix wrapper', () => {
+	// The sheet panel is the box itself: flattened to display:contents it measured 0×0 in the
+	// app and its rows spilled over the page (every popover-family sheet on phone, 2026-09-29).
+	render(
+		<OverlayShell presentation="bottom" open Scrim={Pressable} onDismiss={jest.fn()} testID="m">
+			<OverlaySheetPanel testID="sheet">
+				<View />
+			</OverlaySheetPanel>
+		</OverlayShell>
+	);
+	const sheet = screen.getByTestId('sheet');
+	expect(sheet).toHaveAttribute('role', 'dialog');
+	expect(sheet).toHaveAttribute('data-sheet');
 });
 
 it('provides a fallback scrim test ID', () => {
