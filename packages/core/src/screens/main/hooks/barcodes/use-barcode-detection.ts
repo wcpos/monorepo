@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'react-native';
+import { Platform, TextInputKeyPressEvent } from 'react-native';
 
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useLayoutObservable, useObservableCallback } from 'observable-hooks';
@@ -145,7 +145,7 @@ export const useBarcodeDetection = (
 	 * Event handler for React Native's onKeyPress event.
 	 */
 	const onKeyPress = React.useCallback(
-		(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+		(e: TextInputKeyPressEvent) => {
 			// On web/Electron a focused text field belongs to the typist, regardless
 			// of speed. The document listener still handles wedges outside inputs;
 			// device-identified scans arrive independently through the scan hub.

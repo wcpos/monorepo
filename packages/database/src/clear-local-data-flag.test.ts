@@ -28,7 +28,7 @@ jest.mock('expo-file-system', () => ({
 			return files.has(this.path);
 		}
 
-		write(content: string) {
+		writeSync(content: string) {
 			if (failWrites) {
 				throw new Error('disk full');
 			}

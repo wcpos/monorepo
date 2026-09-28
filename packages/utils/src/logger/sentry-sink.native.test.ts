@@ -21,7 +21,7 @@ jest.mock('expo-file-system', () => ({
 				return files.has(path);
 			},
 			textSync: () => files.get(path),
-			write: (value: string) => files.set(path, value),
+			writeSync: (value: string) => files.set(path, value),
 			delete: () => files.delete(path),
 		};
 	}),

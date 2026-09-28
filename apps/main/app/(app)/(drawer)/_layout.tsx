@@ -90,7 +90,7 @@ function ThemedDrawer({
 				},
 				sceneStyle: { backgroundColor: screenBackgroundColor },
 			}}
-			drawerContent={DrawerContent}
+			drawerContent={(props): React.ReactNode => DrawerContent(props)}
 		>
 			<Drawer.Screen
 				name="(pos)"

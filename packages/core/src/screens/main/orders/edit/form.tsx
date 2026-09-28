@@ -417,7 +417,7 @@ export function EditOrderForm({ order }: Props) {
 				<ModalAction
 					testID="order-edit-save-button"
 					loading={loading}
-					onPress={onSave}
+					onPress={() => void onSave()}
 					disabled={storageDegraded}
 				>
 					{t('common.save')}

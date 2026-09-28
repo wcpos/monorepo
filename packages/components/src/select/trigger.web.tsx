@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { type GestureResponderEvent, Pressable, type View } from 'react-native';
+import { type GestureResponderEvent, Pressable, type ViewInstance } from 'react-native';
 
 import * as Select from '@radix-ui/react-select';
 import { useComposedRefs } from '@rn-primitives/hooks';
@@ -61,16 +61,16 @@ function Trigger({
 	ref,
 	...props
 }: SelectPrimitive.TriggerProps & {
-	ref?: React.Ref<View>;
+	ref?: React.Ref<ViewInstance>;
 	onPointerDown?: (ev: React.PointerEvent) => void;
 }) {
 	const { open, onOpenChange } = SelectPrimitive.useRootContext();
 
-	const localRef = React.useRef<View>(null);
+	const localRef = React.useRef<ViewInstance>(null);
 	const composedRef = useComposedRefs(ref, localRef);
 
 	React.useImperativeHandle(ref, () =>
-		Object.assign(localRef.current ?? ({} as View), {
+		Object.assign(localRef.current ?? ({} as ViewInstance), {
 			open() {
 				onOpenChange(true);
 			},

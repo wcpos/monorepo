@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, type ScrollViewInstance } from 'react-native';
 
 import {
 	columnVisibilityFeature,
@@ -134,7 +134,7 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
 	const rowRefs = React.useRef<Map<string, PulseTableRowRef | null>>(new Map());
 	const rowLayouts = React.useRef<Map<string, { y: number; height: number }>>(new Map());
-	const scrollViewRef = React.useRef<ScrollView>(null);
+	const scrollViewRef = React.useRef<ScrollViewInstance>(null);
 	const { currentOrderRecord } = useCurrentOrder();
 
 	// Track previous cart data

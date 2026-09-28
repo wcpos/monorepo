@@ -345,7 +345,11 @@ export function EditProductForm({ product }: Props) {
 			</ModalBody>
 			<ModalFooter>
 				<ModalClose testID="product-edit-cancel-button">{t('common.cancel')}</ModalClose>
-				<ModalAction testID="product-edit-save-button" loading={loading} onPress={onSave}>
+				<ModalAction
+					testID="product-edit-save-button"
+					loading={loading}
+					onPress={() => void onSave()}
+				>
 					{t('common.save')}
 				</ModalAction>
 			</ModalFooter>

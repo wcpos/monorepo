@@ -1,5 +1,5 @@
+import { AppState, type Permission, PermissionsAndroid, Platform } from 'react-native';
 import * as React from 'react';
-import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
 import {
 	requestNeededAndroidPermissions,
@@ -40,7 +40,7 @@ function SdkBinding({ driver, methods }: Props) {
 			if (Date.now() < retryAfter.current) return Promise.reject(failure.current);
 			initialization.current = (async () => {
 				if (Platform.OS === 'android') {
-					const permissions = [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
+					const permissions: Permission[] = [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
 					if (Number(Platform.Version) >= 31)
 						permissions.push(
 							PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { FlexAlignType, ViewStyle } from 'react-native';
+import type { ViewStyle } from 'react-native';
 
 import {
 	columnVisibilityFeature,
@@ -364,7 +364,7 @@ function buildColumns<TData extends RowData>(
 	});
 }
 
-function getFlexAlign(align: 'left' | 'right' | 'center'): FlexAlignType {
+function getFlexAlign(align: 'left' | 'right' | 'center'): NonNullable<ViewStyle['alignItems']> {
 	switch (align) {
 		case 'left':
 			return 'flex-start';

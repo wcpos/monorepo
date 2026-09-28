@@ -1,9 +1,5 @@
 import * as React from 'react';
-import {
-	NativeSyntheticEvent,
-	TextInput as RNTextInput,
-	TextInputKeyPressEventData,
-} from 'react-native';
+import type { TextInputInstance, TextInputKeyPressEvent } from 'react-native';
 
 import toNumber from 'lodash/toNumber';
 
@@ -16,10 +12,8 @@ import { Input, InputProps } from '../input';
 import { Keypad } from '../keypad';
 import { VStack } from '../vstack';
 
-type TextInputKeyPressEvent = NativeSyntheticEvent<TextInputKeyPressEventData>;
-
 function Display({ selection, onSelectionChange, className, disabled, ref, ...props }: InputProps) {
-	const inputRef = React.useRef<RNTextInput>(null);
+	const inputRef = React.useRef<TextInputInstance>(null);
 	const mergedRef = useMergedRef(ref ?? null, inputRef);
 	/**
 	 *
@@ -107,7 +101,7 @@ function Numpad({
 	const currentValue = toNumber(currentOperand);
 	const hasDiscounts = discounts && discounts.length > 0;
 
-	const localRef = React.useRef<RNTextInput>(null);
+	const localRef = React.useRef<TextInputInstance>(null);
 
 	React.useImperativeHandle(
 		ref,
@@ -126,7 +120,7 @@ function Numpad({
 	 *
 	 */
 	const handleKeyPress = React.useCallback(
-		(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+		(e: TextInputKeyPressEvent) => {
 			let shouldReplace = false;
 			if (localRef.current) {
 				const webInput = localRef.current as unknown as HTMLInputElement | undefined;

@@ -98,8 +98,8 @@ test('does not walk into a nested node_modules', () => {
 	assert.deepEqual(findAarFiles(root), []);
 });
 
-test('the tracked compileSdk matches what Expo SDK 57 (AGP 8.12) supports', () => {
+test('the tracked compileSdk matches what Expo SDK 58 (AGP 9.2.1) supports', () => {
 	// Guards against a silent bump: raising this constant is only correct
 	// alongside an Expo/AGP upgrade, and this line has to move with it.
-	assert.equal(ANDROID_COMPILE_SDK, 36);
+	assert.equal(ANDROID_COMPILE_SDK, 37);
 });

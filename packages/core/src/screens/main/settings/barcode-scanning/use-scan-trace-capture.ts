@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
+import type { TextInputKeyPressEvent } from 'react-native';
 
 import { getKeyFromEvent, RNKeyboardEvent, useHotkeys } from '@wcpos/hooks/use-hotkeys';
 import type { TraceKey } from '@wcpos/scanner';
@@ -70,7 +70,7 @@ export function useScanTraceCapture() {
 	// panel can wire to a capture input. `getKeyFromEvent` isn't exported from
 	// the native build, so read the key straight off the native event.
 	const onKeyPress = React.useCallback(
-		(keyPressEvent: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+		(keyPressEvent: TextInputKeyPressEvent) => {
 			const key = keyPressEvent?.nativeEvent?.key;
 			if (key) {
 				recordKey(key, Date.now());

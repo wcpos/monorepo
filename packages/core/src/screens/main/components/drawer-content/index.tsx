@@ -1,10 +1,7 @@
 import * as React from 'react';
 
 // SDK 56: expo-router vendors react-navigation; @react-navigation/drawer is no longer a dependency.
-import {
-	DrawerContentScrollView,
-	getDrawerStatusFromState,
-} from 'expo-router/build/react-navigation/drawer';
+import { DrawerContentScrollView, getDrawerStatusFromState } from 'expo-router/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DrawerItemList } from './drawer-item-list';
@@ -12,7 +9,7 @@ import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from './panel-vis
 import { Version } from './version';
 import { NotificationBell } from '../header/notification-bell';
 
-import type { DrawerContentComponentProps } from 'expo-router/build/react-navigation/drawer';
+import type { DrawerContentComponentProps } from 'expo-router/drawer';
 
 /**
  * NOTE ON HOOKS IN THIS COMPONENT.
@@ -32,7 +29,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 	// The drawer's open/closed status only exists on the navigator's state, and the drawer
 	// content is the one component the navigator hands it to. Report it upward so the layout
 	// can take a settled-closed panel out of layout entirely — see `panel-visibility.tsx`.
-	const status = getDrawerStatusFromState(props.state);
+	const status = getDrawerStatusFromState(props.state, 'closed');
 
 	// A settled-closed panel is out of layout (`display: 'none'`, see `panel-visibility.tsx`)
 	// but its subtree stays mounted, and on Android the accessibility tree kept reporting the
