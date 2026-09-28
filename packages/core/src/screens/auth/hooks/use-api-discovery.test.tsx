@@ -174,6 +174,14 @@ describe('useApiDiscovery', () => {
 		});
 
 		expect(result.current.error).toBe('Please update your WCPOS plugin');
+
+		const [, options] = mockLoggerError.mock.calls.at(-1) as [
+			string,
+			{ code?: string; showToast?: boolean; toast?: unknown },
+		];
+		expect(options.code).toBe(ERROR_CODES.WCPOS_PLUGIN_OUTDATED);
+		expect(options).not.toHaveProperty('showToast');
+		expect(options).not.toHaveProperty('toast');
 	});
 
 	/**
@@ -204,6 +212,14 @@ describe('useApiDiscovery', () => {
 				result.current.discoverApiEndpoints('https://example.com/wp-json/')
 			).rejects.toMatchObject({ errorCode: ERROR_CODES.REST_ROUTE_MISSING });
 		});
+
+		const [, options] = mockLoggerError.mock.calls.at(-1) as [
+			string,
+			{ code?: string; showToast?: boolean; toast?: unknown },
+		];
+		expect(options.code).toBe(ERROR_CODES.REST_ROUTE_MISSING);
+		expect(options).not.toHaveProperty('showToast');
+		expect(options).not.toHaveProperty('toast');
 	});
 
 	it('lets a compatible version override a visible legacy namespace', async () => {
@@ -225,9 +241,9 @@ describe('useApiDiscovery', () => {
 	])(
 		'shows the merchant the API message, not the dev diagnosis (%s)',
 		async (_case, namespaces, wcposVersion) => {
-			// showToast with no toast.title makes the raw log message the merchant's
-			// toast (logger/index.ts: `title: options.toast?.title ?? message`), and
-			// the log message names one of the two faults this branch serves.
+			// The log message names one of the two faults and is written for us.
+			// The merchant string travels in the thrown error's message; the error
+			// no longer toasts (wcpos/roadmap#382).
 			const { wcpos_version, ...withoutVersion } = siteData;
 			mockGet.mockResolvedValue({
 				data: wcposVersion
@@ -239,14 +255,19 @@ describe('useApiDiscovery', () => {
 			await act(async () => {
 				await expect(
 					result.current.discoverApiEndpoints('https://example.com/wp-json/')
-				).rejects.toMatchObject({ errorCode: ERROR_CODES.REST_ROUTE_MISSING });
+				).rejects.toMatchObject({
+					errorCode: ERROR_CODES.REST_ROUTE_MISSING,
+					message: 'WCPOS API not found',
+				});
 			});
 
 			const [, options] = mockLoggerError.mock.calls.at(-1) as [
 				string,
-				{ toast?: { title?: string } },
+				{ code?: string; showToast?: boolean; toast?: unknown },
 			];
-			expect(options.toast?.title).toBe('WCPOS API not found');
+			expect(options.code).toBe(ERROR_CODES.REST_ROUTE_MISSING);
+			expect(options).not.toHaveProperty('showToast');
+			expect(options).not.toHaveProperty('toast');
 		}
 	);
 
