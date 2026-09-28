@@ -7,7 +7,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 
 import { createTestT } from '../../../../jest/translate';
 import { upsertSiteData } from '../../../utils/site-writes';
-import { normalizeSiteAddress, useSiteConnect } from './use-site-connect';
+import { connectionAddressOf, normalizeSiteAddress, useSiteConnect } from './use-site-connect';
 
 const mockT = createTestT();
 const mockFindOneFix = jest.fn();
@@ -61,6 +61,18 @@ describe('normalizeSiteAddress', () => {
 		['https://example.com/Staging', 'https://example.com/staging', false],
 	])('compares %s with %s: same address = %s', (saved, incoming, same) => {
 		expect(normalizeSiteAddress(saved) === normalizeSiteAddress(incoming)).toBe(same);
+	});
+});
+
+describe('connectionAddressOf', () => {
+	it.each([
+		['https://example.com/wp-json/wcpos/v2/', 'example.com'],
+		['http://Example.com/?rest_route=/wcpos/v2/', 'example.com'],
+		['https://example.com/staging/wp-json/wcpos/v2/', 'example.com/staging'],
+		['https://192.168.1.5:8080/wp-json/wcpos/v2/', '192.168.1.5:8080'],
+		[undefined, ''],
+	])('reduces %s to the address reached, %s', (apiUrl, address) => {
+		expect(connectionAddressOf(apiUrl)).toBe(address);
 	});
 });
 
@@ -134,8 +146,35 @@ describe('useSiteConnect', () => {
 		expect(mockUserLatest.incrementalUpdate).not.toHaveBeenCalled();
 	});
 
-	it('keeps merging a saved identity at the same address despite scheme and host case', async () => {
-		mockFindOneFix.mockResolvedValue({ url: 'http://Example.com/', name: 'Live' });
+	it('refuses a raw copy that still reports the saved store as its home but was reached at another address', async () => {
+		// A database copy without a search-replace: the REST index reports the
+		// live store's url and uuid, only the address the connect reached differs.
+		mockFindOneFix.mockResolvedValue({
+			url: 'https://example.com',
+			wcpos_api_url: 'https://example.com/wp-json/wcpos/v2/',
+			name: 'Live',
+		});
+		mockDiscoverApiEndpoints.mockResolvedValueOnce({
+			endpoints: { wcpos_api_url: 'https://staging.example.com/wp-json/wcpos/v2/' },
+			siteData: { uuid: 'site-uuid', url: 'https://example.com', wcpos_version: '1.11.0' },
+		});
+		mockTestAuthorizationMethod.mockResolvedValue({ ok: true });
+		const { result } = renderHook(() => useSiteConnect());
+
+		await act(async () => {
+			expect(await result.current.onConnect('https://staging.example.com')).toBeNull();
+		});
+
+		expect(result.current.errorCode).toBe('AUTH341');
+		expect(upsertSiteData).not.toHaveBeenCalled();
+	});
+
+	it('keeps merging a saved identity at the same address despite scheme, host case and permalink style', async () => {
+		mockFindOneFix.mockResolvedValue({
+			url: 'http://Example.com/',
+			wcpos_api_url: 'http://Example.com/?rest_route=/wcpos/v2/',
+			name: 'Live',
+		});
 		mockTestAuthorizationMethod.mockResolvedValue({ ok: true });
 		const { result } = renderHook(() => useSiteConnect());
 

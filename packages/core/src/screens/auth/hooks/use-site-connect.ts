@@ -29,6 +29,16 @@ export function normalizeSiteAddress(url: string | undefined): string {
 		.replace(/\/$/, '');
 }
 
+/**
+ * The address a connect actually reached, from its discovered API URL: the
+ * normalised site address with the REST suffix (`/wp-json/...` or
+ * `?rest_route=...`) cut off, so a permalink-style change is not a move but
+ * a different host or site path is.
+ */
+export function connectionAddressOf(apiUrl: string | undefined): string {
+	return normalizeSiteAddress((apiUrl ?? '').replace(/(\/wp-json\b.*|\/?\?rest_route=.*)$/i, ''));
+}
+
 type SiteDocument = import('@wcpos/database').SiteDocument;
 
 interface WpJsonResponse {
@@ -159,9 +169,15 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 
 				// Check if site already exists
 				const existingSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
+				// Two addresses are compared: the one the store reports as its home
+				// (a clone whose URLs were search-replaced reports its own) and the
+				// one this connect actually reached (a raw database copy still
+				// reports the live store's home, and only the address differs).
 				if (
 					existingSite &&
-					normalizeSiteAddress(existingSite.url) !== normalizeSiteAddress(siteData.url)
+					(normalizeSiteAddress(existingSite.url) !== normalizeSiteAddress(siteData.url) ||
+						connectionAddressOf(existingSite.wcpos_api_url) !==
+							connectionAddressOf(endpoints.wcpos_api_url))
 				) {
 					throw Object.assign(
 						new Error(t('auth.site_identity_clash', { name: existingSite.name })),
