@@ -57,7 +57,7 @@ export function Connect() {
 							<Sites user={user} />
 						</Suspense>
 					</ErrorBoundary>
-					{siteCount > 0 && (
+					{siteCount > 0 && !showAddress && (
 						<Button
 							variant="ghost"
 							testID="connect-another-store"

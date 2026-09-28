@@ -78,6 +78,7 @@ it('keeps saved sites first, reveals the address on request and folds it after s
 	expect(screen.queryByTestId('store-url-input')).toBeNull();
 	fireEvent.click(screen.getByTestId('connect-another-store'));
 	const input = screen.getByTestId('store-url-input');
+	expect(screen.queryByTestId('connect-another-store')).toBeNull();
 	expect(
 		screen.getByTestId('logged-in-users-label').compareDocumentPosition(input) &
 			Node.DOCUMENT_POSITION_FOLLOWING
@@ -85,6 +86,7 @@ it('keeps saved sites first, reveals the address on request and folds it after s
 	act(() => mockSites.next(['a', 'b']));
 	rerender(<Connect />);
 	expect(screen.queryByTestId('store-url-input')).toBeNull();
+	expect(screen.getByTestId('connect-another-store')).toBeTruthy();
 });
 it('renders a skeleton card while sites suspend', () => {
 	mockSites.next(['a']);
