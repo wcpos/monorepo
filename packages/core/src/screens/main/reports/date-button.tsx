@@ -200,6 +200,8 @@ export function DateButton({
 							// Free: earlier days stay drawn as out of range, but their presses must reach the
 							// handler below to show the hint; the calendar swallows them otherwise.
 							allowSelectionOutOfRange={!license?.isPro}
+							// A Free press on a spillover day must not page the calendar to a month it cannot use.
+							disableMonthChange={!license?.isPro}
 							dateRange={draft}
 							onDateRangeChange={setDraft}
 							theme={{
@@ -212,8 +214,9 @@ export function DateButton({
 							{...(!license?.isPro
 								? {
 										onDayPress: ({ dateString }: { dateString: string }) => {
-											// A future day is nobody's; an earlier day is Pro's.
-											if (dateString > today) return;
+											// A future day is nobody's and a day past the 92-day reach is gone for Pro too: both are
+											// ignored. An earlier day inside the reach is Pro's.
+											if (dateString > today || dateString < min) return;
 											if (dateString < today) {
 												setLocked(lockedScopeName);
 												return;
