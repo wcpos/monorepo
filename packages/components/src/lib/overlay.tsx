@@ -79,6 +79,9 @@ export function useOverlay(): OverlayContextValue {
 export function useOverlayPresentation(): OverlayPresentation | undefined {
 	return React.useContext(OverlayContext)?.presentation;
 }
+/** The web scrim flattens Radix's wrapper; a panel carrying the mark keeps its box. */
+export const SCRIM_FLATTENS_WRAPPER = '[&>[role=dialog]:not([data-sheet])]:contents';
+const SHEET_MARK = { dataSet: { sheet: '' } } as object;
 export const OVERLAY_PANEL = {
 	anchored: 'bg-card border-border rounded-lg border p-2 shadow-md',
 	bottom: 'bg-card border-border w-full max-h-[92%] rounded-t-2xl border-t p-2',
@@ -162,6 +165,9 @@ export function OverlaySheetPanel({
 			ref={setNode}
 			role="dialog"
 			aria-modal
+			// The shell's scrim flattens its Radix `role="dialog"` wrapper to `display: contents`
+			// (see OverlayShell); this panel IS the box, so it marks itself out of that rule.
+			{...SHEET_MARK}
 			// Focusable itself, for a sheet with nothing tabbable inside (the settle fallback).
 			tabIndex={-1}
 			testID={testID}
@@ -375,7 +381,8 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				align[presentation],
 				open ? 'web:animate-overlay-in' : 'web:animate-overlay-out',
 				// Radix inserts an auto-height [role=dialog] wrapper; flatten it on every presentation so the panel's h-full / max-h-[92%] / max-w-full resolve against the overlay (dialog ledger line 5).
-				'[&>[role=dialog]]:contents'
+				// The phone sheet mounts no Radix wrapper: its own [role=dialog] panel sits right under the scrim and is the box, so it is marked out of the rule.
+				SCRIM_FLATTENS_WRAPPER
 			)}
 			// The scrim is a Pressable, so RN-web would give it tabIndex=0 and the click that
 			// opened the dialog can land on it and focus it. A focus during a side panel's
