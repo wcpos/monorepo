@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const mockUseSiteConnect = jest.fn();
 
@@ -31,8 +31,21 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 jest.mock('@wcpos/components/input', () => ({
-	Input: ({ value, type }: { value: string; type?: React.HTMLInputTypeAttribute }) => (
-		<input readOnly value={value} type={type} />
+	Input: ({
+		value,
+		type,
+		onSubmitEditing,
+	}: {
+		value: string;
+		type?: React.HTMLInputTypeAttribute;
+		onSubmitEditing?: () => void;
+	}) => (
+		<input
+			readOnly
+			value={value}
+			type={type}
+			onKeyDown={(event) => event.key === 'Enter' && onSubmitEditing?.()}
+		/>
 	),
 }));
 jest.mock('@wcpos/components/label', () => ({
@@ -116,5 +129,17 @@ describe('connect presentation', () => {
 		expect(input.parentElement).toBe(button.parentElement);
 		expect(input.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(screen.queryByTestId('connect-progress')).toBeNull();
+	});
+	it('reports a saved site to the page and stays quiet on a failed connect', async () => {
+		const onConnected = jest.fn();
+		const onConnect = jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ uuid: 'a' });
+		mockUseSiteConnect.mockReturnValue({ status: 'idle', loading: false, onConnect });
+		render(<UrlInput onConnected={onConnected} />);
+		const input = document.querySelector('input')!;
+		fireEvent.keyDown(input, { key: 'Enter' });
+		await waitFor(() => expect(onConnect).toHaveBeenCalledTimes(1));
+		expect(onConnected).not.toHaveBeenCalled();
+		fireEvent.keyDown(input, { key: 'Enter' });
+		await waitFor(() => expect(onConnected).toHaveBeenCalledTimes(1));
 	});
 });

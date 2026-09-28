@@ -13,10 +13,19 @@ import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { useT } from '../../../contexts/translations';
 import { useSiteConnect } from '../hooks/use-site-connect';
 
-export function UrlInput() {
+interface UrlInputProps {
+	/** Called once a site is saved, so the page can fold the form. */
+	onConnected?: () => void;
+}
+
+export function UrlInput({ onConnected }: UrlInputProps) {
 	const { onConnect, loading, error, errorCode, reset, status } = useSiteConnect();
 	const [url, setURL] = React.useState('');
 	const t = useT();
+	const connect = async () => {
+		const site = await onConnect(url);
+		if (site) onConnected?.();
+	};
 	const stages: Partial<Record<typeof status, string>> = {
 		'discovering-url': t('auth.finding_your_store'),
 		'discovering-api': t('auth.checking_wordpress'),
@@ -36,7 +45,7 @@ export function UrlInput() {
 					setURL(text);
 					if (error) reset();
 				}}
-				onSubmitEditing={() => onConnect(url)}
+				onSubmitEditing={connect}
 				clearable
 				clearTestID="store-url-clear"
 				placeholder="mystore.com"
@@ -45,7 +54,7 @@ export function UrlInput() {
 			/>
 			<Button
 				testID="connect-store-button"
-				onPress={() => onConnect(url)}
+				onPress={connect}
 				disabled={isEmpty(url)}
 				loading={loading}
 				className="w-full"

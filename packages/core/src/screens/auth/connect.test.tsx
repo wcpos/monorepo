@@ -48,7 +48,9 @@ jest.mock('@wcpos/components/button', () => ({
 	ButtonText: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
 }));
 jest.mock('./components/url-input', () => ({
-	UrlInput: () => <input data-testid="store-url-input" />,
+	UrlInput: ({ onConnected }: { onConnected?: () => void }) => (
+		<input data-testid="store-url-input" onClick={onConnected} />
+	),
 }));
 jest.mock('./components/demo-button', () => ({
 	DemoButton: () => <button data-testid="enter-demo-store-button" />,
@@ -85,6 +87,14 @@ it('keeps saved sites first, reveals the address on request and folds it after s
 	).toBeTruthy();
 	act(() => mockSites.next(['a', 'b']));
 	rerender(<Connect />);
+	expect(screen.queryByTestId('store-url-input')).toBeNull();
+	expect(screen.getByTestId('connect-another-store')).toBeTruthy();
+});
+it('folds the address when a connect saves a site the app already knows', () => {
+	mockSites.next(['a']);
+	render(<Connect />);
+	fireEvent.click(screen.getByTestId('connect-another-store'));
+	fireEvent.click(screen.getByTestId('store-url-input'));
 	expect(screen.queryByTestId('store-url-input')).toBeNull();
 	expect(screen.getByTestId('connect-another-store')).toBeTruthy();
 });

@@ -66,7 +66,9 @@ export function Connect() {
 							<ButtonText>{t('auth.connect_another_store')}</ButtonText>
 						</Button>
 					)}
-					{(siteCount === 0 || showAddress) && <UrlInput />}
+					{(siteCount === 0 || showAddress) && (
+						<UrlInput onConnected={() => setShowAddress(false)} />
+					)}
 					<DemoButton />
 				</VStack>
 			</ScrollView>
