@@ -147,9 +147,16 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				// quietErrors for the same reason as the Link-header probe: this
 				// runs precisely BECAUSE the first probe found nothing, so its
 				// failure is the expected second half of "not a WordPress site".
+				// `wcpos=1` because a HEAD carries no `X-WCPOS` marker (no
+				// preflight), and since plugin 1.10.0 the REST layer stamps
+				// `Access-Control-Allow-Origin` only on requests it owns; the
+				// query-var marker is how a marker-less request is owned
+				// (roadmap#383). The front-page probe needs no marker: the plugin
+				// allows `_method=head` on the front end unconditionally.
 				const response = await http.head(fallbackUrl, {
 					timeout: DISCOVERY_PROBE_TIMEOUT_MS,
 					quietErrors: true,
+					params: { wcpos: 1 },
 				});
 
 				if (response && response.status === 200) {
