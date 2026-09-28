@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { format } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
@@ -60,7 +59,6 @@ export function Bar({
 	onBack,
 }: ScopeProps & { room: 'sales' | 'closures'; onBack: () => void }) {
 	const t = useT();
-	const { top } = useSafeAreaInsets();
 	const { store, site, wpCredentials } = useStoreSession();
 	const binding = useRegisterBinding();
 	const { license } = useAppInfo();
@@ -113,7 +111,7 @@ export function Bar({
 		</Button>
 	);
 	return (
-		<View testID="reports-bar" className="bg-background" style={{ paddingTop: top }}>
+		<View testID="reports-bar" className="bg-background">
 			<View className="h-ctl border-border bg-background flex-row items-center gap-2 border-b pr-2 pl-4">
 				{room === 'closures' ? (
 					<Button

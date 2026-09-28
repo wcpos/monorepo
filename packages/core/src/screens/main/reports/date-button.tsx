@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { format, parseISO, subDays } from 'date-fns';
 
@@ -25,6 +25,25 @@ import { ScopeHint } from './bar';
 
 import type { ClosureScope } from './closures/use-closure-rows';
 
+/** The picker's body: a side-by-side row on tablet and desktop, a bounded scroll on phone. */
+function PickerBody({
+	phone,
+	maxHeight,
+	children,
+}: {
+	phone: boolean;
+	maxHeight: number;
+	children: React.ReactNode;
+}) {
+	return phone ? (
+		<ScrollView style={{ maxHeight }} contentContainerClassName="gap-2">
+			{children}
+		</ScrollView>
+	) : (
+		<View className="flex-row">{children}</View>
+	);
+}
+
 type Props = {
 	scope: ClosureScope;
 	onScopeChange: (scope: ClosureScope) => void;
@@ -44,7 +63,7 @@ export function DateButton({
 }: Props) {
 	const t = useT();
 	const { formatDate } = useLocalDate();
-	const { width } = useWindowDimensions();
+	const { width, height } = useWindowDimensions();
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
 	const { license } = useAppInfo();
@@ -137,7 +156,8 @@ export function DateButton({
 				className="p-0"
 				style={{ width: phone ? Math.min(360, width) : Math.min(520, width) }}
 			>
-				<View className={phone ? 'gap-2' : 'flex-row'}>
+				{/* On a short phone the stacked body scrolls inside the sheet; the footer and the hint stay reachable below it. */}
+				<PickerBody phone={phone} maxHeight={Math.max(240, height - 260)}>
 					<View className={phone ? 'flex-row flex-wrap gap-2 p-2' : 'w-48 shrink-0 p-2'}>
 						{Object.entries(ranges).map(([key, range]) => (
 							<Button
@@ -159,7 +179,11 @@ export function DateButton({
 							</Button>
 						))}
 					</View>
-					<View className="self-center" style={{ width: Math.min(360, width) - 2 }}>
+					{/* On phone the sheet is full width with its own p-2, so the calendar fits inside that. */}
+					<View
+						className="self-center"
+						style={{ width: Math.min(360, width - (phone ? 16 : 0)) - 2 }}
+					>
 						<Calendar
 							testID="reports-calendar"
 							minDate={license?.isPro ? min : today}
@@ -193,7 +217,7 @@ export function DateButton({
 									: {})}
 						/>
 					</View>
-				</View>
+				</PickerBody>
 				<View className="border-border flex-row items-center gap-2 border-t p-2">
 					<Text className="text-muted-foreground flex-1">{t('reports.tap_a_day')}</Text>
 					<Button

@@ -206,6 +206,7 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 function ReportsShell() {
 	const t = useT();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
+	const { top } = useSafeAreaInsets();
 	const router = useRouter();
 	const params = useLocalSearchParams<{
 		closureId?: string;
@@ -241,7 +242,8 @@ function ReportsShell() {
 		? (selection ?? initialScope)
 		: { ...initialScope, cashier: selection?.cashier };
 	return (
-		<View className="flex-1">
+		// The safe-area inset sits above everything, so the Free strip never slides under the status bar.
+		<View className="flex-1" style={{ paddingTop: top }}>
 			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 			<ErrorBoundary>
 				<Suspense>
