@@ -174,9 +174,20 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 	const { wpCredentials, store } = useAppState();
 	const binding = useRegisterBinding();
 	const { license } = useAppInfo();
-	const { presets, rangeToFilter } = useStoreDay();
+	const { presets, rangeToFilter, timezone } = useStoreDay();
 	const cashierScopeID = String(wpCredentials?.id);
 	const storeScopeID = store?.id ? String(store.id) : 'woocommerce-pos';
+	// Free sees today only, so its query is keyed by the store day and re-keyed at the store's
+	// midnight: left open overnight, the page must not keep serving yesterday behind locked controls.
+	const storeToday = format(presets().today.from, 'yyyy-MM-dd', zoneOptions(timezone));
+	const [, rollover] = React.useReducer((n: number) => n + 1, 0);
+	// The timer is an external system: it fires once at the end of the store day to re-render.
+	React.useEffect(() => {
+		if (license?.isPro) return;
+		const wait = Math.max(1_000, presets().today.to.getTime() - Date.now() + 1_000);
+		const id = setTimeout(rollover, wait);
+		return () => clearTimeout(id);
+	}, [license?.isPro, presets, storeToday]);
 	const initialFilters: Partial<FiltersOf<'orders'>> = {
 		status: 'completed',
 		...(!license?.isPro && { register: binding.registerId || 'unbound' }),
@@ -190,7 +201,7 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 		<QueryStateProvider
 			// The plan is part of the key: a licence that drops to Free remounts the query on
 			// today and the bound register instead of keeping a Pro-chosen scope alive.
-			key={`${cashierScopeID}:${storeScopeID}:${license?.isPro ? 'pro' : `free:${binding.registerId ?? 'unbound'}`}`}
+			key={`${cashierScopeID}:${storeScopeID}:${license?.isPro ? 'pro' : `free:${binding.registerId || 'unbound'}:${storeToday}`}`}
 			collection="orders"
 			initialPageSize={REPORTS_ALL_RESULTS_LIMIT}
 			initialSort={initialSort}

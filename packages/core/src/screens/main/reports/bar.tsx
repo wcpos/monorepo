@@ -171,11 +171,11 @@ export function Bar({
 									{
 										storeId: row.id,
 										// Reselecting the current store keeps the scope as it is (on an unbound Free till, `unbound`).
-										registerId: row.id === store.id ? (binding.registerId ?? scope.registerId) : '',
+										registerId: row.id === store.id ? binding.registerId || scope.registerId : '',
 									},
 									row.id === store.id,
 									t('reports.other_stores'),
-									row.id === scope.storeId
+									row.id === (scope.storeId ?? store.id)
 								)
 							)}
 						<ScopeHint locked={locked} />

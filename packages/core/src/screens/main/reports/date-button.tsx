@@ -119,11 +119,11 @@ export function DateButton({
 			inZone(timezone, storeDayBounds(calendarDate(parseISO(value)), timezone).from),
 			pattern
 		);
-	// Phone: the calendar column is the sheet's content width (window minus the sheet's p-2),
-	// and seven days plus the calendar's own 5-pt side padding must fit it: 44-pt days from
-	// 360 pt up, smaller only on narrower phones (302 pt at 320 → 42-pt days).
+	// Phone: the calendar column spans the whole sheet (it cancels the sheet's p-2 with -mx-2),
+	// so seven 44-pt days plus the calendar's own 5-pt side padding fit down to a 320-pt phone
+	// (318 − 10 = 308 = 7 × 44). The size only drops below 44 on something narrower than that.
 	// A window without a measured width (jsdom) keeps the 44-pt days.
-	const calendarWidth = Math.min(360, (width || 360) - (phone ? 16 : 0)) - 2;
+	const calendarWidth = Math.min(360, width || 360) - 2;
 	const daySize = Math.max(36, Math.min(44, Math.floor((calendarWidth - 10) / 7)));
 	// Phone: the body scrolls inside what the 92%-high sheet leaves after the footer and,
 	// when a lock is showing, the hint with See Pro; no floor, so a rotated phone still fits.
@@ -189,8 +189,10 @@ export function DateButton({
 							</Button>
 						))}
 					</View>
-					{/* On phone the sheet is full width with its own p-2, so the calendar fits inside that. */}
-					<View className="self-center" style={{ width: calendarWidth }}>
+					<View
+						className={phone ? '-mx-2 self-center' : 'self-center'}
+						style={{ width: calendarWidth }}
+					>
 						<Calendar
 							testID="reports-calendar"
 							minDate={license?.isPro ? min : today}
@@ -210,7 +212,9 @@ export function DateButton({
 							{...(!license?.isPro
 								? {
 										onDayPress: ({ dateString }: { dateString: string }) => {
-											if (dateString !== today) {
+											// A future day is nobody's; an earlier day is Pro's.
+											if (dateString > today) return;
+											if (dateString < today) {
 												setLocked(lockedScopeName);
 												return;
 											}

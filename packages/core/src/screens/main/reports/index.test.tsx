@@ -252,6 +252,22 @@ describe('ReportsScreen query-state wiring', () => {
 		expect(latestState().filters.register).toBeDefined();
 		expect(latestState().filters.dateRange).toEqual(proRange);
 	});
+
+	it('re-keys Free Sales onto the new today at the store-day boundary', () => {
+		mockPro = false;
+		const { rerender } = render(<ReportsScreen />);
+		const before = latestState().filters.dateRange;
+		expect(before).toBeDefined();
+
+		// Past the store's midnight whatever the machine's zone: the rollover timer fires and the
+		// query remounts on the new day.
+		React.act(() => {
+			jest.advanceTimersByTime(26 * 60 * 60 * 1000);
+		});
+		rerender(<ReportsScreen />);
+
+		expect(latestState().filters.dateRange).not.toEqual(before);
+	});
 });
 
 // Revert: convert a newly selected store's days using the bound till's UTC midnight.
