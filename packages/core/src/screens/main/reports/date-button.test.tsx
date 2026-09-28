@@ -8,7 +8,8 @@ import { of } from 'rxjs';
 
 import { HISTORY_DAYS } from '@wcpos/sync-core';
 
-import { PageBar } from './page-bar';
+import { Bar, CashierButton } from './bar';
+import { DateButton } from './date-button';
 import { ReportsScreen } from './index';
 
 import type { ClosureScope } from './closures/use-closure-rows';
@@ -116,7 +117,10 @@ jest.mock('@wcpos/components/popover', () => {
 				open: boolean;
 				change: (value: boolean) => void;
 			};
-			React.useImperativeHandle(ref, () => ({ close: () => change(false) }));
+			React.useImperativeHandle(ref, () => ({
+				open: () => change(true),
+				close: () => change(false),
+			}));
 			return React.cloneElement(children, { onPress: () => change(!open) });
 		}),
 		PopoverContent: (props: React.PropsWithChildren) => {
@@ -155,6 +159,7 @@ jest.mock('react-native-calendars', () => ({
 		);
 	},
 }));
+jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
 jest.mock('../components/header/right', () => ({ HeaderRight: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
 jest.mock('../../../contexts/translations', () => ({
@@ -215,183 +220,40 @@ beforeEach(() => {
 	jest.useFakeTimers().setSystemTime(new Date('2026-09-17T01:00:00Z'));
 });
 afterEach(() => jest.useRealTimers());
-function draw() {
-	return render(
-		<PageBar room="closures" onRoomChange={room} scope={scope} onScopeChange={change} />
+function Controls({
+	room: currentRoom,
+	scope: currentScope,
+	onScopeChange,
+	onRoomChange,
+}: {
+	room: 'sales' | 'closures';
+	scope: ClosureScope;
+	onScopeChange: (scope: ClosureScope) => void;
+	onRoomChange: (room: string) => void;
+}) {
+	return (
+		<>
+			<Bar
+				room={currentRoom}
+				scope={currentScope}
+				onScopeChange={onScopeChange}
+				onBack={() => onRoomChange('sales')}
+			/>
+			<DateButton
+				scope={currentScope}
+				storeId={currentScope.storeId}
+				onScopeChange={onScopeChange}
+				lockedScopeName="Earlier closures"
+			/>
+			<CashierButton scope={currentScope} onScopeChange={onScopeChange} />
+		</>
 	);
 }
-// Revert: replace the room segments with the Sales-only page, or derive presets in UTC.
-it('switches rooms and selects Yesterday in store time', () => {
-	isPro = true;
-	draw();
-	fireEvent.click(screen.getByTestId('reports-room-sales'));
-	expect(room).toHaveBeenCalledWith('sales');
-	fireEvent.click(screen.getByTestId('reports-room-closures'));
-	expect(room).toHaveBeenCalledWith('closures');
-	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-yesterday'));
-	expect(change).toHaveBeenCalledWith(
-		expect.objectContaining({ from: '2026-09-15', to: '2026-09-15' })
+function draw() {
+	return render(
+		<Controls room="closures" onRoomChange={room} scope={scope} onScopeChange={change} />
 	);
-});
-// Revert: apply a locked selection before checking Pro, or give every locked edge generic copy.
-it.each([
-	['reports-period-yesterday', 'Earlier closures'],
-	['reports-period-thisWeek', 'Earlier closures'],
-	['reports-period-lastWeek', 'Earlier closures'],
-	['reports-period-thisMonth', 'Earlier closures'],
-	['reports-period-lastMonth', 'Earlier closures'],
-	['reports-period-previous', 'Earlier closures'],
-	['reports-period-custom', 'Custom ranges'],
-	['reports-register-other', 'Other registers'],
-	['reports-store-2', 'Other stores'],
-])('names the locked edge %s without changing scope or fetching', (id, label) => {
-	draw();
-	fireEvent.click(screen.getByTestId(id.includes('period') ? 'reports-period' : 'reports-scope'));
-	fireEvent.click(screen.getByTestId(id));
-	expect(screen.getByTestId('reports-lock-hint').textContent).toBe(`${label} are in WCPOS Pro`);
-	expect(screen.getByTestId(id).textContent).not.toContain('Locked');
-	expect(screen.getByTestId(id).querySelector('[data-icon="lock"]')).toBeTruthy();
-	expect(screen.getAllByTestId('reports-see-pro')).toHaveLength(1);
-	expect(change).not.toHaveBeenCalled();
-	expect(get).not.toHaveBeenCalled();
-});
-// Revert: omit minDate/maxDate on the custom calendar, or ignore the closer selection.
-it('caps custom history and applies the cashier filter', () => {
-	isPro = true;
-	draw();
-	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-custom'));
-	const props = calendar.mock.calls.at(-1)?.[0];
-	expect(props.maxDate).toBe('2026-09-16');
-	expect(props.minDate).toBe('2026-06-16');
-	expect(HISTORY_DAYS).toBeGreaterThan(0);
-	fireEvent.click(screen.getByTestId('reports-cashier'));
-	fireEvent.click(screen.getByTestId('reports-cashier-8'));
-	expect(change).toHaveBeenCalledWith(expect.objectContaining({ cashier: 8 }));
-});
-
-// Revert: clamp only the start, allowing a custom range to end before retained history.
-it('keeps both custom endpoints inside retained history', () => {
-	isPro = true;
-	draw();
-	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-custom'));
-	act(() =>
-		calendar.mock.calls
-			.at(-1)![0]
-			.onDateRangeChange({ from: new Date(2026, 5, 1), to: new Date(2026, 5, 1) })
-	);
-	fireEvent.click(screen.getByTestId('reports-period-apply'));
-	expect(change).toHaveBeenCalledWith(
-		expect.objectContaining({ from: '2026-06-16', to: '2026-06-16' })
-	);
-});
-
-// Revert: print ISO boundaries instead of locale-formatted calendar dates.
-it('formats custom period titles', () => {
-	render(
-		<PageBar
-			room="closures"
-			onRoomChange={room}
-			onScopeChange={change}
-			scope={{ from: '2026-09-01', to: '2026-09-04', registerId: 'r', storeId: 1 }}
-		/>
-	);
-	expect(screen.getByTestId('reports-period').textContent).toBe('1 Sep – 4 Sep');
-});
-
-// Revert: keep reading the bound store directory after changing the browsing store.
-it('offers the selected Pro store registers without rebinding the till', () => {
-	isPro = true;
-	function Browse() {
-		const [selected, select] = React.useState(scope);
-		return <PageBar room="closures" onRoomChange={room} scope={selected} onScopeChange={select} />;
-	}
-	render(<Browse />);
-	fireEvent.click(screen.getByTestId('reports-scope'));
-	fireEvent.click(screen.getByTestId('reports-store-2'));
-	expect(screen.queryByTestId('reports-register-other')).toBeNull();
-	fireEvent.click(screen.getByTestId('reports-scope'));
-	fireEvent.click(screen.getByTestId('reports-register-remote'));
-	expect(screen.getByTestId('reports-scope').textContent).toContain('Remote till · Second');
-});
-
-// Revert: omit the page identity ahead of the room control.
-it('identifies Reports before the room segments', () => {
-	draw();
-	expect(screen.getByTestId('reports-title').textContent).toBe('Reports');
-	expect(
-		screen
-			.getByTestId('reports-title')
-			.compareDocumentPosition(screen.getByTestId('reports-room-sales')) &
-			Node.DOCUMENT_POSITION_FOLLOWING
-	).toBeTruthy();
-});
-
-// Revert: clear only the menu marker, leaving the popover root open.
-it.each([
-	['reports-period', 'reports-period-yesterday'],
-	['reports-scope', 'reports-register-other'],
-	['reports-scope', 'reports-store-2'],
-	['reports-cashier', 'reports-cashier-8'],
-])('closes %s after selecting %s', (trigger, option) => {
-	isPro = true;
-	draw();
-	fireEvent.click(screen.getByTestId(trigger));
-	fireEvent.click(screen.getByTestId(option));
-	expect(change).toHaveBeenCalled();
-	expect(screen.queryByTestId(option)).toBeNull();
-});
-// Revert: initialize the custom draft only at mount instead of when Custom opens.
-it('seeds Custom from the current scope after selecting another range', () => {
-	isPro = true;
-	const view = draw();
-	view.rerender(
-		<PageBar
-			room="closures"
-			onRoomChange={room}
-			scope={{ ...scope, from: '2026-09-01', to: '2026-09-04' }}
-			onScopeChange={change}
-		/>
-	);
-	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-custom'));
-	fireEvent.click(screen.getByTestId('reports-period-apply'));
-	expect(change).toHaveBeenLastCalledWith(
-		expect.objectContaining({ from: '2026-09-01', to: '2026-09-04' })
-	);
-});
-
-// Revert: call useStoreDay() without the viewed store id.
-it('uses the viewed store day for presets and custom history bounds', () => {
-	isPro = true;
-	render(
-		<PageBar
-			room="closures"
-			onRoomChange={room}
-			scope={{ ...scope, storeId: 2 }}
-			onScopeChange={change}
-		/>
-	);
-	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-today'));
-	expect(change).toHaveBeenLastCalledWith(
-		expect.objectContaining({ from: '2026-09-17', to: '2026-09-17' })
-	);
-	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-yesterday'));
-	expect(change).toHaveBeenLastCalledWith(
-		expect.objectContaining({ from: '2026-09-16', to: '2026-09-16' })
-	);
-	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-custom'));
-	expect(calendar.mock.calls.at(-1)?.[0]).toMatchObject({
-		minDate: '2026-06-17',
-		maxDate: '2026-09-17',
-	});
-});
-
+}
 let mockRoute: Record<string, string> = {};
 jest.mock('expo-router', () => ({
 	useLocalSearchParams: () => mockRoute,
@@ -445,6 +307,124 @@ jest.mock('./closures/use-closure-rows', () => ({
 	useClosureRows: (scope: ClosureScope) => mockClosureRows(scope),
 }));
 
+// Revert: replace the room segments with the Sales-only page, or derive presets in UTC.
+it('returns to Sales from Closures and selects Yesterday in store time', () => {
+	isPro = true;
+	draw();
+	fireEvent.click(screen.getByTestId('reports-back-sales'));
+	expect(room).toHaveBeenCalledWith('sales');
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-yesterday'));
+	expect(change).toHaveBeenCalledWith(
+		expect.objectContaining({ from: '2026-09-15', to: '2026-09-15' })
+	);
+});
+// Revert: apply a locked selection before checking Pro, or give every locked edge generic copy.
+it.each([
+	['reports-period-yesterday', 'Earlier closures'],
+	['reports-period-thisWeek', 'Earlier closures'],
+	['reports-period-lastWeek', 'Earlier closures'],
+	['reports-period-thisMonth', 'Earlier closures'],
+	['reports-period-lastMonth', 'Earlier closures'],
+])('names the locked edge %s without changing scope or fetching', (id, label) => {
+	draw();
+	fireEvent.click(screen.getByTestId(id.includes('period') ? 'reports-period' : 'reports-scope'));
+	fireEvent.click(screen.getByTestId(id));
+	expect(screen.getByTestId('reports-lock-hint').textContent).toBe(`${label} are in WCPOS Pro`);
+	expect(screen.getByTestId(id).textContent).not.toContain('Locked');
+	expect(screen.getByTestId(id).querySelector('[data-icon="lock"]')).toBeTruthy();
+	expect(screen.getAllByTestId('reports-see-pro')).toHaveLength(1);
+	expect(change).not.toHaveBeenCalled();
+	expect(get).not.toHaveBeenCalled();
+});
+// Revert: omit minDate/maxDate on the custom calendar, or ignore the closer selection.
+it('caps custom history and applies the cashier filter', () => {
+	isPro = true;
+	draw();
+	fireEvent.click(screen.getByTestId('reports-period'));
+	const props = calendar.mock.calls.at(-1)?.[0];
+	expect(props.maxDate).toBe('2026-09-16');
+	expect(props.minDate).toBe('2026-06-16');
+	expect(HISTORY_DAYS).toBeGreaterThan(0);
+	fireEvent.click(screen.getByTestId('reports-cashier'));
+	fireEvent.click(screen.getByTestId('reports-cashier-8'));
+	expect(change).toHaveBeenCalledWith(expect.objectContaining({ cashier: 8 }));
+});
+
+// Revert: clamp only the start, allowing a custom range to end before retained history.
+it('keeps both custom endpoints inside retained history', () => {
+	isPro = true;
+	draw();
+	fireEvent.click(screen.getByTestId('reports-period'));
+	act(() =>
+		calendar.mock.calls
+			.at(-1)![0]
+			.onDateRangeChange({ from: new Date(2026, 5, 1), to: new Date(2026, 5, 1) })
+	);
+	fireEvent.click(screen.getByTestId('reports-period-apply'));
+	expect(change).toHaveBeenCalledWith(
+		expect.objectContaining({ from: '2026-06-16', to: '2026-06-16' })
+	);
+});
+
+// Revert: print ISO boundaries instead of locale-formatted calendar dates.
+it('formats custom period titles', () => {
+	render(
+		<Controls
+			room="closures"
+			onRoomChange={room}
+			onScopeChange={change}
+			scope={{ from: '2026-09-01', to: '2026-09-04', registerId: 'r', storeId: 1 }}
+		/>
+	);
+	expect(screen.getByTestId('reports-period').textContent).toBe('1–4 Sep');
+});
+
+// Revert: initialize the custom draft only at mount instead of when Custom opens.
+it('seeds Custom from the current scope after selecting another range', () => {
+	isPro = true;
+	const view = draw();
+	view.rerender(
+		<Controls
+			room="closures"
+			onRoomChange={room}
+			scope={{ ...scope, from: '2026-09-01', to: '2026-09-04' }}
+			onScopeChange={change}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-apply'));
+	expect(change).toHaveBeenLastCalledWith(
+		expect.objectContaining({ from: '2026-09-01', to: '2026-09-04' })
+	);
+});
+
+// Revert: call useStoreDay() without the viewed store id.
+it('uses the viewed store day for presets and custom history bounds', () => {
+	isPro = true;
+	render(
+		<Controls
+			room="closures"
+			onRoomChange={room}
+			scope={{ ...scope, storeId: 2 }}
+			onScopeChange={change}
+		/>
+	);
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-today'));
+	expect(change).toHaveBeenLastCalledWith(
+		expect.objectContaining({ from: '2026-09-17', to: '2026-09-17' })
+	);
+	fireEvent.click(screen.getByTestId('reports-period-yesterday'));
+	expect(change).toHaveBeenLastCalledWith(
+		expect.objectContaining({ from: '2026-09-16', to: '2026-09-16' })
+	);
+	expect(calendar.mock.calls.at(-1)?.[0]).toMatchObject({
+		minDate: '2026-06-17',
+		maxDate: '2026-09-17',
+	});
+});
+
 // Revert: silently discard a Free historical link's day but keep its selection, or block today's link too.
 it.each([
 	['2026-09-15', true],
@@ -461,7 +441,7 @@ it.each([
 				storeId: 1,
 			})
 		);
-		expect(screen.getByTestId('reports-period').textContent).toBe('Today');
+		expect(screen.getByTestId('reports-period').textContent).toBe('Today · Wed 16 Sep');
 		if (locked) {
 			expect(screen.queryByTestId('selected-closure')).toBeNull();
 			expect(screen.getByTestId('reports-lock-hint').textContent).toBe(
@@ -479,8 +459,8 @@ it.each([
 
 // Revert: clamp only inside the rows hook, leaving the route's old/future heading and selection.
 it.each([
-	['2026-01-01', '2026-06-16', '16 Jun – 16 Jun'],
-	['2026-09-18', '2026-09-16', 'Today'],
+	['2026-01-01', '2026-06-16', 'Tue 16 Jun'],
+	['2026-09-18', '2026-09-16', 'Today · Wed 16 Sep'],
 ])(
 	'clamps a Pro link for %s before the bar and list, and explains why it cannot open',
 	(businessDay, bound, heading) => {
@@ -498,7 +478,6 @@ it.each([
 				'This closure is outside available history'
 			);
 			expect(screen.queryByTestId('reports-see-pro')).toBeNull();
-			fireEvent.click(screen.getByTestId('reports-period'));
 			fireEvent.click(screen.getByTestId('reports-period-today'));
 			expect(screen.queryByTestId('reports-lock-hint')).toBeNull();
 		} finally {
@@ -512,7 +491,7 @@ it('replaces September 1–30 with September 10–20 using two day taps', () => 
 	isPro = true;
 	jest.setSystemTime(new Date('2026-09-30T12:00:00Z'));
 	render(
-		<PageBar
+		<Controls
 			room="closures"
 			onRoomChange={room}
 			onScopeChange={change}
@@ -520,7 +499,6 @@ it('replaces September 1–30 with September 10–20 using two day taps', () => 
 		/>
 	);
 	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-custom'));
 	fireEvent.click(screen.getByTestId('day-2026-09-10'));
 	fireEvent.click(screen.getByTestId('day-2026-09-20'));
 	fireEvent.click(screen.getByTestId('reports-period-apply'));
@@ -535,7 +513,6 @@ it('keeps a single-day seed when selecting the custom end', () => {
 	jest.setSystemTime(new Date('2026-09-30T12:00:00Z'));
 	draw();
 	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-custom'));
 	fireEvent.click(screen.getByTestId('day-2026-09-20'));
 	fireEvent.click(screen.getByTestId('reports-period-apply'));
 	expect(change).toHaveBeenLastCalledWith(
@@ -548,7 +525,6 @@ it('gives custom calendar days at least 44pt targets while retaining the shared 
 	isPro = true;
 	draw();
 	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-custom'));
 	const { theme } = nativeCalendar.mock.calls.at(-1)![0];
 	expect(theme['stylesheet.day.basic']?.base?.width ?? 32).toBeGreaterThanOrEqual(44);
 	expect(theme['stylesheet.day.basic']?.base?.height ?? 32).toBeGreaterThanOrEqual(44);
@@ -563,7 +539,7 @@ it('applies the tapped Tokyo calendar days when viewing a Los Angeles store', ()
 	mockTokyoDevice = true;
 	try {
 		render(
-			<PageBar
+			<Controls
 				room="closures"
 				onRoomChange={room}
 				onScopeChange={change}
@@ -571,7 +547,6 @@ it('applies the tapped Tokyo calendar days when viewing a Los Angeles store', ()
 			/>
 		);
 		fireEvent.click(screen.getByTestId('reports-period'));
-		fireEvent.click(screen.getByTestId('reports-period-custom'));
 		fireEvent.click(screen.getByTestId('day-2026-09-10'));
 		fireEvent.click(screen.getByTestId('day-2026-09-20'));
 		fireEvent.click(screen.getByTestId('reports-period-apply'));
@@ -595,13 +570,12 @@ it('bounds the custom picker to a 320pt viewport with room for all days and Done
 	try {
 		draw();
 		fireEvent.click(screen.getByTestId('reports-period'));
-		fireEvent.click(screen.getByTestId('reports-period-custom'));
 		const props = popoverContent.mock.calls.at(-1)![0];
 		expect(props.style?.width ?? 360).toBeLessThanOrEqual(320);
 		expect(props.className).toContain('p-0');
 		// Calendar has 5pt padding each side; the popover has a 1pt border.
 		expect(props.style.width - 10 - 2).toBeGreaterThanOrEqual(7 * 44);
-		expect(screen.queryByTestId('reports-period-today')).toBeNull();
+		expect(screen.getByTestId('reports-period-today')).toBeTruthy();
 		expect(screen.getByTestId('reports-period-apply')).toBeTruthy();
 	} finally {
 		dimensions.mockRestore();
@@ -613,65 +587,18 @@ it('returns to period choices after dismissing the custom picker', () => {
 	isPro = true;
 	draw();
 	fireEvent.click(screen.getByTestId('reports-period'));
-	fireEvent.click(screen.getByTestId('reports-period-custom'));
 	fireEvent.click(screen.getByTestId('reports-period'));
 	fireEvent.click(screen.getByTestId('reports-period'));
 	expect(screen.getByTestId('reports-period-today')).toBeTruthy();
 });
 
-// Revert: leave HeaderLeft at the default 40pt height or let its container shrink.
-it.each(['sm', 'md'])(
-	'keeps the %s page-bar drawer target at least 48pt and non-shrinking',
-	(size) => {
-		mockScreenSize = size;
-		try {
-			draw();
-			const button = screen.getByTestId('drawer-open-button');
-			expect(button.className).toContain('h-12');
-			expect(button.className).toContain('min-w-12');
-			expect(button.className).toContain('shrink-0');
-		} finally {
-			mockScreenSize = 'sm';
-		}
-	}
-);
-
-// Revert: keep room tabs in the phone title row instead of a separate row.
-it.each(['sm', 'md', 'lg'])('places room tabs separately only on %s phones', (size) => {
-	mockScreenSize = size;
-	try {
-		draw();
-		const titleRow = screen.getByTestId('reports-title-row');
-		const tabs = screen.getByTestId('reports-room-sales');
-		expect(titleRow.contains(screen.getByTestId('reports-title'))).toBe(true);
-		if (size === 'sm') {
-			expect(screen.getByTestId('reports-tabs-row').contains(tabs)).toBe(true);
-			expect(titleRow.contains(tabs)).toBe(false);
-		} else {
-			expect(titleRow.contains(tabs)).toBe(true);
-			expect(screen.queryByTestId('reports-tabs-row')).toBeNull();
-		}
-	} finally {
-		mockScreenSize = 'sm';
-	}
-});
-
-// Revert: switch storeId without clamping the period to the destination store day.
-it.each([
-	['2026-09-18', '2026-09-18', '2026-09-17', '2026-09-17'],
-	['2026-06-01', '2026-09-18', '2026-06-17', '2026-09-17'],
-])('normalises %s–%s before emitting the destination store scope', (from, to, start, end) => {
+// Revert: close the date menu as soon as a preset is selected.
+it('keeps the picker open after a quick range and closes it on Done', () => {
 	isPro = true;
-	jest.setSystemTime(new Date('2026-09-18T01:00:00Z'));
-	render(
-		<PageBar
-			room="closures"
-			onRoomChange={room}
-			onScopeChange={change}
-			scope={{ ...scope, storeId: 2, from, to }}
-		/>
-	);
-	fireEvent.click(screen.getByTestId('reports-scope'));
-	fireEvent.click(screen.getByTestId('reports-store-1'));
-	expect(change).toHaveBeenLastCalledWith({ ...scope, from: start, to: end });
+	draw();
+	fireEvent.click(screen.getByTestId('reports-period'));
+	fireEvent.click(screen.getByTestId('reports-period-yesterday'));
+	expect(screen.queryByTestId('reports-period-yesterday')).not.toBeNull();
+	fireEvent.click(screen.getByTestId('reports-period-apply'));
+	expect(screen.queryByTestId('reports-period-yesterday')).toBeNull();
 });

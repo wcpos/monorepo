@@ -18,7 +18,14 @@ jest.mock('../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),
 }));
 jest.mock('../components/pro-guard', () => ({
-	withProAccess: (Component: React.ComponentType) => Component,
+	withProAccess: (Component: React.ComponentType) => () =>
+		mockPro ? (
+			<Component />
+		) : (
+			<div data-testid="pro-preview">
+				<Component />
+			</div>
+		),
 }));
 const mockClosureScope = jest.fn();
 jest.mock('./closures', () => ({
@@ -42,21 +49,22 @@ const mockViewedStores = of([
 	{ id: 9, timezone: 'UTC' },
 	{ id: 21, timezone: 'America/New_York' },
 ]);
-jest.mock('./page-bar', () => ({
-	PageBar: ({
-		onRoomChange,
+jest.mock('./bar', () => ({
+	CashierButton: () => null,
+	ScopeHint: () => null,
+	Bar: ({
+		onBack,
 		onScopeChange,
 		scope,
 	}: {
 		scope: unknown;
-		onRoomChange: (v: string) => void;
+		onBack: () => void;
 		onScopeChange: (scope: unknown) => void;
 	}) => {
 		mockBarScope(scope);
 		return (
 			<>
-				<button data-testid="room-closures" onClick={() => onRoomChange('closures')} />
-				<button data-testid="room-sales" onClick={() => onRoomChange('sales')} />
+				<button data-testid="reports-back-sales" onClick={onBack} />
 				<button
 					data-testid="past-scope"
 					onClick={() =>
@@ -137,6 +145,7 @@ jest.mock('../../../contexts/app-state', () => ({
 	}),
 }));
 jest.mock('../../../hooks/use-local-date', () => ({
+	useLocalDate: () => ({ formatDate: require('date-fns').format }),
 	convertLocalDateToUTCString: (date: Date) => date.toISOString(),
 	convertUTCStringToLocalDate: (value: string) => new Date(value),
 }));
@@ -256,9 +265,9 @@ it('uses the viewed store midnight for Sales immediately on a cross-store select
 it('unmounts the Sales binding in Closures and remounts it only on returning to Sales', () => {
 	render(<ReportsScreen />);
 	mockUseCollectionBinding.mockClear();
-	fireEvent.click(screen.getByTestId('room-closures'));
+	fireEvent.click(screen.getByTestId('reports-closures-link'));
 	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
-	fireEvent.click(screen.getByTestId('room-sales'));
+	fireEvent.click(screen.getByTestId('reports-back-sales'));
 	// The viewed-store directory can emit after mount; both renders use the Sales binding.
 	expect(mockUseCollectionBinding).toHaveBeenCalledWith('orders', expect.any(Object));
 });
@@ -271,7 +280,7 @@ it('does not mount report readers for a cashier without report permission', () =
 	render(<ReportsScreen />);
 	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
 	expect(mockClosureScope).not.toHaveBeenCalled();
-	expect(screen.queryByTestId('room-closures')).toBeNull();
+	expect(screen.queryByTestId('reports-closures-link')).toBeNull();
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
 // Revert: trust a retained Pro scope after the license becomes Free.
@@ -281,7 +290,7 @@ it('constrains a retained Pro scope before mounting Free closures', () => {
 	mockStoreID = 9;
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 	const view = render(<ReportsScreen />);
-	fireEvent.click(screen.getByTestId('room-closures'));
+	fireEvent.click(screen.getByTestId('reports-closures-link'));
 	fireEvent.click(screen.getByTestId('past-scope'));
 	expect(mockClosureScope).toHaveBeenLastCalledWith({
 		scope: expect.objectContaining({ registerId: 'other' }),
@@ -289,7 +298,6 @@ it('constrains a retained Pro scope before mounting Free closures', () => {
 	});
 	mockPro = false;
 	view.rerender(<ReportsScreen />);
-	fireEvent.click(screen.getByTestId('room-closures'));
 	expect(mockClosureScope).toHaveBeenLastCalledWith({
 		scope: expect.objectContaining({
 			from: '2026-07-15',
@@ -319,7 +327,7 @@ it('can enter local Closures while the Sales workspace is still loading', () => 
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 	try {
 		render(<ReportsScreen />);
-		fireEvent.click(screen.getByTestId('room-closures'));
+		fireEvent.click(screen.getByTestId('reports-closures-link'));
 		expect(mockClosureScope).toHaveBeenCalled();
 	} finally {
 		mockReportsPending = false;
@@ -338,6 +346,7 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'sm' }) }));
 jest.mock('@wcpos/components/button', () => ({
+	ButtonText: require('react-native').Text,
 	Button: ({
 		testID,
 		onPress,
@@ -352,7 +361,16 @@ jest.mock('@wcpos/components/button', () => ({
 		</button>
 	),
 }));
-jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
+}));
+jest.mock('@wcpos/components/calendar', () => ({ Calendar: () => null }));
+jest.mock('@wcpos/components/popover', () => ({
+	Popover: ({ children }: React.PropsWithChildren) => children,
+	PopoverTrigger: ({ children }: React.PropsWithChildren) => children,
+	PopoverContent: () => null,
+}));
+jest.mock('../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
 // Revert: ignore the register-panel route selector and mount Sales instead of the requested closure.
 it('opens the requested closure room and business day for Pro', () => {
 	mockPro = true;
@@ -418,7 +436,7 @@ it('keeps Sales and Closures accessible when capabilities are unknown', () => {
 	mockCapabilities = undefined;
 	render(<ReportsScreen />);
 	expect(screen.queryByTestId('reports-denied')).toBeNull();
-	fireEvent.click(screen.getByTestId('room-closures'));
+	fireEvent.click(screen.getByTestId('reports-closures-link'));
 	expect(mockClosureScope).toHaveBeenCalled();
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
@@ -432,12 +450,28 @@ it('clears a closed deep link without leaving Closures or reopening it after Sal
 	expect(mockSetParams).toHaveBeenCalledWith({ closureId: undefined });
 	view.rerender(<ReportsScreen />);
 	expect(screen.queryByTestId('legacy-register')).toBeNull();
-	fireEvent.click(screen.getByTestId('room-sales'));
-	fireEvent.click(screen.getByTestId('room-closures'));
+	fireEvent.click(screen.getByTestId('reports-back-sales'));
+	fireEvent.click(screen.getByTestId('reports-closures-link'));
 	expect(screen.queryByTestId('close-closure')).toBeNull();
 	// A later visit to the same deep link must still select it.
 	mockRoute = { ...mockRoute, closureId: 'c' };
 	view.rerender(<ReportsScreen />);
 	expect(screen.getByTestId('close-closure')).toBeTruthy();
 	mockRoute = {};
+});
+
+// Revert: restore the Pro overlay or leave Free Sales unscoped to its bound till.
+it('renders the Sales body for a Free cashier without the Pro overlay', () => {
+	mockPro = false;
+	mockStoreID = 9;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	try {
+		render(<ReportsScreen />);
+		expect(screen.getByTestId('legacy-register')).toBeTruthy();
+		expect(screen.queryByTestId('pro-preview')).toBeNull();
+		expect(screen.getByTestId('reports-period').querySelector('[data-icon="lock"]')).toBeTruthy();
+		expect(latestState().filters).toMatchObject({ register: 'r', store: '9' });
+	} finally {
+		mockPro = true;
+	}
 });

@@ -12,11 +12,14 @@ import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { Icon } from '@wcpos/components/icon';
 
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
-import { withProAccess } from '../components/pro-guard';
+import { UpgradeNotice } from '../components/header/upgrade-notice';
+import { UpgradeNoticeContext } from '../components/header/upgrade-notice-context';
 import { useRegisterBinding } from '../../../services/register/use-register-binding';
 import {
 	calendarDate,
@@ -26,7 +29,8 @@ import {
 	zoneOptions,
 } from '../../../hooks/use-store-day';
 import { HeaderLeft } from '../components/header/left';
-import { PageBar } from './page-bar';
+import { Bar, CashierButton } from './bar';
+import { DateButton } from './date-button';
 import { Closures } from './closures';
 import { ReportsProvider } from './context';
 import { Reports } from './reports';
@@ -76,8 +80,8 @@ function getInitialReportSort(
 	return { field: sortBy, direction: sortDirection === 'asc' ? 'asc' : 'desc' };
 }
 
-const GuardedReports = withProAccess(Reports, 'reports');
 function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) => void }) {
+	const t = useT();
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	const binding = useCollectionBinding('orders', state);
@@ -130,11 +134,31 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 	};
 	return (
 		<>
-			<PageBar room="sales" onRoomChange={onRoomChange} scope={scope} onScopeChange={select} />
+			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
+			<View
+				testID="reports-scope-row"
+				className="flex-row items-center justify-between gap-2 px-4 py-2"
+			>
+				<DateButton
+					scope={scope}
+					onScopeChange={select}
+					storeId={scope.storeId}
+					lockedScopeName={t('reports.earlier_days')}
+				/>
+				<Button
+					testID="reports-closures-link"
+					variant="ghost"
+					className="min-h-12 flex-row items-center gap-1"
+					onPress={() => onRoomChange('closures')}
+				>
+					<ButtonText>{t('reports.closures')}</ButtonText>
+					<Icon name="chevronRight" />
+				</Button>
+			</View>
 			<View className="min-h-0 flex-1">
 				<Suspense>
 					<ReportsProvider binding={binding}>
-						<GuardedReports />
+						<Reports />
 					</ReportsProvider>
 				</Suspense>
 			</View>
@@ -148,11 +172,14 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void }) {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
+	const binding = useRegisterBinding();
+	const { license } = useAppInfo();
 	const { presets, rangeToFilter } = useStoreDay();
 	const cashierScopeID = String(wpCredentials?.id);
 	const storeScopeID = store?.id ? String(store.id) : 'woocommerce-pos';
 	const initialFilters: Partial<FiltersOf<'orders'>> = {
 		status: 'completed',
+		...(!license?.isPro && { register: binding.registerId || 'unbound' }),
 		dateRange: rangeToFilter(presets().today),
 		cashier: cashierScopeID,
 		store: storeScopeID,
@@ -177,6 +204,8 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 }
 
 function ReportsShell() {
+	const t = useT();
+	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	const router = useRouter();
 	const params = useLocalSearchParams<{
 		closureId?: string;
@@ -213,20 +242,33 @@ function ReportsShell() {
 		: { ...initialScope, cashier: selection?.cashier };
 	return (
 		<View className="flex-1">
+			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 			<ErrorBoundary>
 				<Suspense>
 					{room === 'sales' ? (
 						<SalesScreen onRoomChange={setRoom} />
 					) : (
 						<>
-							<PageBar
-								room={room}
-								initialLockedPeriod={lockedClosure}
-								initialHistoryLimit={outsideHistory}
-								onRoomChange={setRoom}
+							<Bar
+								room="closures"
+								onBack={() => setRoom('sales')}
 								scope={scope}
 								onScopeChange={setSelection}
 							/>
+							<View
+								testID="reports-scope-row"
+								className="flex-row items-center justify-between gap-2 px-4 py-2"
+							>
+								<DateButton
+									scope={scope}
+									onScopeChange={setSelection}
+									storeId={scope.storeId}
+									lockedScopeName={t('reports.earlier_closures')}
+									initialLockedPeriod={lockedClosure}
+									initialHistoryLimit={outsideHistory}
+								/>
+								<CashierButton scope={scope} onScopeChange={setSelection} />
+							</View>
 							<Closures
 								scope={scope}
 								initialClosureId={lockedClosure || outsideHistory ? undefined : params.closureId}
