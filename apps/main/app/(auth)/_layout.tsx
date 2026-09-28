@@ -12,7 +12,7 @@ import { useNavigationBackground } from '../../components/use-navigation-backgro
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: 'connect',
+	anchor: 'connect',
 };
 
 /**
