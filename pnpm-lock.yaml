@@ -55,6 +55,9 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
     devDependencies:
+      '@react-native/assets-registry':
+        specifier: 0.88.0-rc.2
+        version: 0.88.0-rc.2(react-native@0.88.0-rc.2(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.2(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
@@ -3683,6 +3686,12 @@ packages:
   '@react-native/asset-utils@0.88.0-rc.2':
     resolution: {integrity: sha512-d6qGBOmVM1m7PN1kDrWvKwUrHZ5AZTgwXKygf6xl82rnHpfjFb07LhCcIRC06T0jwwgwO8WBz05vjAMr1YIr1A==}
     engines: {node: ^22.13.0 || ^24.3.0 || >= 26.0.0}
+
+  '@react-native/assets-registry@0.88.0-rc.2':
+    resolution: {integrity: sha512-te97qqtXJlOAOR1ng51M66baByjo7PJsJl0F61WlSSDFO/ZBT4pTfi4JZQtZXenjn3Va/x3VYwr/mz+XIMNOxQ==}
+    engines: {node: ^22.13.0 || ^24.3.0 || >= 26.0.0}
+    peerDependencies:
+      react-native: 0.88.0-rc.2
 
   '@react-native/babel-plugin-codegen@0.88.0-rc.2':
     resolution: {integrity: sha512-ntSYQ8IDjixhuYrndjOddN+7Hq5wHDpCcPUVj9bYs7tqscRWgNH1CtZpCaJ9LBTzzI8tN1WR/3zw+CKeq9ykYA==}
@@ -13514,6 +13523,10 @@ snapshots:
       react-native: 0.88.0-rc.2(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.2(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
 
   '@react-native/asset-utils@0.88.0-rc.2': {}
+
+  '@react-native/assets-registry@0.88.0-rc.2(react-native@0.88.0-rc.2(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.2(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))':
+    dependencies:
+      react-native: 0.88.0-rc.2(@babel/core@7.29.7)(@react-native/metro-config@0.88.0-rc.2(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0)
 
   '@react-native/babel-plugin-codegen@0.88.0-rc.2(@babel/core@7.29.7)':
     dependencies:
