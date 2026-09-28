@@ -201,7 +201,7 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 		<QueryStateProvider
 			// The plan is part of the key: a licence that drops to Free remounts the query on
 			// today and the bound register instead of keeping a Pro-chosen scope alive.
-			key={`${cashierScopeID}:${storeScopeID}:${license?.isPro ? 'pro' : `free:${binding.registerId || 'unbound'}:${storeToday}`}`}
+			key={`${cashierScopeID}:${storeScopeID}:${license?.isPro ? 'pro' : `free:${binding.registerId || 'unbound'}:${storeToday}:${timezone}`}`}
 			collection="orders"
 			initialPageSize={REPORTS_ALL_RESULTS_LIMIT}
 			initialSort={initialSort}
@@ -278,6 +278,8 @@ function ReportsShell() {
 									scope={scope}
 									onScopeChange={setSelection}
 									storeId={scope.storeId}
+									// Re-keyed by plan: a deep link's lock or history hint must not outlive the plan it was computed for.
+									key={license?.isPro ? 'pro' : 'free'}
 									lockedScopeName={t('reports.earlier_closures')}
 									initialLockedPeriod={lockedClosure}
 									initialHistoryLimit={outsideHistory}

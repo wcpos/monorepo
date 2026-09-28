@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { format, parseISO, subDays } from 'date-fns';
 
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -64,6 +65,7 @@ export function DateButton({
 	const t = useT();
 	const { formatDate } = useLocalDate();
 	const { width, height } = useWindowDimensions();
+	const insets = useSafeAreaInsets();
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
 	const { license } = useAppInfo();
@@ -127,7 +129,12 @@ export function DateButton({
 	const daySize = Math.max(36, Math.min(44, Math.floor((calendarWidth - 10) / 7)));
 	// Phone: the body scrolls inside what the 92%-high sheet leaves after the footer and,
 	// when a lock is showing, the hint with See Pro; no floor, so a rotated phone still fits.
-	const bodyMaxHeight = Math.max(96, height * 0.92 - 80 - (locked || historyLimit ? 104 : 0));
+	const bodyMaxHeight = Math.max(
+		96,
+		(height - (insets.top ?? 0) - (insets.bottom ?? 0)) * 0.92 -
+			80 -
+			(locked || historyLimit ? 104 : 0)
+	);
 	const dates =
 		selected === 'thisMonth' || selected === 'lastMonth'
 			? date(scope.from, 'MMMM')
