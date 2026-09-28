@@ -28,6 +28,7 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && node ../../scripts/fix-dist-esm-specifiers.mjs dist",
     "clean": "rm -rf dist",
     "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+    "prepublishOnly": "echo 'Publish with .github/workflows/publish-sync-packages.yml (pnpm pack, then npm publish <tarball>): a direct publish ships src/ and workspace: ranges.' >&2 && exit 1",
     "test": "vitest run",
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"

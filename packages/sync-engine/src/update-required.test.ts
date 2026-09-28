@@ -20,6 +20,25 @@ describe('update-required parity', () => {
 		{ code: 'wcpos_update_required' },
 		{ code: 'wcpos_update_required', data: 'invalid' },
 		{ code: 'wcpos_update_required', data: null },
+		{ code: 'wcpos_update_required', data: [] },
+		{
+			code: 'wcpos_update_required',
+			data: { min_protocol: NaN, server_protocol: NaN, plugin_version: NaN },
+		},
+		{
+			code: 'wcpos_update_required',
+			data: { min_protocol: Infinity, server_protocol: Infinity, plugin_version: Infinity },
+		},
+		{
+			code: 'wcpos_update_required',
+			data: { min_protocol: -0, server_protocol: -0, plugin_version: -0 },
+		},
+		Object.create({ code: 'wcpos_update_required' }),
+		{
+			code: 'wcpos_update_required',
+			data: { min_protocol: 2, server_protocol: 3, plugin_version: '1.11.0', unknown: 'extra' },
+			unknown: 'extra',
+		},
 		{
 			code: 'wcpos_update_required',
 			data: { min_protocol: '2', server_protocol: false, plugin_version: 111 },
@@ -30,7 +49,9 @@ describe('update-required parity', () => {
 		'wcpos_update_required',
 		426,
 		[],
+		true,
+		() => 'wcpos_update_required',
 	])('matches the original for %j', (body) => {
-		expect(parseUpdateRequiredBody(body)).toEqual(originalParseUpdateRequiredBody(body));
+		expect(parseUpdateRequiredBody(body)).toStrictEqual(originalParseUpdateRequiredBody(body));
 	});
 });
