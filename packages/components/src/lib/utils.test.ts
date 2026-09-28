@@ -34,6 +34,21 @@ describe('lib/utils', () => {
 			expect(result).toBe('p-2');
 		});
 
+		it('lets glyph size replace control dimensions', () => {
+			const result = cn('h-ctl w-ctl items-center', 'size-4.5');
+			expect(result.split(' ')).toContain('size-4.5');
+			expect(result.split(' ')).not.toContain('h-ctl');
+			expect(result.split(' ')).not.toContain('w-ctl');
+		});
+
+		it.each([
+			['h-10', 'h-ctl'],
+			['h-ctl', 'h-10'],
+			['min-w-ctl', 'min-w-0'],
+		])('merges %s with %s', (first, last) => {
+			expect(cn(first, last)).toBe(last);
+		});
+
 		it('should handle empty inputs', () => {
 			const result = cn();
 			expect(result).toBe('');

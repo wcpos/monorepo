@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { type GestureResponderEvent, Pressable, type View } from 'react-native';
+import { type GestureResponderEvent, Pressable, type ViewInstance } from 'react-native';
 
 import * as Select from '@radix-ui/react-select';
 import { useComposedRefs } from '@rn-primitives/hooks';
@@ -29,7 +29,7 @@ function Value({
 
 	return (
 		<TextClassContext.Provider
-			value={cn(textClass, 'text-sm', !value?.value && 'text-muted-foreground', className)}
+			value={cn(textClass, 'text-base', !value?.value && 'text-muted-foreground', className)}
 		>
 			{/* An empty `value` is the cleared-selection sentinel, so it reads as no selection. */}
 			<Component {...props}>{value?.value ? value.label : placeholder}</Component>
@@ -52,6 +52,7 @@ function Value({
  */
 function Trigger({
 	asChild,
+	className,
 	onPress: onPressProp,
 	onPointerDown: onPointerDownProp,
 	onKeyDown: onKeyDownProp,
@@ -60,16 +61,16 @@ function Trigger({
 	ref,
 	...props
 }: SelectPrimitive.TriggerProps & {
-	ref?: React.Ref<View>;
+	ref?: React.Ref<ViewInstance>;
 	onPointerDown?: (ev: React.PointerEvent) => void;
 }) {
 	const { open, onOpenChange } = SelectPrimitive.useRootContext();
 
-	const localRef = React.useRef<View>(null);
+	const localRef = React.useRef<ViewInstance>(null);
 	const composedRef = useComposedRefs(ref, localRef);
 
 	React.useImperativeHandle(ref, () =>
-		Object.assign(localRef.current ?? ({} as View), {
+		Object.assign(localRef.current ?? ({} as ViewInstance), {
 			open() {
 				onOpenChange(true);
 			},
@@ -134,6 +135,7 @@ function Trigger({
 				role="button"
 				disabled={disabled}
 				{...props}
+				className={cn(className, open && 'border-ring')}
 			/>
 		</Select.Trigger>
 	);

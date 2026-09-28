@@ -47,7 +47,7 @@ jest.mock('react-native-worklets', () => ({
 }));
 
 jest.mock('uniwind', () => ({
-	useCSSVariable: () => ['#ffffff', '#eeeeee', '#007936', ERROR_COLOR],
+	useCSSVariable: () => ['#ffffff', '#007936', ERROR_COLOR],
 }));
 
 const reanimated = jest.requireMock('react-native-reanimated') as {

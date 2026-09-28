@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, type ViewInstance } from 'react-native';
 
 import { BlurView } from 'expo-blur';
 
@@ -16,7 +16,7 @@ type ProPage = 'products' | 'orders' | 'coupons' | 'customers' | 'reports';
 
 interface Props {
 	page: ProPage;
-	blurTarget?: React.RefObject<View | null>;
+	blurTarget?: React.RefObject<ViewInstance | null>;
 }
 
 interface PageConfig {
@@ -69,7 +69,14 @@ export function ProPreviewOverlay({ page, blurTarget }: Props) {
 				tint="light"
 				blurReductionFactor={4}
 				blurMethod="dimezisBlurViewSdk31Plus"
-				{...(Platform.OS === 'android' && blurTarget ? { blurTarget } : {})}
+				// expo-blur 58 types blurTarget with the component type, not ViewInstance (RN 0.88 strict API); cast until upstream updates.
+				{...(Platform.OS === 'android' && blurTarget
+					? {
+							blurTarget: blurTarget as unknown as React.ComponentProps<
+								typeof BlurView
+							>['blurTarget'],
+						}
+					: {})}
 				style={StyleSheet.absoluteFill}
 			/>
 			<View style={styles.ctaContainer} pointerEvents="box-none">

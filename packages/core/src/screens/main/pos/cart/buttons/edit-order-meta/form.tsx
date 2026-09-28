@@ -294,7 +294,7 @@ export function EditOrderMetaForm({
 			</DialogBody>
 			<DialogFooter>
 				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction testID="order-meta-save" onPress={onSave} disabled={loading}>
+				<DialogAction testID="order-meta-save" onPress={() => void onSave()} disabled={loading}>
 					{t('common.save')}
 				</DialogAction>
 			</DialogFooter>

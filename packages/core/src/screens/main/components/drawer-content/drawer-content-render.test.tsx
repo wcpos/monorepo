@@ -21,13 +21,13 @@ import { render } from '@testing-library/react';
 import { DrawerContent } from './index';
 import { DrawerPanelVisibilityProvider, DrawerPanelVisibilityReporter } from './panel-visibility';
 
-import type { DrawerContentComponentProps } from 'expo-router/build/react-navigation/drawer';
+import type { DrawerContentComponentProps } from 'expo-router/drawer';
 
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-jest.mock('expo-router/build/react-navigation/drawer', () => {
+jest.mock('expo-router/drawer', () => {
 	const R = require('react');
 	return {
 		DrawerContentScrollView: ({

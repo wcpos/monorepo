@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, type ViewProps } from 'react-native';
+import { View, type ViewInstance, type ViewProps } from 'react-native';
 
 import { Button, ButtonText } from '../button';
 import { DocsLink } from '../docs-link';
@@ -39,7 +39,7 @@ export function EmptyState({
 	className,
 	...props
 }: EmptyStateProps) {
-	const actionRef = React.useRef<View>(null);
+	const actionRef = React.useRef<ViewInstance>(null);
 	const focusOnMount = React.useRef(!!(autoFocus && action));
 	// Focus is an opt-in DOM side effect, only at mount, never on a kind change.
 	React.useEffect(() => {

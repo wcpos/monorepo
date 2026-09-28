@@ -11,8 +11,11 @@ export const PANEL_SLIDE = 250;
 export const PANEL_SLIDE_OUT = 200;
 export const PANE = 280;
 export const STAMP = 380;
+export const SPINNER = 1000;
+export const INDETERMINATE = 1100;
 
 export const EASE = Easing.bezier(0.2, 0.7, 0.2, 1);
+export const EASE_CSS = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
 export const EASE_BEAT = Easing.bezier(0.2, 0.9, 0.3, 1.1);
 
 type Beat = {
@@ -196,7 +199,7 @@ export const BEATS = {
 	// Functional indefinite wait: retain the 1s linear revolution under reduce-motion.
 	spinner: {
 		name: 'Spinner',
-		duration: 1000,
+		duration: SPINNER,
 		easing: 'linear',
 		class: 'waiting',
 		waitingPath: true,
@@ -205,7 +208,7 @@ export const BEATS = {
 	// Functional indefinite wait: the drawing's 1.1s cycle, also exempt.
 	indeterminateProgress: {
 		name: 'Indeterminate progress bar',
-		duration: 1100,
+		duration: INDETERMINATE,
 		easing: EASE,
 		class: 'waiting',
 		waitingPath: true,
@@ -224,6 +227,19 @@ export const BEATS = {
 
 // Preserve today's accordion easing and duration; no component adopts new motion yet.
 export const WEB_ANIMATIONS = {
+	'pop-in': `pop-in ${POPOVER_FADE}ms ${EASE_CSS}`,
+	'pop-out': `pop-out ${POPOVER_FADE}ms ${EASE_CSS} forwards`,
+	indeterminate: `indeterminate ${INDETERMINATE}ms ${EASE_CSS} infinite`,
 	'accordion-down': `accordion-down ${CROSSFADE}ms ease-out`,
 	'accordion-up': `accordion-up ${CROSSFADE}ms ease-out`,
+	'overlay-in': `overlay-in ${OVERLAY_FADE}ms ${EASE_CSS}`,
+	'overlay-out': `overlay-out ${OVERLAY_FADE}ms ${EASE_CSS} forwards`,
+	'dialog-in': `dialog-in ${OVERLAY_FADE}ms ${EASE_CSS}`,
+	'dialog-out': `dialog-out ${OVERLAY_FADE}ms ${EASE_CSS} forwards`,
+	'panel-in-left': `panel-in-left ${PANEL_SLIDE}ms ${EASE_CSS}`,
+	'panel-in-right': `panel-in-right ${PANEL_SLIDE}ms ${EASE_CSS}`,
+	'panel-out-left': `panel-out-left ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
+	'panel-out-right': `panel-out-right ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
+	'sheet-in': `sheet-in ${SHEET_RISE}ms ${EASE_CSS}`,
+	'sheet-out': `sheet-out ${PANEL_SLIDE_OUT}ms ${EASE_CSS} forwards`,
 };

@@ -40,32 +40,31 @@ interface PulseTableRowRef {
 
 /**
  * Table row with pulse animation for add/remove feedback.
- * Uses theme-aware colors for alternating rows and pulse effects.
+ * Uses theme-aware colors for the row surface and pulse effects.
  */
 function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 	ref,
 	className,
-	index = 0,
+	index: _index = 0,
 	onRemove = () => {},
 	row,
 	table,
 	...viewProps
 }: PulseTableRowProps<TData, TFeatures>) {
 	// Get theme-aware colors
-	const [tableRowColor, tableRowAltColor, successColor, errorColor] = useCSSVariable([
+	const [tableRowColor, successColor, errorColor] = useCSSVariable([
 		'--color-table-row',
-		'--color-table-row-alt',
 		'--color-success',
 		'--color-destructive',
 	]) as string[];
 
-	// Determine the base color based on row index
-	const baseColor = index % 2 === 0 ? tableRowColor : tableRowAltColor;
+	// Every row uses the same unstriped surface.
+	const baseColor = tableRowColor;
 
 	// Shared value for animated background color
 	const backgroundColor = useSharedValue(baseColor);
 
-	// Update base color when theme colors change (baseColor already derives from index)
+	// Update base color when theme colors change
 	React.useEffect(() => {
 		backgroundColor.value = baseColor;
 	}, [baseColor, backgroundColor]);
@@ -153,7 +152,10 @@ function PulseTableRow<TData extends RowData, TFeatures extends TableFeatures>({
 			// No `web:transition-colors` here: a CSS background-color transition
 			// low-pass-filters reanimated's per-frame inline style updates, so the
 			// pulse never reaches the success/error color and visibly lags/snaps.
-			className={cn('web:data-[state=selected]:bg-muted flex-row', className)}
+			className={cn(
+				'web:data-[state=selected]:bg-muted border-border min-h-row flex-row border-b',
+				className
+			)}
 			style={animatedStyle}
 			{...viewProps}
 		/>

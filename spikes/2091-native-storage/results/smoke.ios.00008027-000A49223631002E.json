@@ -1,0 +1,261 @@
+{
+  "environment": {
+    "platform": "ios",
+    "device": "00008027-000A49223631002E",
+    "deviceName": "iPad",
+    "os": "26.6.2",
+    "hardware": {
+      "cpuType": {
+        "name": "arm64e",
+        "subType": -2147483646,
+        "type": 16777228
+      },
+      "deviceType": "iPad",
+      "ecid": 2895161054003246,
+      "hardwareModel": "J320AP",
+      "internalStorageCapacity": 256000000000,
+      "isProductionFused": true,
+      "marketingName": "iPad Pro (12.9-inch) (3rd generation)",
+      "platform": "iOS",
+      "productType": "iPad8,5",
+      "reality": "physical",
+      "serialNumber": "DLXY9127K7RG",
+      "supportedCPUTypes": [
+        {
+          "name": "arm64e",
+          "subType": -2147483646,
+          "type": 16777228
+        },
+        {
+          "name": "arm64",
+          "subType": 0,
+          "type": 16777228
+        }
+      ],
+      "supportedDeviceFamilies": [
+        1,
+        2
+      ],
+      "thinningProductType": "iPad8,5",
+      "udid": "00008027-000A49223631002E"
+    },
+    "simulator": false,
+    "expo": "57.0.24",
+    "react-native": "0.86.3",
+    "expo-sqlite": "57.0.3",
+    "expo-file-system": "57.0.7",
+    "expo-opfs": "1.0.9",
+    "rxdb": "17.4.0",
+    "rxdb-premium": "17.4.0",
+    "rxjs": "7.8.2",
+    "react-native-worklets": "0.11.4",
+    "premiumMarkers": 47,
+    "expoOpfsShippedPatch": true,
+    "beginRetryConsoleDir": false,
+    "measuredAt": "2026-09-23T19:11:47.134Z",
+    "sqlite": "3.50.3"
+  },
+  "rows": [
+    "expo-filesystem-js",
+    "worklet-filesystem",
+    "expo-sqlite"
+  ],
+  "complete": true,
+  "results": [
+    {
+      "engine": "expo-filesystem-js",
+      "dir": "spike-2091/smoke/expo-filesystem-js/spike-1b5ec9c0-9245-46ee-b1b3-a282d6590413",
+      "db": "spike-1b5ec9c0-9245-46ee-b1b3-a282d6590413",
+      "scenarios": [
+        {
+          "name": "bulk-write",
+          "pass": true,
+          "detail": "insert/update/delete and conflict 409"
+        },
+        {
+          "name": "query-sort",
+          "pass": true,
+          "detail": "indexed and non-indexed sort"
+        },
+        {
+          "name": "count",
+          "pass": true,
+          "detail": "2 active documents"
+        },
+        {
+          "name": "find-by-id",
+          "pass": true,
+          "detail": "with and without deleted"
+        },
+        {
+          "name": "change-stream",
+          "pass": true,
+          "detail": "INSERT → UPDATE → DELETE with checkpoint"
+        },
+        {
+          "name": "attachments",
+          "pass": true,
+          "detail": "32 KB write/read/remove"
+        },
+        {
+          "name": "cleanup",
+          "pass": true,
+          "detail": "deleted document removed"
+        },
+        {
+          "name": "close-reopen",
+          "pass": true,
+          "detail": "2 documents persisted"
+        },
+        {
+          "name": "exists-explicit-null",
+          "pass": true,
+          "detail": "{\"query\":{\"selector\":{\"value\":{\"$exists\":false}}},\"expected\":[\"p1\"],\"actual\":[\"p1\"],\"pass\":true}; {\"query\":{\"selector\":{\"value\":{\"$exists\":true}}},\"expected\":[\"p0\",\"p2\",\"p3\",\"p4\",\"p5\",\"p6\",\"p7\"],\"actual\":[\"p0\",\"p2\",\"p3\",\"p4\",\"p5\",\"p6\",\"p7\"],\"pass\":true}"
+        },
+        {
+          "name": "in-nin-missing",
+          "pass": true,
+          "detail": "{\"query\":{\"selector\":{\"value\":{\"$in\":[\"blue\",2]}}},\"expected\":[\"p2\",\"p4\"],\"actual\":[\"p2\",\"p4\"],\"pass\":true}; {\"query\":{\"selector\":{\"value\":{\"$nin\":[\"blue\",2]}}},\"expected\":[\"p0\",\"p1\",\"p3\",\"p5\",\"p6\",\"p7\"],\"actual\":[\"p0\",\"p1\",\"p3\",\"p5\",\"p6\",\"p7\"],\"pass\":true}"
+        },
+        {
+          "name": "sort-case-accents-mixed-types",
+          "pass": true,
+          "detail": "{\"query\":{\"selector\":{},\"sort\":[{\"name\":\"asc\"}]},\"expected\":[\"p1\",\"p4\",\"p0\",\"p3\",\"p5\",\"p6\",\"p7\",\"p2\"],\"actual\":[\"p1\",\"p4\",\"p0\",\"p3\",\"p5\",\"p6\",\"p7\",\"p2\"],\"pass\":true}; {\"query\":{\"selector\":{},\"sort\":[{\"value\":\"asc\"}]},\"expected\":[\"p1\",\"p0\",\"p4\",\"p6\",\"p7\",\"p5\",\"p2\",\"p3\"],\"actual\":[\"p1\",\"p0\",\"p4\",\"p6\",\"p7\",\"p5\",\"p2\",\"p3\"],\"pass\":true}"
+        }
+      ],
+      "beginRetries": 0,
+      "memory": {}
+    },
+    {
+      "engine": "worklet-filesystem",
+      "dir": "spike-2091/smoke/worklet-filesystem/spike-96cdf1ac-b2cb-4df7-ab1e-f99d3393ceae",
+      "db": "spike-96cdf1ac-b2cb-4df7-ab1e-f99d3393ceae",
+      "scenarios": [
+        {
+          "name": "bulk-write",
+          "pass": true,
+          "detail": "insert/update/delete and conflict 409"
+        },
+        {
+          "name": "query-sort",
+          "pass": true,
+          "detail": "indexed and non-indexed sort"
+        },
+        {
+          "name": "count",
+          "pass": true,
+          "detail": "2 active documents"
+        },
+        {
+          "name": "find-by-id",
+          "pass": true,
+          "detail": "with and without deleted"
+        },
+        {
+          "name": "change-stream",
+          "pass": true,
+          "detail": "INSERT → UPDATE → DELETE with checkpoint"
+        },
+        {
+          "name": "attachments",
+          "pass": true,
+          "detail": "32 KB write/read/remove"
+        },
+        {
+          "name": "cleanup",
+          "pass": true,
+          "detail": "deleted document removed"
+        },
+        {
+          "name": "close-reopen",
+          "pass": true,
+          "detail": "2 documents persisted"
+        },
+        {
+          "name": "exists-explicit-null",
+          "pass": true,
+          "detail": "{\"query\":{\"selector\":{\"value\":{\"$exists\":false}}},\"expected\":[\"p1\"],\"actual\":[\"p1\"],\"pass\":true}; {\"query\":{\"selector\":{\"value\":{\"$exists\":true}}},\"expected\":[\"p0\",\"p2\",\"p3\",\"p4\",\"p5\",\"p6\",\"p7\"],\"actual\":[\"p0\",\"p2\",\"p3\",\"p4\",\"p5\",\"p6\",\"p7\"],\"pass\":true}"
+        },
+        {
+          "name": "in-nin-missing",
+          "pass": true,
+          "detail": "{\"query\":{\"selector\":{\"value\":{\"$in\":[\"blue\",2]}}},\"expected\":[\"p2\",\"p4\"],\"actual\":[\"p2\",\"p4\"],\"pass\":true}; {\"query\":{\"selector\":{\"value\":{\"$nin\":[\"blue\",2]}}},\"expected\":[\"p0\",\"p1\",\"p3\",\"p5\",\"p6\",\"p7\"],\"actual\":[\"p0\",\"p1\",\"p3\",\"p5\",\"p6\",\"p7\"],\"pass\":true}"
+        },
+        {
+          "name": "sort-case-accents-mixed-types",
+          "pass": true,
+          "detail": "{\"query\":{\"selector\":{},\"sort\":[{\"name\":\"asc\"}]},\"expected\":[\"p1\",\"p4\",\"p0\",\"p3\",\"p5\",\"p6\",\"p7\",\"p2\"],\"actual\":[\"p1\",\"p4\",\"p0\",\"p3\",\"p5\",\"p6\",\"p7\",\"p2\"],\"pass\":true}; {\"query\":{\"selector\":{},\"sort\":[{\"value\":\"asc\"}]},\"expected\":[\"p1\",\"p0\",\"p4\",\"p6\",\"p7\",\"p5\",\"p2\",\"p3\"],\"actual\":[\"p1\",\"p0\",\"p4\",\"p6\",\"p7\",\"p5\",\"p2\",\"p3\"],\"pass\":true}"
+        }
+      ],
+      "beginRetries": 0,
+      "memory": {}
+    },
+    {
+      "engine": "expo-sqlite",
+      "dir": "spike-2091/smoke/expo-sqlite/spike-136d6380-efbe-4083-aeb3-58f7a3ac92af",
+      "db": "spike-136d6380-efbe-4083-aeb3-58f7a3ac92af",
+      "scenarios": [
+        {
+          "name": "bulk-write",
+          "pass": true,
+          "detail": "insert/update/delete and conflict 409"
+        },
+        {
+          "name": "query-sort",
+          "pass": true,
+          "detail": "indexed and non-indexed sort"
+        },
+        {
+          "name": "count",
+          "pass": true,
+          "detail": "2 active documents"
+        },
+        {
+          "name": "find-by-id",
+          "pass": true,
+          "detail": "with and without deleted"
+        },
+        {
+          "name": "change-stream",
+          "pass": true,
+          "detail": "INSERT → UPDATE → DELETE with checkpoint"
+        },
+        {
+          "name": "attachments",
+          "pass": true,
+          "detail": "32 KB write/read/remove"
+        },
+        {
+          "name": "cleanup",
+          "pass": true,
+          "detail": "deleted document removed"
+        },
+        {
+          "name": "close-reopen",
+          "pass": true,
+          "detail": "2 documents persisted"
+        },
+        {
+          "name": "exists-explicit-null",
+          "pass": false,
+          "detail": "{\"query\":{\"selector\":{\"value\":{\"$exists\":false}}},\"expected\":[\"p1\"],\"actual\":[\"p0\",\"p1\"],\"pass\":false}; {\"query\":{\"selector\":{\"value\":{\"$exists\":true}}},\"expected\":[\"p0\",\"p2\",\"p3\",\"p4\",\"p5\",\"p6\",\"p7\"],\"actual\":[\"p2\",\"p3\",\"p4\",\"p5\",\"p6\",\"p7\"],\"pass\":false}"
+        },
+        {
+          "name": "in-nin-missing",
+          "pass": false,
+          "detail": "{\"query\":{\"selector\":{\"value\":{\"$in\":[\"blue\",2]}}},\"expected\":[\"p2\",\"p4\"],\"actual\":[\"p2\",\"p4\"],\"pass\":true}; {\"query\":{\"selector\":{\"value\":{\"$nin\":[\"blue\",2]}}},\"expected\":[\"p0\",\"p1\",\"p3\",\"p5\",\"p6\",\"p7\"],\"actual\":[\"p3\",\"p5\",\"p6\",\"p7\"],\"pass\":false}"
+        },
+        {
+          "name": "sort-case-accents-mixed-types",
+          "pass": false,
+          "detail": "{\"query\":{\"selector\":{},\"sort\":[{\"name\":\"asc\"}]},\"expected\":[\"p1\",\"p4\",\"p0\",\"p3\",\"p5\",\"p6\",\"p7\",\"p2\"],\"actual\":[\"p1\",\"p4\",\"p0\",\"p3\",\"p5\",\"p6\",\"p7\",\"p2\"],\"pass\":true}; {\"query\":{\"selector\":{},\"sort\":[{\"value\":\"asc\"}]},\"expected\":[\"p1\",\"p0\",\"p4\",\"p6\",\"p7\",\"p5\",\"p2\",\"p3\"],\"actual\":[\"p0\",\"p1\",\"p4\",\"p6\",\"p7\",\"p5\",\"p2\",\"p3\"],\"pass\":false}"
+        }
+      ],
+      "wal": "wal",
+      "sqlite": "3.50.3",
+      "beginRetries": 0,
+      "memory": {}
+    }
+  ],
+  "trials": []
+}

@@ -10,40 +10,38 @@ import { cn } from '../lib/utils';
 /**
  *
  */
-const buttonVariants = cva(
-	'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 rounded-full p-2',
-	{
-		variants: {
-			variant: {
-				default: 'web:hover:bg-accent/80',
-				primary: 'web:hover:bg-primary/15',
-				muted: 'web:hover:bg-muted/15',
-				destructive: 'web:hover:bg-destructive/15',
-				secondary: 'web:hover:bg-secondary/15',
-				success: 'web:hover:bg-success/15',
-			},
-			size: {
-				default: '',
-				xs: 'p-1',
-				sm: 'p-1',
-				lg: '',
-				xl: '',
-				'2xl': '',
-				'3xl': '',
-				'4xl': '',
-			},
+const buttonVariants = cva('items-center justify-center rounded-lg', {
+	variants: {
+		variant: {
+			default: 'web:hover:bg-muted active:bg-muted',
+			primary: 'web:hover:bg-primary/15 active:bg-primary/15',
+			muted: 'web:hover:bg-muted/15 active:bg-muted/15',
+			destructive: 'web:hover:bg-destructive/15 active:bg-destructive/15',
+			secondary: 'web:hover:bg-secondary/15 active:bg-secondary/15',
+			success: 'web:hover:bg-success/15 active:bg-success/15',
 		},
-		defaultVariants: {
-			variant: 'default',
-			size: 'default',
+		size: {
+			default: 'size-ctl',
+			xs: 'size-6',
+			sm: 'size-8',
+			lg: 'size-ctl',
+			xl: 'size-ctl',
+			'2xl': 'size-ctl',
+			'3xl': 'size-ctl',
+			'4xl': 'size-ctl',
 		},
-	}
-);
+	},
+	defaultVariants: {
+		variant: 'default',
+		size: 'default',
+	},
+});
 
 type ButtonProps = PressableProps &
 	VariantProps<typeof buttonVariants> & {
 		name: IconName;
 		loading?: boolean;
+		on?: boolean;
 		iconClassName?: string;
 		disableHaptics?: boolean;
 		className?: string;
@@ -56,6 +54,7 @@ function IconButton({
 	variant,
 	size,
 	loading,
+	on,
 	disableHaptics = false,
 	onPress,
 	...props
@@ -74,9 +73,10 @@ function IconButton({
 	return (
 		<Pressable
 			className={cn(
-				props.disabled && 'web:pointer-events-none opacity-50',
+				props.disabled && 'web:pointer-events-none opacity-45',
 				buttonVariants({ variant, size, className })
 			)}
+			hitSlop={size === 'sm' ? 8 : size === 'xs' ? 12 : undefined}
 			role="button"
 			onPress={handlePress}
 			{...props}
@@ -89,7 +89,11 @@ function IconButton({
 				variant={variant}
 				size={size}
 				loading={loading}
-				className={cn(className, iconClassName)}
+				className={cn(
+					(!variant || variant === 'default') && 'text-muted-foreground',
+					on && 'text-primary',
+					iconClassName
+				)}
 				pointerEvents="none"
 			/>
 		</Pressable>

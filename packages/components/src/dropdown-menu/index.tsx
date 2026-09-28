@@ -1,14 +1,21 @@
 import * as React from 'react';
-import { Platform, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleProp, Text, View, ViewStyle } from 'react-native';
 
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { DropdownMenuItem } from './item';
+import { SHEET_LABEL_TEXT, SHEET_ROW_ROLES, SheetContext, useMenuSheet } from './sheet-context';
+import { useIsPhone } from '../lib/device';
 import { Icon } from '../icon';
-import { OVERLAY_FADE } from '../lib/motion';
+import {
+	OVERLAY_MOTION,
+	OVERLAY_PANEL,
+	type OverlayScrimProps,
+	OverlaySheetPanel,
+	OverlayShell,
+} from '../lib/overlay';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext, Text as ThemedText } from '../text';
 
 import type { TextProps } from '../text';
 
@@ -20,13 +27,65 @@ const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 
 const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
 
-const DropdownMenuSub = DropdownMenuPrimitive.Sub;
+function DropdownMenuSub(props: DropdownMenuPrimitive.SubProps) {
+	return useMenuSheet() ? <>{props.children}</> : <DropdownMenuPrimitive.Sub {...props} />;
+}
 
-const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
+const RadioSheetContext = React.createContext<DropdownMenuPrimitive.RadioGroupProps | null>(null);
+function DropdownMenuRadioGroup(props: DropdownMenuPrimitive.RadioGroupProps) {
+	const sheet = useMenuSheet();
+	if (!sheet) return <DropdownMenuPrimitive.RadioGroup {...props} />;
+	// The sheet's rows read the value from context; the container is a plain View.
+	const { value: _value, onValueChange: _onValueChange, ...rest } = props;
+	return (
+		<RadioSheetContext.Provider value={props}>
+			<View {...rest} />
+		</RadioSheetContext.Provider>
+	);
+}
 
 const useRootContext = DropdownMenuPrimitive.useRootContext;
 
-function DropdownMenuSubTrigger({
+// The scrim must keep one component identity across renders (on web it wraps the menu, so a
+// new type remounts it and replays the entrance); the caller's overlay props reach it here.
+const OverlayPropsContext = React.createContext<{
+	className?: string;
+	style?: StyleProp<ViewStyle>;
+}>({});
+function MenuScrim(p: OverlayScrimProps) {
+	const overlay = React.useContext(OverlayPropsContext);
+	return (
+		<DropdownMenuPrimitive.Overlay
+			{...p}
+			className={cn(overlay.className, p.className)}
+			style={[p.style, overlay.style]}
+		/>
+	);
+}
+
+/** Text-only children (a string, a number, an interpolation's array of them) need a Text. */
+function isTextChildren(children: React.ReactNode): boolean {
+	// toArray drops a conditional's false, null and undefined, so `{flag && <Icon />}` beside a
+	// string still reads as text when the flag is off.
+	return React.Children.toArray(children).every(
+		(part) => typeof part === 'string' || typeof part === 'number'
+	);
+}
+
+function DropdownMenuSubTrigger(props: React.ComponentProps<typeof AnchoredSubTrigger>) {
+	return useMenuSheet() ? (
+		<DropdownMenuLabel inset={props.inset} testID={props.testID} className={props.className}>
+			{isTextChildren(props.children) ? (
+				props.children
+			) : (
+				<View className="flex-row items-center gap-2">{props.children}</View>
+			)}
+		</DropdownMenuLabel>
+	) : (
+		<AnchoredSubTrigger {...props} />
+	);
+}
+function AnchoredSubTrigger({
 	className,
 	inset,
 	children,
@@ -36,13 +95,12 @@ function DropdownMenuSubTrigger({
 	children?: React.ReactNode;
 }) {
 	const { open } = DropdownMenuPrimitive.useSubContext();
-	// const Icon = Platform.OS === 'web' ? ChevronRight : open ? ChevronUp : ChevronDown;
 	return (
-		<TextClassContext.Provider value={cn('select-none', open && 'native:text-accent-foreground')}>
+		<TextClassContext.Provider value={cn('text-foreground text-base select-none')}>
 			<DropdownMenuPrimitive.SubTrigger
 				className={cn(
-					'web:cursor-default web:select-none web:focus:bg-accent web:hover:bg-accent active:bg-accent web:outline-none flex flex-row items-center gap-2 rounded-sm px-2 py-1.5',
-					open && 'bg-accent',
+					'web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-row items-center gap-2 rounded-md px-2.5 py-1.5',
+					open && 'bg-muted',
 					inset && 'pl-8',
 					className
 				)}
@@ -57,15 +115,23 @@ function DropdownMenuSubTrigger({
 	);
 }
 
-function DropdownMenuSubContent({ className, ...props }: DropdownMenuPrimitive.SubContentProps) {
+function DropdownMenuSubContent(props: DropdownMenuPrimitive.SubContentProps) {
+	return useMenuSheet() ? (
+		<View className={props.className} testID={props.testID}>
+			{props.children as React.ReactNode}
+		</View>
+	) : (
+		<AnchoredSubContent {...props} />
+	);
+}
+function AnchoredSubContent({ className, ...props }: DropdownMenuPrimitive.SubContentProps) {
 	const { open } = DropdownMenuPrimitive.useSubContext();
 	return (
 		<DropdownMenuPrimitive.SubContent
 			className={cn(
-				'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 border-border bg-popover z-50 mt-1 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
-				open
-					? 'web:animate-in web:fade-in-0 web:zoom-in-95'
-					: 'web:animate-out web:fade-out-0 web:zoom-out',
+				OVERLAY_PANEL.anchored,
+				'z-50 mt-1 min-w-50 overflow-hidden p-1.5',
+				open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
 				className
 			)}
 			{...props}
@@ -78,49 +144,62 @@ function DropdownMenuContent({
 	overlayClassName,
 	overlayStyle,
 	portalHost,
+	inline,
 	...props
 }: DropdownMenuPrimitive.ContentProps & {
 	overlayStyle?: StyleProp<ViewStyle>;
 	overlayClassName?: string;
 	portalHost?: string;
+	inline?: boolean;
 }) {
-	const { open } = DropdownMenuPrimitive.useRootContext();
-	return (
-		<DropdownMenuPrimitive.Portal hostName={portalHost}>
-			<DropdownMenuPrimitive.Overlay
-				style={
-					overlayStyle
-						? StyleSheet.flatten([
-								Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined,
-								overlayStyle,
-							] as ViewStyle[])
-						: Platform.OS !== 'web'
-							? StyleSheet.absoluteFill
-							: undefined
-				}
-				className={overlayClassName}
+	const { open, onOpenChange } = DropdownMenuPrimitive.useRootContext();
+	const phone = useIsPhone();
+	const overlay = React.useMemo(
+		() => ({ className: overlayClassName, style: overlayStyle }),
+		[overlayClassName, overlayStyle]
+	);
+	// Native full-bleed accessibility wrapper: see lib/overlay.tsx.
+	const shell = (
+		<OverlayPropsContext.Provider value={overlay}>
+			<OverlayShell
+				presentation={phone ? 'bottom' : 'anchored'}
+				open={open}
+				Scrim={MenuScrim}
+				testID={props.testID}
+				onDismiss={phone ? () => onOpenChange(false) : undefined}
 			>
-				{/* Full-bleed + box-none: an unsized wrapper is width×0, and Android
-				    a11y prunes out-of-bounds children — see popover/index.tsx. */}
-				<Animated.View
-					entering={Platform.OS !== 'web' ? FadeIn.duration(OVERLAY_FADE) : undefined}
-					exiting={Platform.OS !== 'web' ? FadeOut.duration(OVERLAY_FADE) : undefined}
-					pointerEvents="box-none"
-					style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-				>
+				{phone ? (
+					<SheetContext.Provider value={{ close: () => onOpenChange(false) }}>
+						<OverlaySheetPanel testID={props.testID} className={className} style={props.style}>
+							{/* A long menu (the user menu's stores) scrolls inside the bounded panel; the rows
+							    sit in a menu container, eight points apart (the design rule's target gap). */}
+							<ScrollView>
+								<View role="menu" className="gap-2">
+									{props.children as React.ReactNode}
+								</View>
+							</ScrollView>
+						</OverlaySheetPanel>
+					</SheetContext.Provider>
+				) : (
 					<DropdownMenuPrimitive.Content
 						className={cn(
-							'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 border-border bg-popover z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
-							open
-								? 'web:animate-in web:fade-in-0 web:zoom-in-95'
-								: 'web:animate-out web:fade-out-0 web:zoom-out-95',
+							OVERLAY_PANEL.anchored,
+							'z-50 min-w-50 overflow-hidden p-1.5',
+							open ? OVERLAY_MOTION.anchored.enter : OVERLAY_MOTION.anchored.exit,
 							className
 						)}
 						{...props}
 					/>
-				</Animated.View>
-			</DropdownMenuPrimitive.Overlay>
-		</DropdownMenuPrimitive.Portal>
+				)}
+			</OverlayShell>
+		</OverlayPropsContext.Provider>
+	);
+	return inline ? (
+		phone && !open ? null : (
+			shell
+		)
+	) : (
+		<DropdownMenuPrimitive.Portal hostName={portalHost}>{shell}</DropdownMenuPrimitive.Portal>
 	);
 }
 
@@ -130,20 +209,52 @@ function DropdownMenuCheckboxItem({
 	checked,
 	...props
 }: DropdownMenuPrimitive.CheckboxItemProps) {
+	const sheet = useMenuSheet();
+	if (sheet)
+		return (
+			<Pressable
+				role={SHEET_ROW_ROLES.checkbox}
+				aria-checked={checked}
+				disabled={props.disabled}
+				testID={props.testID}
+				className={cn(
+					'active:bg-muted min-h-row w-full flex-row items-center gap-2 rounded-md px-2 py-1.5',
+					props.disabled && 'web:pointer-events-none opacity-45',
+					className
+				)}
+				onPress={(e) => {
+					props.onPress?.(e);
+					props.onCheckedChange?.(!checked);
+					if (props.closeOnPress !== false) sheet.close();
+				}}
+			>
+				{/* The row is the control: a presentational mark in the checkbox's skin, not a
+				    second focusable Checkbox inside a menu item (CodeRabbit, #2215). */}
+				<View
+					aria-hidden
+					className={cn(
+						'border-border bg-card size-5 items-center justify-center rounded-sm border',
+						checked && 'bg-primary border-primary'
+					)}
+				>
+					{checked && <Icon name="check" className="text-primary-foreground size-3" />}
+				</View>
+				<>{children}</>
+			</Pressable>
+		);
 	return (
 		<DropdownMenuPrimitive.CheckboxItem
 			className={cn(
-				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
-				props.disabled && 'web:pointer-events-none opacity-50',
+				'web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-row items-center gap-2 rounded-md py-1.5 pr-2 pl-8',
+				props.disabled && 'web:pointer-events-none opacity-45',
 				className
 			)}
 			checked={checked}
 			{...props}
 		>
-			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+			<View className="absolute left-2 flex size-4 items-center justify-center">
 				<DropdownMenuPrimitive.ItemIndicator>
-					<Icon name="check" />
-					{/* <Check size={14} strokeWidth={3} className="text-foreground" /> */}
+					<Icon name="check" className="text-primary" />
 				</DropdownMenuPrimitive.ItemIndicator>
 			</View>
 			<>{children}</>
@@ -156,18 +267,44 @@ function DropdownMenuRadioItem({
 	children,
 	...props
 }: DropdownMenuPrimitive.RadioItemProps) {
+	const sheet = useMenuSheet();
+	const radio = React.useContext(RadioSheetContext);
+	if (sheet)
+		return (
+			<Pressable
+				role={SHEET_ROW_ROLES.radio}
+				aria-checked={radio?.value === props.value}
+				disabled={props.disabled}
+				testID={props.testID}
+				className={cn(
+					'active:bg-muted min-h-row w-full flex-row items-center gap-2 rounded-md px-2 py-1.5',
+					props.disabled && 'web:pointer-events-none opacity-45',
+					className
+				)}
+				onPress={(e) => {
+					props.onPress?.(e);
+					radio?.onValueChange(props.value);
+					if (props.closeOnPress !== false) sheet.close();
+				}}
+			>
+				<View className="size-4 items-center justify-center">
+					{radio?.value === props.value && <View className="bg-primary h-2 w-2 rounded-full" />}
+				</View>
+				<>{children}</>
+			</Pressable>
+		);
 	return (
 		<DropdownMenuPrimitive.RadioItem
 			className={cn(
-				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
-				props.disabled && 'web:pointer-events-none opacity-50',
+				'web:outline-none web:cursor-default web:focus:bg-muted web:hover:bg-muted active:bg-muted min-h-row relative flex flex-row items-center gap-2 rounded-md py-1.5 pr-2 pl-8',
+				props.disabled && 'web:pointer-events-none opacity-45',
 				className
 			)}
 			{...props}
 		>
-			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+			<View className="absolute left-2 flex size-4 items-center justify-center">
 				<DropdownMenuPrimitive.ItemIndicator>
-					<View className="bg-foreground h-2 w-2 rounded-full" />
+					<View className="bg-primary h-2 w-2 rounded-full" />
 				</DropdownMenuPrimitive.ItemIndicator>
 			</View>
 			<>{children}</>
@@ -180,10 +317,27 @@ function DropdownMenuLabel({
 	inset,
 	...props
 }: DropdownMenuPrimitive.LabelProps & { inset?: boolean }) {
+	if (useMenuSheet())
+		return (
+			<View
+				testID={props.testID}
+				className={cn('h-9 justify-center px-2', inset && 'pl-8', className)}
+			>
+				{/* A composed child (an icon and a Text) reads the label style from context; RN
+				    text styles do not pass through a View (CodeRabbit, #2215). */}
+				<TextClassContext.Provider value={SHEET_LABEL_TEXT}>
+					{isTextChildren(props.children) ? (
+						<ThemedText className={SHEET_LABEL_TEXT}>{props.children}</ThemedText>
+					) : (
+						props.children
+					)}
+				</TextClassContext.Provider>
+			</View>
+		);
 	return (
 		<DropdownMenuPrimitive.Label
 			className={cn(
-				'text-foreground web:cursor-default px-2 py-1.5 text-base font-semibold',
+				'text-foreground web:cursor-default px-2.5 py-1.5 text-sm font-semibold',
 				inset && 'pl-8',
 				className
 			)}
@@ -193,21 +347,18 @@ function DropdownMenuLabel({
 }
 
 function DropdownMenuSeparator({ className, ...props }: DropdownMenuPrimitive.SeparatorProps) {
+	if (useMenuSheet())
+		return <View {...props} className={cn('bg-border -mx-2 my-1 h-px', className)} />;
 	return (
 		<DropdownMenuPrimitive.Separator
-			className={cn('bg-border -mx-1 my-1 h-px', className)}
+			className={cn('bg-border -mx-1.5 my-1 h-px', className)}
 			{...props}
 		/>
 	);
 }
 
 function DropdownMenuShortcut({ className, ...props }: TextProps) {
-	return (
-		<Text
-			className={cn('text-muted-foreground ml-auto text-xs tracking-widest', className)}
-			{...props}
-		/>
-	);
+	return <Text className={cn('text-muted-foreground ml-auto text-sm', className)} {...props} />;
 }
 
 export {

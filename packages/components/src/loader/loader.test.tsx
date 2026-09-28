@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import * as React from 'react';
 
 import { render } from '@testing-library/react';
@@ -26,6 +28,11 @@ jest.mock(
 	{ virtual: true }
 );
 
+jest.mock('react-native', () => ({
+	View: ({ children, className }: React.PropsWithChildren<{ className?: string }>) =>
+		React.createElement('div', { className }, children),
+}));
+
 jest.mock('uniwind', () => ({
 	useCSSVariable: () => '#123456',
 }));
@@ -49,7 +56,7 @@ jest.mock('react-native-reanimated', () => ({
 			return React.createElement('div', { 'data-testid': 'loader-spin', className }, children);
 		},
 	},
-	Easing: { linear: 'mock-linear-easing' },
+	Easing: { linear: 'mock-linear-easing', bezier: () => (value: number) => value },
 	ReduceMotion: { Never: 'mock-reduce-motion-never', System: 'mock-reduce-motion-system' },
 	cancelAnimation: (...args: unknown[]) => cancelAnimationMock(...args),
 	useAnimatedStyle: (factory: () => object) => {
@@ -151,4 +158,13 @@ describe('Loader', () => {
 		const inlineStyle = animatedViewProps.at(-1)?.style;
 		expect(JSON.stringify(inlineStyle ?? {})).not.toMatch(/rotate/);
 	});
+});
+
+it('uses the muted foreground and the named spinner beat', () => {
+	const { container } = render(<Loader variant="muted" />);
+	expect(container.firstChild).toHaveClass('text-muted-foreground');
+	const source = readFileSync(`${__dirname}/index.tsx`, 'utf8');
+	expect(source).toMatch(/import \{ SPINNER \} from '\.\.\/lib\/motion'/);
+	expect(source).not.toContain('1000');
+	expect(source).not.toMatch(/duration:\s*\d/);
 });

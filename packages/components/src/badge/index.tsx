@@ -28,7 +28,7 @@ const badgeVariants = cva('items-center justify-center rounded-full', {
 	},
 });
 
-const badgeTextVariants = cva('font-semibold', {
+const badgeTextVariants = cva('font-bold tabular-nums', {
 	variants: {
 		variant: {
 			default: 'text-primary-foreground',
@@ -40,7 +40,7 @@ const badgeTextVariants = cva('font-semibold', {
 		},
 		size: {
 			default: 'text-xs',
-			sm: 'text-[10px]',
+			sm: 'text-2xs',
 			lg: 'text-sm',
 		},
 	},
@@ -89,7 +89,7 @@ export function Badge({
 
 	// Dot mode - just show a small indicator
 	if (dot) {
-		return <View className={cn('bg-destructive h-2.5 w-2.5 rounded-full', className)} {...props} />;
+		return <View className={cn('bg-destructive size-2.5 rounded-full', className)} {...props} />;
 	}
 
 	const displayCount = count && count > max ? `${max}+` : String(count);

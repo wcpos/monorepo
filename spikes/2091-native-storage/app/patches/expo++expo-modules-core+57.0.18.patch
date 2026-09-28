@@ -1,0 +1,356 @@
+# Spike-only Android backport of https://github.com/expo/expo/pull/50513.
+# Six production source files only; androidTest, cpp/tests, prebuilt and CHANGELOG omitted.
+# 57.0.18 adaptation: anchor SharedObjectIdConverter and NullableFrontendConverter
+# retention overrides to their classes; upstream offsets match adjacent converters
+# in this older header layout. Method bodies and the other five files are unchanged upstream.
+diff --git a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/JavaCallback.cpp b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/JavaCallback.cpp
+index 6faf42f..cf67c76 100644
+--- a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/JavaCallback.cpp
++++ b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/JavaCallback.cpp
+@@ -12,16 +12,19 @@ JavaCallback::CallbackContext::CallbackContext(
+   jsi::Runtime &rt,
+   std::weak_ptr<react::CallInvoker> jsCallInvokerHolder,
+   std::optional<jsi::Function> resolveHolder,
+-  std::optional<jsi::Function> rejectHolder
++  std::optional<jsi::Function> rejectHolder,
++  std::vector<jsi::Value> retainedValues
+ ) : react::LongLivedObject(rt),
+     rt(rt),
+     jsCallInvokerHolder(std::move(jsCallInvokerHolder)),
+     resolveHolder(std::move(resolveHolder)),
+-    rejectHolder(std::move(rejectHolder)) {}
++    rejectHolder(std::move(rejectHolder)),
++    retainedValues(std::move(retainedValues)) {}
+ 
+ void JavaCallback::CallbackContext::invalidate() {
+   resolveHolder.reset();
+   rejectHolder.reset();
++  retainedValues.clear();
+   allowRelease();
+ }
+ 
+diff --git a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/JavaCallback.h b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/JavaCallback.h
+index 4b68820..c916000 100644
+--- a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/JavaCallback.h
++++ b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/JavaCallback.h
+@@ -32,13 +32,18 @@ public:
+       jsi::Runtime &rt,
+       std::weak_ptr<react::CallInvoker> jsCallInvokerHolder,
+       std::optional<jsi::Function> resolveHolder,
+-      std::optional<jsi::Function> rejectHolder
++      std::optional<jsi::Function> rejectHolder,
++      std::vector<jsi::Value> retainedValues = {}
+     );
+ 
+     jsi::Runtime &rt;
+     std::weak_ptr<react::CallInvoker> jsCallInvokerHolder;
+     std::optional<jsi::Function> resolveHolder;
+     std::optional<jsi::Function> rejectHolder;
++    /**
++     * JS values that have to stay alive until the promise is settled.
++     */
++    std::vector<jsi::Value> retainedValues;
+ 
+     void invalidate();
+   };
+diff --git a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/MethodMetadata.cpp b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/MethodMetadata.cpp
+index d2f9fc8..e1620c1 100644
+--- a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/MethodMetadata.cpp
++++ b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/MethodMetadata.cpp
+@@ -20,7 +20,8 @@ namespace expo {
+ jni::local_ref<JavaCallback::JavaPart> createJavaCallback(
+   jsi::Function &&resolveFunction,
+   jsi::Function &&rejectFunction,
+-  jsi::Runtime &rt
++  jsi::Runtime &rt,
++  std::vector<jsi::Value> &&retainedValues
+ ) {
+   JSIContext *jsiContext = getJSIContext(rt);
+   std::shared_ptr<react::CallInvoker> jsInvoker = jsiContext->runtimeHolder->jsInvoker;
+@@ -29,7 +30,8 @@ jni::local_ref<JavaCallback::JavaPart> createJavaCallback(
+     rt,
+     std::move(jsInvoker),
+     std::move(resolveFunction),
+-    std::move(rejectFunction)
++    std::move(rejectFunction),
++    std::move(retainedValues)
+   );
+ 
+   facebook::react::LongLivedObjectCollection::get(rt).add(callbackContext);
+@@ -105,6 +107,11 @@ MethodMetadata::MethodMetadata(
+   jni::global_ref<jobject> &&jBodyReference
+ ) : info(std::move(info)),
+     jBodyReference(std::move(jBodyReference)) {
++  for (size_t index = 0; index < this->info.argTypes.size(); index++) {
++    if (this->info.argTypes[index]->converter->retainsJSValue()) {
++      retainedArgIndices.push_back(index);
++    }
++  }
+ }
+ 
+ std::shared_ptr<jsi::Function> MethodMetadata::toJSFunction(
+@@ -230,12 +237,18 @@ jsi::Function MethodMetadata::toAsyncFunction(
+         auto globalConvertedArgs = (jobjectArray) env->NewGlobalRef(convertedArgs);
+         env->DeleteLocalRef(convertedArgs);
+ 
++        std::shared_ptr<std::vector<jsi::Value>> retainedValues = nullptr;
++        if (!thisPtr->retainedArgIndices.empty()) {
++          retainedValues = std::make_shared<std::vector<jsi::Value>>(
++            thisPtr->retainArguments(rt, thisValue, args, count)
++          );
++        }
++
+         // Creates a JSI promise
+-        jsi::Value promise = Promise.callAsConstructor(
++        return Promise.callAsConstructor(
+           rt,
+-          thisPtr->createPromiseBody(rt, globalConvertedArgs)
++          thisPtr->createPromiseBody(rt, globalConvertedArgs, std::move(retainedValues))
+         );
+-        return promise;
+       } catch (jni::JniException &jniException) {
+         jni::local_ref<jni::JThrowable> unboxedThrowable = jniException.getThrowable();
+         if (!unboxedThrowable->isInstanceOf(CodedException::javaClassLocal())) {
+@@ -246,7 +259,7 @@ jsi::Function MethodMetadata::toAsyncFunction(
+         auto code = codedException->getCode();
+         auto message = codedException->getLocalizedMessage().value_or("");
+ 
+-        jsi::Value promise = Promise.callAsConstructor(
++        return Promise.callAsConstructor(
+           rt,
+           jsi::Function::createFromHostFunction(
+             rt,
+@@ -275,22 +288,49 @@ jsi::Function MethodMetadata::toAsyncFunction(
+             }
+           )
+         );
+-
+-        return promise;
+       }
+     }
+   );
+ }
+ 
++std::vector<jsi::Value> MethodMetadata::retainArguments(
++  jsi::Runtime &rt,
++  const jsi::Value &thisValue,
++  const jsi::Value *args,
++  size_t count
++) const {
++  std::vector<jsi::Value> retained;
++  retained.reserve(retainedArgIndices.size());
++
++  // With an owner, `info.argTypes[0]` describes the receiver and the JS arguments start at index 1.
++  const size_t argsOffset = info.takesOwner ? 1 : 0;
++  for (size_t index : retainedArgIndices) {
++    if (info.takesOwner && index == 0) {
++      if (thisValue.isObject()) {
++        retained.emplace_back(rt, thisValue);
++      }
++      continue;
++    }
++
++    const size_t argIndex = index - argsOffset;
++    if (argIndex < count && args[argIndex].isObject()) {
++      retained.emplace_back(rt, args[argIndex]);
++    }
++  }
++
++  return retained;
++}
++
+ jsi::Function MethodMetadata::createPromiseBody(
+   jsi::Runtime &runtime,
+-  jobjectArray globalArgs
++  jobjectArray globalArgs,
++  std::shared_ptr<std::vector<jsi::Value>> retainedValues
+ ) {
+   return jsi::Function::createFromHostFunction(
+     runtime,
+     getJSIContext(runtime)->jsRegistry->getPropNameID(runtime, "promiseFn"),
+     2,
+-    [this, globalArgs](
++    [this, globalArgs, retainedValues = std::move(retainedValues)](
+       jsi::Runtime &rt,
+       const jsi::Value &thisVal,
+       const jsi::Value *promiseConstructorArgs,
+@@ -303,10 +343,12 @@ jsi::Function MethodMetadata::createPromiseBody(
+       jsi::Function resolveJSIFn = promiseConstructorArgs[0].getObject(rt).getFunction(rt);
+       jsi::Function rejectJSIFn = promiseConstructorArgs[1].getObject(rt).getFunction(rt);
+ 
++      // The promise constructor calls this body synchronously, so the retained values are moved out once.
+       jobject javaCallback = createJavaCallback(
+         std::move(resolveJSIFn),
+         std::move(rejectJSIFn),
+-        rt
++        rt,
++        retainedValues != nullptr ? std::move(*retainedValues) : std::vector<jsi::Value>()
+       ).release();
+ 
+       JNIEnv *env = jni::Environment::current();
+diff --git a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/MethodMetadata.h b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/MethodMetadata.h
+index a2727dc..e77b8a3 100644
+--- a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/MethodMetadata.h
++++ b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/MethodMetadata.h
+@@ -107,9 +107,27 @@ private:
+ 
+   jsi::Function createPromiseBody(
+     jsi::Runtime &runtime,
+-    jobjectArray globalArgs
++    jobjectArray globalArgs,
++    std::shared_ptr<std::vector<jsi::Value>> retainedValues
+   );
+ 
++  /**
++   * Indexes into `info.argTypes` of the arguments whose JS values have to stay alive until an async call
++   * is settled, computed once from the converters. When the receiver is taken, index 0 is the receiver.
++   */
++  std::vector<size_t> retainedArgIndices;
++
++  /**
++   * Copies the JS values of the arguments listed in `retainedArgIndices`.
++   * They are kept alive until the returned promise is settled.
++   */
++  std::vector<jsi::Value> retainArguments(
++    jsi::Runtime &rt,
++    const jsi::Value &thisValue,
++    const jsi::Value *args,
++    size_t count
++  ) const;
++
+   jobjectArray convertJSIArgsToJNI(
+     JNIEnv *env,
+     jsi::Runtime &rt,
+diff --git a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/types/FrontendConverter.h b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/types/FrontendConverter.h
+index 8a01f14..8661654 100644
+--- a/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/types/FrontendConverter.h
++++ b/node_modules/expo/node_modules/expo-modules-core/android/src/main/cpp/types/FrontendConverter.h
+@@ -2,6 +2,8 @@
+ 
+ #pragma once
+ 
++#include <algorithm>
++
+ #include "../ExpoHeader.pch"
+ #include "CppType.h"
+ 
+@@ -41,6 +43,16 @@ public:
+     JNIEnv *env,
+     const jsi::Value &value
+   ) const = 0;
++
++  /**
++   * Whether the JS value has to stay alive until an async call that received it is settled.
++   * It's true for converters that pass only a reference to Kotlin, like the shared object id.
++   * The native body works with the object behind that reference, so the JS value must not be
++   * garbage collected before the call ends. Composite converters ask their element converters.
++   */
++  virtual bool retainsJSValue() const {
++    return false;
++  }
+ };
+ 
+ /**
+@@ -276,6 +288,9 @@ public:
+   ) const override;
+ 
+   bool canConvert(jsi::Runtime &rt, const jsi::Value &value) const override;
++  bool retainsJSValue() const override {
++    return true;
++  }
+ };
+ 
+ /**
+@@ -312,6 +327,12 @@ public:
+     const jsi::Value &value
+   ) const override;
+ 
++  bool retainsJSValue() const override {
++    return std::any_of(converters.begin(), converters.end(), [](const auto &converter) {
++      return converter->retainsJSValue();
++    });
++  }
++
+ private:
+   std::vector<std::shared_ptr<FrontendConverter>> converters;
+ };
+@@ -365,6 +386,10 @@ public:
+ 
+   bool canConvert(jsi::Runtime &rt, const jsi::Value &value) const override;
+ 
++  bool retainsJSValue() const override {
++    return parameterConverter->retainsJSValue();
++  }
++
+ private:
+   /**
+    * A string representation of desired Java type.
+@@ -396,6 +421,10 @@ public:
+   ) const override;
+ 
+   bool canConvert(jsi::Runtime &rt, const jsi::Value &value) const override;
++
++  bool retainsJSValue() const override {
++    return parameterConverter->retainsJSValue();
++  }
+ private:
+   /**
+    * Converter used to convert array elements.
+@@ -425,6 +454,10 @@ public:
+   ) const override;
+ 
+   bool canConvert(jsi::Runtime &rt, const jsi::Value &value) const override;
++
++  bool retainsJSValue() const override {
++    return valueConverter->retainsJSValue();
++  }
+ private:
+   /**
+    * Converter used to convert values.
+@@ -464,6 +497,10 @@ public:
+   ) const override;
+ 
+   bool canConvert(jsi::Runtime &rt, const jsi::Value &value) const override;
++
++  bool retainsJSValue() const override {
++    return parameterConverter->retainsJSValue();
++  }
+ private:
+   std::shared_ptr<FrontendConverter> parameterConverter;
+ };
+@@ -481,6 +518,10 @@ public:
+   ) const override;
+ 
+   bool canConvert(jsi::Runtime &rt, const jsi::Value &value) const override;
++
++  bool retainsJSValue() const override {
++    return parameterConverter->retainsJSValue();
++  }
+ private:
+   std::shared_ptr<FrontendConverter> parameterConverter;
+ };
+diff --git a/node_modules/expo/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JNIDeallocator.kt b/node_modules/expo/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JNIDeallocator.kt
+index 5f19389..1381f38 100644
+--- a/node_modules/expo/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JNIDeallocator.kt
++++ b/node_modules/expo/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JNIDeallocator.kt
+@@ -58,6 +58,20 @@ class JNIDeallocator(shouldCreateDestructorThread: Boolean = true) : AutoCloseab
+     destructorThread?.interrupt()
+   }
+ 
++  /**
++   * Deallocates the hybrid objects whose Java wrappers were already garbage collected,
++   * without waiting for the destructor thread. Returns how many objects were deallocated.
++   */
++  internal fun processPendingReferences(): Int = synchronized(this) {
++    var processed = 0
++    while (true) {
++      val current = referenceQueue.poll() ?: break
++      destructorMap.remove(current)?.resetNative()
++      processed++
++    }
++    processed
++  }
++
+   /**
+    * Returns references to all hybrid objects that contain references to the jsi value
+    * and are present in the memory.

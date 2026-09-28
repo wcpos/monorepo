@@ -14,13 +14,13 @@ jest.mock('uniwind', () => ({
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'Slot' }));
 jest.resetModules();
 
-it('renders one real story in six scoped cells with floored scale values', () => {
+it('renders every text story in six scoped cells with floored scale values', () => {
 	let renderer: ReactTestRenderer;
 	act(() => {
 		renderer = create(<GalleryCells component="text" stories={stories} />);
 	});
 	const scopes = renderer!.root.findAllByType(ScopedVariables);
-	expect(scopes).toHaveLength(6);
+	expect(scopes).toHaveLength(24);
 	const cases = [
 		['compact-coarse', 3.5, 13, 44, 44, 56, 6, 34],
 		['compact-fine', 3.5, 13, 40, 36, 56, 6, 34],
@@ -29,21 +29,69 @@ it('renders one real story in six scoped cells with floored scale values', () =>
 		['spacious-coarse', 5, 16, 52, 52, 80, 10, 48],
 		['spacious-fine', 5, 16, 52, 52, 80, 10, 48],
 	];
-	cases.forEach(([suffix, spacing, base, ctl, row, tile, radius, amt], index) => {
-		expect(scopes[index].props.variables).toEqual({
-			'--spacing': spacing,
-			'--text-base': base,
-			'--spacing-ctl': ctl,
-			'--spacing-row': row,
-			'--spacing-tile': tile,
-			'--radius': radius,
-			'--text-amt': amt,
-		});
-		expect(scopes[index].props.children.props.testID).toBe(`text--default--${suffix}`);
-		expect(scopes[index].props.children.props.dataSet).toEqual({
-			cellId: `text--default--${suffix}`,
+	['default', 'link', 'muted', 'small'].forEach((story, storyIndex) => {
+		cases.forEach(([suffix, spacing, base, ctl, row, tile, radius, amt], cellIndex) => {
+			const index = storyIndex * 6 + cellIndex;
+			expect(scopes[index].props.variables).toEqual({
+				'--spacing': spacing,
+				'--text-base': base,
+				'--spacing-ctl': ctl,
+				'--spacing-row': row,
+				'--spacing-tile': tile,
+				'--radius': radius,
+				'--text-amt': amt,
+			});
+			expect(scopes[index].props.children.props.testID).toBe(`text--${story}--${suffix}`);
+			expect(scopes[index].props.children.props.dataSet).toEqual({
+				cellId: `text--${story}--${suffix}`,
+			});
 		});
 	});
+	act(() => {
+		renderer!.unmount();
+	});
+});
+
+// An isolated story (an open overlay) is a link on the full page and the story alone on
+// its own `?cell=` page; both carry the cell id and the flag the shoot discovers.
+jest.mock('expo-router', () => ({
+	// A host element named Link keeps every prop, the href included, for the assertion below.
+	Link: (props: { href: unknown }) =>
+		jest.requireActual<typeof React>('react').createElement('Link', props),
+}));
+it('renders an isolated story as a link on the full page and mounts it only on its cell page', () => {
+	const isolated = [
+		{ id: 'open', isolated: true, render: () => <ScopedVariables variables={{}} /> },
+	];
+	let renderer: ReactTestRenderer;
+	act(() => {
+		renderer = create(<GalleryCells component="popover" stories={isolated} />);
+	});
+	const cells = renderer!.root.findAll(
+		(node) => node.props?.dataSet?.cellId === 'popover--open--regular-fine'
+	);
+	// The composite View and its host node both carry the props: one cell, two matches.
+	expect(cells.length).toBeGreaterThan(0);
+	expect(cells[0].props.dataSet).toEqual({
+		cellId: 'popover--open--regular-fine',
+		isolated: 'true',
+	});
+	expect(renderer!.root.findAllByType(ScopedVariables)).toHaveLength(0);
+	expect(
+		renderer!.root.findAllByType('Link' as never).map((link) => link.props.href)
+	).toContainEqual({
+		pathname: '/gallery/[component]',
+		params: { component: 'popover', cell: 'popover--open--regular-fine' },
+	});
+	act(() => {
+		renderer!.unmount();
+	});
+	act(() => {
+		renderer = create(
+			<GalleryCells component="popover" stories={isolated} cell="popover--open--regular-fine" />
+		);
+	});
+	expect(renderer!.root.findAllByType(ScopedVariables).length).toBeGreaterThan(0);
 	act(() => {
 		renderer!.unmount();
 	});

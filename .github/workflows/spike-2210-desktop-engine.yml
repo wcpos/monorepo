@@ -1,0 +1,52 @@
+name: Spike 2210 desktop engine
+# workflow_dispatch only resolves for files on the default branch. To re-run from a branch,
+# add a temporary `push: { branches: [<branch>] }` trigger (as runs 35327100216 and 35328362910 did).
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+      - run: bash spikes/2210-desktop-engine/run.sh --build-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spike-2210-bundles
+          include-hidden-files: true
+          path: spikes/2210-desktop-engine/.build/
+  bench-windows:
+    runs-on: windows-latest
+    needs: bundle
+    timeout-minutes: 120
+    env:
+      NODE_OPTIONS: --max-old-space-size=2048
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: spike-2210-bundles
+          path: .build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # A cross-engine content mismatch exits 1 after writing the JSON; the stop harness still runs
+      # and both files are uploaded, then the job fails on the benchmark's own outcome.
+      - id: bench
+        run: node .build/bench-node.js --out results.windows.json --scale both
+        continue-on-error: true
+      - run: node .build/crash-node.js --trials 30 --out crash.windows.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spike-2210-results-windows
+          path: |
+            results.windows.json
+            crash.windows.json
+      - if: steps.bench.outcome != 'success'
+        run: |
+          echo "benchmark step outcome: ${{ steps.bench.outcome }} (cross-engine mismatch or failure; see results.windows.json)"
+          exit 1

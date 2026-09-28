@@ -75,7 +75,7 @@ it('renders title, subtitle, real status variant and controls with a safe-area o
 	expect(screen.getByTestId('bar-subtitle')).toHaveTextContent('· UK Store');
 	const status = screen.getByTestId('bar-status');
 	expect(status).toHaveTextContent('Offline');
-	expect(status.firstElementChild).toHaveClass('text-warning');
+	expect(status.firstElementChild).toHaveClass('bg-warning'); // the dot carries the colour (R3)
 	expect(screen.getByTestId('bar')).toHaveStyle({ paddingTop: '24px' });
 	expect(screen.getByTestId('bar').firstElementChild).toHaveClass('h-ctl');
 	expect(screen.getByTestId('control')).toBeInTheDocument();

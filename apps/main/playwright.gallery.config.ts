@@ -10,7 +10,15 @@ export default defineConfig({
 	updateSnapshots: 'none',
 	reporter: [['list'], ['html', { open: 'never' }]],
 	snapshotPathTemplate: '{testDir}/{testFilePath}-snapshots/{arg}-linux{ext}',
-	expect: { toHaveScreenshot: { maxDiffPixels: 0, animations: 'disabled', caret: 'hide' } },
+	expect: {
+		toHaveScreenshot: {
+			maxDiffPixels: 0,
+			animations: 'disabled',
+			caret: 'hide',
+			// The unfocused look for an isolated cell's search field, below React (see the file).
+			stylePath: './gallery/shoot.css',
+		},
+	},
 	use: { baseURL: 'http://127.0.0.1:8097', trace: 'off', video: 'off', screenshot: 'off' },
 	projects: [{ name: 'gallery', use: { ...devices['Desktop Chrome'] } }],
 	webServer: {

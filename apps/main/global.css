@@ -106,10 +106,25 @@
   --duration-panel-slide-out: 200ms;
   --duration-pane: 280ms;
   --duration-stamp: 380ms;
+  --duration-spinner: 1000ms;
+  --duration-indeterminate: 1100ms;
   --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
   --ease-beat: cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  --animate-pop-in: pop-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-pop-out: pop-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-indeterminate: indeterminate 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
   --animate-accordion-down: accordion-down 200ms ease-out;
   --animate-accordion-up: accordion-up 200ms ease-out;
+  --animate-overlay-in: overlay-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-overlay-out: overlay-out 150ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-dialog-in: dialog-in 150ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-dialog-out: dialog-out 150ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-panel-in-left: panel-in-left 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-panel-in-right: panel-in-right 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-panel-out-left: panel-out-left 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-panel-out-right: panel-out-right 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  --animate-sheet-in: sheet-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --animate-sheet-out: sheet-out 200ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
   /* motion:end */
 }
 
@@ -143,7 +158,11 @@
   --radius-2xl: calc(var(--radius) + 8px);
 }
 
-/* Web-only keyframes for accordion animations */
+/* Web-only animation keyframes */
+@keyframes indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
 @keyframes accordion-down {
   from {
     height: 0;
@@ -160,6 +179,55 @@
   to {
     height: 0;
   }
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes dialog-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialog-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+@keyframes panel-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes panel-out-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+@keyframes panel-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes panel-out-right {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes sheet-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
 }
 
 @layer theme {
@@ -718,7 +786,11 @@
 }
 
 /* Web only: Uniwind must not apply an unsupported preference query on native.
- * Named functional waits keep moving; the indeterminate class is reserved for its rebuild. */
+ * Named functional waits keep moving under reduced motion. */
+@utility duration-crossfade {
+  transition-duration: var(--duration-crossfade);
+}
+
 @supports selector(div > div) {
   @media (prefers-reduced-motion: reduce) {
     *:not(.web\:animate-spin):not(.web\:animate-indeterminate),
@@ -730,5 +802,19 @@
       transition-duration: 0ms !important;
       transition-delay: 0ms !important;
     }
+  }
+  /* Controls tier: wcpos/roadmap#376, shared keyboard focus. */
+  :where([role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="switch"], [role="combobox"], [role="tab"], [role="menuitem"], [role="option"], button, a, summary):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  :where(input, textarea, [contenteditable]):focus-visible {
+    outline: none;
+  }
+  /* Overlays tier: wcpos/roadmap#378. Radix focuses its own content element when a panel
+     opens with nothing tabbable inside; the panel's edge is the affordance, so the
+     container never carries the ring. Its rows and controls above still do. */
+  :where([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]):focus-visible {
+    outline: none;
   }
 }

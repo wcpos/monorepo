@@ -128,7 +128,7 @@ function parseBareArray(body: unknown): WooPayload[] {
 	return body as WooPayload[];
 }
 
-// The plugin has emitted bare variation arrays since 1.11.0.
+// The plugin has emitted bare variation arrays since 2.0.0.
 // Each record carries its own identity and revision stamp.
 export function parseVariationsEnvelope(body: unknown): WooPayload[] {
 	if (!Array.isArray(body)) {

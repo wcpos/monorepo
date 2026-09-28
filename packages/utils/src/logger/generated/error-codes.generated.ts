@@ -65,6 +65,7 @@ export type ErrorCode =
 	| 'AUTH121'
 	| 'AUTH321'
 	| 'AUTH331'
+	| 'AUTH341'
 	| 'AUTH411'
 	| 'AUTH421'
 	| 'AUTH431'
@@ -710,6 +711,15 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'no-impact',
 		summary: "This store's WCPOS plugin is too old for this version of the app.",
 	},
+	AUTH341: {
+		code: 'AUTH341',
+		symbol: 'SITE_IDENTITY_CLASH',
+		domain: 'AUTH',
+		severity: 'error',
+		actionHint: 'Update the WCPOS plugin on the copy, or remove the saved store first.',
+		dataSafety: 'no-impact',
+		summary: 'This store reports the same identity as a store already saved on this device.',
+	},
 	AUTH411: {
 		code: 'AUTH411',
 		symbol: 'STORE_URL_INVALID',
@@ -1115,6 +1125,7 @@ export const ERROR_CODES = {
 	SIGNED_IN_AS_WRONG_USER: 'AUTH121',
 	WOOCOMMERCE_MISSING: 'AUTH321',
 	WCPOS_PLUGIN_OUTDATED: 'AUTH331',
+	SITE_IDENTITY_CLASH: 'AUTH341',
 	STORE_URL_INVALID: 'AUTH411',
 	AUTH_TOKEN_BLOCKED_BY_HOST: 'AUTH421',
 	REST_TRANSPORT_BLOCKED: 'AUTH431',

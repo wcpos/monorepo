@@ -1,11 +1,5 @@
 import * as React from 'react';
-import {
-	type NativeSyntheticEvent,
-	Platform,
-	ScrollView,
-	type TextInputKeyPressEventData,
-	View,
-} from 'react-native';
+import { Platform, ScrollView, type TextInputKeyPressEvent, View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
@@ -97,7 +91,7 @@ export function TestPanel() {
 	// the detected-barcode readout stays empty on native.
 	const isWeb = Platform.OS === 'web';
 	const handleNativeKeyPress = React.useCallback(
-		(event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+		(event: TextInputKeyPressEvent) => {
 			captureOnKeyPress(event);
 			detectorOnKeyPress(event);
 		},

@@ -1,4 +1,10 @@
-export const TRANSLATION_VERSION = '2026.9.10';
+// On next, this is wcpos/translations' moving jsDelivr branch ref, refreshed by the CDN within about 12 hours.
+// On main, the release workflow replaces it with a CalVer tag; resolve this one-line conflict in main's favour when merging next.
+export const TRANSLATION_VERSION = 'next';
+
+// A rolling ref must be re-fetched because its content changes under the same name.
+// (Named REF, not VERSION, so the release bump regex `TRANSLATION_VERSION = '…'` cannot match it.)
+const ROLLING_TRANSLATION_REF = 'next';
 
 /**
  * Custom i18next backend that loads translations from jsDelivr CDN
@@ -42,9 +48,9 @@ export class RxDBBackend {
 	read(language: string, namespace: string, callback: (err: any, data?: any) => void) {
 		const cacheKey = `${language}@${TRANSLATION_VERSION}`;
 
-		// Return cached translations immediately if available
+		// Only pinned versions can return cached translations without re-fetching.
 		const cached = this.translationsState?.[cacheKey];
-		if (cached != null) {
+		if (TRANSLATION_VERSION !== ROLLING_TRANSLATION_REF && cached != null) {
 			callback(null, cached);
 			return;
 		}
@@ -61,22 +67,22 @@ export class RxDBBackend {
 				// Regional locale not found, try base language
 				const baseLang = this.getBaseLanguage(language);
 				if (!baseLang) {
-					callback(null, {});
+					callback(null, cached ?? {});
 					return;
 				}
 
 				return this.fetchTranslations(baseLang, namespace).then((fallbackData) => {
 					if (fallbackData && Object.keys(fallbackData).length > 0) {
-						// Cache under the original language + version key so we don't re-fetch
+						// Cache under the original language + version key.
 						this.translationsState?.set(cacheKey, () => fallbackData);
 						callback(null, fallbackData);
 					} else {
-						callback(null, {});
+						callback(null, cached ?? {});
 					}
 				});
 			})
 			.catch(() => {
-				callback(null, {});
+				callback(null, cached ?? {});
 			});
 	}
 }

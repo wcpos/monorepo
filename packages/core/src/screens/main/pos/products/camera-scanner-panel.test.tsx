@@ -47,12 +47,12 @@ jest.mock('@wcpos/components/icon-button', () => ({
 	IconButton: ({
 		onPress,
 		testID,
-		className,
+		iconClassName,
 	}: {
 		onPress?: () => void;
 		testID?: string;
-		className?: string;
-	}) => <button data-testid={testID} data-class-name={className} onClick={onPress} />,
+		iconClassName?: string;
+	}) => <button data-testid={testID} data-icon-class-name={iconClassName} onClick={onPress} />,
 }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
@@ -186,7 +186,8 @@ describe('CameraScannerPanel', () => {
 		render(<CameraScannerPanel onClose={onClose} />);
 
 		const closeButton = screen.getByTestId('camera-scanner-close');
-		expect(closeButton.getAttribute('data-class-name')).toBe('text-white');
+		// The glyph, not the pressable, carries the viewfinder's white (controls tier, roadmap#376).
+		expect(closeButton.getAttribute('data-icon-class-name')).toBe('text-white');
 		fireEvent.click(closeButton);
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});

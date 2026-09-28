@@ -7,27 +7,29 @@ import Animated, {
 	interpolateColor,
 	useAnimatedStyle,
 	useDerivedValue,
+	useSharedValue,
 	withTiming,
 } from 'react-native-reanimated';
 import { useCSSVariable } from 'uniwind';
 
 import { HStack } from '../hstack';
 import { Label } from '../label';
+import { CROSSFADE, EASE } from '../lib/motion';
 import { cn } from '../lib/utils';
 
 const webSwitchVariants = cva(
-	'focus-visible:ring-ring focus-visible:ring-offset-background peer shrink-0 cursor-pointer flex-row items-center rounded-full border-2 border-transparent transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed',
+	'peer shrink-0 cursor-pointer flex-row items-center rounded-full p-0.5 transition-colors disabled:cursor-not-allowed',
 	{
 		variants: {
 			size: {
 				xs: 'h-3 w-5',
 				sm: 'h-4 w-7',
 				lg: 'h-6 w-11',
-				default: 'h-5 w-9',
+				default: 'h-5 w-8.5',
 			},
 			checked: {
 				true: 'bg-primary',
-				false: 'bg-card-header',
+				false: 'bg-border',
 			},
 		},
 		defaultVariants: {
@@ -38,20 +40,26 @@ const webSwitchVariants = cva(
 );
 
 const webThumbVariants = cva(
-	'bg-background pointer-events-none block rounded-full shadow-md ring-0 transition-transform',
+	'bg-card web:duration-crossfade pointer-events-none block rounded-full transition-transform',
 	{
 		variants: {
 			size: {
-				xs: 'h-2 w-2 translate-x-0',
-				sm: 'h-3 w-3 translate-x-0',
-				lg: 'h-5 w-5 translate-x-0',
-				default: 'h-4 w-4 translate-x-0',
+				xs: 'size-2',
+				sm: 'size-3',
+				lg: 'size-5',
+				default: 'size-4',
 			},
 			checked: {
-				true: 'translate-x-full',
+				true: '',
 				false: 'translate-x-0',
 			},
 		},
+		compoundVariants: [
+			{ size: 'xs', checked: true, class: 'translate-x-2' },
+			{ size: 'sm', checked: true, class: 'translate-x-3' },
+			{ size: 'default', checked: true, class: 'translate-x-3.5' },
+			{ size: 'lg', checked: true, class: 'translate-x-5' },
+		],
 		defaultVariants: {
 			size: 'default',
 			checked: false,
@@ -67,7 +75,7 @@ function SwitchWeb({ className, size, ref, ...props }: SwitchWebProps) {
 		<SwitchPrimitives.Root
 			className={cn(
 				webSwitchVariants({ size, checked: !!props.checked }),
-				props.disabled && 'opacity-50',
+				props.disabled && 'opacity-45',
 				className
 			)}
 			{...props}
@@ -82,13 +90,13 @@ function SwitchWeb({ className, size, ref, ...props }: SwitchWebProps) {
 
 SwitchWeb.displayName = 'SwitchWeb';
 
-const nativeSwitchVariants = cva('shrink-0 flex-row items-center rounded-full', {
+const nativeSwitchVariants = cva('shrink-0 flex-row items-center rounded-full p-0.5', {
 	variants: {
 		size: {
 			xs: 'h-3 w-5',
 			sm: 'h-4 w-7',
 			lg: 'h-6 w-11',
-			default: 'h-5 w-9',
+			default: 'h-5 w-8.5',
 		},
 	},
 	defaultVariants: {
@@ -96,13 +104,13 @@ const nativeSwitchVariants = cva('shrink-0 flex-row items-center rounded-full', 
 	},
 });
 
-const nativeThumbVariants = cva('bg-background rounded-full shadow-sm', {
+const nativeThumbVariants = cva('bg-card rounded-full', {
 	variants: {
 		size: {
-			xs: 'h-2.5 w-2.5',
-			sm: 'h-3.5 w-3.5',
-			lg: 'h-5.5 w-5.5',
-			default: 'h-4 w-4',
+			xs: 'size-2',
+			sm: 'size-3',
+			lg: 'size-5',
+			default: 'size-4',
 		},
 	},
 	defaultVariants: {
@@ -115,53 +123,62 @@ type SwitchNativeProps = SwitchPrimitives.RootProps &
 		ref?: React.Ref<SwitchPrimitives.RootRef>;
 	};
 
-function SwitchNative({ className, size = 'default', ref, ...props }: SwitchNativeProps) {
-	const [inputColor, primaryColor] = useCSSVariable([
-		'--color-input',
+function SwitchNative({ className, size = 'default', ref, style, ...props }: SwitchNativeProps) {
+	const [borderColor, primaryColor] = useCSSVariable([
+		'--color-border',
 		'--color-primary',
 	]) as string[];
-
-	const getTranslateX = (size: string) => {
-		'worklet';
-		switch (size) {
-			case 'xs':
-				return 8;
-			case 'sm':
-				return 10;
-			case 'lg':
-				return 12;
-			default:
-				return 14;
-		}
-	};
-
-	const effectiveSize = size ?? 'default';
-	const translateX = useDerivedValue(() => (props.checked ? getTranslateX(effectiveSize) : 0));
-	const animatedRootStyle = useAnimatedStyle(() => {
-		return {
-			backgroundColor: interpolateColor(
-				translateX.value,
-				[0, getTranslateX(effectiveSize)],
-				[inputColor, primaryColor]
-			),
-		};
-	});
-	const animatedThumbStyle = useAnimatedStyle(() => ({
-		transform: [{ translateX: withTiming(translateX.value, { duration: 200 }) }],
+	const trackWidth = useSharedValue(0);
+	const thumbWidth = useSharedValue(0);
+	const padding = useSharedValue(0);
+	// The track colour crosses on the same clock as the thumb, so neither leads:
+	// a shared progress value animates and interpolateColor reads the number.
+	const progress = useDerivedValue(() =>
+		withTiming(props.checked ? 1 : 0, { duration: CROSSFADE, easing: EASE })
+	);
+	const animatedRootStyle = useAnimatedStyle(() => ({
+		backgroundColor: interpolateColor(progress.value, [0, 1], [borderColor, primaryColor]),
 	}));
+	const animatedThumbStyle = useAnimatedStyle(() => ({
+		transform: [
+			{
+				translateX: withTiming(
+					props.checked && trackWidth.value && thumbWidth.value
+						? trackWidth.value - thumbWidth.value - 2 * padding.value
+						: 0,
+					{ duration: CROSSFADE, easing: EASE }
+				),
+			},
+		],
+	}));
+	// A plain style object belongs to the wrapper (layout, margins, overrides); a
+	// pressed-state style function stays on the primitive that owns the press.
+	const wrapperStyle = typeof style === 'function' ? undefined : style;
+	const pressableStyle = typeof style === 'function' ? style : undefined;
 	return (
 		<Animated.View
-			style={animatedRootStyle}
-			className={cn(nativeSwitchVariants({ size }), props.disabled && 'opacity-50')}
+			style={[animatedRootStyle, wrapperStyle]}
+			// The caller's classes land on the wrapper that owns the layout and paints the
+			// track, as they do on the web root; the primitive underneath is only the hit area.
+			className={cn(nativeSwitchVariants({ size }), props.disabled && 'opacity-45', className)}
+			onLayout={({ nativeEvent: { layout } }) => {
+				trackWidth.value = layout.width;
+			}}
 		>
 			<SwitchPrimitives.Root
-				className={cn(nativeSwitchVariants({ size }), 'bg-transparent', className)}
+				// No size of its own: it fills whatever the wrapper measures, so a caller's
+				// width lands on the same track the thumb's travel is read from.
+				className="absolute inset-0 flex-row items-center bg-transparent p-0.5"
+				style={pressableStyle}
 				{...props}
 				ref={ref}
 			>
 				<Animated.View
 					style={animatedThumbStyle}
-					className={cn('px-0.5', size === 'sm' || size === 'xs' ? 'px-px' : 'px-0.5')}
+					onLayout={({ nativeEvent: { layout } }) => {
+						thumbWidth.value = layout.width;
+						padding.value = layout.x;
+					}}
 				>
 					<SwitchPrimitives.Thumb className={cn(nativeThumbVariants({ size }))} />
 				</Animated.View>

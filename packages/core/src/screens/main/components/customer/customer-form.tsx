@@ -207,7 +207,7 @@ export function CustomerForm(props: CustomerFormProps) {
 			<Button testID="customer-form-close" variant="outline" onPress={onClose}>
 				<ButtonText>{t('common.close')}</ButtonText>
 			</Button>
-			<Button testID="customer-form-save" loading={loading} onPress={onSave}>
+			<Button testID="customer-form-save" loading={loading} onPress={() => void onSave()}>
 				<ButtonText>{t('common.save')}</ButtonText>
 			</Button>
 		</>

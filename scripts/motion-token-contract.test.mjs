@@ -53,3 +53,17 @@ test('web reduce-motion zeroes motion but excludes the two functional waits', ()
 	}
 	dom.window.close();
 });
+
+test('the sheet defines the progress sweep animation and keyframes', () => {
+	const sheet = readFileSync(sheetPath, 'utf8');
+	assert.match(sheet, /--animate-indeterminate:/);
+	assert.match(sheet, /@keyframes indeterminate/);
+});
+
+test('the sheet defines the popover drop animations and keyframes', () => {
+	const sheet = readFileSync(sheetPath, 'utf8');
+	for (const name of ['pop-in', 'pop-out']) {
+		assert.ok(sheet.includes(`--animate-${name}:`));
+		assert.ok(sheet.includes(`@keyframes ${name}`));
+	}
+});

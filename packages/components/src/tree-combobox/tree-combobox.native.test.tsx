@@ -1,5 +1,6 @@
 /* eslint-disable import/first, @typescript-eslint/no-require-imports */
 const mockPendingTransitions: (() => void)[] = [];
+const mockAnimation = { duration: jest.fn().mockReturnThis(), easing: jest.fn().mockReturnThis() };
 const mockPlatform = { OS: 'ios' };
 const mockGestureHandlerScrollView = jest.fn();
 
@@ -30,6 +31,15 @@ jest.mock('react-native-gesture-handler', () => ({
 // The shared sizing module now imports the optional safe-area context.
 jest.mock('react-native-safe-area-context', () => ({
 	SafeAreaInsetsContext: require('react').createContext(null),
+	useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+jest.mock('../keyboard-controller', () => ({
+	KeyboardAvoidingView: jest.requireActual('react-native').View,
+}));
+jest.mock('react-native', () => ({
+	...jest.requireActual('react-native'),
+	useWindowDimensions: () => ({ width: 1024, height: 768, scale: 1, fontScale: 1 }),
 }));
 
 jest.mock('react-native-reanimated', () => ({
@@ -38,8 +48,11 @@ jest.mock('react-native-reanimated', () => ({
 	default: {
 		View: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 	},
-	FadeIn: { duration: () => ({}) },
-	FadeOut: { duration: () => ({}) },
+	...Object.fromEntries(
+		'FadeIn FadeOut SlideInLeft SlideOutLeft SlideInRight SlideOutRight SlideInDown SlideOutDown'
+			.split(' ')
+			.map((name) => [name, mockAnimation])
+	),
 }));
 
 jest.mock('@rn-primitives/popover', () => {
@@ -63,7 +76,7 @@ jest.mock('@rn-primitives/popover', () => {
 				{children}
 			</div>
 		),
-		useRootContext: () => ({ onOpenChange: jest.fn() }),
+		useRootContext: () => ({ open: true, onOpenChange: jest.fn() }),
 	};
 });
 

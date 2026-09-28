@@ -3,8 +3,14 @@ import * as React from 'react';
 import isString from 'lodash/isString';
 import { WebView as RNWebView, WebViewProps as RNWebViewProps } from 'react-native-webview';
 
-export type WebViewHandle = Omit<RNWebView, 'postMessage'> & {
-	postMessage(message: any): void;
+import type {
+	WebViewErrorEvent,
+	WebViewEvent,
+	WebViewMessageEvent,
+} from 'react-native-webview/lib/WebViewTypes';
+
+export type WebViewHandle = Omit<RNWebView<object>, 'postMessage'> & {
+	postMessage(message: unknown): void;
 };
 
 /**
@@ -16,12 +22,12 @@ export interface WebViewContentSizeChangeEvent {
 	nativeEvent: { contentSize: { width: number; height: number } };
 }
 
-export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange'> {
+export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange' | 'onMessage'> {
 	ref?: React.Ref<WebViewHandle>;
 	src?: string;
 	srcDoc?: string;
 	targetOrigin?: string;
-	onMessage: (event: { nativeEvent: { data: any } }) => void;
+	onMessage: (event: { nativeEvent: { data: unknown } }) => void;
 	onContentSizeChange?: (event: WebViewContentSizeChangeEvent) => void;
 }
 
@@ -37,13 +43,13 @@ function WebView({
 	onContentSizeChange,
 	...props
 }: WebViewProps) {
-	const localRef = React.useRef<RNWebView>(null);
+	const localRef = React.useRef<RNWebView<object>>(null);
 
 	React.useImperativeHandle(
 		ref,
 		() =>
-			Object.assign(localRef.current ?? ({} as RNWebView), {
-				postMessage(message: any) {
+			Object.assign(localRef.current ?? ({} as RNWebView<object>), {
+				postMessage(message: unknown) {
 					const eventInit = JSON.stringify({ data: message });
 					localRef.current?.injectJavaScript(`
 						(function() {
@@ -80,10 +86,10 @@ function WebView({
 	const source = srcDoc != null ? { html: srcDoc } : { uri: src || '' };
 
 	return (
-		<RNWebView
+		<RNWebView<object>
 			ref={localRef}
 			source={source}
-			onMessage={(event) => {
+			onMessage={(event: WebViewMessageEvent) => {
 				/**
 				 * https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#onmessage
 				 * data from the webview must be a string, we want to convert this to an object
@@ -105,13 +111,13 @@ function WebView({
 					onMessage?.(event);
 				}
 			}}
-			onError={(error) => {
+			onError={(error: WebViewErrorEvent) => {
 				console.error('WebView error:', error);
 				props.onError?.(error);
 			}}
 			// react-native-webview types onContentSizeChange without `contentSize`,
 			// but it is populated at runtime — the cast bridges the upstream gap.
-			onContentSizeChange={onContentSizeChange as unknown as RNWebViewProps['onContentSizeChange']}
+			onContentSizeChange={onContentSizeChange as ((event: WebViewEvent) => void) | undefined}
 			{...props}
 		/>
 	);

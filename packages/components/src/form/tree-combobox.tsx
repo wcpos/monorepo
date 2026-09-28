@@ -1,12 +1,13 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useFormControlAria } from './aria';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
-import { Icon } from '../icon';
-import { cn } from '../lib/utils';
-import { Text } from '../text';
-import { TreeCombobox, TreeComboboxContent, TreeComboboxTrigger } from '../tree-combobox';
+import {
+	TreeCombobox,
+	TreeComboboxContent,
+	TreeComboboxTrigger,
+	TreeComboboxValue,
+} from '../tree-combobox';
 
 import type { Option } from '../combobox/types';
 import type { HierarchicalOption } from '../lib/use-hierarchy';
@@ -63,22 +64,7 @@ export function FormTreeCombobox({
 				{...treeProps}
 			>
 				<TreeComboboxTrigger>
-					<View
-						className={cn(
-							'border-border bg-card web:ring-offset-background h-10 w-full flex-row items-center rounded-md border px-2'
-						)}
-					>
-						<View className="flex-1">
-							<Text
-								className={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground')}
-								numberOfLines={1}
-								decodeHtml
-							>
-								{displayText}
-							</Text>
-						</View>
-						<Icon name="chevronDown" />
-					</View>
+					<TreeComboboxValue hasValue={hasValue}>{displayText}</TreeComboboxValue>
 				</TreeComboboxTrigger>
 				<TreeComboboxContent
 					matchWidth

@@ -636,6 +636,8 @@ export async function authenticateWithStore(
 	console.log('[auth] Enter Demo Store button visible');
 
 	// Type the store URL and connect
+	if (await page.getByTestId('connect-another-store').isVisible())
+		await page.getByTestId('connect-another-store').click();
 	const urlInput = page.getByTestId('store-url-input');
 	await urlInput.click();
 	await urlInput.fill(storeUrl);

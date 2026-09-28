@@ -16,6 +16,29 @@ import { useUrlDiscovery } from './use-url-discovery';
 
 const siteLogger = getLogger(['wcpos', 'auth', 'site']);
 
+/**
+ * The address as an identity: scheme dropped, host lower-cased, trailing
+ * slash dropped, port and path kept, so `example.com/staging` is another
+ * site and `https://Example.com/` is `example.com`. A missing address
+ * compares as empty rather than throwing inside the save.
+ */
+export function normalizeSiteAddress(url: string | undefined): string {
+	return (url ?? '')
+		.replace(/^https?:\/\//i, '')
+		.replace(/^[^/]+/, (host) => host.toLowerCase())
+		.replace(/\/$/, '');
+}
+
+/**
+ * The address a connect actually reached, from its discovered API URL: the
+ * normalised site address with the REST suffix (`/wp-json/...` or
+ * `?rest_route=...`) cut off, so a permalink-style change is not a move but
+ * a different host or site path is.
+ */
+export function connectionAddressOf(apiUrl: string | undefined): string {
+	return normalizeSiteAddress((apiUrl ?? '').replace(/(\/wp-json\b.*|\/?\?rest_route=.*)$/i, ''));
+}
+
 type SiteDocument = import('@wcpos/database').SiteDocument;
 
 interface WpJsonResponse {
@@ -146,6 +169,23 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 
 				// Check if site already exists
 				const existingSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
+				// Two addresses are compared: the one the store reports as its home
+				// (a clone whose URLs were search-replaced reports its own) and the
+				// one this connect actually reached (a raw database copy still
+				// reports the live store's home, and only the address differs).
+				if (
+					existingSite &&
+					(normalizeSiteAddress(existingSite.url) !== normalizeSiteAddress(siteData.url) ||
+						connectionAddressOf(existingSite.wcpos_api_url) !==
+							connectionAddressOf(endpoints.wcpos_api_url))
+				) {
+					throw Object.assign(
+						new Error(t('auth.site_identity_clash', { name: existingSite.name })),
+						{
+							errorCode: ERROR_CODES.SITE_IDENTITY_CLASH,
+						}
+					);
+				}
 
 				/**
 				 * Merge the discovered details into the site document.
@@ -174,6 +214,12 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 
 				return siteDoc.getLatest();
 			} catch (err: unknown) {
+				if (
+					err instanceof Error &&
+					(err as Error & { errorCode?: ErrorCode }).errorCode === ERROR_CODES.SITE_IDENTITY_CLASH
+				) {
+					throw err;
+				}
 				// Determine error type and code
 				let errorCode: ErrorCode = ERROR_CODES.LOCAL_DB_WRITE_FAILED; // Default for DB operations
 

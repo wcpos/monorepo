@@ -1,13 +1,18 @@
 import * as React from 'react';
 import type { GestureResponderEvent, ViewProps } from 'react-native';
-import { Platform, StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
 import { Slot } from '@rn-primitives/slot';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Button, type ButtonProps } from '../button';
-import { OVERLAY_FADE } from '../lib/motion';
+import { useIsPhone } from '../lib/device';
+import {
+	OVERLAY_MOTION,
+	type OverlayScrimProps,
+	OverlayShell,
+	useOverlayPresentation,
+} from '../lib/overlay';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -17,72 +22,40 @@ const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 
 const AlertDialogPortal = AlertDialogPrimitive.Portal;
 
-function AlertDialogOverlayWeb({ className, ...props }: AlertDialogPrimitive.OverlayProps) {
-	const { open } = AlertDialogPrimitive.useRootContext();
-	return (
-		<AlertDialogPrimitive.Overlay
-			className={cn(
-				// z-70: a confirmation must paint above a side panel (DialogContent is z-60) even when both
-				// portal into the same host, e.g. the order-meta "send order?" confirm on the POS.
-				'absolute top-0 right-0 bottom-0 left-0 z-70 flex items-center justify-center bg-black/70 p-2',
-				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
-				className
-			)}
-			{...props}
-		/>
-	);
-}
-
-function AlertDialogOverlayNative({
-	className,
-	children,
-	...props
-}: AlertDialogPrimitive.OverlayProps) {
-	return (
-		<AlertDialogPrimitive.Overlay
-			style={StyleSheet.absoluteFill}
-			className={cn('z-70 flex items-center justify-center bg-black/70 p-2', className)}
-			{...props}
-			asChild
-		>
-			<Animated.View
-				entering={FadeIn.duration(OVERLAY_FADE)}
-				exiting={FadeOut.duration(OVERLAY_FADE)}
-			>
-				{children}
-			</Animated.View>
-		</AlertDialogPrimitive.Overlay>
-	);
-}
-
-const AlertDialogOverlay = Platform.select({
-	web: AlertDialogOverlayWeb,
-	default: AlertDialogOverlayNative,
-});
+const AlertDialogOverlay = AlertDialogPrimitive.Overlay;
 
 function AlertDialogContent({
 	className,
 	portalHost,
+	inline,
 	...props
-}: AlertDialogPrimitive.ContentProps & { portalHost?: string }) {
+}: AlertDialogPrimitive.ContentProps & { portalHost?: string; inline?: boolean }) {
 	const { open } = AlertDialogPrimitive.useRootContext();
-
-	return (
-		<AlertDialogPortal hostName={portalHost}>
-			<AlertDialogOverlay>
-				<AlertDialogPrimitive.Content
-					className={cn(
-						'web:duration-200 border-border bg-background z-70 max-w-lg gap-4 rounded-lg border py-4 shadow-lg',
-						open
-							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
-							: 'web:animate-out web:fade-out-0 web:zoom-out-95',
-						className
-					)}
-					{...props}
-				/>
-			</AlertDialogOverlay>
-		</AlertDialogPortal>
+	const phone = useIsPhone();
+	const presentation = phone ? 'bottom' : 'center';
+	// Confirmations paint above z-60 panels in the same portal host.
+	const Scrim = React.useMemo(() => {
+		function Scrim(p: OverlayScrimProps) {
+			return <AlertDialogPrimitive.Overlay {...p} className={cn('z-70', p.className)} />;
+		}
+		return Scrim;
+	}, []);
+	const shell = (
+		<OverlayShell presentation={presentation} open={open} Scrim={Scrim} testID={props.testID}>
+			<AlertDialogPrimitive.Content
+				className={cn(
+					'bg-card border-border z-70 max-h-full max-w-full gap-4 border py-4',
+					presentation === 'center'
+						? 'w-full max-w-105 rounded-lg'
+						: 'w-full rounded-t-2xl border-x-0 border-t border-b-0',
+					open ? OVERLAY_MOTION[presentation].enter : OVERLAY_MOTION[presentation].exit,
+					className
+				)}
+				{...props}
+			/>
+		</OverlayShell>
 	);
+	return inline ? shell : <AlertDialogPortal hostName={portalHost}>{shell}</AlertDialogPortal>;
 }
 
 function AlertDialogHeader({ className, ...props }: ViewProps) {
@@ -90,9 +63,14 @@ function AlertDialogHeader({ className, ...props }: ViewProps) {
 }
 
 function AlertDialogFooter({ className, ...props }: ViewProps) {
+	const presentation = useOverlayPresentation() ?? 'center';
 	return (
 		<View
-			className={cn('flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end', className)}
+			className={cn(
+				'flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end',
+				presentation === 'bottom' && 'border-border border-t pt-4',
+				className
+			)}
 			{...props}
 		/>
 	);

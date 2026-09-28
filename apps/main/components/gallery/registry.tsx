@@ -6,6 +6,21 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Uniwind } from 'uniwind';
 
+import { stories as popover } from '@wcpos/components/popover/gallery';
+import { stories as hoverCard } from '@wcpos/components/hover-card/gallery';
+import { stories as dropdownMenu } from '@wcpos/components/dropdown-menu/gallery';
+import { stories as alertDialog } from '@wcpos/components/alert-dialog/gallery';
+import { stories as label } from '@wcpos/components/label/gallery';
+import { stories as form } from '@wcpos/components/form/gallery';
+import { stories as calendar } from '@wcpos/components/calendar/gallery';
+import { stories as numpad } from '@wcpos/components/numpad/gallery';
+import { stories as treeCombobox } from '@wcpos/components/tree-combobox/gallery';
+import { stories as slider } from '@wcpos/components/slider/gallery';
+import { stories as switchStories } from '@wcpos/components/switch/gallery';
+import { stories as radioGroup } from '@wcpos/components/radio-group/gallery';
+import { stories as checkbox } from '@wcpos/components/checkbox/gallery';
+import { stories as textarea } from '@wcpos/components/textarea/gallery';
+import { stories as iconButton } from '@wcpos/components/icon-button/gallery';
 import { stories as breadcrumb } from '@wcpos/components/breadcrumb/gallery';
 import { stories as button } from '@wcpos/components/button/gallery';
 import { stories as chip } from '@wcpos/components/chip/gallery';
@@ -22,11 +37,51 @@ import { PortalHost } from '@wcpos/components/portal';
 import { stories as select } from '@wcpos/components/select/gallery';
 import { Text } from '@wcpos/components/text';
 import { stories as text } from '@wcpos/components/text/gallery';
+import { stories as dialogV2 } from '@wcpos/components/v2/dialog/gallery';
+import { stories as badge } from '@wcpos/components/badge/gallery';
+import { stories as avatar } from '@wcpos/components/avatar/gallery';
+import { stories as loader } from '@wcpos/components/loader/gallery';
+import { stories as progress } from '@wcpos/components/progress/gallery';
+import { stories as sortIcon } from '@wcpos/components/sort-icon/gallery';
+import { stories as statusBadge } from '@wcpos/components/status-badge/gallery';
+import { stories as docsLink } from '@wcpos/components/docs-link/gallery';
+import { stories as card } from '@wcpos/components/card/gallery';
+import { stories as tabs } from '@wcpos/components/tabs/gallery';
+import { stories as panels } from '@wcpos/components/panels/gallery';
+import { stories as table } from '@wcpos/components/table/gallery';
+import { stories as listItem } from '@wcpos/components/list-item/gallery';
 
 import NotFound from '../../app/+not-found';
 import { GalleryCells, type Story } from './cells';
 
 const registry: Record<string, Story[]> = {
+	'alert-dialog': alertDialog,
+	'dropdown-menu': dropdownMenu,
+	'hover-card': hoverCard,
+	popover,
+	tabs,
+	panels,
+	table,
+	'list-item': listItem,
+	badge,
+	avatar,
+	loader,
+	progress,
+	'sort-icon': sortIcon,
+	'status-badge': statusBadge,
+	'docs-link': docsLink,
+	card,
+	label,
+	form,
+	calendar,
+	numpad,
+	'tree-combobox': treeCombobox,
+	slider,
+	switch: switchStories,
+	'radio-group': radioGroup,
+	checkbox,
+	textarea,
+	'icon-button': iconButton,
 	chip,
 	keypad,
 	'segmented-control': segmentedControl,
@@ -41,6 +96,7 @@ const registry: Record<string, Story[]> = {
 	notice,
 	breadcrumb,
 	'page-bar': pageBar,
+	'v2-dialog': dialogV2,
 };
 
 function GalleryPage({ children }: React.PropsWithChildren) {

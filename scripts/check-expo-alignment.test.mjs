@@ -13,6 +13,21 @@ test('satisfies handles exact versions', () => {
 	assert.equal(satisfies('19.2.7', '19.2.3'), false);
 });
 
+test('satisfies accepts only identical exact prerelease versions', () => {
+	assert.equal(satisfies('0.88.0-rc.2', '0.88.0-rc.2'), true);
+	assert.equal(satisfies('0.88.0-rc.3', '0.88.0-rc.2'), false);
+	assert.equal(satisfies('0.88.0', '0.88.0-rc.2'), false);
+	assert.equal(satisfies('0.88.0-rc.2', '0.88.0'), false);
+});
+
+test('satisfies rejects prereleases in tilde and caret ranges', () => {
+	for (const operator of ['~', '^']) {
+		assert.equal(satisfies('0.88.0-rc.2', `${operator}0.88.0`), false);
+		assert.equal(satisfies('0.88.0-rc.2', `${operator}0.88.0-rc.2`), false);
+		assert.equal(satisfies('0.88.0', `${operator}0.88.0-rc.2`), false);
+	}
+});
+
 test('satisfies handles tilde ranges', () => {
 	assert.equal(satisfies('2.31.1', '~2.31.0'), true);
 	assert.equal(satisfies('2.31.5', '~2.31.1'), true);

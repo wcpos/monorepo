@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { type TextInput, View } from 'react-native';
+import { type TextInputInstance, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
@@ -25,7 +25,7 @@ export function RegisterAmount({
 	value: string;
 	onChangeText: (v: string) => void;
 	testID: string;
-	ref?: React.Ref<TextInput>;
+	ref?: React.Ref<TextInputInstance>;
 }) {
 	const { prefix, suffix } = useCurrencyFormat(currencyOptions);
 	return (

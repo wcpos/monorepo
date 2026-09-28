@@ -1,7 +1,11 @@
 import * as React from 'react';
 
 import { Circle, Line as SkiaLine, useFont, vec } from '@shopify/react-native-skia';
-import { Gesture } from 'react-native-gesture-handler';
+import {
+	type ComposedGesture,
+	Gesture,
+	type LegacyComposedGesture,
+} from 'react-native-gesture-handler';
 import { useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useCSSVariable } from 'uniwind';
@@ -87,10 +91,10 @@ export function TrendLineChart({
 		}
 	);
 
-	// Raced so it satisfies `customGestures`' ComposedGesture type; victory races
+	// Raced with the builder API; victory races
 	// it against its own press gesture either way. Both feed the SAME
 	// `handleTouch`, so hover and touch land on the same datum.
-	const hover = React.useMemo(
+	const hover = React.useMemo<LegacyComposedGesture>(
 		() =>
 			Gesture.Race(
 				Gesture.Hover()
@@ -136,7 +140,8 @@ export function TrendLineChart({
 				padding={{ top: 6, right: 10 }}
 				chartPressState={press}
 				actionsRef={actions}
-				customGestures={hover}
+				// victory-native types customGestures with gesture-handler 3's hook-API ComposedGesture but composes it with the builder API at runtime; our LegacyComposedGesture is what it actually consumes.
+				customGestures={hover as unknown as ComposedGesture}
 				xAxis={{
 					font,
 					tickValues: xTicks,

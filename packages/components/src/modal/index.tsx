@@ -129,7 +129,9 @@ function ModalOverlayWeb({
 	className,
 	side = 'center',
 	...props
-}: React.ComponentPropsWithoutRef<typeof View> & { side?: ModalSide }) {
+}: Omit<React.ComponentPropsWithoutRef<typeof View>, 'onKeyDown' | 'onKeyUp'> & {
+	side?: ModalSide;
+}) {
 	const { onClose } = useRootContext();
 	// Radix adds a content wrapper; display: contents preserves the panel's flex sizing.
 	return (
@@ -157,7 +159,9 @@ function ModalOverlayNative({
 	children,
 	side = 'center',
 	...props
-}: React.ComponentPropsWithoutRef<typeof View> & { side?: ModalSide }) {
+}: Omit<React.ComponentPropsWithoutRef<typeof View>, 'onKeyDown' | 'onKeyUp'> & {
+	side?: ModalSide;
+}) {
 	const { onClose } = useRootContext();
 	const fullHeight = side === 'left' || side === 'right';
 	const insets = useSafeAreaInsets();

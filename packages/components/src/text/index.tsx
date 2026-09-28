@@ -15,7 +15,7 @@ const textVariants = cva('text-foreground web:select-text text-base', {
 	variants: {
 		variant: {
 			default: '',
-			link: 'web:hover:underline web:focus:underline web:hover:cursor-pointer group-active:underline',
+			link: 'web:hover:underline web:focus:underline web:hover:cursor-pointer',
 		},
 	},
 	defaultVariants: {

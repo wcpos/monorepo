@@ -23,6 +23,9 @@ import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
+import { Notice } from '@wcpos/components/notice';
+import { VStack } from '@wcpos/components/vstack';
+import { getErrorCodeDocURL } from '@wcpos/utils/logger/constants';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -78,7 +81,7 @@ export function Sites({ user }: SitesProps) {
 	// Single site: render directly without accordion
 	if (sites.length === 1) {
 		return (
-			<Card className="w-full" testID="logged-in-users-label">
+			<Card className="w-full p-3" testID="logged-in-users-label">
 				<ErrorBoundary>
 					<Site user={user} site={sites[0]} />
 				</ErrorBoundary>
@@ -88,11 +91,12 @@ export function Sites({ user }: SitesProps) {
 
 	// Multiple sites: use accordion
 	return (
-		<Card className="w-full" testID="logged-in-users-label">
-			<Text className="text-muted-foreground px-4 pt-4 text-xs font-semibold tracking-wider uppercase">
-				{t('auth.your_sites', { _tags: 'core' })}
+		<VStack className="w-full gap-2" testID="logged-in-users-label">
+			<Text className="text-sm font-semibold">
+				{t('auth.your_sites_heading', { _tags: 'core' })}
 			</Text>
 			<Accordion
+				className="gap-2"
 				type="single"
 				collapsible
 				value={nextAccordionState.expandedSiteUuid}
@@ -100,13 +104,13 @@ export function Sites({ user }: SitesProps) {
 					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }))
 				}
 			>
-				{sites.map((site, index) => (
+				{sites.map((site) => (
 					<ErrorBoundary key={site.uuid}>
-						<AccordionSite user={user} site={site} isFirst={index === 0} />
+						<AccordionSite user={user} site={site} />
 					</ErrorBoundary>
 				))}
 			</Accordion>
-		</Card>
+		</VStack>
 	);
 }
 
@@ -115,17 +119,9 @@ export function Sites({ user }: SitesProps) {
  * - Chevron on the left (via AccordionTrigger default)
  * - Site header in the center
  * - Remove button on the right
- * - Separator between items
+ * - Each item has its own card
  */
-function AccordionSite({
-	user,
-	site,
-	isFirst,
-}: {
-	user: UserDocument;
-	site: SiteDocument;
-	isFirst: boolean;
-}) {
+function AccordionSite({ user, site }: { user: UserDocument; site: SiteDocument }) {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 
@@ -148,35 +144,40 @@ function AccordionSite({
 
 	return (
 		<>
-			{!isFirst && <View className="border-border border-t" />}
-			<AccordionItem value={site.uuid ?? ''} className="border-b-0 px-4">
-				<HStack className="items-center gap-2">
-					<AccordionTrigger headerClassName="flex-1" className="gap-3 py-3" chevronPosition="left">
-						<View className="flex-1 flex-row items-center gap-3">
-							<SiteHeader site={site} />
-							{userCount > 0 && (
-								<StatusBadge
-									label={`${userCount} ${userCount === 1 ? t('auth.user', { _tags: 'core' }) : t('auth.users', { _tags: 'core' })}`}
-									variant="info"
-								/>
-							)}
-						</View>
-					</AccordionTrigger>
-					<IconButton
-						name="circleXmark"
-						size="lg"
-						variant="destructive"
-						onPress={() => setDeleteDialogOpened(true)}
-					/>
-				</HStack>
-				<AccordionContent>
-					<ErrorBoundary>
-						<Suspense>
-							<AccordionSiteContent site={site} />
-						</Suspense>
-					</ErrorBoundary>
-				</AccordionContent>
-			</AccordionItem>
+			<Card className="w-full p-3">
+				<AccordionItem value={site.uuid ?? ''} className="border-b-0">
+					<HStack className="items-center gap-2">
+						<AccordionTrigger
+							headerClassName="flex-1"
+							className="min-h-row gap-3 py-2"
+							chevronPosition="left"
+						>
+							<View className="flex-1 flex-row items-center gap-3">
+								<SiteHeader site={site} />
+								{userCount > 0 && (
+									<StatusBadge
+										label={`${userCount} ${userCount === 1 ? t('auth.user', { _tags: 'core' }) : t('auth.users', { _tags: 'core' })}`}
+										variant="info"
+									/>
+								)}
+							</View>
+						</AccordionTrigger>
+						<IconButton
+							name="xmark"
+							size="lg"
+							variant="destructive"
+							onPress={() => setDeleteDialogOpened(true)}
+						/>
+					</HStack>
+					<AccordionContent>
+						<ErrorBoundary>
+							<Suspense>
+								<AccordionSiteContent site={site} />
+							</Suspense>
+						</ErrorBoundary>
+					</AccordionContent>
+				</AccordionItem>
+			</Card>
 
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>
@@ -209,11 +210,11 @@ function AccordionSiteContent({ site }: { site: SiteDocument }) {
 
 	if (!wcposVersionPass) {
 		return (
-			<HStack space="sm" className="items-center py-2">
-				<Text className="text-warning">
-					{t('common.please_update_your_woocommerce_pos_plugin')}
-				</Text>
-			</HStack>
+			<Notice
+				tone="warn"
+				title={t('auth.update_plugin_to_continue')}
+				docs={{ label: t('common.learn_more'), href: getErrorCodeDocURL('AUTH331') }}
+			/>
 		);
 	}
 

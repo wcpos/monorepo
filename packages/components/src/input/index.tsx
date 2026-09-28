@@ -1,5 +1,10 @@
 import * as React from 'react';
-import { TextInput as RNTextInput, TextInputProps as RNTextInputProps, View } from 'react-native';
+import {
+	TextInput as RNTextInput,
+	type TextInputProps as RNTextInputProps,
+	type TextInputInstance,
+	View,
+} from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 
@@ -37,9 +42,9 @@ function Root({ children, className, disabled = false }: RootProps) {
 		<InputContext.Provider value={{ isFocused, setIsFocused }}>
 			<View
 				className={cn(
-					'border-border bg-input web:ring-offset-background h-ctl w-full flex-row items-center rounded-lg border',
-					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
-					disabled && 'web:cursor-not-allowed opacity-50',
+					'border-border bg-card h-ctl w-full flex-row items-center rounded-lg border',
+					isFocused && 'border-ring web:ring-1 web:ring-ring',
+					disabled && 'web:cursor-not-allowed opacity-45',
 					className
 				)}
 			>
@@ -50,11 +55,11 @@ function Root({ children, className, disabled = false }: RootProps) {
 }
 
 function Left({ children, className }: { children: React.ReactNode; className?: string }) {
-	return <View className={cn('py-2 pl-2', className)}>{children}</View>;
+	return <View className={cn('justify-center pl-3', className)}>{children}</View>;
 }
 
 interface InputFieldProps extends RNTextInputProps {
-	ref?: React.Ref<RNTextInput>;
+	ref?: React.Ref<TextInputInstance>;
 	type?:
 		| 'text'
 		| 'numeric'
@@ -82,7 +87,7 @@ function InputField({
 	...props
 }: InputFieldProps) {
 	const { setIsFocused } = useInputContext();
-	const inputRef = React.useRef<RNTextInput>(null);
+	const inputRef = React.useRef<TextInputInstance>(null);
 	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	let keyboardType: RNTextInputProps['keyboardType'] = 'default';
@@ -155,8 +160,9 @@ function InputField({
 			ref={mergedRef}
 			editable={editable}
 			className={cn(
-				'text-foreground placeholder:text-muted-foreground web:focus-visible:outline-none w-full flex-1 bg-transparent px-3 py-2 text-base leading-none outline-none',
-				!editable && 'web:cursor-not-allowed opacity-50',
+				'text-foreground placeholder:text-muted-foreground w-full flex-1 bg-transparent px-3 py-2 text-base leading-none outline-none',
+				// The root carries the disabled opacity; a second one here would compound to 20 %.
+				!editable && 'web:cursor-not-allowed',
 				className
 			)}
 			// placeholderTextColor={placeholderTextColor || 'text-muted-foreground'}
@@ -177,7 +183,7 @@ function InputField({
 }
 
 function Right({ children, className }: { children: React.ReactNode; className?: string }) {
-	return <View className={cn('py-2 pr-2', className)}>{children}</View>;
+	return <View className={cn('justify-center pr-1', className)}>{children}</View>;
 }
 
 interface InputProps
@@ -209,7 +215,7 @@ function Input({
 		onChange: onChangeText,
 	});
 	const isDisabled = disabled || !editable;
-	const inputRef = React.useRef<RNTextInput>(null);
+	const inputRef = React.useRef<TextInputInstance>(null);
 	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	/**
