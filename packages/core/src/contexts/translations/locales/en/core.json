@@ -867,6 +867,8 @@
 	"pos_checkout.chip_in_checkout_offline": "In checkout · offline",
 	"pos_checkout.saving_order": "Saving order…",
 	"pos_checkout.storage_unavailable": "Payment is blocked — the local database is unavailable, so this order can't be recorded on this device. Reload the app before taking payment.",
+	"pos_products.price_check_only_until_open": "Price check only until the register is open.",
+	"pos_products.counting_items_after_count": "Counting the drawer. Items can be added after the count.",
 	"pos_products.clear_filters": "Clear filters",
 	"pos_products.no_products_yet": "No products yet",
 	"pos_products.no_products_yet_description": "Products you add to the store will appear here.",

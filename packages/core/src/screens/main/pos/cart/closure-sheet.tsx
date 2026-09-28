@@ -6,6 +6,7 @@ import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 import { useDocField } from '@wcpos/query';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
+import { STAMP } from '@wcpos/components/lib/motion';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import type { ClosureDocument } from '@wcpos/database';
@@ -48,23 +49,32 @@ export function ClosureSheet({
 		>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="closure-sheet">
 				<Animated.View
-					entering={ZoomIn.duration(180).reduceMotion(ReduceMotion.System)}
-					className="bg-success/10 h-10 w-10 items-center justify-center rounded-full"
+					entering={ZoomIn.duration(STAMP).reduceMotion(ReduceMotion.System)}
+					className="bg-success/15 size-24 items-center justify-center rounded-full"
 				>
 					<Icon name="check" className="text-success" />
 				</Animated.View>
 				<DialogTitle testID="closure-title">
 					{t('register.closure_written_n', { n: number })}
 				</DialogTitle>
-				<Text testID="closure-counted" className="min-h-11 text-[32px] tabular-nums">
+				<Text
+					testID="closure-counted"
+					className="min-h-row border-border text-amt border-b tabular-nums"
+				>
 					{t('register.counted')} · {format(Number(counted))}
 				</Text>
 				{!blind && (
 					<>
-						<Text testID="closure-expected" className="min-h-11 tabular-nums">
+						<Text
+							testID="closure-expected"
+							className="min-h-row border-border border-b tabular-nums"
+						>
 							{t('register.expected_line', { amount: format(Number(expected)) })}
 						</Text>
-						<Text testID="closure-variance" className="min-h-11 tabular-nums">
+						<Text
+							testID="closure-variance"
+							className="min-h-row border-border border-b tabular-nums"
+						>
 							{t('register.variance')} · {varianceText(countVariance(counted, expected), format, t)}
 						</Text>
 					</>
@@ -75,14 +85,16 @@ export function ClosureSheet({
 					</Text>
 				)}
 				{!blind && (
-					<Button
-						testID="closure-preview-fold"
-						variant="ghost"
-						className="min-h-11"
-						onPress={() => setPreview(!preview)}
-					>
-						{t('register.z_report')}
-					</Button>
+					<View className="border-border border-b">
+						<Button
+							testID="closure-preview-fold"
+							variant="ghost"
+							className="min-h-row"
+							onPress={() => setPreview(!preview)}
+						>
+							{t('register.z_report')}
+						</Button>
+					</View>
 				)}
 				{preview && !blind && (
 					<View className="h-80">
@@ -102,7 +114,7 @@ export function ClosureSheet({
 				) : !blind ? (
 					<Button
 						testID="closure-print"
-						className="min-h-14"
+						size="lg"
 						loading={busy}
 						onPress={async () => {
 							setBusy(true);
@@ -122,7 +134,7 @@ export function ClosureSheet({
 				<Button
 					testID="closure-done"
 					variant={blind || printedAt ? 'default' : 'outline'}
-					className="min-h-14"
+					size="lg"
 					onPress={onDone}
 				>
 					{t('register.done')}

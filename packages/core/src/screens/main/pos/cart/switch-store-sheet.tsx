@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
@@ -44,24 +44,25 @@ function StoreRows({ onSwitched }: { onSwitched: () => void }) {
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	const t = useT();
 	return (
-		<ScrollView contentContainerClassName="gap-1 px-4 pb-4">
+		<ScrollView contentContainerClassName="px-4 pb-4">
 			{stores.map((next) => (
-				<Button
-					key={next.localID}
-					testID={`switch-store-row-${next.localID}`}
-					variant="ghost"
-					className="h-11 flex-row justify-between"
-					disabled={isSwitching || next.localID === store.localID}
-					onPress={async () => {
-						await handleSwitchStore(next);
-						onSwitched();
-					}}
-				>
-					<Text numberOfLines={1} className="min-w-0 flex-1">
-						{next.name}
-					</Text>
-					{next.localID === store.localID && <StatusBadge label={t('register.current')} />}
-				</Button>
+				<View key={next.localID} className="border-border border-b">
+					<Button
+						testID={`switch-store-row-${next.localID}`}
+						variant="ghost"
+						className="min-h-row flex-row justify-between"
+						disabled={isSwitching || next.localID === store.localID}
+						onPress={async () => {
+							await handleSwitchStore(next);
+							onSwitched();
+						}}
+					>
+						<Text numberOfLines={1} className="min-w-0 flex-1">
+							{next.name}
+						</Text>
+						{next.localID === store.localID && <StatusBadge label={t('register.current')} />}
+					</Button>
+				</View>
 			))}
 		</ScrollView>
 	);

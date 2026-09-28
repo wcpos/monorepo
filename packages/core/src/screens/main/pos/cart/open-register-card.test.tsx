@@ -5,6 +5,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { OpenRegisterCard } from './open-register-card';
 
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({}),
 }));

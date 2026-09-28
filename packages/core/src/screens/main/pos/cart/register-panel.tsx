@@ -4,6 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 
+import { Icon } from '@wcpos/components/icon';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
@@ -89,7 +90,7 @@ export function RegisterPanel({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
-				<DialogTitle testID="register-panel-amount" className="text-[32px] tabular-nums">
+				<DialogTitle testID="register-panel-amount" className="text-amt tabular-nums">
 					{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
 				</DialogTitle>
 				{blind ? (
@@ -119,7 +120,7 @@ export function RegisterPanel({
 						<Button
 							testID="register-panel-retry-refused"
 							variant="outline"
-							className="min-h-11"
+							className="min-h-row"
 							onPress={() =>
 								attempt(() => Promise.all(refused.map((row) => actions.retryMovement(row.id))))
 							}
@@ -133,18 +134,30 @@ export function RegisterPanel({
 						<Button
 							key={type}
 							testID={`register-panel-${type.replace('_', '-')}`}
-							className="min-h-14 flex-1"
+							className="h-tile flex-1 gap-1"
 							variant="outline"
 							disabled={session?.status !== 'open'}
 							onPress={() => setMovement(type)}
 						>
-							{t(`register.${type}`)}
+							<Icon
+								name={
+									type === 'paid_in'
+										? 'arrowDown'
+										: type === 'paid_out'
+											? 'arrowUp'
+											: 'cashRegister'
+								}
+							/>
+							<Text numberOfLines={1}>{t(`register.${type}`)}</Text>
 						</Button>
 					))}
 				</View>
-				<ScrollView contentContainerClassName="gap-1 px-4 py-2">
+				<ScrollView contentContainerClassName="bg-card px-4 py-2">
 					{Object.entries({ cash: '0', card: '0', ...expected }).map(([method, amount]) => (
-						<View key={method} className="min-h-11 flex-row items-center justify-between">
+						<View
+							key={method}
+							className="min-h-row border-border flex-row items-center justify-between border-b"
+						>
 							<Text>
 								{method === 'cash'
 									? t('register.cash')
@@ -158,14 +171,17 @@ export function RegisterPanel({
 					<Button
 						testID="register-panel-movements"
 						variant="ghost"
-						className={`min-h-11 ${highlight ? 'bg-success/10' : ''}`}
+						className={`min-h-row border-border rounded-none border-b ${highlight ? 'bg-success/10' : ''}`}
 						onPress={() => setExpanded(!expanded)}
 					>
 						{t('register.paid_in_out')}
 					</Button>
 					{expanded &&
 						activeMovements.map((row) => (
-							<View key={row.id} className="min-h-11 flex-row items-center gap-2">
+							<View
+								key={row.id}
+								className="min-h-row border-border flex-row items-center gap-2 border-b"
+							>
 								<Text
 									testID={`movement-row-${row.id}`}
 									className={`flex-1 ${row.sync_status === 'failed' ? 'text-destructive' : ''}`}
@@ -176,7 +192,7 @@ export function RegisterPanel({
 								</Text>
 								<Button
 									variant="ghost"
-									className="min-h-11"
+									className="min-h-row"
 									testID={`movement-void-${row.id}`}
 									disabled={session?.status !== 'open'}
 									onPress={() => attempt(() => actions.voidMovement(row.id))}
@@ -186,21 +202,26 @@ export function RegisterPanel({
 							</View>
 						))}
 					{!blind && !!session && (
-						<Button
-							testID="register-panel-print"
-							className="min-h-11"
-							variant="ghost"
-							onPress={() => attempt(print)}
-						>
-							{t('register.print_x_report')}
-						</Button>
+						<View className="border-border border-b">
+							<Button
+								testID="register-panel-print"
+								className="min-h-row"
+								variant="ghost"
+								onPress={() => attempt(print)}
+							>
+								{t('register.print_x_report')}
+							</Button>
+						</View>
 					)}
 					{lastClosure && (
-						<View testID="register-panel-last-closure" className="gap-2">
+						<View
+							testID="register-panel-last-closure"
+							className="min-h-row border-border gap-2 border-b"
+						>
 							<Button
 								testID="register-panel-open-closure"
 								variant="ghost"
-								className="min-h-12"
+								className="min-h-row"
 								disabled={reportsDenied}
 								onPress={() => {
 									router.push({
@@ -233,7 +254,7 @@ export function RegisterPanel({
 								<Button
 									testID="closure-reprint"
 									variant="ghost"
-									className="min-h-11"
+									className="min-h-row"
 									onPress={() => attempt(reprint)}
 								>
 									{t('register.reprint_copy')}
@@ -256,7 +277,7 @@ export function RegisterPanel({
 					testID="register-panel-close"
 					disabled={!session}
 					variant="outline"
-					className="min-h-14"
+					size="lg"
 					onPress={() =>
 						attempt(async () => {
 							await actions.startCounting();
@@ -281,7 +302,7 @@ export function RegisterPanel({
 									<Button
 										testID="toast-undo"
 										variant="ghost"
-										className="min-h-11"
+										className="min-h-row"
 										onPress={() => attempt(() => actions.voidMovement(id))}
 									>
 										{t('register.undo')}

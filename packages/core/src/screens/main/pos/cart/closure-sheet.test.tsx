@@ -21,6 +21,7 @@ jest.mock('react-native-reanimated', () => ({
 	default: { View: jest.requireActual('react-native').View },
 	ZoomIn: { duration: () => ({ reduceMotion: () => undefined }) },
 	ReduceMotion: { System: 'system' },
+	Easing: { bezier: jest.fn(), linear: jest.fn() },
 }));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT() }));
 jest.mock('../../hooks/use-currency-format', () => ({

@@ -8,6 +8,8 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-
 
 import { UserSheet, useSalesToday } from './user-sheet';
 
+jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
+
 const mockLogin = jest.fn(async (_input: unknown) => {});
 const mockCredentials = [
 	{

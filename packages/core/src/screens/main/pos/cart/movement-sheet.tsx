@@ -29,15 +29,15 @@ export function RegisterAmount({
 }) {
 	const { prefix, suffix } = useCurrencyFormat(currencyOptions);
 	return (
-		<View className="flex-row items-center self-start">
-			{!!prefix && <Text className="text-[32px] tabular-nums">{prefix}</Text>}
+		<View className="min-h-row border-border flex-row items-center self-start border-b">
+			{!!prefix && <Text className="text-amt tabular-nums">{prefix}</Text>}
 			<Input
 				{...props}
 				type="decimal"
-				className="h-14 w-40"
-				inputClassName="text-[32px] tabular-nums"
+				className="h-tile w-40"
+				inputClassName="text-amt tabular-nums"
 			/>
-			{!!suffix && <Text className="text-[32px] tabular-nums">{suffix}</Text>}
+			{!!suffix && <Text className="text-amt tabular-nums">{suffix}</Text>}
 		</View>
 	);
 }
@@ -92,6 +92,7 @@ export function MovementSheet({
 				)}
 				<Input
 					testID="movement-reason"
+					className="min-h-row border-border"
 					placeholder={t('register.reason')}
 					value={reason}
 					onChangeText={setReason}

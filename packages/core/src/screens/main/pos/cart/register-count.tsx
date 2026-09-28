@@ -47,7 +47,7 @@ export function DenominationTile({
 			testID={`den-tile-${value}`}
 			accessibilityRole="button"
 			accessibilityLabel={format(Number(value))}
-			className="border-border bg-muted active:bg-accent h-14 flex-1 flex-row items-center justify-center gap-1 rounded-md border"
+			className="border-border bg-muted active:bg-accent size-tile items-center justify-center gap-1 rounded-lg border"
 			// Web otherwise adds its default 50 ms press-in delay to the hold duration.
 			{...(Platform.OS === 'web' ? { delayPressIn: 0 } : {})}
 			delayLongPress={400}
@@ -64,7 +64,9 @@ export function DenominationTile({
 				if (!held.current) add(1);
 			}}
 		>
-			<Text className="tabular-nums">{format(Number(value))}</Text>
+			<Text className="max-w-full text-sm tabular-nums" numberOfLines={1} adjustsFontSizeToFit>
+				{format(Number(value))}
+			</Text>
 			<Text testID={`den-count-${value}`} className="bg-background rounded-full px-1 tabular-nums">
 				{count}
 			</Text>
@@ -116,8 +118,8 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 		}
 	};
 	return (
-		<ScrollView className="bg-card flex-1 rounded-md" contentContainerClassName="gap-3 p-4">
-			<Text className="min-h-11">
+		<ScrollView className="bg-card flex-1 rounded-lg" contentContainerClassName="gap-3 p-4">
+			<Text className="min-h-row">
 				{t('register.close_register_title', { name: binding.registerName })}
 			</Text>
 			<Text>{t('register.cash_counted_float_included')}</Text>
@@ -130,7 +132,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 				}}
 			/>
 			{!blind && valid && (
-				<View className="min-h-11 flex-row items-center gap-2">
+				<View className="min-h-row flex-row items-center gap-2">
 					<Text testID="count-variance" className="tabular-nums">
 						{t('register.expected_line', { amount: format(Number(expected.cash ?? '0')) })} ·{' '}
 						{varianceText(variance, format, t)}
@@ -143,7 +145,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 				</View>
 			)}
 			{needsManager && (
-				<Text testID="count-manager-line" className="text-warning min-h-11">
+				<Text testID="count-manager-line" className="text-warning min-h-row">
 					{session?.approval_required
 						? t('register.approval_needed')
 						: t('register.over_limit_manager', { amount: format(Number(varianceThreshold)) })}
@@ -152,7 +154,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			<Button
 				testID="count-denominations"
 				variant="ghost"
-				className="min-h-11"
+				className="min-h-row"
 				onPress={() => setNotesOpen(!notesOpen)}
 			>
 				{t('register.count_by_denominations')}
@@ -184,7 +186,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 					<Button
 						testID="count-clear"
 						variant="ghost"
-						className="min-h-11 self-end"
+						className="min-h-row self-end"
 						onPress={() => {
 							setPieces({});
 							setCash('0.00');
@@ -197,7 +199,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			<Button
 				testID="count-other-tenders"
 				variant="ghost"
-				className="min-h-11"
+				className="min-h-row"
 				onPress={() => setTendersOpen(!tendersOpen)}
 			>
 				{t('register.other_tenders')}
@@ -220,15 +222,15 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 						</View>
 					))}
 			{unsyncedCount > 0 && (
-				<Text testID="count-unsynced" className="text-muted-foreground min-h-11">
+				<Text testID="count-unsynced" className="text-muted-foreground min-h-row">
 					{t('register.unsynced_sales', { count: unsyncedCount })}
 				</Text>
 			)}
 			{!!error && <Text testID="count-error">{error}</Text>}
 			<Button
 				testID="count-back"
-				variant="outline"
-				className="min-h-11"
+				variant="ghost"
+				className="min-h-row"
 				disabled={busy}
 				onPress={() => attempt(actions.backToSelling)}
 			>
@@ -236,7 +238,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			</Button>
 			<Button
 				testID="count-close"
-				className="min-h-14"
+				size="lg"
 				loading={busy}
 				disabled={
 					!valid || Object.values(others).some((value) => value !== '' && !validAmount(value))

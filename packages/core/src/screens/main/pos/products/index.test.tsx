@@ -32,6 +32,8 @@ let mockSortBy = 'name';
 let mockSortDirection = 'asc';
 let mockViewMode = 'table';
 let mockGridColumns = 4;
+let mockSession: { status: string } | null = null;
+let mockSessionsOn = false;
 
 // The state primitives pull in Button (expo-haptics) and Icon (uniwind), both ESM-only under
 // jest; the doubles keep the props this screen reads.
@@ -57,7 +59,7 @@ jest.mock('@wcpos/components/skeleton', () => ({
 	SKELETON_MAX_ROWS: 12,
 }));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ session: null, sessionsOn: false }),
+	useRegisterSession: () => ({ session: mockSession, sessionsOn: mockSessionsOn }),
 }));
 jest.mock('../../../../query', () => {
 	const actual = jest.requireActual('../../../../query');
@@ -75,6 +77,9 @@ jest.mock('@wcpos/query', () => ({
 jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
 	useObservableRef: (value: unknown) => [{ current: value }, of(value)],
+}));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/card', () => ({
 	Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -208,6 +213,32 @@ describe('POSProducts query-state wiring', () => {
 		mockSortDirection = 'asc';
 		mockViewMode = 'table';
 		mockGridColumns = 4;
+		mockSession = null;
+		mockSessionsOn = false;
+	});
+
+	it('shows price-check guidance only before a session opens with sessions enabled', () => {
+		mockSessionsOn = true;
+		const { rerender } = render(<POSProducts />);
+		expect(screen.getByText('pos_products.price_check_only_until_open')).toBeTruthy();
+		mockSession = { status: 'open' };
+		rerender(<POSProducts />);
+		expect(screen.queryByText('pos_products.price_check_only_until_open')).toBeNull();
+		mockSession = null;
+		mockSessionsOn = false;
+		rerender(<POSProducts />);
+		expect(screen.queryByText('pos_products.price_check_only_until_open')).toBeNull();
+	});
+
+	it('shows counting guidance instead of price-check guidance while counting', () => {
+		mockSessionsOn = true;
+		mockSession = { status: 'counting' };
+		const { rerender } = render(<POSProducts />);
+		expect(screen.getByText('pos_products.counting_items_after_count')).toBeTruthy();
+		expect(screen.queryByText('pos_products.price_check_only_until_open')).toBeNull();
+		mockSession = { status: 'open' };
+		rerender(<POSProducts />);
+		expect(screen.queryByText('pos_products.counting_items_after_count')).toBeNull();
 	});
 
 	it('binds table mode, barcode fallback, and the shared filter bar without a fluent Query', () => {

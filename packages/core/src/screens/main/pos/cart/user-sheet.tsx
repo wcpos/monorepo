@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { map } from 'rxjs';
 
+import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Suspense } from '@wcpos/components/suspense';
@@ -68,7 +69,7 @@ function SalesToday() {
 	return (
 		<View
 			testID="user-sheet-sales-today"
-			className="h-11 flex-row items-center justify-between gap-2"
+			className="min-h-row border-border flex-row items-center justify-between gap-2 border-b"
 		>
 			<Text>{t('register.your_sales_today')}</Text>
 			<Text className="tabular-nums">{format(total)}</Text>
@@ -112,15 +113,17 @@ function UserRows() {
 			{credentials
 				.filter((credential) => credential.uuid !== wpCredentials.uuid)
 				.map((credential) => (
-					<Button
-						key={credential.uuid}
-						testID={`user-sheet-user-${credential.uuid}`}
-						variant="ghost"
-						className="h-11 items-start"
-						onPress={() => void switchUser(credential)}
-					>
-						<Text numberOfLines={1}>{credential.display_name}</Text>
-					</Button>
+					<View key={credential.uuid} className="border-border border-b">
+						<Button
+							testID={`user-sheet-user-${credential.uuid}`}
+							variant="ghost"
+							className="min-h-row flex-row justify-start gap-2"
+							onPress={() => void switchUser(credential)}
+						>
+							<Avatar fallback={getInitials(credential.display_name)} size="md" />
+							<Text numberOfLines={1}>{credential.display_name}</Text>
+						</Button>
+					</View>
 				))}
 		</>
 	);
@@ -147,36 +150,38 @@ export function UserSheet({
 					<DialogTitle>{displayName}</DialogTitle>
 				</DialogHeader>
 				{open && (
-					<ScrollView contentContainerClassName="gap-1 px-4 pb-4">
+					<ScrollView contentContainerClassName="grow px-4 pb-4">
 						<SalesToday />
 						<View testID="user-sheet-switch-user">
-							<Text className="h-11 py-3">{t('register.switch_user')}</Text>
+							<Text className="min-h-row py-3">{t('register.switch_user')}</Text>
 							<Suspense>
 								<UserRows />
 							</Suspense>
 							<AddUserButton site={site} hasExistingUsers compact />
 						</View>
 						{registers.length > 1 && onSwitchRegister && (
-							<Button
-								testID="user-sheet-switch-register"
-								variant="ghost"
-								className="h-11 items-start"
-								onPress={() => {
-									onOpenChange(false);
-									onSwitchRegister();
-								}}
-							>
-								{t('register.switch_register')}
-							</Button>
+							<View className="border-border border-b">
+								<Button
+									testID="user-sheet-switch-register"
+									variant="ghost"
+									className="min-h-row flex-row justify-start gap-2"
+									onPress={() => {
+										onOpenChange(false);
+										onSwitchRegister();
+									}}
+								>
+									{t('register.switch_register')}
+								</Button>
+							</View>
 						)}
-						<View className="border-border mt-2 border-t pt-2">
+						<View className="border-border mt-auto border-t pt-4">
 							<Button
 								testID="user-sheet-sign-out"
-								className="h-11"
+								className="min-h-row"
 								variant="outline-destructive"
 								onPress={logout}
 							>
-								{t('register.sign_out')}
+								<Text className="text-destructive">{t('register.sign_out')}</Text>
 							</Button>
 						</View>
 					</ScrollView>

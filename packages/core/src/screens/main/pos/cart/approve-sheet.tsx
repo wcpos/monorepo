@@ -78,7 +78,7 @@ export function ApproveSheet({
 				{!!error && <Text testID="approve-error">{error}</Text>}
 				<Button
 					testID="approve-confirm"
-					className="min-h-14"
+					size="lg"
 					loading={busy}
 					disabled={!online || !username.trim() || !password}
 					onPress={confirm}
@@ -107,7 +107,7 @@ export function ApprovalFields({
 			<Text>{t('register.username')}</Text>
 			<Input
 				testID="approve-username"
-				className="min-h-11"
+				className="min-h-row border-border"
 				value={username}
 				onChangeText={setUsername}
 				autoCapitalize="none"
@@ -116,7 +116,7 @@ export function ApprovalFields({
 			<Text>{t('register.password')}</Text>
 			<Input
 				testID="approve-password"
-				className="min-h-11"
+				className="min-h-row border-border"
 				value={password}
 				onChangeText={setPassword}
 				secureTextEntry

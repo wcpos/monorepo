@@ -12,6 +12,7 @@ import { Skeleton, skeletonCount } from '@wcpos/components/skeleton';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
+import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { EngineRecord } from '@wcpos/query';
 import { useDocField } from '@wcpos/query';
@@ -168,7 +169,7 @@ function POSProductsContent({
 	initialFilters: Record<string, unknown>;
 }) {
 	const side = usePanelSide('products');
-	const { session } = useRegisterSession();
+	const { session, sessionsOn } = useRegisterSession();
 	const { uiSettings } = useUISettings('pos-products');
 	const state = useQueryState<'products'>();
 	const actions = useQueryStateActions<'products'>();
@@ -393,6 +394,15 @@ function POSProductsContent({
 					</ErrorBoundary>
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
+					{(session?.status === 'counting' || (!session && sessionsOn)) && (
+						<Text className="text-muted-foreground px-2 text-sm">
+							{t(
+								session?.status === 'counting'
+									? 'pos_products.counting_items_after_count'
+									: 'pos_products.price_check_only_until_open'
+							)}
+						</Text>
+					)}
 					<View
 						className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}
 						testID="register-products"

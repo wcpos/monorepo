@@ -6,6 +6,8 @@ import { of } from 'rxjs';
 
 import { RegisterPanel } from './register-panel';
 
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+
 jest.mock('@wcpos/query', () => ({
 	useDocField: jest.requireActual('@wcpos/core-test/mock-use-doc-field').mockUseDocField,
 }));

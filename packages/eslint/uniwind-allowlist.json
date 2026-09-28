@@ -93,16 +93,6 @@
   "packages/core/src/screens/main/pos/cart/cells/fee-name.tsx": {
     "grid/grid-cols-*": 2
   },
-  "packages/core/src/screens/main/pos/cart/closure-sheet.tsx": {
-    "arbitrary-px": 1,
-    "duration-literal": 1
-  },
-  "packages/core/src/screens/main/pos/cart/movement-sheet.tsx": {
-    "arbitrary-px": 3
-  },
-  "packages/core/src/screens/main/pos/cart/register-panel.tsx": {
-    "arbitrary-px": 1
-  },
   "packages/core/src/screens/main/pos/checkout/column/checkout-column.tsx": {
     "arbitrary-px": 2
   },
