@@ -155,7 +155,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			// Printer, SumUp and WebRTC use reflection; enabling R8 is a separate ticket.
 			[
 				'expo-build-properties',
-				{ android: { minSdkVersion: 26, enableMinifyInReleaseBuilds: false } },
+				{
+					android: {
+						minSdkVersion: 26,
+						enableMinifyInReleaseBuilds: false,
+						// The dev client only ever runs on 64-bit hardware: arm64-v8a on real devices,
+						// x86_64 on the E2E emulators. Building the two 32-bit ABIs as well is what
+						// pushed the SDK 58 (React Native 0.88) native compile past EAS's medium
+						// worker on 2026-09-28: the Gradle daemon was killed mid-C++ after 57 minutes
+						// (EAS build 8c72b2ba). Store and adhoc builds keep the template's four ABIs.
+						...(isDev ? { buildArchs: ['arm64-v8a', 'x86_64'] } : {}),
+					},
+				},
 			],
 			[
 				'@stripe/stripe-terminal-react-native',
