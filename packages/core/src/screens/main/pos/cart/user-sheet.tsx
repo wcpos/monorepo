@@ -6,7 +6,7 @@ import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { map } from 'rxjs';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
@@ -21,7 +21,7 @@ import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { AddUserButton } from '../../../auth/components/add-user-button';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { usePOSOverlaySide } from '../contexts/overlay-side';
+import { usePanelSide } from '../contexts/overlay-side/v2';
 
 export function useSalesToday() {
 	const { wpCredentials, store } = useStoreSession();
@@ -137,12 +137,12 @@ export function UserSheet({
 }) {
 	const { site, wpCredentials, logout } = useStoreSession();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('shell');
 	const { registers } = useRegisterBinding();
 	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} portalHost="pos" testID="user-sheet">
+			<DialogContent side={side} size="lg" portalHost="pos" testID="user-sheet">
 				<DialogHeader>
 					<DialogTitle>{displayName}</DialogTitle>
 				</DialogHeader>

@@ -28,6 +28,7 @@ type ProductHit = {
 };
 
 interface ProductGridProps {
+	noDataMessage?: React.ReactElement;
 	binding: ReturnType<typeof import('../../../../../query').useRelationalCollectionBinding>;
 	actions: Pick<QueryStateActions<'products'>, 'extendLimit'>;
 }
@@ -44,7 +45,7 @@ interface GridFields {
 	cost_of_goods_sold: boolean;
 }
 
-export function ProductGrid({ binding, actions }: ProductGridProps) {
+export function ProductGrid({ binding, actions, noDataMessage }: ProductGridProps) {
 	const { uiSettings } = useUISettings('pos-products');
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
@@ -145,7 +146,9 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 							{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
 								<Text testID="search-pending-message">{t('common.searching')}</Text>
 							) : (
-								<Text testID="no-data-message">{t('common.no_products_found')}</Text>
+								(noDataMessage ?? (
+									<Text testID="no-data-message">{t('common.no_products_found')}</Text>
+								))
 							)}
 						</View>
 					)}

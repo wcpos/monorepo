@@ -5,7 +5,7 @@ import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 
 import { useDocField } from '@wcpos/query';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import type { ClosureDocument } from '@wcpos/database';
@@ -14,7 +14,7 @@ import { useSessionReport } from '../../../../services/register-session/use-sess
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { usePOSOverlaySide } from '../contexts/overlay-side';
+import { usePanelSide } from '../contexts/overlay-side/v2';
 import { countVariance, varianceText } from './register-count.helpers';
 
 export type ClosureCount = {
@@ -38,7 +38,7 @@ export function ClosureSheet({
 	const [error, setError] = React.useState('');
 	const t = useT();
 	const { format } = useCurrencyFormat();
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	return (
 		<Dialog
 			open
@@ -46,7 +46,7 @@ export function ClosureSheet({
 				if (!open) onDone();
 			}}
 		>
-			<DialogContent side={side} portalHost="pos" testID="closure-sheet">
+			<DialogContent side={side} size="lg" portalHost="pos" testID="closure-sheet">
 				<Animated.View
 					entering={ZoomIn.duration(180).reduceMotion(ReduceMotion.System)}
 					className="bg-success/10 h-10 w-10 items-center justify-center rounded-full"

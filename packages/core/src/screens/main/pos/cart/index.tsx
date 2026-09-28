@@ -7,6 +7,7 @@ import { Button, ButtonGroupSeparator } from '@wcpos/components/button';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 import './register-cart-bar-entries';
@@ -119,7 +120,15 @@ export function OpenOrders({
 				) : session && session.status !== 'open' ? (
 					<RegisterCount key={session.id} onClosed={setClosure} />
 				) : isColumn && receiptOrderUuid ? (
-					<React.Suspense fallback={null}>
+					<React.Suspense
+						fallback={
+							<View className="gap-2 p-2">
+								{[0, 1, 2].map((row) => (
+									<Skeleton key={row} shape="row" />
+								))}
+							</View>
+						}
+					>
 						<ReceiptLedger uuid={receiptOrderUuid} />
 					</React.Suspense>
 				) : isColumn && !isNewOrder && stage === 'checkout' ? (

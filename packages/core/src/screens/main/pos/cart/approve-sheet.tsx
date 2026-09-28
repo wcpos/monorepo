@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Input } from '@wcpos/components/input';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
@@ -11,7 +11,7 @@ import { recordRegisterFact, useRegisterActor } from '../../../../services/regis
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
-import { usePOSOverlaySide } from '../contexts/overlay-side';
+import { usePanelSide } from '../contexts/overlay-side/v2';
 
 export function ApproveSheet({
 	counted,
@@ -31,7 +31,7 @@ export function ApproveSheet({
 	const [busy, setBusy] = React.useState(false);
 	const [error, setError] = React.useState('');
 	const t = useT();
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	const confirm = async () => {
 		if (!online || busy || !session) return;
 		setBusy(true);
@@ -71,7 +71,7 @@ export function ApproveSheet({
 	};
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
-			<DialogContent side={side} portalHost="pos" testID="approve-sheet">
+			<DialogContent side={side} size="lg" portalHost="pos" testID="approve-sheet">
 				<DialogTitle>{t('register.manager_approval')}</DialogTitle>
 				{!online && <Text testID="approve-offline">{t('register.approve_offline')}</Text>}
 				<ApprovalFields {...{ username, password, setUsername, setPassword }} />

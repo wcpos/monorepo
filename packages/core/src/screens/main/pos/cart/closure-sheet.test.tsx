@@ -26,7 +26,7 @@ jest.mock('../../../../contexts/translations', () => ({ useT: () => createTestT(
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -157,3 +157,5 @@ it('updates the title to the server number once acknowledged', () => {
 	);
 	expect(screen.getByTestId('closure-sheet').textContent).toContain('Closure 4 written');
 });
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

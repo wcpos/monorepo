@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { useDocField } from '@wcpos/query';
@@ -15,7 +15,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { usePOSOverlaySide } from '../contexts/overlay-side';
+import { usePanelSide } from '../contexts/overlay-side/v2';
 import { MovementSheet } from './movement-sheet';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 
@@ -62,7 +62,7 @@ export function RegisterPanel({
 	const capabilities = useDocField(wpCredentials, (value) => value.capabilities);
 	const reportsDenied = !!capabilities && !capabilities.includes('view_woocommerce_pos_reports');
 	const router = useRouter();
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	const attempt = async (action: () => Promise<unknown>) => {
 		try {
 			await action();
@@ -88,7 +88,7 @@ export function RegisterPanel({
 	const refused = refusedMovements;
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} portalHost="pos" testID="register-panel">
+			<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
 				<DialogTitle testID="register-panel-amount" className="text-[32px] tabular-nums">
 					{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
 				</DialogTitle>

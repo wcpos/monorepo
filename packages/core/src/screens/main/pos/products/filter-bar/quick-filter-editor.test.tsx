@@ -96,28 +96,7 @@ jest.mock('@wcpos/components/select', () => {
 		SelectValue: () => null,
 	};
 });
-jest.mock('@wcpos/components/toggle-group', () => {
-	const Context = React.createContext<(value: string) => void>(() => {});
-	function ToggleGroup({
-		children,
-		onValueChange,
-	}: React.PropsWithChildren<{ onValueChange?: (value: string) => void }>) {
-		return <Context.Provider value={onValueChange ?? (() => {})}>{children}</Context.Provider>;
-	}
-	function ToggleGroupItem({
-		children,
-		value,
-		testID,
-	}: React.PropsWithChildren<{ value: string; testID?: string }>) {
-		const onValueChange = React.useContext(Context);
-		return (
-			<button type="button" data-testid={testID} onClick={() => onValueChange(value)}>
-				{children}
-			</button>
-		);
-	}
-	return { ToggleGroup, ToggleGroupItem };
-});
+
 jest.mock('@wcpos/components/tree-combobox', () => ({
 	TreeCombobox: ({ children }: React.PropsWithChildren) => <>{children}</>,
 	TreeComboboxContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
@@ -246,3 +225,5 @@ it('keeps a zero price bound unbounded', () => {
 
 	expect((screen.getByTestId('quick-filter-save') as HTMLButtonElement).disabled).toBe(true);
 });
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

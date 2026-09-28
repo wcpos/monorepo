@@ -75,7 +75,7 @@ jest.mock('../../../../contexts/translations', () => ({
 jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (v: number) => `£${v.toFixed(2)}` }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('../../receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({ print, resolvedPrinter: { autoOpenDrawer: true } }),
 }));
@@ -397,3 +397,5 @@ it.each([[undefined], [[]], [['view_woocommerce_pos_reports']]])(
 		expect(mockPush).toHaveBeenCalledTimes(denied ? 0 : 1);
 	}
 );
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

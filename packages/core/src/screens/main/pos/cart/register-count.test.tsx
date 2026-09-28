@@ -11,7 +11,7 @@ jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -226,3 +226,5 @@ it.each([
 	render(<RegisterCount onClosed={jest.fn()} />);
 	expect(screen.getByTestId('count-unsynced').textContent).toContain(text);
 });
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

@@ -33,6 +33,29 @@ let mockSortDirection = 'asc';
 let mockViewMode = 'table';
 let mockGridColumns = 4;
 
+// The state primitives pull in Button (expo-haptics) and Icon (uniwind), both ESM-only under
+// jest; the doubles keep the props this screen reads.
+jest.mock('@wcpos/components/empty-state', () => ({
+	EmptyState: ({
+		title,
+		description,
+		testID,
+	}: {
+		title: string;
+		description?: string;
+		testID?: string;
+	}) => (
+		<section data-testid={testID}>
+			<h2>{title}</h2>
+			{description ? <p>{description}</p> : null}
+		</section>
+	),
+}));
+jest.mock('@wcpos/components/skeleton', () => ({
+	Skeleton: ({ shape }: { shape?: string }) => <div data-testid="skeleton" data-shape={shape} />,
+	skeletonCount: () => 3,
+	SKELETON_MAX_ROWS: 12,
+}));
 jest.mock('../../../../services/register-session/use-register-session', () => ({
 	useRegisterSession: () => ({ session: null, sessionsOn: false }),
 }));

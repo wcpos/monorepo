@@ -47,6 +47,7 @@ jest.mock('../checkout/receipt-stage/receipt-stage', () => ({
 	),
 }));
 jest.mock('react-native-reanimated', () => ({
+	Easing: { bezier: jest.fn() },
 	__esModule: true,
 	default: { View: ({ children }: PanelProps) => <div>{children}</div> },
 	FadeIn: { duration: () => ({}) },

@@ -1,12 +1,12 @@
 import * as React from 'react';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
-import { usePOSOverlaySide } from '../../contexts/overlay-side';
+import { usePanelSide } from '../../contexts/overlay-side/v2';
 
 interface Props {
 	title: string;
@@ -17,7 +17,7 @@ interface Props {
  *
  */
 function EditCartItemButton({ title, children }: Props) {
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	const [openDialog, setOpenDialog] = React.useState(false);
 
 	return (

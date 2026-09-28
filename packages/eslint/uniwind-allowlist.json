@@ -97,9 +97,6 @@
     "arbitrary-px": 1,
     "duration-literal": 1
   },
-  "packages/core/src/screens/main/pos/cart/index.tsx": {
-    "bare-Suspense": 1
-  },
   "packages/core/src/screens/main/pos/cart/movement-sheet.tsx": {
     "arbitrary-px": 3
   },
@@ -121,9 +118,6 @@
     "duration-literal": 2
   },
   "packages/core/src/screens/main/pos/products/cells/variations-popover/index.tsx": {
-    "bare-Suspense": 1
-  },
-  "packages/core/src/screens/main/pos/products/index.tsx": {
     "bare-Suspense": 1
   },
   "packages/core/src/screens/main/pos/products/scan-sound-themes.ts": {

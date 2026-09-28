@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
-import { Text } from '@wcpos/components/text';
+import { Notice } from '@wcpos/components/notice';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -47,28 +46,22 @@ export function StorageOutageBanner() {
 	}
 
 	return (
-		<View
+		<Notice
+			tone="bad"
+			title={t('pos_products.scan_storage_outage_banner')}
 			testID="storage-outage-banner"
-			className="border-destructive/40 bg-destructive/10 flex-row items-center gap-2 rounded-md border p-2"
-		>
-			<Text className="text-destructive flex-1 text-sm">
-				{t('pos_products.scan_storage_outage_banner')}
-			</Text>
-			{/*
-			 * Reload is the only recovery from a dead worker (the storage worker is
-			 * module-scope and shared app-wide), so the banner carries the action
-			 * rather than only describing it.
-			 */}
-			<Pressable testID="storage-outage-reload" onPress={handleReload}>
-				<Text className="text-destructive web:hover:opacity-80 text-sm font-medium underline">
-					{t('pos_products.scan_storage_outage_reload')}
-				</Text>
-			</Pressable>
-			<Pressable testID="scan-outage-view-status" onPress={() => router.push('/health/database')}>
-				<Text className="text-destructive text-sm font-medium underline">
-					{t('pos_products.scan_outage_view_status')}
-				</Text>
-			</Pressable>
-		</View>
+			actions={[
+				{
+					label: t('pos_products.scan_storage_outage_reload'),
+					onPress: handleReload,
+					testID: 'storage-outage-reload',
+				},
+				{
+					label: t('pos_products.scan_outage_view_status'),
+					onPress: () => router.push('/health/database'),
+					testID: 'scan-outage-view-status',
+				},
+			]}
+		/>
 	);
 }

@@ -13,7 +13,7 @@ import {
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { Text } from '@wcpos/components/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
+import { type Segment, SegmentedControl } from '@wcpos/components/segmented-control';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
@@ -107,18 +107,20 @@ export function UISettingsForm() {
 						render={({ field: { value, onChange } }) => (
 							<View className="gap-1 px-1">
 								<Text>{getUILabel('openOrdersPosition')}</Text>
-								<ToggleGroup
-									type="single"
+								<SegmentedControl
 									value={value}
 									onValueChange={(val) => onChange(val || value)}
-								>
-									<ToggleGroupItem value="top" testID="open-orders-position-top">
-										<Text>{t('common.top')}</Text>
-									</ToggleGroupItem>
-									<ToggleGroupItem value="bottom" testID="open-orders-position-bottom">
-										<Text>{t('common.bottom')}</Text>
-									</ToggleGroupItem>
-								</ToggleGroup>
+									segments={
+										[
+											{ value: 'top', label: t('common.top'), testID: 'open-orders-position-top' },
+											{
+												value: 'bottom',
+												label: t('common.bottom'),
+												testID: 'open-orders-position-bottom',
+											},
+										] satisfies [Segment, Segment]
+									}
+								/>
 							</View>
 						)}
 					/>
