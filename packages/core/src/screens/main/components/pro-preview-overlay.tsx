@@ -1,6 +1,5 @@
 import * as React from 'react';
-import type { ViewInstance } from 'react-native';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, type ViewInstance } from 'react-native';
 
 import { BlurView } from 'expo-blur';
 

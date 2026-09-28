@@ -1,6 +1,5 @@
 import * as React from 'react';
-import type { ViewInstance } from 'react-native';
-import { Platform, ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import {

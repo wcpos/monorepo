@@ -1,7 +1,11 @@
 import * as React from 'react';
 
 import { Circle, Line as SkiaLine, useFont, vec } from '@shopify/react-native-skia';
-import { ComposedGesture, Gesture, type LegacyComposedGesture } from 'react-native-gesture-handler';
+import {
+	type ComposedGesture,
+	Gesture,
+	type LegacyComposedGesture,
+} from 'react-native-gesture-handler';
 import { useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useCSSVariable } from 'uniwind';

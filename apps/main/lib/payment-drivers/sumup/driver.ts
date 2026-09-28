@@ -1,5 +1,4 @@
-import type { Permission } from 'react-native';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { type Permission, PermissionsAndroid, Platform } from 'react-native';
 
 import type {
 	CollectResult,

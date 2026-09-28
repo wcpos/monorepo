@@ -1,0 +1,39 @@
+diff --git a/lib/commonjs/Platform/Platform.web.js b/lib/commonjs/Platform/Platform.web.js
+index c00eea491dbdbcd8bd9260584697fecc8f1070f7..ee0876a1d104224d845082869716025de7e30420 100644
+--- a/lib/commonjs/Platform/Platform.web.js
++++ b/lib/commonjs/Platform/Platform.web.js
+@@ -52,7 +52,7 @@ const Platform = exports.Platform = {
+       if (typeof require === "function") {
+         const {
+           getAssetByID
+-        } = require("react-native/Libraries/Image/AssetRegistry");
++        } = require("react-native-web/dist/modules/AssetRegistry");
+         const {
+           httpServerLocation,
+           name,
+diff --git a/lib/module/Platform/Platform.web.js b/lib/module/Platform/Platform.web.js
+index 346a72edb9bad13eb2fd0235f5f0876e0bf15665..10e731b87c7cc71f56f29f8f3bb09406eacf8cb0 100644
+--- a/lib/module/Platform/Platform.web.js
++++ b/lib/module/Platform/Platform.web.js
+@@ -45,7 +45,7 @@ export const Platform = {
+       if (typeof require === "function") {
+         const {
+           getAssetByID
+-        } = require("react-native/Libraries/Image/AssetRegistry");
++        } = require("react-native-web/dist/modules/AssetRegistry");
+         const {
+           httpServerLocation,
+           name,
+diff --git a/src/Platform/Platform.web.tsx b/src/Platform/Platform.web.tsx
+index a4df35eb89c1a97598938a704e8e28eece486f87..80e35d45616302182b9f514c236155f70748503e 100644
+--- a/src/Platform/Platform.web.tsx
++++ b/src/Platform/Platform.web.tsx
+@@ -48,7 +48,7 @@ export const Platform: IPlatform = {
+       if (typeof require === "function") {
+         const {
+           getAssetByID,
+-        } = require("react-native/Libraries/Image/AssetRegistry");
++        } = require("react-native-web/dist/modules/AssetRegistry");
+         const { httpServerLocation, name, type } = getAssetByID(asset);
+         const uri = `${httpServerLocation}/${name}.${type}`;
+         return uri;

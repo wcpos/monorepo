@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { type GestureResponderEvent, Pressable, ViewInstance } from 'react-native';
+import { type GestureResponderEvent, Pressable, type ViewInstance } from 'react-native';
 
 import * as Select from '@radix-ui/react-select';
 import { useComposedRefs } from '@rn-primitives/hooks';

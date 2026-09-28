@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type {
+import {
 	AccessibilityInfo,
 	BackHandler,
 	findNodeHandle,
@@ -8,7 +8,7 @@ import type {
 	type StyleProp,
 	StyleSheet,
 	View,
-	ViewInstance,
+	type ViewInstance,
 	type ViewStyle,
 } from 'react-native';
 

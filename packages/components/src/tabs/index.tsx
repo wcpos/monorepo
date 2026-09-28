@@ -1,9 +1,9 @@
 import * as React from 'react';
-import type {
+import {
 	type LayoutChangeEvent,
 	Platform,
 	ScrollView,
-	ScrollViewInstance,
+	type ScrollViewInstance,
 	View,
 } from 'react-native';
 

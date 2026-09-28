@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { View, ViewInstance, type ViewProps } from 'react-native';
+import { View, type ViewInstance, type ViewProps } from 'react-native';
 
 import { Button } from '../button';
 import { HStack } from '../hstack';

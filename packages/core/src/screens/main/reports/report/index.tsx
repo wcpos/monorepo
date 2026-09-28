@@ -1,6 +1,5 @@
 import * as React from 'react';
-import type { ViewInstance } from 'react-native';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, View, type ViewInstance } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@wcpos/components/card';

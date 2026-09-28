@@ -1,10 +1,10 @@
 import * as React from 'react';
-import type {
-	KeyDownEvent,
+import {
+	type KeyDownEvent,
 	Platform,
 	Pressable,
 	View,
-	ViewInstance,
+	type ViewInstance,
 	type ViewProps,
 } from 'react-native';
 

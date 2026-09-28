@@ -6,6 +6,9 @@
 		"declaration": true,
 		"module": "commonjs",
 		"moduleResolution": "node",
+		// RN 0.88 exposes its types only via package exports, which node10 resolution cannot read; map the entry directly until this build moves to bundler resolution.
+		"baseUrl": ".",
+		"paths": { "react-native": ["../../node_modules/react-native/types_generated/index.d.ts"] },
 		"customConditions": null,
 		"target": "es2019",
 		"jsx": "react-jsx",

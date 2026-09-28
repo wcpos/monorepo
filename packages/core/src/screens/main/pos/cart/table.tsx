@@ -1,6 +1,5 @@
 import * as React from 'react';
-import type { ScrollViewInstance } from 'react-native';
-import { ScrollView } from 'react-native';
+import { ScrollView, type ScrollViewInstance } from 'react-native';
 
 import {
 	columnVisibilityFeature,

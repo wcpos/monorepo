@@ -1,6 +1,5 @@
 import * as React from 'react';
-import type { ViewInstance } from 'react-native';
-import { View } from 'react-native';
+import { View, type ViewInstance } from 'react-native';
 
 import { useVirtualizer } from '@tanstack/react-virtual';
 

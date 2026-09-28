@@ -1,6 +1,5 @@
 import * as React from 'react';
-import type { TextInputInstance } from 'react-native';
-import { View } from 'react-native';
+import { type TextInputInstance, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/dialog';

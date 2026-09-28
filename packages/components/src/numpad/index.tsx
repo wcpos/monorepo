@@ -1,6 +1,5 @@
 import * as React from 'react';
-import type { TextInputInstance } from 'react-native';
-import { TextInputKeyPressEvent } from 'react-native';
+import type { TextInputInstance, TextInputKeyPressEvent } from 'react-native';
 
 import toNumber from 'lodash/toNumber';
 

@@ -1,6 +1,5 @@
-import type { Permission } from 'react-native';
+import { AppState, type Permission, PermissionsAndroid, Platform } from 'react-native';
 import * as React from 'react';
-import { AppState, PermissionsAndroid, Platform } from 'react-native';
 
 import {
 	requestNeededAndroidPermissions,

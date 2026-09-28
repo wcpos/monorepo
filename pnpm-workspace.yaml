@@ -194,6 +194,11 @@ patchedDependencies:
   react-native-drawer-layout@4.2.10: patches/react-native-drawer-layout@4.2.10.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
   rxdb@17.4.0: patches/rxdb@17.4.0.patch
+  # Use react-native-web's AssetRegistry in Skia's web source and both JS builds.
+  # RN 0.88 removed the old path; Expo 58's web resolver refuses RN internals on web.
+  # Skia 2.13.0 still carries it; Shopify/react-native-skia#2702 (2024) asked for the change.
+  # Drop when Skia stops deep-importing react-native on web.
+  "@shopify/react-native-skia@2.11.2": "patches/@shopify__react-native-skia@2.11.2.patch"
   # NOTE: rxdb-premium cannot be patched here — its dist/ is produced by a
   # license-gated postinstall, so it is absent from the tarball pnpm patches.
   # The resurrection-index-leak fix for it lives in
