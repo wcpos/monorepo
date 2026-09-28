@@ -72,6 +72,13 @@ function loadCreateAppEngine(
 	const networkInfo = jest.fn();
 	const networkWarn = jest.fn();
 	const networkError = jest.fn();
+	const setSyncEngineLogger = jest.fn();
+	const getLogger = jest.fn(() => ({
+		debug: jest.fn(),
+		info: networkInfo,
+		warn: networkWarn,
+		error: networkError,
+	}));
 	const markStorageTerminallyFailed = jest.fn((_databaseName: string, _reason: string) => true);
 	const forceFreeDatabaseRegistration = jest.fn((_databaseName: string) => true);
 	const getDatabaseEpoch = jest.fn(() => 0);
@@ -136,6 +143,7 @@ function loadCreateAppEngine(
 	jest.doMock('@wcpos/sync-engine', () => ({
 		createRxdbSyncEngine,
 		createWriteOutcomeBridge,
+		setSyncEngineLogger,
 		// The engine fetcher hydrates 2xx responses through this seam (B9); an
 		// identity stub keeps these engine-lifecycle tests transport-free.
 		hydrateResponse: jest.fn(async (response: Response) => response),
@@ -158,12 +166,7 @@ function loadCreateAppEngine(
 		defaultConfig: { storage: { name: 'test-storage' } },
 	}));
 	jest.doMock('@wcpos/utils/logger', () => ({
-		getLogger: jest.fn(() => ({
-			debug: jest.fn(),
-			info: networkInfo,
-			warn: networkWarn,
-			error: networkError,
-		})),
+		getLogger,
 		getDatabaseEpoch,
 	}));
 	jest.doMock('./metrics', () => ({
@@ -182,6 +185,8 @@ function loadCreateAppEngine(
 		switchAppEngineScope,
 		createRxdbSyncEngine,
 		appMetricsObserver,
+		setSyncEngineLogger,
+		getLogger,
 		recordTransport,
 		recordServerLoad,
 		reportNetworkResponse,
@@ -199,6 +204,19 @@ function loadCreateAppEngine(
 }
 
 describe('createAppSyncEngine scope cache', () => {
+	it('routes the engine warn sink to the orders logger category', () => {
+		const { setSyncEngineLogger, getLogger, networkWarn } = loadCreateAppEngine();
+		expect(setSyncEngineLogger).toHaveBeenCalledTimes(1);
+		const sink = setSyncEngineLogger.mock.calls[0]![0];
+		const message = 'Refund parent seed failed after order ingestion';
+		const meta = { context: { parentRemoteId: 'remote-1', error: 'Error: boom' } };
+
+		sink.warn(message, meta);
+
+		expect(getLogger).toHaveBeenCalledWith(['wcpos', 'sync', 'orders']);
+		expect(networkWarn).toHaveBeenCalledWith(message, meta);
+	});
+
 	it('prompts sign-in once per newly exhausted token', async () => {
 		const fetch = jest
 			.spyOn(globalThis, 'fetch')
