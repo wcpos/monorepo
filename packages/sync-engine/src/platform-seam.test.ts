@@ -108,8 +108,10 @@ describe('platform seam: how an aborted request rejects', () => {
 		//
 		// If an expo upgrade renames the exception or its reason, this breaks
 		// HERE — in milliseconds — instead of as a red box on a nightly.
+		// Expo 58 moved the iOS sources under ios/Expo/ (ios/Fetch/ -> ios/Expo/Fetch/);
+		// the Android path did not move. The exception and its reason are unchanged.
 		const ios = readFileSync(
-			path.join(ROOT, 'node_modules/expo/ios/Fetch/FetchExceptions.swift'),
+			path.join(ROOT, 'node_modules/expo/ios/Expo/Fetch/FetchExceptions.swift'),
 			'utf8'
 		);
 		const android = readFileSync(
