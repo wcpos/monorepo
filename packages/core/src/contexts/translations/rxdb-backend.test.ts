@@ -101,6 +101,52 @@ describe('RxDBBackend', () => {
 			expect(translationsState.set.mock.calls[0][1]()).toEqual(freshData);
 		});
 
+		itRolling(
+			'does not rewrite the cache when the rolling fetch returns what is stored',
+			async () => {
+				const cached = { 'common.cancel': 'Annuler' };
+				mockFetchResponse({ ...cached });
+				const translationsState = {
+					[`fr_CA@${TRANSLATION_VERSION}`]: cached,
+					set: jest.fn(),
+				};
+				const backend = createBackend({ translationsState });
+				const callback = jest.fn();
+				backend.read('fr_CA', 'core', callback);
+
+				await new Promise((r) => setTimeout(r, 0));
+
+				expect(mockFetch).toHaveBeenCalledTimes(1);
+				expect(callback).toHaveBeenCalledWith(null, cached);
+				expect(translationsState.set).not.toHaveBeenCalled();
+			}
+		);
+
+		itRolling('fetches a rolling ref once per backend and then serves the cache', async () => {
+			const freshData = { 'common.cancel': 'Nouvelle traduction' };
+			mockFetchResponse(freshData);
+			const translationsState: Record<string, unknown> & { set: jest.Mock } = {
+				set: jest.fn((key: string, next: () => unknown) => {
+					translationsState[key] = next();
+				}),
+			};
+			const backend = createBackend({ translationsState });
+			const first = jest.fn();
+			backend.read('fr_CA', 'core', first);
+			await new Promise((r) => setTimeout(r, 0));
+			expect(first).toHaveBeenCalledWith(null, freshData);
+			expect(translationsState.set).toHaveBeenCalledTimes(1);
+
+			// The write wakes the app state; the read it provokes must not fetch or write again.
+			const second = jest.fn();
+			backend.read('fr_CA', 'core', second);
+			await new Promise((r) => setTimeout(r, 0));
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(second).toHaveBeenCalledWith(null, freshData);
+			expect(translationsState.set).toHaveBeenCalledTimes(1);
+		});
+
 		itRolling.each(['network error', 'missing translations'])(
 			'falls back to the rolling cache on %s',
 			async (failure) => {

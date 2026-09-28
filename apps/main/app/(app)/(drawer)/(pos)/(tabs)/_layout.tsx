@@ -14,7 +14,7 @@ import { useNavigationBackground } from '../../../../../components/use-navigatio
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: 'index',
+	anchor: 'index',
 };
 
 /**
