@@ -1,0 +1,166 @@
+# Publishes @wcpos/sync-core and @wcpos/sync-engine on manual dispatch or sync-packages-v* tags.
+# Consumers need a token with read:packages. Versions are never committed by this workflow.
+name: Publish sync packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build, verify and pack, but do not publish
+        type: boolean
+        required: false
+        default: false
+  push:
+    tags:
+      - 'sync-packages-v*'
+
+permissions: {}
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: 🛡 Require a merged trunk commit
+        run: |
+          git fetch --no-tags origin main next 2>/dev/null || git fetch --no-tags origin main
+          for trunk in main next; do
+            if git merge-base --is-ancestor HEAD "origin/$trunk" 2>/dev/null; then
+              echo "HEAD is on $trunk"
+              exit 0
+            fi
+          done
+          echo "::error::Refusing to publish sync packages: HEAD is not contained in origin/main or origin/next. Use a ref from a trunk commit."
+          exit 1
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: 🏷 Resolve version
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          COMMITTED=$(node -p 'require("./packages/sync-core/package.json").version')
+          ENGINE_VERSION=$(node -p 'require("./packages/sync-engine/package.json").version')
+          if [[ "$COMMITTED" != "$ENGINE_VERSION" ]]; then
+            echo "::error::Sync package versions must match."
+            exit 1
+          fi
+          if [[ "$EVENT_NAME" == "push" && "$REF_TYPE" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#sync-packages-v}"
+            if [[ "$VERSION" != "$COMMITTED" ]]; then
+              echo "::error::Tag version must equal the committed sync package version."
+              exit 1
+            fi
+            DIST_TAG=latest
+            if [[ "$VERSION" == *-* ]]; then DIST_TAG=next; fi
+          else
+            BASE="${COMMITTED%%-*}"
+            VERSION="${BASE}-next.${GITHUB_RUN_NUMBER}.g${GITHUB_SHA::7}"
+            DIST_TAG=next
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "dist-tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: ✏️ Stamp version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          (cd packages/sync-core && npm pkg set version="$VERSION")
+          (cd packages/sync-engine && npm pkg set version="$VERSION")
+
+      - name: 🧪 Verify packages
+        run: node scripts/check-sync-packages-publish.mjs
+        env:
+          RXDB_PREMIUM: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: 📦 Pack tarballs
+        id: pack
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/sync-packages"
+          for package in sync-core sync-engine; do
+            (cd "packages/$package" && pnpm pack --pack-destination "$RUNNER_TEMP/sync-packages")
+            echo "$package=$RUNNER_TEMP/sync-packages/wcpos-$package-$VERSION.tgz" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: 🔏 Attest build provenance
+        if: ${{ !inputs.dry-run }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/sync-packages/*.tgz
+
+      - name: 🔑 Configure registry auth
+        run: |
+          echo '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' >> ~/.npmrc
+          echo '@wcpos:registry=https://npm.pkg.github.com' >> ~/.npmrc
+
+      - name: 🚀 Publish @wcpos/sync-core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+          DRY_RUN: ${{ inputs.dry-run || false }}
+          TARBALL: ${{ steps.pack.outputs.sync-core }}
+        run: |
+          if npm view "@wcpos/sync-core@$VERSION" version >/dev/null 2>&1; then
+            echo "::warning::@wcpos/sync-core@$VERSION is already published; skipping upload."
+          else
+            args=()
+            if [[ "$DRY_RUN" == "true" ]]; then args+=(--dry-run); fi
+            npm publish "$TARBALL" --registry https://npm.pkg.github.com --tag "$DIST_TAG" "${args[@]}"
+          fi
+
+      - name: 🚀 Publish @wcpos/sync-engine
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+          DRY_RUN: ${{ inputs.dry-run || false }}
+          TARBALL: ${{ steps.pack.outputs.sync-engine }}
+        run: |
+          if npm view "@wcpos/sync-engine@$VERSION" version >/dev/null 2>&1; then
+            echo "::warning::@wcpos/sync-engine@$VERSION is already published; skipping upload."
+          else
+            args=()
+            if [[ "$DRY_RUN" == "true" ]]; then args+=(--dry-run); fi
+            npm publish "$TARBALL" --registry https://npm.pkg.github.com --tag "$DIST_TAG" "${args[@]}"
+          fi
+
+      - name: 📝 Summary
+        if: always()
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+          DRY_RUN: ${{ inputs.dry-run || false }}
+        run: |
+          {
+            echo "Version: $VERSION"
+            echo "Dist-tag: $DIST_TAG"
+            echo "Dry-run: $DRY_RUN"
+            echo '~~~sh'
+            echo '@wcpos:registry=https://npm.pkg.github.com'
+            echo "pnpm add @wcpos/sync-engine@$VERSION @wcpos/sync-core@$VERSION rxdb@17.4.0"
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"

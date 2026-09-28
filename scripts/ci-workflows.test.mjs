@@ -3018,3 +3018,43 @@ test('pnpm never installs on its own before a script (verifyDepsBeforeRun lives 
 	const npmrc = path.join(ROOT, '.npmrc');
 	if (existsSync(npmrc)) assert.doesNotMatch(readFileSync(npmrc, 'utf8'), /verify-deps-before-run/);
 });
+
+test('sync packages publish from a verified trunk commit to GitHub Packages', () => {
+	const workflow = readWorkflow('publish-sync-packages.yml');
+	assert.deepEqual(Object.keys(workflow.on).sort(), ['push', 'workflow_dispatch']);
+	assert.deepEqual(workflow.on.push.tags, ['sync-packages-v*']);
+	assert.deepEqual(workflow.permissions, {});
+	assert.deepEqual(workflow.jobs.publish.permissions, {
+		contents: 'read',
+		packages: 'write',
+		'id-token': 'write',
+		attestations: 'write',
+	});
+
+	const steps = workflow.jobs.publish.steps;
+	const ordered = [
+		'🛡 Require a merged trunk commit',
+		'🏗 Setup monorepo',
+		'✏️ Stamp version',
+		'🧪 Verify packages',
+		'📦 Pack tarballs',
+		'🔏 Attest build provenance',
+		'🚀 Publish @wcpos/sync-core',
+		'🚀 Publish @wcpos/sync-engine',
+	].map((name) => findStep(workflow, 'publish', name));
+	for (let i = 1; i < ordered.length; i++) {
+		assert.ok(steps.indexOf(ordered[i - 1]) < steps.indexOf(ordered[i]));
+	}
+
+	const verify = findStep(workflow, 'publish', '🧪 Verify packages');
+	assert.equal(verify.run, 'node scripts/check-sync-packages-publish.mjs');
+	assert.equal(verify.env.RXDB_PREMIUM, '${{ secrets.RXDB_LICENSE_KEY }}');
+	for (const name of ['🚀 Publish @wcpos/sync-core', '🚀 Publish @wcpos/sync-engine']) {
+		const publish = findStep(workflow, 'publish', name);
+		assert.match(publish.run, /--registry https:\/\/npm\.pkg\.github\.com/);
+		assert.equal(publish.env.NODE_AUTH_TOKEN, '${{ secrets.GITHUB_TOKEN }}');
+	}
+	for (const step of steps) {
+		assert.doesNotMatch(JSON.stringify(step), /registry\.npmjs\.org|--provenance/);
+	}
+});
