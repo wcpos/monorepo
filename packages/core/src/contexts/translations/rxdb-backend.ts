@@ -3,7 +3,8 @@
 export const TRANSLATION_VERSION = 'next';
 
 // A rolling ref must be re-fetched because its content changes under the same name.
-const ROLLING_TRANSLATION_VERSION = 'next';
+// (Named REF, not VERSION, so the release bump regex `TRANSLATION_VERSION = '…'` cannot match it.)
+const ROLLING_TRANSLATION_REF = 'next';
 
 /**
  * Custom i18next backend that loads translations from jsDelivr CDN
@@ -49,7 +50,7 @@ export class RxDBBackend {
 
 		// Only pinned versions can return cached translations without re-fetching.
 		const cached = this.translationsState?.[cacheKey];
-		if (TRANSLATION_VERSION !== ROLLING_TRANSLATION_VERSION && cached != null) {
+		if (TRANSLATION_VERSION !== ROLLING_TRANSLATION_REF && cached != null) {
 			callback(null, cached);
 			return;
 		}
