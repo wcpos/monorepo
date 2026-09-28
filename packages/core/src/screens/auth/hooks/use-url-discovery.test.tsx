@@ -64,9 +64,15 @@ describe('useUrlDiscovery', () => {
 			'https://example.com/wp-json/'
 		);
 
+		// EXACT options again: `wcpos=1` is what makes a plugin from 1.10.0 on
+		// stamp Access-Control-Allow-Origin on a marker-less HEAD of the REST
+		// index; without it the browser refuses the probe and a host that strips
+		// the front page's Link header reads as "not a WordPress site"
+		// (roadmap#383).
 		expect(mockHead).toHaveBeenNthCalledWith(2, 'https://example.com/wp-json/', {
 			timeout: 10_000,
 			quietErrors: true,
+			params: { wcpos: 1 },
 		});
 	});
 
