@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, type ViewProps } from 'react-native';
+import type { View, ViewInstance, type ViewProps } from 'react-native';
 
 import { Button } from '../button';
 import { HStack } from '../hstack';
@@ -25,7 +25,7 @@ export function Breadcrumb({
 	className,
 	...props
 }: BreadcrumbProps) {
-	const backRef = React.useRef<React.ElementRef<typeof View>>(null);
+	const backRef = React.useRef<ViewInstance>(null);
 	const focusOnMount = React.useRef(autoFocus);
 	// Drill-in focus is a mount action, never a response to changing parents.
 	React.useEffect(() => {

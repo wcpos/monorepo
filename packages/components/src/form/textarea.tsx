@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { TextInput } from 'react-native';
+import type { TextInputInstance } from 'react-native';
 
 import { useFormControlAria } from './aria';
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
@@ -15,13 +15,13 @@ export function FormTextarea({
 	ref,
 	...props
 }: FormItemProps<string> &
-	Partial<React.ComponentProps<typeof Textarea>> & { ref?: React.Ref<TextInput> }) {
-	const textareaRef = React.useRef<TextInput>(null);
+	Partial<React.ComponentProps<typeof Textarea>> & { ref?: React.Ref<TextInputInstance> }) {
+	const textareaRef = React.useRef<TextInputInstance>(null);
 	const { labelNativeID, ariaProps } = useFormControlAria({ label, description });
 
 	React.useImperativeHandle(ref, () => {
 		if (!textareaRef.current) {
-			return {} as TextInput;
+			return {} as TextInputInstance;
 		}
 		return textareaRef.current;
 	}, []);

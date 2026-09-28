@@ -1,3 +1,4 @@
+import type { Permission } from 'react-native';
 import { PermissionsAndroid, Platform } from 'react-native';
 
 import type {
@@ -125,7 +126,7 @@ export function createSumUpDriver({ bootstrap, resolveMethod }: Options) {
 	};
 	const permissions = async () => {
 		if (Platform.OS !== 'android') return;
-		const needed = [
+		const needed: Permission[] = [
 			PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
 			PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
 		];

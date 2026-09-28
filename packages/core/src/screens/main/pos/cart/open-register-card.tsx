@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { type TextInput, View } from 'react-native';
+import type { TextInputInstance } from 'react-native';
+import { View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
@@ -21,7 +22,7 @@ export function OpenRegisterCard() {
 	const amount = enteredAmount ?? expectedFloat ?? '';
 	const [busy, setBusy] = React.useState(false);
 	const [error, setError] = React.useState('');
-	const input = React.useRef<TextInput>(null);
+	const input = React.useRef<TextInputInstance>(null);
 	const t = useT();
 	const { format } = useCurrencyFormat();
 	const open = async () => {

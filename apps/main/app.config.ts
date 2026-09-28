@@ -152,7 +152,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				},
 			],
 			// Expo 57 already supplies compile/target SDK >= 35; only the minimum must move.
-			['expo-build-properties', { android: { minSdkVersion: 26 } }],
+			// Printer, SumUp and WebRTC use reflection; enabling R8 is a separate ticket.
+			[
+				'expo-build-properties',
+				{ android: { minSdkVersion: 26, enableMinifyInReleaseBuilds: false } },
+			],
 			[
 				'@stripe/stripe-terminal-react-native',
 				{

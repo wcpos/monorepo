@@ -1,5 +1,5 @@
 import * as React from 'react';
-import {
+import type {
 	AccessibilityInfo,
 	BackHandler,
 	findNodeHandle,
@@ -8,6 +8,7 @@ import {
 	type StyleProp,
 	StyleSheet,
 	View,
+	ViewInstance,
 	type ViewStyle,
 } from 'react-native';
 
@@ -147,7 +148,7 @@ export function OverlaySheetPanel({
 }) {
 	const { open, onPanelNode } = useOverlay();
 	const setNode = React.useCallback(
-		(panel: View | null) => {
+		(panel: ViewInstance | null) => {
 			onPanelNode(panel as unknown as HTMLElement | null);
 			// Native: the primitive Content moved accessibility focus into itself on open; the sheet does the same.
 			if (isWeb || !panel) return;

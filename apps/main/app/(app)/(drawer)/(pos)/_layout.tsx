@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, type ViewInstance } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 import { SystemBars } from 'react-native-edge-to-edge';
@@ -143,7 +143,7 @@ function POSStack() {
 	const insets = useSafeAreaInsets();
 	const { theme } = useUniwind();
 	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
-	const registerPOSContainer = React.useCallback((node: View | null) => {
+	const registerPOSContainer = React.useCallback((node: ViewInstance | null) => {
 		registerPortalContainer('pos', Platform.OS === 'web' ? (node as unknown as HTMLElement) : null);
 	}, []);
 

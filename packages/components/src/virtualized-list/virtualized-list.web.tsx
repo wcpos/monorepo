@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { ViewInstance } from 'react-native';
 import { View } from 'react-native';
 
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -79,7 +80,7 @@ function Root({ style, horizontal = false, ...props }: RootProps) {
 		<RootContext.Provider value={value}>
 			<View
 				{...props}
-				ref={setRef as React.Ref<View>}
+				ref={setRef as React.Ref<ViewInstance>}
 				style={[
 					{
 						overflow: 'auto' as const,
@@ -294,7 +295,7 @@ function Item({ children, ...props }: ItemProps<any>) {
 			width: '100%',
 			transform: horizontal ? undefined : `translateY(${vItem.start}px)`,
 		},
-		ref: measureRef as unknown as React.Ref<View>,
+		ref: measureRef as unknown as React.Ref<ViewInstance>,
 	} as React.ComponentProps<typeof View>;
 
 	return <View {...webProps}>{children}</View>;

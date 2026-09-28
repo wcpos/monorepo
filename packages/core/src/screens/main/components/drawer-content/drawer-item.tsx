@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 import { VStack } from '@wcpos/components/vstack';
 import { Platform } from '@wcpos/utils/platform';
 
-import type { DrawerNavigationOptions } from 'expo-router/build/react-navigation/drawer';
+import type { DrawerNavigationOptions } from 'expo-router/drawer';
 
 type Props = {
 	/**

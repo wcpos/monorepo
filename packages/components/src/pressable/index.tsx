@@ -1,16 +1,16 @@
 import * as React from 'react';
+import type { ViewInstance } from 'react-native';
 import {
 	PressableStateCallbackType,
 	Pressable as RNPressable,
 	StyleProp,
-	View,
 	ViewStyle,
 } from 'react-native';
 
 export type PressableProps = import('react-native').PressableProps & {
 	onHoverIn?: () => void;
 	onHoverOut?: () => void;
-	ref?: React.Ref<View>;
+	ref?: React.Ref<ViewInstance>;
 };
 
 /**

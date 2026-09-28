@@ -331,7 +331,7 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 				<Button variant="outline" onPress={onClose}>
 					<ButtonText>{t('common.close')}</ButtonText>
 				</Button>
-				<Button loading={loading} onPress={onSave}>
+				<Button loading={loading} onPress={() => void onSave()}>
 					<ButtonText>{t('common.save')}</ButtonText>
 				</Button>
 			</ModalFooter>

@@ -257,7 +257,11 @@ export function EditVariationForm({ variation }: Props) {
 			</ModalBody>
 			<ModalFooter>
 				<ModalClose>{t('common.cancel')}</ModalClose>
-				<ModalAction testID="variation-edit-save-button" loading={loading} onPress={onSave}>
+				<ModalAction
+					testID="variation-edit-save-button"
+					loading={loading}
+					onPress={() => void onSave()}
+				>
 					{t('common.save')}
 				</ModalAction>
 			</ModalFooter>

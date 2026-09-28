@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { type LayoutChangeEvent, Platform, ScrollView, View } from 'react-native';
+import type {
+	type LayoutChangeEvent,
+	Platform,
+	ScrollView,
+	ScrollViewInstance,
+	View,
+} from 'react-native';
 
 import * as Haptics from 'expo-haptics';
 import * as TabsPrimitive from '@rn-primitives/tabs';
@@ -115,7 +121,7 @@ function MeasuredTab({
 }
 
 function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.ListProps) {
-	const scrollRef = React.useRef<ScrollView>(null);
+	const scrollRef = React.useRef<ScrollViewInstance>(null);
 	const totalWidthRef = React.useRef(0);
 	const containerWidthRef = React.useRef(0);
 	const [scrollable, setScrollable] = React.useState(false);

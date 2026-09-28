@@ -1,5 +1,12 @@
 import * as React from 'react';
-import { Platform, Pressable, View, type ViewProps } from 'react-native';
+import type {
+	KeyDownEvent,
+	Platform,
+	Pressable,
+	View,
+	ViewInstance,
+	type ViewProps,
+} from 'react-native';
 
 import { Icon, type IconName } from '../icon';
 import { cn } from '../lib/utils';
@@ -29,12 +36,12 @@ export function SegmentedControl({
 	className,
 	...props
 }: SegmentedControlProps) {
-	const refs = React.useRef<Record<string, View | null>>({});
+	const refs = React.useRef<Record<string, ViewInstance | null>>({});
 	const id = (part: string) => (testID ? `${testID}-${part}` : undefined);
 	const choose = (next: string) => {
 		if (next && next !== value) onValueChange(next);
 	};
-	const onKeyDown = (event: React.KeyboardEvent, from: string) => {
+	const onKeyDown = (event: React.KeyboardEvent | KeyDownEvent, from: string) => {
 		if (Platform.OS !== 'web') return;
 		const enabled = segments.filter((segment) => !segment.disabled);
 		const index = enabled.findIndex((segment) => segment.value === from);
@@ -46,7 +53,8 @@ export function SegmentedControl({
 			Home: 0,
 			End: enabled.length - 1,
 		};
-		const target = enabled[destinations[event.key]];
+		const key = 'key' in event ? event.key : event.nativeEvent.key;
+		const target = enabled[destinations[key]];
 		if (!target) return;
 		event.preventDefault();
 		choose(target.value);
@@ -74,7 +82,10 @@ export function SegmentedControl({
 					tabIndex={segment.value === value ? 0 : -1}
 					testID={segment.testID ?? id(`segment-${segment.value}`)}
 					onPress={() => choose(segment.value)}
-					{...{ onKeyDown: (event: React.KeyboardEvent) => onKeyDown(event, segment.value) }}
+					{...{
+						onKeyDown: (event: React.KeyboardEvent | KeyDownEvent) =>
+							onKeyDown(event, segment.value),
+					}}
 					className={cn(
 						'min-w-ctl web:hover:bg-muted flex-1 flex-row items-center justify-center gap-1.5 px-3 active:opacity-70',
 						index > 0 && 'border-border border-l',

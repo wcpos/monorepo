@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { TextInputInstance } from 'react-native';
 import { TextInput as RNTextInput, TextInputProps as RNTextInputProps, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
@@ -54,7 +55,7 @@ function Left({ children, className }: { children: React.ReactNode; className?: 
 }
 
 interface InputFieldProps extends RNTextInputProps {
-	ref?: React.Ref<RNTextInput>;
+	ref?: React.Ref<TextInputInstance>;
 	type?:
 		| 'text'
 		| 'numeric'
@@ -82,7 +83,7 @@ function InputField({
 	...props
 }: InputFieldProps) {
 	const { setIsFocused } = useInputContext();
-	const inputRef = React.useRef<RNTextInput>(null);
+	const inputRef = React.useRef<TextInputInstance>(null);
 	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	let keyboardType: RNTextInputProps['keyboardType'] = 'default';
@@ -210,7 +211,7 @@ function Input({
 		onChange: onChangeText,
 	});
 	const isDisabled = disabled || !editable;
-	const inputRef = React.useRef<RNTextInput>(null);
+	const inputRef = React.useRef<TextInputInstance>(null);
 	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	/**

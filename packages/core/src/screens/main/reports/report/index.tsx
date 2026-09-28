@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { ViewInstance } from 'react-native';
 import { ScrollView, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -35,7 +36,7 @@ import { useQueryState } from '../../../../query';
 export function Report() {
 	const t = useT();
 	const registerNames = useRegisterNames();
-	const contentRef = React.useRef<View>(null);
+	const contentRef = React.useRef<ViewInstance>(null);
 	const { store, wpCredentials } = useStoreSession();
 	const storeName = useDocField(store, (value) => value.name) as string;
 	const num_decimals = useDocField(store, (value) => value.price_num_decimals) as number;

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import type { ViewInstance } from 'react-native';
 import { Platform, ScrollView, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
@@ -59,7 +60,7 @@ export function Closures({
 	const t = useT();
 	const names = useRegisterNames();
 	const [error, setError] = React.useState('');
-	const registerContainer = React.useCallback((node: View | null) => {
+	const registerContainer = React.useCallback((node: ViewInstance | null) => {
 		registerPortalContainer(
 			'reports',
 			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
