@@ -22,6 +22,12 @@ export {
 	TERMINAL_WRITE_EVENT_TYPES,
 } from './create-rxdb-sync-engine';
 export {
+	setSyncEngineLogger,
+	type SyncEngineLogger,
+	type SyncEngineLogMeta,
+} from './engine-logger';
+export type { UpdateRequiredDetails } from './update-required';
+export {
 	hydrateResponse,
 	type ResponseEnvelopeTransportState,
 } from './transport/response-envelope';

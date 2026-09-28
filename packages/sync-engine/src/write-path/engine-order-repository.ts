@@ -13,8 +13,8 @@ import {
 	withOrderColumns,
 	wooIdOf,
 } from '@wcpos/sync-core';
-import { getLogger } from '@wcpos/utils/logger';
 
+import { engineWarn } from '../engine-logger';
 import { stripOrderManifestDigest } from '../local-coverage/existence-manifest-population';
 import {
 	type ManifestCollection,
@@ -215,12 +215,9 @@ export class EngineOrderRepository {
 				// A summary can announce a refund after an active walk's last request.
 				await seedRefundParentLane({ database: this.db, parentRemoteId, coalesceInFlight: true });
 			} catch (error) {
-				getLogger(['wcpos', 'sync', 'orders']).warn(
-					'Refund parent seed failed after order ingestion',
-					{
-						context: { parentRemoteId, error: String(error) },
-					}
-				);
+				engineWarn('Refund parent seed failed after order ingestion', {
+					context: { parentRemoteId, error: String(error) },
+				});
 			}
 		}
 		return applicable;

@@ -55,8 +55,8 @@ import type {
 	StoreScopeIdentity,
 	SyncObserver,
 } from '@wcpos/sync-core';
-import { parseUpdateRequiredBody, type UpdateRequiredDetails } from '@wcpos/utils/sync-protocol';
 
+import { parseUpdateRequiredBody, type UpdateRequiredDetails } from './update-required';
 import {
 	COVERAGE_LANE_HISTORY_LIMIT,
 	ENGINE_KV_COLLECTION,

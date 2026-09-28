@@ -31,6 +31,7 @@ import { composeObservers, scopeDatabaseName, type SyncEvent } from '@wcpos/sync
 import {
 	createRxdbSyncEngine,
 	createWriteOutcomeBridge,
+	setSyncEngineLogger,
 	writeOutcomeChannelName,
 } from '@wcpos/sync-engine';
 import type {
@@ -65,6 +66,11 @@ import { clearUpdateRequired, reportUpdateRequired } from './update-required-gat
 import { electWriteLeader } from './web-write-leader';
 
 const engineLogger = getLogger(['wcpos', 'sync', 'engine']);
+// The engine is published without @wcpos/utils, so it no longer imports the app
+// logger itself; route its process-wide warnings to the category it used before.
+setSyncEngineLogger({
+	warn: (message, meta) => getLogger(['wcpos', 'sync', 'orders']).warn(message, meta),
+});
 const isWeb = Platform.isWeb;
 // Below the successor's 15s readiness-watchdog first report; orders of magnitude above a healthy close.
 const ENGINE_DISPOSAL_DEADLINE_MS = 10_000;
