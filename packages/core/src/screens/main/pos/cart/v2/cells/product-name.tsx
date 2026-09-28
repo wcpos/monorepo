@@ -1,0 +1,105 @@
+import * as React from 'react';
+import { View } from 'react-native';
+
+import { useObservableEagerState } from 'observable-hooks';
+
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
+import type { CellContext } from '@wcpos/core/table-types';
+
+import { formatMetaDataValue } from '../../../../components/format-meta-data-value';
+import { EditCartItemButton } from '../../cells/edit-cart-item-button';
+import { EditLineItem } from '../../cells/edit-line-item';
+import { useT } from '../../../../../../contexts/translations';
+import { EditableField } from '../../../../components/editable-field';
+import { getStockRejectionForLine, stockRejection$ } from '../../../hooks/stock-rejection';
+import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
+import { useCurrentOrder } from '../../../contexts/current-order';
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+interface Props {
+	uuid: string;
+	item: LineItem;
+	type: 'line_items';
+}
+export function ProductName({ row, column, table }: CellContext<Props, 'name'>) {
+	const { item, uuid } = row.original;
+	const { currentOrderRecord } = useCurrentOrder();
+	const { updateLineItem } = useUpdateLineItem();
+	const stockRejection = useObservableEagerState(stockRejection$);
+	const t = useT();
+	/**
+	 * Highlight lines the server rejected at checkout, until the quantity no
+	 * longer exceeds what the server said was available (self-clearing).
+	 */
+	const rejectedItem = React.useMemo(
+		() =>
+			getStockRejectionForLine({
+				stockRejection,
+				orderUuid: currentOrderRecord.uuid ?? '',
+				lineItems: table.options.data
+					.filter((line) => line.type === 'line_items')
+					.map((line) => line.item),
+				lineItem: item,
+			}),
+		[stockRejection, currentOrderRecord.uuid, table.options.data, item]
+	);
+	/**
+	 * filter out the private meta data
+	 */
+	const metaData = React.useMemo(
+		() =>
+			(item.meta_data ?? []).filter((meta) => {
+				if (meta.key) {
+					return !meta.key.startsWith('_');
+				}
+				return true;
+			}),
+		[item.meta_data]
+	);
+	return (
+		<VStack className="w-full">
+			<HStack className="gap-0">
+				<View className="flex-1">
+					<EditableField
+						value={item.name}
+						onChangeText={(name) => updateLineItem(uuid, { name })}
+					/>
+				</View>
+				<EditCartItemButton title={t('common.edit_2', { name: item.name })}>
+					<EditLineItem uuid={uuid} item={item} />
+				</EditCartItemButton>
+			</HStack>
+			{rejectedItem && (
+				<Text className="text-destructive text-xs font-semibold">
+					{rejectedItem.available === null
+						? t('common.out_of_stock')
+						: t('pos_cart.n_available', { quantity: rejectedItem.available })}
+				</Text>
+			)}
+			{column.columnDef.meta?.show?.('sku') && <Text className="text-sm">{item.sku}</Text>}
+			{metaData.length > 0 && (
+				<VStack space="xs">
+					{metaData.map((meta) => (
+						<HStack key={meta.id || meta.key || meta.display_key} className="flex-wrap gap-0">
+							<Text
+								className="text-muted-foreground text-xs"
+								decodeHtml
+							>{`${meta.display_key || meta.key}: `}</Text>
+							{/* testID keyed by the attribute so E2E can assert this VALUE node
+							    (id + text must sit on one node: key and value are separate
+							    Texts, so no single node contains "Size: Small"). */}
+							<Text
+								className="text-xs"
+								decodeHtml
+								testID={`cart-line-meta-${meta.display_key || meta.key}`}
+							>
+								{formatMetaDataValue(meta.display_value || meta.value)}
+							</Text>
+						</HStack>
+					))}
+				</VStack>
+			)}
+		</VStack>
+	);
+}

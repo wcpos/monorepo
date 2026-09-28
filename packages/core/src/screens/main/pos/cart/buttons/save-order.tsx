@@ -15,7 +15,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
 /**
  *
  */
-export function SaveButton() {
+export function SaveButton({ label }: { label?: string } = {}) {
 	const { currentOrderRecord } = useCurrentOrder();
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
@@ -81,7 +81,7 @@ export function SaveButton() {
 				loading={loading}
 				disabled={loading || storageDegraded}
 			>
-				{t('pos_cart.save_to_server')}
+				{label ?? t('pos_cart.save_to_server')}
 			</Button>
 		</View>
 	);

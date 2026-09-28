@@ -33,7 +33,7 @@ const LATE_OUTCOME_TIMEOUT_MS = 120_000;
 /**
  *
  */
-export function VoidButton() {
+export function VoidButton({ onBeforeVoid }: { onBeforeVoid?: () => void } = {}) {
 	const currentOrder = useCurrentOrderRecord();
 	const router = useRouter();
 	const manager = useQueryRuntime();
@@ -103,6 +103,7 @@ export function VoidButton() {
 	 *
 	 */
 	const handleRemove = React.useCallback(async () => {
+		onBeforeVoid?.();
 		const registerId = getCurrentBoundRegisterId() ?? undefined;
 		// #163 ruling R5: voiding writes a delete (or a status change) that must be
 		// recorded locally. With the worker dead the order's fate is unknowable from
@@ -210,7 +211,7 @@ export function VoidButton() {
 				}
 			}
 		}
-	}, [blockIfDegraded, currentOrder, manager, t, undoRemove]);
+	}, [blockIfDegraded, currentOrder, manager, t, undoRemove, onBeforeVoid]);
 
 	/**
 	 *
