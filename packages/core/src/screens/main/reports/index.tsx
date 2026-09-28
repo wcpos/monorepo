@@ -188,7 +188,9 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 
 	return (
 		<QueryStateProvider
-			key={`${cashierScopeID}:${storeScopeID}`}
+			// The plan is part of the key: a licence that drops to Free remounts the query on
+			// today and the bound register instead of keeping a Pro-chosen scope alive.
+			key={`${cashierScopeID}:${storeScopeID}:${license?.isPro ? 'pro' : 'free'}`}
 			collection="orders"
 			initialPageSize={REPORTS_ALL_RESULTS_LIMIT}
 			initialSort={initialSort}

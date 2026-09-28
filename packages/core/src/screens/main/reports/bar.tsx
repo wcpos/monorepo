@@ -137,7 +137,10 @@ export function Bar({
 								{directory.registers.find((row) => row.id === scope.registerId)?.name ??
 									(scope.registerId && binding.registerId
 										? binding.registerName
-										: t('reports.all_registers'))}
+										: !license?.isPro && !binding.registerId
+											? // Free with no bound register sees nothing until one is chosen; say so.
+												t('common.select_register')
+											: t('reports.all_registers'))}
 								{stores.length > 1
 									? ` · ${stores.find((row) => row.id === scope.storeId)?.name ?? store.name}`
 									: ''}

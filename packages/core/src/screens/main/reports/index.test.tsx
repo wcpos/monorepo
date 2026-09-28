@@ -239,6 +239,19 @@ describe('ReportsScreen query-state wiring', () => {
 
 		expect(latestState().filters.store).toBe('12');
 	});
+
+	it('re-initializes report filters when the plan drops to Free', () => {
+		const { rerender } = render(<ReportsScreen />);
+		const proRange = latestState().filters.dateRange;
+		expect(proRange).toBeDefined();
+
+		mockPro = false;
+		rerender(<ReportsScreen />);
+
+		// A fresh query on the bound register, not the Pro scope kept alive under locked controls.
+		expect(latestState().filters.register).toBeDefined();
+		expect(latestState().filters.dateRange).toEqual(proRange);
+	});
 });
 
 // Revert: convert a newly selected store's days using the bound till's UTC midnight.

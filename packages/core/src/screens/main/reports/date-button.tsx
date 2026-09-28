@@ -154,7 +154,8 @@ export function DateButton({
 			<PopoverContent
 				testID="reports-period-menu"
 				className="p-0"
-				style={{ width: phone ? Math.min(360, width) : Math.min(520, width) }}
+				// Tablet and desktop: the 192-pt preset column beside the 360-pt calendar, plus borders.
+				style={{ width: phone ? Math.min(360, width) : Math.min(556, width) }}
 			>
 				{/* On a short phone the stacked body scrolls inside the sheet; the footer and the hint stay reachable below it. */}
 				<PickerBody phone={phone} maxHeight={Math.max(240, height - 260)}>
