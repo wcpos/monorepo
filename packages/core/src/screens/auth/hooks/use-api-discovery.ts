@@ -275,10 +275,6 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 				if (hasOlderWcposApi) {
 					discoveryLogger.error('WCPOS plugin on the store is out of date', {
-						showToast: true,
-						// Without an explicit title the toast shows the log message
-						// above, which is written for us, not for the merchant.
-						toast: { title: t('common.please_update_your_woocommerce_pos_plugin') },
 						code: ERROR_CODES.WCPOS_PLUGIN_OUTDATED,
 						context: {
 							reportedVersion,
@@ -303,10 +299,6 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				// means genuinely absent — so the log carries the distinction as
 				// data instead of guessing at it in prose.
 				discoveryLogger.error('WCPOS REST namespace not registered', {
-					showToast: true,
-					// Without an explicit title the toast shows the log message
-					// above, which is written for us, not for the merchant.
-					toast: { title: t('auth.woocommerce_pos_api_not_found') },
 					code: ERROR_CODES.REST_ROUTE_MISSING,
 					context: {
 						reportedVersion,
