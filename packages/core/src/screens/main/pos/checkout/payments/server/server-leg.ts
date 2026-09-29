@@ -1,4 +1,4 @@
-import { holdLiveTab } from '@wcpos/database';
+import { holdLiveTab } from '@wcpos/database/live-tab';
 import type {
 	OrderPaymentSummary,
 	PaymentEvent,

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { holdLiveTab } from '@wcpos/database';
+import { holdLiveTab } from '@wcpos/database/live-tab';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';

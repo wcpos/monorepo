@@ -3,7 +3,7 @@
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import { holdLiveTab } from '@wcpos/database';
+import { holdLiveTab } from '@wcpos/database/live-tab';
 import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
@@ -14,7 +14,7 @@ import { persistSaleProvenance } from '../sale-completion';
 import { recordCompletionAttempt } from '../completion-journal';
 import { useCheckoutSession } from './use-checkout-session';
 
-jest.mock('@wcpos/database', () => ({ holdLiveTab: jest.fn(() => jest.fn()) }));
+jest.mock('@wcpos/database/live-tab', () => ({ holdLiveTab: jest.fn(() => jest.fn()) }));
 
 const mockCheckoutError = jest.fn();
 const mockCheckoutInfo = jest.fn();

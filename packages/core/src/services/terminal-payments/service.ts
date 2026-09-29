@@ -1,4 +1,4 @@
-import { holdLiveTab } from '@wcpos/database';
+import { holdLiveTab } from '@wcpos/database/live-tab';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type {

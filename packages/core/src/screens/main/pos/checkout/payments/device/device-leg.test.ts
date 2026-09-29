@@ -1,4 +1,4 @@
-import { holdLiveTab } from '@wcpos/database';
+import { holdLiveTab } from '@wcpos/database/live-tab';
 
 import { createDeviceLeg, type DeviceLegState } from './device-leg';
 import { method, row } from './fixtures.test-utils';
@@ -8,7 +8,7 @@ import type {
 	PaymentDriver,
 } from '../../../../../../services/payment-drivers/types';
 
-jest.mock('@wcpos/database', () => ({ holdLiveTab: jest.fn() }));
+jest.mock('@wcpos/database/live-tab', () => ({ holdLiveTab: jest.fn() }));
 const releaseHold = jest.fn();
 beforeEach(() => {
 	jest.mocked(holdLiveTab).mockReset().mockReturnValue(releaseHold);

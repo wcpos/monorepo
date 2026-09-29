@@ -1,9 +1,9 @@
-import { holdLiveTab } from '@wcpos/database';
+import { holdLiveTab } from '@wcpos/database/live-tab';
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 
 import { createServerLeg } from './server-leg';
 
-jest.mock('@wcpos/database', () => ({ holdLiveTab: jest.fn() }));
+jest.mock('@wcpos/database/live-tab', () => ({ holdLiveTab: jest.fn() }));
 const releaseHold = jest.fn();
 beforeEach(() => {
 	jest.mocked(holdLiveTab).mockReset().mockReturnValue(releaseHold);

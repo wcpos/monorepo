@@ -1,4 +1,4 @@
-import { holdLiveTab } from '@wcpos/database';
+import { holdLiveTab } from '@wcpos/database/live-tab';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { PaymentRow } from '@wcpos/order-math';
@@ -18,7 +18,7 @@ import {
 	stopTerminalPaymentsService,
 	subscribeTerminalPaymentsServiceStart,
 } from './index';
-jest.mock('@wcpos/database', () => ({ holdLiveTab: jest.fn(() => jest.fn()) }));
+jest.mock('@wcpos/database/live-tab', () => ({ holdLiveTab: jest.fn(() => jest.fn()) }));
 
 const row: PaymentRow = {
 	id: 'leg',

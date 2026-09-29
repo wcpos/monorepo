@@ -1,4 +1,4 @@
-import { holdLiveTab } from '@wcpos/database';
+import { holdLiveTab } from '@wcpos/database/live-tab';
 import { toMinor } from '@wcpos/order-math';
 import type { OrderPaymentSummary, PaymentRefusalBody, PaymentRow } from '@wcpos/order-math';
 
