@@ -143,6 +143,7 @@ jobs:
       android_devices: ${{ steps.resolve.outputs.android_devices }}
       ios_devices: ${{ steps.resolve.outputs.ios_devices }}
       variable_product_id: ${{ steps.seed.outputs.variable_product_id }}
+      refused: ${{ steps.refuse.outputs.refused }}
     steps:
       - name: 🏗 Setup repository (main lane)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -312,7 +313,7 @@ jobs:
           echo "hit=$hit" >> "$GITHUB_OUTPUT"
 
       # A dispatch does not spend without explicit approval. A PR may spend
-      # while the monthly ceiling has room for the builds this run will queue
+      # while the billing-period ceiling has room for the builds this run will queue
       # (2 for platform=all, else 1). A miss on a plan that expected no
       # rebuild is usually a cache eviction (GitHub drops entries after 7 idle
       # days or past 10 GB), so it spends too — with a warning naming the
@@ -321,6 +322,7 @@ jobs:
       # can each read the same count; that overshoot is bounded by how many
       # runs overlap (2–3) and is accepted rather than serialised (#1265).
       - name: 💸 Refuse an unrequested EAS build
+        id: refuse
         if: >-
           steps.cache.outputs.cache-hit != 'true'
           && steps.recover.outputs.hit != 'true'
@@ -343,12 +345,20 @@ jobs:
             echo "::warning::No cached dev client for $CACHE_KEY although the planner expected none to be needed (native=$NATIVE_PLAN). Either the cache was evicted (7 idle days / 10 GB LRU) or this PR touches an undeclared native input — if the latter, add the path to scripts/ci-plan.mjs's native-config rule. Spending under the ceiling either way."
           fi
           case "$PLATFORM" in all) SLOTS=2 ;; *) SLOTS=1 ;; esac
-          MONTH_START=$(date -u +%Y-%m-01T00:00:00Z)
+          y=$(date -u +%Y)
+          m=$(date -u +%m)
+          d=$(date -u +%d)
+          y=$((10#$y)); m=$((10#$m)); d=$((10#$d))
+          if [ "$d" -lt 22 ]; then
+            m=$((m - 1))
+            if [ "$m" -eq 0 ]; then m=12; y=$((y - 1)); fi
+          fi
+          PERIOD_START=$(printf '%04d-%02d-22T00:00:00Z' "$y" "$m")
           # --limit is CAPPED AT 50 by eas-cli (23.0.0: "Defaults to 10 and is
           # capped at 50"); 100 made the command fail outright, which this step
           # reported only as "build:list command failed." and refused every
           # PR build (PR #1680, 2026-08-29). 50 is enough for a ceiling of 20:
-          # if 50 in-month builds come back the count already exceeds it.
+          # if 50 in-period builds come back the count already exceeds it.
           if ! BUILDS=$(eas build:list --json --non-interactive --limit 50 --build-profile development); then
             # `--json` swallows eas's own reason into $BUILDS. Repeat the call
             # without --json so the real cause (token scope, unlinked project,
@@ -356,19 +366,25 @@ jobs:
             echo "::group::eas build:list diagnostic (no --json)"
             eas build:list --non-interactive --limit 1 --build-profile development || true
             echo "::endgroup::"
-            echo "::error::Could not read this month's EAS build count; refusing an unmetered build. Dispatch with build=true to override."
+            echo "::error::Could not read the EAS build count this EAS billing period (since $PERIOD_START); refusing an unmetered build. Dispatch with build=true to override."
             exit 1
           fi
-          if ! COUNT=$(jq --arg start "$MONTH_START" 'if (type != "array") or any(.[]; (.createdAt|type) != "string") then error("unexpected shape") else [.[] | select(.createdAt >= $start)] | length end' <<< "$BUILDS"); then
-            echo "::error::Could not parse this month's EAS build count (unexpected list shape or a build without createdAt); refusing an unmetered build. Dispatch with build=true to override."
+          if ! COUNT=$(jq --arg start "$PERIOD_START" 'if (type != "array") or any(.[]; (.createdAt|type) != "string") then error("unexpected shape") else [.[] | select(.createdAt >= $start)] | length end' <<< "$BUILDS"); then
+            echo "::error::Could not parse the EAS build count this EAS billing period (since $PERIOD_START) (unexpected list shape or a build without createdAt); refusing an unmetered build. Dispatch with build=true to override."
             exit 1
           fi
-          echo "EAS development builds since $MONTH_START: $COUNT / $BUILD_CEILING (this run needs $SLOTS)" >> "$GITHUB_STEP_SUMMARY"
+          echo "EAS development builds this EAS billing period (since $PERIOD_START): $COUNT / $BUILD_CEILING (this run needs $SLOTS)" >> "$GITHUB_STEP_SUMMARY"
           if [ $((COUNT + SLOTS)) -gt "$BUILD_CEILING" ]; then
-            echo "::error::EAS development builds this UTC month: $COUNT, this run would queue $SLOTS more; ceiling: $BUILD_CEILING. Refusing this PR build. Dispatch with build=true to override."
+            if [ "$NATIVE_PLAN" != "rebuild" ]; then
+              echo "::warning::EAS development builds this EAS billing period (since $PERIOD_START): $COUNT, ceiling $BUILD_CEILING; the dev-client cache for $CACHE_KEY was evicted and this PR changes no native input, so the device suites are skipped, not failed; a push to main or a build=true dispatch re-mints the cache;"
+              echo "EAS development builds this EAS billing period (since $PERIOD_START): $COUNT, ceiling $BUILD_CEILING; the dev-client cache for $CACHE_KEY was evicted and this PR changes no native input, so the device suites are skipped, not failed; a push to main or a build=true dispatch re-mints the cache;" >> "$GITHUB_STEP_SUMMARY"
+              echo "refused=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::EAS development builds this EAS billing period (since $PERIOD_START): $COUNT, this run would queue $SLOTS more; ceiling: $BUILD_CEILING. Refusing this PR build. Dispatch with build=true to override."
             exit 1
           fi
-          echo "::notice::EAS development builds this UTC month: $COUNT / $BUILD_CEILING; PR build authorised ($SLOTS more)."
+          echo "::notice::EAS development builds this EAS billing period (since $PERIOD_START): $COUNT / $BUILD_CEILING; PR build authorised ($SLOTS more)."
 
       # Seed ONCE, before the matrix fans out: the four test jobs share one
       # store, so seed once before this run's matrix fans out. PR runs are not
@@ -382,6 +398,7 @@ jobs:
       # standing shop_manager pair the web E2E uses.
       - name: 🌱 Seed test store
         id: seed
+        if: steps.refuse.outputs.refused != 'true'
         env:
           E2E_PRODUCT_WRITER_USER: ${{ secrets.E2E_PRODUCT_WRITER_USER }}
           E2E_PRODUCT_WRITER_PASS: ${{ secrets.E2E_PRODUCT_WRITER_PASS }}
@@ -392,7 +409,7 @@ jobs:
       # it contains no JS, so it only needs rebuilding when the native
       # fingerprint moves.
       - name: 🛠 Build dev client on EAS (native fingerprint changed)
-        if: steps.cache.outputs.cache-hit != 'true' && steps.recover.outputs.hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true' && steps.recover.outputs.hit != 'true' && steps.refuse.outputs.refused != 'true'
         working-directory: apps/main
         env:
           PLATFORM: ${{ steps.resolve.outputs.platform }}
@@ -419,6 +436,7 @@ jobs:
       # The stamp is what the recovery step above matches on: an artifact
       # that cannot say which fingerprint built it cannot be reused.
       - name: 🏷 Stamp the builds with their cache key
+        if: steps.refuse.outputs.refused != 'true'
         env:
           CACHE_KEY: ${{ steps.fingerprint.outputs.cache_key }}
         run: |
@@ -426,6 +444,7 @@ jobs:
           echo "$CACHE_KEY" > e2e-builds/cache-key
 
       - name: ⬆️ Share builds with test jobs
+        if: steps.refuse.outputs.refused != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: e2e-builds
@@ -435,7 +454,7 @@ jobs:
   android:
     name: 🤖 Android (${{ matrix.device.name }})
     needs: build
-    if: needs.build.outputs.platform != 'ios'
+    if: needs.build.outputs.platform != 'ios' && needs.build.outputs.refused != 'true'
     permissions:
       contents: read
     # No cross-run serialisation. Owner ruling 2026-09-03: device jobs from
@@ -984,7 +1003,7 @@ jobs:
   ios:
     name: 🍎 iOS (${{ matrix.device.name }})
     needs: build
-    if: needs.build.outputs.platform != 'android'
+    if: needs.build.outputs.platform != 'android' && needs.build.outputs.refused != 'true'
     permissions:
       contents: read
     # No cross-run serialisation — see the Android job's twin comment (owner
@@ -1545,6 +1564,7 @@ jobs:
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
           BUILD_RESULT: ${{ needs.build.result }}
+          REFUSED: ${{ needs.build.outputs.refused }}
           ANDROID_RESULT: ${{ needs.android.result }}
           IOS_RESULT: ${{ needs.ios.result }}
           NATIVE_PLAN: ${{ needs.changes.outputs.native }}
@@ -1571,6 +1591,10 @@ jobs:
           fi
           if [ "$EVENT_NAME" = "pull_request" ] && [ "${BASE_REF:-}" = "next" ]; then
             echo "::notice::Native E2E skipped: PRs targeting next are exempt from the device suites (owner ruling 2026-09-03)"
+            exit 0
+          fi
+          if [ "$BUILD_RESULT" = "success" ] && [ "${REFUSED:-}" = "true" ]; then
+            echo "::notice::Native E2E skipped: the EAS build ceiling refused a rebuild the plan did not need (dev-client cache evicted); no device result"
             exit 0
           fi
           if [ "$BUILD_RESULT" != "success" ]; then

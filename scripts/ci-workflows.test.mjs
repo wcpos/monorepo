@@ -1305,15 +1305,25 @@ test('the native spend guard charges the builds a run will queue and fails close
 		'build',
 		'💸 Refuse an unrequested EAS build'
 	);
-	const month = new Date().toISOString().slice(0, 7);
+	const now = new Date();
+	const periodStart = Date.UTC(
+		now.getUTCFullYear(),
+		now.getUTCMonth() - (now.getUTCDate() < 22 ? 1 : 0),
+		22
+	);
 	const builds = (n) =>
-		JSON.stringify(Array.from({ length: n }, () => ({ createdAt: `${month}-02T00:00:00Z` })));
+		JSON.stringify(
+			Array.from({ length: n }, () => ({
+				createdAt: new Date(periodStart + 60 * 60 * 1000).toISOString(),
+			}))
+		);
 	const run = (env) =>
 		runShell(step.run, {
 			cwd: workspace,
 			env: {
 				PATH: `${binDir}:${process.env.PATH}`,
 				GITHUB_STEP_SUMMARY: path.join(workspace, 'summary.md'),
+				GITHUB_OUTPUT: path.join(workspace, 'output'),
 				PLATFORM: 'all',
 				CACHE_KEY: 'e2e-native-devclient-test',
 				NATIVE_PLAN: 'rebuild',
@@ -1342,6 +1352,23 @@ test('the native spend guard charges the builds a run will queue and fails close
 		assert.equal(evicted.status, 0, evicted.stdout + evicted.stderr);
 		assert.match(evicted.stdout, /::warning::.*evicted/);
 
+		const refused = run({ NATIVE_PLAN: 'cachehit', EAS_MOCK_BUILDS: builds(19) });
+		assert.equal(refused.status, 0, refused.stdout + refused.stderr);
+		assert.match(readFileSync(path.join(workspace, 'output'), 'utf8'), /^refused=true$/m);
+		assert.match(
+			refused.stdout,
+			/::warning::.*this EAS billing period \(since .*\).*skipped, not failed/
+		);
+
+		const beforePeriod = run({
+			EAS_MOCK_BUILDS: JSON.stringify(
+				Array.from({ length: 30 }, () => ({
+					createdAt: new Date(periodStart - 60 * 60 * 1000).toISOString(),
+				}))
+			),
+		});
+		assert.equal(beforePeriod.status, 0, beforePeriod.stdout + beforePeriod.stderr);
+
 		// Fail closed: eas unavailable, or a build without createdAt.
 		assert.notEqual(run({ EAS_MOCK_FAIL: '1' }).status, 0);
 		assert.notEqual(run({ EAS_MOCK_BUILDS: '[{"id":"x"}]' }).status, 0);
@@ -1356,6 +1383,40 @@ test('the native spend guard charges the builds a run will queue and fails close
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
+});
+
+test('native budget refusal skips build work and devices and passes the gate', () => {
+	const workflow = readWorkflow('e2e-native.yml');
+	const build = workflow.jobs.build;
+	assert.equal(build.outputs.refused, '${{ steps.refuse.outputs.refused }}');
+	const refuse = build.steps.find(({ id }) => id === 'refuse');
+	assert.ok(refuse, 'missing refuse step');
+	for (const name of [
+		'🌱 Seed test store',
+		'🛠 Build dev client on EAS (native fingerprint changed)',
+		'🏷 Stamp the builds with their cache key',
+		'⬆️ Share builds with test jobs',
+	]) {
+		assert.match(findStep(workflow, 'build', name).if, /steps\.refuse\.outputs\.refused != 'true'/);
+	}
+	for (const platform of ['android', 'ios']) {
+		assert.match(workflow.jobs[platform].if, /needs\.build\.outputs\.refused != 'true'/);
+	}
+	const gate = workflow.jobs['native-gate'].steps[0];
+	assert.equal(gate.env.REFUSED, '${{ needs.build.outputs.refused }}');
+	assert.match(
+		gate.run,
+		/if \[ "\$BUILD_RESULT" = "success" \] && \[ "\$\{REFUSED:-\}" = "true" \]; then\n\s+echo "::notice::[^\n]+\n\s+exit 0\n\s*fi/
+	);
+	assert.match(gate.run, /Native dev-client resolution did not succeed/);
+	assert.match(refuse.run, /-22T00:00:00Z/);
+	assert.doesNotMatch(refuse.run, /%Y-%m-01T00:00:00Z/);
+	assert.match(
+		refuse.run,
+		/if \[ "\$NATIVE_PLAN" != "rebuild" \]; then\n[^]*?exit 0\n\s+fi\n\s+echo "::error::[^\n]+\n\s+exit 1/
+	);
+	assert.match(refuse.run, /Could not read[^\n]+\n\s+exit 1/);
+	assert.match(refuse.run, /Could not parse[^\n]+\n\s+exit 1/);
 });
 
 test('the native E2E aggregator exists under the name the merge gate will require', () => {
