@@ -32,6 +32,11 @@ jest.mock('../../../hooks/use-currency-format', () => ({
 jest.mock('../../../../../contexts/translations', () => ({
 	useT: () => jest.requireActual('../../../../../../jest/translate').createTestT(),
 }));
+jest.mock('@wcpos/components/text', () => ({
+	Text: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
+		<span data-testid={testID}>{children}</span>
+	),
+}));
 jest.mock('@wcpos/components/status-badge', () => ({
 	StatusBadge: ({ label, variant, testID }: { label: string; variant: string; testID: string }) => (
 		<span data-testid={testID} data-variant={variant}>
