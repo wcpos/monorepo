@@ -16,5 +16,13 @@ android {
 	}
 }
 dependencies {
+	// SumUp's POMs list androidx.compose:compose-bom:2024.09.00 as an ordinary dependency and
+	// declare androidx.compose.material:material, material3, material3-window-size-class and
+	// ui-tooling-preview with NO version, relying on the consumer to import that BOM. Gradle 8
+	// (Expo SDK 57) tolerated it; Gradle 9.4 (Expo SDK 58) fails debugCompileClasspath with
+	// "Could not find androidx.compose.material:material:" (EAS build d5f8e07f, 2026-09-28).
+	// Importing the same BOM as a platform supplies those versions. Keep it on the SDK's BOM
+	// when bumping merchant-sdk: read the new reader-<version>.pom on maven.sumup.com.
+	implementation platform('androidx.compose:compose-bom:2024.09.00')
 	implementation 'com.sumup:merchant-sdk:7.1.0'
 }

@@ -190,7 +190,7 @@ function onlineResponse(input?: {
 	return response({
 		code: 'ABC',
 		found: match !== null,
-		// The 1.11.0 plugin serves `match` as a bare record; the resolver wraps it client-side.
+		// The 2.0.0 plugin serves `match` as a bare record; the resolver wraps it client-side.
 		match,
 		ambiguous: input?.ambiguous ?? [],
 	});

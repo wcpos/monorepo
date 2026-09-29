@@ -23,6 +23,8 @@
 	"pos_checkout.next_leg": "Next",
 	"pos_checkout.paid_and_left": "Paid {paid} · {left} left",
 	"pos_checkout.paid_in_full": "Paid in full",
+	"reports.earlier_days": "Earlier days",
+	"reports.tap_a_day": "Tap a day, or two days for a range.",
 	"reports.unavailable_offline": "Unavailable offline",
 	"reports.load_failed": "Could not load closures",
 	"reports.load_more": "Load more",

@@ -8,8 +8,8 @@ import {
 
 describe('sync protocol client signal', () => {
 	it('formats the platform and version', () => {
-		expect(formatClientSignal('electron', '1.11.0')).toBe('electron/1.11.0');
-		expect(formatClientSignal('electron', ' 1.11.0 ')).toBe('electron/1.11.0');
+		expect(formatClientSignal('electron', '2.0.0')).toBe('electron/2.0.0');
+		expect(formatClientSignal('electron', ' 2.0.0 ')).toBe('electron/2.0.0');
 	});
 
 	it.each(['', '   ', '\t'])('substitutes unknown for a blank version %p', (version) => {
@@ -23,9 +23,9 @@ describe('parseUpdateRequiredBody', () => {
 			parseUpdateRequiredBody({
 				code: 'wcpos_update_required',
 				message: 'This store requires a newer version of WCPOS.',
-				data: { status: 426, min_protocol: 2, server_protocol: 3, plugin_version: '1.11.0' },
+				data: { status: 426, min_protocol: 2, server_protocol: 3, plugin_version: '2.0.0' },
 			})
-		).toEqual({ minProtocol: 2, serverProtocol: 3, pluginVersion: '1.11.0' });
+		).toEqual({ minProtocol: 2, serverProtocol: 3, pluginVersion: '2.0.0' });
 	});
 
 	it('recognizes the refusal by code alone when data is absent or malformed', () => {
