@@ -280,11 +280,12 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			return;
 		}
 		set({ phase: 'collecting' });
+		let release: (() => void) | undefined;
 		try {
-			approvedAt = null;
-			// collect may capture on the reader; preparation above owns no payment hold.
-			const release = holdLiveTab('payment');
 			try {
+				approvedAt = null;
+				// collect may capture on the reader; preparation above owns no payment hold.
+				release = holdLiveTab('payment');
 				result = await deps.driver.collect({
 					dp: input.dp,
 					row: state.row,
@@ -294,22 +295,23 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 					offline: input.offline,
 					tipEligibleMinor: input.offline ? null : input.tipEligibleMinor,
 				});
-			} finally {
-				release();
+			} catch (error) {
+				if (!active()) return;
+				errorState(error);
+				result = {
+					outcome: 'declined',
+					failure_reason: 'reader_error',
+					provider_refs: {},
+					receipt: {},
+					amount: null,
+					transport: input.transport,
+				};
 			}
-		} catch (error) {
-			if (!active()) return;
-			errorState(error);
-			result = {
-				outcome: 'declined',
-				failure_reason: 'reader_error',
-				provider_refs: {},
-				receipt: {},
-				amount: null,
-				transport: input.transport,
-			};
+			if (active()) await confirm();
+		} finally {
+			// Keep the reader result protected until confirmation has persisted it.
+			release?.();
 		}
-		if (active()) await confirm();
 	}
 	async function cancel(reason = 'cashier') {
 		if (!active() || state.cancelRequested || inFlight || result) return;

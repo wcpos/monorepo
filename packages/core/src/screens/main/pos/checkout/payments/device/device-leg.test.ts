@@ -1,4 +1,5 @@
 import { holdLiveTab } from '@wcpos/database/live-tab';
+import { createLiveTab, holdLiveTab as holdWebTab } from '@wcpos/database/live-tab/live-tab.web';
 
 import { createDeviceLeg, type DeviceLegState } from './device-leg';
 import { method, row } from './fixtures.test-utils';
@@ -486,7 +487,7 @@ it.each(['success', 'rejection'])(
 				return { data: { payment: row } };
 			}
 			expect(holdLiveTab).toHaveBeenLastCalledWith('payment');
-			expect(releaseHold).toHaveBeenCalledTimes(1); // collection settled; capture request now owns a hold
+			expect(releaseHold).not.toHaveBeenCalled(); // collection stays held through confirmation
 			await pending.promise;
 			if (outcome === 'rejection') throw new Error('transport failed');
 			return { data: { payment: { ...row, status: 'captured' } } };
@@ -498,7 +499,7 @@ it.each(['success', 'rejection'])(
 		c.collection.resolve(approved);
 		await tick();
 		expect(holdLiveTab).toHaveBeenCalledTimes(2);
-		expect(releaseHold).toHaveBeenCalledTimes(1);
+		expect(releaseHold).not.toHaveBeenCalled();
 		pending.resolve({ data: {} });
 		await start;
 		expect(releaseHold).toHaveBeenCalledTimes(2);
@@ -514,3 +515,47 @@ it('releases the collection hold when the reader rejects', async () => {
 	expect(releaseHold).toHaveBeenCalledTimes(1);
 	c.leg.dispose();
 });
+
+it.each(['success', 'rejection'])(
+	'keeps a deferred takeover held until offline persistence %s',
+	async (outcome) => {
+		const c = setup(true);
+		const write = deferred<void>();
+		c.patchAndEnqueue.mockImplementationOnce(async () => {
+			await write.promise;
+			if (outcome === 'rejection') throw new Error('disk');
+		});
+		const channel = {
+			onmessage: null as ((event: MessageEvent) => void) | null,
+			postMessage: jest.fn(),
+			close: jest.fn(),
+		};
+		const tab = createLiveTab({
+			channel: () => channel,
+			onHandover: async () => {},
+			onUnavailable: jest.fn(),
+			onError: jest.fn(),
+		});
+		// As in the gate, parking unmounts the payment service.
+		tab.state$.subscribe((state) => {
+			if (state.kind === 'parked') c.leg.stop();
+		});
+		jest.mocked(holdLiveTab).mockImplementation(holdWebTab);
+		const start = c.leg.start();
+		channel.onmessage?.(
+			new MessageEvent('message', { data: { type: 'takeover-request', requestId: 'other-tab' } })
+		);
+		c.collection.resolve({ ...approved, outcome: 'authorized', provider_refs: {} });
+		await tick();
+		expect(c.patchAndEnqueue).toHaveBeenCalledTimes(1);
+		expect(tab.getState().kind).toBe('live');
+		write.resolve();
+		await start;
+		await tick();
+		expect(tab.getState()).toEqual({ kind: 'parked', reason: 'another-tab-live' });
+		tab.dispose();
+		expect(c.leg.getState()).toMatchObject(
+			outcome === 'success' ? { outcome: 'captured' } : { outcome: null, captureFailed: true }
+		);
+	}
+);
