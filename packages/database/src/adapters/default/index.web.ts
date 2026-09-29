@@ -1,5 +1,6 @@
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
+import { holdLiveTab } from '../../live-tab/live-tab.web';
 import {
 	getWebNewStorage,
 	onStorageWorkerLost,
@@ -22,6 +23,7 @@ onStorageWorkerLost((message) => reportStorageWorkerLost(undefined, message));
 const errorHandlerStorage = wrappedErrorHandlerStorage({
 	storage: workerStorage,
 	onCondemn: terminateStorageWorker,
+	onWrite: () => holdLiveTab('write'),
 });
 export const storage = STORAGE_TIMING_PROBE_ENABLED
 	? withStorageTimingProbe(errorHandlerStorage, 'wrapped')

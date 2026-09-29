@@ -849,7 +849,8 @@ export function markStorageTerminallyFailed(databaseName: string, reason: string
 function wrapStorageInstance<RxDocType>(
 	instance: RxStorageInstance<RxDocType, any, any, any>,
 	databaseName: string,
-	onCondemn?: () => void
+	onCondemn?: () => void,
+	onWrite?: () => () => void
 ): RxStorageInstance<RxDocType, any, any, any> {
 	const originalFindDocumentsById = instance.findDocumentsById.bind(instance);
 	const originalBulkWrite = instance.bulkWrite.bind(instance);
@@ -928,7 +929,14 @@ function wrapStorageInstance<RxDocType>(
 	instancesByDatabaseName.set(databaseName, instances);
 
 	const bulkWrite = instance.bulkWrite.bind(instance);
-	instance.bulkWrite = (...args) => raceStorageCall(state, 'bulkWrite', () => bulkWrite(...args));
+	instance.bulkWrite = async (...args) => {
+		const release = onWrite?.();
+		try {
+			return await raceStorageCall(state, 'bulkWrite', () => bulkWrite(...args));
+		} finally {
+			release?.();
+		}
+	};
 	const findDocumentsById = instance.findDocumentsById.bind(instance);
 	instance.findDocumentsById = (...args) =>
 		raceStorageCall(state, 'findDocumentsById', () => findDocumentsById(...args));
@@ -986,9 +994,11 @@ function wrapStorageInstance<RxDocType>(
 export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 	storage,
 	onCondemn,
+	onWrite,
 }: {
 	storage: RxStorage<Internals, InstanceCreationOptions>;
 	onCondemn?: () => void;
+	onWrite?: () => () => void;
 }): RxStorage<Internals, InstanceCreationOptions> {
 	return {
 		name: 'error-handler-' + storage.name,
@@ -1012,7 +1022,7 @@ export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 				watchdog.disarm();
 			}
 			noteStorageCompletion();
-			return wrapStorageInstance(instance, params.databaseName, onCondemn);
+			return wrapStorageInstance(instance, params.databaseName, onCondemn, onWrite);
 		},
 	};
 }

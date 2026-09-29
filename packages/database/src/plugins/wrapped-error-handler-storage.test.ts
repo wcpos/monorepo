@@ -1889,3 +1889,29 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 	});
 });
+
+test.each(['resolve', 'reject'] as const)(
+	'a pending bulkWrite holds write until %s',
+	async (settlement) => {
+		let settle!: () => void;
+		const pending = new Promise<never>((resolve, reject) => {
+			settle = () =>
+				settlement === 'resolve' ? resolve(undefined as never) : reject(new Error('write failed'));
+		});
+		const release = jest.fn();
+		const onWrite = jest.fn(() => release);
+		const storage = wrappedErrorHandlerStorage({
+			storage: createMockStorage(createMockStorageInstance({ bulkWrite: () => pending })),
+			onWrite,
+		});
+		const instance = await storage.createStorageInstance({
+			databaseName: 'hold-write',
+		} as Parameters<typeof storage.createStorageInstance>[0]);
+		const result = instance.bulkWrite([], 'hold-test').catch(() => undefined);
+		expect(onWrite).toHaveBeenCalledTimes(1);
+		expect(release).not.toHaveBeenCalled();
+		settle();
+		await result;
+		expect(release).toHaveBeenCalledTimes(1);
+	}
+);
