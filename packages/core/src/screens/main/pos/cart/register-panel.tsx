@@ -277,7 +277,7 @@ export function RegisterPanel({
 				</ScrollView>
 				{!!error && <Text>{error}</Text>}
 				<Button
-					testID="register-panel-close"
+					testID="register-panel-close-register"
 					disabled={!session}
 					variant="outline"
 					size="lg"
