@@ -119,5 +119,6 @@ describe('ZReport render stability', () => {
 });
 
 jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNamesReady: () => true,
 	useRegisterNames: () => ({}),
 }));

@@ -2281,5 +2281,7 @@
 	"reports.vs_month_before": "vs the month before",
 	"reports.no_comparison": "No comparison",
 	"reports.average_order": "Average order",
-	"reports.items": "Items"
+	"reports.items": "Items",
+	"reports.comparison_downloading": "Comparison: downloading {downloaded} of {total} orders",
+	"reports.comparison_downloading_unknown_total": "Comparison: {downloaded} orders downloaded so far"
 }

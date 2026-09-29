@@ -24,7 +24,7 @@ import { useT } from '../../../../contexts/translations';
 export function Report({ nestedScrollEnabled = false }: { nestedScrollEnabled?: boolean } = {}) {
 	const t = useT();
 	const { storeId } = useReportsPeriod();
-	const { print, isPrinting, contentRef } = useReportPrint(storeId);
+	const { print, isPrinting, contentRef, ready } = useReportPrint(storeId);
 
 	return (
 		<View testID="reports-content" className="h-full p-2 pt-0 pl-0">
@@ -59,7 +59,12 @@ export function Report({ nestedScrollEnabled = false }: { nestedScrollEnabled?: 
 					</ScrollView>
 				</CardContent>
 				<CardFooter className="border-border bg-footer justify-end border-t p-2">
-					<Button testID="reports-print-button" onPress={print} loading={isPrinting}>
+					<Button
+						testID="reports-print-button"
+						onPress={print}
+						loading={isPrinting}
+						disabled={!ready}
+					>
 						<ButtonText>{t('reports.print')}</ButtonText>
 					</Button>
 				</CardFooter>

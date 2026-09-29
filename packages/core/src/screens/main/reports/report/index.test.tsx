@@ -137,5 +137,6 @@ describe('Report query-state dates', () => {
 });
 
 jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNamesReady: () => true,
 	useRegisterNames: () => ({}),
 }));

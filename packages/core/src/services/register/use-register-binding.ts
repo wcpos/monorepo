@@ -29,6 +29,8 @@ type Binding = {
 	registerId: string | null;
 	registerName: string | null;
 	registers: Register[];
+	/** The register list has been read from the server (names can be trusted). */
+	loaded: boolean;
 };
 type Directory = {
 	value: Binding;
@@ -52,6 +54,7 @@ function directory(siteUuid: string, storeId: number | undefined): Directory {
 				registerId: pointer?.register_id ?? null,
 				registerName: pointer?.register_name ?? null,
 				registers: [],
+				loaded: false,
 			},
 		});
 	}
@@ -75,6 +78,7 @@ function loadDirectory(
 		.then((response) => {
 			entry.loaded = true;
 			publish(entry, {
+				loaded: true,
 				registers: (response.data as Register[]).filter(
 					(row) => row.status === 'active' && (storeId !== 0 || !row.store_id)
 				),

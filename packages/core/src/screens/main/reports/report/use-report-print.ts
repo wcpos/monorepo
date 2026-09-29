@@ -5,7 +5,10 @@ import { useDocField } from '@wcpos/query';
 
 import { generateZReportHTML } from './generate-html';
 import { calculateTotals } from './utils';
-import { useRegisterNames } from '../../../../services/register/use-register-names';
+import {
+	useRegisterNames,
+	useRegisterNamesReady,
+} from '../../../../services/register/use-register-names';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
@@ -21,6 +24,8 @@ import { useQueryState } from '../../../../query';
 export function useReportPrint(storeId?: number) {
 	const t = useT();
 	const registerNames = useRegisterNames(storeId);
+	// Printing waits for the store's register list: a name not yet read must not print as an id.
+	const ready = useRegisterNamesReady(storeId);
 	const contentRef = React.useRef<ViewInstance>(null);
 	const { store } = useStoreSession();
 	const cashier = useReportCashier();
@@ -191,5 +196,5 @@ export function useReportPrint(storeId?: number) {
 		html,
 	});
 
-	return { print, isPrinting, contentRef };
+	return { print, isPrinting, contentRef, ready };
 }

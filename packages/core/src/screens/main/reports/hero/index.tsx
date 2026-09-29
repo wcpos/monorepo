@@ -6,6 +6,7 @@ import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Chip } from '@wcpos/components/chip';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
@@ -26,6 +27,7 @@ import { ReportsComparison, useReportsData, useReportsPeriod, useReportsScope } 
 import { calculateTotals } from '../report/utils';
 import { useReportPrint } from '../report/use-report-print';
 import { ZReport } from '../report/template';
+import { ReportsSyncProgress } from '../sync-progress';
 
 type Choice = { value: string; label: string; hint?: string };
 function MenuChip({
@@ -118,6 +120,10 @@ const tone = (value: number) =>
 	value > 0 ? 'text-success' : value < 0 ? 'text-destructive' : 'text-muted-foreground';
 const signed = (value: number, format: (value: number) => string) =>
 	value === 0 ? '±0' : `${value > 0 ? '+' : '−'}${format(Math.abs(value))}`;
+type Field = 'total' | 'orders' | 'averageOrderValue' | 'totalItemsSold';
+/** The comparison figures, computed once per group from the comparison orders. */
+type Comparison =
+	{ count: number; totals: ReturnType<typeof calculateTotals> } | 'loading' | 'failed';
 function Difference({
 	id,
 	current,
@@ -126,28 +132,34 @@ function Difference({
 	percent,
 	label,
 	numDecimals,
+	comparison,
 }: {
 	id: string;
 	current: number;
-	field: 'total' | 'orders' | 'averageOrderValue' | 'totalItemsSold';
+	field: Field;
 	format: (value: number) => string;
 	/** The store's one-decimal number format, for the percentage line. */
 	percent?: (value: number) => string;
 	label?: string;
 	numDecimals?: number;
+	comparison: Comparison;
 }) {
 	const t = useT();
-	const { comparisonOrders } = useReportsData();
-	// The same rounding as the current figure, or a rounded average reads as a difference.
-	const totals = calculateTotals({ orders: comparisonOrders, num_decimals: numDecimals });
+	if (comparison === 'loading')
+		return <View testID={`${id}-loading`} className="bg-muted h-4 w-24 rounded" />;
 	// Money is compared at the displayed precision, with the currency formatter's own rounding
 	// (lodash), so two figures that read the same never differ.
 	const round = (value: number) =>
 		field === 'orders' || field === 'totalItemsSold' ? value : roundTo(value, numDecimals ?? 2);
-	const previous = round(field === 'orders' ? comparisonOrders.length : totals[field]);
+	const previous =
+		comparison === 'failed'
+			? 0
+			: round(field === 'orders' ? comparison.count : comparison.totals[field]);
 	const shown = round(current);
-	// No orders to compare with: every line reads "—", never a difference against nothing.
-	const none = comparisonOrders.length === 0 || (field === 'total' && previous === 0);
+	// No orders to compare with (or the comparison could not be read): every line reads "—",
+	// never a difference against nothing.
+	const none =
+		comparison === 'failed' || comparison.count === 0 || (field === 'total' && previous === 0);
 	// The percentage is rounded to its displayed tenth before the sign and tone are chosen.
 	const delta = none
 		? 0
@@ -168,15 +180,76 @@ function Difference({
 		</Text>
 	);
 }
-function ComparisonLine(props: React.ComponentProps<typeof Difference>) {
+/** Reads the comparison once for the whole group (mounted inside ReportsComparison). */
+function ComparedFigures(props: Omit<React.ComponentProps<typeof Figures>, 'comparison'>) {
+	const { comparisonOrders } = useReportsData();
+	const totals = calculateTotals({ orders: comparisonOrders, num_decimals: props.numDecimals });
+	return <Figures {...props} comparison={{ count: comparisonOrders.length, totals }} />;
+}
+/** The figure and its companions; the comparison is one value for all four lines. */
+function Figures({
+	phone,
+	total,
+	companions,
+	money,
+	number,
+	percent,
+	label,
+	numDecimals,
+	comparison,
+}: {
+	phone: boolean;
+	total: number;
+	companions: {
+		id: string;
+		label: string;
+		value: number;
+		field: Field;
+		format: (value: number) => string;
+	}[];
+	money: (value: number) => string;
+	number: (value: number) => string;
+	percent: (value: number) => string;
+	label: string;
+	numDecimals?: number;
+	comparison: Comparison;
+}) {
 	return (
-		<React.Suspense
-			fallback={<View testID={`${props.id}-loading`} className="bg-muted h-4 w-24 rounded" />}
-		>
-			<ReportsComparison>
-				<Difference {...props} />
-			</ReportsComparison>
-		</React.Suspense>
+		<View className={phone ? 'gap-5' : 'flex-row items-center justify-between gap-6'}>
+			<View testID="hero-figure" className="gap-1">
+				<Text testID="hero-total" className="text-4xl font-bold tabular-nums">
+					{money(total)}
+				</Text>
+				<Difference
+					id="hero-delta"
+					current={total}
+					field="total"
+					format={number}
+					percent={percent}
+					label={label}
+					numDecimals={numDecimals}
+					comparison={comparison}
+				/>
+			</View>
+			<View testID="hero-companions" className={`flex-row gap-4 ${phone ? '' : 'flex-1'}`}>
+				{companions.map((item) => (
+					<View key={item.id} className="min-w-0 flex-1 gap-1">
+						<Text className="text-muted-foreground text-sm">{item.label}</Text>
+						<Text testID={`hero-${item.id}`} className="text-2xl font-semibold tabular-nums">
+							{item.format(item.value)}
+						</Text>
+						<Difference
+							id={`hero-${item.id}-delta`}
+							current={item.value}
+							field={item.field}
+							format={item.format}
+							numDecimals={numDecimals}
+							comparison={comparison}
+						/>
+					</View>
+				))}
+			</View>
+		</View>
 	);
 }
 /** The card while the orders load: the same title row, so the date button is never lost to a
@@ -197,7 +270,7 @@ export function HeroShell({ title }: { title: React.ReactNode }) {
  * name comes from the credentials directory, and its loading must not blank the figure. */
 function HeroPrint({ storeId }: { storeId?: number }) {
 	const t = useT();
-	const { print, isPrinting, contentRef } = useReportPrint(storeId);
+	const { print, isPrinting, contentRef, ready } = useReportPrint(storeId);
 	return (
 		<>
 			<IconButton
@@ -206,6 +279,7 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 				accessibilityLabel={t('reports.print')}
 				onPress={print}
 				loading={isPrinting}
+				disabled={!ready}
 			/>
 			<View className="hidden">
 				<View ref={contentRef}>
@@ -288,29 +362,38 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			)}
 		</View>
 	);
-	const companions = [
-		{
-			id: 'orders',
-			label: t('common.orders'),
-			value: selectedOrders.length,
-			field: 'orders' as const,
-			format: number,
-		},
-		{
-			id: 'average',
-			label: t('reports.average_order'),
-			value: totals.averageOrderValue,
-			field: 'averageOrderValue' as const,
-			format: money,
-		},
-		{
-			id: 'items',
-			label: t('reports.items'),
-			value: totals.totalItemsSold,
-			field: 'totalItemsSold' as const,
-			format: number,
-		},
-	];
+	const figures = {
+		phone,
+		total: totals.total,
+		money,
+		number,
+		percent,
+		label,
+		numDecimals: store?.price_num_decimals,
+		companions: [
+			{
+				id: 'orders',
+				label: t('common.orders'),
+				value: selectedOrders.length,
+				field: 'orders' as const,
+				format: number,
+			},
+			{
+				id: 'average',
+				label: t('reports.average_order'),
+				value: totals.averageOrderValue,
+				field: 'averageOrderValue' as const,
+				format: money,
+			},
+			{
+				id: 'items',
+				label: t('reports.items'),
+				value: totals.totalItemsSold,
+				field: 'totalItemsSold' as const,
+				format: number,
+			},
+		],
+	};
 	return (
 		<View testID="reports-hero" className="bg-card gap-5 rounded-md border p-5">
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
@@ -332,39 +415,16 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			) : (
 				chips
 			)}
-			<View className={phone ? 'gap-5' : 'flex-row items-center justify-between gap-6'}>
-				<View testID="hero-figure" className="gap-1">
-					<Text testID="hero-total" className="text-4xl font-bold tabular-nums">
-						{money(totals.total)}
-					</Text>
-					<ComparisonLine
-						id="hero-delta"
-						current={totals.total}
-						field="total"
-						format={number}
-						percent={percent}
-						label={label}
-						numDecimals={store?.price_num_decimals}
-					/>
-				</View>
-				<View testID="hero-companions" className={`flex-row gap-4 ${phone ? '' : 'flex-1'}`}>
-					{companions.map((item) => (
-						<View key={item.id} className="min-w-0 flex-1 gap-1">
-							<Text className="text-muted-foreground text-sm">{item.label}</Text>
-							<Text testID={`hero-${item.id}`} className="text-2xl font-semibold tabular-nums">
-								{item.format(item.value)}
-							</Text>
-							<ComparisonLine
-								id={`hero-${item.id}-delta`}
-								current={item.value}
-								field={item.field}
-								format={item.format}
-								numDecimals={store?.price_num_decimals}
-							/>
-						</View>
-					))}
-				</View>
-			</View>
+			{/* One comparison read for the four difference lines. Its loading and its failure are
+			    the differences' alone: the figure and companions stay (ledger 22). */}
+			<ErrorBoundary FallbackComponent={() => <Figures {...figures} comparison="failed" />}>
+				<React.Suspense fallback={<Figures {...figures} comparison="loading" />}>
+					<ReportsComparison>
+						<ComparedFigures {...figures} />
+					</ReportsComparison>
+				</React.Suspense>
+			</ErrorBoundary>
+			<ReportsSyncProgress lane="comparison" />
 			<View testID="hero-chart" className="h-56 w-full">
 				<Chart />
 			</View>

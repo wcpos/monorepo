@@ -12,3 +12,9 @@ export function useRegisterNames(storeId?: number): Record<string, string> {
 		[registers]
 	);
 }
+
+/** Whether that store's register list has been read, so a missing name is a missing register. */
+export function useRegisterNamesReady(storeId?: number): boolean {
+	const { store } = useStoreSession();
+	return useRegisterDirectory(storeId ?? store.id).loaded;
+}

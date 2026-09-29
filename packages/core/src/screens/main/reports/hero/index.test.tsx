@@ -30,6 +30,12 @@ const mockStore = {
 	price_decimal_sep: '.',
 	price_thousand_sep: ',',
 };
+// The shared boundary pulls in a tooltip primitive jest cannot parse; the real react-error-boundary
+// behind it is what the comparison-failure case exercises.
+jest.mock('@wcpos/components/error-boundary', () => ({
+	ErrorBoundary: jest.requireActual('react-error-boundary').ErrorBoundary,
+}));
+jest.mock('../sync-progress', () => ({ ReportsSyncProgress: () => null }));
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ store: mockStore, site: { populate$: () => mockCashiers } }),
 	useStoreSession: () => ({

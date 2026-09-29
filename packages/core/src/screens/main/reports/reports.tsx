@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -16,9 +16,14 @@ import { ReportsSyncProgress } from './sync-progress';
 /**
  *
  */
+// Below this height (a phone in landscape, a squeezed desktop window) the hero alone would take
+// the page, so the page scrolls and the panes keep a fixed height, as on a phone.
+const SHORT_VIEWPORT_HEIGHT = 640;
+
 export function Reports({ title }: { title: React.ReactNode }) {
 	const { screenSize } = useTheme();
 	const { bottom } = useSafeAreaInsets();
+	const short = useWindowDimensions().height < SHORT_VIEWPORT_HEIGHT;
 
 	/**
 	 *
@@ -44,6 +49,23 @@ export function Reports({ title }: { title: React.ReactNode }) {
 							</View>
 							<View className="h-96 pl-2">
 								<Report nestedScrollEnabled />
+							</View>
+						</ScrollView>
+					) : short ? (
+						// A short viewport: the page scrolls, the panes keep a fixed height and opt
+						// into nested scrolling (as on a phone).
+						<ScrollView contentContainerClassName="gap-3 px-2">
+							<Hero title={title} />
+							<View className="h-96">
+								<PanelGroup direction="horizontal">
+									<Panel>
+										<Orders nestedScrollEnabled />
+									</Panel>
+									<PanelResizeHandle />
+									<Panel>
+										<Report nestedScrollEnabled />
+									</Panel>
+								</PanelGroup>
 							</View>
 						</ScrollView>
 					) : (
