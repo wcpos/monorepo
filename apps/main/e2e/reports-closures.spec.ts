@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { expect, type Page } from '@playwright/test';
 
+import orderFixture from '../../../packages/core/jest/__fixtures__/order.json';
 import en from '../../../packages/core/src/contexts/translations/locales/en/core.json';
 import serverDocument from '../../../packages/core/src/services/register-session/__fixtures__/closure.json';
 import {
@@ -180,6 +181,69 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 					const url = new URL(request.url());
 					if (url.origin !== new URL(getStoreUrl(testInfo)).origin) return route.fallback();
 					const path = wcposRestRoute(request.url());
+					// A local midnight sale in each requested range makes the Sales comparison
+					// deterministic, including on an empty store. No order writes reach the server.
+					if (
+						request.method() === 'GET' &&
+						path === '/wcpos/v2/orders' &&
+						url.searchParams.has('after')
+					) {
+						const stamp = url.searchParams.get('after')!.slice(0, 19);
+						const id = 9_000_000 + Math.floor(Date.parse(`${stamp}Z`) / 86_400_000);
+						const hex = id.toString(16);
+						const excluded = (url.searchParams.get('exclude') ?? '')
+							.split(',')
+							.includes(String(id));
+						return route.fulfill({
+							status: 200,
+							headers: {
+								'access-control-allow-origin': '*',
+								'x-wp-total': excluded ? '0' : '1',
+								'x-wp-totalpages': '1',
+								'access-control-expose-headers': 'X-WP-Total, X-WP-TotalPages',
+							},
+							json: excluded
+								? []
+								: [
+										{
+											...orderFixture,
+											id,
+											number: String(id),
+											created_via: 'woocommerce-pos',
+											status: 'completed',
+											currency: 'USD',
+											total: '10.00',
+											total_tax: '0.00',
+											customer_id: 0,
+											date_created: stamp,
+											date_created_gmt: stamp,
+											date_modified: stamp,
+											date_modified_gmt: stamp,
+											line_items: [],
+											tax_lines: [],
+											refunds: [],
+											meta_data: [
+												{
+													id: 1,
+													key: '_woocommerce_pos_uuid',
+													value: `${hex.padStart(8, '0')}-0000-4000-8000-${hex.padStart(12, '0')}`,
+												},
+												{
+													id: 2,
+													key: '_wcpos_register',
+													value: url.searchParams.get('pos_register') ?? registerId,
+												},
+												{
+													id: 3,
+													key: '_pos_store',
+													value: url.searchParams.get('pos_store') ?? '0',
+												},
+											],
+										},
+									],
+						});
+					}
+
 					// Discovery is deliberately overridden at page level, before the fixture's
 					// context-level Pro mask. Preserve actual plugin compatibility information.
 					if (
@@ -378,6 +442,19 @@ async function openClosures(page: Page) {
 	await page.getByTestId('drawer-item-reports').click();
 	await expect(page.getByTestId('reports-bar')).toBeVisible();
 	await expect(page.getByTestId('reports-scope')).toBeVisible();
+	await expect(page.getByTestId('hero-total')).toBeVisible();
+	// The delta line is a figure or the no-comparison dash; its wording is the catalogue's.
+	await expect(page.getByTestId('hero-delta')).toHaveText(/\S/);
+	await page.getByTestId('hero-chip-status').click();
+	await expect(page.getByTestId('hero-status-menu')).toBeVisible();
+	await page.getByTestId('hero-status-all').click();
+	await expect(page.getByTestId('hero-chip-status')).toHaveClass(/border-primary/);
+	await page.getByTestId('hero-chip-status-clear').click();
+	await expect(page.getByTestId('hero-chip-status')).not.toHaveClass(/border-primary/);
+	await page.getByTestId('hero-chip-compare').click();
+	await expect(page.getByTestId('hero-compare-menu')).toBeVisible();
+	await page.getByTestId('hero-compare-yesterday').click();
+
 	await page.getByTestId('reports-scope').click();
 	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();
 	await page.keyboard.press('Escape');

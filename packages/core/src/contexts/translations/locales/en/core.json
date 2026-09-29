@@ -2312,5 +2312,22 @@
 	"register.period_sales": "Period sales",
 	"register.period_refunds": "Period refunds",
 	"register.perpetual_sales": "Perpetual sales",
-	"register.perpetual_refunds": "Perpetual refunds"
+	"register.perpetual_refunds": "Perpetual refunds",
+	"reports.everyone": "Everyone",
+	"reports.completed_processing": "Completed & processing",
+	"reports.every_status": "Every status",
+	"reports.every_status_hint": "Adds pending and on hold",
+	"reports.vs_yesterday": "vs yesterday",
+	"reports.vs_last_weekday": "vs last {weekday}",
+	"reports.compare_live_hint": "A live day is compared at the same time of day",
+	"reports.vs_week_before": "vs the week before",
+	"reports.vs_month_before": "vs the month before",
+	"reports.no_comparison": "No comparison",
+	"reports.average_order": "Average order",
+	"reports.items": "Items",
+	"reports.comparison_downloading": "Comparison: downloading {downloaded} of {total} orders",
+	"reports.comparison_downloading_unknown_total": "Comparison: {downloaded} orders downloaded so far",
+	"reports.loading_store": "Loading the store…",
+	"reports.loading_register_names": "Loading register names…",
+	"reports.loading_cashier": "Loading the cashier…"
 }

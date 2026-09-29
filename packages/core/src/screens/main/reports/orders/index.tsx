@@ -29,7 +29,12 @@ import { PaymentMethod } from '../../components/order/payment-method';
 import { Status } from '../../components/order/status';
 import { Total } from '../../components/order/total';
 import { UISettingsDialog } from '../../components/ui-settings';
-import { useReportsBinding, useReportsData, useReportsSelection } from '../context';
+import {
+	useIncludedStatus,
+	useReportsBinding,
+	useReportsData,
+	useReportsSelection,
+} from '../context';
 import { UISettingsForm } from '../ui-settings-form';
 import { useQueryState, useQueryStateActions } from '../../../../query';
 
@@ -91,13 +96,15 @@ function ReportsOrdersFooter(props: {
 /**
  *
  */
-export function Orders() {
+export function Orders({ nestedScrollEnabled = false }: { nestedScrollEnabled?: boolean } = {}) {
 	const t = useT();
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	const { binding } = useReportsBinding();
 	const { allOrders } = useReportsData();
 	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
+	// Rows outside the status set are unchecked and cannot be ticked: the table agrees with the hero.
+	const included = useIncludedStatus();
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'orders'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(
@@ -105,7 +112,13 @@ export function Orders() {
 			setSort: actions.setSort,
 			// Reports bind the complete resident date window up front; there is no next page.
 			extendLimit: () => undefined,
-			setFilter: actions.setFilter,
+			// The status set and the (absent) customer filter are the hero's: a tap on a status or
+			// customer cell must not scope the report through a filter nothing on the page shows.
+			// A cashier cell tap does scope it, and the cashier chip mirrors the filter.
+			setFilter: (key, value) => {
+				if (key === 'status' || key === 'customer_id') return;
+				actions.setFilter(key, value);
+			},
 		}),
 		[actions]
 	);
@@ -116,12 +129,12 @@ export function Orders() {
 	const selectionState = React.useMemo<RowSelectionState>(() => {
 		const state: RowSelectionState = {};
 		allOrders.forEach((order) => {
-			if (order.uuid && !unselectedRowIds[order.uuid]) {
+			if (order.uuid && included(order) && !unselectedRowIds[order.uuid]) {
 				state[order.uuid] = true;
 			}
 		});
 		return state;
-	}, [allOrders, unselectedRowIds]);
+	}, [allOrders, included, unselectedRowIds]);
 
 	/**
 	 * Update unselectedRowIds when row selection changes
@@ -131,50 +144,66 @@ export function Orders() {
 			setUnselectedRowIds((prev) => {
 				const newSelectionState = typeof updater === 'function' ? updater(selectionState) : updater;
 
-				// Compute the new unselectedRowIds
+				// Compute the new unselectedRowIds; an untick on a row the status set currently
+				// excludes is kept, so it is still unticked when that status is shown again.
 				const newUnselectedRowIds: Record<string, true> = {};
 				allOrders.forEach((order) => {
-					if (order.uuid && !newSelectionState[order.uuid]) {
+					if (!order.uuid) return;
+					if (!included(order)) {
+						if (prev[order.uuid]) newUnselectedRowIds[order.uuid] = true;
+					} else if (!newSelectionState[order.uuid]) {
 						newUnselectedRowIds[order.uuid] = true;
 					}
 				});
 				return newUnselectedRowIds;
 			});
 		},
-		[allOrders, selectionState, setUnselectedRowIds]
+		[allOrders, included, selectionState, setUnselectedRowIds]
 	);
 
 	/**
 	 * Toggle all rows selected or unselected
 	 */
 	const handleToggleAllRowsSelected = React.useCallback(() => {
-		if (Object.keys(unselectedRowIds).length === 0) {
-			// All rows are selected, so we want to unselect all rows
+		// The direction follows the selectable rows: an untick kept on a row the status set now
+		// excludes must not make the first tap a no-op.
+		const selectable = allOrders.filter((order) => order.uuid && included(order));
+		const allSelected = selectable.every((order) => !unselectedRowIds[order.uuid]);
+		// Unticks on rows the status set excludes are kept either way.
+		const kept = (prev: Record<string, true>) =>
+			Object.fromEntries(
+				allOrders
+					.filter((order) => order.uuid && !included(order) && prev[order.uuid])
+					.map((order) => [order.uuid, true as const])
+			);
+		if (allSelected) {
+			// All selectable rows are selected, so we want to unselect them all
 			setUnselectedRowIds((prev) => {
-				const newUnselectedRowIds: Record<string, true> = {};
-				allOrders.forEach((order) => {
-					if (order.uuid) newUnselectedRowIds[order.uuid] = true;
+				const newUnselectedRowIds: Record<string, true> = kept(prev);
+				selectable.forEach((order) => {
+					newUnselectedRowIds[order.uuid] = true;
 				});
 				return newUnselectedRowIds;
 			});
 		} else {
-			// Some rows are unselected, so we want to select all rows
-			setUnselectedRowIds({});
+			// Some selectable rows are unselected, so we want to select all selectable rows
+			setUnselectedRowIds((prev) => kept(prev));
 		}
-	}, [allOrders, setUnselectedRowIds, unselectedRowIds]);
+	}, [allOrders, included, setUnselectedRowIds, unselectedRowIds]);
 
 	/**
 	 * Table config
 	 */
 	const tableConfig = React.useMemo(
 		() => ({
-			enableRowSelection: true,
+			enableRowSelection: (row: { original: OrderRow }) => included(row.original.record.payload),
 			state: {
 				rowSelection: selectionState,
 			},
 			onRowSelectionChange: handleRowSelectionChange,
 			meta: {
-				totalOrders: allOrders.length,
+				// The header checkbox counts the rows that can be ticked, the same universe as the rows.
+				totalOrders: allOrders.filter(included).length,
 				toggleAllRowsSelected: handleToggleAllRowsSelected,
 			},
 			/**
@@ -184,7 +213,7 @@ export function Orders() {
 				selectionState,
 			},
 		}),
-		[allOrders.length, handleToggleAllRowsSelected, handleRowSelectionChange, selectionState]
+		[allOrders, handleToggleAllRowsSelected, handleRowSelectionChange, included, selectionState]
 	);
 
 	/**
@@ -210,6 +239,7 @@ export function Orders() {
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}
+								nestedScrollEnabled={nestedScrollEnabled}
 								active$={binding.active$}
 								total$={binding.total$}
 								sync={binding.sync}

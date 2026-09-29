@@ -77,6 +77,7 @@ jest.mock('../../components/record-text-cell', () => ({ RecordTextCell: () => nu
 jest.mock('./header-select', () => ({ TableHeaderSelect: () => null }));
 jest.mock('./row-select', () => ({ TableRowSelect: () => null }));
 jest.mock('../context', () => ({
+	useIncludedStatus: () => () => true,
 	useReportsBinding: () => ({ binding: mockBinding }),
 	useReportsData: () => ({ allOrders: [] }),
 	useReportsSelection: () => ({ unselectedRowIds: {}, setUnselectedRowIds: jest.fn() }),
@@ -135,10 +136,16 @@ describe('reports orders binding table', () => {
 		expect(mockFooterProps.collectionName).toBe('orders');
 
 		const actions = mockDataTableProps.actions as {
-			setFilter: (field: 'status', value: string) => void;
+			setFilter: (field: 'status' | 'customer_id' | 'cashier', value: string) => void;
 		};
+		// A status or customer cell tap is not a filter in Reports (the hero's chips own the status
+		// set and there is no customer filter on the page); a cashier cell tap scopes the report.
 		act(() => actions.setFilter('status', 'processing'));
-		expect(screen.getByTestId('filters').textContent).toContain('"status":"processing"');
+		act(() => actions.setFilter('customer_id', '3'));
+		expect(screen.getByTestId('filters').textContent).not.toContain('"status"');
+		expect(screen.getByTestId('filters').textContent).not.toContain('"customer_id"');
+		act(() => actions.setFilter('cashier', '5'));
+		expect(screen.getByTestId('filters').textContent).toContain('"cashier":"5"');
 	});
 });
 

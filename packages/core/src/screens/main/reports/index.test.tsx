@@ -54,6 +54,13 @@ jest.mock('./till-strip', () => ({
 		<button data-testid="till-closures" onClick={onOpenClosures} />
 	),
 }));
+// The hero reaches expo-haptics through IconButton; the loading shell keeps the title (the date button).
+jest.mock('./hero', () => ({
+	Hero: ({ title }: { title: React.ReactNode }) => <div data-testid="reports-hero">{title}</div>,
+	HeroShell: ({ title }: { title: React.ReactNode }) => (
+		<div data-testid="reports-hero-loading">{title}</div>
+	),
+}));
 jest.mock('./bar', () => ({
 	CashierButton: () => null,
 	ScopeHint: () => null,
@@ -119,26 +126,30 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: { children: React.ReactNode }) => (
-		<React.Suspense fallback={null}>{children}</React.Suspense>
+	Suspense: ({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) => (
+		<React.Suspense fallback={fallback ?? null}>{children}</React.Suspense>
 	),
 }));
 let mockReportsPending = false;
 const mockPendingReport = new Promise(() => {});
 jest.mock('./context', () => ({
+	...jest.requireActual('./context'),
 	ReportsProvider: ({ children }: { children: React.ReactNode }) => {
 		if (mockReportsPending) throw mockPendingReport;
 		return children;
 	},
 }));
 jest.mock('./reports', () => ({
-	Reports: () => {
+	Reports: ({ title }: { title: React.ReactNode }) => {
 		const actions = jest.requireActual('../../../query').useQueryStateActions();
 		return (
-			<button
-				data-testid="legacy-register"
-				onClick={() => actions.setFilter('register', 'other')}
-			/>
+			<>
+				{title}
+				<button
+					data-testid="legacy-register"
+					onClick={() => actions.setFilter('register', 'other')}
+				/>
+			</>
 		);
 	},
 }));
@@ -161,7 +172,7 @@ jest.mock('../contexts/ui-settings', () => ({
 }));
 
 function latestState(): QueryStateOf<'orders'> {
-	const call = mockUseCollectionBinding.mock.calls.at(-1);
+	const call = mockUseCollectionBinding.mock.calls.at(-2);
 	if (!call) throw new Error('reports orders binding was not called');
 	return call[1] as QueryStateOf<'orders'>;
 }
@@ -180,7 +191,7 @@ describe('ReportsScreen query-state wiring', () => {
 
 	afterEach(() => jest.useRealTimers());
 
-	it('binds the completed current-day report window and current cashier/store scope', () => {
+	it('binds today for every status and Everyone in the current store (no status or cashier filter)', () => {
 		render(<ReportsScreen />);
 
 		const today = new Date(2026, 6, 15, 12);
@@ -188,12 +199,10 @@ describe('ReportsScreen query-state wiring', () => {
 		expect(latestState()).toEqual({
 			search: '',
 			filters: {
-				status: 'completed',
 				dateRange: {
 					from: startOfDay(today, { in: utc }).toISOString(),
 					to: endOfDay(today, { in: utc }).toISOString(),
 				},
-				cashier: '7',
 				store: '9',
 			},
 			sort: { field: 'date_created_gmt', direction: 'desc' },
@@ -209,7 +218,7 @@ describe('ReportsScreen query-state wiring', () => {
 		render(<ReportsScreen />);
 
 		expect(latestState()).toMatchObject({
-			filters: { cashier: '7', store: 'woocommerce-pos' },
+			filters: { store: 'woocommerce-pos' },
 			sort: { field: 'status', direction: 'asc' },
 		});
 	});
@@ -356,6 +365,18 @@ it('shows Sales actual scope initially and after a legacy filter changes', () =>
 });
 
 // Revert: let a pending Sales resource suspend the page bar and trap the room switch.
+// The date button is the only way out of a slow range: the loading shell keeps it.
+it('keeps the date button while the Sales workspace is still loading', () => {
+	mockReportsPending = true;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	try {
+		render(<ReportsScreen />);
+		expect(screen.getByTestId('reports-hero-loading')).toBeTruthy();
+		expect(screen.getByTestId('reports-period')).toBeTruthy();
+	} finally {
+		mockReportsPending = false;
+	}
+});
 it('can enter local Closures while the Sales workspace is still loading', () => {
 	mockReportsPending = true;
 	mockCapabilities = ['view_woocommerce_pos_reports'];
@@ -508,4 +529,15 @@ it('renders the Sales body for a Free cashier without the Pro overlay', () => {
 	} finally {
 		mockPro = true;
 	}
+});
+
+// Revert: bind the comparison without copying the register, store and cashier scope.
+it('binds the comparison with the same filters and a shifted date range', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	render(<ReportsScreen />);
+	const current = latestState();
+	const comparison = mockUseCollectionBinding.mock.calls.at(-1)![1] as QueryStateOf<'orders'>;
+	expect(comparison.filters).toEqual({ ...current.filters, dateRange: expect.any(Object) });
+	expect(comparison.filters.dateRange).not.toEqual(current.filters.dateRange);
+	expect(comparison.limit).toBe(current.limit);
 });

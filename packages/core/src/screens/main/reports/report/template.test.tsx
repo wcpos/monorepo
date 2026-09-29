@@ -41,6 +41,9 @@ jest.mock('./utils', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/app-state', () => {
+	// The session site is one stable document: the report's cashier scope memoises its
+	// credentials directory on it (empty here: Everyone).
+	const site = { populate$: () => new BehaviorSubject([]) };
 	const useAppState = () => ({
 		store: {
 			id: 9,
@@ -51,6 +54,7 @@ jest.mock('../../../../contexts/app-state', () => {
 			price_num_decimals$: new BehaviorSubject(2),
 		},
 		wpCredentials: { id: 7, toJSON: () => ({ id: 7 }) },
+		site,
 	});
 	return { useAppState, useStoreSession: useAppState };
 });
@@ -75,9 +79,16 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 jest.mock('../../hooks/use-number-format', () => ({
 	useNumberFormat: () => ({ format: String }),
 }));
-const REPORTS = { selectedOrders: [] };
+// One data object, built on first use (after the register fixture below exists); its
+// registerArray is that fixture by reference, so the register-totals case can grow it.
+let mockReports: { selectedOrders: never[]; totals: unknown } | undefined;
 jest.mock('../context', () => ({
-	useReportsData: () => REPORTS,
+	useReportsData: () =>
+		(mockReports ??= {
+			selectedOrders: [],
+			totals: jest.requireMock('./utils').calculateTotals({ orders: [] }),
+		}),
+	useReportsScope: () => ({ cashierName: undefined }),
 }));
 
 describe('ZReport query-state dates', () => {
@@ -109,6 +120,7 @@ describe('ZReport query-state dates', () => {
 });
 
 jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNamesReady: () => true,
 	useRegisterNames: () => ({ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': 'Front desk' }),
 }));
 

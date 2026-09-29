@@ -86,6 +86,8 @@ interface CommonProps<TData extends RowData> {
 	id: UISettingID;
 	noDataMessage?: string | React.ReactElement;
 	estimatedItemSize?: number;
+	/** The table sits inside a page that scrolls on the same axis (a phone stack). */
+	nestedScrollEnabled?: boolean;
 	showFooter?: boolean;
 	renderItem?: (params: {
 		item: any;
@@ -140,6 +142,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 		id,
 		noDataMessage,
 		estimatedItemSize,
+		nestedScrollEnabled,
 		showFooter = true,
 		renderItem,
 		cells,
@@ -254,6 +257,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 							: defaultRenderItem({ item, index, table })
 					}
 					estimatedItemSize={estimatedItemSize ?? 50}
+					nestedScrollEnabled={nestedScrollEnabled}
 					parentComponent={TableBody as unknown as typeof import('react-native').View}
 					getItemType={getItemType}
 					onEndReachedThreshold={0.1}

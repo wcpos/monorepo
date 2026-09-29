@@ -24,6 +24,13 @@ jest.mock('./till-strip', () => ({
 		<button data-testid="till-closures" onClick={onOpenClosures} />
 	),
 }));
+// The hero reaches expo-haptics through IconButton; the loading shell keeps the title (the date button).
+jest.mock('./hero', () => ({
+	Hero: ({ title }: { title: React.ReactNode }) => <div data-testid="reports-hero">{title}</div>,
+	HeroShell: ({ title }: { title: React.ReactNode }) => (
+		<div data-testid="reports-hero-loading">{title}</div>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: require('react-native').Text,
@@ -268,8 +275,9 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('../components/pro-guard', () => ({ withProAccess: (component: unknown) => component }));
 jest.mock('../contexts/ui-settings', () => ({ useUISettings: () => ({ uiSettings: {} }) }));
-jest.mock('./reports', () => ({ Reports: () => null }));
+jest.mock('./reports', () => ({ Reports: ({ title }: { title: React.ReactNode }) => title }));
 jest.mock('./context', () => ({
+	...jest.requireActual('./context'),
 	ReportsProvider: ({ children }: React.PropsWithChildren) => children,
 }));
 jest.mock('@wcpos/components/error-boundary', () => ({

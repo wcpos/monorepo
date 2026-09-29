@@ -29,6 +29,10 @@ type Binding = {
 	registerId: string | null;
 	registerName: string | null;
 	registers: Register[];
+	/** The register list has been read from the server (names can be trusted). */
+	loaded: boolean;
+	/** The last list request failed; nothing more will arrive until the next attempt. */
+	failed: boolean;
 };
 type Directory = {
 	value: Binding;
@@ -52,6 +56,8 @@ function directory(siteUuid: string, storeId: number | undefined): Directory {
 				registerId: pointer?.register_id ?? null,
 				registerName: pointer?.register_name ?? null,
 				registers: [],
+				loaded: false,
+				failed: false,
 			},
 		});
 	}
@@ -70,11 +76,15 @@ function loadDirectory(
 	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
 	storeId: number | undefined
 ): Promise<void> {
+	// A new attempt clears the last failure: readers wait for names again while it runs.
+	if (!entry.request && entry.value.failed) publish(entry, { failed: false });
 	entry.request ??= http
 		.get('registers', { params: { store_id: storeId || null } })
 		.then((response) => {
 			entry.loaded = true;
 			publish(entry, {
+				loaded: true,
+				failed: false,
 				registers: (response.data as Register[]).filter(
 					(row) => row.status === 'active' && (storeId !== 0 || !row.store_id)
 				),
@@ -82,8 +92,9 @@ function loadDirectory(
 		})
 		.catch(() => {
 			// A failed list request leaves the pointer and status unchanged; the next
-			// session (or reconnect) tries again.
+			// session (or reconnect) tries again. Readers waiting for names stop waiting.
 			entry.request = undefined;
+			publish(entry, { failed: true });
 			recordRegisterFact({
 				kind: 'directory-unavailable',
 				registerId: entry.value?.registerId ?? null,

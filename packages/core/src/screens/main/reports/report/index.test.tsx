@@ -62,6 +62,9 @@ jest.mock('./utils', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/app-state', () => {
+	// The session site is one stable document: the report's cashier scope memoises its
+	// credentials directory on it (empty here: Everyone).
+	const site = { populate$: () => new BehaviorSubject([]) };
 	const useAppState = () => ({
 		store: {
 			id: 9,
@@ -72,6 +75,7 @@ jest.mock('../../../../contexts/app-state', () => {
 			price_num_decimals$: new BehaviorSubject(2),
 		},
 		wpCredentials: { id: 7, toJSON: () => ({ id: 7 }) },
+		site,
 	});
 	return { useAppState, useStoreSession: useAppState };
 });
@@ -95,7 +99,12 @@ jest.mock('../../hooks/use-print', () => ({
 	usePrint: () => ({ print: jest.fn(), isPrinting: false }),
 }));
 jest.mock('../context', () => ({
-	useReportsData: () => ({ selectedOrders: [] }),
+	useReportsData: () => ({
+		selectedOrders: [],
+		totals: jest.requireMock('./utils').calculateTotals({ orders: [] }),
+	}),
+	useReportsPeriod: () => ({ storeId: undefined }),
+	useReportsScope: () => ({ cashierName: undefined }),
 }));
 
 describe('Report query-state dates', () => {
@@ -122,11 +131,18 @@ describe('Report query-state dates', () => {
 					from: '2026-07-01T10:00:00.000+02:00',
 					to: '2026-07-02T20:00:00.000+02:00',
 				},
+				// No cashier chosen: the report is Everyone's, never the session cashier's.
+				cashierName: 'reports.everyone',
+				cashierId: '',
 			})
 		);
 	});
 });
 
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNamesReady: () => true,
 	useRegisterNames: () => ({}),
 }));
