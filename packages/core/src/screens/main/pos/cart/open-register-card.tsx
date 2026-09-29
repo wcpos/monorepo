@@ -45,6 +45,9 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 		<ScrollView
 			className="flex-1"
 			contentContainerClassName="gap-4 px-4 py-5"
+			// With the keyboard up after typing the float, the first tap on a chip or Open register
+			// must run the action, not just dismiss the keyboard.
+			keyboardShouldPersistTaps="handled"
 			testID="open-register-card"
 		>
 			{lastClosure && (
