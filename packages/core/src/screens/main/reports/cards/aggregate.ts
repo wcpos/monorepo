@@ -120,17 +120,27 @@ export function refundsSummary(orders: ReportOrder[], totals: Totals, num_decima
 export function tenders(orders: ReportOrder[], totals: Totals, num_decimals = 2) {
 	const parts = new Map<string, { key: string; label: string; amount: number; orders: number }>();
 	for (const order of orders) {
-		const captured = readLedger(order.meta_data).filter((row) => row.status === 'captured');
-		const rows = captured.length
-			? captured.map((row) => ({
-					key: row.kind === 'cash' ? 'cash' : row.method_id,
-					label:
-						row.method_id === order.payment_method ||
-						(row.kind === 'cash' && order.payment_method === 'cash')
-							? order.payment_method_title || ''
-							: '',
-					amount: Number(row.amount),
-				}))
+		const ledger = readLedger(order.meta_data);
+		// Money taken is what the sale completion counts (`checkout/sale-completion.ts`): a captured
+		// row, or an authorized row recorded offline. A ledger whose rows are all pending, failed
+		// or voided is still the ledger: nothing is attributed to the order's method, and what the
+		// order still needs is the unpaid part. Only an order with no ledger at all (a sale from
+		// before the ledger, or from elsewhere) is read from its payment method.
+		const settled = ledger.filter(
+			(row) => row.status === 'captured' || (row.status === 'authorized' && row.recorded_offline)
+		);
+		const taken = settled.reduce((sum, row) => sum + Number(row.amount), 0);
+		const rows = ledger.length
+			? [
+					...settled.map((row) => ({
+						key: row.kind === 'cash' ? 'cash' : row.method_id,
+						label: row.method_id === order.payment_method ? order.payment_method_title || '' : '',
+						amount: Number(row.amount),
+					})),
+					...(order.needs_payment && Number(order.total || 0) > taken
+						? [{ key: 'unpaid', label: '', amount: Number(order.total || 0) - taken }]
+						: []),
+				]
 			: [
 					{
 						key: order.payment_method || (order.needs_payment ? 'unpaid' : 'unknown'),

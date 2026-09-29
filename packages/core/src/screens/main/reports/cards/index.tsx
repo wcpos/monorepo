@@ -17,7 +17,6 @@ import { CardSkeleton } from './card';
 import { PaymentsCard } from './payments';
 import { CategoriesCard } from './categories';
 import { CashiersCard } from './cashiers';
-import { WhereSoldCard } from './where-sold';
 import { OrdersCard } from './orders';
 import { TopProductsCard } from './top-products';
 import { TaxesCard } from './taxes';
@@ -29,7 +28,6 @@ const cards = [
 	{ id: 'card-products', name: 'reports.card_top_products', Component: TopProductsCard },
 	{ id: 'card-categories', name: 'reports.card_categories', Component: CategoriesCard },
 	{ id: 'card-cashiers', name: 'reports.card_cashiers', Component: CashiersCard },
-	{ id: 'card-where-sold', name: 'reports.card_where_sold', Component: WhereSoldCard },
 	{ id: 'card-taxes', name: 'reports.card_taxes', Component: TaxesCard },
 	{ id: 'card-refunds', name: 'reports.card_refunds', Component: RefundsCard },
 ];

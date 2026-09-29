@@ -20,7 +20,7 @@ it('renders Orders, Payments, Top products, Categories, Cashiers, Where sold, Ta
 		Array.from(section.querySelectorAll('[data-testid]'))
 			.map((node) => node.getAttribute('data-testid'))
 			.filter((id) =>
-				/^card-(orders|payments|products|categories|cashiers|where-sold|taxes|refunds)$/.test(id!)
+				/^card-(orders|payments|products|categories|cashiers|taxes|refunds)$/.test(id!)
 			)
 	).toEqual([
 		'card-orders',
@@ -28,7 +28,6 @@ it('renders Orders, Payments, Top products, Categories, Cashiers, Where sold, Ta
 		'card-products',
 		'card-categories',
 		'card-cashiers',
-		'card-where-sold',
 		'card-taxes',
 		'card-refunds',
 	]);
@@ -70,7 +69,7 @@ it('three columns on lg, two on md, one on sm', () => {
 		view.rerender(<PeriodSection />);
 		const row = screen.getByTestId('card-orders').parentElement!.parentElement!;
 		expect(row.children.length).toBe(columns);
-		expect(row.parentElement!.children.length).toBe(1 + Math.ceil(8 / columns));
+		expect(row.parentElement!.children.length).toBe(1 + Math.ceil(7 / columns));
 		expect(row.children[0].contains(screen.getByTestId('card-orders'))).toBe(true);
 	}
 });

@@ -295,6 +295,38 @@ describe('tenders', () => {
 		]);
 		expect(tenders(rows, totals(rows), 2)).toMatchObject([{ key: 'cash', amount: 5, orders: 1 }]);
 	});
+	it('a ledger with nothing taken attributes nothing to the method; what is owed is unpaid', () => {
+		const rows = orders([
+			{
+				total: '9',
+				needs_payment: true,
+				payment_method: 'stripe',
+				payment_method_title: 'Card',
+				meta_data: ledger([
+					{ id: 'b', kind: 'card', method_id: 'stripe', status: 'pending', amount: '9' },
+				]),
+			},
+		]);
+		expect(tenders(rows, totals(rows), 2)).toMatchObject([{ key: 'unpaid', amount: 9, orders: 1 }]);
+	});
+	it('an authorized row recorded offline is money taken', () => {
+		const rows = orders([
+			{
+				total: '7',
+				meta_data: ledger([
+					{
+						id: 'c',
+						kind: 'card',
+						method_id: 'sumup',
+						status: 'authorized',
+						recorded_offline: true,
+						amount: '7',
+					},
+				]),
+			},
+		]);
+		expect(tenders(rows, totals(rows), 2)).toMatchObject([{ key: 'sumup', amount: 7, orders: 1 }]);
+	});
 });
 describe('channels', () => {
 	it('POS orders are in store, everything else online', () => {
