@@ -22,6 +22,8 @@ export function ShippingTitle({ row }: CellContext<Props, 'name'>) {
 		// No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29).
 		<View className="w-full">
 			<EditableField
+				variant="ghost"
+				bold={false}
 				value={item.method_title}
 				onChangeText={(method_title) => updateShippingLine(uuid, { method_title })}
 			/>

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { Input, InputProps } from '@wcpos/components/input';
+import { cn } from '@wcpos/components/lib/utils';
 import { useDocField } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -21,6 +22,9 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
 
 	/** Number formatting options (used in web for display) */
 	formatOptions?: NumberFormatOptions;
+
+	/** Classes for the displayed number */
+	textClassName?: string;
 }
 
 /**
@@ -37,6 +41,8 @@ export function NumberInput({
 	formatOptions: _formatOptions,
 	onBlur,
 	onFocus,
+	inputClassName,
+	textClassName,
 	...props
 }: NumberInputProps) {
 	const { store } = useAppState();
@@ -108,6 +114,7 @@ export function NumberInput({
 	return (
 		<Input
 			{...props}
+			inputClassName={cn(inputClassName, textClassName)}
 			value={internalValue}
 			onChangeText={setInternalValue}
 			onFocus={handleFocus}

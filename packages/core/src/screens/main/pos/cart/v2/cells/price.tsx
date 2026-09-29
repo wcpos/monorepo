@@ -37,7 +37,8 @@ export function Price({ row, column }: CellContext<Props, 'price'>) {
 				</Text>
 			)}
 			<CurrencyInput
-				className="border-0 bg-transparent tabular-nums"
+				className="items-end border-0 bg-transparent tabular-nums"
+				textClassName="text-muted-foreground text-right tabular-nums"
 				inputClassName="border-0 tabular-nums"
 				value={price}
 				onChangeText={(price) => updateLineItem(uuid, { price })}

@@ -26,7 +26,8 @@ export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 				// painted as "2" (iPhone 16 Pro simulator, 2026-09-09). Native only; the
 				// web NumberInput renders a button and ignores this.
 				inputClassName="border-0 px-1 text-center tabular-nums"
-				className="min-h-row border-0 bg-transparent tabular-nums"
+				className="h-9 min-w-9 items-center justify-center px-2 tabular-nums"
+				textClassName="font-semibold"
 				// A tap on the field lands the caret wherever the finger was, often before
 				// the digits, so typing appends instead of replacing ("1" → "31"). A
 				// cashier tapping the quantity means to replace it, as the web numpad
