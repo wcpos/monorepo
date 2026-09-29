@@ -11,7 +11,7 @@ import { useRegisterNames } from '../../../../services/register/use-register-nam
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
-import { inZone, useStoreDay } from '../../../../hooks/use-store-day';
+import { inZone, useStoreDay, useViewedStore } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
@@ -21,12 +21,15 @@ import { useQueryState } from '../../../../query';
 /**
  *
  */
-export function ZReport() {
+/** The report is the viewed store's (a Pro cashier may report on another store than the till's). */
+export function ZReport({ storeId }: { storeId?: number } = {}) {
 	const t = useT();
 	const registerNames = useRegisterNames();
 	const { store, wpCredentials } = useStoreSession();
-	const storeName = useDocField(store, (value) => value.name) as string;
-	const num_decimals = useDocField(store, (value) => value.price_num_decimals) as number;
+	const viewed = useDocField(useViewedStore(storeId), (value) => value);
+	const sessionName = useDocField(store, (value) => value.name);
+	const storeName = (viewed?.name ?? sessionName) as string;
+	const num_decimals = viewed?.price_num_decimals as number;
 	const { selectedOrders } = useReportsData();
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
@@ -45,11 +48,20 @@ export function ZReport() {
 		averageOrderValue,
 	} = calculateTotals({ orders: selectedOrders, num_decimals });
 
-	const { format: formatCurrency } = useCurrencyFormat();
+	const options = {
+		decimalScale: viewed?.price_num_decimals,
+		decimalSeparator: viewed?.price_decimal_sep,
+		thousandSeparator: viewed?.price_thousand_sep,
+	};
+	const { format: formatCurrency } = useCurrencyFormat({
+		...options,
+		currency: viewed?.currency,
+		currencyPosition: viewed?.currency_pos,
+	});
 	const { format: formatName } = useCustomerNameFormat();
-	const { format: formatNumber } = useNumberFormat();
+	const { format: formatNumber } = useNumberFormat(options);
 	const { formatDate } = useLocalDate();
-	const { timezone } = useStoreDay();
+	const { timezone } = useStoreDay(storeId);
 
 	/**
 	 *
@@ -98,7 +110,7 @@ export function ZReport() {
 	return (
 		<View>
 			<Text bold>
-				{storeName} (ID: {store.id!})
+				{storeName} (ID: {viewed?.id ?? store.id!})
 			</Text>
 			<Text>{`${t('reports.report_generated')}: ${reportGenerated}`}</Text>
 			<Text>{`${t('reports.report_period_start')}: ${reportPeriod.from}`}</Text>

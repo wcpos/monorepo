@@ -23,7 +23,8 @@ import { useT } from '../../../../contexts/translations';
  */
 export function Report() {
 	const t = useT();
-	const { print, isPrinting, contentRef } = useReportPrint(useReportsPeriod().storeId);
+	const { storeId } = useReportsPeriod();
+	const { print, isPrinting, contentRef } = useReportPrint(storeId);
 
 	return (
 		<View testID="reports-content" className="h-full p-2 pt-0 pl-0">
@@ -49,7 +50,7 @@ export function Report() {
 				<CardContent className="flex-1 p-0">
 					<ScrollView horizontal={false} className="w-full">
 						<View ref={contentRef} style={{ width: '100%', height: '100%', padding: 10 }}>
-							<ZReport />
+							<ZReport storeId={storeId} />
 						</View>
 					</ScrollView>
 				</CardContent>

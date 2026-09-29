@@ -181,7 +181,8 @@ export function Orders() {
 			},
 			onRowSelectionChange: handleRowSelectionChange,
 			meta: {
-				totalOrders: allOrders.length,
+				// The header checkbox counts the rows that can be ticked, the same universe as the rows.
+				totalOrders: allOrders.filter(included).length,
 				toggleAllRowsSelected: handleToggleAllRowsSelected,
 			},
 			/**
@@ -191,13 +192,7 @@ export function Orders() {
 				selectionState,
 			},
 		}),
-		[
-			allOrders.length,
-			handleToggleAllRowsSelected,
-			handleRowSelectionChange,
-			included,
-			selectionState,
-		]
+		[allOrders, handleToggleAllRowsSelected, handleRowSelectionChange, included, selectionState]
 	);
 
 	/**

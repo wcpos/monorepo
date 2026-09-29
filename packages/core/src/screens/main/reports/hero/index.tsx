@@ -116,6 +116,7 @@ function Difference({
 	current,
 	field,
 	format,
+	percent,
 	label,
 	numDecimals,
 }: {
@@ -123,6 +124,8 @@ function Difference({
 	current: number;
 	field: 'total' | 'orders' | 'averageOrderValue' | 'totalItemsSold';
 	format: (value: number) => string;
+	/** The store's one-decimal number format, for the percentage line. */
+	percent?: (value: number) => string;
 	label?: string;
 	numDecimals?: number;
 }) {
@@ -152,7 +155,7 @@ function Difference({
 			{none
 				? '—'
 				: field === 'total'
-					? `${signed(delta, (n) => n.toFixed(1))}% ${label}`
+					? `${signed(delta, percent ?? ((n) => n.toFixed(1)))}% ${label}`
 					: signed(delta, format)}
 		</Text>
 	);
@@ -186,6 +189,12 @@ export function Hero({ title }: { title: React.ReactNode }) {
 		currencyPosition: store?.currency_pos,
 	});
 	const { format: number } = useNumberFormat(options);
+	// The percentage carries the store's separators too (+1,3 % where the store writes 1,3).
+	const { format: percent } = useNumberFormat({
+		...options,
+		decimalScale: 1,
+		fixedDecimalScale: true,
+	});
 	const { formatDate } = useLocalDate();
 	const { selectedOrders } = useReportsData();
 	const totals = calculateTotals({
@@ -289,6 +298,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 						current={totals.total}
 						field="total"
 						format={number}
+						percent={percent}
 						label={label}
 						numDecimals={store?.price_num_decimals}
 					/>
@@ -316,7 +326,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			</View>
 			<View className="hidden">
 				<View ref={contentRef}>
-					<ZReport />
+					<ZReport storeId={storeId} />
 				</View>
 			</View>
 		</View>
