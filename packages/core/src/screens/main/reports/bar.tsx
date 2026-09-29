@@ -170,8 +170,15 @@ export function Bar({
 									row.name ?? '',
 									{
 										storeId: row.id,
-										// Reselecting the current store keeps the register scope as it is (a chosen Pro register, or `unbound` on an unbound Free till).
-										registerId: row.id === store.id ? scope.registerId : '',
+										// Reselecting the bound store while already on it keeps the register scope (a chosen Pro
+										// register, or `unbound` on an unbound Free till); returning to it from another store
+										// restores the binding, so another store's register never rides along.
+										registerId:
+											row.id === store.id
+												? (scope.storeId ?? store.id) === store.id
+													? scope.registerId
+													: (binding.registerId ?? '')
+												: '',
 									},
 									row.id === store.id,
 									t('reports.other_stores'),
