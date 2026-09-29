@@ -36,6 +36,7 @@ function createEngineDouble(
 		for (const cb of dbListeners) cb({});
 	};
 	return {
+		ready: Promise.resolve(),
 		dispose: jest.fn(dispose),
 		scope: {
 			// A resolved switch means the engine ACTIVATED the scope (db$ fired);
@@ -65,6 +66,8 @@ function loadCreateAppEngine(
 	initiallyActive = true
 ) {
 	jest.resetModules();
+	const purgeLegacyDatabases = jest.fn(async () => undefined);
+	jest.doMock('@wcpos/database/purge-legacy-db', () => ({ purgeLegacyDatabases }));
 	const appMetricsObserver = jest.fn();
 	const reportNetworkResponse = jest.fn();
 	const recordTransport = jest.fn();
@@ -178,6 +181,7 @@ function loadCreateAppEngine(
 		jest.requireActual<typeof import('./create-app-engine')>('./create-app-engine');
 	return {
 		createAppSyncEngine,
+		purgeLegacyDatabases,
 		createSessionFetcherOptions,
 		switchAppEngineScope,
 		createRxdbSyncEngine,
@@ -1978,5 +1982,47 @@ describe('createAppSyncEngine scope cache', () => {
 				level: 'warn',
 			})
 		);
+	});
+});
+
+describe('legacy database purge', () => {
+	it('runs once after readiness, never blocks the open or the next engine', async () => {
+		let ready!: () => void;
+		const engine = createEngineDouble();
+		engine.ready = new Promise<void>((resolve) => {
+			ready = resolve;
+		});
+		const { createAppSyncEngine, purgeLegacyDatabases } = loadCreateAppEngine(() => engine);
+		purgeLegacyDatabases.mockImplementation(() => new Promise(() => {}));
+		expect(createAppSyncEngine(BASE_OPTIONS)).toBe(engine);
+		expect(purgeLegacyDatabases).not.toHaveBeenCalled();
+		ready();
+		await engine.ready;
+		await Promise.resolve();
+		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
+		createAppSyncEngine(OTHER_SITE_OPTIONS);
+		await Promise.resolve();
+		expect(purgeLegacyDatabases).toHaveBeenCalledTimes(1);
+	});
+
+	it('logs a rejected purge without failing readiness', async () => {
+		const { createAppSyncEngine, purgeLegacyDatabases, networkError } = loadCreateAppEngine();
+		purgeLegacyDatabases.mockRejectedValue(new Error('purge failed'));
+		const engine = createAppSyncEngine(BASE_OPTIONS);
+		await expect(engine.ready).resolves.toBeUndefined();
+		await Promise.resolve();
+		expect(networkError).toHaveBeenCalledWith(
+			'Failed to purge legacy databases',
+			expect.any(Object)
+		);
+	});
+
+	it('does not purge when engine readiness fails', async () => {
+		const engine = createEngineDouble();
+		const { createAppSyncEngine, purgeLegacyDatabases } = loadCreateAppEngine(() => engine);
+		engine.ready = Promise.reject(new Error('open failed'));
+		createAppSyncEngine(BASE_OPTIONS);
+		await expect(engine.ready).rejects.toThrow('open failed');
+		expect(purgeLegacyDatabases).not.toHaveBeenCalled();
 	});
 });

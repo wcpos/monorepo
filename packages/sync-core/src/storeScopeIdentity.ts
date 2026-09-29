@@ -123,12 +123,13 @@ export function scopeKeyFor(identity: StoreScopeIdentity): string {
  * and the sync-checkpoint `checkpointKey`) were renamed in place, so a
  * generation-3 database is abandoned wholesale rather than migrated (house
  * ruling: no migrations for unreleased schema; 1.10 ships a fresh database).
+ * v5 = the 2.0 storage engine: promoted scope/sort columns and indexes (#2242).
  */
 export function scopeDatabaseName(
 	identity: StoreScopeIdentity,
 	options?: ScopeDatabaseNameOptions
 ): string {
-	const generation = options?.generation ?? 4;
+	const generation = options?.generation ?? 5;
 	const suffix = options?.namespace === undefined ? '' : `_${options.namespace}`;
 	return `pos_v${generation}_${scopeKeyFor(identity)}${suffix}`;
 }
