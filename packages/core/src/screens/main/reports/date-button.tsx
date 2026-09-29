@@ -84,7 +84,7 @@ export function DateButton({
 	const [selectingStart, setSelectingStart] = React.useState(scope.from !== scope.to);
 	// The visible month, so the header arrows stop at the reach and at today's month instead of
 	// paging into months with no usable day.
-	const [visibleMonth, setVisibleMonth] = React.useState('');
+	const [visibleMonth, setVisibleMonth] = React.useState(() => scope.from.slice(0, 7));
 	const [draft, setDraft] = React.useState<DateRange>({
 		from: parseISO(scope.from),
 		to: parseISO(scope.to),
@@ -149,6 +149,7 @@ export function DateButton({
 			onOpenChange={(value) => {
 				if (value) {
 					setDraft({ from: parseISO(scope.from), to: parseISO(scope.to) });
+					setVisibleMonth(scope.from.slice(0, 7));
 					setSelectingStart(scope.from !== scope.to);
 					// A locked deep link opens the picker to show its hint; only a cashier's own tap clears it.
 					if (!linkOpen.current) setLocked('');
@@ -273,7 +274,8 @@ export function DateButton({
 						{t('common.done')}
 					</Button>
 				</View>
-				<ScopeHint locked={locked} historyLimit={historyLimit} />
+				{/* A lock is only Free's: a plan that turns Pro under an open picker drops it at once. */}
+				<ScopeHint locked={license?.isPro ? '' : locked} historyLimit={historyLimit} />
 			</PopoverContent>
 		</Popover>
 	);

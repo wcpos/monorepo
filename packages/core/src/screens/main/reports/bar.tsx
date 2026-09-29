@@ -170,15 +170,15 @@ export function Bar({
 									row.name ?? '',
 									{
 										storeId: row.id,
-										// Reselecting the current store keeps the scope as it is (on an unbound Free till, `unbound`).
-										registerId: row.id === store.id ? binding.registerId || scope.registerId : '',
+										// Reselecting the current store keeps the register scope as it is (a chosen Pro register, or `unbound` on an unbound Free till).
+										registerId: row.id === store.id ? scope.registerId : '',
 									},
 									row.id === store.id,
 									t('reports.other_stores'),
 									row.id === (scope.storeId ?? store.id)
 								)
 							)}
-						<ScopeHint locked={locked} />
+						<ScopeHint locked={license?.isPro ? '' : locked} />
 					</PopoverContent>
 				</Popover>
 				<View className="ml-auto shrink-0">
