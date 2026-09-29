@@ -8,8 +8,14 @@ export function ReportCard({
 	testID,
 	name,
 	figure,
+	head,
 	children,
-}: React.PropsWithChildren<{ testID: string; name: string; figure: string }>) {
+}: React.PropsWithChildren<{
+	testID: string;
+	name: string;
+	figure: string;
+	head?: React.ReactNode;
+}>) {
 	return (
 		<View testID={testID} className="bg-card flex-1 gap-3 rounded-md border p-4">
 			<View className="flex-row items-center justify-between gap-3">
@@ -18,6 +24,7 @@ export function ReportCard({
 					{figure}
 				</Text>
 			</View>
+			{head}
 			{children}
 		</View>
 	);

@@ -1,5 +1,7 @@
 import round from 'lodash/round';
 
+import { readLedger } from '@wcpos/order-math';
+
 import type { ReportOrder, ReportsScope } from '../context';
 import type { calculateTotals } from '../report/utils';
 
@@ -112,5 +114,119 @@ export function refundsSummary(orders: ReportOrder[], totals: Totals, num_decima
 		orders: orders.length,
 		kept,
 		keptShare: totals.total ? kept / totals.total : null,
+	};
+}
+
+export function tenders(orders: ReportOrder[], totals: Totals, num_decimals = 2) {
+	const parts = new Map<string, { key: string; label: string; amount: number; orders: number }>();
+	for (const order of orders) {
+		const captured = readLedger(order.meta_data).filter((row) => row.status === 'captured');
+		const rows = captured.length
+			? captured.map((row) => ({
+					key: row.kind === 'cash' ? 'cash' : row.method_id,
+					label:
+						row.method_id === order.payment_method ||
+						(row.kind === 'cash' && order.payment_method === 'cash')
+							? order.payment_method_title || ''
+							: '',
+					amount: Number(row.amount),
+				}))
+			: [
+					{
+						key: order.payment_method || (order.needs_payment ? 'unpaid' : 'unknown'),
+						label: order.payment_method ? order.payment_method_title || '' : '',
+						amount: Number(order.total || 0),
+					},
+				];
+		const touched = new Set<string>();
+		for (const row of rows) {
+			const part = parts.get(row.key) ?? {
+				key: row.key,
+				label: row.label || (['cash', 'unpaid', 'unknown'].includes(row.key) ? '' : row.key),
+				amount: 0,
+				orders: 0,
+			};
+			if (row.label) part.label = row.label;
+			part.amount += row.amount;
+			if (!touched.has(row.key)) part.orders++;
+			touched.add(row.key);
+			parts.set(row.key, part);
+		}
+	}
+	return [...parts.values()]
+		.map((row) => ({
+			...row,
+			amount: round(row.amount, num_decimals),
+			share: totals.total ? row.amount / totals.total : 0,
+		}))
+		.sort((a, b) => b.amount - a.amount);
+}
+export function channels(orders: ReportOrder[], totals: Totals) {
+	return ['store', 'online']
+		.map((key) => {
+			const rows = orders.filter(
+				(order) => (order.created_via === 'woocommerce-pos' ? 'store' : 'online') === key
+			);
+			const amount = rows.reduce((sum, order) => sum + Number(order.total || 0), 0);
+			return { key, amount, orders: rows.length, share: totals.total ? amount / totals.total : 0 };
+		})
+		.filter((row) => row.orders > 0)
+		.sort((a, b) => b.amount - a.amount);
+}
+export function registers(totals: Totals) {
+	return totals.registerArray
+		.map((row) => ({
+			key: row.registerId,
+			amount: row.totalAmount,
+			orders: row.totalOrders,
+			share: totals.total ? row.totalAmount / totals.total : 0,
+		}))
+		.sort((a, b) => b.amount - a.amount);
+}
+export function cashiers(totals: Totals) {
+	const parts = new Map<string, { key: string; amount: number; orders: number }>();
+	for (const row of totals.userStoreArray) {
+		const part = parts.get(row.cashierId) ?? { key: row.cashierId, amount: 0, orders: 0 };
+		part.amount += row.totalAmount;
+		part.orders += row.totalOrders;
+		parts.set(row.cashierId, part);
+	}
+	return [...parts.values()]
+		.map((row) => ({ ...row, share: totals.total ? row.amount / totals.total : 0 }))
+		.sort((a, b) => b.amount - a.amount);
+}
+export type LocalProduct = { id?: number; categories?: { id?: number; name?: string }[] };
+export function categories(
+	orders: ReportOrder[],
+	products: LocalProduct[],
+	totals: Totals,
+	num_decimals = 2
+) {
+	const directory = new Map(products.map((product) => [product.id, product]));
+	const parts = new Map<string, { key: string; label: string; amount: number; quantity: number }>();
+	let unknownLines = 0,
+		totalLines = 0;
+	for (const order of orders)
+		for (const line of order.line_items ?? []) {
+			const product = directory.get(line.product_id ?? undefined),
+				category = product?.categories?.[0];
+			const key = !product ? 'unknown' : category ? String(category.id) : 'uncategorised';
+			const part = parts.get(key) ?? { key, label: category?.name || '', amount: 0, quantity: 0 };
+			part.amount += Number(line.total || 0) + Number(line.total_tax || 0);
+			part.quantity += Number.isFinite(line.quantity) ? line.quantity! : 0;
+			parts.set(key, part);
+			totalLines++;
+			if (!product) unknownLines++;
+		}
+	return {
+		parts: [...parts.values()]
+			.map((row) => ({
+				...row,
+				amount: round(row.amount, num_decimals),
+				share: totals.total ? row.amount / totals.total : 0,
+			}))
+			.sort((a, b) => b.amount - a.amount),
+		unknownLines,
+		totalLines,
 	};
 }

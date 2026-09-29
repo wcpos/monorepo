@@ -13,14 +13,25 @@ beforeEach(() => {
 	mockState.from = mockState.to = '2026-07-15';
 });
 // Reordering or omitting a card, diverging labels and incorrect width buckets break these contracts.
-it('renders Orders, Top products, Taxes and Refunds in that order', () => {
+it('renders Orders, Payments, Top products, Categories, Cashiers, Where sold, Taxes and Refunds in that order', () => {
 	render(<PeriodSection />);
 	const section = screen.getByTestId('reports-period-section');
 	expect(
 		Array.from(section.querySelectorAll('[data-testid]'))
 			.map((node) => node.getAttribute('data-testid'))
-			.filter((id) => /^card-(orders|products|taxes|refunds)$/.test(id!))
-	).toEqual(['card-orders', 'card-products', 'card-taxes', 'card-refunds']);
+			.filter((id) =>
+				/^card-(orders|payments|products|categories|cashiers|where-sold|taxes|refunds)$/.test(id!)
+			)
+	).toEqual([
+		'card-orders',
+		'card-payments',
+		'card-products',
+		'card-categories',
+		'card-cashiers',
+		'card-where-sold',
+		'card-taxes',
+		'card-refunds',
+	]);
 });
 it("the heading reads the date button's label", () => {
 	const tree = () => (
@@ -59,7 +70,7 @@ it('three columns on lg, two on md, one on sm', () => {
 		view.rerender(<PeriodSection />);
 		const row = screen.getByTestId('card-orders').parentElement!.parentElement!;
 		expect(row.children.length).toBe(columns);
-		expect(row.parentElement!.children.length).toBe(1 + Math.ceil(4 / columns));
+		expect(row.parentElement!.children.length).toBe(1 + Math.ceil(8 / columns));
 		expect(row.children[0].contains(screen.getByTestId('card-orders'))).toBe(true);
 	}
 });

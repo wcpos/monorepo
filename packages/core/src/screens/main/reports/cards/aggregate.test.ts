@@ -1,4 +1,15 @@
-import { ordersSummary, refundsSummary, statusCounts, taxesByRate, topProducts } from './aggregate';
+import {
+	cashiers,
+	categories,
+	channels,
+	ordersSummary,
+	refundsSummary,
+	registers,
+	statusCounts,
+	taxesByRate,
+	tenders,
+	topProducts,
+} from './aggregate';
 import { calculateTotals } from '../report/utils';
 
 import type { ReportOrder } from '../context';
@@ -230,5 +241,142 @@ describe('taxesByRate', () => {
 describe('refundsSummary', () => {
 	it('kept share is null with no sales', () => {
 		expect(refundsSummary([], totals([])).keptShare).toBeNull();
+	});
+});
+
+// Wrong ledger filtering, per-row order counts, or category joins break these fixtures.
+describe('tenders', () => {
+	const ledger = (payments: object[]) => [
+		{ key: '_wcpos_payments', value: JSON.stringify({ schema: 1, payments }) },
+	];
+	it('a split sale is one order per method it touched', () => {
+		const rows = orders([
+			{
+				total: '100',
+				payment_method: 'pos_cash',
+				payment_method_title: 'Cash drawer',
+				meta_data: ledger([
+					{ id: 'a', kind: 'cash', method_id: 'pos_cash', status: 'captured', amount: '20' },
+					{ id: 'b', kind: 'cash', method_id: 'pos_cash', status: 'captured', amount: '10' },
+					{ id: 'c', kind: 'card', method_id: 'stripe', status: 'captured', amount: '70' },
+				]),
+			},
+		]);
+		expect(tenders(rows, totals(rows), 2)).toEqual([
+			{ key: 'stripe', label: 'stripe', amount: 70, orders: 1, share: 0.7 },
+			{ key: 'cash', label: 'Cash drawer', amount: 30, orders: 1, share: 0.3 },
+		]);
+	});
+	it('an order without a ledger is one tender of its payment method', () => {
+		const rows = orders([
+			{ total: '12.345', payment_method: 'bacs', payment_method_title: 'Bank' },
+		]);
+		expect(tenders(rows, totals(rows), 2)).toEqual([
+			{ key: 'bacs', label: 'Bank', amount: 12.35, orders: 1, share: 1 },
+		]);
+	});
+	it('an unpaid order is the unpaid tender', () => {
+		const rows = orders([{ total: '12', needs_payment: true }]);
+		expect(tenders(rows, totals(rows), 2)[0]).toMatchObject({
+			key: 'unpaid',
+			amount: 12,
+			orders: 1,
+		});
+	});
+	it('a ledger row that is not captured is not a tender', () => {
+		const rows = orders([
+			{
+				total: '5',
+				meta_data: ledger([
+					{ id: 'a', kind: 'cash', method_id: 'pos_cash', status: 'captured', amount: '5' },
+					{ id: 'b', kind: 'card', method_id: 'stripe', status: 'pending', amount: '9' },
+				]),
+			},
+		]);
+		expect(tenders(rows, totals(rows), 2)).toMatchObject([{ key: 'cash', amount: 5, orders: 1 }]);
+	});
+});
+describe('channels', () => {
+	it('POS orders are in store, everything else online', () => {
+		const rows = orders([
+			{ total: '30', created_via: 'woocommerce-pos' },
+			{ total: '10', created_via: 'checkout' },
+			{ total: '10' },
+		]);
+		expect(channels(rows, totals(rows))).toEqual([
+			{ key: 'store', amount: 30, orders: 1, share: 0.6 },
+			{ key: 'online', amount: 20, orders: 2, share: 0.4 },
+		]);
+	});
+});
+describe('cashiers', () => {
+	it('sums a cashier across stores', () => {
+		expect(
+			cashiers({
+				...totals([]),
+				total: 40,
+				userStoreArray: [
+					{ cashierId: '7', storeId: '1', totalAmount: 10, totalOrders: 1 },
+					{ cashierId: '7', storeId: '2', totalAmount: 30, totalOrders: 2 },
+				],
+			})
+		).toEqual([{ key: '7', amount: 40, orders: 3, share: 1 }]);
+	});
+});
+describe('registers', () => {
+	it('sorts register amounts and uses the period total for shares', () => {
+		expect(
+			registers({
+				...totals([]),
+				total: 100,
+				registerArray: [
+					{ registerId: 'a', totalAmount: 20, totalOrders: 1 },
+					{ registerId: 'b', totalAmount: 60, totalOrders: 2 },
+				],
+			})
+		).toEqual([
+			{ key: 'b', amount: 60, orders: 2, share: 0.6 },
+			{ key: 'a', amount: 20, orders: 1, share: 0.2 },
+		]);
+	});
+});
+describe('categories', () => {
+	const rows = orders([
+		{ total: '12', line_items: [{ product_id: 1, total: '10', total_tax: '2', quantity: 1.5 }] },
+	]);
+	it("a line takes its product's first category", () => {
+		expect(
+			categories(
+				rows,
+				[
+					{
+						id: 1,
+						categories: [
+							{ id: 8, name: 'First' },
+							{ id: 9, name: 'Second' },
+						],
+					},
+				],
+				totals(rows),
+				2
+			)
+		).toEqual({
+			parts: [{ key: '8', label: 'First', amount: 12, quantity: 1.5, share: 1 }],
+			unknownLines: 0,
+			totalLines: 1,
+		});
+	});
+	it('a product without categories is uncategorised', () => {
+		expect(categories(rows, [{ id: 1, categories: [] }], totals(rows), 2).parts[0]).toMatchObject({
+			key: 'uncategorised',
+			amount: 12,
+		});
+	});
+	it('a line without a local product is the unknown row and is counted', () => {
+		expect(categories(rows, [], totals(rows), 2)).toMatchObject({
+			parts: [{ key: 'unknown', amount: 12, quantity: 1.5 }],
+			unknownLines: 1,
+			totalLines: 1,
+		});
 	});
 });
