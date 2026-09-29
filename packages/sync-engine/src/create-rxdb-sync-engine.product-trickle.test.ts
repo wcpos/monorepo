@@ -466,6 +466,7 @@ describe('product-trickle maintenance lane', () => {
 		await scope.database.collections.products.insert({
 			uuid: productUuid(77),
 			remoteId: remoteId(77),
+			remoteKey: String(remoteId(77) ?? ''),
 			price: 12.5,
 			stockStatus: 'instock',
 			type: 'simple',

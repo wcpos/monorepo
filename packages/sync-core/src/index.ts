@@ -51,6 +51,7 @@ export { MUTATION_QUEUE_COLLECTION, StoreScopeManager, type Fetcher, type ScopeB
 // prettier-ignore
 export {
 	checkpointInstantMs, finiteOrNull, normalizeCheckpoint,
+	remoteKeyFor,
 	promotedOrderColumns, promotedProductColumns,
 	withOrderColumns, type OrderDocument, type ProductDocument, type PullResponse,
 	type StoredOrderDocument, type StoredProductDocument, type SyncCheckpoint,
@@ -77,6 +78,8 @@ export {
 	type PosCarrier,
 	type PosIdentity,
 	NO_STORE,
+	identityColumns,
+	identityColumnFilter,
 	POS_META_KEYS,
 	wooMetaCarrier,
 } from './pos-carrier/carrier';

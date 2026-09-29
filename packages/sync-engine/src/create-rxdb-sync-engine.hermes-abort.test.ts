@@ -147,8 +147,11 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 		if (!scope0) throw new Error('no active scope');
 		await (scope0.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert(
 			{
+				posUserId: '',
+				posStoreId: '',
 				uuid: UUID_1,
 				remoteId: null,
+				remoteKey: '',
 				number: '',
 				dateCreatedGmt: '2026-07-10T00:00:00',
 				status: 'pos-open',
@@ -217,6 +220,7 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 		await scope.database.collections.products.insert({
 			uuid: UUID_1,
 			remoteId: remoteId(501),
+			remoteKey: String(remoteId(501) ?? ''),
 			price: 12.5,
 			stockStatus: 'instock',
 			type: 'simple',

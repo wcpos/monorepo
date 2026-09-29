@@ -47,6 +47,7 @@ function fakeCustomer(): RxDocument<EngineDocument> {
 	const json = {
 		uuid: 'customer-uuid',
 		remoteId: '42',
+		remoteKey: '42',
 		payload: { id: 42, first_name: 'Ada', last_name: 'Lovelace' },
 	};
 	return {

@@ -1,4 +1,4 @@
-import { remoteIdOrNull } from '@wcpos/sync-core';
+import { remoteIdOrNull, remoteKeyFor } from '@wcpos/sync-core';
 
 import {
 	type EngineDocument,
@@ -23,7 +23,8 @@ export class EngineAdapterSelectorError extends Error {
 }
 
 function remoteIdSelectorCondition(field: string, condition: unknown): unknown {
-	const convert = (value: unknown): unknown => remoteIdOrNull(value) ?? value;
+	const convert = (value: unknown): unknown =>
+		field === 'parent_id' && value === null ? remoteKeyFor(null) : (remoteIdOrNull(value) ?? value);
 	if (!isRecord(condition)) return convert(condition);
 
 	return Object.fromEntries(
@@ -454,6 +455,23 @@ function buildPrefilter(
 			mapping.kind === 'identifier' || (collection === 'variations' && field === 'parent_id');
 		const engineCondition = identifier ? remoteIdSelectorCondition(field, condition) : condition;
 		const faithful = !containsUnsafePushOperator(condition);
+		if (
+			mapping.enginePath === 'remoteId' &&
+			collection !== 'refunds' &&
+			isRecord(engineCondition) &&
+			Array.isArray(engineCondition.$in)
+		) {
+			result.remoteKey = {
+				...engineCondition,
+				$in: engineCondition.$in.map((value) => (value === null ? remoteKeyFor(null) : value)),
+			};
+			continue;
+		}
+		if (collection === 'variations' && field === 'parent_id') {
+			result.parentRemoteKey = engineCondition;
+			continue;
+		}
+
 		if (
 			mapping.kind === 'payload' &&
 			!mapping.compute &&

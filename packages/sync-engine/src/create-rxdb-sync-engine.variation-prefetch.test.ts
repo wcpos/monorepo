@@ -34,6 +34,7 @@ function product(id: number, variations: number[]): Record<string, unknown> {
 	return {
 		uuid: uuid('product', id),
 		remoteId: remoteId(id),
+		remoteKey: String(remoteId(id) ?? ''),
 		price: 5,
 		stockStatus: 'instock',
 		type: 'variable',
@@ -52,7 +53,9 @@ function variation(id: number, parentId: number): Record<string, unknown> {
 	return {
 		uuid: uuid('variation', id),
 		remoteId: remoteId(id),
+		remoteKey: String(remoteId(id) ?? ''),
 		parentRemoteId: remoteId(parentId),
+		parentRemoteKey: String(remoteId(parentId) ?? ''),
 		price: 5,
 		stockStatus: 'instock',
 		attributes: [],

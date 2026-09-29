@@ -26,6 +26,7 @@ function product(
 	return {
 		uuid,
 		remoteId: String(wooProductId),
+		remoteKey: String(String(wooProductId) ?? ''),
 		price: Math.round(Number(price) * 100) / 100,
 		stockStatus: 'instock',
 		type: 'simple',
@@ -57,8 +58,11 @@ function order(
 	total = '10.00'
 ) {
 	return {
+		posUserId: '',
+		posStoreId: '',
 		uuid,
 		remoteId: String(wooOrderId),
+		remoteKey: String(String(wooOrderId) ?? ''),
 		number: String(wooOrderId),
 		dateCreatedGmt,
 		status: 'completed',

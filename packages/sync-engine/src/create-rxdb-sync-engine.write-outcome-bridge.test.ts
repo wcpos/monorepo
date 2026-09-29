@@ -68,8 +68,11 @@ function channelWorld() {
 async function insertServerOrder(engine: RxdbSyncEngine): Promise<void> {
 	await engine.ready;
 	await engine.active()!.database.collections.orders.insert({
+		posUserId: '',
+		posStoreId: '',
 		uuid: ORDER_ID,
 		remoteId: remoteId(900),
+		remoteKey: String(remoteId(900) ?? ''),
 		number: '900',
 		dateCreatedGmt: '2026-08-14T00:00:00',
 		// NOT 'pos-open': the drain deliberately holds an open cart's implicit
@@ -280,8 +283,11 @@ describe('cross-tab write outcomes (#1209)', () => {
 			await tabs.leader.engine.ready;
 			tabs.setLeaderOwns(false);
 			await tabs.leader.engine.active()!.database.collections.orders.insert({
+				posUserId: '',
+				posStoreId: '',
 				uuid: ORDER_ID,
 				remoteId: null,
+				remoteKey: '',
 				number: '',
 				dateCreatedGmt: '2026-08-14T00:00:00',
 				status: 'pos-open',

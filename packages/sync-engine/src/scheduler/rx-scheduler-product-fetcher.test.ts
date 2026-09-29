@@ -290,6 +290,7 @@ describe('createProductsSchedulerFetcher', () => {
 			{
 				uuid: uuidFor(321),
 				remoteId: remoteId(321),
+				remoteKey: String(remoteId(321) ?? ''),
 				// Promoted filter/sort columns attached at the storage seam (withProductColumns). This payload
 				// carries no filter fields, so they default — proving the promotion runs on every upsert.
 				price: 0,
@@ -2202,6 +2203,7 @@ describe('createProductsSchedulerFetcher', () => {
 			expect.objectContaining({
 				uuid: uuidFor(101),
 				remoteId: remoteId(101),
+				remoteKey: String(remoteId(101) ?? ''),
 				payload: expect.objectContaining({ name: 'Keyboard Stand', sku: 'KEY-101' }),
 			}),
 		]);
@@ -2772,6 +2774,7 @@ describe('createProductsSchedulerFetcher', () => {
 			expect.objectContaining({
 				uuid: uuidFor(321),
 				remoteId: remoteId(321),
+				remoteKey: String(remoteId(321) ?? ''),
 				payload: expect.objectContaining({ status: 'draft' }),
 			}),
 		]);

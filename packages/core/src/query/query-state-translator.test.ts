@@ -1,7 +1,7 @@
 import { orderBrowserQueryKey } from '@wcpos/query/testing';
 import { engineCollectionNameFor } from '@wcpos/query/collection-map';
 import { mintRemoteId } from '@wcpos/sync-core';
-import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
+import { engineCollectionCreators, engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import {
 	compileQuery,
@@ -70,6 +70,35 @@ it('pushes only required top-level engine columns for every UI sort', () => {
 	} satisfies { [C in Collection]: SortFieldOf<C>[] };
 	const creators = engineSyncCollectionCreators();
 	const violations: string[] = [];
+	for (const [name, { schema }] of Object.entries(engineCollectionCreators())) {
+		const typed = schema as RxJsonSchema<Record<string, unknown>>;
+		for (const index of typed.indexes ?? [])
+			for (const path of typeof index === 'string' ? [index] : index) {
+				const parts = path.split('.');
+				let node = typed;
+				for (const part of parts) {
+					if (!node.required?.includes(part)) violations.push(`${name}.${path}: not required`);
+					node = node.properties[part] as RxJsonSchema<Record<string, unknown>>;
+				}
+				if (typeof node.type !== 'string' || node.type === 'null')
+					violations.push(`${name}.${path}: nullable`);
+			}
+	}
+	for (const name of [
+		'orders',
+		'products',
+		'variations',
+		'customers',
+		'taxRates',
+		'categories',
+		'brands',
+		'tags',
+		'coupons',
+	] as const) {
+		const schema = creators[name].schema as RxJsonSchema<Record<string, unknown>>;
+		if (!schema.indexes?.includes('remoteKey')) violations.push(`${name}: missing remoteKey index`);
+	}
+
 	for (const collection of Object.keys(fields) as Collection[]) {
 		const legacy = collection === 'tax-rates' ? 'taxes' : collection;
 		const schema = creators[engineCollectionNameFor(legacy)].schema as RxJsonSchema<
@@ -344,10 +373,10 @@ describe('query-state translator', () => {
 				{ status: 'processing' },
 				{ customerId: 42 },
 				{
-					'payload.meta_data': { $elemMatch: { key: '_pos_user', value: { $in: ['7', 7] } } },
+					posUserId: '7',
 				},
 				{
-					'payload.meta_data': { $elemMatch: { key: '_pos_store', value: { $in: ['3', 3] } } },
+					posStoreId: '3',
 				},
 				{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 			],
@@ -381,10 +410,10 @@ describe('query-state translator', () => {
 			prefilter: {
 				$and: [
 					{
-						'payload.meta_data': { $elemMatch: { key: '_pos_user', value: { $in: ['7', 7] } } },
+						posUserId: '7',
 					},
 					{
-						'payload.meta_data': { $elemMatch: { key: '_pos_store', value: { $in: ['3', 3] } } },
+						posStoreId: '3',
 					},
 					{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 				],
@@ -850,7 +879,7 @@ describe('query-state translator', () => {
 
 		expect(compiled.demand).toEqual([]);
 		expect(compiled.represented).toBe(false);
-		expect(compiled.read.prefilter).toEqual({ remoteId: { $in: [] } });
+		expect(compiled.read.prefilter).toEqual({ remoteKey: { $in: [] } });
 	});
 
 	it('states the picker sort on a reference refresh when the wire can express it (#1347)', () => {

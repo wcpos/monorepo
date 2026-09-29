@@ -6,12 +6,37 @@ import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import { OPEN_ORDERS_SORT, openOrdersSelector } from '../../src/open-orders-scope';
 import { engineOrder } from '../../src/testing';
+import { sqlitePlan } from '../helpers/sqlite-plan';
 import { storages } from '../helpers/storages';
 
 import type { RxDatabase } from 'rxdb';
 
-describe.each(storages)('%s open-orders scope', (_name, storage) => {
+describe.each(storages)('%s open-orders scope', (name, storage) => {
 	let database: RxDatabase;
+	it('uses promoted scope fields and creation sort', () => {
+		expect(openOrdersSelector(7, 2)).toMatchObject({ posUserId: '7', posStoreId: '2' });
+		expect(OPEN_ORDERS_SORT).toEqual([{ dateCreatedGmt: 'asc' }, { uuid: 'asc' }]);
+	});
+	it('indexes grid and user sheet selectors', async () => {
+		if (name !== 'sqlite') return;
+		for (const selector of [
+			{ posUserId: '7', posStoreId: '2' },
+			{
+				posUserId: '7',
+				posStoreId: '2',
+				status: 'completed',
+				dateCreatedGmt: { $gte: '2026-01-01', $lt: '2026-01-02' },
+			},
+		])
+			expect(
+				await sqlitePlan(database.orders, {
+					selector,
+					sort: [{ dateCreatedGmt: 'desc' }, { uuid: 'desc' }],
+					limit: 10,
+				})
+			).not.toEqual(expect.arrayContaining([expect.stringMatching(/^SCAN (?!json_each)/)]));
+	});
+
 	beforeEach(async () => {
 		database = await createRxDatabase({
 			name: `orders-${crypto.randomUUID()}`,
@@ -61,5 +86,12 @@ describe.each(storages)('%s open-orders scope', (_name, storage) => {
 			})
 			.exec();
 		expect(documents.map((document) => document.primary)).toEqual(expected);
+		if (name === 'sqlite')
+			expect(
+				await sqlitePlan(database.orders, {
+					selector: openOrdersSelector(7, store),
+					sort: OPEN_ORDERS_SORT,
+				})
+			).not.toEqual(expect.arrayContaining([expect.stringMatching(/^SCAN (?!json_each)/)]));
 	});
 });

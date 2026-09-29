@@ -100,6 +100,7 @@ function storedDocument(input: {
 	const common = {
 		uuid: id,
 		[spec.remoteIdField]: mirroredRemoteId,
+		remoteKey: mirroredRemoteId ?? '',
 		payload: payload(spec, id, label, input.remoteId),
 		sync: {
 			revision: input.revision ?? '',
@@ -125,6 +126,7 @@ function storedDocument(input: {
 		return {
 			...common,
 			parentRemoteId: spec.parentId === undefined ? null : remoteId(spec.parentId),
+			parentRemoteKey: String(spec.parentId === undefined ? null : (remoteId(spec.parentId) ?? '')),
 			price: 4.2,
 			stockStatus: 'instock',
 			attributes: [],

@@ -17,7 +17,7 @@ import type {
 	OrderBrowseDimensions,
 	ProductBrowseDimensions,
 } from '@wcpos/sync-engine';
-import { remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
+import { identityColumnFilter, remoteIdOrNull, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { parseRemoteId } from '../utils/parse-remote-id';
 
@@ -231,23 +231,21 @@ function compileReadFilter(
 	}
 	if (operator === 'metadata') {
 		const id = parseRemoteId(value)!;
-		const identityFilter = wooMetaCarrier.identityFilter({
+		const identityFilter = identityColumnFilter({
 			cashierId: String(id),
 		});
 		return {
-			prefilter: { [mapping.enginePath]: identityFilter.meta_data },
+			prefilter: identityFilter,
 			matches: (document) => String(actual(document)) === String(id),
 		};
 	}
 	if (operator === 'store') {
 		const numeric = typeof value === 'number' || /^\d+$/.test(String(value));
-		const identityFilter = wooMetaCarrier.identityFilter({
+		const identityFilter = identityColumnFilter({
 			storeId: String(value),
 		});
 		return {
-			prefilter: numeric
-				? { [mapping.enginePath]: identityFilter.meta_data }
-				: { 'payload.created_via': value },
+			prefilter: numeric ? identityFilter : { 'payload.created_via': value },
 			matches: (document) => {
 				const payload = readEnginePath(document, 'payload') as Record<string, unknown> | undefined;
 				if (!numeric) return payload?.created_via === value;
@@ -357,7 +355,7 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 	if (targeted !== undefined) {
 		const idMapping = resolveLegacyField(legacyCollection, 'id');
 		readFilters.push({
-			prefilter: { [idMapping.enginePath]: { $in: targeted } },
+			prefilter: { remoteKey: { $in: targeted } },
 			matches: (document) => {
 				const remoteId = remoteIdOrNull(mappedValue(idMapping, document));
 				return remoteId !== null && targeted.includes(remoteId);

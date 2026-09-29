@@ -1,3 +1,4 @@
+import { identityColumns, type MetaDataEntry, wooMetaCarrier } from './pos-carrier/carrier';
 import { type RemoteId } from './woo/remoteIdCodec';
 import { GUEST_CUSTOMER_ID } from './woo/sentinels';
 
@@ -32,6 +33,8 @@ export type WooProductPayload = Record<string, unknown> & {
  * via `promotedOrderColumns`; backfilled from payload by the orderSchema v1 migration.
  */
 export type PromotedOrderColumns = {
+	posUserId: string;
+	posStoreId: string;
 	// Driver-shaped filter dimensions stay numeric; they are not document identity.
 	number: string;
 	dateCreatedGmt: string;
@@ -60,6 +63,9 @@ export type StoredOrderDocument = OrderDocument & PromotedOrderColumns;
  * promotion mapping (used by the storage boundary AND the schema migration backfill). */
 export function promotedOrderColumns(payload: WooOrderPayload): PromotedOrderColumns {
 	return {
+		...identityColumns(
+			wooMetaCarrier.readIdentity(payload.meta_data as MetaDataEntry[] | undefined)
+		),
 		number: String(payload.number ?? ''),
 		dateCreatedGmt: String(payload.date_created_gmt ?? ''),
 		status: String(payload.status ?? ''),
@@ -68,11 +74,16 @@ export function promotedOrderColumns(payload: WooOrderPayload): PromotedOrderCol
 	};
 }
 
+/** Non-null lookup spelling; remoteId itself retains the born-local null state. */
+export function remoteKeyFor(remoteId: string | null | undefined): string {
+	return remoteId ?? '';
+}
+
 /** Attach the promoted columns (derived from `doc.payload`) to an order document for storage. */
-export function withOrderColumns<T extends { payload: WooOrderPayload }>(
+export function withOrderColumns<T extends { payload: WooOrderPayload; remoteId?: string | null }>(
 	doc: T
-): T & PromotedOrderColumns {
-	return { ...doc, ...promotedOrderColumns(doc.payload) };
+): T & PromotedOrderColumns & { remoteKey: string } {
+	return { ...doc, ...promotedOrderColumns(doc.payload), remoteKey: remoteKeyFor(doc.remoteId) };
 }
 
 /** Numeric ids from a Woo taxonomy array (categories/brands: `[{ id, name, ... }]`). Defensive — the

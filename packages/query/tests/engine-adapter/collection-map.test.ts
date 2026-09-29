@@ -320,6 +320,8 @@ describe('engine adapter collection map', () => {
 				customer_id: '42',
 			})
 		).toEqual({
+			posUserId: '',
+			posStoreId: '',
 			number: '17',
 			dateCreatedGmt: '',
 			status: '',
@@ -364,6 +366,7 @@ describe('engine adapter collection map', () => {
 			})
 		).toEqual({
 			parentRemoteId: null,
+			parentRemoteKey: '',
 			price: -4.25,
 			stockStatus: 'instock',
 			attributes: [{ id: 2, name: 'Size', option: 'Large' }],

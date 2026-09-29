@@ -96,8 +96,11 @@ async function insertBornLocalOrder(
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
 	await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
+		posUserId: '',
+		posStoreId: '',
 		uuid: id,
 		remoteId: null,
+		remoteKey: '',
 		number: '',
 		dateCreatedGmt: '2026-07-10T00:00:00',
 		status: promotedStatus,
@@ -155,8 +158,11 @@ async function insertServerBornOrder(
 	const scope = engine.active();
 	if (!scope) throw new Error('no active scope');
 	await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
+		posUserId: '',
+		posStoreId: '',
 		uuid: id,
 		remoteId: remoteId(over.wooOrderId),
+		remoteKey: String(remoteId(over.wooOrderId) ?? ''),
 		number: String(1000 + over.wooOrderId),
 		dateCreatedGmt: '2026-07-10T00:00:00',
 		status: over.status ?? 'processing',
@@ -4519,8 +4525,11 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 			await (
 				scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }
 			).insert({
+				posUserId: '',
+				posStoreId: '',
 				uuid: UUID_A,
 				remoteId: null,
+				remoteKey: '',
 				number: '',
 				dateCreatedGmt: '2026-07-10T00:00:00',
 				status: 'pos-open',

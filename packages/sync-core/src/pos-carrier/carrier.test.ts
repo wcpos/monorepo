@@ -1,5 +1,11 @@
 import { createFakeCarrier } from './fake';
-import { POS_META_KEYS, type PosCarrier, wooMetaCarrier } from './carrier';
+import {
+	identityColumnFilter,
+	identityColumns,
+	POS_META_KEYS,
+	type PosCarrier,
+	wooMetaCarrier,
+} from './carrier';
 
 it('freezes POS metadata wire keys', () => {
 	expect(POS_META_KEYS.posData).toBe('_woocommerce_pos_data');
@@ -209,4 +215,20 @@ it('stamps and reads distinct till and bound register identities', () => {
 	});
 	expect(unbound.some(({ key }) => key === '_wcpos_register')).toBe(false);
 	expect(wooMetaCarrier.readIdentity(unbound).tillId).toBe('installation');
+});
+
+it('projects identity columns and filters without conflating absent and no-store spellings', () => {
+	expect(identityColumns({ cashierId: '7', storeId: 'woocommerce-pos' })).toEqual({
+		posUserId: '7',
+		posStoreId: 'woocommerce-pos',
+	});
+	expect(identityColumns({ cashierId: null, storeId: null })).toEqual({
+		posUserId: '',
+		posStoreId: '',
+	});
+	expect(identityColumnFilter({ cashierId: '7' })).toEqual({ posUserId: '7' });
+	expect(identityColumnFilter({ cashierId: '7', storeId: '2' })).toEqual({
+		posUserId: '7',
+		posStoreId: '2',
+	});
 });

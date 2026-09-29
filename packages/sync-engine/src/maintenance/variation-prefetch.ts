@@ -125,7 +125,7 @@ async function missingVariationIds(
 	const remoteIds = ids.map(remoteIdOrNull).filter((id) => id !== null);
 	const docs = await database.collections[descriptor.collection]
 		.find({
-			selector: { [descriptor.wooIdField]: { $in: remoteIds } } as never,
+			selector: { remoteKey: { $in: remoteIds } } as never,
 		})
 		.exec();
 	const present = new Set(

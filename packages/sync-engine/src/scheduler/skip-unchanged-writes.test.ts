@@ -39,6 +39,7 @@ describe.each([
 			const document: PullDocument = {
 				uuid: `document-${id}`,
 				remoteId: mintRemoteId(id, 'fixture'),
+				remoteKey: String(mintRemoteId(id, 'fixture') ?? ''),
 				payload: {
 					id,
 					name: `Original ${id}`,
@@ -66,6 +67,7 @@ describe.each([
 			if (name === 'variations')
 				return Object.assign(document, {
 					parentRemoteId: 'woo:10',
+					parentRemoteKey: 'woo:10',
 					price: 0,
 					stockStatus: '',
 					attributes: [],

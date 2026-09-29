@@ -87,6 +87,18 @@ function decodeSingleIdentityCondition(
 	return null;
 }
 
+/** Indexed spelling of the carrier identity; no store attribution is the empty string. */
+export function identityColumns(identity: Pick<PosIdentity, 'cashierId' | 'storeId'>) {
+	return { posUserId: identity.cashierId ?? '', posStoreId: identity.storeId ?? '' };
+}
+
+export function identityColumnFilter(identity: { cashierId?: string; storeId?: string }) {
+	return {
+		...(identity.cashierId === undefined ? {} : { posUserId: identity.cashierId }),
+		...(identity.storeId === undefined ? {} : { posStoreId: identity.storeId }),
+	};
+}
+
 export const wooMetaCarrier: PosCarrier = {
 	readIdentity(meta) {
 		return {

@@ -52,6 +52,7 @@ function product(wooId: number): Record<string, unknown> {
 	return {
 		uuid: `00000000-0000-4000-8000-${String(wooId).padStart(12, '0')}`,
 		remoteId: remoteId(wooId),
+		remoteKey: String(remoteId(wooId) ?? ''),
 		price: 1,
 		stockStatus: 'instock',
 		type: 'simple',

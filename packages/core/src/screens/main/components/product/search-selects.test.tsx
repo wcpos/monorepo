@@ -19,6 +19,7 @@ const mockUseSearchSelect = jest.fn((collection: string) => ({
 					record: {
 						uuid: `${collection}-uuid`,
 						remoteId: '42',
+						remoteKey: '42',
 						payload: { id: 42, name: `${collection} name` },
 					},
 				},

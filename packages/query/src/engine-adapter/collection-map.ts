@@ -1,8 +1,9 @@
-import { normalizeVariationAttributes } from '@wcpos/sync-engine';
+import { normalizeVariationAttributes, promotedVariationColumns } from '@wcpos/sync-engine';
 import {
 	promotedOrderColumns,
 	promotedProductColumns,
 	remoteIdOrNull,
+	remoteKeyFor,
 	wooIdOf,
 	wooMetaCarrier,
 	type WooOrderPayload,
@@ -503,15 +504,18 @@ export const collectionMap = {
 			parent_id: {
 				legacy: 'parent_id',
 				kind: 'promoted',
-				enginePath: 'parentRemoteId',
+				enginePath: 'parentRemoteKey',
+				readEnginePath: 'parentRemoteId',
 				read: readRemoteId,
-				write: remoteIdOrNull,
+				write: (value) => remoteKeyFor(remoteIdOrNull(value)),
 			},
 		},
 	},
 	orders: {
 		engineCollection: 'orders',
 		fields: {
+			posUserId: { legacy: 'posUserId', kind: 'promoted', enginePath: 'posUserId' },
+			posStoreId: { legacy: 'posStoreId', kind: 'promoted', enginePath: 'posStoreId' },
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
@@ -871,13 +875,15 @@ export function promotedColumnsFor(
 	collection: LegacyCollectionName,
 	legacyPayload: Record<string, unknown>
 ): Record<string, unknown> {
-	// Products and orders delegate to the sync-core projectors — the single source of the
-	// promotion mapping (the storage boundary uses the same functions), so the local write
-	// path and materialization cannot drift. Ruled 2026-08-19: no negative-price clamp;
-	// bare-number taxonomy ids are accepted. Collections without a sync-core projector
-	// (variations carry the map-only parentRemoteId promotion) keep the map-driven path.
+	// Share the storage projectors so pull materialization and local writes cannot drift.
 	if (collection === 'products') {
 		return { ...promotedProductColumns(legacyPayload as unknown as WooProductPayload) };
+	}
+	if (collection === 'variations') {
+		return {
+			...promotedVariationColumns(legacyPayload),
+			parentRemoteId: remoteIdOrNull(legacyPayload.parent_id),
+		};
 	}
 	if (collection === 'orders') {
 		return { ...promotedOrderColumns(legacyPayload as unknown as WooOrderPayload) };

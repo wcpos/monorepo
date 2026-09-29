@@ -11,7 +11,7 @@ describe('promoted product columns parity', () => {
 			barcode: '012345678905',
 			price: '12.345',
 			regular_price: '14.00',
-			sale_price: '12.345',
+			sale_price: '10.00',
 			stock_status: 'instock',
 			manage_stock: true,
 			stock_quantity: 3.6,
@@ -66,19 +66,21 @@ describe('promoted product columns parity', () => {
 	});
 });
 
-// Unlike products/orders, the variation map face still carries its own write fns (the
-// sync-engine projector isn't reachable from the map — it also owns parentRemoteId, which
-// the map derives separately). This pin is the drift tripwire #1308 gave the other two
-// collections: the four shared columns must agree on both faces.
+// Local writes and pull materialization share the variation projector, including its parent key.
 describe('promoted variation columns parity', () => {
 	it('matches the sync-engine projector for canonical Woo variation payloads', () => {
 		const payload = {
+			parent_id: 3,
 			price: '12.345',
 			stock_status: 'instock',
 			stock_quantity: 3.6,
 			attributes: [{ id: 1, name: 'Size', option: 'Large' }],
 		};
 
+		expect(promotedColumnsFor('variations', payload)).toMatchObject({
+			parentRemoteId: '3',
+			parentRemoteKey: '3',
+		});
 		expect(promotedColumnsFor('variations', payload)).toMatchObject(
 			promotedVariationColumns(payload)
 		);

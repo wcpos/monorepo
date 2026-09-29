@@ -57,8 +57,11 @@ function order(
 	storeId: number
 ) {
 	const document: EngineDocument = {
+		posUserId: String(cashierId),
+		posStoreId: String(storeId),
 		uuid,
 		remoteId: String(remoteId),
+		remoteKey: String(String(remoteId) ?? ''),
 		status: 'pos-open',
 		dateCreatedGmt,
 		payload: {
@@ -73,6 +76,7 @@ function order(
 	};
 	return {
 		...document,
+		dateCreatedGmt,
 		$: of(document),
 		collection: { name: 'orders' },
 		getLatest: () => order(uuid, remoteId, dateCreatedGmt, cashierId, storeId),
@@ -87,7 +91,7 @@ const ORDERS_SCHEMA = fillWithDefaultSettings(
 /**
  * The cashier/store scope and the creation order are the STORAGE's (#2242), so the fake
  * collection answers `find` the way storage would: rxdb's own matcher over the selector it
- * was given, in `payload.date_created_gmt` order. The seam test in the query package runs the
+ * was given, in `dateCreatedGmt` order. The seam test in the query package runs the
  * same selector against real engines; this fake only has to honour it.
  */
 function databaseWith<T extends ReturnType<typeof order>>(
@@ -106,11 +110,7 @@ function databaseWith<T extends ReturnType<typeof order>>(
 							map((records) =>
 								records
 									.filter((record) => matches(record as never))
-									.sort((a, b) =>
-										String(a.payload.date_created_gmt).localeCompare(
-											String(b.payload.date_created_gmt)
-										)
-									)
+									.sort((a, b) => String(a.dateCreatedGmt).localeCompare(String(b.dateCreatedGmt)))
 							)
 						),
 					};

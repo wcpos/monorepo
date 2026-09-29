@@ -69,8 +69,11 @@ async function insertOrder(
 		insert(doc: Record<string, unknown>): Promise<unknown>;
 	};
 	await orders.insert({
+		posUserId: '',
+		posStoreId: '',
 		uuid: id,
 		remoteId: remoteId(1),
+		remoteKey: String(remoteId(1) ?? ''),
 		number: '1001',
 		dateCreatedGmt: '2026-07-09T00:00:00',
 		status: 'processing',
@@ -376,8 +379,11 @@ describe('createRxdbSyncEngine — scope lifecycle', () => {
 			revision: 'r1',
 		});
 		await (scope.database.collections.orders as { insert(doc: unknown): Promise<unknown> }).insert({
+			posUserId: '',
+			posStoreId: '',
 			uuid: id,
 			remoteId: remoteId(1),
+			remoteKey: String(remoteId(1) ?? ''),
 			number: '1001',
 			dateCreatedGmt: '2026-07-01T00:00:00',
 			status: 'pos-open',
