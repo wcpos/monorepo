@@ -32,25 +32,29 @@ export function useLastClosure(
 	// into a new closure), is stale and reads as idle, so the next enable loads afresh.
 	// `generation` is the caller's word for "what I held is stale": the till strip passes its
 	// local last closure's id, which changes whenever this device closes the till.
-	const key = register ? `${register.id}:${storeId ?? ''}:${generation ?? ''}` : '';
-	const idle: SessionCardData & { key: string } = {
-		key,
-		session: null,
-		closure: null,
-		status: 'idle',
-	};
+	const registerId = register?.id;
+	const key = registerId ? `${registerId}:${storeId ?? ''}:${generation ?? ''}` : '';
+	const idle = React.useMemo(
+		(): SessionCardData & { key: string } => ({
+			key,
+			session: null,
+			closure: null,
+			status: 'idle',
+		}),
+		[key]
+	);
 	const [localData, setData] = React.useState<SessionCardData & { key: string }>(idle);
 	const data = summary ?? (localData.key === key ? localData : idle);
 	const load = React.useCallback(
 		async (options?: { silent?: boolean }) => {
-			if (!online || !register) return;
+			if (!online || !registerId) return;
 			// A response for a superseded target (or after a disable) is ignored.
 			const settle = (next: Partial<SessionCardData>) =>
 				setData((d) => (d.key === key ? { ...d, ...next } : d));
 			// A silent read keeps what it shows until the answer arrives (no loading state).
 			if (!options?.silent) setData({ ...idle, status: 'loading' });
 			try {
-				const params = { register_id: register.id, store_id: storeId || null };
+				const params = { register_id: registerId, store_id: storeId || null };
 				const lists = await Promise.all(
 					['open', 'counting'].map((status) =>
 						http.get('sessions', { params: { ...params, status } })
@@ -73,7 +77,7 @@ export function useLastClosure(
 				settle({ status: get(error, 'response.status') === 403 ? 'denied' : 'error' });
 			}
 		},
-		[http, online, register?.id, storeId, key]
+		[http, online, registerId, storeId, key, idle]
 	);
 	// The scheduled re-read: silent over a ready result, a plain load otherwise (so a failed
 	// or never-started lookup recovers on the next tick).
