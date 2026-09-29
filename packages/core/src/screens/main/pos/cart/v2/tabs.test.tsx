@@ -58,12 +58,13 @@ const mockReceipts = {
 const mockPending = new Promise(() => {});
 let mockSuspended: string | null = null;
 let mockPhone = false;
+let mockCurrent: ReturnType<typeof mockRecord> & { isNew?: boolean } = mockOpen[0].record;
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
 jest.mock('../../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
-		currentOrderRecord: mockOpen[0].record,
+		currentOrderRecord: mockCurrent,
 		openOrders: mockOpen,
 		setCurrentOrderID: mockSetOrder,
 	}),
@@ -127,8 +128,32 @@ jest.mock('@wcpos/components/icon-button', () => ({
 beforeEach(() => {
 	mockSuspended = null;
 	mockPhone = false;
+	mockCurrent = mockOpen[0].record;
 	resetCheckoutMode();
 	jest.clearAllMocks();
+});
+it('shows a fresh cart as the active last tab, and only while the current order is new', () => {
+	const { unmount } = render(<OpenOrderTabs />);
+	expect(screen.queryByTestId('open-order-tab-new')).toBeNull();
+	unmount();
+	mockCurrent = {
+		...mockRecord('fresh', '2026-09-07T15:00:00'),
+		isNew: true,
+		payload: { date_created_gmt: '2026-09-07T15:00:00', total: '0.00', refunds: [], meta_data: [] },
+	};
+	render(<OpenOrderTabs />);
+	const fresh = screen.getByTestId('open-order-tab-new');
+	const open = screen.getByTestId('open-order-tab-open');
+	expect(fresh.getAttribute('aria-selected')).toBe('true');
+	expect(fresh.className).toContain('border-primary');
+	expect(open.className).toContain('border-transparent');
+	expect(fresh.firstElementChild?.firstElementChild?.textContent).toBe('$0.00');
+	expect(screen.getByTestId('open-order-status-fresh').textContent).toBe('Cart');
+	// After the open orders, before the +; it is not an open order, so the count stays.
+	expect(open.compareDocumentPosition(fresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	expect(screen.getByTestId('open-orders-count').textContent).toBe('1');
+	fireEvent.click(open);
+	expect(mockSetOrder).toHaveBeenCalledWith('open');
 });
 it('appends receipt-only tabs after open orders, avoids duplicates, and selects each kind', () => {
 	enterReceipt('late');

@@ -38,6 +38,12 @@ export function OpenOrderTabs() {
 	const activeValue =
 		selectedReceiptOrder ??
 		((currentOrderRecord as { isNew?: boolean }).isNew ? 'new' : currentOrderRecord.uuid);
+	// A fresh cart is not an open order until its first line, but the cashier is on it: the
+	// board shows the current cart as a tab, so it is the last one here, before the +.
+	const freshCart =
+		activeValue === 'new'
+			? [{ id: 'new', record: currentOrderRecord as EngineRecord<'orders'> }]
+			: [];
 	const handleTabPress = React.useCallback(
 		(orderId: string) => {
 			if (receiptOrders.has(orderId)) {
@@ -114,7 +120,7 @@ export function OpenOrderTabs() {
 						}}
 						scrollEventThrottle={16}
 					>
-						{openOrders.map(({ id, record }) =>
+						{[...openOrders, ...freshCart].map(({ id, record }) =>
 							renderTab(id, <TabContent order={record} active={id === activeValue} phone={phone} />)
 						)}
 						{extraReceiptIds.map((uuid) =>
