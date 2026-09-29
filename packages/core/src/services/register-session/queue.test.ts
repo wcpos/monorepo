@@ -98,10 +98,21 @@ it('marks a losing create failed and adopts the server session', async () => {
 			data: { code: 'wcpos_session_already_open', data: { session_id: 'winner' } },
 		},
 	});
-	http.get.mockResolvedValue({ data: { ...row.toJSON(), id: 'winner', status: 'open' } });
+	http.get.mockResolvedValue({
+		data: {
+			...row.toJSON(),
+			id: 'winner',
+			status: 'open',
+			created_at_gmt: '2026-09-18 10:31:06',
+			movements: [],
+			sales_count: 0,
+		},
+	});
 	await drain();
 	expect(row.getLatest().sync_status).toBe('failed');
-	expect((await db.register_sessions.findOne('winner').exec())?.sync_status).toBe('synced');
+	const adopted = (await db.register_sessions.findOne('winner').exec())?.toJSON();
+	expect(adopted).toMatchObject({ sync_status: 'synced', server_status: 'open' });
+	expect(adopted).not.toHaveProperty('created_at_gmt');
 	expect(logger.info).toHaveBeenCalledWith(
 		'Register session adopted',
 		expect.objectContaining({
@@ -515,7 +526,16 @@ it('records a takeover as a takeover, not as a refused open', async () => {
 			data: { code: 'wcpos_session_already_open', data: { session_id: 'winner' } },
 		},
 	});
-	http.get.mockResolvedValue({ data: { ...row.toJSON(), id: 'winner', status: 'open' } });
+	http.get.mockResolvedValue({
+		data: {
+			...row.toJSON(),
+			id: 'winner',
+			status: 'open',
+			created_at_gmt: '2026-09-18 10:31:06',
+			movements: [],
+			sales_count: 0,
+		},
+	});
 	await drain();
 	// Two tills on one drawer. Today this is completely mute.
 	expect(logger.warn).toHaveBeenCalledWith(

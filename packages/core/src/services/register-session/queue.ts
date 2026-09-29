@@ -492,7 +492,17 @@ export async function adoptSession(
 	sessions: RegisterSessionCollection,
 	server: RegisterSessionRow & { movements?: unknown; expected?: unknown; sales_count?: unknown }
 ) {
-	const { movements: _movements, expected: _expected, sales_count: _count, ...row } = server;
+	/**
+	 * The server row carries columns the local schema does not declare (`created_at_gmt`, and
+	 * the detail route's `movements` / `expected` / `sales_count`); the collection is
+	 * `additionalProperties: false`, so an unfiltered upsert throws VD2 and no server session
+	 * can ever be adopted.
+	 */
+	const row = Object.fromEntries(
+		Object.entries(server).filter(([key]) =>
+			Object.prototype.hasOwnProperty.call(sessions.schema.jsonSchema.properties, key)
+		)
+	) as RegisterSessionRow;
 	const local = await sessions.findOne(row.id).exec();
 	if (local?.sync_status === 'pending') return;
 	await sessions.incrementalUpsert({
