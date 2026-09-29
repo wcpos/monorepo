@@ -36,6 +36,8 @@ jest.mock('../../hooks/use-currency-format', () => ({
 	useCurrencyFormat: () => ({ currencySymbol: '£', format: (n: number) => `£${n.toFixed(2)}` }),
 }));
 jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
+jest.mock('../../../../hooks/use-store-day', () => ({ useStoreDay: () => ({ timezone: 'UTC' }) }));
+jest.mock('../../../../hooks/use-locale', () => ({ useLocale: () => ({ code: 'en' }) }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	Button: ({

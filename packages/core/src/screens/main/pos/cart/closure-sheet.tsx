@@ -18,7 +18,10 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import type { ClosureDocument } from '@wcpos/database';
 
+import { formatClosureDate } from '../../../../services/register-session/closure-document';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
+import { useLocale } from '../../../../hooks/use-locale';
+import { useStoreDay } from '../../../../hooks/use-store-day';
 import { ReceiptBody } from '../../receipt/receipt-body';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -50,10 +53,11 @@ export function ClosureSheet({
 	const t = useT();
 	const { format } = useCurrencyFormat();
 	const side = usePanelSide('cart');
-	const date = new Date(closure.closed_at).toLocaleString([], {
-		dateStyle: 'medium',
-		timeStyle: 'short',
-	});
+	// The store's timezone and locale, as the Z-report prints it: the header and the
+	// document must show the same day and time.
+	const { timezone } = useStoreDay();
+	const { code: locale } = useLocale();
+	const date = formatClosureDate(closure.closed_at, { timezone, locale }).datetime;
 	const figures = [
 		['counted', t('register.counted'), format(Number(counted))],
 		['expected', t('register.expected_label'), format(Number(expected))],
@@ -83,9 +87,10 @@ export function ClosureSheet({
 						</DialogDescription>
 					</View>
 				</DialogHeader>
-				<View className="flex-row gap-2">
+				{/* Tiles wrap on a narrow page (the phone's full-width sheet, long amounts). */}
+				<View className="flex-row flex-wrap gap-2">
 					{figures.map(([key, label, value]) => (
-						<View key={key} className="border-border flex-1 rounded-lg border px-3 py-2.5">
+						<View key={key} className="border-border min-w-28 flex-1 rounded-lg border px-3 py-2.5">
 							<Text className="text-muted-foreground text-sm">{label}</Text>
 							<Text
 								testID={`closure-${key}`}

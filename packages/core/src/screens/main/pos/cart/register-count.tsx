@@ -131,6 +131,8 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 					testID="count-back"
 					variant="ghost"
 					size="sm"
+					// Compact look, 44 pt target: 36 px tall plus 4 px of hit slop each side.
+					hitSlop={{ top: 4, bottom: 4 }}
 					disabled={busy}
 					onPress={() => attempt(actions.backToSelling)}
 				>
