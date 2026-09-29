@@ -84,6 +84,8 @@ const LIVE: LiveTabState = { kind: 'live' };
 const ACQUIRING: LiveTabState = { kind: 'acquiring' };
 const getSnapshot = () =>
 	liveTab?.getState() ?? (typeof navigator === 'undefined' || !navigator.locks ? LIVE : ACQUIRING);
+// SSR and browser hydration must both exclude children until ownership is resolved.
+const getServerSnapshot = () => ACQUIRING;
 const subscribe = (notify: () => void) => {
 	// Synchronous unmount precedes database teardown, rather than waiting for a React batch.
 	const subscription = liveTab?.state$.pipe(skip(1)).subscribe(() => flushSync(notify));
@@ -94,7 +96,7 @@ export function LiveTabGate({ children }: React.PropsWithChildren) {
 	React.useEffect(() => {
 		getLiveTab();
 	}, []);
-	const state = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+	const state = React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 	// scripts/live-tab-probe.mjs found premium retains the terminated worker:
 	// a former owner must reacquire, then reload, rather than reuse cached hydration/storage.
 	React.useEffect(() => {
