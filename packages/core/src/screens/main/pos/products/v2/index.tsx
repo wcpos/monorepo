@@ -135,7 +135,7 @@ function POSProductsContent({
 		(props: React.ComponentProps<typeof ProductTile>) => (
 			<VariableProductTile {...props} variationsStyle={variationsStyle} onDrill={setDrilled} />
 		),
-		[variationsStyle]
+		[variationsStyle, setDrilled]
 	);
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const sortBy = useDocField(uiSettings, (value) => value.sortBy);
