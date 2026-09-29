@@ -17,7 +17,7 @@ export function FeaturedPill() {
 		<ButtonPill
 			leftIcon="star"
 			size="xs"
-			variant={isActive ? undefined : 'muted'}
+			variant={isActive ? 'outline-primary' : 'outline'}
 			onPress={() => actions.setFilter('featured', true)}
 			testID="filter-pill-featured"
 			removable={isActive}

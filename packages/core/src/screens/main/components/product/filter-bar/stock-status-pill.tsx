@@ -45,7 +45,8 @@ export function StockStatusPill() {
 				<ButtonPill
 					size="xs"
 					leftIcon="warehouseFull"
-					variant={isActive ? undefined : 'muted'}
+					rightIcon={isActive ? undefined : 'chevronDown'}
+					variant={isActive ? 'outline-primary' : 'outline'}
 					testID="filter-pill-stock_status"
 					removable={isActive}
 					removeTestID="filter-pill-remove-stock_status"

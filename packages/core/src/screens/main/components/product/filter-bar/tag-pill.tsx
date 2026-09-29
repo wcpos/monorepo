@@ -45,7 +45,8 @@ export function TagPill({ resource, selectedID }: Props) {
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
-					variant={isActive ? undefined : 'muted'}
+					rightIcon={isActive ? undefined : 'chevronDown'}
+					variant={isActive ? 'outline-primary' : 'outline'}
 					testID="filter-pill-tags"
 					removable={isActive}
 					removeTestID="filter-pill-remove-tags"
