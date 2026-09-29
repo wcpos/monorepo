@@ -92,3 +92,6 @@ it('enables coupons and discounts for non-Pro tills, and opens the discount dial
 	fireEvent.click(screen.getByTestId('menu-add-discount'));
 	expect(screen.getByTestId('add-discount-dialog').textContent).toBe('pos_cart.add_discount');
 });
+
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

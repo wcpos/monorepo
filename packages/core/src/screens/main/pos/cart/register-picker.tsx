@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -20,21 +21,22 @@ export function RegisterPicker({ onBound }: { onBound?: () => void }) {
 			<CardContent>
 				<ScrollView>
 					{registers.map((register) => (
-						<Button
-							key={register.id}
-							testID={`register-picker-row-${register.id}`}
-							variant="ghost"
-							className="h-11 items-start"
-							onPress={async () => {
-								await bind(register.id);
-								onBound?.();
-							}}
-						>
-							<VStack className="gap-0">
-								<Text numberOfLines={1}>{register.name}</Text>
-								<Text className="text-muted-foreground text-sm">{t('register.not_opened')}</Text>
-							</VStack>
-						</Button>
+						<View key={register.id} className="border-border border-b">
+							<Button
+								testID={`register-picker-row-${register.id}`}
+								variant="ghost"
+								className="min-h-row items-start"
+								onPress={async () => {
+									await bind(register.id);
+									onBound?.();
+								}}
+							>
+								<VStack className="gap-0">
+									<Text numberOfLines={1}>{register.name}</Text>
+									<StatusBadge label={t('register.not_opened')} variant="muted" />
+								</VStack>
+							</Button>
+						</View>
 					))}
 				</ScrollView>
 			</CardContent>

@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { CROSSFADE } from '@wcpos/components/lib/motion';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
@@ -88,8 +89,8 @@ export function POSColumns() {
 									{descriptor.id === PRODUCTS_ENTRY_ID ? (
 										<Animated.View
 											key={selectedReceiptOrder ? `receipt:${selectedReceiptOrder}` : stage}
-											entering={FadeIn.duration(CHECKOUT_SWAP_FADE_MS)}
-											exiting={FadeOut.duration(CHECKOUT_SWAP_FADE_MS)}
+											entering={FadeIn.duration(CROSSFADE)}
+											exiting={FadeOut.duration(CROSSFADE)}
 											style={{ flex: 1 }}
 										>
 											{selectedReceiptOrder ? (

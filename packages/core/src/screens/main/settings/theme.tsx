@@ -39,6 +39,7 @@ function ThemeOptionButton({
 	const isActive = activeTheme === option.name;
 	return (
 		<Pressable
+			testID={`theme-option-${option.name}`}
 			onPress={() => {
 				void onPress(option.name);
 			}}

@@ -3,10 +3,9 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { Button, ButtonGroupSeparator } from '@wcpos/components/button';
-import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { Button } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { HStack } from '@wcpos/components/hstack';
+import { Skeleton } from '@wcpos/components/skeleton';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 import './register-cart-bar-entries';
@@ -14,16 +13,14 @@ import { Text } from '@wcpos/components/text';
 
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
-import { OrderMetaButton, OrderMetaDialog } from './buttons/order-meta';
-import { PayButton } from './buttons/pay';
-import { SaveButton } from './buttons/save-order';
-import { VoidButton } from './buttons/void';
 import { useEngineRecord } from '../../hooks/use-engine-document';
 import { CheckoutLedger } from './checkout-ledger';
 import { useOrderCheckoutStage } from '../checkout/checkout-mode';
-import { CartHeader } from './cart-header';
+import { CartHeader } from './v2/cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
-import { CartTable } from './table';
+import { CartTable } from './v2/table';
+import { CartFoot } from './v2/foot';
+import { OrderSheet } from './v2/order-sheet';
 import { Totals } from './totals';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
@@ -33,6 +30,10 @@ import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
 import { RegisterPicker } from './register-picker';
+import {
+	consumeRegisterPickerRequest,
+	useRegisterPickerRequested,
+} from './register-picker-request';
 import { CartTotalsChangedBanner } from './totals-changed-banner';
 import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 
@@ -56,10 +57,13 @@ export function OpenOrders({
 	const [closure, setClosure] = React.useState<ClosureCount | null>(null);
 	const [panelOpen, setPanelOpen] = React.useState(false);
 	const [pickingRegister, setPickingRegister] = React.useState(false);
+	// The rail's cashier sheet asks for the picker from outside this screen: the request is
+	// read as state and consumed when the picker binds.
+	const pickerRequested = useRegisterPickerRequested();
 	const t = useT();
 
 	const { currentOrderRecord } = useCurrentOrder();
-	// Keep the dialog mounted on its original order while a send changes the open-order list.
+	// Keep the sheet mounted on its original order while a send changes the open-order list.
 	const [editingOrder, setEditingOrder] = React.useState<CurrentOrderRecord | null>(null);
 	const stage = useOrderCheckoutStage(currentOrderRecord);
 	const { uiSettings } = useUISettings('pos-cart');
@@ -112,26 +116,37 @@ export function OpenOrders({
 			{position === 'top' && cartBar}
 			{bindingStatus === 'none' && <Text>{t('register.no_register_for_store')}</Text>}
 			<ErrorBoundary>
-				{bindingStatus === 'choose' || pickingRegister ? (
-					<RegisterPicker onBound={() => setPickingRegister(false)} />
+				{bindingStatus === 'choose' || pickingRegister || pickerRequested ? (
+					<RegisterPicker
+						onBound={() => {
+							setPickingRegister(false);
+							consumeRegisterPickerRequest();
+						}}
+					/>
 				) : sessionsOn && !session && bindingStatus === 'bound' ? (
 					<OpenRegisterCard />
 				) : session && session.status !== 'open' ? (
 					<RegisterCount key={session.id} onClosed={setClosure} />
 				) : isColumn && receiptOrderUuid ? (
-					<React.Suspense fallback={null}>
+					<React.Suspense
+						fallback={
+							<View className="gap-2 p-2">
+								{[0, 1, 2].map((row) => (
+									<Skeleton key={row} shape="row" />
+								))}
+							</View>
+						}
+					>
 						<ReceiptLedger uuid={receiptOrderUuid} />
 					</React.Suspense>
 				) : isColumn && !isNewOrder && stage === 'checkout' ? (
 					<CheckoutLedger order={currentOrderRecord as EngineRecord<'orders'>} />
 				) : isNewOrder ? (
-					<Card className="flex-1">
-						<CardHeader className="bg-card-header p-2">
-							<ErrorBoundary>
-								<CartHeader />
-							</ErrorBoundary>
-						</CardHeader>
-						<CardContent className="flex-1 p-0" />
+					<View className="flex-1">
+						<ErrorBoundary>
+							<CartHeader />
+						</ErrorBoundary>
+						<View className="flex-1" />
 						{overdue && (
 							<Button
 								testID="checkout-close-register"
@@ -141,15 +156,13 @@ export function OpenOrders({
 								{t('register.close_register')}
 							</Button>
 						)}
-					</Card>
+					</View>
 				) : (
-					<Card className="flex-1">
-						<CardHeader className="bg-card-header p-2">
-							<ErrorBoundary>
-								<CartHeader />
-							</ErrorBoundary>
-						</CardHeader>
-						<CardContent className="border-border flex-1 border-t p-0">
+					<View className="flex-1">
+						<ErrorBoundary>
+							<CartHeader />
+						</ErrorBoundary>
+						<View className="flex-1">
 							<View className="flex-1">
 								<ErrorBoundary>
 									<CartTable lastDraftOrderUuidRef={lastDraftOrderUuidRef} />
@@ -161,46 +174,19 @@ export function OpenOrders({
 							<ErrorBoundary>
 								<Totals />
 							</ErrorBoundary>
-							<HStack className="bg-footer p-2">
-								<View className="flex-1">
-									<OrderMetaButton onPress={() => setEditingOrder(currentOrderRecord)} />
-								</View>
-								<View className="flex-1">
-									<SaveButton />
-								</View>
-							</HStack>
-							<HStack className="w-full gap-0">
-								<ErrorBoundary>
-									<VoidButton />
-									<ButtonGroupSeparator className="bg-card-header" />
-									{sessionsOn && !session ? (
-										<Button
-											testID="checkout-open-register"
-											className="min-h-14 flex-1"
-											onPress={() => setPickingRegister(true)}
-										>
-											{t('register.open_register')}
-										</Button>
-									) : overdue && !currentOrderRecord.payload.line_items?.length ? (
-										<Button
-											testID="checkout-close-register"
-											className="min-h-14 flex-1"
-											onPress={() => setPanelOpen(true)}
-										>
-											{t('register.close_register')}
-										</Button>
-									) : (
-										<PayButton />
-									)}
-								</ErrorBoundary>
-							</HStack>
-						</CardContent>
-					</Card>
+							<CartFoot
+								onOpenRegister={() => setPickingRegister(true)}
+								onCloseRegister={() => setPanelOpen(true)}
+								onOpenSheet={() => setEditingOrder(currentOrderRecord)}
+							/>
+						</View>
+					</View>
 				)}
 			</ErrorBoundary>
 			{closure && !session && <ClosureSheet {...closure} onDone={() => setClosure(null)} />}
-			<OrderMetaDialog
-				order={editingOrder}
+			<OrderSheet
+				open={editingOrder !== null}
+				order={editingOrder ?? currentOrderRecord}
 				onOpenChange={(open) => {
 					if (!open) setEditingOrder(null);
 				}}

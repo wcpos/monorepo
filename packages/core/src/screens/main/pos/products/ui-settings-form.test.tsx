@@ -95,7 +95,7 @@ jest.mock('@wcpos/components/form', () => {
 });
 
 /**
- * The Select and ToggleGroup doubles keep the production prop contracts (`onValueChange`
+ * The Select double and SegmentedControl keep the production prop contracts (`onValueChange`
  * receives an Option / a string) and render each choice as a plain button, so a click
  * goes through the same field `onChange` the real popovers call.
  */
@@ -132,30 +132,6 @@ jest.mock('@wcpos/components/select', () => {
 		SelectGroup: PassThrough,
 		SelectItem,
 	};
-});
-
-jest.mock('@wcpos/components/toggle-group', () => {
-	type OnValueChange = (value: string | undefined) => void;
-	const ToggleCtx = React.createContext<OnValueChange>(() => {});
-	function ToggleGroup({
-		onValueChange,
-		children,
-	}: React.PropsWithChildren<{ onValueChange?: OnValueChange }>) {
-		return <ToggleCtx.Provider value={onValueChange ?? (() => {})}>{children}</ToggleCtx.Provider>;
-	}
-	function ToggleGroupItem({
-		value,
-		testID,
-		children,
-	}: React.PropsWithChildren<{ value: string; testID?: string }>) {
-		const onValueChange = React.useContext(ToggleCtx);
-		return (
-			<button type="button" data-testid={testID} onClick={() => onValueChange(value)}>
-				{children}
-			</button>
-		);
-	}
-	return { ToggleGroup, ToggleGroupItem };
 });
 
 jest.mock('@wcpos/components/button', () => {
@@ -288,12 +264,20 @@ it('persists a switch change immediately (control)', async () => {
 it('persists a View Mode selection', async () => {
 	render(<UISettingsForm />);
 
-	fireEvent.click(screen.getByTestId('option-grid'));
+	fireEvent.click(screen.getByTestId('view-mode-grid'));
 	act(() => {
 		jest.advanceTimersByTime(1000);
 	});
 
 	expect(patchSpy).toHaveBeenCalledWith({ viewMode: 'grid' });
+	await settle();
+});
+
+it('persists the inline Variations selection', async () => {
+	render(<UISettingsForm />);
+	fireEvent.click(screen.getByTestId('products-variations-style-inline'));
+	act(() => jest.advanceTimersByTime(1000));
+	expect(patchSpy).toHaveBeenCalledWith({ variationsStyle: 'inline' });
 	await settle();
 });
 
@@ -338,3 +322,5 @@ it('opens the filter-bar customisation modal', () => {
 	fireEvent.click(screen.getByTestId('customize-filter-bar'));
 	expect(pushSpy).toHaveBeenCalledWith('/(app)/(modals)/filter-bar');
 });
+
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));

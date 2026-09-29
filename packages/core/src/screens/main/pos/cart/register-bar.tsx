@@ -6,11 +6,13 @@ import { useNavigation } from 'expo-router';
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
 
+import { CashierSheetProvider, useCashierSheet } from './cashier-sheet-state';
 import { RegisterPanel } from './register-panel';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -23,7 +25,17 @@ import { describeRegisterBar } from './register-bar.helpers';
 import { SwitchStoreSheet } from './switch-store-sheet';
 import { UserSheet } from './user-sheet';
 
-export function RegisterBar({
+// Rehost the Add user consumer after a full-page OAuth return, as Connect does.
+export function RegisterBar(props: React.ComponentProps<typeof RegisterBarContent>) {
+	const { site } = useStoreSession();
+	return (
+		<CashierSheetProvider initialOpen={() => peekRedirectLoginUrl() === site.wcpos_login_url}>
+			<RegisterBarContent {...props} />
+		</CashierSheetProvider>
+	);
+}
+
+function RegisterBarContent({
 	onSwitchRegister,
 	panelOpen,
 	onPanelOpenChange,
@@ -33,7 +45,7 @@ export function RegisterBar({
 	onPanelOpenChange: (open: boolean) => void;
 }) {
 	const { session, sessionsOn, overdue, lastClosure } = useRegisterSession();
-	const { wpCredentials, store, site } = useStoreSession();
+	const { wpCredentials, store } = useStoreSession();
 	const { screenSize } = useTheme();
 	const navigation = useNavigation();
 	const t = useT();
@@ -55,13 +67,10 @@ export function RegisterBar({
 		approvalRequired: session?.approval_required,
 		overdue,
 	});
-	// Rehost the Add user consumer after a full-page OAuth return, as Connect does.
-	const [userOpen, setUserOpen] = React.useState(
-		() => peekRedirectLoginUrl() === site.wcpos_login_url
-	);
+	const { open: userOpen, setOpen: setUserOpen } = useCashierSheet();
 	const [storeOpen, setStoreOpen] = React.useState(false);
 	return (
-		<HStack className="bg-card border-border h-12 gap-2 border-b px-2">
+		<HStack className="bg-background border-border h-12 gap-2 border-b px-2">
 			{screenSize !== 'lg' && (
 				<Button
 					variant="ghost"
@@ -80,12 +89,12 @@ export function RegisterBar({
 						className="h-11 min-w-11 shrink items-start px-0"
 						onPress={() => setStoreOpen(true)}
 					>
-						<Text testID="register-bar-place" numberOfLines={1}>
+						<Text testID="register-bar-place" className="text-base font-semibold" numberOfLines={1}>
 							{place}
 						</Text>
 					</Button>
 				) : (
-					<Text testID="register-bar-place" numberOfLines={1}>
+					<Text testID="register-bar-place" className="text-base font-semibold" numberOfLines={1}>
 						{place}
 					</Text>
 				)}
@@ -93,24 +102,26 @@ export function RegisterBar({
 			{pill && <StatusBadge testID="register-bar-pill" label={t(pill)} variant="warning" />}
 			<View className="flex-1" />
 			{(session || lastClosure) && (
+				<IconButton
+					name="cashRegister"
+					testID="register-bar-drawer"
+					iconClassName={overdue ? 'text-warning' : 'text-foreground'}
+					onPress={() => onPanelOpenChange(true)}
+				/>
+			)}
+			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
+			{/* The rail carries the avatar only on `lg`; every other layout (the phone, and the
+			    medium widths that keep the old front drawer) needs the bar's. */}
+			{screenSize !== 'lg' && (
 				<Button
 					variant="ghost"
 					className="h-11 w-11 p-0"
-					testID="register-bar-drawer"
-					onPress={() => onPanelOpenChange(true)}
+					testID="register-bar-avatar"
+					onPress={() => setUserOpen(true)}
 				>
-					<Icon name="cashRegister" className={overdue ? 'text-warning' : 'text-foreground'} />
+					<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
 				</Button>
 			)}
-			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
-			<Button
-				variant="ghost"
-				className="h-11 w-11 p-0"
-				testID="register-bar-avatar"
-				onPress={() => setUserOpen(true)}
-			>
-				<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
-			</Button>
 			<UserSheet open={userOpen} onOpenChange={setUserOpen} onSwitchRegister={onSwitchRegister} />
 			<SwitchStoreSheet open={storeOpen} onOpenChange={setStoreOpen} />
 		</HStack>

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { type TextInputInstance, View } from 'react-native';
 
+import { Chip } from '@wcpos/components/chip';
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -40,7 +41,10 @@ export function OpenRegisterCard() {
 		}
 	};
 	return (
-		<View className="bg-card flex-1 gap-3 rounded-md p-4" testID="open-register-card">
+		<View
+			className="bg-card border-border flex-1 gap-3 rounded-lg border p-4"
+			testID="open-register-card"
+		>
 			<Text>{t('register.open_register')}</Text>
 			<RegisterAmount
 				ref={input}
@@ -54,15 +58,13 @@ export function OpenRegisterCard() {
 			].map(
 				([value, source]) =>
 					value != null && (
-						<Button
+						<Chip
 							key={source}
 							testID={`open-register-chip-${source}`}
-							variant="outline"
-							className="min-h-11"
+							on={amount === value}
+							label={t(`register.float_${source}_chip`, { amount: format(Number(value)) })}
 							onPress={() => setAmount(value)}
-						>
-							{t(`register.float_${source}_chip`, { amount: format(Number(value)) })}
-						</Button>
+						/>
 					)
 			)}
 			{expectedFloat !== null && Number(amount) !== Number(expectedFloat) && (
@@ -75,7 +77,8 @@ export function OpenRegisterCard() {
 			{!!error && <Text>{error}</Text>}
 			<Button
 				testID="open-register-button"
-				className="min-h-14"
+				size="lg"
+				className="w-full"
 				loading={busy}
 				disabled={!amount || !Number.isFinite(Number(amount)) || Number(amount) < 0}
 				onPress={open}

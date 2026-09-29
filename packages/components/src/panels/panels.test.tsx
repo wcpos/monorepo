@@ -84,3 +84,33 @@ it('retires the hover pill and literal animation', () => {
 		/group|duration-|animate-|Icon|Platform/
 	);
 });
+
+// A missing grip or a pointer/drag branch inversion must fail this contract.
+it.each(['coarse', 'fine'] as const)('paints the three grip dots for a %s pointer', (pointer) => {
+	mockPointer = pointer;
+	mockDirection = 'horizontal';
+	const { container } = render(<PanelResizeHandle />);
+	const handle = container.firstElementChild!;
+	const dots = () => container.querySelectorAll('.size-1');
+	expect(dots()).toHaveLength(3);
+	// The dots contrast with the bar under them: muted-foreground on the border bar,
+	// background on the hovered muted-foreground bar, primary-foreground on the primary bar.
+	for (const dot of dots())
+		expect(dot).toHaveClass(
+			'bg-muted-foreground',
+			pointer === 'coarse' ? 'opacity-60' : 'opacity-0'
+		);
+	fireEvent.pointerEnter(handle);
+	for (const dot of dots())
+		expect(dot).toHaveClass(
+			...(pointer === 'fine'
+				? ['bg-background', 'opacity-100']
+				: ['bg-muted-foreground', 'opacity-60'])
+		);
+	act(() => mockHandle.onDragging?.(true));
+	for (const dot of dots()) expect(dot).toHaveClass('bg-primary-foreground', 'opacity-100');
+	act(() => mockHandle.onDragging?.(false));
+	fireEvent.pointerLeave(handle);
+	for (const dot of dots())
+		expect(dot).toHaveClass(pointer === 'coarse' ? 'opacity-60' : 'opacity-0');
+});

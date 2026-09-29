@@ -46,7 +46,7 @@ jest.mock('react-native-reanimated', () => ({
 	withTiming: (value: number) => value,
 	withRepeat: jest.fn((value: number) => value),
 	cancelAnimation: jest.fn(),
-	Easing: { linear: (value: number) => value },
+	Easing: { bezier: jest.fn(), linear: (value: number) => value },
 }));
 beforeEach(() => {
 	jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
@@ -72,6 +72,7 @@ jest.mock('@wcpos/components/button', () => ({
 	ButtonText: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
 jest.mock('@wcpos/components/text', () => ({
+	TextClassContext: React.createContext(''),
 	Text: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
 		<span data-testid={testID}>{children}</span>
 	),
@@ -260,7 +261,8 @@ it.each([
 	for (let index = 0; index < 4; index++) {
 		const dot = screen.getByTestId(`checkout-terminal-step-${index}`);
 		expect(dot.getAttribute('aria-selected')).toBe(String(index === current));
-		expect(dot.className.includes('bg-success')).toBe(index < current);
+		// The timeline marks every reached step, including the current one, green.
+		expect(dot.className.includes('bg-success')).toBe(index <= current);
 	}
 });
 

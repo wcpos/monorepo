@@ -8,6 +8,8 @@ import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-
 
 import { UserSheet, useSalesToday } from './user-sheet';
 
+jest.mock('@wcpos/components/image', () => ({ Image: () => null }));
+
 const mockLogin = jest.fn(async (_input: unknown) => {});
 const mockCredentials = [
 	{
@@ -53,7 +55,7 @@ jest.mock('../../../auth/components/add-user-button', () => ({ AddUserButton: ()
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registers: [] }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/dialog', () => {
 	function Box({ children }: { children: React.ReactNode }) {
 		return <div>{children}</div>;
@@ -119,3 +121,5 @@ it('sums local completed orders for this cashier, store and device-local day', a
 		$lt: end.toISOString().slice(0, -5),
 	});
 });
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

@@ -2,9 +2,9 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
 import { HStack } from '@wcpos/components/hstack';
-import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
+import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { Text } from '@wcpos/components/text';
 import { fromMinor } from '@wcpos/order-math';
 import { type EngineRecord, useRecordField } from '@wcpos/query';
@@ -65,47 +65,27 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 	})();
 
 	return (
-		<View testID="checkout-tender-pane" className="bg-sidebar text-sidebar-foreground flex-1">
+		<View testID="checkout-tender-pane" className="bg-card flex-1">
 			<Text testID="checkout-server-order-id" className="hidden">
 				{payload.id}
 			</Text>
 			<HStack className="items-center gap-3 p-2">
-				<Button
-					variant="ghost"
-					size="lg"
-					className="h-[44px] w-[44px] p-0"
-					accessibilityLabel={t('common.close')}
-					testID="checkout-close"
-					onPress={back}
-				>
-					<Icon name="xmark" className="text-sidebar-foreground" />
-				</Button>
-				{flow.saveState?.kind === 'saving' && !payload.number ? (
-					<View className="flex-1">
-						<View className="bg-muted h-5 w-40 rounded" testID="checkout-title-skeleton" />
-					</View>
-				) : (
-					<Text className="text-sidebar-foreground flex-1 text-lg font-semibold">
-						{payload.number
-							? t('pos_checkout.checkout_order', { orderNumber: payload.number })
-							: t('pos_checkout.checkout')}
-					</Text>
-				)}
-				<Tabs
+				<SegmentedControl
 					value={flow.state.tab}
 					onValueChange={(tab) => flow.dispatch({ type: 'set-tab', tab: tab as 'payments' })}
-					orientation="horizontal"
-				>
-					{/* TabsList sets no direction of its own; on web a View defaults to a column. */}
-					<TabsList className="flex-row">
-						<TabsTrigger value="payments" testID="checkout-tab-payments">
-							<Text>{t('pos_checkout.payments_tab')}</Text>
-						</TabsTrigger>
-						<TabsTrigger value="legacy" testID="checkout-tab-legacy">
-							<Text>{t('pos_checkout.legacy_tab')}</Text>
-						</TabsTrigger>
-					</TabsList>
-				</Tabs>
+					segments={[
+						{
+							value: 'payments',
+							label: t('pos_checkout.payments_tab'),
+							testID: 'checkout-tab-payments',
+						},
+						{ value: 'legacy', label: t('pos_checkout.legacy_tab'), testID: 'checkout-tab-legacy' },
+					]}
+				/>
+				{flow.saveState?.kind === 'saving' && !payload.number ? (
+					<View className="bg-muted h-5 w-40 rounded" testID="checkout-title-skeleton" />
+				) : null}
+				<View className="flex-1" />
 				{flow.hasLiveLeg && !flow.hasLiveTerminalLeg && flow.state.view !== 'cancel' ? (
 					<Button
 						variant="ghost-destructive"
@@ -116,6 +96,12 @@ export function CheckoutColumn({ order }: { order: EngineRecord<'orders'> }) {
 						<ButtonText>{t('pos_checkout.cancel_payment')}</ButtonText>
 					</Button>
 				) : null}
+				<IconButton
+					name="xmark"
+					accessibilityLabel={t('common.close')}
+					testID="checkout-close"
+					onPress={back}
+				/>
 			</HStack>
 			<View className="px-3">
 				<TotalsChangedBanner orderId={order.uuid} testID="checkout-totals-changed-banner" />

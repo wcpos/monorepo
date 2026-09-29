@@ -27,6 +27,19 @@ describe('lib/utils', () => {
 			expect(result).toContain('valid');
 		});
 
+		it('keeps the amount size beside a text colour', () => {
+			// `amt` is a font-size token, not a colour: neither class may drop the other.
+			expect(cn('text-foreground text-amt').split(' ').sort()).toEqual([
+				'text-amt',
+				'text-foreground',
+			]);
+			expect(cn('text-amt text-foreground').split(' ').sort()).toEqual([
+				'text-amt',
+				'text-foreground',
+			]);
+			expect(cn('text-amt text-base')).toBe('text-base');
+		});
+
 		it('should merge tailwind classes correctly', () => {
 			// twMerge should handle conflicting tailwind classes
 			const result = cn('p-4', 'p-2');

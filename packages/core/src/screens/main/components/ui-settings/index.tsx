@@ -126,7 +126,7 @@ function UISettingsDialog({ title, children, triggerTestID, portalHost, side }: 
 						<DialogContext.Provider value={contextValue}>{children}</DialogContext.Provider>
 					</DialogBody>
 					<DialogFooter>
-						<DialogClose>{t('common.close')}</DialogClose>
+						<DialogClose testID="ui-settings-close">{t('common.close')}</DialogClose>
 						<DialogAction
 							{...({ variant: 'destructive' } as Record<string, unknown>)}
 							onPress={handleButtonPress}

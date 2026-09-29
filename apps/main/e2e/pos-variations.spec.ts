@@ -1,12 +1,18 @@
 import { errors, expect, type Locator, type Page } from '@playwright/test';
 
+import {
+	becomesVisible,
+	closeOrderSheet,
+	ensureRegisterOpen,
+	isWcposRestRoute,
+	openOrderSheet,
+} from './fixtures';
 import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import {
 	findVariableProduct,
 	isolatedVariableProductTest as test,
 	variableProductProbe,
 } from './checkout-probe';
-import { becomesVisible, ensureRegisterOpen, isWcposRestRoute } from './fixtures';
 import { unwrapWireBody } from './wire-envelope';
 import { ensureTableView } from './pos-view-mode';
 
@@ -155,14 +161,20 @@ async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
  * Helper: void any existing cart items so tests start clean.
  */
 async function voidCartIfNeeded(page: Page) {
+	// The new-order placeholder has no foot; preserve the optional empty-cart cleanup.
+	if (!(await becomesVisible(page.getByTestId('order-meta-button'), 1_000))) return;
+	await openOrderSheet(page);
 	const voidButton = page.getByTestId('void-button');
 	// `becomesVisible` honours the wait; `isVisible({ timeout })` ignores its
 	// timeout, so a void button still rendering would read as "cart empty" and
 	// skip the cleanup.
 	if (await becomesVisible(voidButton, 1_000)) {
+		// Void closes the sheet itself before its flow runs.
 		await voidButton.click();
 		await page.waitForTimeout(1_500);
+		return;
 	}
+	await closeOrderSheet(page);
 }
 
 /**

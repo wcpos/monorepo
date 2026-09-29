@@ -131,3 +131,6 @@ describe.each([
 		expect(toJSON).not.toHaveBeenCalled();
 	});
 });
+
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

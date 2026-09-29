@@ -11,7 +11,7 @@ import { Text } from '@wcpos/components/text';
 import { useTheme } from '@wcpos/core/contexts/theme';
 import { POSColumns } from '@wcpos/core/screens/main/pos/columns';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+import { POSProducts } from '@wcpos/core/screens/main/pos/products/v2';
 
 /**
  *

@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 
 import { EditOrderMeta } from './edit-order-meta';
 import { useT } from '../../../../../contexts/translations';
-import { usePOSOverlaySide } from '../../contexts/overlay-side';
+import { usePanelSide } from '../../contexts/overlay-side/v2';
 
 import type { CurrentOrderRecord } from '../../contexts/current-order';
 
@@ -25,7 +25,7 @@ export function OrderMetaDialog({
 	order: CurrentOrderRecord | null;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	const t = useT();
 	return (
 		<Dialog open={!!order} onOpenChange={onOpenChange}>

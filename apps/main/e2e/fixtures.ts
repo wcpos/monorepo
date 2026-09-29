@@ -110,6 +110,35 @@ export async function becomesVisible(locator: Locator, timeout: number): Promise
 		.catch(() => false);
 }
 
+export async function openOrderSheet(page: Page): Promise<void> {
+	const dialog = page.getByTestId('order-meta-dialog');
+	if (!(await dialog.isVisible())) await page.getByTestId('order-meta-button').click();
+	await expect(dialog).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * The order sheet is modal (a scrim covers the columns), and Save leaves it open so its
+ * loading state and result stay visible. A test that goes on to press anything else closes it.
+ */
+export async function closeOrderSheet(page: Page): Promise<void> {
+	const dialog = page.getByTestId('order-meta-dialog');
+	if (!(await dialog.isVisible())) return;
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden({ timeout: 15_000 });
+}
+
+export async function setVariationsStyle(page: Page, style: 'drill' | 'inline'): Promise<void> {
+	await page.getByTestId('products-settings-button').click();
+	const dialog = page
+		.getByRole('dialog')
+		.filter({ has: page.getByTestId(`products-variations-style-${style}`) });
+	await dialog.getByTestId(`products-variations-style-${style}`).click();
+	// The footer Close by id: the store's locale sets its label (dev-next reads "Cerrar"). Forced:
+	// the toast host (`#error-toast`) intercepts pointer events for a while after any toast.
+	await dialog.getByTestId('ui-settings-close').click({ force: true });
+	await expect(dialog).toBeHidden();
+}
+
 /**
  * Open a real live-store session when the cart column shows the open-register
  * landing; leave it open so later runs can reuse it.
@@ -930,6 +959,10 @@ export async function authenticateWithStore(
 		}
 	} else {
 		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 120_000 });
+	}
+	// Persist the inline alternative in the auth snapshot, after catalogue readiness.
+	if (await becomesVisible(page.getByTestId('products-settings-button'), 5_000)) {
+		await setVariationsStyle(page, 'inline');
 	}
 	await waitForOPFSPersistence(page);
 

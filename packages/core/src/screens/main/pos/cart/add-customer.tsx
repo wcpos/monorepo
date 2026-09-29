@@ -11,7 +11,7 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/components/dialog';
+} from '@wcpos/components/v2/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
@@ -25,7 +25,7 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
-import { usePOSOverlaySide } from '../contexts/overlay-side';
+import { usePanelSide } from '../contexts/overlay-side/v2';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 
@@ -118,7 +118,7 @@ function AddCustomerFormBody({ onClose }: { onClose: () => void }) {
  *
  */
 export function AddNewCustomer() {
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	const t = useT();
 	const [open, setOpen] = React.useState(false);
 	const close = React.useCallback(() => setOpen(false), []);
@@ -134,7 +134,7 @@ export function AddNewCustomer() {
 						<Text>{t('common.add_new_customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent side={side} testID="add-new-customer-dialog" size="xl" portalHost="pos">
+				<DialogContent side={side} testID="add-new-customer-dialog" size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
@@ -155,13 +155,13 @@ interface AddCustomerDialogProps {
 }
 
 export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps) {
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	const t = useT();
 	const close = React.useCallback(() => onOpenChange(false), [onOpenChange]);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange} style={{ display: 'none' }}>
-			<DialogContent side={side} testID="add-customer-dialog" size="xl" portalHost="pos">
+			<DialogContent side={side} testID="add-customer-dialog" size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 				</DialogHeader>

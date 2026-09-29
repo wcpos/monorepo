@@ -5,6 +5,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { OpenRegisterCard } from './open-register-card';
 
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
+
 jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({}),
 }));
@@ -84,7 +86,7 @@ jest.mock('@wcpos/printer', () => ({ usePrint: () => ({ print }) }));
 jest.mock('../../receipt/hooks/use-resolved-printer', () => ({
 	useResolvedPrinter: () => ({ resolvedPrinter: null }),
 }));
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 
 beforeEach(() => {
 	defaultFloat = '200';
@@ -102,3 +104,5 @@ it('uses a last count that arrives after the local query, without replacing type
 	view.rerender(<OpenRegisterCard />);
 	expect((screen.getByTestId('open-register-amount') as HTMLInputElement).value).toBe('600');
 });
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

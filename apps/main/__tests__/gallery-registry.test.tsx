@@ -7,6 +7,7 @@ jest.resetModules();
 // definition of done (landing order, DoD C) fails it silently at the shoot.
 // Reading the source keeps this test free of the gallery's native imports.
 const registered = [
+	"'drawer-item': drawerItem",
 	'popover',
 	"'hover-card': hoverCard",
 	"'dropdown-menu': dropdownMenu",

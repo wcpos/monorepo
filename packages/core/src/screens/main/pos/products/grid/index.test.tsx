@@ -35,8 +35,21 @@ jest.mock('../../../contexts/ui-settings', () => ({
 jest.mock('../../../contexts/tax-rates', () => ({ useTaxSettings: () => ({ calcTaxes: false }) }));
 jest.mock('@wcpos/components/virtualized-list', () => ({
 	Root: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-	List: ({ ListFooterComponent }: { ListFooterComponent?: React.ReactNode }) => (
-		<div>{ListFooterComponent}</div>
+	List: ({
+		data,
+		renderItem,
+		ListFooterComponent,
+	}: {
+		data: unknown[];
+		renderItem: (value: { item: unknown }) => React.ReactNode;
+		ListFooterComponent?: React.ReactNode;
+	}) => (
+		<div>
+			{data.map((item, index) => (
+				<React.Fragment key={index}>{renderItem({ item })}</React.Fragment>
+			))}
+			{ListFooterComponent}
+		</div>
 	),
 	Item: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -51,8 +64,10 @@ jest.mock('./grid-footer', () => ({
 		</>
 	),
 }));
-jest.mock('./product-tile', () => ({ ProductTile: () => null }));
-jest.mock('./variable-product-tile', () => ({ VariableProductTile: () => null }));
+jest.mock('./product-tile', () => ({ ProductTile: () => <div data-testid="default-tile" /> }));
+jest.mock('./variable-product-tile', () => ({
+	VariableProductTile: () => <div data-testid="default-variable-tile" />,
+}));
 jest.mock('../../../components/data-table/footer', () => ({ DataTableFooter: () => null }));
 jest.mock('../../../components/product/tax-based-on', () => ({ TaxBasedOn: () => null }));
 
@@ -90,4 +105,30 @@ describe('ProductGrid stale-hit reporting', () => {
 
 		await waitFor(() => expect(getLogger([]).warn).toHaveBeenCalledTimes(2));
 	});
+});
+
+it('uses supplied tiles for both kinds and retains the defaults otherwise', () => {
+	mockResult = {
+		hits: ['simple', 'variable'].map((type) => ({
+			record: { uuid: type, payload: { type, name: type } },
+		})),
+	};
+	const props = {
+		binding: { resource: {}, active$: {}, total$: {}, sync: jest.fn() },
+		actions: { extendLimit: jest.fn() },
+	} as unknown as React.ComponentProps<typeof ProductGrid>;
+	const { rerender } = render(<ProductGrid {...props} />);
+	expect(screen.getByTestId('default-tile')).toBeTruthy();
+	expect(screen.getByTestId('default-variable-tile')).toBeTruthy();
+	rerender(
+		<ProductGrid
+			{...props}
+			tile={() => <div data-testid="custom-tile" />}
+			variableTile={() => <div data-testid="custom-variable-tile" />}
+		/>
+	);
+	expect(screen.getByTestId('custom-tile')).toBeTruthy();
+	expect(screen.getByTestId('custom-variable-tile')).toBeTruthy();
+	expect(screen.queryByTestId('default-tile')).toBeNull();
+	expect(screen.queryByTestId('default-variable-tile')).toBeNull();
 });

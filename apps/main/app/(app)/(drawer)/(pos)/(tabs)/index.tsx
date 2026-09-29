@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { RegisterBar } from '@wcpos/core/screens/main/pos/cart/register-bar';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+import { POSProducts } from '@wcpos/core/screens/main/pos/products/v2';
 
 export default function POSProductsTab() {
 	const [panelOpen, setPanelOpen] = React.useState(false);

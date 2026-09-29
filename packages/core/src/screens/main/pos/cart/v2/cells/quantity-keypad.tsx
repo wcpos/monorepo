@@ -1,0 +1,45 @@
+import * as React from 'react';
+
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
+import type { CellContext } from '@wcpos/core/table-types';
+
+import { useT } from '../../../../../../contexts/translations';
+import { NumberInput } from '../../../../components/number-input';
+import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+interface Props {
+	uuid: string;
+	item: LineItem;
+	type: 'line_items';
+}
+export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
+	const { item, uuid } = row.original;
+	const { updateLineItem, splitLineItem } = useUpdateLineItem();
+	const t = useT();
+	return (
+		<VStack className="min-h-row items-center justify-center gap-1">
+			<NumberInput
+				testID="cart-quantity-input"
+				// The column is 56 wide and the input box 41; the shared input's 12-point
+				// horizontal padding left ~17 points for the digits, so "19" fit and "20"
+				// painted as "2" (iPhone 16 Pro simulator, 2026-09-09). Native only; the
+				// web NumberInput renders a button and ignores this.
+				inputClassName="border-0 px-1 text-center tabular-nums"
+				className="min-h-row border-0 bg-transparent tabular-nums"
+				// A tap on the field lands the caret wherever the finger was, often before
+				// the digits, so typing appends instead of replacing ("1" → "31"). A
+				// cashier tapping the quantity means to replace it, as the web numpad
+				// does; selecting on focus makes the next keystroke do exactly that.
+				selectTextOnFocus
+				value={item.quantity}
+				onChangeText={(quantity) => updateLineItem(uuid, { quantity })}
+			/>
+			{column.columnDef.meta?.show?.('split') && (item.quantity ?? 0) > 1 && (
+				<Text variant="link" className="text-primary text-sm" onPress={() => splitLineItem(uuid)}>
+					{t('pos_cart.split_qty')}
+				</Text>
+			)}
+		</VStack>
+	);
+}

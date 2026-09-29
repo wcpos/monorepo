@@ -14,12 +14,17 @@ import type { CurrentOrderRecord } from '../../../contexts/current-order';
 
 interface Props {
 	order: CurrentOrderRecord;
+	/**
+	 * Receives the form's submit so a footer action outside the form (the order sheet's
+	 * "Save order") can apply the edits before it pushes the order.
+	 */
+	submitRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }
 
 /**
  *
  */
-export function EditOrderMeta({ order }: Props) {
+export function EditOrderMeta({ order, submitRef }: Props) {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 
@@ -52,6 +57,7 @@ export function EditOrderMeta({ order }: Props) {
 				<EditOrderMetaForm
 					order={order}
 					formData={formData as React.ComponentProps<typeof EditOrderMetaForm>['formData']}
+					submitRef={submitRef}
 				/>
 			</TabsContent>
 			<TabsContent value="json" className="min-h-0 flex-1">

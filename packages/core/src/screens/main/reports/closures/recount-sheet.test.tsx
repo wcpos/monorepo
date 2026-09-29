@@ -56,6 +56,8 @@ jest.mock('../../../../contexts/app-state', () => ({
 	}),
 }));
 jest.mock('../../pos/contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+// `movement-sheet` reads its side from the v2 subject rule since the register switch (roadmap#388).
+jest.mock('../../pos/contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -118,6 +120,22 @@ jest.mock('@wcpos/components/dialog', () => ({
 	},
 	DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
+// `movement-sheet` renders on the v2 dialog (register switch, roadmap#388): the same doubles,
+// plus the v2-only parts as pass-throughs, so its ESM primitive never loads here.
+jest.mock('@wcpos/components/v2/dialog', () => {
+	const React = jest.requireActual('react');
+	const old = jest.requireMock('@wcpos/components/dialog') as Record<string, unknown>;
+	const passthrough = ({ children }: { children?: React.ReactNode }) =>
+		React.createElement(React.Fragment, null, children);
+	return {
+		...old,
+		DialogHeader: old.DialogHeader ?? passthrough,
+		DialogBody: old.DialogBody ?? passthrough,
+		DialogFooter: old.DialogFooter ?? passthrough,
+		DialogClose: old.DialogClose ?? passthrough,
+		useDialog: old.useDialog ?? (() => ({ open: true, close: () => {} })),
+	};
+});
 const post = jest.fn(),
 	patch = jest.fn(async () => undefined),
 	closeSession = jest.fn(async () => undefined);

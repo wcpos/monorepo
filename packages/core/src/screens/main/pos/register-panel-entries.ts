@@ -3,7 +3,7 @@ import * as React from 'react';
 import { registerSlotEntry } from '../../../extensions/slots';
 import { useCheckoutMode } from './checkout/checkout-mode';
 import { OpenOrders } from './cart';
-import { POSProducts } from './products';
+import { POSProducts } from './products/v2';
 
 import type { SlotEntryProps } from '../../../extensions/slots';
 

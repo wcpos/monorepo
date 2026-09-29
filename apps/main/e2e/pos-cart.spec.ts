@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-import { ensureRegisterOpen } from './fixtures';
+import { ensureRegisterOpen, openOrderSheet } from './fixtures';
 import { beginCartAddMeasurement, expectCartAddMeasurement } from './cart-add-timing';
 import {
 	addCheckoutProbeProduct,
@@ -172,6 +172,7 @@ test.describe('POS Cart', () => {
 	test('should void an order to clear cart', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
+		await openOrderSheet(page);
 		await page.getByTestId('void-button').click();
 		await page.waitForTimeout(1_500);
 
@@ -237,6 +238,7 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			});
 			saved.catch(() => {});
 
+			await openOrderSheet(page);
 			await page.getByTestId('save-to-server-button').click();
 			const response = await saved;
 			expect(response.status(), 'save to server must succeed').toBeLessThan(400);
@@ -278,6 +280,7 @@ liveTest.describe('POS Cart - save to server parity (live store)', () => {
 			// when the round trip completes, so the reconciliation that could rewrite
 			// the rendered total has run before we compare — a bare toPass would
 			// succeed instantly on the pre-save rendering.
+			await openOrderSheet(page);
 			await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
 			const totalNow = ((await checkoutButton.textContent()) ?? '').trim();
 			expect(totalNow, 'cart total must be unchanged by the save round trip').toBe(cartTotalText);

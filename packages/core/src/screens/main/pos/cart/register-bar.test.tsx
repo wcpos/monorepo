@@ -5,6 +5,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { RegisterBar } from './register-bar';
 
+jest.mock('expo-haptics', () => ({}));
+
+let mockIsPhone = true;
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockIsPhone }));
+
 let mockRedirectUrl: string | null = null;
 jest.mock('../../../../hooks/use-wcpos-auth/redirect-result', () => ({
 	peekRedirectLoginUrl: () => mockRedirectUrl,
@@ -17,7 +22,10 @@ jest.mock('../../../../contexts/app-state', () => ({
 		wpCredentials: { display_name: 'Cashier', stores: [] },
 	}),
 }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+let mockScreenSize: 'sm' | 'md' | 'lg' = 'sm';
+jest.mock('../../../../contexts/theme', () => ({
+	useTheme: () => ({ screenSize: mockScreenSize }),
+}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ status: 'bound', registerName: 'Front', registers: [{ id: 'r' }] }),
@@ -61,6 +69,7 @@ jest.mock('./user-sheet', () => ({
 
 beforeEach(() => {
 	mockRedirectUrl = null;
+	mockIsPhone = true;
 });
 it('opens the user sheet from the bar avatar', () => {
 	render(
@@ -93,4 +102,21 @@ it('shows the drawer only with a session and opens its panel', () => {
 	fireEvent.click(screen.getByTestId('register-bar-drawer'));
 	expect(onPanelOpenChange).toHaveBeenCalledWith(true);
 	mockSession = null;
+});
+
+it('has no avatar on wide, where the rail carries it', () => {
+	mockScreenSize = 'lg';
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
+	expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
+	mockScreenSize = 'sm';
+});
+it('has an avatar on the phone', () => {
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
+});
+it('keeps the avatar at medium widths, which keep the old front drawer', () => {
+	mockScreenSize = 'md';
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
+	mockScreenSize = 'sm';
 });

@@ -84,7 +84,7 @@ interface BindingActions<TSortField extends string> {
 
 interface CommonProps<TData extends RowData> {
 	id: UISettingID;
-	noDataMessage?: string;
+	noDataMessage?: string | React.ReactElement;
 	estimatedItemSize?: number;
 	showFooter?: boolean;
 	renderItem?: (params: {
@@ -266,6 +266,8 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 							    as "this record does not exist" (#1733). */}
 							{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
 								<Text testID="search-pending-message">{t('common.searching')}</Text>
+							) : React.isValidElement(noDataMessage) ? (
+								noDataMessage
 							) : (
 								<Text testID="no-data-message">
 									{noDataMessage ? noDataMessage : t('common.no_results_found')}

@@ -14,7 +14,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 	useStoreSession: () => ({ wpCredentials: { id: 7, display_name: 'Pat', username: 'pat' } }),
 }));
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
-jest.mock('../contexts/overlay-side', () => ({ usePOSOverlaySide: () => 'right' }));
+jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -166,3 +166,5 @@ it('does not label a failed close as a refused approval', async () => {
 	);
 	expect(recordFact).toHaveBeenCalledTimes(1);
 });
+
+jest.mock('@wcpos/components/v2/dialog', () => jest.requireMock('@wcpos/components/dialog'));

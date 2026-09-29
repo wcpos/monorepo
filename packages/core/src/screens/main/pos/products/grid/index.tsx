@@ -28,6 +28,9 @@ type ProductHit = {
 };
 
 interface ProductGridProps {
+	noDataMessage?: React.ReactElement;
+	tile?: React.ComponentType<React.ComponentProps<typeof ProductTile>>;
+	variableTile?: React.ComponentType<React.ComponentProps<typeof VariableProductTile>>;
 	binding: ReturnType<typeof import('../../../../../query').useRelationalCollectionBinding>;
 	actions: Pick<QueryStateActions<'products'>, 'extendLimit'>;
 }
@@ -44,7 +47,13 @@ interface GridFields {
 	cost_of_goods_sold: boolean;
 }
 
-export function ProductGrid({ binding, actions }: ProductGridProps) {
+export function ProductGrid({
+	binding,
+	actions,
+	noDataMessage,
+	tile: Tile = ProductTile,
+	variableTile: VariableTile = VariableProductTile,
+}: ProductGridProps) {
 	const { uiSettings } = useUISettings('pos-products');
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
@@ -110,13 +119,9 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 							<View className="flex-row">
 								{row?.map(({ record }) =>
 									record.payload.type === 'variable' ? (
-										<VariableProductTile
-											key={record.uuid}
-											record={record}
-											gridFields={gridFields}
-										/>
+										<VariableTile key={record.uuid} record={record} gridFields={gridFields} />
 									) : (
-										<ProductTile key={record.uuid} record={record} gridFields={gridFields} />
+										<Tile key={record.uuid} record={record} gridFields={gridFields} />
 									)
 								)}
 								{/* Spacers for incomplete last row */}
@@ -145,7 +150,9 @@ export function ProductGrid({ binding, actions }: ProductGridProps) {
 							{deferredResult.searchActive && deferredResult.searchState === 'pending' ? (
 								<Text testID="search-pending-message">{t('common.searching')}</Text>
 							) : (
-								<Text testID="no-data-message">{t('common.no_products_found')}</Text>
+								(noDataMessage ?? (
+									<Text testID="no-data-message">{t('common.no_products_found')}</Text>
+								))
 							)}
 						</View>
 					)}

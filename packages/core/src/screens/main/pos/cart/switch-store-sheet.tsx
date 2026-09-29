@@ -1,11 +1,11 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
 import { StatusBadge } from '@wcpos/components/status-badge';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 
@@ -13,7 +13,7 @@ import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useSwitchStore } from '../../components/header/use-switch-store';
 import { storeListResource } from '../../hooks/store-list-resource';
-import { usePOSOverlaySide } from '../contexts/overlay-side';
+import { usePanelSide } from '../contexts/overlay-side/v2';
 
 export function SwitchStoreSheet({
 	open,
@@ -22,11 +22,11 @@ export function SwitchStoreSheet({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const side = usePOSOverlaySide();
+	const side = usePanelSide('cart');
 	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} portalHost="pos" testID="switch-store-sheet">
+			<DialogContent side={side} size="lg" portalHost="pos" testID="switch-store-sheet">
 				<DialogHeader>
 					<DialogTitle>{t('register.switch_store')}</DialogTitle>
 				</DialogHeader>
@@ -44,24 +44,25 @@ function StoreRows({ onSwitched }: { onSwitched: () => void }) {
 	const { handleSwitchStore, isSwitching } = useSwitchStore();
 	const t = useT();
 	return (
-		<ScrollView contentContainerClassName="gap-1 px-4 pb-4">
+		<ScrollView contentContainerClassName="px-4 pb-4">
 			{stores.map((next) => (
-				<Button
-					key={next.localID}
-					testID={`switch-store-row-${next.localID}`}
-					variant="ghost"
-					className="h-11 flex-row justify-between"
-					disabled={isSwitching || next.localID === store.localID}
-					onPress={async () => {
-						await handleSwitchStore(next);
-						onSwitched();
-					}}
-				>
-					<Text numberOfLines={1} className="min-w-0 flex-1">
-						{next.name}
-					</Text>
-					{next.localID === store.localID && <StatusBadge label={t('register.current')} />}
-				</Button>
+				<View key={next.localID} className="border-border border-b">
+					<Button
+						testID={`switch-store-row-${next.localID}`}
+						variant="ghost"
+						className="min-h-row flex-row justify-between"
+						disabled={isSwitching || next.localID === store.localID}
+						onPress={async () => {
+							await handleSwitchStore(next);
+							onSwitched();
+						}}
+					>
+						<Text numberOfLines={1} className="min-w-0 flex-1">
+							{next.name}
+						</Text>
+						{next.localID === store.localID && <StatusBadge label={t('register.current')} />}
+					</Button>
+				</View>
 			))}
 		</ScrollView>
 	);

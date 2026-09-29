@@ -3,6 +3,7 @@ import * as React from 'react';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
+import { DeviceScope } from '@wcpos/components/lib/device';
 import type { PaymentMethodDescriptor } from '@wcpos/order-math';
 
 import { method as deviceMethod } from '../payments/device/fixtures.test-utils';
@@ -29,14 +30,22 @@ jest.mock('@wcpos/components/button', () => ({
 		disabled,
 		onPress,
 		variant,
+		className,
 	}: {
 		children?: React.ReactNode;
 		testID?: string;
 		disabled?: boolean;
 		onPress?: () => void;
 		variant?: string;
+		className?: string;
 	}) => (
-		<button data-testid={testID} data-variant={variant} disabled={disabled} onClick={onPress}>
+		<button
+			className={className}
+			data-testid={testID}
+			data-variant={variant}
+			disabled={disabled}
+			onClick={onPress}
+		>
 			{children}
 		</button>
 	),
@@ -225,7 +234,7 @@ it('selects methods without committing and folds unavailable reasons', () => {
 	};
 	render(<TenderPane flow={flow} format={String} />);
 	expect(screen.getByTestId('checkout-method-pos_cash').getAttribute('data-variant')).toBe(
-		'sidebar-solid'
+		'outline'
 	);
 	fireEvent.click(screen.getByTestId('checkout-method-pos_cash'));
 	expect(flow.pickMethod).toHaveBeenCalledWith('pos_cash');
@@ -669,4 +678,118 @@ it('keeps fixed plans numbered out of two, but stops numbering a completed item 
 		/>
 	);
 	expect(screen.getByTestId('checkout-commit').textContent).toContain(' · pays it off');
+});
+
+it('preserves every keypad selector and dispatches the original key action', () => {
+	const flow = { ...makeFlow(), saveState: null };
+	render(<TenderPane flow={flow} format={String} />);
+	for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'backspace']) {
+		expect(screen.getByTestId(`checkout-key-${key}`)).toBeTruthy();
+	}
+	fireEvent.click(screen.getByTestId('checkout-key-5'));
+	expect(flow.dispatch).toHaveBeenLastCalledWith({ type: 'key', key: '5' });
+});
+
+jest.mock('uniwind', () => ({
+	useCSSVariable: (name: string) =>
+		name === '--spacing-tile' ? 64 : name === '--spacing-ctl' ? 44 : 'currentColor',
+}));
+jest.mock('react-native-svg', () => ({ __esModule: true, default: 'svg', Circle: 'circle' }));
+jest.mock('../../../../../hooks/use-local-date', () => ({
+	useLocalDate: () => ({ formatDate: () => '14:04' }),
+}));
+
+const mockLayouts: Record<
+	string,
+	(event: { nativeEvent: { layout: { height?: number; y?: number } } }) => void
+> = {};
+jest.mock('react-native', () => {
+	const native = jest.requireActual('react-native');
+	function Box({
+		children,
+		testID,
+		className,
+		onLayout,
+	}: React.PropsWithChildren<{
+		testID?: string;
+		className?: string;
+		onLayout?: (typeof mockLayouts)[string];
+	}>) {
+		// The jsdom host has no layout engine; expose its committed layout callback to the test.
+		React.useLayoutEffect(() => {
+			if (testID && onLayout) mockLayouts[testID] = onLayout;
+		}, [testID, onLayout]);
+		return (
+			<div data-testid={testID} className={className}>
+				{children}
+			</div>
+		);
+	}
+	return { ...native, View: Box, ScrollView: Box };
+});
+it('shrinks the shared keypad under a short measured pane and restores tile fit', () => {
+	render(<TenderPane flow={{ ...makeFlow(), saveState: null }} format={String} />);
+	act(() => {
+		mockLayouts['checkout-keypad']({ nativeEvent: { layout: { y: 200 } } });
+		mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 400 } } });
+	});
+	expect(screen.getByTestId('checkout-keypad').className).toContain('min-h-0');
+	act(() => mockLayouts['checkout-keypad-pane']({ nativeEvent: { layout: { height: 900 } } }));
+	expect(screen.getByTestId('checkout-keypad').className).not.toContain('min-h-0');
+});
+
+// Fractional widths plus a gap must not wrap five methods into four columns.
+it.each([
+	[false, 5],
+	[true, 3],
+] as const)('keeps fixed method rows and pads the last row (phone=%s)', (phone, columns) => {
+	const flow = makeFlow(7);
+	flow.tiles = flow.tiles.map((tile, index) => ({
+		...tile,
+		method: { ...tile.method, id: `method-${index}` },
+	}));
+	const { rerender } = render(
+		<DeviceScope phone={phone}>
+			<TenderPane flow={flow} format={String} />
+		</DeviceScope>
+	);
+	for (const saving of [true, false]) {
+		rerender(
+			<DeviceScope phone={phone}>
+				<TenderPane flow={{ ...flow, saveState: saving ? flow.saveState : null }} format={String} />
+			</DeviceScope>
+		);
+		const tiles = screen.getAllByTestId(
+			saving ? /^checkout-tile-method-/ : /^checkout-method-method-/
+		);
+		const rows = [...new Set(tiles.map((tile) => tile.parentElement!))];
+		expect(rows).toHaveLength(phone ? 3 : 2);
+		for (const row of rows) {
+			expect(row.className).toContain('flex-row gap-2');
+			expect(row.className).not.toContain('flex-wrap');
+			expect(row.children).toHaveLength(columns);
+			for (const cell of Array.from(row.children)) {
+				expect(cell.className).toContain('flex-1');
+				expect(cell.className).toContain('min-w-0');
+			}
+		}
+		expect(tiles.map((tile) => tile.textContent?.includes('Cash'))).toEqual(Array(7).fill(true));
+		const lastRow = rows.at(-1)!;
+		expect(
+			Array.from(lastRow.children).filter((cell) => !cell.hasAttribute('data-testid'))
+		).toHaveLength(phone ? 2 : 3);
+	}
+	rerender(
+		<DeviceScope phone={phone}>
+			<TenderPane flow={makeFlow(0)} format={String} />
+		</DeviceScope>
+	);
+	const skeletons = screen.getAllByTestId('checkout-tile-skeleton');
+	expect(skeletons).toHaveLength(4);
+	const rows = [...new Set(skeletons.map((tile) => tile.parentElement!))];
+	expect(rows).toHaveLength(phone ? 2 : 1);
+	for (const row of rows) {
+		expect(row.className).toContain('flex-row gap-2');
+		expect(row.children).toHaveLength(columns);
+	}
 });

@@ -18,6 +18,11 @@ import { initialTenderState } from '../tender/tender-state';
 import type { LedgerView } from '../tender/use-ledger-view';
 import type { TenderFlow } from '../tender/use-tender-flow';
 
+jest.mock('expo-haptics', () => ({
+	impactAsync: jest.fn(),
+	ImpactFeedbackStyle: { Light: 'light' },
+}));
+
 const mockPickMethod = jest.fn();
 const mockBack = jest.fn();
 let mockScreenSize: 'sm' | 'md' | 'lg' = 'lg';
@@ -100,7 +105,7 @@ jest.mock('react-native-reanimated', () => ({
 	withTiming: (value: number) => value,
 	withRepeat: (value: number) => value,
 	cancelAnimation: jest.fn(),
-	Easing: { linear: (value: number) => value },
+	Easing: { bezier: jest.fn(), linear: (value: number) => value },
 }));
 jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
@@ -319,3 +324,20 @@ it('shows a title skeleton while saving an unnumbered order', () => {
 	rerender(<CheckoutColumn order={order} />);
 	expect(screen.queryByTestId('checkout-title-skeleton')).toBeNull();
 });
+
+it('keeps both segment selectors and removes the redundant order title', () => {
+	mountColumn();
+	expect(screen.getByTestId('checkout-tab-payments')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('checkout-tab-legacy'));
+	expect(mockFlow.dispatch).toHaveBeenCalledWith({ type: 'set-tab', tab: 'legacy' });
+	expect(screen.queryByText('pos_checkout.checkout_order')).toBeNull();
+});
+
+jest.mock('uniwind', () => ({
+	useCSSVariable: (name: string) =>
+		name === '--spacing-tile' ? 64 : name === '--spacing-ctl' ? 44 : 'currentColor',
+}));
+jest.mock('react-native-svg', () => ({ __esModule: true, default: 'svg', Circle: 'circle' }));
+jest.mock('../../../../../hooks/use-local-date', () => ({
+	useLocalDate: () => ({ formatDate: () => '14:04' }),
+}));
