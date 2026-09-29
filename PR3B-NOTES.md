@@ -1,143 +1,153 @@
-# PR 3B — partial implementation, not deployable
+# PR 3B — app integration
 
-## Status
+## Status and scope
 
-**Incomplete.** Paused at 397 changed non-test source lines against the pre-task HEAD
-`a98d278981e7`, just below AGENTS.md's 400-line ceiling. Requested explicit permission for
-500 to finish the brief; no response received at report time. See `PR3B-STOP.md`.
-High stakes: takeover during capture or persisted writes can affect money/data.
-No fetch/pull/rebase, push, PR, sync-engine/sync-core/schema edits or deployment.
-Existing staged briefs/findings remain outside implementation commits.
+Implementation and verification finished; independent review status is recorded below.
+High stakes: sync-storage / checkout-money. Premature handover can affect persisted data or money.
+The continuation brief authorizes 700 changed non-test source lines total. Conservative count:
+**599 additions + deletions** against `a98d278981e7`, including platform files; excludes
+probes/tests, generated worker, lockfile, and reports. The continuation adds 202 versus the
+397-line stop. No new recovery subsystem, retries, flags, dependencies, or environment variables.
 
-## Changes by file
+No fetch/pull/rebase, push, PR edits, deployment, sync-engine/sync-core/schema changes.
+The requested initial WIP commit is `3d13716ae`; it preserved the entire starting working tree,
+including staged briefs. Capture integration is `76fadf254`; lifecycle/teardown is `7bced5b51`. Earlier PR3 commits are `226cc6373` (pool growth) and `58ba03e7b` (protocol).
 
-Commits: `226cc6373` (pool growth), `58ba03e7b` (protocol/write hold).
+## Changes by file / behavior
 
-### Committed concerns
-
-- `scripts/sqlite-worker-entry.mjs`: check file count/capacity before open; grow by 16.
-- `packages/database/src/adapters/storage/sqlite-pool.ts`: initial capacity 22 = three
-  database/WAL pairs (6) + one growth batch (16), with acquisition-cost rationale.
-- `apps/main/public/sqlite.worker.js`: rebuilt generated worker.
-- `scripts/sqlite-worker-probe.mjs`: exceed initial capacity with concurrently open DBs,
-  write/read the last, retain prior persistence/restore checks.
-- `packages/database/src/live-tab/live-tab.web.ts`: origin-scoped exclusive lock,
-  cooperative request/ack/release, payment/write registry, ceiling, no-answer state,
-  worker-loss park, disposal. No stealing. RxJS is the existing observable dependency;
-  no application, storage or UI imports in the protocol.
-- `packages/database/src/live-tab/index.ts`, `index.web.ts`, `src/index.ts`: native/default
-  no-op hold and web public platform export.
-- `packages/database/src/plugins/wrapped-error-handler-storage.ts`: optional write hold
-  callback, released in finally when the wrapped bulkWrite settles.
-- `packages/database/src/adapters/default/index.web.ts`: supply the write hold callback.
-- `packages/database/src/live-tab/live-tab.web.test.ts`: ten named protocol cases, fake
-  lock queue/broadcast bus/timers. Fake rejects signal+ifAvailable, like real Web Locks.
-- `packages/database/src/plugins/wrapped-error-handler-storage.test.ts`: two pending-write
-  hold/release cases (resolution and rejection).
-- `scripts/live-tab-probe.mjs`: real two-page Web Locks/BroadcastChannel and shipped SQLite
-  worker. Parked page constructs zero workers. Former pool-owner pages reload before reuse.
-
-### Uncommitted, incomplete app integration
-
-- `apps/main/components/parked-tab.tsx`: exact requested English copy, semantic-token
-  EmptyState, separate 48pt-minimum action (EmptyState's built-in action lacks disabled
-  support and uses a smaller touch target). No translation/theme providers required by
-  this component's code. Actual provider-free browser rendering remains unverified.
-- `apps/main/components/live-tab-gate.web.tsx`, `live-tab-gate.tsx`: singleton, live-only
-  children, synchronous subscription notifications/unmount, worker-loss subscriptions,
-  test hold hook guarded by existing DEV/E2E switch, reload after a former owner reacquires.
-- `apps/main/app/_layout.tsx`: place merchant gate before startup clear/hydration.
-- `apps/main/lib/create-app-engine.ts`: export reuse of cached-engine bounded disposal.
-- `packages/core/src/contexts/app-state/use-hydration-suspense.ts`: await an already-started
-  hydration before closing its databases, so it cannot open more after pool termination.
-- `apps/main/components/parked-tab.test.tsx`, `live-tab-gate.test.tsx`: six copy/action states
-  and singleton/live-only child mounting test. Shared UI components are mocked in the
-  screen test: these assertions do not establish real Uniwind rendering.
-- `apps/main/e2e/live-tab.spec.ts`: authenticated same-context two-page transitions, write
-  test hook and frozen-holder CDP case. Not run against dev-next, as instructed.
-- `apps/main/package.json`, `pnpm-lock.yaml`: RNTL 14.0.1, verified via npm registry before
-  installation. Installation ran the repository's ordinary postinstall patches.
+- `scripts/sqlite-worker-entry.mjs`, database `adapters/storage/sqlite-pool.ts`, generated
+  `apps/main/public/sqlite.worker.js`: initial pool capacity 22, growth by 16 before opens.
+  Existing pools retain their capacity; the earlier probe failed with fixed capacity and passed
+  after growth. No performance improvement is claimed.
+- Database `live-tab/live-tab.web.ts`: origin-scoped exclusive Web Lock, cooperative
+  request/ack/release, payment/write holds, 15-second defer ceiling, 3-second no-answer state,
+  worker-loss parking, disposal. Replacement holds are rechecked after each release without
+  resetting the ceiling (including collection immediately starting capture).
+- Database `live-tab/index{,.web,.electron}.ts`, public `index.ts`: platform-neutral hold export;
+  Electron/native holds are no-ops. Electron needs its explicit override because Metro exports
+  its renderer with the web platform.
+- Database `plugins/wrapped-error-handler-storage.ts`, `adapters/default/index.web.ts`:
+  write holds cover wrapped bulkWrite through settlement; no extra manual-tender hold.
+- Core `payments/server/server-leg.ts`, `payments/device/device-leg.ts`: payment holds cover
+  awaited capture POSTs, released in finally. Device `driver.collect()` also has a hold because
+  its result can already be `captured`; intent preparation and idle tender UI have none.
+- Core `checkout/hooks/use-checkout-session.ts`: **contract checkout DOES await an external
+  capture**, `orders/{id}/checkout`. Only that POST is held, not bootstrap, preparation,
+  polling, or completion writes. Manual/offline gateway order saves use the existing write hold.
+- Core `services/terminal-payments/service.ts`: background settlement of recorded-offline
+  authorizations posts an external capture too. It is reachable on web from persisted rows
+  without a device driver, so the same narrow hold protects that await.
+- `apps/main/components/live-tab-gate.web.tsx`: singleton creation happens in an effect;
+  no-locks/SSR render is live without starting the protocol. Browser hydration remains acquiring
+  until ownership. Live children unmount synchronously before teardown. Former owners reload
+  after reacquiring: the real worker probe found premium retains the terminated worker.
+- `live-tab-gate.tsx` and `.electron.tsx`: provider-free passthroughs; platform unit cases
+  render immediately even when reading navigator throws.
+- Gate teardown starts engine disposal and registered-database close together, retaining the
+  original close promises. After the existing hold ceiling, a separate 10-second deadline
+  terminally fails every still-registered database, awaits the closes, then terminates the
+  worker before the protocol releases the lock. This reuses the disposal primitive.
+  **A timed-out write may have committed. The next owner must read the document back.**
+- Database `plugins/rx-database-registry.ts`: expose current names for terminal failure;
+  keep the existing close loop. `adapters/storage/index.web.ts`: worker termination is permanent
+  for the page, rejecting late hydration opens even if no worker existed yet. This permits
+  removing the WIP's `finishPendingHydration` wait: unrelated HTTP probes cannot delay handover,
+  and cannot reopen the old pool afterward. Recovery remains reload-only.
+- `apps/main/app/_layout.tsx`: merchant gate precedes startup clearing/hydration.
+  `lib/create-app-engine.ts`: exposes the existing cached-engine disposal.
+- `parked-tab.tsx`: unchanged real EmptyState/Button components, semantic tokens and specified
+  provider-free English copy. No plain-React-Native fallback was needed.
+- `apps/main/e2e/live-tab.spec.ts`: same-context tabs, write deferral, frozen owner; third case
+  reverses takeover and explicitly observes document reload before the former owner is live.
+  Authenticated live-store execution is deferred to the owner, as the original brief instructs.
+- `scripts/parked-tab-probe.mjs`: bundles REAL ParkedTab with RNW/Uniwind web bindings and
+  compiles `apps/main/global.css` through the installed Uniwind Metro compile/scan/CSS visitor
+  pipeline. No provider/UI mocks, no handwritten substitute CSS, no Expo export prerequisite.
+  Generated CSS, HTML, JS and types are colocated with screenshots outside the repository.
 
 ## Verification — Observed
 
-The brief's pnpm extra `--` is known from PR3A to become a Jest filename pattern; the
-commands below omit that separator and use the actual app package name `@wcpos/main`.
+All commands below are run from the repository root. Jest commands omit the extra `--`,
+which this repository passes through as a filename pattern. Suites ran sequentially with
+`--maxWorkers=2`; core was limited to changed capture-path test files, never the full suite.
+The previous full core run exhausted worker heaps at two workers; no full-core passing claim.
 
 | Command / check | Result |
 | --- | --- |
-| Protocol tests before implementation | Missing-module error first; then stub run: 9 failed / 1 passed, demonstrating missing behavior. |
-| `node scripts/sqlite-worker-probe.mjs` before growth | FAIL with SQLITE_CANTOPEN after exceeding old capacity. |
-| `pnpm build:sqlite-worker` | PASS, exit 0. |
-| `node scripts/sqlite-worker-probe.mjs` after growth | PASS, output below. |
-| `node --test scripts/sqlite-worker.test.mjs` | PASS, 3 tests. |
-| New pending-write hold tests before/after callback | FAIL 2, then PASS 2. |
-| `pnpm --filter @wcpos/database test --maxWorkers=2 --coverage=false live-tab.web.test.ts` | PASS, 10 tests. |
-| `pnpm --filter @wcpos/database test --maxWorkers=2` (final) | PASS, 49 suites / 604 tests; 1 suite / 1 test skipped. |
-| `pnpm --filter @wcpos/main test --maxWorkers=2 --runTestsByPath components/live-tab-gate.test.tsx components/parked-tab.test.tsx` | PASS, 2 suites / 7 tests. |
-| `pnpm --filter @wcpos/main test --maxWorkers=2` (final) | PASS, 40 suites / 523 tests. Jest warned a worker did not exit gracefully. |
-| `pnpm --filter @wcpos/core test --maxWorkers=2` | INCOMPLETE: multiple workers exhausted the configured 2 GB V8 heaps. Stopped with SIGINT (130) after repeated failures; no passing full-suite claim. |
-| `node --test scripts/*.test.mjs` | PASS, 926 tests, exit 0. |
-| `node scripts/live-tab-probe.mjs` | PASS all four transitions, output below. |
-| `pnpm --filter @wcpos/database exec tsc --noEmit` | PASS after fake lock signature correction. |
-| `pnpm typecheck --force` | Initial failures found channel/test signatures, logger code, dataset typing and E2E expect import. Final rerun PASS, exit 0: 15/15 tasks successful, none cached. |
-| `pnpm --filter @wcpos/database lint` | PASS; four existing types.d.ts warnings. |
+| `pnpm --filter @wcpos/database test --maxWorkers=2` | PASS: 49 suites, 607 tests; 1 suite/1 test skipped. |
+| `pnpm --filter @wcpos/main test --maxWorkers=2` | PASS: 41 suites, 528 tests. Existing worker-exit warning remains. |
+| `pnpm --filter @wcpos/core test --maxWorkers=2 --coverage=false --runTestsByPath src/screens/main/pos/checkout/payments/server/server-leg.test.ts src/screens/main/pos/checkout/payments/device/device-leg.test.ts src/screens/main/pos/checkout/hooks/use-checkout-session.test.ts src/services/terminal-payments/service.test.ts` | PASS: 4 suites, 140 tests. Hook/background files are included because they also contain changed capture awaits; no unrelated core tests. Existing React act warnings in hook tests remain. |
+| `node --test scripts/*.test.mjs` | PASS: 926 tests. |
+| `pnpm typecheck --force` | PASS: 15/15 tasks, none cached. |
+| `git diff --check -- . ':!apps/main/public/sqlite.worker.js'` | PASS. Generated vendor worker is excluded from whitespace checking. |
+| Explicit ESLint on every source/test/probe file in the whole PR3 diff | PASS, exit 0; `/tmp/claude-501/pr3b-whole-diff-lint.log`. |
+| `pnpm --filter @wcpos/database lint` | PASS; existing type-definition warnings. |
 | `pnpm --filter @wcpos/main lint` | PASS. |
-| `pnpm --filter @wcpos/core lint` | PASS, 125 warnings / zero errors. |
-| Explicit ESLint on changed source/test/probe files | PASS after formatting and browser global qualification. |
-| `git diff --check -- . ':!apps/main/public/sqlite.worker.js'` | PASS. Generated minified worker contains trailing whitespace inside vendor template literals; not manually rewritten. |
+| `pnpm --filter @wcpos/core lint` | PASS: zero errors, 125 existing warnings. |
+| `node scripts/live-tab-probe.mjs` | PASS: first live/second parked with zero opens; payment deferral; write ceiling/reverse ownership; frozen-holder close grants ownership, no pool contention. Protocol + real worker, not full app. |
+| `node scripts/parked-tab-probe.mjs` | PASS: 24 provider-free states; 48px action heights; title/background colours differ. Title contrast 16.13:1 light / 15.11:1 dark (sRGB canvas measurement). |
 
-One main-suite attempt briefly overlapped the core run; interrupted that attempt (130),
-then reran main alone after stopping core. No claim that every run was strictly sequential.
+Logs: `/tmp/claude-501/pr3b-{database,main,core,scripts,typecheck}-final.log`,
+`/tmp/claude-501/pr3b-{database,main,core}-lint.log`, `/tmp/claude-501/pr3b-format.log`,
+`/tmp/claude-501/pr3b-{live-probe-final,parked-probe}.log`.
 
-### Mutation check
+### Regression / mutation evidence
 
-Moved the holder ack after starting teardown, ran:
-`pnpm --filter @wcpos/database test --maxWorkers=2 --coverage=false live-tab.web.test.ts -t 'holder acks, tears down'`.
-**FAIL, exit 1**: expected ack before teardown; observed teardown before ack. Restored
-immediately. The final database suite includes the restored ordering.
+- Payment legs: 4 new hold cases failed first (68 existing passed); green afterward.
+  Contract capture: 2 new cases failed, then passed. Background capture: 2 failed, then passed.
+  Reader rejection also releases its collection hold.
+- Gate: missing navigator/render side effects and unbounded close failed before correction.
+  Final teardown test drives the real protocol with controlled storage: both registered names
+  are terminally failed, worker terminates, then the real lock callback completes. Pending
+  hydration is not awaited. Reacquisition triggers reload without mounting retired children.
+- Worker-retirement and replacement-hold tests failed before the respective fixes.
+  One exploratory test queued capture AFTER handover had already parked; corrected it to queue
+  capture before the handover continuation, the actual race the test must protect.
+- SSR mutation: replacing the browser hydration snapshot with unconditional LIVE makes the
+  real web-module render test fail (exit 1), then restoring the gate passes.
+  Log: `/tmp/claude-501/pr3b-ssr-mutation.log`.
+- Final ack-before-teardown mutation: moving ack after starting handover failed the ordering test (exit 1), then the restored protocol passed all 12 tests. Logs: `/tmp/claude-501/pr3b-ack-mutation.log`, `/tmp/claude-501/pr3b-protocol-restored.log`.
 
-### Browser evidence and its limits
+## Independent read-only review
 
-The first real protocol probe failed because Web Locks disallows `signal` together with
-`ifAvailable`. Corrected to `{ ifAvailable: true }` on boot and `{ signal }` on queued
-acquisition; strengthened the fake. A later reverse-open attempt hung because premium's
-client still retained a terminated worker: the probe now reloads former-owner pages, in
-line with the intended app gate reload, rather than claiming in-place recovery works.
+Round 1 reviewed the whole PR3 diff against `a98d278981e7` and found browser-hydration bypass,
+release/rehold race, hydration exceeding teardown deadline, and background capture missing a hold.
+All four are addressed above with regression coverage. **Round 2 code verdict: CLEAN** (read-only source-review inference, not independently rerun runtime verification). Doc-logic review found one non-blocking measurement-timing contradiction; the evidence limitation below corrects that claim. Review stopped after two rounds.
 
-```text
-PASS write/read/close/reopen; growth beyond initial capacity/
-PASS write/read/close/reopen; growth beyond initial capacity/?read=persisted
-PASS persistence across page/worker restart; wasm cache-buster
-PASS write/read/close/reopen; growth beyond initial capacity/?read=restored
-PASS OPFS snapshot/restore preserves readable SQLite pool
+## Rendering artifacts
 
-PASS first tab live; second parked with zero worker/pool opens
-PASS payment deferral, close/terminate/release, requester opens real pool
-PASS write deferral reaches ceiling; reverse takeover opens real pool
-PASS no-answer timeout; closing frozen holder grants ownership; no pool contention
-```
+`.scratch/parked-tab/` is not gitignored, so the specified fallback directory is used:
+`/tmp/claude-501/parked-tab/`. Reproduce with `node scripts/parked-tab-probe.mjs`.
+`measurements.json` records action heights and sampled colours/contrast. **Accepted probe timing limitation:** the first colour sample after a media switch can precede the theme update. Specifically `tablet-dark-parked`, `phone-light-parked`, and `phone-dark-parked` contain the previous theme's colours/contrast. The screenshots are taken later and show the requested theme; the reviewer independently inspected the first two. Do not treat those three JSON colour samples as matching their screenshots. The 48px heights and title/background difference assertions still hold.
+`probe.html`, `probe.js`, `global.css`, `uniwind.css`, `uniwind-types.d.ts` are the reproducible
+local harness artifacts. No screenshot/artifact is committed into the repository.
 
-The two-page probe bundles the protocol, not the real app gate. Holds are artificial,
-not payment requests or actually wedged bulkWrites. It does not prove bounded app teardown.
-No screenshots or visual artifacts were captured.
+- `/tmp/claude-501/parked-tab/tablet-light-parked.png`
+- `/tmp/claude-501/parked-tab/tablet-light-waiting.png`
+- `/tmp/claude-501/parked-tab/tablet-light-payment.png`
+- `/tmp/claude-501/parked-tab/tablet-light-write.png`
+- `/tmp/claude-501/parked-tab/tablet-light-no-answer.png`
+- `/tmp/claude-501/parked-tab/tablet-light-lost.png`
+- `/tmp/claude-501/parked-tab/tablet-dark-parked.png`
+- `/tmp/claude-501/parked-tab/tablet-dark-waiting.png`
+- `/tmp/claude-501/parked-tab/tablet-dark-payment.png`
+- `/tmp/claude-501/parked-tab/tablet-dark-write.png`
+- `/tmp/claude-501/parked-tab/tablet-dark-no-answer.png`
+- `/tmp/claude-501/parked-tab/tablet-dark-lost.png`
+- `/tmp/claude-501/parked-tab/phone-light-parked.png`
+- `/tmp/claude-501/parked-tab/phone-light-waiting.png`
+- `/tmp/claude-501/parked-tab/phone-light-payment.png`
+- `/tmp/claude-501/parked-tab/phone-light-write.png`
+- `/tmp/claude-501/parked-tab/phone-light-no-answer.png`
+- `/tmp/claude-501/parked-tab/phone-light-lost.png`
+- `/tmp/claude-501/parked-tab/phone-dark-parked.png`
+- `/tmp/claude-501/parked-tab/phone-dark-waiting.png`
+- `/tmp/claude-501/parked-tab/phone-dark-payment.png`
+- `/tmp/claude-501/parked-tab/phone-dark-write.png`
+- `/tmp/claude-501/parked-tab/phone-dark-no-answer.png`
+- `/tmp/claude-501/parked-tab/phone-dark-lost.png`
 
-## Remaining work / known gaps
-
-1. Payment holds are **not wired**. Tender uses asynchronous `service.begin()`; actual
-   awaited device/server capture windows live in their payment-leg modules. Cover those,
-   manual recording and contract checkout without holding preparation/idle UI time.
-2. `closeRegisteredDatabases()` can still await a genuinely wedged write beyond the
-   takeover ceiling. Reuse terminal storage/disposal handling and test this end to end.
-3. Verify gate teardown ordering with the actual lifecycle, SSR/pre-render behavior,
-   Electron platform resolution, repeated takeover/reload and initial hydration races.
-4. Verify real EmptyState outside providers, light/dark, tablet/phone, button sizing and
-   contrast. Unit tests mock shared UI. Do not infer visual success from them.
-5. Full core suite remains unverified after worker OOM; authenticated live-store E2E is
-   intentionally not run. Native/Electron runtime, WebKit, deployed CDN delivery and
-   real reader/payment behavior are unverified.
-6. No independent completion review: implementation stopped on scope before that gate.
-
-## Exact copy in the unfinished working tree (not shipped)
+## Exact copy
 
 | State | Title | Description | Action |
 | --- | --- | --- | --- |
@@ -148,14 +158,23 @@ No screenshots or visual artifacts were captured.
 | taking-over: no-answer | The other tab isn't answering | Close it, or reload it, to continue here. | Take over here (disabled) |
 | worker-lost | Local database unavailable | Reload to keep selling. | Reload the app |
 
+
 ## Behavior changes / regressions
 
-- Observed: empty pools start at 22 handles and grow in batches of 16; previously 64 was
-  fixed. Existing pools retain their existing capacity. No performance improvement claimed.
-- Intended/incomplete: merchant web tabs are gated per origin; concurrent followers become
-  parked, and a former owner reloads after acquiring ownership again. App integration is
-  not ready to deploy without payment/teardown work above.
-- Observed: protocol and artificial holds work in Chromium, including close of a frozen
-  owner. Not evidence of old/new full application compatibility or crash durability.
-- Known gap: capture is currently unprotected by the new registry. Known gap: a real stuck
-  write can prevent teardown from finishing. These are blockers, not accepted high-stakes risks.
+- Observed in tests/probes: one merchant web tab per origin; other tabs park. Takeover closes
+  the predecessor and former owners reload on reacquisition instead of reopening cached workers.
+- Observed: awaited external captures and writes defer takeover up to the existing 15-second
+  ceiling. A wedged close is terminally failed at the additional 10-second teardown deadline.
+  Unknown write/capture outcomes are not reported as “did not commit”.
+- Observed: worker termination rejects subsequent opens until reload. This intentionally
+  replaces the possibility of a late hydration reopening or hanging on a retired worker.
+- Observed: new pools start at 22 handles and grow by 16 instead of using a fixed initial 64.
+  No old/new app compatibility or performance claim is made.
+- Not evaluated: real reader/payment processing, authenticated live-store E2E, full Expo static
+  export, packaged Electron/native runtime, WebKit, CDN deployment, crash durability, or broad
+  old/new application equivalence. Unit platform cases are not packaged-platform verification.
+- Accepted limitation: timer-based deadlines cannot run while a browser freezes a tab. The
+  no-answer state asks the user to close/reload that holder; real Chromium close recovery passes.
+- Known non-blocking evidence limitation: the three theme-switch colour samples described above lag their screenshots; no production change was made for this stale-read-only probe issue.
+- Known non-blocking validation noise: existing main Jest worker-exit warning, core hook act
+  warnings and existing package lint warnings. No unrelated cleanup attempted.
