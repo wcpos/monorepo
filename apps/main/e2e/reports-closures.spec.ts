@@ -466,6 +466,16 @@ async function openClosures(page: Page) {
 	await expect(page.getByTestId('card-taxes')).toBeVisible();
 	await expect(page.getByTestId('card-payments')).toBeVisible();
 	await expect(page.getByTestId('card-payments-figure')).toHaveText(/\d/);
+	await page.getByTestId('card-taxes-open').click();
+	await expect(page.getByTestId('detail-panel-body')).toBeVisible();
+	await expect(page.getByTestId('detail-panel-export')).toBeVisible();
+	if ((page.viewportSize()?.width ?? 0) < 640) {
+		await page.getByTestId('detail-panel-back').click();
+		await expect(page.getByTestId('hero-total')).toBeVisible();
+	} else {
+		await page.getByTestId('detail-panel-close').click();
+	}
+	await expect(page.getByTestId('detail-panel-body')).toHaveCount(0);
 
 	await page.getByTestId('reports-scope').click();
 	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();

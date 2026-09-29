@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useT } from '../../../../contexts/translations';
-import { useReportsData, useReportsPeriod } from '../context';
+import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
 import { taxesByRate } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
@@ -10,6 +10,7 @@ import { Legend, ProportionalBar, StatGrid } from './primitives';
 // Five shared hues, cycled: a sixth rate takes the first hue again, never its neighbour's.
 const colors = ['bg-c1', 'bg-c2', 'bg-c3', 'bg-c4', 'bg-c5'];
 export function TaxesCard() {
+	const { setDetail } = useReportsScope();
 	const t = useT(),
 		{ selectedOrders, totals } = useReportsData();
 	const { storeId } = useReportsPeriod(),
@@ -21,7 +22,12 @@ export function TaxesCard() {
 	);
 	if (!store) return <CardSkeleton testID="card-taxes" name={t('reports.card_taxes')} />;
 	return (
-		<ReportCard testID="card-taxes" name={t('reports.card_taxes')} figure={money(summary.tax)}>
+		<ReportCard
+			onOpen={() => setDetail('taxes')}
+			testID="card-taxes"
+			name={t('reports.card_taxes')}
+			figure={money(summary.tax)}
+		>
 			<ProportionalBar
 				testID="card-taxes-bar"
 				segments={summary.rows.map((row, index) => ({

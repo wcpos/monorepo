@@ -2383,5 +2383,21 @@
 	"reports.n_orders_note_one": "{n} order",
 	"reports.n_orders_note_other": "{n} orders",
 	"reports.n_sold_one": "{n} sold",
-	"reports.n_sold_other": "{n} sold"
+	"reports.n_sold_other": "{n} sold",
+	"reports.panel_orders": "Orders",
+	"reports.panel_payments": "Sales by payment method",
+	"reports.panel_products": "Top products",
+	"reports.panel_categories": "Sales by category",
+	"reports.panel_cashiers": "Sales by cashier",
+	"reports.panel_taxes": "Taxes collected",
+	"reports.panel_refunds": "Refunds",
+	"reports.panel_scope": "{period} · {register}",
+	"reports.panel_status": "{count} orders · {total}",
+	"reports.col_method": "Method",
+	"reports.col_share": "Share",
+	"reports.col_qty": "Qty",
+	"reports.col_avg_order": "Avg order",
+	"reports.col_reason": "Reason",
+	"reports.all_products": "All products",
+	"reports.no_rows_in_period": "Nothing in this period"
 }

@@ -3,13 +3,14 @@ import * as React from 'react';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
-import { useReportsData, useReportsPeriod } from '../context';
+import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
 import { tenders } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Donut } from './donut';
 
 export function PaymentsCard() {
+	const { setDetail } = useReportsScope();
 	const t = useT(),
 		{ selectedOrders, totals } = useReportsData(),
 		{ storeId } = useReportsPeriod();
@@ -27,6 +28,7 @@ export function PaymentsCard() {
 	};
 	return (
 		<ReportCard
+			onOpen={() => setDetail('payments')}
 			testID="card-payments"
 			name={t('reports.card_payments')}
 			figure={money(totals.total)}

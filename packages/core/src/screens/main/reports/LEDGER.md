@@ -42,6 +42,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 26. The parts-of-a-whole cards are donuts in the five shared categorical colours with the total in the middle and a row per part, at most five parts and an Other; Payments reads the order’s tender ledger where it exists and the order’s payment method otherwise (a split sale counts once per method it touched); Categories joins lines to local products by first category and names the lines it cannot join — evidence: build brief §1 “Period section”, §5 “Thick distinct-hue donut”; wcpos/roadmap#332 PR 3b.
 
+27. Every card head opens its report as a panel on the right (a page with a crumb on phone) whose rows are the card’s aggregation in full, with a footer count and Export CSV of the rows shown; the open panel is device state, never in the query. Orders remains non-interactive until PR 3d — evidence: build brief §1 “Detail panels”, the closures ledger lines 12 and 26–28, wcpos/roadmap#332 PR 3c.
+
 ## Evidence footnotes
 
 [^query]: `91722e8e59 2026-07-15 feat(core): the reports screen rides the query-state store + bindings (per-screen migration 6/8) (#659)`.
