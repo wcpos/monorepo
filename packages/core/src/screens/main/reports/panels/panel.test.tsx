@@ -4,7 +4,7 @@ import * as React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { mockState, setOrders } from '../cards/test-utils';
-import { mockDoc, mockDocuments, preparePanel, room } from './test-utils';
+import { preparePanel, room } from './test-utils';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import { ReportRows } from './report-rows';
 
@@ -85,63 +85,4 @@ it('renders labelled phone rows and a period-neutral empty line', () => {
 	expect(screen.getByTestId('rows-total').textContent).toBe('All products£3.00');
 	view.rerender(<ReportRows spec={{ ...spec, align: [...spec.align], rows: [] }} testID="rows" />);
 	expect(screen.getByText('Nothing in this period')).toBeTruthy();
-});
-
-// Printing stale/unready data, losing template choices, or churning timestamps breaks these.
-it('Print waits with a reason until the templates are known', () => {
-	jest.useFakeTimers();
-	jest.setSystemTime(new Date('2026-07-15T13:00:00Z'));
-	mockDoc.isSyncing = true;
-	const view = room();
-	fireEvent.click(screen.getByTestId('card-payments-open'));
-	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe('Loading templates');
-	const first = JSON.stringify(mockDocuments.at(-1));
-	mockDoc.isSyncing = false;
-	jest.setSystemTime(new Date('2026-07-15T13:05:00Z'));
-	fireEvent.click(screen.getByTestId('widen'));
-	expect(screen.queryByTestId('detail-panel-print-waiting')).toBeNull();
-	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
-	expect(JSON.stringify(mockDocuments.at(-1))).toBe(first);
-	fireEvent.click(screen.getByTestId('detail-panel-print'));
-	expect(mockDoc.print).toHaveBeenCalled();
-	view.unmount();
-});
-it('the template select lists the report templates', () => {
-	room();
-	fireEvent.click(screen.getByTestId('card-payments-open'));
-	const select = screen.getByTestId('detail-panel-template');
-	expect(select.textContent).toContain('Report thermal');
-	expect(select.textContent).toContain('Report full page');
-});
-
-it('explains store and offline waits and shows a document error', () => {
-	room();
-	fireEvent.click(screen.getByTestId('card-payments-open'));
-	const store = mockState.store;
-	mockState.store = undefined;
-	try {
-		fireEvent.click(screen.getByTestId('widen'));
-		expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
-			'Waiting for the store'
-		);
-		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-	} finally {
-		mockState.store = store;
-	}
-	const templates = mockDoc.templates;
-	mockDoc.templates = [];
-	mockDoc.isOffline = true;
-	try {
-		fireEvent.click(screen.getByTestId('widen'));
-		expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
-			'Offline · no saved template'
-		);
-		expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
-	} finally {
-		mockDoc.templates = templates;
-	}
-	mockDoc.documentError = new Error('Template unavailable');
-	fireEvent.click(screen.getByTestId('widen'));
-	expect(screen.getByTestId('detail-panel-print-error').textContent).toBe('Template unavailable');
 });

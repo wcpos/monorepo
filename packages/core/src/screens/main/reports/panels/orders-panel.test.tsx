@@ -70,7 +70,7 @@ it('unticking a row removes it from the count and dims it, and keeps it listed',
 	fireEvent.click(screen.getByTestId('detail-panel-export'));
 	await waitFor(() =>
 		expect(saveOrShareCsv).toHaveBeenCalledWith(
-			expect.stringContaining('"#42","11:00","Unknown","UNPAID","£20.00","no"'),
+			expect.stringContaining('"#42","11:00","Unknown","UNPAID","£20.00","No"'),
 			expect.any(String)
 		)
 	);

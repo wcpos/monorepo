@@ -104,12 +104,20 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 						cashierNames[cashier] || unknown,
 						method,
 						money(Number(order.total || 0)),
-						inputs.unselectedRowIds?.[order.uuid] ? 'no' : 'yes',
+						t(inputs.unselectedRowIds?.[order.uuid] ? 'common.no' : 'common.yes'),
 					];
 					return {
 						key: order.uuid,
 						cells,
-						raw: cells.map((cell, index) => (index === 4 ? Number(order.total || 0) : cell)),
+						raw: cells.map((cell, index) =>
+							index === 4
+								? Number(order.total || 0)
+								: index === 5
+									? inputs.unselectedRowIds?.[order.uuid]
+										? 'no'
+										: 'yes'
+									: cell
+						),
 					};
 				}),
 				[t('reports.counted'), '', '', '', amount, ''],

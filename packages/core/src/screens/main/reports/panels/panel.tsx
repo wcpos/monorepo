@@ -34,11 +34,7 @@ import { useReportFormats } from '../use-report-formats';
 import { panelCsv } from './export-csv';
 import { ReportRows } from './report-rows';
 import { panelSpec } from './specs';
-import { buildReportDocument } from './document';
 import { OrdersPanel } from './orders-panel';
-import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
-import { useReceiptDocument } from '../../receipt/use-receipt-document';
-import { TemplateSwitcher } from '../../receipt/template-switcher';
 
 const PANEL_WIDTH = 480;
 export function DetailPanel() {
@@ -50,7 +46,6 @@ export function DetailPanel() {
 		.filter(included)
 		.sort((a, b) => (b.date_created_gmt ?? '').localeCompare(a.date_created_gmt ?? ''));
 	const leftOut = includedOrders.filter((order) => unselectedRowIds[order.uuid]).length;
-	const [generatedAt] = React.useState(() => new Date().toISOString());
 	const { dateRange, storeId, timezone } = useReportsPeriod(),
 		formats = useReportFormats(storeId);
 	const { screenSize } = useTheme(),
@@ -106,41 +101,6 @@ export function DetailPanel() {
 		),
 	});
 	const title = t(`reports.panel_${detail}`);
-	const context = useClosureDocumentContext(storeId);
-	const document = buildReportDocument(
-		spec,
-		spec.keys.map((key, i) => ({
-			key,
-			label: spec.head[i],
-			type: spec.types[i],
-			align: spec.align[i],
-		})),
-		{
-			key: detail ?? 'orders',
-			title,
-			label: t('reports.panel_scope', { period, register }),
-			storeId: storeId ?? 0,
-			registerId: registerId ?? '',
-			registerName: register,
-			from: dateRange.start.toISOString(),
-			to: dateRange.end.toISOString(),
-			generatedAt,
-		},
-		context
-	);
-	const doc = useReceiptDocument({
-		autoPrintAllowed: false,
-		templateType: 'report',
-		storeId,
-		localReport: document,
-	});
-	const waiting = !formats.store
-		? 'store'
-		: doc.isSyncing
-			? 'templates'
-			: doc.isOffline && doc.templates.length === 0
-				? 'offline'
-				: null;
 	if (!detail) return null;
 	const content = (
 		<View
@@ -174,15 +134,6 @@ export function DetailPanel() {
 				<Text testID="detail-panel-scope" className="text-muted-foreground">
 					{t('reports.panel_scope', { period, register })}
 				</Text>
-				<View testID="detail-panel-template">
-					<TemplateSwitcher
-						templates={doc.templates}
-						selectedId={doc.selectedTemplateId}
-						onSelect={doc.setSelectedTemplateId}
-						isOffline={doc.isOffline}
-						alwaysVisible
-					/>
-				</View>
 			</View>
 			<View testID="detail-panel-body" className="min-h-0 flex-1 p-4">
 				{ready ? (
@@ -239,36 +190,7 @@ export function DetailPanel() {
 							{t('reports.export_csv')}
 						</Button>
 					)}
-					{waiting && (
-						<Text
-							testID="detail-panel-print-waiting"
-							className="text-muted-foreground min-w-0 flex-1 text-sm"
-						>
-							{t(
-								waiting === 'store'
-									? 'reports.print_waiting_store'
-									: waiting === 'templates'
-										? 'reports.print_waiting_templates'
-										: 'reports.print_offline_no_template'
-							)}
-						</Text>
-					)}
-					<Button
-						testID="detail-panel-print"
-						variant="default"
-						className="min-h-12"
-						disabled={!!waiting}
-						loading={doc.isPrinting}
-						onPress={doc.print}
-					>
-						{t('reports.print')}
-					</Button>
 				</View>
-				{!!doc.documentError && (
-					<Text testID="detail-panel-print-error" className="text-destructive">
-						{doc.documentError.message}
-					</Text>
-				)}
 				{!!error && (
 					<Text testID="detail-panel-export-error" className="text-destructive">
 						{error}

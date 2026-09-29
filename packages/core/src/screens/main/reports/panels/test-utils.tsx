@@ -66,44 +66,7 @@ jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),
 }));
 
-export const mockDoc = {
-	templates: [
-		{ id: 1, title: 'Report thermal', offline_capable: true },
-		{ id: 2, title: 'Report full page', offline_capable: true },
-	],
-	selectedTemplateId: 1,
-	setSelectedTemplateId: jest.fn(),
-	isOffline: false,
-	isSyncing: false,
-	hasFinalData: true,
-	print: jest.fn(),
-	isPrinting: false,
-	documentError: null as Error | null,
-};
-export const mockDocuments: Record<string, unknown>[] = [];
-jest.mock('../../receipt/use-receipt-document', () => ({
-	useReceiptDocument: (options: {
-		localReport: Record<string, unknown>;
-		templateType: string;
-		autoPrintAllowed: boolean;
-	}) => {
-		if (options.templateType !== 'report' || options.autoPrintAllowed)
-			throw new Error('Wrong document mode');
-		mockDocuments.push(options.localReport);
-		return mockDoc;
-	},
-}));
-jest.mock('../../../../services/register-session/use-closure-document-context', () => ({
-	useClosureDocumentContext: () => ({
-		store: mockState.store ?? {},
-		currency: 'GBP',
-		timezone: 'UTC',
-		locale: 'en-GB',
-		printedAt: new Date().toISOString(),
-		i18n: {},
-	}),
-}));
-// Only native controls are replaced; selection, report aggregation and TemplateSwitcher stay real.
+// Only native controls are replaced; selection and report aggregation stay real.
 jest.mock('@wcpos/components/checkbox', () => ({
 	Checkbox: ({
 		testID,
@@ -155,9 +118,6 @@ export function preparePanel() {
 			totals: calculateTotals({ orders: selectedOrders }),
 		};
 	});
-	mockDoc.isSyncing = mockDoc.isOffline = false;
-	mockDoc.documentError = null;
-	mockDocuments.length = 0;
 }
 function SelectionProvider({ children }: React.PropsWithChildren) {
 	const [unselectedRowIds, setUnselectedRowIds] = React.useState<
