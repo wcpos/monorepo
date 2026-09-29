@@ -24,8 +24,10 @@ it('does not offer resize on coarse pointers', () => {
 	expect(screen.queryByTestId('data-table-resize-name')).toBeNull();
 	expect(pans).toHaveLength(0);
 });
-it('last visible column takes remaining space rather than a fixed width', () => {
+it('a trailing actions head keeps its configured width, like the actions cell beside the row', () => {
 	renderTable();
-	expect(screen.getByTestId('data-table-head-actions').style.flexBasis).toBe('0%');
+	// The rows put the actions cell beside the pressable at its own width; a flexible actions
+	// head would drift the name and price heads away from their cells (Codex, #2233).
+	expect(screen.getByTestId('data-table-head-actions').style.flexBasis).toBe('48px');
 	expect(screen.queryByTestId('data-table-resize-actions')).toBeNull();
 });

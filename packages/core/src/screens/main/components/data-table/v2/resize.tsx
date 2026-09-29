@@ -13,12 +13,15 @@ export function ResizeHead({
 	columnId,
 	meta,
 	last,
+	resizable = true,
 	onResize,
 	children,
 }: {
 	columnId: string;
 	meta?: Meta;
 	last: boolean;
+	/** The trailing actions head keeps its configured width and offers no drag edge. */
+	resizable?: boolean;
 	onResize: (width: number) => void;
 	children: React.ReactNode;
 }) {
@@ -41,7 +44,7 @@ export function ResizeHead({
 			}}
 		>
 			{children}
-			{!last && (
+			{!last && resizable && (
 				<GestureDetector gesture={pan}>
 					<View
 						testID={`data-table-resize-${columnId}`}

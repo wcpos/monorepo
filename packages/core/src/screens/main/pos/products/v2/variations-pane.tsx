@@ -16,6 +16,7 @@ import { useCollectionBinding, useQueryState, useQueryStateActions } from '../..
 import { DataTable } from '../../../components/data-table/v2';
 import { DataTableSkeleton } from '../../../components/data-table/v2/skeleton';
 import { matchesStockStatusFilter } from '../../../components/product/stock-filter';
+import { useVariationsRefresh } from '../cells/variations-popover/use-variations-refresh';
 import { ProductsFooter } from './footer';
 import { VariationName, VariationRow, VariationStock } from './rows/variation-row';
 import { Price } from '../cells/price';
@@ -30,11 +31,9 @@ export function VariationsPane({ parent, ...props }: Props) {
 	const variationIds: number[] = useDocField(parent, (value) => value.payload.variations) ?? [];
 	const remoteIds = variationIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
 	const binding = useCollectionBinding('variations', state, { remoteIds });
-	const initialBinding = React.useRef(binding);
-	React.useEffect(() => {
-		// Refresh once per row expansion without blocking locally resident variations.
-		void initialBinding.current.sync().catch(() => undefined);
-	}, []);
+	// The popover's bounded, logged refresh retry: a first refresh that hangs or returns
+	// nothing during a transient failure must not leave the default drill-in pane empty.
+	useVariationsRefresh(binding);
 	return (
 		<Suspense fallback={<DataTableSkeleton id="pos-products" />}>
 			<VariationsTable parent={parent} binding={binding} {...props} />

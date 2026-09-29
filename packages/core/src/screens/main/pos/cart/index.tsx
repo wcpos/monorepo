@@ -20,6 +20,7 @@ import { CartHeader } from './v2/cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
 import { CartTable } from './v2/table';
 import { CartFoot } from './v2/foot';
+import { OrderSheet } from './v2/order-sheet';
 import { Totals } from './totals';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
@@ -29,8 +30,12 @@ import { type ClosureCount, ClosureSheet } from './closure-sheet';
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RegisterBar } from './register-bar';
 import { RegisterPicker } from './register-picker';
+import {
+	consumeRegisterPickerRequest,
+	useRegisterPickerRequested,
+} from './register-picker-request';
 import { CartTotalsChangedBanner } from './totals-changed-banner';
-import { useCurrentOrder } from '../contexts/current-order';
+import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
 
 const NO_API: SlotContracts['pos.cart.bar']['api'] = {};
 const NEVER_CHANGES = () => () => {};
@@ -52,9 +57,14 @@ export function OpenOrders({
 	const [closure, setClosure] = React.useState<ClosureCount | null>(null);
 	const [panelOpen, setPanelOpen] = React.useState(false);
 	const [pickingRegister, setPickingRegister] = React.useState(false);
+	// The rail's cashier sheet asks for the picker from outside this screen: the request is
+	// read as state and consumed when the picker binds.
+	const pickerRequested = useRegisterPickerRequested();
 	const t = useT();
 
 	const { currentOrderRecord } = useCurrentOrder();
+	// Keep the sheet mounted on its original order while a send changes the open-order list.
+	const [editingOrder, setEditingOrder] = React.useState<CurrentOrderRecord | null>(null);
 	const stage = useOrderCheckoutStage(currentOrderRecord);
 	const { uiSettings } = useUISettings('pos-cart');
 	const position = useDocField(uiSettings, (value) => value.openOrdersPosition);
@@ -106,8 +116,13 @@ export function OpenOrders({
 			{position === 'top' && cartBar}
 			{bindingStatus === 'none' && <Text>{t('register.no_register_for_store')}</Text>}
 			<ErrorBoundary>
-				{bindingStatus === 'choose' || pickingRegister ? (
-					<RegisterPicker onBound={() => setPickingRegister(false)} />
+				{bindingStatus === 'choose' || pickingRegister || pickerRequested ? (
+					<RegisterPicker
+						onBound={() => {
+							setPickingRegister(false);
+							consumeRegisterPickerRequest();
+						}}
+					/>
 				) : sessionsOn && !session && bindingStatus === 'bound' ? (
 					<OpenRegisterCard />
 				) : session && session.status !== 'open' ? (
@@ -162,12 +177,20 @@ export function OpenOrders({
 							<CartFoot
 								onOpenRegister={() => setPickingRegister(true)}
 								onCloseRegister={() => setPanelOpen(true)}
+								onOpenSheet={() => setEditingOrder(currentOrderRecord)}
 							/>
 						</View>
 					</View>
 				)}
 			</ErrorBoundary>
 			{closure && !session && <ClosureSheet {...closure} onDone={() => setClosure(null)} />}
+			<OrderSheet
+				open={editingOrder !== null}
+				order={editingOrder ?? currentOrderRecord}
+				onOpenChange={(open) => {
+					if (!open) setEditingOrder(null);
+				}}
+			/>
 			{position !== 'top' && cartBar}
 		</VStack>
 	);

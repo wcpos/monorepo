@@ -10,28 +10,33 @@ import { NoteRow } from './note-row';
 import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrder } from '../../contexts/current-order';
 import { PayButton } from '../buttons/pay';
-import { OrderSheet } from './order-sheet';
 
 export function CartFoot({
 	onOpenRegister,
 	onCloseRegister,
+	onOpenSheet,
 }: {
 	onOpenRegister: () => void;
 	onCloseRegister: () => void;
+	/**
+	 * The order sheet is the cart root's, pinned to the order it opened for: a status or
+	 * cashier change sent from it moves that order out of the open list, this foot
+	 * unmounts with the branch, and the sheet must stay to show the result.
+	 */
+	onOpenSheet: () => void;
 }) {
 	const { sessionsOn, session, overdue } = useRegisterSession();
-	const [open, setOpen] = React.useState(false);
 	const { currentOrderRecord } = useCurrentOrder();
 	const t = useT();
 	return (
 		<>
-			<NoteRow order={currentOrderRecord} onPress={() => setOpen(true)} />
+			<NoteRow order={currentOrderRecord} onPress={onOpenSheet} />
 			<HStack className="gap-2 p-2">
 				<IconButton
 					name="ellipsisVertical"
 					testID="order-meta-button"
 					accessibilityLabel={t('pos_cart.order_details')}
-					onPress={() => setOpen(true)}
+					onPress={onOpenSheet}
 				/>
 				<View className="flex-1">
 					{sessionsOn && !session ? (
@@ -55,7 +60,6 @@ export function CartFoot({
 					)}
 				</View>
 			</HStack>
-			<OrderSheet open={open} onOpenChange={setOpen} order={currentOrderRecord} />
 		</>
 	);
 }

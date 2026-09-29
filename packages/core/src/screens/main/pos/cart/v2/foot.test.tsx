@@ -37,10 +37,6 @@ jest.mock('@wcpos/components/icon-button', () => ({
 	),
 }));
 jest.mock('../buttons/pay', () => ({ PayButton: () => <button data-testid="checkout-button" /> }));
-jest.mock('./order-sheet', () => ({
-	OrderSheet: ({ open }: { open: boolean }) =>
-		open ? <div data-testid="order-meta-dialog" /> : null,
-}));
 beforeEach(() => {
 	mockSession = { sessionsOn: false, session: null, overdue: false };
 	mockOrder.payload.line_items = [];
@@ -48,7 +44,9 @@ beforeEach(() => {
 it('opens the register when sessions are on and none is open', () => {
 	mockSession.sessionsOn = true;
 	const onOpenRegister = jest.fn();
-	render(<CartFoot onOpenRegister={onOpenRegister} onCloseRegister={jest.fn()} />);
+	render(
+		<CartFoot onOpenRegister={onOpenRegister} onCloseRegister={jest.fn()} onOpenSheet={jest.fn()} />
+	);
 	fireEvent.click(screen.getByTestId('checkout-open-register'));
 	expect(onOpenRegister).toHaveBeenCalledTimes(1);
 	expect(screen.queryByTestId('checkout-button')).toBeNull();
@@ -56,7 +54,13 @@ it('opens the register when sessions are on and none is open', () => {
 it('closes an overdue register with an empty cart', () => {
 	mockSession.overdue = true;
 	const onCloseRegister = jest.fn();
-	render(<CartFoot onOpenRegister={jest.fn()} onCloseRegister={onCloseRegister} />);
+	render(
+		<CartFoot
+			onOpenRegister={jest.fn()}
+			onCloseRegister={onCloseRegister}
+			onOpenSheet={jest.fn()}
+		/>
+	);
 	fireEvent.click(screen.getByTestId('checkout-close-register'));
 	expect(onCloseRegister).toHaveBeenCalledTimes(1);
 	expect(screen.queryByTestId('checkout-button')).toBeNull();
@@ -64,12 +68,18 @@ it('closes an overdue register with an empty cart', () => {
 it.each([false, true])('pays otherwise (overdue %s)', (overdue) => {
 	mockSession.overdue = overdue;
 	mockOrder.payload.line_items = [{}];
-	render(<CartFoot onOpenRegister={jest.fn()} onCloseRegister={jest.fn()} />);
+	render(
+		<CartFoot onOpenRegister={jest.fn()} onCloseRegister={jest.fn()} onOpenSheet={jest.fn()} />
+	);
 	expect(screen.getByTestId('checkout-button')).toBeTruthy();
 });
-it('opens the order sheet from the note', () => {
-	render(<CartFoot onOpenRegister={jest.fn()} onCloseRegister={jest.fn()} />);
-	expect(screen.queryByTestId('order-meta-dialog')).toBeNull();
+it('asks the cart root for the order sheet from the note and from the menu button', () => {
+	// The sheet is the cart root's, pinned to the order it opened for; the foot only asks.
+	const onOpenSheet = jest.fn();
+	render(
+		<CartFoot onOpenRegister={jest.fn()} onCloseRegister={jest.fn()} onOpenSheet={onOpenSheet} />
+	);
 	fireEvent.click(screen.getByTestId('cart-note-row'));
-	expect(screen.getByTestId('order-meta-dialog')).toBeTruthy();
+	fireEvent.click(screen.getByTestId('order-meta-button'));
+	expect(onOpenSheet).toHaveBeenCalledTimes(2);
 });

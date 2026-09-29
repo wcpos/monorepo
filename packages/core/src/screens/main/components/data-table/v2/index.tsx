@@ -225,7 +225,14 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 									key={header.id}
 									columnId={header.column.id}
 									meta={header.column.columnDef.meta}
-									last={index === headerGroup.headers.length - 1}
+									// The rows give the last BODY cell the remainder only when no actions
+									// column trails them (the actions cell keeps its configured width beside
+									// the pressable); the header follows the same rule or drifts from the cells.
+									last={
+										index === headerGroup.headers.length - 1 &&
+										!headerGroup.headers.some((h) => h.column.id === 'actions')
+									}
+									resizable={header.column.id !== 'actions'}
 									onResize={(width) =>
 										setWidths((previous) => new Map(previous).set(header.column.id, width))
 									}

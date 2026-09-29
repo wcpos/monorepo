@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import {
 	Dialog,
 	DialogContent,
@@ -25,16 +27,23 @@ export function OrderSheet({
 }) {
 	const side = usePanelSide('cart');
 	const t = useT();
+	// The form's submit, applied by "Save order" before the push.
+	const submitRef = React.useRef<(() => Promise<void>) | null>(null);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="order-meta-dialog">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.order_details')}</DialogTitle>
 				</DialogHeader>
-				<EditOrderMeta order={order} />
+				<EditOrderMeta order={order} submitRef={submitRef} />
 				<DialogFooter className="flex-row justify-between gap-2">
 					<VoidButton onBeforeVoid={() => onOpenChange(false)} />
-					<SaveButton label={t('pos_cart.save_order')} />
+					<SaveButton
+						label={t('pos_cart.save_order')}
+						onBeforeSave={async () => {
+							await submitRef.current?.();
+						}}
+					/>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

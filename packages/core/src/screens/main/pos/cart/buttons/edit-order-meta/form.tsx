@@ -87,9 +87,11 @@ type FormValues = z.infer<typeof formSchema>;
 export function EditOrderMetaForm({
 	order,
 	formData,
+	submitRef,
 }: {
 	order: CurrentOrderRecord;
 	formData: FormValues;
+	submitRef?: React.RefObject<(() => Promise<void>) | null>;
 }) {
 	const t = useT();
 	const { localPatch } = useLocalMutation();
@@ -187,6 +189,14 @@ export function EditOrderMetaForm({
 	 * Form submission handlers that include validation
 	 */
 	const onSave = form.handleSubmit(handleSave);
+	// Hand the submit to the sheet's footer (an effect: refs are not written during render).
+	React.useEffect(() => {
+		if (!submitRef) return;
+		submitRef.current = onSave;
+		return () => {
+			submitRef.current = null;
+		};
+	});
 
 	/**
 	 *

@@ -10,6 +10,7 @@ import { useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../../../contexts/app-state';
 import { UserAvatar } from '../../header/user-avatar';
+import { requestRegisterPicker } from '../../../pos/cart/register-picker-request';
 import { UserSheet } from '../../../pos/cart/user-sheet';
 import { DrawerItem } from './drawer-item';
 import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from '../panel-visibility';
@@ -88,33 +89,36 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 				}}
 			>
 				<RailAvatar />
-				{props.state.routes.map((route, i) => {
-					const focused = i === props.state.index;
-					const { title, drawerLabel, drawerIcon } = props.descriptors[route.key].options;
-					return (
-						<DrawerItem
-							key={route.key}
-							testID={`drawer-item-${route.name.replace(/[()]/g, '')}`}
-							label={
-								(drawerLabel !== undefined
-									? drawerLabel
-									: title !== undefined
-										? title
-										: route.name) as string
-							}
-							icon={drawerIcon as React.ComponentProps<typeof DrawerItem>['icon']}
-							focused={focused}
-							onPress={() =>
-								props.navigation.dispatch({
-									...(focused
-										? DrawerActions.closeDrawer()
-										: CommonActions.navigate({ name: route.name, merge: true })),
-									target: props.state.key,
-								})
-							}
-						/>
-					);
-				})}
+				{/* `gap-2` keeps each item's hitSlop out of its neighbour's target. */}
+				<View className="gap-2">
+					{props.state.routes.map((route, i) => {
+						const focused = i === props.state.index;
+						const { title, drawerLabel, drawerIcon } = props.descriptors[route.key].options;
+						return (
+							<DrawerItem
+								key={route.key}
+								testID={`drawer-item-${route.name.replace(/[()]/g, '')}`}
+								label={
+									(drawerLabel !== undefined
+										? drawerLabel
+										: title !== undefined
+											? title
+											: route.name) as string
+								}
+								icon={drawerIcon as React.ComponentProps<typeof DrawerItem>['icon']}
+								focused={focused}
+								onPress={() =>
+									props.navigation.dispatch({
+										...(focused
+											? DrawerActions.closeDrawer()
+											: CommonActions.navigate({ name: route.name, merge: true })),
+										target: props.state.key,
+									})
+								}
+							/>
+						);
+					})}
+				</View>
 				<View className="mt-auto">
 					<NotificationBell showLabel={false} />
 					<Version />
@@ -139,7 +143,12 @@ function RailAvatar() {
 			>
 				<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
 			</Pressable>
-			<UserSheet open={open} onOpenChange={setOpen} portalHost={null} />
+			<UserSheet
+				open={open}
+				onOpenChange={setOpen}
+				portalHost={null}
+				onSwitchRegister={requestRegisterPicker}
+			/>
 		</>
 	);
 }

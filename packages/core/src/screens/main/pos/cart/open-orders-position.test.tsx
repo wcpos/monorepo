@@ -38,6 +38,7 @@ jest.mock('./totals', () => ({ Totals: () => <div /> }));
 jest.mock('./totals-changed-banner', () => ({ CartTotalsChangedBanner: () => <div /> }));
 jest.mock('./v2/cart-header', () => ({ CartHeader: () => <div data-testid="cart-header" /> }));
 jest.mock('./v2/foot', () => ({ CartFoot: () => <div data-testid="checkout-button" /> }));
+jest.mock('./v2/order-sheet', () => ({ OrderSheet: () => null }));
 jest.mock('./v2/tabs', () => ({ OpenOrderTabs: () => <div data-testid="open-orders" /> }));
 
 // Keep the slot and its registration real; replace native chrome and data-heavy children.

@@ -118,8 +118,31 @@ jest.mock('@wcpos/components/icon-button', () => ({
 		<button data-testid={testID} onClick={onPress} />
 	),
 }));
+// The cart root's wiring, as `pos/cart/index.tsx` does it: the foot asks, the root pins the
+// sheet to the order it opened for.
+function FootWithSheet() {
+	const [editing, setEditing] = React.useState<typeof mockOrder | null>(null);
+	return (
+		<>
+			<CartFoot
+				onOpenRegister={jest.fn()}
+				onCloseRegister={jest.fn()}
+				onOpenSheet={() => setEditing(mockOrder)}
+			/>
+			<OrderSheet
+				open={editing !== null}
+				onOpenChange={(open) => {
+					if (!open) setEditing(null);
+				}}
+				order={
+					(editing ?? mockOrder) as unknown as React.ComponentProps<typeof OrderSheet>['order']
+				}
+			/>
+		</>
+	);
+}
 it('keeps Void out of the cart column until the order sheet opens', () => {
-	render(<CartFoot onOpenRegister={jest.fn()} onCloseRegister={jest.fn()} />);
+	render(<FootWithSheet />);
 	expect(screen.getByTestId('checkout-button')).toBeTruthy();
 	expect(screen.queryByTestId('void-button')).toBeNull();
 	fireEvent.click(screen.getByTestId('order-meta-button'));

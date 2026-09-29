@@ -15,7 +15,10 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
 /**
  *
  */
-export function SaveButton({ label }: { label?: string } = {}) {
+export function SaveButton({
+	label,
+	onBeforeSave,
+}: { label?: string; onBeforeSave?: () => Promise<void> } = {}) {
 	const { currentOrderRecord } = useCurrentOrder();
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
@@ -38,6 +41,9 @@ export function SaveButton({ label }: { label?: string } = {}) {
 
 		setLoading(true);
 		try {
+			// The order sheet's form edits (note, status, cashier…) are applied before the push,
+			// or "saved" would send the old values and the close would discard the new ones.
+			await onBeforeSave?.();
 			await pushDocument(currentOrderRecord).then((savedDoc) => {
 				/**
 				 * TODO; move this generic sanckbar to the pushDocument hook
@@ -67,7 +73,7 @@ export function SaveButton({ label }: { label?: string } = {}) {
 		} finally {
 			setLoading(false);
 		}
-	}, [blockIfDegraded, currentOrderRecord, pushDocument, t]);
+	}, [blockIfDegraded, currentOrderRecord, onBeforeSave, pushDocument, t]);
 
 	/**
 	 *
