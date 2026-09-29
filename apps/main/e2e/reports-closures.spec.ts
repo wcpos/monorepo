@@ -443,8 +443,8 @@ async function openClosures(page: Page) {
 	await expect(page.getByTestId('reports-bar')).toBeVisible();
 	await expect(page.getByTestId('reports-scope')).toBeVisible();
 	await expect(page.getByTestId('hero-total')).toBeVisible();
-	// The whole composite is the referent here: the delta names the comparison period.
-	await expect(page.getByTestId('hero-delta')).toContainText('vs');
+	// The delta line is a figure or the no-comparison dash; its wording is the catalogue's.
+	await expect(page.getByTestId('hero-delta')).toHaveText(/\S/);
 	await page.getByTestId('hero-chip-status').click();
 	await expect(page.getByTestId('hero-status-menu')).toBeVisible();
 	await page.getByTestId('hero-status-all').click();
