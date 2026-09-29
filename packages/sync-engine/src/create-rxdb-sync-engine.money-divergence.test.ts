@@ -107,8 +107,11 @@ async function insertResident(
 			insert(doc: unknown): Promise<unknown>;
 		}
 	).insert({
+		posUserId: '',
+		posStoreId: '',
 		uuid: ORDER_UUID,
 		remoteId: over.wooOrderId == null ? null : remoteId(over.wooOrderId),
+		remoteKey: String(over.wooOrderId == null ? null : (remoteId(over.wooOrderId) ?? '')),
 		number: '',
 		dateCreatedGmt: '2026-08-06T00:00:00',
 		status: String(payload.status ?? 'processing'),
@@ -592,6 +595,7 @@ describe('divergence detection at the ack boundary', () => {
 			).insert({
 				uuid: ORDER_UUID,
 				remoteId: null,
+				remoteKey: '',
 				payload: {
 					first_name: 'Ada',
 					meta_data: [{ key: '_woocommerce_pos_uuid', value: ORDER_UUID }],

@@ -49,6 +49,7 @@ describe('package exports', () => {
 		expect(Object.keys(testing).sort()).toEqual([
 			'createEngineHarness',
 			'customerBrowseWindowQueryKeyFromDimensions',
+			'engineCollectionCreators',
 			'engineSyncCollectionCreators',
 			'existenceManifestDocument',
 			'existenceManifestSchema',

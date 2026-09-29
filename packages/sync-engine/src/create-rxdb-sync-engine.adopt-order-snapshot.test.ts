@@ -43,6 +43,7 @@ describe('RxdbSyncEngine.adoptOrderSnapshot', () => {
 		expect(stored).toMatchObject({
 			uuid: ORDER_UUID,
 			remoteId: remoteId(42),
+			remoteKey: String(remoteId(42) ?? ''),
 			status: 'completed',
 			payload: { id: 42, status: 'completed' },
 		});
@@ -69,8 +70,11 @@ describe('RxdbSyncEngine.adoptOrderSnapshot', () => {
 			);
 			await harness.seed('orders', [
 				{
+					posUserId: '',
+					posStoreId: '',
 					uuid: ORDER_UUID,
 					remoteId: remoteId(42),
+					remoteKey: String(remoteId(42) ?? ''),
 					number: '42',
 					dateCreatedGmt: '2026-09-01T10:00:00',
 					status: 'pos-open',

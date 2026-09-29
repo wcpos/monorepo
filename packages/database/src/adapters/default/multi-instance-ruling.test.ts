@@ -68,6 +68,7 @@ describe('multiInstance is pinned to the storage engine (#1057 2026-08-06, #2146
 		expect(REQUIRED_WEB_MULTI_INSTANCE_BY_ENGINE['sqlite-sahpool']).toBe(false);
 	});
 
+	// #2242: desktop stays single-instance under node:sqlite.
 	it('electron is false — one main-process storage behind IPC, in every era', async () => {
 		const { defaultConfig } = await import('./index.electron');
 

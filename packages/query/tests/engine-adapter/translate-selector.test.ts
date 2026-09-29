@@ -7,6 +7,7 @@ import {
 const product = {
 	uuid: 'product-1',
 	remoteId: '10',
+	remoteKey: '10',
 	stockStatus: 'instock',
 	type: 'simple',
 	featured: true,
@@ -106,7 +107,7 @@ describe('translateSelector', () => {
 		});
 
 		expect(translated.prefilter).toEqual({
-			remoteId: { $in: ['10', '11'] },
+			remoteKey: { $in: ['10', '11'] },
 			stockStatus: 'instock',
 			'payload.name': { $regex: '^Al' },
 			'payload.meta_data': { $elemMatch: { key: 'color', value: 'blue' } },
@@ -124,8 +125,10 @@ describe('translateSelector', () => {
 		[{ id: 10 }, { remoteId: '10' }],
 		[{ id: { $eq: 10 } }, { remoteId: { $eq: '10' } }],
 		[{ id: { $ne: 10 } }, { remoteId: { $ne: '10' } }],
-		[{ id: { $in: [10, 11] } }, { remoteId: { $in: ['10', '11'] } }],
-		[{ parent_id: { $eq: 10 } }, { parentRemoteId: { $eq: '10' } }],
+		[{ id: { $in: [10, 11] } }, { remoteKey: { $in: ['10', '11'] } }],
+		[{ parent_id: { $eq: 10 } }, { parentRemoteKey: { $eq: '10' } }],
+		[{ parent_id: { $eq: null } }, { parentRemoteKey: { $eq: '' } }],
+		[{ id: { $in: [null, 10] } }, { remoteKey: { $in: ['', '10'] } }],
 	] as const)('converts legacy identifier selector values %#', (selector, expected) => {
 		const collection = 'parent_id' in selector ? 'variations' : 'products';
 		expect(translateSelector(collection, selector).prefilter).toEqual(expected);
@@ -194,6 +197,7 @@ describe('translateSelector', () => {
 		const variation = {
 			uuid: 'variation-1',
 			remoteId: '20',
+			remoteKey: '20',
 			attributes: [{ id: 1, name: 'Color', option: 'Red' }],
 			payload: {
 				attributes: [
@@ -300,7 +304,7 @@ describe('translateSelector', () => {
 		[
 			'variations',
 			{ id: { $in: [20] } },
-			{ uuid: 'variation-1', remoteId: '20', attributes: [], payload: {} },
+			{ uuid: 'variation-1', remoteId: '20', remoteKey: '20', attributes: [], payload: {} },
 		],
 		[
 			'variations',
@@ -321,7 +325,7 @@ describe('translateSelector', () => {
 		[
 			'orders',
 			{ date_created_gmt: { $gte: '2026-01-01', $lte: '2026-12-31' } },
-			{ uuid: 'order-1', dateCreatedGmt: '2026-07-01', payload: {} },
+			{ posUserId: '', posStoreId: '', uuid: 'order-1', dateCreatedGmt: '2026-07-01', payload: {} },
 		],
 		[
 			'orders',
@@ -335,7 +339,7 @@ describe('translateSelector', () => {
 		[
 			'customers',
 			{ id: 7, role: { $in: ['cashier'] } },
-			{ uuid: 'customer-1', remoteId: '7', payload: { role: 'cashier' } },
+			{ uuid: 'customer-1', remoteId: '7', remoteKey: '7', payload: { role: 'cashier' } },
 		],
 		[
 			'coupons',

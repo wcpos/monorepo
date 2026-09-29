@@ -965,6 +965,7 @@ describe('query bindings', () => {
 		await engineDB.collections.coupons.insert({
 			uuid: 'coupon-1',
 			remoteId: '1',
+			remoteKey: '1',
 			payload: {
 				id: 1,
 				code: 'SUMMER',
@@ -1012,6 +1013,7 @@ describe('query bindings', () => {
 		await engineDB.collections.taxRates.insert({
 			uuid: 'woo-tax-rate:1',
 			remoteId: '1',
+			remoteKey: '1',
 			payload: { id: 1, name: 'Standard', class: 'standard' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 		});
@@ -1071,6 +1073,7 @@ describe('query bindings', () => {
 		await engineDB.collections.customers.insert({
 			uuid: 'customer-ada',
 			remoteId: '103',
+			remoteKey: '103',
 			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -1349,6 +1352,7 @@ describe('query bindings', () => {
 		await engineDB.collections.customers.insert({
 			uuid: 'customer-ada',
 			remoteId: '103',
+			remoteKey: '103',
 			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -1394,6 +1398,7 @@ describe('query bindings', () => {
 		await engineDB.collections.customers.insert({
 			uuid: 'customer-ada',
 			remoteId: '103',
+			remoteKey: '103',
 			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -1422,6 +1427,7 @@ describe('query bindings', () => {
 		await engineDB.collections.customers.insert({
 			uuid: 'customer-ada',
 			remoteId: '103',
+			remoteKey: '103',
 			payload: { id: 103, first_name: 'Ada', last_name: 'Lovelace', role: 'customer' },
 			sync: { revision: '1', partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -1930,6 +1936,7 @@ describe('query bindings', () => {
 			{
 				uuid: 'a',
 				remoteId: '1',
+				remoteKey: '1',
 				payload: { name: 'Alpha' },
 				sync: { revision: '1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -1937,6 +1944,7 @@ describe('query bindings', () => {
 			{
 				uuid: 'b',
 				remoteId: '2',
+				remoteKey: '2',
 				payload: { name: 'Alpine' },
 				sync: { revision: '1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -1944,6 +1952,7 @@ describe('query bindings', () => {
 			{
 				uuid: 'c',
 				remoteId: '3',
+				remoteKey: '3',
 				payload: { name: 'Albatross' },
 				sync: { revision: '1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -2241,6 +2250,7 @@ describe('query bindings', () => {
 			{
 				uuid: 'cashier-grace',
 				remoteId: '7',
+				remoteKey: '7',
 				payload: {
 					id: 7,
 					first_name: 'Grace',
@@ -2253,6 +2263,7 @@ describe('query bindings', () => {
 			{
 				uuid: 'customer-ada',
 				remoteId: '42',
+				remoteKey: '42',
 				payload: {
 					id: 42,
 					first_name: 'Ada',

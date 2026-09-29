@@ -187,7 +187,9 @@ async function insertResidentProduct(engine: RxdbSyncEngine, id: number): Promis
 	await scope.database.collections.products.insert({
 		uuid: productUuid(id),
 		remoteId: remoteId(id),
+		remoteKey: String(remoteId(id) ?? ''),
 		price: 5,
+		sortName: '',
 		stockStatus: 'instock',
 		type: 'simple',
 		categoryIds: [],
@@ -659,6 +661,7 @@ describe('require() for search — the public search-demand verb', () => {
 		await scope.database.collections.customers.upsert({
 			uuid: 'customer:default',
 			remoteId: null,
+			remoteKey: '',
 			payload: {},
 			sync: { revision: '', partial: true, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -928,7 +931,9 @@ describe('require() for search — the public search-demand verb', () => {
 		await products.insert({
 			uuid: productUuid(321),
 			remoteId: remoteId(321),
+			remoteKey: String(remoteId(321) ?? ''),
 			price: 5,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],

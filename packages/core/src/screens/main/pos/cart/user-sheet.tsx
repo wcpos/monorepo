@@ -13,6 +13,7 @@ import { Text } from '@wcpos/components/text';
 import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 import { requestStateManager } from '@wcpos/hooks/use-http-client/request-state-manager';
 import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
+import { identityColumnFilter } from '@wcpos/sync-core';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 
@@ -41,17 +42,10 @@ export function useSalesToday() {
 					$gte: convertLocalDateToUTCString(start),
 					$lt: convertLocalDateToUTCString(end),
 				},
-				$and: [
-					{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials.id) } } },
-					{
-						meta_data: {
-							$elemMatch: {
-								key: '_pos_store',
-								value: store.id ? String(store.id) : 'woocommerce-pos',
-							},
-						},
-					},
-				],
+				...identityColumnFilter({
+					cashierId: String(wpCredentials.id),
+					storeId: store.id ? String(store.id) : 'woocommerce-pos',
+				}),
 			},
 		}).pipe(
 			map((result) =>

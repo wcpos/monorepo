@@ -28,8 +28,11 @@ function engineWith(writePlaneOwner?: () => boolean) {
 async function insertServerOrder(engine: ReturnType<typeof createRxdbSyncEngine>) {
 	await engine.ready;
 	await engine.active()!.database.collections.orders.insert({
+		posUserId: '',
+		posStoreId: '',
 		uuid: ORDER_ID,
 		remoteId: remoteId(42),
+		remoteKey: String(remoteId(42) ?? ''),
 		number: '1042',
 		dateCreatedGmt: '2026-08-07T00:00:00',
 		status: 'processing',
@@ -120,8 +123,11 @@ describe('web write-plane leader gate', () => {
 			await engine.ready;
 			// Born-local order (no server identity) — rung up locally.
 			await engine.active()!.database.collections.orders.insert({
+				posUserId: '',
+				posStoreId: '',
 				uuid: LOCAL_ID,
 				remoteId: null,
+				remoteKey: '',
 				number: '',
 				dateCreatedGmt: '2026-08-07T00:00:00',
 				status: 'pos-open',

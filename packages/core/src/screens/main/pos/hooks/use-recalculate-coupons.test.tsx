@@ -94,25 +94,42 @@ const lineItems = [
 
 function installEngineFixture(couponPayload: Record<string, unknown>, throwOnCouponToJSON = false) {
 	const coupon = engineDocument(
-		{ uuid: 'coupon-uuid', remoteId: '501', payload: couponPayload },
+		{ uuid: 'coupon-uuid', remoteId: '501', remoteKey: '501', payload: couponPayload },
 		throwOnCouponToJSON
 	);
 	const products = [
 		engineDocument({
 			uuid: 'product-83',
 			remoteId: '83',
+			remoteKey: '83',
 			payload: { id: 83, categories: [{ id: 19 }] },
 		}),
 		engineDocument({
 			uuid: 'product-82',
 			remoteId: '82',
+			remoteKey: '82',
 			payload: { id: 82, categories: [{ id: 17 }] },
 		}),
 	];
 	const categories = [
-		engineDocument({ uuid: 'category-16', remoteId: '16', payload: { id: 16, parent: 0 } }),
-		engineDocument({ uuid: 'category-17', remoteId: '17', payload: { id: 17, parent: 16 } }),
-		engineDocument({ uuid: 'category-19', remoteId: '19', payload: { id: 19, parent: 0 } }),
+		engineDocument({
+			uuid: 'category-16',
+			remoteId: '16',
+			remoteKey: '16',
+			payload: { id: 16, parent: 0 },
+		}),
+		engineDocument({
+			uuid: 'category-17',
+			remoteId: '17',
+			remoteKey: '17',
+			payload: { id: 17, parent: 16 },
+		}),
+		engineDocument({
+			uuid: 'category-19',
+			remoteId: '19',
+			remoteKey: '19',
+			payload: { id: 19, parent: 0 },
+		}),
 	];
 	const couponFind = jest.fn(() => ({ exec: async () => [coupon] }));
 	const productFind = jest.fn(() => ({ exec: async () => products }));
@@ -172,7 +189,7 @@ describe('useRecalculateCoupons engine reads', () => {
 
 		await expect(result.current.recalculate(lineItems, couponLines)).resolves.toEqual(expected);
 		expect(reads.productFind).toHaveBeenCalledWith({
-			selector: { remoteId: { $in: ['83', '82'] } },
+			selector: { remoteKey: { $in: ['83', '82'] } },
 		});
 		expect(reads.categoryFind).toHaveBeenCalledWith();
 	});

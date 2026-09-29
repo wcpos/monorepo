@@ -19,6 +19,7 @@ import {
 	orderChangesAssertIntent,
 	RECORD_UUID_META_KEY,
 	remoteIdOrNull,
+	remoteKeyFor,
 } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -86,7 +87,11 @@ function withPromotedFields(
 	resident: Record<string, unknown>
 ): Record<string, unknown> {
 	const payload = (resident.payload ?? {}) as Record<string, unknown>;
-	return { ...resident, ...promotedColumnsFor(collection, payload) };
+	return {
+		...resident,
+		...promotedColumnsFor(collection, payload),
+		remoteKey: remoteKeyFor(resident.remoteId as string | null),
+	};
 }
 
 function syncableChanges(

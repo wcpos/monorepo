@@ -102,10 +102,10 @@ function makeOrder(meta: OrderMeta[] = []): TestOrderRecord {
 		},
 		collection: { name: 'orders' },
 		getLatest: () => record,
-		toJSON: () => ({ uuid: 'order-uuid', remoteId: null, payload: payload$.value }),
+		toJSON: () => ({ uuid: 'order-uuid', remoteId: null, remoteKey: '', payload: payload$.value }),
 		$: payload$.pipe(
 			map((payload) => ({
-				toJSON: () => ({ uuid: 'order-uuid', remoteId: null, payload }),
+				toJSON: () => ({ uuid: 'order-uuid', remoteId: null, remoteKey: '', payload }),
 			}))
 		),
 		patchPayload: (patch: Record<string, unknown>) =>

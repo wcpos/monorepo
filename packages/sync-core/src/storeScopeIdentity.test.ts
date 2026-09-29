@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	canonicalSiteKey,
+	containsLegacyScopeDatabaseName,
 	containsScopeDatabaseName,
 	isScopeDatabaseName,
 	scopeDatabaseName,
@@ -75,9 +76,9 @@ describe('scopeKeyFor', () => {
 });
 
 describe('scopeDatabaseName', () => {
-	it('defaults to the v4 scope generation for the bare-id renames', () => {
+	it('defaults to the v5 scope generation for the storage engine', () => {
 		const name = scopeDatabaseName(identity);
-		expect(name).toBe(`pos_v4_${scopeKeyFor(identity)}`);
+		expect(name).toBe(`pos_v5_${scopeKeyFor(identity)}`);
 	});
 
 	it('bumps the generation prefix for storage-format migrations', () => {
@@ -86,7 +87,7 @@ describe('scopeDatabaseName', () => {
 
 	it('appends a namespace suffix for test isolation', () => {
 		expect(scopeDatabaseName(identity, { namespace: 'run7' })).toBe(
-			`pos_v4_${scopeKeyFor(identity)}_run7`
+			`pos_v5_${scopeKeyFor(identity)}_run7`
 		);
 	});
 
@@ -125,5 +126,23 @@ describe('containsScopeDatabaseName', () => {
 	it('does not match unrelated names', () => {
 		expect(containsScopeDatabaseName('unrelated-shop-data')).toBe(false);
 		expect(containsScopeDatabaseName('positive_vibes')).toBe(false);
+	});
+});
+
+describe('containsLegacyScopeDatabaseName', () => {
+	it('classes every generation below the current one as legacy, by containment', () => {
+		for (const generation of [3, 4]) {
+			const db = scopeDatabaseName(identity, { generation });
+			expect(containsLegacyScopeDatabaseName(db)).toBe(true);
+			expect(containsLegacyScopeDatabaseName(`rxdb-${db}--0--orders`)).toBe(true);
+		}
+	});
+
+	it('never classes the current or a future generation as legacy', () => {
+		expect(containsLegacyScopeDatabaseName(scopeDatabaseName(identity))).toBe(false);
+		expect(containsLegacyScopeDatabaseName(scopeDatabaseName(identity, { generation: 9 }))).toBe(
+			false
+		);
+		expect(containsLegacyScopeDatabaseName('unrelated-shop-data')).toBe(false);
 	});
 });

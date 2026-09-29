@@ -49,13 +49,13 @@ describe('create-db', () => {
 	it.each([
 		[
 			'createUserDB',
-			'wcposusers_v6',
+			'wcposusers_v7',
 			userCollections,
 			async (module: typeof import('./create-db')) => module.createUserDB(),
 		],
 		[
 			'createStoreDB',
-			'store_v6_abc123',
+			'store_v7_abc123',
 			storeCollections,
 			async (module: typeof import('./create-db')) => module.createStoreDB('abc123'),
 		],

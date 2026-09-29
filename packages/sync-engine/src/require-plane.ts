@@ -732,7 +732,7 @@ export function createRequirePlane(deps: RequirePlaneDeps): RequirePlane {
 	): Promise<RemoteId[]> {
 		const collection = db.collections[d.collection] as RxCollection;
 		const docs = await collection
-			.find({ selector: { [d.wooIdField]: { $in: remoteIds } } as never })
+			.find({ selector: { remoteKey: { $in: remoteIds } } as never })
 			.exec();
 		const present = new Set(
 			docs

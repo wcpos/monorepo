@@ -207,6 +207,7 @@ function productDocument(id = 41, barcode = 'ABC'): EngineDocument {
 	const document = {
 		uuid: `product-${id}`,
 		remoteId: String(id),
+		remoteKey: String(String(id) ?? ''),
 		stockStatus: 'instock',
 		payload,
 		collection: { name: 'products' as const },
@@ -230,7 +231,9 @@ function variationDocument(id = 51, parentId = 41, barcode = 'ABC'): EngineDocum
 	const document = {
 		uuid: `variation-${id}`,
 		remoteId: String(id),
+		remoteKey: String(String(id) ?? ''),
 		parentRemoteId: String(parentId),
+		parentRemoteKey: String(String(parentId) ?? ''),
 		stockStatus: 'instock',
 		payload,
 		collection: { name: 'variations' as const },

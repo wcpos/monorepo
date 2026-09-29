@@ -1,8 +1,9 @@
-import { normalizeVariationAttributes } from '@wcpos/sync-engine';
+import { normalizeVariationAttributes, promotedVariationColumns } from '@wcpos/sync-engine';
 import {
 	promotedOrderColumns,
 	promotedProductColumns,
 	remoteIdOrNull,
+	remoteKeyFor,
 	wooIdOf,
 	wooMetaCarrier,
 	type WooOrderPayload,
@@ -309,6 +310,14 @@ export const collectionMap = {
 	products: {
 		engineCollection: 'products',
 		fields: {
+			// The storage spelling of the `name` sort (folded, indexed, #2242); on the wire it is
+			// still Woo's `title`, so the boot browse-window seed derives the same orderby.
+			sortName: {
+				legacy: 'sortName',
+				kind: 'promoted',
+				enginePath: 'sortName',
+				sort: { wooOrderby: 'title', tiebreak: ['uuid'] },
+			},
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			sku: {
 				legacy: 'sku',
@@ -334,10 +343,7 @@ export const collectionMap = {
 				legacy: 'name',
 				kind: 'payload',
 				enginePath: 'payload.name',
-				// The id tiebreak keeps tied titles in Woo-id order on every till —
-				// without it the local sort falls through to client-minted uuids,
-				// a different order per device (Paul's 2026-08-19 name-asc default).
-				sort: { wooOrderby: 'title', tiebreak: ['id'] },
+				sort: { wooOrderby: 'title', uiAlias: 'sortName', tiebreak: ['uuid'] },
 			},
 			// 1.9 catalog-order contract (#810): equal menu_order values (usually 0) are
 			// common, so the Woo id tiebreak is part of the sort rather than an engine detail.
@@ -450,6 +456,13 @@ export const collectionMap = {
 	variations: {
 		engineCollection: 'variations',
 		fields: {
+			sortName: { legacy: 'sortName', kind: 'promoted', enginePath: 'sortName' },
+			name: {
+				legacy: 'name',
+				kind: 'payload',
+				enginePath: 'payload.name',
+				sort: { uiAlias: 'sortName', tiebreak: ['uuid'] },
+			},
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			// Variations share the product catalog-order contract (#871).
 			menu_order: {
@@ -503,15 +516,18 @@ export const collectionMap = {
 			parent_id: {
 				legacy: 'parent_id',
 				kind: 'promoted',
-				enginePath: 'parentRemoteId',
+				enginePath: 'parentRemoteKey',
+				readEnginePath: 'parentRemoteId',
 				read: readRemoteId,
-				write: remoteIdOrNull,
+				write: (value) => remoteKeyFor(remoteIdOrNull(value)),
 			},
 		},
 	},
 	orders: {
 		engineCollection: 'orders',
 		fields: {
+			posUserId: { legacy: 'posUserId', kind: 'promoted', enginePath: 'posUserId' },
+			posStoreId: { legacy: 'posStoreId', kind: 'promoted', enginePath: 'posStoreId' },
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			id: {
 				legacy: 'id',
@@ -871,13 +887,15 @@ export function promotedColumnsFor(
 	collection: LegacyCollectionName,
 	legacyPayload: Record<string, unknown>
 ): Record<string, unknown> {
-	// Products and orders delegate to the sync-core projectors — the single source of the
-	// promotion mapping (the storage boundary uses the same functions), so the local write
-	// path and materialization cannot drift. Ruled 2026-08-19: no negative-price clamp;
-	// bare-number taxonomy ids are accepted. Collections without a sync-core projector
-	// (variations carry the map-only parentRemoteId promotion) keep the map-driven path.
+	// Share the storage projectors so pull materialization and local writes cannot drift.
 	if (collection === 'products') {
 		return { ...promotedProductColumns(legacyPayload as unknown as WooProductPayload) };
+	}
+	if (collection === 'variations') {
+		return {
+			...promotedVariationColumns(legacyPayload),
+			parentRemoteId: remoteIdOrNull(legacyPayload.parent_id),
+		};
 	}
 	if (collection === 'orders') {
 		return { ...promotedOrderColumns(legacyPayload as unknown as WooOrderPayload) };

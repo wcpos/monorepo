@@ -235,6 +235,7 @@ describe('engine adapter collection map', () => {
 			);
 
 		expect(declaredValues('products', sortAliasFor)).toEqual({
+			name: 'sortName',
 			price: 'sortable_price',
 		});
 		expect(declaredValues('orders', sortAliasFor)).toEqual({
@@ -242,12 +243,11 @@ describe('engine adapter collection map', () => {
 		});
 		expect(declaredValues('products', sortTiebreakFor)).toEqual({
 			menu_order: ['id'],
-			// name gained the same Woo-id tiebreak when it became the authored
-			// default (Paul 2026-08-19): tied titles must render in one order on
-			// every till, not in client-minted-uuid order.
-			name: ['id'],
+			name: ['uuid'],
+			sortName: ['uuid'],
 		});
 		expect(declaredValues('variations', sortTiebreakFor)).toEqual({
+			name: ['uuid'],
 			menu_order: ['id'],
 		});
 		expect(declaredValues('orders', sortTiebreakFor)).toEqual({});
@@ -257,6 +257,8 @@ describe('engine adapter collection map', () => {
 			menu_order: 'menu_order',
 			id: 'id',
 			name: 'title',
+			// The storage alias keeps the UI sort's wire spelling (the boot seed derives it).
+			sortName: 'title',
 			price: 'price',
 			sortable_price: 'price',
 			total_sales: 'popularity',
@@ -320,6 +322,8 @@ describe('engine adapter collection map', () => {
 				customer_id: '42',
 			})
 		).toEqual({
+			posUserId: '',
+			posStoreId: '',
 			number: '17',
 			dateCreatedGmt: '',
 			status: '',
@@ -341,6 +345,7 @@ describe('engine adapter collection map', () => {
 				stock_quantity: '',
 			})
 		).toEqual({
+			sortName: '',
 			price: 12.35,
 			stockStatus: '',
 			type: '7',
@@ -364,6 +369,8 @@ describe('engine adapter collection map', () => {
 			})
 		).toEqual({
 			parentRemoteId: null,
+			parentRemoteKey: '',
+			sortName: '',
 			price: -4.25,
 			stockStatus: 'instock',
 			attributes: [{ id: 2, name: 'Size', option: 'Large' }],

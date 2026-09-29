@@ -9,6 +9,7 @@ import {
 	refundDocumentId,
 	type RemoteId,
 	remoteIdOrNull,
+	remoteKeyFor,
 	taxRateDocumentId,
 	wooIdOf,
 	type WooOrderPayload,
@@ -118,6 +119,7 @@ export function materializeTargeted(
 			{
 				...common,
 				remoteId,
+				remoteKey: remoteKeyFor(remoteId),
 				...promotedProductColumns(identified.payload as WooProductPayload),
 				local: { dirty: false, pendingMutationIds: [] },
 			},
@@ -128,6 +130,7 @@ export function materializeTargeted(
 			{
 				...common,
 				remoteId,
+				remoteKey: remoteKeyFor(remoteId),
 				parentRemoteId: remoteIdOrNull(identified.payload.parent_id),
 				...promotedVariationColumns(identified.payload as WooVariationPayload),
 				local: { dirty: false, pendingMutationIds: [] },
@@ -138,6 +141,7 @@ export function materializeTargeted(
 		{
 			...common,
 			remoteId,
+			remoteKey: remoteKeyFor(remoteId),
 			local: { dirty: false, pendingMutationIds: [] },
 		} satisfies LocalCustomerDocument,
 		manifestRow
@@ -154,6 +158,7 @@ export function materializeGreedyPrunable(
 		storedDocument: {
 			uuid: identified.uuid,
 			remoteId,
+			remoteKey: remoteKeyFor(remoteId),
 			payload: identified.payload,
 			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -170,6 +175,7 @@ export function materializeUpsertRefresh(
 		storedDocument: {
 			uuid: taxRateDocumentId(remoteId),
 			remoteId,
+			remoteKey: remoteKeyFor(remoteId),
 			payload: stripDigest(adopted.payload),
 			sync: { revision: adopted.revision, partial: false, source: 'woo-rest' },
 		},
@@ -203,6 +209,7 @@ export function materializeLocalOnly(
 	const document = {
 		uuid: envelope?.uuid ?? identified.uuid,
 		remoteId,
+		remoteKey: remoteKeyFor(remoteId),
 		payload: identified.payload,
 		sync,
 		local: envelope?.local ?? { dirty: false, pendingMutationIds: [] },
