@@ -378,7 +378,9 @@ describe('scheduler drain through the public handle', () => {
 		await scope.database.collections.products.insert({
 			uuid: PRODUCT_UUID_55,
 			remoteId: remoteId(77),
+			remoteKey: String(remoteId(77) ?? ''),
 			price: 0,
+			sortName: '',
 			stockStatus: '',
 			type: '',
 			categoryIds: [],
@@ -427,7 +429,9 @@ describe('scheduler drain through the public handle', () => {
 		await scope.database.collections.products.insert({
 			uuid: PRODUCT_UUID_55,
 			remoteId: remoteId(77),
+			remoteKey: String(remoteId(77) ?? ''),
 			price: 0,
+			sortName: '',
 			stockStatus: '',
 			type: '',
 			categoryIds: [],

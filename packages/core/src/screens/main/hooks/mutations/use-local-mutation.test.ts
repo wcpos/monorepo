@@ -138,6 +138,7 @@ describe('useLocalMutation', () => {
 			const stored: Record<string, unknown> = {
 				uuid: 'product-uuid',
 				remoteId: '42',
+				remoteKey: '42',
 				payload: { id: 42 },
 				sync: { revision: 'rev-1' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -176,6 +177,7 @@ describe('useLocalMutation', () => {
 			const stored: Record<string, unknown> = {
 				uuid: 'order-uuid',
 				remoteId: '42',
+				remoteKey: '42',
 				payload: {
 					id: 42,
 					billing: { first_name: 'Resident', last_name: 'Customer', city: 'Old City' },
@@ -232,6 +234,7 @@ describe('useLocalMutation', () => {
 		const stored: Record<string, unknown> = {
 			uuid: 'product-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { id: 42 },
 			sync: { revision: 'rev-1' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -296,6 +299,7 @@ describe('useLocalMutation', () => {
 			const stored: Record<string, unknown> = {
 				uuid: 'product-uuid',
 				remoteId: '42',
+				remoteKey: '42',
 				payload: { id: 42, ...priorCarrier, barcode: 'OLD' },
 				sync: { revision: 'rev-1' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -433,6 +437,7 @@ describe('useLocalMutation', () => {
 		const stored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: '42',
+			remoteKey: 'stale',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 			sync: { revision: 'rev-1' },
@@ -464,6 +469,7 @@ describe('useLocalMutation', () => {
 		);
 
 		expect(stored).toMatchObject({
+			remoteKey: '42',
 			status: 'processing',
 			payload: {
 				status: 'processing',
@@ -495,6 +501,7 @@ describe('useLocalMutation', () => {
 		const stored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { id: 42 },
 			sync: { revision: 'rev-1' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -535,6 +542,7 @@ describe('useLocalMutation', () => {
 		const stored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: null,
+			remoteKey: '',
 			status: 'pos-open',
 			payload: { status: 'pos-open', line_items: [] },
 			sync: { revision: '' },
@@ -579,6 +587,7 @@ describe('useLocalMutation', () => {
 		const stored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 			sync: { revision: 'rev-1' },
@@ -628,6 +637,7 @@ describe('useLocalMutation', () => {
 		const stored: Record<string, unknown> = {
 			uuid: 'product-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { id: 42 },
 			sync: { revision: 'rev-1' },
 			local: { dirty: false, pendingMutationIds: [] },
@@ -692,6 +702,7 @@ describe('useLocalMutation', () => {
 		const stored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 		};
@@ -727,6 +738,7 @@ describe('useLocalMutation', () => {
 		const firstStored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 		};
@@ -798,6 +810,7 @@ describe('useLocalMutation', () => {
 			const stored: Record<string, unknown> = {
 				uuid: 'order-uuid',
 				remoteId: '42',
+				remoteKey: '42',
 				status: 'pos-open',
 				payload: { id: 42, status: 'pos-open', total: '0.00' },
 				sync: { revision: 'rev-1' },
@@ -881,6 +894,7 @@ describe('useLocalMutation', () => {
 		const firstStored: Record<string, unknown> = {
 			uuid: 'order-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			status: 'pending',
 			payload: { id: 42, status: 'pending' },
 		};

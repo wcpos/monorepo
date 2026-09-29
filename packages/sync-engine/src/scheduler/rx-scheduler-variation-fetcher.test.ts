@@ -283,7 +283,9 @@ describe('createVariationsSchedulerFetcher', () => {
 		expect(stored).toMatchObject({
 			uuid: uuidFor(7),
 			remoteId: remoteId(7),
+			remoteKey: String(remoteId(7) ?? ''),
 			parentRemoteId: remoteId(3),
+			parentRemoteKey: String(remoteId(3) ?? ''),
 			price: 12.5,
 			payload: { id: 7, parent_id: 3 },
 		});

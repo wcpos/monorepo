@@ -83,6 +83,7 @@ describe('EngineOrderRepository — the manifest boundary after the Symbol', () 
 			{
 				uuid: 'uuid-78',
 				remoteId: '78',
+				remoteKey: '78',
 				payload: { id: 78, status: 'completed', _rxdb_digest: 'd78' },
 				sync: { revision: 'r', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },

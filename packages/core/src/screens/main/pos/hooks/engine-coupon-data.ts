@@ -18,7 +18,7 @@ export async function readEngineProductRecordsByWooId(manager: QueryManager, woo
 	const collection = activeCollection(manager, 'products');
 	if (!collection) return [];
 	const remoteIds = wooIds.map(remoteIdOrNull).filter((remoteId) => remoteId !== null);
-	return collection.find({ selector: { remoteId: { $in: remoteIds } } }).exec();
+	return collection.find({ selector: { remoteKey: { $in: remoteIds } } }).exec();
 }
 
 export async function readEngineProductsByWooId(manager: QueryManager, wooIds: number[]) {

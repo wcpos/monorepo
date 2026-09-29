@@ -1,6 +1,11 @@
 import type { ClosureRow } from '@wcpos/database';
 import { fromMinor, toMinor } from '@wcpos/order-math';
 
+export function csvCell(value: unknown) {
+	const text = String(value ?? '');
+	return `"${(/^(?:[\t\r\n]|[\s\x00-\x1f\x7f-\x9f]*[=+\-@])/.test(text) ? "'" + text : text).replace(/"/g, '""')}"`;
+}
+
 export function exportCsv(
 	rows: readonly ClosureRow[],
 	t: (key: string) => string,
@@ -16,10 +21,7 @@ export function exportCsv(
 			])
 		),
 	];
-	const cell = (value: unknown) => {
-		const text = String(value ?? '');
-		return `"${(/^(?:[\t\r\n]|[\s\x00-\x1f\x7f-\x9f]*[=+\-@])/.test(text) ? "'" + text : text).replace(/"/g, '""')}"`;
-	};
+
 	const header = ['business_day', 'closure', 'register', 'store', 'opened', 'closed', 'closer'].map(
 		(key) => t(`reports.csv_${key}`)
 	);
@@ -64,6 +66,6 @@ export function exportCsv(
 					: '',
 		]),
 	]
-		.map((row) => row.map(cell).join(','))
+		.map((row) => row.map(csvCell).join(','))
 		.join('\r\n');
 }

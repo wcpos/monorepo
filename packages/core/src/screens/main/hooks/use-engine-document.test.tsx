@@ -105,6 +105,7 @@ describe('useEngineRecord', () => {
 		const source = fakeRxDocument({
 			uuid: 'tag-42',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { id: 42, name: 'Featured' },
 		});
 		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
@@ -123,6 +124,7 @@ describe('useEngineRecord', () => {
 		const source = fakeRxDocument({
 			uuid: 'product-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { id: 42, name: 'Coffee' },
 		});
 		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(source.document);
@@ -156,11 +158,13 @@ describe('useEngineRecord', () => {
 		const hardware = fakeRxDocument({
 			uuid: 'category-38',
 			remoteId: '38',
+			remoteKey: '38',
 			payload: { id: 38, name: 'Hardware' },
 		});
 		const tools = fakeRxDocument({
 			uuid: 'category-12',
 			remoteId: '12',
+			remoteKey: '12',
 			payload: { id: 12, name: 'Tools' },
 		});
 		const documents$ = new BehaviorSubject<RxDocument<EngineDocument>[]>([
@@ -172,7 +176,7 @@ describe('useEngineRecord', () => {
 
 		const { result } = renderHook(() => useEngineRecordsByWooId('categories', [12, 999, 38]));
 
-		expect(find).toHaveBeenCalledWith({ selector: { remoteId: { $in: ['12', '999', '38'] } } });
+		expect(find).toHaveBeenCalledWith({ selector: { remoteKey: { $in: ['12', '999', '38'] } } });
 		expect(result.current.read()).toEqual([tools.document, hardware.document]);
 	});
 
@@ -209,6 +213,7 @@ describe('useEngineRecord', () => {
 		const first = fakeRxDocument({
 			uuid: 'product-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { name: 'Coffee' },
 		});
 		const document$ = new BehaviorSubject<RxDocument<EngineDocument> | null>(first.document);
@@ -218,6 +223,7 @@ describe('useEngineRecord', () => {
 		const updated = fakeRxDocument({
 			uuid: 'product-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { name: 'Tea' },
 		});
 		act(() => document$.next(updated.document));
@@ -229,11 +235,13 @@ describe('useEngineRecord', () => {
 		const first = fakeRxDocument({
 			uuid: 'product-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { name: 'Old scope' },
 		});
 		const second = fakeRxDocument({
 			uuid: 'product-uuid',
 			remoteId: '42',
+			remoteKey: '42',
 			payload: { name: 'New scope' },
 		});
 		const firstDatabase = databaseWith(

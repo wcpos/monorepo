@@ -6,6 +6,7 @@ import { catchError, map, shareReplay, startWith, switchMap } from 'rxjs/operato
 
 import { buildScanSearchSelector } from '@wcpos/sync-core';
 
+import { normalizeSelectorSemantics } from './engine-adapter/normalize-selector';
 import { useQueryRuntime } from './provider';
 import { useLocalCollection$ } from './use-local-collection';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
@@ -143,6 +144,7 @@ function localQueryResult$(
 				);
 
 	return selectors$.pipe(
+		map((selector) => normalizeSelectorSemantics(selector)),
 		switchMap((matchingSelector) => {
 			// No startWith(empty) on these: the first emission must be the real query
 			// result, so a descriptor swap in useLocalQuery keeps the previous window

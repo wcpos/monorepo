@@ -1,5 +1,11 @@
 import { createFakeCarrier } from './fake';
-import { POS_META_KEYS, type PosCarrier, wooMetaCarrier } from './carrier';
+import {
+	identityColumnFilter,
+	identityColumns,
+	POS_META_KEYS,
+	type PosCarrier,
+	wooMetaCarrier,
+} from './carrier';
 
 it('freezes POS metadata wire keys', () => {
 	expect(POS_META_KEYS.posData).toBe('_woocommerce_pos_data');
@@ -112,11 +118,16 @@ describe.each(carrierFactories)('%s PosCarrier contract', (_name, createCarrier)
 		const carrier = createCarrier();
 		const filter = carrier.identityFilter({ cashierId: '7', storeId: '3' });
 
+		// A numeric-looking identity matches the stamped string AND a server-side integer,
+		// the two spellings `readIdentity` accepts.
 		expect(filter).toEqual({
 			$and: [
-				{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
-				{ meta_data: { $elemMatch: { key: '_pos_store', value: '3' } } },
+				{ meta_data: { $elemMatch: { key: '_pos_user', value: { $in: ['7', 7] } } } },
+				{ meta_data: { $elemMatch: { key: '_pos_store', value: { $in: ['3', 3] } } } },
 			],
+		});
+		expect(carrier.identityFilter({ storeId: 'woocommerce-pos' })).toEqual({
+			meta_data: { $elemMatch: { key: '_pos_store', value: 'woocommerce-pos' } },
 		});
 		expect(carrier.decodeIdentityFilter(filter)).toEqual({
 			cashierId: '7',
@@ -204,4 +215,20 @@ it('stamps and reads distinct till and bound register identities', () => {
 	});
 	expect(unbound.some(({ key }) => key === '_wcpos_register')).toBe(false);
 	expect(wooMetaCarrier.readIdentity(unbound).tillId).toBe('installation');
+});
+
+it('projects identity columns and filters without conflating absent and no-store spellings', () => {
+	expect(identityColumns({ cashierId: '7', storeId: 'woocommerce-pos' })).toEqual({
+		posUserId: '7',
+		posStoreId: 'woocommerce-pos',
+	});
+	expect(identityColumns({ cashierId: null, storeId: null })).toEqual({
+		posUserId: '',
+		posStoreId: '',
+	});
+	expect(identityColumnFilter({ cashierId: '7' })).toEqual({ posUserId: '7' });
+	expect(identityColumnFilter({ cashierId: '7', storeId: '2' })).toEqual({
+		posUserId: '7',
+		posStoreId: '2',
+	});
 });

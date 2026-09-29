@@ -642,6 +642,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			{
 				uuid: uuidFor(123),
 				remoteId: remoteId(123),
+				remoteKey: String(remoteId(123) ?? ''),
 				payload: {
 					id: 123,
 					date_modified_gmt: '2026-05-20T10:10:00',
@@ -663,6 +664,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			{
 				uuid: uuidFor(456),
 				remoteId: remoteId(456),
+				remoteKey: String(remoteId(456) ?? ''),
 				payload: {
 					id: 456,
 					date_modified_gmt: '2026-05-20T10:11:00',
@@ -1427,6 +1429,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			expect.objectContaining({
 				uuid: uuidFor(789),
 				remoteId: remoteId(789),
+				remoteKey: String(remoteId(789) ?? ''),
 				payload: {
 					id: 789,
 					status: 'processing',
@@ -2722,6 +2725,7 @@ describe('createOrdersSchedulerFetcher', () => {
 			expect.objectContaining({
 				uuid: uuidFor(789),
 				remoteId: remoteId(789),
+				remoteKey: String(remoteId(789) ?? ''),
 				payload: {
 					id: 789,
 					status: 'processing',

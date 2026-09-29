@@ -12,24 +12,24 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
 import { SegmentedControl } from '@wcpos/components/segmented-control';
-import { useDocField } from '@wcpos/query';
 import type { WPCredentialsDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
-import { inZone, useViewedStore } from '../../../../hooks/use-store-day';
+import { inZone } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useQueryState, useQueryStateActions } from '../../../../query';
-import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { useNumberFormat } from '../../hooks/use-number-format';
+import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
 import {
 	ReportsComparison,
+	useIncludedStatus,
 	useReportsBinding,
 	useReportsData,
 	useReportsPeriod,
 	useReportsScope,
+	useReportsSelection,
 } from '../context';
 import { calculateTotals } from '../report/utils';
 import { useReportPrint } from '../report/use-report-print';
@@ -315,30 +315,18 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	const t = useT();
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
-	const { cmp, setCmp, statusMode, setStatusMode, chartView, setChartView } = useReportsScope();
+	const { cmp, setCmp, statusMode, setStatusMode, chartView, setChartView, setDetail } =
+		useReportsScope();
 	const { comparisonBinding } = useReportsBinding();
 	const { period, timezone, storeId, dateRange } = useReportsPeriod();
-	const store = useDocField(useViewedStore(storeId), (value) => value);
-	const options = {
-		decimalScale: store?.price_num_decimals,
-		decimalSeparator: store?.price_decimal_sep,
-		thousandSeparator: store?.price_thousand_sep,
-		thousandsGroupStyle: store?.thousands_group_style,
-	};
-	const { format: money } = useCurrencyFormat({
-		...options,
-		currency: store?.currency,
-		currencyPosition: store?.currency_pos,
-	});
-	const { format: number } = useNumberFormat(options);
-	// The percentage carries the store's separators too (+1,3 % where the store writes 1,3).
-	const { format: percent } = useNumberFormat({
-		...options,
-		decimalScale: 1,
-		fixedDecimalScale: true,
-	});
+	const { store, money, number, quantity, percent } = useReportFormats(storeId);
 	const { formatDate } = useLocalDate();
-	const { selectedOrders, totals } = useReportsData();
+	const { allOrders, selectedOrders, totals } = useReportsData();
+	const included = useIncludedStatus();
+	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
+	const leftOut = allOrders.filter(
+		(order) => included(order) && unselectedRowIds[order.uuid]
+	).length;
 	const weekday = formatDate(inZone(timezone, dateRange.start), 'EEEE');
 	const comparisons = [
 		{ value: 'yesterday', label: t('reports.vs_yesterday') },
@@ -378,6 +366,18 @@ export function Hero({ title }: { title: React.ReactNode }) {
 				/>
 			) : (
 				<Chip testID="hero-chip-compare" icon="rightLeft" label={label} disabled dimmed />
+			)}
+			{leftOut > 0 && (
+				<Chip
+					testID="hero-chip-left-out"
+					icon="cartShopping"
+					on
+					label={t('reports.orders_left_out', { count: leftOut, n: quantity(leftOut) })}
+					onClear={() => setUnselectedRowIds({})}
+					clearTestID="hero-chip-left-out-clear"
+					clearLabel={t('reports.put_them_back')}
+					onPress={() => setDetail('orders')}
+				/>
 			)}
 		</View>
 	);
@@ -425,7 +425,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 				label: t('reports.items'),
 				value: totals.totalItemsSold,
 				field: 'totalItemsSold' as const,
-				format: number,
+				format: quantity,
 			},
 		],
 	};

@@ -169,6 +169,7 @@ function mockEngineData(coupons: ReturnType<typeof engineDocument>[]) {
 		engineDocument({
 			uuid: 'product-82',
 			remoteId: '82',
+			remoteKey: '82',
 			payload: { id: 82, categories: [{ id: 17 }] },
 		}),
 	];
@@ -192,9 +193,15 @@ describe('useAddCoupon engine reads', () => {
 			engineDocument({
 				uuid: 'coupon-bonus',
 				remoteId: '1',
+				remoteKey: '1',
 				payload: couponPayload('bonus', false),
 			}),
-			engineDocument({ uuid: 'coupon-solo', remoteId: '2', payload: couponPayload('solo', true) }),
+			engineDocument({
+				uuid: 'coupon-solo',
+				remoteId: '2',
+				remoteKey: '2',
+				payload: couponPayload('solo', true),
+			}),
 		]);
 	});
 
@@ -280,6 +287,7 @@ describe('useAddCoupon per-user usage limits', () => {
 			engineDocument({
 				uuid: 'coupon-once',
 				remoteId: '3',
+				remoteKey: '3',
 				payload: couponPayload('once', false, {
 					usage_limit_per_user: 1,
 					used_by: [GUEST_EMAIL, '7'],

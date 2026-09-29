@@ -460,6 +460,49 @@ async function openClosures(page: Page) {
 	await page.getByTestId('hero-chart-toggle-hour').click();
 	await expect(page.getByTestId('hero-chart-toggle-hour')).toHaveAttribute('aria-checked', 'true');
 	await expect(page.getByTestId('hero-chart-comparison-total')).toHaveCount(0);
+	await expect(page.getByTestId('reports-period-title')).toBeVisible();
+	await expect(page.getByTestId('reports-period-title')).toHaveText(/\S/);
+	await expect(page.getByTestId('card-orders-figure')).toHaveText(/\d/);
+	await expect(page.getByTestId('card-taxes')).toBeVisible();
+	await expect(page.getByTestId('card-payments')).toBeVisible();
+	await expect(page.getByTestId('card-payments-figure')).toHaveText(/\d/);
+	await page.getByTestId('card-taxes-open').click();
+	await expect(page.getByTestId('detail-panel-body')).toBeVisible();
+	await expect(page.getByTestId('detail-panel-export')).toBeVisible();
+	// The stub has no templates route: Print must be usable or visibly explain its wait.
+	await expect(async () => {
+		const print = page.getByTestId('detail-panel-print');
+		await expect(print).toBeVisible();
+		if (await print.isEnabled()) return;
+		const waiting = page.getByTestId('detail-panel-print-waiting');
+		await expect(waiting).toBeVisible();
+		await expect(waiting).toHaveText(/\S/);
+	}).toPass();
+	if ((page.viewportSize()?.width ?? 0) < 640) {
+		await page.getByTestId('detail-panel-back').click();
+		await expect(page.getByTestId('hero-total')).toBeVisible();
+	} else {
+		await page.getByTestId('detail-panel-close').click();
+	}
+	await expect(page.getByTestId('detail-panel-body')).toHaveCount(0);
+	await page.getByTestId('card-orders-open').click();
+	await expect(page.getByTestId('orders-list')).toBeVisible();
+	// The stub answers every range with one order, so a row is there; an empty period would
+	// have nothing to untick and the chip walk would not apply.
+	const firstTick = page.getByTestId(/^orders-panel-tick-(?!all$)/).first();
+	await expect(firstTick).toBeVisible();
+	await firstTick.click();
+	if ((page.viewportSize()?.width ?? 0) < 640) {
+		await page.getByTestId('detail-panel-back').click();
+	}
+	// The chip's number is in its label; it carries no count pill.
+	await expect(page.getByTestId('hero-chip-left-out')).toBeVisible();
+	await expect(page.getByTestId('hero-chip-left-out')).toContainText('1');
+	if ((page.viewportSize()?.width ?? 0) >= 640) {
+		await page.getByTestId('detail-panel-close').click();
+	}
+	await page.getByTestId('hero-chip-left-out-clear').click();
+	await expect(page.getByTestId('hero-chip-left-out')).toHaveCount(0);
 
 	await page.getByTestId('reports-scope').click();
 	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();

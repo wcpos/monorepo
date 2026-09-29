@@ -3,6 +3,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { Subject } from 'rxjs';
 
+import { foldSearchText } from '@wcpos/sync-core';
 import {
 	customerBrowseWindowQueryKeyFromDimensions,
 	engineSyncCollectionCreators,
@@ -21,7 +22,15 @@ import type {
 	RxdbSyncEngine,
 	SyncCollectionName,
 } from '@wcpos/sync-engine';
-import { GUEST_CUSTOMER_ID, HISTORY_DAYS, remoteIdOrNull } from '@wcpos/sync-core';
+import {
+	GUEST_CUSTOMER_ID,
+	HISTORY_DAYS,
+	identityColumns,
+	type MetaDataEntry,
+	remoteIdOrNull,
+	remoteKeyFor,
+	wooMetaCarrier,
+} from '@wcpos/sync-core';
 
 import { searchPlugin } from './search';
 
@@ -213,6 +222,8 @@ export function engineProduct(input: {
 	return {
 		uuid,
 		remoteId: remoteIdOrNull(wooId),
+		remoteKey: remoteKeyFor(remoteIdOrNull(wooId)),
+		sortName: foldSearchText(name ?? '').slice(0, 256),
 		price: num(price),
 		stockStatus: stock_status ?? 'instock',
 		type: type ?? 'simple',
@@ -253,6 +264,8 @@ export function engineOrder(input: {
 	return {
 		uuid,
 		remoteId: remoteIdOrNull(wooId),
+		remoteKey: remoteKeyFor(remoteIdOrNull(wooId)),
+		...identityColumns(wooMetaCarrier.readIdentity(rest.meta_data as MetaDataEntry[])),
 		number: number ?? String(wooId),
 		dateCreatedGmt: date_created_gmt ?? '2026-01-01T00:00:00',
 		status: status ?? 'processing',
@@ -289,7 +302,10 @@ export function engineVariation(input: {
 	return {
 		uuid,
 		remoteId: remoteIdOrNull(id),
+		remoteKey: remoteKeyFor(remoteIdOrNull(id)),
 		parentRemoteId: remoteIdOrNull(parent_id),
+		parentRemoteKey: remoteKeyFor(remoteIdOrNull(parent_id)),
+		sortName: foldSearchText(name ?? '').slice(0, 256),
 		price: num(price),
 		stockStatus: stock_status ?? 'instock',
 		stockQuantity: input.stock_quantity ?? null,

@@ -111,7 +111,7 @@ test('writes Closure 1 and leaves the last closure in the register panel', async
 	await page.getByTestId('open-register-amount').fill('100');
 	await page.getByTestId('open-register-button').click();
 	await page.getByTestId('register-bar-drawer').click();
-	await page.getByTestId('register-panel-close').click();
+	await page.getByTestId('register-panel-close-register').click();
 	await expect(page.getByTestId('count-amount')).toBeVisible();
 	await page.getByTestId('count-amount').fill('100');
 	await expect(page.getByTestId('count-amount')).toHaveValue('100');

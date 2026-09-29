@@ -14,6 +14,7 @@ export type WooReferencePayload = Record<string, unknown> & { id?: number };
 export type LocalReferenceDocument = {
 	uuid: string;
 	remoteId: RemoteId | null;
+	remoteKey: string;
 	payload: WooReferencePayload;
 	sync: {
 		revision: string;
@@ -37,11 +38,13 @@ export const categorySchema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: { type: 'string', maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'remoteKey', 'payload', 'sync', 'local'],
+	indexes: ['remoteKey'],
 } as const;
 
 export const brandSchema = {
@@ -52,11 +55,13 @@ export const brandSchema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: { type: 'string', maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'remoteKey', 'payload', 'sync', 'local'],
+	indexes: ['remoteKey'],
 } as const;
 
 export const tagSchema = {
@@ -67,11 +72,13 @@ export const tagSchema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: { type: 'string', maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'remoteKey', 'payload', 'sync', 'local'],
+	indexes: ['remoteKey'],
 } as const;
 
 // Coupons are not a taxonomy term — they are a WC_Data resource (`shop_coupon`) — but
@@ -86,9 +93,11 @@ export const couponSchema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: { type: 'string', maxLength: 64 },
 		payload: { type: 'object', additionalProperties: true },
 		sync: { type: 'object', additionalProperties: true },
 		local: { type: 'object', additionalProperties: true },
 	},
-	required: ['uuid', 'remoteId', 'payload', 'sync', 'local'],
+	required: ['uuid', 'remoteId', 'remoteKey', 'payload', 'sync', 'local'],
+	indexes: ['remoteKey'],
 } as const;

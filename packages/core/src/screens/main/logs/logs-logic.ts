@@ -58,7 +58,7 @@ function isSyncCategory(category: string | undefined): boolean {
 export function displayKind(row: Pick<LogRow, 'level' | 'actor' | 'category'>): LevelKind {
 	if (row.level === 'error') return 'error';
 	if (row.level === 'warn') return 'warn';
-	if (row.actor && (row.actor.id !== undefined || row.actor.name !== undefined)) return 'action';
+	if (row.actor && (row.actor.id != null || row.actor.name != null)) return 'action';
 	// DEBUG OUTRANKS THE DOMAIN. Debug rows exist only while verbose diagnostics
 	// is on, and that is exactly when someone needs to tell the forensic rows
 	// apart from the running narrative. Ranking the sync domain first painted

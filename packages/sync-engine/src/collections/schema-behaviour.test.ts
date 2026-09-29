@@ -130,6 +130,7 @@ const PRODUCT_PAYLOAD = {
 
 const VARIATION_PAYLOAD = {
 	id: 77,
+	parent_id: 9,
 	price: '4.20',
 	stock_status: 'instock',
 	attributes: [{ id: 1, name: 'Size', option: 'L' }],
@@ -143,6 +144,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: 'order-uuid-42',
 				remoteId: '42',
+				remoteKey: '42',
 				...promotedOrderColumns(ORDER_PAYLOAD),
 				payload: ORDER_PAYLOAD,
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
@@ -157,6 +159,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: 'product-uuid-9',
 				remoteId: '9',
+				remoteKey: '9',
 				...promotedProductColumns(PRODUCT_PAYLOAD),
 				payload: PRODUCT_PAYLOAD,
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
@@ -171,6 +174,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: 'variation-uuid-77',
 				remoteId: '77',
+				remoteKey: '77',
 				parentRemoteId: '9',
 				...promotedVariationColumns(VARIATION_PAYLOAD),
 				payload: VARIATION_PAYLOAD,
@@ -187,6 +191,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: customerDocumentId(remoteId(42)),
 				remoteId: '42',
+				remoteKey: '42',
 				payload: { id: 42, date_modified_gmt: '2026-07-01T10:00:00' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -251,6 +256,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: taxRateDocumentId(remoteId(7)),
 				remoteId: '7',
+				remoteKey: '7',
 				payload: { id: 7, rate: '10.0' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 			},
@@ -268,6 +274,7 @@ describe('every exported schema is accepted by RxDB and round-trips a representa
 			document: {
 				uuid: referenceDocumentId(prefix, remoteId(3)),
 				remoteId: '3',
+				remoteKey: '3',
 				payload: { id: 3, name: 'Ref' },
 				sync: { revision: 'r1', partial: false, source: 'woo-rest' },
 				local: { dirty: false, pendingMutationIds: [] },
@@ -496,18 +503,18 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 	};
 
 	const PINNED_DIGESTS: Record<string, string> = {
-		orders: '72d3cd3ea083c10c',
-		products: '914ff9bc836d2f03',
-		variations: '478a682482d83df3',
+		orders: 'bc0b35ca7829dad7',
+		products: '533f385dbba3bd58',
+		variations: 'df92c9203ba108c1',
 		// customers and the four reference schemas share a digest: they ARE the same
 		// shape apart from title (ADR 0019 — see the identity test below).
-		customers: '85e1373e0643f472',
-		taxRates: 'faea838bf1991ead',
+		customers: 'ac922ffdb0538886',
+		taxRates: '7573745a31add62b',
 		refunds: 'd78bcc1758dcf4ab',
-		categories: '85e1373e0643f472',
-		brands: '85e1373e0643f472',
-		tags: '85e1373e0643f472',
-		coupons: '85e1373e0643f472',
+		categories: 'ac922ffdb0538886',
+		brands: 'ac922ffdb0538886',
+		tags: 'ac922ffdb0538886',
+		coupons: 'ac922ffdb0538886',
 		schedulerTaskStates: '3fbf7c70726dec3c',
 		coverageRecords: '3022569cc18cc7df',
 		coverageLanes: '12a1f38d36ffc0d0',

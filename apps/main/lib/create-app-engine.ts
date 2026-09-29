@@ -22,6 +22,7 @@ import {
 } from '@wcpos/hooks/use-http-client/refresh-access-token';
 import { bareAuthParamSupported } from '@wcpos/utils/auth-param';
 import { resolveRestTransport } from '@wcpos/utils/rest-transport';
+import { purgeLegacyDatabases } from '@wcpos/database/purge-legacy-db';
 import { defaultConfig } from '@wcpos/database/adapters/default';
 import { forceFreeDatabaseRegistration } from '@wcpos/database/plugins/rx-database-registry';
 import { markStorageTerminallyFailed } from '@wcpos/database/plugins/wrapped-error-handler-storage';
@@ -152,6 +153,7 @@ type CachedEngine = {
 };
 
 let cachedEngine: CachedEngine | null = null;
+let legacyPurgeStarted = false;
 const pendingDisposals = new Map<string, Promise<void>>();
 
 function moveWriteLeader(entry: CachedEngine, databaseName: string): void {
@@ -603,6 +605,23 @@ export function createAppSyncEngine(options: CreateAppSyncEngineOptions): RxdbSy
 		options.scope
 	);
 	engineSelf = engine;
+	// Purging is session maintenance, not part of opening a store. Failed opens
+	// leave legacy data alone; a rejected purge never rejects engine.ready.
+	void engine.ready.then(
+		async () => {
+			if (legacyPurgeStarted) return;
+			legacyPurgeStarted = true;
+			try {
+				await purgeLegacyDatabases();
+			} catch (error) {
+				engineLogger.error('Failed to purge legacy databases', {
+					code: ERROR_CODES.LOCAL_DB_SETUP_FAILED,
+					context: { error: error instanceof Error ? error.message : String(error) },
+				});
+			}
+		},
+		() => undefined
+	);
 	// The store header follows the ENGINE's active scope, never the app's
 	// intent. The engine flips scopes after it has aborted the outgoing scope's
 	// ticket and before the incoming open's barcode hydrate, bootstrap seed and

@@ -34,6 +34,13 @@ describe('displayCategory', () => {
 });
 
 describe('displayKind', () => {
+	it('does not call a null actor id an action', () => {
+		expect(
+			displayKind({ level: 'info', actor: { id: null } } as unknown as Parameters<
+				typeof displayKind
+			>[0])
+		).toBe('info');
+	});
 	it('lets severity win over everything', () => {
 		expect(displayKind({ level: 'error', actor: { name: 'Paul' } })).toBe('error');
 		expect(displayKind({ level: 'warn', category: 'wcpos.sync.engine' })).toBe('warn');

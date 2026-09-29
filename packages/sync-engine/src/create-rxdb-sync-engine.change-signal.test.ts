@@ -774,7 +774,9 @@ describe('sync("change-signal") through the public handle', () => {
 		await products.insert({
 			uuid: '44444444-4444-4444-8444-444444444444',
 			remoteId: remoteId(77),
+			remoteKey: String(remoteId(77) ?? ''),
 			price: 7,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
@@ -791,7 +793,9 @@ describe('sync("change-signal") through the public handle', () => {
 		await products.insert({
 			uuid: '55555555-5555-4555-8555-555555555555',
 			remoteId: remoteId(88),
+			remoteKey: String(remoteId(88) ?? ''),
 			price: 8,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],

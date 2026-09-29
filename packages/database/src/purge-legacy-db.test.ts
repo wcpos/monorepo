@@ -12,10 +12,10 @@ const sqliteEntries = [
 	'wcposusers_v4.db-wal',
 	'wcposusers_v4.db-shm',
 	'fast_store_v5_shop.db',
-	// Not legacy (`store_v5_` is not a legacy prefix — store goes v3, v4, v6) and
+	// Not legacy (`store_v5_` is not a legacy prefix — store goes v3, v4, v7) and
 	// not ours. Both must survive.
 	'store_v5_shop.db',
-	'store_v6_shop.db',
+	'store_v7_shop.db',
 	'some-other-library.db',
 ].map((name) => ({ name, delete: jest.fn() }));
 
@@ -23,9 +23,9 @@ const opfsEntries = [
 	'rxdb-wcposusers_v4-sites-0',
 	'rxdb-store_v4_shop-products-0',
 	'rxdb-fast_store_v5_shop-orders-0',
-	'rxdb-wcposusers_v6-sites-0',
-	'rxdb-store_v6_shop-products-0',
-	'rxdb-fast_store_v6_shop-orders-0',
+	'rxdb-wcposusers_v7-sites-0',
+	'rxdb-store_v7_shop-products-0',
+	'rxdb-fast_store_v7_shop-orders-0',
 	'unrelated',
 ].map((name) => ({ name, delete: jest.fn() }));
 

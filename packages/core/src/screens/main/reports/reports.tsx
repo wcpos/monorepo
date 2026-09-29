@@ -1,97 +1,56 @@
 import * as React from 'react';
-import { ScrollView, useWindowDimensions, View } from 'react-native';
+import { Platform, ScrollView, View, type ViewInstance } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
-import { VStack } from '@wcpos/components/vstack';
-import { useTheme } from '@wcpos/core/contexts/theme';
+import { PortalHost } from '@wcpos/components/portal';
+import { registerPortalContainer } from '@wcpos/components/lib/portal-container';
 
+import { useTheme } from '../../../contexts/theme';
+import { useReportsScope } from './context';
+import { DetailPanel } from './panels/panel';
 import { Hero } from './hero';
-import { Orders } from './orders';
-import { Report } from './report';
+import { PeriodSection } from './cards';
 import { ReportsSyncProgress } from './sync-progress';
 
-/**
- *
- */
-// The Sales workspace (what is left under the bar and the till strip) needs about this much for
-// the hero and a usable orders/summary group; below it (a phone in landscape, a squeezed desktop
-// window) the page scrolls and the panes keep a fixed height, as on a phone.
-const MIN_FIXED_WORKSPACE_HEIGHT = 720;
-
 export function Reports({ title }: { title: React.ReactNode }) {
-	const { screenSize } = useTheme();
 	const { bottom } = useSafeAreaInsets();
-	const [workspaceHeight, setWorkspaceHeight] = React.useState<number | null>(null);
-	const short = workspaceHeight !== null && workspaceHeight < MIN_FIXED_WORKSPACE_HEIGHT;
-
-	/**
-	 *
-	 */
+	const { detail } = useReportsScope(),
+		{ screenSize } = useTheme();
+	const phonePanel = !!detail && screenSize === 'sm';
+	const registerContainer = React.useCallback((node: ViewInstance | null) => {
+		registerPortalContainer(
+			'reports',
+			Platform.OS === 'web' ? (node as unknown as HTMLElement) : null
+		);
+	}, []);
 	return (
-		<VStack
+		<View
+			ref={registerContainer}
 			testID="screen-reports"
-			className="h-full"
-			style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}
-			onLayout={(event) => setWorkspaceHeight(event.nativeEvent.layout.height)}
+			className="h-full gap-2"
+			style={{ paddingBottom: !phonePanel && bottom !== 0 ? bottom : undefined }}
 		>
-			<ErrorBoundary>
-				<ReportsSyncProgress />
-			</ErrorBoundary>
-			<View className="flex-1">
+			{!phonePanel && (
 				<ErrorBoundary>
-					{screenSize === 'sm' ? (
-						// The phone page scrolls; the two panes inside it scroll on the same axis, so
-						// they opt into nested scrolling (Android hands them their drags).
-						<ScrollView contentContainerClassName="gap-3">
-							<Hero title={title} />
-							<View className="h-96 pr-2">
-								<Orders nestedScrollEnabled />
-							</View>
-							<View className="h-96 pl-2">
-								<Report nestedScrollEnabled />
-							</View>
-						</ScrollView>
-					) : short ? (
-						// A short viewport: the page scrolls, the panes keep a fixed height and opt
-						// into nested scrolling (as on a phone).
-						<ScrollView contentContainerClassName="gap-3 px-2">
-							<Hero title={title} />
-							<View className="h-96">
-								<PanelGroup direction="horizontal">
-									<Panel>
-										<Orders nestedScrollEnabled />
-									</Panel>
-									<PanelResizeHandle />
-									<Panel>
-										<Report nestedScrollEnabled />
-									</Panel>
-								</PanelGroup>
-							</View>
-						</ScrollView>
+					<ReportsSyncProgress />
+				</ErrorBoundary>
+			)}
+			<View className="min-h-0 flex-1 flex-row">
+				<ErrorBoundary>
+					{phonePanel ? (
+						<DetailPanel key={detail} />
 					) : (
-						// The hero takes its natural height; the orders and the summary share the rest
-						// and scroll themselves. No page scroll around lists that scroll on the same
-						// axis: on Android the outer one would take their drags.
-						<View className="h-full w-full gap-3 px-2">
+						<ScrollView className="flex-1" contentContainerClassName="gap-3 px-2">
 							<Hero title={title} />
-							<View className="min-h-0 flex-1">
-								<PanelGroup direction="horizontal">
-									<Panel>
-										<Orders />
-									</Panel>
-									<PanelResizeHandle />
-									<Panel>
-										<Report />
-									</Panel>
-								</PanelGroup>
-							</View>
-						</View>
+							<PeriodSection />
+						</ScrollView>
 					)}
+					{detail && !phonePanel && <DetailPanel key={detail} />}
 				</ErrorBoundary>
 			</View>
-		</VStack>
+			<PortalHost name="reports" />
+		</View>
 	);
 }

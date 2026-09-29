@@ -372,3 +372,30 @@ it('compares a clamped early This month with the same bounds in the previous mon
 		jest.useRealTimers();
 	}
 });
+
+// Writing detail into query state or retaining it across provider visits breaks this contract.
+it('detail is device state, initially null', () => {
+	function DetailProbe() {
+		const { detail, setDetail } = useReportsScope();
+		return (
+			<button data-testid="detail" onClick={() => setDetail('taxes')}>
+				{String(detail)}
+			</button>
+		);
+	}
+	const view = render(
+		<ReportsScopeProvider>
+			<DetailProbe />
+		</ReportsScopeProvider>
+	);
+	expect(screen.getByTestId('detail').textContent).toBe('null');
+	fireEvent.click(screen.getByTestId('detail'));
+	expect(screen.getByTestId('detail').textContent).toBe('taxes');
+	view.unmount();
+	render(
+		<ReportsScopeProvider>
+			<DetailProbe />
+		</ReportsScopeProvider>
+	);
+	expect(screen.getByTestId('detail').textContent).toBe('null');
+});

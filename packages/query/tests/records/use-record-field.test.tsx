@@ -33,6 +33,7 @@ const schema = {
 	properties: {
 		uuid: { type: 'string', maxLength: 64 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
+		remoteKey: String({ type: ['string', 'null'], maxLength: 64 } ?? ''),
 		payload: { type: 'object', additionalProperties: true },
 	},
 	required: ['uuid'],
@@ -59,6 +60,7 @@ async function insertRow(uuid = 'row-1'): Promise<RxDocument<Shape>> {
 	return collection.insert({
 		uuid,
 		remoteId: null,
+		remoteKey: '',
 		payload: { total: '10.00', note: 'first', nested: { qty: 1 } },
 	});
 }

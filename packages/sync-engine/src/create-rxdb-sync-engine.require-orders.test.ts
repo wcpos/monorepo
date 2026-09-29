@@ -134,6 +134,7 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 					{
 						uuid: `77777777-7777-4777-8777-${String(id).padStart(12, '0')}`,
 						remoteId: remoteId(id),
+						remoteKey: String(remoteId(id) ?? ''),
 						payload: {
 							id,
 							date_modified_gmt: checkpoint.updatedAtGmt,
