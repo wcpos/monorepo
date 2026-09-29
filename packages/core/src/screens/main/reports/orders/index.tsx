@@ -155,17 +155,21 @@ export function Orders() {
 	 * Toggle all rows selected or unselected
 	 */
 	const handleToggleAllRowsSelected = React.useCallback(() => {
-		if (Object.keys(unselectedRowIds).length === 0) {
-			// All rows are selected, so we want to unselect all rows
-			setUnselectedRowIds((prev) => {
+		// The direction follows the selectable rows: an untick kept on a row the status set now
+		// excludes must not make the first tap a no-op.
+		const selectable = allOrders.filter((order) => order.uuid && included(order));
+		const allSelected = selectable.every((order) => !unselectedRowIds[order.uuid]);
+		if (allSelected) {
+			// All selectable rows are selected, so we want to unselect them all
+			setUnselectedRowIds(() => {
 				const newUnselectedRowIds: Record<string, true> = {};
-				allOrders.forEach((order) => {
-					if (order.uuid && included(order)) newUnselectedRowIds[order.uuid] = true;
+				selectable.forEach((order) => {
+					newUnselectedRowIds[order.uuid] = true;
 				});
 				return newUnselectedRowIds;
 			});
 		} else {
-			// Some rows are unselected, so we want to select all rows
+			// Some selectable rows are unselected, so we want to select all rows
 			setUnselectedRowIds({});
 		}
 	}, [allOrders, included, setUnselectedRowIds, unselectedRowIds]);

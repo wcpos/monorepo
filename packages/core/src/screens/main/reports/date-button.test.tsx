@@ -24,6 +24,13 @@ jest.mock('./till-strip', () => ({
 		<button data-testid="till-closures" onClick={onOpenClosures} />
 	),
 }));
+// The hero reaches expo-haptics through IconButton; the loading shell keeps the title (the date button).
+jest.mock('./hero', () => ({
+	Hero: ({ title }: { title: React.ReactNode }) => <div data-testid="reports-hero">{title}</div>,
+	HeroShell: ({ title }: { title: React.ReactNode }) => (
+		<div data-testid="reports-hero-loading">{title}</div>
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: require('react-native').Text,

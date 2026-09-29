@@ -54,6 +54,13 @@ jest.mock('./till-strip', () => ({
 		<button data-testid="till-closures" onClick={onOpenClosures} />
 	),
 }));
+// The hero reaches expo-haptics through IconButton; the loading shell keeps the title (the date button).
+jest.mock('./hero', () => ({
+	Hero: ({ title }: { title: React.ReactNode }) => <div data-testid="reports-hero">{title}</div>,
+	HeroShell: ({ title }: { title: React.ReactNode }) => (
+		<div data-testid="reports-hero-loading">{title}</div>
+	),
+}));
 jest.mock('./bar', () => ({
 	CashierButton: () => null,
 	ScopeHint: () => null,
@@ -119,8 +126,8 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@wcpos/components/suspense', () => ({
-	Suspense: ({ children }: { children: React.ReactNode }) => (
-		<React.Suspense fallback={null}>{children}</React.Suspense>
+	Suspense: ({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) => (
+		<React.Suspense fallback={fallback ?? null}>{children}</React.Suspense>
 	),
 }));
 let mockReportsPending = false;
@@ -358,6 +365,18 @@ it('shows Sales actual scope initially and after a legacy filter changes', () =>
 });
 
 // Revert: let a pending Sales resource suspend the page bar and trap the room switch.
+// The date button is the only way out of a slow range: the loading shell keeps it.
+it('keeps the date button while the Sales workspace is still loading', () => {
+	mockReportsPending = true;
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	try {
+		render(<ReportsScreen />);
+		expect(screen.getByTestId('reports-hero-loading')).toBeTruthy();
+		expect(screen.getByTestId('reports-period')).toBeTruthy();
+	} finally {
+		mockReportsPending = false;
+	}
+});
 it('can enter local Closures while the Sales workspace is still loading', () => {
 	mockReportsPending = true;
 	mockCapabilities = ['view_woocommerce_pos_reports'];

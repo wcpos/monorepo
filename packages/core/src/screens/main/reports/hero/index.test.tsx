@@ -335,3 +335,8 @@ it('shows no money difference below the store precision', () => {
 	expect(screen.getByTestId('hero-average').textContent).toBe('£15.00');
 	expect(screen.getByTestId('hero-average-delta').textContent).toBe('±0');
 });
+// The percentage is rounded to its displayed tenth before the sign: a change below that reads flat.
+it('reads a change below a tenth of a percent as flat', () => {
+	setup({ comparison: resource([{ ...previous[0], total: '30.01' }] as ReportOrder[]) });
+	expect(screen.getByTestId('hero-delta').textContent).toBe('±0% vs yesterday');
+});

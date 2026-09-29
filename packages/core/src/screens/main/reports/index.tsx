@@ -32,6 +32,7 @@ import { DateButton } from './date-button';
 import { TillStrip } from './till-strip';
 import { Closures } from './closures';
 import { ReportsProvider, ReportsScopeProvider, useReportsPeriod } from './context';
+import { HeroShell } from './hero';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
 import { useUISettings } from '../contexts/ui-settings';
@@ -143,6 +144,14 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 		);
 		actions.setFilter('cashier', next.cashier === undefined ? undefined : String(next.cashier));
 	};
+	const title = (
+		<DateButton
+			scope={scope}
+			onScopeChange={select}
+			storeId={scope.storeId}
+			lockedScopeName={t('reports.earlier_days')}
+		/>
+	);
 	return (
 		<>
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
@@ -151,18 +160,17 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 				<TillStrip onOpenClosures={() => onRoomChange('closures')} />
 			</View>
 			<View className="min-h-0 flex-1">
-				<Suspense>
+				{/* The date button stays available while the orders load: it is the only way out of a
+				    slow or stuck range, so the loading shell carries the same title row. */}
+				<Suspense
+					fallback={
+						<View className="px-2">
+							<HeroShell title={title} />
+						</View>
+					}
+				>
 					<ReportsProvider binding={binding} comparisonBinding={comparisonBinding}>
-						<Reports
-							title={
-								<DateButton
-									scope={scope}
-									onScopeChange={select}
-									storeId={scope.storeId}
-									lockedScopeName={t('reports.earlier_days')}
-								/>
-							}
-						/>
+						<Reports title={title} />
 					</ReportsProvider>
 				</Suspense>
 			</View>

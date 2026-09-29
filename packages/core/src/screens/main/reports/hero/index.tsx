@@ -35,6 +35,7 @@ function MenuChip({
 	choices,
 	onChange,
 	hint,
+	scroll = false,
 }: {
 	name: string;
 	icon: React.ComponentProps<typeof Chip>['icon'];
@@ -43,6 +44,8 @@ function MenuChip({
 	choices: Choice[];
 	onChange: (value: string) => void;
 	hint?: string;
+	/** A variable-length list (the cashiers) scrolls inside a bounded height; short menus do not. */
+	scroll?: boolean;
 }) {
 	const trigger = React.useRef<React.ComponentRef<typeof PopoverTrigger>>(null);
 	const t = useT();
@@ -64,23 +67,25 @@ function MenuChip({
 				/>
 			</PopoverTrigger>
 			<PopoverContent testID={`hero-${name}-menu`}>
-				{choices.map((row) => (
-					<Button
-						key={row.value}
-						testID={`hero-${name}-${row.value}`}
-						variant="ghost"
-						className="min-h-12 flex-row justify-start gap-2 px-3"
-						onPress={() => choose(row.value)}
-					>
-						<View className="w-5 items-center">
-							{row.value === value && <Icon name="check" size="sm" />}
-						</View>
-						<View className="min-w-0 flex-1">
-							<ButtonText>{row.label}</ButtonText>
-							{row.hint && <Text className="text-muted-foreground text-sm">{row.hint}</Text>}
-						</View>
-					</Button>
-				))}
+				<ScrollView className={scroll ? 'max-h-96' : undefined} scrollEnabled={scroll}>
+					{choices.map((row) => (
+						<Button
+							key={row.value}
+							testID={`hero-${name}-${row.value}`}
+							variant="ghost"
+							className="min-h-12 flex-row justify-start gap-2 px-3"
+							onPress={() => choose(row.value)}
+						>
+							<View className="w-5 items-center">
+								{row.value === value && <Icon name="check" size="sm" />}
+							</View>
+							<View className="min-w-0 flex-1">
+								<ButtonText>{row.label}</ButtonText>
+								{row.hint && <Text className="text-muted-foreground text-sm">{row.hint}</Text>}
+							</View>
+						</Button>
+					))}
+				</ScrollView>
 				{hint && <Text className="text-muted-foreground p-3 text-sm">{hint}</Text>}
 			</PopoverContent>
 		</Popover>
@@ -97,6 +102,7 @@ function CashierChip() {
 		<MenuChip
 			name="cashier"
 			icon="user"
+			scroll
 			value={value === undefined ? 'all' : String(value)}
 			defaultValue="all"
 			onChange={(next) => actions.setFilter('cashier', next === 'all' ? undefined : next)}
@@ -141,10 +147,11 @@ function Difference({
 	const shown = round(current);
 	// No orders to compare with: every line reads "—", never a difference against nothing.
 	const none = comparisonOrders.length === 0 || (field === 'total' && previous === 0);
+	// The percentage is rounded to its displayed tenth before the sign and tone are chosen.
 	const delta = none
 		? 0
 		: field === 'total'
-			? ((shown - previous) / previous) * 100
+			? Math.round(((shown - previous) / previous) * 1000) / 10
 			: shown - previous;
 	return (
 		<Text
@@ -169,6 +176,20 @@ function ComparisonLine(props: React.ComponentProps<typeof Difference>) {
 				<Difference {...props} />
 			</ReportsComparison>
 		</React.Suspense>
+	);
+}
+/** The card while the orders load: the same title row, so the date button is never lost to a
+ * slow or stuck all-results request (it is the only way to a smaller range). */
+export function HeroShell({ title }: { title: React.ReactNode }) {
+	return (
+		<View testID="reports-hero-loading" className="bg-card gap-5 rounded-md border p-5">
+			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
+				{title}
+			</View>
+			<View className="bg-muted h-12 w-64 rounded" />
+			<View className="bg-muted h-10 w-48 rounded" />
+			<View className="bg-muted h-56 w-full rounded" />
+		</View>
 	);
 }
 export function Hero({ title }: { title: React.ReactNode }) {
