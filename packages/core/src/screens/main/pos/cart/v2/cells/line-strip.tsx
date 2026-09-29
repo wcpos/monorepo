@@ -172,7 +172,8 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 					<Text className="text-destructive">{t('pos_cart.remove_line')}</Text>
 				</Button>
 			</View>
-			<Animated.View className="min-h-row flex-row" style={style}>
+			{/* The body carries the row surface: the strip sits under it and shows only where the body has slid away. */}
+			<Animated.View className="bg-card min-h-row flex-row" style={style}>
 				{children(wrapTotal)}
 			</Animated.View>
 		</View>

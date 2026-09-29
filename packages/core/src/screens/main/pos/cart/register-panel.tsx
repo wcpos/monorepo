@@ -6,7 +6,7 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import { Icon } from '@wcpos/components/icon';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/v2/dialog';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { useDocField } from '@wcpos/query';
@@ -90,28 +90,31 @@ export function RegisterPanel({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="register-panel">
-				<DialogTitle testID="register-panel-amount" className="text-amt tabular-nums">
-					{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
-				</DialogTitle>
-				{blind ? (
-					<Text>{t('register.sales_count', { count: salesCount })}</Text>
-				) : (
-					<Text>
-						{t('register.in_the_drawer')} · {binding.registerName} ·{' '}
-						{t('register.opened_at_by', {
-							time: new Date(session?.opened_at_gmt ?? lastClosure!.closed_at).toLocaleTimeString(
-								[],
-								{
-									hour: '2-digit',
-									minute: '2-digit',
-								}
-							),
-						})}{' '}
-						<React.Suspense fallback={null}>
-							<Opener id={session?.opened_by} />
-						</React.Suspense>
-					</Text>
-				)}
+				{/* The header block: on the phone the panel is a page, and its padding comes from here. */}
+				<DialogHeader>
+					<DialogTitle testID="register-panel-amount" className="text-amt tabular-nums">
+						{blind ? binding.registerName : format(Number(expected.cash ?? 0))}
+					</DialogTitle>
+					{blind ? (
+						<Text>{t('register.sales_count', { count: salesCount })}</Text>
+					) : (
+						<Text>
+							{t('register.in_the_drawer')} · {binding.registerName} ·{' '}
+							{t('register.opened_at_by', {
+								time: new Date(session?.opened_at_gmt ?? lastClosure!.closed_at).toLocaleTimeString(
+									[],
+									{
+										hour: '2-digit',
+										minute: '2-digit',
+									}
+								),
+							})}{' '}
+							<React.Suspense fallback={null}>
+								<Opener id={session?.opened_by} />
+							</React.Suspense>
+						</Text>
+					)}
+				</DialogHeader>
 				{refused.length > 0 && (
 					<View className="border-destructive mx-4 flex-row items-center gap-2 border px-3 py-2">
 						<Text testID="register-panel-refused" className="text-destructive flex-1">

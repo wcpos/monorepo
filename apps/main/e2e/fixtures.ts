@@ -133,9 +133,9 @@ export async function setVariationsStyle(page: Page, style: 'drill' | 'inline'):
 		.getByRole('dialog')
 		.filter({ has: page.getByTestId(`products-variations-style-${style}`) });
 	await dialog.getByTestId(`products-variations-style-${style}`).click();
-	// The brief explicitly uses the existing footer Close; the shared dialog stays unchanged.
-	// eslint-disable-next-line no-restricted-syntax -- RUN-388-stage6b requires the existing footer Close without changing shared UI.
-	await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+	// The footer Close by id: the store's locale sets its label (dev-next reads "Cerrar"). Forced:
+	// the toast host (`#error-toast`) intercepts pointer events for a while after any toast.
+	await dialog.getByTestId('ui-settings-close').click({ force: true });
 	await expect(dialog).toBeHidden();
 }
 

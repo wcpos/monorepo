@@ -32,7 +32,11 @@ import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
 import { CategoryTreeLoader } from '../../../components/product/category-select';
 import { TagSearch } from '../../../components/product/tag-select';
 import { BrandSearch } from '../../../components/product/brand-select';
-import { normalizeFilterBar, type QuickFilter } from '../filter-bar/filter-bar-layout';
+import {
+	type FilterBarItem,
+	normalizeFilterBar,
+	type QuickFilter,
+} from '../filter-bar/filter-bar-layout';
 import { isQuickFilterActive, quickFilterToQueryPatch } from '../filter-bar/apply-quick-filter';
 import { getPOSProductSort } from '../pos-product-sort';
 
@@ -206,6 +210,43 @@ function StockChip({ touched }: { touched: () => void }) {
 		</Select>
 	);
 }
+function DimmedChip({ item }: { item: FilterBarItem }) {
+	const state = useQueryState<'products'>();
+	const t = useT();
+	if (item.type === 'quick') {
+		return (
+			<Chip
+				testID={`quick-filter-${item.id}`}
+				label={item.label}
+				count={item.conditions.length}
+				dimmed
+			/>
+		);
+	}
+	const value = state.filters[item.id as keyof typeof state.filters] as unknown;
+	const on = Array.isArray(value) ? value.length > 0 : !!value;
+	const label =
+		item.id === 'featured'
+			? t('common.featured')
+			: item.id === 'on_sale'
+				? t('common.on_sale')
+				: item.id === 'categories'
+					? t('common.category')
+					: item.id === 'tags'
+						? t('common.tag')
+						: item.id === 'brands'
+							? t('common.brand')
+							: t('common.stock_status');
+	const icon =
+		item.id === 'featured'
+			? 'star'
+			: item.id === 'on_sale'
+				? 'badgeDollar'
+				: item.id === 'stock_status'
+					? 'warehouseFull'
+					: 'folder';
+	return <Chip testID={`filter-pill-${item.id}`} label={label} icon={icon} on={on} dimmed />;
+}
 export function POSFilterBar({
 	level = 'products',
 	initialFilters = { status: 'publish' },
@@ -242,30 +283,33 @@ export function POSFilterBar({
 				const touched = () =>
 					scroll.current?.scrollTo({ x: positions.current.get(item.id) ?? 0, animated: false });
 				const dimmed = level === 'variations' && item.id !== 'stock_status';
-				const content =
-					item.type === 'quick' ? (
-						<QuickChip quickFilter={item} touched={touched} />
-					) : item.id === 'stock_status' ? (
-						<StockChip touched={touched} />
-					) : item.id === 'featured' || item.id === 'on_sale' ? (
-						<Chip
-							label={item.id === 'featured' ? t('common.featured') : t('common.on_sale')}
-							icon={item.id === 'featured' ? 'star' : 'badgeDollar'}
-							on={!!state.filters[item.id]}
-							dimmed={dimmed}
-							testID={`filter-pill-${item.id}`}
-							onPress={() => {
-								const field = item.id as 'featured' | 'on_sale';
-								if (state.filters[field]) actions.clearFilter(field);
-								else actions.setFilter(field, true);
-								touched();
-							}}
-						/>
-					) : (
-						<Suspense>
-							<SetChip field={item.id} dimmed={dimmed} touched={touched} />
-						</Suspense>
-					);
+				// A dimmed chip opens nothing: it is the tooltip's trigger itself (one pressable, no
+				// menu around it; a trigger wrapping a chip renders a button inside a button on web).
+				const content = dimmed ? (
+					<DimmedChip item={item} />
+				) : item.type === 'quick' ? (
+					<QuickChip quickFilter={item} touched={touched} />
+				) : item.id === 'stock_status' ? (
+					<StockChip touched={touched} />
+				) : item.id === 'featured' || item.id === 'on_sale' ? (
+					<Chip
+						label={item.id === 'featured' ? t('common.featured') : t('common.on_sale')}
+						icon={item.id === 'featured' ? 'star' : 'badgeDollar'}
+						on={!!state.filters[item.id]}
+						dimmed={dimmed}
+						testID={`filter-pill-${item.id}`}
+						onPress={() => {
+							const field = item.id as 'featured' | 'on_sale';
+							if (state.filters[field]) actions.clearFilter(field);
+							else actions.setFilter(field, true);
+							touched();
+						}}
+					/>
+				) : (
+					<Suspense>
+						<SetChip field={item.id} dimmed={dimmed} touched={touched} />
+					</Suspense>
+				);
 				return (
 					<View
 						key={item.id}
@@ -273,9 +317,7 @@ export function POSFilterBar({
 					>
 						{dimmed ? (
 							<Tooltip>
-								<TooltipTrigger asChild>
-									<View>{content}</View>
-								</TooltipTrigger>
+								<TooltipTrigger asChild>{content}</TooltipTrigger>
 								<TooltipContent>
 									<Text>{t('pos_products.product_filter_not_in_variations')}</Text>
 								</TooltipContent>

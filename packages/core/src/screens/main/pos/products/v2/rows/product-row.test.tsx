@@ -40,7 +40,7 @@ it('adds the record when the row is pressed and replaces + with an in-cart count
 	fireEvent.click(screen.getByTestId('row'));
 	expect(add).toHaveBeenCalledWith(record);
 	expect(screen.queryByTestId('add-to-cart-button')).toBeNull();
-	expect(screen.getByLabelText('pos_products.in_cart_count').textContent).toBe('1');
+	expect(screen.getByLabelText('pos_products.in_cart_count').textContent).toBe('3');
 });
 it('renders the add button for a product not in the order', () => {
 	lines = [];

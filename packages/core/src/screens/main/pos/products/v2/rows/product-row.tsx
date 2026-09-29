@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
@@ -14,21 +14,27 @@ export function useProductCount(record: EngineRecord<'products'>) {
 	const { currentOrderRecord } = useCurrentOrder();
 	return useDocField(
 		currentOrderRecord,
+		// The cashier reads "how many are in the cart": quantities summed across the lines of
+		// this product, not the number of lines.
 		(value) =>
-			(value.payload.line_items ?? []).filter(
-				(line: { product_id?: number }) => line.product_id === Number(record.remoteId)
-			).length
+			(value.payload.line_items ?? [])
+				.filter((line: { product_id?: number }) => line.product_id === Number(record.remoteId))
+				.reduce((sum: number, line: { quantity?: number }) => sum + (line.quantity ?? 1), 0)
 	);
 }
-export function InCartCount({ count }: { count: number }) {
+export function InCartCount({ count, onPress }: { count: number; onPress?: () => void }) {
 	const t = useT();
+	// Pressable when it stands in for the `+`: the badge is then the row's named add control.
+	const Wrapper = onPress ? Pressable : View;
 	return (
-		<View
+		<Wrapper
+			accessibilityRole={onPress ? 'button' : undefined}
 			accessibilityLabel={t('pos_products.in_cart_count', { count })}
+			onPress={onPress}
 			className="bg-primary size-6 items-center justify-center rounded-full"
 		>
 			<Text className="text-primary-foreground">{count}</Text>
-		</View>
+		</Wrapper>
 	);
 }
 export function ProductRow({
@@ -43,7 +49,7 @@ export function ProductRow({
 			onPress={() => addProduct(record)}
 			trailing={
 				count ? (
-					<InCartCount count={count} />
+					<InCartCount count={count} onPress={() => void addProduct(record)} />
 				) : (
 					<IconButton
 						name="circlePlus"

@@ -10,13 +10,8 @@ test('drills into variations, adds a line and returns to products', async ({ pos
 	try {
 		await ensureTableView(page);
 		await findVariableProduct(page, page.getByTestId('screen-pos').getByTestId('search-products'));
-		// A drill row has a chevron, not the simple product's add button.
-		const variable = page
-			.getByTestId(/^data-table-row-/)
-			.filter({
-				hasNot: page.getByTestId('add-to-cart-button'),
-			})
-			.first();
+		// The drill chevron beside a variable row is the row's named control; it drills in.
+		const variable = page.getByTestId('variable-product-drill').first();
 		await expect(variable).toBeVisible({ timeout: 30_000 });
 		await page.getByTestId('new-order-tab').click();
 		const lines = page.getByTestId('cart-line-total');

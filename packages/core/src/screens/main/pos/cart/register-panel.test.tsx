@@ -137,6 +137,7 @@ jest.mock('@wcpos/components/dialog', () => ({
 	DialogTitle: ({ children, testID }: { children: React.ReactNode; testID?: string }) => (
 		<h2 data-testid={testID}>{children}</h2>
 	),
+	DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 const confirmButton = () => screen.getByTestId('movement-confirm') as HTMLButtonElement;
 beforeEach(() => {

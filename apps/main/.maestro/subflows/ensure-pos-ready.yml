@@ -165,5 +165,5 @@ appId: com.wcpos.main.dev
       - tapOn:
           id: "products-variations-style-inline"
       - tapOn:
-          text: "Close"
+          id: "ui-settings-close"
       - evalScript: ${output.variationsStyleInline = true}

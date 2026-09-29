@@ -45,26 +45,48 @@ export function DataTableRow<TData extends RowData>({
 			</Suspense>
 		</ErrorBoundary>
 	);
-	const primary = cells.filter((cell) => !['price', 'actions'].includes(cell.column.id));
-	const hasActions = cells.some((cell) => cell.column.id === 'actions');
+	// The actions cell (the caller's trailing control: `+`, a chevron, the in-cart count) sits
+	// BESIDE the row's pressable, never inside it: a button inside a button is invalid HTML and
+	// React reports it on web. The pressable covers every other cell.
+	const actions = cells.find((cell) => cell.column.id === 'actions');
+	const body = cells.filter((cell) => cell.column.id !== 'actions');
+	const primary = body.filter((cell) => cell.column.id !== 'price');
+	const trailingNode = actions ? content(actions) : trailing;
 	return (
-		<View className="border-border border-b">
+		<View className="border-border flex-row items-center border-b">
 			<Pressable
 				testID={testID ?? getRowTestID(item)}
-				onPress={onPress}
-				accessibilityRole={onPress ? 'button' : undefined}
+				// No `accessibilityRole="button"`: on web that renders a <button>, and the cells carry
+				// their own controls (category chips, an edit icon), which may not nest in one. The
+				// row stays a focusable pressable; the trailing control beside it is the named button.
+				onPress={
+					onPress
+						? (event) => {
+								// A press that started on a control inside a cell is that control's, not the
+								// row's (web bubbles the click; native's responder already stops here).
+								const target = (event as unknown as { nativeEvent?: { target?: unknown } })
+									.nativeEvent?.target;
+								if (
+									target instanceof Element &&
+									target.closest('button,[role="button"],a,input,select,textarea')
+								)
+									return;
+								onPress(event);
+							}
+						: undefined
+				}
 				className={
 					pointer === 'fine'
-						? 'min-h-row active:bg-muted web:hover:bg-muted flex-row items-center'
-						: 'min-h-row active:bg-muted flex-row items-center gap-3 px-3'
+						? 'min-h-row active:bg-muted web:hover:bg-muted flex-1 flex-row items-center'
+						: 'min-h-row active:bg-muted flex-1 flex-row items-center gap-3 px-3'
 				}
 			>
 				{pointer === 'fine' ? (
-					cells.map((cell, index) => (
+					body.map((cell, index) => (
 						<TableCell
 							key={cell.id}
 							style={getColumnStyle(
-								index === cells.length - 1
+								index === body.length - 1 && !actions
 									? { ...cell.column.columnDef.meta, width: undefined, flex: 1 }
 									: cell.column.columnDef.meta
 							)}
@@ -75,11 +97,19 @@ export function DataTableRow<TData extends RowData>({
 				) : (
 					<>
 						<View className="min-w-0 flex-1">{primary.map(content)}</View>
-						{cells.filter((cell) => ['price', 'actions'].includes(cell.column.id)).map(content)}
+						{body.filter((cell) => cell.column.id === 'price').map(content)}
 					</>
 				)}
-				{!hasActions && trailing}
 			</Pressable>
+			{trailingNode !== undefined && trailingNode !== null ? (
+				pointer === 'fine' && actions ? (
+					<TableCell style={getColumnStyle(actions.column.columnDef.meta)}>
+						{trailingNode}
+					</TableCell>
+				) : (
+					<View className="pr-3">{trailingNode}</View>
+				)
+			) : null}
 		</View>
 	);
 }
