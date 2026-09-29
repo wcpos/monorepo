@@ -155,6 +155,7 @@
 	"register.close_and_print": "Close & print",
 	"register.cash_counted": "Cash counted",
 	"register.expected": "Expected {amount}",
+	"register.expected_label": "Expected",
 	"register.sales_count": "{count} sales",
 	"register.closed": "Closed",
 	"register.overdue": "Overdue",
