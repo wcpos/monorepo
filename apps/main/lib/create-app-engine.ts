@@ -295,6 +295,14 @@ function disposeCachedEngine(entry: CachedEngine): void {
 	});
 }
 
+/** Reuse the existing bounded disposal before the live-tab owner closes its pool. */
+export async function disposeAppSyncEngine(): Promise<void> {
+	const entry = cachedEngine;
+	cachedEngine = null;
+	if (entry) disposeCachedEngine(entry);
+	await Promise.all(pendingDisposals.values());
+}
+
 /**
  * Awaited scope transition for the store-switch flow (issue #876). Called by
  * the app-state layer (via the core engine-scope port) AFTER the new store's

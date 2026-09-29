@@ -126,3 +126,8 @@ export const useHydrationSuspense = (): UseHydrationSuspenseReturn => {
 		error: null,
 	};
 };
+
+/** A parked page must not leave an already-started hydration opening databases after teardown. */
+export async function finishPendingHydration(): Promise<void> {
+	await globalHydrationPromise?.catch(() => undefined);
+}
