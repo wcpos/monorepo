@@ -13,7 +13,7 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { RegisterAmount } from './movement-sheet';
 
 export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void }) {
-	const { binding, lastClosed, lastClosure, actions } = useRegisterSession();
+	const { binding, lastClosed, lastClosure, actions, blind } = useRegisterSession();
 	const defaultFloat = binding.registers.find(
 		(row) => row.id === binding.registerId
 	)?.default_float;
@@ -68,7 +68,7 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 			</View>
 			{[
 				[defaultFloat, 'default'],
-				[lastCount, 'last'],
+				[blind ? null : lastCount, 'last'],
 			].map(
 				([value, source]) =>
 					value != null && (
@@ -110,7 +110,8 @@ export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void
 					<Text className="text-muted-foreground">{t('register.last_closure')}</Text>
 					<Text className="text-muted-foreground shrink">
 						{t('reports.closure_n', { n: lastClosure.server_number ?? lastClosure.number })}
-						{lastClosure.counted?.cash != null
+						{/* Blind count: the previous cash figure stays hidden here as it does in RegisterPanel. */}
+						{!blind && lastClosure.counted?.cash != null
 							? ` · ${format(Number(lastClosure.counted.cash))}`
 							: ''}
 					</Text>

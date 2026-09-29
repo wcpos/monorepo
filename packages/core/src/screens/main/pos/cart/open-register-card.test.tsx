@@ -14,6 +14,7 @@ jest.mock('../../../../contexts/app-state', () => ({
 let defaultFloat: string | undefined = '200';
 let lastCount: string | undefined = '570.10';
 let hasClosure = true;
+let blind = false;
 const open = jest.fn(async () => undefined);
 const print = jest.fn(async () => undefined);
 jest.mock('../../../../services/register-session/use-register-session', () => ({
@@ -25,6 +26,7 @@ jest.mock('../../../../services/register-session/use-register-session', () => ({
 			: null,
 		actions: { openSession: open },
 		expected: { cash: '155' },
+		blind,
 	}),
 }));
 // The movement sheet reaches the receipt document hook (REST client, expo-crypto); not this test's concern.
@@ -134,4 +136,17 @@ it('opens the last closure panel from the fold and omits it without a closure', 
 	hasClosure = false;
 	view.rerender(<OpenRegisterCard onLastClosure={onLastClosure} />);
 	expect(screen.queryByTestId('open-register-last-closure')).toBeNull();
+});
+
+it('hides the previous cash figures from a blind-count cashier', () => {
+	blind = true;
+	try {
+		render(<OpenRegisterCard onLastClosure={() => {}} />);
+		// The fold keeps its label and navigation; the last-count chip goes with the amount.
+		expect(screen.getByTestId('open-register-last-closure').textContent).not.toContain('£480');
+		expect(screen.queryByTestId('open-register-chip-last')).toBeNull();
+		expect(screen.getByTestId('open-register-chip-default')).toBeTruthy();
+	} finally {
+		blind = false;
+	}
 });
