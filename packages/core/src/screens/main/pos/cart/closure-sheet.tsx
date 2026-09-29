@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 
 import { useDocField } from '@wcpos/query';
-import { Button } from '@wcpos/components/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogContent,
@@ -113,7 +113,7 @@ export function ClosureSheet({
 								name={preview ? 'chevronDown' : 'chevronRight'}
 								className="text-muted-foreground"
 							/>
-							{t('register.z_report')}
+							<ButtonText>{t('register.z_report')}</ButtonText>
 						</Button>
 					</View>
 				)}

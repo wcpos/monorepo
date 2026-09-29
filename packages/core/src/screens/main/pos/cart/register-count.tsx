@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 
-import { Button } from '@wcpos/components/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { fromMinor } from '@wcpos/order-math';
@@ -170,7 +170,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 			{needsManager && (
 				<View className="bg-warning/10 min-h-ctl flex-row items-center gap-2 rounded-lg px-3">
 					<Icon name="lock" className="text-warning" />
-					<Text testID="count-manager-line" className="text-warning">
+					<Text testID="count-manager-line" className="text-warning flex-1">
 						{session?.approval_required
 							? t('register.approval_needed')
 							: t('register.over_limit_manager', { amount: format(Number(varianceThreshold)) })}
@@ -188,7 +188,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 						name={notesOpen ? 'chevronDown' : 'chevronRight'}
 						className="text-muted-foreground"
 					/>
-					{t('register.count_by_denominations')}
+					<ButtonText>{t('register.count_by_denominations')}</ButtonText>
 				</Button>
 			</View>
 			{notesOpen && (
@@ -239,7 +239,7 @@ export function RegisterCount({ onClosed }: { onClosed: (count: ClosureCount) =>
 						name={tendersOpen ? 'chevronDown' : 'chevronRight'}
 						className="text-muted-foreground"
 					/>
-					{t('register.other_tenders')}
+					<ButtonText>{t('register.other_tenders')}</ButtonText>
 				</Button>
 			</View>
 			{tendersOpen &&

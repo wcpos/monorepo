@@ -13,6 +13,7 @@ jest.mock('../../hooks/use-currency-format', () => ({
 const recordFact = jest.spyOn(audit, 'recordRegisterFact');
 jest.mock('../contexts/overlay-side/v2', () => ({ usePanelSide: () => 'right' }));
 jest.mock('@wcpos/components/button', () => ({
+	ButtonText: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 	Button: ({
 		children,
 		onPress,
