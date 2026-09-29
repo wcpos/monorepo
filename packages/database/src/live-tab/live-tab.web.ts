@@ -93,8 +93,20 @@ export function createLiveTab(deps: Dependencies) {
 				}
 			)
 			.catch((error) => {
-				if (!disposed) {
-					deps.onError(error);
+				if (disposed) return;
+				// A request that REJECTS before any grant (a sandboxed or opaque context,
+				// #1057's write lease saw the same) is an absent API, not a dead worker:
+				// there is nothing to coordinate with, so the tab runs live rather than
+				// telling the cashier to reload forever. A rejected takeover request just
+				// leaves the tab parked, so Take over here can be pressed again.
+				deps.onError(error);
+				if (state.value.kind === 'acquiring') {
+					deps.onUnavailable();
+					set({ kind: 'live' });
+				} else if (state.value.kind === 'taking-over') {
+					clock.clearTimeout(answerTimer);
+					set({ kind: 'parked', reason: 'another-tab-live' });
+				} else {
 					park('worker-lost');
 				}
 			});

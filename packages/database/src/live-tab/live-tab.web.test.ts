@@ -83,6 +83,48 @@ afterEach(async () => {
 	jest.useRealTimers();
 });
 
+test('a lock request that REJECTS on boot (restricted context) runs live, like an absent API', async () => {
+	const onUnavailable = jest.fn();
+	const onError = jest.fn();
+	const tab = createLiveTab({
+		locks: { request: jest.fn(() => Promise.reject(new Error('SecurityError'))) },
+		channel: h.channel,
+		onHandover: jest.fn(async () => {}),
+		onUnavailable,
+		onError,
+	});
+	await flush();
+	expect(tab.getState()).toEqual({ kind: 'live' });
+	expect(onUnavailable).toHaveBeenCalledTimes(1);
+	expect(onError).toHaveBeenCalledTimes(1);
+	tab.dispose();
+});
+test('a takeover request that REJECTS leaves the tab parked so it can be retried', async () => {
+	const a = h.tab();
+	await flush();
+	const rejecting = createLiveTab({
+		locks: {
+			request: jest.fn((name, options, callback) =>
+				options.ifAvailable
+					? h.locks.request(name, options, callback)
+					: Promise.reject(new Error('AbortError'))
+			),
+		},
+		channel: h.channel,
+		onHandover: jest.fn(async () => {}),
+		onUnavailable: jest.fn(),
+		onError: jest.fn(),
+	});
+	await flush();
+	expect(rejecting.getState()).toEqual({ kind: 'parked', reason: 'another-tab-live' });
+	rejecting.takeOver();
+	await flush();
+	expect(rejecting.getState()).toEqual({ kind: 'parked', reason: 'another-tab-live' });
+	// The holder answered and handed over regardless; a later Take over here
+	// re-requests, so nothing is stuck in `taking-over`.
+	expect(a.getState()).toEqual({ kind: 'parked', reason: 'another-tab-live' });
+	rejecting.dispose();
+});
 test('the first tab is live and the second parks', async () => {
 	const a = h.tab();
 	const b = h.tab();
