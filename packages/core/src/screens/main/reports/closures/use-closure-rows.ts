@@ -55,7 +55,8 @@ export function selectClosureRows(
 				b.business_day.localeCompare(a.business_day) || b.closed_at.localeCompare(a.closed_at)
 		);
 }
-function normalizeClosureRow(
+/** A server closure into the local row shape: GMT stamps, absent maps, flattened labels. */
+export function normalizeClosureRow(
 	row: ClosureRow & { opened_at_gmt?: string; closed_at_gmt?: string }
 ): ClosureRow[] {
 	const opened = row.opened_at_gmt ?? row.opened_at;

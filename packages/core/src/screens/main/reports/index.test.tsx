@@ -49,6 +49,11 @@ const mockViewedStores = of([
 	{ id: 9, timezone: 'UTC' },
 	{ id: 21, timezone: 'America/New_York' },
 ]);
+jest.mock('./till-strip', () => ({
+	TillStrip: ({ onOpenClosures }: { onOpenClosures: () => void }) => (
+		<button data-testid="till-closures" onClick={onOpenClosures} />
+	),
+}));
 jest.mock('./bar', () => ({
 	CashierButton: () => null,
 	ScopeHint: () => null,
@@ -294,7 +299,7 @@ it('uses the viewed store midnight for Sales immediately on a cross-store select
 it('unmounts the Sales binding in Closures and remounts it only on returning to Sales', () => {
 	render(<ReportsScreen />);
 	mockUseCollectionBinding.mockClear();
-	fireEvent.click(screen.getByTestId('reports-closures-link'));
+	fireEvent.click(screen.getByTestId('till-closures'));
 	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
 	fireEvent.click(screen.getByTestId('reports-back-sales'));
 	// The viewed-store directory can emit after mount; both renders use the Sales binding.
@@ -309,7 +314,7 @@ it('does not mount report readers for a cashier without report permission', () =
 	render(<ReportsScreen />);
 	expect(mockUseCollectionBinding).not.toHaveBeenCalled();
 	expect(mockClosureScope).not.toHaveBeenCalled();
-	expect(screen.queryByTestId('reports-closures-link')).toBeNull();
+	expect(screen.queryByTestId('till-closures')).toBeNull();
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
 // Revert: trust a retained Pro scope after the license becomes Free.
@@ -319,7 +324,7 @@ it('constrains a retained Pro scope before mounting Free closures', () => {
 	mockStoreID = 9;
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 	const view = render(<ReportsScreen />);
-	fireEvent.click(screen.getByTestId('reports-closures-link'));
+	fireEvent.click(screen.getByTestId('till-closures'));
 	fireEvent.click(screen.getByTestId('past-scope'));
 	expect(mockClosureScope).toHaveBeenLastCalledWith({
 		scope: expect.objectContaining({ registerId: 'other' }),
@@ -356,7 +361,7 @@ it('can enter local Closures while the Sales workspace is still loading', () => 
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 	try {
 		render(<ReportsScreen />);
-		fireEvent.click(screen.getByTestId('reports-closures-link'));
+		fireEvent.click(screen.getByTestId('till-closures'));
 		expect(mockClosureScope).toHaveBeenCalled();
 	} finally {
 		mockReportsPending = false;
@@ -465,7 +470,7 @@ it('keeps Sales and Closures accessible when capabilities are unknown', () => {
 	mockCapabilities = undefined;
 	render(<ReportsScreen />);
 	expect(screen.queryByTestId('reports-denied')).toBeNull();
-	fireEvent.click(screen.getByTestId('reports-closures-link'));
+	fireEvent.click(screen.getByTestId('till-closures'));
 	expect(mockClosureScope).toHaveBeenCalled();
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 });
@@ -480,7 +485,7 @@ it('clears a closed deep link without leaving Closures or reopening it after Sal
 	view.rerender(<ReportsScreen />);
 	expect(screen.queryByTestId('legacy-register')).toBeNull();
 	fireEvent.click(screen.getByTestId('reports-back-sales'));
-	fireEvent.click(screen.getByTestId('reports-closures-link'));
+	fireEvent.click(screen.getByTestId('till-closures'));
 	expect(screen.queryByTestId('close-closure')).toBeNull();
 	// A later visit to the same deep link must still select it.
 	mockRoute = { ...mockRoute, closureId: 'c' };

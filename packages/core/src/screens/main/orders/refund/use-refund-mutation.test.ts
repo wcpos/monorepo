@@ -17,6 +17,11 @@ import { StorageBlockedError } from '../../hooks/use-storage-health';
 
 const mockPost = jest.fn();
 const mockEngineRequire = jest.fn();
+const mockUseRegisterSession = jest.fn();
+
+beforeEach(() => {
+	mockUseRegisterSession.mockReturnValue({ binding: { registerId: null }, session: null });
+});
 
 const makeOrder = (id: number | undefined) => {
 	const order = {
@@ -34,6 +39,10 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({
 		post: mockPost,
 	}),
+}));
+
+jest.mock('../../../../services/register-session/use-register-session', () => ({
+	useRegisterSession: () => mockUseRegisterSession(),
 }));
 
 jest.mock('@wcpos/query', () => ({
@@ -120,6 +129,82 @@ describe('useRefundMutation', () => {
 		mockEngineRequire
 			.mockReset()
 			.mockImplementation(() => ({ ready: Promise.resolve(), release: jest.fn() }));
+	});
+
+	// Removing the till stamp loses refund attribution; emitting empty metadata changes the fallback.
+	it.each([
+		{
+			name: 'bound register and open session',
+			registerId: 'register-2',
+			session: { id: 'session-2', status: 'open' },
+			metaData: [
+				{ key: '_wcpos_register', value: 'register-2' },
+				{ key: '_wcpos_session', value: 'session-2' },
+			],
+		},
+		{
+			name: 'bound register and counting session',
+			registerId: 'register-2',
+			session: { id: 'session-2', status: 'counting' },
+			metaData: [
+				{ key: '_wcpos_register', value: 'register-2' },
+				{ key: '_wcpos_session', value: 'session-2' },
+			],
+		},
+		{
+			name: 'no register or session',
+			registerId: null,
+			session: null,
+			metaData: undefined,
+		},
+		{
+			name: 'bound register without a session',
+			registerId: 'register-2',
+			session: null,
+			metaData: [{ key: '_wcpos_register', value: 'register-2' }],
+		},
+		{
+			name: 'empty register and session ids',
+			registerId: '',
+			session: { id: '', status: 'open' },
+			metaData: undefined,
+		},
+		{
+			name: 'session without a register',
+			registerId: null,
+			session: { id: 'session-2', status: 'open' },
+			metaData: [{ key: '_wcpos_session', value: 'session-2' }],
+		},
+		{
+			name: 'closed session awaiting recovery',
+			registerId: 'register-2',
+			session: { id: 'session-2', status: 'closed' },
+			metaData: [{ key: '_wcpos_register', value: 'register-2' }],
+		},
+	])('posts only known current till metadata: $name', async ({ registerId, session, metaData }) => {
+		mockUseRegisterSession.mockReturnValue({ binding: { registerId }, session });
+		const { result } = renderHook(() => useRefundMutation());
+
+		await act(async () => {
+			await result.current({
+				order: makeOrder(77) as never,
+				amount: '10.00',
+				reason: 'Counter refund',
+				lineItems: [],
+				refundDestination: 'cash',
+			});
+		});
+
+		expect(mockPost).toHaveBeenCalledTimes(1);
+		const payload = mockPost.mock.calls[0][1];
+		expect(payload).toEqual({
+			amount: '10.00',
+			reason: 'Counter refund',
+			refund_destination: 'cash',
+			api_refund: false,
+			...(metaData ? { meta_data: metaData } : {}),
+		});
+		if (!metaData) expect(payload).not.toHaveProperty('meta_data');
 	});
 
 	it('posts the stable refund payload with an idempotency header and refreshes the order', async () => {
