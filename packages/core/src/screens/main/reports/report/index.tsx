@@ -53,9 +53,17 @@ export function Report({ nestedScrollEnabled = false }: { nestedScrollEnabled?: 
 						className="w-full"
 						nestedScrollEnabled={nestedScrollEnabled}
 					>
-						<View ref={contentRef} style={{ width: '100%', height: '100%', padding: 10 }}>
-							<ZReport storeId={storeId} />
-						</View>
+						{/* The preview waits for the viewed store as the print does: another store's totals
+						    must not be shown under the till's name, currency or formats. */}
+						{waiting === 'store' ? (
+							<Text testID="reports-content-loading" className="text-muted-foreground p-3">
+								{t('reports.loading_store')}
+							</Text>
+						) : (
+							<View ref={contentRef} style={{ width: '100%', height: '100%', padding: 10 }}>
+								<ZReport storeId={storeId} />
+							</View>
+						)}
 					</ScrollView>
 				</CardContent>
 				<CardFooter className="border-border bg-footer items-center justify-end gap-3 border-t p-2">
