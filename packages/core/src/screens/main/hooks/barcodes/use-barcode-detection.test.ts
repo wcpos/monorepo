@@ -378,6 +378,27 @@ describe('useBarcodeDetection', () => {
 	});
 
 	describe('cross-source de-dup (#2263)', () => {
+		it('a slow long wedge burst is still one scan when the device copy came first', () => {
+			avgThreshold$.next(40);
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			try {
+				act(() => {
+					hubEvents$.next({ code: '1234567890123', source: { kind: 'hid-pos' }, timestamp: 1 });
+					for (const [index, key] of [...'1234567890123'].entries()) {
+						if (index > 0) jest.advanceTimersByTime(30);
+						document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+					}
+					jest.advanceTimersByTime(151);
+				});
+
+				expect(barcodes).toEqual(['1234567890123']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
+
 		it.each([
 			{ name: 'one scan, two sources', structuredFirst: false },
 			{ name: 'structured source first', structuredFirst: true },

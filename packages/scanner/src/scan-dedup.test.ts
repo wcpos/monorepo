@@ -16,7 +16,7 @@ describe('dedupeScans', () => {
 	beforeEach(() => {
 		receiptTime = 0;
 		source$ = new Subject<ScanEvent>();
-		scans$ = source$.pipe(dedupeScans(undefined, () => receiptTime));
+		scans$ = source$.pipe(dedupeScans(undefined, (_event) => receiptTime));
 		received = [];
 		scans$.subscribe((event) => received.push(event));
 	});
@@ -34,6 +34,31 @@ describe('dedupeScans', () => {
 	it('passes the same code again after the window', () => {
 		source$.next(scan);
 		receiptTime = SCAN_DEDUP_WINDOW_MS + 1;
+		source$.next(scan);
+
+		expect(received).toEqual([scan, scan]);
+	});
+
+	it('de-duplicates padded UPC-A codes without changing the emitted code', () => {
+		const padded = { ...scan, code: '0123456789012' };
+		source$.next(padded);
+		receiptTime = 151;
+		source$.next({ ...scan, code: '123456789012' });
+
+		expect(received).toEqual([padded]);
+	});
+
+	it('drops a scan timed 40 ms before the previous pass', () => {
+		source$.next(scan);
+		receiptTime = -40;
+		source$.next(scan);
+
+		expect(received).toEqual([scan]);
+	});
+
+	it('passes a scan timed more than the window before the previous pass', () => {
+		source$.next(scan);
+		receiptTime = -SCAN_DEDUP_WINDOW_MS - 1;
 		source$.next(scan);
 
 		expect(received).toEqual([scan, scan]);
