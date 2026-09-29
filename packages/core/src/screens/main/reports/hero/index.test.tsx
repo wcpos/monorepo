@@ -11,6 +11,7 @@ import {
 	ReportsProvider,
 	ReportsScopeProvider,
 	useReportsData,
+	useReportsScope,
 	useReportsSelection,
 } from '../context';
 import { QueryStateProvider, useQueryState } from '../../../../query';
@@ -61,7 +62,20 @@ jest.mock('../../../../hooks/use-local-date', () => ({
 	...jest.requireActual('../../../../hooks/use-local-date'),
 	useLocalDate: () => ({ formatDate: jest.requireActual('date-fns').format }),
 }));
-jest.mock('../chart', () => ({ Chart: () => <div data-testid="existing-chart" /> }));
+jest.mock('../chart', () => ({
+	Chart: ({ comparison = false }: { comparison?: boolean }) => {
+		const { chartView } = useReportsScope();
+		const { wholeComparisonOrders } = useReportsData();
+		return (
+			<div
+				data-testid="existing-chart"
+				data-comparison={comparison ? wholeComparisonOrders.length : 'unavailable'}
+			>
+				{chartView}
+			</div>
+		);
+	},
+}));
 jest.mock('../report/template', () => ({ ZReport: () => null }));
 jest.mock('../report/use-report-print', () => ({
 	useReportPrint: () => ({ print: mockPrint, isPrinting: false, contentRef: { current: null } }),
@@ -163,6 +177,7 @@ function Probe() {
 function setup({
 	comparison = resource(previous),
 	week = false,
+	probe = true,
 	cashier = undefined as string | undefined,
 } = {}) {
 	const Provider = ReportsProvider as unknown as React.ComponentType<
@@ -192,11 +207,13 @@ function setup({
 						comparisonBinding={{ resource: comparison }}
 					>
 						<Hero title={<span>Today</span>} />
-						<React.Suspense fallback={null}>
-							<ReportsComparison>
-								<Probe />
-							</ReportsComparison>
-						</React.Suspense>
+						{probe && (
+							<React.Suspense fallback={null}>
+								<ReportsComparison>
+									<Probe />
+								</ReportsComparison>
+							</React.Suspense>
+						)}
 					</Provider>
 				</React.Suspense>
 			</ReportsScopeProvider>
@@ -362,4 +379,53 @@ it('counts the whole comparison day once the store day rolls over', () => {
 		jest.advanceTimersByTime(12 * 60 * 60 * 1000 + 31 * 60 * 1000);
 	});
 	expect(screen.getByTestId('comparison-counts').textContent).toBe('3/3');
+});
+
+it('switches the chart view for the visit without changing query filters', () => {
+	setup();
+	expect(screen.getByTestId('hero-chart-toggle-hour').textContent).toBe('By hour');
+	expect(screen.getByTestId('existing-chart').textContent).toBe('hour');
+	fireEvent.click(screen.getByTestId('hero-chart-toggle-run'));
+	expect(screen.getByTestId('existing-chart').textContent).toBe('run');
+	expect(screen.getByTestId('hero-chart-toggle-run').getAttribute('aria-checked')).toBe('true');
+	fireEvent.click(screen.getByTestId('hero-chip-status'));
+	fireEvent.click(screen.getByTestId('hero-status-all'));
+	expect(screen.getByTestId('existing-chart').textContent).toBe('run');
+	fireEvent.click(screen.getByTestId('hero-chart-toggle-hour'));
+	expect(screen.getByTestId('existing-chart').textContent).toBe('hour');
+});
+it('labels the week chart By day', () => {
+	setup({ week: true });
+	expect(screen.getByTestId('hero-chart-toggle-hour').textContent).toBe('By day');
+	expect(screen.getByTestId('hero-chart-toggle-run').textContent).toBe('Running total');
+});
+it('keeps the primary chart while comparison is pending then supplies the comparison', async () => {
+	const source = new Subject<{ hits: { record: { uuid: string; payload: ReportOrder } }[] }>();
+	setup({ comparison: new ObservableResource(source) as unknown as ReturnType<typeof resource> });
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('unavailable');
+	await act(async () => {
+		source.next({ hits: previous.map((payload) => ({ record: { uuid: payload.uuid, payload } })) });
+	});
+	expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe('2');
+});
+
+it('keeps the primary chart and figures when the comparison fails', async () => {
+	const source = new Subject<{ hits: never[] }>();
+	const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		setup({
+			comparison: new ObservableResource(source) as unknown as ReturnType<typeof resource>,
+			probe: false,
+		});
+		await act(async () => {
+			source.error(new Error('comparison failed'));
+		});
+		expect(screen.getByTestId('existing-chart').getAttribute('data-comparison')).toBe(
+			'unavailable'
+		);
+		expect(screen.getByTestId('hero-total').textContent).toBe('£30.00');
+		expect(screen.getByTestId('hero-delta').textContent).toBe('—');
+	} finally {
+		errors.mockRestore();
+	}
 });

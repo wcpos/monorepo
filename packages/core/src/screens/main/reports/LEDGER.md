@@ -34,6 +34,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 22. Comparison is on by default and only changed: a day against yesterday or the same weekday last week, a week against the week before, a month against the month before, a live day at the same time of day; comparison orders come from a second binding on the same filters with the shifted range — evidence: build brief §2; wcpos/roadmap#332 PR 2a — platform: all.
 
+23. The chart view (by hour/day or running total) is device state for the visit, never in the query — evidence: build brief §2; this PR.
+
 ## Evidence footnotes
 
 [^query]: `91722e8e59 2026-07-15 feat(core): the reports screen rides the query-state store + bindings (per-screen migration 6/8) (#659)`.

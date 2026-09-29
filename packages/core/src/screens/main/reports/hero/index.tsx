@@ -11,6 +11,7 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
+import { SegmentedControl } from '@wcpos/components/segmented-control';
 import { useDocField } from '@wcpos/query';
 import type { WPCredentialsDocument } from '@wcpos/database';
 
@@ -314,7 +315,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	const t = useT();
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
-	const { cmp, setCmp, statusMode, setStatusMode } = useReportsScope();
+	const { cmp, setCmp, statusMode, setStatusMode, chartView, setChartView } = useReportsScope();
 	const { comparisonBinding } = useReportsBinding();
 	const { period, timezone, storeId, dateRange } = useReportsPeriod();
 	const store = useDocField(useViewedStore(storeId), (value) => value);
@@ -380,6 +381,22 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			)}
 		</View>
 	);
+	const toggle = (
+		<SegmentedControl
+			testID="hero-chart-toggle"
+			className={phone ? 'w-full' : 'w-72'}
+			value={chartView}
+			onValueChange={(value) => setChartView(value as typeof chartView)}
+			segments={[
+				{
+					value: 'hour',
+					label: t(period === 'day' ? 'reports.by_hour' : 'reports.by_day'),
+					testID: 'hero-chart-toggle-hour',
+				},
+				{ value: 'run', label: t('reports.running_total'), testID: 'hero-chart-toggle-run' },
+			]}
+		/>
+	);
 	const figures = {
 		phone,
 		total: totals.total,
@@ -420,6 +437,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
 				{title}
 				<View className="flex-row items-center gap-2">
+					{!phone && toggle}
 					<React.Suspense
 						fallback={
 							<IconButton name="printer" accessibilityLabel={t('reports.print')} disabled />
@@ -429,6 +447,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 					</React.Suspense>
 				</View>
 			</View>
+			{phone && toggle}
 			{phone ? (
 				<ScrollView horizontal showsHorizontalScrollIndicator={false}>
 					{chips}
@@ -451,7 +470,16 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			</ErrorBoundary>
 			<ReportsSyncProgress lane="comparison" />
 			<View testID="hero-chart" className="h-56 w-full">
-				<Chart />
+				<ErrorBoundary
+					FallbackComponent={() => <Chart />}
+					resetKeys={[comparisonBinding, cmp, statusMode]}
+				>
+					<React.Suspense fallback={<Chart />}>
+						<ReportsComparison>
+							<Chart comparison />
+						</ReportsComparison>
+					</React.Suspense>
+				</ErrorBoundary>
 			</View>
 		</View>
 	);

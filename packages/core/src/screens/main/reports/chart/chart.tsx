@@ -1,86 +1,160 @@
-import React from 'react';
+import * as React from 'react';
 import { Platform, View } from 'react-native';
 
-import { Circle, RoundedRect, Text, useFont } from '@shopify/react-native-skia';
+import {
+	Circle,
+	DashPathEffect,
+	RoundedRect,
+	Line as SkiaLine,
+	Text as SkiaText,
+	useFont,
+} from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useCSSVariable } from 'uniwind';
-import { CartesianChart, StackedBar } from 'victory-native';
+import { Area, CartesianChart, type ChartBounds, Line, type PointsArray } from 'victory-native';
+
+import { Text } from '@wcpos/components/text';
+import { useDocField } from '@wcpos/query';
 
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { useStoreDay } from '../../../../hooks/use-store-day';
+import { inZone, useViewedStore } from '../../../../hooks/use-store-day';
 import { useLocalDate } from '../../../../hooks/use-local-date';
-import { useReportsData } from '../context';
-import { aggregateData } from './utils';
+import { useNowMs } from '../../health/use-relative-time';
+import { useT } from '../../../../contexts/translations';
+import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
+import { aggregateComparison, aggregateData } from './utils';
 
-import type { AggregatedDataPoint } from './utils';
-
-// Chart data type for victory-native - must have index signature
-type ChartDataPoint = AggregatedDataPoint & { [key: string]: unknown };
-
-// Point with position info from victory-native
-type PointWithPosition = {
-	x: number;
-	xValue: string;
-	y: number;
-	yValue: number;
-};
-
-// Tooltip dimensions
-const TOOLTIP_WIDTH = 160;
-const TOOLTIP_HEIGHT = 88;
-const TOOLTIP_PADDING = 10;
-const TOOLTIP_MARGIN = 12;
-
-// Tooltip state type
-type TooltipState = {
-	visible: boolean;
-	pointIndex: number;
-	x: number;
-	totalY: number;
-	taxY: number;
-};
-
-// Find the index of the point whose x is closest to the given touch x
-function findClosestPointIndex(points: PointWithPosition[], touchX: number): number {
-	if (!points || points.length === 0) return -1;
-
-	let closestIdx = 0;
-	let closestDist = Math.abs(points[0].x - touchX);
-
-	for (let i = 1; i < points.length; i++) {
-		const dist = Math.abs(points[i].x - touchX);
-		if (dist < closestDist) {
-			closestDist = dist;
-			closestIdx = i;
-		}
-	}
-	return closestIdx;
+// Keep only raw touch state: pixel points belong to the current chart render.
+function findClosestPointIndex(points: PointsArray, touchX: number): number {
+	return points.reduce(
+		(best, point, i) => (Math.abs(point.x - touchX) < Math.abs(points[best].x - touchX) ? i : best),
+		0
+	);
 }
 
-export default function Chart() {
-	const { selectedOrders, dateRange } = useReportsData();
-	const { timezone } = useStoreDay();
-	const { format } = useCurrencyFormat();
+export default function Chart({ comparison = false }: { comparison?: boolean }) {
+	const {
+		selectedOrders,
+		dateRange,
+		comparisonRange,
+		live,
+		wholeComparisonOrders,
+		comparisonOrders,
+		totals,
+	} = useReportsData();
+	const { timezone, period: rangePeriod, storeId } = useReportsPeriod();
+	const period = rangePeriod as 'day' | 'week' | 'month';
+	const { chartView, cmp } = useReportsScope();
+	const run = chartView === 'run';
+	const store = useDocField(useViewedStore(storeId), (value) => value);
+	const { format } = useCurrencyFormat({
+		currency: store?.currency,
+		currencyPosition: store?.currency_pos,
+		decimalScale: store?.price_num_decimals,
+		decimalSeparator: store?.price_decimal_sep,
+		thousandSeparator: store?.price_thousand_sep,
+		thousandsGroupStyle: store?.thousands_group_style,
+	});
 	const { dateFnsLocale, formatDate } = useLocalDate();
+	const t = useT();
 	const font = useFont(require('../../../../assets/fonts/Inter-Medium.ttf'), 12);
-
-	// Theme colors
-	const [popoverColor, popoverForegroundColor, primaryColor, mutedForegroundColor, borderColor] =
+	const [popoverColor, textColor, primaryColor, mutedForegroundColor, borderColor, mutedColor] =
 		useCSSVariable([
 			'--color-popover',
 			'--color-popover-foreground',
 			'--color-primary',
 			'--color-muted-foreground',
 			'--color-border',
+			'--color-muted',
 		]).map(String);
-
-	const data = React.useMemo<ChartDataPoint[]>(
-		() => aggregateData(selectedOrders, dateRange, dateFnsLocale, timezone) as ChartDataPoint[],
-		[selectedOrders, dateRange, dateFnsLocale, timezone]
+	const buckets = React.useMemo(
+		() =>
+			aggregateData(
+				selectedOrders,
+				dateRange,
+				dateFnsLocale,
+				timezone,
+				comparison ? { orders: wholeComparisonOrders, range: comparisonRange } : undefined,
+				period
+			),
+		[
+			selectedOrders,
+			dateRange,
+			dateFnsLocale,
+			timezone,
+			comparison,
+			wholeComparisonOrders,
+			comparisonRange,
+			period,
+		]
 	);
-	// Max is subtotal + tax = total (the actual order total)
-	const maxTotal = Math.max(...data.map((d) => d.total), 0);
-
+	const compared = React.useMemo(
+		() =>
+			aggregateComparison(
+				wholeComparisonOrders,
+				comparisonRange,
+				buckets,
+				dateRange,
+				period,
+				timezone
+			),
+		[wholeComparisonOrders, comparisonRange, buckets, dateRange, period, timezone]
+	);
+	const cut = React.useMemo(
+		() =>
+			aggregateComparison(comparisonOrders, comparisonRange, buckets, dateRange, period, timezone),
+		[comparisonOrders, comparisonRange, buckets, dateRange, period, timezone]
+	);
+	const now = useNowMs(60_000);
+	const data = React.useMemo(() => {
+		return buckets.map((bucket, index) => {
+			const running = buckets.slice(0, index + 1).reduce((sum, row) => sum + row.total, 0);
+			const previous = compared.slice(0, index + 1).reduce((sum, row) => sum + (row.total ?? 0), 0);
+			const future = live && bucket.key > now;
+			return {
+				...bucket,
+				index,
+				future,
+				current: future ? null : run ? running : bucket.total,
+				comparison:
+					!comparison || compared[index].total === null
+						? null
+						: run
+							? previous
+							: compared[index].total,
+				futureTotal: comparison && future && !run ? compared[index].total : null,
+			};
+		});
+	}, [buckets, compared, live, now, run, comparison]);
+	const peak = data.reduce(
+		(best, row, i) => (!row.future && row.total > data[best].total ? i : best),
+		0
+	);
+	const currentEnd = data.findLastIndex((row) => row.current !== null);
+	const comparisonEnd = data.findLastIndex((row) => row.comparison !== null);
+	const max = Math.max(10, ...data.flatMap((row) => [row.current ?? 0, row.comparison ?? 0])) * 1.3;
+	const wholeTotal = wholeComparisonOrders.reduce(
+		(sum, order) => sum + Number(order.total || 0),
+		0
+	);
+	const count = (n: number) => t('reports.chart_orders', { count: n });
+	const comparisonLabel =
+		period === 'day'
+			? cmp === 'yesterday'
+				? t('common.yesterday')
+				: t('reports.chart_last_weekday', {
+						weekday: formatDate(inZone(timezone, comparisonRange.start), 'EEEE'),
+					})
+			: t(period === 'week' ? 'common.last_week' : 'common.last_month');
+	const [bounds, setBounds] = React.useState<ChartBounds | null>(null);
+	const [scales, setScales] = React.useState<{
+		x: (n: number) => number;
+		y: (n: number) => number;
+	} | null>(null);
+	const onScaleChange = React.useCallback(
+		(x: (n: number) => number, y: (n: number) => number) => setScales({ x, y }),
+		[]
+	);
 	/**
 	 * Track only the raw touch position in state. The closest-point lookup and
 	 * tooltip positioning happen inside the chart render prop below, where the
@@ -126,81 +200,156 @@ export default function Chart() {
 		return Gesture.Simultaneous(longPressGesture, panGesture);
 	}, [isWeb]);
 
-	// Calculate tick count based on data length
-	// Limit to actual data length to prevent victory-native from interpolating beyond our data
-	const tickCount = React.useMemo(() => {
-		const len = data.length;
-		if (len <= 12) return len;
-		if (len <= 24) return Math.min(len, 8);
-		if (len <= 31) return Math.min(len, 10);
-		return Math.min(len, 12);
-	}, [data.length]);
-
+	const tickCount = Math.min(
+		data.length,
+		data.length <= 12 ? 12 : data.length <= 24 ? 8 : data.length <= 31 ? 10 : 12
+	);
+	const ticks = Array.from({ length: tickCount }, (_, i) =>
+		Math.round((i * (data.length - 1)) / Math.max(1, tickCount - 1))
+	);
+	// Native text overlays carry real testIDs/accessibility; their coordinates use the actual (niced) canvas scales.
+	const label = (
+		id: string,
+		index: number,
+		value: number,
+		text: string,
+		color: string,
+		below = false
+	) => {
+		if (!bounds || !scales || index < 0) return null;
+		// The Skia font measures narrower than the rendered semibold text: leave a third spare so
+		// the label never ellipsises, then clamp to the plot.
+		const width = Math.min(
+			bounds.right - bounds.left,
+			(font?.measureText(text).width ?? 190) * 1.35 + 12
+		);
+		return (
+			<Text
+				testID={id}
+				numberOfLines={1}
+				className="pointer-events-none absolute text-xs font-semibold tabular-nums"
+				style={{
+					color,
+					width,
+					left: Math.max(bounds.left, Math.min(bounds.right - width, scales.x(index) - width / 2)),
+					top: Math.max(
+						bounds.top,
+						Math.min(bounds.bottom - (run && !below ? 36 : 16), scales.y(value) + (below ? 6 : -22))
+					),
+				}}
+			>
+				{text}
+			</Text>
+		);
+	};
 	return (
 		<GestureDetector gesture={gesture}>
-			<View collapsable={false} style={{ flex: 1 }}>
+			<View collapsable={false} className="flex-1">
 				<CartesianChart
 					data={data}
-					xKey="label"
-					yKeys={['subtotal', 'total_tax']}
-					domainPadding={{ left: 70, right: 70, top: 30 }}
+					xKey="index"
+					yKeys={['current', 'comparison', 'futureTotal']}
+					frame={{ lineWidth: 0 }}
+					domain={{ x: [-0.5, Math.max(0.5, data.length - 0.5)], y: [0, max] }}
+					onChartBoundsChange={setBounds}
+					onScaleChange={onScaleChange}
 					xAxis={{
 						font,
-						lineColor: borderColor,
+						lineWidth: 0,
 						labelColor: mutedForegroundColor,
 						tickCount,
-						formatXLabel: (label) => label ?? '',
+						tickValues: ticks,
+						formatXLabel: (index) => data[index]?.label ?? '',
 					}}
-					yAxis={[
-						{
-							yKeys: ['subtotal', 'total_tax'],
-							font,
-							lineColor: borderColor,
-							labelColor: mutedForegroundColor,
-							domain: [0, Math.max(maxTotal, 10)],
-							formatYLabel: format,
-						},
-					]}
+					yAxis={[{ tickCount: 0, lineWidth: 0, labelPosition: 'inset', formatYLabel: () => '' }]}
 				>
 					{({ points, chartBounds }) => {
-						// Resolve the active tooltip from the current touch position and the
-						// pixel-positioned points provided by the chart.
-						const subtotalPoints = points.subtotal as unknown as PointWithPosition[];
-						const taxPoints = points.total_tax as unknown as PointWithPosition[];
-						const pointIndex = touch.active ? findClosestPointIndex(subtotalPoints, touch.x) : -1;
-						const tooltip: TooltipState | null =
-							pointIndex >= 0 && subtotalPoints[pointIndex] && taxPoints[pointIndex]
-								? {
-										visible: true,
-										pointIndex,
-										x: subtotalPoints[pointIndex].x,
-										totalY: subtotalPoints[pointIndex].y,
-										taxY: taxPoints[pointIndex].y,
-									}
-								: null;
-
+						const current = points.current.filter((point) => point.y != null);
+						const path = current.length
+							? [
+									{ ...current[0], x: chartBounds.left, y: chartBounds.bottom, yValue: 0 },
+									...current,
+								]
+							: [];
+						const barWidth = Math.max(
+							1,
+							Math.min(40, (chartBounds.right - chartBounds.left) / data.length - 6)
+						);
+						const index =
+							touch.active && data.length ? findClosestPointIndex(points.current, touch.x) : -1;
+						const row = data[index];
+						const point = points.current[index];
+						const tip = row
+							? [
+									row.label,
+									format(row.total),
+									count(row.order_count),
+									...(comparison && compared[index].total !== null
+										? [
+												`${comparisonLabel} ${format((live && !row.future ? cut[index].total : compared[index].total) ?? 0)}`,
+											]
+										: []),
+								]
+							: [];
 						return (
 							<>
-								<StackedBar
-									chartBounds={chartBounds}
-									points={[points.subtotal, points.total_tax]}
-									colors={[primaryColor, `${primaryColor}99`]}
-									animate={{ type: 'spring' }}
-									barWidth={Math.min(50, (chartBounds.right - chartBounds.left) / data.length - 10)}
-									barOptions={({ isTop }) => ({
-										roundedCorners: isTop ? { topLeft: 5, topRight: 5 } : undefined,
-									})}
+								<SkiaLine
+									p1={{ x: chartBounds.left, y: chartBounds.bottom }}
+									p2={{ x: chartBounds.right, y: chartBounds.bottom }}
+									color={borderColor}
+									strokeWidth={0.5}
 								/>
-								{tooltip && (
+								{run ? (
+									<>
+										<Area
+											points={path}
+											y0={chartBounds.bottom}
+											color={primaryColor}
+											opacity={0.1}
+										/>
+										<Line points={path} color={primaryColor} strokeWidth={2} />
+										<Line
+											points={path.slice(peak, peak + 2)}
+											color={primaryColor}
+											strokeWidth={3.5}
+										/>
+									</>
+								) : (
+									data.map((row, i) => {
+										const y = (row.future ? points.futureTotal[i] : points.current[i]).y;
+										return y == null ? null : (
+											<RoundedRect
+												key={row.key}
+												x={points.current[i].x - barWidth / 2}
+												y={y}
+												width={barWidth}
+												height={Math.max(0, chartBounds.bottom - y)}
+												r={3}
+												color={row.future ? mutedColor : primaryColor}
+												opacity={row.future || i === peak ? 1 : 0.55}
+											/>
+										);
+									})
+								)}
+								{comparison && (
+									<Line
+										points={points.comparison}
+										color={mutedForegroundColor}
+										strokeWidth={1.5}
+										connectMissingData={false}
+									>
+										<DashPathEffect intervals={[4, 4]} />
+									</Line>
+								)}
+								{row && point && (
 									<ToolTip
-										tooltip={tooltip}
-										point={data[tooltip.pointIndex]}
+										lines={tip}
+										x={point.x}
+										y={point.y ?? points.comparison[index].y ?? chartBounds.bottom}
 										chartBounds={chartBounds}
-										formatCurrency={format}
-										formatDate={formatDate}
 										font={font}
 										bgColor={popoverColor}
-										textColor={popoverForegroundColor}
+										textColor={textColor}
 										accentColor={primaryColor}
 									/>
 								)}
@@ -208,117 +357,83 @@ export default function Chart() {
 						);
 					}}
 				</CartesianChart>
+				{!run &&
+					data[peak]?.order_count > 0 &&
+					label(
+						'hero-chart-peak',
+						peak,
+						data[peak].total,
+						`${format(data[peak].total)} · ${count(data[peak].order_count)}`,
+						primaryColor
+					)}
+				{run &&
+					label(
+						'hero-chart-total',
+						Math.max(0, currentEnd),
+						data[currentEnd]?.current ?? 0,
+						live ? t('reports.amount_now', { amount: format(totals.total) }) : format(totals.total),
+						primaryColor
+					)}
+				{run &&
+					comparison &&
+					label(
+						'hero-chart-comparison-total',
+						comparisonEnd,
+						data[comparisonEnd]?.comparison ?? 0,
+						format(wholeTotal),
+						mutedForegroundColor,
+						true
+					)}
 			</View>
 		</GestureDetector>
 	);
 }
 
 function ToolTip({
-	tooltip,
-	point,
+	lines,
+	x,
+	y,
 	chartBounds,
-	formatCurrency,
-	formatDate,
 	font,
 	bgColor,
 	textColor,
 	accentColor,
 }: {
-	tooltip: TooltipState;
-	point: ChartDataPoint;
-	chartBounds: { top: number; bottom: number; left: number; right: number };
-	formatCurrency: (v: number) => string;
-	formatDate: (date: Date, formatString: string) => string;
-	font: any;
+	lines: string[];
+	x: number;
+	y: number;
+	chartBounds: ChartBounds;
+	font: ReturnType<typeof useFont>;
 	bgColor: string;
 	textColor: string;
 	accentColor: string;
 }) {
-	const { x, totalY, taxY } = tooltip;
-
-	// Calculate the y position for the TOP of the stacked bar
-	// totalY = position where the "total" segment ends
-	// taxY = position where "total_tax" value would be if plotted independently
-	// For stacked bar: tax segment height in pixels = chartBounds.bottom - taxY
-	// Top of stack = totalY - taxHeight
-	const taxHeight = chartBounds.bottom - taxY;
-	const y = totalY - taxHeight;
-
-	const tooltipHeight = point.refund_total > 0 ? 106 : TOOLTIP_HEIGHT;
-
-	// Calculate tooltip position to keep it on screen
-	const spaceAbove = y - chartBounds.top;
-	const tooltipAbove = spaceAbove >= tooltipHeight + TOOLTIP_MARGIN;
-	const tooltipY = tooltipAbove ? y - tooltipHeight - TOOLTIP_MARGIN : y + TOOLTIP_MARGIN;
-
-	// Horizontal position - centered on x, but constrained to chart bounds
-	let tooltipX = x - TOOLTIP_WIDTH / 2;
-	const minX = chartBounds.left + TOOLTIP_PADDING;
-	const maxX = chartBounds.right - TOOLTIP_WIDTH - TOOLTIP_PADDING;
-	tooltipX = Math.max(minX, Math.min(maxX, tooltipX));
-
-	// Determine if we're showing time (for hourly data)
-	const showTime = point.key.includes(' ');
-
-	// Format date using date-fns with locale
-	const tooltipDate = showTime
-		? formatDate(point.dateObj, 'EEE d MMM, HH:mm')
-		: formatDate(point.dateObj, 'EEE d MMM yyyy');
-
+	const width = Math.min(
+		chartBounds.right - chartBounds.left,
+		Math.max(160, ...lines.map((line) => (font?.measureText(line).width ?? 0) + 20))
+	);
+	const height = lines.length * 18 + 20;
+	const left = Math.max(chartBounds.left, Math.min(chartBounds.right - width, x - width / 2));
+	const top = Math.max(
+		chartBounds.top,
+		Math.min(
+			chartBounds.bottom - height,
+			y - chartBounds.top >= height + 12 ? y - height - 12 : y + 12
+		)
+	);
 	return (
 		<>
-			{/* Background */}
-			<RoundedRect
-				x={tooltipX}
-				y={tooltipY}
-				width={TOOLTIP_WIDTH}
-				height={tooltipHeight}
-				r={8}
-				color={bgColor}
-			/>
-			{/* Date */}
-			<Text
-				x={tooltipX + TOOLTIP_PADDING}
-				y={tooltipY + TOOLTIP_PADDING + 12}
-				text={tooltipDate}
-				font={font}
-				color={textColor}
-			/>
-			{/* Total */}
-			<Text
-				x={tooltipX + TOOLTIP_PADDING}
-				y={tooltipY + TOOLTIP_PADDING + 30}
-				text={`Total: ${formatCurrency(point.total)}`}
-				font={font}
-				color={textColor}
-			/>
-			{/* Tax */}
-			<Text
-				x={tooltipX + TOOLTIP_PADDING}
-				y={tooltipY + TOOLTIP_PADDING + 48}
-				text={`Tax: ${formatCurrency(point.total_tax)}`}
-				font={font}
-				color={textColor}
-			/>
-			{/* Refunds (only shown when > 0) */}
-			{point.refund_total > 0 && (
-				<Text
-					x={tooltipX + TOOLTIP_PADDING}
-					y={tooltipY + TOOLTIP_PADDING + 66}
-					text={`Refunds: -${formatCurrency(point.refund_total)}`}
+			<RoundedRect x={left} y={top} width={width} height={height} r={8} color={bgColor} />
+			{lines.map((line, i) => (
+				<SkiaText
+					key={i}
+					x={left + 10}
+					y={top + 22 + i * 18}
+					text={line}
 					font={font}
 					color={textColor}
 				/>
-			)}
-			{/* Order count */}
-			<Text
-				x={tooltipX + TOOLTIP_PADDING}
-				y={tooltipY + TOOLTIP_PADDING + (point.refund_total > 0 ? 84 : 66)}
-				text={`Orders: ${point.order_count}`}
-				font={font}
-				color={textColor}
-			/>
-			{/* Indicator dot at the top of the stacked bar */}
+			))}
 			<Circle cx={x} cy={y} r={5} color={accentColor} />
 		</>
 	);
