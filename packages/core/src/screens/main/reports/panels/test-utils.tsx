@@ -74,18 +74,21 @@ jest.mock('@wcpos/components/checkbox', () => ({
 		indeterminate,
 		onCheckedChange,
 		accessibilityLabel,
+		disabled,
 	}: {
 		testID: string;
 		checked: boolean;
 		indeterminate?: boolean;
 		onCheckedChange: (checked: boolean) => void;
 		accessibilityLabel?: string;
+		disabled?: boolean;
 	}) => (
 		<button
 			role="checkbox"
 			aria-label={accessibilityLabel}
 			aria-checked={indeterminate ? 'mixed' : checked}
 			data-testid={testID}
+			disabled={disabled}
 			onClick={() => onCheckedChange(!checked)}
 		/>
 	),
@@ -105,6 +108,7 @@ const context = jest.requireMock<typeof Context>('../context');
 export const real = jest.requireActual<typeof Context>('../context');
 export function preparePanel() {
 	jest.spyOn(context, 'useReportsScope').mockImplementation(real.useReportsScope);
+	jest.spyOn(context, 'useIncludedStatus').mockImplementation(real.useIncludedStatus);
 	jest.spyOn(context, 'useReportsSelection').mockImplementation(() => React.useContext(Selection)!);
 	jest.spyOn(context, 'useReportsData').mockImplementation(() => {
 		const included = real.useIncludedStatus();

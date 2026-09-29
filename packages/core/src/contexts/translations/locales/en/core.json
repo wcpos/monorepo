@@ -2364,6 +2364,7 @@
 	"reports.n_pending_one": "{count} pending",
 	"reports.n_pending_other": "{count} pending",
 	"reports.no_orders_in_period": "No orders in this period",
+	"reports.all_orders_left_out": "Every order is left out",
 	"reports.no_sales_in_period": "No sales in this period",
 	"reports.share_sold_one": "{percent}% · {quantity} sold",
 	"reports.share_sold_other": "{percent}% · {quantity} sold",

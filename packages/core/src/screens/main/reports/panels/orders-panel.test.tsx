@@ -125,3 +125,10 @@ jest.mock('react-native', () => ({
 		);
 	}),
 }));
+it('an empty panel leaves the all-orders tick unchecked and disabled', () => {
+	setOrders([] as ReportOrder[]);
+	open();
+	const all = screen.getByTestId('orders-panel-tick-all');
+	expect(all.getAttribute('aria-checked')).not.toBe('true');
+	expect(all.hasAttribute('disabled')).toBe(true);
+});

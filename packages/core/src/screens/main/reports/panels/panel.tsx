@@ -78,8 +78,11 @@ export function DetailPanel() {
 	const [error, setError] = React.useState('');
 	const [busy, setBusy] = React.useState(false);
 
+	// Orders names its cashiers too: the CSV must not carry "Unknown" for a directory still loading.
 	const ready =
-		formats.store && (detail !== 'categories' || products) && (detail !== 'cashiers' || directory);
+		formats.store &&
+		(detail !== 'categories' || products) &&
+		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory);
 	const decimals = formats.store?.price_num_decimals;
 	const spec = panelSpec(detail ?? 'orders', {
 		payments: tenders(selectedOrders, totals, decimals),

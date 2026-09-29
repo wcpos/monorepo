@@ -36,7 +36,8 @@ export function OrdersPanel({
 					testID="orders-panel-tick-all"
 					className="size-11"
 					accessibilityLabel={t('reports.toggle_selection')}
-					checked={leftOut === 0}
+					checked={spec.rows.length > 0 && leftOut === 0}
+					disabled={spec.rows.length === 0}
 					indeterminate={leftOut > 0 && leftOut < spec.rows.length}
 					onCheckedChange={() =>
 						toggle(

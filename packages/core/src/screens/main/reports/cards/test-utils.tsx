@@ -61,6 +61,12 @@ jest.mock('../context', () => ({
 	...jest.requireActual('../context'),
 	useReportsData: () => mockState.data,
 	useReportsScope: () => ({ statusMode: mockState.statusMode }),
+	useIncludedStatus: () => (order: { status?: string }) =>
+		[
+			'completed',
+			'processing',
+			...(mockState.statusMode === 'all' ? ['pending', 'on-hold'] : []),
+		].includes(order.status ?? ''),
 	useReportsPeriod: () => ({
 		dateRange: {
 			start: new Date(`${mockState.from}T00:00:00Z`),
