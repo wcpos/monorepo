@@ -99,8 +99,8 @@ const notSyncCategory = {
 	],
 };
 
-// displayKind's actor test is `actor && (actor.id !== undefined || actor.name
-// !== undefined)` — a null actor or a role-only actor is NOT an action row, so
+// displayKind's actor test is `actor && (actor.id != null || actor.name
+// != null)` — a null actor or a role-only actor is NOT an action row, so
 // the selectors probe the identifying fields, not the object.
 const hasActingActor = {
 	$or: [{ 'actor.id': { $exists: true } }, { 'actor.name': { $exists: true } }],

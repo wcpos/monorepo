@@ -1,6 +1,43 @@
-import { type EngineDocument, type LegacyCollectionName, readLegacyField } from './collection-map';
+import {
+	type EngineDocument,
+	type LegacyCollectionName,
+	readLegacyField,
+	resolveLegacyField,
+} from './collection-map';
+import { type ProjectionCollection, projectionReaderFor } from '../projection-read';
 
 import type { RxDocument } from 'rxdb';
+
+export type SearchProjectionRow = { id: string; fields: string[] };
+
+/**
+ * The search fields of every live record, read as a projection rather than as documents
+ * (#2242): the blob, the document scan and the short-prefix path only ever fold these strings.
+ * Legacy search fields resolve to plain engine paths (`LEGACY_SEARCH_FIELDS` are all payload or
+ * promoted columns); a computed mapping cannot be projected and is refused rather than read wrong.
+ */
+export async function searchProjection(
+	collection: ProjectionCollection,
+	name: LegacyCollectionName,
+	fields: readonly string[]
+): Promise<SearchProjectionRow[]> {
+	const mappings = fields.map((field) => resolveLegacyField(name, field));
+	const computed = mappings.find((mapping) => mapping.compute);
+	if (computed) {
+		throw new Error(
+			`Search field "${computed.legacy}" on ${name} is computed and cannot be read as a projection`
+		);
+	}
+	const paths = mappings.map((mapping) => mapping.readEnginePath ?? mapping.enginePath);
+	const rows = await projectionReaderFor(collection.database).readLiveProjection(collection, paths);
+	return rows.map((row) => ({
+		id: row.id,
+		fields: row.values.map((value, index) => {
+			const read = mappings[index].read;
+			return String((read ? read(value) : value) ?? '');
+		}),
+	}));
+}
 
 /**
  * The legacy-shaped snapshot of one engine record: `payload` flattened to the top level,

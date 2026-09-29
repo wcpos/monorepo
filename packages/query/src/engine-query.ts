@@ -38,7 +38,7 @@ import {
 	executeAdapterQuery,
 } from './engine-adapter/execute-query';
 import { catalogueSearchBlobFor } from './catalogue-search-blob';
-import { legacySearchSnapshot } from './engine-adapter/search-snapshot';
+import { legacySearchSnapshot, searchProjection } from './engine-adapter/search-snapshot';
 import { recoverEngineCollectionStorage } from './logs-storage-recovery';
 import {
 	fieldsMatchShortPrefix,
@@ -150,16 +150,12 @@ async function scanDocumentsForSearch(
 	collection: SearchableCollection,
 	search: string,
 	searchFields: string[],
-	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>
-): Promise<EngineRxDocument[]> {
+	collectionName: EngineQueryDescriptor['collection']
+): Promise<string[]> {
 	const tokens = searchTokens(search);
 	if (searchFields.length === 0 || tokens.length === 0) return [];
-	const documents = await collection.find().exec();
-	return documents.filter((document) => {
-		const snapshot = documentSnapshot(document);
-		const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-		return fieldsMatchTokens(fields, tokens);
-	});
+	const rows = await searchProjection(collection, collectionName, searchFields);
+	return rows.filter((row) => fieldsMatchTokens(row.fields, tokens)).map((row) => row.id);
 }
 function matchingSelectors$(
 	database: AdapterDatabase,
@@ -193,7 +189,12 @@ function matchingSelectors$(
 			descriptor.searchFields ??
 			collection.options?.searchFields ??
 			[];
-		const blob = catalogueSearchBlobFor(collection, searchFields, documentSnapshot);
+		const blob = catalogueSearchBlobFor(
+			collection,
+			searchFields,
+			documentSnapshot,
+			descriptor.collection
+		);
 		return blob.changes$.pipe(map(() => ({ selector, hitIds: blob.search(terms) })));
 	}
 	if (foldedSearch.length < FLEXSEARCH_MIN_TERM_LENGTH) {
@@ -208,16 +209,12 @@ function matchingSelectors$(
 		// is a genuine collection read error and must stay eligible for storage recovery.
 		return collection.$.pipe(
 			startWith(null),
-			switchMap(() => from(collection.find().exec())),
+			switchMap(() => from(searchProjection(collection, descriptor.collection, searchFields))),
 			map((documents) => ({
 				selector,
 				hitIds: documents
-					.filter((document) => {
-						const snapshot = documentSnapshot(document);
-						const fields = searchFields.map((field) => String(get(snapshot, field) ?? ''));
-						return fieldsMatchShortPrefix(fields, prefix);
-					})
-					.map((document) => document.primary),
+					.filter((row) => fieldsMatchShortPrefix(row.fields, prefix))
+					.map((row) => row.id),
 			}))
 		);
 	}
@@ -264,7 +261,7 @@ function matchingSelectors$(
 				trailing: true,
 			}),
 			switchMap(() =>
-				from(scanDocumentsForSearch(collection, search, searchFields, documentSnapshot))
+				from(scanDocumentsForSearch(collection, search, searchFields, descriptor.collection))
 			)
 		);
 
@@ -339,6 +336,7 @@ function matchingSelectors$(
 							return filtered;
 						}
 					}),
+					map((documents) => documents.map((document) => document.primary)),
 					// A poisoned pipeline surfacing through find() must never take search
 					// down with it — even after earlier answers: log once, stand the
 					// deadline lane down, and hand this binding to the scan for good. A
@@ -360,7 +358,7 @@ function matchingSelectors$(
 	}).pipe(
 		map((documents) => ({
 			selector,
-			hitIds: documents.map((document) => document.primary),
+			hitIds: documents,
 		}))
 	);
 }

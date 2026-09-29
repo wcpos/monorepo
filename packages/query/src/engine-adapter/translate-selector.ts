@@ -188,7 +188,7 @@ function matchesFieldCondition(actual: unknown, condition: unknown): boolean {
 			case '$nin':
 				return Array.isArray(operand) && !operand.some((item) => includesValue(actual, item));
 			case '$exists':
-				return Boolean(operand) === (actual !== undefined);
+				return Boolean(operand) === (actual != null);
 			case '$regex': {
 				if (typeof actual !== 'string') {
 					return false;

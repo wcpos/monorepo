@@ -397,3 +397,11 @@ describe('query-builder operators (codex round 2)', () => {
 		expect(residual({ uuid: 'b', payload: { status: 'draft' } } as any)).toBe(false);
 	});
 });
+
+it('treats null and absent as no value in residual exists checks', () => {
+	for (const value of [null, undefined]) {
+		const row = { ...product, payload: { ...product.payload, name: value } };
+		expect(translateSelector('products', { name: { $exists: true } }).residual(row)).toBe(false);
+		expect(translateSelector('products', { name: { $exists: false } }).residual(row)).toBe(true);
+	}
+});

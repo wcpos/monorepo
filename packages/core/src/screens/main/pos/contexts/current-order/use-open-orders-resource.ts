@@ -8,10 +8,11 @@ import {
 	declareRequirements,
 	engineCollection,
 	type EngineRecord,
-	resolveLegacyField,
+	OPEN_ORDER_STATUSES,
+	OPEN_ORDERS_SORT,
+	openOrdersSelector,
 	useQueryRuntime,
 } from '@wcpos/query';
-import { NO_STORE, wooMetaCarrier } from '@wcpos/sync-core';
 
 import {
 	compileQuery,
@@ -21,10 +22,6 @@ import {
 import type { OpenOrderHit } from './context';
 import type { RxDatabase } from 'rxdb';
 
-// record-manual-payment.ts patches status to derive().status, so a part-paid order
-// leaves pos-open and would drop out of the tabs mid-checkout. Include pos-partial
-// and pending to keep the order and its tender reachable, including after reload.
-const OPEN_ORDER_STATUSES = ['pos-open', 'pos-partial', 'pending'];
 const OPEN_ORDERS_COMPILED = OPEN_ORDER_STATUSES.map((status) =>
 	compileQuery(
 		'orders',
@@ -37,11 +34,6 @@ const OPEN_ORDERS_COMPILED = OPEN_ORDER_STATUSES.map((status) =>
 		{ id: `pos:open-orders:${status}` }
 	)
 );
-
-function orderMeta(document: EngineRecord<'orders'>) {
-	const meta = document.payload?.meta_data;
-	return Array.isArray(meta) ? meta : undefined;
-}
 
 /**
  * CANNOT loop across a Suspense retry: `(pos)/_layout.tsx` calls this hook and renders
@@ -65,28 +57,14 @@ export function useOpenOrdersResource(
 		}).pipe(
 			switchMap((database) => {
 				const collection = engineCollection(database, 'orders');
-				if (!collection) return of([] as EngineRecord<'orders'>[]);
-				const statusPath = resolveLegacyField('orders', 'status').enginePath;
-				return collection.find({ selector: { [statusPath]: { $in: OPEN_ORDER_STATUSES } } }).$;
+				// The scope and the order are the STORAGE's (#2242): no cashier, no query.
+				if (!collection || cashierID === undefined) return of([] as EngineRecord<'orders'>[]);
+				return collection.find({
+					selector: openOrdersSelector(cashierID, storeID),
+					sort: OPEN_ORDERS_SORT,
+				}).$;
 			}),
-			map((documents) =>
-				documents
-					.filter((document) => {
-						const { cashierId: posUser, storeId: posStore } = wooMetaCarrier.readIdentity(
-							orderMeta(document)
-						);
-						if (cashierID === undefined) return false;
-						if (storeID === undefined || storeID === NO_STORE) return posUser === String(cashierID);
-						return posUser === String(cashierID) && posStore === String(storeID);
-					})
-					.map((record) => ({ record }))
-					.sort((a, b) =>
-						(a.record.payload.date_created_gmt ?? '').localeCompare(
-							b.record.payload.date_created_gmt ?? ''
-						)
-					)
-					.map(({ record }) => ({ id: String(record.uuid), record }))
-			)
+			map((documents) => documents.map((record) => ({ id: String(record.uuid), record })))
 		);
 		return new ObservableResource(openOrders$);
 	}, [cashierID, runtime, storeID]);
