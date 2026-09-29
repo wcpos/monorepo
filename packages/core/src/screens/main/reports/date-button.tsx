@@ -82,6 +82,9 @@ export function DateButton({
 		if (openInitially) trigger.current?.open();
 	}, [openInitially]);
 	const [selectingStart, setSelectingStart] = React.useState(scope.from !== scope.to);
+	// The visible month, so the header arrows stop at the reach and at today's month instead of
+	// paging into months with no usable day.
+	const [visibleMonth, setVisibleMonth] = React.useState('');
 	const [draft, setDraft] = React.useState<DateRange>({
 		from: parseISO(scope.from),
 		to: parseISO(scope.to),
@@ -209,6 +212,13 @@ export function DateButton({
 							allowSelectionOutOfRange={!license?.isPro}
 							// A Free press on a spillover day must not page the calendar to a month it cannot use.
 							disableMonthChange={!license?.isPro}
+							onMonthChange={({ dateString }: { dateString: string }) =>
+								setVisibleMonth(dateString.slice(0, 7))
+							}
+							disableArrowRight={(visibleMonth || today.slice(0, 7)) >= today.slice(0, 7)}
+							disableArrowLeft={
+								(visibleMonth || today.slice(0, 7)) <= (license?.isPro ? min : today).slice(0, 7)
+							}
 							dateRange={draft}
 							onDateRangeChange={setDraft}
 							theme={{
