@@ -302,6 +302,12 @@ export const collectionMap = {
 	refunds: {
 		engineCollection: 'refunds',
 		fields: {
+			date_created_gmt: {
+				legacy: 'date_created_gmt',
+				kind: 'payload',
+				enginePath: 'payload.date_created_gmt',
+				wireFace: 'dimension',
+			},
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			session_id: { legacy: 'session_id', kind: 'payload', enginePath: 'sessionId' },
 			id: { legacy: 'id', kind: 'identifier', enginePath: 'remoteId', read: readRemoteId },

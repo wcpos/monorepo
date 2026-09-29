@@ -69,7 +69,7 @@ const RANGED_COMPLETE_MAX_RECORDS = ORDER_BROWSE_RANGED_COMPLETE_MAX_RECORDS;
  * resumed without either skipping records or looping, so the walk fails loudly instead — see
  * the throw in fetchBrowserOrderQuery.
  */
-const RANGED_RESUME_MAX_EXCLUDED_IDS = 500;
+export const RANGED_RESUME_MAX_EXCLUDED_IDS = 500;
 
 export type OrdersSchedulerCoverageRepository = BrowseWindowLaneEvictionRepository & {
 	recordQueryResult(input: BuildCoverageDocumentsFromQueryResultInput): Promise<void>;
@@ -512,7 +512,7 @@ async function hasFullBaselineMarker(
  * requirement-bridge.ts — get it wrong and the cursor drifts by the store's UTC offset, which
  * on a resume silently skips (or re-downloads) hours of orders.
  */
-function orderCreatedAtSeconds(payload: WooOrderPayload): number | null {
+function orderCreatedAtSeconds(payload: { date_created_gmt?: unknown }): number | null {
 	const raw = (payload as { date_created_gmt?: unknown }).date_created_gmt;
 	if (typeof raw !== 'string' || raw === '') return null;
 	const milliseconds = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}Z`);
@@ -520,7 +520,7 @@ function orderCreatedAtSeconds(payload: WooOrderPayload): number | null {
 	return Math.floor(milliseconds / 1_000);
 }
 
-function payloadWooId(payload: WooOrderPayload): number | null {
+function payloadWooId(payload: { id?: number }): number | null {
 	const id = Number((payload as { id?: unknown }).id);
 	return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
@@ -532,7 +532,9 @@ function payloadWooId(payload: WooOrderPayload): number | null {
  * and still counted as covered, they simply do not participate in the boundary. `null` means
  * the whole page was unusable, which leaves nowhere to resume from.
  */
-function pageBoundary(payloads: WooOrderPayload[]): { seconds: number; wooIds: number[] } | null {
+export function pageBoundary(
+	payloads: { id?: number; date_created_gmt?: unknown }[]
+): { seconds: number; wooIds: number[] } | null {
 	let seconds: number | null = null;
 	let wooIds: number[] = [];
 	for (const payload of payloads) {

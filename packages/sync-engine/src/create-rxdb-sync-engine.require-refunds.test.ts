@@ -583,3 +583,183 @@ describe('refund requirements', () => {
 		handle.release();
 	});
 });
+
+describe('refund browse requirements', () => {
+	const range = {
+		kind: 'refunds-browse',
+		collection: 'refunds',
+		after: 1788220800,
+		before: 1788393600,
+		limit: 'all',
+	} as const;
+	it('refunds-browse fetches the window in date order and continues past one page to completion; coverage is recorded cumulatively', async () => {
+		const h = await harness((url) => {
+			const excluded = new Set((url.searchParams.get('exclude') ?? '').split(',').map(Number));
+			const remaining = Array.from({ length: 101 }, (_, index) => index + 1).filter(
+				(id) => !excluded.has(id)
+			);
+			return Response.json(remaining.slice(0, 100).map(row), {
+				headers: {
+					'X-WP-Total': String(remaining.length),
+					'X-WP-TotalPages': String(Math.ceil(remaining.length / 100)),
+				},
+			});
+		});
+		const handle = h.engine.require({ ...range, id: 'browse' });
+		await handle.ready;
+		handle.release();
+		expect(h.requests).toHaveLength(2);
+		for (const request of h.requests) {
+			expect(request.searchParams.get('orderby')).toBe('date');
+			expect(request.searchParams.get('order')).toBe('desc');
+			expect(request.searchParams.get('after')).toBe('2026-08-31T23:59:59.000Z');
+			expect(request.searchParams.get('page')).toBe('1');
+		}
+		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual(
+			Array.from({ length: 101 }, (_, index) => index + 1).sort()
+		);
+		const coverage = createLocalCoverage({
+			database: (await h.engine.whenActive())!.database as never,
+			freshForMs: 1000,
+		});
+		const lane = await coverage.readLane('refunds', handle.queryKey!);
+		expect(lane?.complete).toBe(true);
+		expect(lane?.expectedRecordIds).toHaveLength(101);
+		expect(lane?.rangedResume).toBeUndefined();
+	});
+	it('a fetched refund is admitted through the parent-held rule when the parent is local and POS provenance otherwise; a refund outside the rule is not written', async () => {
+		const h = await harness(() =>
+			Response.json([
+				{ ...row(1), meta_data: [] },
+				row(2),
+				{ ...row(3), parent_id: 99 },
+				{ ...row(4), parent_id: 99, meta_data: [] },
+			])
+		);
+		const scope = await h.engine.whenActive();
+		await new EngineOrderRepository(scope.database.collections as never).upsertMany([
+			parent(42, [{ id: 1 }]),
+		]);
+		const handle = h.engine.require({ ...range, id: 'admission' });
+		await handle.ready;
+		handle.release();
+		expect((await readRefunds(h)).map((doc) => doc.payload.id).sort()).toEqual([1, 3]);
+	});
+	it('persists cursor, cumulative IDs and progress across an interrupted declaration', async () => {
+		let fail = true;
+		const h = await harness((url) => {
+			const excluded = new Set((url.searchParams.get('exclude') ?? '').split(',').map(Number));
+			if (url.searchParams.has('exclude') && fail)
+				return new Response('interrupted', { status: 500 });
+			const remaining = Array.from({ length: 101 }, (_, i) => i + 1).filter(
+				(id) => !excluded.has(id)
+			);
+			return Response.json(remaining.slice(0, 100).map(row), {
+				headers: {
+					'X-WP-Total': String(remaining.length),
+					'X-WP-TotalPages': String(Math.ceil(remaining.length / 100)),
+				},
+			});
+		});
+		const first = h.engine.require({ ...range, id: 'interrupted' });
+		const progress: unknown[] = [];
+		const unsubscribe = h.engine.coverageChanges(
+			{ collection: 'refunds', queryKey: first.queryKey! },
+			(verdict) => progress.push(verdict.progress)
+		);
+		await expect(first.ready).rejects.toThrow();
+		first.release();
+		const scope = await h.engine.whenActive();
+		const coverage = createLocalCoverage({ database: scope.database as never, freshForMs: 1000 });
+		const lane = await coverage.readLane('refunds', first.queryKey!);
+		expect(lane?.expectedRecordIds).toHaveLength(100);
+		expect(lane?.rangedResume).toMatchObject({
+			downloadedRecords: 100,
+			totalRecords: 101,
+			beforeSeconds: 1788220801,
+		});
+		await vi.waitFor(() => expect(progress).toContainEqual({ downloaded: 100, total: 101 }));
+		fail = false;
+		h.clock.advance(60_000);
+		const again = h.engine.require({ ...range, id: 'resumed' });
+		await again.ready;
+		again.release();
+		unsubscribe();
+		expect(h.requests.at(-1)?.searchParams.get('exclude')?.split(',')).toHaveLength(100);
+		expect((await coverage.readLane('refunds', again.queryKey!))?.expectedRecordIds).toHaveLength(
+			101
+		);
+	});
+	it('an all-rejected page is not exhaustion and downloaded progress counts raw rows', async () => {
+		const h = await harness((url) => {
+			const next = url.searchParams.has('exclude');
+			return Response.json(
+				next
+					? [row(101)]
+					: Array.from({ length: 100 }, (_, i) => ({ ...row(i + 1), meta_data: [] })),
+				{ headers: { 'X-WP-TotalPages': next ? '1' : '2' } }
+			);
+		});
+		const handle = h.engine.require({ ...range, id: 'rejected-page' });
+		await handle.ready;
+		handle.release();
+		expect(h.requests).toHaveLength(2);
+		expect((await readRefunds(h)).map((doc) => doc.payload.id)).toEqual([101]);
+	});
+	it('a lane reset during a page restarts instead of claiming completion from lost ancestry', async () => {
+		let reset = async () => {};
+		let resetOnce = false;
+		const h = await harness(async (url) => {
+			const excluded = new Set((url.searchParams.get('exclude') ?? '').split(',').map(Number));
+			if (url.searchParams.has('exclude') && !resetOnce) {
+				resetOnce = true;
+				await reset();
+			}
+			const remaining = Array.from({ length: 101 }, (_, i) => i + 1).filter(
+				(id) => !excluded.has(id)
+			);
+			return Response.json(remaining.slice(0, 100).map(row), {
+				headers: {
+					'X-WP-Total': String(remaining.length),
+					'X-WP-TotalPages': String(Math.ceil(remaining.length / 100)),
+				},
+			});
+		});
+		const scope = await h.engine.whenActive();
+		reset = async () => {
+			await scope.database.collections.coverageLanes.find().remove();
+		};
+		const handle = h.engine.require({ ...range, id: 'reset-mid-page' });
+		await handle.ready;
+		handle.release();
+		expect(h.requests).toHaveLength(4);
+		const coverage = createLocalCoverage({ database: scope.database as never, freshForMs: 1000 });
+		const lane = await coverage.readLane('refunds', handle.queryKey!);
+		expect(lane?.complete).toBe(true);
+		expect(lane?.expectedRecordIds).toHaveLength(101);
+	});
+	it('numeric windows stop at their budget without claiming server exhaustion', async () => {
+		const h = await harness(() =>
+			Response.json([row(1), row(2)], { headers: { 'X-WP-TotalPages': '2' } })
+		);
+		const handle = h.engine.require({ ...range, id: 'numeric', limit: 2 });
+		await handle.ready;
+		handle.release();
+		const scope = await h.engine.whenActive();
+		const coverage = createLocalCoverage({ database: scope.database as never, freshForMs: 1000 });
+		expect((await coverage.readLane('refunds', handle.queryKey!))?.complete).toBe(false);
+		expect(h.requests).toHaveLength(1);
+		expect(h.requests[0].searchParams.get('per_page')).toBe('2');
+		expect(h.requests[0].searchParams.has('created_via')).toBe(false);
+	});
+	it('two callers with the same window share one lane', async () => {
+		const h = await harness(() => Response.json([row(1)]));
+		const a = h.engine.require({ ...range, id: 'a' });
+		const b = h.engine.require({ ...range, id: 'b', priority: 800 });
+		await Promise.all([a.ready, b.ready]);
+		a.release();
+		b.release();
+		expect(a.queryKey).toBe(b.queryKey);
+		expect(h.requests).toHaveLength(1);
+	});
+});

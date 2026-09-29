@@ -8,6 +8,7 @@ import type {
 } from './query-state-types';
 
 const DEFAULT_FILTERS = {
+	refunds: {},
 	products: { categories: [], tags: [], brands: [] },
 	orders: {},
 	coupons: {},
