@@ -41,14 +41,6 @@ jest.mock('../../plugins/storage-timing-probe', () => ({
 	...jest.requireActual('../../plugins/storage-timing-probe'),
 	withStorageTimingProbe: (storage: unknown, layer: string) => mockProbe(storage, layer),
 }));
-// Retired constructor can load during the test-first red phase.
-jest.mock('rxdb-premium/plugins/storage-filesystem-expo', () => ({
-	getRxStorageExpoAsync: () => ({ name: 'old' }),
-}));
-jest.mock('../../plugins/opfs-targeted-recovery.mjs', () => ({
-	withTargetedOpfsRecovery: (storage: unknown) => storage,
-}));
-
 describe('native SQLite storage seam', () => {
 	const flagBefore = process.env.EXPO_PUBLIC_WCPOS_STORAGE_PROBE;
 	beforeEach(() => {
