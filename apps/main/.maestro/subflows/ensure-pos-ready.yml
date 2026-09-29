@@ -129,6 +129,20 @@ appId: com.wcpos.main.dev
 # 33662941896 died in flow 04 at 36 s exactly that way. The keyboard's tell
 # on a phone is the tab bar pushed off screen while the search box stays:
 # dismiss only then, and only on phones (tablets have no tab bar to read).
+# Set the persisted variation alternative once per Maestro run.
+- runFlow:
+    when:
+      true: ${!output.variationsStyleInline}
+      visible:
+        id: "products-settings-button"
+    commands:
+      - tapOn:
+          id: "products-settings-button"
+      - tapOn:
+          id: "products-variations-style-inline"
+      - tapOn:
+          id: "ui-settings-close"
+      - evalScript: ${output.variationsStyleInline = true}
 - runFlow:
     when:
       true: "${typeof DEVICE_CLASS !== 'undefined' && DEVICE_CLASS === 'phone'}"
@@ -153,17 +167,3 @@ appId: com.wcpos.main.dev
           visible:
             id: "pos-tab-products"
           timeout: 10000
-# Set the persisted variation alternative once per Maestro run.
-- runFlow:
-    when:
-      true: ${!output.variationsStyleInline}
-      visible:
-        id: "products-settings-button"
-    commands:
-      - tapOn:
-          id: "products-settings-button"
-      - tapOn:
-          id: "products-variations-style-inline"
-      - tapOn:
-          id: "ui-settings-close"
-      - evalScript: ${output.variationsStyleInline = true}
