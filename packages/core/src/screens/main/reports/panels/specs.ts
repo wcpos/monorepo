@@ -74,7 +74,12 @@ export function panelSpec(id: Exclude<DetailId, 'orders'>, inputs: Inputs): Pane
 					key: row.key,
 					cells: [row.name || unknown, quantity(row.quantity), money(row.amount)],
 				})),
-				[t('reports.all_products'), quantity(totals.totalItemsSold), amount]
+				// The rows carry line totals; the order total would add shipping and fees they do not.
+				[
+					t('reports.all_products'),
+					quantity(totals.totalItemsSold),
+					money(products.reduce((sum, row) => sum + row.amount, 0)),
+				]
 			);
 		case 'categories': {
 			const labels: Record<string, string> = {
@@ -92,7 +97,12 @@ export function panelSpec(id: Exclude<DetailId, 'orders'>, inputs: Inputs): Pane
 						share(row.share),
 					],
 				})),
-				[total, quantity(totals.totalItemsSold), amount, '']
+				[
+					total,
+					quantity(totals.totalItemsSold),
+					money(categories.parts.reduce((sum, row) => sum + row.amount, 0)),
+					'',
+				]
 			);
 		}
 		case 'cashiers':

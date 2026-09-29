@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, ScrollView, View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { format } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
@@ -63,6 +63,7 @@ export function DetailPanel() {
 	);
 	const products = useLocalProducts(detail === 'categories' ? ids : []);
 	const [error, setError] = React.useState('');
+	const [busy, setBusy] = React.useState(false);
 	if (!detail || detail === 'orders') return null;
 	const ready =
 		formats.store && (detail !== 'categories' || products) && (detail !== 'cashiers' || directory);
@@ -115,17 +116,13 @@ export function DetailPanel() {
 					{t('reports.panel_scope', { period, register })}
 				</Text>
 			</View>
-			<ScrollView
-				testID="detail-panel-body"
-				className="min-h-0 flex-1"
-				contentContainerClassName="p-4"
-			>
+			<View testID="detail-panel-body" className="min-h-0 flex-1 p-4">
 				{ready ? (
 					<ReportRows spec={spec} testID={`detail-${detail}`} />
 				) : (
 					<Text>{t('common.loading')}</Text>
 				)}
-			</ScrollView>
+			</View>
 			<View
 				testID="detail-panel-footer"
 				className="gap-2 border-t p-4"
@@ -143,7 +140,10 @@ export function DetailPanel() {
 							testID="detail-panel-export"
 							variant="outline"
 							className="min-h-12"
+							loading={busy}
 							onPress={async () => {
+								if (busy) return;
+								setBusy(true);
 								setError('');
 								try {
 									await saveOrShareCsv(
@@ -152,6 +152,8 @@ export function DetailPanel() {
 									);
 								} catch {
 									setError(t('reports.export_failed'));
+								} finally {
+									setBusy(false);
 								}
 							}}
 						>
