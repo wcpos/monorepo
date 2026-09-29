@@ -48,7 +48,12 @@ export function ReportRows({ spec, testID }: { spec: PanelSpec; testID: string }
 									<Text className="font-semibold">{row.cells[0]}</Text>
 									{row.cells.slice(1).map((cell, index) => (
 										<View key={index} className="flex-row justify-between gap-3">
-											<Text className="text-muted-foreground">{spec.head[index + 1]}</Text>
+											<Text
+												testID={`${testID}-head-${spec.keys[index + 1]}`}
+												className="text-muted-foreground"
+											>
+												{spec.head[index + 1]}
+											</Text>
 											<Text className="min-w-0 shrink text-right tabular-nums">{cell}</Text>
 										</View>
 									))}
@@ -58,11 +63,20 @@ export function ReportRows({ spec, testID }: { spec: PanelSpec; testID: string }
 					/>
 				</VirtualizedList.Root>
 				{spec.total && (
-					<View testID={`${testID}-total`} className="flex-row justify-between gap-3 pt-3">
-						<Text className="min-w-0 shrink font-semibold">{spec.total[0]}</Text>
-						<Text className="text-right font-semibold tabular-nums">
-							{spec.total.filter(Boolean).at(-1)}
-						</Text>
+					// Every total with its label: a report with the margin columns has three beside
+					// the amount, and the amount must never give way to a percentage.
+					<View testID={`${testID}-total`} className="gap-2 pt-3">
+						<Text className="font-semibold">{spec.total[0]}</Text>
+						{spec.total.slice(1).map((cell, index) =>
+							cell ? (
+								<View key={index} className="flex-row justify-between gap-3">
+									<Text className="text-muted-foreground">{spec.head[index + 1]}</Text>
+									<Text className="min-w-0 shrink text-right font-semibold tabular-nums">
+										{cell}
+									</Text>
+								</View>
+							) : null
+						)}
 					</View>
 				)}
 			</View>
@@ -82,7 +96,7 @@ export function ReportRows({ spec, testID }: { spec: PanelSpec; testID: string }
 			<TableHeader>
 				<TableRow>
 					{spec.head.map((label, index) => (
-						<TableHead key={index}>
+						<TableHead key={index} testID={`${testID}-head-${spec.keys[index]}`}>
 							<Text className={spec.align[index] === 'right' ? 'text-right' : 'text-left'}>
 								{label}
 							</Text>

@@ -2,6 +2,7 @@ import round from 'lodash/round';
 
 import { readLedger } from '@wcpos/order-math';
 
+import type { OrderLine } from '../margin';
 import type { ReportOrder, ReportsScope } from '../context';
 import type { calculateTotals } from '../report/utils';
 
@@ -48,12 +49,19 @@ export function statusCounts(orders: ReportOrder[], statusMode: ReportsScope['st
 export function topProducts(orders: ReportOrder[], totals: Totals, num_decimals = 2) {
 	const products = new Map<
 		number | string,
-		{ key: number | string; name: string; quantity: number; amount: number }
+		{ key: number | string; name: string; quantity: number; amount: number; lines?: OrderLine[] }
 	>();
 	for (const order of orders)
 		for (const line of order.line_items ?? []) {
 			const key = line.variation_id || line.product_id || line.name || '';
-			const row = products.get(key) ?? { key, name: line.name || '', quantity: 0, amount: 0 };
+			const row = products.get(key) ?? {
+				key,
+				name: line.name || '',
+				quantity: 0,
+				amount: 0,
+				lines: [],
+			};
+			(row.lines ??= []).push(line);
 			row.quantity += Number.isFinite(line.quantity) ? line.quantity! : 0;
 			row.amount += Number(line.total || 0) + Number(line.total_tax || 0);
 			products.set(key, row);
@@ -205,23 +213,41 @@ export function cashiers(totals: Totals) {
 		.map((row) => ({ ...row, share: totals.total ? row.amount / totals.total : 0 }))
 		.sort((a, b) => b.amount - a.amount);
 }
-export type LocalProduct = { id?: number; categories?: { id?: number; name?: string }[] };
+type Group = { id?: number; name?: string };
+export type LocalProduct = {
+	id?: number;
+	categories?: Group[];
+	brands?: Group[];
+	cost_of_goods_sold?: unknown;
+};
 export function categories(
 	orders: ReportOrder[],
 	products: LocalProduct[],
 	totals: Totals,
-	num_decimals = 2
+	num_decimals = 2,
+	group: (product: LocalProduct) => Group | undefined = (product) => product.categories?.[0],
+	emptyKey = 'uncategorised'
 ) {
 	const directory = new Map(products.map((product) => [product.id, product]));
-	const parts = new Map<string, { key: string; label: string; amount: number; quantity: number }>();
+	const parts = new Map<
+		string,
+		{ key: string; label: string; amount: number; quantity: number; lines?: OrderLine[] }
+	>();
 	let unknownLines = 0,
 		totalLines = 0;
 	for (const order of orders)
 		for (const line of order.line_items ?? []) {
 			const product = directory.get(line.product_id ?? undefined),
-				category = product?.categories?.[0];
-			const key = !product ? 'unknown' : category ? String(category.id) : 'uncategorised';
-			const part = parts.get(key) ?? { key, label: category?.name || '', amount: 0, quantity: 0 };
+				category = product ? group(product) : undefined;
+			const key = !product ? 'unknown' : category ? String(category.id) : emptyKey;
+			const part = parts.get(key) ?? {
+				key,
+				label: category?.name || '',
+				amount: 0,
+				quantity: 0,
+				lines: [],
+			};
+			(part.lines ??= []).push(line);
 			part.amount += Number(line.total || 0) + Number(line.total_tax || 0);
 			part.quantity += Number.isFinite(line.quantity) ? line.quantity! : 0;
 			parts.set(key, part);

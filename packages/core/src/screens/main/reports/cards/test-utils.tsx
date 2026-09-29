@@ -1,12 +1,15 @@
 import * as React from 'react';
 
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, type Observable } from 'rxjs';
 
 import { calculateTotals } from '../report/utils';
 
 import type { LocalProduct } from './aggregate';
 import type { ReportOrder, ReportsData } from '../context';
 
+export const mockCategories = new BehaviorSubject<
+	{ id: number; name: string; parent: number }[] | undefined
+>([]);
 export const mockProducts = new BehaviorSubject<LocalProduct[] | undefined>([]);
 export const mockCredentials = new BehaviorSubject<
 	{ id: number; display_name: string }[] | undefined
@@ -87,15 +90,25 @@ jest.mock('../../../../contexts/app-state', () => ({
 }));
 jest.mock('@wcpos/query', () => ({
 	useQueryRuntime: () => mockRuntime,
-	observeEngineQuery: () =>
-		mockProducts.pipe(
+	observeEngineQuery: (
+		_engine: unknown,
+		_locale: unknown,
+		query: { collection: string; selector: { id: { $in: number[] } } }
+	) =>
+		(
+			(query.collection === 'products/categories' ? mockCategories : mockProducts) as Observable<
+				LocalProduct[] | undefined
+			>
+		).pipe(
 			jest.requireActual('rxjs').filter((products: unknown) => products !== undefined),
-			jest
-				.requireActual('rxjs')
-				.map(
-					(products: LocalProduct[] | undefined) =>
-						products && { hits: products.map((payload) => ({ record: { payload } })) }
-				)
+			jest.requireActual('rxjs').map(
+				(products: LocalProduct[] | undefined) =>
+					products && {
+						hits: products
+							.filter((p) => query.selector.id.$in.includes(p.id!))
+							.map((payload) => ({ record: { payload } })),
+					}
+			)
 		),
 	useDocField: (source: unknown, select: (source: unknown) => unknown) => source && select(source),
 }));

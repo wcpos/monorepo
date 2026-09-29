@@ -219,7 +219,16 @@ const test = authenticatedTest.extend<{ freeLicense: boolean; probe: Probe }>({
 											date_created_gmt: stamp,
 											date_modified: stamp,
 											date_modified_gmt: stamp,
-											line_items: [],
+											line_items: [
+												{
+													id: 1,
+													product_id: null,
+													name: 'Report probe',
+													quantity: 1,
+													total: '10.00',
+													total_tax: '0.00',
+												},
+											],
 											tax_lines: [],
 											refunds: [],
 											meta_data: [
@@ -466,6 +475,13 @@ async function openClosures(page: Page) {
 	await expect(page.getByTestId('card-taxes')).toBeVisible();
 	await expect(page.getByTestId('card-payments')).toBeVisible();
 	await expect(page.getByTestId('card-payments-figure')).toHaveText(/\d/);
+	// No COGS on the stub order; its custom line joins no catalogue product.
+	await expect(page.getByTestId('card-brands')).toHaveCount(0);
+	await page.getByTestId('card-products-open').click();
+	await expect(page.getByTestId('detail-products')).toBeVisible();
+	await expect(page.getByTestId('detail-products-head-cost')).toHaveCount(0);
+	if ((page.viewportSize()?.width ?? 0) < 640) await page.getByTestId('detail-panel-back').click();
+	else await page.getByTestId('detail-panel-close').click();
 	await page.getByTestId('card-taxes-open').click();
 	await expect(page.getByTestId('detail-panel-body')).toBeVisible();
 	await expect(page.getByTestId('detail-panel-export')).toBeVisible();
