@@ -136,6 +136,9 @@ describe('Report query-state dates', () => {
 	});
 });
 
+jest.mock('@wcpos/hooks/use-online-status', () => ({
+	useOnlineStatus: () => ({ status: 'online-website-available' }),
+}));
 jest.mock('../../../../services/register/use-register-names', () => ({
 	useRegisterNamesReady: () => true,
 	useRegisterNames: () => ({}),

@@ -23,7 +23,13 @@ import { useQueryState, useQueryStateActions } from '../../../../query';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
 import { Chart } from '../chart';
-import { ReportsComparison, useReportsData, useReportsPeriod, useReportsScope } from '../context';
+import {
+	ReportsComparison,
+	useReportsBinding,
+	useReportsData,
+	useReportsPeriod,
+	useReportsScope,
+} from '../context';
 import { calculateTotals } from '../report/utils';
 import { useReportPrint } from '../report/use-report-print';
 import { ZReport } from '../report/template';
@@ -294,6 +300,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
 	const { cmp, setCmp, statusMode, setStatusMode } = useReportsScope();
+	const { comparisonBinding } = useReportsBinding();
 	const { period, timezone, storeId, dateRange } = useReportsPeriod();
 	const store = useDocField(useViewedStore(storeId), (value) => value);
 	const options = {
@@ -417,7 +424,11 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			)}
 			{/* One comparison read for the four difference lines. Its loading and its failure are
 			    the differences' alone: the figure and companions stay (ledger 22). */}
-			<ErrorBoundary FallbackComponent={() => <Figures {...figures} comparison="failed" />}>
+			<ErrorBoundary
+				FallbackComponent={() => <Figures {...figures} comparison="failed" />}
+				// A failed comparison is retried when its query changes (range, cashier, choice, status).
+				resetKeys={[comparisonBinding, cmp, statusMode]}
+			>
 				<React.Suspense fallback={<Figures {...figures} comparison="loading" />}>
 					<ReportsComparison>
 						<ComparedFigures {...figures} />

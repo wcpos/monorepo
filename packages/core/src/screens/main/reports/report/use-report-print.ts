@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { ViewInstance } from 'react-native';
 
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
 
 import { generateZReportHTML } from './generate-html';
@@ -24,8 +25,8 @@ import { useQueryState } from '../../../../query';
 export function useReportPrint(storeId?: number) {
 	const t = useT();
 	const registerNames = useRegisterNames(storeId);
-	// Printing waits for the store's register list: a name not yet read must not print as an id.
-	const ready = useRegisterNamesReady(storeId);
+	const namesLoaded = useRegisterNamesReady(storeId);
+	const online = useOnlineStatus().status === 'online-website-available';
 	const contentRef = React.useRef<ViewInstance>(null);
 	const { store } = useStoreSession();
 	const cashier = useReportCashier();
@@ -69,6 +70,10 @@ export function useReportPrint(storeId?: number) {
 		shippingTotalsArray,
 		averageOrderValue,
 	} = calculateTotals({ orders: selectedOrders, num_decimals });
+	// Printing waits for the store's register list only while it can still arrive and the report
+	// names a register it has not resolved: offline, or with every name known, it prints.
+	const ready =
+		namesLoaded || !online || registerArray.every(({ registerId }) => !!registerNames[registerId]);
 
 	const reportPeriod = React.useMemo(() => {
 		const from = selectedDateRange?.from
