@@ -1,10 +1,22 @@
 import * as React from 'react';
 
+import { BehaviorSubject } from 'rxjs';
+
 import { calculateTotals } from '../report/utils';
 
+import type { LocalProduct } from './aggregate';
 import type { ReportOrder, ReportsData } from '../context';
 
+export const mockProducts = new BehaviorSubject<LocalProduct[] | undefined>([]);
+export const mockCredentials = new BehaviorSubject<
+	{ id: number; display_name: string }[] | undefined
+>([]);
+const mockSite = { populate$: () => mockCredentials };
+const mockRuntime = { engine: {}, locale: 'en' };
 export const mockState = {
+	register: undefined as string | undefined,
+	names: {} as Record<string, string>,
+	namesReady: true,
 	screenSize: 'lg',
 	store: {
 		id: 9,
@@ -63,9 +75,21 @@ jest.mock('../../../../contexts/theme', () => ({
 	useTheme: () => ({ screenSize: mockState.screenSize }),
 }));
 jest.mock('../../../../contexts/app-state', () => ({
+	useStoreSession: () => ({ site: mockSite, store: mockState.store }),
 	useAppState: () => ({ store: mockState.store }),
 }));
 jest.mock('@wcpos/query', () => ({
+	useQueryRuntime: () => mockRuntime,
+	observeEngineQuery: () =>
+		mockProducts.pipe(
+			jest.requireActual('rxjs').filter((products: unknown) => products !== undefined),
+			jest
+				.requireActual('rxjs')
+				.map(
+					(products: LocalProduct[] | undefined) =>
+						products && { hits: products.map((payload) => ({ record: { payload } })) }
+				)
+		),
 	useDocField: (source: unknown, select: (source: unknown) => unknown) => source && select(source),
 }));
 jest.mock('../../../../contexts/translations', () => ({
@@ -110,4 +134,22 @@ jest.mock('@wcpos/components/popover', () => ({
 }));
 jest.mock('react-native-safe-area-context', () => ({
 	useSafeAreaInsets: () => ({ top: 0, bottom: 0 }),
+}));
+
+jest.mock('../../../../query', () => ({
+	useQueryState: () => ({ filters: { register: mockState.register } }),
+}));
+jest.mock('../../../../services/register/use-register-names', () => ({
+	useRegisterNames: () => mockState.names,
+	useRegisterNamesReady: () => mockState.namesReady,
+}));
+jest.mock('uniwind', () => ({
+	useCSSVariable: () => ['red', 'blue', 'green', 'orange', 'purple', 'black', 'gray'],
+}));
+jest.mock('react-native-svg', () => ({
+	__esModule: true,
+	default: ({ children, ...props }: React.PropsWithChildren) =>
+		React.createElement('svg', props, children),
+	Circle: (props: object) => React.createElement('circle', props),
+	G: ({ children, ...props }: React.PropsWithChildren) => React.createElement('g', props, children),
 }));

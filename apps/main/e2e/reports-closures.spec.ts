@@ -464,6 +464,8 @@ async function openClosures(page: Page) {
 	await expect(page.getByTestId('reports-period-title')).toHaveText(/\S/);
 	await expect(page.getByTestId('card-orders-figure')).toHaveText(/\d/);
 	await expect(page.getByTestId('card-taxes')).toBeVisible();
+	await expect(page.getByTestId('card-payments')).toBeVisible();
+	await expect(page.getByTestId('card-payments-figure')).toHaveText(/\d/);
 
 	await page.getByTestId('reports-scope').click();
 	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();

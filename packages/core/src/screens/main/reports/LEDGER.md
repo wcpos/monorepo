@@ -40,6 +40,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 24. The period section follows the date and computes every card on the device from selected orders (the status set and unticked orders already applied); the till strip stays outside — evidence: build brief §1 “Period section”, §2; wcpos/roadmap#332 PR 3a.
 25. Ledger figures are plain numbers (Orders, Taxes’ Net · Tax · Gross, Refunds); ranked magnitudes are bars (Top products); ledger splits use one proportional bar (tax rates, kept against refunded, order statuses); parts of a whole use donuts (PR 3b); change over time uses the hero chart — evidence: build brief §1 “Encoding rule”; wcpos/roadmap#332 PR 3a.
 
+26. The parts-of-a-whole cards are donuts in the five shared categorical colours with the total in the middle and a row per part, at most five parts and an Other; Payments reads the order’s tender ledger where it exists and the order’s payment method otherwise (a split sale counts once per method it touched); Categories joins lines to local products by first category and names the lines it cannot join — evidence: build brief §1 “Period section”, §5 “Thick distinct-hue donut”; wcpos/roadmap#332 PR 3b.
+
 ## Evidence footnotes
 
 [^query]: `91722e8e59 2026-07-15 feat(core): the reports screen rides the query-state store + bindings (per-screen migration 6/8) (#659)`.
