@@ -8,6 +8,7 @@ import { mockLaneProgress, mockPrintDocument, preparePanel, room } from './test-
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import { ReportRows } from './report-rows';
 
+import type { PanelSpec } from './specs';
 import type * as Context from '../context';
 
 beforeEach(() => {
@@ -88,7 +89,7 @@ it('renders labelled phone rows and a period-neutral empty line', () => {
 	};
 	const view = render(<ReportRows spec={{ ...spec, align: [...spec.align] }} testID="rows" />);
 	expect(screen.getByTestId('rows-row-one').textContent).toBe('TeaQty1.5Amount£3.00');
-	expect(screen.getByTestId('rows-total').textContent).toBe('All products£3.00');
+	expect(screen.getByTestId('rows-total').textContent).toBe('All productsQty1.5Amount£3.00');
 	view.rerender(<ReportRows spec={{ ...spec, align: [...spec.align], rows: [] }} testID="rows" />);
 	expect(screen.getByText('Nothing in this period')).toBeTruthy();
 });
@@ -193,4 +194,21 @@ it('the footer names the items missing a cost', () => {
 	expect(screen.getByTestId('detail-panel-cost-missing').textContent).toBe(
 		'1 orders · £150.00 · cost missing on 1.5 of 3.5 items'
 	);
+});
+it('a phone total with the margin columns keeps its amount beside the margin', () => {
+	mockState.screenSize = 'sm';
+	const spec: PanelSpec = {
+		keys: ['product', 'qty', 'amount', 'cost', 'profit', 'margin'],
+		head: ['Product', 'Qty', 'Amount', 'Cost', 'Profit', 'Margin %'],
+		types: ['text', 'number', 'money', 'money', 'money', 'number'],
+		rows: [{ key: 'one', cells: ['Tea', '1', '£100.00', '£25.00', '£75.00', '75.0%'], raw: [] }],
+		total: ['All products', '1', '£100.00', '£25.00', '£75.00', '75.0%'],
+		totalRaw: [],
+		align: ['left', 'right', 'right', 'right', 'right', 'right'],
+	};
+	render(<ReportRows spec={spec} testID="rows" />);
+	expect(screen.getByTestId('rows-total').textContent).toBe(
+		'All productsQty1Amount£100.00Cost£25.00Profit£75.00Margin %75.0%'
+	);
+	mockState.screenSize = 'lg';
 });
