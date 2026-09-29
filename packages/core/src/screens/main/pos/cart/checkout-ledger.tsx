@@ -4,8 +4,9 @@ import { ScrollView, View } from 'react-native';
 import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { type EngineRecord, useRecordField } from '@wcpos/query';
+import { type EngineRecord, useDocField, useRecordField } from '@wcpos/query';
 
+import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -23,6 +24,10 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 	const payload = useRecordField(order, (record) => record.payload);
 	const { format: formatCurrency } = useCurrencyFormat({ currencySymbol: payload.currency_symbol });
 	const { format: formatName } = useCustomerNameFormat();
+	const { store } = useAppState();
+	// The same figure the cart's Total column showed a moment ago: with prices shown
+	// tax-inclusive the line total carries its tax, otherwise it is the net (product-total.tsx).
+	const taxDisplayCart = useDocField(store, (value) => value.tax_display_cart);
 	const t = useT();
 	const lines = React.useMemo(
 		() =>
@@ -30,9 +35,11 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 				id: getUuidFromLineItem(item) ?? item.id,
 				name: item.name,
 				quantity: item.quantity,
-				total: formatCurrency(Number(item.total ?? 0)),
+				total: formatCurrency(
+					Number(item.total ?? 0) + (taxDisplayCart === 'incl' ? Number(item.total_tax ?? 0) : 0)
+				),
 			})),
-		[payload.line_items, formatCurrency]
+		[payload.line_items, formatCurrency, taxDisplayCart]
 	);
 	return (
 		// No Card: the ledger is the cart's own frame with a stilled head (decision 49), not a
