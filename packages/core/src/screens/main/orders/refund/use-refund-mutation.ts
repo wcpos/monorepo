@@ -6,6 +6,7 @@ import { type EngineRecord, useQueryRuntime } from '@wcpos/query';
 import { mintRemoteId, remoteIdOrNull } from '@wcpos/sync-core';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 
+import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { StorageBlockedError, useStorageMoneyPathGuard } from '../../hooks/use-storage-health';
@@ -27,6 +28,8 @@ interface BuildRefundPayloadArgs {
 	reason: string;
 	lineItems: RefundLineItem[];
 	refundDestination: RefundDestination;
+	registerId?: string | null;
+	sessionId?: string | null;
 }
 
 interface RefundMutationArgs extends BuildRefundPayloadArgs {
@@ -41,6 +44,8 @@ export function buildRefundPayload({
 	reason,
 	lineItems,
 	refundDestination,
+	registerId,
+	sessionId,
 }: BuildRefundPayloadArgs) {
 	const payload: Record<string, unknown> = {
 		amount,
@@ -48,6 +53,11 @@ export function buildRefundPayload({
 		refund_destination: refundDestination,
 		api_refund: refundDestination === 'original_method',
 	};
+	const metaData = Object.entries({
+		...(registerId ? { _wcpos_register: registerId } : {}),
+		...(sessionId ? { _wcpos_session: sessionId } : {}),
+	}).map(([key, value]) => ({ key, value }));
+	if (metaData.length > 0) payload.meta_data = metaData;
 
 	if (lineItems.length > 0) {
 		payload.line_items = lineItems.map((item) => ({
@@ -74,6 +84,9 @@ export function createRefundIdempotencyKey(orderId: number) {
  */
 export function useRefundMutation() {
 	const http = useRestHttpClient();
+	const { binding, session } = useRegisterSession();
+	const sessionId =
+		session?.status === 'open' || session?.status === 'counting' ? session.id : null;
 	const runtime = useQueryRuntime();
 	const { blockIfDegraded } = useStorageMoneyPathGuard();
 
@@ -97,6 +110,8 @@ export function useRefundMutation() {
 				reason,
 				lineItems,
 				refundDestination,
+				registerId: binding.registerId,
+				sessionId,
 			});
 
 			const response = await http.post(`orders/${orderId}/refunds`, payload, {
@@ -161,6 +176,6 @@ export function useRefundMutation() {
 
 			return response?.data;
 		},
-		[blockIfDegraded, http, runtime]
+		[binding.registerId, blockIfDegraded, http, runtime, sessionId]
 	);
 }
