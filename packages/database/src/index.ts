@@ -87,3 +87,9 @@ export type {
 	CashMovementDocument,
 	CashMovementCollection,
 } from './collections';
+
+export {
+	SQLITE_POOL_NAME,
+	SQLITE_POOL_DIRECTORY,
+	SQLITE_POOL_INITIAL_CAPACITY,
+} from './adapters/storage/sqlite-pool';

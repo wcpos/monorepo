@@ -400,9 +400,13 @@ export const config = [
 		// codegen and CI checks that legitimately use Node globals. Without this they
 		// report `'Buffer' is not defined` once the prettier glob covers them.
 		files: ['**/*.{mjs,cjs}'],
-		// These modules form the browser-bundled OPFS worker graph, so Node globals
+		// These modules form the browser-bundled storage worker graph, so Node globals
 		// must remain unavailable even though they use the `.mjs` extension.
-		ignores: ['**/opfs-worker-entry.mjs', '**/opfs-targeted-recovery*.mjs'],
+		ignores: [
+			'**/sqlite-worker-entry.mjs',
+			'**/sqlite-basics-oo1.mjs',
+			'**/opfs-targeted-recovery*.mjs',
+		],
 		languageOptions: {
 			globals: {
 				Buffer: 'readonly',
