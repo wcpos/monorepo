@@ -124,7 +124,7 @@ current=next&&typeof next.catch==="function"?next.catch(function(error){__wcposR
  * per-dist literals rather than a regex. A literal that stops matching is the
  * signal we want — see the install-failure note above.
  */
-const DISTS = [
+const DISTS_17_4_0 = [
 	{
 		dist: 'esm',
 		constructorBefore: 'this.queue=e,this.readTasks=[]',
@@ -168,6 +168,69 @@ const DISTS = [
 			'(async()=>{try{var r={type:"CLEANUP",storageInstance:(0,e.ensureNotFalsy)(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(r),await t(r).then((e=>s(e))).catch((e=>a(e)))}finally{if(r)await this.cleanupAfterRun(r)}}))',
 	},
 ];
+
+/**
+ * 17.5.0 emits `queue` as a class field (esm: native; cjs: babel's defineProperty
+ * helper) instead of assigning it in the constructor. The healer still installs
+ * straight after it: in esm at the top of the constructor body, reading the
+ * already-initialised `this.queue`, because the constructor's `e` is `lockId` there.
+ */
+const DISTS_17_5_0 = [
+	{
+		dist: 'esm',
+		constructorBefore:
+			'queue=e;readTasks=[];writeTasks=[];readTaskAdded$=new r;writeTaskAdded$=new r;readQueueRunsInProgress=0;writeQueueRunsInProgress=0;constructor(e,s,t){',
+		constructorAfter: `queue=e;readTasks=[];writeTasks=[];readTaskAdded$=new r;writeTaskAdded$=new r;readQueueRunsInProgress=0;writeQueueRunsInProgress=0;constructor(e,s,t){${MARKER}(this,this.queue),`,
+		writeRunBefore: '(async()=>{if(0!==this.writeTasks.length){for(var t={type:"WRITE"',
+		writeRunAfter: '(async()=>{if(0!==this.writeTasks.length){try{for(var t={type:"WRITE"',
+		writeCleanupBefore: 'await this.beforeTaskReadOrWrite(t),await this.cleanupAfterRun(t)}}))',
+		writeCleanupAfter:
+			'await this.beforeTaskReadOrWrite(t)}finally{if(t)await this.cleanupAfterRun(t)}}}))',
+		readRunBefore:
+			'(async()=>{var e={type:"READ",storageInstance:s(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(e);',
+		readRunAfter:
+			'(async()=>{try{var e={type:"READ",storageInstance:s(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(e);',
+		readCleanupBefore: '0===this.readTasks.length&&(t=!0)}return this.cleanupAfterRun(e)}))',
+		readCleanupAfter:
+			'0===this.readTasks.length&&(t=!0)}}finally{if(e)await this.cleanupAfterRun(e)}}))',
+		cleanupRunBefore:
+			'(async()=>{var r={type:"CLEANUP",storageInstance:s(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(r),await e(r).then((e=>t(e))).catch((e=>a(e))),await this.cleanupAfterRun(r)}))',
+		cleanupRunAfter:
+			'(async()=>{try{var r={type:"CLEANUP",storageInstance:s(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(r),await e(r).then((e=>t(e))).catch((e=>a(e)))}finally{if(r)await this.cleanupAfterRun(r)}}))',
+	},
+	{
+		dist: 'cjs',
+		constructorBefore:
+			'(0,t.default)(this,"queue",s.PROMISE_RESOLVE_VOID),(0,t.default)(this,"readTasks",[])',
+		constructorAfter: `(0,t.default)(this,"queue",s.PROMISE_RESOLVE_VOID),${MARKER}(this,s.PROMISE_RESOLVE_VOID),(0,t.default)(this,"readTasks",[])`,
+		writeRunBefore: '(async()=>{if(0!==this.writeTasks.length){for(var t={type:"WRITE"',
+		writeRunAfter: '(async()=>{if(0!==this.writeTasks.length){try{for(var t={type:"WRITE"',
+		writeCleanupBefore: 'await this.beforeTaskReadOrWrite(t),await this.cleanupAfterRun(t)}}))',
+		writeCleanupAfter:
+			'await this.beforeTaskReadOrWrite(t)}finally{if(t)await this.cleanupAfterRun(t)}}}))',
+		readRunBefore:
+			'(async()=>{var e={type:"READ",storageInstance:(0,s.ensureNotFalsy)(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(e);',
+		readRunAfter:
+			'(async()=>{try{var e={type:"READ",storageInstance:(0,s.ensureNotFalsy)(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(e);',
+		readCleanupBefore: '0===this.readTasks.length&&(t=!0)}return this.cleanupAfterRun(e)}))',
+		readCleanupAfter:
+			'0===this.readTasks.length&&(t=!0)}}finally{if(e)await this.cleanupAfterRun(e)}}))',
+		cleanupRunBefore:
+			'(async()=>{var a={type:"CLEANUP",storageInstance:(0,s.ensureNotFalsy)(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(a),await e(a).then((e=>t(e))).catch((e=>r(e))),await this.cleanupAfterRun(a)}))',
+		cleanupRunAfter:
+			'(async()=>{try{var a={type:"CLEANUP",storageInstance:(0,s.ensureNotFalsy)(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(a),await e(a).then((e=>t(e))).catch((e=>r(e)))}finally{if(a)await this.cleanupAfterRun(a)}}))',
+	},
+];
+
+// Anchors per rxdb-premium release. The postinstall picks the set for the installed
+// version and fails on any other, so a new release is re-derived against the
+// containment test, never guessed. Drop a release's set when the pin leaves it.
+const DISTS_BY_VERSION = {
+	'17.4.0': DISTS_17_4_0,
+	'17.5.0': DISTS_17_5_0,
+};
+const INSTALLED_VERSION = require('rxdb-premium/package.json').version;
+const DISTS = DISTS_BY_VERSION[INSTALLED_VERSION];
 
 /**
  * Validate-only phase: every dist is checked before any is written, so a moved
@@ -236,6 +299,12 @@ function commitPatches(prepared) {
 }
 
 function main() {
+	if (DISTS === undefined) {
+		throw new Error(
+			`rxdb-premium ${INSTALLED_VERSION} has no anchor set in patch-rxdb-premium-task-queue-containment.mjs — ` +
+				're-derive this patch against the containment test'
+		);
+	}
 	const packageRoot = dirname(require.resolve('rxdb-premium/package.json'));
 
 	const prepared = DISTS.map(({ dist, ...anchors }) => {
