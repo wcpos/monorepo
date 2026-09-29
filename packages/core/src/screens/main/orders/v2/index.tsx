@@ -1,18 +1,29 @@
 import React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, type ViewInstance } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 import isEqual from 'lodash/isEqual';
+import Animated, { FadeInRight, ReduceMotion } from 'react-native-reanimated';
 
+import { BEATS } from '@wcpos/components/lib/motion';
+import { Dialog, DialogContent } from '@wcpos/components/v2/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { EmptyState } from '@wcpos/components/empty-state';
-import { usePointer } from '@wcpos/components/lib/device';
+import { useIsPhone, usePointer } from '@wcpos/components/lib/device';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { VirtualizedListHandle } from '@wcpos/components/virtualized-list/types';
 
+import { ManagementBar } from '../../components/management-bar';
+import { QuerySearchInput } from '../../components/query-search-input';
+import { UpgradeNotice } from '../../components/header/upgrade-notice';
+import { UpgradeNoticeContext } from '../../components/header/upgrade-notice-context';
+import { useAppInfo } from '../../../../hooks/use-app-info';
+import { useTheme } from '../../../../contexts/theme';
+import { DisplayOptions } from './display-options';
+import { OrderPane } from './order-pane';
 import { Actions } from '../cells/actions';
 import { Address } from '../cells/address';
 import { Note } from '../cells/note';
@@ -104,8 +115,10 @@ function getInitialOrderSort(
 function OrdersList({
 	binding,
 	initialFilters,
+	onSelectedRow,
 }: {
 	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
+	onSelectedRow: (node: ViewInstance | null) => void;
 	initialFilters: Partial<FiltersOf<'orders'>>;
 }) {
 	const state = useQueryState<'orders'>();
@@ -155,7 +168,10 @@ function OrdersList({
 					aria-selected={selected === record.uuid}
 					tabIndex={Platform.OS === 'web' ? (focused ? 0 : -1) : undefined}
 					onFocus={() => keyboard.setFocusIndex(focusIndex)}
-					ref={(node) => keyboard.focusRow(focusIndex, node)}
+					ref={(node) => {
+						keyboard.focusRow(focusIndex, node);
+						if (selected === record.uuid) onSelectedRow(node);
+					}}
 					className={`${selected === record.uuid ? 'bg-muted' : ''} ${focused ? 'web:outline-2 web:outline-primary web:-outline-offset-2' : ''}`}
 				>
 					{pointer === 'coarse' ? (
@@ -233,19 +249,84 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 	const binding = useCollectionBinding('orders', state);
 	useReferencedCustomerDemand(binding.result$);
 	const { bottom } = useSafeAreaInsets();
+	const t = useT();
+	const phone = useIsPhone();
+	const { screenSize } = useTheme();
+	const { order: selected } = useLocalSearchParams<{ order?: string }>();
+	const router = useRouter();
+	const selectedRow = React.useRef<ViewInstance>(null);
+	const { license } = useAppInfo();
+	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
+	const close = () => {
+		router.setParams({ order: undefined });
+		if (Platform.OS === 'web') selectedRow.current?.focus();
+	};
+	const pane = selected ? <OrderPane key={selected} selected={selected} onClose={close} /> : null;
 	return (
 		<View
 			testID="screen-orders"
-			className="bg-background flex-1"
+			className="bg-background flex-1 flex-row"
 			style={{ paddingBottom: bottom || undefined }}
+			onKeyDown={
+				Platform.OS === 'web'
+					? (event) => {
+							if (selected && event.nativeEvent.key === 'Escape' && !event.defaultPrevented) {
+								event.preventDefault();
+								close();
+							}
+						}
+					: undefined
+			}
 		>
-			{/* TODO(stage 3): Orders page bar, search and pane. */}
-			<View />
-			<ErrorBoundary>
-				<Suspense fallback={<DataTableSkeleton id="orders" />}>
-					<OrdersList binding={binding} initialFilters={initialFilters} />
-				</Suspense>
-			</ErrorBoundary>
+			<View className="min-w-0 flex-1">
+				<ManagementBar
+					title={t('common.orders')}
+					testID="orders-bar"
+					search={
+						<QuerySearchInput
+							collectionName="orders"
+							testID="search-orders"
+							placeholder={t('orders.search_orders')}
+						/>
+					}
+				>
+					<DisplayOptions />
+				</ManagementBar>
+				{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
+				<ErrorBoundary>
+					<Suspense fallback={<DataTableSkeleton id="orders" />}>
+						<OrdersList
+							binding={binding}
+							initialFilters={initialFilters}
+							onSelectedRow={(node) => {
+								selectedRow.current = node;
+							}}
+						/>
+					</Suspense>
+				</ErrorBoundary>
+			</View>
+			{pane &&
+				(phone ? (
+					<Dialog route onClose={close}>
+						<DialogContent
+							side="right"
+							size="full"
+							className="gap-0 p-0"
+							closeButtonProps={{ className: 'hidden' }}
+						>
+							{pane}
+						</DialogContent>
+					</Dialog>
+				) : (
+					<Animated.View
+						entering={FadeInRight.duration(BEATS.ordersPane.duration)
+							.easing(BEATS.ordersPane.easing)
+							.reduceMotion(ReduceMotion.System)}
+						className={`border-border bg-card border-l ${screenSize === 'lg' ? 'w-120' : 'w-2/5 max-w-110'}`}
+					>
+						{pane}
+					</Animated.View>
+				))}
 		</View>
 	);
 }

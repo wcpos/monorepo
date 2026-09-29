@@ -21,6 +21,8 @@ const mockBinding = {
 };
 const mockUseCollectionBinding = jest.fn((_collection: unknown, _state: unknown) => mockBinding);
 let mockPointer = 'fine';
+let mockSelected: string | undefined;
+let mockPhone = false;
 const mockSetParams = jest.fn();
 const mockScroll = jest.fn();
 let mockDataTableProps: Record<string, unknown> = {};
@@ -248,10 +250,10 @@ jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/lib/device', () => ({
 	usePointer: () => mockPointer,
-	useIsPhone: () => false,
+	useIsPhone: () => mockPhone,
 }));
 jest.mock('expo-router', () => ({
-	useLocalSearchParams: () => ({}),
+	useLocalSearchParams: () => ({ order: mockSelected }),
 	useRouter: () => ({ setParams: mockSetParams }),
 }));
 jest.mock('../../../../hooks/use-store-day', () => ({
@@ -390,6 +392,85 @@ it('navigates from the actual focused coarse row, skipping headings, then opens 
 		fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
 		expect(mockSetParams).toHaveBeenLastCalledWith({ order: undefined });
 		unmount();
+	} finally {
+		mockBinding.resource = original;
+	}
+});
+
+jest.mock('../../components/management-bar', () => ({
+	ManagementBar: ({ search, children }: React.PropsWithChildren<{ search: React.ReactNode }>) => (
+		<div>
+			{search}
+			{children}
+		</div>
+	),
+}));
+jest.mock('./display-options', () => ({ DisplayOptions: () => null }));
+jest.mock('./order-pane', () => ({
+	OrderPane: ({ selected, onClose }: { selected: string; onClose: () => void }) => (
+		<button data-testid="order-pane" onClick={onClose}>
+			{selected}
+		</button>
+	),
+}));
+jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'md' }) }));
+jest.mock('../../../../hooks/use-app-info', () => ({
+	useAppInfo: () => ({ license: { isPro: true } }),
+}));
+jest.mock('../../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('@wcpos/components/v2/dialog', () => ({
+	Dialog: ({ children }: React.PropsWithChildren) => children,
+	DialogContent: ({ children }: React.PropsWithChildren) => (
+		<div data-testid="phone-page">{children}</div>
+	),
+}));
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: ({ children }: React.PropsWithChildren) => <div>{children}</div> },
+	FadeInRight: { duration: () => ({ easing: () => ({ reduceMotion: () => undefined }) }) },
+	ReduceMotion: { System: 'system' },
+}));
+jest.mock('@wcpos/components/lib/motion', () => ({
+	BEATS: { ordersPane: { duration: 220, easing: 'ease' } },
+}));
+afterEach(() => {
+	mockSelected = undefined;
+	mockPhone = false;
+});
+it('searches from the management bar and opens the selected pane beside the list', () => {
+	mockSelected = 'one';
+	render(<OrdersScreen />);
+	expect(screen.getByTestId('order-pane').textContent).toBe('one');
+	expect(screen.queryByTestId('phone-page')).toBeNull();
+	fireEvent.click(screen.getByTestId('order-pane'));
+	expect(mockSetParams).toHaveBeenLastCalledWith({ order: undefined });
+	expect(screen.getByTestId('search-orders')).toBeTruthy();
+});
+it('renders the selected order as a full page on the phone', () => {
+	mockPhone = true;
+	mockSelected = 'one';
+	render(<OrdersScreen />);
+	expect(screen.getByTestId('phone-page').contains(screen.getByTestId('order-pane'))).toBe(true);
+});
+
+it('ignores reselecting the same row and returns focus there when the pane closes', () => {
+	mockPointer = 'coarse';
+	mockSelected = 'one';
+	const original = mockBinding.resource;
+	mockBinding.resource = new ObservableResource(
+		new BehaviorSubject({
+			hits: [{ id: 'one', record: { uuid: 'one', payload: { number: '1' } } }],
+			searchActive: false,
+			searchState: 'answered',
+		})
+	) as unknown as typeof original;
+	try {
+		render(<OrdersScreen />);
+		fireEvent.click(screen.getByTestId('orders-row-one'));
+		expect(mockSetParams).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByTestId('order-pane'));
+		expect(mockSetParams).toHaveBeenCalledWith({ order: undefined });
+		expect(document.activeElement?.getAttribute('aria-selected')).toBe('true');
 	} finally {
 		mockBinding.resource = original;
 	}

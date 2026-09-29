@@ -50,7 +50,7 @@ const useDialogContext = () => {
 function UISettingsColumnsOnlyForm({ id }: { id: ColumnsOnlySettingsID }) {
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings(id);
 	const formData = useDocField(uiSettings, (value) => value);
-	const { setButtonPressHandler } = useDialogContext();
+	const dialog = React.useContext(DialogContext);
 
 	/**
 	 * The reset button lives in the dialog footer, outside this form's subtree, so the
@@ -59,8 +59,8 @@ function UISettingsColumnsOnlyForm({ id }: { id: ColumnsOnlySettingsID }) {
 	 * plain call. Nothing here derives state; it only registers the callback.
 	 */
 	React.useEffect(() => {
-		setButtonPressHandler(() => void resetUI());
-	}, [setButtonPressHandler, resetUI]);
+		dialog?.setButtonPressHandler(() => void resetUI());
+	}, [dialog, resetUI]);
 
 	const form = useForm<z.infer<typeof columnsOnlyFormSchema>>({
 		resolver: zodResolver(columnsOnlyFormSchema as never) as never,
