@@ -55,11 +55,13 @@ export function QuickFilterButton({ quickFilter }: { quickFilter: QuickFilter })
 	return (
 		<ButtonPill
 			size="xs"
-			variant={active ? undefined : 'muted'}
+			variant={active ? 'outline-primary' : 'outline'}
 			testID={`quick-filter-${quickFilter.id}`}
 			onPress={handlePress}
 		>
-			<ButtonText decodeHtml>{quickFilter.label}</ButtonText>
+			<ButtonText decodeHtml className={active ? 'text-primary font-semibold' : undefined}>
+				{quickFilter.label}
+			</ButtonText>
 		</ButtonPill>
 	);
 }

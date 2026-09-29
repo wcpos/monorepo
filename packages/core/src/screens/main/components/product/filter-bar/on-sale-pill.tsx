@@ -17,14 +17,16 @@ export function OnSalePill() {
 		<ButtonPill
 			leftIcon="badgeDollar"
 			size="xs"
-			variant={isActive ? undefined : 'muted'}
+			variant={isActive ? 'outline-primary' : 'outline'}
 			onPress={() => actions.setFilter('on_sale', true)}
 			testID="filter-pill-on_sale"
 			removable={isActive}
 			removeTestID="filter-pill-remove-on_sale"
 			onRemove={() => actions.clearFilter('on_sale')}
 		>
-			<ButtonText>{t('common.on_sale')}</ButtonText>
+			<ButtonText className={isActive ? 'text-primary font-semibold' : undefined}>
+				{t('common.on_sale')}
+			</ButtonText>
 		</ButtonPill>
 	);
 }

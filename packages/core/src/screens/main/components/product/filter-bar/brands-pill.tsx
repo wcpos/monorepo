@@ -45,13 +45,14 @@ export function BrandsPill({ resource, selectedID }: Props) {
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
-					variant={isActive ? undefined : 'muted'}
+					rightIcon={isActive ? undefined : 'chevronDown'}
+					variant={isActive ? 'outline-primary' : 'outline'}
 					testID="filter-pill-brands"
 					removable={isActive}
 					removeTestID="filter-pill-remove-brands"
 					onRemove={() => actions.clearFilter('brands')}
 				>
-					<ButtonText decodeHtml>
+					<ButtonText decodeHtml className={isActive ? 'text-primary font-semibold' : undefined}>
 						{isActive
 							? brand?.payload.name || t('common.id_2', { id: selectedID })
 							: t('common.brand')}

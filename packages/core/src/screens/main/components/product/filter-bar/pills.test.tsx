@@ -24,18 +24,26 @@ jest.mock('@wcpos/components/button', () => ({
 		children,
 		onPress,
 		onRemove,
+		variant,
+		rightIcon,
 	}: {
 		children: React.ReactNode;
 		onPress?: () => void;
 		onRemove?: () => void;
+		variant?: string;
+		rightIcon?: string;
 	}) => (
-		<div>
+		<div data-testid="filter-pill" data-variant={variant} data-right-icon={rightIcon}>
 			<button data-testid="activate-filter" onClick={onPress} />
 			{children}
 			<button data-testid="clear-filter" onClick={onRemove} />
 		</div>
 	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+	ButtonText: ({ children, className }: React.PropsWithChildren<{ className?: string }>) => (
+		<span data-testid="filter-label" className={className}>
+			{children}
+		</span>
+	),
 }));
 jest.mock('@wcpos/components/combobox', () => ({
 	Combobox: ({
@@ -172,9 +180,14 @@ describe('product filter pills', () => {
 
 	it('sets and clears the stock-status filter through query-state actions', () => {
 		renderPill(storePill(StockStatusPill));
+		expect(screen.getByTestId('filter-pill').getAttribute('data-variant')).toBe('outline');
+		expect(screen.getByTestId('filter-pill').getAttribute('data-right-icon')).toBe('chevronDown');
 
 		fireEvent.click(screen.getByTestId('choose-stock-status'));
 		expect(filters()).toMatchObject({ stock_status: 'outofstock' });
+		expect(screen.getByTestId('filter-pill').getAttribute('data-variant')).toBe('outline-primary');
+		expect(screen.getByTestId('filter-label').className).toBe('text-primary font-semibold');
+		expect(screen.getByTestId('filter-pill').getAttribute('data-right-icon')).toBeNull();
 		fireEvent.click(screen.getByTestId('clear-filter'));
 		expect(filters()).not.toHaveProperty('stock_status');
 	});

@@ -45,13 +45,16 @@ export function StockStatusPill() {
 				<ButtonPill
 					size="xs"
 					leftIcon="warehouseFull"
-					variant={isActive ? undefined : 'muted'}
+					rightIcon={isActive ? undefined : 'chevronDown'}
+					variant={isActive ? 'outline-primary' : 'outline'}
 					testID="filter-pill-stock_status"
 					removable={isActive}
 					removeTestID="filter-pill-remove-stock_status"
 					onRemove={() => actions.clearFilter('stock_status')}
 				>
-					<ButtonText decodeHtml>{value?.label || t('common.stock_status')}</ButtonText>
+					<ButtonText decodeHtml className={isActive ? 'text-primary font-semibold' : undefined}>
+						{value?.label || t('common.stock_status')}
+					</ButtonText>
 				</ButtonPill>
 			</SelectPrimitiveTrigger>
 			<SelectContent>

@@ -45,13 +45,14 @@ export function TagPill({ resource, selectedID }: Props) {
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
-					variant={isActive ? undefined : 'muted'}
+					rightIcon={isActive ? undefined : 'chevronDown'}
+					variant={isActive ? 'outline-primary' : 'outline'}
 					testID="filter-pill-tags"
 					removable={isActive}
 					removeTestID="filter-pill-remove-tags"
 					onRemove={() => actions.clearFilter('tags')}
 				>
-					<ButtonText decodeHtml>
+					<ButtonText decodeHtml className={isActive ? 'text-primary font-semibold' : undefined}>
 						{isActive ? tag?.payload.name || t('common.id_2', { id: selectedID }) : t('common.tag')}
 					</ButtonText>
 				</ButtonPill>

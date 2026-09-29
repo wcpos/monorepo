@@ -17,14 +17,16 @@ export function FeaturedPill() {
 		<ButtonPill
 			leftIcon="star"
 			size="xs"
-			variant={isActive ? undefined : 'muted'}
+			variant={isActive ? 'outline-primary' : 'outline'}
 			onPress={() => actions.setFilter('featured', true)}
 			testID="filter-pill-featured"
 			removable={isActive}
 			removeTestID="filter-pill-remove-featured"
 			onRemove={() => actions.clearFilter('featured')}
 		>
-			<ButtonText>{t('common.featured')}</ButtonText>
+			<ButtonText className={isActive ? 'text-primary font-semibold' : undefined}>
+				{t('common.featured')}
+			</ButtonText>
 		</ButtonPill>
 	);
 }
