@@ -104,9 +104,13 @@ function CashierChip() {
 	const t = useT();
 	const { site } = useStoreSession();
 	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
-	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
+	// Undefined until the directory emits: a chip built from an empty list would offer Everyone
+	// as the only choice while the credentials are still being read.
+	const cashiers = useObservableState(source) as WPCredentialsDocument[] | undefined;
 	const value = useQueryState<'orders'>().filters.cashier;
 	const actions = useQueryStateActions<'orders'>();
+	if (!cashiers)
+		return <View testID="hero-cashier-loading" className="bg-muted h-12 w-28 rounded" />;
 	return (
 		<MenuChip
 			name="cashier"
@@ -276,9 +280,14 @@ export function HeroShell({ title }: { title: React.ReactNode }) {
  * name comes from the credentials directory, and its loading must not blank the figure. */
 function HeroPrint({ storeId }: { storeId?: number }) {
 	const t = useT();
-	const { print, isPrinting, contentRef, ready } = useReportPrint(storeId);
+	const { print, isPrinting, contentRef, ready, waiting } = useReportPrint(storeId);
 	return (
 		<>
+			{waiting && (
+				<Text testID="hero-print-waiting" className="text-muted-foreground text-sm">
+					{t(waiting === 'store' ? 'reports.loading_store' : 'reports.loading_register_names')}
+				</Text>
+			)}
 			<IconButton
 				testID="hero-print"
 				name="printer"

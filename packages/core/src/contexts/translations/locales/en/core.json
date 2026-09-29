@@ -2283,5 +2283,7 @@
 	"reports.average_order": "Average order",
 	"reports.items": "Items",
 	"reports.comparison_downloading": "Comparison: downloading {downloaded} of {total} orders",
-	"reports.comparison_downloading_unknown_total": "Comparison: {downloaded} orders downloaded so far"
+	"reports.comparison_downloading_unknown_total": "Comparison: {downloaded} orders downloaded so far",
+	"reports.loading_store": "Loading the store…",
+	"reports.loading_register_names": "Loading register names…"
 }

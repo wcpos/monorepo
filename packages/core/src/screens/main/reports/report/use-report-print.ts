@@ -70,14 +70,19 @@ export function useReportPrint(storeId?: number) {
 		shippingTotalsArray,
 		averageOrderValue,
 	} = calculateTotals({ orders: selectedOrders, num_decimals });
-	// Printing waits for the store's register list only while it can still arrive (online, not yet
-	// read, not failed) and the document will print a by-register section (two or more registers)
-	// with a name it has not resolved. Otherwise it prints.
-	const ready =
-		namesLoaded ||
-		!online ||
-		registerArray.length < 2 ||
-		registerArray.every(({ registerId }) => !!registerNames[registerId]);
+	// Printing waits for the viewed store's document (a report on another store must not print
+	// under the till's name) and for the store's register list only while it can still arrive
+	// (online, not yet read, not failed) and the document will print a by-register section
+	// (two or more registers) with a name it has not resolved. Otherwise it prints.
+	const waiting: 'store' | 'registers' | null = !viewed
+		? 'store'
+		: namesLoaded ||
+			  !online ||
+			  registerArray.length < 2 ||
+			  registerArray.every(({ registerId }) => !!registerNames[registerId])
+			? null
+			: 'registers';
+	const ready = waiting === null;
 
 	const reportPeriod = React.useMemo(() => {
 		const from = selectedDateRange?.from
@@ -205,5 +210,5 @@ export function useReportPrint(storeId?: number) {
 		html,
 	});
 
-	return { print, isPrinting, contentRef, ready };
+	return { print, isPrinting, contentRef, ready, waiting };
 }

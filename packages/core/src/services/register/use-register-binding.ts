@@ -76,6 +76,8 @@ function loadDirectory(
 	http: Pick<ReturnType<typeof useRestHttpClient>, 'get'>,
 	storeId: number | undefined
 ): Promise<void> {
+	// A new attempt clears the last failure: readers wait for names again while it runs.
+	if (!entry.request && entry.value.failed) publish(entry, { failed: false });
 	entry.request ??= http
 		.get('registers', { params: { store_id: storeId || null } })
 		.then((response) => {
