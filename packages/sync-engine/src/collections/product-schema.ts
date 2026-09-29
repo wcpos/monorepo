@@ -15,6 +15,7 @@ export const productSchema = {
 		uuid: { type: 'string', maxLength: 128 },
 		remoteId: { type: ['string', 'null'], maxLength: 64 },
 		remoteKey: { type: 'string', maxLength: 64 },
+		sortName: { type: 'string', maxLength: 256 },
 		// Promoted filter/sort columns (duplicated out of payload, payload bytes unchanged). price is
 		// numeric for range filters; categoryIds/brandIds are membership arrays for multi-select.
 		// Indexed number fields need bounds + multipleOf; prices are cents (rounded in promotedProductColumns).
@@ -41,6 +42,7 @@ export const productSchema = {
 		'uuid',
 		'remoteId',
 		'remoteKey',
+		'sortName',
 		'price',
 		'stockStatus',
 		'type',
@@ -55,5 +57,5 @@ export const productSchema = {
 	],
 	// POS product list filter axes. category/brand arrays are membership-filtered (not index-backed);
 	// stock + type are the index-worthy filter axes; price backs the default product panel sort.
-	indexes: ['remoteKey', 'stockStatus', 'price', ['type', 'stockStatus']],
+	indexes: ['sortName', 'remoteKey', 'stockStatus', 'price', ['type', 'stockStatus']],
 } as const;

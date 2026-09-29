@@ -504,8 +504,8 @@ describe('schema identity — an in-place edit throws DB6 and blocks the databas
 
 	const PINNED_DIGESTS: Record<string, string> = {
 		orders: 'bc0b35ca7829dad7',
-		products: 'bd976d7a3f8f297c',
-		variations: 'e11c71fd6922bfd8',
+		products: '533f385dbba3bd58',
+		variations: 'df92c9203ba108c1',
 		// customers and the four reference schemas share a digest: they ARE the same
 		// shape apart from title (ADR 0019 — see the identity test below).
 		customers: 'ac922ffdb0538886',

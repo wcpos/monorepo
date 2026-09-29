@@ -1,4 +1,5 @@
 import { identityColumns, type MetaDataEntry, wooMetaCarrier } from './pos-carrier/carrier';
+import { foldSearchText } from './searchIndexConfig';
 import { type RemoteId } from './woo/remoteIdCodec';
 import { GUEST_CUSTOMER_ID } from './woo/sentinels';
 
@@ -119,6 +120,7 @@ export function finiteOrNull(value: unknown): number | null {
  * is numeric for range filters; `categoryIds`/`brandIds` are membership arrays for multi-select.
  */
 export type PromotedProductColumns = {
+	sortName: string;
 	price: number;
 	stockStatus: string;
 	type: string;
@@ -142,6 +144,7 @@ export type StoredProductDocument = ProductDocument & PromotedProductColumns;
  * mapping (storage boundary AND the schema migration backfill). */
 export function promotedProductColumns(payload: WooProductPayload): PromotedProductColumns {
 	return {
+		sortName: foldSearchText(payload.name ?? '').slice(0, 256),
 		// Rounded to cents so the indexed price column satisfies the schema's multipleOf:0.01.
 		price: Math.round((Number(payload.price) || 0) * 100) / 100,
 		stockStatus: String(payload.stock_status ?? ''),

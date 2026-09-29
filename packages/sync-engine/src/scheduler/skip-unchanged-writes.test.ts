@@ -56,6 +56,7 @@ describe.each([
 			if (name === 'products')
 				return Object.assign(document, {
 					price: 0,
+					sortName: '',
 					stockStatus: '',
 					type: '',
 					categoryIds: [],
@@ -69,6 +70,7 @@ describe.each([
 					parentRemoteId: 'woo:10',
 					parentRemoteKey: 'woo:10',
 					price: 0,
+					sortName: '',
 					stockStatus: '',
 					attributes: [],
 					stockQuantity: null,

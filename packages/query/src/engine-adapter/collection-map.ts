@@ -310,6 +310,7 @@ export const collectionMap = {
 	products: {
 		engineCollection: 'products',
 		fields: {
+			sortName: { legacy: 'sortName', kind: 'promoted', enginePath: 'sortName' },
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			sku: {
 				legacy: 'sku',
@@ -335,10 +336,7 @@ export const collectionMap = {
 				legacy: 'name',
 				kind: 'payload',
 				enginePath: 'payload.name',
-				// The id tiebreak keeps tied titles in Woo-id order on every till —
-				// without it the local sort falls through to client-minted uuids,
-				// a different order per device (Paul's 2026-08-19 name-asc default).
-				sort: { wooOrderby: 'title', tiebreak: ['id'] },
+				sort: { wooOrderby: 'title', uiAlias: 'sortName', tiebreak: ['uuid'] },
 			},
 			// 1.9 catalog-order contract (#810): equal menu_order values (usually 0) are
 			// common, so the Woo id tiebreak is part of the sort rather than an engine detail.
@@ -451,6 +449,13 @@ export const collectionMap = {
 	variations: {
 		engineCollection: 'variations',
 		fields: {
+			sortName: { legacy: 'sortName', kind: 'promoted', enginePath: 'sortName' },
+			name: {
+				legacy: 'name',
+				kind: 'payload',
+				enginePath: 'payload.name',
+				sort: { uiAlias: 'sortName', tiebreak: ['uuid'] },
+			},
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			// Variations share the product catalog-order contract (#871).
 			menu_order: {

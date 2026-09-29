@@ -56,6 +56,7 @@ function productDocument(input: {
 		remoteId: String(input.wooId),
 		remoteKey: String(String(input.wooId) ?? ''),
 		price: 24,
+		sortName: '',
 		stockStatus: 'instock',
 		type: input.type,
 		categoryIds: [],

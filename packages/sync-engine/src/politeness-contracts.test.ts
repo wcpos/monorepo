@@ -54,6 +54,7 @@ function product(wooId: number): Record<string, unknown> {
 		remoteId: remoteId(wooId),
 		remoteKey: String(remoteId(wooId) ?? ''),
 		price: 1,
+		sortName: '',
 		stockStatus: 'instock',
 		type: 'simple',
 		categoryIds: [],

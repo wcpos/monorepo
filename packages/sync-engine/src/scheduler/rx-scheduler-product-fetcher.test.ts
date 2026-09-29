@@ -294,6 +294,7 @@ describe('createProductsSchedulerFetcher', () => {
 				// Promoted filter/sort columns attached at the storage seam (withProductColumns). This payload
 				// carries no filter fields, so they default — proving the promotion runs on every upsert.
 				price: 0,
+				sortName: 'keyboard',
 				stockStatus: '',
 				type: '',
 				categoryIds: [],

@@ -222,6 +222,7 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 			remoteId: remoteId(501),
 			remoteKey: String(remoteId(501) ?? ''),
 			price: 12.5,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],

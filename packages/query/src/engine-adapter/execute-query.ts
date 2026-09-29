@@ -88,7 +88,7 @@ function comparableValue(
 }
 
 /** Missing and null tie before every value; subsequent sort parts, then uuid, break the tie. */
-function compareValues(left: unknown, right: unknown): number {
+function compareValues(left: unknown, right: unknown, codePoint = false): number {
 	if (Object.is(left, right) || (left == null && right == null)) {
 		return 0;
 	}
@@ -111,7 +111,13 @@ function compareValues(left: unknown, right: unknown): number {
 	// tiebreak), never to case. The uuid fallback keeps the overall sort total.
 	const leftString = String(left);
 	const rightString = String(right);
-	return CASHIER_STRING_COLLATOR.compare(leftString, rightString);
+	return codePoint
+		? leftString < rightString
+			? -1
+			: leftString > rightString
+				? 1
+				: 0
+		: CASHIER_STRING_COLLATOR.compare(leftString, rightString);
 }
 
 const CASHIER_STRING_COLLATOR = new Intl.Collator('en', { sensitivity: 'base' });
@@ -152,7 +158,8 @@ function sortDocuments(
 			}
 			const comparison = compareValues(
 				comparableValue(collection, left, legacyField),
-				comparableValue(collection, right, legacyField)
+				comparableValue(collection, right, legacyField),
+				mapping.enginePath === 'sortName'
 			);
 			if (comparison !== 0) {
 				return direction === 'desc' ? -comparison : comparison;
@@ -177,7 +184,11 @@ export function sortCompiledDocuments(
 				if (comparison !== 0) return comparison;
 				continue;
 			}
-			const comparison = compareValues(part.value(left), part.value(right));
+			const comparison = compareValues(
+				part.value(left),
+				part.value(right),
+				part.enginePath === 'sortName'
+			);
 			if (comparison !== 0) return part.direction === 'desc' ? -comparison : comparison;
 		}
 		return String(left.uuid).localeCompare(String(right.uuid));

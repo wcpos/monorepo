@@ -468,6 +468,7 @@ describe('product-trickle maintenance lane', () => {
 			remoteId: remoteId(77),
 			remoteKey: String(remoteId(77) ?? ''),
 			price: 12.5,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],

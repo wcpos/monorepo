@@ -1161,3 +1161,23 @@ it('translates the register into both metadata reads and browse demand', () => {
 		'payload.meta_data': { $elemMatch: { key: '_wcpos_register', value: register } },
 	});
 });
+
+it.each(['products', 'variations'] as const)(
+	'bounds the default %s grid in storage',
+	(collection) => {
+		const { read } = compileQuery(
+			collection,
+			{
+				search: '',
+				filters: { categories: [], tags: [], brands: [] },
+				sort: { field: 'name', direction: 'asc' },
+				limit: 10,
+			},
+			{ id: 'default-grid' }
+		);
+		expect(read.sortPushable).toBe(true);
+		expect(read.limit).toBe(10);
+		expect(Number.isFinite(read.limit)).toBe(true);
+		expect(read.sort.map(({ enginePath }) => enginePath)).toEqual(['sortName', 'uuid']);
+	}
+);

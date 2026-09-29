@@ -3,6 +3,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { Subject } from 'rxjs';
 
+import { foldSearchText } from '@wcpos/sync-core';
 import {
 	customerBrowseWindowQueryKeyFromDimensions,
 	engineSyncCollectionCreators,
@@ -222,6 +223,7 @@ export function engineProduct(input: {
 		uuid,
 		remoteId: remoteIdOrNull(wooId),
 		remoteKey: remoteKeyFor(remoteIdOrNull(wooId)),
+		sortName: foldSearchText(name ?? '').slice(0, 256),
 		price: num(price),
 		stockStatus: stock_status ?? 'instock',
 		type: type ?? 'simple',
@@ -303,6 +305,7 @@ export function engineVariation(input: {
 		remoteKey: remoteKeyFor(remoteIdOrNull(id)),
 		parentRemoteId: remoteIdOrNull(parent_id),
 		parentRemoteKey: remoteKeyFor(remoteIdOrNull(parent_id)),
+		sortName: foldSearchText(name ?? '').slice(0, 256),
 		price: num(price),
 		stockStatus: stock_status ?? 'instock',
 		stockQuantity: input.stock_quantity ?? null,

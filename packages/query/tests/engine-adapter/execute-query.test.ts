@@ -3,6 +3,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { firstValueFrom, Observable } from 'rxjs';
 import { filter, take } from 'rxjs/operators';
 
+import { foldSearchText } from '@wcpos/sync-core';
 import { engineSyncCollectionCreators, memoryEngineStorage } from '@wcpos/sync-engine/testing';
 
 import { executeAdapterQuery } from '../../src/engine-adapter/execute-query';
@@ -27,6 +28,7 @@ function product(
 		uuid,
 		remoteId: String(wooProductId),
 		remoteKey: String(String(wooProductId) ?? ''),
+		sortName: foldSearchText(name).slice(0, 256),
 		price: Math.round(Number(price) * 100) / 100,
 		stockStatus: 'instock',
 		type: 'simple',
@@ -401,7 +403,7 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
-	it('orders the catalog sort by menu_order then the Woo id tiebreak (#810)', async () => {
+	it('orders the catalog sort by menu_order then the uuid tiebreak (#810)', async () => {
 		const { database, products } = await openProductsDatabase();
 		const withMenuOrder = (document: ReturnType<typeof product>, menuOrder: number) => ({
 			...document,
@@ -432,12 +434,8 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
-	// Paul's cashier-expectation ruling (2026-08-19, issue #1372): "alphabetical"
-	// folds case and accents — apple beside Apple, Éclair beside Eclair — matching
-	// the ci collation MySQL uses to choose the wire window, so rendered order and
-	// window membership agree. Tied names resolve by the Woo id tiebreak the
-	// collection map now declares for `name`.
-	it('orders the name sort case- and accent-insensitively with the Woo id tiebreak', async () => {
+	// Folded names and uuid ties are shared by the pushed grid and search-hit paths (#2242).
+	it('orders the name sort case- and accent-insensitively with the uuid tiebreak', async () => {
 		const { database, products } = await openProductsDatabase();
 		await products.bulkInsert([
 			product('product-zoo', 10, 'Zoo', '1.00'),
@@ -452,7 +450,7 @@ describe('executeAdapterQuery', () => {
 				database: database as unknown as AdapterDatabase,
 				collection: 'products',
 				selector: {},
-				sort: [{ name: 'asc' }, { id: 'asc' }],
+				sort: [{ sortName: 'asc' }, { uuid: 'asc' }],
 			})
 		);
 
@@ -460,7 +458,7 @@ describe('executeAdapterQuery', () => {
 			// Code-unit order would put 'Zoo' first and 'Éclair' after 'zoo'.
 			'product-apple',
 			'product-eclair',
-			// Tied titles resolve by Woo id (5 before 40), identically on every till.
+			// Tied folded titles resolve by uuid, not the server id.
 			'product-gift-1',
 			'product-gift-2',
 			'product-zoo',
@@ -468,14 +466,11 @@ describe('executeAdapterQuery', () => {
 		await database.close();
 	});
 
-	it('folded-equal names ("Apple"/"apple") tie to the id part, never to case', async () => {
-		// The collator returns 0 for folded-equal strings ON PURPOSE: to a cashier
-		// they are the same word, so the declared id tiebreak decides — a code-unit
-		// residue here would order 'Apple' before 'apple' regardless of id.
+	it('folded-equal names ("Apple"/"apple") tie to the uuid part, never to case', async () => {
 		const { database, products } = await openProductsDatabase();
 		await products.bulkInsert([
 			product('product-upper', 40, 'Apple', '1.00'),
-			product('product-lower', 20, 'apple', '1.00'),
+			product('product-lower', 50, 'apple', '1.00'),
 		]);
 
 		const result = await firstValueFrom(
@@ -483,7 +478,7 @@ describe('executeAdapterQuery', () => {
 				database: database as unknown as AdapterDatabase,
 				collection: 'products',
 				selector: {},
-				sort: [{ name: 'asc' }, { id: 'asc' }],
+				sort: [{ sortName: 'asc' }, { uuid: 'asc' }],
 			})
 		);
 

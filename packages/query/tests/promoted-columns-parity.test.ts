@@ -105,3 +105,14 @@ describe('promoted order columns parity', () => {
 		expect(promotedColumnsFor('orders', payload)).toEqual(promotedOrderColumns(payload));
 	});
 });
+
+it.each(['products', 'variations'] as const)(
+	'%s folds and bounds its stored name sort key',
+	(collection) => {
+		expect(promotedColumnsFor(collection, { name: 'ÉCLAIR' }).sortName).toBe('eclair');
+		expect(promotedColumnsFor(collection, { name: 'Á'.repeat(257) }).sortName).toBe(
+			'a'.repeat(256)
+		);
+		expect(promotedColumnsFor(collection, {}).sortName).toBe('');
+	}
+);

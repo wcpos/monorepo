@@ -113,6 +113,7 @@ function storedDocument(input: {
 		return {
 			...common,
 			price: 12.5,
+			sortName: '',
 			stockStatus: 'instock',
 			type: 'simple',
 			categoryIds: [],
@@ -128,6 +129,7 @@ function storedDocument(input: {
 			parentRemoteId: spec.parentId === undefined ? null : remoteId(spec.parentId),
 			parentRemoteKey: String(spec.parentId === undefined ? null : (remoteId(spec.parentId) ?? '')),
 			price: 4.2,
+			sortName: '',
 			stockStatus: 'instock',
 			attributes: [],
 			stockQuantity: null,
