@@ -6,7 +6,12 @@ import { useLayoutObservable, useObservableCallback } from 'observable-hooks';
 import { merge } from 'rxjs';
 import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
-import { createWedgeDetector, type ScanEvent, type WedgeDetector } from '@wcpos/scanner';
+import {
+	createWedgeDetector,
+	dedupeScans,
+	type ScanEvent,
+	type WedgeDetector,
+} from '@wcpos/scanner';
 import { markUserActivity } from '@wcpos/utils/user-activity';
 import { useDocField } from '@wcpos/query';
 
@@ -188,30 +193,22 @@ export const useBarcodeDetection = (
 	 */
 	const attributed = useAttributedWedge(isActive);
 	const hub = useScanHub();
-	const barcode$ = React.useMemo(
+	const gatedScans$ = React.useMemo(
 		() =>
-			merge(
-				wedgeBarcode$,
-				attributed.scanEvents$.pipe(map((event) => event.code)),
-				hub.events$.pipe(map((event) => event.code))
-			).pipe(
+			merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$, hub.events$).pipe(
 				// Blurred drawer consumers stay mounted/subscribed while the app-scoped
 				// hub is shared; drop events here (#1409).
 				withLatestFrom(isActive$),
 				filter(([, active]) => active),
-				map(([code]) => code)
+				map(([event]) => event),
+				dedupeScans()
 			),
 		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$]
 	);
+	const barcode$ = React.useMemo(() => gatedScans$.pipe(map((event) => event.code)), [gatedScans$]);
 	const scanEvents$ = React.useMemo(
-		() =>
-			merge(wedgeBarcode$.pipe(map(toWedgeScanEvent)), attributed.scanEvents$, hub.events$).pipe(
-				withLatestFrom(isActive$),
-				filter(([, active]) => active),
-				map(([event]) => event),
-				tap(() => markUserActivity())
-			),
-		[wedgeBarcode$, attributed.scanEvents$, hub.events$, isActive$]
+		() => gatedScans$.pipe(tap(() => markUserActivity())),
+		[gatedScans$]
 	);
 
 	/**
