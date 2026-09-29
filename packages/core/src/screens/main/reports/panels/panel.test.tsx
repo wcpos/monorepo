@@ -175,3 +175,22 @@ it('Print waits while the orders lane is still downloading, and for a printer th
 	);
 	mockPrintDocument.mismatchWarning = null;
 });
+it('the footer names the items missing a cost', () => {
+	setOrders([
+		{
+			uuid: 'a',
+			status: 'completed',
+			total: '150',
+			cost_of_goods_sold: {},
+			line_items: [
+				{ product_id: 1, total: '100', quantity: 2, cost_of_goods_sold: { value: 25 } },
+				{ product_id: 2, total: '50', quantity: 1.5 },
+			],
+		},
+	] as Context.ReportOrder[]);
+	room();
+	fireEvent.click(screen.getByTestId('card-products-open'));
+	expect(screen.getByTestId('detail-panel-cost-missing').textContent).toBe(
+		'1 orders · £150.00 · cost missing on 1.5 of 3.5 items'
+	);
+});

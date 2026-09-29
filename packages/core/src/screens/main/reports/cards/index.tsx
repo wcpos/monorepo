@@ -11,8 +11,11 @@ import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
-import { useReportsPeriod } from '../context';
+import { useReportsData, useReportsPeriod } from '../context';
 import { periodLabel } from '../date-button';
+import { cogsEnabled } from '../margin';
+import { LocalProductsContext, useLocalProducts } from './use-local-products';
+import { BrandsCard } from './brands';
 import { CardSkeleton } from './card';
 import { PaymentsCard } from './payments';
 import { CategoriesCard } from './categories';
@@ -27,6 +30,7 @@ const cards = [
 	{ id: 'card-payments', name: 'reports.card_payments', Component: PaymentsCard },
 	{ id: 'card-products', name: 'reports.card_top_products', Component: TopProductsCard },
 	{ id: 'card-categories', name: 'reports.card_categories', Component: CategoriesCard },
+	{ id: 'card-brands', name: 'reports.card_brands', Component: BrandsCard },
 	{ id: 'card-cashiers', name: 'reports.card_cashiers', Component: CashiersCard },
 	{ id: 'card-taxes', name: 'reports.card_taxes', Component: TaxesCard },
 	{ id: 'card-refunds', name: 'reports.card_refunds', Component: RefundsCard },
@@ -35,6 +39,14 @@ const cards = [
 const THREE_COLUMNS_MIN_WIDTH = 1000;
 const TWO_COLUMNS_MIN_WIDTH = 600;
 export function PeriodSection() {
+	const { selectedOrders } = useReportsData();
+	const products = useLocalProducts(
+		selectedOrders.flatMap((order) =>
+			(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
+		)
+	);
+	const enabled = cogsEnabled(selectedOrders, products ?? []);
+	const visibleCards = cards.filter((card) => card.id !== 'card-brands' || enabled);
 	const t = useT(),
 		{ screenSize } = useTheme(),
 		{ dateRange, storeId, timezone } = useReportsPeriod();
@@ -61,32 +73,34 @@ export function PeriodSection() {
 					? 2
 					: 1;
 	return (
-		<View
-			testID="reports-period-section"
-			className="gap-3"
-			onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-		>
-			<Text testID="reports-period-title" role="heading" className="text-lg font-semibold">
-				{text}
-			</Text>
-			{Array.from({ length: Math.ceil(cards.length / columns) }, (_, row) => (
-				<View key={row} className="flex-row gap-3">
-					{Array.from({ length: columns }, (_, cell) => {
-						const card = cards[row * columns + cell];
-						return (
-							<View key={cell} className="min-w-0 flex-1">
-								{card && (
-									<ErrorBoundary>
-										<Suspense fallback={<CardSkeleton testID={card.id} name={t(card.name)} />}>
-											<card.Component />
-										</Suspense>
-									</ErrorBoundary>
-								)}
-							</View>
-						);
-					})}
-				</View>
-			))}
-		</View>
+		<LocalProductsContext.Provider value={products}>
+			<View
+				testID="reports-period-section"
+				className="gap-3"
+				onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+			>
+				<Text testID="reports-period-title" role="heading" className="text-lg font-semibold">
+					{text}
+				</Text>
+				{Array.from({ length: Math.ceil(visibleCards.length / columns) }, (_, row) => (
+					<View key={row} className="flex-row gap-3">
+						{Array.from({ length: columns }, (_, cell) => {
+							const card = visibleCards[row * columns + cell];
+							return (
+								<View key={cell} className="min-w-0 flex-1">
+									{card && (
+										<ErrorBoundary>
+											<Suspense fallback={<CardSkeleton testID={card.id} name={t(card.name)} />}>
+												<card.Component />
+											</Suspense>
+										</ErrorBoundary>
+									)}
+								</View>
+							);
+						})}
+					</View>
+				))}
+			</View>
+		</LocalProductsContext.Provider>
 	);
 }

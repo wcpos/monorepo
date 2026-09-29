@@ -1,11 +1,17 @@
+import round from 'lodash/round';
+
 import { wooMetaCarrier } from '@wcpos/sync-core';
 
+import { chainLabel, cogsEnabled, lineCost, marginOf } from '../margin';
+
+import type { brands, CategoryTree } from '../margin';
 import type { cashiers, categories, taxesByRate, tenders, topProducts } from '../cards/aggregate';
 import type { DetailId, ReportOrder } from '../context';
 import type { calculateTotals } from '../report/utils';
 import type { useReportFormats } from '../use-report-formats';
 
 export type PanelSpec = {
+	missing?: { n: number; m: number };
 	head: string[];
 	rows: { key: string | number; cells: string[]; raw: (string | number)[] }[];
 	keys: string[];
@@ -15,6 +21,10 @@ export type PanelSpec = {
 	align: ('left' | 'right')[];
 };
 type Inputs = {
+	brands?: ReturnType<typeof brands>;
+	categoryTree?: CategoryTree;
+	cogs?: boolean;
+	num_decimals?: number;
 	payments: ReturnType<typeof tenders>;
 	products: ReturnType<typeof topProducts>;
 	categories: ReturnType<typeof categories>;
@@ -51,6 +61,7 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		payments: ['method', 'orders', 'amount', 'share'],
 		products: ['product', 'qty', 'amount'],
 		categories: ['category', 'qty', 'amount', 'share'],
+		brands: ['brand', 'qty', 'amount', 'share'],
 		cashiers: ['cashier', 'orders', 'avg_order', 'amount'],
 		taxes: ['rate', 'net', 'tax', 'gross'],
 		refunds: ['order', 'reason', 'amount'],
@@ -68,17 +79,72 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 		rows: { key: string | number; cells: string[]; raw: (string | number)[] }[],
 		total: string[],
 		totalRaw: (string | number)[]
-	): PanelSpec => ({
-		head: head.map((key) => t(key)),
-		rows,
-		total,
-		totalRaw,
-		keys,
-		types,
-		align: keys.map((key, index) =>
-			index === 0 || (types[index] === 'text' && key !== 'share') ? 'left' : 'right'
-		),
-	});
+	): PanelSpec => {
+		const result: PanelSpec = {
+			head: head.map((key) => t(key)),
+			rows,
+			total,
+			totalRaw,
+			keys,
+			types,
+			align: keys.map((key, index) =>
+				index === 0 || (types[index] === 'text' && key !== 'share') ? 'left' : 'right'
+			),
+		};
+		const groups =
+			id === 'products'
+				? products
+				: id === 'categories'
+					? categories.parts
+					: id === 'brands'
+						? (inputs.brands?.parts ?? [])
+						: null;
+		if (groups && (inputs.cogs ?? cogsEnabled(orders, []))) {
+			const insert = <T>(values: T[], extra: T[]) => values.splice(3, 0, ...extra);
+			insert(result.keys, ['cost', 'profit', 'margin']);
+			insert(
+				result.head,
+				['reports.col_cost', 'reports.col_profit', 'reports.col_margin'].map((key) => t(key))
+			);
+			insert(result.types, ['money', 'money', 'number']);
+			insert(result.align, ['right', 'right', 'right']);
+			const append = (
+				cells: string[],
+				raw: (string | number)[],
+				value: ReturnType<typeof marginOf>,
+				known: boolean
+			) => {
+				insert(cells, [
+					known ? money(value.cost) : '—',
+					known ? money(value.profit) : '—',
+					value.marginPct === null ? '—' : share(value.marginPct),
+				]);
+				insert(raw, [
+					known ? value.cost : '',
+					known ? value.profit : '',
+					value.marginPct === null ? '' : value.marginPct * 100,
+				]);
+				return value;
+			};
+			const value = marginOf([]),
+				known = groups.some((group) => (group.lines ?? []).some((line) => lineCost(line) !== null));
+			groups.forEach((group, index) => {
+				const lines = group.lines ?? [],
+					row = marginOf(lines, inputs.num_decimals);
+				append(rows[index].cells, rows[index].raw, row, row.missing < lines.length);
+				for (const key of ['net', 'cost', 'profit', 'missing', 'items', 'missingItems'] as const)
+					value[key] += row[key];
+			});
+			value.cost = round(value.cost, inputs.num_decimals ?? 2);
+			value.profit = round(value.profit, inputs.num_decimals ?? 2);
+			value.marginPct =
+				value.cost + value.profit ? value.profit / (value.cost + value.profit) : null;
+			append(total, totalRaw, value, known);
+			if (value.missing) result.missing = { n: value.missingItems, m: value.items };
+		}
+		return result;
+	};
+
 	switch (id) {
 		case 'orders':
 			return spec(
@@ -165,35 +231,40 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 					products.reduce((sum, row) => sum + row.amount, 0),
 				]
 			);
+		case 'brands':
 		case 'categories': {
+			const grouping = id === 'brands' ? (inputs.brands?.parts ?? []) : categories.parts;
+			const label = (row: (typeof categories.parts)[number]) =>
+				(id === 'categories' && inputs.categoryTree
+					? chainLabel(Number(row.key), inputs.categoryTree, t('reports.chain_separator'), unknown)
+					: '') ||
+				row.label ||
+				labels[row.key] ||
+				unknown;
 			const labels: Record<string, string> = {
 				unknown: t('reports.unknown_product'),
 				uncategorised: t('reports.uncategorised'),
+				nobrand: t('reports.no_brand'),
 			};
 			return spec(
-				['common.category', 'reports.col_qty', 'common.amount', 'reports.col_share'],
-				categories.parts.map((row) => ({
+				[
+					id === 'brands' ? 'common.brand' : 'common.category',
+					'reports.col_qty',
+					'common.amount',
+					'reports.col_share',
+				],
+				grouping.map((row) => ({
 					key: row.key,
-					raw: [row.label || labels[row.key] || unknown, row.quantity, row.amount, row.share * 100],
-					cells: [
-						row.label || labels[row.key] || unknown,
-						quantity(row.quantity),
-						money(row.amount),
-						share(row.share),
-					],
+					raw: [label(row), row.quantity, row.amount, row.share * 100],
+					cells: [label(row), quantity(row.quantity), money(row.amount), share(row.share)],
 				})),
 				[
 					total,
 					quantity(totals.totalItemsSold),
-					money(categories.parts.reduce((sum, row) => sum + row.amount, 0)),
+					money(grouping.reduce((sum, row) => sum + row.amount, 0)),
 					'',
 				],
-				[
-					total,
-					totals.totalItemsSold,
-					categories.parts.reduce((sum, row) => sum + row.amount, 0),
-					'',
-				]
+				[total, totals.totalItemsSold, grouping.reduce((sum, row) => sum + row.amount, 0), '']
 			);
 		}
 		case 'cashiers':

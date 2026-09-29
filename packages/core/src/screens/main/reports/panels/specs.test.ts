@@ -1,6 +1,7 @@
 import { createTestT } from '../../../../../jest/translate';
 import { cashiers, categories, taxesByRate, tenders, topProducts } from '../cards/aggregate';
 import { calculateTotals } from '../report/utils';
+import { brands } from '../margin';
 import { panelSpec } from './specs';
 
 import type { ReportOrder } from '../context';
@@ -114,4 +115,120 @@ it('categories retain unknown and uncategorised rows and fractional quantities',
 		['Unknown product', 'qty:1.5', '£3.00', '75.0%'],
 		['Uncategorised', 'qty:1', '£1.00', '25.0%'],
 	]);
+});
+
+it('the margin columns appear only when the feature is on', () => {
+	const data = inputs([
+		{
+			uuid: 'a',
+			line_items: [{ product_id: 1, total: '100', quantity: 2, cost_of_goods_sold: { value: 25 } }],
+		},
+	] as ReportOrder[]);
+	expect(panelSpec('products', data).keys).toEqual(['product', 'qty', 'amount']);
+	data.orders[0].cost_of_goods_sold = { total_value: 25 };
+	const spec = panelSpec('products', data);
+	expect(spec.keys).toEqual(['product', 'qty', 'amount', 'cost', 'profit', 'margin']);
+	expect(spec.rows[0].cells.slice(3)).toEqual(['£25.00', '£75.00', '75.0%']);
+	expect(spec.rows[0].raw.slice(3)).toEqual([25, 75, 75]);
+	expect(spec.types.slice(3)).toEqual(['money', 'money', 'number']);
+	expect(spec.align.slice(3)).toEqual(['right', 'right', 'right']);
+});
+it('a row with every cost missing shows dashes', () => {
+	const spec = panelSpec(
+		'products',
+		inputs([
+			{
+				uuid: 'a',
+				cost_of_goods_sold: {},
+				line_items: [{ product_id: 1, total: '50', quantity: 2 }],
+			},
+		] as ReportOrder[])
+	);
+	expect(spec.rows[0].cells.slice(3)).toEqual(['—', '—', '—']);
+	expect(spec.rows[0].raw.slice(3)).toEqual(['', '', '']);
+});
+it('the total row sums cost and profit and carries the overall margin', () => {
+	const spec = panelSpec(
+		'products',
+		inputs([
+			{
+				uuid: 'a',
+				cost_of_goods_sold: {},
+				line_items: [
+					{ product_id: 1, total: '100', quantity: 1, cost_of_goods_sold: { value: 25 } },
+					{ product_id: 2, total: '50', quantity: 2, cost_of_goods_sold: { value: 20 } },
+					{ product_id: 3, total: '30', quantity: 1 },
+				],
+			},
+		] as ReportOrder[])
+	);
+	expect(spec.total.slice(3)).toEqual(['£45.00', '£105.00', '70.0%']);
+});
+it('the brands spec', () => {
+	const data = inputs([
+		{
+			uuid: 'a',
+			cost_of_goods_sold: {},
+			line_items: [{ product_id: 1, total: '10', quantity: 1.5, cost_of_goods_sold: { value: 4 } }],
+		},
+	] as ReportOrder[]);
+	const spec = panelSpec('brands', {
+		...data,
+		brands: brands(data.orders, [{ id: 1, brands: [{ id: 3, name: 'Acme' }] }], data.totals),
+	});
+	expect(spec.head).toEqual(['Brand', 'Qty', 'Amount', 'Cost', 'Profit', 'Margin %', 'Share']);
+	expect(spec.rows[0].cells).toEqual([
+		'Acme',
+		'qty:1.5',
+		'£10.00',
+		'£4.00',
+		'£6.00',
+		'60.0%',
+		'0.0%',
+	]);
+});
+it('category panels keep assigned categories and translated parent chains', () => {
+	const data = inputs([
+		{
+			uuid: 'a',
+			line_items: [
+				{ product_id: 1, total: '10', quantity: 1 },
+				{ product_id: 2, total: '20', quantity: 2 },
+			],
+		},
+	] as ReportOrder[]);
+	data.categories = categories(
+		data.orders,
+		[
+			{ id: 1, categories: [{ id: 2, name: 'Beans' }] },
+			{ id: 2, categories: [{ id: 3, name: 'Ground' }] },
+		],
+		data.totals
+	);
+	const spec = panelSpec('categories', {
+		...data,
+		categoryTree: new Map([
+			[1, { id: 1, name: 'Coffee', parent: 0 }],
+			[2, { id: 2, name: 'Beans', parent: 1 }],
+			[3, { id: 3, name: 'Ground', parent: 1 }],
+		]),
+	});
+	expect(spec.rows.map((row) => [row.key, row.cells[0]])).toEqual([
+		['3', 'Coffee › Ground'],
+		['2', 'Coffee › Beans'],
+	]);
+});
+it('rounded totals sum their displayed rows at the store precision', () => {
+	const data = inputs([
+		{
+			uuid: 'a',
+			cost_of_goods_sold: {},
+			line_items: [
+				{ product_id: 1, total: '1', quantity: 1, cost_of_goods_sold: { value: 0.004 } },
+				{ product_id: 2, total: '1', quantity: 1, cost_of_goods_sold: { value: 0.004 } },
+			],
+		},
+	] as ReportOrder[]);
+	const spec = panelSpec('products', data);
+	expect(spec.totalRaw.slice(3)).toEqual([0, 2, 100]);
 });

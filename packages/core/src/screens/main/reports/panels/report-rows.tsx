@@ -48,7 +48,12 @@ export function ReportRows({ spec, testID }: { spec: PanelSpec; testID: string }
 									<Text className="font-semibold">{row.cells[0]}</Text>
 									{row.cells.slice(1).map((cell, index) => (
 										<View key={index} className="flex-row justify-between gap-3">
-											<Text className="text-muted-foreground">{spec.head[index + 1]}</Text>
+											<Text
+												testID={`${testID}-head-${spec.keys[index + 1]}`}
+												className="text-muted-foreground"
+											>
+												{spec.head[index + 1]}
+											</Text>
 											<Text className="min-w-0 shrink text-right tabular-nums">{cell}</Text>
 										</View>
 									))}
@@ -82,7 +87,7 @@ export function ReportRows({ spec, testID }: { spec: PanelSpec; testID: string }
 			<TableHeader>
 				<TableRow>
 					{spec.head.map((label, index) => (
-						<TableHead key={index}>
+						<TableHead key={index} testID={`${testID}-head-${spec.keys[index]}`}>
 							<Text className={spec.align[index] === 'right' ? 'text-right' : 'text-left'}>
 								{label}
 							</Text>

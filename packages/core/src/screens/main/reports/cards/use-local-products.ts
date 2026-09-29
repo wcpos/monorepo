@@ -7,6 +7,8 @@ import { observeEngineQuery, useQueryRuntime } from '@wcpos/query';
 
 import type { LocalProduct } from './aggregate';
 
+export const LocalProductsContext = React.createContext<LocalProduct[] | undefined>(undefined);
+
 export function useLocalProducts(ids: number[]) {
 	const { engine, locale } = useQueryRuntime();
 	const key = [...new Set(ids)].sort((a, b) => a - b).join(',');
