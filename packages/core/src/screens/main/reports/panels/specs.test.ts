@@ -75,26 +75,30 @@ it('taxes gross is net plus tax and a dash without a net', () => {
 	]);
 	expect(spec.total).toEqual(['Total', '£10.00', '£4.00', '£14.00']);
 });
-it('refunds lists one row per embedded refund with the absolute amount', () => {
-	const spec = panelSpec(
-		'refunds',
-		inputs([
+it("one row per period refund with the parent's number when local", () => {
+	const data = inputs([
+		{ id: 4, uuid: 'a', number: '42', refunds: [{ total: '-90' }] },
+	] as ReportOrder[]);
+	const spec = panelSpec('refunds', {
+		...data,
+		periodRefunds: [
 			{
-				uuid: 'a',
-				number: '42',
-				refunds: [
-					{ id: 1, reason: 'Damaged', total: '-2' },
-					{ id: 2, total: '-3' },
-				],
+				id: 1,
+				parent_id: 4,
+				parentNumber: '42',
+				date_created_gmt: '2026-07-15T10:00:00',
+				amount: '2',
+				reason: 'Damaged',
 			},
-		] as ReportOrder[])
-	);
+			{ id: 2, parent_id: 8, date_created_gmt: '2026-07-15T10:00:00', total: '-3' },
+		],
+		orderTime: () => '12:00',
+	});
 	expect(spec.rows.map((row) => row.cells)).toEqual([
-		['#42', 'Damaged', '£2.00'],
-		['#42', '—', '£3.00'],
+		['#42', '12:00', 'Damaged', '£2.00'],
+		['#8', '12:00', '—', '£3.00'],
 	]);
-	expect(new Set(spec.rows.map((row) => row.key)).size).toBe(2);
-	expect(spec.total).toEqual(['Refunded', '', '£5.00']);
+	expect(spec.total).toEqual(['Refunded', '', '', '£5.00']);
 });
 it('cashiers average is amount over orders', () => {
 	const data = inputs([]);

@@ -13,6 +13,7 @@ import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use
 import { inZone, useStoreDay, useViewedStore } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
+import { refundsSummary } from '../cards/aggregate';
 import { useReportsData, useReportsScope } from '../context';
 import { useReportCashier } from './use-report-cashier';
 import { useQueryState } from '../../../../query';
@@ -30,13 +31,13 @@ export function ZReport({ storeId }: { storeId?: number } = {}) {
 	const viewed = useDocField(useViewedStore(storeId), (value) => value);
 	const sessionName = useDocField(store, (value) => value.name);
 	const storeName = (viewed?.name ?? sessionName) as string;
-	const { selectedOrders, totals } = useReportsData();
+	const { selectedOrders, totals, periodRefunds } = useReportsData();
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
 	);
 	const {
 		total,
-		refundTotal,
+		refundTotal: embeddedRefundTotal,
 		paymentMethodsArray,
 		taxTotalsArray,
 		totalTax,
@@ -47,6 +48,10 @@ export function ZReport({ storeId }: { storeId?: number } = {}) {
 		shippingTotalsArray,
 		averageOrderValue,
 	} = totals;
+	const refundTotal =
+		periodRefunds === undefined
+			? embeddedRefundTotal
+			: refundsSummary(periodRefunds, totals, viewed?.price_num_decimals).refunded;
 
 	const options = {
 		decimalScale: viewed?.price_num_decimals,

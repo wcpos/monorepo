@@ -134,6 +134,7 @@ let mockReportsPending = false;
 const mockPendingReport = new Promise(() => {});
 jest.mock('./context', () => ({
 	...jest.requireActual('./context'),
+	ReportsRefunds: ({ children }: React.PropsWithChildren) => children,
 	ReportsProvider: ({ children }: { children: React.ReactNode }) => {
 		if (mockReportsPending) throw mockPendingReport;
 		return children;
@@ -172,7 +173,9 @@ jest.mock('../contexts/ui-settings', () => ({
 }));
 
 function latestState(): QueryStateOf<'orders'> {
-	const call = mockUseCollectionBinding.mock.calls.at(-2);
+	const call = mockUseCollectionBinding.mock.calls
+		.filter(([collection]) => collection === 'orders')
+		.at(-2);
 	if (!call) throw new Error('reports orders binding was not called');
 	return call[1] as QueryStateOf<'orders'>;
 }
@@ -536,8 +539,22 @@ it('binds the comparison with the same filters and a shifted date range', () => 
 	mockCapabilities = ['view_woocommerce_pos_reports'];
 	render(<ReportsScreen />);
 	const current = latestState();
-	const comparison = mockUseCollectionBinding.mock.calls.at(-1)![1] as QueryStateOf<'orders'>;
+	const comparison = mockUseCollectionBinding.mock.calls
+		.filter(([collection]) => collection === 'orders')
+		.at(-1)![1] as QueryStateOf<'orders'>;
 	expect(comparison.filters).toEqual({ ...current.filters, dateRange: expect.any(Object) });
 	expect(comparison.filters.dateRange).not.toEqual(current.filters.dateRange);
 	expect(comparison.limit).toBe(current.limit);
+});
+
+// Inheriting the order's sort or room filters would violate the refunds browse lane's contract.
+it('binds refunds by their date alone with the supported sort', () => {
+	mockCapabilities = ['view_woocommerce_pos_reports'];
+	render(<ReportsScreen />);
+	const state = mockUseCollectionBinding.mock.calls.findLast(
+		([collection]) => collection === 'refunds'
+	)![1] as QueryStateOf<'refunds'>;
+	expect(state.filters).toEqual({ dateRange: latestState().filters.dateRange });
+	expect(state.sort).toEqual({ field: 'date_created_gmt', direction: 'desc' });
+	expect(state.limit).toBe(Number.MAX_SAFE_INTEGER);
 });

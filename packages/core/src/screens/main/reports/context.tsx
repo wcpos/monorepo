@@ -11,10 +11,12 @@ import {
 	subDays,
 	subMonths,
 } from 'date-fns';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { startWith } from 'rxjs';
 
+import { wooMetaCarrier } from '@wcpos/sync-core';
 import type { EngineRecord } from '@wcpos/query';
-import { useDocField } from '@wcpos/query';
+import { observeEngineQuery, useDocField, useQueryRuntime } from '@wcpos/query';
 
 import {
 	calendarDate,
@@ -41,10 +43,13 @@ export type ReportOrder = OrderPayload & {
 	uuid: EngineRecord<'orders'>['uuid'];
 };
 
+export type RefundRow = EngineRecord<'refunds'>['payload'] & { parentNumber?: string };
+
 /** The query binding. Changes only when the provider is handed a new one. */
 export interface ReportsBinding {
 	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
 	comparisonBinding: ReturnType<typeof useCollectionBinding<'orders'>>;
+	refundsBinding: ReturnType<typeof useCollectionBinding<'refunds'>>;
 }
 
 /** Row selection state. Changes when the cashier ticks a row. */
@@ -55,6 +60,7 @@ export interface ReportsSelection {
 
 /** The orders themselves. Rebuilt on every query emission. */
 export interface ReportsData {
+	periodRefunds?: RefundRow[];
 	allOrders: ReportOrder[];
 	selectedOrders: ReportOrder[];
 	dateRange: DateRange;
@@ -213,13 +219,19 @@ export const useReportsData = (): ReportsData => {
 interface ReportsProviderProps {
 	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
 	comparisonBinding: ReturnType<typeof useCollectionBinding<'orders'>>;
+	refundsBinding: ReturnType<typeof useCollectionBinding<'refunds'>>;
 	children: React.ReactNode;
 }
 
 /**
  *
  */
-export function ReportsProvider({ binding, comparisonBinding, children }: ReportsProviderProps) {
+export function ReportsProvider({
+	binding,
+	comparisonBinding,
+	refundsBinding,
+	children,
+}: ReportsProviderProps) {
 	const result = useObservableSuspense(binding.resource);
 	const { dateRange, comparisonRange, live } = useReportsPeriod();
 	const { statusMode } = useReportsScope();
@@ -248,8 +260,8 @@ export function ReportsProvider({ binding, comparisonBinding, children }: Report
 		[allOrders, statusMode, unselectedRowIds]
 	);
 	const bindingValue = React.useMemo<ReportsBinding>(
-		() => ({ binding, comparisonBinding }),
-		[binding, comparisonBinding]
+		() => ({ binding, comparisonBinding, refundsBinding }),
+		[binding, comparisonBinding, refundsBinding]
 	);
 
 	const selectionValue = React.useMemo<ReportsSelection>(
@@ -324,6 +336,60 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 		: wholeComparisonOrders;
 	return (
 		<ReportsDataContext.Provider value={{ ...data, live, comparisonOrders, wholeComparisonOrders }}>
+			{children}
+		</ReportsDataContext.Provider>
+	);
+}
+
+/** A secondary read: parent lookup is local-only and never expands the sales demand. */
+export function ReportsRefunds({ children }: React.PropsWithChildren) {
+	const data = useReportsData();
+	const { refundsBinding } = useReportsBinding();
+	const { filters } = useQueryState<'orders'>();
+	const result = useObservableSuspense(refundsBinding.resource);
+	const refunds = result.hits.map(({ record }) => (record as EngineRecord<'refunds'>).payload);
+	const { engine, locale } = useQueryRuntime();
+	const parentIds = [
+		...new Set(
+			result.hits.map(({ record }) => (record as EngineRecord<'refunds'>).payload.parent_id)
+		),
+	]
+		.sort((a, b) => a - b)
+		.join(',');
+	const source = React.useMemo(
+		() =>
+			observeEngineQuery(engine, locale, {
+				collection: 'orders',
+				selector: { id: { $in: parentIds ? parentIds.split(',').map(Number) : [] } },
+				limit: Number.MAX_SAFE_INTEGER,
+			}).pipe(startWith(undefined)),
+		[engine, locale, parentIds]
+	);
+	const local = useObservableState(source);
+	const parents = new Map([
+		...(local?.hits.map(({ record }) => {
+			const order = record as EngineRecord<'orders'>;
+			return [order.payload.id, order.payload] as const;
+		}) ?? []),
+		...data.allOrders.map((order) => [order.id, order] as const),
+	]);
+	const held = new Set(data.allOrders.map((order) => order.id));
+	const periodRefunds =
+		local &&
+		refunds.flatMap((refund) => {
+			const parent = parents.get(refund.parent_id);
+			const identity = wooMetaCarrier.readIdentity((parent ?? refund).meta_data);
+			const inRoom =
+				held.has(refund.parent_id) ||
+				((!filters.store ||
+					(parent && !/^\d+$/.test(String(filters.store))
+						? parent.created_via === filters.store
+						: identity.storeId === String(filters.store))) &&
+					(!filters.register || identity.registerId === filters.register));
+			return inRoom ? [{ ...refund, parentNumber: parent?.number }] : [];
+		});
+	return (
+		<ReportsDataContext.Provider value={{ ...data, periodRefunds }}>
 			{children}
 		</ReportsDataContext.Provider>
 	);

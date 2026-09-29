@@ -30,7 +30,7 @@ import {
 	useReportsScope,
 	useReportsSelection,
 } from '../context';
-import { brands, cogsEnabled } from '../margin';
+import { brands, cogsEnabled, lineCost } from '../margin';
 import { useLocalCategories } from '../cards/use-local-categories';
 import { periodLabel } from '../date-button';
 import { useReportFormats } from '../use-report-formats';
@@ -48,7 +48,7 @@ const PANEL_WIDTH = 480;
 const WIDE_PANEL_WIDTH = 640;
 export function DetailPanel() {
 	const { detail, setDetail } = useReportsScope(),
-		{ allOrders, selectedOrders, totals } = useReportsData();
+		{ allOrders, selectedOrders, totals, periodRefunds } = useReportsData();
 	const included = useIncludedStatus();
 	const { unselectedRowIds } = useReportsSelection();
 	const includedOrders = allOrders
@@ -80,7 +80,7 @@ export function DetailPanel() {
 	const { site } = useStoreSession();
 	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
 	const directory = useObservableState(source) as WPCredentialsDocument[] | undefined;
-	const ids = selectedOrders.flatMap((order) =>
+	const ids = [...selectedOrders, ...(periodRefunds ?? [])].flatMap((order) =>
 		(order.line_items ?? []).flatMap((line) => (line.product_id == null ? [] : [line.product_id]))
 	);
 	const grouped = detail === 'products' || detail === 'categories' || detail === 'brands';
@@ -102,18 +102,32 @@ export function DetailPanel() {
 	// Orders names its cashiers too: the CSV must not carry "Unknown" for a directory still loading.
 	const ready =
 		formats.store &&
+		(detail !== 'refunds' || periodRefunds !== undefined) &&
 		(!grouped || products) &&
 		(detail !== 'categories' || tree) &&
 		(detail !== 'cashiers' && detail !== 'orders' ? true : !!directory);
 	const decimals = formats.store?.price_num_decimals;
 	const spec = panelSpec(detail ?? 'orders', {
-		cogs: cogsEnabled(selectedOrders, products ?? []),
+		cogs:
+			cogsEnabled(selectedOrders, products ?? []) ||
+			(periodRefunds ?? []).some((refund) =>
+				(refund.line_items ?? []).some((line) => lineCost(line) !== null)
+			),
 		num_decimals: decimals,
 		categoryTree: tree,
-		brands: brands(selectedOrders, products ?? [], totals, decimals),
+		periodRefunds,
+		brands: brands(selectedOrders, products ?? [], totals, decimals, periodRefunds),
 		payments: tenders(selectedOrders, totals, decimals),
-		products: topProducts(selectedOrders, totals, decimals),
-		categories: categories(selectedOrders, products ?? [], totals, decimals),
+		products: topProducts(selectedOrders, totals, decimals, periodRefunds, products),
+		categories: categories(
+			selectedOrders,
+			products ?? [],
+			totals,
+			decimals,
+			undefined,
+			undefined,
+			periodRefunds
+		),
 		cashiers: cashiers(totals),
 		taxes: taxesByRate(selectedOrders, totals, decimals),
 		orders: detail === 'orders' ? includedOrders : selectedOrders,

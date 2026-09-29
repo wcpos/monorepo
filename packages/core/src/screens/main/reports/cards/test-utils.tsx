@@ -50,6 +50,7 @@ export function setOrders(orders: ReportOrder[]) {
 	};
 	mockState.data = {
 		allOrders: orders,
+		periodRefunds: [],
 		selectedOrders: orders,
 		dateRange,
 		comparisonRange: dateRange,

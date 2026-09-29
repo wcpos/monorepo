@@ -9,6 +9,7 @@ import { of } from 'rxjs';
 
 import {
 	ReportsProvider,
+	ReportsRefunds,
 	ReportsScopeProvider,
 	useReportsBinding,
 	useReportsData,
@@ -19,10 +20,15 @@ import {
 import { QueryStateProvider, useQueryStateActions } from '../../../query';
 
 let mockZone = 'UTC';
+let mockLocalParents: object[] = [];
+const mockRuntime = { engine: {}, locale: 'en' };
 // The provider reads the viewed store's precision through useDocField; the app-state mock's
 // store is a plain object, so the field is read directly.
 jest.mock('@wcpos/query', () => ({
 	...jest.requireActual('@wcpos/query'),
+	useQueryRuntime: () => mockRuntime,
+	observeEngineQuery: () =>
+		of({ hits: mockLocalParents.map((payload) => ({ record: { payload } })) }),
 	useDocField: (doc: Record<string, unknown> | undefined, pick: (row: never) => unknown) =>
 		doc ? pick(doc as never) : undefined,
 }));
@@ -58,6 +64,7 @@ const binding = {
 const DataProvider = ReportsProvider as unknown as React.ComponentType<{
 	binding: { resource: unknown };
 	comparisonBinding: { resource: unknown };
+	refundsBinding?: { resource: unknown };
 	children: React.ReactNode;
 }>;
 
@@ -398,4 +405,94 @@ it('detail is device state, initially null', () => {
 		</ReportsScopeProvider>
 	);
 	expect(screen.getByTestId('detail').textContent).toBe('null');
+});
+
+// Parent scope wins over a refund's metadata; absent parents require matching POS identity.
+function refundRoom(parents: object[], refunds: object[], store = '9') {
+	mockLocalParents = parents;
+	const source = {
+		resource: new ObservableResource(
+			of({ hits: refunds.map((payload) => ({ record: { payload } })) })
+		),
+	};
+	const sales = { resource: new ObservableResource(of({ hits: [] })) };
+	function RefundProbe() {
+		const { periodRefunds } = useReportsData();
+		return (
+			<span data-testid="period-refunds">
+				{periodRefunds?.map((row) => row.id).join(',') ?? 'loading'}
+			</span>
+		);
+	}
+	return render(
+		<QueryStateProvider
+			collection="orders"
+			initialPageSize={100}
+			initialSort={{ field: 'date_created_gmt', direction: 'desc' }}
+			initialFilters={{ store, register: 'front' }}
+		>
+			<ReportsScopeProvider>
+				<DataProvider binding={sales} comparisonBinding={sales} refundsBinding={source}>
+					<React.Suspense fallback={<RefundProbe />}>
+						<ReportsRefunds>
+							<RefundProbe />
+						</ReportsRefunds>
+					</React.Suspense>
+				</DataProvider>
+			</ReportsScopeProvider>
+		</QueryStateProvider>
+	);
+}
+const identity = (store: string, register = 'front') => [
+	{ key: '_pos_store', value: store },
+	{ key: '_wcpos_register', value: register },
+];
+it('period refunds are scoped to the room by their parent order', async () => {
+	refundRoom(
+		[
+			{ id: 4, meta_data: identity('9') },
+			{ id: 5, meta_data: identity('9', 'back') },
+		],
+		[
+			{ id: 1, parent_id: 4 },
+			{ id: 2, parent_id: 5 },
+		]
+	);
+	expect(await screen.findByText('1')).toBeTruthy();
+});
+it('a refund whose parent is not local is kept by its own POS identity', async () => {
+	refundRoom(
+		[],
+		[
+			{ id: 1, parent_id: 4, meta_data: identity('9') },
+			{ id: 2, parent_id: 5 },
+			{ id: 3, parent_id: 6, meta_data: identity('9', 'back') },
+		]
+	);
+	expect(await screen.findByText('1')).toBeTruthy();
+});
+it("a refund of another store's order is dropped", async () => {
+	refundRoom(
+		[{ id: 4, meta_data: identity('10') }],
+		[
+			{ id: 1, parent_id: 4, meta_data: identity('9') },
+			{ id: 2, parent_id: 5, meta_data: identity('9') },
+		]
+	);
+	expect(await screen.findByText('2')).toBeTruthy();
+});
+
+it('local parents use created_via for the legacy POS store filter', async () => {
+	refundRoom(
+		[
+			{ id: 4, created_via: 'woocommerce-pos', meta_data: identity('0') },
+			{ id: 5, created_via: 'checkout', meta_data: identity('0') },
+		],
+		[
+			{ id: 1, parent_id: 4 },
+			{ id: 2, parent_id: 5 },
+		],
+		'woocommerce-pos'
+	);
+	expect(await screen.findByText('1')).toBeTruthy();
 });
