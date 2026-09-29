@@ -298,7 +298,7 @@ it('says nothing about refused movements when every row is delivered', () => {
 it('Close register starts counting and dismisses the panel', async () => {
 	const onOpenChange = jest.fn();
 	render(<RegisterPanel open onOpenChange={onOpenChange} />);
-	fireEvent.click(screen.getByTestId('register-panel-close'));
+	fireEvent.click(screen.getByTestId('register-panel-close-register'));
 	await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
 	expect(startCounting).toHaveBeenCalled();
 });
