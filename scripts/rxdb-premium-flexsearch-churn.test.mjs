@@ -36,15 +36,6 @@ try {
 const installedVersion = packageRoot && require('rxdb-premium/package.json').version;
 // The esm build's import bindings are renamed per release; rewrite exactly the installed ones.
 const ESM_IMPORTS_BY_VERSION = {
-	'17.4.0': [
-		['import{ensureNotFalsy as e}from"rxdb/plugins/core";', 'var e=core.ensureNotFalsy;'],
-		[
-			'import{getFlexsearchIndexSchema as t}from"./schema.js";',
-			'var t=schema.getFlexsearchIndexSchema;',
-		],
-		['import{filter as a,mergeMap as i}from"rxjs";', 'var a=rxjs.filter,i=rxjs.mergeMap;'],
-		['import n from"flexsearch";', 'var n=FlexSearch;'],
-	],
 	'17.5.0': [
 		['import{ensureNotFalsy as e}from"rxdb/plugins/core";', 'var e=core.ensureNotFalsy;'],
 		[
@@ -55,6 +46,10 @@ const ESM_IMPORTS_BY_VERSION = {
 		['import s from"flexsearch";', 'var s=FlexSearch;'],
 	],
 };
+assert.ok(
+	!packageRoot || (DISTS && ESM_IMPORTS_BY_VERSION[installedVersion]),
+	`rxdb-premium ${installedVersion} has no anchor set — re-derive the flexsearch churn patch`
+);
 const indexOptions = { preset: 'performance', tokenize: 'full', minlength: 3 };
 const installedPath = (dist) =>
 	packageRoot ? join(packageRoot, `dist/${dist}/plugins/flexsearch/rx-fulltext-search.js`) : null;

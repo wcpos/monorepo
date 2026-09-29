@@ -79,7 +79,7 @@ async function writePayload(
 
 /**
  * Wrap the collection's event stream so document subscriptions are countable: every
- * `doc.$` subscription reaches `eventBulks$` exactly once (verified rxdb 17.4.0 —
+ * `doc.$` subscription reaches `eventBulks$` exactly once (verified rxdb 17.5.0 —
  * `rx-document.ts` builds the per-document stream from `collection.eventBulks$`).
  */
 function countEventStreamSubscriptions(target: RxCollection<Shape>): { count: () => number } {

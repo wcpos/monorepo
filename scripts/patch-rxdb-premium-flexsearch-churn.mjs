@@ -212,30 +212,12 @@ export const PRELUDE = `globalThis.WCPOS_FLEXSEARCH_CHURN_PATCH=1;\n${wcposSearc
 
 // Byte-exact per-dist literals: keep everything outside these rewrites untouched.
 // These installed dists have two indexing add sites: boot replay and live events.
-const DISTS_17_4_0 = [
-	{
-		dist: 'esm',
-		liveBefore: 's.add(e.id,e.searchable)',
-		replayBefore: 'o.add(e.id,e.searchable)',
-		pipelineBefore: 'l=await a.collection.addPipeline({destination:s,',
-		destination: 's',
-		appendBefore: 'i.push({id:o,searchable:r})}var l=',
-	},
-	{
-		dist: 'cjs',
-		liveBefore: 'n.add(e.id,e.searchable)',
-		replayBefore: 'l.add(e.id,e.searchable)',
-		pipelineBefore: 'h=await e.collection.addPipeline({destination:c,',
-		destination: 'c',
-		appendBefore: 'i.push({id:s,searchable:n})}var o=',
-	},
-];
-
 /**
  * 17.5.0 has the same code at every anchor, so the same derivation below applies. Its esm
  * build emits RxFulltextSearch as a native class (close is a method; its body still ends
  * `await this.queue}`), and cjs gains babel's defineProperty helper for the class fields.
- * The minifier renamed the locals: esm live index `r`, destination `r`, handler text `n`;
+ * The minifier renamed the locals: esm live index `r` (the RxFulltextSearch constructor
+ * parameter), destination `r` (the local in addFulltextSearch), handler text `n`;
  * cjs live index `s`, destination `n`, handler text `s`, splice before `var c=`.
  */
 const DISTS_17_5_0 = [
@@ -290,7 +272,6 @@ const withRewrites = ({
 // version and fails on any other, so a new release is re-derived against the
 // churn test, never guessed. Drop a release's set when the pin leaves it.
 const DISTS_BY_VERSION = {
-	'17.4.0': DISTS_17_4_0.map(withRewrites),
 	'17.5.0': DISTS_17_5_0.map(withRewrites),
 };
 const INSTALLED_VERSION = require('rxdb-premium/package.json').version;

@@ -123,56 +123,10 @@ current=next&&typeof next.catch==="function"?next.catch(function(error){__wcposR
  * Each dist is minified with its own identifier names, so the anchors are
  * per-dist literals rather than a regex. A literal that stops matching is the
  * signal we want — see the install-failure note above.
- */
-const DISTS_17_4_0 = [
-	{
-		dist: 'esm',
-		constructorBefore: 'this.queue=e,this.readTasks=[]',
-		constructorAfter: `this.queue=e,${MARKER}(this,e),this.readTasks=[]`,
-		writeRunBefore: '(async()=>{if(0!==this.writeTasks.length){for(var s={type:"WRITE"',
-		writeRunAfter: '(async()=>{if(0!==this.writeTasks.length){try{for(var s={type:"WRITE"',
-		writeCleanupBefore: 'await this.beforeTaskReadOrWrite(s),await this.cleanupAfterRun(s)}}))',
-		writeCleanupAfter:
-			'await this.beforeTaskReadOrWrite(s)}finally{if(s)await this.cleanupAfterRun(s)}}}))',
-		readRunBefore:
-			'(async()=>{var e={type:"READ",storageInstance:t(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(e);',
-		readRunAfter:
-			'(async()=>{try{var e={type:"READ",storageInstance:t(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(e);',
-		readCleanupBefore: '0===this.readTasks.length&&(s=!0)}return this.cleanupAfterRun(e)}))',
-		readCleanupAfter:
-			'0===this.readTasks.length&&(s=!0)}}finally{if(e)await this.cleanupAfterRun(e)}}))',
-		cleanupRunBefore:
-			'(async()=>{var r={type:"CLEANUP",storageInstance:t(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(r),await e(r).then((e=>s(e))).catch((e=>a(e))),await this.cleanupAfterRun(r)}))',
-		cleanupRunAfter:
-			'(async()=>{try{var r={type:"CLEANUP",storageInstance:t(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(r),await e(r).then((e=>s(e))).catch((e=>a(e)))}finally{if(r)await this.cleanupAfterRun(r)}}))',
-	},
-	{
-		dist: 'cjs',
-		constructorBefore: 'this.queue=e.PROMISE_RESOLVE_VOID,this.readTasks=[]',
-		constructorAfter: `this.queue=e.PROMISE_RESOLVE_VOID,${MARKER}(this,e.PROMISE_RESOLVE_VOID),this.readTasks=[]`,
-		writeRunBefore: '(async()=>{if(0!==this.writeTasks.length){for(var a={type:"WRITE"',
-		writeRunAfter: '(async()=>{if(0!==this.writeTasks.length){try{for(var a={type:"WRITE"',
-		writeCleanupBefore: 'await this.beforeTaskReadOrWrite(a),await this.cleanupAfterRun(a)}}))',
-		writeCleanupAfter:
-			'await this.beforeTaskReadOrWrite(a)}finally{if(a)await this.cleanupAfterRun(a)}}}))',
-		readRunBefore:
-			'(async()=>{var s={type:"READ",storageInstance:(0,e.ensureNotFalsy)(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(s);',
-		readRunAfter:
-			'(async()=>{try{var s={type:"READ",storageInstance:(0,e.ensureNotFalsy)(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(s);',
-		readCleanupBefore: '0===this.readTasks.length&&(a=!0)}return this.cleanupAfterRun(s)}))',
-		readCleanupAfter:
-			'0===this.readTasks.length&&(a=!0)}}finally{if(s)await this.cleanupAfterRun(s)}}))',
-		cleanupRunBefore:
-			'(async()=>{var r={type:"CLEANUP",storageInstance:(0,e.ensureNotFalsy)(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(r),await t(r).then((e=>s(e))).catch((e=>a(e))),await this.cleanupAfterRun(r)}))',
-		cleanupRunAfter:
-			'(async()=>{try{var r={type:"CLEANUP",storageInstance:(0,e.ensureNotFalsy)(this.storageInstance),accessHandlers:new Map,touchedWriteDocuments:new Set,knownChangesContent:[]};await this.beforeTaskReadOrWrite(r),await t(r).then((e=>s(e))).catch((e=>a(e)))}finally{if(r)await this.cleanupAfterRun(r)}}))',
-	},
-];
-
-/**
+ *
  * 17.5.0 emits `queue` as a class field (esm: native; cjs: babel's defineProperty
- * helper) instead of assigning it in the constructor. The healer still installs
- * straight after it: in esm at the top of the constructor body, reading the
+ * helper), not as a constructor assignment. The healer installs straight after
+ * it: in esm at the top of the constructor body, reading the
  * already-initialised `this.queue`, because the constructor's `e` is `lockId` there.
  */
 const DISTS_17_5_0 = [
@@ -226,7 +180,6 @@ const DISTS_17_5_0 = [
 // version and fails on any other, so a new release is re-derived against the
 // containment test, never guessed. Drop a release's set when the pin leaves it.
 const DISTS_BY_VERSION = {
-	'17.4.0': DISTS_17_4_0,
 	'17.5.0': DISTS_17_5_0,
 };
 const INSTALLED_VERSION = require('rxdb-premium/package.json').version;

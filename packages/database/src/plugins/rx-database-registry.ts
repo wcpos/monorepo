@@ -18,7 +18,7 @@ export const rxDatabaseRegistryPlugin: RxPlugin = {
 				databases.add(database);
 
 				const originalOnClosed = database.onClosed;
-				// Deliberate rxdb-17.4.0 internals reach, version-pinned by the registry test.
+				// Deliberate rxdb-17.5.0 internals reach, version-pinned by the registry test.
 				const mutableDatabase = database as unknown as MutableOnClosed;
 				mutableDatabase.onClosed = () => {
 					const registered = openDatabasesByName.get(database.name);

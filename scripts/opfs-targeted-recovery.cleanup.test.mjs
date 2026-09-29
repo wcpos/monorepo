@@ -42,7 +42,7 @@ const SCHEMA = {
  * That is why `indexStates[0]` is `_deleted`-first, and why the production
  * stack throws reading `_deleted` rather than `_meta`.
  *
- * `cleanup` reproduces `cleanupDocumentJsonFile` (rxdb-premium 17.4.0,
+ * `cleanup` reproduces `cleanupDocumentJsonFile` (rxdb-premium 17.5.0,
  * plugins/storage-abstract-filesystem/cleanup.js): it walks the two-element
  * `_meta.lwt` index in row order, skips any row already flush against the write
  * cursor (`w === g`), and for a row preceded by a gap reads the bytes, parses
