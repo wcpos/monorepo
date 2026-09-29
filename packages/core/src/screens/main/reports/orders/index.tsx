@@ -96,7 +96,7 @@ function ReportsOrdersFooter(props: {
 /**
  *
  */
-export function Orders() {
+export function Orders({ nestedScrollEnabled = false }: { nestedScrollEnabled?: boolean } = {}) {
 	const t = useT();
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
@@ -112,7 +112,13 @@ export function Orders() {
 			setSort: actions.setSort,
 			// Reports bind the complete resident date window up front; there is no next page.
 			extendLimit: () => undefined,
-			setFilter: actions.setFilter,
+			// The status set and the (absent) customer filter are the hero's: a tap on a status or
+			// customer cell must not scope the report through a filter nothing on the page shows.
+			// A cashier cell tap does scope it, and the cashier chip mirrors the filter.
+			setFilter: (key, value) => {
+				if (key === 'status' || key === 'customer_id') return;
+				actions.setFilter(key, value);
+			},
 		}),
 		[actions]
 	);
@@ -233,6 +239,7 @@ export function Orders() {
 								resource={binding.resource}
 								sort={state.sort}
 								actions={tableActions}
+								nestedScrollEnabled={nestedScrollEnabled}
 								active$={binding.active$}
 								total$={binding.total$}
 								sync={binding.sync}

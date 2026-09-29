@@ -99,11 +99,6 @@ function CashierChip() {
 	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
 	const value = useQueryState<'orders'>().filters.cashier;
 	const actions = useQueryStateActions<'orders'>();
-	const { setCashierName } = useReportsScope();
-	const choices = [
-		{ value: 'all', label: t('reports.everyone') },
-		...cashiers.map((row) => ({ value: String(row.id), label: row.display_name ?? '' })),
-	];
 	return (
 		<MenuChip
 			name="cashier"
@@ -111,14 +106,11 @@ function CashierChip() {
 			scroll
 			value={value === undefined ? 'all' : String(value)}
 			defaultValue="all"
-			onChange={(next) => {
-				actions.setFilter('cashier', next === 'all' ? undefined : next);
-				// The printed report names the chosen cashier; the query holds only the id.
-				setCashierName(
-					next === 'all' ? undefined : choices.find((row) => row.value === next)?.label
-				);
-			}}
-			choices={choices}
+			onChange={(next) => actions.setFilter('cashier', next === 'all' ? undefined : next)}
+			choices={[
+				{ value: 'all', label: t('reports.everyone') },
+				...cashiers.map((row) => ({ value: String(row.id), label: row.display_name ?? '' })),
+			]}
 		/>
 	);
 }
@@ -201,6 +193,28 @@ export function HeroShell({ title }: { title: React.ReactNode }) {
 		</View>
 	);
 }
+/** The print action and its hidden document, under their own boundary: the report's cashier
+ * name comes from the credentials directory, and its loading must not blank the figure. */
+function HeroPrint({ storeId }: { storeId?: number }) {
+	const t = useT();
+	const { print, isPrinting, contentRef } = useReportPrint(storeId);
+	return (
+		<>
+			<IconButton
+				testID="hero-print"
+				name="printer"
+				accessibilityLabel={t('reports.print')}
+				onPress={print}
+				loading={isPrinting}
+			/>
+			<View className="hidden">
+				<View ref={contentRef}>
+					<ZReport storeId={storeId} />
+				</View>
+			</View>
+		</>
+	);
+}
 export function Hero({ title }: { title: React.ReactNode }) {
 	const t = useT();
 	const { screenSize } = useTheme();
@@ -241,7 +255,6 @@ export function Hero({ title }: { title: React.ReactNode }) {
 		period === 'day'
 			? comparisons.find((row) => row.value === cmp)!.label
 			: t(period === 'week' ? 'reports.vs_week_before' : 'reports.vs_month_before');
-	const { print, isPrinting, contentRef } = useReportPrint(storeId);
 	const chips = (
 		<View testID="hero-chips" className={`flex-row gap-2 ${phone ? '' : 'flex-wrap'}`}>
 			<React.Suspense
@@ -303,13 +316,13 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">
 				{title}
 				<View className="flex-row items-center gap-2">
-					<IconButton
-						testID="hero-print"
-						name="printer"
-						accessibilityLabel={t('reports.print')}
-						onPress={print}
-						loading={isPrinting}
-					/>
+					<React.Suspense
+						fallback={
+							<IconButton name="printer" accessibilityLabel={t('reports.print')} disabled />
+						}
+					>
+						<HeroPrint storeId={storeId} />
+					</React.Suspense>
 				</View>
 			</View>
 			{phone ? (
@@ -354,11 +367,6 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			</View>
 			<View testID="hero-chart" className="h-56 w-full">
 				<Chart />
-			</View>
-			<View className="hidden">
-				<View ref={contentRef}>
-					<ZReport storeId={storeId} />
-				</View>
 			</View>
 		</View>
 	);

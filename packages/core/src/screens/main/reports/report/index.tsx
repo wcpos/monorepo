@@ -21,7 +21,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-export function Report() {
+export function Report({ nestedScrollEnabled = false }: { nestedScrollEnabled?: boolean } = {}) {
 	const t = useT();
 	const { storeId } = useReportsPeriod();
 	const { print, isPrinting, contentRef } = useReportPrint(storeId);
@@ -48,7 +48,11 @@ export function Report() {
 					</HStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">
-					<ScrollView horizontal={false} className="w-full">
+					<ScrollView
+						horizontal={false}
+						className="w-full"
+						nestedScrollEnabled={nestedScrollEnabled}
+					>
 						<View ref={contentRef} style={{ width: '100%', height: '100%', padding: 10 }}>
 							<ZReport storeId={storeId} />
 						</View>

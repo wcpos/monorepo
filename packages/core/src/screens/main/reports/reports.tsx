@@ -35,25 +35,24 @@ export function Reports({ title }: { title: React.ReactNode }) {
 			<View className="flex-1">
 				<ErrorBoundary>
 					{screenSize === 'sm' ? (
+						// The phone page scrolls; the two panes inside it scroll on the same axis, so
+						// they opt into nested scrolling (Android hands them their drags).
 						<ScrollView contentContainerClassName="gap-3">
 							<Hero title={title} />
 							<View className="h-96 pr-2">
-								<Orders />
+								<Orders nestedScrollEnabled />
 							</View>
 							<View className="h-96 pl-2">
-								<Report />
+								<Report nestedScrollEnabled />
 							</View>
 						</ScrollView>
 					) : (
-						// The hero takes its natural height; the orders and the summary share the rest,
-						// and a short viewport scrolls the page rather than clipping the chart.
-						<ScrollView
-							className="h-full w-full"
-							contentContainerClassName="min-h-full gap-3 px-2"
-							testID="reports-sales-scroll"
-						>
+						// The hero takes its natural height; the orders and the summary share the rest
+						// and scroll themselves. No page scroll around lists that scroll on the same
+						// axis: on Android the outer one would take their drags.
+						<View className="h-full w-full gap-3 px-2">
 							<Hero title={title} />
-							<View className="min-h-96 flex-1">
+							<View className="min-h-0 flex-1">
 								<PanelGroup direction="horizontal">
 									<Panel>
 										<Orders />
@@ -64,7 +63,7 @@ export function Reports({ title }: { title: React.ReactNode }) {
 									</Panel>
 								</PanelGroup>
 							</View>
-						</ScrollView>
+						</View>
 					)}
 				</ErrorBoundary>
 			</View>

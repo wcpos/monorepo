@@ -62,6 +62,9 @@ jest.mock('./utils', () => ({
 	}),
 }));
 jest.mock('../../../../contexts/app-state', () => {
+	// The session site is one stable document: the report's cashier scope memoises its
+	// credentials directory on it (empty here: Everyone).
+	const site = { populate$: () => new BehaviorSubject([]) };
 	const useAppState = () => ({
 		store: {
 			id: 9,
@@ -72,6 +75,7 @@ jest.mock('../../../../contexts/app-state', () => {
 			price_num_decimals$: new BehaviorSubject(2),
 		},
 		wpCredentials: { id: 7, toJSON: () => ({ id: 7 }) },
+		site,
 	});
 	return { useAppState, useStoreSession: useAppState };
 });
