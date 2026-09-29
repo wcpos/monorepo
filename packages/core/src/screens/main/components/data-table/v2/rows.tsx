@@ -7,6 +7,7 @@ import { usePointer } from '@wcpos/components/lib/device';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { TableCell } from '@wcpos/components/table';
+import { TooltipPassiveTriggers } from '@wcpos/components/tooltip';
 
 import { getColumnStyle } from '../index';
 
@@ -96,25 +97,28 @@ export function DataTableRow<TData extends RowData>({
 						: 'min-h-row active:bg-muted flex-1 flex-row items-center gap-3 px-3'
 				}
 			>
-				{pointer === 'fine' ? (
-					body.map((cell, index) => (
-						<TableCell
-							key={cell.id}
-							style={getColumnStyle(
-								index === body.length - 1 && !actions
-									? { ...cell.column.columnDef.meta, width: undefined, flex: 1 }
-									: cell.column.columnDef.meta
-							)}
-						>
-							{content(cell)}
-						</TableCell>
-					))
-				) : (
-					<>
-						<View className="min-w-0 flex-1">{primary.map(content)}</View>
-						{body.filter((cell) => cell.column.id === 'price').map(content)}
-					</>
-				)}
+				{/* A tooltip in a cell (the price's tax) is a hint here, not a control: the press is the row's. */}
+				<TooltipPassiveTriggers>
+					{pointer === 'fine' ? (
+						body.map((cell, index) => (
+							<TableCell
+								key={cell.id}
+								style={getColumnStyle(
+									index === body.length - 1 && !actions
+										? { ...cell.column.columnDef.meta, width: undefined, flex: 1 }
+										: cell.column.columnDef.meta
+								)}
+							>
+								{content(cell)}
+							</TableCell>
+						))
+					) : (
+						<>
+							<View className="min-w-0 flex-1">{primary.map(content)}</View>
+							{body.filter((cell) => cell.column.id === 'price').map(content)}
+						</>
+					)}
+				</TooltipPassiveTriggers>
 			</Pressable>
 			{trailingNode !== undefined && trailingNode !== null ? (
 				pointer === 'fine' && actions ? (

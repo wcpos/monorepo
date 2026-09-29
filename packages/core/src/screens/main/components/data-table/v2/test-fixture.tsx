@@ -63,6 +63,9 @@ jest.mock('@wcpos/components/table', () => {
 jest.mock('@wcpos/components/text', () => ({ Text: jest.requireActual('react-native').Text }));
 jest.mock('@wcpos/components/hstack', () => ({ HStack: jest.requireActual('react-native').View }));
 jest.mock('@wcpos/components/sort-icon', () => ({ SortIcon: () => null }));
+jest.mock('@wcpos/components/tooltip', () => ({
+	TooltipPassiveTriggers: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('@wcpos/components/error-boundary', () => ({
 	ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
