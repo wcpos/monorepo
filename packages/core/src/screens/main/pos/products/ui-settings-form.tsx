@@ -48,6 +48,7 @@ const gridFieldsSchema = z.object({
 
 export const schema = z.object({
 	viewMode: z.enum(['grid', 'table']),
+	variationsStyle: z.enum(['drill', 'inline']).optional(),
 	position: z.enum(['left', 'right']),
 	showOutOfStock: z.boolean(),
 	sortBy: z.string(),
@@ -119,6 +120,31 @@ export function UISettingsForm() {
 											{ value: 'table', label: t('common.table'), testID: 'view-mode-table' },
 										] satisfies [Segment, Segment]
 									}
+								/>
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="variationsStyle"
+						render={({ field: { value, onChange } }) => (
+							<View className="gap-1 px-1">
+								<Text>{t('pos_products.variations_style')}</Text>
+								<SegmentedControl
+									value={value ?? 'drill'}
+									onValueChange={onChange}
+									segments={[
+										{
+											value: 'drill',
+											label: t('pos_products.variations_open_in_place'),
+											testID: 'products-variations-style-drill',
+										},
+										{
+											value: 'inline',
+											label: t('pos_products.variations_popover_and_rows'),
+											testID: 'products-variations-style-inline',
+										},
+									]}
 								/>
 							</View>
 						)}

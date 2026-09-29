@@ -273,6 +273,14 @@ it('persists a View Mode selection', async () => {
 	await settle();
 });
 
+it('persists the inline Variations selection', async () => {
+	render(<UISettingsForm />);
+	fireEvent.click(screen.getByTestId('products-variations-style-inline'));
+	act(() => jest.advanceTimersByTime(1000));
+	expect(patchSpy).toHaveBeenCalledWith({ variationsStyle: 'inline' });
+	await settle();
+});
+
 it('persists a Sort By selection', async () => {
 	render(<UISettingsForm />);
 

@@ -18,6 +18,7 @@ module.exports = {
 		// here; everything else goes through ts-jest. The patterns are mutually
 		// exclusive so transformer pick order can't matter.
 		//
+		// The v2 table is compiled for the same store-subscription reason.
 		// data-table/index.tsx joined this list with the react-table v9 migration:
 		// its useTableWrapper used to return `{ ...useReactTable(...) }`, and that
 		// spread is illegal in v9 (methods live on prototypes now). The spread was
@@ -31,9 +32,9 @@ module.exports = {
 		// behind a memo sentinel, so the screen never saw the service that started
 		// after it mounted. Uncompiled, the same component passed every test.
 		// Reader dev controls must refresh mutable driver state under compiler memoization too.
-		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index|settings/customer-display/index|checkout/tender/reader-connection)\\.tsx$':
+		'(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|v2/index)|settings/customer-display/index|checkout/tender/reader-connection)\\.tsx$':
 			'<rootDir>/jest/react-compiler-transform.js',
-		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/index|settings/customer-display/index|checkout/tender/reader-connection)\\.tsx$).+\\.(ts|tsx)$':
+		'^(?!.*(variable-product-row/(index|context|variations/(index|table|filters|footer))|components/data-table/(index|v2/index)|settings/customer-display/index|checkout/tender/reader-connection)\\.tsx$).+\\.(ts|tsx)$':
 			['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }],
 	},
 	transformIgnorePatterns: [

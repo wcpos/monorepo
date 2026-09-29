@@ -29,6 +29,8 @@ type ProductHit = {
 
 interface ProductGridProps {
 	noDataMessage?: React.ReactElement;
+	tile?: React.ComponentType<React.ComponentProps<typeof ProductTile>>;
+	variableTile?: React.ComponentType<React.ComponentProps<typeof VariableProductTile>>;
 	binding: ReturnType<typeof import('../../../../../query').useRelationalCollectionBinding>;
 	actions: Pick<QueryStateActions<'products'>, 'extendLimit'>;
 }
@@ -45,7 +47,13 @@ interface GridFields {
 	cost_of_goods_sold: boolean;
 }
 
-export function ProductGrid({ binding, actions, noDataMessage }: ProductGridProps) {
+export function ProductGrid({
+	binding,
+	actions,
+	noDataMessage,
+	tile: Tile = ProductTile,
+	variableTile: VariableTile = VariableProductTile,
+}: ProductGridProps) {
 	const { uiSettings } = useUISettings('pos-products');
 	const gridColumns = useDocField(uiSettings, (value) => value.gridColumns);
 	const gridFields = useDocField(uiSettings, (value) => value.gridFields) as GridFields;
@@ -111,13 +119,9 @@ export function ProductGrid({ binding, actions, noDataMessage }: ProductGridProp
 							<View className="flex-row">
 								{row?.map(({ record }) =>
 									record.payload.type === 'variable' ? (
-										<VariableProductTile
-											key={record.uuid}
-											record={record}
-											gridFields={gridFields}
-										/>
+										<VariableTile key={record.uuid} record={record} gridFields={gridFields} />
 									) : (
-										<ProductTile key={record.uuid} record={record} gridFields={gridFields} />
+										<Tile key={record.uuid} record={record} gridFields={gridFields} />
 									)
 								)}
 								{/* Spacers for incomplete last row */}
