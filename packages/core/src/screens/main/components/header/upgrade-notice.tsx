@@ -22,7 +22,9 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 			testID="upgrade-notice-banner"
 			className="bg-warn-bg border-warning/45 min-h-10 items-center gap-2.5 border-b pr-2 pl-4"
 		>
-			<Icon name="star" size="sm" className="text-warning" />
+			{/* Decorative: the title beside it carries the meaning, so the star is hidden from
+			    assistive tech and its contrast is not load-bearing. */}
+			<Icon name="star" size="sm" className="text-warning" aria-hidden />
 			<Text className="min-w-0 flex-1 text-sm" numberOfLines={1}>
 				<Text className="font-semibold">{t('pro.strip_title')}</Text>
 				{!isPhone && <> {t('pro.strip_body')}</>}
@@ -37,7 +39,13 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 					{t('pro.strip_more')}
 				</Text>
 			)}
-			<Button testID="upgrade-notice-upgrade" size="sm" onPress={openPro}>
+			{/* Compact look, 44 pt target: 36 px tall plus 4 px of hit slop each side. */}
+			<Button
+				testID="upgrade-notice-upgrade"
+				size="sm"
+				hitSlop={{ top: 4, bottom: 4 }}
+				onPress={openPro}
+			>
 				{t('common.upgrade_to_pro')}
 			</Button>
 			<IconButton
