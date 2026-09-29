@@ -42,7 +42,7 @@ export function TaxBasedOn() {
 						<Icon size="sm" variant="error" name="triangleExclamation" />
 					)}
 					<Text
-						className={rates.length > 0 ? 'text-sm' : 'text-destructive text-sm'}
+						className={rates.length > 0 ? 'shrink text-sm' : 'text-destructive shrink text-sm'}
 						numberOfLines={1}
 					>
 						{valueLabel}

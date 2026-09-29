@@ -125,7 +125,7 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 						testID={`product-tile-stock-${record.remoteId ?? record.uuid}`}
 					>
 						<Text
-							className={`text-xs font-bold ${stock === 'lowstock' ? 'text-white' : 'text-background'}`}
+							className={`text-xs font-bold ${stock === 'lowstock' ? 'text-warning-foreground' : 'text-background'}`}
 						>
 							{t('pos_products.n_left', { n: fields.stockQuantity })}
 						</Text>

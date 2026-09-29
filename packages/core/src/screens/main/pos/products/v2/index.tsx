@@ -339,7 +339,7 @@ function POSProductsContent({
 							testID="products-locked-notice"
 						>
 							<Icon name="lock" className="text-muted-foreground" />
-							<Text className="text-sm">
+							<Text className="flex-1 text-sm">
 								{t(
 									session?.status === 'counting'
 										? 'pos_products.counting_items_after_count'
