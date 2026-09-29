@@ -57,7 +57,11 @@ export function OpenOrderTabs() {
 	}, [activeValue, reveal]);
 	const closeList = (id = activeValue) => {
 		setListOpen(false);
-		tabs.current.get(id)?.focus();
+		// The new-order holder is a View: focus the button inside it where the platform allows.
+		const target = tabs.current.get(id) as unknown as
+			| { focus?: () => void; querySelector?: (s: string) => { focus?: () => void } | null }
+			| undefined;
+		(target?.querySelector?.('button') ?? target)?.focus?.();
 	};
 	const renderTab = (id: string, content: React.ReactNode) => (
 		<Pressable
@@ -122,9 +126,12 @@ export function OpenOrderTabs() {
 						scroll.current?.scrollTo({ x: scrollX.current + viewport.current, animated: true })
 					}
 				/>
-				<Pressable
+				{/* A View, not a Pressable: the wrapper only holds the focus target for the list's
+				    close and must not add a dead tab stop beside the real button. */}
+				<View
 					ref={(node) => {
-						if (node) tabs.current.set('new', node);
+						if (node)
+							tabs.current.set('new', node as unknown as React.ElementRef<typeof Pressable>);
 						else tabs.current.delete('new');
 					}}
 				>
@@ -134,7 +141,7 @@ export function OpenOrderTabs() {
 						accessibilityLabel={t('pos_cart.new_order')}
 						onPress={() => handleTabPress('new')}
 					/>
-				</Pressable>
+				</View>
 			</View>
 			{listOpen && (
 				<OpenOrdersList

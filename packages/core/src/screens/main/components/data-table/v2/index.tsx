@@ -89,6 +89,8 @@ interface CommonProps<TData extends RowData> {
 	cells?: CellMap;
 	cellsForRow?: (row: Row<TData, DataTableFeatures>) => CellMap;
 	renderHeader?: (props: RenderHeaderProps) => React.ReactNode;
+	/** Off for a table that borrows another's settings id (the variations pane): a header sort must not rewrite the products sort. */
+	persistSort?: boolean;
 	tableConfig?: DataTableConfig<TData>;
 	getItemType?: (row: any) => string;
 	ListFooterComponent?: React.ComponentType<any>;
@@ -139,6 +141,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 		cells,
 		cellsForRow,
 		renderHeader,
+		persistSort = true,
 		tableConfig,
 		getItemType,
 		ListFooterComponent,
@@ -176,10 +179,10 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }: SortingChange) => {
-			void patchUI({ sortBy, sortDirection });
+			if (persistSort) void patchUI({ sortBy, sortDirection });
 			props.actions.setSort(sortBy as TSortField, sortDirection);
 		},
-		[patchUI, props.actions]
+		[patchUI, persistSort, props.actions]
 	);
 
 	// Guarded (#1221): pending blocks; full local reads extend regardless of exhaustion.

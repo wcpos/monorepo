@@ -28,11 +28,18 @@ export function DataTableRow<TData extends RowData>({
 	onPress,
 	testID,
 	trailing,
+	accessibilityLabel,
 }: {
 	item: Row<TData, DataTableFeatures>;
 	onPress?: PressableProps['onPress'];
 	testID?: string;
 	trailing?: React.ReactNode;
+	/**
+	 * Set by a caller whose row IS the control (no trailing button, no controls in its
+	 * cells): the row then takes the button role and this name. Callers with controls
+	 * inside the cells leave it unset, so no button nests in a button on web.
+	 */
+	accessibilityLabel?: string;
 }) {
 	const pointer = usePointer();
 	const cells = item.getVisibleCells();
@@ -56,9 +63,11 @@ export function DataTableRow<TData extends RowData>({
 		<View className="border-border flex-row items-center border-b">
 			<Pressable
 				testID={testID ?? getRowTestID(item)}
-				// No `accessibilityRole="button"`: on web that renders a <button>, and the cells carry
-				// their own controls (category chips, an edit icon), which may not nest in one. The
-				// row stays a focusable pressable; the trailing control beside it is the named button.
+				// No `accessibilityRole="button"` by default: on web that renders a <button>, and the
+				// cells may carry their own controls (category chips, an edit icon), which may not
+				// nest in one. A caller whose row is the only control names it (`accessibilityLabel`).
+				accessibilityRole={accessibilityLabel ? 'button' : undefined}
+				accessibilityLabel={accessibilityLabel}
 				onPress={
 					onPress
 						? (event) => {

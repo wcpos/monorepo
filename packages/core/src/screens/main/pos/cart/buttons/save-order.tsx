@@ -18,7 +18,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
 export function SaveButton({
 	label,
 	onBeforeSave,
-}: { label?: string; onBeforeSave?: () => Promise<void> } = {}) {
+}: { label?: string; onBeforeSave?: () => Promise<boolean> } = {}) {
 	const { currentOrderRecord } = useCurrentOrder();
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
@@ -42,8 +42,9 @@ export function SaveButton({
 		setLoading(true);
 		try {
 			// The order sheet's form edits (note, status, cashier…) are applied before the push,
-			// or "saved" would send the old values and the close would discard the new ones.
-			await onBeforeSave?.();
+			// or "saved" would send the old values and the close would discard the new ones. When
+			// they were not applied (validation, a pending identity confirmation) there is no push.
+			if (onBeforeSave && !(await onBeforeSave())) return;
 			await pushDocument(currentOrderRecord).then((savedDoc) => {
 				/**
 				 * TODO; move this generic sanckbar to the pushDocument hook

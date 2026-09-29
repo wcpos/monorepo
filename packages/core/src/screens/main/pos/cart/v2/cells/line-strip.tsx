@@ -56,6 +56,10 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 			const next = (open ? -width : 0) + event.translationX < -width / 2;
 			setOpen(next);
 			settle(next ? -width : 0);
+			// The latch suppresses the press that ends THIS gesture; a pan that began on the
+			// name or the quantity never presses the total, so clear it once that press has had
+			// its turn, or the next deliberate tap on the total is swallowed.
+			setTimeout(() => swiped.set(false), 0);
 		});
 	/**
 	 * Every press is forwarded; `pulseRemove` owns the re-entrancy guard

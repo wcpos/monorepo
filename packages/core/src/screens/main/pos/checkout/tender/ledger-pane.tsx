@@ -196,7 +196,8 @@ export function LedgerLegs({ view, format }: { view: LedgerView; format: Props['
 					</View>
 				</HStack>
 			))}
-			{view.balanceMinor === 0 ? (
+			{/* A zero balance with nothing settled (every leg failed or voided) is not paid. */}
+			{view.balanceMinor === 0 && settled.length > 0 ? (
 				<Text className="text-success text-sm">
 					{lastTime
 						? t('pos_checkout.paid_in_full_at', { time: formatDate(new Date(lastTime), 'p') })

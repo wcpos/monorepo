@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
+import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { type EngineRecord, useDocField } from '@wcpos/query';
 
 import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';
@@ -34,19 +35,28 @@ export function OpenOrdersList({
 					onPress={() => onClose()}
 				/>
 			</View>
-			<ScrollView>
-				{orders.map(({ id, record }) => (
-					<OrderRow
-						key={id}
-						order={record}
-						selected={id === activeValue}
-						onPress={() => {
-							onSelect(id);
-							onClose(id);
-						}}
-					/>
-				))}
-			</ScrollView>
+			{/* Virtualized: a store can hold thousands of open orders, and every row subscribes
+			    to its record, save state and payment methods. */}
+			<VirtualizedList.Root style={{ flex: 1 }}>
+				<VirtualizedList.List
+					data={orders}
+					keyExtractor={(order) => order.id}
+					estimatedItemSize={48}
+					extraData={activeValue}
+					renderItem={({ item: { id, record } }) => (
+						<VirtualizedList.Item>
+							<OrderRow
+								order={record}
+								selected={id === activeValue}
+								onPress={() => {
+									onSelect(id);
+									onClose(id);
+								}}
+							/>
+						</VirtualizedList.Item>
+					)}
+				/>
+			</VirtualizedList.Root>
 		</View>
 	);
 }

@@ -91,7 +91,7 @@ export function EditOrderMetaForm({
 }: {
 	order: CurrentOrderRecord;
 	formData: FormValues;
-	submitRef?: React.RefObject<(() => Promise<void>) | null>;
+	submitRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }) {
 	const t = useT();
 	const { localPatch } = useLocalMutation();
@@ -118,16 +118,26 @@ export function EditOrderMetaForm({
 	const cashierId = useWatch({ control: form.control, name: 'cashier_id' });
 	const { label: cashierLabel } = useCashierLabel(cashierId);
 
-	async function handleSave(data: FormValues) {
+	/**
+	 * Apply the form. Resolves true only when the edits are written locally; false when the
+	 * identity change awaits its confirmation (the send flow owns that) — a caller that pushes
+	 * next must then stop, or the server gets the old values under a success toast.
+	 */
+	async function applySave(data: FormValues, { close }: { close: boolean }): Promise<boolean> {
 		const payload = order.getLatest().payload;
 		const currentCashierId = wooMetaCarrier.readIdentity(payload.meta_data).cashierId ?? '';
 		const identityChanged = data.status !== payload.status || data.cashier_id !== currentCashierId;
 		if (identityChanged) {
 			setPending(data);
-			return;
+			return false;
 		}
 		const { cashier_id: _cashierId, ...patch } = data;
-		if (await localPatch({ document: order, data: patch })) onOpenChange(false);
+		const written = !!(await localPatch({ document: order, data: patch }));
+		if (written && close) onOpenChange(false);
+		return written;
+	}
+	async function handleSave(data: FormValues) {
+		await applySave(data, { close: true });
 	}
 
 	async function handleSend() {
@@ -189,10 +199,18 @@ export function EditOrderMetaForm({
 	 * Form submission handlers that include validation
 	 */
 	const onSave = form.handleSubmit(handleSave);
-	// Hand the submit to the sheet's footer (an effect: refs are not written during render).
+	// Hand the submit to the sheet's footer (an effect: refs are not written during render). It
+	// resolves whether the edits were applied: false on a validation failure or while an
+	// identity change awaits confirmation, and it never closes the sheet under the push.
 	React.useEffect(() => {
 		if (!submitRef) return;
-		submitRef.current = onSave;
+		submitRef.current = () =>
+			new Promise<boolean>((resolve) => {
+				void form.handleSubmit(
+					async (data) => resolve(await applySave(data, { close: false })),
+					() => resolve(false)
+				)();
+			});
 		return () => {
 			submitRef.current = null;
 		};

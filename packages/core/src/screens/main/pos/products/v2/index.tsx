@@ -119,7 +119,18 @@ function POSProductsContent({
 
 	const viewMode = useDocField(uiSettings, (value) => value.viewMode) === 'grid' ? 'grid' : 'table';
 	const variationsStyle = useDocField(uiSettings, (value) => value.variationsStyle) ?? 'drill';
-	const [drilled, setDrilled] = React.useState<EngineRecord<'products'> | null>(null);
+	// A drill-in remembers the search it opened under: typing a new product search is a return
+	// to the products (the search writes to the outer query, which the pane does not show).
+	const [drill, setDrill] = React.useState<{
+		record: EngineRecord<'products'>;
+		search: string;
+	} | null>(null);
+	const drilled = drill && drill.search === state.search ? drill.record : null;
+	const setDrilled = React.useCallback(
+		(record: EngineRecord<'products'> | null) =>
+			setDrill(record ? { record, search: state.search } : null),
+		[state.search]
+	);
 	const VariableTile = React.useCallback(
 		(props: React.ComponentProps<typeof ProductTile>) => (
 			<VariableProductTile {...props} variationsStyle={variationsStyle} onDrill={setDrilled} />

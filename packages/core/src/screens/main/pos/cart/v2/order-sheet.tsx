@@ -28,7 +28,7 @@ export function OrderSheet({
 	const side = usePanelSide('cart');
 	const t = useT();
 	// The form's submit, applied by "Save order" before the push.
-	const submitRef = React.useRef<(() => Promise<void>) | null>(null);
+	const submitRef = React.useRef<(() => Promise<boolean>) | null>(null);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="order-meta-dialog">
@@ -40,9 +40,9 @@ export function OrderSheet({
 					<VoidButton onBeforeVoid={() => onOpenChange(false)} />
 					<SaveButton
 						label={t('pos_cart.save_order')}
-						onBeforeSave={async () => {
-							await submitRef.current?.();
-						}}
+						// The push happens only when the form's edits were applied; a validation error
+						// or a pending identity confirmation stops it silently (the form shows why).
+						onBeforeSave={async () => (submitRef.current ? await submitRef.current() : true)}
 					/>
 				</DialogFooter>
 			</DialogContent>

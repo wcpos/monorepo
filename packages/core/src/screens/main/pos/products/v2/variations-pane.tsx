@@ -65,6 +65,7 @@ function VariationsTable({
 	return (
 		<DataTable<{ record: EngineRecord<'variations'> }>
 			id="pos-products"
+			persistSort={false}
 			collectionName="variations"
 			binding={binding}
 			resource={binding.resource}

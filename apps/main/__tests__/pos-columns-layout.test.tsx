@@ -92,6 +92,9 @@ jest.mock('react-native-reanimated', () => {
 		},
 		FadeIn: { duration: () => ({}) },
 		FadeOut: { duration: () => ({}) },
+		// `lib/motion` builds its easing curves at import; the columns import it for CROSSFADE.
+		Easing: { bezier: () => (t: number) => t },
+		ReduceMotion: { System: 'system' },
 	};
 });
 jest.mock('../../../packages/core/src/screens/main/pos/contexts/current-order', () => ({
@@ -117,6 +120,11 @@ jest.mock(
 	() => ({ ReceiptStage: () => null })
 );
 jest.mock('@wcpos/core/screens/main/pos/products', () => ({ POSProducts: () => null }));
+// The columns route and the panel entry render the v2 products screen since the register switch.
+jest.mock('@wcpos/core/screens/main/pos/products/v2', () => ({ POSProducts: () => null }));
+jest.mock('../../../packages/core/src/screens/main/pos/products/v2', () => ({
+	POSProducts: () => null,
+}));
 jest.mock('../../../packages/core/src/screens/main/pos/products', () => ({
 	POSProducts: () => null,
 }));

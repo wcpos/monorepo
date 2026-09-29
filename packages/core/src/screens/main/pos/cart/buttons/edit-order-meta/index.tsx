@@ -18,7 +18,7 @@ interface Props {
 	 * Receives the form's submit so a footer action outside the form (the order sheet's
 	 * "Save order") can apply the edits before it pushes the order.
 	 */
-	submitRef?: React.RefObject<(() => Promise<void>) | null>;
+	submitRef?: React.RefObject<(() => Promise<boolean>) | null>;
 }
 
 /**
