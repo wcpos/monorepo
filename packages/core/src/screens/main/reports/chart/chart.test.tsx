@@ -16,7 +16,8 @@ const mockPrevious = [
 	{ date_created_gmt: '2026-09-21T08:05:00Z', total: '15' },
 	{ date_created_gmt: '2026-09-21T14:05:00Z', total: '40' },
 ];
-const mockData = {
+let mockPeriod = 'day';
+let mockData = {
 	selectedOrders: mockCurrent,
 	comparisonOrders: mockPrevious.slice(0, 1),
 	wholeComparisonOrders: mockPrevious,
@@ -37,7 +38,7 @@ jest.mock('../../health/database-logic', () => ({}));
 jest.mock('../context', () => ({
 	useReportsData: () => mockData,
 	useReportsScope: () => ({ chartView: mockView, cmp: 'yesterday' }),
-	useReportsPeriod: () => ({ period: 'day', timezone: 'Europe/London', storeId: 9 }),
+	useReportsPeriod: () => ({ period: mockPeriod, timezone: 'Europe/London', storeId: 9 }),
 }));
 jest.mock('../../../../hooks/use-store-day', () => ({
 	...jest.requireActual('../../../../hooks/use-store-day'),
@@ -136,9 +137,12 @@ jest.mock('victory-native', () => ({
 	),
 	Area: ({ opacity }: { opacity: number }) => <span data-testid="area">{opacity}</span>,
 }));
+const dayData = mockData;
 beforeEach(() => {
 	jest.useFakeTimers().setSystemTime(new Date('2026-09-22T10:00:00Z'));
 	mockView = 'hour';
+	mockPeriod = 'day';
+	mockData = dayData;
 });
 afterEach(() => jest.useRealTimers());
 // Removing the comparison or drawing future primary bars breaks this encoding.
@@ -160,6 +164,32 @@ it('draws cumulative lines, a faint area and the whole comparison closing figure
 	expect(screen.getByTestId('area').textContent).toBe('0.1');
 	expect(screen.getByTestId('hero-chart-total').textContent).toBe('£30.00 now');
 	expect(screen.getByTestId('hero-chart-comparison-total').textContent).toBe('£55.00');
+});
+// The label reads the line's endpoint, not the whole previous period: March 31st has no April counterpart.
+it('labels the comparison line with the plotted total, leaving an unmatched 31st out', () => {
+	mockView = 'run';
+	mockPeriod = 'month';
+	mockData = {
+		...dayData,
+		selectedOrders: [{ date_created_gmt: '2026-04-02T12:00:00Z', total: '10' }],
+		comparisonOrders: [],
+		wholeComparisonOrders: [
+			{ date_created_gmt: '2026-03-30T12:00:00Z', total: '20' },
+			{ date_created_gmt: '2026-03-31T12:00:00Z', total: '80' },
+		],
+		dateRange: {
+			start: new Date('2026-03-31T23:00:00Z'),
+			end: new Date('2026-04-30T22:59:59.999Z'),
+		},
+		comparisonRange: {
+			start: new Date('2026-03-01T00:00:00Z'),
+			end: new Date('2026-03-31T22:59:59.999Z'),
+		},
+		live: false,
+		totals: { total: 10 },
+	} as unknown as ReportsData;
+	render(<Chart comparison />);
+	expect(screen.getByTestId('hero-chart-comparison-total').textContent).toBe('£20.00');
 });
 it('renders only the primary drawing when comparison is unavailable', () => {
 	mockView = 'run';

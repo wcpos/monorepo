@@ -133,10 +133,10 @@ export default function Chart({ comparison = false }: { comparison?: boolean }) 
 	const currentEnd = data.findLastIndex((row) => row.current !== null);
 	const comparisonEnd = data.findLastIndex((row) => row.comparison !== null);
 	const max = Math.max(10, ...data.flatMap((row) => [row.current ?? 0, row.comparison ?? 0])) * 1.3;
-	const wholeTotal = wholeComparisonOrders.reduce(
-		(sum, order) => sum + Number(order.total || 0),
-		0
-	);
+	// The comparison label reads the line's own endpoint: the running sum of the
+	// mapped buckets. Days of the previous period with no counterpart in this one
+	// (a 31st against a 30-day month) are not plotted, so they are not labelled.
+	const comparisonTotal = data[comparisonEnd]?.comparison ?? 0;
 	const count = (n: number) => t('reports.chart_orders', { count: n });
 	const comparisonLabel =
 		period === 'day'
@@ -379,8 +379,8 @@ export default function Chart({ comparison = false }: { comparison?: boolean }) 
 					label(
 						'hero-chart-comparison-total',
 						comparisonEnd,
-						data[comparisonEnd]?.comparison ?? 0,
-						format(wholeTotal),
+						comparisonTotal,
+						format(comparisonTotal),
 						mutedForegroundColor,
 						true
 					)}
