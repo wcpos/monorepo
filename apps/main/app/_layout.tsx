@@ -23,6 +23,7 @@ import {
 	ClearLocalDataBlockedScreen,
 	useClearLocalDataOnStartup,
 } from '../components/clear-local-data-on-startup';
+import { LiveTabGate } from '../components/live-tab-gate';
 import { RootError } from '../components/root-error';
 import '../global.css';
 import '../polyfills';
@@ -135,7 +136,11 @@ export default function RootLayout() {
 	// A build-time constant: false in every merchant build (Metro resolves the gallery
 	// registry to its stub), so production never reads the route to decide anything.
 	if (IS_GALLERY_BUILD) return <GalleryRootLayout merchant={MerchantRootLayout} />;
-	return <MerchantRootLayout />;
+	return (
+		<LiveTabGate>
+			<MerchantRootLayout />
+		</LiveTabGate>
+	);
 }
 
 function MerchantRootLayout() {

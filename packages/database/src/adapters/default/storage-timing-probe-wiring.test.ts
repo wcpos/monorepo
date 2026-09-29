@@ -27,6 +27,7 @@ jest.mock('../../plugins/opfs-targeted-recovery.mjs', () => ({
 }));
 jest.mock('../../plugins/wrapped-error-handler-storage', () => ({
 	wrappedErrorHandlerStorage: () => errorHandledStorage,
+	reportStorageWorkerLost: jest.fn(),
 }));
 jest.mock('rxdb/plugins/validate-z-schema', () => ({
 	wrappedValidateZSchemaStorage: () => ({ name: 'validated-storage' }),
@@ -68,7 +69,15 @@ describe('storage timing probe wiring per platform adapter', () => {
 			const { storage } = await import(modulePath);
 
 			expect(mockWithStorageTimingProbe.mock.calls).toEqual([
-				[rawStorage, 'raw'],
+				[
+					_platform === 'web'
+						? expect.objectContaining({
+								name: 'worker',
+								createStorageInstance: expect.any(Function),
+							})
+						: rawStorage,
+					'raw',
+				],
 				[errorHandledStorage, 'wrapped'],
 			]);
 			expect(storage).toEqual({ name: 'probed:wrapped', storage: errorHandledStorage });

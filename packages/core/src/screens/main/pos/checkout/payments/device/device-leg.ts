@@ -1,3 +1,6 @@
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
+import { log } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toMinor } from '@wcpos/order-math';
 import type { OrderPaymentSummary, PaymentRefusalBody, PaymentRow } from '@wcpos/order-math';
 
@@ -186,30 +189,41 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				}
 				const success = result?.outcome === 'captured' || result?.outcome === 'authorized';
 				set({ phase: success ? 'capturing' : 'confirming' });
-				const response = await deps.post(
-					url(success ? 'capture' : 'void'),
-					success && result
-						? {
-								context: {
-									provider_refs: result.provider_refs,
-									receipt: result.receipt,
-									transport: result.transport,
-									amount: result.amount,
-								},
-							}
-						: {
-								reason:
-									result?.outcome === 'declined'
-										? (result.failure_reason ?? 'card_declined')
-										: cancelReason,
-							}
-				);
+				let response: { data: unknown };
+				const release = success ? holdLiveTab('payment') : undefined;
+				try {
+					response = await deps.post(
+						url(success ? 'capture' : 'void'),
+						success && result
+							? {
+									context: {
+										provider_refs: result.provider_refs,
+										receipt: result.receipt,
+										transport: result.transport,
+										amount: result.amount,
+									},
+								}
+							: {
+									reason:
+										result?.outcome === 'declined'
+											? (result.failure_reason ?? 'card_declined')
+											: cancelReason,
+								}
+					);
+				} finally {
+					release?.();
+				}
 				await apply(response.data as ServerLegResponse);
 				if (!active()) return;
 				throw new Error('Payment is not final on the store');
 			}
 		} catch (error) {
 			if (!active()) return;
+			if (error instanceof LiveTabNotOwnedError) {
+				stop();
+				log.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+				return;
+			}
 			const body = errorState(error);
 			if (body?.data?.payment) {
 				await apply({ payment: body.data.payment, order: body.data.order });
@@ -273,30 +287,43 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			return;
 		}
 		set({ phase: 'collecting' });
+		let release: (() => void) | undefined;
 		try {
-			approvedAt = null;
-			result = await deps.driver.collect({
-				dp: input.dp,
-				row: state.row,
-				method: input.method,
-				transport: input.transport,
-				handoff,
-				offline: input.offline,
-				tipEligibleMinor: input.offline ? null : input.tipEligibleMinor,
-			});
-		} catch (error) {
-			if (!active()) return;
-			errorState(error);
-			result = {
-				outcome: 'declined',
-				failure_reason: 'reader_error',
-				provider_refs: {},
-				receipt: {},
-				amount: null,
-				transport: input.transport,
-			};
+			try {
+				approvedAt = null;
+				// collect may capture on the reader; preparation above owns no payment hold.
+				release = holdLiveTab('payment');
+				result = await deps.driver.collect({
+					dp: input.dp,
+					row: state.row,
+					method: input.method,
+					transport: input.transport,
+					handoff,
+					offline: input.offline,
+					tipEligibleMinor: input.offline ? null : input.tipEligibleMinor,
+				});
+			} catch (error) {
+				if (!active()) return;
+				if (error instanceof LiveTabNotOwnedError) {
+					stop();
+					log.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+					return;
+				}
+				errorState(error);
+				result = {
+					outcome: 'declined',
+					failure_reason: 'reader_error',
+					provider_refs: {},
+					receipt: {},
+					amount: null,
+					transport: input.transport,
+				};
+			}
+			if (active()) await confirm();
+		} finally {
+			// Keep the reader result protected until confirmation has persisted it.
+			release?.();
 		}
-		if (active()) await confirm();
 	}
 	async function cancel(reason = 'cashier') {
 		if (!active() || state.cancelRequested || inFlight || result) return;

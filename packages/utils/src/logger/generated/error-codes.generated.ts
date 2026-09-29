@@ -100,7 +100,8 @@ export type ErrorCode =
 	| 'REGISTER221'
 	| 'REGISTER301'
 	| 'CLIENT151'
-	| 'AUTH131';
+	| 'AUTH131'
+	| 'CLIENT161';
 export type ErrorDomain =
 	| 'AUTH'
 	| 'SYNC'
@@ -1058,6 +1059,16 @@ export const ERROR_CATALOGUE: Record<ErrorCode, CatalogueEntry> = {
 		dataSafety: 'local-only',
 		summary: 'The saved store session was incomplete, so WCPOS returned to the store list.',
 	},
+	CLIENT161: {
+		code: 'CLIENT161',
+		symbol: 'REGISTER_TAB_NOT_OWNED',
+		domain: 'CLIENT',
+		severity: 'info',
+		actionHint: 'Follow the instructions on the register screen before continuing.',
+		dataSafety: 'no-impact',
+		summary:
+			'This tab does not currently run the register, so it did not send a new payment request.',
+	},
 };
 
 export const ERROR_CODES = {
@@ -1161,4 +1172,5 @@ export const ERROR_CODES = {
 	REGISTER_APPROVAL_REFUSED: 'REGISTER301',
 	SCREEN_RENDER_FAILED: 'CLIENT151',
 	STORE_SESSION_INCOMPLETE: 'AUTH131',
+	REGISTER_TAB_NOT_OWNED: 'CLIENT161',
 } as const satisfies Record<string, ErrorCode>;

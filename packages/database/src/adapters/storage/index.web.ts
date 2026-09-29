@@ -1,6 +1,6 @@
 import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
+import { RXDB_VERSION } from 'rxdb/plugins/utils';
 
-import { getRepairOwnershipChannelName } from '../../plugins/repair-ownership';
 import {
 	STORAGE_TIMING_PROBE_ENABLED,
 	withStorageTimingProbe,
@@ -11,13 +11,15 @@ import {
 	WEB_WORKER_PATH_BY_ENGINE,
 } from './storage-engines';
 
+import type { RxStorage } from 'rxdb';
+
 export function getWebStorageWorkerPaths() {
 	const runtime = globalThis as typeof globalThis & { opfsWorker?: string };
 	const enginePath = WEB_WORKER_PATH_BY_ENGINE[WEB_STORAGE_ENGINE];
 	const override = runtime.opfsWorker;
 
 	// An override is normal: the page bootstrap sets `globalThis.opfsWorker`, and the
-	// published web bundle rewrites it to a CDN URL. Its directory is not ours to
+	// WordPress host may supply a CDN URL. Its directory is not ours to
 	// predict, but its BASENAME says which engine's worker it is — and an override
 	// naming the WRONG engine is worse than no override at all, because the app would
 	// run the previous storage engine while `multiInstance` and everything else are
@@ -47,12 +49,58 @@ function endsWithWorkerFile(path: string, engine: typeof WEB_STORAGE_ENGINE): bo
 	return withoutSuffix === basename || withoutSuffix.endsWith(`/${basename}`);
 }
 
-export function getWebNewStorage() {
-	const rawStorage = getRxStorageWorker({
-		workerInput: getWebStorageWorkerPaths().targetOpfsWorker,
-		workerOptions: { name: getRepairOwnershipChannelName() },
+export const STORAGE_WORKER_NAME = 'wcpos-sqlite';
+let storageWorker: Worker | undefined;
+let retired = false;
+let innerStorage: ReturnType<typeof getRxStorageWorker> | undefined;
+const workerLostListeners = new Set<(message: string) => void>();
+
+export function onStorageWorkerLost(listener: (message: string) => void): () => void {
+	workerLostListeners.add(listener);
+	return () => {
+		workerLostListeners.delete(listener);
+	};
+}
+
+export function terminateStorageWorker(): void {
+	retired = true;
+	storageWorker?.terminate();
+	storageWorker = undefined;
+	// Do not reset innerStorage: recovery requires reload, never an in-tab restart.
+}
+
+function createStorageWorker(): Worker {
+	const worker = new Worker(getWebStorageWorkerPaths().targetOpfsWorker, {
+		type: 'module',
+		name: STORAGE_WORKER_NAME,
 	});
-	// 'raw' here is the worker client: one round trip through premium's RPC plus the
-	// storage's own work inside the worker. Nothing in the page can split those two.
+	storageWorker = worker;
+	// terminate() emits no error: the watchdog alone detects silent death. These
+	// listeners catch script-load failures and crashes that DO report (#2242).
+	for (const type of ['error', 'messageerror']) {
+		worker.addEventListener(type, (event) => {
+			const message = `Storage worker ${type}: ${'message' in event ? event.message : 'connection lost'}`;
+			for (const listener of workerLostListeners) listener(message);
+		});
+	}
+	return worker;
+}
+
+export function getWebNewStorage() {
+	const rawStorage: RxStorage<unknown, unknown> = {
+		name: 'worker',
+		rxdbVersion: RXDB_VERSION,
+		createStorageInstance(params) {
+			if (retired) return Promise.reject(new Error('Storage worker retired; reload required'));
+			// mode: one constructs a Worker eagerly; defer the entire client until
+			// the first open so a parked tab can import the adapter without OPFS.
+			innerStorage ??= getRxStorageWorker({
+				workerInput: createStorageWorker,
+				workerOptions: { type: 'module', name: STORAGE_WORKER_NAME },
+				mode: 'one',
+			});
+			return innerStorage.createStorageInstance(params);
+		},
+	};
 	return STORAGE_TIMING_PROBE_ENABLED ? withStorageTimingProbe(rawStorage, 'raw') : rawStorage;
 }

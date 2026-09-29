@@ -28,6 +28,7 @@ type InFlightCall = {
 	kill: () => void;
 };
 type InstanceLatchState = {
+	onCondemn?: () => void;
 	databaseName: string;
 	/**
 	 * Carried purely so a diagnostic can name the collection that stalled.
@@ -451,6 +452,13 @@ function latchDegradedStorage(
 	publishDegradedStorage();
 }
 
+/** Worker events have no RPC envelope, including failures before the first open. */
+export function reportStorageWorkerLost(databaseName: string | undefined, message: string): void {
+	const names = databaseName ? [databaseName] : [...instancesByDatabaseName.keys()];
+	if (names.length === 0) names.push('storage-worker');
+	for (const name of names) latchDegradedStorage(name, 'createStorageInstance', message);
+}
+
 /**
  * Runs `call` under the dead-worker deadline, independent of any instance state.
  * Shared by the per-RPC watchdog and by database creation, which has no instance
@@ -794,9 +802,10 @@ async function raceStorageCall<T>(
 		return Promise.race([underlying, killed]);
 	}
 
-	const watchdog = createWatchdog(methodName, (error) =>
-		noteStorageWorkerFailure(state, methodName, error)
-	);
+	const watchdog = createWatchdog(methodName, (error) => {
+		noteStorageWorkerFailure(state, methodName, error);
+		state.onCondemn?.();
+	});
 	return Promise.race([underlying, killed, watchdog.expiry]).finally(watchdog.disarm);
 }
 
@@ -839,7 +848,9 @@ export function markStorageTerminallyFailed(databaseName: string, reason: string
  */
 function wrapStorageInstance<RxDocType>(
 	instance: RxStorageInstance<RxDocType, any, any, any>,
-	databaseName: string
+	databaseName: string,
+	onCondemn?: () => void,
+	onWrite?: () => () => void
 ): RxStorageInstance<RxDocType, any, any, any> {
 	const originalFindDocumentsById = instance.findDocumentsById.bind(instance);
 	const originalBulkWrite = instance.bulkWrite.bind(instance);
@@ -905,6 +916,7 @@ function wrapStorageInstance<RxDocType>(
 
 	const state: InstanceLatchState = {
 		databaseName,
+		onCondemn,
 		collectionName: instance.collectionName,
 		failureReason: null,
 		inFlight: new Set(),
@@ -917,7 +929,14 @@ function wrapStorageInstance<RxDocType>(
 	instancesByDatabaseName.set(databaseName, instances);
 
 	const bulkWrite = instance.bulkWrite.bind(instance);
-	instance.bulkWrite = (...args) => raceStorageCall(state, 'bulkWrite', () => bulkWrite(...args));
+	instance.bulkWrite = async (...args) => {
+		const release = onWrite?.();
+		try {
+			return await raceStorageCall(state, 'bulkWrite', () => bulkWrite(...args));
+		} finally {
+			release?.();
+		}
+	};
 	const findDocumentsById = instance.findDocumentsById.bind(instance);
 	instance.findDocumentsById = (...args) =>
 		raceStorageCall(state, 'findDocumentsById', () => findDocumentsById(...args));
@@ -974,8 +993,12 @@ function wrapStorageInstance<RxDocType>(
  */
 export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 	storage,
+	onCondemn,
+	onWrite,
 }: {
 	storage: RxStorage<Internals, InstanceCreationOptions>;
+	onCondemn?: () => void;
+	onWrite?: () => () => void;
 }): RxStorage<Internals, InstanceCreationOptions> {
 	return {
 		name: 'error-handler-' + storage.name,
@@ -988,9 +1011,10 @@ export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 			// instance in existence to arm a read against and nothing to show the
 			// cashier. Failing instead surfaces as a bootstrap error the engine
 			// already knows how to report.
-			const watchdog = createWatchdog('createStorageInstance', (error) =>
-				latchDegradedStorage(params.databaseName, 'createStorageInstance', error)
-			);
+			const watchdog = createWatchdog('createStorageInstance', (error) => {
+				latchDegradedStorage(params.databaseName, 'createStorageInstance', error);
+				onCondemn?.();
+			});
 			let instance: RxStorageInstance<RxDocType, Internals, InstanceCreationOptions, unknown>;
 			try {
 				instance = await Promise.race([storage.createStorageInstance(params), watchdog.expiry]);
@@ -998,7 +1022,7 @@ export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 				watchdog.disarm();
 			}
 			noteStorageCompletion();
-			return wrapStorageInstance(instance, params.databaseName);
+			return wrapStorageInstance(instance, params.databaseName, onCondemn, onWrite);
 		},
 	};
 }
