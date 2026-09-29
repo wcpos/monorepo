@@ -1,4 +1,6 @@
-import { holdLiveTab } from '@wcpos/database/live-tab';
+import { log } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { createLiveTab, holdLiveTab as holdWebTab } from '@wcpos/database/live-tab/live-tab.web';
 
 import { createDeviceLeg, type DeviceLegState } from './device-leg';
@@ -9,7 +11,10 @@ import type {
 	PaymentDriver,
 } from '../../../../../../services/payment-drivers/types';
 
-jest.mock('@wcpos/database/live-tab', () => ({ holdLiveTab: jest.fn() }));
+jest.mock('@wcpos/database/live-tab', () => ({
+	...jest.requireActual('@wcpos/database/live-tab'),
+	holdLiveTab: jest.fn(),
+}));
 const releaseHold = jest.fn();
 beforeEach(() => {
 	jest.mocked(holdLiveTab).mockReset().mockReturnValue(releaseHold);
@@ -557,5 +562,36 @@ it.each(['success', 'rejection'])(
 		expect(c.leg.getState()).toMatchObject(
 			outcome === 'success' ? { outcome: 'captured' } : { outcome: null, captureFailed: true }
 		);
+	}
+);
+
+it.each(['collect', 'capture'])(
+	'abandons device %s silently when ownership is refused',
+	async (stage) => {
+		const c = setup(stage === 'collect');
+		jest.mocked(log.info).mockClear();
+		if (stage === 'collect')
+			jest.mocked(holdLiveTab).mockImplementation(() => {
+				throw new LiveTabNotOwnedError();
+			});
+		const start = c.leg.start();
+		await tick();
+		if (stage === 'capture') {
+			c.post.mockClear(); // The preparation intent is not a capture.
+			jest.mocked(holdLiveTab).mockImplementation(() => {
+				throw new LiveTabNotOwnedError();
+			});
+			c.collection.resolve(approved);
+		}
+		await start;
+		await c.leg.capture();
+		expect(c.post).not.toHaveBeenCalled();
+		if (stage === 'collect') expect(c.driver.collect).not.toHaveBeenCalled();
+		expect(c.leg.getState().error).toBeNull();
+		expect(log.info).toHaveBeenCalledTimes(1);
+		expect(log.info).toHaveBeenCalledWith(expect.any(String), {
+			code: ERROR_CODES.REGISTER_TAB_NOT_OWNED,
+		});
+		c.leg.dispose();
 	}
 );

@@ -3,7 +3,7 @@
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import { holdLiveTab } from '@wcpos/database/live-tab';
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
@@ -14,7 +14,10 @@ import { persistSaleProvenance } from '../sale-completion';
 import { recordCompletionAttempt } from '../completion-journal';
 import { useCheckoutSession } from './use-checkout-session';
 
-jest.mock('@wcpos/database/live-tab', () => ({ holdLiveTab: jest.fn(() => jest.fn()) }));
+jest.mock('@wcpos/database/live-tab', () => ({
+	...jest.requireActual('@wcpos/database/live-tab'),
+	holdLiveTab: jest.fn(() => jest.fn()),
+}));
 
 const mockCheckoutError = jest.fn();
 const mockCheckoutInfo = jest.fn();
@@ -244,7 +247,8 @@ describe('useCheckoutSession', () => {
 			expect(mockPost).toHaveBeenNthCalledWith(
 				1,
 				expect.stringContaining('payment-gateways/stripe_terminal_for_woocommerce/bootstrap'),
-				expect.anything()
+				expect.anything(),
+				{ signal: expect.any(AbortSignal) }
 			);
 			expect(mockEngineRequire).toHaveBeenCalledWith({
 				id: 'checkout:order-refresh:42',
@@ -864,4 +868,67 @@ describe('contract session gate', () => {
 			expect(result.current.loading).toBe(false);
 		}
 	);
+});
+
+it.each(['resolves', 'rejects'])(
+	'aborts bootstrap on unmount and never posts checkout even if bootstrap %s',
+	async (outcome) => {
+		jest.clearAllMocks();
+		mockGet.mockResolvedValueOnce({
+			data: [{ id: 'stripe_terminal_for_woocommerce', capabilities: { supports_checkout: true } }],
+		});
+		let settle!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			settle = resolve;
+		});
+		let signal: AbortSignal | undefined;
+		mockPost.mockImplementation(
+			async (url: string, _body: unknown, config?: { signal?: AbortSignal }) => {
+				if (url.endsWith('/bootstrap')) {
+					signal = config?.signal;
+					await pending;
+					if (outcome === 'rejects') throw new Error('aborted');
+				}
+				return { data: { status: 'completed' } };
+			}
+		);
+		const { result, unmount } = renderHook(() => useCheckoutSession(order));
+		await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+		let checkout!: Promise<void>;
+		act(() => {
+			checkout = result.current.startCheckout();
+		});
+		await waitFor(() => expect(mockPost).toHaveBeenCalled());
+		unmount();
+		settle();
+		await act(async () => {
+			await checkout;
+		});
+		expect(mockPost.mock.calls.filter(([url]) => url === 'orders/42/checkout')).toHaveLength(0);
+		expect(signal?.aborted).toBe(true);
+		expect(mockCheckoutError).not.toHaveBeenCalled();
+	}
+);
+
+it('refuses the contract POST without a cashier error after ownership moves', async () => {
+	jest.clearAllMocks();
+	mockGet.mockResolvedValueOnce({
+		data: [{ id: 'stripe_terminal_for_woocommerce', capabilities: { supports_checkout: true } }],
+	});
+	mockPost.mockResolvedValue({ data: { status: 'completed' } });
+	jest.mocked(holdLiveTab).mockImplementation(() => {
+		throw new LiveTabNotOwnedError();
+	});
+	const { result } = renderHook(() => useCheckoutSession(order));
+	await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+	await act(async () => {
+		await result.current.startCheckout();
+	});
+	expect(mockPost.mock.calls.filter(([url]) => url === 'orders/42/checkout')).toHaveLength(0);
+	expect(result.current.error).toBeNull();
+	expect(mockCheckoutError).not.toHaveBeenCalled();
+	expect(mockCheckoutInfo).toHaveBeenCalledTimes(1);
+	expect(mockCheckoutInfo).toHaveBeenCalledWith(expect.any(String), {
+		code: ERROR_CODES.REGISTER_TAB_NOT_OWNED,
+	});
 });

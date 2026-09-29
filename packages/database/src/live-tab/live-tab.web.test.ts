@@ -1,6 +1,5 @@
 import {
 	createLiveTab,
-	holdLiveTab,
 	TAKEOVER_ANSWER_TIMEOUT_MS,
 	TAKEOVER_DEFER_CEILING_MS,
 } from './live-tab.web';
@@ -56,11 +55,16 @@ function harness() {
 	};
 	const tabs: ReturnType<typeof createLiveTab>[] = [];
 	const tab = (
-		onHandover = jest.fn(async () => {
+		onHandover: () => Promise<void> = jest.fn(async () => {
 			events.push('teardown');
 		})
 	) => {
-		const instance = createLiveTab({
+		let registry!: typeof import('./live-tab.web');
+		// Each browser page has its own module-level ownership and holds.
+		jest.isolateModules(() => {
+			registry = jest.requireActual('./live-tab.web');
+		});
+		const instance = registry.createLiveTab({
 			locks,
 			channel,
 			onHandover,
@@ -68,7 +72,11 @@ function harness() {
 			onError: jest.fn(),
 		});
 		tabs.push(instance);
-		return instance;
+		return {
+			...instance,
+			hold: registry.holdLiveTab,
+			NotOwnedError: registry.LiveTabNotOwnedError,
+		};
 	};
 	return { events, locks, channel, channels, tab, dispose: () => tabs.forEach((t) => t.dispose()) };
 }
@@ -153,10 +161,10 @@ test('takeover: the holder acks, tears down, releases; the requester becomes liv
 	expect(b.getState()).toEqual({ kind: 'live' });
 });
 test('takeover defers while a payment is held and the requester sees the reason', async () => {
-	h.tab();
+	const a = h.tab();
 	const b = h.tab();
 	await flush();
-	const release = holdLiveTab('payment');
+	const release = a.hold('payment');
 	b.takeOver();
 	await flush();
 	expect(b.getState()).toEqual({ kind: 'taking-over', deferral: 'payment' });
@@ -165,10 +173,10 @@ test('takeover defers while a payment is held and the requester sees the reason'
 	expect(b.getState()).toEqual({ kind: 'live' });
 });
 test('takeover proceeds at the ceiling with the hold still active', async () => {
-	h.tab();
+	const a = h.tab();
 	const b = h.tab();
 	await flush();
-	const release = holdLiveTab('write');
+	const release = a.hold('write');
 	b.takeOver();
 	await flush();
 	jest.advanceTimersByTime(TAKEOVER_DEFER_CEILING_MS);
@@ -209,7 +217,7 @@ test('worker loss parks the holder and frees the lock for the next tab', async (
 	const a = h.tab();
 	const b = h.tab();
 	await flush();
-	const release = holdLiveTab('write');
+	const release = a.hold('write');
 	b.takeOver();
 	a.park('worker-lost');
 	await flush();
@@ -245,11 +253,11 @@ test('dispose releases the lock and closes the channel', async () => {
 });
 test('a second takeover request during a handover gets its own ack and the same handover', async () => {
 	const teardown = jest.fn(async () => {});
-	h.tab(teardown);
+	const a = h.tab(teardown);
 	const b = h.tab();
 	const c = h.tab();
 	await flush();
-	const release = holdLiveTab('payment');
+	const release = a.hold('payment');
 	b.takeOver();
 	c.takeOver();
 	await flush();
@@ -267,19 +275,19 @@ test.each([false, true])(
 		const a = h.tab();
 		const b = h.tab();
 		await flush();
-		const releaseCollection = holdLiveTab('payment');
+		const releaseCollection = a.hold('payment');
 		b.takeOver();
 		await flush();
 		jest.advanceTimersByTime(1000);
 		let releaseCapture: () => void;
 		if (microtask) {
 			// Queue capture before releasing; it starts before the handover continuation.
-			const capture = Promise.resolve().then(() => holdLiveTab('payment'));
+			const capture = Promise.resolve().then(() => a.hold('payment'));
 			releaseCollection();
 			releaseCapture = await capture;
 		} else {
 			releaseCollection();
-			releaseCapture = holdLiveTab('payment');
+			releaseCapture = a.hold('payment');
 		}
 		await flush();
 		expect(a.getState()).toEqual({ kind: 'live' });
@@ -289,3 +297,43 @@ test.each([false, true])(
 		releaseCapture();
 	}
 );
+
+test('only the live owner accepts holds, including while waiting for an earlier hold', async () => {
+	const a = h.tab();
+	const b = h.tab();
+	await flush();
+	expect(() => b.hold('payment')).toThrow(b.NotOwnedError);
+	const release = a.hold('payment');
+	b.takeOver();
+	expect(() => b.hold('payment')).toThrow(b.NotOwnedError);
+	const continuation = a.hold('payment');
+	release();
+	await flush();
+	expect(a.getState().kind).toBe('live');
+	continuation();
+	await flush();
+	expect(() => a.hold('payment')).toThrow(a.NotOwnedError);
+	b.hold('payment')();
+});
+test('the ceiling rejects new holds even while teardown has not settled', async () => {
+	const a = h.tab(() => new Promise(() => {}));
+	const b = h.tab();
+	const release = a.hold('payment');
+	b.takeOver();
+	await jest.advanceTimersByTimeAsync(TAKEOVER_DEFER_CEILING_MS);
+	expect(() => a.hold('payment')).toThrow(a.NotOwnedError);
+	expect(() => b.hold('payment')).toThrow(b.NotOwnedError);
+	release();
+});
+test('acquiring cannot accept a payment hold', () => {
+	const pending = createLiveTab({
+		locks: { request: () => new Promise(() => {}) },
+		channel: h.channel,
+		onHandover: async () => {},
+		onUnavailable: jest.fn(),
+		onError: jest.fn(),
+	});
+	const { holdLiveTab } = jest.requireActual<typeof import('./live-tab.web')>('./live-tab.web');
+	expect(() => holdLiveTab('payment')).toThrow();
+	pending.dispose();
+});

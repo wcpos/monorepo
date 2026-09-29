@@ -1,4 +1,4 @@
-import { holdLiveTab } from '@wcpos/database/live-tab';
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { getErrorMessage, getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type {
@@ -254,6 +254,11 @@ export class TerminalPaymentsService {
 					this.offline.delete(row.id);
 				}
 			} catch (error) {
+				if (error instanceof LiveTabNotOwnedError) {
+					this.stop();
+					logger.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+					return;
+				}
 				const willRetry =
 					!this.stopped &&
 					entry.timer === undefined &&

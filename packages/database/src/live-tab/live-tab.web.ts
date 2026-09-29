@@ -1,5 +1,9 @@
 import { BehaviorSubject } from 'rxjs';
 
+import { LiveTabNotOwnedError } from './ownership-error';
+
+export { LiveTabNotOwnedError } from './ownership-error';
+
 // SAHPool is per origin; the user DB opens before any store identity exists.
 // Ownership is therefore one live tab per SITE, not the spec's per-store lock.
 export const LIVE_TAB_LOCK_NAME = 'wcpos-live-tab';
@@ -37,9 +41,11 @@ type Dependencies = {
 	onUnavailable(): void;
 	onError(error: unknown): void;
 };
+let ownsPool = false;
 const holds = new Map<symbol, Hold>();
 const released = new Set<() => void>();
 export function holdLiveTab(reason: Hold): () => void {
+	if (!ownsPool) throw new LiveTabNotOwnedError();
 	const key = Symbol();
 	holds.set(key, reason);
 	return () => {
@@ -48,6 +54,7 @@ export function holdLiveTab(reason: Hold): () => void {
 }
 
 export function createLiveTab(deps: Dependencies) {
+	ownsPool = false;
 	const state = new BehaviorSubject<LiveTabState>({ kind: 'acquiring' });
 	const clock = deps.clock ?? globalThis;
 	const channel = deps.channel(LIVE_TAB_CHANNEL_NAME);
@@ -62,7 +69,10 @@ export function createLiveTab(deps: Dependencies) {
 	let handingOver = false;
 	const requests = new Set<string>();
 	const set = (value: LiveTabState) => {
-		if (!disposed) state.next(value);
+		if (!disposed) {
+			ownsPool = value.kind === 'live';
+			state.next(value);
+		}
 	};
 	const reason = () =>
 		[...holds.values()].includes('payment') ? 'payment' : holds.size ? 'write' : null;
@@ -117,6 +127,7 @@ export function createLiveTab(deps: Dependencies) {
 			let expired = false;
 			const timer = clock.setTimeout(() => {
 				expired = true;
+				ownsPool = false;
 				finishWaiting?.();
 			}, TAKEOVER_DEFER_CEILING_MS);
 			// Collection may release then start capture before this continuation runs.
@@ -200,6 +211,8 @@ export function createLiveTab(deps: Dependencies) {
 		dispose() {
 			if (disposed) return;
 			disposed = true;
+			ownsPool = false;
+			holds.clear();
 			controller.abort();
 			clock.clearTimeout(answerTimer);
 			finishWaiting?.();

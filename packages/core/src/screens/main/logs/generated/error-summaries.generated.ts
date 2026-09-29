@@ -216,6 +216,8 @@ export function translateErrorSummary(t: TranslateError, code: ErrorCode): strin
 			return t('health.logs.error_summary.CLIENT151');
 		case 'AUTH131':
 			return t('health.logs.error_summary.AUTH131');
+		case 'CLIENT161':
+			return t('health.logs.error_summary.CLIENT161');
 		default: {
 			const exhaustive: never = code;
 			return exhaustive;

@@ -1,4 +1,4 @@
-import { holdLiveTab } from '@wcpos/database/live-tab';
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { PaymentRow } from '@wcpos/order-math';
@@ -18,7 +18,10 @@ import {
 	stopTerminalPaymentsService,
 	subscribeTerminalPaymentsServiceStart,
 } from './index';
-jest.mock('@wcpos/database/live-tab', () => ({ holdLiveTab: jest.fn(() => jest.fn()) }));
+jest.mock('@wcpos/database/live-tab', () => ({
+	...jest.requireActual('@wcpos/database/live-tab'),
+	holdLiveTab: jest.fn(() => jest.fn()),
+}));
 
 const row: PaymentRow = {
 	id: 'leg',
@@ -905,3 +908,24 @@ it.each(['success', 'rejection'])(
 		c.service.stop();
 	}
 );
+
+it('abandons settlement without HTTP or retries when the registry refuses ownership', async () => {
+	const c = offlineSetup();
+	const logger = getLogger(['wcpos', 'payments', 'terminal']);
+	jest.mocked(logger.info).mockClear();
+	jest.mocked(logger.error).mockClear();
+	jest.mocked(holdLiveTab).mockImplementation(() => {
+		throw new LiveTabNotOwnedError();
+	});
+	await c.service.flushOffline();
+	await c.service.flushOffline();
+	await jest.advanceTimersByTimeAsync(60000);
+	expect(c.http.post).not.toHaveBeenCalled();
+	expect(c.schedule).not.toHaveBeenCalled();
+	expect(logger.error).not.toHaveBeenCalled();
+	expect(logger.info).toHaveBeenCalledTimes(1);
+	expect(logger.info).toHaveBeenCalledWith(expect.any(String), {
+		code: ERROR_CODES.REGISTER_TAB_NOT_OWNED,
+	});
+	c.service.stop();
+});

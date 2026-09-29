@@ -1,4 +1,6 @@
-import { holdLiveTab } from '@wcpos/database/live-tab';
+import { holdLiveTab, LiveTabNotOwnedError } from '@wcpos/database/live-tab';
+import { log } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import { toMinor } from '@wcpos/order-math';
 import type { OrderPaymentSummary, PaymentRefusalBody, PaymentRow } from '@wcpos/order-math';
 
@@ -217,6 +219,11 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 			}
 		} catch (error) {
 			if (!active()) return;
+			if (error instanceof LiveTabNotOwnedError) {
+				stop();
+				log.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+				return;
+			}
 			const body = errorState(error);
 			if (body?.data?.payment) {
 				await apply({ payment: body.data.payment, order: body.data.order });
@@ -297,6 +304,11 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				});
 			} catch (error) {
 				if (!active()) return;
+				if (error instanceof LiveTabNotOwnedError) {
+					stop();
+					log.info(error.message, { code: ERROR_CODES.REGISTER_TAB_NOT_OWNED });
+					return;
+				}
 				errorState(error);
 				result = {
 					outcome: 'declined',
