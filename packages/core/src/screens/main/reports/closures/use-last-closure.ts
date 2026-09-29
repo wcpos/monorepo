@@ -91,14 +91,24 @@ export function useLastClosure(
 		() => load({ silent: data.status === 'ready' }),
 		[load, data.status]
 	);
+	// A target change, including disabling, overtakes every read in flight: none may settle
+	// as ready for a target that is no longer wanted. Declared before the load effect so a
+	// read started in the same commit is not overtaken.
+	React.useEffect(() => {
+		latest.current += 1;
+	}, [key]);
 	const wasOnline = React.useRef(false);
-	// External connectivity changes refresh stale remote cards; failures still use Retry.
+	const wasEnabled = React.useRef(false);
+	// External connectivity changes and re-enabling refresh stale remote cards; failures still use Retry.
 	React.useEffect(() => {
 		const reconnected = online && !wasOnline.current;
 		wasOnline.current = online;
+		const enabled = !!registerId;
+		const reenabled = enabled && !wasEnabled.current;
+		wasEnabled.current = enabled;
 		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- Activation/reconnect reads external server state.
-		if (!summary && (data.status === 'idle' || reconnected)) void load();
-	}, [data.status, load, online, summary]);
+		if (!summary && (data.status === 'idle' || reconnected || reenabled)) void load();
+	}, [data.status, load, online, registerId, summary]);
 
 	const unavailable = !online
 		? t('reports.unavailable_offline')

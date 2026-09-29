@@ -496,3 +496,40 @@ it('ignores an overtaken scheduled read that answers after a newer one', async (
 		jest.useRealTimers();
 	}
 });
+
+// A read in flight when the lookup is disabled may not settle, and re-enabling reads afresh.
+it('drops a read in flight across a disable and reads afresh when re-enabled', async () => {
+	data.session = null;
+	online = true;
+	// The first read hangs on its session list until released.
+	let release: (value: unknown) => void = () => {};
+	const hanging = new Promise((resolve) => {
+		release = resolve;
+	});
+	get.mockImplementationOnce(() => hanging).mockImplementationOnce(() => hanging);
+	const { rerender } = render(<TillStrip onOpenClosures={jest.fn()} />);
+	await waitFor(() => expect(get).toHaveBeenCalledWith('sessions', expect.anything()));
+	const sessionReads = () => get.mock.calls.filter(([path]) => path === 'sessions').length;
+	const before = sessionReads();
+	// Sessions are switched off while the read is pending; it then answers with the old closure.
+	data.sessionsOn = false;
+	rerender(<TillStrip onOpenClosures={jest.fn()} />);
+	await act(async () => {
+		release({ data: [] });
+		await hanging;
+	});
+	await act(async () => {
+		await Promise.resolve();
+	});
+	expect(screen.queryByTestId('till-last-closure')).toBeNull();
+	// Back on: the strip reads again instead of showing what the dropped read answered.
+	get.mockImplementation(() => new Promise(() => {}));
+	data.sessionsOn = true;
+	rerender(<TillStrip onOpenClosures={jest.fn()} />);
+	await waitFor(() => expect(sessionReads()).toBeGreaterThan(before));
+	// While that read is pending the strip shows this device's own last closure (#412), never
+	// the server's #413 that the dropped read answered, and Reprint waits for the lookup.
+	expect(screen.getByTestId('till-last-closure').textContent).toContain('#412');
+	expect(screen.getByTestId('till-last-closure').textContent).not.toContain('#413');
+	expect((screen.getByTestId('till-reprint') as HTMLButtonElement).disabled).toBe(true);
+});
