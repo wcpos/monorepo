@@ -4,7 +4,7 @@ import { StatusBadge } from '@wcpos/components/status-badge';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
-import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
+import { useIncludedStatus, useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
 import { ordersSummary, statusCounts } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
@@ -19,8 +19,9 @@ const colors = {
 };
 export function OrdersCard() {
 	const t = useT(),
-		{ selectedOrders, totals } = useReportsData(),
-		{ statusMode } = useReportsScope();
+		{ allOrders, selectedOrders, totals } = useReportsData(),
+		included = useIncludedStatus(),
+		{ statusMode, setDetail } = useReportsScope();
 	const { storeId } = useReportsPeriod(),
 		{ store, money, number, quantity, percent } = useReportFormats(storeId);
 	const decimals = store?.price_num_decimals;
@@ -59,9 +60,19 @@ export function OrdersCard() {
 		['discounts', 'discounts', money(summary.discounts)],
 	];
 	return (
-		<ReportCard testID="card-orders" name={t('reports.card_orders')} figure={number(summary.count)}>
+		<ReportCard
+			onOpen={() => setDetail('orders')}
+			testID="card-orders"
+			name={t('reports.card_orders')}
+			figure={number(summary.count)}
+		>
 			{summary.count === 0 ? (
-				<Text testID="card-orders-empty">{t('reports.no_orders_in_period')}</Text>
+				// Nothing counted: either the period has no orders, or every one of them is unticked.
+				<Text testID="card-orders-empty">
+					{t(
+						allOrders.some(included) ? 'reports.all_orders_left_out' : 'reports.no_orders_in_period'
+					)}
+				</Text>
 			) : (
 				<>
 					<StatGrid

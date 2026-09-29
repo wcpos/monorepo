@@ -58,3 +58,9 @@ it('items sold keep a fractional quantity under a zero-decimal currency', () => 
 	expect(screen.getByTestId('card-orders-average').textContent).toBe('¥300');
 	mockState.store = saved;
 });
+it('every order unticked reads as left out, not as an empty period', () => {
+	setOrders([{ status: 'completed', total: '12', uuid: 'a' }] as ReportOrder[]);
+	mockState.data = { ...mockState.data, selectedOrders: [] };
+	render(<OrdersCard />);
+	expect(screen.getByTestId('card-orders-empty').textContent).toBe('Every order is left out');
+});

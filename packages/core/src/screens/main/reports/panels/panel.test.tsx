@@ -4,89 +4,27 @@ import * as React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { mockState, setOrders } from '../cards/test-utils';
-import { Reports } from '../reports';
+import { preparePanel, room } from './test-utils';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import { ReportRows } from './report-rows';
 
 import type * as Context from '../context';
 
-// Native portal/animation primitives are not transformed by this Jest preset; keep shell state real.
-jest.mock('@wcpos/components/portal', () => ({ PortalHost: () => null }));
-jest.mock('@wcpos/components/dialog', () => {
-	const Close = React.createContext(() => {});
-	return {
-		DialogTitle: ({ children }: React.PropsWithChildren) => <div role="heading">{children}</div>,
-		Dialog: ({
-			children,
-			onOpenChange,
-		}: React.PropsWithChildren<{ onOpenChange: (open: boolean) => void }>) => (
-			<Close.Provider value={() => onOpenChange(false)}>{children}</Close.Provider>
-		),
-		DialogContent: ({
-			children,
-			closeButtonProps,
-			side,
-			portalHost,
-		}: React.PropsWithChildren<{
-			closeButtonProps: { testID: string };
-			side: string;
-			portalHost: string;
-		}>) => (
-			<div data-testid="dialog-shell" data-side={side} data-host={portalHost}>
-				{children}
-				<button data-testid={closeButtonProps.testID} onClick={React.useContext(Close)} />
-			</div>
-		),
-	};
-});
-jest.mock('@wcpos/components/table', () => {
-	const tags = {
-		Table: 'table',
-		TableHeader: 'thead',
-		TableHead: 'th',
-		TableBody: 'tbody',
-		TableRow: 'tr',
-		TableCell: 'td',
-		TableFooter: 'tfoot',
-	};
-	return Object.fromEntries(
-		Object.entries(tags).map(([name, tag]) => [
-			name,
-			({
-				children,
-				testID,
-				className,
-			}: React.PropsWithChildren<{ testID?: string; className?: string }>) =>
-				React.createElement(tag, { 'data-testid': testID, className }, children),
-		])
-	);
-});
-jest.mock('../closures/save-or-share-csv', () => ({ saveOrShareCsv: jest.fn(async () => {}) }));
-jest.mock('../hero', () => ({ Hero: () => <div data-testid="hero-total">Hero</div> }));
-jest.mock('../sync-progress', () => ({ ReportsSyncProgress: () => null }));
-jest.mock('../../../../services/register/use-register-binding', () => ({
-	useRegisterBinding: () => ({ registerId: 'r', registerName: 'Front' }),
-}));
-const context = jest.requireMock<typeof Context>('../context');
-const real = jest.requireActual<typeof Context>('../context');
 beforeEach(() => {
-	jest.spyOn(context, 'useReportsScope').mockImplementation(real.useReportsScope);
+	preparePanel();
 	mockState.screenSize = 'lg';
 	mockState.register = 'r';
 	mockState.names = { r: 'Front' };
 	mockState.from = mockState.to = '2026-07-15';
 	setOrders([
-		{ uuid: 'a', number: '42', total: '10', payment_method: 'cash' },
+		{ uuid: 'a', number: '42', total: '10', payment_method: 'cash', status: 'completed' },
 	] as Context.ReportOrder[]);
 	jest.mocked(saveOrShareCsv).mockReset().mockResolvedValue();
 });
-afterEach(() => jest.restoreAllMocks());
-const room = () =>
-	render(
-		<real.ReportsScopeProvider>
-			<Reports title="Sales" />
-		</real.ReportsScopeProvider>
-	);
+afterEach(() => {
+	jest.restoreAllMocks();
+	jest.useRealTimers();
+});
 // Losing shell scope/count, wrong export inputs, or leaving the hero mounted on phone breaks these.
 it('opens the payments panel with its title, scope line and footer count', async () => {
 	room();
@@ -135,7 +73,10 @@ it('renders labelled phone rows and a period-neutral empty line', () => {
 	mockState.screenSize = 'sm';
 	const spec = {
 		head: ['Product', 'Qty', 'Amount'],
-		rows: [{ key: 'one', cells: ['Tea', '1.5', '£3.00'] }],
+		keys: ['product', 'qty', 'amount'],
+		types: ['text', 'number', 'money'] as ('text' | 'number' | 'money')[],
+		totalRaw: ['All products', 1.5, 3],
+		rows: [{ key: 'one', cells: ['Tea', '1.5', '£3.00'], raw: ['Tea', 1.5, 3] }],
 		total: ['All products', '1.5', '£3.00'],
 		align: ['left', 'right', 'right'] as const,
 	};

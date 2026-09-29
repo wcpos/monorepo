@@ -24,10 +24,12 @@ import { useReportFormats } from '../use-report-formats';
 import { Chart } from '../chart';
 import {
 	ReportsComparison,
+	useIncludedStatus,
 	useReportsBinding,
 	useReportsData,
 	useReportsPeriod,
 	useReportsScope,
+	useReportsSelection,
 } from '../context';
 import { calculateTotals } from '../report/utils';
 import { useReportPrint } from '../report/use-report-print';
@@ -313,12 +315,18 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	const t = useT();
 	const { screenSize } = useTheme();
 	const phone = screenSize === 'sm';
-	const { cmp, setCmp, statusMode, setStatusMode, chartView, setChartView } = useReportsScope();
+	const { cmp, setCmp, statusMode, setStatusMode, chartView, setChartView, setDetail } =
+		useReportsScope();
 	const { comparisonBinding } = useReportsBinding();
 	const { period, timezone, storeId, dateRange } = useReportsPeriod();
 	const { store, money, number, quantity, percent } = useReportFormats(storeId);
 	const { formatDate } = useLocalDate();
-	const { selectedOrders, totals } = useReportsData();
+	const { allOrders, selectedOrders, totals } = useReportsData();
+	const included = useIncludedStatus();
+	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
+	const leftOut = allOrders.filter(
+		(order) => included(order) && unselectedRowIds[order.uuid]
+	).length;
 	const weekday = formatDate(inZone(timezone, dateRange.start), 'EEEE');
 	const comparisons = [
 		{ value: 'yesterday', label: t('reports.vs_yesterday') },
@@ -358,6 +366,18 @@ export function Hero({ title }: { title: React.ReactNode }) {
 				/>
 			) : (
 				<Chip testID="hero-chip-compare" icon="rightLeft" label={label} disabled dimmed />
+			)}
+			{leftOut > 0 && (
+				<Chip
+					testID="hero-chip-left-out"
+					icon="cartShopping"
+					on
+					label={t('reports.orders_left_out', { count: leftOut, n: quantity(leftOut) })}
+					onClear={() => setUnselectedRowIds({})}
+					clearTestID="hero-chip-left-out-clear"
+					clearLabel={t('reports.put_them_back')}
+					onPress={() => setDetail('orders')}
+				/>
 			)}
 		</View>
 	);
