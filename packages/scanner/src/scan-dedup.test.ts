@@ -6,6 +6,7 @@ import { dedupeScans, SCAN_DEDUP_WINDOW_MS } from './scan-dedup';
 import type { ScanEvent } from './scan-events';
 
 const scan: ScanEvent = { code: '12345678', source: { kind: 'wedge' }, timestamp: 1 };
+const deviceScan: ScanEvent = { ...scan, source: { kind: 'hid-pos' } };
 
 describe('dedupeScans', () => {
 	let receiptTime: number;
@@ -43,7 +44,7 @@ describe('dedupeScans', () => {
 		const padded = { ...scan, code: '0123456789012' };
 		source$.next(padded);
 		receiptTime = 151;
-		source$.next({ ...scan, code: '123456789012' });
+		source$.next({ ...deviceScan, code: '123456789012' });
 
 		expect(received).toEqual([padded]);
 	});
@@ -51,7 +52,7 @@ describe('dedupeScans', () => {
 	it('drops a scan timed 40 ms before the previous pass', () => {
 		source$.next(scan);
 		receiptTime = -40;
-		source$.next(scan);
+		source$.next(deviceScan);
 
 		expect(received).toEqual([scan]);
 	});
@@ -59,20 +60,20 @@ describe('dedupeScans', () => {
 	it('passes a scan timed more than the window before the previous pass', () => {
 		source$.next(scan);
 		receiptTime = -SCAN_DEDUP_WINDOW_MS - 1;
-		source$.next(scan);
+		source$.next(deviceScan);
 
-		expect(received).toEqual([scan, scan]);
+		expect(received).toEqual([scan, deviceScan]);
 	});
 
 	it('does not extend the window when a duplicate is dropped', () => {
 		source$.next(scan);
 		receiptTime = SCAN_DEDUP_WINDOW_MS - 1;
-		source$.next(scan);
+		source$.next(deviceScan);
 		expect(received).toEqual([scan]);
 		receiptTime = SCAN_DEDUP_WINDOW_MS;
-		source$.next(scan);
+		source$.next(deviceScan);
 
-		expect(received).toEqual([scan, scan]);
+		expect(received).toEqual([scan, deviceScan]);
 	});
 
 	it('passes different codes within the window', () => {
@@ -89,9 +90,35 @@ describe('dedupeScans', () => {
 		scans$.subscribe((event) => secondReceived.push(event));
 		source$.next(scan);
 		receiptTime = 1;
-		source$.next(scan);
+		source$.next(deviceScan);
 
 		expect(received).toEqual([scan]);
 		expect(secondReceived).toEqual([scan]);
+	});
+
+	it('passes a same-kind repeat of the same code within the window', () => {
+		source$.next(scan);
+		receiptTime = 300;
+		source$.next(scan);
+
+		expect(received).toEqual([scan, scan]);
+	});
+
+	it('collapses a cross-kind copy against the latest same-kind repeat', () => {
+		source$.next(scan);
+		receiptTime = 300;
+		source$.next(scan);
+		receiptTime = 550;
+		source$.next(deviceScan);
+
+		expect(received).toEqual([scan, scan]);
+	});
+
+	it('passes the same code once when hid-pos comes before wedge within the window', () => {
+		source$.next(deviceScan);
+		receiptTime = 151;
+		source$.next(scan);
+
+		expect(received).toEqual([deviceScan]);
 	});
 });

@@ -470,6 +470,25 @@ describe('useBarcodeDetection', () => {
 				subscription.unsubscribe();
 			}
 		});
+
+		it('same source, same code, 300 ms apart counts twice', () => {
+			const barcodes: string[] = [];
+			const { result } = renderHook(() => useBarcodeDetection());
+			const subscription = result.current.barcode$.subscribe((code) => barcodes.push(code));
+			try {
+				act(() => {
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+					jest.advanceTimersByTime(300);
+					dispatchBarcode('12345678');
+					jest.advanceTimersByTime(151);
+				});
+
+				expect(barcodes).toEqual(['12345678', '12345678']);
+			} finally {
+				subscription.unsubscribe();
+			}
+		});
 	});
 
 	it('bridges attributed scans to barcode$ without duplicating scanEvents$', () => {
