@@ -38,6 +38,7 @@ export function TopProductsCard() {
 						note={t('reports.share_sold', {
 							percent: percent(row.share * 100),
 							count: row.quantity,
+							quantity: quantity(row.quantity),
 						})}
 					/>
 				))
