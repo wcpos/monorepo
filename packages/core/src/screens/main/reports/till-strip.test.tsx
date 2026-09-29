@@ -386,3 +386,34 @@ it('revalidates a ready lookup every minute while focused', async () => {
 		jest.useRealTimers();
 	}
 });
+
+// The scheduled read keeps what it shows until the answer arrives, and keeps reading after a failure.
+it('keeps the shown closure while a scheduled read is in flight and retries after a failed one', async () => {
+	data.session = null;
+	online = true;
+	jest.useFakeTimers();
+	try {
+		render(<TillStrip onOpenClosures={jest.fn()} />);
+		await waitFor(() =>
+			expect(screen.getByTestId('till-last-closure').textContent).toContain('#413')
+		);
+		const reads = () => get.mock.calls.filter(([path]) => path === 'closures/last').length;
+		const before = reads();
+		// The next read fails.
+		get.mockImplementationOnce(() => Promise.reject(new Error('offline')));
+		await act(async () => {
+			jest.advanceTimersByTime(60_000);
+		});
+		await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(0));
+		expect(screen.getByTestId('till-last-closure').textContent).toContain('#413');
+		expect(screen.queryByText('Loading…')).toBeNull();
+		// The tick after that reads again.
+		await act(async () => {
+			jest.advanceTimersByTime(60_000);
+		});
+		await waitFor(() => expect(reads()).toBeGreaterThan(before));
+		expect(screen.getByTestId('till-last-closure').textContent).toContain('#413');
+	} finally {
+		jest.useRealTimers();
+	}
+});

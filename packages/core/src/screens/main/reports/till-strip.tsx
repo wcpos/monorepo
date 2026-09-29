@@ -65,16 +65,16 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 		!active && authoritative ? (remoteClosure ?? undefined) : undefined
 	);
 	// The remote session's X-report goes through the receipt document, as the room's remote card prints it.
-	// The till now: while this screen is focused a ready lookup is read again every minute and
-	// on regaining focus, so a till opened on another device does not stay "Closed" here.
+	// The till now: while this screen is focused and online, the remote lookup is read again
+	// every minute (silently over a ready result, a retry after a failure), so a till opened on
+	// another device does not stay "Closed" here and a failed read does not stay failed.
 	const focused = useIsFocused();
-	const { load: reload, data: remoteData } = remote;
-	const ready = remoteData.status === 'ready';
+	const { revalidate, online } = remote;
 	React.useEffect(() => {
-		if (!focused || active || !bound || !ready) return;
-		const id = setInterval(() => void reload(), 60_000);
+		if (!focused || active || !bound || !online) return;
+		const id = setInterval(() => void revalidate(), 60_000);
 		return () => clearInterval(id);
-	}, [focused, active, bound, ready, reload]);
+	}, [focused, active, bound, online, revalidate]);
 	const remoteReport = useReceiptDocument({
 		document: remoteSession ? `xreport:${remoteSession.id}` : undefined,
 		documentReady: !!remoteSession,

@@ -41,34 +41,46 @@ export function useLastClosure(
 	};
 	const [localData, setData] = React.useState<SessionCardData & { key: string }>(idle);
 	const data = summary ?? (localData.key === key ? localData : idle);
-	const load = React.useCallback(async () => {
-		if (!online || !register) return;
-		// A response for a superseded target (or after a disable) is ignored.
-		const settle = (next: Partial<SessionCardData>) =>
-			setData((d) => (d.key === key ? { ...d, ...next } : d));
-		setData({ ...idle, status: 'loading' });
-		try {
-			const params = { register_id: register.id, store_id: storeId || null };
-			const lists = await Promise.all(
-				['open', 'counting'].map((status) =>
-					http.get('sessions', { params: { ...params, status } })
-				)
-			);
-			const listed = lists.flatMap((result) => result.data as SessionSummary[])[0];
-			const detail = listed ? await http.get(`sessions/${listed.id}`, { params }) : undefined;
-			// A session that closed between the list and its detail is not open any more.
-			const session = detail?.data as SessionSummary | undefined;
-			const stillOpen = !!session && (session.status === 'open' || session.status === 'counting');
-			const last = stillOpen ? undefined : await http.get('closures/last', { params });
-			settle({
-				session: stillOpen ? session : null,
-				closure: stillOpen ? null : ((last?.data as ClosureRow | null) ?? null),
-				status: 'ready',
-			});
-		} catch (error) {
-			settle({ status: get(error, 'response.status') === 403 ? 'denied' : 'error' });
-		}
-	}, [http, online, register?.id, storeId, key]);
+	const load = React.useCallback(
+		async (options?: { silent?: boolean }) => {
+			if (!online || !register) return;
+			// A response for a superseded target (or after a disable) is ignored.
+			const settle = (next: Partial<SessionCardData>) =>
+				setData((d) => (d.key === key ? { ...d, ...next } : d));
+			// A silent read keeps what it shows until the answer arrives (no loading state).
+			if (!options?.silent) setData({ ...idle, status: 'loading' });
+			try {
+				const params = { register_id: register.id, store_id: storeId || null };
+				const lists = await Promise.all(
+					['open', 'counting'].map((status) =>
+						http.get('sessions', { params: { ...params, status } })
+					)
+				);
+				const listed = lists.flatMap((result) => result.data as SessionSummary[])[0];
+				const detail = listed ? await http.get(`sessions/${listed.id}`, { params }) : undefined;
+				// A session that closed between the list and its detail is not open any more.
+				const session = detail?.data as SessionSummary | undefined;
+				const stillOpen = !!session && (session.status === 'open' || session.status === 'counting');
+				const last = stillOpen ? undefined : await http.get('closures/last', { params });
+				settle({
+					session: stillOpen ? session : null,
+					closure: stillOpen ? null : ((last?.data as ClosureRow | null) ?? null),
+					status: 'ready',
+				});
+			} catch (error) {
+				// A failed silent read keeps what it held; the next scheduled read tries again.
+				if (options?.silent) return;
+				settle({ status: get(error, 'response.status') === 403 ? 'denied' : 'error' });
+			}
+		},
+		[http, online, register?.id, storeId, key]
+	);
+	// The scheduled re-read: silent over a ready result, a plain load otherwise (so a failed
+	// or never-started lookup recovers on the next tick).
+	const revalidate = React.useCallback(
+		() => load({ silent: data.status === 'ready' }),
+		[load, data.status]
+	);
 	const wasOnline = React.useRef(false);
 	// External connectivity changes refresh stale remote cards; failures still use Retry.
 	React.useEffect(() => {
@@ -89,5 +101,5 @@ export function useLastClosure(
 							? 'reports.load_failed'
 							: 'common.loading'
 				);
-	return { data, online, load, unavailable };
+	return { data, online, load, revalidate, unavailable };
 }

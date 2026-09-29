@@ -230,7 +230,8 @@ export function RemoteSessionCard({
 					testID={`session-retry-${register.id}`}
 					variant="outline"
 					className="min-h-12"
-					onPress={reload ?? load}
+					// The press event must not reach `load` as its options.
+					onPress={() => void (reload ?? load)()}
 				>
 					{t('common.retry')}
 				</Button>
