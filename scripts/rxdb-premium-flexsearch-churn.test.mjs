@@ -33,6 +33,28 @@ try {
 } catch {
 	packageRoot = null;
 }
+const installedVersion = packageRoot && require('rxdb-premium/package.json').version;
+// The esm build's import bindings are renamed per release; rewrite exactly the installed ones.
+const ESM_IMPORTS_BY_VERSION = {
+	'17.4.0': [
+		['import{ensureNotFalsy as e}from"rxdb/plugins/core";', 'var e=core.ensureNotFalsy;'],
+		[
+			'import{getFlexsearchIndexSchema as t}from"./schema.js";',
+			'var t=schema.getFlexsearchIndexSchema;',
+		],
+		['import{filter as a,mergeMap as i}from"rxjs";', 'var a=rxjs.filter,i=rxjs.mergeMap;'],
+		['import n from"flexsearch";', 'var n=FlexSearch;'],
+	],
+	'17.5.0': [
+		['import{ensureNotFalsy as e}from"rxdb/plugins/core";', 'var e=core.ensureNotFalsy;'],
+		[
+			'import{getFlexsearchIndexSchema as a}from"./schema.js";',
+			'var a=schema.getFlexsearchIndexSchema;',
+		],
+		['import{filter as t,mergeMap as i}from"rxjs";', 'var t=rxjs.filter,i=rxjs.mergeMap;'],
+		['import s from"flexsearch";', 'var s=FlexSearch;'],
+	],
+};
 const indexOptions = { preset: 'performance', tokenize: 'full', minlength: 3 };
 const installedPath = (dist) =>
 	packageRoot ? join(packageRoot, `dist/${dist}/plugins/flexsearch/rx-fulltext-search.js`) : null;
@@ -92,17 +114,21 @@ function loadPlugin(dist, source = patchedSource(dist), strict = false) {
 		rxjs,
 		flexsearch: FlexSearch,
 		'@babel/runtime/helpers/interopRequireDefault': (value) => ({ default: value }),
+		// 17.5.0's cjs build initialises its class fields through babel's helper.
+		'@babel/runtime/helpers/defineProperty': (object, key, value) =>
+			Object.defineProperty(object, key, {
+				value,
+				enumerable: true,
+				configurable: true,
+				writable: true,
+			}),
 	};
 	if (dist === 'esm') {
-		source = source
-			.replace('import{ensureNotFalsy as e}from"rxdb/plugins/core";', 'var e=core.ensureNotFalsy;')
-			.replace(
-				'import{getFlexsearchIndexSchema as t}from"./schema.js";',
-				'var t=schema.getFlexsearchIndexSchema;'
-			)
-			.replace('import{filter as a,mergeMap as i}from"rxjs";', 'var a=rxjs.filter,i=rxjs.mergeMap;')
-			.replace('import n from"flexsearch";', 'var n=FlexSearch;')
-			.replaceAll('export ', '');
+		for (const [from, to] of ESM_IMPORTS_BY_VERSION[installedVersion]) {
+			assert.ok(source.includes(from), `missing esm import ${from}`);
+			source = source.replace(from, to);
+		}
+		source = source.replaceAll('export ', '');
 		source += ';Object.assign(exports,{RxFulltextSearch,addFulltextSearch});';
 	}
 	runInNewContext((strict ? "'use strict';\n" : '') + source, {
@@ -758,7 +784,7 @@ test(
 			);
 			const root = join(directory, 'node_modules/rxdb-premium');
 			mkdirSync(root, { recursive: true });
-			writeFileSync(join(root, 'package.json'), '{}');
+			writeFileSync(join(root, 'package.json'), JSON.stringify({ version: installedVersion }));
 			const paths = DISTS.map(({ dist }) => {
 				const path = join(root, `dist/${dist}/plugins/flexsearch/rx-fulltext-search.js`);
 				mkdirSync(dirname(path), { recursive: true });
