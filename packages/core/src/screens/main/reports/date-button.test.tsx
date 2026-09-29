@@ -268,8 +268,9 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('../components/pro-guard', () => ({ withProAccess: (component: unknown) => component }));
 jest.mock('../contexts/ui-settings', () => ({ useUISettings: () => ({ uiSettings: {} }) }));
-jest.mock('./reports', () => ({ Reports: () => null }));
+jest.mock('./reports', () => ({ Reports: ({ title }: { title: React.ReactNode }) => title }));
 jest.mock('./context', () => ({
+	...jest.requireActual('./context'),
 	ReportsProvider: ({ children }: React.PropsWithChildren) => children,
 }));
 jest.mock('@wcpos/components/error-boundary', () => ({

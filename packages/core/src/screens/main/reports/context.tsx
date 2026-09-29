@@ -1,10 +1,18 @@
 import * as React from 'react';
 
+import {
+	differenceInCalendarDays,
+	endOfMonth,
+	format,
+	isSameDay,
+	subDays,
+	subMonths,
+} from 'date-fns';
 import { useObservableSuspense } from 'observable-hooks';
 
 import type { EngineRecord } from '@wcpos/query';
 
-import { useStoreDay } from '../../../hooks/use-store-day';
+import { calendarDate, inZone, useStoreDay, zoneOptions } from '../../../hooks/use-store-day';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useQueryState } from '../../../query';
 
@@ -25,6 +33,7 @@ export type ReportOrder = OrderPayload & {
 /** The query binding. Changes only when the provider is handed a new one. */
 export interface ReportsBinding {
 	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
+	comparisonBinding: ReturnType<typeof useCollectionBinding<'orders'>>;
 }
 
 /** Row selection state. Changes when the cashier ticks a row. */
@@ -38,7 +47,89 @@ export interface ReportsData {
 	allOrders: ReportOrder[];
 	selectedOrders: ReportOrder[];
 	dateRange: DateRange;
+	comparisonRange: DateRange;
+	comparisonOrders: ReportOrder[];
+	wholeComparisonOrders: ReportOrder[];
+	live: boolean;
 }
+
+export interface ReportsScope {
+	cmp: 'yesterday' | 'lastweek';
+	setCmp: React.Dispatch<React.SetStateAction<ReportsScope['cmp']>>;
+	statusMode: 'done' | 'all';
+	setStatusMode: React.Dispatch<React.SetStateAction<ReportsScope['statusMode']>>;
+}
+const ReportsScopeContext = React.createContext<ReportsScope | undefined>(undefined);
+export function ReportsScopeProvider({ children }: React.PropsWithChildren) {
+	const [cmp, setCmp] = React.useState<ReportsScope['cmp']>('yesterday');
+	const [statusMode, setStatusMode] = React.useState<ReportsScope['statusMode']>('done');
+	const value = React.useMemo(
+		() => ({ cmp, setCmp, statusMode, setStatusMode }),
+		[cmp, statusMode]
+	);
+	return <ReportsScopeContext.Provider value={value}>{children}</ReportsScopeContext.Provider>;
+}
+export function useReportsScope() {
+	const value = React.useContext(ReportsScopeContext);
+	if (!value) throw new Error('useReportsScope must be used within ReportsScopeProvider');
+	return value;
+}
+
+/** Shared by the two binding requests and the data provider; boundaries are store calendar days. */
+export function useReportsPeriod() {
+	const { cmp } = useReportsScope();
+	const filters = useQueryState<'orders'>().filters;
+	const storeId = Number.isFinite(Number(filters.store)) ? Number(filters.store) : undefined;
+	const { presets, timezone, dayBounds, rangeToFilter } = useStoreDay(storeId);
+	const ranges = presets();
+	const today = ranges.today;
+	const start = filters.dateRange?.from
+		? convertUTCStringToLocalDate(filters.dateRange.from)
+		: today.from;
+	const end = filters.dateRange?.to ? convertUTCStringToLocalDate(filters.dateRange.to) : today.to;
+	const options = zoneOptions(timezone);
+	const days = differenceInCalendarDays(end, start, options) + 1;
+	// Match DateButton's clamped presets and precedence (Today wins coincident ranges).
+	const selected = Object.entries(ranges).find(
+		([, range]) =>
+			isSameDay(range.from, start, options) &&
+			isSameDay(range.to > today.to ? today.to : range.to, end, options)
+	)?.[0];
+	const period = selected?.endsWith('Month')
+		? 'month'
+		: selected?.endsWith('Week')
+			? 'week'
+			: days === 1
+				? 'day'
+				: days <= 7
+					? 'week'
+					: 'month';
+	const shiftedStart =
+		period === 'month'
+			? subMonths(start, 1, options)
+			: subDays(start, period === 'day' && cmp === 'yesterday' ? 1 : 7, options);
+	const shiftedEnd =
+		period === 'month'
+			? isSameDay(end, endOfMonth(end, options), options)
+				? endOfMonth(shiftedStart, options)
+				: subMonths(end, 1, options)
+			: subDays(end, period === 'day' && cmp === 'yesterday' ? 1 : 7, options);
+	const from = dayBounds(calendarDate(inZone(timezone, shiftedStart))).from;
+	const to = dayBounds(calendarDate(inZone(timezone, shiftedEnd))).to;
+	return {
+		dateRange: { start, end },
+		comparisonRange: { start: from, end: to },
+		comparisonFilter: rangeToFilter({ from, to }),
+		live: period === 'day' && isSameDay(start, today.from, options),
+		period,
+		timezone,
+		storeId,
+	};
+}
+const includedStatus = (order: ReportOrder, mode: ReportsScope['statusMode']) =>
+	['completed', 'processing', ...(mode === 'all' ? ['pending', 'on-hold'] : [])].includes(
+		order.status ?? ''
+	);
 
 /**
  * Split three ways along how often each part changes.
@@ -84,40 +175,18 @@ export const useReportsData = (): ReportsData => {
 
 interface ReportsProviderProps {
 	binding: ReturnType<typeof useCollectionBinding<'orders'>>;
+	comparisonBinding: ReturnType<typeof useCollectionBinding<'orders'>>;
 	children: React.ReactNode;
 }
 
 /**
  *
  */
-export function ReportsProvider({ binding, children }: ReportsProviderProps) {
+export function ReportsProvider({ binding, comparisonBinding, children }: ReportsProviderProps) {
 	const result = useObservableSuspense(binding.resource);
-	const { presets } = useStoreDay();
+	const { dateRange, comparisonRange, live } = useReportsPeriod();
+	const { statusMode } = useReportsScope();
 	const [unselectedRowIds, setUnselectedRowIds] = React.useState<RowSelectionState>({});
-	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
-		(state) => state.filters.dateRange
-	);
-
-	/**
-	 * Convert the selector's date range to Date objects
-	 */
-	const dateRange = React.useMemo<DateRange>(() => {
-		const { from, to } = presets().today;
-		const defaultRange = { start: from, end: to };
-
-		if (!selectedDateRange) {
-			return defaultRange;
-		}
-
-		return {
-			start: selectedDateRange.from
-				? convertUTCStringToLocalDate(selectedDateRange.from)
-				: defaultRange.start,
-			end: selectedDateRange.to
-				? convertUTCStringToLocalDate(selectedDateRange.to)
-				: defaultRange.end,
-		};
-	}, [selectedDateRange, presets]);
 
 	/**
 	 *
@@ -134,15 +203,17 @@ export function ReportsProvider({ binding, children }: ReportsProviderProps) {
 	/**
 	 * Remove unselectedRowIds from orders
 	 */
-	const selectedOrders = React.useMemo(() => {
-		if (Object.keys(unselectedRowIds).length === 0) {
-			return allOrders;
-		}
-
-		return allOrders.filter((order) => order.uuid && !unselectedRowIds[order.uuid]);
-	}, [allOrders, unselectedRowIds]);
-
-	const bindingValue = React.useMemo<ReportsBinding>(() => ({ binding }), [binding]);
+	const selectedOrders = React.useMemo(
+		() =>
+			allOrders.filter(
+				(order) => includedStatus(order, statusMode) && !unselectedRowIds[order.uuid]
+			),
+		[allOrders, statusMode, unselectedRowIds]
+	);
+	const bindingValue = React.useMemo<ReportsBinding>(
+		() => ({ binding, comparisonBinding }),
+		[binding, comparisonBinding]
+	);
 
 	const selectionValue = React.useMemo<ReportsSelection>(
 		() => ({ unselectedRowIds, setUnselectedRowIds }),
@@ -150,8 +221,16 @@ export function ReportsProvider({ binding, children }: ReportsProviderProps) {
 	);
 
 	const dataValue = React.useMemo<ReportsData>(
-		() => ({ allOrders, selectedOrders, dateRange }),
-		[allOrders, selectedOrders, dateRange]
+		() => ({
+			allOrders,
+			selectedOrders,
+			dateRange,
+			comparisonRange,
+			live,
+			comparisonOrders: [],
+			wholeComparisonOrders: [],
+		}),
+		[allOrders, selectedOrders, dateRange, comparisonRange, live]
 	);
 
 	return (
@@ -160,5 +239,34 @@ export function ReportsProvider({ binding, children }: ReportsProviderProps) {
 				<ReportsDataContext.Provider value={dataValue}>{children}</ReportsDataContext.Provider>
 			</ReportsSelectionContext.Provider>
 		</ReportsBindingContext.Provider>
+	);
+}
+
+/** Mount only inside a differences-only Suspense boundary: the current figure never suspends. */
+export function ReportsComparison({ children }: React.PropsWithChildren) {
+	const data = useReportsData();
+	const { comparisonBinding } = useReportsBinding();
+	const { statusMode } = useReportsScope();
+	const { timezone } = useReportsPeriod();
+	const result = useObservableSuspense(comparisonBinding.resource);
+	const wholeComparisonOrders = result.hits
+		.map(({ record }) => {
+			const order = record as EngineRecord<'orders'>;
+			return { ...order.payload, uuid: order.uuid };
+		})
+		.filter((order) => includedStatus(order, statusMode));
+	const clock = (date: Date) => format(inZone(timezone, date), 'HH:mm:ss.SSS');
+	const now = clock(new Date());
+	const comparisonOrders = data.live
+		? wholeComparisonOrders.filter(
+				(order) =>
+					order.date_created_gmt &&
+					clock(convertUTCStringToLocalDate(order.date_created_gmt)) <= now
+			)
+		: wholeComparisonOrders;
+	return (
+		<ReportsDataContext.Provider value={{ ...data, comparisonOrders, wholeComparisonOrders }}>
+			{children}
+		</ReportsDataContext.Provider>
 	);
 }

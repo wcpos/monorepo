@@ -31,7 +31,7 @@ import { Bar, CashierButton } from './bar';
 import { DateButton } from './date-button';
 import { TillStrip } from './till-strip';
 import { Closures } from './closures';
-import { ReportsProvider } from './context';
+import { ReportsProvider, ReportsScopeProvider, useReportsPeriod } from './context';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
 import { useUISettings } from '../contexts/ui-settings';
@@ -84,6 +84,18 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	const binding = useCollectionBinding('orders', state);
+	const { comparisonFilter } = useReportsPeriod();
+	// The binding is compiled from the state object's identity: keep the comparison state stable
+	// across renders so the resource (and its Suspense) is rebuilt only when a bound changes.
+	const { from: comparisonFrom, to: comparisonTo } = comparisonFilter;
+	const comparisonState = React.useMemo(
+		() => ({
+			...state,
+			filters: { ...state.filters, dateRange: { from: comparisonFrom, to: comparisonTo } },
+		}),
+		[state, comparisonFrom, comparisonTo]
+	);
+	const comparisonBinding = useCollectionBinding('orders', comparisonState);
 	const storeId = Number.isFinite(Number(state.filters.store))
 		? Number(state.filters.store)
 		: undefined;
@@ -138,21 +150,19 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 			<View className="pt-3">
 				<TillStrip onOpenClosures={() => onRoomChange('closures')} />
 			</View>
-			<View
-				testID="reports-scope-row"
-				className="flex-row items-center justify-between gap-2 px-4 py-2"
-			>
-				<DateButton
-					scope={scope}
-					onScopeChange={select}
-					storeId={scope.storeId}
-					lockedScopeName={t('reports.earlier_days')}
-				/>
-			</View>
 			<View className="min-h-0 flex-1">
 				<Suspense>
-					<ReportsProvider binding={binding}>
-						<Reports />
+					<ReportsProvider binding={binding} comparisonBinding={comparisonBinding}>
+						<Reports
+							title={
+								<DateButton
+									scope={scope}
+									onScopeChange={select}
+									storeId={scope.storeId}
+									lockedScopeName={t('reports.earlier_days')}
+								/>
+							}
+						/>
 					</ReportsProvider>
 				</Suspense>
 			</View>
@@ -183,10 +193,8 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 		return () => clearTimeout(id);
 	}, [license?.isPro, presets, storeToday]);
 	const initialFilters: Partial<FiltersOf<'orders'>> = {
-		status: 'completed',
 		...(!license?.isPro && { register: binding.registerId || 'unbound' }),
 		dateRange: rangeToFilter(presets().today),
-		cashier: cashierScopeID,
 		store: storeScopeID,
 	};
 	const initialSort = getInitialReportSort(uiSettings.sortBy, uiSettings.sortDirection);
@@ -203,7 +211,9 @@ function SalesScreen({ onRoomChange }: { onRoomChange: (room: string) => void })
 		>
 			<ErrorBoundary>
 				<Suspense>
-					<ReportsScreenContent onRoomChange={onRoomChange} />
+					<ReportsScopeProvider>
+						<ReportsScreenContent onRoomChange={onRoomChange} />
+					</ReportsScopeProvider>
 				</Suspense>
 			</ErrorBoundary>
 		</QueryStateProvider>
