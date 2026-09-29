@@ -3,6 +3,7 @@
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+import { holdLiveTab } from '@wcpos/database';
 import {
 	clearStorageDegradation,
 	wrappedErrorHandlerStorage,
@@ -12,6 +13,8 @@ import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated
 import { persistSaleProvenance } from '../sale-completion';
 import { recordCompletionAttempt } from '../completion-journal';
 import { useCheckoutSession } from './use-checkout-session';
+
+jest.mock('@wcpos/database', () => ({ holdLiveTab: jest.fn(() => jest.fn()) }));
 
 const mockCheckoutError = jest.fn();
 const mockCheckoutInfo = jest.fn();
@@ -89,6 +92,45 @@ describe('useCheckoutSession', () => {
 			release: jest.fn(),
 		});
 	});
+
+	it.each(['success', 'rejection'])(
+		'holds only the contract capture POST through %s',
+		async (outcome) => {
+			const release = jest.fn();
+			jest.mocked(holdLiveTab).mockReturnValue(release);
+			mockGet.mockResolvedValueOnce({
+				data: [
+					{ id: 'stripe_terminal_for_woocommerce', capabilities: { supports_checkout: true } },
+				],
+			});
+			let settle!: () => void;
+			const pending = new Promise<void>((resolve) => {
+				settle = resolve;
+			});
+			mockPost.mockImplementation(async (url: string) => {
+				if (url.endsWith('/bootstrap')) {
+					expect(holdLiveTab).not.toHaveBeenCalled();
+					return { data: { status: 'ready' } };
+				}
+				expect(holdLiveTab).toHaveBeenCalledWith('payment');
+				expect(release).not.toHaveBeenCalled();
+				await pending;
+				if (outcome === 'rejection') throw new Error('transport failed');
+				return { data: { status: 'awaiting_customer', terminal: true } };
+			});
+			const { result } = renderHook(() => useCheckoutSession(order));
+			await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+			await act(async () => {
+				const checkout = result.current.startCheckout();
+				await waitFor(() => expect(holdLiveTab).toHaveBeenCalledTimes(1));
+				expect(release).not.toHaveBeenCalled();
+				settle();
+				await checkout;
+			});
+			expect(release).toHaveBeenCalledTimes(1);
+			mockPost.mockReset();
+		}
+	);
 
 	it('uses contract mode whenever supports_checkout is true, even for non-wcpos providers', async () => {
 		mockGet.mockResolvedValueOnce({

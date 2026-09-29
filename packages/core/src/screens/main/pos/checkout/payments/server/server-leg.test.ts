@@ -1,6 +1,14 @@
+import { holdLiveTab } from '@wcpos/database';
 import type { OrderPaymentSummary, PaymentRow } from '@wcpos/order-math';
 
 import { createServerLeg } from './server-leg';
+
+jest.mock('@wcpos/database', () => ({ holdLiveTab: jest.fn() }));
+const releaseHold = jest.fn();
+beforeEach(() => {
+	jest.mocked(holdLiveTab).mockReset().mockReturnValue(releaseHold);
+	releaseHold.mockClear();
+});
 
 const epoch = Date.parse('2026-01-01T00:00:00Z');
 // Explicit wire fixture, including the legacy GMT date format without a zone suffix.
@@ -582,4 +590,22 @@ it('a stale mirror rejection cannot mutate the state after checkNow supersedes i
 	write.reject(new Error('old write'));
 	await tick();
 	expect(c.leg.getState()).toBe(state);
+});
+
+it.each(['success', 'rejection'])('holds only the awaited capture through %s', async (outcome) => {
+	const c = setup(true, { status: 'authorized' });
+	const pending = deferred<{ data: unknown }>();
+	c.queue('capture', () => {
+		expect(holdLiveTab).toHaveBeenCalledWith('payment');
+		expect(releaseHold).not.toHaveBeenCalled();
+		return pending.promise;
+	});
+	const capture = c.leg.capture();
+	expect(holdLiveTab).toHaveBeenCalledTimes(1);
+	expect(releaseHold).not.toHaveBeenCalled();
+	if (outcome === 'success') pending.resolve({ data: response({ status: 'captured' }) });
+	else pending.reject(new Error('transport failed'));
+	await capture;
+	expect(releaseHold).toHaveBeenCalledTimes(1);
+	c.leg.dispose();
 });

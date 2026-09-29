@@ -1,3 +1,4 @@
+import { holdLiveTab } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
 import type { PaymentRow } from '@wcpos/order-math';
@@ -17,6 +18,7 @@ import {
 	stopTerminalPaymentsService,
 	subscribeTerminalPaymentsServiceStart,
 } from './index';
+jest.mock('@wcpos/database', () => ({ holdLiveTab: jest.fn(() => jest.fn()) }));
 
 const row: PaymentRow = {
 	id: 'leg',
@@ -875,3 +877,31 @@ it('does not enter an old store receipt when a pending local balance read finish
 	expect(getCheckoutModeSnapshot().receiptOrders.has('order')).toBe(false);
 	expect(c.completeOrder).not.toHaveBeenCalled();
 });
+
+it.each(['success', 'rejection'])(
+	'holds background external capture through %s',
+	async (outcome) => {
+		const release = jest.fn();
+		jest.mocked(holdLiveTab).mockReset().mockReturnValue(release);
+		const c = offlineSetup();
+		let settle!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			settle = resolve;
+		});
+		c.http.post.mockImplementation(async () => {
+			expect(holdLiveTab).toHaveBeenCalledWith('payment');
+			expect(release).not.toHaveBeenCalled();
+			await pending;
+			if (outcome === 'rejection') throw new Error('transport failed');
+			return { data: { payment: { ...deviceRow, status: 'captured' } } };
+		});
+		const flushing = c.service.flushOffline();
+		await Promise.resolve();
+		expect(holdLiveTab).toHaveBeenCalledTimes(1);
+		expect(release).not.toHaveBeenCalled();
+		settle();
+		await flushing;
+		expect(release).toHaveBeenCalledTimes(1);
+		c.service.stop();
+	}
+);

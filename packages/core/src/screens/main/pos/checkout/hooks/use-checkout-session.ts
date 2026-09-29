@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { holdLiveTab } from '@wcpos/database';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { isExpectedPreflightBlock } from '@wcpos/hooks/use-http-client/is-expected-preflight-block';
 import { type EngineRecord, useQueryRuntime, useRecordField } from '@wcpos/query';
@@ -249,25 +250,31 @@ export function useCheckoutSession(order: EngineRecord<'orders'>) {
 			// the gateway and the client cannot recall it — see the PR body.
 			if (blockIfDegraded('process-payment', { orderId: orderId })) return;
 
-			const response = await http.post(
-				`orders/${orderId}/checkout`,
-				{
-					gateway_id: resolvedGateway.id,
-					action: 'start',
-					payment_data: {},
-				},
-				{
-					headers: {
-						'X-WCPOS-Idempotency-Key': createCheckoutIdempotencyKey(
-							orderId,
-							resolvedGateway.id,
-							checkoutAttemptIdRef.current
-						),
+			let state: CheckoutState;
+			const release = holdLiveTab('payment');
+			try {
+				const response = await http.post(
+					`orders/${orderId}/checkout`,
+					{
+						gateway_id: resolvedGateway.id,
+						action: 'start',
+						payment_data: {},
 					},
-				}
-			);
+					{
+						headers: {
+							'X-WCPOS-Idempotency-Key': createCheckoutIdempotencyKey(
+								orderId,
+								resolvedGateway.id,
+								checkoutAttemptIdRef.current
+							),
+						},
+					}
+				);
 
-			let state = (response?.data || {}) as CheckoutState;
+				state = (response?.data || {}) as CheckoutState;
+			} finally {
+				release();
+			}
 			let attempts = 0;
 			while (!isTerminalCheckoutStatus(state.status) && !state.terminal) {
 				attempts += 1;

@@ -1,3 +1,4 @@
+import { holdLiveTab } from '@wcpos/database';
 import { toMinor } from '@wcpos/order-math';
 import type { OrderPaymentSummary, PaymentRefusalBody, PaymentRow } from '@wcpos/order-math';
 
@@ -186,24 +187,30 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 				}
 				const success = result?.outcome === 'captured' || result?.outcome === 'authorized';
 				set({ phase: success ? 'capturing' : 'confirming' });
-				const response = await deps.post(
-					url(success ? 'capture' : 'void'),
-					success && result
-						? {
-								context: {
-									provider_refs: result.provider_refs,
-									receipt: result.receipt,
-									transport: result.transport,
-									amount: result.amount,
-								},
-							}
-						: {
-								reason:
-									result?.outcome === 'declined'
-										? (result.failure_reason ?? 'card_declined')
-										: cancelReason,
-							}
-				);
+				let response: { data: unknown };
+				const release = success ? holdLiveTab('payment') : undefined;
+				try {
+					response = await deps.post(
+						url(success ? 'capture' : 'void'),
+						success && result
+							? {
+									context: {
+										provider_refs: result.provider_refs,
+										receipt: result.receipt,
+										transport: result.transport,
+										amount: result.amount,
+									},
+								}
+							: {
+									reason:
+										result?.outcome === 'declined'
+											? (result.failure_reason ?? 'card_declined')
+											: cancelReason,
+								}
+					);
+				} finally {
+					release?.();
+				}
 				await apply(response.data as ServerLegResponse);
 				if (!active()) return;
 				throw new Error('Payment is not final on the store');
@@ -275,15 +282,21 @@ export function createDeviceLeg(deps: DeviceLegDeps, input: DeviceLegInput) {
 		set({ phase: 'collecting' });
 		try {
 			approvedAt = null;
-			result = await deps.driver.collect({
-				dp: input.dp,
-				row: state.row,
-				method: input.method,
-				transport: input.transport,
-				handoff,
-				offline: input.offline,
-				tipEligibleMinor: input.offline ? null : input.tipEligibleMinor,
-			});
+			// collect may capture on the reader; preparation above owns no payment hold.
+			const release = holdLiveTab('payment');
+			try {
+				result = await deps.driver.collect({
+					dp: input.dp,
+					row: state.row,
+					method: input.method,
+					transport: input.transport,
+					handoff,
+					offline: input.offline,
+					tipEligibleMinor: input.offline ? null : input.tipEligibleMinor,
+				});
+			} finally {
+				release();
+			}
 		} catch (error) {
 			if (!active()) return;
 			errorState(error);

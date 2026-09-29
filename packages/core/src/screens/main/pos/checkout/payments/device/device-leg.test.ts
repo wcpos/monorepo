@@ -1,3 +1,5 @@
+import { holdLiveTab } from '@wcpos/database';
+
 import { createDeviceLeg, type DeviceLegState } from './device-leg';
 import { method, row } from './fixtures.test-utils';
 
@@ -5,6 +7,13 @@ import type {
 	CollectResult,
 	PaymentDriver,
 } from '../../../../../../services/payment-drivers/types';
+
+jest.mock('@wcpos/database', () => ({ holdLiveTab: jest.fn() }));
+const releaseHold = jest.fn();
+beforeEach(() => {
+	jest.mocked(holdLiveTab).mockReset().mockReturnValue(releaseHold);
+	releaseHold.mockClear();
+});
 
 const approved: CollectResult = {
 	outcome: 'captured',
@@ -465,3 +474,43 @@ it.each(['driver', 'method'] as const)(
 		expect(c.post).not.toHaveBeenCalled();
 	}
 );
+
+it.each(['success', 'rejection'])(
+	'holds the awaited external capture through %s, not preparation',
+	async (outcome) => {
+		const c = setup();
+		const pending = deferred<{ data: unknown }>();
+		c.post.mockImplementation(async (url) => {
+			if (!url.endsWith('/capture')) {
+				expect(holdLiveTab).not.toHaveBeenCalled();
+				return { data: { payment: row } };
+			}
+			expect(holdLiveTab).toHaveBeenLastCalledWith('payment');
+			expect(releaseHold).toHaveBeenCalledTimes(1); // collection settled; capture request now owns a hold
+			await pending.promise;
+			if (outcome === 'rejection') throw new Error('transport failed');
+			return { data: { payment: { ...row, status: 'captured' } } };
+		});
+		const start = c.leg.start();
+		await tick();
+		expect(holdLiveTab).toHaveBeenCalledTimes(1); // driver.collect can return captured
+		expect(releaseHold).not.toHaveBeenCalled();
+		c.collection.resolve(approved);
+		await tick();
+		expect(holdLiveTab).toHaveBeenCalledTimes(2);
+		expect(releaseHold).toHaveBeenCalledTimes(1);
+		pending.resolve({ data: {} });
+		await start;
+		expect(releaseHold).toHaveBeenCalledTimes(2);
+		c.leg.dispose();
+	}
+);
+
+it('releases the collection hold when the reader rejects', async () => {
+	const c = setup();
+	jest.mocked(c.driver.collect).mockRejectedValueOnce(new Error('reader disconnected'));
+	await c.leg.start();
+	expect(holdLiveTab).toHaveBeenCalledTimes(1);
+	expect(releaseHold).toHaveBeenCalledTimes(1);
+	c.leg.dispose();
+});
