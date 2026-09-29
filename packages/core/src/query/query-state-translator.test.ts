@@ -344,10 +344,10 @@ describe('query-state translator', () => {
 				{ status: 'processing' },
 				{ customerId: 42 },
 				{
-					'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '7' } },
+					'payload.meta_data': { $elemMatch: { key: '_pos_user', value: { $in: ['7', 7] } } },
 				},
 				{
-					'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '3' } },
+					'payload.meta_data': { $elemMatch: { key: '_pos_store', value: { $in: ['3', 3] } } },
 				},
 				{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 			],
@@ -381,10 +381,10 @@ describe('query-state translator', () => {
 			prefilter: {
 				$and: [
 					{
-						'payload.meta_data': { $elemMatch: { key: '_pos_user', value: '7' } },
+						'payload.meta_data': { $elemMatch: { key: '_pos_user', value: { $in: ['7', 7] } } },
 					},
 					{
-						'payload.meta_data': { $elemMatch: { key: '_pos_store', value: '3' } },
+						'payload.meta_data': { $elemMatch: { key: '_pos_store', value: { $in: ['3', 3] } } },
 					},
 					{ dateCreatedGmt: { $gte: '2026-07-01', $lte: '2026-07-14' } },
 				],

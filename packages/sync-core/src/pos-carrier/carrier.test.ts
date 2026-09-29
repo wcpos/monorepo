@@ -112,11 +112,16 @@ describe.each(carrierFactories)('%s PosCarrier contract', (_name, createCarrier)
 		const carrier = createCarrier();
 		const filter = carrier.identityFilter({ cashierId: '7', storeId: '3' });
 
+		// A numeric-looking identity matches the stamped string AND a server-side integer,
+		// the two spellings `readIdentity` accepts.
 		expect(filter).toEqual({
 			$and: [
-				{ meta_data: { $elemMatch: { key: '_pos_user', value: '7' } } },
-				{ meta_data: { $elemMatch: { key: '_pos_store', value: '3' } } },
+				{ meta_data: { $elemMatch: { key: '_pos_user', value: { $in: ['7', 7] } } } },
+				{ meta_data: { $elemMatch: { key: '_pos_store', value: { $in: ['3', 3] } } } },
 			],
+		});
+		expect(carrier.identityFilter({ storeId: 'woocommerce-pos' })).toEqual({
+			meta_data: { $elemMatch: { key: '_pos_store', value: 'woocommerce-pos' } },
 		});
 		expect(carrier.decodeIdentityFilter(filter)).toEqual({
 			cashierId: '7',

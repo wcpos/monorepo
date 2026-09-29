@@ -28,6 +28,8 @@ describe.each(storages)('%s open-orders scope', (_name, storage) => {
 				['other-cashier', 8, 2, '01', 'pos-open'],
 				['other-both', 8, 9, '01', 'pos-open'],
 				['store-less', 7, undefined, '04', 'pos-open'],
+				// A server-side writer can leave the identity as an integer; readIdentity accepts it.
+				['numeric-meta', 7, 2, '05', 'pos-open'],
 				['completed', 7, 2, '01', 'completed'],
 			].map(([uuid, cashier, store, day, status]) =>
 				engineOrder({
@@ -35,8 +37,10 @@ describe.each(storages)('%s open-orders scope', (_name, storage) => {
 					status: String(status),
 					date_created_gmt: `2026-01-${day}T00:00:00`,
 					meta_data: [
-						{ key: '_pos_user', value: String(cashier) },
-						...(store === undefined ? [] : [{ key: '_pos_store', value: String(store) }]),
+						{ key: '_pos_user', value: uuid === 'numeric-meta' ? cashier : String(cashier) },
+						...(store === undefined
+							? []
+							: [{ key: '_pos_store', value: uuid === 'numeric-meta' ? store : String(store) }]),
 					],
 				})
 			)
@@ -46,9 +50,9 @@ describe.each(storages)('%s open-orders scope', (_name, storage) => {
 		await database.close();
 	});
 	it.each([
-		[2, ['early', 'tied', 'late']],
-		[NO_STORE, ['early', 'tied', 'other-store', 'late', 'store-less']],
-		[undefined, ['early', 'tied', 'other-store', 'late', 'store-less']],
+		[2, ['early', 'tied', 'late', 'numeric-meta']],
+		[NO_STORE, ['early', 'tied', 'other-store', 'late', 'store-less', 'numeric-meta']],
+		[undefined, ['early', 'tied', 'other-store', 'late', 'store-less', 'numeric-meta']],
 	])('scopes cashier and store %s and sorts in storage', async (store, expected) => {
 		const documents = await database.orders
 			.find({

@@ -57,8 +57,14 @@ function scalarMetaValue(meta: MetaDataEntry[] | undefined, key: string): string
 	return null;
 }
 
+/**
+ * The identity is STAMPED as a string, but `readIdentity` (via `scalarMetaValue`) also
+ * accepts an integer a server-side writer left behind. A condition that reaches storage
+ * cannot coerce, so a numeric-looking identity matches both spellings (#2249 review).
+ */
 function identityCondition(key: string, value: string): Record<string, unknown> {
-	return { meta_data: { $elemMatch: { key, value } } };
+	const spellings = /^\d+$/.test(value) ? { $in: [value, Number(value)] } : value;
+	return { meta_data: { $elemMatch: { key, value: spellings } } };
 }
 
 function decodeSingleIdentityCondition(
@@ -68,7 +74,13 @@ function decodeSingleIdentityCondition(
 	if (metaData === null || typeof metaData !== 'object') return null;
 	const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
 	if (elemMatch === null || typeof elemMatch !== 'object') return null;
-	const { key, value } = elemMatch as Record<string, unknown>;
+	const { key, value: spellings } = elemMatch as Record<string, unknown>;
+	const value =
+		spellings !== null &&
+		typeof spellings === 'object' &&
+		Array.isArray((spellings as { $in?: unknown }).$in)
+			? (spellings as { $in: unknown[] }).$in.find((entry) => typeof entry === 'string')
+			: spellings;
 	if (typeof value !== 'string') return null;
 	if (key === POS_META_KEYS.user) return { cashierId: value };
 	if (key === POS_META_KEYS.store) return { storeId: value };
