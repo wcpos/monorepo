@@ -53,7 +53,7 @@ export function Reports({ title }: { title: React.ReactNode }) {
 							testID="reports-sales-scroll"
 						>
 							<Hero title={title} />
-							<View className="h-[520px] flex-1">
+							<View className="min-h-96 flex-1">
 								<PanelGroup direction="horizontal">
 									<Panel>
 										<Orders />

@@ -272,6 +272,14 @@ it.each([
 		'2026-01-01T05:00:00.000Z',
 		'2026-02-01T04:59:59.999Z',
 	],
+	// A custom 45-day range keeps its 45 days: each bound shifts by a month (Codex review, PR 2a).
+	[
+		'custom 45-day (Jan 15 to Feb 28)',
+		'2026-01-15T05:00:00.000Z',
+		'2026-03-01T04:59:59.999Z',
+		'2025-12-15T05:00:00.000Z',
+		'2026-01-29T04:59:59.999Z',
+	],
 ])(
 	'derives the %s comparison in the viewed store zone',
 	(_name, from, to, expectedFrom, expectedTo) => {

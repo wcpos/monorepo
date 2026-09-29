@@ -5,6 +5,8 @@ import {
 	endOfMonth,
 	format,
 	isSameDay,
+	isSameMonth,
+	startOfMonth,
 	subDays,
 	subMonths,
 } from 'date-fns';
@@ -108,9 +110,16 @@ export function useReportsPeriod() {
 		period === 'month'
 			? subMonths(start, 1, options)
 			: subDays(start, period === 'day' && cmp === 'yesterday' ? 1 : 7, options);
+	// A whole calendar month (the 1st to its last day, preset or typed) compares with the whole
+	// month before; a running month and any other range shift each bound by a month, so a
+	// 45-day range keeps 45 days.
+	const wholeMonth =
+		isSameMonth(start, end, options) &&
+		isSameDay(start, startOfMonth(start, options), options) &&
+		isSameDay(end, endOfMonth(end, options), options);
 	const shiftedEnd =
 		period === 'month'
-			? isSameDay(end, endOfMonth(end, options), options)
+			? wholeMonth
 				? endOfMonth(shiftedStart, options)
 				: subMonths(end, 1, options)
 			: subDays(end, period === 'day' && cmp === 'yesterday' ? 1 : 7, options);
@@ -126,10 +135,18 @@ export function useReportsPeriod() {
 		storeId,
 	};
 }
-const includedStatus = (order: ReportOrder, mode: ReportsScope['statusMode']) =>
+const includedStatus = (order: { status?: string }, mode: ReportsScope['statusMode']) =>
 	['completed', 'processing', ...(mode === 'all' ? ['pending', 'on-hold'] : [])].includes(
 		order.status ?? ''
 	);
+/** The status set as a predicate, for the table's selection to agree with the figures. */
+export function useIncludedStatus() {
+	const { statusMode } = useReportsScope();
+	return React.useCallback(
+		(order: { status?: string }) => includedStatus(order, statusMode),
+		[statusMode]
+	);
+}
 
 /**
  * Split three ways along how often each part changes.
@@ -256,7 +273,14 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 		})
 		.filter((order) => includedStatus(order, statusMode));
 	const clock = (date: Date) => format(inZone(timezone, date), 'HH:mm:ss.SSS');
-	const now = clock(new Date());
+	// A live day's cutoff moves with the clock: once a minute while the report stays open.
+	const [tick, setTick] = React.useState(() => Date.now());
+	React.useEffect(() => {
+		if (!data.live) return;
+		const id = setInterval(() => setTick(Date.now()), 60_000);
+		return () => clearInterval(id);
+	}, [data.live]);
+	const now = clock(new Date(tick));
 	const comparisonOrders = data.live
 		? wholeComparisonOrders.filter(
 				(order) =>

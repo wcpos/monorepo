@@ -130,14 +130,19 @@ function Difference({
 	const { comparisonOrders } = useReportsData();
 	// The same rounding as the current figure, or a rounded average reads as a difference.
 	const totals = calculateTotals({ orders: comparisonOrders, num_decimals: numDecimals });
-	const previous = field === 'orders' ? comparisonOrders.length : totals[field];
+	// Money is compared at the displayed precision, so two equal displayed figures never differ.
+	const scale = 10 ** (numDecimals ?? 2);
+	const round = (value: number) =>
+		field === 'orders' || field === 'totalItemsSold' ? value : Math.round(value * scale) / scale;
+	const previous = round(field === 'orders' ? comparisonOrders.length : totals[field]);
+	const shown = round(current);
 	// No orders to compare with: every line reads "—", never a difference against nothing.
 	const none = comparisonOrders.length === 0 || (field === 'total' && previous === 0);
 	const delta = none
 		? 0
 		: field === 'total'
-			? ((current - previous) / previous) * 100
-			: current - previous;
+			? ((shown - previous) / previous) * 100
+			: shown - previous;
 	return (
 		<Text
 			testID={id}
@@ -196,7 +201,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 		period === 'day'
 			? comparisons.find((row) => row.value === cmp)!.label
 			: t(period === 'week' ? 'reports.vs_week_before' : 'reports.vs_month_before');
-	const { print, isPrinting, contentRef } = useReportPrint();
+	const { print, isPrinting, contentRef } = useReportPrint(storeId);
 	const chips = (
 		<View testID="hero-chips" className={`flex-row gap-2 ${phone ? '' : 'flex-wrap'}`}>
 			<React.Suspense

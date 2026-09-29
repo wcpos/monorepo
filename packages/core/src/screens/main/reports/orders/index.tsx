@@ -29,7 +29,12 @@ import { PaymentMethod } from '../../components/order/payment-method';
 import { Status } from '../../components/order/status';
 import { Total } from '../../components/order/total';
 import { UISettingsDialog } from '../../components/ui-settings';
-import { useReportsBinding, useReportsData, useReportsSelection } from '../context';
+import {
+	useIncludedStatus,
+	useReportsBinding,
+	useReportsData,
+	useReportsSelection,
+} from '../context';
 import { UISettingsForm } from '../ui-settings-form';
 import { useQueryState, useQueryStateActions } from '../../../../query';
 
@@ -98,6 +103,8 @@ export function Orders() {
 	const { binding } = useReportsBinding();
 	const { allOrders } = useReportsData();
 	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
+	// Rows outside the status set are unchecked and cannot be ticked: the table agrees with the hero.
+	const included = useIncludedStatus();
 	const tableActions = React.useMemo<
 		Pick<QueryStateActions<'orders'>, 'setSort' | 'extendLimit' | 'setFilter'>
 	>(
@@ -116,12 +123,12 @@ export function Orders() {
 	const selectionState = React.useMemo<RowSelectionState>(() => {
 		const state: RowSelectionState = {};
 		allOrders.forEach((order) => {
-			if (order.uuid && !unselectedRowIds[order.uuid]) {
+			if (order.uuid && included(order) && !unselectedRowIds[order.uuid]) {
 				state[order.uuid] = true;
 			}
 		});
 		return state;
-	}, [allOrders, unselectedRowIds]);
+	}, [allOrders, included, unselectedRowIds]);
 
 	/**
 	 * Update unselectedRowIds when row selection changes
@@ -134,14 +141,14 @@ export function Orders() {
 				// Compute the new unselectedRowIds
 				const newUnselectedRowIds: Record<string, true> = {};
 				allOrders.forEach((order) => {
-					if (order.uuid && !newSelectionState[order.uuid]) {
+					if (order.uuid && included(order) && !newSelectionState[order.uuid]) {
 						newUnselectedRowIds[order.uuid] = true;
 					}
 				});
 				return newUnselectedRowIds;
 			});
 		},
-		[allOrders, selectionState, setUnselectedRowIds]
+		[allOrders, included, selectionState, setUnselectedRowIds]
 	);
 
 	/**
@@ -153,7 +160,7 @@ export function Orders() {
 			setUnselectedRowIds((prev) => {
 				const newUnselectedRowIds: Record<string, true> = {};
 				allOrders.forEach((order) => {
-					if (order.uuid) newUnselectedRowIds[order.uuid] = true;
+					if (order.uuid && included(order)) newUnselectedRowIds[order.uuid] = true;
 				});
 				return newUnselectedRowIds;
 			});
@@ -161,14 +168,14 @@ export function Orders() {
 			// Some rows are unselected, so we want to select all rows
 			setUnselectedRowIds({});
 		}
-	}, [allOrders, setUnselectedRowIds, unselectedRowIds]);
+	}, [allOrders, included, setUnselectedRowIds, unselectedRowIds]);
 
 	/**
 	 * Table config
 	 */
 	const tableConfig = React.useMemo(
 		() => ({
-			enableRowSelection: true,
+			enableRowSelection: (row: { original: OrderRow }) => included(row.original.record.payload),
 			state: {
 				rowSelection: selectionState,
 			},
@@ -184,7 +191,13 @@ export function Orders() {
 				selectionState,
 			},
 		}),
-		[allOrders.length, handleToggleAllRowsSelected, handleRowSelectionChange, selectionState]
+		[
+			allOrders.length,
+			handleToggleAllRowsSelected,
+			handleRowSelectionChange,
+			included,
+			selectionState,
+		]
 	);
 
 	/**

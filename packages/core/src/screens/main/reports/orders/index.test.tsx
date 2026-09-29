@@ -77,6 +77,7 @@ jest.mock('../../components/record-text-cell', () => ({ RecordTextCell: () => nu
 jest.mock('./header-select', () => ({ TableHeaderSelect: () => null }));
 jest.mock('./row-select', () => ({ TableRowSelect: () => null }));
 jest.mock('../context', () => ({
+	useIncludedStatus: () => () => true,
 	useReportsBinding: () => ({ binding: mockBinding }),
 	useReportsData: () => ({ allOrders: [] }),
 	useReportsSelection: () => ({ unselectedRowIds: {}, setUnselectedRowIds: jest.fn() }),

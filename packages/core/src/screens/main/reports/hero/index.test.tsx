@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { of, Subject } from 'rxjs';
 
@@ -314,4 +314,24 @@ it('shows flat deltas in percent and the companions own units', () => {
 	expect(screen.getByTestId('hero-delta').textContent).toBe('±0% vs yesterday');
 	for (const name of ['orders', 'average', 'items'])
 		expect(screen.getByTestId(`hero-${name}-delta`).textContent).toBe('±0');
+});
+// The live cutoff moves with the clock, so a report left open does not compare against a stale hour.
+it('advances a live comparison cutoff as the clock moves', () => {
+	setup();
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('1/2');
+	act(() => {
+		jest.advanceTimersByTime(6 * 60 * 60 * 1000 + 60_000);
+	});
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('2/2');
+});
+// Money differences are taken at the displayed precision: two figures that read the same never differ.
+it('shows no money difference below the store precision', () => {
+	setup({
+		comparison: resource([
+			{ ...previous[0], total: '15.004' },
+			{ ...previous[0], uuid: 'other', total: '14.998' },
+		] as ReportOrder[]),
+	});
+	expect(screen.getByTestId('hero-average').textContent).toBe('£15.00');
+	expect(screen.getByTestId('hero-average-delta').textContent).toBe('±0');
 });

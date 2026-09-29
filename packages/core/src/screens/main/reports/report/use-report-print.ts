@@ -9,7 +9,7 @@ import { useRegisterNames } from '../../../../services/register/use-register-nam
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
-import { inZone, useStoreDay } from '../../../../hooks/use-store-day';
+import { inZone, useStoreDay, useViewedStore } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
@@ -17,23 +17,35 @@ import { usePrint } from '../../hooks/use-print';
 import { useReportsData } from '../context';
 import { useQueryState } from '../../../../query';
 
-export function useReportPrint() {
+/** The printed report is the viewed store's (a Pro cashier may report on another store). */
+export function useReportPrint(storeId?: number) {
 	const t = useT();
 	const registerNames = useRegisterNames();
 	const contentRef = React.useRef<ViewInstance>(null);
 	const { store, wpCredentials } = useStoreSession();
-	const storeName = useDocField(store, (value) => value.name) as string;
-	const num_decimals = useDocField(store, (value) => value.price_num_decimals) as number;
+	const viewed = useDocField(useViewedStore(storeId), (value) => value);
+	const sessionName = useDocField(store, (value) => value.name);
+	const storeName = (viewed?.name ?? sessionName) as string;
+	const num_decimals = viewed?.price_num_decimals as number;
 	const { selectedOrders } = useReportsData();
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
 	);
 
-	const { format: formatCurrency } = useCurrencyFormat();
+	const options = {
+		decimalScale: viewed?.price_num_decimals,
+		decimalSeparator: viewed?.price_decimal_sep,
+		thousandSeparator: viewed?.price_thousand_sep,
+	};
+	const { format: formatCurrency } = useCurrencyFormat({
+		...options,
+		currency: viewed?.currency,
+		currencyPosition: viewed?.currency_pos,
+	});
 	const { format: formatName } = useCustomerNameFormat();
-	const { format: formatNumber } = useNumberFormat();
+	const { format: formatNumber } = useNumberFormat(options);
 	const { formatDate } = useLocalDate();
-	const { timezone } = useStoreDay();
+	const { timezone } = useStoreDay(storeId);
 
 	/**
 	 * Calculate totals from selected orders
@@ -81,7 +93,7 @@ export function useReportPrint() {
 	const html = React.useMemo(() => {
 		return generateZReportHTML({
 			storeName,
-			storeId: store.id!,
+			storeId: viewed?.id ?? store.id!,
 			reportGenerated,
 			reportPeriod,
 			cashierName: formatName(wpCredentials.toJSON()),
@@ -144,6 +156,7 @@ export function useReportPrint() {
 		});
 	}, [
 		storeName,
+		viewed?.id,
 		store.id,
 		reportGenerated,
 		reportPeriod,

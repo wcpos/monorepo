@@ -96,6 +96,7 @@ jest.mock('../../hooks/use-print', () => ({
 }));
 jest.mock('../context', () => ({
 	useReportsData: () => ({ selectedOrders: [] }),
+	useReportsPeriod: () => ({ storeId: undefined }),
 }));
 
 describe('Report query-state dates', () => {

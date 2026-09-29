@@ -15,6 +15,7 @@ import { Text } from '@wcpos/components/text';
 
 import { ZReport } from './template';
 import { useReportPrint } from './use-report-print';
+import { useReportsPeriod } from '../context';
 import { useT } from '../../../../contexts/translations';
 
 /**
@@ -22,7 +23,7 @@ import { useT } from '../../../../contexts/translations';
  */
 export function Report() {
 	const t = useT();
-	const { print, isPrinting, contentRef } = useReportPrint();
+	const { print, isPrinting, contentRef } = useReportPrint(useReportsPeriod().storeId);
 
 	return (
 		<View testID="reports-content" className="h-full p-2 pt-0 pl-0">
