@@ -1,5 +1,5 @@
 import type { RxDatabaseBase, RxPlugin } from 'rxdb';
-type RegisteredDatabase = Pick<RxDatabaseBase<unknown, unknown>, 'name' | 'onClosed'>;
+type RegisteredDatabase = Pick<RxDatabaseBase<unknown, unknown>, 'name' | 'onClosed' | 'close'>;
 type MutableOnClosed = { onClosed: (() => void) | undefined };
 const openDatabasesByName = new Map<string, Set<RegisteredDatabase>>();
 export const rxDatabaseRegistryPlugin: RxPlugin = {
@@ -44,4 +44,13 @@ export function forceFreeDatabaseRegistration(databaseName: string): boolean {
 		freed = true;
 	}
 	return freed;
+}
+
+/** Finish live writes/close before a local-data reset terminates the web worker. */
+export async function closeRegisteredDatabases(): Promise<void> {
+	await Promise.all(
+		[...openDatabasesByName.values()].flatMap((databases) =>
+			[...databases].map((database) => database.close())
+		)
+	);
 }

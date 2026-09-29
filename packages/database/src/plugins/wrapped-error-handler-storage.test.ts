@@ -12,6 +12,7 @@ import {
 	isStorageDegraded,
 	isStorageWorkerFailure,
 	noteStorageWriteDeadlinePassed,
+	reportStorageWorkerLost,
 	resetReportedCleanupFailures,
 	STORAGE_RPC_STALL_REPORT_MS,
 	STORAGE_RPC_WATCHDOG_MS,
@@ -1235,6 +1236,35 @@ describe('wrappedErrorHandlerStorage', () => {
 				storage: createMockStorage(instance),
 			}).createStorageInstance({ databaseName } as any);
 		}
+
+		it('reports worker events for every database and before the first instance', async () => {
+			reportStorageWorkerLost(undefined, 'script load failed');
+			expect(isStorageDegraded()).toBe(true);
+			clearStorageDegradation();
+			const first = await wrap('events-first', { close: jest.fn(async () => undefined) });
+			const second = await wrap('events-second', { close: jest.fn(async () => undefined) });
+			reportStorageWorkerLost(undefined, 'worker crashed');
+			expect(isStorageDegraded('events-first')).toBe(true);
+			expect(isStorageDegraded('events-second')).toBe(true);
+			await first.close();
+			await second.close();
+		});
+
+		it.each(['query', 'createStorageInstance'])('calls onCondemn for silent %s', async (method) => {
+			const onCondemn = jest.fn();
+			const instance = createMockStorageInstance({
+				query: jest.fn(() => new Promise<never>(() => undefined)),
+			});
+			const storage = createMockStorage(instance);
+			if (method === 'createStorageInstance') storage.createStorageInstance = pending() as never;
+			const wrapped = wrappedErrorHandlerStorage({ storage, onCondemn });
+			const opening = wrapped.createStorageInstance({ databaseName: 'condemn-db' } as never);
+			const call = method === 'query' ? (await opening).query({} as never) : opening;
+			const assertion = expect(call).rejects.toMatchObject({ name: 'StorageWorkerTimeoutError' });
+			await jest.advanceTimersByTimeAsync(STORAGE_RPC_WATCHDOG_MS * 2 + 2);
+			await assertion;
+			expect(onCondemn).toHaveBeenCalledTimes(1);
+		});
 
 		it('trips the latch when an RPC never comes back', async () => {
 			const wrappedInstance = await wrap('dead-worker-db', {

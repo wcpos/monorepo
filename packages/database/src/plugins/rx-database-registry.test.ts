@@ -5,7 +5,11 @@ import {
 	type RxStorageMemoryInstanceCreationOptions,
 } from 'rxdb/plugins/storage-memory';
 
-import { forceFreeDatabaseRegistration, rxDatabaseRegistryPlugin } from './rx-database-registry';
+import {
+	closeRegisteredDatabases,
+	forceFreeDatabaseRegistration,
+	rxDatabaseRegistryPlugin,
+} from './rx-database-registry';
 
 import type { RxDatabase, RxStorageInstanceCreationParams } from 'rxdb';
 
@@ -62,6 +66,13 @@ beforeAll(() => {
 });
 
 describe('rx database registry plugin', () => {
+	it('closes every registered database before local-data removal', async () => {
+		const db = await createRxDatabase({ name: 'clear-registered', storage: getRxStorageMemory() });
+		await closeRegisteredDatabases();
+		expect(db.closed).toBe(true);
+		expect(forceFreeDatabaseRegistration(db.name)).toBe(false);
+	});
+
 	it('frees a wedged database registration so the same name can reopen', async () => {
 		const { storage, closeControls } = createControlledCloseStorage();
 		const db1 = await createRxDatabase({ name: 'same-name', storage });

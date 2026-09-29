@@ -35,7 +35,11 @@ const errorHandledStorage = { name: 'error-handled-storage' };
 const validatedStorage = { name: 'validated-storage' };
 
 jest.mock('../storage', () => ({ getNativeNewStorage: () => rawStorage }));
-jest.mock('../storage/index.web', () => ({ getWebNewStorage: () => rawStorage }));
+jest.mock('../storage/index.web', () => ({
+	getWebNewStorage: () => rawStorage,
+	onStorageWorkerLost: jest.fn(),
+	terminateStorageWorker: jest.fn(),
+}));
 jest.mock('../storage/index.electron', () => ({ getElectronNewStorage: () => rawStorage }));
 jest.mock('../../plugins/wrapped-error-handler-storage', () => ({
 	wrappedErrorHandlerStorage: () => errorHandledStorage,

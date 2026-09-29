@@ -1,3 +1,6 @@
+import { terminateStorageWorker } from './adapters/storage/index.web';
+import { SQLITE_POOL_DIRECTORY } from './adapters/storage/sqlite-pool';
+import { closeRegisteredDatabases } from './plugins/rx-database-registry';
 import {
 	APP_DATABASE_PREFIXES,
 	containsScopeDatabaseName,
@@ -59,7 +62,7 @@ const deleteOpfsDatabases = async () => {
 	const entriesToDelete: string[] = [];
 
 	for await (const [name] of root as unknown as AsyncIterable<[string, FileSystemHandle]>) {
-		if (isKnownAppOpfsEntry(name)) {
+		if (name === SQLITE_POOL_DIRECTORY || isKnownAppOpfsEntry(name)) {
 			entriesToDelete.push(name);
 		}
 	}
@@ -69,6 +72,8 @@ const deleteOpfsDatabases = async () => {
 };
 
 export const clearAllDB = async (): Promise<ClearDBResult> => {
+	await closeRegisteredDatabases();
+	terminateStorageWorker(); // Release the pool's sync access handles before recursive removal.
 	const [deletedIndexedDbDatabases, deletedOpfsDatabases] = await Promise.all([
 		deleteIndexedDbDatabases(),
 		deleteOpfsDatabases(),

@@ -1,12 +1,12 @@
 Storage adapters for each platform.
 
-## Web - OPFS
+## Web - SQLite SAHPool
 
-The web adapter uses a web worker to offload the database operations to a separate thread and stores data in OPFS.
+The web adapter runs SQLite wasm in a dedicated module worker over the OPFS SAHPool VFS, with exclusive locking, WAL, and synchronous NORMAL (#2242, #2144).
 
-## Electron - filesystem-node-ipc
+## Electron - SQLite IPC
 
-The electron adapter uses the filesystem-node IPC bridge for database storage.
+The Electron renderer uses an IPC bridge to SQLite in the main process.
 
 ## Native - Expo Filesystem
 
@@ -16,14 +16,14 @@ The expo adapter uses the Expo Filesystem-backed storage implementation.
 
 **Status:** ruled, standing, in two eras.
 
-- **Era 1 — `opfs-filesystem` (today, and all of 1.10.x).** Owner ruling 2026-08-06, implemented by #1057 (closes #1045, #1055, #1050-web). Supersedes #1049 and wcpos/electron#325. **Web is `true`.**
-- **Era 2 — `sqlite-sahpool` (2.0).** Owner ruling 2026-09-21, wayfinder #2146 under map #2137. **Web becomes `false`, with the engine and not before.**
+- **Era 1 — `opfs-filesystem` (previous era, retained on 1.10.x).** Owner ruling 2026-08-06, implemented by #1057 (closes #1045, #1055, #1050-web). Supersedes #1049 and wcpos/electron#325. **Web is `true`.**
+- **Era 2 — `sqlite-sahpool` (current 2.0 adapter).** Owner ruling 2026-09-21, wayfinder #2146 under map #2137. **Web is `false`, switched with the engine.**
 
 The two values were never independent settings, so they are pinned as a **pair**: `adapters/storage/storage-engines.ts` declares the current engine and the `multiInstance` each engine requires, and `multi-instance-ruling.test.ts` asserts them together. Changing the engine without the flag, or the flag without the engine, fails that test and the failure names the half you forgot. Every earlier version of this pin asserted the literal `true`, and a literal can be argued with — it was re-proposed as `false` five times.
 
-**Which era applies to the lane you are on:** `main` / 1.10.x is Era 1 and stays there; `false` on web is still the #1049 data-loss path on that lane. `next` is Era 1 **until the engine migration lands** and Era 2 after it. Flipping the flag on `next` ahead of the engine reintroduces #1049.
+**Which era applies to the lane you are on:** `main` / 1.10.x is Era 1 and stays there; `false` on web is still the #1049 data-loss path on that lane. This #2242 worktree selects Era 2; the change must not be backported to the Era 1 lane. Flipping the flag on `next` ahead of the engine reintroduces #1049.
 
-## Era 1 — `opfs-filesystem`: web is `true`
+## Era 1 — `opfs-filesystem`: historical web `true`
 
 | Platform | `multiInstance` | Why |
 |---|---|---|
@@ -31,7 +31,7 @@ The two values were never independent settings, so they are pinned as a **pair**
 | Electron (`index.electron.ts`) | `false` | Every window proxies over IPC to one main-process storage. |
 | Native (`index.ts`) | `false` | One storage per app process. |
 
-Cashiers open the POS in several tabs and do unexpected things. We support it rather than forbid it. On web, one tab wins a `navigator.locks` exclusive lease and owns the write plane (drain, conflict resolution, recovery). `multiInstance: true` is what makes that work: it gives the follower tabs a coherent read view over BroadcastChannel and gives RxDB's own leader election a single tab to run cleanup and recovery in. Two database paths exist on web and only one has a fallback: the engine-scope databases (`apps/main/lib/create-app-engine.ts`) set `multiInstance` from `webLocksAvailable`, so a browser without `navigator.locks` degrades them to single-writer `false` alongside the write-leader degrade. The user and store databases built from this adapter's `defaultConfig` are `true` unconditionally; they have no fallback, and none is planned, because without Web Locks there is no leader to gate recovery on either way. The temporary database is outside this ruling: it comes from the ephemeral adapter, which is in-memory and `multiInstance: false` on every platform.
+In Era 1, cashiers open the POS in several tabs and do unexpected things. We support it rather than forbid it. On web, one tab wins a `navigator.locks` exclusive lease and owns the write plane (drain, conflict resolution, recovery). `multiInstance: true` is what makes that work: it gives the follower tabs a coherent read view over BroadcastChannel and gives RxDB's own leader election a single tab to run cleanup and recovery in. Two database paths exist on web and only one has a fallback: the engine-scope databases (`apps/main/lib/create-app-engine.ts`) set `multiInstance` from `webLocksAvailable`, so a browser without `navigator.locks` degrades them to single-writer `false` alongside the write-leader degrade. The user and store databases built from this adapter's `defaultConfig` are `true` unconditionally; they have no fallback, and none is planned, because without Web Locks there is no leader to gate recovery on either way. The temporary database is outside this ruling: it comes from the ephemeral adapter, which is in-memory and `multiInstance: false` on every platform.
 
 ## Why `false` on web is a data-loss path, not a fix
 
@@ -49,9 +49,13 @@ The defect is the gate. #1057 removed the config-flag refusal from `scripts/opfs
 - **What remains, and why it is upstream work.** If two tabs' batches for one document reach a third tab out of order, that document reverts to the older revision on that peer and can be left with two rows for itself: a stale secondary row, or — when the primary-index string changed between the two revisions and the newer batch's `A` landed on its fast path — a duplicate primary row that `metaIdMap` no longer points at, which `reconcileSecondaryIndexes` then refuses as `duplicate-primary-id`. An ordinary later write does not clear these (it only deletes the string it knows); an index rebuild does. No neighbour is touched. The receiver has no ordering signal: byte-range monotonicity breaks compaction propagation, and a same-document scan per secondary insert is O(n) on the boot replay. Closing it needs a revision or sequence in premium's op contract.
 - **The gate itself (#1982) is belt-and-braces.** With identity-checked ops, the leadership handoff double-drop is harmless. #1982 now also rechecks primary absence inside the cleanup lock on the stale-secondary path, tracks ownership per RxDatabase instance (a duplicate close no longer revokes the survivor), and awaits the worker's acknowledgement of a revocation before rxdb's elector dies. Until it lands, refused repairs on web leave a row unrepaired; they do not corrupt anything.
 
-## Era 2 — `sqlite-sahpool`: web becomes `false`, and multi-tab ends
+## Era 2 — `sqlite-sahpool`: web is `false`, and multi-tab ends
 
 Ruled 2026-09-21 (#2146, under storage-engine map #2137). At 2.0 web runs SQLite — the official `@sqlite.org/sqlite-wasm` build on the `opfs-sahpool` VFS, in WAL — in one dedicated worker owned by the one live tab.
+
+The page constructs no Worker at import or metadata access. Its first storage open lazily constructs premium's `mode: 'one'` client; that client reuses one module worker across collection closes/reopens. `error` and `messageerror` feed the existing worker-lost degradation signal. The read/create watchdog terminates a condemned worker, releasing its pool handles; `terminate()` itself emits no error, so silent loss still needs the watchdog. Recovery is a page reload, not an in-tab worker restart. Existing write-outcome uncertainty remains: termination is not proof a pending write did not commit.
+
+**PR 3A boundary:** the engine, delivery, and lifecycle seams are implemented here. The cooperative ownership gate, parked screen, and takeover described below are PR 3B requirements, not yet implemented. Do not deploy this half alone as a complete multi-tab solution.
 
 **This is a consequence of the engine, not a change of mind about multi-tab.** `opfs-sahpool` holds exclusive OPFS access handles for the whole origin, and a second worker can never install the same pool. The shape Era 1 ships — every tab its own dedicated worker over the same files — is simply not available on SQLite. The only thing that was open is what a second tab does instead: route its storage calls into the first tab's worker, or be refused. **Refused.**
 
@@ -63,7 +67,7 @@ Ruled 2026-09-21 (#2146, under storage-engine map #2137). At 2.0 web runs SQLite
 
 Era 1's ruling is **superseded, not overturned on its merits**. Its stated purpose was that cashiers open several tabs and do unexpected things, so we support it rather than forbid it — that is, *do not lose data* when they do. A take-over screen satisfies that: the second tab never opens a second storage, so #1049's route (two tabs each repairing the same file) cannot exist. What is given up is two live tills, which was never the thing asked for, and it is given up for durability plus roughly a hundredfold on the sync hot path (#2143, #2144).
 
-The topology that replaces it, in one line each — full reasoning in #2146's resolution:
+The PR 3B topology that must replace it, in one line each — full reasoning in #2146's resolution:
 
 - **Take-over is cooperative.** The second tab asks over BroadcastChannel; the holder closes its databases, terminates its worker, releases the Web Lock and parks on the same "POS is open in another tab" screen. Stealing the lock is wrong: a stolen holder keeps running and keeps the files.
 - **Refusal is bounded** — only while a payment capture or a storage write is in flight, then the handover proceeds anyway.
