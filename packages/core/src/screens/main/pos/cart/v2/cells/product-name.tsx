@@ -58,9 +58,12 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 		<VStack className="w-full gap-0">
 			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
 			<View className="w-full">
+				{/* Two lines: the name is what the cashier reads, and the amount columns hold
+				    their width at every scale step, so a long name wraps rather than truncates. */}
 				<EditableField
 					variant="ghost"
 					bold={false}
+					numberOfLines={2}
 					value={item.name}
 					onChangeText={(name) => updateLineItem(uuid, { name })}
 				/>

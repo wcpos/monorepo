@@ -24,6 +24,7 @@ export function ShippingTitle({ row }: CellContext<Props, 'name'>) {
 			<EditableField
 				variant="ghost"
 				bold={false}
+				numberOfLines={2}
 				value={item.method_title}
 				onChangeText={(method_title) => updateShippingLine(uuid, { method_title })}
 			/>

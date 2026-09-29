@@ -46,6 +46,7 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 				<EditableField
 					variant="ghost"
 					bold={false}
+					numberOfLines={2}
 					value={item.name ?? undefined}
 					onChangeText={(name) => updateFeeLine(uuid, { name })}
 				/>
