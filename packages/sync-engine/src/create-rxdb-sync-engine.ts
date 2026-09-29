@@ -164,6 +164,7 @@ export type {
 	CustomerBrowseDimensions,
 	EngineRequirement,
 	OrderBrowseDimensions,
+	RefundBrowseDimensions,
 	ProductBrowseDimensions,
 	RequirementHandle,
 } from './require-plane';

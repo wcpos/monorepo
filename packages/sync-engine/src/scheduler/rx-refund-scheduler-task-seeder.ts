@@ -1,5 +1,13 @@
 import type { RemoteId } from '@wcpos/sync-core';
 
+import {
+	REFUND_BROWSE_WINDOW_GRAMMAR,
+	type RefundBrowserSchedulerDescriptor,
+} from './refund-browser-scheduler-descriptor';
+import {
+	seedBrowseWindowLane,
+	type SeedBrowseWindowLaneInput,
+} from './rx-browse-window-lane-seeder';
 import { withSchedulerSeedLedgerRecovery } from '../local-coverage/ledger-storage-recovery';
 import { refundHistoryQueryKey, refundParentQueryKey } from './refund-lane-descriptor';
 import { seedPersistedSchedulerTasks } from './rx-scheduler-task-seeder';
@@ -42,3 +50,24 @@ export const seedRefundWindowLane = (input: SeedPosBootstrapLanesInput) =>
 export const seedRefundParentLane = (
 	input: SeedPosBootstrapLanesInput & { parentRemoteId: RemoteId; coalesceInFlight?: boolean }
 ) => seedRefundLane(refundParentQueryKey(input.parentRemoteId), input, input.coalesceInFlight);
+
+export function seedRefundBrowseSchedulerTask(
+	input: Omit<
+		SeedBrowseWindowLaneInput<RefundBrowserSchedulerDescriptor>,
+		'window' | 'limit' | 'mode'
+	> & { descriptor: RefundBrowserSchedulerDescriptor }
+) {
+	return seedBrowseWindowLane(
+		{
+			grammar: REFUND_BROWSE_WINDOW_GRAMMAR,
+			defaultPriority: 700,
+			defaultCompletedDedupeForMs: 30_000,
+		},
+		{
+			...input,
+			window: input.descriptor,
+			limit: input.descriptor.limit,
+			mode: input.descriptor.complete ? 'greedy' : 'windowed',
+		}
+	);
+}

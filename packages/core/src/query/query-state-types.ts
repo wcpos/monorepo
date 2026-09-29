@@ -12,6 +12,7 @@ export type VariationMatch = { id: number; name: string; option: string };
 export type LogKindFilter = 'error' | 'warn' | 'action' | 'sync' | 'info' | 'debug';
 
 export interface FiltersByCollection {
+	refunds: { dateRange?: DateRangeFilter };
 	products: {
 		categories: number[];
 		tags: number[];
@@ -50,6 +51,7 @@ type PriceSort = 'price' | 'regular_price' | 'sale_price';
 type StockSort = 'stock_quantity' | 'stock_status';
 
 export interface SortFieldsByCollection {
+	refunds: 'date_created_gmt';
 	products:
 		| 'id'
 		| 'name'

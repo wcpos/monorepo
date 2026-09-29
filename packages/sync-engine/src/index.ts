@@ -14,6 +14,7 @@ export {
 	type EngineStatus,
 	type CustomerBrowseDimensions,
 	type OrderBrowseDimensions,
+	type RefundBrowseDimensions,
 	type ProductBrowseDimensions,
 	type RequirementHandle,
 	type RxdbSyncEngine,

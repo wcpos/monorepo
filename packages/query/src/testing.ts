@@ -10,6 +10,7 @@ import {
 	memoryEngineStorage,
 	orderBrowserQueryKey,
 	productBrowseWindowQueryKeyFromDimensions,
+	refundBrowserQueryKey,
 	searchLaneQueryKey,
 } from '@wcpos/sync-engine/testing';
 import type {
@@ -64,7 +65,7 @@ type DataCollection =
  * speed. This is what `executeAdapterQuery` reads (`collection.database`).
  */
 /** Re-exported so lane-identity tests can assert on the canonical key the engine builds. */
-export { orderBrowserQueryKey };
+export { orderBrowserQueryKey, refundBrowserQueryKey };
 
 export async function createEngineDatabase(
 	collections: readonly DataCollection[] = ['products', 'variations', 'orders']
@@ -145,6 +146,7 @@ export interface RecordedSearchRequirement {
 
 const requirementQueryKey = (requirement: EngineRequirement): string | null => {
 	if (requirement.kind === 'search') return searchLaneQueryKey(requirement);
+	if (requirement.kind === 'refunds-browse') return refundBrowserQueryKey(requirement);
 	if (requirement.kind === 'orders-browse') return orderBrowserQueryKey(requirement);
 	if (requirement.kind === 'product-browse') {
 		return productBrowseWindowQueryKeyFromDimensions(requirement);

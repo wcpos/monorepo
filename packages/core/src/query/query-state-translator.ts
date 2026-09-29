@@ -37,6 +37,9 @@ const mappedEntry = (mapping: WireField, operator: Operator = 'value'): MappedFi
 });
 
 export const FILTER_TRANSLATORS = {
+	refunds: {
+		dateRange: mappedEntry(collectionMap.refunds.fields.date_created_gmt, 'date-range'),
+	},
 	products: {
 		categories: mappedEntry(collectionMap.products.fields.categories, 'taxonomy-many'),
 		tags: mappedEntry(collectionMap.products.fields.tags, 'taxonomy-many'),
@@ -302,6 +305,7 @@ function requirementId(id: string, kind: EngineRequirement['kind']): string {
 		search: 'search',
 		refresh: 'reference-refresh',
 		'orders-browse': 'orders-browse',
+		'refunds-browse': 'refunds-browse',
 		'product-browse': 'products-browse-window',
 		'customer-browse': 'customers-browse-window',
 		'refunds-by-parent': 'refunds-by-parent',
@@ -466,7 +470,25 @@ export function compileQuery<C extends Exclude<CollectionKey, 'logs'>>(
 		!options.residual &&
 		active.every(({ translator }) => translator.mapping.wireFace !== 'local-only') &&
 		(!search || collection === 'orders');
-	if (collection === 'orders') {
+	if (collection === 'refunds') {
+		const filters = state.filters as FiltersOf<'refunds'>;
+		const after = orderRangeBoundSeconds(filters.dateRange?.from);
+		const before = orderRangeBoundSeconds(filters.dateRange?.to);
+		const limit = state.limit === Number.MAX_SAFE_INTEGER ? 'all' : state.limit;
+		represented &&=
+			limit === 'all' || (uiSortField === 'date_created_gmt' && state.sort.direction === 'desc');
+		if (after === undefined || before === undefined || after > before) represented = false;
+		else
+			demand.push({
+				id: requirementId(options.id, 'refunds-browse'),
+				collection: 'refunds',
+				kind: 'refunds-browse',
+				after,
+				before,
+				limit,
+				priority: 700,
+			});
+	} else if (collection === 'orders') {
 		const wooOrderby = wooOrderbyFor('orders', uiSortField);
 		const dimensions: OrderBrowseDimensions = {
 			...(state.limit !== undefined ? { limit: state.limit } : {}),

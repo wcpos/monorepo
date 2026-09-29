@@ -1,8 +1,10 @@
-import { assertBulkSuccess } from '@wcpos/sync-core';
-import type { SyncObserver } from '@wcpos/sync-core';
 /** The persisted scheduler drain for apps/main. One context serves every supported
  * collection; this module owns the registry and its task-support predicates. */
 
+import { assertBulkSuccess } from '@wcpos/sync-core';
+import type { SyncObserver } from '@wcpos/sync-core';
+
+import { parseRefundBrowserSchedulerDescriptor } from './refund-browser-scheduler-descriptor';
 import {
 	ledgerRebuiltSchedulerTaskRunnerResult,
 	type PersistedSchedulerTaskRunnerResult,
@@ -449,9 +451,13 @@ function createEngineSchedulerFetcherRegistry(
 			name: 'refunds',
 			supportsTask: (task) =>
 				task.collection === 'refunds' &&
-				task.mode === 'greedy' &&
 				hasNoTargetedIds(task) &&
-				parseRefundLaneQueryKey(task.queryKey) !== null,
+				((task.mode === 'greedy' && parseRefundLaneQueryKey(task.queryKey) !== null) ||
+					(parseRefundBrowserSchedulerDescriptor(task.queryKey) !== null &&
+						task.mode ===
+							(parseRefundBrowserSchedulerDescriptor(task.queryKey)!.complete
+								? 'greedy'
+								: 'windowed'))),
 			fetcher: createRefundsSchedulerFetcher({
 				scope: input.scope,
 				...shared,
@@ -605,7 +611,7 @@ export async function runEngineSchedulerDrain(
 				getNowMs,
 				leaseForMs: ORDER_SCHEDULER_LEASE_FOR_MS,
 				retryAfterMs: ORDER_SCHEDULER_RETRY_AFTER_MS,
-				// A history/parent walk is exhausted, not capped at the ordinary 100 pages.
+				// Refund limits count invocations: pages for history/parent, ranged passes for browse.
 				maxRequestsForTask: (task) =>
 					task.collection === 'refunds'
 						? (input.maxRequestsPerTask ?? REFUND_WALK_MAX_REQUESTS)

@@ -91,6 +91,7 @@ describe('query bindings', () => {
 			'variations',
 			'customers',
 			'orders',
+			'refunds',
 			'taxRates',
 			'categories',
 			'coupons',
@@ -508,6 +509,57 @@ describe('query bindings', () => {
 			},
 		});
 		await waitFor(() => expect(current(result.current.resource)?.hits).toEqual([]));
+	});
+
+	it("useCollectionBinding('refunds', …) declares the requirement and serves exact-boundary local rows in the window", async () => {
+		await engineDB.collections.refunds.bulkInsert(
+			[
+				['1', '2026-09-01T00:00:00'],
+				['2', '2026-09-02T00:00:00'],
+				['3', '2026-09-03T00:00:00'],
+				['4', '2026-09-04T00:00:00'],
+				['5', '2026-08-31T23:59:59'],
+			].map(([id, date]) => ({
+				uuid: `woo-refund:${id}`,
+				remoteId: id,
+				sessionId: '',
+				payload: {
+					id: Number(id),
+					parent_id: 42,
+					date_created_gmt: date,
+					meta_data: [],
+				},
+				local: { dirty: false, pendingMutationIds: [] },
+				sync: { revision: '', partial: false, source: 'woo-rest' },
+			}))
+		);
+		const state: QueryStateOf<'refunds'> = {
+			search: '',
+			filters: {
+				dateRange: { from: '2026-09-01T00:00:00', to: '2026-09-03T00:00:00' },
+			},
+			sort: { field: 'date_created_gmt', direction: 'desc' },
+			limit: Number.MAX_SAFE_INTEGER,
+		};
+		const { result } = renderHook(() => useCollectionBinding('refunds', state), {
+			wrapper: Provider,
+		});
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual([
+				'woo-refund:3',
+				'woo-refund:2',
+				'woo-refund:1',
+			])
+		);
+		expect(engine.requireCalls).toContainEqual(
+			expect.objectContaining({
+				kind: 'refunds-browse',
+				collection: 'refunds',
+				after: 1788220800,
+				before: 1788393600,
+				limit: 'all',
+			})
+		);
 	});
 
 	it('declares the orders query descriptor for status/customer/date-filtered windows', async () => {
