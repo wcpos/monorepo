@@ -3,6 +3,8 @@ import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 import { exposeWorkerRxStorage } from 'rxdb-premium/plugins/storage-worker';
 
 import {
+	SQLITE_POOL_FILES_PER_DATABASE,
+	SQLITE_POOL_GROWTH_STEP,
 	SQLITE_POOL_INITIAL_CAPACITY,
 	SQLITE_POOL_NAME,
 } from '../packages/database/src/adapters/storage/sqlite-pool.ts';
@@ -19,9 +21,15 @@ const sqliteBasics = getSQLiteBasicsOo1({
 			sqlite3.installOpfsSAHPoolVfs({
 				name: SQLITE_POOL_NAME,
 				initialCapacity: SQLITE_POOL_INITIAL_CAPACITY,
+				SQLITE_POOL_FILES_PER_DATABASE,
+				SQLITE_POOL_GROWTH_STEP,
 			})
 		);
-		return new (await ready).OpfsSAHPoolDb('/' + name);
+		const pool = await ready;
+		if (pool.getFileCount() + SQLITE_POOL_FILES_PER_DATABASE > pool.getCapacity()) {
+			await pool.addCapacity(SQLITE_POOL_GROWTH_STEP);
+		}
+		return new pool.OpfsSAHPoolDb('/' + name);
 	},
 });
 // Expose synchronously: awaiting wasm first loses the page's first RPC (#2242 spike).

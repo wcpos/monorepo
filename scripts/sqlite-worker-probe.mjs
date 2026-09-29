@@ -12,6 +12,7 @@ const dir = await mkdtemp(join(tmpdir(), 'wcpos-sqlite-probe-'));
 const pageEntry = `
 import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
 import { fillWithDefaultSettings } from 'rxdb/plugins/core';
+import { SQLITE_POOL_INITIAL_CAPACITY } from './packages/database/src/adapters/storage/sqlite-pool.ts';
 const storage = getRxStorageWorker({
   workerInput: () => {
     const worker = new Worker('/sqlite.worker.js?ver=probe', { type: 'module' });
@@ -41,7 +42,19 @@ const params = {
   instance = await storage.createStorageInstance(params);
   await read();
   await instance.close();
-  globalThis.probeResult = 'PASS write/read/close/reopen';
+  // Keep every pair open: initialCapacity must not remain a hard ceiling.
+  const instances = [];
+  for (let i = 0; i <= SQLITE_POOL_INITIAL_CAPACITY / 2; i++) {
+    const extra = await storage.createStorageInstance({ ...params, databaseName: 'growth-' + i });
+    instances.push(extra);
+  }
+  const last = instances.at(-1);
+  const rows = await last.findDocumentsById(['growth'], false);
+  if (!rows.length) await last.bulkWrite([{ document: { id: 'growth', n: 99, _deleted: false,
+    _attachments: {}, _rev: '1-growth', _meta: { lwt: Date.now() } } }], 'growth-probe');
+  if ((await last.findDocumentsById(['growth'], false))[0]?.n !== 99) throw new Error('growth read failed');
+  await Promise.all(instances.map(instance => instance.close()));
+  globalThis.probeResult = 'PASS write/read/close/reopen; growth beyond initial capacity';
 })().catch((error) => { globalThis.probeError = error.message; });
 `;
 let browser;
