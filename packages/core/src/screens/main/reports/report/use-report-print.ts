@@ -20,7 +20,7 @@ import { useQueryState } from '../../../../query';
 /** The printed report is the viewed store's (a Pro cashier may report on another store). */
 export function useReportPrint(storeId?: number) {
 	const t = useT();
-	const registerNames = useRegisterNames();
+	const registerNames = useRegisterNames(storeId);
 	const contentRef = React.useRef<ViewInstance>(null);
 	const { store } = useStoreSession();
 	const cashier = useReportCashier();

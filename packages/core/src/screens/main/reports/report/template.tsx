@@ -24,7 +24,7 @@ import { useQueryState } from '../../../../query';
 /** The report is the viewed store's (a Pro cashier may report on another store than the till's). */
 export function ZReport({ storeId }: { storeId?: number } = {}) {
 	const t = useT();
-	const registerNames = useRegisterNames();
+	const registerNames = useRegisterNames(storeId);
 	const { store } = useStoreSession();
 	const cashier = useReportCashier();
 	const viewed = useDocField(useViewedStore(storeId), (value) => value);

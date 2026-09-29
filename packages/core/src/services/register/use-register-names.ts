@@ -1,9 +1,12 @@
 import * as React from 'react';
 
-import { useRegisterBinding } from './use-register-binding';
+import { useStoreSession } from '../../contexts/app-state';
+import { useRegisterDirectory } from './use-register-binding';
 
-export function useRegisterNames(): Record<string, string> {
-	const { registers } = useRegisterBinding();
+/** Register id → name for a store: the viewed store when given, otherwise the till's. */
+export function useRegisterNames(storeId?: number): Record<string, string> {
+	const { store } = useStoreSession();
+	const { registers } = useRegisterDirectory(storeId ?? store.id);
 	return React.useMemo(
 		() => Object.fromEntries(registers.map(({ id, name }) => [id, name])),
 		[registers]
