@@ -253,3 +253,30 @@ describe('mergeWithInitalValues', () => {
 		expect(currentState.position).toBe('right');
 	});
 });
+
+// Authored status sizing must displace the legacy icon width without undoing user preferences.
+it('gives orders status room for its label while keeping stored order and visibility', async () => {
+	const current: Record<string, unknown> = {
+		columns: [
+			{ key: 'number', show: true },
+			{ key: 'status', width: 45, hideLabel: true, show: false },
+		],
+	};
+	const state = {
+		get: () => current,
+		set: async (key: string, update: (value: unknown) => unknown) => {
+			current[key] = update(current[key]);
+		},
+	};
+	await mergeWithInitalValues('orders', state as never);
+	const columns = current.columns as {
+		key: string;
+		show: boolean;
+		width?: number;
+		flex?: number;
+		hideLabel?: boolean;
+	}[];
+	expect(columns.slice(0, 2).map((c) => c.key)).toEqual(['number', 'status']);
+	expect(columns[1]).toMatchObject({ show: false, flex: 1, hideLabel: false });
+	expect(columns[1].width).toBeUndefined();
+});
