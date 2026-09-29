@@ -1,10 +1,10 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-import { mockState, setOrders } from '../cards/test-utils';
-import { preparePanel, room } from './test-utils';
+import { mockCredentials, mockProducts, mockState, setOrders } from '../cards/test-utils';
+import { mockPrintDocument, preparePanel, room } from './test-utils';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import { ReportRows } from './report-rows';
 
@@ -12,6 +12,12 @@ import type * as Context from '../context';
 
 beforeEach(() => {
 	preparePanel();
+	mockPrintDocument.templates = [{ id: 7, title: 'Sales', offline_capable: true }];
+	mockPrintDocument.templatesReady = true;
+	mockPrintDocument.documentError = null;
+	mockPrintDocument.print.mockReset().mockResolvedValue(true);
+	mockCredentials.next([]);
+	mockProducts.next([]);
 	mockState.screenSize = 'lg';
 	mockState.register = 'r';
 	mockState.names = { r: 'Front' };
@@ -85,4 +91,69 @@ it('renders labelled phone rows and a period-neutral empty line', () => {
 	expect(screen.getByTestId('rows-total').textContent).toBe('All products£3.00');
 	view.rerender(<ReportRows spec={{ ...spec, align: [...spec.align], rows: [] }} testID="rows" />);
 	expect(screen.getByText('Nothing in this period')).toBeTruthy();
+});
+
+// Each gate prevents a blank/incomplete report; its reason must be visible, not a dead button.
+it('Print waits for the templates with a reason', () => {
+	mockPrintDocument.templatesReady = false;
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(true);
+	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe('Loading templates');
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	expect(mockPrintDocument.print).not.toHaveBeenCalled();
+});
+
+it.each(['categories', 'cashiers', 'orders'])(
+	"Print waits for the panel's data: %s",
+	async (panel) => {
+		room();
+		const open = screen.getByTestId(`card-${panel}-open`);
+		act(() => {
+			mockProducts.next(undefined);
+			mockCredentials.next(undefined);
+			fireEvent.click(open);
+		});
+		expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(true);
+		expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe('Loading the report');
+		await act(async () => {
+			mockProducts.next([]);
+			mockCredentials.next([]);
+		});
+		await waitFor(() =>
+			expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(false)
+		);
+	}
+);
+it('no local template is said, not silently disabled', () => {
+	mockPrintDocument.templates = [];
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	expect((screen.getByTestId('detail-panel-print') as HTMLButtonElement).disabled).toBe(true);
+	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
+		'No template can print offline · manage templates in WP Admin'
+	);
+});
+it('a print that resolves false or rejects shows the message', async () => {
+	mockPrintDocument.print
+		.mockResolvedValueOnce(false)
+		.mockRejectedValueOnce(new Error('printer unavailable'));
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	for (let attempt = 0; attempt < 2; attempt++) {
+		fireEvent.click(screen.getByTestId('detail-panel-print'));
+		await waitFor(() =>
+			expect(screen.getByTestId('detail-panel-print-error').textContent).toBe(
+				'Could not print. Try again.'
+			)
+		);
+	}
+	fireEvent.click(screen.getByTestId('detail-panel-print'));
+	await waitFor(() => expect(screen.queryByTestId('detail-panel-print-error')).toBeNull());
+});
+it('shows a document error under the footer', () => {
+	mockPrintDocument.documentError = new Error('document unavailable');
+	room();
+	fireEvent.click(screen.getByTestId('card-payments-open'));
+	expect(screen.getByTestId('detail-panel-print-error').textContent).toBe('document unavailable');
 });

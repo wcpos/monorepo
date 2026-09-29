@@ -21,6 +21,14 @@ export function useActiveTemplates(
 	type: 'receipt' | 'report' | 'closure' = 'receipt',
 	storeId?: number
 ): TemplateDocument[] {
+	return useActiveTemplatesState(type, storeId).templates;
+}
+
+/** Template rows and the readiness of the same sync run, for local document hosts. */
+export function useActiveTemplatesState(
+	type: 'receipt' | 'report' | 'closure' = 'receipt',
+	storeId?: number
+): { templates: TemplateDocument[]; synced: boolean } {
 	const { store, storeDB } = useStoreSession();
 	const { license } = useAppInfo();
 	const isPro = !!license?.isPro;
@@ -29,7 +37,7 @@ export function useActiveTemplates(
 	// endpoint returns the full set in a single response (posts_per_page=-1) and
 	// ignores include/exclude, so greedy pagination is unnecessary and would loop
 	// forever re-fetching the same set. A single sync pass per poll is enough.
-	useTemplatesSync(type, storeId ?? store.id);
+	const { synced } = useTemplatesSync(type, storeId ?? store.id);
 
 	// Read per-store template assignments (will be empty until store schema v5)
 	type TemplateAssignment = { template_id: string | number; sort_order: number };
@@ -58,7 +66,7 @@ export function useActiveTemplates(
 	const allTemplates = useObservableState(allTemplates$, [] as TemplateDocument[]);
 
 	// Apply per-store filtering for Pro users
-	return React.useMemo(() => {
+	const templates = React.useMemo(() => {
 		if (type === 'closure' || !isPro || !activeTemplates || activeTemplates.length === 0) {
 			return allTemplates;
 		}
@@ -77,4 +85,5 @@ export function useActiveTemplates(
 
 		return filtered.length > 0 ? filtered : allTemplates;
 	}, [type, isPro, activeTemplates, allTemplates]);
+	return { templates, synced };
 }

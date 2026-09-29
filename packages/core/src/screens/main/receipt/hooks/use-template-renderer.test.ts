@@ -39,7 +39,10 @@ jest.mock('./use-receipt-data', () => ({
 }));
 
 jest.mock('./use-active-templates', () => ({
-	useActiveTemplates: (...args: unknown[]) => mockUseActiveTemplates(...args),
+	useActiveTemplatesState: (...args: unknown[]) => ({
+		templates: mockUseActiveTemplates(...args),
+		synced: true,
+	}),
 }));
 
 jest.mock('../../contexts/tax-rates', () => ({

@@ -469,6 +469,15 @@ async function openClosures(page: Page) {
 	await page.getByTestId('card-taxes-open').click();
 	await expect(page.getByTestId('detail-panel-body')).toBeVisible();
 	await expect(page.getByTestId('detail-panel-export')).toBeVisible();
+	// The stub has no templates route: Print must be usable or visibly explain its wait.
+	await expect(async () => {
+		const print = page.getByTestId('detail-panel-print');
+		await expect(print).toBeVisible();
+		if (await print.isEnabled()) return;
+		const waiting = page.getByTestId('detail-panel-print-waiting');
+		await expect(waiting).toBeVisible();
+		await expect(waiting).toHaveText(/\S/);
+	}).toPass();
 	if ((page.viewportSize()?.width ?? 0) < 640) {
 		await page.getByTestId('detail-panel-back').click();
 		await expect(page.getByTestId('hero-total')).toBeVisible();

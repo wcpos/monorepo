@@ -147,3 +147,17 @@ export const room = () =>
 			</SelectionProvider>
 		</real.ReportsScopeProvider>
 	);
+
+export const mockPrintDocument = {
+	templates: [{ id: 7, title: 'Sales', offline_capable: true }],
+	templatesReady: true,
+	selectedTemplateId: 7,
+	setSelectedTemplateId: jest.fn(),
+	isOffline: false,
+	isPrinting: false,
+	documentError: null as Error | null,
+	print: jest.fn<Promise<boolean>, []>().mockResolvedValue(true),
+};
+jest.mock('../../receipt/use-receipt-document', () => ({
+	useReceiptDocument: jest.fn(() => mockPrintDocument),
+}));

@@ -28,7 +28,7 @@ jest.mock('../../../../hooks/use-app-info', () => ({
 jest.mock('@wcpos/query', () => ({
 	useDocField: <T,>(row: T, select: (row: T) => unknown) => select(row),
 }));
-jest.mock('./use-templates-sync', () => ({ useTemplatesSync: jest.fn() }));
+jest.mock('./use-templates-sync', () => ({ useTemplatesSync: jest.fn(() => ({ synced: true })) }));
 
 // Revert: query unscoped closure templates or filter by the bound store's assignments.
 it('uses the viewed store template set instead of bound-store assignments', () => {

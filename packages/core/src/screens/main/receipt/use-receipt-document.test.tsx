@@ -219,11 +219,16 @@ const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockHttp = { get: mockGet, post: mockPost };
 let mockOnline = true;
+let mockTemplatesSynced = true;
 const mockGenericPrint = jest.fn().mockResolvedValue(undefined);
 const mockThermalPrint = jest.fn().mockResolvedValue(undefined);
 const mockHtmlPrint = jest.fn().mockResolvedValue(undefined);
 const mockCloudPrint = jest.fn().mockResolvedValue(undefined);
 jest.mock('./hooks/use-active-templates', () => ({
+	useActiveTemplatesState: () => ({
+		templates: jest.requireMock('./hooks/use-active-templates').useActiveTemplates(),
+		synced: mockTemplatesSynced,
+	}),
 	useActiveTemplates: () => [
 		{
 			id: 7,
@@ -254,6 +259,7 @@ jest.mock('@wcpos/printer/printer-service', () => ({
 describe('print intent through checkout and reprint receipt documents', () => {
 	beforeEach(() => {
 		mockOnline = true;
+		mockTemplatesSynced = true;
 		mockAutoPrint = false;
 		mockPost
 			.mockReset()
@@ -286,6 +292,53 @@ describe('print intent through checkout and reprint receipt documents', () => {
 	afterEach(() => {
 		jest.restoreAllMocks();
 		mockOnline = true;
+	});
+
+	it('a local report offers only offline-capable templates', async () => {
+		jest
+			.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
+			.mockReturnValue({ useSystemDialog: true });
+		jest
+			.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+			.mockReturnValue([
+				{ id: 'php', is_active: true, offline_capable: false, engine: 'legacy-php' },
+				{ id: 8, offline_capable: true, engine: 'logicless', content: '<b>{{report.title}}</b>' },
+			]);
+		const localReport = { report: { title: 'Local Sales' } };
+		const { result } = renderHook(() =>
+			useReceiptDocument({ autoPrintAllowed: false, templateType: 'report', localReport })
+		);
+		expect(result.current.templates.map((template) => template.id)).toEqual([8]);
+		expect(result.current.selectedTemplateId).toBe(8);
+		expect(result.current.previewProps.renderedHtml).toContain('Local Sales');
+		await act(async () => {
+			expect(await result.current.print()).toBe(true);
+		});
+		expect(mockHtmlPrint.mock.calls[0][0]).toContain('Local Sales');
+		expect(mockGet).not.toHaveBeenCalled();
+		expect(mockPost).not.toHaveBeenCalled();
+	});
+
+	it('templatesReady waits for the first sync and is true offline', () => {
+		mockTemplatesSynced = false;
+		jest
+			.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
+			.mockReturnValue([{ id: 'php', offline_capable: false }]);
+		const { result, rerender } = renderHook(() =>
+			useReceiptDocument({
+				autoPrintAllowed: false,
+				templateType: 'report',
+				localReport: { report: {} },
+			})
+		);
+		expect(result.current).toMatchObject({ templatesReady: false });
+		mockTemplatesSynced = true;
+		rerender();
+		expect(result.current).toMatchObject({ templatesReady: true, templates: [] });
+		mockTemplatesSynced = false;
+		mockOnline = false;
+		rerender();
+		expect(result.current).toMatchObject({ templatesReady: true });
 	});
 
 	// Revert: omit the authoritative card's getter or look up only its local id, not the server alias.
