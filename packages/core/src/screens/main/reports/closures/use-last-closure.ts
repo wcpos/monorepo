@@ -72,9 +72,11 @@ export function useLastClosure(
 					status: 'ready',
 				});
 			} catch (error) {
-				// A failed silent read keeps what it held; the next scheduled read tries again.
-				if (options?.silent) return;
-				settle({ status: get(error, 'response.status') === 403 ? 'denied' : 'error' });
+				// A failed silent read keeps what it held and the next scheduled read tries again,
+				// unless access was refused: a 403 is not transient and must show as denied.
+				const denied = get(error, 'response.status') === 403;
+				if (options?.silent && !denied) return;
+				settle({ status: denied ? 'denied' : 'error' });
 			}
 		},
 		[http, online, registerId, storeId, key, idle]

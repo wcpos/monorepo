@@ -417,3 +417,25 @@ it('keeps the shown closure while a scheduled read is in flight and retries afte
 		jest.useRealTimers();
 	}
 });
+
+// Access refused during a scheduled read is not transient: the strip shows it, not the stale closure.
+it('settles to denied when a scheduled read is refused', async () => {
+	data.session = null;
+	online = true;
+	jest.useFakeTimers();
+	try {
+		render(<TillStrip onOpenClosures={jest.fn()} />);
+		await waitFor(() =>
+			expect(screen.getByTestId('till-last-closure').textContent).toContain('#413')
+		);
+		get.mockImplementation(() => Promise.reject({ response: { status: 403 } }));
+		await act(async () => {
+			jest.advanceTimersByTime(60_000);
+		});
+		await waitFor(() =>
+			expect((screen.getByTestId('till-reprint') as HTMLButtonElement).disabled).toBe(true)
+		);
+	} finally {
+		jest.useRealTimers();
+	}
+});
