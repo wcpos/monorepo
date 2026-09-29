@@ -19,11 +19,6 @@ packages:
 # frozen-lockfile install is the one install; a stale tree is a warning to
 # read, not a second install to wait on.
 verifyDepsBeforeRun: warn
-# rxdb-premium's dist/ is produced by its licence-gated postinstall and then
-# patched by the root postinstall. pnpm's side-effects cache (on by default)
-# would store that licensed output in the pnpm store, from where any cache
-# upload carries it off the runner. Off, and asserted by the setup action.
-sideEffectsCache: false
 nodeLinker: hoisted
 preferSymlinkedExecutables: false
 minimumReleaseAge: 1440
