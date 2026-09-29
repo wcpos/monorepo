@@ -124,7 +124,7 @@ export function OpenOrders({
 						}}
 					/>
 				) : sessionsOn && !session && bindingStatus === 'bound' ? (
-					<OpenRegisterCard />
+					<OpenRegisterCard onLastClosure={() => setPanelOpen(true)} />
 				) : session && session.status !== 'open' ? (
 					<RegisterCount key={session.id} onClosed={setClosure} />
 				) : isColumn && receiptOrderUuid ? (

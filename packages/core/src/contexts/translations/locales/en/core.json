@@ -109,6 +109,8 @@
 	"reports.select_closure": "Select a closure",
 	"register.x_report": "X-report",
 	"register.open_register": "Open register",
+	"register.cash_in_drawer": "Cash in the drawer",
+	"register.last_closure": "Last closure",
 	"register.float_default_chip": "{amount} default float",
 	"register.float_last_chip": "{amount} last count",
 	"register.opening_variance": "Opening variance {amount}",
