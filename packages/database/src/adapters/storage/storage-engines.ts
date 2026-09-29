@@ -20,6 +20,7 @@ export type WebStorageEngine = 'opfs-filesystem' | 'sqlite-sahpool';
 
 /** The engine the web adapter runs right now. Changing this is the 2.0 migration. */
 export const WEB_STORAGE_ENGINE: WebStorageEngine = 'sqlite-sahpool';
+export const NATIVE_STORAGE_ENGINE = 'expo-sqlite';
 
 /**
  * The worker bundle each engine is served by. Kept beside the engine id so the
