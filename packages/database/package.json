@@ -35,7 +35,7 @@
     "lodash": "^4.18.1",
     "observable-hooks": "4.2.4",
     "rxdb": "17.4.0",
-    "rxdb-premium": "17.4.0",
+    "rxdb-premium": "17.5.0",
     "rxjs": "7.8.2",
     "uuid": "^14.0.1"
   },
