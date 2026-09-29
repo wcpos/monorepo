@@ -171,6 +171,17 @@ describe('taxesByRate', () => {
 		]);
 		expect(taxesByRate(rows, totals(rows)).rows.map((row) => row.net)).toEqual([100, 100]);
 	});
+	it("a line taxed at zero still counts toward its rate's net", () => {
+		const rows = orders([
+			{
+				total: '50',
+				total_tax: '0',
+				tax_lines: [{ rate_id: 3, tax_total: '0' }],
+				line_items: [{ total: '50', taxes: [{ id: 3, total: '0' }] }],
+			},
+		]);
+		expect(taxesByRate(rows, totals(rows)).rows[0]).toMatchObject({ rateId: 3, tax: 0, net: 50 });
+	});
 	it('net is null when no line names the rate', () => {
 		const rows = orders([{ tax_lines: [{ rate_id: 1, tax_total: '20' }] }]);
 		expect(taxesByRate(rows, totals(rows)).rows[0].net).toBeNull();

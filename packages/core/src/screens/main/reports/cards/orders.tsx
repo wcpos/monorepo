@@ -22,7 +22,7 @@ export function OrdersCard() {
 		{ selectedOrders, totals } = useReportsData(),
 		{ statusMode } = useReportsScope();
 	const { storeId } = useReportsPeriod(),
-		{ store, money, number, percent } = useReportFormats(storeId);
+		{ store, money, number, quantity, percent } = useReportFormats(storeId);
 	const decimals = store?.price_num_decimals;
 	const summary = React.useMemo(
 		() => ordersSummary(selectedOrders, totals, decimals),
@@ -54,7 +54,7 @@ export function OrdersCard() {
 		['average', 'average_order', money(summary.average)],
 		['median', 'median', money(summary.median)],
 		['largest', 'largest', summary.largest === null ? '—' : money(summary.largest)],
-		['items', 'items_sold', number(summary.items)],
+		['items', 'items_sold', quantity(summary.items)],
 		['items-per-order', 'items_per_order', percent(summary.itemsPerOrder)],
 		['discounts', 'discounts', money(summary.discounts)],
 	];

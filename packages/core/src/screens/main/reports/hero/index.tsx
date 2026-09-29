@@ -316,7 +316,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 	const { cmp, setCmp, statusMode, setStatusMode, chartView, setChartView } = useReportsScope();
 	const { comparisonBinding } = useReportsBinding();
 	const { period, timezone, storeId, dateRange } = useReportsPeriod();
-	const { store, money, number, percent } = useReportFormats(storeId);
+	const { store, money, number, quantity, percent } = useReportFormats(storeId);
 	const { formatDate } = useLocalDate();
 	const { selectedOrders, totals } = useReportsData();
 	const weekday = formatDate(inZone(timezone, dateRange.start), 'EEEE');
@@ -405,7 +405,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 				label: t('reports.items'),
 				value: totals.totalItemsSold,
 				field: 'totalItemsSold' as const,
-				format: number,
+				format: quantity,
 			},
 		],
 	};

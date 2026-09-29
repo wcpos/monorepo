@@ -14,7 +14,7 @@ export function TopProductsCard() {
 		{ selectedOrders, totals } = useReportsData();
 	useReportsScope();
 	const { storeId } = useReportsPeriod(),
-		{ store, money, number, percent } = useReportFormats(storeId);
+		{ store, money, quantity, percent } = useReportFormats(storeId);
 	const decimals = store?.price_num_decimals;
 	const rows = React.useMemo(
 		() => topProducts(selectedOrders, totals, decimals),
@@ -25,21 +25,22 @@ export function TopProductsCard() {
 		<ReportCard
 			testID="card-products"
 			name={t('reports.card_top_products')}
-			figure={number(totals.totalItemsSold)}
+			figure={quantity(totals.totalItemsSold)}
 		>
 			{rows.length ? (
-				rows
-					.slice(0, 4)
-					.map((row, index) => (
-						<ShareBar
-							key={row.key}
-							testID={`card-products-row-${index}`}
-							label={row.name}
-							value={money(row.amount)}
-							share={row.share}
-							note={`${percent(row.share * 100)}% · ${t('reports.n_sold', { count: row.quantity })}`}
-						/>
-					))
+				rows.slice(0, 4).map((row, index) => (
+					<ShareBar
+						key={row.key}
+						testID={`card-products-row-${index}`}
+						label={row.name}
+						value={money(row.amount)}
+						share={row.share}
+						note={t('reports.share_sold', {
+							percent: percent(row.share * 100),
+							count: row.quantity,
+						})}
+					/>
+				))
 			) : (
 				<Text testID="card-products-empty">{t('reports.no_sales_in_period')}</Text>
 			)}

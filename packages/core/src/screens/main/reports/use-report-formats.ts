@@ -18,11 +18,13 @@ export function useReportFormats(storeId?: number) {
 		currencyPosition: store?.currency_pos,
 	});
 	const { format: number } = useNumberFormat(options);
+	// Quantities are not money: a zero-decimal currency must not truncate 1.5 items to 1.
+	const { format: quantity } = useNumberFormat({ ...options, decimalScale: 3 });
 	// The percentage carries the store's separators too (+1,3 % where the store writes 1,3).
 	const { format: percent } = useNumberFormat({
 		...options,
 		decimalScale: 1,
 		fixedDecimalScale: true,
 	});
-	return { store, money, number, percent };
+	return { store, money, number, quantity, percent };
 }

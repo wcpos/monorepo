@@ -40,7 +40,10 @@ export function RefundsCard() {
 					},
 					{
 						label: t('reports.kept'),
-						value: summary.keptShare === null ? '—' : `${percent(summary.keptShare * 100)}%`,
+						value:
+							summary.keptShare === null
+								? '—'
+								: t('reports.percent', { value: percent(summary.keptShare * 100) }),
 						testID: 'card-refunds-kept',
 					},
 				]}
