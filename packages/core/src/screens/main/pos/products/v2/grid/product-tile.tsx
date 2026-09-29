@@ -57,6 +57,7 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 		barcode: payload.barcode,
 		stockQuantity: payload.stock_quantity,
 		manageStock: payload.manage_stock,
+		lowStockAmount: payload.low_stock_amount,
 		costOfGoodsSold: payload.cost_of_goods_sold,
 	}));
 
@@ -66,6 +67,12 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 		fields.manageStock === true &&
 		Number.isFinite(fields.stockQuantity) &&
 		(fields.stockQuantity as number) > 0;
+	// Woo has no low-stock status: low is the product's own threshold (or a plugin's status).
+	const lowStock =
+		showStockPill &&
+		(stock === 'lowstock' ||
+			(typeof fields.lowStockAmount === 'number' &&
+				(fields.stockQuantity as number) <= fields.lowStockAmount));
 	const safeTaxStatus = (fields.taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
 	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
 	const showOnSale = gridFields.on_sale && fields.onSale;
@@ -121,13 +128,13 @@ export function ProductTile({ record, gridFields, onDrill }: ProductTileProps) {
 				<TileImage record={record} />
 				{showStockPill && (
 					<View
-						className={`absolute top-2 left-2 h-5 justify-center rounded-full px-2 ${stock === 'lowstock' ? 'bg-warning' : 'bg-foreground'}`}
+						className={`absolute top-2 left-2 h-5 justify-center rounded-full px-2 ${lowStock ? 'bg-warning' : 'bg-foreground'}`}
 						testID={`product-tile-stock-${record.remoteId ?? record.uuid}`}
 					>
 						<Text
-							className={`text-xs font-bold ${stock === 'lowstock' ? 'text-warning-foreground' : 'text-background'}`}
+							className={`text-xs font-bold ${lowStock ? 'text-warning-foreground' : 'text-background'}`}
 						>
-							{t('pos_products.n_left', { n: fields.stockQuantity })}
+							{t('pos_products.n_left', { count: fields.stockQuantity as number })}
 						</Text>
 					</View>
 				)}

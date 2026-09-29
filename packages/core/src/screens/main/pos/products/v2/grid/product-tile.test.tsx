@@ -123,6 +123,37 @@ it.each([
 	const pill = screen.getByTestId('product-tile-stock-12');
 	expect(pill.textContent).toBe('3 left');
 	expect(pill.getAttribute('data-class-name')).toContain(color);
+});
+it('reads low stock from the product threshold, since Woo has no lowstock status', () => {
+	const managed = { ...record.payload, manage_stock: true, stock_status: 'instock' as const };
+	const { rerender } = render(
+		<ProductTile
+			record={{ ...record, payload: { ...managed, stock_quantity: 2, low_stock_amount: 5 } }}
+			gridFields={gridFields}
+		/>
+	);
+	expect(screen.getByTestId('product-tile-stock-12').getAttribute('data-class-name')).toContain(
+		'bg-warning'
+	);
+	rerender(
+		<ProductTile
+			record={{ ...record, payload: { ...managed, stock_quantity: 6, low_stock_amount: 5 } }}
+			gridFields={gridFields}
+		/>
+	);
+	expect(screen.getByTestId('product-tile-stock-12').getAttribute('data-class-name')).toContain(
+		'bg-foreground'
+	);
+	rerender(
+		<ProductTile
+			record={{ ...record, payload: { ...managed, stock_quantity: 1, low_stock_amount: null } }}
+			gridFields={gridFields}
+		/>
+	);
+	expect(screen.getByTestId('product-tile-stock-12').textContent).toBe('1 left');
+	expect(screen.getByTestId('product-tile-stock-12').getAttribute('data-class-name')).toContain(
+		'bg-foreground'
+	);
 	expect(screen.queryByTestId('stock')).toBeNull();
 });
 it('composes the existing tile under inline and the drill tile with a chevron under drill', () => {
