@@ -152,6 +152,7 @@ describe('query-state translator', () => {
 		]);
 	});
 	it.each([
+		['name', 'name'],
 		['price', 'sortable_price'],
 		['regular_price', 'regular_price'],
 		['sale_price', 'sale_price'],

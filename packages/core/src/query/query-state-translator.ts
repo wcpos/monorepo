@@ -82,7 +82,9 @@ export function normalizeQuerySortField(
 	field: unknown
 ): string | undefined {
 	if (typeof field !== 'string') return undefined;
-	return collection === 'products' ? (sortAliasFor(collection, field) ?? field) : field;
+	return collection === 'products' && field !== 'name'
+		? (sortAliasFor(collection, field) ?? field)
+		: field;
 }
 
 const SYNC_KIND_PREFIX = 'wcpos.sync';

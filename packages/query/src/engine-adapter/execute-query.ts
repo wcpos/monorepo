@@ -111,13 +111,16 @@ function compareValues(left: unknown, right: unknown, codePoint = false): number
 	// tiebreak), never to case. The uuid fallback keeps the overall sort total.
 	const leftString = String(left);
 	const rightString = String(right);
-	return codePoint
-		? leftString < rightString
-			? -1
-			: leftString > rightString
-				? 1
-				: 0
-		: CASHIER_STRING_COLLATOR.compare(leftString, rightString);
+	if (codePoint) {
+		const leftPoints = Array.from(leftString);
+		const rightPoints = Array.from(rightString);
+		for (let index = 0; index < Math.min(leftPoints.length, rightPoints.length); index++) {
+			const difference = leftPoints[index].codePointAt(0)! - rightPoints[index].codePointAt(0)!;
+			if (difference !== 0) return difference;
+		}
+		return leftPoints.length - rightPoints.length;
+	}
+	return CASHIER_STRING_COLLATOR.compare(leftString, rightString);
 }
 
 const CASHIER_STRING_COLLATOR = new Intl.Collator('en', { sensitivity: 'base' });
@@ -297,12 +300,10 @@ export function executeAdapterQuery({
 			Object.keys(prefilter).length > 0
 				? getQueryMatcher(schema, normalizeMangoQuery(schema, { selector: prefilter }))
 				: undefined;
-		// A pushable sort was the STORAGE's order before this path existed (code-unit
-		// order on the index string, 'Zoo' before 'apple'); keep it byte-for-byte so a
-		// panel never orders differently with and without a search term. Non-pushable
-		// sorts already went through the JS sorters below.
+		// sortName follows SQLite code-point order, not RxDB's UTF-16 comparator.
+		// Other pushable sorts retain the existing storage comparator.
 		const storageOrder =
-			complete && engineSort.pushable
+			complete && engineSort.pushable && !engineSort.sort.some((part) => 'sortName' in part)
 				? getSortComparator(
 						schema,
 						normalizeMangoQuery(schema, {

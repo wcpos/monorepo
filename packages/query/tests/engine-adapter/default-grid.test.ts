@@ -77,3 +77,42 @@ describe.each(storages)('%s default grid', (name, storage) => {
 		}
 	);
 });
+
+// Memory uses UTF-16 ordering; SQLite is the shipping engine and orders by code point.
+it('orders 😀 after ｚ on SQLite and in the JS search-hit comparator', async () => {
+	const database = await createRxDatabase({
+		name: `unicode-${crypto.randomUUID()}`,
+		storage: storages[1][1],
+		multiInstance: false,
+	});
+	try {
+		await database.addCollections({ products: engineSyncCollectionCreators().products });
+		await database.products.bulkInsert([
+			engineProduct({ uuid: 'emoji', name: '😀', id: 1 }),
+			engineProduct({ uuid: 'fullwidth', name: 'ｚ', id: 2 }),
+		]);
+		const { read } = compileQuery(
+			'products',
+			{
+				search: '',
+				filters: { categories: [], tags: [], brands: [] },
+				sort: { field: 'name', direction: 'asc' },
+				limit: 2,
+			},
+			{ id: 'unicode' }
+		);
+		const options = {
+			database: database as unknown as AdapterDatabase,
+			collection: 'products' as const,
+			read,
+		};
+		const page = await firstValueFrom(executeAdapterQuery(options));
+		const search = await firstValueFrom(
+			executeAdapterQuery({ ...options, hitIds: ['emoji', 'fullwidth'] })
+		);
+		expect(page.hits.map((doc) => doc.uuid)).toEqual(['fullwidth', 'emoji']);
+		expect(search.hits.map((doc) => doc.uuid)).toEqual(['fullwidth', 'emoji']);
+	} finally {
+		await database.close();
+	}
+});
