@@ -11,7 +11,7 @@ import find from 'lodash/find';
 import get from 'lodash/get';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { getFlexAlign } from '@wcpos/components/lib/utils';
+import { cn, getFlexAlign } from '@wcpos/components/lib/utils';
 import {
 	PulseTableRow,
 	Table,
@@ -49,6 +49,23 @@ import { SKU } from '../cells/sku';
 
 import type { Column, ColumnDef } from '../../../../../table-types';
 const cartTableFeatures = tableFeatures({ columnVisibilityFeature });
+/**
+ * Item gives way (the decided cart board: `44px 1fr 70px 80px`). The amount columns hold a
+ * width and the name takes what is left, so a total never wraps onto two lines. Spacing
+ * utilities, so the widths follow the scale step. Quantity and the prices are inputs and
+ * take a fixed width; the totals are text with a floor, and a long total widens its own
+ * cell rather than wrapping. The header holds the floor and truncates its label. The
+ * inner paddings are the board's 12 px gap, so the name keeps room at the largest step.
+ */
+const INPUT_COLUMN = { head: 'w-18 flex-none px-2', cell: 'w-18 flex-none px-2' };
+const TEXT_COLUMN = { head: 'w-20 flex-none pr-3 pl-2', cell: 'min-w-20 flex-none pr-3 pl-2' };
+const AMOUNT_COLUMNS: Record<string, { head: string; cell: string } | undefined> = {
+	quantity: { head: 'w-12 flex-none pr-2 pl-3', cell: 'w-12 flex-none pr-2 pl-3' },
+	price: INPUT_COLUMN,
+	regular_price: INPUT_COLUMN,
+	subtotal: TEXT_COLUMN,
+	total: TEXT_COLUMN,
+};
 type CartTableFeatures = typeof cartTableFeatures;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -285,14 +302,17 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 							return (
 								<TableHead
 									key={header.id}
-									className="min-h-row"
-									style={{
-										flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
-										flexBasis: meta?.width ? meta.width : undefined,
-										// Item gives way (the cart board): the other columns keep their content width so a total never wraps.
-										flexShrink: header.column.id === 'name' ? 1 : 0,
-										alignItems: getFlexAlign(meta?.align || 'left'),
-									}}
+									className={cn('min-h-row', AMOUNT_COLUMNS[header.column.id]?.head)}
+									style={
+										AMOUNT_COLUMNS[header.column.id]
+											? { alignItems: getFlexAlign(meta?.align || 'left') }
+											: {
+													flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
+													flexBasis: meta?.width ? meta.width : undefined,
+													flexShrink: header.column.id === 'name' ? 1 : 0,
+													alignItems: getFlexAlign(meta?.align || 'left'),
+												}
+									}
 								>
 									{header.isPlaceholder || meta?.hideLabel
 										? null
@@ -334,13 +354,17 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 										return (
 											<TableCell
 												key={cell.id}
-												style={{
-													flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
-													flexBasis: meta?.width ? meta.width : undefined,
-													// Item gives way (the cart board): the other columns keep their content width so a total never wraps.
-													flexShrink: cell.column.id === 'name' ? 1 : 0,
-													alignItems: getFlexAlign(meta?.align || 'left'),
-												}}
+												className={AMOUNT_COLUMNS[cell.column.id]?.cell}
+												style={
+													AMOUNT_COLUMNS[cell.column.id]
+														? { alignItems: getFlexAlign(meta?.align || 'left') }
+														: {
+																flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
+																flexBasis: meta?.width ? meta.width : undefined,
+																flexShrink: cell.column.id === 'name' ? 1 : 0,
+																alignItems: getFlexAlign(meta?.align || 'left'),
+															}
+												}
 											>
 												{cell.column.id === targetId ? wrapTotal(content) : content}
 											</TableCell>

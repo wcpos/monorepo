@@ -66,6 +66,7 @@ jest.mock('@wcpos/components/error-boundary', () => ({
 }));
 
 jest.mock('@wcpos/components/lib/utils', () => ({
+	cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 	getFlexAlign: () => undefined,
 }));
 

@@ -43,7 +43,6 @@ export function VariationStock({ row }: { row: Props['item'] }) {
 export function VariationRow({ item, parent }: Props) {
 	const variation = item.original.record;
 	const attributes = useDocField(variation, (value) => value.payload.attributes);
-	const payload = useDocField(variation, (value) => value.payload);
 	const { addVariation } = useAddVariation();
 	const add = () =>
 		addVariation(
@@ -60,8 +59,9 @@ export function VariationRow({ item, parent }: Props) {
 			item={item}
 			testID={`data-table-row-variation-${variation.remoteId ?? variation.uuid}`}
 			onPress={add}
-			// The row is the add control here (no trailing button), so it carries the name.
-			accessibilityLabel={resolveVariationName(payload)}
+			// No `accessibilityLabel` (so no button role): the Price cell's tax tooltip is a
+			// <button> on web, and a button may not nest in one. The row stays a focusable
+			// pressable, as the product rows do.
 		/>
 	);
 }
