@@ -133,10 +133,12 @@ export function UserSheet({
 	open,
 	onOpenChange,
 	onSwitchRegister,
+	portalHost = 'pos',
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onSwitchRegister?: () => void;
+	portalHost?: string | null;
 }) {
 	const { site, wpCredentials, logout } = useStoreSession();
 	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
@@ -145,7 +147,7 @@ export function UserSheet({
 	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent side={side} size="lg" portalHost="pos" testID="user-sheet">
+			<DialogContent side={side} size="lg" portalHost={portalHost ?? undefined} testID="user-sheet">
 				<DialogHeader>
 					<DialogTitle>{displayName}</DialogTitle>
 				</DialogHeader>

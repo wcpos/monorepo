@@ -1,0 +1,145 @@
+import * as React from 'react';
+import { Pressable, View } from 'react-native';
+
+import { CommonActions, DrawerActions } from 'expo-router/react-navigation';
+// SDK 56: expo-router vendors react-navigation; @react-navigation/drawer is no longer a dependency.
+import { DrawerContentScrollView, getDrawerStatusFromState } from 'expo-router/drawer';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useDocField } from '@wcpos/query';
+
+import { useStoreSession } from '../../../../../contexts/app-state';
+import { UserAvatar } from '../../header/user-avatar';
+import { UserSheet } from '../../../pos/cart/user-sheet';
+import { DrawerItem } from './drawer-item';
+import { DrawerPanelVisibilityReporter, useDrawerPanelHidden } from '../panel-visibility';
+import { Version } from '../version';
+import { NotificationBell } from '../../header/notification-bell';
+
+import type { DrawerContentComponentProps } from 'expo-router/drawer';
+
+/**
+ * NOTE ON HOOKS IN THIS COMPONENT.
+ *
+ * This is not rendered as a component. `DrawerView.renderDrawerContent` calls
+ * `drawerContent({ state, navigation, descriptors })` as a plain function, and
+ * `react-native-drawer-layout`'s `Drawer` calls `renderDrawerContent()` inside its own render
+ * body. So every hook below runs at `Drawer`'s position in the tree, NOT where its output is
+ * mounted — which means it can only read context from providers ABOVE `Drawer`, and none of
+ * the ones `Drawer` itself renders (`DrawerProgressContext`, `DrawerGestureContext`).
+ * `useSafeAreaInsets` is fine because its provider is far above. Anything that needs a
+ * drawer-owned context has to be a rendered element instead.
+ */
+export function DrawerContent(props: DrawerContentComponentProps) {
+	const insets = useSafeAreaInsets();
+
+	// The drawer's open/closed status only exists on the navigator's state, and the drawer
+	// content is the one component the navigator hands it to. Report it upward so the layout
+	// can take a settled-closed panel out of layout entirely — see `panel-visibility.tsx`.
+	const status = getDrawerStatusFromState(props.state, 'closed');
+
+	// A settled-closed panel is out of layout (`display: 'none'`, see `panel-visibility.tsx`)
+	// but its subtree stays mounted, and on Android the accessibility tree kept reporting the
+	// items with their last laid-out bounds after a heavy screen mount — a screen reader (and
+	// Maestro, run 33740223026: `drawer-item-pos` "visible" with nothing drawn) could reach
+	// menu items that are not on the screen. Hide the descendants from assistive tech while
+	// the panel is hidden; the reporter above stays mounted so an open can un-hide them.
+	//
+	// Never for a `permanent` drawer: the large-screen rail is always on screen, the layout
+	// never hides it, but the navigator's state still says "closed" (a permanent drawer has no
+	// drawer entry in `history`), so the provider's flag alone would hide the visible sidebar
+	// from screen readers for the whole session. `drawerType` comes from the screen options
+	// (`_layout.tsx` sets it per screen size); the focused route's descriptor carries it.
+	// react-native-drawer-layout >= 4.2.10 does the same on the panel view as a Reanimated
+	// animated prop; this is the static counterpart, independent of any animated value.
+	const panelHidden = useDrawerPanelHidden();
+	const focusedRoute = props.state.routes[props.state.index];
+	const drawerType = focusedRoute
+		? props.descriptors[focusedRoute.key]?.options.drawerType
+		: undefined;
+	const hideFromAssistiveTech = panelHidden && drawerType !== 'permanent';
+	// The E2E flows need to tell a permanent rail (always on screen, nothing to
+	// close) from a front drawer left open (close it through the scrim before the
+	// flow starts): both show the same items. The panel says which it is.
+	const permanentPanelTestID = 'drawer-panel-permanent';
+	const panelTestID = drawerType === 'permanent' ? permanentPanelTestID : 'drawer-panel';
+
+	return (
+		<>
+			<DrawerPanelVisibilityReporter status={status === 'open' ? 'open' : 'closed'} />
+			<DrawerContentScrollView
+				{...props}
+				className="bg-rail border-rail-border w-14 border-r"
+				testID={panelTestID}
+				importantForAccessibility={hideFromAssistiveTech ? 'no-hide-descendants' : 'auto'}
+				accessibilityElementsHidden={hideFromAssistiveTech}
+				contentContainerStyle={{
+					paddingTop: insets.top,
+					paddingBottom: insets.bottom,
+					paddingLeft: 0,
+					paddingRight: 0,
+					paddingStart: 0,
+					paddingEnd: 0,
+					justifyContent: 'flex-start',
+					// flexGrow (not height: '100%') so the bottom group's marginTop: 'auto'
+					// still anchors when content fits, while overflowing items stay scrollable
+					// on short viewports (#1425).
+					flexGrow: 1,
+				}}
+			>
+				<RailAvatar />
+				{props.state.routes.map((route, i) => {
+					const focused = i === props.state.index;
+					const { title, drawerLabel, drawerIcon } = props.descriptors[route.key].options;
+					return (
+						<DrawerItem
+							key={route.key}
+							testID={`drawer-item-${route.name.replace(/[()]/g, '')}`}
+							label={
+								(drawerLabel !== undefined
+									? drawerLabel
+									: title !== undefined
+										? title
+										: route.name) as string
+							}
+							icon={drawerIcon as React.ComponentProps<typeof DrawerItem>['icon']}
+							focused={focused}
+							onPress={() =>
+								props.navigation.dispatch({
+									...(focused
+										? DrawerActions.closeDrawer()
+										: CommonActions.navigate({ name: route.name, merge: true })),
+									target: props.state.key,
+								})
+							}
+						/>
+					);
+				})}
+				<View className="mt-auto">
+					<NotificationBell showLabel={false} />
+					<Version />
+				</View>
+			</DrawerContentScrollView>
+		</>
+	);
+}
+
+function RailAvatar() {
+	const { wpCredentials } = useStoreSession();
+	const displayName = useDocField(wpCredentials, (value) => value.display_name) as string;
+	const [open, setOpen] = React.useState(false);
+	return (
+		<>
+			<Pressable
+				className="active:bg-card size-12 items-center justify-center"
+				testID="register-bar-avatar"
+				accessibilityRole="button"
+				accessibilityLabel={displayName}
+				onPress={() => setOpen(true)}
+			>
+				<UserAvatar wpCredentials={wpCredentials} displayName={displayName} />
+			</Pressable>
+			<UserSheet open={open} onOpenChange={setOpen} portalHost={null} />
+		</>
+	);
+}

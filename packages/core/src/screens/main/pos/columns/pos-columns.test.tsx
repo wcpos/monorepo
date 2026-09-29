@@ -26,7 +26,7 @@ jest.mock('@wcpos/query', () => ({
 }));
 // The real registration module populates the real slot registry with these panels.
 jest.mock('../cart', () => ({ OpenOrders: () => <div data-testid="open-orders-strip" /> }));
-jest.mock('../products', () => ({ POSProducts: () => <div data-testid="products" /> }));
+jest.mock('../products/v2', () => ({ POSProducts: () => <div data-testid="products" /> }));
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'a', isNew: mockIsNew, payload: {} } }),
 }));

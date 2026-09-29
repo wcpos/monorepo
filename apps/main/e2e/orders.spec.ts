@@ -1,7 +1,13 @@
 import { expect, type Page } from '@playwright/test';
 
+import {
+	closeOrderSheet,
+	getStoreVariant,
+	navigateToPage,
+	openOrderSheet,
+	tryAddProductBySku,
+} from './fixtures';
 import { isolatedProductTest as test, tryAddRunPrivateSimpleProduct } from './checkout-probe';
-import { getStoreVariant, navigateToPage, tryAddProductBySku } from './fixtures';
 import { extractOrderIdFromPushBody, extractOrderNumberFromPushBody } from './order-cleanup';
 import {
 	expectMoneyMatches,
@@ -120,6 +126,7 @@ test.describe('Orders Page (Pro)', () => {
 			{ timeout: 90_000 }
 		);
 		savePending.catch(() => {});
+		await openOrderSheet(page);
 		await page.getByTestId('save-to-server-button').click();
 		const saveResponse = await savePending;
 		if (!saveResponse.ok()) {
@@ -152,7 +159,9 @@ test.describe('Orders Page (Pro)', () => {
 		if (ackDoc && sentPayload.cart_tax !== undefined) {
 			expectTaxParity(ackDoc.cart_tax, sentPayload.cart_tax, 'cart_tax parity');
 		}
+		await openOrderSheet(page);
 		await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+		await closeOrderSheet(page);
 
 		const screen = await navigateToOrders(page);
 		const searchInput = screen.getByTestId('search-orders');

@@ -33,18 +33,12 @@ jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({ currentOrderRecord: { uuid: 'order-1', isNew: mockIsNew } }),
 }));
 jest.mock('../hooks/use-cart-settlement', () => ({ useCartSettlement: () => undefined }));
-jest.mock('./table', () => ({ CartTable: () => <div data-testid="cart-table" /> }));
+jest.mock('./v2/table', () => ({ CartTable: () => <div data-testid="cart-table" /> }));
 jest.mock('./totals', () => ({ Totals: () => <div /> }));
 jest.mock('./totals-changed-banner', () => ({ CartTotalsChangedBanner: () => <div /> }));
-jest.mock('./cart-header', () => ({ CartHeader: () => <div /> }));
-jest.mock('./buttons/order-meta', () => ({
-	OrderMetaButton: () => <div />,
-	OrderMetaDialog: () => null,
-}));
-jest.mock('./buttons/pay', () => ({ PayButton: () => <div data-testid="checkout-button" /> }));
-jest.mock('./buttons/save-order', () => ({ SaveButton: () => <div /> }));
-jest.mock('./buttons/void', () => ({ VoidButton: () => <div /> }));
-jest.mock('./tabs', () => ({ OpenOrderTabs: () => <div data-testid="open-orders" /> }));
+jest.mock('./v2/cart-header', () => ({ CartHeader: () => <div data-testid="cart-header" /> }));
+jest.mock('./v2/foot', () => ({ CartFoot: () => <div data-testid="checkout-button" /> }));
+jest.mock('./v2/tabs', () => ({ OpenOrderTabs: () => <div data-testid="open-orders" /> }));
 
 // Keep the slot and its registration real; replace native chrome and data-heavy children.
 jest.mock('@wcpos/components/error-boundary', () => ({
@@ -79,19 +73,24 @@ describe('open orders position', () => {
 			mockStage = stage;
 			mockPosition = 'top';
 			const { rerender } = render(<OpenOrders isColumn />);
+			// The frame is now a View, not Card. Keep comparing the whole cart surface.
+			const cartSurface = () =>
+				stage === 'checkout'
+					? screen.getByTestId('cart-card')
+					: screen.getByTestId('cart-header').parentElement!;
 			if (stage === 'checkout') {
 				expect(screen.queryByTestId('cart-table')).toBeNull();
 				expect(screen.queryByTestId('checkout-button')).toBeNull();
 			}
-			expect(
-				screen.getByTestId('open-orders').compareDocumentPosition(screen.getByTestId('cart-card'))
-			).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+			expect(screen.getByTestId('open-orders').compareDocumentPosition(cartSurface())).toBe(
+				Node.DOCUMENT_POSITION_FOLLOWING
+			);
 
 			mockPosition = 'bottom';
 			rerender(<OpenOrders isColumn />);
-			expect(
-				screen.getByTestId('open-orders').compareDocumentPosition(screen.getByTestId('cart-card'))
-			).toBe(Node.DOCUMENT_POSITION_PRECEDING);
+			expect(screen.getByTestId('open-orders').compareDocumentPosition(cartSurface())).toBe(
+				Node.DOCUMENT_POSITION_PRECEDING
+			);
 		}
 	);
 });

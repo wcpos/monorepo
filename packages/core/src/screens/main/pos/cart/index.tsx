@@ -3,10 +3,8 @@ import { View } from 'react-native';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { Button, ButtonGroupSeparator } from '@wcpos/components/button';
-import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { Button } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { HStack } from '@wcpos/components/hstack';
 import { Skeleton } from '@wcpos/components/skeleton';
 import { VStack } from '@wcpos/components/vstack';
 import { type EngineRecord, useDocField } from '@wcpos/query';
@@ -15,16 +13,13 @@ import { Text } from '@wcpos/components/text';
 
 import { type ReadonlyView, Slot, type SlotContracts } from '../../../../extensions/slots';
 import { useUISettings } from '../../contexts/ui-settings';
-import { OrderMetaButton, OrderMetaDialog } from './buttons/order-meta';
-import { PayButton } from './buttons/pay';
-import { SaveButton } from './buttons/save-order';
-import { VoidButton } from './buttons/void';
 import { useEngineRecord } from '../../hooks/use-engine-document';
 import { CheckoutLedger } from './checkout-ledger';
 import { useOrderCheckoutStage } from '../checkout/checkout-mode';
-import { CartHeader } from './cart-header';
+import { CartHeader } from './v2/cart-header';
 import { useCartSettlement } from '../hooks/use-cart-settlement';
-import { CartTable } from './table';
+import { CartTable } from './v2/table';
+import { CartFoot } from './v2/foot';
 import { Totals } from './totals';
 import { useT } from '../../../../contexts/translations';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
@@ -35,7 +30,7 @@ import { useRegisterSession } from '../../../../services/register-session/use-re
 import { RegisterBar } from './register-bar';
 import { RegisterPicker } from './register-picker';
 import { CartTotalsChangedBanner } from './totals-changed-banner';
-import { type CurrentOrderRecord, useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrder } from '../contexts/current-order';
 
 const NO_API: SlotContracts['pos.cart.bar']['api'] = {};
 const NEVER_CHANGES = () => () => {};
@@ -60,8 +55,6 @@ export function OpenOrders({
 	const t = useT();
 
 	const { currentOrderRecord } = useCurrentOrder();
-	// Keep the dialog mounted on its original order while a send changes the open-order list.
-	const [editingOrder, setEditingOrder] = React.useState<CurrentOrderRecord | null>(null);
 	const stage = useOrderCheckoutStage(currentOrderRecord);
 	const { uiSettings } = useUISettings('pos-cart');
 	const position = useDocField(uiSettings, (value) => value.openOrdersPosition);
@@ -134,13 +127,11 @@ export function OpenOrders({
 				) : isColumn && !isNewOrder && stage === 'checkout' ? (
 					<CheckoutLedger order={currentOrderRecord as EngineRecord<'orders'>} />
 				) : isNewOrder ? (
-					<Card className="flex-1">
-						<CardHeader className="bg-card-header p-2">
-							<ErrorBoundary>
-								<CartHeader />
-							</ErrorBoundary>
-						</CardHeader>
-						<CardContent className="flex-1 p-0" />
+					<View className="flex-1">
+						<ErrorBoundary>
+							<CartHeader />
+						</ErrorBoundary>
+						<View className="flex-1" />
 						{overdue && (
 							<Button
 								testID="checkout-close-register"
@@ -150,15 +141,13 @@ export function OpenOrders({
 								{t('register.close_register')}
 							</Button>
 						)}
-					</Card>
+					</View>
 				) : (
-					<Card className="flex-1">
-						<CardHeader className="bg-card-header p-2">
-							<ErrorBoundary>
-								<CartHeader />
-							</ErrorBoundary>
-						</CardHeader>
-						<CardContent className="border-border flex-1 border-t p-0">
+					<View className="flex-1">
+						<ErrorBoundary>
+							<CartHeader />
+						</ErrorBoundary>
+						<View className="flex-1">
 							<View className="flex-1">
 								<ErrorBoundary>
 									<CartTable lastDraftOrderUuidRef={lastDraftOrderUuidRef} />
@@ -170,50 +159,15 @@ export function OpenOrders({
 							<ErrorBoundary>
 								<Totals />
 							</ErrorBoundary>
-							<HStack className="bg-footer p-2">
-								<View className="flex-1">
-									<OrderMetaButton onPress={() => setEditingOrder(currentOrderRecord)} />
-								</View>
-								<View className="flex-1">
-									<SaveButton />
-								</View>
-							</HStack>
-							<HStack className="w-full gap-0">
-								<ErrorBoundary>
-									<VoidButton />
-									<ButtonGroupSeparator className="bg-card-header" />
-									{sessionsOn && !session ? (
-										<Button
-											testID="checkout-open-register"
-											className="min-h-14 flex-1"
-											onPress={() => setPickingRegister(true)}
-										>
-											{t('register.open_register')}
-										</Button>
-									) : overdue && !currentOrderRecord.payload.line_items?.length ? (
-										<Button
-											testID="checkout-close-register"
-											className="min-h-14 flex-1"
-											onPress={() => setPanelOpen(true)}
-										>
-											{t('register.close_register')}
-										</Button>
-									) : (
-										<PayButton />
-									)}
-								</ErrorBoundary>
-							</HStack>
-						</CardContent>
-					</Card>
+							<CartFoot
+								onOpenRegister={() => setPickingRegister(true)}
+								onCloseRegister={() => setPanelOpen(true)}
+							/>
+						</View>
+					</View>
 				)}
 			</ErrorBoundary>
 			{closure && !session && <ClosureSheet {...closure} onDone={() => setClosure(null)} />}
-			<OrderMetaDialog
-				order={editingOrder}
-				onOpenChange={(open) => {
-					if (!open) setEditingOrder(null);
-				}}
-			/>
 			{position !== 'top' && cartBar}
 		</VStack>
 	);

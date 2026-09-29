@@ -153,3 +153,17 @@ appId: com.wcpos.main.dev
           visible:
             id: "pos-tab-products"
           timeout: 10000
+# Set the persisted variation alternative once per Maestro run.
+- runFlow:
+    when:
+      true: ${!output.variationsStyleInline}
+      visible:
+        id: "products-settings-button"
+    commands:
+      - tapOn:
+          id: "products-settings-button"
+      - tapOn:
+          id: "products-variations-style-inline"
+      - tapOn:
+          text: "Close"
+      - evalScript: ${output.variationsStyleInline = true}
