@@ -3,7 +3,6 @@ import * as React from 'react';
 import { decode } from 'html-entities';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
 	SelectContent,
@@ -15,6 +14,7 @@ import {
 } from '@wcpos/components/select';
 import type { StoreDocument } from '@wcpos/database';
 
+import { FilterChip as Chip } from './chip';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 
@@ -88,22 +88,16 @@ export function StorePill({ resource }: Props) {
 	return (
 		<Select value={value} onOpenChange={setOpen} onValueChange={handleSelect}>
 			<SelectPrimitiveTrigger asChild>
-				<ButtonPill
+				<Chip
+					clearLabel={t('common.remove')}
 					testID="order-filter-store"
-					size="xs"
-					leftIcon="shop"
-					variant={isActive ? undefined : 'muted'}
+					icon="shop"
+					on={isActive}
 					onPress={() => setOpen(!open)}
-					removable={isActive}
-					onRemove={handleRemove}
-					removeTestID="order-filter-store-remove"
-				>
-					{/* This pill is its own trigger (SelectPrimitiveTrigger asChild), so it
-					    renders the `value` memo's label rather than Select's own Value — the
-					    memo rebuilds it from raw `store.name`, and decoding only the
-					    SelectItem left the CLOSED pill showing the entity. */}
-					<ButtonText decodeHtml>{value?.label || t('common.created_via_2')}</ButtonText>
-				</ButtonPill>
+					onClear={isActive ? handleRemove : undefined}
+					clearTestID="order-filter-store-remove"
+					label={decode(value?.label || t('common.created_via_2'))}
+				/>
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				<SelectGroup>
@@ -128,7 +122,7 @@ export function StorePill({ resource }: Props) {
 								// header decodes it. Decoded here because SelectItem's text is drawn
 								// by rn-primitives, where `decodeHtml` cannot reach. This covers the
 								// MENU only: the closed pill renders the `value` memo above through
-								// its own ButtonText, which decodes separately.
+								// the decoded Chip label above.
 								const name = decode(store.name ?? '');
 								return (
 									<SelectItem key={store.id} value={String(store.id ?? '')} label={name}>

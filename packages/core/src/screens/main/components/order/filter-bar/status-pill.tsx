@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
 	SelectContent,
@@ -8,6 +7,7 @@ import {
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
 
+import { FilterChip as Chip } from './chip';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';
@@ -32,16 +32,15 @@ export function StatusPill() {
 			onValueChange={(option) => option && actions.setFilter('status', option.value)}
 		>
 			<SelectPrimitiveTrigger asChild>
-				<ButtonPill
+				<Chip
+					clearLabel={t('common.remove')}
+					clearTestID="order-filter-status-remove"
 					testID="order-filter-status"
-					size="xs"
-					leftIcon="cartCircleCheck"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={() => actions.clearFilter('status')}
-				>
-					<ButtonText>{value?.label || t('common.status')}</ButtonText>
-				</ButtonPill>
+					icon="cartCircleCheck"
+					on={isActive}
+					onClear={isActive ? () => actions.clearFilter('status') : undefined}
+					label={value?.label || t('common.status')}
+				/>
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				{items.map((item) => (

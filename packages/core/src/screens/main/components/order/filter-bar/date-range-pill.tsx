@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { isSameDay, isToday, isYesterday } from 'date-fns';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import type { DateRange } from '@wcpos/components/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
+import { FilterChip as Chip } from './chip';
 import { DateRangeCalendar } from './calendar';
 import { calendarDate, inZone, useStoreDay, zoneOptions } from '../../../../../hooks/use-store-day';
 import { useT } from '../../../../../contexts/translations';
@@ -35,7 +35,7 @@ export function DateRangePill({ onRemove }: Props = {}) {
 	 */
 	const label = React.useMemo(() => {
 		if (!isActive) {
-			return t('common.date_range');
+			return t('orders.date_range');
 		}
 
 		// date_created_gmt in WC REST API is in UTC, but without the 'Z',
@@ -92,15 +92,17 @@ export function DateRangePill({ onRemove }: Props = {}) {
 				ref={triggerRef}
 				asChild
 			>
-				<ButtonPill
-					size="xs"
-					leftIcon="calendarDays"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={() => (onRemove ? onRemove() : actions.clearFilter('dateRange'))}
-				>
-					<ButtonText>{label}</ButtonText>
-				</ButtonPill>
+				<Chip
+					clearLabel={t('common.remove')}
+					clearTestID="order-filter-date-remove"
+					testID="order-filter-date"
+					icon="calendarDays"
+					on={isActive}
+					onClear={
+						isActive ? () => (onRemove ? onRemove() : actions.clearFilter('dateRange')) : undefined
+					}
+					label={label}
+				/>
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-2">
 				{/* Keyed by zone: the calendar seeds its selection from the store day at mount, so a

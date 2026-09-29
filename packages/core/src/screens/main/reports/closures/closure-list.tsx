@@ -1,16 +1,14 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
-import { format as formatDate, parseISO, subDays } from 'date-fns';
-
 import { useDocField } from '@wcpos/query';
 import { Badge } from '@wcpos/components/badge';
 import { Text } from '@wcpos/components/text';
 import type { ClosureRow } from '@wcpos/database';
 
-import { useLocalDate } from '../../../../hooks/use-local-date';
+import { useStoreDayLabel } from '../../../../hooks/use-store-day-label';
 import { useT } from '../../../../contexts/translations';
-import { inZone, useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-store-day';
+import { useViewedStore } from '../../../../hooks/use-store-day';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
@@ -35,18 +33,9 @@ export function ClosureList({
 		decimalSeparator: settings?.price_decimal_sep,
 		thousandSeparator: settings?.price_thousand_sep,
 	});
-	const { timezone } = useStoreDay(storeId);
+	const { heading, time } = useStoreDayLabel(storeId);
 	const names = useRegisterNames();
-	const { formatDate: displayDate } = useLocalDate();
-	const today = formatDate(new Date(), 'yyyy-MM-dd', zoneOptions(timezone));
-	const yesterday = formatDate(subDays(inZone(timezone, new Date()), 1), 'yyyy-MM-dd');
-	const heading = (day: string) =>
-		day === today
-			? t('common.today')
-			: day === yesterday
-				? t('common.yesterday')
-				: displayDate(parseISO(day), 'EEEE, d MMM yyyy');
-	const time = (value: string) => formatDate(new Date(value), 'HH:mm', zoneOptions(timezone));
+
 	return (
 		<View className="bg-card rounded-md border">
 			{!rows.length && (

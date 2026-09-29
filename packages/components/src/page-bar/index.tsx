@@ -44,8 +44,8 @@ export function PageBar({
 			{...props}
 		>
 			<HStack className="h-ctl border-border bg-background items-center gap-2 border-b pr-2 pl-4">
-				{phone &&
-					(back ? (
+				{(phone || onMenu) &&
+					(phone && back ? (
 						<Breadcrumb parents={[back]} testID={id('back')} />
 					) : onMenu ? (
 						<IconButton

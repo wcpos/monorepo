@@ -26,7 +26,7 @@ import { UISettingID, useUISettings } from '../../../contexts/ui-settings';
 import { RecordTextCell } from '../../record-text-cell';
 import { useT } from '../../../../../contexts/translations';
 import { DataTableHeader } from '../header';
-import { DataTableFooter } from '../footer';
+import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from '../list-footer';
 import { getRowTestID, DataTableRow as RowView } from './rows';
 import { ResizeHead } from './resize';
@@ -78,6 +78,7 @@ interface BindingActions<TSortField extends string> {
 
 interface CommonProps<TData extends RowData> {
 	id: UISettingID;
+	listRef?: React.Ref<import('@wcpos/components/virtualized-list/types').VirtualizedListHandle>;
 	noDataMessage?: string | React.ReactElement;
 	estimatedItemSize?: number;
 	showFooter?: boolean;
@@ -134,6 +135,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 	 */
 	const {
 		id,
+		listRef,
 		noDataMessage,
 		estimatedItemSize,
 		showFooter = true,
@@ -276,6 +278,7 @@ function DataTable<TData extends RowData, TSortField extends string = string>(
 				style={{ flex: 1 }}
 			>
 				<VirtualizedList.List
+					ref={listRef}
 					data={table.getRowModel().rows}
 					keyExtractor={(item) => item.id}
 					renderItem={({ item, index }) =>

@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
 	SelectContent,
@@ -8,6 +7,7 @@ import {
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
 
+import { FilterChip as Chip } from './chip';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 import { useRegisterNames } from '../../../../../services/register/use-register-names';
@@ -30,17 +30,15 @@ export function RegisterPill() {
 			}}
 		>
 			<SelectPrimitiveTrigger asChild>
-				<ButtonPill
+				<Chip
+					clearLabel={t('common.remove')}
 					testID="order-filter-register"
-					size="xs"
-					variant={selected ? undefined : 'muted'}
+					on={!!selected}
 					onPress={() => setOpen(!open)}
-					removable={!!selected}
-					onRemove={() => actions.clearFilter('register')}
-					removeTestID="order-filter-register-remove"
-				>
-					<ButtonText>{value?.label || t('common.select_register')}</ButtonText>
-				</ButtonPill>
+					onClear={selected ? () => actions.clearFilter('register') : undefined}
+					clearTestID="order-filter-register-remove"
+					label={value?.label || t('common.select_register')}
+				/>
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				{Object.entries(names).map(([id, name]) => (

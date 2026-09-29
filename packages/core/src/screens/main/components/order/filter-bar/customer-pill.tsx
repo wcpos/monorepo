@@ -2,11 +2,11 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import type { EngineRecord } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
 
+import { FilterChip as Chip } from './chip';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions } from '../../../../../query';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
@@ -85,22 +85,21 @@ export function CustomerPill({ resource, guestCustomer, onMissing }: CustomerPil
 			}}
 		>
 			<ComboboxTrigger asChild>
-				<ButtonPill
+				<Chip
+					clearLabel={t('common.remove')}
+					clearTestID="order-filter-customer-remove"
 					testID="order-filter-customer"
-					size="xs"
-					leftIcon="user"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={() => actions.clearFilter('customer_id')}
-				>
-					<ButtonText>
-						{isLoading
+					icon="user"
+					on={isActive}
+					onClear={isActive ? () => actions.clearFilter('customer_id') : undefined}
+					label={
+						isLoading
 							? t('common.loading')
 							: customerEntity
 								? format(customerEntity)
-								: t('common.select_customer')}
-					</ButtonText>
-				</ButtonPill>
+								: t('common.select_customer')
+					}
+				/>
 			</ComboboxTrigger>
 			<ComboboxContent>
 				<CustomerSearch withGuest />

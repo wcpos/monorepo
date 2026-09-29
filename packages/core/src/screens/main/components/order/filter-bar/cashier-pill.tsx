@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Combobox,
 	ComboboxContent,
@@ -12,6 +11,7 @@ import {
 import { Suspense } from '@wcpos/components/suspense';
 import type { EngineRecord } from '@wcpos/query';
 
+import { FilterChip as Chip } from './chip';
 import { useT } from '../../../../../contexts/translations';
 import { useQueryState, useQueryStateActions, useSearchSelect } from '../../../../../query';
 import { parseRemoteId } from '../../../../../utils/parse-remote-id';
@@ -92,23 +92,21 @@ export function CashierPill({ resource, onMissing }: CashierPillProps) {
 			}}
 		>
 			<ComboboxTrigger asChild>
-				<ButtonPill
+				<Chip
+					clearLabel={t('common.remove')}
 					testID="order-filter-cashier"
-					size="xs"
-					leftIcon="userCrown"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={handleRemove}
-					removeTestID="order-filter-cashier-remove"
-				>
-					<ButtonText>
-						{isLoading
+					icon="userCrown"
+					on={isActive}
+					onClear={isActive ? handleRemove : undefined}
+					clearTestID="order-filter-cashier-remove"
+					label={
+						isLoading
 							? t('common.loading')
 							: cashierEntity
 								? format(cashierEntity)
-								: t('common.select_cashier')}
-					</ButtonText>
-				</ButtonPill>
+								: t('common.select_cashier')
+					}
+				/>
 			</ComboboxTrigger>
 			<ComboboxContent>
 				<CashierSearch />
