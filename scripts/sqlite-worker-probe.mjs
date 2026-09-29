@@ -12,7 +12,8 @@ const dir = await mkdtemp(join(tmpdir(), 'wcpos-sqlite-probe-'));
 const pageEntry = `
 import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
 import { fillWithDefaultSettings } from 'rxdb/plugins/core';
-import { SQLITE_POOL_INITIAL_CAPACITY } from './packages/database/src/adapters/storage/sqlite-pool.ts';
+import { SQLITE_POOL_DIRECTORY, SQLITE_POOL_INITIAL_CAPACITY } from './packages/database/src/adapters/storage/sqlite-pool.ts';
+import { measureAppStorage } from './packages/database/src/measure-storage.web.ts';
 const storage = getRxStorageWorker({
   workerInput: () => {
     const worker = new Worker('/sqlite.worker.js?ver=probe', { type: 'module' });
@@ -53,6 +54,22 @@ const params = {
   if (!rows.length) await last.bulkWrite([{ document: { id: 'growth', n: 99, _deleted: false,
     _attachments: {}, _rev: '1-growth', _meta: { lwt: Date.now() } } }], 'growth-probe');
   if ((await last.findDocumentsById(['growth'], false))[0]?.n !== 99) throw new Error('growth read failed');
+  // Measure from the PAGE while the worker owns the pool's sync access handles.
+  const pool = await (await navigator.storage.getDirectory()).getDirectoryHandle(SQLITE_POOL_DIRECTORY);
+  let files = 0, bytes = 0;
+  const errors = [];
+  async function walk(directory) {
+    for await (const entry of directory.values()) {
+      if (entry.kind === 'directory') await walk(entry);
+      else {
+        files++;
+        try { bytes += (await entry.getFile()).size; }
+        catch (error) { errors.push({ name: error.name, message: error.message }); }
+      }
+    }
+  }
+  await walk(pool);
+  globalThis.probeMeasurement = { files, bytes, errors, footprint: await measureAppStorage() };
   await Promise.all(instances.map(instance => instance.close()));
   globalThis.probeResult = 'PASS write/read/close/reopen; growth beyond initial capacity';
 })().catch((error) => { globalThis.probeError = error.message; });
@@ -93,6 +110,7 @@ try {
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 	const origin = `http://127.0.0.1:${server.address().port}`;
 	browser = await chromium.launch();
+	console.log('Chromium:', browser.version());
 	const context = await browser.newContext();
 	const page = await context.newPage();
 	const pageErrors = [];
@@ -107,9 +125,22 @@ try {
 		const result = await page.evaluate(() => ({
 			result: globalThis.probeResult,
 			error: globalThis.probeError,
+			measurement: globalThis.probeMeasurement,
 		}));
 		assert.equal(result.error, undefined);
 		assert.deepEqual(pageErrors, []);
+		console.log('Live pool measurement:', JSON.stringify(result.measurement));
+		assert.ok(result.measurement.files > 0, 'worker has pool files');
+		assert.deepEqual(result.measurement.errors, [], 'page getFile succeeds with live pool handles');
+		const sqliteRoot = result.measurement.footprint.entries.find(
+			(entry) => entry.root === 'sqlite'
+		);
+		assert.ok(sqliteRoot?.bytes > 0, 'live sqlite root has non-zero bytes');
+		assert.equal(
+			sqliteRoot.bytes,
+			result.measurement.bytes,
+			'footprint matches the page directory walk'
+		);
 		console.log(result.result + suffix);
 	};
 	await run('/');

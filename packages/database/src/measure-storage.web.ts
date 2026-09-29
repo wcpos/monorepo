@@ -20,6 +20,8 @@ async function measureDirectory(handle: OpfsDirectoryHandle): Promise<number> {
 	let bytes = 0;
 	for await (const child of handle.values()) {
 		if (child.kind === 'file') {
+			// sqlite-worker-probe.mjs pins Chromium getFile() while SAHPool holds
+			// sync handles open. Safari's behavior under those handles is unverified.
 			bytes += (await child.getFile()).size;
 		} else {
 			bytes += await measureDirectory(child);
