@@ -6,6 +6,7 @@ import { fillWithDefaultSettings, getQueryMatcher, normalizeMangoQuery } from 'r
 import { BehaviorSubject, map, of } from 'rxjs';
 
 import { OPEN_ORDERS_SORT, openOrdersSelector } from '@wcpos/query';
+import { POS_META_KEYS } from '@wcpos/sync-core';
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import { useOpenOrdersResource } from './use-open-orders-resource';
@@ -54,7 +55,8 @@ function order(
 	remoteId: number,
 	dateCreatedGmt: string,
 	cashierId: number,
-	storeId: number
+	storeId: number,
+	registerId?: string
 ) {
 	const document: EngineDocument = {
 		posUserId: String(cashierId),
@@ -71,6 +73,7 @@ function order(
 			meta_data: [
 				{ key: '_pos_user', value: String(cashierId) },
 				{ key: '_pos_store', value: String(storeId) },
+				...(registerId ? [{ key: POS_META_KEYS.register, value: registerId }] : []),
 			],
 		},
 	};
@@ -79,7 +82,7 @@ function order(
 		dateCreatedGmt,
 		$: of(document),
 		collection: { name: 'orders' },
-		getLatest: () => order(uuid, remoteId, dateCreatedGmt, cashierId, storeId),
+		getLatest: () => order(uuid, remoteId, dateCreatedGmt, cashierId, storeId, registerId),
 		toJSON: () => document,
 	};
 }
@@ -134,14 +137,18 @@ describe('useOpenOrdersResource', () => {
 
 	it('reads pos-open orders scoped by cashier/store in storage order, and rebinds scopes', () => {
 		const orders$ = new BehaviorSubject([
-			order('late', 3, '2026-07-14T12:00:00', 7, 2),
+			order('late', 3, '2026-07-14T12:00:00', 7, 2, 'register-b'),
 			order('wrong-store', 4, '2026-07-14T09:00:00', 7, 9),
-			order('early', 2, '2026-07-14T10:00:00', 7, 2),
+			order('early', 2, '2026-07-14T10:00:00', 7, 2, 'register-a'),
 			order('wrong-cashier', 5, '2026-07-14T08:00:00', 8, 2),
 		]);
 		const firstDatabase = databaseWith(orders$);
 		activeDatabase = firstDatabase;
-		const { result } = renderHook(() => useOpenOrdersResource(7, 2));
+		const initialProps: { registerId: string | null } = { registerId: null };
+		const { result, rerender } = renderHook(
+			({ registerId }: { registerId: string | null }) => useOpenOrdersResource(7, 2, registerId),
+			{ initialProps }
+		);
 
 		expect(firstDatabase.collections.orders.find).toHaveBeenCalledWith({
 			selector: openOrdersSelector(7, 2),
@@ -155,6 +162,12 @@ describe('useOpenOrdersResource', () => {
 		act(() => {
 			orders$.next([...orders$.value, order('new', 6, '2026-07-14T13:00:00', 7, 2)]);
 		});
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['early', 'late', 'new']);
+		rerender({ registerId: 'register-a' });
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['early']);
+		rerender({ registerId: 'register-b' });
+		expect(result.current.read().map((hit) => hit.id)).toEqual(['late']);
+		rerender({ registerId: null });
 		expect(result.current.read().map((hit) => hit.id)).toEqual(['early', 'late', 'new']);
 
 		const nextOrders$ = new BehaviorSubject([order('next-scope', 10, '2026-07-14T14:00:00', 7, 2)]);

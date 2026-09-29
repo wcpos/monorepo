@@ -48,7 +48,8 @@ const OPEN_ORDERS_COMPILED = OPEN_ORDER_STATUSES.map((status) =>
  */
 export function useOpenOrdersResource(
 	cashierID: number | undefined,
-	storeID: number | undefined
+	storeID: number | undefined,
+	registerID?: string | null
 ): ObservableResource<OpenOrderHit[]> {
 	const runtime = useQueryRuntime();
 	const resource = React.useMemo(() => {
@@ -60,14 +61,14 @@ export function useOpenOrdersResource(
 				// The scope and the order are the STORAGE's (#2242): no cashier, no query.
 				if (!collection || cashierID === undefined) return of([] as EngineRecord<'orders'>[]);
 				return collection.find({
-					selector: openOrdersSelector(cashierID, storeID),
+					selector: openOrdersSelector(cashierID, storeID, registerID),
 					sort: OPEN_ORDERS_SORT,
 				}).$;
 			}),
 			map((documents) => documents.map((record) => ({ id: String(record.uuid), record })))
 		);
 		return new ObservableResource(openOrders$);
-	}, [cashierID, runtime, storeID]);
+	}, [cashierID, runtime, storeID, registerID]);
 
 	React.useEffect(() => {
 		// Keep remote demand and the resident subscription bound to the same resource lifetime.

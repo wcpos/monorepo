@@ -1,4 +1,4 @@
-import { identityColumnFilter, NO_STORE } from '@wcpos/sync-core';
+import { identityColumnFilter, NO_STORE, wooMetaCarrier } from '@wcpos/sync-core';
 
 import { resolveLegacyField } from './engine-adapter/collection-map';
 
@@ -17,7 +17,7 @@ export const OPEN_ORDERS_SORT: MangoQuerySortPart<EngineDocument>[] = [
 ];
 
 /**
- * This till's open orders, scoped IN STORAGE (#2242): the cashier and store identity the
+ * This till's open orders, scoped IN STORAGE (#2242): the cashier, store and register identity the
  * carrier promotes from the order's `meta_data` is the selector, not a JS filter over every
  * open order in the store. `NO_STORE` (or an unknown store) scopes by cashier alone, as the
  * carrier omits the store entry for it. The
@@ -25,14 +25,27 @@ export const OPEN_ORDERS_SORT: MangoQuerySortPart<EngineDocument>[] = [
  */
 export function openOrdersSelector(
 	cashierId: number,
-	storeId: number | undefined
+	storeId: number | undefined,
+	registerId?: string | null
 ): MangoQuerySelector<EngineDocument> {
 	const statusPath = resolveLegacyField('orders', 'status').enginePath;
+	// The register is not a promoted column: it is the `_pos_register` entry of `meta_data`,
+	// matched with the carrier's own condition once the indexed cashier/store scope has done
+	// the narrowing (Paul, 2026-09-29: a cashier sees their orders on this store AND register).
+	const register =
+		typeof registerId === 'string' && registerId !== ''
+			? {
+					[resolveLegacyField('orders', 'meta_data').enginePath]: (
+						wooMetaCarrier.identityFilter({ registerId }) as { meta_data: unknown }
+					).meta_data,
+				}
+			: {};
 	return {
 		[statusPath]: { $in: [...OPEN_ORDER_STATUSES] },
 		...identityColumnFilter({
 			cashierId: String(cashierId),
 			...(storeId !== undefined && storeId !== NO_STORE ? { storeId: String(storeId) } : {}),
 		}),
+		...register,
 	} as MangoQuerySelector<EngineDocument>;
 }

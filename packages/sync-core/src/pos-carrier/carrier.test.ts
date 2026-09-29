@@ -12,6 +12,16 @@ it('freezes POS metadata wire keys', () => {
 	expect(POS_META_KEYS.lineUuid).toBe('_woocommerce_pos_uuid');
 });
 
+it('round-trips a register-scoped identity filter', () => {
+	const identity = { cashierId: '7', storeId: '2', registerId: 'register-a' };
+	const filter = wooMetaCarrier.identityFilter(identity);
+	expect(filter.$and).toHaveLength(3);
+	expect(filter.$and).toContainEqual({
+		meta_data: { $elemMatch: { key: POS_META_KEYS.register, value: 'register-a' } },
+	});
+	expect(wooMetaCarrier.decodeIdentityFilter(filter)).toEqual(identity);
+});
+
 type CarrierFactory = () => PosCarrier;
 
 const carrierFactories: [string, CarrierFactory][] = [

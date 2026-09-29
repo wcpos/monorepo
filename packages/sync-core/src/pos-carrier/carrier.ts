@@ -22,10 +22,14 @@ export interface PosCarrier {
 	taxBasedOnOverride(meta: MetaDataEntry[] | undefined): string | null;
 	lineUuid(line: { meta_data?: MetaDataEntry[] }): string | null;
 	ensureLineUuid<L extends { meta_data?: MetaDataEntry[] }>(line: L, mintUuid: () => string): L;
-	identityFilter(identity: { cashierId?: string; storeId?: string }): Record<string, unknown>;
+	identityFilter(identity: {
+		cashierId?: string;
+		storeId?: string;
+		registerId?: string;
+	}): Record<string, unknown>;
 	decodeIdentityFilter(
 		selector: Record<string, unknown>
-	): { cashierId?: string; storeId?: string } | null;
+	): { cashierId?: string; storeId?: string; registerId?: string } | null;
 }
 
 /**
@@ -69,7 +73,7 @@ function identityCondition(key: string, value: string): Record<string, unknown> 
 
 function decodeSingleIdentityCondition(
 	selector: Record<string, unknown>
-): { cashierId?: string; storeId?: string } | null {
+): { cashierId?: string; storeId?: string; registerId?: string } | null {
 	const metaData = selector.meta_data;
 	if (metaData === null || typeof metaData !== 'object') return null;
 	const elemMatch = (metaData as Record<string, unknown>).$elemMatch;
@@ -84,6 +88,7 @@ function decodeSingleIdentityCondition(
 	if (typeof value !== 'string') return null;
 	if (key === POS_META_KEYS.user) return { cashierId: value };
 	if (key === POS_META_KEYS.store) return { storeId: value };
+	if (key === POS_META_KEYS.register) return { registerId: value };
 	return null;
 }
 
@@ -181,6 +186,9 @@ export const wooMetaCarrier: PosCarrier = {
 			identity.storeId === undefined
 				? undefined
 				: identityCondition(POS_META_KEYS.store, identity.storeId),
+			identity.registerId === undefined
+				? undefined
+				: identityCondition(POS_META_KEYS.register, identity.registerId),
 		].filter((condition): condition is Record<string, unknown> => condition !== undefined);
 		if (conditions.length === 0) return {};
 		if (conditions.length === 1) return conditions[0];
@@ -192,13 +200,14 @@ export const wooMetaCarrier: PosCarrier = {
 		if (single) return single;
 		if (Object.keys(selector).length === 0) return {};
 		if (!Array.isArray(selector.$and)) return null;
-		const identity: { cashierId?: string; storeId?: string } = {};
+		const identity: { cashierId?: string; storeId?: string; registerId?: string } = {};
 		for (const condition of selector.$and) {
 			if (condition === null || typeof condition !== 'object') return null;
 			const decoded = decodeSingleIdentityCondition(condition as Record<string, unknown>);
 			if (!decoded) return null;
 			if (decoded.cashierId !== undefined) identity.cashierId = decoded.cashierId;
 			if (decoded.storeId !== undefined) identity.storeId = decoded.storeId;
+			if (decoded.registerId !== undefined) identity.registerId = decoded.registerId;
 		}
 		return identity;
 	},
