@@ -57,6 +57,14 @@ const rows: Probe[] = [
 		},
 	},
 ];
+for (const [uuid, entry] of [
+	['boolean', { value: true }],
+	['missing', {}],
+	['null', { value: null }],
+	['one', { value: 1 }],
+	['text', { value: 'z' }],
+] as const)
+	rows.push({ uuid, payload: { items: [entry] } });
 const identity = wooMetaCarrier.identityFilter({ cashierId: '7' });
 const cases: [string, Record<string, unknown>, string[], boolean][] = [
 	['one-term Logs', logs('co-balt'), ['fold', 'raw', 'split'], true],
@@ -77,6 +85,15 @@ const cases: [string, Record<string, unknown>, string[], boolean][] = [
 	['taxonomy', { 'payload.categories': { $elemMatch: { id: 5 } } }, ['string'], true],
 	['unsupported regex', { message: { $regex: 'a.*b' } }, ['regex'], false],
 ];
+for (const [label, condition, expected, fast] of [
+	['nin fallback', { $nin: [1] }, ['boolean', 'missing', 'null', 'text'], false],
+	['null in fallback', { $in: [null] }, ['missing', 'null'], false],
+	['typed numeric equality', { $eq: 1 }, ['one'], true],
+	['range fallback', { $gt: 1 }, [], false],
+	['boolean equality fallback', { $eq: true }, ['boolean'], false],
+] as [string, Record<string, unknown>, string[], boolean][]) {
+	cases.push([label, { 'payload.items': { $elemMatch: { value: condition } } }, expected, fast]);
+}
 const results = new Map<string, unknown>();
 afterAll(() => {
 	for (const [label] of cases)

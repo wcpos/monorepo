@@ -102,26 +102,42 @@ for (const dist of DISTS)
 		assert.deepEqual(ids({ text: { $regex: 'co%_\\*\\?\\[balt' } }), ['two']);
 		for (const [condition, expected] of [
 			[{ $eq: 7 }, ['one']],
-			[{ $ne: null }, ['one', 'three']],
-			[{ $eq: null }, ['two']],
 			[{ $in: [7, 9] }, ['one', 'three']],
-			[{ $nin: [7, 9] }, []],
-			[{ $gt: 7 }, ['three']],
-			[{ $gte: 7 }, ['one', 'three']],
-			[{ $lt: 9 }, ['one']],
-			[{ $lte: 7 }, ['one']],
 		])
 			assert.deepEqual(ids({ items: { $elemMatch: { value: condition } } }), expected);
 		assert.deepEqual(
 			ids({
 				items: {
-					$elemMatch: { $and: [{ key: 'x' }, { $or: [{ value: 7 }, { value: { $eq: null } }] }] },
+					$elemMatch: { $and: [{ key: 'x' }, { $or: [{ value: 7 }, { value: { $eq: 9 } }] }] },
 				},
 			}),
-			['one', 'two']
+			['one']
 		);
 		assert.deepEqual(ids({ values: { $elemMatch: { $in: [7] } } }), ['one']);
 		assert.deepEqual(ids({ values: { $elemMatch: { $eq: 'blue' } } }), ['one']);
+		for (const value of [
+			null,
+			true,
+			{ $eq: null },
+			{ $eq: true },
+			{ $eq: {} },
+			{ $in: [null] },
+			{ $in: [true] },
+			{ $in: [{}] },
+			{ $ne: 7 },
+			{ $nin: [7] },
+			{ $gt: 7 },
+			{ $gte: 7 },
+			{ $lt: 9 },
+			{ $lte: 7 },
+			{ $exists: true },
+			{ $regex: 'abc' },
+			{ $elemMatch: { $eq: 7 } },
+		])
+			assert.throws(
+				() => sql({ items: { $elemMatch: { value } } }),
+				(error) => error.isNonImplementedOperatorError === true
+			);
 		for (const condition of [
 			{ $regex: 'a.*b' },
 			{ $regex: '\\d' },

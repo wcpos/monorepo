@@ -46,49 +46,55 @@ function wcposElementMatch(column, selector, push, placeholder) {
 		error.isNonImplementedOperatorError = true;
 		throw error;
 	};
-	const scalar = (value) =>
-		value === null || ['string', 'number', 'boolean'].includes(typeof value);
+	const scalar = (value) => ['string', 'number'].includes(typeof value);
 	const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-	const compare = (operator, value, expression) => {
-		if (operator === '$in' || operator === '$nin') {
-			if (!Array.isArray(value) || !value.every(scalar)) fail();
-			value.forEach(push);
-			return (
-				expression +
-				(operator === '$in' ? ' IN (' : ' NOT IN (') +
-				value.map(() => placeholder).join(',') +
-				')'
-			);
-		}
-		const signs = { $eq: '=', $ne: '!=', $gt: '>', $gte: '>=', $lt: '<', $lte: '<=' };
-		if (!Object.hasOwn(signs, operator) || !scalar(value)) fail();
-		if (value === null && (operator === '$eq' || operator === '$ne'))
-			return expression + (operator === '$eq' ? ' IS NULL' : ' IS NOT NULL');
-		push(value);
-		const comparison = expression + signs[operator] + placeholder;
-		return operator === '$ne' ? '(' + comparison + ' OR ' + expression + ' IS NULL)' : comparison;
+	const compare = (operator, value, expression, type) => {
+		if (operator !== '$eq' && operator !== '$in') fail();
+		const values = operator === '$in' ? value : [value];
+		if (!Array.isArray(values) || !values.every(scalar)) fail();
+		const groups = ['string', 'number'].flatMap((kind) => {
+			const operands = values.filter((operand) => typeof operand === kind);
+			if (!operands.length) return [];
+			operands.forEach(push);
+			const guard = type + (kind === 'string' ? " = 'text'" : " IN ('integer','real')");
+			const comparison =
+				operator === '$eq'
+					? expression + ' = ' + placeholder
+					: expression + ' IN (' + operands.map(() => placeholder).join(',') + ')';
+			return ['(' + guard + ' AND ' + comparison + ')'];
+		});
+		return '(' + (groups.join(' OR ') || '0') + ')';
 	};
-	const walk = (condition, expression, document) => {
-		if (!object(condition)) return compare('$eq', condition, expression);
+	const walk = (condition, expression, type, document) => {
+		if (!object(condition)) return compare('$eq', condition, expression, type);
 		const clauses = Object.entries(condition).map(([key, value]) => {
 			if (key === '$and' || key === '$or') {
 				if (!Array.isArray(value) || !value.length || !value.every(object)) fail();
 				return (
 					'(' +
 					value
-						.map((part) => walk(part, expression, document))
+						.map((part) => walk(part, expression, type, document))
 						.join(key === '$and' ? ' AND ' : ' OR ') +
 					')'
 				);
 			}
-			if (key.startsWith('$')) return compare(key, value, expression);
+			if (key.startsWith('$')) return compare(key, value, expression, type);
 			if (!document) fail();
 			// Mixed arrays must not feed scalar strings to json_extract as JSON text.
-			const field =
-				"json_extract(CASE WHEN json_each.type='object' THEN json_each.value END,'$." +
+			const argumentsSQL =
+				"CASE WHEN json_each.type='object' THEN json_each.value END,'$." +
 				key.replace(/'/g, "''") +
-				"')";
-			return "(json_each.type='object' AND " + walk(value, field, false) + ')';
+				"'";
+			return (
+				"(json_each.type='object' AND " +
+				walk(
+					value,
+					'json_extract(' + argumentsSQL + ')',
+					'json_type(' + argumentsSQL + ')',
+					false
+				) +
+				')'
+			);
 		});
 		if (!clauses.length) fail();
 		return '(' + clauses.join(' AND ') + ')';
@@ -98,7 +104,7 @@ function wcposElementMatch(column, selector, push, placeholder) {
 		'EXISTS (SELECT 1 FROM json_each(' +
 		column +
 		') WHERE ' +
-		walk(selector, 'json_each.value', true) +
+		walk(selector, 'json_each.value', 'json_each.type', true) +
 		')'
 	);
 }
