@@ -23,13 +23,14 @@ import {
 } from '@wcpos/components/table';
 import type { PulseTableRowRef } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
+import { useIsPhone } from '@wcpos/components/lib/device';
 import { useDocField } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { LineStrip } from './cells/line-strip';
 import { type LineSort, sortLines } from './sort-lines';
 import { FeeAndShippingTotal } from '../cells/fee-and-shipping-total';
-import { FeeName } from '../cells/fee-name';
+import { FeeName } from './cells/fee-name';
 import { FeePrice } from '../cells/fee-price';
 import { LineItemImage } from '../cells/image';
 import { Price } from './cells/price';
@@ -38,7 +39,7 @@ import { ProductTotal } from './cells/product-total';
 import { Quantity } from './cells/quantity-keypad';
 import { RegularPrice } from '../cells/regular_price';
 import { ShippingPrice } from '../cells/shipping-price';
-import { ShippingTitle } from '../cells/shipping-title';
+import { ShippingTitle } from './cells/shipping-title';
 import { Subtotal } from '../cells/subtotal';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { type CurrentOrderRecord, useCurrentOrder } from '../../contexts/current-order';
@@ -126,6 +127,9 @@ interface CartTableProps {
 export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
 	const t = useT();
+	// The decided cart line at phone width has no Price column (the cart board, 2026-09-17):
+	// Qty · Item · Total fit; four columns truncate their labels at the larger scale steps.
+	const isPhone = useIsPhone();
 	const uiColumns = useDocField(uiSettings, (value) => value.columns);
 	const setting = useDocField(uiSettings, (value) => value.sortLines) as LineSort | undefined;
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
@@ -200,7 +204,9 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 	}, [data, lastDraftOrderUuidRef]);
 	const columns = React.useMemo((): ColumnDef<CartTableLine, unknown, CartTableFeatures>[] => {
 		return uiColumns
-			.filter((column) => column.show && column.key !== 'actions')
+			.filter(
+				(column) => column.show && column.key !== 'actions' && !(isPhone && column.key === 'price')
+			)
 			.map((col) => {
 				return {
 					id: col.key,
@@ -238,7 +244,7 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 					},
 				} as ColumnDef<CartTableLine, unknown, CartTableFeatures>;
 			});
-	}, [uiColumns, getUILabel, t]);
+	}, [uiColumns, getUILabel, t, isPhone]);
 	const table = useTable({
 		features: cartTableFeatures,
 		data,
@@ -283,6 +289,8 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 									style={{
 										flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
 										flexBasis: meta?.width ? meta.width : undefined,
+										// Item gives way (the cart board): the other columns keep their content width so a total never wraps.
+										flexShrink: header.column.id === 'name' ? 1 : 0,
 										alignItems: getFlexAlign(meta?.align || 'left'),
 									}}
 								>
@@ -329,6 +337,8 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 												style={{
 													flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
 													flexBasis: meta?.width ? meta.width : undefined,
+													// Item gives way (the cart board): the other columns keep their content width so a total never wraps.
+													flexShrink: cell.column.id === 'name' ? 1 : 0,
 													alignItems: getFlexAlign(meta?.align || 'left'),
 												}}
 											>

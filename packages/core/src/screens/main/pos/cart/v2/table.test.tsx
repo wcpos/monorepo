@@ -109,7 +109,9 @@ jest.mock('./cells/line-strip', () => ({
 	),
 }));
 jest.mock('../cells/fee-and-shipping-total', () => ({ FeeAndShippingTotal: () => null }));
-jest.mock('../cells/fee-name', () => ({ FeeName: () => null }));
+let mockIsPhone = false;
+jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockIsPhone }));
+jest.mock('./cells/fee-name', () => ({ FeeName: () => null }));
 jest.mock('../cells/fee-price', () => ({ FeePrice: () => null }));
 jest.mock('../cells/image', () => ({ LineItemImage: () => null }));
 jest.mock('./cells/price', () => ({ Price: () => null }));
@@ -118,7 +120,7 @@ jest.mock('./cells/product-total', () => ({ ProductTotal: () => null }));
 jest.mock('./cells/quantity-keypad', () => ({ Quantity: () => null }));
 jest.mock('../cells/regular_price', () => ({ RegularPrice: () => null }));
 jest.mock('../cells/shipping-price', () => ({ ShippingPrice: () => null }));
-jest.mock('../cells/shipping-title', () => ({ ShippingTitle: () => null }));
+jest.mock('./cells/shipping-title', () => ({ ShippingTitle: () => null }));
 jest.mock('../cells/sku', () => ({ SKU: () => null }));
 jest.mock('../cells/subtotal', () => ({ Subtotal: () => null }));
 
@@ -201,6 +203,16 @@ it('renders the four cart header labels', () => {
 	render(<CartTable />);
 	for (const label of ['Qty', 'Item', 'Price', 'Total'])
 		expect(screen.getByText(label)).toBeTruthy();
+});
+it('has no Price column on the phone (the decided cart line at phone width)', () => {
+	mockIsPhone = true;
+	try {
+		render(<CartTable />);
+		expect(screen.queryByText('Price')).toBeNull();
+		expect(screen.getByText('Total')).toBeTruthy();
+	} finally {
+		mockIsPhone = false;
+	}
 });
 it('pulses once for an added line and does not pulse again on an unchanged rerender', () => {
 	mockPulseAdd.mockClear();

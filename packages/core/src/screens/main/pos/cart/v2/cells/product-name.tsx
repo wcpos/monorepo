@@ -9,8 +9,6 @@ import { VStack } from '@wcpos/components/vstack';
 import type { CellContext } from '@wcpos/core/table-types';
 
 import { formatMetaDataValue } from '../../../../components/format-meta-data-value';
-import { EditCartItemButton } from '../../cells/edit-cart-item-button';
-import { EditLineItem } from '../../cells/edit-line-item';
 import { useT } from '../../../../../../contexts/translations';
 import { EditableField } from '../../../../components/editable-field';
 import { getStockRejectionForLine, stockRejection$ } from '../../../hooks/stock-rejection';
@@ -59,17 +57,10 @@ export function ProductName({ row, column, table }: CellContext<Props, 'name'>) 
 	);
 	return (
 		<VStack className="w-full">
-			<HStack className="gap-0">
-				<View className="flex-1">
-					<EditableField
-						value={item.name}
-						onChangeText={(name) => updateLineItem(uuid, { name })}
-					/>
-				</View>
-				<EditCartItemButton title={t('common.edit_2', { name: item.name })}>
-					<EditLineItem uuid={uuid} item={item} />
-				</EditCartItemButton>
-			</HStack>
+			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
+			<View className="w-full">
+				<EditableField value={item.name} onChangeText={(name) => updateLineItem(uuid, { name })} />
+			</View>
 			{rejectedItem && (
 				<Text className="text-destructive text-xs font-semibold">
 					{rejectedItem.available === null
