@@ -286,7 +286,7 @@ test('a second takeover request during a handover gets its own ack and the same 
 });
 
 test.each([false, true])(
-	'a replacement capture hold defers under the original ceiling (microtask: %s)',
+	'a replacement capture hold keeps the handover waiting past the ceiling (microtask: %s)',
 	async (microtask) => {
 		const a = h.tab();
 		const b = h.tab();
@@ -307,12 +307,58 @@ test.each([false, true])(
 		}
 		await flush();
 		expect(a.getState()).toEqual({ kind: 'live' });
-		jest.advanceTimersByTime(TAKEOVER_DEFER_CEILING_MS - 1000);
+		jest.advanceTimersByTime(TAKEOVER_DEFER_CEILING_MS * 4);
+		await flush();
+		expect(a.getState()).toEqual({ kind: 'live' });
+		expect(b.getState()).toEqual({ kind: 'taking-over', deferral: 'payment' });
+		releaseCapture();
 		await flush();
 		expect(b.getState()).toEqual({ kind: 'live' });
-		releaseCapture();
 	}
 );
+test('a payment hold is never abandoned at the ceiling: the card may still be on the reader', async () => {
+	const a = h.tab();
+	const b = h.tab();
+	await flush();
+	const release = a.hold('payment');
+	b.takeOver();
+	await flush();
+	jest.advanceTimersByTime(TAKEOVER_DEFER_CEILING_MS * 20); // The device leg's 300 s deadline.
+	await flush();
+	expect(a.getState()).toEqual({ kind: 'live' });
+	// The holder can still protect the capture that follows collection.
+	const capture = a.hold('payment');
+	release();
+	await flush();
+	expect(b.getState()).toEqual({ kind: 'taking-over', deferral: 'payment' });
+	capture();
+	await flush();
+	expect(a.getState()).toEqual({ kind: 'parked', reason: 'another-tab-live' });
+	expect(b.getState()).toEqual({ kind: 'live' });
+});
+test('a payment that begins under a write ceiling suspends it; a write left behind gets a fresh ceiling', async () => {
+	const a = h.tab();
+	const b = h.tab();
+	await flush();
+	const releaseWrite = a.hold('write');
+	b.takeOver();
+	await flush();
+	jest.advanceTimersByTime(TAKEOVER_DEFER_CEILING_MS - 1000);
+	const releasePayment = a.hold('payment');
+	jest.advanceTimersByTime(TAKEOVER_DEFER_CEILING_MS * 4);
+	await flush();
+	expect(a.getState()).toEqual({ kind: 'live' });
+	releasePayment();
+	await flush();
+	expect(a.getState()).toEqual({ kind: 'live' });
+	jest.advanceTimersByTime(TAKEOVER_DEFER_CEILING_MS - 1);
+	await flush();
+	expect(a.getState()).toEqual({ kind: 'live' });
+	jest.advanceTimersByTime(1);
+	await flush();
+	expect(b.getState()).toEqual({ kind: 'live' });
+	releaseWrite();
+});
 
 test('only the live owner accepts holds, including while waiting for an earlier hold', async () => {
 	const a = h.tab();
@@ -334,7 +380,7 @@ test('only the live owner accepts holds, including while waiting for an earlier 
 test('the ceiling rejects new holds even while teardown has not settled', async () => {
 	const a = h.tab(() => new Promise(() => {}));
 	const b = h.tab();
-	const release = a.hold('payment');
+	const release = a.hold('write');
 	b.takeOver();
 	await jest.advanceTimersByTimeAsync(TAKEOVER_DEFER_CEILING_MS);
 	expect(() => a.hold('payment')).toThrow(a.NotOwnedError);

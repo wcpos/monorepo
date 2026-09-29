@@ -9,7 +9,11 @@ export { LiveTabNotOwnedError } from './ownership-error';
 export const LIVE_TAB_LOCK_NAME = 'wcpos-live-tab';
 export const LIVE_TAB_CHANNEL_NAME = 'wcpos-live-tab';
 export const TAKEOVER_ANSWER_TIMEOUT_MS = 3_000; // A few seconds before asking to close the other tab.
-export const TAKEOVER_DEFER_CEILING_MS = 15_000; // Allow a card round trip, not indefinite lockout.
+// Bounds a WRITE hold only. A payment hold is never abandoned: the parked holder keeps its
+// reader session, so a card approved after a forced handover would be charged with no tab
+// left to post the capture, and the next owner would mark the row failed. The device leg's
+// own 300 s deadline cancels the collection, which bounds the wait.
+export const TAKEOVER_DEFER_CEILING_MS = 15_000;
 export const HANDOVER_TEARDOWN_DEADLINE_MS = 10_000; // After the takeover ceiling, bound storage disposal.
 type Hold = 'payment' | 'write';
 export type LiveTabState =
@@ -51,7 +55,8 @@ export function holdLiveTab(reason: Hold): () => void {
 	const key = Symbol();
 	holds.set(key, reason);
 	return () => {
-		if (holds.delete(key) && !holds.size) for (const notify of released) notify();
+		// Every release wakes the handover so it can re-read the remaining holds' reason.
+		if (holds.delete(key)) for (const notify of released) notify();
 	};
 }
 
@@ -130,14 +135,22 @@ export function createLiveTab(deps: Dependencies) {
 		handingOver = true;
 		if (holds.size) {
 			let expired = false;
-			const timer = clock.setTimeout(() => {
-				expired = true;
-				ownsPool = false;
-				finishWaiting?.();
-			}, TAKEOVER_DEFER_CEILING_MS);
+			let timer: ReturnType<typeof setTimeout> | undefined;
 			// Collection may release then start capture before this continuation runs.
-			// Recheck each replacement hold, without resetting the original ceiling.
+			// Recheck each replacement hold. The ceiling runs only while the holds are
+			// write-only, and a replacement write hold does not reset it.
 			while (holds.size && !expired && !disposed && !lost) {
+				if (reason() === 'write' && timer === undefined) {
+					timer = clock.setTimeout(() => {
+						if (reason() === 'payment') {
+							timer = undefined; // A payment began under the ceiling; wait it out.
+							return;
+						}
+						expired = true;
+						ownsPool = false;
+						finishWaiting?.();
+					}, TAKEOVER_DEFER_CEILING_MS);
+				}
 				await new Promise<void>((resolve) => {
 					const done = () => {
 						released.delete(done);
