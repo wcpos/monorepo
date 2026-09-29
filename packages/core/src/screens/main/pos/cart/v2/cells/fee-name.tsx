@@ -44,6 +44,9 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 			{/* No edit icon here: the line strip's Edit owns the dialog (Paul, 2026-09-29). */}
 			<View className="w-full">
 				<EditableField
+					variant="ghost"
+					bold={false}
+					numberOfLines={2}
 					value={item.name ?? undefined}
 					onChangeText={(name) => updateFeeLine(uuid, { name })}
 				/>

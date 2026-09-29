@@ -33,6 +33,9 @@ export interface NumberInputProps {
 	/**  */
 	className?: string;
 
+	/** Classes for the displayed number */
+	textClassName?: string;
+
 	/**  */
 	formatOptions?: NumberFormatOptions;
 
@@ -49,6 +52,7 @@ export function NumberInput({
 	discounts,
 	placement = 'bottom',
 	className,
+	textClassName,
 	formatOptions,
 	testID,
 	...props
@@ -111,7 +115,7 @@ export function NumberInput({
 					disabled={disabled}
 					className={cn('min-w-10 items-start', className)}
 				>
-					<ButtonText>{value !== '' ? format(value) : ''}</ButtonText>
+					<ButtonText className={textClassName}>{value !== '' ? format(value) : ''}</ButtonText>
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent side={placement as 'top' | 'bottom'} className="w-auto p-2">
