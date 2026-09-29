@@ -3,6 +3,8 @@ import { fromMinor, toMinor } from '@wcpos/order-math';
 
 type LedgerRow = {
 	id?: string;
+	/** The order the row belongs to, when the caller keeps it; counts distinct orders. */
+	order?: string;
 	refunds?: readonly { id: number; amount: string; status: string }[];
 	session_id?: string | null;
 	kind: string;
@@ -144,7 +146,13 @@ export function deriveDrawerTerms(input: Parameters<typeof deriveExpected>[0]) {
 	const refunds = attributeRefunds(session.id, ledgerRowsBySession, refundRecords);
 	return {
 		float: fromMinor(toMinor(session.counted_float, 4), 4),
-		cashSales: { amount: total(cash), count: cash.length },
+		cashSales: {
+			amount: total(cash),
+			// Distinct orders when rows carry their order; a split cash payment is one sale.
+			count: cash.every((row) => row.order)
+				? new Set(cash.map((row) => row.order)).size
+				: cash.length,
+		},
 		paidIn: live
 			.filter((row) => row.type === 'paid_in')
 			.map((row) => ({

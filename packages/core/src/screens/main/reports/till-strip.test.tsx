@@ -112,6 +112,8 @@ jest.mock('../../../hooks/use-local-date', () => ({
 	// The cashier's locale is English here; the strip must format through this path.
 	useLocalDate: () => ({ formatDate: jest.requireActual('date-fns').format }),
 }));
+let focused = true;
+jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => focused }));
 jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => http }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: online ? 'online-website-available' : 'offline' }),
@@ -351,4 +353,36 @@ it('reads afresh when the bound register changes while closed', async () => {
 		'closures/last',
 		expect.objectContaining({ params: expect.objectContaining({ register_id: 'r2' }) })
 	);
+});
+// The till now: a ready lookup is read again every minute while the screen is focused,
+// and not while the screen is unfocused.
+it('revalidates a ready lookup every minute while focused', async () => {
+	data.session = null;
+	online = true;
+	jest.useFakeTimers();
+	try {
+		const { rerender } = render(<TillStrip onOpenClosures={jest.fn()} />);
+		await waitFor(() =>
+			expect(screen.getByTestId('till-last-closure').textContent).toContain('#413')
+		);
+		const reads = () => get.mock.calls.filter(([path]) => path === 'closures/last').length;
+		const before = reads();
+		await act(async () => {
+			jest.advanceTimersByTime(60_000);
+		});
+		await waitFor(() => expect(reads()).toBe(before + 1));
+		await waitFor(() =>
+			expect(screen.getByTestId('till-last-closure').textContent).toContain('#413')
+		);
+		const settled = reads();
+		focused = false;
+		rerender(<TillStrip onOpenClosures={jest.fn()} />);
+		await act(async () => {
+			jest.advanceTimersByTime(120_000);
+		});
+		expect(reads()).toBe(settled);
+	} finally {
+		focused = true;
+		jest.useRealTimers();
+	}
 });

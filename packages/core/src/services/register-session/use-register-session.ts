@@ -292,8 +292,9 @@ export function useRegisterSession() {
 		? {
 				session,
 				movements: entries,
+				// Each row keeps its order, so a split cash payment counts as one cash sale.
 				ledgerRowsBySession: accountingOrders.flatMap(({ record }) =>
-					readLedger(record.payload.meta_data)
+					readLedger(record.payload.meta_data).map((row) => ({ ...row, order: record.uuid }))
 				),
 				refundRecords: data?.refundRecords,
 			}

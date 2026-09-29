@@ -309,3 +309,22 @@ it('counts a refund split across cash and card once per method', () => {
 		count: 1,
 	});
 });
+
+it('counts cash sales by order, so a split cash payment is one sale', () => {
+	const session = { id: 'S', counted_float: '0.0000' };
+	const leg = (order: string, amount: string) => ({
+		order,
+		session_id: 'S',
+		kind: 'cash',
+		method_id: 'cash',
+		status: 'captured',
+		amount,
+		refunded_amount: '0.0000',
+	});
+	const terms = deriveDrawerTerms({
+		session,
+		movements: [],
+		ledgerRowsBySession: [leg('o1', '10.0000'), leg('o1', '5.0000'), leg('o2', '20.0000')],
+	});
+	expect(terms.cashSales).toEqual({ amount: '35.0000', count: 2 });
+});

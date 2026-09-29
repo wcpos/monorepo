@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { format as formatDate, subDays } from 'date-fns';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -64,6 +65,16 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 		!active && authoritative ? (remoteClosure ?? undefined) : undefined
 	);
 	// The remote session's X-report goes through the receipt document, as the room's remote card prints it.
+	// The till now: while this screen is focused a ready lookup is read again every minute and
+	// on regaining focus, so a till opened on another device does not stay "Closed" here.
+	const focused = useIsFocused();
+	const { load: reload, data: remoteData } = remote;
+	const ready = remoteData.status === 'ready';
+	React.useEffect(() => {
+		if (!focused || active || !bound || !ready) return;
+		const id = setInterval(() => void reload(), 60_000);
+		return () => clearInterval(id);
+	}, [focused, active, bound, ready, reload]);
 	const remoteReport = useReceiptDocument({
 		document: remoteSession ? `xreport:${remoteSession.id}` : undefined,
 		documentReady: !!remoteSession,
