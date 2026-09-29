@@ -3,8 +3,6 @@
  */
 import * as React from 'react';
 
-import { endOfDay, startOfDay } from 'date-fns';
-import { utc } from '@date-fns/utc';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ObservableResource } from 'observable-hooks';
 import { of } from 'rxjs';
@@ -116,8 +114,6 @@ describe('reports FilterBar bindings', () => {
 		expect(mockUseEngineRecordByWooId).toHaveBeenNthCalledWith(1, 'customers', 42);
 		expect(mockUseEngineRecordByWooId).toHaveBeenNthCalledWith(2, 'customers', 7);
 		expect(screen.getByTestId('shared-status-pill')).toBeTruthy();
-		expect(screen.getByTestId('shared-store-pill')).toBeTruthy();
-		expect(screen.getByTestId('shared-date-range-pill')).toBeTruthy();
 
 		fireEvent.click(screen.getByTestId('shared-customer-pill'));
 		fireEvent.click(screen.getByTestId('shared-cashier-pill'));
@@ -125,7 +121,7 @@ describe('reports FilterBar bindings', () => {
 		expect(mockForceRefresh).toHaveBeenNthCalledWith(2, mockManager, 7, 'cashier');
 	});
 
-	it('keeps the reports safety invariant by resetting a removed date range to today', () => {
+	it('renders no register, store or date pill: the bar and the date button own that scope', () => {
 		render(
 			<QueryStateProvider
 				collection="orders"
@@ -143,13 +139,13 @@ describe('reports FilterBar bindings', () => {
 			</QueryStateProvider>
 		);
 
-		fireEvent.click(screen.getByTestId('shared-date-range-pill'));
-
-		const today = new Date(2026, 6, 15, 12);
+		expect(screen.queryByTestId('shared-store-pill')).toBeNull();
+		expect(screen.queryByTestId('shared-date-range-pill')).toBeNull();
+		// The window the page holds is untouched by the pills.
 		expect(JSON.parse(screen.getByTestId('filters').textContent ?? '{}')).toEqual({
 			dateRange: {
-				from: startOfDay(today, { in: utc }).toISOString(),
-				to: endOfDay(today, { in: utc }).toISOString(),
+				from: '2026-07-01T00:00:00.000Z',
+				to: '2026-07-02T23:59:59.999Z',
 			},
 		});
 	});

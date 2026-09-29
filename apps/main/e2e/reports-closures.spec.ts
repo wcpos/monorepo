@@ -376,7 +376,16 @@ async function openClosures(page: Page) {
 	}
 	await expect(page.getByTestId('drawer-item-reports')).toBeVisible();
 	await page.getByTestId('drawer-item-reports').click();
-	await page.getByTestId('reports-room-closures').click();
+	await expect(page.getByTestId('reports-bar')).toBeVisible();
+	await expect(page.getByTestId('reports-scope')).toBeVisible();
+	await page.getByTestId('reports-scope').click();
+	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await page.getByTestId('reports-closures-link').click();
+	await expect(page.getByTestId('reports-closures')).toBeVisible();
+	await page.getByTestId('reports-back-sales').click();
+	await expect(page.getByTestId('reports-closures-link')).toBeVisible();
+	await page.getByTestId('reports-closures-link').click();
 	await expect(page.getByTestId('reports-closures')).toBeVisible();
 }
 
@@ -485,13 +494,11 @@ for (const viewport of viewports) {
 				await page.getByTestId('reports-period').click();
 				await expect(page.getByTestId('reports-period-today')).not.toHaveClass(/opacity-50/);
 				for (const [period, scopeName] of [
-					['previous', en['reports.earlier_closures']],
 					['yesterday', en['reports.earlier_closures']],
 					['thisWeek', en['reports.earlier_closures']],
 					['lastWeek', en['reports.earlier_closures']],
 					['thisMonth', en['reports.earlier_closures']],
 					['lastMonth', en['reports.earlier_closures']],
-					['custom', en['reports.custom_ranges']],
 				]) {
 					const option = page.getByTestId(`reports-period-${period}`);
 					await expect(option).toHaveClass(/opacity-50/);

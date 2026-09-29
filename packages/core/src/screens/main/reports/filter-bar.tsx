@@ -8,21 +8,17 @@ import { useQueryRuntime } from '@wcpos/query';
 import { isGuestCustomer } from '@wcpos/sync-core';
 
 import { forceRefreshFilterCustomer } from '../orders/force-refresh-filter-customer';
-import { useStoreSession } from '../../../contexts/app-state';
-import { useStoreDay } from '../../../hooks/use-store-day';
-import { useQueryState, useQueryStateActions } from '../../../query';
+import { useQueryState } from '../../../query';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
-import { RegisterPill } from '../components/order/filter-bar/register-pill';
 import { CustomerPill } from '../components/order/filter-bar/customer-pill';
-import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
-import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useEngineRecordByWooId } from '../hooks/use-engine-document';
-import { storeListResource } from '../hooks/store-list-resource';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 /**
- *
+ * The 1.10 pills that survive until the hero chips replace them. The register, store and
+ * date pills are gone: the bar's register/store menu and the date button own that scope,
+ * and on Free those controls carry the lock, which a pill underneath would have bypassed.
  */
 export function FilterBar() {
 	const customerID = useQueryState<'orders', number | undefined>(
@@ -32,11 +28,9 @@ export function FilterBar() {
 		(state) => state.filters.cashier
 	);
 	const cashierID = cashierFilter === undefined ? undefined : Number(cashierFilter);
-	const actions = useQueryStateActions<'orders'>();
 	const guestCustomer = useGuestCustomer();
 	const customerResource = useEngineRecordByWooId('customers', customerID ?? 0);
 	const cashierResource = useEngineRecordByWooId('customers', cashierID ?? 0);
-	const { wpCredentials } = useStoreSession();
 	const runtime = useQueryRuntime();
 
 	const refreshCustomer = React.useCallback(() => {
@@ -48,23 +42,13 @@ export function FilterBar() {
 		void forceRefreshFilterCustomer(runtime, cashierID, 'cashier');
 	}, [cashierID, runtime]);
 
-	// Held outside React on purpose — a resource rebuilt on each Suspense retry re-suspends
-	// forever. See `store-list-resource.ts`.
-	const storesResource = storeListResource(wpCredentials);
-
-	/**
-	 * Reports must stay bounded to a date window; clearing restores today's window.
-	 */
-	const { presets, rangeToFilter } = useStoreDay();
-	const removeDateRangeFilter = React.useCallback(() => {
-		actions.setFilter('dateRange', rangeToFilter(presets().today));
-	}, [actions, presets, rangeToFilter]);
-
 	return (
 		<View className="p-2 pb-0">
 			<Card className="bg-card-header w-full p-2">
 				<HStack className="w-full flex-wrap">
 					<StatusPill />
+					{/* Each pill keeps its own boundary: a pill still waiting for its records must
+					    never blank the screen around it (#1707). */}
 					<Suspense>
 						<CustomerPill
 							resource={customerResource}
@@ -75,16 +59,6 @@ export function FilterBar() {
 					<Suspense>
 						<CashierPill resource={cashierResource} onMissing={refreshCashier} />
 					</Suspense>
-					{/* Its own boundary, like the two pills above: a pill still waiting for its
-					    records must never blank the screen around it. Without this the
-					    suspension escaped to expo-router's per-route boundary, whose production
-					    fallback is `null`, which is how the Orders body came to render empty
-					    under a painted header (#1707, CI run 33295532237). */}
-					<Suspense>
-						<StorePill resource={storesResource} />
-					</Suspense>
-					<RegisterPill />
-					<DateRangePill onRemove={removeDateRangeFilter} />
 				</HStack>
 			</Card>
 		</View>
