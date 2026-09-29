@@ -8,6 +8,7 @@ import { type ExpandedState } from '@tanstack/react-table';
 import { EmptyState } from '@wcpos/components/empty-state';
 import { Skeleton, skeletonCount } from '@wcpos/components/skeleton';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Icon } from '@wcpos/components/icon';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
@@ -333,13 +334,19 @@ function POSProductsContent({
 				</View>
 				<View className="border-border flex-1 border-t">
 					{(session?.status === 'counting' || (!session && sessionsOn)) && (
-						<Text className="text-muted-foreground px-2 text-sm">
-							{t(
-								session?.status === 'counting'
-									? 'pos_products.counting_items_after_count'
-									: 'pos_products.price_check_only_until_open'
-							)}
-						</Text>
+						<View
+							className="border-border bg-card mx-2 mb-2 flex-row items-center gap-2 rounded-lg border px-3 py-2.5"
+							testID="products-locked-notice"
+						>
+							<Icon name="lock" className="text-muted-foreground" />
+							<Text className="text-sm">
+								{t(
+									session?.status === 'counting'
+										? 'pos_products.counting_items_after_count'
+										: 'pos_products.price_check_only_until_open'
+								)}
+							</Text>
+						</View>
 					)}
 					<View
 						className={`flex-1 ${session?.status === 'counting' ? 'opacity-40' : ''}`}

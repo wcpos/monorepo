@@ -6,6 +6,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { ProductTile } from './product-tile';
 import { VariableProductTile } from './variable-product-tile';
 
+jest.mock('react-native', () => {
+	const actual = jest.requireActual('react-native');
+	return {
+		...actual,
+		View: ({ className, ...props }: React.ComponentProps<typeof actual.View>) => (
+			<actual.View {...props} dataSet={{ className }} />
+		),
+	};
+});
+
 const addProduct = jest.fn();
 const order = {
 	payload: { line_items: [{ product_id: 12 }, { product_id: 12 }, { product_id: 99 }] },
@@ -18,8 +28,7 @@ jest.mock('../../../contexts/current-order', () => ({
 }));
 jest.mock('../../../hooks/use-add-product', () => ({ useAddProduct: () => ({ addProduct }) }));
 jest.mock('../../../../../../contexts/translations', () => ({
-	useT: () => (key: string, values?: { count: number }) =>
-		values ? `${key}: ${values.count}` : key,
+	useT: () => jest.requireActual('../../../../../../../jest/translate').createTestT(),
 }));
 jest.mock('../../../../hooks/use-stock-status-label', () => ({
 	useStockStatusLabel: () => ({ getLabel: (value: string) => value }),
@@ -76,7 +85,7 @@ const gridFields = {
 };
 it('shows the in-cart line count and adds through the existing hook', () => {
 	render(<ProductTile record={record} gridFields={gridFields} />);
-	expect(screen.getByLabelText('pos_products.in_cart_count: 2').textContent).toBe('2');
+	expect(screen.getByLabelText('In cart: 2').textContent).toBe('2');
 	fireEvent.click(screen.getByTestId('product-tile'));
 	expect(addProduct).toHaveBeenCalledWith(record);
 });
@@ -93,11 +102,34 @@ it.each([
 	);
 	expect(screen.getByTestId('stock').getAttribute('data-variant')).toBe(variant);
 });
+it.each([
+	['instock', 'bg-foreground'],
+	['lowstock', 'bg-warning'],
+] as const)('shows managed quantity in a %s pill', (stockStatus, color) => {
+	render(
+		<ProductTile
+			record={{
+				...record,
+				payload: {
+					...record.payload,
+					manage_stock: true,
+					stock_quantity: 3,
+					stock_status: stockStatus,
+				},
+			}}
+			gridFields={gridFields}
+		/>
+	);
+	const pill = screen.getByTestId('product-tile-stock-12');
+	expect(pill.textContent).toBe('3 left');
+	expect(pill.getAttribute('data-class-name')).toContain(color);
+	expect(screen.queryByTestId('stock')).toBeNull();
+});
 it('composes the existing tile under inline and the drill tile with a chevron under drill', () => {
 	const onDrill = jest.fn();
 	const { rerender } = render(
 		<VariableProductTile
-			record={record}
+			record={{ ...record, remoteId: null }}
 			gridFields={gridFields}
 			variationsStyle="inline"
 			onDrill={onDrill}
@@ -107,7 +139,7 @@ it('composes the existing tile under inline and the drill tile with a chevron un
 	expect(screen.queryByTestId('chevronRight')).toBeNull();
 	rerender(
 		<VariableProductTile
-			record={record}
+			record={{ ...record, remoteId: null }}
 			gridFields={gridFields}
 			variationsStyle="drill"
 			onDrill={onDrill}
@@ -115,12 +147,12 @@ it('composes the existing tile under inline and the drill tile with a chevron un
 	);
 	expect(screen.queryByTestId('inline-tile')).toBeNull();
 	expect(screen.getByTestId('chevronRight')).not.toBeNull();
-	expect(screen.getByTestId('variable-product-tile-12')).not.toBeNull();
+	expect(screen.getByTestId('variable-product-tile-product')).not.toBeNull();
 	fireEvent.click(screen.getByTestId('variable-product-tile'));
-	expect(onDrill).toHaveBeenCalledWith(record);
+	expect(onDrill).toHaveBeenCalledWith({ ...record, remoteId: null });
 });
 
-it('keeps variable price ranges and sale ranges on a drill tile', () => {
+it('shows the minimum variable price with from and keeps sale strikethrough', () => {
 	const variable = {
 		...record,
 		payload: {
@@ -152,6 +184,7 @@ it('keeps variable price ranges and sale ranges on a drill tile', () => {
 	).toEqual([
 		['10', 'true'],
 		['4', 'false'],
-		['8', 'false'],
 	]);
+	expect(screen.getByText('from')).not.toBeNull();
+	expect(screen.queryByTestId('chevronRight')).toBeNull();
 });

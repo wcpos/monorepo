@@ -29,17 +29,17 @@ export function ProductsFooter({
 	const actions = useQueryStateActions();
 	const t = useT();
 	return (
-		<HStack className="border-border border-t p-2">
+		<HStack className="border-border min-h-ctl items-center border-t px-2">
 			{/* Keep the tax label shrinkable and counts at their natural width. */}
 			<HStack className="min-w-0 flex-1 *:min-w-0 *:flex-1">
 				{children ?? (calcTaxes ? <TaxBasedOn /> : null)}
 			</HStack>
 			<HStack className="shrink-0 gap-0">
 				{/* No denominator unless binding.total$ vouches for one; hidden markers stay raw. */}
-				<Text testID="data-table-count" className="text-xs">
+				<Text testID="data-table-count" className="text-muted-foreground text-sm">
 					{total === null
 						? t('common.showing_n', { shown: count.toLocaleString() })
-						: t('pos_products.shown_of_total', {
+						: t('common.showing_of', {
 								shown: count.toLocaleString(),
 								total: total.toLocaleString(),
 							})}

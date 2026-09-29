@@ -1,7 +1,7 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@wcpos/components/hover-card';
-import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 
@@ -26,25 +26,32 @@ export function TaxBasedOn() {
 	if (taxBasedOn === 'shipping') {
 		taxBasedOnSetting = t('common.customer_shipping_address');
 	}
+	const valueLabel =
+		taxBasedOn === 'billing' || taxBasedOn === 'shipping'
+			? taxBasedOnSetting
+			: t('common.shop_base');
 	const taxBasedOnLabel = `${t('common.tax_based_on')}: ${taxBasedOnSetting}`;
 
 	return (
 		<HoverCard>
-			<HoverCardTrigger>
-				{rates.length > 0 ? (
-					<Text variant="link" className="text-xs" numberOfLines={1}>
-						{taxBasedOnLabel}
-					</Text>
-				) : (
-					<HStack space="xs">
+			<HoverCardTrigger accessibilityLabel={taxBasedOnLabel} testID="tax-based-on-trigger">
+				<View className="flex-row items-center gap-1">
+					{rates.length > 0 ? (
+						<Icon name="percent" size="sm" className="text-muted-foreground" />
+					) : (
 						<Icon size="sm" variant="error" name="triangleExclamation" />
-						<Text variant="link" className="text-destructive text-xs" numberOfLines={1}>
-							{taxBasedOnLabel}
-						</Text>
-					</HStack>
-				)}
+					)}
+					<Text
+						className={rates.length > 0 ? 'text-sm' : 'text-destructive text-sm'}
+						numberOfLines={1}
+					>
+						{valueLabel}
+					</Text>
+					<Icon name="chevronDown" size="sm" className="text-muted-foreground" />
+				</View>
 			</HoverCardTrigger>
 			<HoverCardContent side="top" align="start" className="w-96">
+				<Text className="text-sm">{taxBasedOnLabel}</Text>
 				<DisplayCurrentTaxRates
 					rates={rates}
 					country={location.country}

@@ -78,6 +78,7 @@ jest.mock('observable-hooks', () => ({
 	useObservableEagerState: (value: unknown) => value,
 	useObservableRef: (value: unknown) => [{ current: value }, of(value)],
 }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -224,7 +225,9 @@ describe('POSProducts query-state wiring', () => {
 	it('shows price-check guidance only before a session opens with sessions enabled', () => {
 		mockSessionsOn = true;
 		const { rerender } = render(<POSProducts />);
-		expect(screen.getByText('pos_products.price_check_only_until_open')).toBeTruthy();
+		expect(screen.getByTestId('products-locked-notice').textContent).toBe(
+			'pos_products.price_check_only_until_open'
+		);
 		mockSession = { status: 'open' };
 		rerender(<POSProducts />);
 		expect(screen.queryByText('pos_products.price_check_only_until_open')).toBeNull();
