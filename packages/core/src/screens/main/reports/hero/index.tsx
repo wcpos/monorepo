@@ -98,6 +98,11 @@ function CashierChip() {
 	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
 	const value = useQueryState<'orders'>().filters.cashier;
 	const actions = useQueryStateActions<'orders'>();
+	const { setCashierName } = useReportsScope();
+	const choices = [
+		{ value: 'all', label: t('reports.everyone') },
+		...cashiers.map((row) => ({ value: String(row.id), label: row.display_name ?? '' })),
+	];
 	return (
 		<MenuChip
 			name="cashier"
@@ -105,11 +110,14 @@ function CashierChip() {
 			scroll
 			value={value === undefined ? 'all' : String(value)}
 			defaultValue="all"
-			onChange={(next) => actions.setFilter('cashier', next === 'all' ? undefined : next)}
-			choices={[
-				{ value: 'all', label: t('reports.everyone') },
-				...cashiers.map((row) => ({ value: String(row.id), label: row.display_name ?? '' })),
-			]}
+			onChange={(next) => {
+				actions.setFilter('cashier', next === 'all' ? undefined : next);
+				// The printed report names the chosen cashier; the query holds only the id.
+				setCashierName(
+					next === 'all' ? undefined : choices.find((row) => row.value === next)?.label
+				);
+			}}
+			choices={choices}
 		/>
 	);
 }
@@ -203,6 +211,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 		decimalScale: store?.price_num_decimals,
 		decimalSeparator: store?.price_decimal_sep,
 		thousandSeparator: store?.price_thousand_sep,
+		thousandsGroupStyle: store?.thousands_group_style,
 	};
 	const { format: money } = useCurrencyFormat({
 		...options,

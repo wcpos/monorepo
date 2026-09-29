@@ -11,10 +11,10 @@ import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { inZone, useStoreDay, useViewedStore } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
 import { usePrint } from '../../hooks/use-print';
 import { useReportsData } from '../context';
+import { useReportCashier } from './use-report-cashier';
 import { useQueryState } from '../../../../query';
 
 /** The printed report is the viewed store's (a Pro cashier may report on another store). */
@@ -22,7 +22,8 @@ export function useReportPrint(storeId?: number) {
 	const t = useT();
 	const registerNames = useRegisterNames();
 	const contentRef = React.useRef<ViewInstance>(null);
-	const { store, wpCredentials } = useStoreSession();
+	const { store } = useStoreSession();
+	const cashier = useReportCashier();
 	const viewed = useDocField(useViewedStore(storeId), (value) => value);
 	const sessionName = useDocField(store, (value) => value.name);
 	const storeName = (viewed?.name ?? sessionName) as string;
@@ -36,13 +37,13 @@ export function useReportPrint(storeId?: number) {
 		decimalScale: viewed?.price_num_decimals,
 		decimalSeparator: viewed?.price_decimal_sep,
 		thousandSeparator: viewed?.price_thousand_sep,
+		thousandsGroupStyle: viewed?.thousands_group_style,
 	};
 	const { format: formatCurrency } = useCurrencyFormat({
 		...options,
 		currency: viewed?.currency,
 		currencyPosition: viewed?.currency_pos,
 	});
-	const { format: formatName } = useCustomerNameFormat();
 	const { format: formatNumber } = useNumberFormat(options);
 	const { formatDate } = useLocalDate();
 	const { timezone } = useStoreDay(storeId);
@@ -96,8 +97,8 @@ export function useReportPrint(storeId?: number) {
 			storeId: viewed?.id ?? store.id!,
 			reportGenerated,
 			reportPeriod,
-			cashierName: formatName(wpCredentials.toJSON()),
-			cashierId: wpCredentials.id!,
+			cashierName: cashier.name,
+			cashierId: cashier.id,
 			totalOrders: selectedOrders?.length || 0,
 			total: formatCurrency(total),
 			totalTax: formatCurrency(totalTax),
@@ -160,8 +161,8 @@ export function useReportPrint(storeId?: number) {
 		store.id,
 		reportGenerated,
 		reportPeriod,
-		formatName,
-		wpCredentials,
+		cashier.name,
+		cashier.id,
 		selectedOrders?.length,
 		formatCurrency,
 		total,

@@ -60,14 +60,18 @@ export interface ReportsScope {
 	setCmp: React.Dispatch<React.SetStateAction<ReportsScope['cmp']>>;
 	statusMode: 'done' | 'all';
 	setStatusMode: React.Dispatch<React.SetStateAction<ReportsScope['statusMode']>>;
+	/** The chosen cashier's display name (the query holds only the id); undefined is Everyone. */
+	cashierName: string | undefined;
+	setCashierName: React.Dispatch<React.SetStateAction<string | undefined>>;
 }
 const ReportsScopeContext = React.createContext<ReportsScope | undefined>(undefined);
 export function ReportsScopeProvider({ children }: React.PropsWithChildren) {
 	const [cmp, setCmp] = React.useState<ReportsScope['cmp']>('yesterday');
 	const [statusMode, setStatusMode] = React.useState<ReportsScope['statusMode']>('done');
+	const [cashierName, setCashierName] = React.useState<string | undefined>(undefined);
 	const value = React.useMemo(
-		() => ({ cmp, setCmp, statusMode, setStatusMode }),
-		[cmp, statusMode]
+		() => ({ cmp, setCmp, statusMode, setStatusMode, cashierName, setCashierName }),
+		[cmp, statusMode, cashierName]
 	);
 	return <ReportsScopeContext.Provider value={value}>{children}</ReportsScopeContext.Provider>;
 }

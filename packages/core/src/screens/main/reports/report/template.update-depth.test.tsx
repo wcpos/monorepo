@@ -81,6 +81,7 @@ jest.mock('../../hooks/use-number-format', () => ({
 const REPORTS = { selectedOrders: [] };
 jest.mock('../context', () => ({
 	useReportsData: () => REPORTS,
+	useReportsScope: () => ({ cashierName: undefined }),
 }));
 
 describe('ZReport render stability', () => {

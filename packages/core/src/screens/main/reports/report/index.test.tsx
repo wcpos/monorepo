@@ -97,6 +97,7 @@ jest.mock('../../hooks/use-print', () => ({
 jest.mock('../context', () => ({
 	useReportsData: () => ({ selectedOrders: [] }),
 	useReportsPeriod: () => ({ storeId: undefined }),
+	useReportsScope: () => ({ cashierName: undefined }),
 }));
 
 describe('Report query-state dates', () => {
@@ -123,6 +124,9 @@ describe('Report query-state dates', () => {
 					from: '2026-07-01T10:00:00.000+02:00',
 					to: '2026-07-02T20:00:00.000+02:00',
 				},
+				// No cashier chosen: the report is Everyone's, never the session cashier's.
+				cashierName: 'reports.everyone',
+				cashierId: '',
 			})
 		);
 	});

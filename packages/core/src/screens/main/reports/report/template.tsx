@@ -13,9 +13,9 @@ import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { inZone, useStoreDay, useViewedStore } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
 import { useReportsData } from '../context';
+import { useReportCashier } from './use-report-cashier';
 import { useQueryState } from '../../../../query';
 
 /**
@@ -25,7 +25,8 @@ import { useQueryState } from '../../../../query';
 export function ZReport({ storeId }: { storeId?: number } = {}) {
 	const t = useT();
 	const registerNames = useRegisterNames();
-	const { store, wpCredentials } = useStoreSession();
+	const { store } = useStoreSession();
+	const cashier = useReportCashier();
 	const viewed = useDocField(useViewedStore(storeId), (value) => value);
 	const sessionName = useDocField(store, (value) => value.name);
 	const storeName = (viewed?.name ?? sessionName) as string;
@@ -52,13 +53,13 @@ export function ZReport({ storeId }: { storeId?: number } = {}) {
 		decimalScale: viewed?.price_num_decimals,
 		decimalSeparator: viewed?.price_decimal_sep,
 		thousandSeparator: viewed?.price_thousand_sep,
+		thousandsGroupStyle: viewed?.thousands_group_style,
 	};
 	const { format: formatCurrency } = useCurrencyFormat({
 		...options,
 		currency: viewed?.currency,
 		currencyPosition: viewed?.currency_pos,
 	});
-	const { format: formatName } = useCustomerNameFormat();
 	const { format: formatNumber } = useNumberFormat(options);
 	const { formatDate } = useLocalDate();
 	const { timezone } = useStoreDay(storeId);
@@ -115,7 +116,7 @@ export function ZReport({ storeId }: { storeId?: number } = {}) {
 			<Text>{`${t('reports.report_generated')}: ${reportGenerated}`}</Text>
 			<Text>{`${t('reports.report_period_start')}: ${reportPeriod.from}`}</Text>
 			<Text>{`${t('reports.report_period_end')}: ${reportPeriod.to}`}</Text>
-			<Text>{`${t('common.cashier')}: ${formatName(wpCredentials.toJSON())} (ID: ${wpCredentials.id!})`}</Text>
+			<Text>{`${t('common.cashier')}: ${cashier.name}${cashier.id === '' ? '' : ` (ID: ${cashier.id})`}`}</Text>
 			<Br />
 
 			<Line />

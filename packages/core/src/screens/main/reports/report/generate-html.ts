@@ -10,7 +10,8 @@ interface ReportData {
 		to: string;
 	};
 	cashierName: string;
-	cashierId: number;
+	/** Empty for Everyone: the line then carries no id. */
+	cashierId: number | string;
 	totalOrders: number;
 	total: string;
 	totalTax: string;
@@ -231,7 +232,7 @@ export function generateZReportHTML(data: ReportData): string {
 			<div>${t.reportGenerated}: ${reportGenerated}</div>
 			<div>${t.reportPeriodStart}: ${reportPeriod.from}</div>
 			<div>${t.reportPeriodEnd}: ${reportPeriod.to}</div>
-			<div>${t.cashier}: ${cashierName} (ID: ${cashierId})</div>
+			<div>${t.cashier}: ${cashierName}${cashierId === '' ? '' : ` (ID: ${cashierId})`}</div>
 			<div class="br"></div>
 
 			<div class="line"></div>
