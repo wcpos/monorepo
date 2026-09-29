@@ -51,8 +51,8 @@
 		"glob": "^13.0.6",
 		"lint-staged": "^17.5.1",
 		"prettier-plugin-tailwindcss": "^0.8.1",
-		"rxdb": "17.4.0",
-		"rxdb-premium": "17.4.0",
+		"rxdb": "17.5.0",
+		"rxdb-premium": "17.5.0",
 		"yaml": "2.9.1"
 	},
 	"dependencies": {
