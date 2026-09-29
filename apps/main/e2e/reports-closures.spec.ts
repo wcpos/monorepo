@@ -454,6 +454,12 @@ async function openClosures(page: Page) {
 	await page.getByTestId('hero-chip-compare').click();
 	await expect(page.getByTestId('hero-compare-menu')).toBeVisible();
 	await page.getByTestId('hero-compare-yesterday').click();
+	await page.getByTestId('hero-chart-toggle-run').click();
+	await expect(page.getByTestId('hero-chart-toggle-run')).toHaveAttribute('aria-checked', 'true');
+	await expect(page.getByTestId('hero-chart-comparison-total')).toBeVisible();
+	await page.getByTestId('hero-chart-toggle-hour').click();
+	await expect(page.getByTestId('hero-chart-toggle-hour')).toHaveAttribute('aria-checked', 'true');
+	await expect(page.getByTestId('hero-chart-comparison-total')).toHaveCount(0);
 
 	await page.getByTestId('reports-scope').click();
 	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();

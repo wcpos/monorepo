@@ -67,6 +67,8 @@ export interface ReportsData {
 }
 
 export interface ReportsScope {
+	chartView: 'hour' | 'run';
+	setChartView: React.Dispatch<React.SetStateAction<ReportsScope['chartView']>>;
 	cmp: 'yesterday' | 'lastweek';
 	setCmp: React.Dispatch<React.SetStateAction<ReportsScope['cmp']>>;
 	statusMode: 'done' | 'all';
@@ -74,11 +76,12 @@ export interface ReportsScope {
 }
 const ReportsScopeContext = React.createContext<ReportsScope | undefined>(undefined);
 export function ReportsScopeProvider({ children }: React.PropsWithChildren) {
+	const [chartView, setChartView] = React.useState<ReportsScope['chartView']>('hour');
 	const [cmp, setCmp] = React.useState<ReportsScope['cmp']>('yesterday');
 	const [statusMode, setStatusMode] = React.useState<ReportsScope['statusMode']>('done');
 	const value = React.useMemo(
-		() => ({ cmp, setCmp, statusMode, setStatusMode }),
-		[cmp, statusMode]
+		() => ({ cmp, setCmp, statusMode, setStatusMode, chartView, setChartView }),
+		[cmp, statusMode, chartView]
 	);
 	return <ReportsScopeContext.Provider value={value}>{children}</ReportsScopeContext.Provider>;
 }

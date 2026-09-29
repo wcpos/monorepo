@@ -12,26 +12,47 @@
 //
 // The actual UTC->local conversion is tested separately in use-local-date tests.
 
+import * as React from 'react';
+
+import { renderToStaticMarkup } from 'react-dom/server';
+import { ObservableResource } from 'observable-hooks';
+import { of } from 'rxjs';
 import { format } from 'date-fns';
 
+import { QueryStateProvider } from '../../../../query';
+import {
+	ReportsComparison,
+	ReportsProvider,
+	ReportsScopeProvider,
+	useReportsData,
+} from '../context';
 import { DEVICE_ZONE } from '../../../../hooks/use-store-day';
 import {
+	aggregateComparison,
 	aggregateData,
 	determineInterval,
 	generateAllDates,
 	getEffectiveDailyRange,
 	getNiceMinuteInterval,
 	getOrderTimeBounds,
-	getStartOfMinuteInterval,
 } from './utils';
 
 import type { DateRange, OrderPayload } from '../context';
 
-jest.mock('../../../../contexts/app-state', () => ({}));
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: { id: 9, timezone: 'Europe/London' } }),
+}));
+jest.mock('@wcpos/query', () => ({
+	useDocField: (
+		source: Record<string, unknown> | undefined,
+		select: (value: Record<string, unknown>) => unknown
+	) => source && select(source),
+}));
 
 // Simple mock - treats timestamps as-is (consistent with how dateRange is created in tests)
 jest.mock('../../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (dateString: string) => new Date(dateString),
+	convertLocalDateToUTCString: (date: Date) => date.toISOString(),
 }));
 
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -66,40 +87,6 @@ describe('Chart Utils', () => {
 
 		it('should return 360 (6 hours) for very large spans', () => {
 			expect(getNiceMinuteInterval(5000)).toBe(360);
-		});
-	});
-
-	describe('getStartOfMinuteInterval', () => {
-		it('should align to 30-minute boundaries', () => {
-			const date1 = new Date(2023, 0, 1, 10, 15);
-			expect(getStartOfMinuteInterval(date1, 30)).toEqual(new Date(2023, 0, 1, 10, 0));
-
-			const date2 = new Date(2023, 0, 1, 10, 45);
-			expect(getStartOfMinuteInterval(date2, 30)).toEqual(new Date(2023, 0, 1, 10, 30));
-		});
-
-		it('should align to 60-minute (hourly) boundaries', () => {
-			const date1 = new Date(2023, 0, 1, 10, 30);
-			expect(getStartOfMinuteInterval(date1, 60)).toEqual(new Date(2023, 0, 1, 10, 0));
-
-			const date2 = new Date(2023, 0, 1, 10, 59);
-			expect(getStartOfMinuteInterval(date2, 60)).toEqual(new Date(2023, 0, 1, 10, 0));
-		});
-
-		it('should align to 90-minute boundaries', () => {
-			const date1 = new Date(2023, 0, 1, 10, 0); // 600 min, 600/90 = 6.67 -> floor to 6*90 = 540 = 9:00
-			expect(getStartOfMinuteInterval(date1, 90)).toEqual(new Date(2023, 0, 1, 9, 0));
-
-			const date2 = new Date(2023, 0, 1, 12, 0); // 720 min, 720/90 = 8 -> 8*90 = 720 = 12:00
-			expect(getStartOfMinuteInterval(date2, 90)).toEqual(new Date(2023, 0, 1, 12, 0));
-		});
-
-		it('should align to 120-minute (2 hour) boundaries', () => {
-			const date1 = new Date(2023, 0, 1, 11, 30);
-			expect(getStartOfMinuteInterval(date1, 120)).toEqual(new Date(2023, 0, 1, 10, 0));
-
-			const date2 = new Date(2023, 0, 1, 14, 0);
-			expect(getStartOfMinuteInterval(date2, 120)).toEqual(new Date(2023, 0, 1, 14, 0));
 		});
 	});
 
@@ -306,24 +293,21 @@ describe('Chart Utils', () => {
 
 			expect(result).toHaveLength(3);
 			expect(result[0]).toMatchObject({
-				key: '2023-01',
+				key: new Date('2023-01-01T00:00:00').getTime(),
 				label: 'Jan 2023',
 				total: 300,
-				total_tax: 30,
 				order_count: 2,
 			});
 			expect(result[1]).toMatchObject({
-				key: '2023-02',
+				key: new Date('2023-02-01T00:00:00').getTime(),
 				label: 'Feb 2023',
 				total: 150,
-				total_tax: 15,
 				order_count: 1,
 			});
 			expect(result[2]).toMatchObject({
-				key: '2023-03',
+				key: new Date('2023-03-01T00:00:00').getTime(),
 				label: 'Mar 2023',
 				total: 120,
-				total_tax: 12,
 				order_count: 1,
 			});
 		});
@@ -342,9 +326,21 @@ describe('Chart Utils', () => {
 			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(3);
-			expect(result[0]).toMatchObject({ key: '2023-01', total: 100, order_count: 1 });
-			expect(result[1]).toMatchObject({ key: '2023-02', total: 0, order_count: 0 });
-			expect(result[2]).toMatchObject({ key: '2023-03', total: 120, order_count: 1 });
+			expect(result[0]).toMatchObject({
+				key: new Date('2023-01-01T00:00:00').getTime(),
+				total: 100,
+				order_count: 1,
+			});
+			expect(result[1]).toMatchObject({
+				key: new Date('2023-02-01T00:00:00').getTime(),
+				total: 0,
+				order_count: 0,
+			});
+			expect(result[2]).toMatchObject({
+				key: new Date('2023-03-01T00:00:00').getTime(),
+				total: 120,
+				order_count: 1,
+			});
 		});
 
 		it('should aggregate orders over days with day name and number for 8-30 day range', () => {
@@ -364,19 +360,19 @@ describe('Chart Utils', () => {
 
 			expect(result).toHaveLength(10);
 			expect(result[0]).toMatchObject({
-				key: '2023-01-01',
+				key: new Date('2023-01-01T00:00:00').getTime(),
 				label: 'Sun 1',
 				total: 300,
 				order_count: 2,
 			});
 			expect(result[4]).toMatchObject({
-				key: '2023-01-05',
+				key: new Date('2023-01-05T00:00:00').getTime(),
 				label: 'Thu 5',
 				total: 150,
 				order_count: 1,
 			});
 			expect(result[9]).toMatchObject({
-				key: '2023-01-10',
+				key: new Date('2023-01-10T00:00:00').getTime(),
 				label: 'Tue 10',
 				total: 120,
 				order_count: 1,
@@ -398,9 +394,21 @@ describe('Chart Utils', () => {
 			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(3);
-			expect(result[0]).toMatchObject({ key: '2023-01-02', label: 'Mon 2 Jan', total: 100 });
-			expect(result[1]).toMatchObject({ key: '2023-01-03', label: 'Tue 3 Jan', total: 200 });
-			expect(result[2]).toMatchObject({ key: '2023-01-04', label: 'Wed 4 Jan', total: 150 });
+			expect(result[0]).toMatchObject({
+				key: new Date('2023-01-02T00:00:00').getTime(),
+				label: 'Mon 2 Jan',
+				total: 100,
+			});
+			expect(result[1]).toMatchObject({
+				key: new Date('2023-01-03T00:00:00').getTime(),
+				label: 'Tue 3 Jan',
+				total: 200,
+			});
+			expect(result[2]).toMatchObject({
+				key: new Date('2023-01-04T00:00:00').getTime(),
+				label: 'Wed 4 Jan',
+				total: 150,
+			});
 		});
 
 		it('should fill in missing days with zeros', () => {
@@ -417,9 +425,21 @@ describe('Chart Utils', () => {
 			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(3);
-			expect(result[0]).toMatchObject({ key: '2023-01-01', total: 100, order_count: 1 });
-			expect(result[1]).toMatchObject({ key: '2023-01-02', total: 0, order_count: 0 });
-			expect(result[2]).toMatchObject({ key: '2023-01-03', total: 120, order_count: 1 });
+			expect(result[0]).toMatchObject({
+				key: new Date('2023-01-01T00:00:00').getTime(),
+				total: 100,
+				order_count: 1,
+			});
+			expect(result[1]).toMatchObject({
+				key: new Date('2023-01-02T00:00:00').getTime(),
+				total: 0,
+				order_count: 0,
+			});
+			expect(result[2]).toMatchObject({
+				key: new Date('2023-01-03T00:00:00').getTime(),
+				total: 120,
+				order_count: 1,
+			});
 		});
 
 		describe('single-day reports with order-based trimming', () => {
@@ -549,9 +569,21 @@ describe('Chart Utils', () => {
 			const result = aggregateData(orders, dateRange, undefined, zone);
 
 			expect(result).toHaveLength(3);
-			expect(result[0]).toMatchObject({ key: '2023-01-01', total: 0, order_count: 0 });
-			expect(result[1]).toMatchObject({ key: '2023-01-02', total: 200, order_count: 1 });
-			expect(result[2]).toMatchObject({ key: '2023-01-03', total: 0, order_count: 0 });
+			expect(result[0]).toMatchObject({
+				key: new Date('2023-01-01T00:00:00').getTime(),
+				total: 0,
+				order_count: 0,
+			});
+			expect(result[1]).toMatchObject({
+				key: new Date('2023-01-02T00:00:00').getTime(),
+				total: 200,
+				order_count: 1,
+			});
+			expect(result[2]).toMatchObject({
+				key: new Date('2023-01-03T00:00:00').getTime(),
+				total: 0,
+				order_count: 0,
+			});
 		});
 
 		describe('timezone handling consistency', () => {
@@ -597,8 +629,8 @@ describe('Chart Utils', () => {
 				const result = aggregateData(orders, dateRange, undefined, zone);
 
 				// Multi-day uses daily buckets
-				const day1 = result.find((d) => d.key === '2023-01-01');
-				const day2 = result.find((d) => d.key === '2023-01-02');
+				const day1 = result.find((d) => d.key === new Date('2023-01-01T00:00:00').getTime());
+				const day2 = result.find((d) => d.key === new Date('2023-01-02T00:00:00').getTime());
 
 				expect(day1).toMatchObject({ total: 100, order_count: 1 });
 				expect(day2).toMatchObject({ total: 200, order_count: 1 });
@@ -638,7 +670,7 @@ describe('store-zone chart ranges', () => {
 		]);
 		const orders = [{ date_created_gmt: '2026-09-16T23:30:00Z', total: '10' }] as OrderPayload[];
 		const data = aggregateData(orders, { start, end }, undefined, london);
-		expect(data.find((bucket) => bucket.key === '2026-09-17')).toMatchObject({
+		expect(data.find((bucket) => bucket.key === start.getTime())).toMatchObject({
 			order_count: 1,
 			total: 10,
 		});
@@ -649,4 +681,202 @@ describe('store-zone chart ranges', () => {
 		expect(new Date(range.start).toISOString()).toBe('2026-09-16T23:00:00.000Z');
 		expect(new Date(range.end).toISOString()).toBe('2026-09-17T22:59:59.999Z');
 	});
+});
+
+describe('instant buckets and comparison alignment', () => {
+	const london = 'Europe/London';
+	const range = (start: string, end: string): DateRange => ({
+		start: new Date(start),
+		end: new Date(end),
+	});
+	const order = (date: string, total = '10') => ({ date_created_gmt: date, total }) as OrderPayload;
+	it('keeps a rounded sale in its 120-minute spring-forward bucket (London 2026-03-29)', () => {
+		const r = range('2026-03-29T00:00:00Z', '2026-03-29T22:59:59.999Z');
+		const data = aggregateData(
+			[
+				order('2026-03-29T00:10:00Z'),
+				order('2026-03-29T03:30:00Z', '25'),
+				order('2026-03-29T22:15:00Z'),
+			],
+			r,
+			undefined,
+			london
+		);
+		expect(data.find((b) => b.key === Date.parse('2026-03-29T02:00:00Z'))).toMatchObject({
+			label: '03:00',
+			total: 25,
+			order_count: 1,
+		});
+		expect(data.reduce((sum, b) => sum + b.total, 0)).toBe(45);
+	});
+	it('keeps the repeated fall-back hour as distinct instant buckets (London 2026-10-25)', () => {
+		const r = range('2026-10-24T23:00:00Z', '2026-10-25T23:59:59.999Z');
+		const data = aggregateData(
+			[order('2026-10-25T00:10:00Z'), order('2026-10-25T01:10:00Z', '20')],
+			r,
+			undefined,
+			london
+		);
+		const repeated = data.filter((b) => b.label === '01:00');
+		expect(repeated.map((b) => b.key)).toEqual([
+			Date.parse('2026-10-25T00:00:00Z'),
+			Date.parse('2026-10-25T01:00:00Z'),
+		]);
+		expect(repeated.map((b) => b.total)).toEqual([10, 20]);
+	});
+	it('aligns Tuesday 09:00 with last Monday 09:00 and trims on their union', () => {
+		const r = range('2026-09-21T23:00:00Z', '2026-09-22T22:59:59.999Z');
+		const c = range('2026-09-13T23:00:00Z', '2026-09-14T22:59:59.999Z');
+		const orders = [order('2026-09-22T11:00:00Z')];
+		const previous = [order('2026-09-14T08:00:00Z', '42')];
+		const buckets = aggregateData(orders, r, undefined, london, { orders: previous, range: c });
+		const compared = aggregateComparison(previous, c, buckets, r, 'day', london);
+		expect(buckets[0].label).toBe('09:00');
+		expect(compared).toHaveLength(buckets.length);
+		expect(compared[0].total).toBe(42);
+	});
+	it('aligns the fall-back days 25th hour with a null counterpart', () => {
+		const r = range('2026-10-24T23:00:00Z', '2026-10-25T23:59:59.999Z');
+		const c = range('2026-10-23T23:00:00Z', '2026-10-24T22:59:59.999Z');
+		const buckets = aggregateData([order('2026-10-25T23:10:00Z')], r, undefined, london);
+		const compared = aggregateComparison([], c, buckets, r, 'day', london);
+		expect(compared).toHaveLength(buckets.length);
+		expect(compared.every((b) => b.total === null)).toBe(true);
+	});
+	it('aligns March by day-of-month and gives March 31st no February counterpart', () => {
+		const r = range('2026-03-01T00:00:00Z', '2026-03-31T22:59:59.999Z');
+		const c = range('2026-02-01T00:00:00Z', '2026-02-28T23:59:59.999Z');
+		const buckets = aggregateData([], r, undefined, london);
+		const compared = aggregateComparison(
+			[order('2026-02-01T12:00:00Z', '31')],
+			c,
+			buckets,
+			r,
+			'month',
+			london
+		);
+		expect(buckets).toHaveLength(31);
+		expect(compared[0].total).toBe(31);
+		expect(compared[27].total).toBe(0);
+		expect(compared.slice(28).map((b) => b.total)).toEqual([null, null, null]);
+	});
+	it('aligns a week by the whole midnight offset across DST, not individual weekdays', () => {
+		const r = range('2026-03-23T00:00:00Z', '2026-03-29T22:59:59.999Z');
+		const c = range('2026-03-16T00:00:00Z', '2026-03-22T23:59:59.999Z');
+		const buckets = aggregateData([], r, undefined, london);
+		const compared = aggregateComparison(
+			[order('2026-03-22T22:30:00Z', '17'), order('2026-03-22T23:30:00Z', '99')],
+			c,
+			buckets,
+			r,
+			'week',
+			london
+		);
+		expect(compared).toHaveLength(7);
+		expect(compared[6].total).toBe(17);
+	});
+	it('leaves an unplotted previous-month 31st out of the series without mutating its orders', () => {
+		const r = range('2026-04-01T00:00:00Z', '2026-04-30T23:59:59.999Z');
+		const c = range('2026-03-01T00:00:00Z', '2026-03-31T23:59:59.999Z');
+		const previous = [order('2026-03-30T12:00:00Z', '20'), order('2026-03-31T12:00:00Z', '80')];
+		const compared = aggregateComparison(
+			previous,
+			c,
+			aggregateData([], r, undefined, 'UTC'),
+			r,
+			'month',
+			'UTC'
+		);
+		expect(compared.reduce((sum, b) => sum + (b.total ?? 0), 0)).toBe(20);
+		expect(previous.reduce((sum, o) => sum + Number(o.total), 0)).toBe(100);
+	});
+});
+
+// Exercise the existing provider cutoff and the new aggregator together, not a second cutoff implementation.
+it('a live day drops comparison orders after now while preserving the whole comparison series', () => {
+	jest.useFakeTimers().setSystemTime(new Date('2026-09-22T10:00:00Z'));
+	const resource = new ObservableResource(
+		of({
+			hits: [
+				{
+					record: {
+						uuid: 'morning',
+						payload: { status: 'completed', date_created_gmt: '2026-09-21T08:00:00Z', total: '10' },
+					},
+				},
+				{
+					record: {
+						uuid: 'afternoon',
+						payload: { status: 'completed', date_created_gmt: '2026-09-21T14:00:00Z', total: '40' },
+					},
+				},
+			],
+		})
+	);
+	function Probe() {
+		const data = useReportsData();
+		const buckets = aggregateData([], data.dateRange, undefined, 'Europe/London');
+		const cut = aggregateComparison(
+			data.comparisonOrders,
+			data.comparisonRange,
+			buckets,
+			data.dateRange,
+			'day',
+			'Europe/London'
+		);
+		const whole = aggregateComparison(
+			data.wholeComparisonOrders,
+			data.comparisonRange,
+			buckets,
+			data.dateRange,
+			'day',
+			'Europe/London'
+		);
+		return React.createElement(
+			'span',
+			null,
+			`${cut.reduce((sum, b) => sum + (b.total ?? 0), 0)}/${whole.reduce((sum, b) => sum + (b.total ?? 0), 0)}`
+		);
+	}
+	const Provider = ReportsProvider as unknown as React.ComponentType<
+		React.PropsWithChildren<{
+			binding: { resource: unknown };
+			comparisonBinding: { resource: unknown };
+		}>
+	>;
+	const QueryProvider = QueryStateProvider as React.ComponentType<
+		React.PropsWithChildren<Omit<React.ComponentProps<typeof QueryStateProvider>, 'children'>>
+	>;
+	try {
+		const result = renderToStaticMarkup(
+			React.createElement(
+				QueryProvider,
+				{
+					collection: 'orders',
+					initialPageSize: Number.MAX_SAFE_INTEGER,
+					initialSort: { field: 'date_created_gmt', direction: 'desc' },
+					initialFilters: {
+						store: '9',
+						dateRange: { from: '2026-09-21T23:00:00Z', to: '2026-09-22T22:59:59.999Z' },
+					},
+				},
+				React.createElement(
+					ReportsScopeProvider,
+					null,
+					React.createElement(
+						Provider,
+						{
+							binding: { resource: new ObservableResource(of({ hits: [] })) },
+							comparisonBinding: { resource },
+						},
+						React.createElement(ReportsComparison, null, React.createElement(Probe))
+					)
+				)
+			)
+		);
+		expect(result).toBe('<span>10/50</span>');
+	} finally {
+		jest.useRealTimers();
+		resource.destroy();
+	}
 });

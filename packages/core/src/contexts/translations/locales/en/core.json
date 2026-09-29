@@ -2329,5 +2329,12 @@
 	"reports.comparison_downloading_unknown_total": "Comparison: {downloaded} orders downloaded so far",
 	"reports.loading_store": "Loading the store…",
 	"reports.loading_register_names": "Loading register names…",
-	"reports.loading_cashier": "Loading the cashier…"
+	"reports.loading_cashier": "Loading the cashier…",
+	"reports.by_hour": "By hour",
+	"reports.by_day": "By day",
+	"reports.running_total": "Running total",
+	"reports.amount_now": "{amount} now",
+	"reports.chart_orders_one": "{count} order",
+	"reports.chart_orders_other": "{count} orders",
+	"reports.chart_last_weekday": "Last {weekday}"
 }
