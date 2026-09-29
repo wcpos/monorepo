@@ -23,6 +23,7 @@ export function RegisterAmount({
 	...props
 }: {
 	currencyOptions?: CurrencyFormatOptions;
+	/** `box`: one framed field with the currency inside it (the closed register); movements keep the underline. */
 	variant?: 'underline' | 'box';
 	value: string;
 	onChangeText: (v: string) => void;
@@ -30,22 +31,23 @@ export function RegisterAmount({
 	ref?: React.Ref<TextInputInstance>;
 }) {
 	const { prefix, suffix } = useCurrencyFormat(currencyOptions);
-	if (variant === 'box')
+	if (variant === 'box') {
 		return (
 			<Input.Root className="h-tile">
 				{!!prefix && (
 					<Input.Left>
-						<Text className="text-muted-foreground text-amt tabular-nums">{prefix}</Text>
+						<Text className="text-amt text-muted-foreground tabular-nums">{prefix}</Text>
 					</Input.Left>
 				)}
 				<Input.InputField {...props} type="decimal" className="text-amt tabular-nums" />
 				{!!suffix && (
-					<Input.Right>
-						<Text className="text-muted-foreground text-amt tabular-nums">{suffix}</Text>
+					<Input.Right className="pr-3">
+						<Text className="text-amt text-muted-foreground tabular-nums">{suffix}</Text>
 					</Input.Right>
 				)}
 			</Input.Root>
 		);
+	}
 	return (
 		<View className="min-h-row border-border flex-row items-center self-start border-b">
 			{!!prefix && <Text className="text-amt tabular-nums">{prefix}</Text>}
