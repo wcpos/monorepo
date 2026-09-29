@@ -7,7 +7,6 @@ import { StatusBadge } from '@wcpos/components/status-badge';
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
-import { useIsPhone } from '@wcpos/components/lib/device';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
@@ -48,7 +47,6 @@ function RegisterBarContent({
 	const { session, sessionsOn, overdue, lastClosure } = useRegisterSession();
 	const { wpCredentials, store } = useStoreSession();
 	const { screenSize } = useTheme();
-	const isPhone = useIsPhone();
 	const navigation = useNavigation();
 	const t = useT();
 	const binding = useRegisterBinding();
@@ -112,7 +110,9 @@ function RegisterBarContent({
 				/>
 			)}
 			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
-			{isPhone && (
+			{/* The rail carries the avatar only on `lg`; every other layout (the phone, and the
+			    medium widths that keep the old front drawer) needs the bar's. */}
+			{screenSize !== 'lg' && (
 				<Button
 					variant="ghost"
 					className="h-11 w-11 p-0"

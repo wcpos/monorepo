@@ -310,8 +310,14 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 							}}
 						>
 							<LineStrip line={row.original} rowRefs={rowRefs}>
-								{(wrapTotal) =>
-									row.getVisibleCells().map((cell) => {
+								{(wrapTotal) => {
+									const visible = row.getVisibleCells();
+									// The strip's press target is the Total cell; with Total hidden in the
+									// settings it is the last visible cell, so Edit and Remove stay reachable.
+									const targetId = visible.some((cell) => cell.column.id === 'total')
+										? 'total'
+										: visible.at(-1)?.column.id;
+									return visible.map((cell) => {
 										const meta = cell.column.columnDef.meta;
 										const content = flexRender(cell.column.columnDef.cell, cell.getContext());
 										return (
@@ -323,11 +329,11 @@ export function CartTable({ lastDraftOrderUuidRef }: CartTableProps) {
 													alignItems: getFlexAlign(meta?.align || 'left'),
 												}}
 											>
-												{cell.column.id === 'total' ? wrapTotal(content) : content}
+												{cell.column.id === targetId ? wrapTotal(content) : content}
 											</TableCell>
 										);
-									})
-								}
+									});
+								}}
 							</LineStrip>
 						</PulseTableRow>
 					))}

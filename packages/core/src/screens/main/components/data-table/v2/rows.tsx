@@ -66,7 +66,10 @@ export function DataTableRow<TData extends RowData>({
 								// row's (web bubbles the click; native's responder already stops here).
 								const target = (event as unknown as { nativeEvent?: { target?: unknown } })
 									.nativeEvent?.target;
+								// `Element` exists on web only; Hermes has no DOM, and native's responder
+								// system already grants the innermost pressable.
 								if (
+									typeof Element !== 'undefined' &&
 									target instanceof Element &&
 									target.closest('button,[role="button"],a,input,select,textarea')
 								)

@@ -42,6 +42,17 @@ it('adds the record when the row is pressed and replaces + with an in-cart count
 	expect(screen.queryByTestId('add-to-cart-button')).toBeNull();
 	expect(screen.getByLabelText('pos_products.in_cart_count').textContent).toBe('3');
 });
+it('counts nothing for a born-local product, whose remote id is null', () => {
+	// `product_id: 0` is every miscellaneous line's id; a product without a remote id must
+	// not read those as its own.
+	lines = [{ product_id: 0, quantity: 4 }];
+	const local = {
+		original: { record: { ...record, remoteId: null } },
+	} as unknown as typeof props.item;
+	render(<ProductRow {...props} item={local} />);
+	expect(screen.getByTestId('add-to-cart-button')).toBeTruthy();
+	lines = [{ product_id: 12, quantity: 3 }];
+});
 it('renders the add button for a product not in the order', () => {
 	lines = [];
 	render(<ProductRow {...props} />);

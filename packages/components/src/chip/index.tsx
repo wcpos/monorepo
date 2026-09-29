@@ -89,8 +89,11 @@ export function Chip({
 						role="button"
 						disabled={inactive}
 						className="flex-1 flex-row items-center gap-1.5 self-stretch active:opacity-70"
+						// The label's press bubbles: with a clear control the root has no handler, so
+						// nothing fires twice, and a menu trigger wrapping the chip (`asChild`) listens
+						// on the root's DOM node on web. Stopping it here made a selected filter
+						// impossible to reopen. Only the clear control stops its own press.
 						onPress={(event) => {
-							event?.stopPropagation?.();
 							onPress?.(event);
 						}}
 					>

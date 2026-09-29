@@ -123,11 +123,7 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 				{content}
 			</Pressable>
 		);
-		return pointer === 'coarse' ? (
-			<GestureDetector gesture={pan}>{target}</GestureDetector>
-		) : (
-			target
-		);
+		return target;
 	};
 	const title = t('common.edit_2', {
 		name: 'name' in item ? item.name : 'method_title' in item ? item.method_title : '',
@@ -173,9 +169,19 @@ export function LineStrip({ line: { uuid, type, item }, rowRefs, children }: Pro
 				</Button>
 			</View>
 			{/* The body carries the row surface: the strip sits under it and shows only where the body has slid away. */}
-			<Animated.View className="bg-card min-h-row flex-row" style={style}>
-				{children(wrapTotal)}
-			</Animated.View>
+			{pointer === 'coarse' ? (
+				// The pan covers the whole row (a swipe on the name or the quantity reveals the
+				// strip too); with `activeOffsetX` it never steals a tap from a cell's control.
+				<GestureDetector gesture={pan}>
+					<Animated.View className="bg-card min-h-row flex-row" style={style}>
+						{children(wrapTotal)}
+					</Animated.View>
+				</GestureDetector>
+			) : (
+				<Animated.View className="bg-card min-h-row flex-row" style={style}>
+					{children(wrapTotal)}
+				</Animated.View>
+			)}
 		</View>
 	);
 }

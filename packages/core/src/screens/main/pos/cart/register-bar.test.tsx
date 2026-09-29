@@ -22,7 +22,10 @@ jest.mock('../../../../contexts/app-state', () => ({
 		wpCredentials: { display_name: 'Cashier', stores: [] },
 	}),
 }));
-jest.mock('../../../../contexts/theme', () => ({ useTheme: () => ({ screenSize: 'lg' }) }));
+let mockScreenSize: 'sm' | 'md' | 'lg' = 'sm';
+jest.mock('../../../../contexts/theme', () => ({
+	useTheme: () => ({ screenSize: mockScreenSize }),
+}));
 jest.mock('../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ status: 'bound', registerName: 'Front', registers: [{ id: 'r' }] }),
@@ -101,12 +104,19 @@ it('shows the drawer only with a session and opens its panel', () => {
 	mockSession = null;
 });
 
-it('has no avatar on wide', () => {
-	mockIsPhone = false;
+it('has no avatar on wide, where the rail carries it', () => {
+	mockScreenSize = 'lg';
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.queryByTestId('register-bar-avatar')).toBeNull();
+	mockScreenSize = 'sm';
 });
 it('has an avatar on the phone', () => {
 	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
 	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
+});
+it('keeps the avatar at medium widths, which keep the old front drawer', () => {
+	mockScreenSize = 'md';
+	render(<RegisterBar panelOpen={false} onPanelOpenChange={jest.fn()} />);
+	expect(screen.getByTestId('register-bar-avatar')).toBeTruthy();
+	mockScreenSize = 'sm';
 });
