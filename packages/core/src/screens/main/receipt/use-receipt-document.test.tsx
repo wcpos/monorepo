@@ -294,7 +294,7 @@ describe('print intent through checkout and reprint receipt documents', () => {
 		mockOnline = true;
 	});
 
-	it('a local report offers only offline-capable templates', async () => {
+	it('a local report offers only templates the local render path accepts', async () => {
 		jest
 			.spyOn(jest.requireMock('./hooks/use-resolved-printer'), 'useResolvedPrinter')
 			.mockReturnValue({ useSystemDialog: true });
@@ -302,6 +302,9 @@ describe('print intent through checkout and reprint receipt documents', () => {
 			.spyOn(jest.requireMock('./hooks/use-active-templates'), 'useActiveTemplates')
 			.mockReturnValue([
 				{ id: 'php', is_active: true, offline_capable: false, engine: 'legacy-php' },
+				// The field absent, or capable without content: the local render path refuses both.
+				{ id: 'nofield', is_active: true, engine: 'logicless', content: '<b>x</b>' },
+				{ id: 'nocontent', is_active: true, offline_capable: true, engine: 'logicless' },
 				{ id: 8, offline_capable: true, engine: 'logicless', content: '<b>{{report.title}}</b>' },
 			]);
 		const localReport = { report: { title: 'Local Sales' } };

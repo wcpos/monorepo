@@ -116,7 +116,8 @@ export function useTemplateRenderer({
 	const templates = React.useMemo(
 		() =>
 			localDocument
-				? activeTemplates.filter((template) => template.offline_capable !== false)
+				? // Only a template the local render path will accept (l.249, 271): capable and with content.
+					activeTemplates.filter((template) => !!template.offline_capable && !!template.content)
 				: activeTemplates,
 		[activeTemplates, localDocument]
 	);
