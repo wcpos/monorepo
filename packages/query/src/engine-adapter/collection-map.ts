@@ -310,7 +310,14 @@ export const collectionMap = {
 	products: {
 		engineCollection: 'products',
 		fields: {
-			sortName: { legacy: 'sortName', kind: 'promoted', enginePath: 'sortName' },
+			// The storage spelling of the `name` sort (folded, indexed, #2242); on the wire it is
+			// still Woo's `title`, so the boot browse-window seed derives the same orderby.
+			sortName: {
+				legacy: 'sortName',
+				kind: 'promoted',
+				enginePath: 'sortName',
+				sort: { wooOrderby: 'title', tiebreak: ['uuid'] },
+			},
 			uuid: { legacy: 'uuid', kind: 'identifier', enginePath: 'uuid' },
 			sku: {
 				legacy: 'sku',

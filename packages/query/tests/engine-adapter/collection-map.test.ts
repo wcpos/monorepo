@@ -244,6 +244,7 @@ describe('engine adapter collection map', () => {
 		expect(declaredValues('products', sortTiebreakFor)).toEqual({
 			menu_order: ['id'],
 			name: ['uuid'],
+			sortName: ['uuid'],
 		});
 		expect(declaredValues('variations', sortTiebreakFor)).toEqual({
 			name: ['uuid'],
@@ -256,6 +257,8 @@ describe('engine adapter collection map', () => {
 			menu_order: 'menu_order',
 			id: 'id',
 			name: 'title',
+			// The storage alias keeps the UI sort's wire spelling (the boot seed derives it).
+			sortName: 'title',
 			price: 'price',
 			sortable_price: 'price',
 			total_sales: 'popularity',
