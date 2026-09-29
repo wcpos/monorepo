@@ -8,6 +8,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 ## Lines
 
+The printable summary’s on-page card (`report/index.tsx`) left in wcpos/roadmap#332 PR 3a. The document is reached from the hero’s print button (PR 2a); lines 1–10 continue to hold for `ZReport`, `useReportPrint` and `generate-html.ts` unchanged.
+
 1. Sum absolute refund amounts separately and show a negative refund row only when nonzero, in both rendered and HTML reports — native printed reports must not omit refund information — evidence: [^refunds] — platform: all.
 2. Preserve legitimate zero quantities and count non-finite quantities as zero — malformed quantities must not poison items-sold totals — evidence: `ed56726d5e 2026-08-05 fix(core): reject non-finite report quantities`; test “ignores NaN quantities when calculating the total items sold” — platform: all.
 3. Combine product and shipping tax per tax rate, and include shipping tax in shipping-method totals — separated wire components must not disappear from aggregates — evidence: `reports/report/utils.ts:73–74`, “Also, tax_total and shipping_tax_total are separated in the tax_lines, so we need to add them together.” Current code rounds these contributions to six decimals; the preceding store-precision comment does not match that implementation — platform: all.

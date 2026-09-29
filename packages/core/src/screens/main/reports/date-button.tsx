@@ -54,6 +54,47 @@ type Props = {
 	initialHistoryLimit?: boolean;
 };
 
+export function periodLabel({
+	scope,
+	timezone,
+	ranges,
+	t,
+	formatDate,
+}: {
+	scope: Pick<ClosureScope, 'from' | 'to'>;
+	timezone: string;
+	ranges: ReturnType<ReturnType<typeof useStoreDay>['presets']>;
+	t: ReturnType<typeof useT>;
+	formatDate: ReturnType<typeof useLocalDate>['formatDate'];
+}) {
+	const day = (date: Date) => format(date, 'yyyy-MM-dd', zoneOptions(timezone));
+	const today = day(ranges.today.from);
+	const labels = {
+		today: t('common.today'),
+		yesterday: t('common.yesterday'),
+		thisWeek: t('common.this_week'),
+		lastWeek: t('common.last_week'),
+		thisMonth: t('common.this_month'),
+		lastMonth: t('common.last_month'),
+	};
+	const selected = Object.entries(ranges).find(
+		([, range]) =>
+			day(range.from) === scope.from && (day(range.to) > today ? today : day(range.to)) === scope.to
+	)?.[0] as keyof typeof labels | undefined;
+	const date = (value: string, pattern: string) =>
+		formatDate(
+			inZone(timezone, storeDayBounds(calendarDate(parseISO(value)), timezone).from),
+			pattern
+		);
+	const dates =
+		selected === 'thisMonth' || selected === 'lastMonth'
+			? date(scope.from, 'MMMM')
+			: scope.from === scope.to
+				? date(scope.from, 'EEE d MMM')
+				: `${date(scope.from, scope.from.slice(0, 7) === scope.to.slice(0, 7) ? 'd' : 'd MMM')}–${date(scope.to, 'd MMM')}`;
+	return { labels, selected, dates, text: `${selected ? `${labels[selected]} · ` : ''}${dates}` };
+}
+
 export function DateButton({
 	scope,
 	onScopeChange,
@@ -93,14 +134,7 @@ export function DateButton({
 	const ranges = presets();
 	const today = day(ranges.today.from);
 	const min = format(subDays(parseISO(today), HISTORY_DAYS), 'yyyy-MM-dd');
-	const labels = {
-		today: t('common.today'),
-		yesterday: t('common.yesterday'),
-		thisWeek: t('common.this_week'),
-		lastWeek: t('common.last_week'),
-		thisMonth: t('common.this_month'),
-		lastMonth: t('common.last_month'),
-	};
+	const { labels, selected, dates } = periodLabel({ scope, timezone, ranges, t, formatDate });
 	const period = (from: string, to: string, name: string) => {
 		if (!license?.isPro && (from !== today || to !== today)) {
 			setLocked(name);
@@ -115,15 +149,7 @@ export function DateButton({
 		setSelectingStart(start !== end);
 		return true;
 	};
-	const selected = Object.entries(ranges).find(
-		([, range]) =>
-			day(range.from) === scope.from && (day(range.to) > today ? today : day(range.to)) === scope.to
-	)?.[0] as keyof typeof labels | undefined;
-	const date = (value: string, pattern: string) =>
-		formatDate(
-			inZone(timezone, storeDayBounds(calendarDate(parseISO(value)), timezone).from),
-			pattern
-		);
+
 	// Phone: the calendar column spans the whole sheet (it cancels the sheet's p-2 with -mx-2),
 	// so seven 44-pt days plus the calendar's own 5-pt side padding fit down to a 320-pt phone
 	// (318 − 10 = 308 = 7 × 44). The size only drops below 44 on something narrower than that.
@@ -138,12 +164,7 @@ export function DateButton({
 			80 -
 			(locked || historyLimit ? 104 : 0)
 	);
-	const dates =
-		selected === 'thisMonth' || selected === 'lastMonth'
-			? date(scope.from, 'MMMM')
-			: scope.from === scope.to
-				? date(scope.from, 'EEE d MMM')
-				: `${date(scope.from, scope.from.slice(0, 7) === scope.to.slice(0, 7) ? 'd' : 'd MMM')}–${date(scope.to, 'd MMM')}`;
+
 	return (
 		<Popover
 			onOpenChange={(value) => {
