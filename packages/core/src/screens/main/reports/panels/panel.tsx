@@ -14,25 +14,43 @@ import type { WPCredentialsDocument } from '@wcpos/database';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
-import { useLocalDate } from '../../../../hooks/use-local-date';
-import { useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
+import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
+import { inZone, useStoreDay, zoneOptions } from '../../../../hooks/use-store-day';
 import { useQueryState } from '../../../../query';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { cashiers, categories, taxesByRate, tenders, topProducts } from '../cards/aggregate';
 import { useLocalProducts } from '../cards/use-local-products';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
-import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
+import {
+	useIncludedStatus,
+	useReportsData,
+	useReportsPeriod,
+	useReportsScope,
+	useReportsSelection,
+} from '../context';
 import { periodLabel } from '../date-button';
 import { useReportFormats } from '../use-report-formats';
 import { panelCsv } from './export-csv';
 import { ReportRows } from './report-rows';
 import { panelSpec } from './specs';
+import { buildReportDocument } from './document';
+import { OrdersPanel } from './orders-panel';
+import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
+import { useReceiptDocument } from '../../receipt/use-receipt-document';
+import { TemplateSwitcher } from '../../receipt/template-switcher';
 
 const PANEL_WIDTH = 480;
 export function DetailPanel() {
 	const { detail, setDetail } = useReportsScope(),
-		{ selectedOrders, totals } = useReportsData();
+		{ allOrders, selectedOrders, totals } = useReportsData();
+	const included = useIncludedStatus();
+	const { unselectedRowIds } = useReportsSelection();
+	const includedOrders = allOrders
+		.filter(included)
+		.sort((a, b) => (b.date_created_gmt ?? '').localeCompare(a.date_created_gmt ?? ''));
+	const leftOut = includedOrders.filter((order) => unselectedRowIds[order.uuid]).length;
+	const [generatedAt] = React.useState(() => new Date().toISOString());
 	const { dateRange, storeId, timezone } = useReportsPeriod(),
 		formats = useReportFormats(storeId);
 	const { screenSize } = useTheme(),
@@ -64,17 +82,22 @@ export function DetailPanel() {
 	const products = useLocalProducts(detail === 'categories' ? ids : []);
 	const [error, setError] = React.useState('');
 	const [busy, setBusy] = React.useState(false);
-	if (!detail || detail === 'orders') return null;
+
 	const ready =
 		formats.store && (detail !== 'categories' || products) && (detail !== 'cashiers' || directory);
 	const decimals = formats.store?.price_num_decimals;
-	const spec = panelSpec(detail, {
+	const spec = panelSpec(detail ?? 'orders', {
 		payments: tenders(selectedOrders, totals, decimals),
 		products: topProducts(selectedOrders, totals, decimals),
 		categories: categories(selectedOrders, products ?? [], totals, decimals),
 		cashiers: cashiers(totals),
 		taxes: taxesByRate(selectedOrders, totals, decimals),
-		orders: selectedOrders,
+		orders: detail === 'orders' ? includedOrders : selectedOrders,
+		unselectedRowIds,
+		orderTime: (order) =>
+			order.date_created_gmt
+				? formatDate(inZone(timezone, convertUTCStringToLocalDate(order.date_created_gmt)), 'HH:mm')
+				: t('common.unknown'),
 		totals,
 		formats,
 		t,
@@ -83,6 +106,42 @@ export function DetailPanel() {
 		),
 	});
 	const title = t(`reports.panel_${detail}`);
+	const context = useClosureDocumentContext(storeId);
+	const document = buildReportDocument(
+		spec,
+		spec.keys.map((key, i) => ({
+			key,
+			label: spec.head[i],
+			type: spec.types[i],
+			align: spec.align[i],
+		})),
+		{
+			key: detail ?? 'orders',
+			title,
+			label: t('reports.panel_scope', { period, register }),
+			storeId: storeId ?? 0,
+			registerId: registerId ?? '',
+			registerName: register,
+			from: dateRange.start.toISOString(),
+			to: dateRange.end.toISOString(),
+			generatedAt,
+		},
+		context
+	);
+	const doc = useReceiptDocument({
+		autoPrintAllowed: false,
+		templateType: 'report',
+		storeId,
+		localReport: document,
+	});
+	const waiting = !formats.store
+		? 'store'
+		: doc.isSyncing
+			? 'templates'
+			: doc.isOffline && doc.templates.length === 0
+				? 'offline'
+				: null;
+	if (!detail) return null;
 	const content = (
 		<View
 			testID="detail-panel"
@@ -115,10 +174,23 @@ export function DetailPanel() {
 				<Text testID="detail-panel-scope" className="text-muted-foreground">
 					{t('reports.panel_scope', { period, register })}
 				</Text>
+				<View testID="detail-panel-template">
+					<TemplateSwitcher
+						templates={doc.templates}
+						selectedId={doc.selectedTemplateId}
+						onSelect={doc.setSelectedTemplateId}
+						isOffline={doc.isOffline}
+						alwaysVisible
+					/>
+				</View>
 			</View>
 			<View testID="detail-panel-body" className="min-h-0 flex-1 p-4">
 				{ready ? (
-					<ReportRows spec={spec} testID={`detail-${detail}`} />
+					detail === 'orders' ? (
+						<OrdersPanel spec={spec} quantity={formats.quantity} />
+					) : (
+						<ReportRows spec={spec} testID={`detail-${detail}`} />
+					)
 				) : (
 					<Text>{t('common.loading')}</Text>
 				)}
@@ -130,11 +202,18 @@ export function DetailPanel() {
 			>
 				<View className="flex-row items-center justify-between gap-3">
 					<Text className="min-w-0 flex-1 tabular-nums">
-						{t('reports.panel_status', {
-							count: formats.number(selectedOrders.length),
-							total: formats.money(totals.total),
-						})}
+						{detail === 'orders'
+							? t(leftOut ? 'reports.orders_counted_left_out' : 'reports.orders_counted', {
+									n: formats.quantity(selectedOrders.length),
+									m: formats.quantity(includedOrders.length),
+								})
+							: t('reports.panel_status', {
+									count: formats.number(selectedOrders.length),
+									total: formats.money(totals.total),
+								})}
 					</Text>
+				</View>
+				<View className="flex-row items-center justify-end gap-3">
 					{ready && (
 						<Button
 							testID="detail-panel-export"
@@ -160,7 +239,36 @@ export function DetailPanel() {
 							{t('reports.export_csv')}
 						</Button>
 					)}
+					{waiting && (
+						<Text
+							testID="detail-panel-print-waiting"
+							className="text-muted-foreground min-w-0 flex-1 text-sm"
+						>
+							{t(
+								waiting === 'store'
+									? 'reports.print_waiting_store'
+									: waiting === 'templates'
+										? 'reports.print_waiting_templates'
+										: 'reports.print_offline_no_template'
+							)}
+						</Text>
+					)}
+					<Button
+						testID="detail-panel-print"
+						variant="default"
+						className="min-h-12"
+						disabled={!!waiting}
+						loading={doc.isPrinting}
+						onPress={doc.print}
+					>
+						{t('reports.print')}
+					</Button>
 				</View>
+				{!!doc.documentError && (
+					<Text testID="detail-panel-print-error" className="text-destructive">
+						{doc.documentError.message}
+					</Text>
+				)}
 				{!!error && (
 					<Text testID="detail-panel-export-error" className="text-destructive">
 						{error}

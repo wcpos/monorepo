@@ -99,7 +99,7 @@ it('shows skeletons while the viewed store is unknown', () => {
 });
 
 // Miswiring the card id or making the deferred Orders head live breaks these contracts.
-it('a card head opens its panel', () => {
+it('every card head, Orders included, opens its panel', () => {
 	const context = jest.requireMock<typeof import('../context')>('../context');
 	const real = jest.requireActual<typeof import('../context')>('../context');
 	const spy = jest.spyOn(context, 'useReportsScope').mockImplementation(real.useReportsScope);
@@ -113,13 +113,19 @@ it('a card head opens its panel', () => {
 				<Detail />
 			</real.ReportsScopeProvider>
 		);
-		fireEvent.click(screen.getByTestId('card-taxes-open'));
-		expect(screen.getByTestId('open-detail').textContent).toBe('taxes');
+		for (const id of [
+			'orders',
+			'payments',
+			'products',
+			'categories',
+			'cashiers',
+			'taxes',
+			'refunds',
+		]) {
+			fireEvent.click(screen.getByTestId(`card-${id}-open`));
+			expect(screen.getByTestId('open-detail').textContent).toBe(id);
+		}
 	} finally {
 		spy.mockRestore();
 	}
-});
-it('the Orders head has no press', () => {
-	render(<PeriodSection />);
-	expect(screen.queryByTestId('card-orders-open')).toBeNull();
 });

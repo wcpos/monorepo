@@ -20,7 +20,7 @@ const colors = {
 export function OrdersCard() {
 	const t = useT(),
 		{ selectedOrders, totals } = useReportsData(),
-		{ statusMode } = useReportsScope();
+		{ statusMode, setDetail } = useReportsScope();
 	const { storeId } = useReportsPeriod(),
 		{ store, money, number, quantity, percent } = useReportFormats(storeId);
 	const decimals = store?.price_num_decimals;
@@ -59,7 +59,12 @@ export function OrdersCard() {
 		['discounts', 'discounts', money(summary.discounts)],
 	];
 	return (
-		<ReportCard testID="card-orders" name={t('reports.card_orders')} figure={number(summary.count)}>
+		<ReportCard
+			onOpen={() => setDetail('orders')}
+			testID="card-orders"
+			name={t('reports.card_orders')}
+			figure={number(summary.count)}
+		>
 			{summary.count === 0 ? (
 				<Text testID="card-orders-empty">{t('reports.no_orders_in_period')}</Text>
 			) : (

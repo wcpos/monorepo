@@ -108,6 +108,7 @@ jest.mock('../../../../hooks/use-store-day', () => ({
 	}),
 }));
 jest.mock('../../../../hooks/use-local-date', () => ({
+	...jest.requireActual('../../../../hooks/use-local-date'),
 	useLocalDate: () => ({ formatDate: jest.requireActual('date-fns').format }),
 }));
 jest.mock('../../../../hooks/use-app-info', () => ({
@@ -127,10 +128,10 @@ jest.mock('@wcpos/components/text', () => ({
 jest.mock('@wcpos/components/button', () => ({
 	Button: React.forwardRef<
 		HTMLButtonElement,
-		React.PropsWithChildren<{ testID?: string; onPress?: () => void }>
-	>(function TestButton({ testID, onPress, children }, ref) {
+		React.PropsWithChildren<{ testID?: string; onPress?: () => void; disabled?: boolean }>
+	>(function TestButton({ testID, onPress, children, disabled }, ref) {
 		return (
-			<button ref={ref} data-testid={testID} onClick={onPress}>
+			<button ref={ref} data-testid={testID} onClick={onPress} disabled={disabled}>
 				{children}
 			</button>
 		);

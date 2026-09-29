@@ -476,6 +476,21 @@ async function openClosures(page: Page) {
 		await page.getByTestId('detail-panel-close').click();
 	}
 	await expect(page.getByTestId('detail-panel-body')).toHaveCount(0);
+	await page.getByTestId('card-orders-open').click();
+	await page
+		.getByTestId(/^orders-panel-tick-(?!all$)/)
+		.first()
+		.click();
+	if ((page.viewportSize()?.width ?? 0) < 640) {
+		await page.getByTestId('detail-panel-back').click();
+	}
+	await expect(page.getByTestId('hero-chip-left-out')).toBeVisible();
+	await expect(page.getByTestId('hero-chip-left-out-count')).toHaveText('1');
+	if ((page.viewportSize()?.width ?? 0) >= 640) {
+		await page.getByTestId('detail-panel-close').click();
+	}
+	await page.getByTestId('hero-chip-left-out-clear').click();
+	await expect(page.getByTestId('hero-chip-left-out')).toHaveCount(0);
 
 	await page.getByTestId('reports-scope').click();
 	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();

@@ -159,10 +159,14 @@ function resource(orders: ReportOrder[]) {
 }
 function Probe() {
 	const data = useReportsData();
-	const { setUnselectedRowIds } = useReportsSelection();
+	const { unselectedRowIds, setUnselectedRowIds } = useReportsSelection();
+	const { detail } = useReportsScope();
 	const state = useQueryState<'orders'>();
 	return (
 		<>
+			<span data-testid="exclusions">{Object.keys(unselectedRowIds).join()}</span>
+			<span data-testid="detail">{detail}</span>
+			<button data-testid="exclude-hidden" onClick={() => setUnselectedRowIds({ pending: true })} />
 			<span data-testid="comparison-counts">
 				{data.comparisonOrders.length}/{data.wholeComparisonOrders.length}
 			</span>
@@ -428,4 +432,25 @@ it('keeps the primary chart and figures when the comparison fails', async () => 
 	} finally {
 		errors.mockRestore();
 	}
+});
+
+// Counting hidden exclusions or clearing only visible exclusions breaks these contracts.
+it('the left-out chip appears only when an included order is unticked and counts them', () => {
+	setup();
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
+	fireEvent.click(screen.getByTestId('exclude-hidden'));
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
+	fireEvent.click(screen.getByTestId('hero-chip-status'));
+	fireEvent.click(screen.getByTestId('hero-status-all'));
+	expect(screen.getByTestId('hero-chip-left-out').textContent).toContain('1 order left out');
+	fireEvent.click(screen.getByTestId('hero-chip-left-out-label'));
+	expect(screen.getByTestId('detail').textContent).toBe('orders');
+});
+it('its clear puts every order back', () => {
+	setup();
+	fireEvent.click(screen.getByTestId('exclude'));
+	expect(screen.getByTestId('hero-chip-left-out').textContent).toContain('1 order left out');
+	fireEvent.click(screen.getByTestId('hero-chip-left-out-clear'));
+	expect(screen.queryByTestId('hero-chip-left-out')).toBeNull();
+	expect(screen.getByTestId('exclusions').textContent).toBe('');
 });

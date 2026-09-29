@@ -3,7 +3,10 @@ import { panelCsv } from './export-csv';
 import type { PanelSpec } from './specs';
 const spec: PanelSpec = {
 	head: ['Product', 'Amount'],
-	rows: [{ key: 'a', cells: ['A "quote", here', '£2.00'] }],
+	keys: ['product', 'amount'],
+	types: ['text', 'money'],
+	totalRaw: ['Total', 2],
+	rows: [{ key: 'a', cells: ['A "quote", here', '£2.00'], raw: ['A "quote", here', 2] }],
 	total: ['Total', '£2.00'],
 	align: ['left', 'right'],
 };
@@ -15,6 +18,10 @@ it('the CSV has the head, the rows and the total, CRLF-joined', () => {
 });
 it('a cell starting with = is prefixed', () => {
 	expect(
-		panelCsv({ ...spec, rows: [{ key: 'a', cells: ['=1+1', '£2.00'] }], total: undefined })
-	).toBe('"Product","Amount"\r\n"\'=1+1","£2.00"');
+		panelCsv({
+			...spec,
+			rows: [{ key: 'a', cells: ['=1+1', '£2.00'], raw: ['=1+1', 2] }],
+			total: [],
+		})
+	).toBe('"Product","Amount"\r\n"\'=1+1","£2.00"\r\n');
 });
