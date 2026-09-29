@@ -26,7 +26,9 @@ export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 				// painted as "2" (iPhone 16 Pro simulator, 2026-09-09). Native only; the
 				// web NumberInput renders a button and ignores this.
 				inputClassName="border-0 px-1 text-center tabular-nums"
-				className="h-9 min-w-9 items-center justify-center px-2 tabular-nums"
+				// `web:px-2` only: the native Input already pads its field (px-1 above), and a
+				// second padding on the 36-point box clipped two-digit quantities.
+				className="web:px-2 h-9 min-w-9 items-center justify-center tabular-nums"
 				textClassName="font-semibold"
 				// A tap on the field lands the caret wherever the finger was, often before
 				// the digits, so typing appends instead of replacing ("1" → "31"). A
