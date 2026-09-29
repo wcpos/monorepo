@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { Chip } from '@wcpos/components/chip';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -36,11 +35,10 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 		[payload.line_items, formatCurrency]
 	);
 	return (
-		<Card className="flex-1">
-			<CardHeader
-				className="bg-card border-border border-b px-2 py-2"
-				testID="checkout-ledger-header"
-			>
+		// No Card: the ledger is the cart's own frame with a stilled head (decision 49), not a
+		// rounded, bordered box inside the column.
+		<View className="flex-1">
+			<View className="border-border border-b px-2 py-2" testID="checkout-ledger-header">
 				{/* Same height as the cart header it replaces, so the strip and totals below
 				    do not move when the column swaps. */}
 				<HStack className="h-ctl items-center gap-2">
@@ -51,8 +49,8 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 					)}
 					<Chip disabled label={formatName({ ...payload.billing, customer_id: 0 })} />
 				</HStack>
-			</CardHeader>
-			<CardContent className="flex-1 p-0">
+			</View>
+			<View className="flex-1">
 				<HStack className="border-border min-h-row items-center gap-2 border-b px-4">
 					{(['qty', 'item', 'price', 'total'] as const).map((column) => (
 						<Text
@@ -94,7 +92,7 @@ export function CheckoutLedger({ order }: { order: EngineRecord<'orders'> }) {
 						</Text>
 					</HStack>
 				</View>
-			</CardContent>
-		</Card>
+			</View>
+		</View>
 	);
 }
