@@ -43,6 +43,16 @@ const COMPONENT_PATTERN = /^[a-z0-9-]+$/;
 const SCOPE_DATABASE_NAME_SOURCE = 'pos_v\\d+_[a-f0-9]{12}_s[a-z0-9-]+_c[a-z0-9-]+';
 const SCOPE_DATABASE_NAME_PATTERN = new RegExp(`^${SCOPE_DATABASE_NAME_SOURCE}`);
 const SCOPE_DATABASE_NAME_ANYWHERE = new RegExp(SCOPE_DATABASE_NAME_SOURCE);
+const SCOPE_DATABASE_GENERATION_ANYWHERE = new RegExp(
+	SCOPE_DATABASE_NAME_SOURCE.replace('pos_v\\d+', 'pos_v(\\d+)')
+);
+
+/**
+ * The scope-database generation this build opens. Every lower generation is
+ * legacy: the purge that runs after a store is sale-ready removes it (#2242).
+ * History is on `scopeDatabaseName`.
+ */
+export const SCOPE_DATABASE_GENERATION = 5;
 
 /**
  * Canonicalize a site identity so URL spelling variants (scheme, case,
@@ -129,7 +139,7 @@ export function scopeDatabaseName(
 	identity: StoreScopeIdentity,
 	options?: ScopeDatabaseNameOptions
 ): string {
-	const generation = options?.generation ?? 5;
+	const generation = options?.generation ?? SCOPE_DATABASE_GENERATION;
 	const suffix = options?.namespace === undefined ? '' : `_${options.namespace}`;
 	return `pos_v${generation}_${scopeKeyFor(identity)}${suffix}`;
 }
@@ -146,4 +156,14 @@ export function isScopeDatabaseName(name: string): boolean {
  */
 export function containsScopeDatabaseName(name: string): boolean {
 	return SCOPE_DATABASE_NAME_ANYWHERE.test(name);
+}
+
+/**
+ * True when a storage entry embeds a scope database name of an OLDER
+ * generation than this build opens — what the legacy purge deletes. The
+ * current and any future generation are never legacy.
+ */
+export function containsLegacyScopeDatabaseName(name: string): boolean {
+	const match = SCOPE_DATABASE_GENERATION_ANYWHERE.exec(name);
+	return match !== null && Number(match[1]) < SCOPE_DATABASE_GENERATION;
 }

@@ -1,4 +1,4 @@
-import { containsScopeDatabaseName } from '@wcpos/sync-core';
+import { containsLegacyScopeDatabaseName, containsScopeDatabaseName } from '@wcpos/sync-core';
 
 import { DATABASE_GENERATION } from './database-generation';
 
@@ -63,8 +63,13 @@ export const getStoreDatabaseName = (id: string) => `${STORE_DATABASE_PREFIX}${i
 export const isStoreDatabaseName = (value: string) => matchesAnyPrefix(value, ALL_STORE_PREFIXES);
 export const isFastStoreDatabaseName = (value: string) =>
 	matchesAnyPrefix(value, ALL_FAST_STORE_PREFIXES);
+/**
+ * What the post-readiness purge deletes: every retired app-database family
+ * AND every scope database (`pos_v<n>_…`) of a generation below the one this
+ * build opens — the store's engine data, by far the largest legacy footprint.
+ */
 export const isLegacyAppDatabaseName = (value: string) =>
-	matchesAnyPrefix(value, LEGACY_APP_DATABASE_PREFIXES);
+	matchesAnyPrefix(value, LEGACY_APP_DATABASE_PREFIXES) || containsLegacyScopeDatabaseName(value);
 export const isKnownAppDatabaseName = (value: string) =>
 	matchesAnyPrefix(value, APP_DATABASE_PREFIXES);
 /**

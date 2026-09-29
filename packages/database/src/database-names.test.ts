@@ -48,6 +48,10 @@ describe('database name helpers', () => {
 		'fast_store_v3_abc123',
 		'fast_store_v4_abc123',
 		'fast_store_v5_abc123',
+		// Scope databases of an older generation, including rxdb's derived store names.
+		'pos_v4_0123456789ab_s1_c2',
+		'rxdb-pos_v4_0123456789ab_s1_c2--0--orders',
+		'pos_v3_0123456789ab_s1_c2_run7',
 	])('classifies %s as legacy', (name) => {
 		expect(isLegacyAppDatabaseName(name)).toBe(true);
 	});
@@ -57,6 +61,8 @@ describe('database name helpers', () => {
 		'wcposusers_v7-sites-0',
 		'store_v7_abc123',
 		'fast_store_v7_abc123',
+		'pos_v5_0123456789ab_s1_c2',
+		'rxdb-pos_v5_0123456789ab_s1_c2--0--orders',
 		'temporary',
 	])('does not classify %s as legacy', (name) => {
 		expect(isLegacyAppDatabaseName(name)).toBe(false);
