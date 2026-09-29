@@ -20,8 +20,9 @@ jest.mock('./closure-sheet', () => ({ ClosureSheet: () => null }));
 jest.mock('../../../../services/register/use-register-binding', () => ({
 	useRegisterBinding: () => ({ status: 'bound', registers: [] }),
 }));
+let mockSession: { session: unknown; sessionsOn: boolean } = { session: null, sessionsOn: false };
 jest.mock('../../../../services/register-session/use-register-session', () => ({
-	useRegisterSession: () => ({ session: null, sessionsOn: false, overdue: false }),
+	useRegisterSession: () => ({ ...mockSession, overdue: false }),
 }));
 jest.mock('../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { openOrdersPosition: mockPosition } }),
@@ -100,3 +101,22 @@ jest.mock('../checkout/checkout-mode', () => ({
 	useOrderCheckoutStage: (record: { isNew?: boolean }) => (record.isNew ? 'cart' : mockStage),
 }));
 jest.mock('./checkout-ledger', () => ({ CheckoutLedger: () => <div data-testid="cart-card" /> }));
+
+it('hides the open-order tabs while the register is closed or counting', () => {
+	mockIsNew = false;
+	mockStage = 'cart';
+	mockPosition = 'top';
+	mockSession = { session: null, sessionsOn: true };
+	try {
+		const { rerender } = render(<OpenOrders isColumn />);
+		expect(screen.queryByTestId('open-orders')).toBeNull();
+		mockSession = { session: { id: 's', status: 'counting' }, sessionsOn: true };
+		rerender(<OpenOrders isColumn />);
+		expect(screen.queryByTestId('open-orders')).toBeNull();
+		mockSession = { session: { id: 's', status: 'open' }, sessionsOn: true };
+		rerender(<OpenOrders isColumn />);
+		expect(screen.getByTestId('open-orders')).toBeTruthy();
+	} finally {
+		mockSession = { session: null, sessionsOn: false };
+	}
+});
