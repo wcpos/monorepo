@@ -21,6 +21,7 @@ import { useT } from '../../../../contexts/translations';
 import { peekRedirectLoginUrl } from '../../../../hooks/use-wcpos-auth/redirect-result';
 import { useRegisterBinding } from '../../../../services/register/use-register-binding';
 import { UserAvatar } from '../../components/header/user-avatar';
+import { NotificationBell } from '../../components/header/notification-bell';
 import { describeRegisterBar } from './register-bar.helpers';
 import { SwitchStoreSheet } from './switch-store-sheet';
 import { UserSheet } from './user-sheet';
@@ -109,6 +110,7 @@ function RegisterBarContent({
 					onPress={() => onPanelOpenChange(true)}
 				/>
 			)}
+			<NotificationBell testID="register-bar-bell" portalHost="pos" />
 			{panelOpen && <RegisterPanel open={panelOpen} onOpenChange={onPanelOpenChange} />}
 			{/* The rail carries the avatar only on `lg`; every other layout (the phone, and the
 			    medium widths that keep the old front drawer) needs the bar's. */}

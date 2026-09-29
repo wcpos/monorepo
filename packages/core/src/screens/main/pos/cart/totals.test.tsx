@@ -67,7 +67,6 @@ jest.mock('@wcpos/components/chip', () => {
 	return { Chip };
 });
 
-jest.mock('./totals/customer-note', () => ({ CustomerNote: () => null }));
 jest.mock('./totals/taxes', () => ({ Taxes: () => null }));
 
 jest.mock('../../../../contexts/translations', () => {

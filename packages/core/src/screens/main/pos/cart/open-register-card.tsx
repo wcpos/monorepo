@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { type TextInputInstance, View } from 'react-native';
+import { Pressable, ScrollView, type TextInputInstance, View } from 'react-native';
 
 import { Chip } from '@wcpos/components/chip';
 import { Button } from '@wcpos/components/button';
+import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 
@@ -11,8 +12,8 @@ import { useRegisterSession } from '../../../../services/register-session/use-re
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { RegisterAmount } from './movement-sheet';
 
-export function OpenRegisterCard() {
-	const { binding, lastClosed, actions } = useRegisterSession();
+export function OpenRegisterCard({ onLastClosure }: { onLastClosure?: () => void }) {
+	const { binding, lastClosed, lastClosure, actions, blind } = useRegisterSession();
 	const defaultFloat = binding.registers.find(
 		(row) => row.id === binding.registerId
 	)?.default_float;
@@ -41,20 +42,36 @@ export function OpenRegisterCard() {
 		}
 	};
 	return (
-		<View
-			className="bg-card border-border flex-1 gap-3 rounded-lg border p-4"
+		<ScrollView
+			className="flex-1"
+			contentContainerClassName="gap-4 px-4 py-5"
+			// With the keyboard up after typing the float, the first tap on a chip or Open register
+			// must run the action, not just dismiss the keyboard.
+			keyboardShouldPersistTaps="handled"
 			testID="open-register-card"
 		>
-			<Text>{t('register.open_register')}</Text>
-			<RegisterAmount
-				ref={input}
-				testID="open-register-amount"
-				value={amount}
-				onChangeText={setAmount}
-			/>
+			{lastClosure && (
+				<Text className="text-muted-foreground">
+					{t('register.last_closure')} {lastClosure.server_number ?? lastClosure.number} ·{' '}
+					{new Date(lastClosure.closed_at).toLocaleString([], {
+						dateStyle: 'short',
+						timeStyle: 'short',
+					})}
+				</Text>
+			)}
+			<View className="gap-2">
+				<Text className="text-muted-foreground">{t('register.cash_in_drawer')}</Text>
+				<RegisterAmount
+					variant="box"
+					ref={input}
+					testID="open-register-amount"
+					value={amount}
+					onChangeText={setAmount}
+				/>
+			</View>
 			{[
 				[defaultFloat, 'default'],
-				[lastCount, 'last'],
+				[blind ? null : lastCount, 'last'],
 			].map(
 				([value, source]) =>
 					value != null && (
@@ -67,17 +84,9 @@ export function OpenRegisterCard() {
 						/>
 					)
 			)}
-			{expectedFloat !== null && Number(amount) !== Number(expectedFloat) && (
-				<Text testID="opening-variance">
-					{t('register.opening_variance', {
-						amount: format(Number(amount) - Number(expectedFloat)),
-					})}
-				</Text>
-			)}
-			{!!error && <Text>{error}</Text>}
 			<Button
 				testID="open-register-button"
-				size="lg"
+				size="xl"
 				className="w-full"
 				loading={busy}
 				disabled={!amount || !Number.isFinite(Number(amount)) || Number(amount) < 0}
@@ -85,14 +94,32 @@ export function OpenRegisterCard() {
 			>
 				{t('register.open_register')}
 			</Button>
-			<View className="flex-1" />
-			<Button
-				testID="checkout-open-register"
-				variant="ghost"
-				onPress={() => input.current?.focus()}
-			>
-				{t('register.open_register')}
-			</Button>
-		</View>
+			{expectedFloat !== null && Number(amount) !== Number(expectedFloat) && (
+				<Text testID="opening-variance" className="text-muted-foreground">
+					{t('register.opening_variance', {
+						amount: format(Number(amount) - Number(expectedFloat)),
+					})}
+				</Text>
+			)}
+			{!!error && <Text className="text-destructive">{error}</Text>}
+			{lastClosure && (
+				<Pressable
+					testID="open-register-last-closure"
+					accessibilityRole="button"
+					onPress={onLastClosure}
+					className="border-border min-h-ctl active:bg-muted web:hover:bg-muted flex-row items-center gap-2 border-t"
+				>
+					<Icon name="chevronRight" className="text-muted-foreground" />
+					<Text className="text-muted-foreground">{t('register.last_closure')}</Text>
+					<Text className="text-muted-foreground shrink">
+						{t('reports.closure_n', { n: lastClosure.server_number ?? lastClosure.number })}
+						{/* Blind count: the previous cash figure stays hidden here as it does in RegisterPanel. */}
+						{!blind && lastClosure.counted?.cash != null
+							? ` · ${format(Number(lastClosure.counted.cash))}`
+							: ''}
+					</Text>
+				</Pressable>
+			)}
+		</ScrollView>
 	);
 }

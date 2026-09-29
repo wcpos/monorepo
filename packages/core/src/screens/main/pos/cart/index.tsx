@@ -75,7 +75,13 @@ export function OpenOrders({
 		}),
 		[position, isColumn]
 	);
-	const cartBar = <Slot id="pos.cart.bar" api={NO_API} data={view} />;
+	// The open-order tabs belong to the cart: while the column shows the register picker, the
+	// Open register card or the count instead, the tabs go with it (Paul, 2026-09-29).
+	const cartShown =
+		!(bindingStatus === 'choose' || pickingRegister || pickerRequested) &&
+		!(sessionsOn && !session && bindingStatus === 'bound') &&
+		!(session && session.status !== 'open');
+	const cartBar = cartShown ? <Slot id="pos.cart.bar" api={NO_API} data={view} /> : null;
 
 	if (!currentOrderRecord) {
 		throw new Error('Current order is not defined');
@@ -101,7 +107,7 @@ export function OpenOrders({
 	 *
 	 */
 	return (
-		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
+		<VStack className={`h-full gap-1 p-2 ${isColumn ? 'bg-card pl-0' : ''}`}>
 			<RegisterBar
 				onSwitchRegister={() => setPickingRegister(true)}
 				panelOpen={panelOpen}
@@ -124,7 +130,7 @@ export function OpenOrders({
 						}}
 					/>
 				) : sessionsOn && !session && bindingStatus === 'bound' ? (
-					<OpenRegisterCard />
+					<OpenRegisterCard onLastClosure={() => setPanelOpen(true)} />
 				) : session && session.status !== 'open' ? (
 					<RegisterCount key={session.id} onClosed={setClosure} />
 				) : isColumn && receiptOrderUuid ? (

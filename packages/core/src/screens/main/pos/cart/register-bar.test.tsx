@@ -6,6 +6,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { RegisterBar } from './register-bar';
 
 jest.mock('expo-haptics', () => ({}));
+// The bar carries the notifications bell (language decision 42); its Popover primitive ships
+// untransformed JSX, so the bell is a stub here as it is in the rail test.
+jest.mock('../../components/header/notification-bell', () => ({
+	NotificationBell: ({ testID }: { testID?: string }) => <div data-testid={testID ?? 'bell'} />,
+}));
 
 let mockIsPhone = true;
 jest.mock('@wcpos/components/lib/device', () => ({ useIsPhone: () => mockIsPhone }));
