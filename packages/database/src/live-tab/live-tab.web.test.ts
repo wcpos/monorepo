@@ -14,7 +14,7 @@ function harness() {
 	const locks = {
 		request: jest.fn(
 			(_name, options, callback) =>
-				new Promise<void>((resolve) => {
+				new Promise<void>((resolve, reject) => {
 					if (options.ifAvailable && options.signal)
 						throw new Error('signal and ifAvailable cannot be combined');
 					const grant = () => {
@@ -29,8 +29,15 @@ function harness() {
 					if (occupied && options.ifAvailable) {
 						callback(null);
 						resolve();
-					} else if (occupied) queue.push(grant);
-					else grant();
+					} else if (occupied) {
+						queue.push(grant);
+						options.signal?.addEventListener('abort', () => {
+							const index = queue.indexOf(grant);
+							if (index < 0) return;
+							queue.splice(index, 1);
+							reject(new DOMException('Aborted', 'AbortError'));
+						});
+					} else grant();
 				})
 		),
 	};
@@ -149,7 +156,7 @@ test('takeover: the holder acks, tears down, releases; the requester becomes liv
 	});
 	b.takeOver();
 	await flush();
-	expect(h.events.filter((e) => e !== 'takeover-released')).toEqual([
+	expect(h.events.filter((e) => e !== 'takeover-released' && e !== 'live')).toEqual([
 		'takeover-request',
 		'takeover-ack',
 		'teardown',
@@ -266,7 +273,16 @@ test('a second takeover request during a handover gets its own ack and the same 
 	await flush();
 	expect(teardown).toHaveBeenCalledTimes(1);
 	expect(b.getState()).toEqual({ kind: 'live' });
-	expect(c.getState().kind).toBe('taking-over');
+	expect(c.getState()).toEqual({ kind: 'parked', reason: 'another-tab-live' });
+	const queued = h.locks.request.mock.calls.filter(([, options]) => options.signal);
+	expect(queued[1][1].signal.aborted).toBe(true);
+	c.takeOver();
+	await flush();
+	expect(b.getState()).toEqual({ kind: 'parked', reason: 'another-tab-live' });
+	expect(c.getState()).toEqual({ kind: 'live' });
+	const retried = h.locks.request.mock.calls.at(-1)![1].signal;
+	expect(retried).not.toBe(queued[1][1].signal);
+	expect(retried.aborted).toBe(false);
 });
 
 test.each([false, true])(

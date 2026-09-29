@@ -17,11 +17,13 @@ export type LiveTabState =
 	| { kind: 'live' }
 	| { kind: 'parked'; reason: 'another-tab-live' | 'worker-lost' }
 	| { kind: 'taking-over'; deferral: null | Hold | 'no-answer' };
-type Message = {
-	type: 'takeover-request' | 'takeover-ack' | 'takeover-released';
-	requestId: string;
-	deferral?: Hold | null;
-};
+type Message =
+	| { type: 'live' }
+	| {
+			type: 'takeover-request' | 'takeover-ack' | 'takeover-released';
+			requestId: string;
+			deferral?: Hold | null;
+	  };
 type Channel = {
 	onmessage: ((event: MessageEvent<unknown>) => void) | null;
 	postMessage(data: Message): void;
@@ -58,7 +60,7 @@ export function createLiveTab(deps: Dependencies) {
 	const state = new BehaviorSubject<LiveTabState>({ kind: 'acquiring' });
 	const clock = deps.clock ?? globalThis;
 	const channel = deps.channel(LIVE_TAB_CHANNEL_NAME);
-	const controller = new AbortController();
+	let acquisition: AbortController | undefined;
 	let disposed = false;
 	let lost = false;
 	let unlock: (() => void) | undefined;
@@ -85,6 +87,8 @@ export function createLiveTab(deps: Dependencies) {
 		finishWaiting?.();
 	};
 	const acquire = (ifAvailable: boolean) => {
+		const controller = new AbortController();
+		acquisition = controller;
 		lockDone = deps
 			.locks!.request(
 				LIVE_TAB_LOCK_NAME,
@@ -99,11 +103,12 @@ export function createLiveTab(deps: Dependencies) {
 					await new Promise<void>((resolve) => {
 						unlock = resolve;
 						set({ kind: 'live' });
+						channel.postMessage({ type: 'live' });
 					});
 				}
 			)
 			.catch((error) => {
-				if (disposed) return;
+				if (disposed || controller.signal.aborted) return;
 				// A request that REJECTS before any grant (a sandboxed or opaque context,
 				// #1057's write lease saw the same) is an absent API, not a dead worker:
 				// there is nothing to coordinate with, so the tab runs live rather than
@@ -169,6 +174,13 @@ export function createLiveTab(deps: Dependencies) {
 	channel.onmessage = ({ data }) => {
 		if (disposed || lost || !data || typeof data !== 'object') return;
 		const message = data as Message;
+		if (message.type === 'live') {
+			if (state.value.kind === 'taking-over') {
+				acquisition?.abort();
+				park('another-tab-live');
+			}
+			return;
+		}
 		if (typeof message.requestId !== 'string') return;
 		if (message.type === 'takeover-request' && (state.value.kind === 'live' || handingOver)) {
 			requests.add(message.requestId);
@@ -213,7 +225,7 @@ export function createLiveTab(deps: Dependencies) {
 			disposed = true;
 			ownsPool = false;
 			holds.clear();
-			controller.abort();
+			acquisition?.abort();
 			clock.clearTimeout(answerTimer);
 			finishWaiting?.();
 			unlock?.();
