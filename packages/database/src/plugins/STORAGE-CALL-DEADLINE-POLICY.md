@@ -15,7 +15,10 @@ next engine must not reinvent it a third time. The implementation is
    is a spurious banner, so the watchdog condemns the worker after two consecutive
    `STORAGE_RPC_WATCHDOG_MS` windows in which nothing answered, and only the watched read methods
    arm it (`WATCHDOG_WATCHED_METHODS`, `STORAGE_RPC_SILENT_WINDOWS_BEFORE_DEAD`). The condemned
-   state is a one-shot latch (`worker-lost`) cleared only by a reload.
+   state is a one-shot latch (`worker-lost`) cleared only by a reload. Opening a store
+   (`createStorageInstance`) is the one non-read call that arms the watchdog: it is a remote RPC
+   with no instance yet to arm a read against, so its expiry rejects the open as a bootstrap error
+   rather than leaving the app on a spinner forever.
 
 3. **Writes are never failed by the clock, only signalled — and the signal blocks Pay.** Rejecting
    a `bulkWrite` on elapsed time would tell the caller it failed while it may still commit, which is
