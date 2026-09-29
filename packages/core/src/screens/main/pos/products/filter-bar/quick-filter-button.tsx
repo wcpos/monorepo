@@ -59,9 +59,7 @@ export function QuickFilterButton({ quickFilter }: { quickFilter: QuickFilter })
 			testID={`quick-filter-${quickFilter.id}`}
 			onPress={handlePress}
 		>
-			<ButtonText decodeHtml className={active ? 'text-primary font-semibold' : undefined}>
-				{quickFilter.label}
-			</ButtonText>
+			<ButtonText decodeHtml>{quickFilter.label}</ButtonText>
 		</ButtonPill>
 	);
 }

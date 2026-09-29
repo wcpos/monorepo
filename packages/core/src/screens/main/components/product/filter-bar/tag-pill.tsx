@@ -52,7 +52,7 @@ export function TagPill({ resource, selectedID }: Props) {
 					removeTestID="filter-pill-remove-tags"
 					onRemove={() => actions.clearFilter('tags')}
 				>
-					<ButtonText decodeHtml className={isActive ? 'text-primary font-semibold' : undefined}>
+					<ButtonText decodeHtml>
 						{isActive ? tag?.payload.name || t('common.id_2', { id: selectedID }) : t('common.tag')}
 					</ButtonText>
 				</ButtonPill>

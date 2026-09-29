@@ -24,9 +24,7 @@ export function FeaturedPill() {
 			removeTestID="filter-pill-remove-featured"
 			onRemove={() => actions.clearFilter('featured')}
 		>
-			<ButtonText className={isActive ? 'text-primary font-semibold' : undefined}>
-				{t('common.featured')}
-			</ButtonText>
+			<ButtonText>{t('common.featured')}</ButtonText>
 		</ButtonPill>
 	);
 }

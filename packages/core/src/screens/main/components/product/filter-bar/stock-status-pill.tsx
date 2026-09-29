@@ -52,9 +52,7 @@ export function StockStatusPill() {
 					removeTestID="filter-pill-remove-stock_status"
 					onRemove={() => actions.clearFilter('stock_status')}
 				>
-					<ButtonText decodeHtml className={isActive ? 'text-primary font-semibold' : undefined}>
-						{value?.label || t('common.stock_status')}
-					</ButtonText>
+					<ButtonText decodeHtml>{value?.label || t('common.stock_status')}</ButtonText>
 				</ButtonPill>
 			</SelectPrimitiveTrigger>
 			<SelectContent>

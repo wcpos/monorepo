@@ -52,7 +52,7 @@ export function BrandsPill({ resource, selectedID }: Props) {
 					removeTestID="filter-pill-remove-brands"
 					onRemove={() => actions.clearFilter('brands')}
 				>
-					<ButtonText decodeHtml className={isActive ? 'text-primary font-semibold' : undefined}>
+					<ButtonText decodeHtml>
 						{isActive
 							? brand?.payload.name || t('common.id_2', { id: selectedID })
 							: t('common.brand')}

@@ -186,7 +186,6 @@ describe('product filter pills', () => {
 		fireEvent.click(screen.getByTestId('choose-stock-status'));
 		expect(filters()).toMatchObject({ stock_status: 'outofstock' });
 		expect(screen.getByTestId('filter-pill').getAttribute('data-variant')).toBe('outline-primary');
-		expect(screen.getByTestId('filter-label').className).toBe('text-primary font-semibold');
 		expect(screen.getByTestId('filter-pill').getAttribute('data-right-icon')).toBeNull();
 		fireEvent.click(screen.getByTestId('clear-filter'));
 		expect(filters()).not.toHaveProperty('stock_status');

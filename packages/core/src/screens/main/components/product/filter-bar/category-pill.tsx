@@ -21,11 +21,9 @@ import { useQueryState, useQueryStateActions } from '../../../../../query';
 function CategoryPillLabel({
 	resource,
 	fallbackLabel,
-	active,
 }: {
 	resource: ObservableResource<EngineRecord<'categories'>[]>;
 	fallbackLabel: string;
-	active: boolean;
 }) {
 	const selected = useObservableSuspense(resource);
 	const displayText = React.useMemo(() => {
@@ -34,11 +32,7 @@ function CategoryPillLabel({
 		return `${selected[0].payload.name} +${selected.length - 1}`;
 	}, [fallbackLabel, selected]);
 
-	return (
-		<ButtonText decodeHtml className={active ? 'text-primary font-semibold' : undefined}>
-			{displayText}
-		</ButtonText>
-	);
+	return <ButtonText decodeHtml>{displayText}</ButtonText>;
 }
 
 /**
@@ -89,15 +83,8 @@ export function CategoryPill() {
 					removeTestID="filter-pill-remove-categories"
 					onRemove={handleRemove}
 				>
-					<React.Suspense
-						fallback={
-							<ButtonText className={isActive ? 'text-primary font-semibold' : undefined}>
-								{t('common.loading')}
-							</ButtonText>
-						}
-					>
+					<React.Suspense fallback={<ButtonText>{t('common.loading')}</ButtonText>}>
 						<CategoryPillLabel
-							active={isActive}
 							resource={selectedCategoriesResource}
 							fallbackLabel={t('common.category')}
 						/>

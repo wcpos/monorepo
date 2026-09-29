@@ -24,9 +24,7 @@ export function OnSalePill() {
 			removeTestID="filter-pill-remove-on_sale"
 			onRemove={() => actions.clearFilter('on_sale')}
 		>
-			<ButtonText className={isActive ? 'text-primary font-semibold' : undefined}>
-				{t('common.on_sale')}
-			</ButtonText>
+			<ButtonText>{t('common.on_sale')}</ButtonText>
 		</ButtonPill>
 	);
 }
