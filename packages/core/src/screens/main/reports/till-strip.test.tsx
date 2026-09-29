@@ -439,3 +439,60 @@ it('settles to denied when a scheduled read is refused', async () => {
 		jest.useRealTimers();
 	}
 });
+
+// A slow read overtaken by the next scheduled one must not put its older answer over the newer.
+it('ignores an overtaken scheduled read that answers after a newer one', async () => {
+	data.session = null;
+	online = true;
+	jest.useFakeTimers();
+	try {
+		render(<TillStrip onOpenClosures={jest.fn()} />);
+		await waitFor(() =>
+			expect(screen.getByTestId('till-last-closure').textContent).toContain('#413')
+		);
+		// The first scheduled read hangs on its session list.
+		let releaseFirst: (value: unknown) => void = () => {};
+		const first = new Promise((resolve) => {
+			releaseFirst = resolve;
+		});
+		get.mockImplementationOnce(() => first).mockImplementationOnce(() => first);
+		await act(async () => {
+			jest.advanceTimersByTime(60_000);
+		});
+		// The second scheduled read finds a session opened on another device.
+		const opened = {
+			id: 'r9',
+			status: 'open',
+			opened_at_gmt: '2026-09-17T04:00:00Z',
+			opened_by: 7,
+		};
+		get.mockImplementation((path: string) =>
+			Promise.resolve(
+				path === 'sessions'
+					? { data: [opened] }
+					: { data: { ...opened, expected: { cash: '150.0000' }, sales_count: 3 } }
+			)
+		);
+		await act(async () => {
+			jest.advanceTimersByTime(60_000);
+		});
+		await waitFor(() => expect(screen.getByTestId('till-status').textContent).toContain('Open'));
+		// The first read now answers with no session and the old closure: it is ignored.
+		get.mockImplementation((path: string) =>
+			Promise.resolve({
+				data: path === 'sessions' ? [] : { ...data.lastClosure, id: 'B', server_number: 413 },
+			})
+		);
+		await act(async () => {
+			releaseFirst({ data: [] });
+			await first;
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(screen.getByTestId('till-status').textContent).toContain('Open');
+		expect(screen.queryByTestId('till-reprint')).toBeNull();
+	} finally {
+		jest.useRealTimers();
+	}
+});

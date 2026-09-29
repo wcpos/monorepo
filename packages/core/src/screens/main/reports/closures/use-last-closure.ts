@@ -45,12 +45,16 @@ export function useLastClosure(
 	);
 	const [localData, setData] = React.useState<SessionCardData & { key: string }>(idle);
 	const data = summary ?? (localData.key === key ? localData : idle);
+	// Only the latest request may settle: a slow read overtaken by the next scheduled one
+	// must not put the older answer over the newer.
+	const latest = React.useRef(0);
 	const load = React.useCallback(
 		async (options?: { silent?: boolean }) => {
 			if (!online || !registerId) return;
-			// A response for a superseded target (or after a disable) is ignored.
+			const request = ++latest.current;
+			// A response for a superseded target (or after a disable), or an overtaken request, is ignored.
 			const settle = (next: Partial<SessionCardData>) =>
-				setData((d) => (d.key === key ? { ...d, ...next } : d));
+				setData((d) => (d.key === key && request === latest.current ? { ...d, ...next } : d));
 			// A silent read keeps what it shows until the answer arrives (no loading state).
 			if (!options?.silent) setData({ ...idle, status: 'loading' });
 			try {
