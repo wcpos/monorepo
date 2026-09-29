@@ -96,7 +96,8 @@ export function OpenOrderTabs() {
 						accessibilityLabel={t('pos_cart.open_orders_count', { count: openOrders.length })}
 						onPress={() => setListOpen(true)}
 					>
-						<Badge count={openOrders.length} variant="muted" />
+						{/* `children`, not `count`: the pill must read "0" when the strip is empty. */}
+						<Badge variant="muted">{String(openOrders.length)}</Badge>
 						<Icon name="chevronUp" size="sm" className="text-muted-foreground" />
 					</Button>
 				</View>
@@ -126,9 +127,10 @@ export function OpenOrderTabs() {
 							)
 						)}
 					</ScrollView>
-					{/* Translucent edge overlays are the RN equivalent of the prototype's fade. */}
-					<View pointerEvents="none" className="bg-card/70 absolute inset-y-0 left-0 w-6" />
-					<View pointerEvents="none" className="bg-card/70 absolute inset-y-0 right-0 w-6" />
+					{/* Translucent edge overlays are the RN equivalent of the prototype's fade. They
+					    stay inside the tabs' 12 px padding so a fully revealed amount is never washed. */}
+					<View pointerEvents="none" className="bg-card/70 absolute inset-y-0 left-0 w-3" />
+					<View pointerEvents="none" className="bg-card/70 absolute inset-y-0 right-0 w-3" />
 				</View>
 				<IconButton
 					name="chevronRight"
