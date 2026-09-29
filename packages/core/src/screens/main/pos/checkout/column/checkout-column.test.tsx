@@ -77,6 +77,13 @@ jest.mock('../../contexts/current-order/context', () => ({ useCurrentOrder: jest
 jest.mock('@wcpos/query', () => ({
 	useRecordField: (_order: unknown, select: (record: unknown) => unknown) =>
 		select({ payload: { id: 1187, number: mockNumber, currency_symbol: '$', line_items: [] } }),
+	useDocField: (_doc: unknown, select: (value: unknown) => unknown) =>
+		select({ tax_display_cart: 'excl' }),
+}));
+// The ledger reads the store's tax display through app-state; the real provider pulls
+// expo-crypto (ESM) into jest, so it is stubbed here as tab-chip.test.tsx does.
+jest.mock('../../../../../contexts/app-state', () => ({
+	useAppState: () => ({ store: {} }),
 }));
 
 // Chrome only: the assertions are about which pane renders, not how a modal or a
