@@ -7,8 +7,11 @@ const mockGet = jest.fn();
 jest.mock('@wcpos/hooks/use-online-status', () => ({
 	useOnlineStatus: () => ({ status: 'online-website-available' }),
 }));
+// One stable client, as in the app: a fresh object per render would re-run the directory
+// effect on the re-render a failed read now publishes.
+const mockHttp = { get: (...args: unknown[]) => mockGet(...args) };
 jest.mock('../../screens/main/hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({ get: mockGet }),
+	useRestHttpClient: () => mockHttp,
 }));
 jest.mock('./register-document', () => ({
 	getRegisterSnapshot: () => null,

@@ -70,10 +70,14 @@ export function useReportPrint(storeId?: number) {
 		shippingTotalsArray,
 		averageOrderValue,
 	} = calculateTotals({ orders: selectedOrders, num_decimals });
-	// Printing waits for the store's register list only while it can still arrive and the report
-	// names a register it has not resolved: offline, or with every name known, it prints.
+	// Printing waits for the store's register list only while it can still arrive (online, not yet
+	// read, not failed) and the document will print a by-register section (two or more registers)
+	// with a name it has not resolved. Otherwise it prints.
 	const ready =
-		namesLoaded || !online || registerArray.every(({ registerId }) => !!registerNames[registerId]);
+		namesLoaded ||
+		!online ||
+		registerArray.length < 2 ||
+		registerArray.every(({ registerId }) => !!registerNames[registerId]);
 
 	const reportPeriod = React.useMemo(() => {
 		const from = selectedDateRange?.from
