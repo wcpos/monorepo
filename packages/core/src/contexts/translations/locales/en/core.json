@@ -2442,5 +2442,12 @@
 	"reports.col_avg_order": "Avg order",
 	"reports.col_reason": "Reason",
 	"reports.all_products": "All products",
-	"reports.no_rows_in_period": "Nothing in this period"
+	"reports.no_rows_in_period": "Nothing in this period",
+	"orders.display_options": "Display options",
+	"orders.restore_defaults": "Restore defaults",
+	"orders.print_receipt": "Print receipt",
+	"orders.close_order": "Close order",
+	"orders.order_actions": "Order actions",
+	"common.status_offline": "Offline",
+	"common.status_site_unreachable": "Site unreachable"
 }

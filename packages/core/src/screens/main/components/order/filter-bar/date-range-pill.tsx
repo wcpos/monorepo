@@ -104,7 +104,7 @@ export function DateRangePill({ onRemove }: Props = {}) {
 					label={label}
 				/>
 			</PopoverTrigger>
-			<PopoverContent className="w-auto p-2">
+			<PopoverContent testID="order-filter-date-popover" className="w-auto p-2">
 				{/* Keyed by zone: the calendar seeds its selection from the store day at mount, so a
 				    zone resolved after mount must not leave the old selection behind. */}
 				<DateRangeCalendar key={timezone} onSelect={handleDateSelect} />

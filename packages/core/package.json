@@ -37,6 +37,7 @@
 		"./screens/main/hooks/use-rest-http-client": "./src/screens/main/hooks/use-rest-http-client/index.ts",
 		"./screens/main/health": "./src/screens/main/health/index.tsx",
 		"./screens/main/logs": "./src/screens/main/logs/index.tsx",
+		"./screens/main/orders/v2": "./src/screens/main/orders/v2/index.tsx",
 		"./screens/main/orders": "./src/screens/main/orders/index.tsx",
 		"./screens/main/orders/edit": "./src/screens/main/orders/edit/index.tsx",
 		"./screens/main/orders/refund": "./src/screens/main/orders/refund/index.tsx",

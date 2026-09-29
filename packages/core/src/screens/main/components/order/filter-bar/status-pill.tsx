@@ -44,7 +44,12 @@ export function StatusPill() {
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				{items.map((item) => (
-					<SelectItem key={item.value} label={item.label} value={item.value} />
+					<SelectItem
+						testID={`order-filter-status-${item.value}`}
+						key={item.value}
+						label={item.label}
+						value={item.value}
+					/>
 				))}
 			</SelectContent>
 		</Select>

@@ -69,9 +69,6 @@
   "packages/core/src/screens/main/logs/row-detail.tsx": {
     "arbitrary-px": 1
   },
-  "packages/core/src/screens/main/orders/cells/actions.tsx": {
-    "group-*": 1
-  },
   "packages/core/src/screens/main/orders/view/sections/_section.tsx": {
     "arbitrary-px": 1
   },

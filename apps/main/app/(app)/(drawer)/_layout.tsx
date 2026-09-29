@@ -127,6 +127,7 @@ function ThemedDrawer({
 			<Drawer.Screen
 				name="orders"
 				options={{
+					headerShown: false,
 					title: t('common.orders'),
 					drawerLabel: t('common.orders'),
 					drawerIcon: ({ focused }) => (
