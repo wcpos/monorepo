@@ -58,7 +58,10 @@ export function DataTableRow<TData extends RowData>({
 	const actions = cells.find((cell) => cell.column.id === 'actions');
 	const body = cells.filter((cell) => cell.column.id !== 'actions');
 	const primary = body.filter((cell) => cell.column.id !== 'price');
-	const trailingNode = actions ? content(actions) : trailing;
+	// A table whose settings HIDE the actions column hides the trailing control with it, as the
+	// old table did; a table with no actions column at all shows the caller's control.
+	const actionsHidden = item.getAllCells().some((cell) => cell.column.id === 'actions') && !actions;
+	const trailingNode = actions ? content(actions) : actionsHidden ? null : trailing;
 	return (
 		<View className="border-border flex-row items-center border-b">
 			<Pressable

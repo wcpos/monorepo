@@ -63,6 +63,8 @@ interface CartTableLine {
 	kind: 'line' | 'fee' | 'shipping';
 	name: string;
 	total: number;
+	/** Per-unit price for the Price sort; fees and shipping carry their total (they sort last anyway). */
+	price: number;
 }
 const cells = {
 	line_items: {
@@ -106,6 +108,7 @@ const formatCartItems = (
 			kind: type === 'line_items' ? 'line' : type === 'fee_lines' ? 'fee' : 'shipping',
 			name: ('name' in item ? item.name : 'method_title' in item ? item.method_title : '') ?? '',
 			total: Number(item.total ?? 0),
+			price: Number(('price' in item ? item.price : item.total) ?? 0),
 			uuid,
 			type,
 		};

@@ -4,7 +4,8 @@ type SortableLine = {
 	position: number;
 	kind: 'line' | 'fee' | 'shipping';
 	name: string;
-	total: number;
+	/** The per-unit price the Price column shows, not the line total. */
+	price: number;
 };
 const group = { line: 0, fee: 1, shipping: 2 };
 
@@ -15,7 +16,7 @@ export function sortLines<T extends SortableLine>(lines: readonly T[], setting: 
 		if (a.kind !== 'line') return a.position - b.position;
 		if (setting === 'newest_top') return b.position - a.position;
 		if (setting === 'name') return a.name.localeCompare(b.name) || a.position - b.position;
-		if (setting === 'price') return a.total - b.total || a.position - b.position;
+		if (setting === 'price') return a.price - b.price || a.position - b.position;
 		return a.position - b.position;
 	});
 }

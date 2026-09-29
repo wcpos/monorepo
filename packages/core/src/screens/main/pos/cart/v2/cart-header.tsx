@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
@@ -55,28 +56,39 @@ export function CartHeader() {
 	}, []);
 	return (
 		<HStack className="border-border min-h-ctl border-b py-2">
-			<HStack className="h-ctl flex-1">
-				<Text className="font-bold">{t('common.customer')}:</Text>
-				<ErrorBoundary>
-					{showCustomerSelect ? (
-						<Combobox<CustomerData>
-							onValueChange={handleSelectCustomer}
-							onOpenChange={delayedCloseHandler}
-						>
-							{/* @ts-expect-error: ComboboxTrigger ref type is more specific than our ref with open() method */}
-							<ComboboxTrigger ref={triggerRef} asChild>
-								<ButtonPill testID="cart-customer-select" size="xs" leftIcon="user" variant="muted">
-									<ButtonText>{t('common.select_customer')}</ButtonText>
-								</ButtonPill>
-							</ComboboxTrigger>
-							<ComboboxContent>
-								<CustomerSearch withGuest />
-							</ComboboxContent>
-						</Combobox>
-					) : (
-						<Customer onShowCustomerSelect={handleShowCustomerSelect} />
-					)}
-				</ErrorBoundary>
+			{/* `min-w-0` and the shrinking wrapper: a long customer name truncates instead of
+			    pushing the add and settings controls off the row. */}
+			<HStack className="h-ctl min-w-0 flex-1">
+				<Text className="font-bold" numberOfLines={1}>
+					{t('common.customer')}:
+				</Text>
+				<View className="min-w-0 shrink">
+					<ErrorBoundary>
+						{showCustomerSelect ? (
+							<Combobox<CustomerData>
+								onValueChange={handleSelectCustomer}
+								onOpenChange={delayedCloseHandler}
+							>
+								{/* @ts-expect-error: ComboboxTrigger ref type is more specific than our ref with open() method */}
+								<ComboboxTrigger ref={triggerRef} asChild>
+									<ButtonPill
+										testID="cart-customer-select"
+										size="xs"
+										leftIcon="user"
+										variant="muted"
+									>
+										<ButtonText>{t('common.select_customer')}</ButtonText>
+									</ButtonPill>
+								</ComboboxTrigger>
+								<ComboboxContent>
+									<CustomerSearch withGuest />
+								</ComboboxContent>
+							</Combobox>
+						) : (
+							<Customer onShowCustomerSelect={handleShowCustomerSelect} />
+						)}
+					</ErrorBoundary>
+				</View>
 			</HStack>
 			<AddCartItemsMenu />
 			<UISettingsDialog
