@@ -93,7 +93,7 @@ function OrderRow({
 				<CartTabTitle order={order} />
 			</View>
 			<Text className="flex-1">{name || t('pos_cart.guest')}</Text>
-			<TabChip order={order} fallbackLabel={getLabel(payload.status)} />
+			<TabChip order={order} fallbackLabel={getLabel(payload.status)} fallbackIsStatus />
 			{selected && <Text>{t('pos_cart.selected')}</Text>}
 		</Pressable>
 	);

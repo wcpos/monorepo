@@ -185,7 +185,11 @@ function TabContent({
 }) {
 	const t = useT();
 	return (
-		<View className={phone ? 'flex-row items-center gap-1' : 'flex-col items-start gap-0'}>
+		// tabular-nums on the wrapper: on web it reaches the status label's amounts (waiting for
+		// terminal, partly paid) so a tab does not change width as its numbers change.
+		<View
+			className={`tabular-nums ${phone ? 'flex-row items-center gap-1' : 'flex-col items-start gap-0'}`}
+		>
 			<CartTabTitle order={order} amountOnly active={active} />
 			<TabChip
 				order={order}

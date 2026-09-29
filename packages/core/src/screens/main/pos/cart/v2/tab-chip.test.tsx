@@ -140,3 +140,16 @@ it('suppresses active chips and renders a phone dot without a word', () => {
 	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('');
 	expect(screen.getByTestId('open-order-chip-a').dataset.variant).toBe('info');
 });
+it('keeps a caller status fallback as a badge, and the strip word as plain text', () => {
+	const order = {
+		uuid: 'a',
+		payload: { total: '10.00', meta_data: [] },
+	} as unknown as EngineRecord<'orders'>;
+	const { rerender } = render(<TabChip order={order} fallbackLabel="Cart" />);
+	expect(screen.queryByTestId('open-order-chip-a')).toBeNull();
+	expect(screen.getByTestId('open-order-status-a').textContent).toBe('Cart');
+	// The open-orders list passes the order's real status: still a badge, as before.
+	rerender(<TabChip order={order} fallbackLabel="POS - Open" fallbackIsStatus />);
+	expect(screen.queryByTestId('open-order-status-a')).toBeNull();
+	expect(screen.getByTestId('open-order-chip-a').textContent).toBe('POS - Open');
+});

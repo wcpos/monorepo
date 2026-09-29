@@ -20,11 +20,14 @@ export function TabChip({
 	active = false,
 	compact = false,
 	fallbackLabel,
+	fallbackIsStatus = false,
 }: {
 	order: EngineRecord<'orders'>;
 	active?: boolean;
 	compact?: boolean;
 	fallbackLabel?: string;
+	/** The fallback is a real order status (the open-orders list), not the strip's "Cart" word. */
+	fallbackIsStatus?: boolean;
 }) {
 	const payload = useRecordField(order, (record) => record.payload);
 	const mode = useCheckoutMode();
@@ -64,7 +67,7 @@ export function TabChip({
 	// Plain muted text, no dot: the active tab carries no chip (ledger line 6) but keeps its
 	// status word so every tab reads "amount over status"; and the fallback ("Cart") is not a
 	// status at all, so it never gets a dot on any tab.
-	if (active || label === fallbackLabel) {
+	if (active || (label === fallbackLabel && !fallbackIsStatus)) {
 		return compact ? null : (
 			<Text testID={`open-order-status-${order.uuid}`} className="text-muted-foreground text-sm">
 				{label}
