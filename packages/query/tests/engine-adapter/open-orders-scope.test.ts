@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { createRxDatabase } from 'rxdb';
 
-import { NO_STORE } from '@wcpos/sync-core';
+import { NO_STORE, POS_META_KEYS } from '@wcpos/sync-core';
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import { OPEN_ORDERS_SORT, openOrdersSelector } from '../../src/open-orders-scope';
@@ -73,6 +73,25 @@ describe.each(storages)('%s open-orders scope', (name, storage) => {
 	});
 	afterEach(async () => {
 		await database.close();
+	});
+	it('requires a matching register entry when bound', async () => {
+		await database.orders.bulkInsert(
+			['register-a', 'register-b'].map((registerId) =>
+				engineOrder({
+					uuid: registerId,
+					status: 'pos-open',
+					meta_data: [
+						{ key: '_pos_user', value: '7' },
+						{ key: '_pos_store', value: '2' },
+						{ key: POS_META_KEYS.register, value: registerId },
+					],
+				})
+			)
+		);
+		const documents = await database.orders
+			.find({ selector: openOrdersSelector(7, 2, 'register-a') })
+			.exec();
+		expect(documents.map((document) => document.primary)).toEqual(['register-a']);
 	});
 	it.each([
 		[2, ['early', 'tied', 'late', 'numeric-meta']],
