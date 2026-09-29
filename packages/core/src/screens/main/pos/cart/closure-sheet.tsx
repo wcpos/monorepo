@@ -5,7 +5,14 @@ import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 
 import { useDocField } from '@wcpos/query';
 import { Button } from '@wcpos/components/button';
-import { Dialog, DialogContent, DialogTitle } from '@wcpos/components/v2/dialog';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/components/v2/dialog';
 import { STAMP } from '@wcpos/components/lib/motion';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
@@ -13,6 +20,7 @@ import type { ClosureDocument } from '@wcpos/database';
 
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
 import { ReceiptBody } from '../../receipt/receipt-body';
+import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePanelSide } from '../contexts/overlay-side/v2';
@@ -31,6 +39,8 @@ export function ClosureSheet({
 	blind,
 	onDone,
 }: ClosureCount & { onDone: () => void }) {
+	const { store } = useStoreSession();
+	const storeName = useDocField(store, (value) => value.name);
 	const report = useSessionReport(closure);
 	const number = useDocField(closure, (row) => row.server_number ?? row.number);
 	const [preview, setPreview] = React.useState(false);
@@ -40,6 +50,15 @@ export function ClosureSheet({
 	const t = useT();
 	const { format } = useCurrencyFormat();
 	const side = usePanelSide('cart');
+	const date = new Date(closure.closed_at).toLocaleString([], {
+		dateStyle: 'medium',
+		timeStyle: 'short',
+	});
+	const figures = [
+		['counted', t('register.counted'), format(Number(counted))],
+		['expected', t('register.expected_label'), format(Number(expected))],
+		['variance', t('register.variance'), varianceText(countVariance(counted, expected), format, t)],
+	].filter(([key]) => !blind || key === 'counted');
 	return (
 		<Dialog
 			open
@@ -48,50 +67,52 @@ export function ClosureSheet({
 			}}
 		>
 			<DialogContent side={side} size="lg" portalHost="pos" testID="closure-sheet">
-				<Animated.View
-					entering={ZoomIn.duration(STAMP).reduceMotion(ReduceMotion.System)}
-					className="bg-success/15 size-24 items-center justify-center rounded-full"
-				>
-					<Icon name="check" className="text-success" />
-				</Animated.View>
-				<DialogTitle testID="closure-title">
-					{t('register.closure_written_n', { n: number })}
-				</DialogTitle>
-				<Text
-					testID="closure-counted"
-					className="min-h-row border-border text-amt border-b tabular-nums"
-				>
-					{t('register.counted')} · {format(Number(counted))}
-				</Text>
-				{!blind && (
-					<>
-						<Text
-							testID="closure-expected"
-							className="min-h-row border-border border-b tabular-nums"
-						>
-							{t('register.expected_line', { amount: format(Number(expected)) })}
-						</Text>
-						<Text
-							testID="closure-variance"
-							className="min-h-row border-border border-b tabular-nums"
-						>
-							{t('register.variance')} · {varianceText(countVariance(counted, expected), format, t)}
-						</Text>
-					</>
-				)}
+				<DialogHeader className="flex-row items-center gap-3">
+					<Animated.View
+						entering={ZoomIn.duration(STAMP).reduceMotion(ReduceMotion.System)}
+						className="bg-success/15 size-11 items-center justify-center rounded-full"
+					>
+						<Icon name="check" className="text-success" />
+					</Animated.View>
+					<View className="flex-1 gap-1">
+						<DialogTitle testID="closure-title">
+							{t('register.closure_written_n', { n: number })}
+						</DialogTitle>
+						<DialogDescription>
+							{storeName} · {date}
+						</DialogDescription>
+					</View>
+				</DialogHeader>
+				<View className="flex-row gap-2">
+					{figures.map(([key, label, value]) => (
+						<View key={key} className="border-border flex-1 rounded-lg border px-3 py-2.5">
+							<Text className="text-muted-foreground text-sm">{label}</Text>
+							<Text
+								testID={`closure-${key}`}
+								className={`text-xl font-bold tabular-nums ${key === 'variance' && countVariance(counted, expected) < 0 ? 'text-destructive' : ''}`}
+							>
+								{value}
+							</Text>
+						</View>
+					))}
+				</View>
 				{!blind && closure.unsynced_count > 0 && (
 					<Text testID="closure-unsynced" className="text-muted-foreground">
 						{t('register.unsynced_closure', { count: closure.unsynced_count })}
 					</Text>
 				)}
 				{!blind && (
-					<View className="border-border border-b">
+					<View className="border-border border-t">
 						<Button
 							testID="closure-preview-fold"
 							variant="ghost"
-							className="min-h-row"
+							className="min-h-ctl flex-row justify-start gap-2 px-0"
 							onPress={() => setPreview(!preview)}
 						>
+							<Icon
+								name={preview ? 'chevronDown' : 'chevronRight'}
+								className="text-muted-foreground"
+							/>
 							{t('register.z_report')}
 						</Button>
 					</View>
@@ -101,7 +122,6 @@ export function ClosureSheet({
 						<ReceiptBody doc={report.doc} />
 					</View>
 				)}
-				{error && <Text testID="closure-print-error">{error}</Text>}
 				{!blind && printedAt ? (
 					<Text testID="closure-printed" className="text-success">
 						{t('register.printed_on', {
@@ -111,34 +131,45 @@ export function ClosureSheet({
 							}),
 						})}
 					</Text>
-				) : !blind ? (
-					<Button
-						testID="closure-print"
-						size="lg"
-						loading={busy}
-						onPress={async () => {
-							setBusy(true);
-							setError('');
-							try {
-								setPrintedAt(await report.print());
-							} catch {
-								setError(t('register.print_failed'));
-							} finally {
-								setBusy(false);
-							}
-						}}
-					>
-						{t('register.print_z_report')}
-					</Button>
 				) : null}
-				<Button
-					testID="closure-done"
-					variant={blind || printedAt ? 'default' : 'outline'}
-					size="lg"
-					onPress={onDone}
-				>
-					{t('register.done')}
-				</Button>
+				<DialogFooter className="flex-row items-center gap-2">
+					<Button
+						testID="closure-done"
+						variant={blind || printedAt ? 'default' : 'ghost'}
+						className={blind || printedAt ? 'w-full' : undefined}
+						size="lg"
+						onPress={onDone}
+					>
+						{t('register.done')}
+					</Button>
+					{!blind && !printedAt && <View className="flex-1" />}
+					{!blind && !printedAt && (
+						<Button
+							testID="closure-print"
+							leftIcon="printer"
+							size="lg"
+							loading={busy}
+							onPress={async () => {
+								setBusy(true);
+								setError('');
+								try {
+									setPrintedAt(await report.print());
+								} catch {
+									setError(t('register.print_failed'));
+								} finally {
+									setBusy(false);
+								}
+							}}
+						>
+							{t('register.print_z_report')}
+						</Button>
+					)}
+				</DialogFooter>
+				{!!error && (
+					<Text testID="closure-print-error" className="text-destructive">
+						{error}
+					</Text>
+				)}
 			</DialogContent>
 		</Dialog>
 	);

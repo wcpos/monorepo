@@ -119,7 +119,10 @@ afterEach(() => jest.useRealTimers());
 it('shows short and exact with check', () => {
 	render(<RegisterCount onClosed={jest.fn()} />);
 	enter('463.30');
-	expect(screen.getByTestId('count-variance').textContent).toBe('Expected £480.80 · −£17.50 short');
+	expect(screen.getByTestId('count-variance').textContent).toBe('−£17.50 short');
+	expect(screen.getByTestId('count-variance').parentElement?.parentElement?.textContent).toContain(
+		'Expected £480.80'
+	);
 	enter('480.80');
 	expect(screen.getByTestId('count-variance').textContent).toContain('Exact');
 	expect(screen.getByTestId('count-exact')).toBeTruthy();

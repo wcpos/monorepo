@@ -19,15 +19,33 @@ import { usePanelSide } from '../contexts/overlay-side/v2';
 
 export function RegisterAmount({
 	currencyOptions,
+	variant = 'underline',
 	...props
 }: {
 	currencyOptions?: CurrencyFormatOptions;
+	variant?: 'underline' | 'box';
 	value: string;
 	onChangeText: (v: string) => void;
 	testID: string;
 	ref?: React.Ref<TextInputInstance>;
 }) {
 	const { prefix, suffix } = useCurrencyFormat(currencyOptions);
+	if (variant === 'box')
+		return (
+			<Input.Root className="h-tile">
+				{!!prefix && (
+					<Input.Left>
+						<Text className="text-muted-foreground text-amt tabular-nums">{prefix}</Text>
+					</Input.Left>
+				)}
+				<Input.InputField {...props} type="decimal" className="text-amt tabular-nums" />
+				{!!suffix && (
+					<Input.Right>
+						<Text className="text-muted-foreground text-amt tabular-nums">{suffix}</Text>
+					</Input.Right>
+				)}
+			</Input.Root>
+		);
 	return (
 		<View className="min-h-row border-border flex-row items-center self-start border-b">
 			{!!prefix && <Text className="text-amt tabular-nums">{prefix}</Text>}
