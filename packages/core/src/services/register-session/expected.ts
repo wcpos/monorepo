@@ -12,6 +12,7 @@ type LedgerRow = {
 	refunded_amount: string;
 };
 type Movement = {
+	reason?: string;
 	id: string;
 	session_id: string;
 	type: string;
@@ -113,4 +114,41 @@ export function deriveExpected({
 	return Object.fromEntries(
 		Object.entries(totals).map(([key, value]) => [key, fromMinor(value, 4)])
 	);
+}
+
+/** The display terms use the same session attribution and four-decimal arithmetic. */
+export function deriveDrawerTerms(input: Parameters<typeof deriveExpected>[0]) {
+	const { session, movements, ledgerRowsBySession, refundRecords = [] } = input;
+	const own = movements.filter((row) => row.session_id === session.id);
+	const voids = new Set(own.filter((row) => row.type === 'void').map((row) => row.voids));
+	const live = own.filter((row) => !row.voided_by && !voids.has(row.id));
+	const cash = ledgerRowsBySession.filter(
+		(row) => row.session_id === session.id && row.status === 'captured' && row.kind === 'cash'
+	);
+	const paidOut = live.filter((row) => row.type === 'paid_out');
+	const total = (rows: readonly { amount: string }[]) =>
+		fromMinor(
+			rows.reduce((sum, row) => sum + toMinor(row.amount, 4), 0),
+			4
+		);
+	const refunds = attributeRefunds(session.id, ledgerRowsBySession, refundRecords);
+	return {
+		float: fromMinor(toMinor(session.counted_float, 4), 4),
+		cashSales: { amount: total(cash), count: cash.length },
+		paidIn: live
+			.filter((row) => row.type === 'paid_in')
+			.map((row) => ({
+				amount: fromMinor(toMinor(row.amount, 4), 4),
+				note: row.reason,
+			})),
+		paidOut: {
+			amount: total(paidOut),
+			count: paidOut.length,
+			note: paidOut.length === 1 ? paidOut[0].reason : undefined,
+		},
+		cashRefunds: { amount: fromMinor(refunds.byMethod.cash ?? 0, 4), count: refunds.count },
+		noSales: live.filter((row) => row.type === 'no_sale').length,
+		voids: live.filter((row) => row.type === 'void').length,
+		expected: deriveExpected(input).cash,
+	};
 }

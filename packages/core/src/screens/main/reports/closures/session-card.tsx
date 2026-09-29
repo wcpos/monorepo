@@ -3,13 +3,11 @@ import { View } from 'react-native';
 
 import { format as formatDate } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
-import get from 'lodash/get';
 
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
-import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
-import type { ClosureRow, RegisterSessionRow, WPCredentialsDocument } from '@wcpos/database';
+import type { RegisterSessionRow, WPCredentialsDocument } from '@wcpos/database';
 
 import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useStoreSession } from '../../../../contexts/app-state';
@@ -18,19 +16,13 @@ import { useStoreDay, useViewedStore, zoneOptions } from '../../../../hooks/use-
 import { useRegisterSession } from '../../../../services/register-session/use-register-session';
 import { useClosureCollection } from '../../../../services/register-session/use-register-session-collections';
 import { useSessionReport } from '../../../../services/register-session/use-session-report';
-import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useReceiptDocument } from '../../receipt/use-receipt-document';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { useLastClosure } from './use-last-closure';
 
-export type SessionSummary = RegisterSessionRow & {
-	expected?: Record<string, string>;
-	sales_count?: number;
-};
-export type SessionCardData = {
-	session: SessionSummary | null;
-	closure: ClosureRow | null;
-	status: string;
-};
+import type { SessionCardData } from './use-last-closure';
+
+export type { SessionCardData, SessionSummary } from './use-last-closure';
 type BatchProps = { summary?: SessionCardData; reload?: () => void };
 
 export function SessionCard(batch: BatchProps) {
@@ -180,17 +172,10 @@ export function RemoteSessionCard({
 	storeId?: number;
 	localCard?: (unavailableReason?: string) => React.ReactNode;
 }) {
-	const http = useRestHttpClient();
-	const online = useOnlineStatus().status === 'online-website-available';
+	const { data, online, load, unavailable } = useLastClosure(register, storeId, summary);
 	const { wpCredentials } = useStoreSession();
 	const capabilities = useDocField(wpCredentials, (row) => row.capabilities);
 	const t = useT();
-	const [localData, setData] = React.useState<SessionCardData>({
-		session: null,
-		closure: null,
-		status: 'idle',
-	});
-	const data = summary ?? localData;
 	const collection = useClosureCollection();
 	const closureId = data.closure?.server_closure_id ?? data.closure?.id;
 	const getLocalClosure = React.useCallback(
@@ -204,40 +189,6 @@ export function RemoteSessionCard({
 				: null,
 		[collection, closureId]
 	);
-	const load = React.useCallback(async () => {
-		if (!online) return;
-		setData((d) => ({ ...d, status: 'loading' }));
-		try {
-			const params = { register_id: register.id, store_id: storeId || null };
-			const lists = await Promise.all(
-				['open', 'counting'].map((status) =>
-					http.get('sessions', { params: { ...params, status } })
-				)
-			);
-			const session = lists.flatMap((result) => result.data as SessionSummary[])[0];
-			const detail = await http.get(session ? `sessions/${session.id}` : 'closures/last', {
-				params,
-			});
-			setData({
-				session: session ? (detail.data as SessionSummary) : null,
-				closure: session ? null : (detail.data as ClosureRow | null),
-				status: 'ready',
-			});
-		} catch (error) {
-			setData((d) => ({
-				...d,
-				status: get(error, 'response.status') === 403 ? 'denied' : 'error',
-			}));
-		}
-	}, [http, online, register.id, storeId]);
-	const wasOnline = React.useRef(false);
-	// External connectivity changes refresh stale remote cards; failures still use Retry.
-	React.useEffect(() => {
-		const reconnected = online && !wasOnline.current;
-		wasOnline.current = online;
-		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- Activation/reconnect reads external server state.
-		if (!summary && (data.status === 'idle' || reconnected)) void load();
-	}, [data.status, load, online, summary]);
 	const document = data.session
 		? `xreport:${data.session.id}`
 		: data.closure
@@ -256,17 +207,7 @@ export function RemoteSessionCard({
 	return (
 		<View testID={`remote-session-${register.id}`} className={!online ? 'opacity-50' : ''}>
 			{localCard && (!online || data.status !== 'ready') ? (
-				localCard(
-					online
-						? t(
-								data.status === 'denied'
-									? 'reports.no_access'
-									: data.status === 'error'
-										? 'reports.load_failed'
-										: 'common.loading'
-							)
-						: undefined
-				)
+				localCard(online ? unavailable : undefined)
 			) : data.status === 'ready' ? (
 				<SessionCardContent
 					storeId={storeId}
@@ -282,17 +223,7 @@ export function RemoteSessionCard({
 					}}
 				/>
 			) : (
-				<Text testID={`session-${online ? data.status : 'unavailable'}`}>
-					{t(
-						!online
-							? 'reports.unavailable_offline'
-							: data.status === 'denied'
-								? 'reports.no_access'
-								: data.status === 'error'
-									? 'reports.load_failed'
-									: 'common.loading'
-					)}
-				</Text>
+				<Text testID={`session-${online ? data.status : 'unavailable'}`}>{unavailable}</Text>
 			)}
 			{online && data.status === 'error' && (
 				<Button

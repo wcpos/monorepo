@@ -30,6 +30,8 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 
 20. Free reaches Sales without a blur or banner: today on the bound register and store renders plainly, and the gate is the lock on the date button and the register/store menu with the hint and one See Pro — evidence: wcpos/roadmap#332 §2 and the build brief (PR 281), this PR — platform: all.
 
+21. The till strip above the Sales body is outside the date: it reads the register session, movements, closures and expected drawer the Closures room reads (its result chip is the hook's server-anchored expected, never a second derivation), never the reports query, and is the only way into the Closures room — evidence: build brief §1 “Till strip”; wcpos/roadmap#332; `reports/till-strip.tsx`, `till-strip.test.tsx` — platform: all.
+
 ## Evidence footnotes
 
 [^query]: `91722e8e59 2026-07-15 feat(core): the reports screen rides the query-state store + bindings (per-screen migration 6/8) (#659)`.

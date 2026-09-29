@@ -18,6 +18,12 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({ useOnlineStatus: jest.fn() 
 jest.mock('@wcpos/components/icon', () => ({
 	Icon: ({ name }: { name: string }) => <span data-icon={name} />,
 }));
+// The strip reaches expo-haptics through IconButton; it has its own suite.
+jest.mock('./till-strip', () => ({
+	TillStrip: ({ onOpenClosures }: { onOpenClosures: () => void }) => (
+		<button data-testid="till-closures" onClick={onOpenClosures} />
+	),
+}));
 jest.mock('@wcpos/components/text', () => ({ Text: require('react-native').Text }));
 jest.mock('@wcpos/components/button', () => ({
 	ButtonText: require('react-native').Text,
