@@ -32,7 +32,7 @@ export function TopProductsCard() {
 					<ShareBar
 						key={row.key}
 						testID={`card-products-row-${index}`}
-						label={row.name}
+						label={row.name || t('common.unknown')}
 						value={money(row.amount)}
 						share={row.share}
 						note={t('reports.share_sold', {

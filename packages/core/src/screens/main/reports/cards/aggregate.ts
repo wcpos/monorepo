@@ -75,14 +75,23 @@ export function taxesByRate(orders: ReportOrder[], totals: Totals, num_decimals 
 			...(order.fee_lines ?? []),
 		])
 			for (const tax of line.taxes ?? []) {
-				// Membership is the rate id: a zero-rated or zero-rounded line is still taxed under it.
-				if (!tax.id) continue;
+				// WooCommerce writes an empty-string total for a rate that exists on the order but
+				// does not apply to this line (as the receipt path reads it); a '0' is a zero-rated
+				// or zero-rounded line, still taxed under the rate.
+				if (!tax.id || tax.total == null || tax.total === '') continue;
 				nets.set(tax.id, (nets.get(tax.id) ?? 0) + Number(line.total || 0));
 			}
+	// WC_Order_Item_Tax::get_label() falls back to the rate code, then "Tax"; an unsynced local
+	// order can carry an empty label, so the row keeps the code and the card supplies the word.
+	const codes = new Map<number, string>();
+	for (const order of orders)
+		for (const line of order.tax_lines ?? [])
+			if (line.rate_id && line.rate_code && !codes.has(line.rate_id))
+				codes.set(line.rate_id, line.rate_code);
 	const rows = totals.taxTotalsArray
 		.map((row) => ({
 			rateId: row.rate_id,
-			label: row.label,
+			label: row.label || codes.get(row.rate_id) || '',
 			tax: round(row.total, num_decimals),
 			net: nets.has(row.rate_id) ? round(nets.get(row.rate_id)!, num_decimals) : null,
 			share: totals.totalTax ? row.total / totals.totalTax : 0,

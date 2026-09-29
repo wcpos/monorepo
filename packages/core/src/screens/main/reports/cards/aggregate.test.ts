@@ -182,6 +182,42 @@ describe('taxesByRate', () => {
 		]);
 		expect(taxesByRate(rows, totals(rows)).rows[0]).toMatchObject({ rateId: 3, tax: 0, net: 50 });
 	});
+	it('an empty-string total means the rate is not on this line', () => {
+		const rows = orders([
+			{
+				total: '80',
+				total_tax: '6',
+				tax_lines: [
+					{ rate_id: 1, tax_total: '6' },
+					{ rate_id: 2, tax_total: '0' },
+				],
+				line_items: [
+					{
+						total: '30',
+						taxes: [
+							{ id: 1, total: '6' },
+							{ id: 2, total: '' },
+						],
+					},
+					{
+						total: '50',
+						taxes: [
+							{ id: 1, total: '' },
+							{ id: 2, total: '0' },
+						],
+					},
+				],
+			},
+		]);
+		const nets = Object.fromEntries(
+			taxesByRate(rows, totals(rows)).rows.map((row) => [row.rateId, row.net])
+		);
+		expect(nets).toEqual({ 1: 30, 2: 50 });
+	});
+	it('an unlabelled rate keeps its code', () => {
+		const rows = orders([{ tax_lines: [{ rate_id: 7, rate_code: 'GB-VAT-1', tax_total: '1' }] }]);
+		expect(taxesByRate(rows, totals(rows)).rows[0].label).toBe('GB-VAT-1');
+	});
 	it('net is null when no line names the rate', () => {
 		const rows = orders([{ tax_lines: [{ rate_id: 1, tax_total: '20' }] }]);
 		expect(taxesByRate(rows, totals(rows)).rows[0].net).toBeNull();
