@@ -381,11 +381,12 @@ async function openClosures(page: Page) {
 	await page.getByTestId('reports-scope').click();
 	await expect(page.getByTestId('reports-scope-menu')).toBeVisible();
 	await page.keyboard.press('Escape');
-	await page.getByTestId('reports-closures-link').click();
+	await expect(page.getByTestId('reports-till')).toBeVisible();
+	await page.getByTestId('till-closures').click();
 	await expect(page.getByTestId('reports-closures')).toBeVisible();
 	await page.getByTestId('reports-back-sales').click();
-	await expect(page.getByTestId('reports-closures-link')).toBeVisible();
-	await page.getByTestId('reports-closures-link').click();
+	await expect(page.getByTestId('till-closures')).toBeVisible();
+	await page.getByTestId('till-closures').click();
 	await expect(page.getByTestId('reports-closures')).toBeVisible();
 }
 

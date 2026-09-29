@@ -12,8 +12,6 @@ import { Text } from '@wcpos/components/text';
 import { useDocField } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { Button, ButtonText } from '@wcpos/components/button';
-import { Icon } from '@wcpos/components/icon';
 
 import { useAppInfo } from '../../../hooks/use-app-info';
 import { useT } from '../../../contexts/translations';
@@ -31,6 +29,7 @@ import {
 import { HeaderLeft } from '../components/header/left';
 import { Bar, CashierButton } from './bar';
 import { DateButton } from './date-button';
+import { TillStrip } from './till-strip';
 import { Closures } from './closures';
 import { ReportsProvider } from './context';
 import { Reports } from './reports';
@@ -135,6 +134,10 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 	return (
 		<>
 			<Bar room="sales" onBack={() => onRoomChange('sales')} scope={scope} onScopeChange={select} />
+			{/* The till strip is outside the date: it always shows the till now, and is the way into Closures. */}
+			<View className="pt-3">
+				<TillStrip onOpenClosures={() => onRoomChange('closures')} />
+			</View>
 			<View
 				testID="reports-scope-row"
 				className="flex-row items-center justify-between gap-2 px-4 py-2"
@@ -145,15 +148,6 @@ function ReportsScreenContent({ onRoomChange }: { onRoomChange: (room: string) =
 					storeId={scope.storeId}
 					lockedScopeName={t('reports.earlier_days')}
 				/>
-				<Button
-					testID="reports-closures-link"
-					variant="ghost"
-					className="min-h-12 flex-row items-center gap-1"
-					onPress={() => onRoomChange('closures')}
-				>
-					<ButtonText>{t('reports.closures')}</ButtonText>
-					<Icon name="chevronRight" />
-				</Button>
 			</View>
 			<View className="min-h-0 flex-1">
 				<Suspense>
