@@ -33,6 +33,7 @@ globalThis.fetch = async (input, init) => {
 	// Decode bytes directly: the app's js-base64 `decode`/atob fallback decodes UTF-8 text.
 	const blob = new Blob([toUint8Array(data[2])], { type: data[1] });
 	const response = new Response(null, { headers: { 'Content-Type': blob.type } });
-	response.blob = async () => blob;
+	// Expo's Blob declares bytes() as Uint8Array<ArrayBufferLike>, wider than the DOM type.
+	response.blob = async () => blob as unknown as globalThis.Blob;
 	return response;
 };
