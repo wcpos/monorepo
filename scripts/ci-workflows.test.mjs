@@ -140,6 +140,28 @@ test('the shared setup action uses a Node version supported by jsdom 30', () => 
 	assert.equal(setup.inputs['node-version'].default, '22.22.2');
 });
 
+test('setup action keeps the licensed rxdb-premium dist out of every cache', () => {
+	const setup = readAction('setup-monorepo/action.yml');
+	const node = setup.runs.steps.find((step) => step.uses?.startsWith('actions/setup-node'));
+	assert.ok(node, 'no setup-node step');
+	assert.equal(node.with['package-manager-cache'], false);
+	assert.equal('cache' in node.with, false);
+
+	const names = setup.runs.steps.map((step) => step.name);
+	const disable = names.indexOf('🔒 Disable the pnpm side-effects cache');
+	const install = names.indexOf('📦 Install dependencies');
+	const assertion = names.indexOf('🔒 Assert licensed dist stays out of every cache');
+	assert.ok(install >= 0, 'no install step');
+	assert.ok(
+		disable >= 0 && disable < install,
+		'the side-effects cache must be disabled before the install'
+	);
+	assert.match(setup.runs.steps[disable].run, /pnpm_config_side_effects_cache=false/);
+	assert.match(setup.runs.steps[disable].run, /GITHUB_ENV/);
+	assert.ok(assertion > install, 'the licensed dist assertion must exist after the install');
+	assert.match(setup.runs.steps[assertion].run, /pnpm config get side-effects-cache/);
+});
+
 test('the shared setup action initialises the apps/web workspace submodule BEFORE it installs', () => {
 	// apps/web is both a submodule and a pnpm workspace member. Initialised by
 	// the root preinstall script mid-install, the tree pnpm left behind never
