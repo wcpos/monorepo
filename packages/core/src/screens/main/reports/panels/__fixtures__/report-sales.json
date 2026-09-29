@@ -383,10 +383,7 @@
 	"store": {
 		"id": 1,
 		"name": "Coffee Monster",
-		"address_lines": [
-			"123 Bean Street",
-			"London"
-		],
+		"address_lines": ["123 Bean Street", "London"],
 		"phone": "",
 		"email": "",
 		"logo": ""

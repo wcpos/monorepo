@@ -4,7 +4,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { mockCredentials, mockProducts, mockState, setOrders } from '../cards/test-utils';
-import { mockPrintDocument, preparePanel, room } from './test-utils';
+import { mockLaneProgress, mockPrintDocument, preparePanel, room } from './test-utils';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import { ReportRows } from './report-rows';
 
@@ -156,4 +156,22 @@ it('shows a document error under the footer', () => {
 	room();
 	fireEvent.click(screen.getByTestId('card-payments-open'));
 	expect(screen.getByTestId('detail-panel-print-error').textContent).toBe('document unavailable');
+});
+
+it('Print waits while the orders lane is still downloading, and for a printer that can print the template', () => {
+	mockLaneProgress.next({ received: 40, total: 100 });
+	room();
+	fireEvent.click(screen.getByTestId('card-taxes-open'));
+	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
+		'Still loading orders for this range'
+	);
+	mockLaneProgress.next(null);
+	mockPrintDocument.mismatchWarning = 'raw printer';
+	fireEvent.click(screen.getByTestId('detail-panel-close'));
+	fireEvent.click(screen.getByTestId('card-taxes-open'));
+	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe(
+		'The saved printer cannot print this template'
+	);
+	mockPrintDocument.mismatchWarning = null;
 });

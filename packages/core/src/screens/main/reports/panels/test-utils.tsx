@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { BehaviorSubject } from 'rxjs';
 import { render } from '@testing-library/react';
 
 import { mockState } from '../cards/test-utils';
@@ -109,6 +110,11 @@ export const real = jest.requireActual<typeof Context>('../context');
 export function preparePanel() {
 	jest.spyOn(context, 'useReportsScope').mockImplementation(real.useReportsScope);
 	jest.spyOn(context, 'useIncludedStatus').mockImplementation(real.useIncludedStatus);
+	jest
+		.spyOn(context, 'useReportsBinding')
+		.mockImplementation(
+			() => ({ binding: { laneProgress$: mockLaneProgress } }) as unknown as Context.ReportsBinding
+		);
 	jest.spyOn(context, 'useReportsSelection').mockImplementation(() => React.useContext(Selection)!);
 	jest.spyOn(context, 'useReportsData').mockImplementation(() => {
 		const included = real.useIncludedStatus();
@@ -148,9 +154,15 @@ export const room = () =>
 		</real.ReportsScopeProvider>
 	);
 
+/** The sales lane's ranged-download progress: null when the range is complete. */
+export const mockLaneProgress = new BehaviorSubject<{
+	received: number;
+	total: number | null;
+} | null>(null);
 export const mockPrintDocument = {
 	templates: [{ id: 7, title: 'Sales', offline_capable: true }],
 	templatesReady: true,
+	mismatchWarning: null as string | null,
 	selectedTemplateId: 7,
 	setSelectedTemplateId: jest.fn(),
 	isOffline: false,

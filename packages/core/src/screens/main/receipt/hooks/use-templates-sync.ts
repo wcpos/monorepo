@@ -171,11 +171,19 @@ export function useTemplatesSync(
 	// Publish readiness when the external sync settles, including a failed first request.
 	React.useEffect(() => {
 		if (!collection) return;
-		const settle = () =>
+		// A run that settles after the scope moved on must not overwrite the current scope's
+		// readiness (two keyed runs can finish out of order); it is simply ignored.
+		let current = true;
+		const settle = () => {
+			if (!current) return;
 			setSettled((previous) =>
 				previous?.key === key && previous.collection === collection ? previous : { key, collection }
 			);
+		};
 		void syncTemplates(collection, httpClient, type, storeId).then(settle, settle);
+		return () => {
+			current = false;
+		};
 	}, [collection, httpClient, wakeTick, type, storeId, key]);
 	return { synced: settled?.key === key && settled.collection === collection };
 }

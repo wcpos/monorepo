@@ -24,6 +24,7 @@ import { useLocalProducts } from '../cards/use-local-products';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import {
 	useIncludedStatus,
+	useReportsBinding,
 	useReportsData,
 	useReportsPeriod,
 	useReportsScope,
@@ -138,20 +139,32 @@ export function DetailPanel() {
 		storeId,
 		localReport: document,
 	});
-	const waiting: 'store' | 'data' | 'templates' | 'no-template' | null = !formats.store
-		? 'store'
-		: !ready
-			? 'data'
-			: !doc.templatesReady
-				? 'templates'
-				: doc.templates.length === 0
-					? 'no-template'
-					: null;
+	// A range still arriving over ranged sync passes is a partial set (see ReportsSyncProgress):
+	// the document would claim a whole period it does not hold, so Print waits for the lane.
+	const { binding: salesBinding } = useReportsBinding();
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
+	const laneProgress = useObservableState(salesBinding.laneProgress$, null);
+	const waiting: 'store' | 'data' | 'orders' | 'templates' | 'no-template' | 'printer' | null =
+		!formats.store
+			? 'store'
+			: !ready
+				? 'data'
+				: laneProgress
+					? 'orders'
+					: !doc.templatesReady
+						? 'templates'
+						: doc.templates.length === 0
+							? 'no-template'
+							: doc.mismatchWarning
+								? 'printer'
+								: null;
 	const waitingLabels = {
 		store: 'reports.print_waiting_store',
 		data: 'reports.print_waiting_data',
+		orders: 'reports.print_waiting_orders',
 		templates: 'reports.print_waiting_templates',
 		'no-template': 'reports.print_no_local_template',
+		printer: 'reports.print_printer_mismatch',
 	} as const;
 	if (!detail) return null;
 	const content = (
