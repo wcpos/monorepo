@@ -117,7 +117,7 @@ return states
 `;
 
 // Byte-exact per-dist literals: keep everything outside these rewrites untouched.
-export const DISTS = [
+const DISTS_17_4_0 = [
 	{
 		dist: 'esm',
 		file: 'index-state.js',
@@ -172,6 +172,77 @@ export const DISTS = [
 		linkAfter: `h=${LINK_MARKER}((0,n.getIndexesFromSchema)(i.schema).map(((e,a)=>new n.IndexState(a,e,m,i.schema))))`,
 	},
 ];
+
+/**
+ * 17.5.0 has the same code at every anchor. Its esm build emits IndexState as a native
+ * class, so runChangelogOperation is a method (`runChangelogOperation(t){...}`) rather
+ * than a prototype assignment, and appendWriteOperations renamed its locals (position
+ * `x`, previous string `g`, byte range `d`). The cjs build moved rxdb/plugins/core from
+ * `e` to `r` and renamed the same locals (changelog out `a`, byte range `u`). cleanup.js
+ * and helpers.js are byte-identical to the 17.4.0 set.
+ */
+const DISTS_17_5_0 = [
+	{
+		dist: 'esm',
+		file: 'index-state.js',
+		applyBefore:
+			'runChangelogOperation(t){var e=t[1],i=t[3];if("A"===t[2])this.rows.splice(e,0,i),this.metaIdMap&&this.metaIdMap.set(s(i[0],this.primaryKeyLength),i);else if("D"===t[2])this.rows.splice(e,1),this.metaIdMap&&this.metaIdMap.delete(s(i[0],this.primaryKeyLength));else{if("R"!==t[2])throw new Error("unknown operation key "+t[2]);this.rows[e]=i,this.metaIdMap&&this.metaIdMap.set(s(i[0],this.primaryKeyLength),i)}}',
+		applyAfter: `runChangelogOperation(t){return ${MARKER}(this,t,s)}`,
+		emitBefore: 'this.rows.splice(x,1),r.push([this.indexId,x,"D",[t(g),d[0],d[1]]])',
+		emitAfter:
+			'function(){var removed=this.rows[x];this.rows.splice(x,1),r.push([this.indexId,x,"D",removed,"wcpos-exact"])}.call(this)',
+	},
+	{
+		dist: 'cjs',
+		file: 'index-state.js',
+		applyBefore:
+			'runChangelogOperation=function(e){var t=e[1],i=e[3];if("A"===e[2])this.rows.splice(t,0,i),this.metaIdMap&&this.metaIdMap.set((0,r.getPrimaryKeyFromIndexableString)(i[0],this.primaryKeyLength),i);else if("D"===e[2])this.rows.splice(t,1),this.metaIdMap&&this.metaIdMap.delete((0,r.getPrimaryKeyFromIndexableString)(i[0],this.primaryKeyLength));else{if("R"!==e[2])throw new Error("unknown operation key "+e[2]);this.rows[t]=i,this.metaIdMap&&this.metaIdMap.set((0,r.getPrimaryKeyFromIndexableString)(i[0],this.primaryKeyLength),i)}}',
+		applyAfter: `runChangelogOperation=function(t){return ${MARKER}(this,t,function(a,b){return (0,r.getPrimaryKeyFromIndexableString)(a,b)})}`,
+		emitBefore:
+			'this.rows.splice(x,1),a.push([this.indexId,x,"D",[(0,r.ensureNotFalsy)(I),u[0],u[1]]])',
+		emitAfter:
+			'function(){var removed=this.rows[x];this.rows.splice(x,1),a.push([this.indexId,x,"D",removed,"wcpos-exact"])}.call(this)',
+	},
+	...[
+		['esm', 'k=[H.indexId,W,"D",H.rows[W]]', 'k=[H.indexId,W,"D",H.rows[W],"wcpos-exact"]'],
+		['cjs', 'P=[S.indexId,O,"D",S.rows[O]]', 'P=[S.indexId,O,"D",S.rows[O],"wcpos-exact"]'],
+	].map(([dist, emitBefore, emitAfter]) => ({
+		dist,
+		file: 'cleanup.js',
+		marker: 'WCPOS_EXACT_CLEANUP_DELETE_PATCH',
+		prelude: 'globalThis.WCPOS_EXACT_CLEANUP_DELETE_PATCH=1;\n',
+		emitBefore,
+		emitAfter,
+	})),
+	// Link at IndexState array creation, before the replay-safety boot replay (as in 17.4.0).
+	{
+		dist: 'esm',
+		file: 'helpers.js',
+		marker: LINK_MARKER,
+		prelude: LINK_PRELUDE,
+		linkBefore: 'y=s(d.schema).map(((e,a)=>new i(a,e,u,d.schema)))',
+		linkAfter: `y=${LINK_MARKER}(s(d.schema).map(((e,a)=>new i(a,e,u,d.schema))))`,
+	},
+	{
+		dist: 'cjs',
+		file: 'helpers.js',
+		marker: LINK_MARKER,
+		prelude: LINK_PRELUDE,
+		linkBefore:
+			'h=(0,n.getIndexesFromSchema)(i.schema).map(((e,a)=>new n.IndexState(a,e,m,i.schema)))',
+		linkAfter: `h=${LINK_MARKER}((0,n.getIndexesFromSchema)(i.schema).map(((e,a)=>new n.IndexState(a,e,m,i.schema))))`,
+	},
+];
+
+// Anchors per rxdb-premium release. The postinstall picks the set for the installed
+// version and fails on any other, so a new release is re-derived against the
+// containment test, never guessed. Drop a release's set when the pin leaves it.
+const DISTS_BY_VERSION = {
+	'17.4.0': DISTS_17_4_0,
+	'17.5.0': DISTS_17_5_0,
+};
+const INSTALLED_VERSION = require('rxdb-premium/package.json').version;
+export const DISTS = DISTS_BY_VERSION[INSTALLED_VERSION];
 
 // Validate every dist before writing any, as in the task-queue patcher.
 export function preparePatch(path, anchors) {
@@ -229,6 +300,12 @@ function commitPatches(prepared) {
 }
 
 function main() {
+	if (DISTS === undefined) {
+		throw new Error(
+			`rxdb-premium ${INSTALLED_VERSION} has no anchor set in patch-rxdb-premium-changelog-identity.mjs — ` +
+				're-derive this patch against the containment test'
+		);
+	}
 	const packageRoot = dirname(require.resolve('rxdb-premium/package.json'));
 	const prepared = DISTS.map(({ dist, file, ...anchors }) => {
 		const path = join(packageRoot, `dist/${dist}/plugins/storage-abstract-filesystem/${file}`);
