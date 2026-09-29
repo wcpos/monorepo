@@ -54,3 +54,7 @@ export async function closeRegisteredDatabases(): Promise<void> {
 		)
 	);
 }
+
+export function getRegisteredDatabaseNames(): string[] {
+	return [...openDatabasesByName.keys()];
+}

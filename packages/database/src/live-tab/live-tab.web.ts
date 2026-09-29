@@ -6,6 +6,7 @@ export const LIVE_TAB_LOCK_NAME = 'wcpos-live-tab';
 export const LIVE_TAB_CHANNEL_NAME = 'wcpos-live-tab';
 export const TAKEOVER_ANSWER_TIMEOUT_MS = 3_000; // A few seconds before asking to close the other tab.
 export const TAKEOVER_DEFER_CEILING_MS = 15_000; // Allow a card round trip, not indefinite lockout.
+export const HANDOVER_TEARDOWN_DEADLINE_MS = 10_000; // After the takeover ceiling, bound storage disposal.
 type Hold = 'payment' | 'write';
 export type LiveTabState =
 	| { kind: 'acquiring' }
@@ -100,18 +101,27 @@ export function createLiveTab(deps: Dependencies) {
 	};
 	const handover = async () => {
 		handingOver = true;
-		if (holds.size)
-			await new Promise<void>((resolve) => {
-				const done = () => {
-					clock.clearTimeout(timer);
-					released.delete(done);
-					finishWaiting = undefined;
-					resolve();
-				};
-				const timer = clock.setTimeout(done, TAKEOVER_DEFER_CEILING_MS);
-				finishWaiting = done;
-				released.add(done);
-			});
+		if (holds.size) {
+			let expired = false;
+			const timer = clock.setTimeout(() => {
+				expired = true;
+				finishWaiting?.();
+			}, TAKEOVER_DEFER_CEILING_MS);
+			// Collection may release then start capture before this continuation runs.
+			// Recheck each replacement hold, without resetting the original ceiling.
+			while (holds.size && !expired && !disposed && !lost) {
+				await new Promise<void>((resolve) => {
+					const done = () => {
+						released.delete(done);
+						finishWaiting = undefined;
+						resolve();
+					};
+					finishWaiting = done;
+					released.add(done);
+				});
+			}
+			clock.clearTimeout(timer);
+		}
 		if (disposed || lost) return;
 		holds.clear(); // Releases from a capture that outlives the ceiling become no-ops.
 		// Gate unmounts the app before onHandover closes any database.

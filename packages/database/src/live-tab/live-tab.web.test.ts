@@ -218,3 +218,32 @@ test('a second takeover request during a handover gets its own ack and the same 
 	expect(b.getState()).toEqual({ kind: 'live' });
 	expect(c.getState().kind).toBe('taking-over');
 });
+
+test.each([false, true])(
+	'a replacement capture hold defers under the original ceiling (microtask: %s)',
+	async (microtask) => {
+		const a = h.tab();
+		const b = h.tab();
+		await flush();
+		const releaseCollection = holdLiveTab('payment');
+		b.takeOver();
+		await flush();
+		jest.advanceTimersByTime(1000);
+		let releaseCapture: () => void;
+		if (microtask) {
+			// Queue capture before releasing; it starts before the handover continuation.
+			const capture = Promise.resolve().then(() => holdLiveTab('payment'));
+			releaseCollection();
+			releaseCapture = await capture;
+		} else {
+			releaseCollection();
+			releaseCapture = holdLiveTab('payment');
+		}
+		await flush();
+		expect(a.getState()).toEqual({ kind: 'live' });
+		jest.advanceTimersByTime(TAKEOVER_DEFER_CEILING_MS - 1000);
+		await flush();
+		expect(b.getState()).toEqual({ kind: 'live' });
+		releaseCapture();
+	}
+);

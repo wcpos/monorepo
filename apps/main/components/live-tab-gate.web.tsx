@@ -3,14 +3,24 @@ import * as React from 'react';
 import { flushSync } from 'react-dom';
 import { skip } from 'rxjs';
 
-import { createLiveTab, holdLiveTab } from '@wcpos/database/live-tab/live-tab.web';
+import {
+	createLiveTab,
+	HANDOVER_TEARDOWN_DEADLINE_MS,
+	holdLiveTab,
+	type LiveTabState,
+} from '@wcpos/database/live-tab/live-tab.web';
 import {
 	onStorageWorkerLost,
 	terminateStorageWorker,
 } from '@wcpos/database/adapters/storage/index.web';
-import { closeRegisteredDatabases } from '@wcpos/database/plugins/rx-database-registry';
-import { degradedStorage$ } from '@wcpos/database/plugins/wrapped-error-handler-storage';
-import { finishPendingHydration } from '@wcpos/core/contexts/app-state/use-hydration-suspense';
+import {
+	closeRegisteredDatabases,
+	getRegisteredDatabaseNames,
+} from '@wcpos/database/plugins/rx-database-registry';
+import {
+	degradedStorage$,
+	markStorageTerminallyFailed,
+} from '@wcpos/database/plugins/wrapped-error-handler-storage';
 import { reloadApp } from '@wcpos/core/utils/reload-app';
 import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/generated/error-codes.generated';
@@ -23,7 +33,7 @@ let retired = false;
 function getLiveTab() {
 	if (liveTab) return liveTab;
 	liveTab = createLiveTab({
-		locks: navigator.locks,
+		locks: typeof navigator === 'undefined' ? undefined : navigator.locks,
 		channel: (name) => new BroadcastChannel(name),
 		onUnavailable: () => log.warn('Web Locks unavailable; live-tab coordination disabled'),
 		onError: (error) =>
@@ -33,10 +43,26 @@ function getLiveTab() {
 			}),
 		async onHandover() {
 			retired = true;
-			await finishPendingHydration();
-			await disposeAppSyncEngine();
-			await closeRegisteredDatabases();
-			terminateStorageWorker();
+			// Do not wait for hydration's HTTP probes. Retirement rejects their late opens.
+			const closing = Promise.all([disposeAppSyncEngine(), closeRegisteredDatabases()]);
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			try {
+				await Promise.race([
+					closing,
+					new Promise<void>((resolve) => {
+						timer = setTimeout(() => {
+							for (const name of getRegisteredDatabaseNames())
+								markStorageTerminallyFailed(name, 'live-tab handover');
+							// Unknown-outcome writes may have committed: the NEXT owner reads back.
+							resolve();
+						}, HANDOVER_TEARDOWN_DEADLINE_MS);
+					}),
+				]);
+				await closing; // Terminal failure rejects wedged calls so close can finish.
+				terminateStorageWorker();
+			} finally {
+				clearTimeout(timer);
+			}
 		},
 	});
 	const workerLost = () => {
@@ -54,21 +80,27 @@ function getLiveTab() {
 	}
 	return liveTab;
 }
+const LIVE: LiveTabState = { kind: 'live' };
+const ACQUIRING: LiveTabState = { kind: 'acquiring' };
+const getSnapshot = () =>
+	liveTab?.getState() ?? (typeof navigator === 'undefined' || !navigator.locks ? LIVE : ACQUIRING);
 const subscribe = (notify: () => void) => {
 	// Synchronous unmount precedes database teardown, rather than waiting for a React batch.
-	const subscription = getLiveTab()
-		.state$.pipe(skip(1))
-		.subscribe(() => flushSync(notify));
-	return () => subscription.unsubscribe();
+	const subscription = liveTab?.state$.pipe(skip(1)).subscribe(() => flushSync(notify));
+	return () => subscription?.unsubscribe();
 };
 export function LiveTabGate({ children }: React.PropsWithChildren) {
-	const tab = getLiveTab();
-	const state = React.useSyncExternalStore(subscribe, tab.getState, tab.getState);
-	// A former holder has closed cached hydration/worker objects: reacquire, then reload.
+	// Page-lifetime ownership is a browser side effect, never part of SSR/render.
+	React.useEffect(() => {
+		getLiveTab();
+	}, []);
+	const state = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+	// scripts/live-tab-probe.mjs found premium retains the terminated worker:
+	// a former owner must reacquire, then reload, rather than reuse cached hydration/storage.
 	React.useEffect(() => {
 		if (retired && state.kind === 'live') reloadApp();
 	}, [state]);
 	if (state.kind === 'live') return retired ? null : children;
 	if (state.kind === 'acquiring') return null;
-	return <ParkedTab state={state} takeOver={tab.takeOver} />;
+	return <ParkedTab state={state} takeOver={liveTab!.takeOver} />;
 }

@@ -84,3 +84,12 @@ describe('web SQLite storage', () => {
 		}
 	);
 });
+
+it('retirement prevents late hydration opening a worker even when no worker existed', async () => {
+	jest.resetModules();
+	jest.clearAllMocks();
+	const { getWebNewStorage, terminateStorageWorker } = await import('./index.web');
+	terminateStorageWorker();
+	await expect(getWebNewStorage().createStorageInstance({} as never)).rejects.toThrow('retired');
+	expect(mockWorker).not.toHaveBeenCalled();
+});

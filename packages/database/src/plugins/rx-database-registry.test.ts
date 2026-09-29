@@ -8,6 +8,7 @@ import {
 import {
 	closeRegisteredDatabases,
 	forceFreeDatabaseRegistration,
+	getRegisteredDatabaseNames,
 	rxDatabaseRegistryPlugin,
 } from './rx-database-registry';
 
@@ -68,7 +69,9 @@ beforeAll(() => {
 describe('rx database registry plugin', () => {
 	it('closes every registered database before local-data removal', async () => {
 		const db = await createRxDatabase({ name: 'clear-registered', storage: getRxStorageMemory() });
+		expect(getRegisteredDatabaseNames()).toContain('clear-registered');
 		await closeRegisteredDatabases();
+		expect(getRegisteredDatabaseNames()).not.toContain('clear-registered');
 		expect(db.closed).toBe(true);
 		expect(forceFreeDatabaseRegistration(db.name)).toBe(false);
 	});

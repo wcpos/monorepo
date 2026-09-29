@@ -4,39 +4,6 @@ import { authenticatedTest as test } from './fixtures';
 import { LOADED_COUNT_READY, LOADED_COUNT_TEST_ID } from './catalogue-readiness';
 import { TAKEOVER_DEFER_CEILING_MS } from '../../../packages/database/src/live-tab/live-tab.web';
 
-// Same context is essential: both pages share the origin's OPFS and Web Locks.
-test('second tab parks, takes over, and the former holder can take it back', async ({
-	page,
-	context,
-}) => {
-	const second = await context.newPage();
-	try {
-		await second.goto(page.url());
-		await expect(second.getByTestId('parked-tab')).toHaveAttribute(
-			'data-state',
-			'parked:another-tab-live'
-		);
-		await second.getByTestId('parked-tab-take-over').click();
-		await expect(second.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
-			timeout: 60_000,
-		});
-		await expect(page.getByTestId('parked-tab')).toHaveAttribute(
-			'data-state',
-			'parked:another-tab-live'
-		);
-		await page.getByTestId('parked-tab-take-over').click();
-		await expect(page.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
-			timeout: 60_000,
-		});
-		await expect(second.getByTestId('parked-tab')).toHaveAttribute(
-			'data-state',
-			'parked:another-tab-live'
-		);
-	} finally {
-		await second.close();
-	}
-});
-
 test('a write defers takeover, then the ceiling allows it to proceed', async ({
 	page,
 	context,
@@ -98,6 +65,46 @@ test('an unanswered request explains how to continue, but closing the holder sti
 	} finally {
 		if (!page.isClosed()) await cdp.send('Emulation.setScriptExecutionDisabled', { value: false });
 		await cdp.detach();
+		await second.close();
+	}
+});
+
+// Same context is essential: both pages share the origin's OPFS and Web Locks.
+test('second tab parks, takes over, and the former holder can take it back', async ({
+	page,
+	context,
+}) => {
+	const second = await context.newPage();
+	try {
+		await second.goto(page.url());
+		await expect(second.getByTestId('parked-tab')).toHaveAttribute(
+			'data-state',
+			'parked:another-tab-live'
+		);
+		await second.getByTestId('parked-tab-take-over').click();
+		await expect(second.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+			timeout: 60_000,
+		});
+		await expect(page.getByTestId('parked-tab')).toHaveAttribute(
+			'data-state',
+			'parked:another-tab-live'
+		);
+		// premium retains the old worker; reverse takeover must replace this document.
+		await page.evaluate(() => {
+			document.documentElement.dataset.formerOwner = 'yes';
+		});
+		const reloaded = page.waitForEvent('load');
+		await page.getByTestId('parked-tab-take-over').click();
+		await reloaded;
+		expect(await page.evaluate(() => document.documentElement.dataset.formerOwner)).toBeUndefined();
+		await expect(page.getByTestId(LOADED_COUNT_TEST_ID)).toHaveText(LOADED_COUNT_READY, {
+			timeout: 60_000,
+		});
+		await expect(second.getByTestId('parked-tab')).toHaveAttribute(
+			'data-state',
+			'parked:another-tab-live'
+		);
+	} finally {
 		await second.close();
 	}
 });

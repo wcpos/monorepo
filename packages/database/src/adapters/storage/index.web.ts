@@ -51,6 +51,7 @@ function endsWithWorkerFile(path: string, engine: typeof WEB_STORAGE_ENGINE): bo
 
 export const STORAGE_WORKER_NAME = 'wcpos-sqlite';
 let storageWorker: Worker | undefined;
+let retired = false;
 let innerStorage: ReturnType<typeof getRxStorageWorker> | undefined;
 const workerLostListeners = new Set<(message: string) => void>();
 
@@ -62,6 +63,7 @@ export function onStorageWorkerLost(listener: (message: string) => void): () => 
 }
 
 export function terminateStorageWorker(): void {
+	retired = true;
 	storageWorker?.terminate();
 	storageWorker = undefined;
 	// Do not reset innerStorage: recovery requires reload, never an in-tab restart.
@@ -89,6 +91,7 @@ export function getWebNewStorage() {
 		name: 'worker',
 		rxdbVersion: RXDB_VERSION,
 		createStorageInstance(params) {
+			if (retired) return Promise.reject(new Error('Storage worker retired; reload required'));
 			// mode: one constructs a Worker eagerly; defer the entire client until
 			// the first open so a parked tab can import the adapter without OPFS.
 			innerStorage ??= getRxStorageWorker({
