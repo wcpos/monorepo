@@ -3,6 +3,7 @@ import { BehaviorSubject } from 'rxjs';
 import { getLogger } from '@wcpos/utils/logger';
 
 import type { EngineRxDocument } from './engine-adapter/execute-query';
+import type { ProjectionCollection } from './projection-read';
 import type { Observable } from 'rxjs';
 
 export type SearchInstance = {
@@ -10,7 +11,7 @@ export type SearchInstance = {
 	find(term: string, options?: { limit?: number }): Promise<EngineRxDocument[]>;
 };
 
-export type SearchableCollection = {
+export type SearchableCollection = ProjectionCollection & {
 	onClose?: (() => void | Promise<unknown>)[];
 	$: Observable<unknown>;
 	options?: { searchFields?: string[] };

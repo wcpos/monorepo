@@ -40,8 +40,9 @@ describe('startSearchReadiness', () => {
 			.spyOn(database.collections.customers, 'initSearch')
 			.mockResolvedValue(stub as never);
 
-		const findProducts = jest.spyOn(database.collections.products, 'find');
-		const findVariations = jest.spyOn(database.collections.variations, 'find');
+		// The warm-up is the catalogue blob's projection read (#2242), not a `find()`.
+		const findProducts = jest.spyOn(database.collections.products.storageInstance, 'query');
+		const findVariations = jest.spyOn(database.collections.variations.storageInstance, 'query');
 		const countProducts = jest.spyOn(database.collections.products, 'count');
 		const countVariations = jest.spyOn(database.collections.variations, 'count');
 		const dispose = startSearchReadiness({

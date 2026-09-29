@@ -1,3 +1,8 @@
+/**
+ * The storage-call deadline policy this wrapper implements is written down once, in
+ * ./STORAGE-CALL-DEADLINE-POLICY.md; every platform adapter cites it and
+ * ../adapters/default/error-handler-wrapping.test.ts pins that each one is wrapped here.
+ */
 import { BehaviorSubject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';

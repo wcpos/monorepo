@@ -1,5 +1,6 @@
 import { waitFor } from '@testing-library/react';
 import { firstValueFrom, of, Subject } from 'rxjs';
+import { fillWithDefaultSettings } from 'rxdb';
 
 import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 import { getLogger } from '@wcpos/utils/logger';
@@ -42,7 +43,7 @@ describe('observeEngineQuery', () => {
 				);
 				expect(result.hits.map((hit) => hit.id)).toEqual(['coffee']);
 			}
-			expect(find).toHaveBeenCalledTimes(1);
+			expect(find).not.toHaveBeenCalled();
 			expect(findByIds.mock.calls).toEqual([[['coffee']], [['coffee']], [['coffee']]]);
 			expect(init).not.toHaveBeenCalled();
 		} finally {
@@ -205,7 +206,7 @@ describe('observeEngineQuery', () => {
 				})
 			);
 			expect(result).toEqual({ hits: [], count: 0, searchState: 'answered' });
-			expect(find).toHaveBeenCalledTimes(1);
+			expect(find).not.toHaveBeenCalled();
 			expect(count).not.toHaveBeenCalled();
 			expect(findByIds).not.toHaveBeenCalled();
 		} finally {
@@ -492,7 +493,10 @@ describe('observeEngineQuery', () => {
 				products: {
 					$: of(null),
 					initSearch: async () => ({ collection: { $: of(null) }, find: async () => [] }),
-					find: () => ({ exec: () => Promise.reject(error) }),
+					schema: {
+						jsonSchema: fillWithDefaultSettings(engineSyncCollectionCreators().products.schema),
+					},
+					storageInstance: { query: () => Promise.reject(error) },
 				},
 			},
 		};

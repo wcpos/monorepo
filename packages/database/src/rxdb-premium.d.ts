@@ -31,6 +31,9 @@ declare module 'rxdb-premium/plugins/storage-filesystem-expo' {
 
 declare module 'rxdb-premium/plugins/storage-sqlite' {
 	export * from 'rxdb/plugins/storage-sqlite';
+	export function getSQLiteBasicsNodeNative(
+		DatabaseSync: unknown
+	): import('rxdb/plugins/storage-sqlite').SQLiteBasics;
 
 	export type RxStorageSQLite = import('rxdb').RxStorage<
 		any,

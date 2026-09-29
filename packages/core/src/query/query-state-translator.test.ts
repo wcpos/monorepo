@@ -1,5 +1,7 @@
 import { orderBrowserQueryKey } from '@wcpos/query/testing';
+import { engineCollectionNameFor } from '@wcpos/query/collection-map';
 import { mintRemoteId } from '@wcpos/sync-core';
+import { engineSyncCollectionCreators } from '@wcpos/sync-engine/testing';
 
 import {
 	compileQuery,
@@ -9,7 +11,8 @@ import {
 	translateLogsQueryState,
 } from './query-state-translator';
 
-import type { CollectionKey, FiltersOf, QueryStateOf } from './query-state-types';
+import type { CollectionKey, FiltersOf, QueryStateOf, SortFieldOf } from './query-state-types';
+import type { RxJsonSchema } from 'rxdb';
 
 type ExhaustiveFilterMap = {
 	[C in Exclude<CollectionKey, 'logs'>]: { [F in keyof FiltersOf<C>]-?: unknown };
@@ -18,6 +21,81 @@ type ExhaustiveFilterMap = {
 // This assignment is intentionally part of the compile gate: adding a FiltersOf field
 // without a translator entry makes this suite fail before it can run.
 const exhaustiveFilterMap: ExhaustiveFilterMap = FILTER_TRANSLATORS;
+
+// Required keys cannot be absent. Nullable is allowed: null precedes all values on both engines.
+it('pushes only required top-level engine columns for every UI sort', () => {
+	type Collection = Exclude<CollectionKey, 'logs'>;
+	const dated = ['date_created_gmt', 'date_modified_gmt'] as const;
+	const prices = ['price', 'regular_price', 'sale_price'] as const;
+	const stock = ['stock_quantity', 'stock_status'] as const;
+	const fields = {
+		products: [
+			'id',
+			'name',
+			'sku',
+			'barcode',
+			'sortable_price',
+			'total_sales',
+			'menu_order',
+			'type',
+			...prices,
+			...stock,
+			...dated,
+		],
+		orders: [
+			'status',
+			'number',
+			'customer_id',
+			'total',
+			'date_completed_gmt',
+			'date_paid_gmt',
+			'payment_method',
+			...dated,
+		],
+		coupons: [
+			'code',
+			'amount',
+			'discount_type',
+			'status',
+			'usage_count',
+			'date_expires_gmt',
+			...dated,
+		],
+		'products/categories': ['id', 'name'],
+		'products/brands': ['id', 'name'],
+		'products/tags': ['id', 'name'],
+		variations: ['id', 'name', 'sku', 'menu_order', ...prices, ...stock, ...dated],
+		customers: ['id', 'first_name', 'last_name', 'email', 'role', 'username', ...dated],
+		'tax-rates': ['id', 'name', 'country', 'state', 'priority', 'rate', 'class', 'order'],
+	} satisfies { [C in Collection]: SortFieldOf<C>[] };
+	const creators = engineSyncCollectionCreators();
+	const violations: string[] = [];
+	for (const collection of Object.keys(fields) as Collection[]) {
+		const legacy = collection === 'tax-rates' ? 'taxes' : collection;
+		const schema = creators[engineCollectionNameFor(legacy)].schema as RxJsonSchema<
+			Record<string, unknown>
+		>;
+		for (const field of fields[collection]) {
+			const { read } = compileQuery(
+				collection,
+				{
+					search: '',
+					filters: {},
+					sort: { field, direction: 'asc' },
+					limit: 10,
+				},
+				{ id: 'sort-schema-pin' }
+			);
+			if (!read.sortPushable) continue;
+			for (const { enginePath } of read.sort) {
+				const property = enginePath === undefined ? undefined : schema.properties[enginePath];
+				if (!property || !schema.required?.includes(enginePath!))
+					violations.push(`${collection}.${field} -> ${enginePath}`);
+			}
+		}
+	}
+	expect(violations).toEqual([]);
+});
 
 describe('query-state translator', () => {
 	// Remove the refunds-by-parent suffix: re-declaration produces an undefined requirement id.

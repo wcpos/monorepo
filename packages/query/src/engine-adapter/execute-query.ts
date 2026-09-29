@@ -10,6 +10,7 @@ import {
 	readEnginePath,
 	resolveLegacyField,
 } from './collection-map';
+import { normalizeSelectorSemantics } from './normalize-selector';
 import { type LegacyMangoSelector, translateSelector } from './translate-selector';
 
 import type { MangoQuerySelector, MangoQuerySortPart, RxDocument, RxJsonSchema } from 'rxdb';
@@ -86,8 +87,9 @@ function comparableValue(
 	return projected;
 }
 
+/** Missing and null tie before every value; subsequent sort parts, then uuid, break the tie. */
 function compareValues(left: unknown, right: unknown): number {
-	if (Object.is(left, right)) {
+	if (Object.is(left, right) || (left == null && right == null)) {
 		return 0;
 	}
 	if (left === undefined || left === null) {
@@ -160,7 +162,7 @@ function sortDocuments(
 	});
 }
 
-function sortCompiledDocuments(
+export function sortCompiledDocuments(
 	documents: EngineRxDocument[],
 	sort: CompiledSortPart[]
 ): EngineRxDocument[] {
@@ -222,11 +224,13 @@ export function executeAdapterQuery({
 	const compiledWithSearch = read && Object.keys(selector).length > 0;
 	const selectorRead =
 		!read || compiledWithSearch ? translateSelector(collection, selector) : undefined;
-	const prefilter = read
-		? ((compiledWithSearch
-				? { $and: [read.prefilter, selectorRead!.prefilter] }
-				: read.prefilter) as MangoQuerySelector<EngineDocument>)
-		: selectorRead!.prefilter;
+	const prefilter = normalizeSelectorSemantics(
+		read
+			? ((compiledWithSearch
+					? { $and: [read.prefilter, selectorRead!.prefilter] }
+					: read.prefilter) as MangoQuerySelector<EngineDocument>)
+			: selectorRead!.prefilter
+	) as MangoQuerySelector<EngineDocument>;
 	const residual = read
 		? (document: EngineDocument) =>
 				read.residual(document) && (!compiledWithSearch || selectorRead!.residual(document))

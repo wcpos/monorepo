@@ -4,8 +4,9 @@ import { asyncScheduler, ReplaySubject, throttleTime } from 'rxjs';
 import { foldSearchText } from '@wcpos/sync-core';
 
 import { SEARCH_SCAN_RETHROTTLE_MS, type SearchableCollection } from './search-shared';
+import { searchProjection } from './engine-adapter/search-snapshot';
 
-import type { EngineDocument } from './engine-adapter/collection-map';
+import type { EngineDocument, LegacyCollectionName } from './engine-adapter/collection-map';
 import type { EngineRxDocument } from './engine-adapter/execute-query';
 import type { RxChangeEvent } from 'rxdb';
 import type { Observable } from 'rxjs';
@@ -41,7 +42,7 @@ export type CatalogueSearchBlob = {
 };
 
 type Blob = { text: string; offsets: Uint32Array; ids: string[] };
-type BlobCollection = Pick<SearchableCollection, '$' | 'find' | 'onClose'>;
+type BlobCollection = SearchableCollection;
 
 /** One blob per collection instance AND field list; a panel with other fields gets its own. */
 const blobs = new WeakMap<object, Map<string, CatalogueSearchBlob>>();
@@ -105,7 +106,8 @@ function blobSearch(blob: Blob, terms: string[]): string[] {
 export function catalogueSearchBlobFor(
 	collection: BlobCollection,
 	searchFields: string[],
-	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>
+	documentSnapshot: (document: EngineRxDocument) => Record<string, unknown>,
+	collectionName: LegacyCollectionName
 ): CatalogueSearchBlob {
 	const fieldsKey = searchFields.join('|');
 	const byFields = blobs.get(collection) ?? new Map<string, CatalogueSearchBlob>();
@@ -157,9 +159,9 @@ export function catalogueSearchBlobFor(
 		byFields.delete(fieldsKey);
 	};
 	const ready = (async () => {
-		const documents = await collection.find().exec();
+		const projected = await searchProjection(collection, collectionName, searchFields);
 		if (disposed) return;
-		for (const document of documents) rows.set(document.primary, rowText(document));
+		for (const row of projected) rows.set(row.id, foldSearchText(row.fields.join(' ')));
 		for (const event of buffered) apply(event);
 		buffered.length = 0;
 		loading = false;
