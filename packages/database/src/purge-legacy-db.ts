@@ -16,12 +16,6 @@ export interface PurgeLegacyDBResult {
 	databasesDeleted: number;
 }
 
-const fromFilesystemSafeName = (value: string) => value.replace(/__/g, '/');
-
-const isLegacyAppFilesystemEntry = (name: string) =>
-	name.startsWith(RXDB_DIRECTORY_PREFIX) &&
-	isLegacyAppDatabaseName(fromFilesystemSafeName(name.slice(RXDB_DIRECTORY_PREFIX.length)));
-
 const deleteLegacySQLiteDatabases = () => {
 	dbLogger.debug(`Checking SQLite database directory: ${LEGACY_SQLITE_DIRECTORY.uri}`);
 
@@ -57,15 +51,12 @@ const deleteLegacyFilesystemDatabases = () => {
 		return 0;
 	}
 
-	const contents = EXPO_OPFS_ROOT.list();
-	const legacyEntries = contents.filter((item) => isLegacyAppFilesystemEntry(item.name));
-
-	for (const entry of legacyEntries) {
-		dbLogger.debug(`Deleting legacy filesystem-backed database entry: ${entry.name}`);
-		entry.delete();
-	}
-
-	return legacyEntries.length;
+	// The entire retired engine root is WCPOS-owned, including current-generation remnants.
+	const count = EXPO_OPFS_ROOT.list().filter((item) =>
+		item.name.startsWith(RXDB_DIRECTORY_PREFIX)
+	).length;
+	EXPO_OPFS_ROOT.delete();
+	return count;
 };
 
 export const purgeLegacyDatabases = async (): Promise<PurgeLegacyDBResult> => {
