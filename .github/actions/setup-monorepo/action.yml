@@ -29,11 +29,15 @@ runs:
     - name: 🏗 Setup pnpm
       uses: pnpm/action-setup@v4
 
+    # No package-manager cache: the pnpm store would carry the licensed,
+    # patched rxdb-premium dist into the Actions cache. `cache: pnpm` is gone
+    # and `package-manager-cache: false` keeps setup-node v5+ from turning
+    # caching back on by itself when it sees the packageManager field.
     - name: 🏗 Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: pnpm
+        package-manager-cache: false
 
     - name: 🏗 Setup Expo
       uses: expo/expo-github-action@v8
@@ -90,6 +94,11 @@ runs:
         else
           pnpm install --frozen-lockfile
         fi
+      shell: bash
+
+    - name: 🔒 Assert licensed dist stays out of every cache
+      run: |
+        test "$(pnpm config get side-effects-cache)" = "false" || { echo "::error::pnpm side-effects-cache must be false: it would store the licensed rxdb-premium dist in the pnpm store"; exit 1; }
       shell: bash
 
     # One turbo cache entry per OS per UTC day, saved by main, not one per
