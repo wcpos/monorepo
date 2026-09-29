@@ -80,6 +80,7 @@ const initialData = () => ({
 	terms: initialTerms(),
 	lastClosure: {
 		id: 'A',
+		opened_at: '2026-09-17T00:00:00Z',
 		number: 411,
 		server_number: 412,
 		closed_at: '2026-09-17T03:30:00Z',
@@ -105,6 +106,11 @@ let online = false;
 const remotePrint = jest.fn();
 jest.mock('../receipt/use-receipt-document', () => ({
 	useReceiptDocument: () => ({ print: remotePrint }),
+}));
+jest.mock('../../../hooks/use-local-date', () => ({
+	...jest.requireActual('../../../hooks/use-local-date'),
+	// The cashier's locale is English here; the strip must format through this path.
+	useLocalDate: () => ({ formatDate: jest.requireActual('date-fns').format }),
 }));
 jest.mock('../hooks/use-rest-http-client', () => ({ useRestHttpClient: () => http }));
 jest.mock('@wcpos/hooks/use-online-status', () => ({
@@ -279,4 +285,51 @@ it('shows a session opened on another device as open with the server expected an
 	fireEvent.click(screen.getByTestId('till-xreport'));
 	await waitFor(() => expect(remotePrint).toHaveBeenCalledTimes(1));
 	expect(print).not.toHaveBeenCalled();
+});
+// Ledger closures 23/25: the lookup is invalidated while this device's own session is open.
+it('forgets the lookup while the till is open here and reads afresh once it closes again', async () => {
+	data.session = null;
+	online = true;
+	const { rerender } = render(<TillStrip onOpenClosures={jest.fn()} />);
+	await waitFor(() => expect(get).toHaveBeenCalledWith('closures/last', expect.anything()));
+	const reads = get.mock.calls.filter(([path]) => path === 'closures/last').length;
+	data.session = { id: 's2', opened_at_gmt: '2026-09-17T06:00:00Z', opened_by: 7, status: 'open' };
+	rerender(<TillStrip onOpenClosures={jest.fn()} />);
+	expect(screen.getByTestId('till-xreport')).toBeTruthy();
+	data.session = null;
+	rerender(<TillStrip onOpenClosures={jest.fn()} />);
+	await waitFor(() =>
+		expect(get.mock.calls.filter(([path]) => path === 'closures/last').length).toBe(reads + 1)
+	);
+});
+it('resolves to the last closure when the listed session closed during the lookup', async () => {
+	data.session = null;
+	online = true;
+	get.mockImplementation((path: string) =>
+		Promise.resolve(
+			path === 'sessions'
+				? {
+						data: [
+							{ id: 'r9', status: 'open', opened_at_gmt: '2026-09-17T04:00:00Z', opened_by: 7 },
+						],
+					}
+				: path === 'sessions/r9'
+					? {
+							data: {
+								id: 'r9',
+								status: 'closed',
+								opened_at_gmt: '2026-09-17T04:00:00Z',
+								opened_by: 7,
+							},
+						}
+					: { data: { ...data.lastClosure, id: 'B', server_number: 413 } }
+		)
+	);
+	render(<TillStrip onOpenClosures={jest.fn()} />);
+	await waitFor(() => expect(get).toHaveBeenCalledWith('closures/last', expect.anything()));
+	await waitFor(() =>
+		expect(screen.getByTestId('till-last-closure').textContent).toContain('#413')
+	);
+	expect(screen.getByTestId('till-status').textContent).toContain('Closed');
+	expect(screen.queryByTestId('till-xreport')).toBeNull();
 });

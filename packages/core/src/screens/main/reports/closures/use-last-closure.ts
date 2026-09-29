@@ -26,12 +26,17 @@ export function useLastClosure(
 	const http = useRestHttpClient();
 	const online = useOnlineStatus().status === 'online-website-available';
 	const t = useT();
-	const [localData, setData] = React.useState<SessionCardData>({
-		session: null,
-		closure: null,
-		status: 'idle',
-	});
+	const idle: SessionCardData = { session: null, closure: null, status: 'idle' };
+	const [localData, setData] = React.useState<SessionCardData>(idle);
 	const data = summary ?? localData;
+	// While the lookup is disabled (the till is open on this device) whatever it held is stale:
+	// the session it saw may since have closed into a new closure. Forget it, so the next
+	// enable reads afresh instead of presenting the previous closure as authoritative.
+	const disabled = !register;
+	React.useEffect(() => {
+		// eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- invalidates a server read when the caller disables it; nothing derives from props here.
+		if (disabled) setData(idle);
+	}, [disabled]);
 	const load = React.useCallback(async () => {
 		if (!online || !register) return;
 		setData((d) => ({ ...d, status: 'loading' }));
@@ -42,13 +47,15 @@ export function useLastClosure(
 					http.get('sessions', { params: { ...params, status } })
 				)
 			);
-			const session = lists.flatMap((result) => result.data as SessionSummary[])[0];
-			const detail = await http.get(session ? `sessions/${session.id}` : 'closures/last', {
-				params,
-			});
+			const listed = lists.flatMap((result) => result.data as SessionSummary[])[0];
+			const detail = listed ? await http.get(`sessions/${listed.id}`, { params }) : undefined;
+			// A session that closed between the list and its detail is not open any more.
+			const session = detail?.data as SessionSummary | undefined;
+			const stillOpen = !!session && (session.status === 'open' || session.status === 'counting');
+			const last = stillOpen ? undefined : await http.get('closures/last', { params });
 			setData({
-				session: session ? (detail.data as SessionSummary) : null,
-				closure: session ? null : (detail.data as ClosureRow | null),
+				session: stillOpen ? session : null,
+				closure: stillOpen ? null : ((last?.data as ClosureRow | null) ?? null),
 				status: 'ready',
 			});
 		} catch (error) {

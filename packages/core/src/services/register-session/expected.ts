@@ -35,10 +35,16 @@ export function attributeRefunds(
 		})
 	);
 	const byMethod: Record<string, number> = {};
+	const countByMethod: Record<string, number> = {};
 	const ids = new Set<number | string>();
 	const allocated = new Map<number, number>();
 	const debit = (method: string, amount: number) => {
 		byMethod[method] = (byMethod[method] ?? 0) + amount;
+	};
+	const counted = (method: string, id: number | string) => {
+		if (ids.has(id)) return;
+		ids.add(id);
+		countByMethod[method] = (countByMethod[method] ?? 0) + 1;
 	};
 	for (const [index, row] of ledgerRows.entries()) {
 		const method = row.kind === 'cash' ? 'cash' : row.method_id;
@@ -56,16 +62,16 @@ export function attributeRefunds(
 			covered += amount;
 			if (record.sessionId === sessionId) {
 				debit(method, amount);
-				ids.add(allocation.id);
+				counted(method, allocation.id);
 			}
 		}
 		const legacy = Math.max(0, toMinor(row.refunded_amount, 4) - covered);
 		if (row.session_id === sessionId && row.status === 'captured') {
 			debit(method, legacy);
 			if (legacy <= 0) continue;
-			for (const id of legacyIds) ids.add(id);
+			for (const id of legacyIds) counted(method, id);
 			// Aggregate-only historical rows cannot supply an exact identity/count.
-			if (!legacyIds.size) ids.add(`legacy-row:${index}`);
+			if (!legacyIds.size) counted(method, `legacy-row:${index}`);
 		}
 	}
 	for (const [id, record] of stamped) {
@@ -73,10 +79,10 @@ export function attributeRefunds(
 		const amount = toMinor(record.refund.amount ?? '0', 4) - (allocated.get(id) ?? 0);
 		if (amount > 0) {
 			debit('cash', amount);
-			ids.add(id);
+			counted('cash', id);
 		}
 	}
-	return { byMethod, count: ids.size };
+	return { byMethod, count: ids.size, countByMethod };
 }
 
 export function deriveExpected({
@@ -146,7 +152,10 @@ export function deriveDrawerTerms(input: Parameters<typeof deriveExpected>[0]) {
 			count: paidOut.length,
 			note: paidOut.length === 1 ? paidOut[0].reason : undefined,
 		},
-		cashRefunds: { amount: fromMinor(refunds.byMethod.cash ?? 0, 4), count: refunds.count },
+		cashRefunds: {
+			amount: fromMinor(refunds.byMethod.cash ?? 0, 4),
+			count: refunds.countByMethod.cash ?? 0,
+		},
 		noSales: live.filter((row) => row.type === 'no_sale').length,
 		voids: live.filter((row) => row.type === 'void').length,
 		expected: deriveExpected(input).cash,

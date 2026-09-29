@@ -14,12 +14,13 @@ import { useDocField } from '@wcpos/query';
 import { useStoreSession } from '../../../contexts/app-state';
 import { useTheme } from '../../../contexts/theme';
 import { useT } from '../../../contexts/translations';
-import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
-import { useStoreDay, useViewedStore, zoneOptions } from '../../../hooks/use-store-day';
+import { convertUTCStringToLocalDate, useLocalDate } from '../../../hooks/use-local-date';
+import { inZone, useStoreDay, useViewedStore, zoneOptions } from '../../../hooks/use-store-day';
 import { useRegisterSession } from '../../../services/register-session/use-register-session';
 import { useSessionReport } from '../../../services/register-session/use-session-report';
 import { useCurrencyFormat } from '../hooks/use-currency-format';
 import { useReceiptDocument } from '../receipt/use-receipt-document';
+import { normalizeClosureRow } from './closures/use-closure-rows';
 import { useLastClosure } from './closures/use-last-closure';
 
 type Term = [id: string, sign: string, label: string, amount: string];
@@ -37,6 +38,10 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 		store.id
 	);
 	const authoritative = remote.online && remote.data.status === 'ready';
+	// The server closure in the local row shape (GMT stamps, absent maps, flattened labels), or nothing usable.
+	const remoteClosure = remote.data.closure
+		? (normalizeClosureRow(remote.data.closure)[0] ?? null)
+		: null;
 	// A session opened on another device is open here too: the server says so (ledger closures 23).
 	const remoteSession = !active && authoritative ? remote.data.session : null;
 	const open = active || !!remoteSession;
@@ -46,14 +51,14 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 			? lastClosure
 			: null
 		: authoritative
-			? remote.data.closure
-			: (lastClosure ?? remote.data.closure);
+			? remoteClosure
+			: (lastClosure ?? remoteClosure);
 	const unavailable =
 		!open && (remote.online ? remote.unavailable : !lastClosure ? remote.unavailable : undefined);
 	const { print } = useSessionReport(
 		active || authoritative || !lastClosure ? undefined : lastClosure,
 		!active,
-		!active && authoritative ? (remote.data.closure ?? undefined) : undefined
+		!active && authoritative ? (remoteClosure ?? undefined) : undefined
 	);
 	// The remote session's X-report goes through the receipt document, as the room's remote card prints it.
 	const remoteReport = useReceiptDocument({
@@ -75,8 +80,10 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 		thousandSeparator: settings?.price_thousand_sep,
 	});
 	const { timezone } = useStoreDay(store.id);
+	// Locale-aware (the cashier's language), in the store's zone.
+	const { formatDate: formatLocal } = useLocalDate();
 	const date = (value: string, pattern: string) =>
-		formatDate(convertUTCStringToLocalDate(value), pattern, zoneOptions(timezone));
+		formatLocal(inZone(timezone, convertUTCStringToLocalDate(value)), pattern);
 	const today = formatDate(new Date(), 'yyyy-MM-dd', zoneOptions(timezone));
 	const yesterday = formatDate(
 		subDays(new Date(), 1, zoneOptions(timezone)),

@@ -80,8 +80,16 @@ it('does not credit the drawer when the aggregate lags stamped allocations', () 
 	expect(deriveExpected({ ...input, session: { id: 'B', counted_float: '10' } })).toEqual({
 		cash: '-10.0000',
 	});
-	expect(attributeRefunds('A', rows, [refund])).toEqual({ byMethod: { cash: 0 }, count: 0 });
-	expect(attributeRefunds('B', rows, [refund])).toEqual({ byMethod: { cash: 200000 }, count: 1 });
+	expect(attributeRefunds('A', rows, [refund])).toEqual({
+		byMethod: { cash: 0 },
+		count: 0,
+		countByMethod: {},
+	});
+	expect(attributeRefunds('B', rows, [refund])).toEqual({
+		byMethod: { cash: 200000 },
+		count: 1,
+		countByMethod: { cash: 1 },
+	});
 });
 
 // Revert the stamped-refund cash debit in attributeRefunds: Tuesday's drawer loses its refund.
@@ -170,7 +178,11 @@ it('debits the unallocated remainder to cash without adding a remainder to a ful
 		refundRecords: [refund],
 	};
 	expect(deriveExpected(input)).toEqual({ cash: '-20.0000' });
-	expect(attributeRefunds('B', rows, [refund])).toEqual({ byMethod: { cash: 200000 }, count: 1 });
+	expect(attributeRefunds('B', rows, [refund])).toEqual({
+		byMethod: { cash: 200000 },
+		count: 1,
+		countByMethod: { cash: 1 },
+	});
 	rows[1].refunds[0].status = 'succeeded';
 	rows[1].refunded_amount = '13';
 	expect(deriveExpected(input)).toEqual({ cash: '-7.0000', card: '-13.0000' });
@@ -228,4 +240,35 @@ it('keeps a single paid-out reason and attributes refunds to their own session',
 		voids: 0,
 		expected: '8.0000',
 	});
+});
+
+it('counts only the refunds attributed to cash in the drawer terms', () => {
+	const session = { id: 'S', counted_float: '100.0000' };
+	const stamp = { key: '_wcpos_session', value: 'S' };
+	const refundRecords = [
+		{ id: 1, amount: '5.0000', meta_data: [stamp] },
+		{ id: 2, amount: '7.0000', meta_data: [stamp] },
+	] as unknown as Parameters<typeof deriveDrawerTerms>[0]['refundRecords'];
+	const ledgerRowsBySession = [
+		{
+			session_id: 'S',
+			kind: 'cash',
+			method_id: 'cash',
+			status: 'captured',
+			amount: '20.0000',
+			refunded_amount: '5.0000',
+			refunds: [{ id: 1, amount: '5.0000', status: 'succeeded' }],
+		},
+		{
+			session_id: 'S',
+			kind: 'card',
+			method_id: 'stripe',
+			status: 'captured',
+			amount: '30.0000',
+			refunded_amount: '7.0000',
+			refunds: [{ id: 2, amount: '7.0000', status: 'succeeded' }],
+		},
+	];
+	const terms = deriveDrawerTerms({ session, movements: [], ledgerRowsBySession, refundRecords });
+	expect(terms.cashRefunds).toEqual({ amount: '5.0000', count: 1 });
 });
