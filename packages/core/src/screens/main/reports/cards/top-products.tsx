@@ -12,7 +12,7 @@ import { ShareBar } from './primitives';
 export function TopProductsCard() {
 	const t = useT(),
 		{ selectedOrders, totals } = useReportsData();
-	useReportsScope();
+	const { setDetail } = useReportsScope();
 	const { storeId } = useReportsPeriod(),
 		{ store, money, quantity, percent } = useReportFormats(storeId);
 	const decimals = store?.price_num_decimals;
@@ -23,6 +23,7 @@ export function TopProductsCard() {
 	if (!store) return <CardSkeleton testID="card-products" name={t('reports.card_top_products')} />;
 	return (
 		<ReportCard
+			onOpen={() => setDetail('products')}
 			testID="card-products"
 			name={t('reports.card_top_products')}
 			figure={quantity(totals.totalItemsSold)}

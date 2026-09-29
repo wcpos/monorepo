@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import * as React from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { mockState, setOrders } from './test-utils';
 import { PeriodSection } from './index';
@@ -96,4 +96,30 @@ it('shows skeletons while the viewed store is unknown', () => {
 	} finally {
 		mockState.store = store;
 	}
+});
+
+// Miswiring the card id or making the deferred Orders head live breaks these contracts.
+it('a card head opens its panel', () => {
+	const context = jest.requireMock<typeof import('../context')>('../context');
+	const real = jest.requireActual<typeof import('../context')>('../context');
+	const spy = jest.spyOn(context, 'useReportsScope').mockImplementation(real.useReportsScope);
+	function Detail() {
+		return <span data-testid="open-detail">{context.useReportsScope().detail}</span>;
+	}
+	try {
+		render(
+			<real.ReportsScopeProvider>
+				<PeriodSection />
+				<Detail />
+			</real.ReportsScopeProvider>
+		);
+		fireEvent.click(screen.getByTestId('card-taxes-open'));
+		expect(screen.getByTestId('open-detail').textContent).toBe('taxes');
+	} finally {
+		spy.mockRestore();
+	}
+});
+it('the Orders head has no press', () => {
+	render(<PeriodSection />);
+	expect(screen.queryByTestId('card-orders-open')).toBeNull();
 });

@@ -58,6 +58,7 @@ export function setOrders(orders: ReportOrder[]) {
 }
 setOrders([]);
 jest.mock('../context', () => ({
+	...jest.requireActual('../context'),
 	useReportsData: () => mockState.data,
 	useReportsScope: () => ({ statusMode: mockState.statusMode }),
 	useReportsPeriod: () => ({
@@ -124,7 +125,16 @@ jest.mock('@wcpos/components/text', () => ({
 	TextClassContext: React.createContext(undefined),
 }));
 jest.mock('@wcpos/components/button', () => ({
-	Button: jest.requireActual('react-native').View,
+	Button: React.forwardRef<
+		HTMLButtonElement,
+		React.PropsWithChildren<{ testID?: string; onPress?: () => void }>
+	>(function TestButton({ testID, onPress, children }, ref) {
+		return (
+			<button ref={ref} data-testid={testID} onClick={onPress}>
+				{children}
+			</button>
+		);
+	}),
 	ButtonText: jest.requireActual('react-native').Text,
 }));
 jest.mock('@wcpos/components/popover', () => ({

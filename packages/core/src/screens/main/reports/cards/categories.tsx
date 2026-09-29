@@ -3,7 +3,7 @@ import * as React from 'react';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
-import { useReportsData, useReportsPeriod } from '../context';
+import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
 import { categories } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
@@ -11,6 +11,7 @@ import { Donut } from './donut';
 import { useLocalProducts } from './use-local-products';
 
 export function CategoriesCard() {
+	const { setDetail } = useReportsScope();
 	const t = useT(),
 		{ selectedOrders, totals } = useReportsData(),
 		{ storeId } = useReportsPeriod();
@@ -38,6 +39,7 @@ export function CategoriesCard() {
 	};
 	return (
 		<ReportCard
+			onOpen={() => setDetail('categories')}
 			testID="card-categories"
 			name={t('reports.card_categories')}
 			figure={money(totals.total)}

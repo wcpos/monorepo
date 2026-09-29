@@ -36,6 +36,9 @@ Seeded 2026-09-18 from `.claude/research/2026-09-18-composed-behaviour-ledger.md
 26. Export only currently shown rows, union all tender columns, include expected-only tenders as zero counted with shortage, and retain badge precedence — CSV must represent the visible scope without dropping tenders — evidence: [^closures]; `export-csv.test.ts` names shown-row export and expected-only shortages — platform: all.
 27. Quote/escape CSV cells, use CRLF, and prefix formula/control-leading text, including whitespace-prefixed formulas — exported names must remain text rather than spreadsheet instructions — evidence: [^closures]; `export-csv.test.ts` names formula-prefix neutralization — platform: all.
 28. Native export writes UTF-8 CSV to cache and opens sharing with CSV MIME/UTI; web downloads through a temporary Blob link and removes/revokes it — preserves each platform’s file handoff — evidence: [^closures]; both `save-or-share-csv` test names pin their handoffs — platform: iOS/Android versus web/Electron.
+
+   Sales panels share the escaper (`csvCell`) and file handoff (`saveOrShareCsv`) from lines 26–28 — evidence: wcpos/roadmap#332 PR 3c.
+
 29. Keep offline document labels aligned with shipped server-template keys — offline documents must speak the same template vocabulary — evidence: `reports/closures/document-labels.ts:1`, “Offline defaults use the same label keys as the shipped server closure template.” — platform: all.
 
 ## Evidence footnotes

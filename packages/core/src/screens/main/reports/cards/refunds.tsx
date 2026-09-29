@@ -3,13 +3,14 @@ import * as React from 'react';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
-import { useReportsData, useReportsPeriod } from '../context';
+import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
 import { refundsSummary } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Legend, ProportionalBar, StatGrid } from './primitives';
 
 export function RefundsCard() {
+	const { setDetail } = useReportsScope();
 	const t = useT(),
 		{ selectedOrders, totals } = useReportsData();
 	const { storeId } = useReportsPeriod(),
@@ -22,6 +23,7 @@ export function RefundsCard() {
 	if (!store) return <CardSkeleton testID="card-refunds" name={t('reports.card_refunds')} />;
 	return (
 		<ReportCard
+			onOpen={() => setDetail('refunds')}
 			testID="card-refunds"
 			name={t('reports.card_refunds')}
 			figure={money(summary.refunded)}

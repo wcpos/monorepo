@@ -66,7 +66,12 @@ export interface ReportsData {
 	totals: ReturnType<typeof calculateTotals>;
 }
 
+export type DetailId =
+	'orders' | 'payments' | 'products' | 'categories' | 'cashiers' | 'taxes' | 'refunds';
+
 export interface ReportsScope {
+	detail: DetailId | null;
+	setDetail: React.Dispatch<React.SetStateAction<DetailId | null>>;
 	chartView: 'hour' | 'run';
 	setChartView: React.Dispatch<React.SetStateAction<ReportsScope['chartView']>>;
 	cmp: 'yesterday' | 'lastweek';
@@ -76,12 +81,13 @@ export interface ReportsScope {
 }
 const ReportsScopeContext = React.createContext<ReportsScope | undefined>(undefined);
 export function ReportsScopeProvider({ children }: React.PropsWithChildren) {
+	const [detail, setDetail] = React.useState<DetailId | null>(null);
 	const [chartView, setChartView] = React.useState<ReportsScope['chartView']>('hour');
 	const [cmp, setCmp] = React.useState<ReportsScope['cmp']>('yesterday');
 	const [statusMode, setStatusMode] = React.useState<ReportsScope['statusMode']>('done');
 	const value = React.useMemo(
-		() => ({ cmp, setCmp, statusMode, setStatusMode, chartView, setChartView }),
-		[cmp, statusMode, chartView]
+		() => ({ detail, setDetail, cmp, setCmp, statusMode, setStatusMode, chartView, setChartView }),
+		[detail, cmp, statusMode, chartView]
 	);
 	return <ReportsScopeContext.Provider value={value}>{children}</ReportsScopeContext.Provider>;
 }

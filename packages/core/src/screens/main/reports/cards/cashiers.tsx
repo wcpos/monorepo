@@ -7,13 +7,14 @@ import type { WPCredentialsDocument } from '@wcpos/database';
 
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useReportsData, useReportsPeriod } from '../context';
+import { useReportsData, useReportsPeriod, useReportsScope } from '../context';
 import { useReportFormats } from '../use-report-formats';
 import { cashiers } from './aggregate';
 import { CardSkeleton, ReportCard } from './card';
 import { Donut } from './donut';
 
 export function CashiersCard() {
+	const { setDetail } = useReportsScope();
 	const t = useT(),
 		{ totals } = useReportsData(),
 		{ storeId } = useReportsPeriod(),
@@ -26,6 +27,7 @@ export function CashiersCard() {
 		return <CardSkeleton testID="card-cashiers" name={t('reports.card_cashiers')} />;
 	return (
 		<ReportCard
+			onOpen={() => setDetail('cashiers')}
 			testID="card-cashiers"
 			name={t('reports.card_cashiers')}
 			figure={number(rows.length)}
