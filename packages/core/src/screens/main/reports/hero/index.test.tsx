@@ -340,3 +340,20 @@ it('reads a change below a tenth of a percent as flat', () => {
 	setup({ comparison: resource([{ ...previous[0], total: '30.01' }] as ReportOrder[]) });
 	expect(screen.getByTestId('hero-delta').textContent).toBe('±0% vs yesterday');
 });
+// Past the store's midnight the day is no longer live: the whole comparison day counts.
+it('counts the whole comparison day once the store day rolls over', () => {
+	const lateNight = {
+		...previous[0],
+		uuid: 'late-night',
+		total: '5',
+		// 23:59 in New York on the 14th.
+		date_created_gmt: '2026-07-15T03:59:00',
+	};
+	setup({ comparison: resource([...previous, lateNight] as ReportOrder[]) });
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('1/3');
+	act(() => {
+		// 12:00 to 00:31 New York time, in minute ticks.
+		jest.advanceTimersByTime(12 * 60 * 60 * 1000 + 31 * 60 * 1000);
+	});
+	expect(screen.getByTestId('comparison-counts').textContent).toBe('3/3');
+});

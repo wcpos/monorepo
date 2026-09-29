@@ -138,10 +138,14 @@ export function Orders() {
 			setUnselectedRowIds((prev) => {
 				const newSelectionState = typeof updater === 'function' ? updater(selectionState) : updater;
 
-				// Compute the new unselectedRowIds
+				// Compute the new unselectedRowIds; an untick on a row the status set currently
+				// excludes is kept, so it is still unticked when that status is shown again.
 				const newUnselectedRowIds: Record<string, true> = {};
 				allOrders.forEach((order) => {
-					if (order.uuid && included(order) && !newSelectionState[order.uuid]) {
+					if (!order.uuid) return;
+					if (!included(order)) {
+						if (prev[order.uuid]) newUnselectedRowIds[order.uuid] = true;
+					} else if (!newSelectionState[order.uuid]) {
 						newUnselectedRowIds[order.uuid] = true;
 					}
 				});
@@ -159,18 +163,25 @@ export function Orders() {
 		// excludes must not make the first tap a no-op.
 		const selectable = allOrders.filter((order) => order.uuid && included(order));
 		const allSelected = selectable.every((order) => !unselectedRowIds[order.uuid]);
+		// Unticks on rows the status set excludes are kept either way.
+		const kept = (prev: Record<string, true>) =>
+			Object.fromEntries(
+				allOrders
+					.filter((order) => order.uuid && !included(order) && prev[order.uuid])
+					.map((order) => [order.uuid, true as const])
+			);
 		if (allSelected) {
 			// All selectable rows are selected, so we want to unselect them all
-			setUnselectedRowIds(() => {
-				const newUnselectedRowIds: Record<string, true> = {};
+			setUnselectedRowIds((prev) => {
+				const newUnselectedRowIds: Record<string, true> = kept(prev);
 				selectable.forEach((order) => {
 					newUnselectedRowIds[order.uuid] = true;
 				});
 				return newUnselectedRowIds;
 			});
 		} else {
-			// Some selectable rows are unselected, so we want to select all rows
-			setUnselectedRowIds({});
+			// Some selectable rows are unselected, so we want to select all selectable rows
+			setUnselectedRowIds((prev) => kept(prev));
 		}
 	}, [allOrders, included, setUnselectedRowIds, unselectedRowIds]);
 

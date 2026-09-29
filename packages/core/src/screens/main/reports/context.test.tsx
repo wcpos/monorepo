@@ -272,13 +272,21 @@ it.each([
 		'2026-01-01T05:00:00.000Z',
 		'2026-02-01T04:59:59.999Z',
 	],
-	// A custom 45-day range keeps its 45 days: each bound shifts by a month (Codex review, PR 2a).
+	// A custom range keeps its calendar-day count from a start a month earlier, whatever the
+	// months' lengths (Codex review, PR 2a): 45 days stay 45, 59 days stay 59.
 	[
 		'custom 45-day (Jan 15 to Feb 28)',
 		'2026-01-15T05:00:00.000Z',
 		'2026-03-01T04:59:59.999Z',
 		'2025-12-15T05:00:00.000Z',
 		'2026-01-29T04:59:59.999Z',
+	],
+	[
+		'custom 59-day (Jan 2 to Mar 1)',
+		'2026-01-02T05:00:00.000Z',
+		'2026-03-02T04:59:59.999Z',
+		'2025-12-02T05:00:00.000Z',
+		'2026-01-30T04:59:59.999Z',
 	],
 ])(
 	'derives the %s comparison in the viewed store zone',

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import {
+	addDays,
 	differenceInCalendarDays,
 	endOfMonth,
 	format,
@@ -115,8 +116,8 @@ export function useReportsPeriod() {
 			? subMonths(start, 1, options)
 			: subDays(start, period === 'day' && cmp === 'yesterday' ? 1 : 7, options);
 	// A whole calendar month (the 1st to its last day, preset or typed) compares with the whole
-	// month before; a running month and any other range shift each bound by a month, so a
-	// 45-day range keeps 45 days.
+	// month before; a running month and any other range start a month earlier and keep their
+	// calendar-day count, so a 45-day range compares with 45 days whatever the months' lengths.
 	const wholeMonth =
 		isSameMonth(start, end, options) &&
 		isSameDay(start, startOfMonth(start, options), options) &&
@@ -125,7 +126,7 @@ export function useReportsPeriod() {
 		period === 'month'
 			? wholeMonth
 				? endOfMonth(shiftedStart, options)
-				: subMonths(end, 1, options)
+				: addDays(shiftedStart, days - 1, options)
 			: subDays(end, period === 'day' && cmp === 'yesterday' ? 1 : 7, options);
 	const from = dayBounds(calendarDate(inZone(timezone, shiftedStart))).from;
 	const to = dayBounds(calendarDate(inZone(timezone, shiftedEnd))).to;
@@ -268,7 +269,8 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 	const data = useReportsData();
 	const { comparisonBinding } = useReportsBinding();
 	const { statusMode } = useReportsScope();
-	const { timezone } = useReportsPeriod();
+	const { timezone, period, storeId } = useReportsPeriod();
+	const { presets } = useStoreDay(storeId);
 	const result = useObservableSuspense(comparisonBinding.resource);
 	const wholeComparisonOrders = result.hits
 		.map(({ record }) => {
@@ -277,15 +279,20 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 		})
 		.filter((order) => includedStatus(order, statusMode));
 	const clock = (date: Date) => format(inZone(timezone, date), 'HH:mm:ss.SSS');
-	// A live day's cutoff moves with the clock: once a minute while the report stays open.
+	// A live day's cutoff moves with the clock, once a minute while a day is shown; the day
+	// stops being live at the store's midnight, when the whole comparison day counts.
 	const [tick, setTick] = React.useState(() => Date.now());
 	React.useEffect(() => {
-		if (!data.live) return;
+		if (period !== 'day') return;
 		const id = setInterval(() => setTick(Date.now()), 60_000);
 		return () => clearInterval(id);
-	}, [data.live]);
+	}, [period]);
 	const now = clock(new Date(tick));
-	const comparisonOrders = data.live
+	// `presets()` reads the clock; the minute tick above is what makes this render again.
+	const live =
+		period === 'day' &&
+		isSameDay(data.dateRange.start, presets().today.from, zoneOptions(timezone));
+	const comparisonOrders = live
 		? wholeComparisonOrders.filter(
 				(order) =>
 					order.date_created_gmt &&
@@ -293,7 +300,7 @@ export function ReportsComparison({ children }: React.PropsWithChildren) {
 			)
 		: wholeComparisonOrders;
 	return (
-		<ReportsDataContext.Provider value={{ ...data, comparisonOrders, wholeComparisonOrders }}>
+		<ReportsDataContext.Provider value={{ ...data, live, comparisonOrders, wholeComparisonOrders }}>
 			{children}
 		</ReportsDataContext.Provider>
 	);

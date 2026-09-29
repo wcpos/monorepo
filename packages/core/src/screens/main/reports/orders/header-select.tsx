@@ -31,7 +31,7 @@ export function TableHeaderSelect({ table }: HeaderContext<OrderRow, boolean, Da
 			<TooltipTrigger asChild>
 				<View role="none">
 					<Checkbox
-						checked={totalSelected === meta.totalOrders}
+						checked={meta.totalOrders > 0 && totalSelected === meta.totalOrders}
 						indeterminate={indeterminate}
 						onCheckedChange={() => meta.toggleAllRowsSelected()}
 					/>

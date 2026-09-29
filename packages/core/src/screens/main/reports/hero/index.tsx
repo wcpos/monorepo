@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
+import roundTo from 'lodash/round';
 import { useObservableState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -147,10 +148,10 @@ function Difference({
 	const { comparisonOrders } = useReportsData();
 	// The same rounding as the current figure, or a rounded average reads as a difference.
 	const totals = calculateTotals({ orders: comparisonOrders, num_decimals: numDecimals });
-	// Money is compared at the displayed precision, so two equal displayed figures never differ.
-	const scale = 10 ** (numDecimals ?? 2);
+	// Money is compared at the displayed precision, with the currency formatter's own rounding
+	// (lodash), so two figures that read the same never differ.
 	const round = (value: number) =>
-		field === 'orders' || field === 'totalItemsSold' ? value : Math.round(value * scale) / scale;
+		field === 'orders' || field === 'totalItemsSold' ? value : roundTo(value, numDecimals ?? 2);
 	const previous = round(field === 'orders' ? comparisonOrders.length : totals[field]);
 	const shown = round(current);
 	// No orders to compare with: every line reads "—", never a difference against nothing.
