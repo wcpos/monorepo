@@ -24,6 +24,7 @@ import { useLocalProducts } from '../cards/use-local-products';
 import { saveOrShareCsv } from '../closures/save-or-share-csv';
 import {
 	useIncludedStatus,
+	useReportsBinding,
 	useReportsData,
 	useReportsPeriod,
 	useReportsScope,
@@ -34,7 +35,11 @@ import { useReportFormats } from '../use-report-formats';
 import { panelCsv } from './export-csv';
 import { ReportRows } from './report-rows';
 import { panelSpec } from './specs';
+import { buildReportDocument } from './document';
 import { OrdersPanel } from './orders-panel';
+import { useClosureDocumentContext } from '../../../../services/register-session/use-closure-document-context';
+import { useReceiptDocument } from '../../receipt/use-receipt-document';
+import { TemplateSwitcher } from '../../receipt/template-switcher';
 
 const PANEL_WIDTH = 480;
 export function DetailPanel() {
@@ -76,6 +81,8 @@ export function DetailPanel() {
 	);
 	const products = useLocalProducts(detail === 'categories' ? ids : []);
 	const [error, setError] = React.useState('');
+	const [generatedAt] = React.useState(() => new Date().toISOString());
+	const [printError, setPrintError] = React.useState('');
 	const [busy, setBusy] = React.useState(false);
 
 	// Orders names its cashiers too: the CSV must not carry "Unknown" for a directory still loading.
@@ -104,6 +111,61 @@ export function DetailPanel() {
 		),
 	});
 	const title = t(`reports.panel_${detail}`);
+	const context = useClosureDocumentContext(storeId);
+	const document = buildReportDocument(
+		spec,
+		spec.keys.map((key, i) => ({
+			key,
+			label: spec.head[i],
+			type: spec.types[i],
+			align: spec.align[i],
+		})),
+		{
+			key: detail ?? 'orders',
+			title,
+			label: t('reports.panel_scope', { period, register }),
+			storeId: storeId ?? 0,
+			registerId: registerId ?? '',
+			registerName: register,
+			from: dateRange.start.toISOString(),
+			to: dateRange.end.toISOString(),
+			generatedAt,
+		},
+		context
+	);
+	const doc = useReceiptDocument({
+		autoPrintAllowed: false,
+		templateType: 'report',
+		storeId,
+		localReport: document,
+	});
+	// A range still arriving over ranged sync passes is a partial set (see ReportsSyncProgress):
+	// the document would claim a whole period it does not hold, so Print waits for the lane.
+	const { binding: salesBinding } = useReportsBinding();
+	// eslint-disable-next-line wcpos/no-dollar-getter-into-observable-hooks -- Query binding exposes a stable stream property, not an RxDB $-getter; exception dated 2026-08-21.
+	const laneProgress = useObservableState(salesBinding.laneProgress$, null);
+	const waiting: 'store' | 'data' | 'orders' | 'templates' | 'no-template' | 'printer' | null =
+		!formats.store
+			? 'store'
+			: !ready
+				? 'data'
+				: laneProgress
+					? 'orders'
+					: !doc.templatesReady
+						? 'templates'
+						: doc.templates.length === 0
+							? 'no-template'
+							: doc.mismatchWarning
+								? 'printer'
+								: null;
+	const waitingLabels = {
+		store: 'reports.print_waiting_store',
+		data: 'reports.print_waiting_data',
+		orders: 'reports.print_waiting_orders',
+		templates: 'reports.print_waiting_templates',
+		'no-template': 'reports.print_no_local_template',
+		printer: 'reports.print_printer_mismatch',
+	} as const;
 	if (!detail) return null;
 	const content = (
 		<View
@@ -137,6 +199,15 @@ export function DetailPanel() {
 				<Text testID="detail-panel-scope" className="text-muted-foreground">
 					{t('reports.panel_scope', { period, register })}
 				</Text>
+				<View testID="detail-panel-template">
+					<TemplateSwitcher
+						templates={doc.templates}
+						selectedId={doc.selectedTemplateId}
+						onSelect={doc.setSelectedTemplateId}
+						isOffline={doc.isOffline}
+						alwaysVisible
+					/>
+				</View>
 			</View>
 			<View testID="detail-panel-body" className="min-h-0 flex-1 p-4">
 				{ready ? (
@@ -193,7 +264,37 @@ export function DetailPanel() {
 							{t('reports.export_csv')}
 						</Button>
 					)}
+					{waiting && (
+						<Text
+							testID="detail-panel-print-waiting"
+							className="text-muted-foreground min-w-0 flex-1 text-sm"
+						>
+							{t(waitingLabels[waiting])}
+						</Text>
+					)}
+					<Button
+						testID="detail-panel-print"
+						className="min-h-12"
+						disabled={!!waiting}
+						loading={doc.isPrinting}
+						onPress={async () => {
+							setPrintError('');
+							try {
+								const ok = await doc.print();
+								if (ok === false) setPrintError(t('reports.print_failed'));
+							} catch {
+								setPrintError(t('reports.print_failed'));
+							}
+						}}
+					>
+						{t('reports.print')}
+					</Button>
 				</View>
+				{!!(printError || doc.documentError) && (
+					<Text testID="detail-panel-print-error" className="text-destructive">
+						{printError || doc.documentError?.message}
+					</Text>
+				)}
 				{!!error && (
 					<Text testID="detail-panel-export-error" className="text-destructive">
 						{error}

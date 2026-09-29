@@ -1112,3 +1112,18 @@ it.each([undefined, false, true])(
 		expect(ReceiptDataSchema.parse(mapped).fiscal.is_refund_document).toBe(flag ?? true);
 	}
 );
+
+// Without the envelope pass-through, mapping treats a report as a sale and drops its table.
+it('a report envelope is preserved through the mapper', () => {
+	const data = {
+		report: {
+			title: 'Sales',
+			columns: [{ key: 'amount' }],
+			rows: [{ key: 'row-cash', cells: [{ key: 'amount', value: '10', formatted: '£10.00' }] }],
+		},
+		store: { name: 'Shop' },
+		fiscal: { document_type: 'report', is_report_document: true },
+	};
+	expect(mapReceiptData(data)).toMatchObject(data);
+	expect(mapReceiptData(data).order).toBeDefined();
+});

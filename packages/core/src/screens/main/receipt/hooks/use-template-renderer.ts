@@ -11,7 +11,7 @@ import { useLocale } from '../../../../hooks/use-locale';
 import { useStoreDay } from '../../../../hooks/use-store-day';
 import { formatClosureDate } from '../../../../services/register-session/closure-document';
 import { useRegister } from '../../../../services/register/use-register';
-import { useActiveTemplates } from './use-active-templates';
+import { useActiveTemplatesState } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
 import { buildReceiptData } from '../utils/build-receipt-data';
 import { useAppState } from '../../../../contexts/app-state';
@@ -75,6 +75,7 @@ interface TemplateRendererResult {
 	refetch: () => void;
 	serverReceiptData: Record<string, unknown> | null;
 	templates: TemplateDocument[];
+	templatesReady: boolean;
 	selectedTemplateId: string | number | null;
 	setSelectedTemplateId: (id: string | number) => void;
 	renderedHtml: string | null;
@@ -107,9 +108,18 @@ export function useTemplateRenderer({
 	storeId,
 	previewEnabled = true,
 }: UseTemplateRendererOptions): TemplateRendererResult {
-	const templates = useActiveTemplates(
+	const { templates: activeTemplates, synced } = useActiveTemplatesState(
 		templateType ?? (localReport ? 'report' : 'receipt'),
 		storeId
+	);
+	const localDocument = !!localReport && !orderId && !document;
+	const templates = React.useMemo(
+		() =>
+			localDocument
+				? // Only a template the local render path will accept (l.249, 271): capable and with content.
+					activeTemplates.filter((template) => !!template.offline_capable && !!template.content)
+				: activeTemplates,
+		[activeTemplates, localDocument]
 	);
 	const mode = document ? 'fiscal' : requestedMode;
 	const { store, site } = useAppState();
@@ -174,7 +184,7 @@ export function useTemplateRenderer({
 	const receiptData = React.useMemo(() => {
 		if (!isOffline && apiReceiptData)
 			return formatReport ? formatReport(apiReceiptData) : apiReceiptData;
-		if (document) return localReport ?? null;
+		if (document || localDocument) return localReport ?? null;
 		if (order && store) {
 			return buildReceiptData(order, store, dp, {
 				getStatusLabel,
@@ -187,6 +197,7 @@ export function useTemplateRenderer({
 	}, [
 		apiReceiptData,
 		localReport,
+		localDocument,
 		formatReport,
 		document,
 		isOffline,
@@ -383,6 +394,7 @@ export function useTemplateRenderer({
 		preparePrintContent,
 		serverReceiptData: isOffline ? null : apiReceiptData,
 		templates,
+		templatesReady: !localDocument || isOffline || synced,
 		selectedTemplateId,
 		setSelectedTemplateId,
 		renderedHtml,

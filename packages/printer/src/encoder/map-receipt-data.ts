@@ -988,6 +988,9 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	// Session reports are already formatted, orderless envelopes. Preserve them on every print pass.
 	if (data.closure && typeof data.closure === 'object') return { ...emptyReceiptData(), ...data };
 
+	// Tabular reports are already formatted, orderless envelopes; keep their columns and rows.
+	if (data.report && typeof data.report === 'object') return { ...emptyReceiptData(), ...data };
+
 	// Pass through data that already matches the canonical shape.
 	if (isCanonicalShape(data)) {
 		return normalizeCanonicalReceiptData(data as Partial<ReceiptData>);
