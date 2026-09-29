@@ -14,8 +14,16 @@ import {
 import { useObservableSuspense } from 'observable-hooks';
 
 import type { EngineRecord } from '@wcpos/query';
+import { useDocField } from '@wcpos/query';
 
-import { calendarDate, inZone, useStoreDay, zoneOptions } from '../../../hooks/use-store-day';
+import {
+	calendarDate,
+	inZone,
+	useStoreDay,
+	useViewedStore,
+	zoneOptions,
+} from '../../../hooks/use-store-day';
+import { calculateTotals } from './report/utils';
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 import { useQueryState } from '../../../query';
 
@@ -54,6 +62,8 @@ export interface ReportsData {
 	comparisonOrders: ReportOrder[];
 	wholeComparisonOrders: ReportOrder[];
 	live: boolean;
+	/** The selected orders aggregated once, at the viewed store's precision, for every reader. */
+	totals: ReturnType<typeof calculateTotals>;
 }
 
 export interface ReportsScope {
@@ -238,6 +248,13 @@ export function ReportsProvider({ binding, comparisonBinding, children }: Report
 		[unselectedRowIds]
 	);
 
+	// One aggregation for the hero, both print actions and both document renderers.
+	const { storeId } = useReportsPeriod();
+	const numDecimals = useDocField(useViewedStore(storeId), (value) => value.price_num_decimals);
+	const totals = React.useMemo(
+		() => calculateTotals({ orders: selectedOrders, num_decimals: numDecimals }),
+		[selectedOrders, numDecimals]
+	);
 	const dataValue = React.useMemo<ReportsData>(
 		() => ({
 			allOrders,
@@ -247,8 +264,9 @@ export function ReportsProvider({ binding, comparisonBinding, children }: Report
 			live,
 			comparisonOrders: [],
 			wholeComparisonOrders: [],
+			totals,
 		}),
-		[allOrders, selectedOrders, dateRange, comparisonRange, live]
+		[allOrders, selectedOrders, dateRange, comparisonRange, live, totals]
 	);
 
 	return (

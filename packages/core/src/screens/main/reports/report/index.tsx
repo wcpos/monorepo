@@ -61,7 +61,13 @@ export function Report({ nestedScrollEnabled = false }: { nestedScrollEnabled?: 
 				<CardFooter className="border-border bg-footer items-center justify-end gap-3 border-t p-2">
 					{waiting && (
 						<Text testID="reports-print-waiting" className="text-muted-foreground text-sm">
-							{t(waiting === 'store' ? 'reports.loading_store' : 'reports.loading_register_names')}
+							{t(
+								waiting === 'store'
+									? 'reports.loading_store'
+									: waiting === 'cashier'
+										? 'reports.loading_cashier'
+										: 'reports.loading_register_names'
+							)}
 						</Text>
 					)}
 					<Button

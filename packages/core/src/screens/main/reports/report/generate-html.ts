@@ -12,6 +12,8 @@ interface ReportData {
 	cashierName: string;
 	/** Empty for Everyone: the line then carries no id. */
 	cashierId: number | string;
+	/** Which statuses the totals include (the Orders chip's choice). */
+	statusScope: string;
 	totalOrders: number;
 	total: string;
 	totalTax: string;
@@ -46,6 +48,7 @@ interface ReportData {
 		reportPeriodStart: string;
 		reportPeriodEnd: string;
 		cashier: string;
+		orders: string;
 		salesSummary: string;
 		totalOrders: string;
 		totalNetSales: string;
@@ -128,6 +131,7 @@ export function generateZReportHTML(data: ReportData): string {
 		reportPeriod,
 		cashierName,
 		cashierId,
+		statusScope,
 		totalOrders,
 		total,
 		totalTax,
@@ -233,6 +237,7 @@ export function generateZReportHTML(data: ReportData): string {
 			<div>${t.reportPeriodStart}: ${reportPeriod.from}</div>
 			<div>${t.reportPeriodEnd}: ${reportPeriod.to}</div>
 			<div>${t.cashier}: ${cashierName}${cashierId === '' ? '' : ` (ID: ${cashierId})`}</div>
+			<div>${t.orders}: ${statusScope}</div>
 			<div class="br"></div>
 
 			<div class="line"></div>

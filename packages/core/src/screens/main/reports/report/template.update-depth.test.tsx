@@ -82,7 +82,10 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 jest.mock('../../hooks/use-number-format', () => ({
 	useNumberFormat: () => ({ format: String }),
 }));
-const REPORTS = { selectedOrders: [] };
+const REPORTS = {
+	selectedOrders: [],
+	totals: jest.requireMock('./utils').calculateTotals({ orders: [] }),
+};
 jest.mock('../context', () => ({
 	useReportsData: () => REPORTS,
 	useReportsScope: () => ({ cashierName: undefined }),

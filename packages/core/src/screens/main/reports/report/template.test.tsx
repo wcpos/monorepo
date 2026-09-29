@@ -79,9 +79,15 @@ jest.mock('../../hooks/use-customer-name-format', () => ({
 jest.mock('../../hooks/use-number-format', () => ({
 	useNumberFormat: () => ({ format: String }),
 }));
-const REPORTS = { selectedOrders: [] };
+// One data object, built on first use (after the register fixture below exists); its
+// registerArray is that fixture by reference, so the register-totals case can grow it.
+let mockReports: { selectedOrders: never[]; totals: unknown } | undefined;
 jest.mock('../context', () => ({
-	useReportsData: () => REPORTS,
+	useReportsData: () =>
+		(mockReports ??= {
+			selectedOrders: [],
+			totals: jest.requireMock('./utils').calculateTotals({ orders: [] }),
+		}),
 	useReportsScope: () => ({ cashierName: undefined }),
 }));
 

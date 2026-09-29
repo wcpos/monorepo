@@ -99,7 +99,10 @@ jest.mock('../../hooks/use-print', () => ({
 	usePrint: () => ({ print: jest.fn(), isPrinting: false }),
 }));
 jest.mock('../context', () => ({
-	useReportsData: () => ({ selectedOrders: [] }),
+	useReportsData: () => ({
+		selectedOrders: [],
+		totals: jest.requireMock('./utils').calculateTotals({ orders: [] }),
+	}),
 	useReportsPeriod: () => ({ storeId: undefined }),
 	useReportsScope: () => ({ cashierName: undefined }),
 }));

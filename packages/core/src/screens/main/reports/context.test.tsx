@@ -19,6 +19,13 @@ import {
 import { QueryStateProvider, useQueryStateActions } from '../../../query';
 
 let mockZone = 'UTC';
+// The provider reads the viewed store's precision through useDocField; the app-state mock's
+// store is a plain object, so the field is read directly.
+jest.mock('@wcpos/query', () => ({
+	...jest.requireActual('@wcpos/query'),
+	useDocField: (doc: Record<string, unknown> | undefined, pick: (row: never) => unknown) =>
+		doc ? pick(doc as never) : undefined,
+}));
 jest.mock('../../../contexts/app-state', () => ({
 	useAppState: () => ({ site: { timezone_string: mockZone, gmt_offset: '0' }, store: {} }),
 }));

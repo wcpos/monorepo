@@ -18,8 +18,9 @@ export function useReportCashier() {
 	const value = useQueryState<'orders'>().filters.cashier;
 	const { site } = useStoreSession();
 	const source = React.useMemo(() => site.populate$('wp_credentials'), [site]);
-	const cashiers = useObservableState(source, []) as WPCredentialsDocument[];
-	if (value === undefined) return { name: t('reports.everyone'), id: '' as const };
-	const match = cashiers.find((row) => String(row.id) === String(value));
-	return { name: match?.display_name ?? String(value), id: String(value) };
+	// Undefined until the directory has emitted: a name cannot be resolved before then.
+	const cashiers = useObservableState(source) as WPCredentialsDocument[] | undefined;
+	if (value === undefined) return { name: t('reports.everyone'), id: '' as const, ready: true };
+	const match = cashiers?.find((row) => String(row.id) === String(value));
+	return { name: match?.display_name ?? String(value), id: String(value), ready: !!cashiers };
 }

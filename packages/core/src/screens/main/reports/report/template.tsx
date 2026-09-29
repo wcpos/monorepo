@@ -6,7 +6,6 @@ import { useFocusEffect } from 'expo-router';
 import { Br, Line, Row, Text } from '@wcpos/components/print';
 import { useDocField } from '@wcpos/query';
 
-import { calculateTotals } from './utils';
 import { useRegisterNames } from '../../../../services/register/use-register-names';
 import { useStoreSession } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -14,7 +13,7 @@ import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use
 import { inZone, useStoreDay, useViewedStore } from '../../../../hooks/use-store-day';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
-import { useReportsData } from '../context';
+import { useReportsData, useReportsScope } from '../context';
 import { useReportCashier } from './use-report-cashier';
 import { useQueryState } from '../../../../query';
 
@@ -27,11 +26,11 @@ export function ZReport({ storeId }: { storeId?: number } = {}) {
 	const registerNames = useRegisterNames(storeId);
 	const { store } = useStoreSession();
 	const cashier = useReportCashier();
+	const { statusMode } = useReportsScope();
 	const viewed = useDocField(useViewedStore(storeId), (value) => value);
 	const sessionName = useDocField(store, (value) => value.name);
 	const storeName = (viewed?.name ?? sessionName) as string;
-	const num_decimals = viewed?.price_num_decimals as number;
-	const { selectedOrders } = useReportsData();
+	const { selectedOrders, totals } = useReportsData();
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
 	);
@@ -47,7 +46,7 @@ export function ZReport({ storeId }: { storeId?: number } = {}) {
 		totalItemsSold,
 		shippingTotalsArray,
 		averageOrderValue,
-	} = calculateTotals({ orders: selectedOrders, num_decimals });
+	} = totals;
 
 	const options = {
 		decimalScale: viewed?.price_num_decimals,
@@ -117,6 +116,7 @@ export function ZReport({ storeId }: { storeId?: number } = {}) {
 			<Text>{`${t('reports.report_period_start')}: ${reportPeriod.from}`}</Text>
 			<Text>{`${t('reports.report_period_end')}: ${reportPeriod.to}`}</Text>
 			<Text>{`${t('common.cashier')}: ${cashier.name}${cashier.id === '' ? '' : ` (ID: ${cashier.id})`}`}</Text>
+			<Text testID="report-status-scope">{`${t('common.orders')}: ${t(statusMode === 'all' ? 'reports.every_status' : 'reports.completed_processing')}`}</Text>
 			<Br />
 
 			<Line />

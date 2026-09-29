@@ -285,7 +285,13 @@ function HeroPrint({ storeId }: { storeId?: number }) {
 		<>
 			{waiting && (
 				<Text testID="hero-print-waiting" className="text-muted-foreground text-sm">
-					{t(waiting === 'store' ? 'reports.loading_store' : 'reports.loading_register_names')}
+					{t(
+						waiting === 'store'
+							? 'reports.loading_store'
+							: waiting === 'cashier'
+								? 'reports.loading_cashier'
+								: 'reports.loading_register_names'
+					)}
 				</Text>
 			)}
 			<IconButton
@@ -331,11 +337,7 @@ export function Hero({ title }: { title: React.ReactNode }) {
 		fixedDecimalScale: true,
 	});
 	const { formatDate } = useLocalDate();
-	const { selectedOrders } = useReportsData();
-	const totals = calculateTotals({
-		orders: selectedOrders,
-		num_decimals: store?.price_num_decimals,
-	});
+	const { selectedOrders, totals } = useReportsData();
 	const weekday = formatDate(inZone(timezone, dateRange.start), 'EEEE');
 	const comparisons = [
 		{ value: 'yesterday', label: t('reports.vs_yesterday') },
@@ -410,6 +412,9 @@ export function Hero({ title }: { title: React.ReactNode }) {
 			},
 		],
 	};
+	// Another store's figures wait for its document: money in the till's currency and precision
+	// would be wrong money.
+	if (!store) return <HeroShell title={title} />;
 	return (
 		<View testID="reports-hero" className="bg-card gap-5 rounded-md border p-5">
 			<View testID="hero-title" className="flex-row items-center justify-between gap-2">

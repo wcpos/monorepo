@@ -2285,5 +2285,6 @@
 	"reports.comparison_downloading": "Comparison: downloading {downloaded} of {total} orders",
 	"reports.comparison_downloading_unknown_total": "Comparison: {downloaded} orders downloaded so far",
 	"reports.loading_store": "Loading the store…",
-	"reports.loading_register_names": "Loading register names…"
+	"reports.loading_register_names": "Loading register names…",
+	"reports.loading_cashier": "Loading the cashier…"
 }

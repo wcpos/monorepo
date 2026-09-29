@@ -16,14 +16,16 @@ import { ReportsSyncProgress } from './sync-progress';
 /**
  *
  */
-// Below this height (a phone in landscape, a squeezed desktop window) the hero alone would take
-// the page, so the page scrolls and the panes keep a fixed height, as on a phone.
-const SHORT_VIEWPORT_HEIGHT = 640;
+// The Sales workspace (what is left under the bar and the till strip) needs about this much for
+// the hero and a usable orders/summary group; below it (a phone in landscape, a squeezed desktop
+// window) the page scrolls and the panes keep a fixed height, as on a phone.
+const MIN_FIXED_WORKSPACE_HEIGHT = 720;
 
 export function Reports({ title }: { title: React.ReactNode }) {
 	const { screenSize } = useTheme();
 	const { bottom } = useSafeAreaInsets();
-	const short = useWindowDimensions().height < SHORT_VIEWPORT_HEIGHT;
+	const [workspaceHeight, setWorkspaceHeight] = React.useState<number | null>(null);
+	const short = workspaceHeight !== null && workspaceHeight < MIN_FIXED_WORKSPACE_HEIGHT;
 
 	/**
 	 *
@@ -33,6 +35,7 @@ export function Reports({ title }: { title: React.ReactNode }) {
 			testID="screen-reports"
 			className="h-full"
 			style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}
+			onLayout={(event) => setWorkspaceHeight(event.nativeEvent.layout.height)}
 		>
 			<ErrorBoundary>
 				<ReportsSyncProgress />

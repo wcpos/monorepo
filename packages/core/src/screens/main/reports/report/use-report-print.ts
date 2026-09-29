@@ -5,7 +5,6 @@ import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { useDocField } from '@wcpos/query';
 
 import { generateZReportHTML } from './generate-html';
-import { calculateTotals } from './utils';
 import {
 	useRegisterNames,
 	useRegisterNamesReady,
@@ -17,7 +16,7 @@ import { inZone, useStoreDay, useViewedStore } from '../../../../hooks/use-store
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
 import { usePrint } from '../../hooks/use-print';
-import { useReportsData } from '../context';
+import { useReportsData, useReportsScope } from '../context';
 import { useReportCashier } from './use-report-cashier';
 import { useQueryState } from '../../../../query';
 
@@ -30,11 +29,15 @@ export function useReportPrint(storeId?: number) {
 	const contentRef = React.useRef<ViewInstance>(null);
 	const { store } = useStoreSession();
 	const cashier = useReportCashier();
+	// The printed header says which statuses the totals include.
+	const { statusMode } = useReportsScope();
+	const statusScope = t(
+		statusMode === 'all' ? 'reports.every_status' : 'reports.completed_processing'
+	);
 	const viewed = useDocField(useViewedStore(storeId), (value) => value);
 	const sessionName = useDocField(store, (value) => value.name);
 	const storeName = (viewed?.name ?? sessionName) as string;
-	const num_decimals = viewed?.price_num_decimals as number;
-	const { selectedOrders } = useReportsData();
+	const { selectedOrders, totals } = useReportsData();
 	const selectedDateRange = useQueryState<'orders', { from: string; to: string } | undefined>(
 		(state) => state.filters.dateRange
 	);
@@ -69,19 +72,21 @@ export function useReportPrint(storeId?: number) {
 		totalItemsSold,
 		shippingTotalsArray,
 		averageOrderValue,
-	} = calculateTotals({ orders: selectedOrders, num_decimals });
+	} = totals;
 	// Printing waits for the viewed store's document (a report on another store must not print
 	// under the till's name) and for the store's register list only while it can still arrive
 	// (online, not yet read, not failed) and the document will print a by-register section
 	// (two or more registers) with a name it has not resolved. Otherwise it prints.
-	const waiting: 'store' | 'registers' | null = !viewed
+	const waiting: 'store' | 'cashier' | 'registers' | null = !viewed
 		? 'store'
-		: namesLoaded ||
-			  !online ||
-			  registerArray.length < 2 ||
-			  registerArray.every(({ registerId }) => !!registerNames[registerId])
-			? null
-			: 'registers';
+		: !cashier.ready
+			? 'cashier'
+			: namesLoaded ||
+				  !online ||
+				  registerArray.length < 2 ||
+				  registerArray.every(({ registerId }) => !!registerNames[registerId])
+				? null
+				: 'registers';
 	const ready = waiting === null;
 
 	const reportPeriod = React.useMemo(() => {
@@ -118,6 +123,7 @@ export function useReportPrint(storeId?: number) {
 			reportPeriod,
 			cashierName: cashier.name,
 			cashierId: cashier.id,
+			statusScope,
 			totalOrders: selectedOrders?.length || 0,
 			total: formatCurrency(total),
 			totalTax: formatCurrency(totalTax),
@@ -153,6 +159,7 @@ export function useReportPrint(storeId?: number) {
 				reportPeriodStart: t('reports.report_period_start'),
 				reportPeriodEnd: t('reports.report_period_end'),
 				cashier: t('common.cashier'),
+				orders: t('common.orders'),
 				salesSummary: t('reports.sales_summary'),
 				totalOrders: t('reports.total_orders'),
 				totalNetSales: t('reports.total_net_sales'),
@@ -182,6 +189,7 @@ export function useReportPrint(storeId?: number) {
 		reportPeriod,
 		cashier.name,
 		cashier.id,
+		statusScope,
 		selectedOrders?.length,
 		formatCurrency,
 		total,
