@@ -248,7 +248,7 @@ it('counts only the refunds attributed to cash in the drawer terms', () => {
 	const refundRecords = [
 		{ id: 1, amount: '5.0000', meta_data: [stamp] },
 		{ id: 2, amount: '7.0000', meta_data: [stamp] },
-	] as unknown as Parameters<typeof deriveDrawerTerms>[0]['refundRecords'];
+	] as unknown as Parameters<typeof attributeRefunds>[2];
 	const ledgerRowsBySession = [
 		{
 			session_id: 'S',
@@ -271,4 +271,41 @@ it('counts only the refunds attributed to cash in the drawer terms', () => {
 	];
 	const terms = deriveDrawerTerms({ session, movements: [], ledgerRowsBySession, refundRecords });
 	expect(terms.cashRefunds).toEqual({ amount: '5.0000', count: 1 });
+});
+
+it('counts a refund split across cash and card once per method', () => {
+	const session = { id: 'S', counted_float: '100.0000' };
+	const stamp = { key: '_wcpos_session', value: 'S' };
+	const refundRecords = [{ id: 9, amount: '12.0000', meta_data: [stamp] }] as unknown as Parameters<
+		typeof deriveDrawerTerms
+	>[0]['refundRecords'];
+	const ledgerRowsBySession = [
+		{
+			session_id: 'S',
+			kind: 'card',
+			method_id: 'stripe',
+			status: 'captured',
+			amount: '30.0000',
+			refunded_amount: '7.0000',
+			refunds: [{ id: 9, amount: '7.0000', status: 'succeeded' }],
+		},
+		{
+			session_id: 'S',
+			kind: 'cash',
+			method_id: 'cash',
+			status: 'captured',
+			amount: '20.0000',
+			refunded_amount: '5.0000',
+			refunds: [{ id: 9, amount: '5.0000', status: 'succeeded' }],
+		},
+	];
+	const refunds = attributeRefunds('S', ledgerRowsBySession, refundRecords!);
+	expect(refunds.count).toBe(1);
+	expect(refunds.countByMethod).toEqual({ stripe: 1, cash: 1 });
+	expect(
+		deriveDrawerTerms({ session, movements: [], ledgerRowsBySession, refundRecords }).cashRefunds
+	).toEqual({
+		amount: '5.0000',
+		count: 1,
+	});
 });

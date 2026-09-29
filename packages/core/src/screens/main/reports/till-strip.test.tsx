@@ -297,6 +297,8 @@ it('forgets the lookup while the till is open here and reads afresh once it clos
 	rerender(<TillStrip onOpenClosures={jest.fn()} />);
 	expect(screen.getByTestId('till-xreport')).toBeTruthy();
 	data.session = null;
+	// Closing here wrote a new local closure.
+	data.lastClosure = { ...data.lastClosure, id: 'A2', number: 412, server_number: 413 };
 	rerender(<TillStrip onOpenClosures={jest.fn()} />);
 	await waitFor(() =>
 		expect(get.mock.calls.filter(([path]) => path === 'closures/last').length).toBe(reads + 1)
@@ -332,4 +334,21 @@ it('resolves to the last closure when the listed session closed during the looku
 	);
 	expect(screen.getByTestId('till-status').textContent).toContain('Closed');
 	expect(screen.queryByTestId('till-xreport')).toBeNull();
+});
+// Ledger closures 23: the lookup follows the register it is asked about, never a previous one.
+it('reads afresh when the bound register changes while closed', async () => {
+	data.session = null;
+	online = true;
+	const { rerender } = render(<TillStrip onOpenClosures={jest.fn()} />);
+	await waitFor(() => expect(get).toHaveBeenCalledWith('closures/last', expect.anything()));
+	const reads = get.mock.calls.filter(([path]) => path === 'closures/last').length;
+	data.binding = { registerId: 'r2', registerName: 'Back till' };
+	rerender(<TillStrip onOpenClosures={jest.fn()} />);
+	await waitFor(() =>
+		expect(get.mock.calls.filter(([path]) => path === 'closures/last').length).toBe(reads + 1)
+	);
+	expect(get).toHaveBeenLastCalledWith(
+		'closures/last',
+		expect.objectContaining({ params: expect.objectContaining({ register_id: 'r2' }) })
+	);
 });

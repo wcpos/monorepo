@@ -9,6 +9,7 @@ import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import type { WPCredentialsDocument } from '@wcpos/database';
+import { fromMinor, toMinor } from '@wcpos/order-math';
 import { useDocField } from '@wcpos/query';
 
 import { useStoreSession } from '../../../contexts/app-state';
@@ -35,7 +36,10 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 	const active = bound && (session?.status === 'open' || session?.status === 'counting');
 	const remote = useLastClosure(
 		bound && !active ? { id: binding.registerId!, name: binding.registerName ?? '' } : undefined,
-		store.id
+		store.id,
+		undefined,
+		// A new local closure means the till closed here since the last read: read afresh.
+		lastClosure?.id ?? ''
 	);
 	const authoritative = remote.online && remote.data.status === 'ready';
 	// The server closure in the local row shape (GMT stamps, absent maps, flattened labels), or nothing usable.
@@ -46,10 +50,9 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 	const remoteSession = !active && authoritative ? remote.data.session : null;
 	const open = active || !!remoteSession;
 	const liveSession = active ? session : remoteSession;
+	// Open here or elsewhere, the last closure line is this device's own record of it.
 	const closure = open
-		? active
-			? lastClosure
-			: null
+		? lastClosure
 		: authoritative
 			? remoteClosure
 			: (lastClosure ?? remoteClosure);
@@ -117,14 +120,29 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 					`${t('reports.cash_sales')} · ${terms.cashSales.count}`,
 					money(terms.cashSales.amount),
 				]);
-			terms.paidIn.forEach((row, index) =>
+			// Up to two paid-ins keep their notes; more fold into one term with a count, so a busy
+			// day never pushes the actions off a phone.
+			if (terms.paidIn.length > 2)
 				rows.push([
-					`till-term-paid-in-${index}`,
+					'till-term-paid-in',
 					'+',
-					[t('register.paid_in'), row.note].filter(Boolean).join(' · '),
-					money(row.amount),
-				])
-			);
+					`${t('register.paid_in')} · ${terms.paidIn.length}`,
+					money(
+						fromMinor(
+							terms.paidIn.reduce((sum, row) => sum + toMinor(row.amount, 4), 0),
+							4
+						)
+					),
+				]);
+			else
+				terms.paidIn.forEach((row, index) =>
+					rows.push([
+						`till-term-paid-in-${index}`,
+						'+',
+						[t('register.paid_in'), row.note].filter(Boolean).join(' · '),
+						money(row.amount),
+					])
+				);
 			if (terms.paidOut.count)
 				rows.push([
 					'till-term-paid-out',
@@ -253,7 +271,7 @@ export function TillStrip({ onOpenClosures }: { onOpenClosures: () => void }) {
 				className={phone ? 'gap-1' : 'flex-row flex-wrap items-center justify-center gap-2'}
 			>
 				{rows.map(([id, sign, label, amount]) => {
-					const primary = active && sign === '=';
+					const primary = open && sign === '=';
 					const color = primary
 						? 'text-primary-foreground'
 						: id === 'till-result'

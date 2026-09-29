@@ -41,9 +41,13 @@ export function attributeRefunds(
 	const debit = (method: string, amount: number) => {
 		byMethod[method] = (byMethod[method] ?? 0) + amount;
 	};
+	// A refund split across tenders is one refund overall but one per method it touched.
+	const seenByMethod: Record<string, Set<number | string>> = {};
 	const counted = (method: string, id: number | string) => {
-		if (ids.has(id)) return;
 		ids.add(id);
+		const seen = (seenByMethod[method] ??= new Set());
+		if (seen.has(id)) return;
+		seen.add(id);
 		countByMethod[method] = (countByMethod[method] ?? 0) + 1;
 	};
 	for (const [index, row] of ledgerRows.entries()) {
