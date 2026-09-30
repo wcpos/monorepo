@@ -6,6 +6,8 @@ import {
 	findExpoMisalignments,
 	formatMisalignments,
 	satisfies,
+	SDK_VERSIONED_UNLISTED,
+	withUnlistedSdkPackages,
 } from './check-expo-alignment.mjs';
 
 test('satisfies handles exact versions', () => {
@@ -93,6 +95,36 @@ test('findExpoMisalignments accepts in-range tilde resolutions', () => {
 		misalignments.some(({ name }) => name === 'expo-image'),
 		false
 	);
+});
+
+// expo-blob is not in bundledNativeModules.json; a 57.x left behind by an SDK
+// 58 bump crashes Android at module init, so it is held to the SDK major.
+test('withUnlistedSdkPackages pins the unlisted SDK packages to the installed SDK major', () => {
+	assert.deepEqual(SDK_VERSIONED_UNLISTED, ['expo-blob']);
+	const extended = withUnlistedSdkPackages({ expo: '~58.0.0' }, '58.0.0-preview.8');
+	assert.equal(extended['expo-blob'], '^58.0.0');
+	assert.equal(extended.expo, '~58.0.0');
+	// Expo's own entry wins the day it appears in the list.
+	assert.equal(withUnlistedSdkPackages({ 'expo-blob': '~58.0.2' }, '58.0.1')['expo-blob'], '~58.0.2');
+	assert.deepEqual(withUnlistedSdkPackages({}, 'not-a-version'), {});
+});
+
+test('a previous-SDK expo-blob is flagged; the current SDK line is accepted', () => {
+	const extended = withUnlistedSdkPackages({}, '58.0.0-preview.8');
+	const stale = findExpoMisalignments(
+		{ 'apps/main': { 'expo-blob': { specifier: '~57.0.1', version: '57.0.1' } } },
+		extended,
+		new Map()
+	);
+	assert.equal(stale.length, 1);
+	assert.equal(stale[0].name, 'expo-blob');
+	assert.equal(stale[0].prescribed, '^58.0.0');
+	const current = findExpoMisalignments(
+		{ 'apps/main': { 'expo-blob': { specifier: '~58.0.2', version: '58.0.2' } } },
+		extended,
+		new Map()
+	);
+	assert.deepEqual(current, []);
 });
 
 test('findExpoMisalignments respects the allowlist', () => {

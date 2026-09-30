@@ -1,0 +1,30 @@
+diff --git a/expo-module.config.json b/expo-module.config.json
+index 0e7867e38ffae615d870bdb050490c404cd3dc0f..9a332cc40fba4238e6e12e7d0245a270554a7f99 100644
+--- a/expo-module.config.json
++++ b/expo-module.config.json
+@@ -1,14 +1,17 @@
+ {
+-  "platforms": ["apple", "android", "web"],
++  "platforms": [
++    "apple",
++    "android",
++    "web"
++  ],
+   "apple": {
+-    "modules": ["ExpoBlob"]
++    "modules": [
++      "ExpoBlob"
++    ]
+   },
+   "android": {
+-    "modules": ["expo.modules.blob.BlobModule"],
+-    "publication": {
+-      "groupId": "host.exp.exponent",
+-      "artifactId": "expo.modules.blob",
+-      "repository": "local-maven-repo"
+-    }
++    "modules": [
++      "expo.modules.blob.BlobModule"
++    ]
+   }
+ }
