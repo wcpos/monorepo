@@ -24,7 +24,8 @@ import { CustomerRow as CoarseRow } from './row';
 import { DateCell } from './cells/date';
 import { ManagementBar } from '../components/management-bar';
 import { useT } from '../../../contexts/translations';
-import { useProAccess } from '../contexts/pro-access';
+import { useAppInfo } from '../../../hooks/use-app-info';
+import { withProAccess } from '../components/pro-guard';
 import { CapabilityTooltipTrigger } from '../components/capability-tooltip';
 import { DataTable } from '../components/data-table/v2';
 import { DataTableSkeleton } from '../components/data-table/v2/skeleton';
@@ -161,13 +162,32 @@ function CustomersList({
 	);
 }
 
-function CustomersScreenContent() {
+/** The list: the part of the page the Free preview overlay covers. */
+function CustomersBody() {
 	const state = useQueryState<'customers'>();
 	const binding = useCollectionBinding('customers', state);
+	return (
+		<View testID="customers-body" className="flex-1">
+			<ErrorBoundary>
+				<Suspense fallback={<DataTableSkeleton id="customers" />}>
+					<CustomersList binding={binding} />
+				</Suspense>
+			</ErrorBoundary>
+		</View>
+	);
+}
+
+// The guard wraps the body only: on Free the preview overlay must leave the bar's menu, bell
+// and cashier reachable, or a Free user below lg has no way off this page (Orders, Codex review).
+const GuardedCustomersBody = withProAccess(CustomersBody, 'customers');
+
+function CustomersScreenContent() {
 	const t = useT();
 	const router = useRouter();
 	const { bottom } = useSafeAreaInsets();
-	const { readOnly } = useProAccess();
+	// The bar sits outside the guard, so it reads the licence itself.
+	const { license } = useAppInfo();
+	const readOnly = !(license?.isPro ?? false);
 	const { caps } = useUserCapabilities();
 	return (
 		<View
@@ -208,11 +228,7 @@ function CustomersScreenContent() {
 				<DisplayOptions />
 			</ManagementBar>
 
-			<ErrorBoundary>
-				<Suspense fallback={<DataTableSkeleton id="customers" />}>
-					<CustomersList binding={binding} />
-				</Suspense>
-			</ErrorBoundary>
+			<GuardedCustomersBody />
 		</View>
 	);
 }
