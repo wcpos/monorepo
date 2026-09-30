@@ -1560,7 +1560,10 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	assert.ok(setup, 'deploy.yml lost the e2e-setup job');
 	assert.equal(setup.strategy, undefined, 'e2e-setup must run once, not as a matrix');
 	assert.ok([jobs.e2e.needs].flat().includes('e2e-setup'), 'e2e no longer waits for e2e-setup');
+	assert.ok(jobs.e2e.if.slice(4, -3).startsWith("!cancelled() && needs.changes.result == 'success' && needs.deploy.result == 'success' && "));
 	const run = setup.steps.find(({ id }) => id === 'setup');
+	assert.equal(run['timeout-minutes'], 20);
+	assert.ok(run['timeout-minutes'] < setup['timeout-minutes']);
 	assert.match(run.env.E2E_SHARED_SETUP_SHARDS, /only_specs != ''.*'1' \|\| '6'/);
 
 	// ONLY ciphertext may leave a runner: no cache or artifact step names the plaintext.
@@ -1572,6 +1575,7 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 		'a cache or artifact step points at the PLAINTEXT auth state — credentials would leave the runner'
 	);
 	const upload = setup.steps.find(({ uses }) => uses?.startsWith('actions/upload-artifact@'));
+	assert.equal(upload['continue-on-error'], true);
 	assert.equal(upload.with.path, 'apps/main/e2e/auth-state.enc');
 	const encrypt = setup.steps.find(({ name }) => /Encrypt the shared auth state/.test(name ?? ''));
 	assert.match(encrypt.run, /openssl enc -aes-256-cbc -pbkdf2 -k "\$E2E_AUTH_CACHE_KEY"/);
@@ -1582,7 +1586,7 @@ test('one e2e-setup job logs in for the whole run and hands shards only cipherte
 	// Without the key (forks) nothing logs in here and the shards set up alone.
 	assert.equal(run.if, "steps.key.outputs.present == 'true'");
 	assert.equal(upload.if, "steps.setup.outcome == 'success'");
-	assert.match(setup.outputs.state, /steps\.upload\.outcome == 'success' && 'ready'/);
+	assert.equal(setup.outputs.state, "${{ steps.upload.outcome == 'success' && 'ready' || '' }}");
 	const shardSteps = jobs.e2e.steps.filter(({ name }) => /shared auth state/.test(name ?? ''));
 	assert.equal(shardSteps.length, 2);
 	for (const step of shardSteps) {
