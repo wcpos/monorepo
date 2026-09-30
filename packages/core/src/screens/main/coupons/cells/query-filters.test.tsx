@@ -78,3 +78,5 @@ describe('coupon filter cells', () => {
 		);
 	});
 });
+
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));

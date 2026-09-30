@@ -11,6 +11,7 @@ import { QueryStateProvider, useQueryState } from '../../../../query';
 import { DateRangePill } from './date-range-pill';
 import { DiscountTypePill } from './discount-type-pill';
 import { StatusPill } from './status-pill';
+import { FilterBar } from './index';
 
 import type { FiltersOf } from '../../../../query';
 
@@ -19,15 +20,8 @@ let mockSelectedOption = { value: 'publish', label: 'coupons.publish' };
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => ({ site: { timezone_string: 'UTC', gmt_offset: '0' }, store: {} }),
 }));
-jest.mock('@wcpos/components/button', () => ({
-	ButtonPill: ({ children, onRemove }: { children: React.ReactNode; onRemove?: () => void }) => (
-		<div>
-			{children}
-			<button data-testid="clear-filter" onClick={onRemove} />
-		</div>
-	),
-	ButtonText: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-}));
+jest.mock('expo-haptics', () => ({}));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('@wcpos/components/select', () => ({
 	Select: ({
 		children,
@@ -105,7 +99,9 @@ describe('coupon filter pills', () => {
 		fireEvent.click(screen.getByTestId('select-filter'));
 		expect(filters()).toEqual({ status: 'publish' });
 
-		fireEvent.click(screen.getByTestId('clear-filter'));
+		expect(screen.getByTestId('filter-pill-remove-status')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('filter-pill-remove-status'));
+		expect(screen.queryByTestId('filter-pill-remove-status')).toBeNull();
 		expect(filters()).toEqual({});
 	});
 
@@ -117,7 +113,9 @@ describe('coupon filter pills', () => {
 		fireEvent.click(screen.getByTestId('select-filter'));
 		expect(filters()).toEqual({ discount_type: 'fixed_cart' });
 
-		fireEvent.click(screen.getByTestId('clear-filter'));
+		expect(screen.getByTestId('filter-pill-remove-discount_type')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('filter-pill-remove-discount_type'));
+		expect(screen.queryByTestId('filter-pill-remove-discount_type')).toBeNull();
 		expect(filters()).toEqual({});
 	});
 
@@ -133,7 +131,42 @@ describe('coupon filter pills', () => {
 			},
 		});
 
-		fireEvent.click(screen.getByTestId('clear-filter'));
+		expect(screen.getByTestId('filter-pill-remove-date_expires_gmt')).toBeTruthy();
+		fireEvent.click(screen.getByTestId('filter-pill-remove-date_expires_gmt'));
+		expect(screen.queryByTestId('filter-pill-remove-date_expires_gmt')).toBeNull();
 		expect(filters()).toEqual({});
 	});
+});
+
+it('shows Clear all only for multiple groups and resets them', () => {
+	renderPill(<FilterBar />);
+	expect(screen.queryByTestId('coupons-filter-clear-all')).toBeNull();
+	mockSelectedOption = { value: 'draft', label: 'coupons.draft' };
+	fireEvent.click(screen.getAllByTestId('select-filter')[0]);
+	expect(screen.queryByTestId('coupons-filter-clear-all')).toBeNull();
+	mockSelectedOption = { value: 'percent', label: 'coupons.percent' };
+	fireEvent.click(screen.getAllByTestId('select-filter')[1]);
+	fireEvent.click(screen.getByTestId('coupons-filter-clear-all'));
+	expect(filters()).toEqual({});
+});
+
+jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
+jest.mock('@wcpos/components/loader', () => ({ Loader: () => null }));
+
+const mockChipProps = jest.fn();
+jest.mock('@wcpos/components/chip', () => {
+	const { Chip } = jest.requireActual('@wcpos/components/chip');
+	return {
+		Chip: (props: React.ComponentProps<typeof Chip>) => {
+			mockChipProps(props);
+			return <Chip {...props} />;
+		},
+	};
+});
+it('switches Chip on with a selected status', () => {
+	renderPill(<StatusPill />);
+	expect(mockChipProps).toHaveBeenLastCalledWith(expect.objectContaining({ on: false }));
+	mockSelectedOption = { value: 'publish', label: 'coupons.publish' };
+	fireEvent.click(screen.getByTestId('select-filter'));
+	expect(mockChipProps).toHaveBeenLastCalledWith(expect.objectContaining({ on: true }));
 });

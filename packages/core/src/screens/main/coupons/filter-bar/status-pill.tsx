@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Chip } from '@wcpos/components/chip';
 import {
 	Select,
 	SelectContent,
@@ -35,19 +35,23 @@ export function StatusPill() {
 	return (
 		<Select value={value} onValueChange={(option) => option && setFilter('status', option.value)}>
 			<SelectPrimitiveTrigger asChild>
-				<ButtonPill
-					size="xs"
-					leftIcon="circleInfo"
-					variant={isActive ? undefined : 'muted'}
-					removable={isActive}
-					onRemove={() => clearFilter('status')}
-				>
-					<ButtonText>{value?.label || t('common.status')}</ButtonText>
-				</ButtonPill>
+				<Chip
+					testID="filter-pill-status"
+					clearTestID="filter-pill-remove-status"
+					icon="circleInfo"
+					label={value?.label || t('common.status')}
+					on={isActive}
+					onClear={isActive ? () => clearFilter('status') : undefined}
+				/>
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				{items.map((item) => (
-					<SelectItem key={item.value} label={item.label} value={item.value} />
+					<SelectItem
+						testID={`coupon-filter-status-${item.value}`}
+						key={item.value}
+						label={item.label}
+						value={item.value}
+					/>
 				))}
 			</SelectContent>
 		</Select>
