@@ -24,6 +24,7 @@ import {
 	ClearLocalDataBlockedScreen,
 	useClearLocalDataOnStartup,
 } from '../components/clear-local-data-on-startup';
+import { DesktopWindowChrome } from '../components/desktop-window-chrome';
 import { LiveTabGate } from '../components/live-tab-gate';
 import { RootError } from '../components/root-error';
 // Configures EAS Observe at import, before any screen mounts (see lib/observe.ts).
@@ -174,22 +175,25 @@ function MerchantRootLayout() {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<SafeAreaProvider style={{ overflow: 'hidden' }}>
-				<GestureHandlerRootView style={{ flex: 1 }}>
-					<KeyboardProvider>
-						<HydrationProviders>
-							{/* Inside the hydration sandwich (it reads the store's Scale
-							    override) and around the toaster, so every PortalHost —
-							    the app's, the (auth) one and the named `pos` host — sits
-							    inside the scale scope. */}
-							<ScaleProvider>
-								<RootStack />
-								<ErrorBoundary>
-									<ThemedToaster />
-								</ErrorBoundary>
-							</ScaleProvider>
-						</HydrationProviders>
-					</KeyboardProvider>
-				</GestureHandlerRootView>
+				{/* Desktop only: reserves the frameless window's title-bar strip as top inset. */}
+				<DesktopWindowChrome>
+					<GestureHandlerRootView style={{ flex: 1 }}>
+						<KeyboardProvider>
+							<HydrationProviders>
+								{/* Inside the hydration sandwich (it reads the store's Scale
+								    override) and around the toaster, so every PortalHost —
+								    the app's, the (auth) one and the named `pos` host — sits
+								    inside the scale scope. */}
+								<ScaleProvider>
+									<RootStack />
+									<ErrorBoundary>
+										<ThemedToaster />
+									</ErrorBoundary>
+								</ScaleProvider>
+							</HydrationProviders>
+						</KeyboardProvider>
+					</GestureHandlerRootView>
+				</DesktopWindowChrome>
 			</SafeAreaProvider>
 		</ErrorBoundary>
 	);
