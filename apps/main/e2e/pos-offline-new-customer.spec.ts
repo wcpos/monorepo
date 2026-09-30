@@ -13,6 +13,10 @@
  * in cash and asserts both the ordering (an order push carrying the id was
  * accepted before the payment POST went out) and the paid server order.
  *
+ * The second case is the gateway pay page with the ack landing AFTER that
+ * push: the stamp is still held when the store takes payment, and adopting the
+ * paid order retires it unsent. The kept link must stamp the paid order again.
+ *
  * Store-agnostic per CLAUDE.md: the order is built through the POS UI from
  * this run's private probe product, the customer is minted with a probe token,
  * the cash method comes from the store's own payments descriptor, and the
@@ -40,8 +44,12 @@ import {
 	expectOrderPaid,
 	liveOrderTest as liveTest,
 	newRunLabel,
+	openCheckout as openPayPageCheckout,
+	processPayment,
+	showPaymentWebview,
 	stampRunLabel,
 } from './order-lifecycle';
+import { resolveProbeAuthorization, type StoreAuthorization } from './probe-credential';
 import { mintSearchProbeToken, probeGet } from './search-probe';
 
 const PUSH_CUSTOMERS = '/wcpos/v2/push/customers';
@@ -209,4 +217,132 @@ liveTest.describe('Cart: new customer while the store is unreachable (#1523)', (
 			).toBe(true);
 		}
 	);
+
+	liveTest(
+		'on the gateway pay page, a customer acknowledged after the pre-payment push still reaches the paid order',
+		async ({ posPage: page, trackOrder, storeAuthorization, request }, testInfo) => {
+			liveTest.slow();
+			await ensureRegisterOpen(page);
+			await addCheckoutProbeProduct(page);
+
+			const probe = mintSearchProbeToken(testInfo.workerIndex);
+			const email = `${probe}@example.com`;
+			const storeUrl = getStoreUrl(testInfo);
+			const storeOrigin = new URL(storeUrl).origin;
+			const unreachable = (route: Route) => route.abort('internetdisconnected');
+			const isStore = (url: URL) => url.origin === storeOrigin;
+			// The customer create alone stays unsent until the pay page has made its push.
+			// A failed push backs off only its own record, so the order still goes out.
+			const isCustomerPush = (url: URL) =>
+				url.origin === storeOrigin && wcposRestRoute(url.href) === PUSH_CUSTOMERS;
+
+			// Every accepted order push, from checkout on, with the customer it carried.
+			const orderPushes: number[] = [];
+			page.on('response', (response) => {
+				if (response.request().method() !== 'POST') return;
+				if (wcposRestRoute(response.url()) !== PUSH_ORDERS || response.status() >= 400) return;
+				orderPushes.push(Number(pushedPayload(response)?.customer_id ?? 0));
+			});
+
+			await page.context().route(isCustomerPush, unreachable);
+			try {
+				await page.context().route(isStore, unreachable);
+				try {
+					await createCustomerFromCart(page, probe, email);
+					await expect(page.getByTestId('cart-customer-name')).toContainText(probe, {
+						timeout: 10_000,
+					});
+				} finally {
+					await page.context().unroute(isStore, unreachable);
+				}
+
+				const label = newRunLabel();
+				await stampRunLabel(page, label);
+				const { orderId, sent, surface } = await openPayPageCheckout(page, {
+					onOrderCreated: (order) => trackOrder({ ...order, label }),
+				});
+				expect(Number(sent.customer_id ?? 0), 'the checkout push goes out as a guest').toBe(0);
+
+				// The pay page pushes the order explicitly before it exposes its URL
+				// (persistSaleProvenance), so a loaded store page means that push is done.
+				// (`#place_order` is the store's own markup, not app UI.)
+				await showPaymentWebview(page, surface);
+				await expect(
+					page.frameLocator('iframe[src*="order-pay"]').locator('#place_order')
+				).toBeAttached({ timeout: 90_000 });
+
+				// Armed before the customer push is let through. Retries back off at most 60 s.
+				const customerAck = page.waitForResponse(
+					(response) => {
+						if (response.request().method() !== 'POST') return false;
+						if (wcposRestRoute(response.url()) !== PUSH_CUSTOMERS) return false;
+						const payload = pushedPayload(response);
+						const billing = payload?.billing as { email?: unknown } | undefined;
+						return payload?.email === email || billing?.email === email;
+					},
+					{ timeout: 150_000 }
+				);
+				// An unhandled rejection takes down the whole worker process (#997).
+				customerAck.catch(() => {});
+
+				await page.context().unroute(isCustomerPush, unreachable);
+				expect((await customerAck).status(), 'the customer create must be accepted').toBeLessThan(
+					400
+				);
+				// The bridge stamps the open order within a pass; give it a moment to land.
+				await page.waitForTimeout(2_000);
+
+				const authorization = await resolveProbeAuthorization(
+					request,
+					storeUrl,
+					storeAuthorization,
+					{ route: '/wcpos/v2/orders' }
+				);
+				const created = await createdCustomerId(request, storeUrl, authorization, probe, email);
+				// The race this case exists for: the stamp is held with the order still an
+				// open cart, so no push has carried the id before payment.
+				expect(
+					orderPushes.filter((customerId) => customerId === created),
+					`no order push may carry customer ${created} before payment; saw ${JSON.stringify(orderPushes)}`
+				).toEqual([]);
+
+				await processPayment(page);
+
+				const order = await pollOrder(
+					request,
+					testInfo,
+					authorization,
+					orderId,
+					(candidate) =>
+						Number(candidate.customer_id) > 0 &&
+						Boolean(candidate.date_paid_gmt ?? candidate.date_paid),
+					'the paid server order must carry the customer acknowledged after the pay page push'
+				);
+				expectOrderPaid(order);
+				expect(Number(order.customer_id)).toBe(created);
+			} finally {
+				await page.context().unroute(isCustomerPush, unreachable);
+			}
+		}
+	);
 });
+
+/** The store's id for the customer created from the cart, found by its probe email. */
+async function createdCustomerId(
+	request: Parameters<typeof probeGet>[0],
+	storeUrl: string,
+	authorization: StoreAuthorization,
+	probe: string,
+	email: string
+): Promise<number> {
+	const { headers, params } = storeRequestOptions(authorization);
+	const response = await probeGet(request, storeUrl, 'customers', {
+		headers,
+		params: { ...params, search: probe },
+	});
+	expect(response.ok(), `GET customers?search=${probe} -> ${response.status()}`).toBe(true);
+	const customers = (await response.json()) as { id?: number; email?: string }[];
+	const id = customers.find((customer) => customer.email === email)?.id ?? 0;
+	expect(id, 'the customer created from the cart reached the store').toBeGreaterThan(0);
+	return id;
+}
