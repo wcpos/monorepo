@@ -53,10 +53,7 @@ export function SettingsRow({
 				<View className="relative">
 					{children}
 					{name && (
-						<View
-							pointerEvents="none"
-							className="absolute inset-y-0 right-full mr-3 justify-center"
-						>
+						<View className="pointer-events-none absolute inset-y-0 right-full mr-3 justify-center">
 							<SavedMark name={name} />
 						</View>
 					)}
@@ -76,7 +73,7 @@ export function SettingsRow({
 					{children}
 					{/* Out of flow, under the control's right edge, inside the row's padding: no height change. */}
 					{name && (
-						<View pointerEvents="none" className="absolute top-full right-0 mt-0.5">
+						<View className="pointer-events-none absolute top-full right-0 mt-0.5">
 							<SavedMark name={name} />
 						</View>
 					)}
