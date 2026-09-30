@@ -358,7 +358,7 @@ describe('cashiers', () => {
 describe('registers', () => {
 	it('sorts register amounts and uses the period total for shares', () => {
 		expect(
-			registers({
+			registers([], {
 				...totals([]),
 				total: 100,
 				registerArray: [
@@ -370,6 +370,25 @@ describe('registers', () => {
 			{ key: 'b', amount: 60, orders: 2, share: 0.6 },
 			{ key: 'a', amount: 20, orders: 1, share: 0.2 },
 		]);
+	});
+	it('the orders no register stamped make up the rest: online, and POS without a register', () => {
+		const rows = orders([
+			{
+				total: '60',
+				created_via: 'woocommerce-pos',
+				meta_data: [{ key: '_wcpos_register', value: 'a' }],
+			},
+			{ total: '20', created_via: 'checkout', meta_data: [] },
+			{ total: '15', created_via: 'admin' },
+			{ total: '5', created_via: 'woocommerce-pos', meta_data: [] },
+		]);
+		const parts = registers(rows, totals(rows));
+		expect(parts).toEqual([
+			{ key: 'a', amount: 60, orders: 1, share: 0.6 },
+			{ key: 'online', amount: 35, orders: 2, share: 0.35 },
+			{ key: 'unregistered', amount: 5, orders: 1, share: 0.05 },
+		]);
+		expect(parts.reduce((sum, row) => sum + row.share, 0)).toBeCloseTo(1);
 	});
 });
 describe('categories', () => {

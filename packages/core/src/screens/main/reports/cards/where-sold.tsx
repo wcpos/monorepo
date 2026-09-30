@@ -29,9 +29,21 @@ export function WhereSoldCard() {
 	const canChoose = register === undefined && totals.registerArray.length > 1;
 	const byRegister = canChoose && view === 'registers';
 	const rows = React.useMemo(
-		() => (byRegister ? registers(totals) : channels(selectedOrders, totals)),
+		() => (byRegister ? registers(selectedOrders, totals) : channels(selectedOrders, totals)),
 		[byRegister, selectedOrders, totals]
 	);
+	const channelLabel = (key: string) => t(key === 'store' ? 'reports.in_store' : 'common.online');
+	// The two rows no register stamped: the site's online orders, and POS orders with no register.
+	const registerLabel = (key: string) =>
+		key === 'online'
+			? t('common.online')
+			: key === 'unregistered'
+				? t('reports.no_register_row')
+				: names[key] || t('common.unknown');
+	// The centre counts registers (or channels); the remainder rows are not registers.
+	const registerCount = byRegister
+		? rows.filter((row) => row.key !== 'online' && row.key !== 'unregistered').length
+		: rows.length;
 	if (!store) return <CardSkeleton testID="card-where-sold" name={t('reports.card_where_sold')} />;
 	return (
 		<ReportCard
@@ -63,15 +75,13 @@ export function WhereSoldCard() {
 					centre={{
 						figure: moneyWhole(Math.round(totals.total)),
 						label: t(byRegister ? 'reports.n_registers' : 'reports.n_channels', {
-							count: rows.length,
-							n: number(rows.length),
+							count: registerCount,
+							n: number(registerCount),
 						}),
 					}}
 					parts={rows.map((row) => ({
 						key: row.key,
-						label: byRegister
-							? names[row.key] || t('common.unknown')
-							: t(row.key === 'store' ? 'reports.in_store' : 'common.online'),
+						label: byRegister ? registerLabel(row.key) : channelLabel(row.key),
 						value: row.amount,
 						valueText: money(row.amount),
 						shareText: t('reports.percent', { value: percent(row.share * 100) }),

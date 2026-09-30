@@ -301,7 +301,11 @@ export function panelSpec(id: DetailId, inputs: Inputs): PanelSpec {
 				rows.map((row) => {
 					const name = byChannel
 						? t(row.key === 'store' ? 'reports.in_store' : 'common.online')
-						: inputs.registerNames[row.key] || unknown;
+						: row.key === 'online'
+							? t('common.online')
+							: row.key === 'unregistered'
+								? t('reports.no_register_row')
+								: inputs.registerNames[row.key] || unknown;
 					const average = row.orders ? row.amount / row.orders : 0;
 					return {
 						key: row.key,

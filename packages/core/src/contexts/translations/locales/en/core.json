@@ -2487,5 +2487,6 @@
 	"reports.in_store": "In store",
 	"reports.panel_channels": "Channels",
 	"reports.panel_registers": "Registers",
-	"common.channel": "Channel"
+	"common.channel": "Channel",
+	"reports.no_register_row": "No register"
 }

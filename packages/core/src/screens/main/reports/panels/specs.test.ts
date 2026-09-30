@@ -23,7 +23,7 @@ function inputs(orders: ReportOrder[]) {
 		categories: categories(orders, [], totals),
 		cashiers: cashiers(totals),
 		channels: channels(orders, totals),
-		registers: registers(totals),
+		registers: registers(orders, totals),
 		registerNames: {},
 		taxes: taxesByRate(orders, totals),
 		orders,
@@ -284,4 +284,15 @@ it('registers spec: names through registerNames, unknown fallback', () => {
 	expect(spec.totalRaw).toEqual(['Total', 3, 10 / 3, 10]);
 	expect(spec.types).toEqual(['text', 'number', 'money', 'money']);
 	expect(panelSpec('registers', inputs([])).totalRaw).toEqual(['Total', 0, 0, 0]);
+});
+it('registers spec: the online and no-register remainders are named rows, never Unknown', () => {
+	const data = inputs([]);
+	data.registers = [
+		{ key: 'front', orders: 1, amount: 6, share: 0.6 },
+		{ key: 'online', orders: 1, amount: 3, share: 0.3 },
+		{ key: 'unregistered', orders: 1, amount: 1, share: 0.1 },
+	];
+	const spec = panelSpec('registers', { ...data, registerNames: { front: 'Front' } });
+	expect(spec.rows.map((row) => row.cells[0])).toEqual(['Front', 'Online', 'No register']);
+	expect(spec.total).toEqual(['Total', '3', '£3.33', '£10.00']);
 });

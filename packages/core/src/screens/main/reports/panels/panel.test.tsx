@@ -249,3 +249,31 @@ it('does not wait for refund downloads when printing payments', () => {
 	fireEvent.click(screen.getByTestId('card-payments-open'));
 	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(false);
 });
+it('the Registers panel waits for the register names before Export and Print', () => {
+	mockState.register = undefined;
+	mockState.namesReady = false;
+	mockState.names = {};
+	setOrders([
+		{
+			uuid: 'a',
+			total: '10',
+			status: 'completed',
+			created_via: 'woocommerce-pos',
+			meta_data: [{ key: '_wcpos_register', value: 'r' }],
+		},
+		{
+			uuid: 'b',
+			total: '5',
+			status: 'completed',
+			created_via: 'woocommerce-pos',
+			meta_data: [{ key: '_wcpos_register', value: 's' }],
+		},
+	] as Context.ReportOrder[]);
+	room();
+	fireEvent.click(screen.getByTestId('card-where-sold-view-segment-registers'));
+	fireEvent.click(screen.getByTestId('card-where-sold-open'));
+	expect(screen.getByTestId('detail-panel-print').hasAttribute('disabled')).toBe(true);
+	expect(screen.getByTestId('detail-panel-print-waiting').textContent).toBe('Loading the report');
+	expect(screen.queryByTestId('detail-panel-export')).toBeNull();
+	mockState.namesReady = true;
+});
