@@ -53,7 +53,10 @@ async function ensureSystemTheme(page: Page) {
 	await expect(page.getByTestId('screen-settings-theme')).toBeVisible();
 	await page.getByTestId('theme-option-system').click();
 	await navigate(page, 'products');
-	await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 30_000 });
+	// Scoped: the POS products panel stays mounted behind the drawer with the same search id.
+	await expect(page.getByTestId('screen-products').getByTestId('search-products')).toBeVisible({
+		timeout: 30_000,
+	});
 }
 
 for (const [device, viewport] of Object.entries({
