@@ -1477,6 +1477,75 @@ test('both lanes run six E2E shards', () => {
 	assert.match(matrix.shardTotal, /\|\| '\[6\]'/);
 });
 
+test('e2e-web-mini runs the suite against the mini store in parallel, never gating', () => {
+	const workflow = readWorkflow('deploy.yml');
+	const mini = workflow.jobs['e2e-web-mini'];
+	const e2e = workflow.jobs.e2e;
+	assert.ok(mini, 'deploy.yml is missing the e2e-web-mini job');
+	assert.deepEqual(mini.needs, ['changes', 'deploy']);
+	assert.equal(mini['continue-on-error'], true);
+	assert.equal(mini.if, `${e2e.if} && needs.changes.outputs.lane == 'next'`);
+	assert.deepEqual(mini.strategy, e2e.strategy);
+	assert.equal(mini['runs-on'], 'ubuntu-latest');
+	assert.equal(mini['timeout-minutes'], 60);
+	assert.deepEqual(mini.concurrency, {
+		group: "${{ format('deploy-verify-mini-{0}-{1}', github.run_id, matrix.shardIndex) }}",
+		'cancel-in-progress': true,
+	});
+
+	const [gate, ...steps] = mini.steps;
+	assert.equal(gate.id, 'gate');
+	assert.equal(gate.env.TS_OAUTH_CLIENT_ID, '${{ secrets.TS_OAUTH_CLIENT_ID }}');
+	assert.equal(gate.env.E2E_MINI_CASHIER_PASS, '${{ secrets.E2E_MINI_CASHIER_PASS }}');
+	assert.match(gate.run, /ready=false/);
+	assert.match(gate.run, /ready=true/);
+	assert.match(gate.run, /::notice::/);
+	for (const step of steps) {
+		assert.ok(step.if?.includes("steps.gate.outputs.ready == 'true'"), step.name);
+	}
+	for (const step of mini.steps) {
+		assert.doesNotMatch(JSON.stringify(step), /E2E_AUTH_CACHE_KEY/);
+	}
+
+	const tailnet = steps.find((step) => step.uses?.startsWith('tailscale/github-action@'));
+	assert.ok(tailnet, 'mini job must join the tailnet');
+	assert.match(tailnet.uses, /^tailscale\/github-action@[a-f0-9]{40}$/);
+	assert.deepEqual(tailnet.with, {
+		'oauth-client-id': '${{ secrets.TS_OAUTH_CLIENT_ID }}',
+		'oauth-secret': '${{ secrets.TS_OAUTH_SECRET }}',
+		tags: 'tag:ci',
+	});
+
+	const runStep = steps.find((step) => step.id === 'e2e-tests');
+	const originalRun = e2e.steps.find((step) => step.id === 'e2e-tests');
+	assert.ok(runStep, 'mini job must run the suite');
+	assert.equal(runStep.run, originalRun.run.replace(/^\s*#.*\n/gm, ''));
+	assert.deepEqual(runStep.env, {
+		...originalRun.env,
+		E2E_STORE_URL_PRO: 'https://claudes-mac-mini.tail6a20e3.ts.net:8443',
+		E2E_STORE_URL_FREE: 'https://claudes-mac-mini.tail6a20e3.ts.net:8443',
+		E2E_CASHIER_PASS: '${{ secrets.E2E_MINI_CASHIER_PASS }}',
+		E2E_PRODUCT_WRITER_USER: '${{ secrets.E2E_MINI_PRODUCT_WRITER_USER }}',
+		E2E_PRODUCT_WRITER_PASS: '${{ secrets.E2E_MINI_PRODUCT_WRITER_PASS }}',
+	});
+
+	const artifacts = steps.filter((step) => step.uses?.startsWith('actions/upload-artifact@'));
+	assert.deepEqual(artifacts.map((step) => step.with.name), [
+		'mini-blob-report-${{ matrix.shardIndex }}',
+		'mini-screenshots-${{ matrix.shardIndex }}-${{ github.sha }}',
+	]);
+	assert.equal(artifacts[0].if, "always() && steps.gate.outputs.ready == 'true'");
+	assert.equal(artifacts[1].if, "failure() && steps.gate.outputs.ready == 'true'");
+	for (const artifact of artifacts) {
+		assert.doesNotMatch(artifact.with.name, /^blob-report-/);
+		assert.doesNotMatch(artifact.with.name, /^playwright-screenshots-/);
+	}
+	for (const [name, job] of Object.entries(workflow.jobs)) {
+		if (name === 'e2e-web-mini') continue;
+		assert.ok(![job.needs].flat().includes('e2e-web-mini'), name);
+	}
+});
+
 test('cold-start verifies the deployed main artifact and participates in the gate', () => {
 	const workflow = readWorkflow('deploy.yml');
 	const coldStart = workflow.jobs['cold-start'];
