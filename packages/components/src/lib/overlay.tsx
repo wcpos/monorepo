@@ -60,6 +60,15 @@ export type OverlayShellProps = {
 	 * overlays and every native `Overlay` already dismiss on a press: leave it unset there.
 	 */
 	onDismiss?: () => void;
+	/**
+	 * Web, anchored: the dismiss for a press outside a non-modal panel. The scrim becomes a
+	 * transparent full-screen layer behind the panel that takes the press, so it closes the
+	 * panel and reaches nothing underneath (monorepo#2313: closing the footer tax popover
+	 * pressed the product tile under the tap). Native's anchored `Overlay` is full-screen
+	 * already. Radix still closes on a mouse pointer-down, and the browser drops the click
+	 * whose target went with the layer; a touch it leaves to the click, which lands here.
+	 */
+	onOutsidePress?: () => void;
 	pinned?: boolean;
 	testID?: string;
 	children: React.ReactNode;
@@ -82,6 +91,11 @@ export function useOverlayPresentation(): OverlayPresentation | undefined {
 /** The web scrim flattens Radix's wrapper; a panel carrying the mark keeps its box. */
 export const SCRIM_FLATTENS_WRAPPER = '[&>[role=dialog]:not([data-sheet])]:contents';
 const SHEET_MARK = { dataSet: { sheet: '' } } as object;
+// `auto`: under a Radix modal dialog the body has `pointer-events: none`, which the layer would inherit.
+const OUTSIDE_PRESS_LAYER: StyleProp<ViewStyle> = [
+	StyleSheet.absoluteFill,
+	{ pointerEvents: 'auto' },
+];
 export const OVERLAY_PANEL = {
 	anchored: 'bg-card border-border rounded-lg border p-2 shadow-md',
 	bottom: 'bg-card border-border w-full max-h-[92%] rounded-t-2xl border-t p-2',
@@ -209,7 +223,7 @@ const keyOwners: object[] = [];
  * keyed on `open` runs, and that effect would never re-run.
  */
 export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
-	const { presentation, open, Scrim, onDismiss, pinned, testID, children } = props;
+	const { presentation, open, Scrim, onDismiss, onOutsidePress, pinned, testID, children } = props;
 	const insets = useSafeAreaInsets();
 	const [node, onPanelNode] = React.useState<HTMLElement | null>(null);
 	const fullHeight = presentation === 'left' || presentation === 'right' || presentation === 'page';
@@ -224,9 +238,9 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 			// On web the scrim is the panel's ancestor, so a press inside the panel bubbles
 			// here too; only the backdrop itself dismisses.
 			if (event?.target && event.currentTarget && event.target !== event.currentTarget) return;
-			onDismiss?.();
+			(onDismiss ?? onOutsidePress)?.();
 		},
-		[onDismiss]
+		[onDismiss, onOutsidePress]
 	);
 	React.useEffect(() => {
 		if (!open || !ownsDismiss) return;
@@ -316,7 +330,8 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 		/**
 		 * The primitive positions the panel; the shell supplies only the plumbing the
 		 * popover family used to carry each on its own. On web that is nothing: the
-		 * primitive's `Overlay` is a passthrough and Radix Popper places the content.
+		 * primitive's `Overlay` is a passthrough and Radix Popper places the content,
+		 * unless `onOutsidePress` makes it the full-screen layer that takes an outside press.
 		 *
 		 * Native: full-bleed + box-none. Unsized, the wrapper measures width×0 — its
 		 * absolutely-positioned child still DRAWS (RN doesn't clip), but Android
@@ -333,7 +348,8 @@ export function OverlayShell(props: OverlayShellProps): React.JSX.Element {
 				{isWeb ? (
 					<Scrim
 						focusable={false}
-						onPress={onDismiss ? onScrimPress : undefined}
+						style={onOutsidePress ? OUTSIDE_PRESS_LAYER : undefined}
+						onPress={onDismiss || onOutsidePress ? onScrimPress : undefined}
 						testID={testID ? `${testID}-scrim` : 'overlay-scrim'}
 					>
 						{children}

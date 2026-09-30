@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@wcpos/components/hover-card';
 import { Icon } from '@wcpos/components/icon';
+import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
 
 import { DisplayCurrentTaxRates } from './display-current-tax-rates';
@@ -32,9 +32,12 @@ export function TaxBasedOn() {
 			: t('common.shop_base');
 	const taxBasedOnLabel = `${t('common.tax_based_on')}: ${taxBasedOnSetting}`;
 
+	// A popover, not a hover card: the chevron promises a press, a touch screen has no hover
+	// (Radix's hover card ignores touch), and a hover card opened under a resting pointer
+	// covered the first product tiles and stayed open while the pointer crossed it.
 	return (
-		<HoverCard>
-			<HoverCardTrigger accessibilityLabel={taxBasedOnLabel} testID="tax-based-on-trigger">
+		<Popover>
+			<PopoverTrigger accessibilityLabel={taxBasedOnLabel} testID="tax-based-on-trigger">
 				<View className="flex-row items-center gap-1">
 					{rates.length > 0 ? (
 						<Icon name="percent" size="sm" className="text-muted-foreground" />
@@ -49,8 +52,8 @@ export function TaxBasedOn() {
 					</Text>
 					<Icon name="chevronDown" size="sm" className="text-muted-foreground" />
 				</View>
-			</HoverCardTrigger>
-			<HoverCardContent side="top" align="start" className="w-96">
+			</PopoverTrigger>
+			<PopoverContent side="top" align="start" className="w-96" testID="tax-based-on-content">
 				<Text className="text-sm">{taxBasedOnLabel}</Text>
 				<DisplayCurrentTaxRates
 					rates={rates}
@@ -59,7 +62,7 @@ export function TaxBasedOn() {
 					city={location.city}
 					postcode={location.postcode}
 				/>
-			</HoverCardContent>
-		</HoverCard>
+			</PopoverContent>
+		</Popover>
 	);
 }

@@ -31,6 +31,19 @@ it('keeps its toasts pressable under the pointer lock a modal dialog puts on the
 	expect((await shownToaster()).style.pointerEvents).toBe('auto');
 });
 
+it('renders into the body, out of the app root it is mounted in', async () => {
+	// Inline, the app root's stacking context capped sonner's z-index, and an anchored popover's
+	// outside-press layer in the body covered the Undo toast (#2313).
+	const { container } = render(<Toaster />);
+	act(() => {
+		sonnerToast('Removed from cart');
+	});
+
+	const toaster = await shownToaster();
+	expect(container.contains(toaster)).toBe(false);
+	expect(document.body.contains(toaster)).toBe(true);
+});
+
 it('keeps the caller style alongside', async () => {
 	render(<Toaster style={{ zIndex: 5 }} />);
 	act(() => {

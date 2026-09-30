@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { createPortal } from 'react-dom';
 import { toast as sonnerToast, Toaster as SonnerToaster } from 'sonner';
 
 import type { ExternalToast, ToasterProps } from 'sonner';
@@ -12,9 +13,15 @@ type ToastOptions = ExternalToast & { type?: ToastType };
  * An open modal dialog sets `pointer-events: none` on the body, and sonner's toaster inherits it:
  * a toast shown over one (the register panel's Undo) could be seen but not pressed (#2284). The
  * toaster takes its own pointer events back; it is only as large as the toasts in it.
+ *
+ * It also renders into the body. sonner draws inline, so the toaster sat inside the app root's
+ * stacking context (an RN-web View is `z-index: 0`), and anything portalled into the body painted
+ * over it whatever its own z-index: an anchored popover's outside-press layer covered the Undo
+ * toast for as long as the popover was open (#2313).
  */
-export function Toaster({ style, ...props }: ToasterProps): React.JSX.Element {
-	return <SonnerToaster {...props} style={{ pointerEvents: 'auto', ...style }} />;
+export function Toaster({ style, ...props }: ToasterProps): React.ReactNode {
+	const toaster = <SonnerToaster {...props} style={{ pointerEvents: 'auto', ...style }} />;
+	return typeof document === 'undefined' ? toaster : createPortal(toaster, document.body);
 }
 
 /**

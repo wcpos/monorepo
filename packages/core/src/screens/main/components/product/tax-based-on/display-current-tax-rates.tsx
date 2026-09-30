@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { useRootContext } from '@wcpos/components/popover';
 import {
 	Table,
 	TableBody,
@@ -41,6 +42,7 @@ export function DisplayCurrentTaxRates({
 }: DisplayCurrentTaxRatesProps) {
 	const router = useRouter();
 	const t = useT();
+	const { onOpenChange } = useRootContext();
 
 	/**
 	 *
@@ -130,6 +132,8 @@ export function DisplayCurrentTaxRates({
 				<Button
 					variant="muted"
 					onPress={() => {
+						// The popover (a sheet on a phone) would otherwise stay open over the modal.
+						onOpenChange(false);
 						router.push('/(app)/(modals)/tax-rates');
 					}}
 				>
