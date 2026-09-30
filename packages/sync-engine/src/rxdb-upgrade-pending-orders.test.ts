@@ -114,12 +114,56 @@ function expectUntouched(state: Awaited<ReturnType<typeof stored>>): void {
 		expect(state.orders.get(order.uuid), order.case).toEqual(order.stored);
 }
 
-function expectSent(state: Awaited<ReturnType<typeof stored>>): void {
+/**
+ * The ONLY order fields a successful push may change — what the ack writes
+ * (`ackBookkeeping.reconcile` and the orders facet's `adoptPayload`, collection-descriptors.ts):
+ *  - remoteId / remoteKey: a create ack captures the server id (remoteKey is its lookup spelling);
+ *  - sync.revision: re-anchored to the ack's currentRevision (sync.partial / sync.source stay);
+ *  - local: the acked mutationId leaves pendingMutationIds, and dirty clears with it;
+ *  - payload: the ack document is adopted over the resident's; a key it omits keeps the local value;
+ *  - number / dateCreatedGmt / status: promoted columns re-derived from the adopted payload
+ *    (`promotedOrderColumns`). These residents hold number/date columns their payload lacks, so
+ *    those two re-derive to ''.
+ * Everything else (uuid, total, customerId, posUserId, posStoreId, …) must not move.
+ */
+const ACK_MAY_CHANGE = [
+	'remoteId',
+	'remoteKey',
+	'local',
+	'payload',
+	'number',
+	'dateCreatedGmt',
+	'status',
+];
+
+function withoutAckFields(order: Json | undefined): Json {
+	const rest: Json = { ...order, sync: { ...(order?.sync as Json), revision: undefined } };
+	for (const field of ACK_MAY_CHANGE) delete rest[field];
+	return rest;
+}
+
+type Applied = ReadonlyMap<string, { id: number; revision: string }>;
+
+/** Sent orders compared WHOLE with their 17.4.0 before-state; their queue rows are gone. */
+function expectSent(state: Awaited<ReturnType<typeof stored>>, applied: Applied): void {
 	expect([...state.rows.keys()].sort()).toEqual(untouchedRows.map((row) => row.mutationId).sort());
 	for (const order of sentOrders) {
-		const now = state.orders.get(order.uuid);
-		expect(now?.remoteId, order.case).toEqual(expect.any(String));
-		expect(now?.local, order.case).toEqual({ dirty: false, pendingMutationIds: [] });
+		const after = state.orders.get(order.uuid);
+		expect(withoutAckFields(after), order.case).toEqual(withoutAckFields(order.stored));
+		const server = applied.get(order.uuid)!;
+		const pushed = sendOnce.find((row) => row.uuid === order.uuid)!.stored.payload as Json;
+		const payload: Json = { ...(order.stored.payload as Json), ...pushed, id: server.id };
+		expect(after, order.case).toEqual({
+			...order.stored,
+			remoteId: String(server.id),
+			remoteKey: String(server.id),
+			sync: { ...(order.stored.sync as Json), revision: server.revision },
+			local: { dirty: false, pendingMutationIds: [] },
+			payload,
+			number: String(payload.number ?? ''),
+			dateCreatedGmt: String(payload.date_created_gmt ?? ''),
+			status: String(payload.status),
+		});
 	}
 }
 
@@ -173,7 +217,7 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 				sentOrders.map((order) => order.uuid).sort()
 			);
 			const drained = await stored(harness);
-			expectSent(drained);
+			expectSent(drained, server.applied);
 			expectUntouched(drained);
 
 			expect(await harness.engine.sync('write-drain')).toMatchObject({ pushed: 0, held: 1 });
@@ -187,7 +231,7 @@ describe.each(STORAGES)('rxdb %s database written by 17.4.0', (_name, restore) =
 			expect([...reopened.orders.keys()].sort()).toEqual(
 				manifest.orders.map((order) => order.uuid).sort()
 			);
-			expectSent(reopened);
+			expectSent(reopened, server.applied);
 			expectUntouched(reopened);
 		} finally {
 			await harness.dispose();
