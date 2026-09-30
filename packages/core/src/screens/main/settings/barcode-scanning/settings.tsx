@@ -31,6 +31,7 @@ import {
 	SCAN_SOUND_THEMES,
 	type ScanSoundTheme,
 } from '../../pos/products/scan-sound-themes';
+import { SavedFieldProvider, useMarkSaved } from '../components/saved-mark';
 import { SettingsRow } from '../components/settings-row';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
@@ -51,6 +52,15 @@ const formSchema = z.object({
  *
  */
 export function BarcodeSettings() {
+	return (
+		<SavedFieldProvider>
+			<BarcodeSettingsForm />
+		</SavedFieldProvider>
+	);
+}
+
+function BarcodeSettingsForm() {
+	const markSaved = useMarkSaved();
 	const { store } = useStoreSession();
 	const t = useT();
 	const { localPatch } = useLocalMutation();
@@ -93,8 +103,9 @@ export function BarcodeSettings() {
 				document: store,
 				data,
 			});
+			markSaved(Object.keys(data));
 		},
-		[localPatch, store]
+		[localPatch, store, markSaved]
 	);
 
 	useFormChangeHandler({
@@ -152,7 +163,10 @@ export function BarcodeSettings() {
 					control={form.control}
 					name="barcode_scanning_avg_time_input_threshold"
 					render={({ field: { value, ...rest } }) => (
-						<SettingsRow label={t('settings.barcode_average_time_input_threshold_ms')}>
+						<SettingsRow
+							name="barcode_scanning_avg_time_input_threshold"
+							label={t('settings.barcode_average_time_input_threshold_ms')}
+						>
 							<FormInput
 								type="numeric"
 								value={value != null ? String(value) : undefined}
@@ -165,7 +179,10 @@ export function BarcodeSettings() {
 					control={form.control}
 					name="barcode_scanning_min_chars"
 					render={({ field: { value, ...rest } }) => (
-						<SettingsRow label={t('settings.barcode_minimum_length')}>
+						<SettingsRow
+							name="barcode_scanning_min_chars"
+							label={t('settings.barcode_minimum_length')}
+						>
 							<FormInput
 								type="numeric"
 								value={value != null ? String(value) : undefined}
@@ -178,7 +195,10 @@ export function BarcodeSettings() {
 					control={form.control}
 					name="barcode_scanning_prefix"
 					render={({ field }) => (
-						<SettingsRow label={t('settings.barcode_scanner_prefix')}>
+						<SettingsRow
+							name="barcode_scanning_prefix"
+							label={t('settings.barcode_scanner_prefix')}
+						>
 							<FormInput {...field} />
 						</SettingsRow>
 					)}
@@ -187,7 +207,10 @@ export function BarcodeSettings() {
 					control={form.control}
 					name="barcode_scanning_suffix"
 					render={({ field }) => (
-						<SettingsRow label={t('settings.barcode_scanner_suffix')}>
+						<SettingsRow
+							name="barcode_scanning_suffix"
+							label={t('settings.barcode_scanner_suffix')}
+						>
 							<FormInput {...field} />
 						</SettingsRow>
 					)}
@@ -196,7 +219,11 @@ export function BarcodeSettings() {
 					control={form.control}
 					name="barcode_scanning_sound_enabled"
 					render={({ field }) => (
-						<SettingsRow inline label={t('settings.barcode_scan_sound')}>
+						<SettingsRow
+							name="barcode_scanning_sound_enabled"
+							inline
+							label={t('settings.barcode_scan_sound')}
+						>
 							<FormSwitch {...field} />
 						</SettingsRow>
 					)}
@@ -276,7 +303,11 @@ export function BarcodeSettings() {
 							control={form.control}
 							name="barcode_scanning_sound_success_enabled"
 							render={({ field }) => (
-								<SettingsRow inline label={t('settings.barcode_sound_success')}>
+								<SettingsRow
+									name="barcode_scanning_sound_success_enabled"
+									inline
+									label={t('settings.barcode_sound_success')}
+								>
 									<FormSwitch {...field} />
 								</SettingsRow>
 							)}
@@ -285,7 +316,11 @@ export function BarcodeSettings() {
 							control={form.control}
 							name="barcode_scanning_sound_failure_enabled"
 							render={({ field }) => (
-								<SettingsRow inline label={t('settings.barcode_sound_failure')}>
+								<SettingsRow
+									name="barcode_scanning_sound_failure_enabled"
+									inline
+									label={t('settings.barcode_sound_failure')}
+								>
 									<FormSwitch {...field} />
 								</SettingsRow>
 							)}
@@ -295,7 +330,11 @@ export function BarcodeSettings() {
 								control={form.control}
 								name="barcode_scanning_sound_haptic_enabled"
 								render={({ field }) => (
-									<SettingsRow inline label={t('settings.barcode_sound_haptic')}>
+									<SettingsRow
+										name="barcode_scanning_sound_haptic_enabled"
+										inline
+										label={t('settings.barcode_sound_haptic')}
+									>
 										<FormSwitch {...field} />
 									</SettingsRow>
 								)}

@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import * as Alert from '@wcpos/components/alert-dialog';
 import { Button } from '@wcpos/components/button';
 import { DocsLink } from '@wcpos/components/docs-link';
 import { HStack } from '@wcpos/components/hstack';
@@ -38,6 +39,7 @@ import { useT } from '../../../../contexts/translations';
 export function PrintingSettings() {
 	const t = useT();
 	const { storeDB } = useStoreSession();
+	const [pendingDelete, setPendingDelete] = React.useState<PrinterProfile>();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
 	const [editingPrinter, setEditingPrinter] = React.useState<PrinterProfile | undefined>();
 	const [prefilledPrinter, setPrefilledPrinter] = React.useState<
@@ -119,15 +121,18 @@ export function PrintingSettings() {
 		[storeDB]
 	);
 
-	const handleDelete = React.useCallback(
-		async (id: string) => {
-			const doc = await storeDB.collections.printer_profiles.findOne(id).exec();
-			if (doc && !doc.isBuiltIn) {
-				await doc.remove();
-			}
-		},
-		[storeDB]
-	);
+	const handleDelete = (id: string) =>
+		setPendingDelete(printers.find((printer) => printer.id === id));
+
+	const confirmDelete = React.useCallback(async () => {
+		if (!pendingDelete) return;
+		const id = pendingDelete.id;
+		setPendingDelete(undefined);
+		const doc = await storeDB.collections.printer_profiles.findOne(id).exec();
+		if (doc && !doc.isBuiltIn) {
+			await doc.remove();
+		}
+	}, [storeDB, pendingDelete]);
 
 	const handleSetDefault = React.useCallback(
 		async (id: string) => {
@@ -291,6 +296,33 @@ export function PrintingSettings() {
 				)}
 			</SettingsSection>
 
+			<Alert.AlertDialog
+				open={!!pendingDelete}
+				onOpenChange={(open) => !open && setPendingDelete(undefined)}
+			>
+				<Alert.AlertDialogContent>
+					<Alert.AlertDialogHeader>
+						<Alert.AlertDialogTitle>
+							{t('settings.delete_printer_title', { name: pendingDelete?.name })}
+						</Alert.AlertDialogTitle>
+						<Alert.AlertDialogDescription>
+							{t('settings.delete_printer_description')}
+						</Alert.AlertDialogDescription>
+					</Alert.AlertDialogHeader>
+					<Alert.AlertDialogFooter>
+						<Alert.AlertDialogCancel testID={`printer-row-${pendingDelete?.id}-delete-cancel`}>
+							{t('common.cancel')}
+						</Alert.AlertDialogCancel>
+						<Alert.AlertDialogAction
+							variant="destructive"
+							testID={`printer-row-${pendingDelete?.id}-delete-confirm`}
+							onPress={confirmDelete}
+						>
+							{t('common.delete')}
+						</Alert.AlertDialogAction>
+					</Alert.AlertDialogFooter>
+				</Alert.AlertDialogContent>
+			</Alert.AlertDialog>
 			<PrinterDialog
 				open={dialogOpen}
 				onOpenChange={setDialogOpen}

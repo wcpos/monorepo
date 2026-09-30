@@ -7,6 +7,13 @@ import { Uniwind } from 'uniwind';
 import { ThemeSettings } from './theme';
 
 jest.mock('expo-haptics', () => ({}));
+jest.mock('react-native-reanimated', () => ({
+	__esModule: true,
+	default: { View: jest.requireActual<typeof import('react-native')>('react-native').View },
+	FadeOut: { duration: jest.fn() },
+	useReducedMotion: () => true,
+}));
+jest.mock('@wcpos/components/lib/motion', () => ({ BEAT: 220 }));
 jest.mock('@rn-primitives/slot', () => ({ Slot: 'span' }));
 jest.mock('@wcpos/components/label', () => ({
 	Label: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
@@ -119,8 +126,23 @@ describe('theme tiles', () => {
 		await act(async () => fireEvent.click(getByTestId('theme-option-ocean')));
 		expect(mockLocalPatch).toHaveBeenCalledWith({ document: store, data: { theme: 'ocean' } });
 		expect(Uniwind.setTheme).toHaveBeenCalledWith('ocean');
+		expect(getByTestId('settings-saved-theme').textContent).toBe('settings.saved');
 		expect(mockLocalPatch.mock.invocationCallOrder[0]).toBeLessThan(
 			jest.mocked(Uniwind.setTheme).mock.invocationCallOrder[0]
 		);
 	});
+});
+
+it('marks Scale only after its patch resolves', async () => {
+	let resolve!: () => void;
+	mockLocalPatch.mockReturnValueOnce(
+		new Promise<void>((done) => {
+			resolve = done;
+		})
+	);
+	const { getByTestId, queryByTestId } = render(<ThemeSettings />);
+	fireEvent.click(getByTestId('settings-scale-compact'));
+	expect(queryByTestId('settings-saved-scale')).toBeNull();
+	await act(async () => resolve());
+	expect(getByTestId('settings-saved-scale').textContent).toBe('settings.saved');
 });

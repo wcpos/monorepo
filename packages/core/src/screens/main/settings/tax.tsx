@@ -20,6 +20,8 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
+import { LockedRow } from './components/locked-row';
+import { SavedFieldProvider, useMarkSaved } from './components/saved-mark';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
@@ -44,6 +46,15 @@ const formSchema = z.object({
  *
  */
 export function TaxSettings() {
+	return (
+		<SavedFieldProvider>
+			<TaxSettingsForm />
+		</SavedFieldProvider>
+	);
+}
+
+function TaxSettingsForm() {
+	const markSaved = useMarkSaved();
 	const { store, site } = useStoreSession();
 	const t = useT();
 	const router = useRouter();
@@ -105,8 +116,9 @@ export function TaxSettings() {
 					Object.entries(data).filter(([key]) => Object.keys(formSchema.shape).includes(key))
 				),
 			});
+			markSaved(Object.keys(data));
 		},
-		[localPatch, store]
+		[localPatch, store, markSaved]
 	);
 
 	useFormChangeHandler({
@@ -122,25 +134,21 @@ export function TaxSettings() {
 			<VStack className="gap-5">
 				<FormErrors />
 				<SettingsSection first title={t('settings.tax_calculation')}>
-					<SettingsRow
-						inline
+					<LockedRow
 						label={t('settings.enable_taxes')}
 						testID="settings-tax-locked-calc_taxes"
-					>
-						<Text>{yesNo(lockedSettings.calc_taxes)}</Text>
-					</SettingsRow>
-					<SettingsRow
-						inline
+						value={yesNo(lockedSettings.calc_taxes)}
+					/>
+					<LockedRow
 						label={t('settings.prices_entered_with_tax')}
 						testID="settings-tax-locked-prices_include_tax"
-					>
-						<Text>{yesNo(lockedSettings.prices_include_tax)}</Text>
-					</SettingsRow>
+						value={yesNo(lockedSettings.prices_include_tax)}
+					/>
 					<FormField
 						control={form.control}
 						name="tax_based_on"
 						render={({ field: { value, onChange, ...rest } }) => (
-							<SettingsRow label={t('common.calculate_tax_based_on')}>
+							<SettingsRow name="tax_based_on" label={t('common.calculate_tax_based_on')}>
 								<FormSelect
 									customComponent={TaxBasedOnSelect}
 									value={value}
@@ -150,20 +158,16 @@ export function TaxSettings() {
 							</SettingsRow>
 						)}
 					/>
-					<SettingsRow
-						inline
+					<LockedRow
 						label={t('settings.shipping_tax_class')}
 						testID="settings-tax-locked-shipping_tax_class"
-					>
-						<Text>{shippingTaxClassName}</Text>
-					</SettingsRow>
-					<SettingsRow
-						inline
+						value={shippingTaxClassName}
+					/>
+					<LockedRow
 						label={t('settings.round_tax_at_subtotal_level')}
 						testID="settings-tax-locked-tax_round_at_subtotal"
-					>
-						<Text>{yesNo(lockedSettings.tax_round_at_subtotal)}</Text>
-					</SettingsRow>
+						value={yesNo(lockedSettings.tax_round_at_subtotal)}
+					/>
 					<Text className="text-muted-foreground text-xs">{t('settings.tax_locked_note')}</Text>
 					{wooTaxSettingsUrl ? (
 						<DocsLink href={wooTaxSettingsUrl}>{t('settings.tax_locked_link')}</DocsLink>
@@ -175,7 +179,7 @@ export function TaxSettings() {
 						control={form.control}
 						name="tax_total_display"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.display_tax_totals')}>
+							<SettingsRow name="tax_total_display" label={t('settings.display_tax_totals')}>
 								<FormRadioGroup customComponent={TaxDisplayRadioGroup} {...field} />
 							</SettingsRow>
 						)}
@@ -184,7 +188,7 @@ export function TaxSettings() {
 						control={form.control}
 						name="tax_display_shop"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.display_prices_in_the_shop')}>
+							<SettingsRow name="tax_display_shop" label={t('settings.display_prices_in_the_shop')}>
 								<FormRadioGroup customComponent={InclExclRadioGroup} {...field} />
 							</SettingsRow>
 						)}
@@ -193,7 +197,10 @@ export function TaxSettings() {
 						control={form.control}
 						name="tax_display_cart"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.display_prices_during_cart_and_checkout')}>
+							<SettingsRow
+								name="tax_display_cart"
+								label={t('settings.display_prices_during_cart_and_checkout')}
+							>
 								<FormRadioGroup customComponent={InclExclRadioGroup} {...field} />
 							</SettingsRow>
 						)}
@@ -202,7 +209,7 @@ export function TaxSettings() {
 						control={form.control}
 						name="price_display_suffix"
 						render={({ field }) => (
-							<SettingsRow label={t('settings.price_display_suffix')}>
+							<SettingsRow name="price_display_suffix" label={t('settings.price_display_suffix')}>
 								<FormInput {...field} />
 							</SettingsRow>
 						)}

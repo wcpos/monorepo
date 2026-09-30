@@ -31,6 +31,9 @@ const store = {
 };
 
 jest.mock('react-native', () => ({ View: ({ children }: React.PropsWithChildren) => children }));
+jest.mock('react-native-reanimated', () => ({ useReducedMotion: () => true }));
+jest.mock('@wcpos/components/lib/motion', () => ({ BEAT: 220 }));
+jest.mock('@wcpos/components/icon', () => ({ Icon: () => null }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('react-hook-form', () => ({ useForm: (options: unknown) => mockUseForm(options) }));
 jest.mock('@hookform/resolvers/zod', () => ({ zodResolver: jest.fn() }));

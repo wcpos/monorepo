@@ -10,6 +10,7 @@ import { type Segment, SegmentedControl } from '@wcpos/components/segmented-cont
 import { VStack } from '@wcpos/components/vstack';
 import { useDocField } from '@wcpos/query';
 
+import { SavedFieldProvider, SavedMark, useMarkSaved } from './components/saved-mark';
 import { SettingsRow } from './components/settings-row';
 import { SettingsSection } from './components/settings-section';
 import { useStoreSession } from '../../../contexts/app-state';
@@ -131,6 +132,7 @@ function ThemeGrid({
 					? t('settings.following_system_theme')
 					: t('settings.current_theme', { theme: activeThemeLabel })}
 			</Text>
+			<SavedMark name="theme" />
 		</>
 	);
 }
@@ -145,6 +147,7 @@ const SCALE_OPTIONS = ['auto', 'compact', 'regular', 'spacious'] as const;
 function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 	const { store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
+	const markSaved = useMarkSaved();
 	const scale = useDocField(store, (latest) => latest.scale) ?? 'auto';
 
 	const handleScaleChange = React.useCallback(
@@ -152,11 +155,12 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
 			if (!value) return;
 			try {
 				await localPatch({ document: store, data: { scale: value } });
+				markSaved(['scale']);
 			} catch (error) {
 				console.error('Failed to persist selected scale', error);
 			}
 		},
-		[localPatch, store]
+		[localPatch, store, markSaved]
 	);
 
 	return (
@@ -185,9 +189,18 @@ function ScaleRow({ t }: { t: ReturnType<typeof useT> }) {
  * Persists theme selection to RxDB store document.
  */
 export function ThemeSettings() {
+	return (
+		<SavedFieldProvider>
+			<ThemeSettingsContent />
+		</SavedFieldProvider>
+	);
+}
+
+function ThemeSettingsContent() {
 	const t = useT();
 	const { store } = useStoreSession();
 	const { localPatch } = useLocalMutation();
+	const markSaved = useMarkSaved();
 
 	/**
 	 * Theme options following Uniwind's theming API
@@ -249,11 +262,12 @@ export function ThemeSettings() {
 				});
 
 				Uniwind.setTheme(themeName as any);
+				markSaved(['theme']);
 			} catch (error) {
 				console.error('Failed to persist selected theme', error);
 			}
 		},
-		[localPatch, store]
+		[localPatch, store, markSaved]
 	);
 
 	return (
