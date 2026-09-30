@@ -237,7 +237,13 @@ function GeneralSettingsForm({
 					/>
 					<LockedRow
 						label={t('settings.store_base_state')}
-						value={formData.store_state}
+						value={decode(
+							countries
+								.find(({ code }) => code === formData.store_country)
+								?.states?.find(({ code }) => code === formData.store_state)?.name ??
+								formData.store_state ??
+								''
+						)}
 						testID="settings-general-locked-state"
 					/>
 					<LockedRow

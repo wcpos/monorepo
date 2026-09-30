@@ -15,8 +15,8 @@ const site: { url?: string } = { url: 'https://example.test' };
 const store = {
 	id: 1,
 	name: 'Store',
-	store_country: 'GB',
-	store_state: 'LND',
+	store_country: 'US',
+	store_state: 'NY',
 	store_city: 'London',
 	store_postcode: '',
 	getLatest: () => store,
@@ -114,12 +114,6 @@ jest.mock('../hooks/use-customer-name-format', () => ({
 	useCustomerNameFormat: () => ({ format: () => 'Guest' }),
 }));
 jest.mock('../components/form-errors', () => ({ FormErrors: () => null }));
-jest.mock('../components/country-state-select/country-combobox', () => ({
-	CountryCombobox: () => null,
-}));
-jest.mock('../components/country-state-select/state-forminput', () => ({
-	StateFormInput: () => null,
-}));
 jest.mock('../components/currency-position-select', () => ({ CurrencyPositionSelect: () => null }));
 jest.mock('../components/currency-select', () => ({ CurrencySelect: () => null }));
 jest.mock('../components/customer-select', () => ({ CustomerSelect: () => null }));
@@ -137,8 +131,8 @@ beforeEach(() => {
 });
 it('renders the country display name and the raw address values, with an em dash for empty', () => {
 	const { getByTestId } = render(<GeneralSettings />);
-	expect(getByTestId('settings-general-locked-country').textContent).toBe('United Kingdom (UK)');
-	expect(getByTestId('settings-general-locked-state').textContent).toBe('LND');
+	expect(getByTestId('settings-general-locked-country').textContent).toBe('United States (US)');
+	expect(getByTestId('settings-general-locked-state').textContent).toBe('New York');
 	expect(getByTestId('settings-general-locked-city').textContent).toBe('London');
 	expect(getByTestId('settings-general-locked-postcode').textContent).toBe('—');
 });

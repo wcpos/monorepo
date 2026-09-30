@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Uniwind, useUniwind } from 'uniwind';
 
@@ -52,7 +52,7 @@ function ThemeOptionButton({
 			// + 2-line description cap (≈9.4rem) — so all six tiles match across
 			// rows, locales, and widths, not just within a stretched row.
 			className={`bg-card min-h-40 flex-1 items-center justify-center gap-2 rounded-lg border p-3 ${
-				isActive ? 'border-primary' : 'border-border'
+				isActive ? 'border-primary' : 'border-border web:hover:border-primary/40'
 			}`}
 		>
 			{isActive && <Icon name="check" size="sm" className="text-primary absolute top-2 right-2" />}
@@ -127,12 +127,17 @@ function ThemeGrid({
 			</VStack>
 
 			{/* Current theme status */}
-			<Text className="text-muted-foreground text-xs">
-				{hasAdaptiveThemes
-					? t('settings.following_system_theme')
-					: t('settings.current_theme', { theme: activeThemeLabel })}
-			</Text>
-			<SavedMark name="theme" />
+			<View className="relative self-start">
+				<Text className="text-muted-foreground text-xs">
+					{hasAdaptiveThemes
+						? t('settings.following_system_theme')
+						: t('settings.current_theme', { theme: activeThemeLabel })}
+				</Text>
+				{/* Out of flow beside the status line: the Scale row below never moves. */}
+				<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
+					<SavedMark name="theme" />
+				</View>
+			</View>
 		</>
 	);
 }

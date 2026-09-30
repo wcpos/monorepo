@@ -23,6 +23,14 @@ export type NavigationAreaItem = {
 	badge?: React.ReactNode;
 };
 
+/**
+ * The surface the area sits on. An area that opted into the page bar (`barTestID`) is on
+ * `bg-background`, so a selected row lifts onto `bg-card`; an area that did not (Health, until
+ * its own switch) is still on `bg-card`, where that lift is invisible, so it keeps the tinted
+ * row it had. The index route reads it too, so both surfaces stay consistent per area.
+ */
+const NavigationSurfaceContext = React.createContext<'background' | 'card'>('card');
+
 function NavigationItems({
 	items,
 	showChevron,
@@ -33,6 +41,8 @@ function NavigationItems({
 	const pathname = usePathname();
 	const router = useRouter();
 	const pointer = usePointer();
+	const surface = React.useContext(NavigationSurfaceContext);
+	const lifted = surface === 'background';
 
 	return items.map((item) => {
 		const selected = pathname === item.href;
@@ -45,21 +55,33 @@ function NavigationItems({
 				onPress={() => router.push(item.href)}
 				accessibilityState={{ selected }}
 				aria-selected={selected}
+				// `data-surface` on web: Uniwind compiles the classes away, so tests read the surface here.
+				{...({ dataSet: { surface } } as object)}
 				className={cn(
-					'active:bg-card h-10 w-full flex-row items-center gap-3 rounded-md px-3',
-					pointer === 'fine' && 'web:hover:bg-card',
-					selected && 'bg-card'
+					'h-10 w-full flex-row items-center gap-3 rounded-md px-3',
+					lifted ? 'active:bg-card' : 'active:bg-primary/10',
+					pointer === 'fine' && (lifted ? 'web:hover:bg-card' : 'web:hover:bg-primary/10'),
+					selected && (lifted ? 'bg-card' : 'bg-primary/10')
 				)}
 			>
 				{item.icon ? (
 					<Icon
 						name={item.icon}
 						size="sm"
-						className={selected ? 'text-foreground' : 'text-muted-foreground'}
+						className={
+							selected ? (lifted ? 'text-foreground' : 'text-primary') : 'text-muted-foreground'
+						}
 					/>
 				) : null}
 				<Text
-					className={cn('flex-1 text-sm', selected ? 'text-foreground' : 'text-muted-foreground')}
+					className={cn(
+						'flex-1 text-sm',
+						selected
+							? lifted
+								? 'text-foreground'
+								: 'text-primary font-semibold'
+							: 'text-muted-foreground'
+					)}
 				>
 					{item.label}
 				</Text>
@@ -113,28 +135,35 @@ export function NavigationAreaLayout({
 		</>
 	) : null;
 
+	const surface = barTestID ? 'background' : 'card';
+
 	if (screenSize === 'sm') {
 		// A leaf page (or deep link) on a narrow screen has no rail — the back
 		// bar is its only in-app route to the area index and its siblings.
 		return (
-			<View testID={screenTestID} className={cn('flex-1', barTestID ? 'bg-background' : 'bg-card')}>
-				{bar}
-				{current && !barTestID ? (
-					<HStack
-						testID={`${testID}-back`}
-						className="border-border/50 bg-card h-12 items-center gap-2 border-b px-1"
-					>
-						<Button variant="link" onPress={() => router.navigate(indexHref)}>
-							<HStack className="items-center gap-1">
-								<Icon name="chevronLeft" className="text-primary" />
-								<ButtonText>{areaLabel}</ButtonText>
-							</HStack>
-						</Button>
-						<ButtonText className="font-semibold">{current.label}</ButtonText>
-					</HStack>
-				) : null}
-				{children}
-			</View>
+			<NavigationSurfaceContext.Provider value={surface}>
+				<View
+					testID={screenTestID}
+					className={cn('flex-1', barTestID ? 'bg-background' : 'bg-card')}
+				>
+					{bar}
+					{current && !barTestID ? (
+						<HStack
+							testID={`${testID}-back`}
+							className="border-border/50 bg-card h-12 items-center gap-2 border-b px-1"
+						>
+							<Button variant="link" onPress={() => router.navigate(indexHref)}>
+								<HStack className="items-center gap-1">
+									<Icon name="chevronLeft" className="text-primary" />
+									<ButtonText>{areaLabel}</ButtonText>
+								</HStack>
+							</Button>
+							<ButtonText className="font-semibold">{current.label}</ButtonText>
+						</HStack>
+					) : null}
+					{children}
+				</View>
+			</NavigationSurfaceContext.Provider>
 		);
 	}
 
@@ -154,13 +183,17 @@ export function NavigationAreaLayout({
 			</View>
 		</View>
 	);
-	return barTestID ? (
-		<View className="flex-1">
-			{bar}
-			{content}
-		</View>
-	) : (
-		content
+	return (
+		<NavigationSurfaceContext.Provider value={surface}>
+			{barTestID ? (
+				<View className="flex-1">
+					{bar}
+					{content}
+				</View>
+			) : (
+				content
+			)}
+		</NavigationSurfaceContext.Provider>
 	);
 }
 
@@ -174,13 +207,17 @@ export function NavigationAreaIndex({
 	testID: string;
 }) {
 	const { screenSize } = useTheme();
+	const surface = React.useContext(NavigationSurfaceContext);
 
 	if (screenSize !== 'sm') {
 		return <Redirect href={defaultHref} />;
 	}
 
 	return (
-		<ScrollView testID={testID} className="bg-card flex-1">
+		<ScrollView
+			testID={testID}
+			className={cn('flex-1', surface === 'background' ? 'bg-background' : 'bg-card')}
+		>
 			<View className="gap-1 p-4">
 				<NavigationItems items={items} showChevron />
 			</View>

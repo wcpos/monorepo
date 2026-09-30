@@ -152,6 +152,29 @@ describe('NavigationAreaLayout', () => {
 		expect(mockPush).toHaveBeenCalledWith('/settings/tax');
 	});
 
+	it('lifts the selected row onto bg-card only on the opted-in (background) rail; the legacy rail keeps its tint', () => {
+		const layout = (barTestID?: string) => (
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				screenTestID="settings-screen"
+				barTestID={barTestID}
+			>
+				<div />
+			</NavigationAreaLayout>
+		);
+		// Uniwind compiles the classes away, so the row exposes the surface it styles for.
+		const lifted = render(layout('settings-bar'));
+		expect(lifted.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('background');
+		lifted.unmount();
+
+		// Health has not opted in: its rail is still bg-card, where a bg-card row is invisible.
+		const legacy = render(layout());
+		expect(legacy.getByTestId('settings-nav-tax').getAttribute('data-surface')).toBe('card');
+	});
+
 	it('keeps the legacy back bar when the layout has not opted in', () => {
 		mockScreenSize = 'sm';
 

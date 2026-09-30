@@ -39,7 +39,10 @@ import { useT } from '../../../../contexts/translations';
 export function PrintingSettings() {
 	const t = useT();
 	const { storeDB } = useStoreSession();
+	// The dialog is open while `pendingDelete` is set; `deleteTarget` outlives it so the title
+	// keeps naming the printer through the exit animation instead of reading "Delete ?".
 	const [pendingDelete, setPendingDelete] = React.useState<PrinterProfile>();
+	const [deleteTarget, setDeleteTarget] = React.useState<PrinterProfile>();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
 	const [editingPrinter, setEditingPrinter] = React.useState<PrinterProfile | undefined>();
 	const [prefilledPrinter, setPrefilledPrinter] = React.useState<
@@ -121,8 +124,11 @@ export function PrintingSettings() {
 		[storeDB]
 	);
 
-	const handleDelete = (id: string) =>
-		setPendingDelete(printers.find((printer) => printer.id === id));
+	const handleDelete = (id: string) => {
+		const printer = printers.find((candidate) => candidate.id === id);
+		setDeleteTarget(printer);
+		setPendingDelete(printer);
+	};
 
 	const confirmDelete = React.useCallback(async () => {
 		if (!pendingDelete) return;
@@ -303,19 +309,19 @@ export function PrintingSettings() {
 				<Alert.AlertDialogContent>
 					<Alert.AlertDialogHeader>
 						<Alert.AlertDialogTitle>
-							{t('settings.delete_printer_title', { name: pendingDelete?.name })}
+							{t('settings.delete_printer_title', { name: deleteTarget?.name })}
 						</Alert.AlertDialogTitle>
 						<Alert.AlertDialogDescription>
 							{t('settings.delete_printer_description')}
 						</Alert.AlertDialogDescription>
 					</Alert.AlertDialogHeader>
 					<Alert.AlertDialogFooter>
-						<Alert.AlertDialogCancel testID={`printer-row-${pendingDelete?.id}-delete-cancel`}>
+						<Alert.AlertDialogCancel testID={`printer-row-${deleteTarget?.id}-delete-cancel`}>
 							{t('common.cancel')}
 						</Alert.AlertDialogCancel>
 						<Alert.AlertDialogAction
 							variant="destructive"
-							testID={`printer-row-${pendingDelete?.id}-delete-confirm`}
+							testID={`printer-row-${deleteTarget?.id}-delete-confirm`}
 							onPress={confirmDelete}
 						>
 							{t('common.delete')}

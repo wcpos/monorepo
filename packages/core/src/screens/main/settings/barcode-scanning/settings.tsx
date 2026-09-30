@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
@@ -243,10 +244,13 @@ function BarcodeSettingsForm() {
 							name="barcode_scanning_sound_theme"
 							render={({ field }) => (
 								<VStack space="xs">
-									<HStack space="sm" className="items-center">
+									<View className="relative self-start">
 										<Text className="text-sm font-medium">{t('settings.barcode_sound_theme')}</Text>
-										<SavedMark name="barcode_scanning_sound_theme" />
-									</HStack>
+										{/* Out of flow: the mark never takes width from the controls beside it. */}
+										<View className="pointer-events-none absolute top-0 left-full ml-3 h-full justify-center">
+											<SavedMark name="barcode_scanning_sound_theme" />
+										</View>
+									</View>
 									<RadioGroup value={field.value} onValueChange={field.onChange}>
 										{SCAN_SOUND_THEMES.map((theme) => (
 											<HStack key={theme} space="sm" className="items-center">
@@ -283,8 +287,15 @@ function BarcodeSettingsForm() {
 							name="barcode_scanning_sound_volume"
 							render={({ field }) => (
 								<HStack space="sm" className="items-center">
-									<Text className="text-sm font-medium">{t('settings.barcode_sound_volume')}</Text>
-									<SavedMark name="barcode_scanning_sound_volume" />
+									<View className="relative">
+										<Text className="text-sm font-medium">
+											{t('settings.barcode_sound_volume')}
+										</Text>
+										{/* Out of flow, under the label: the slider's track never changes width mid-drag. */}
+										<View className="pointer-events-none absolute top-full left-0 mt-0.5">
+											<SavedMark name="barcode_scanning_sound_volume" />
+										</View>
+									</View>
 									<VStack className="flex-1 px-2">
 										<Slider
 											value={field.value}
