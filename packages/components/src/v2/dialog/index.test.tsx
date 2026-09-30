@@ -27,6 +27,7 @@ const mockPortalCalls: Primitive.PortalProps[] = [];
 const mockAutoFocusEvents: { preventDefault: jest.Mock }[] = [];
 const mockScrimProps: Primitive.OverlayProps[] = [];
 const mockPressableProps: PressableProps[] = [];
+const mockInteractOutside: NonNullable<Primitive.ContentProps['onInteractOutside']>[] = [];
 
 jest.mock('react-native', () => {
 	const actual = jest.requireActual<typeof import('react-native')>('react-native');
@@ -141,9 +142,11 @@ jest.mock('@rn-primitives/dialog', () => {
 		className,
 		children,
 		onOpenAutoFocus,
+		onInteractOutside,
 		ref,
 	}: Omit<Primitive.ContentProps, 'ref'> & { ref?: React.Ref<HTMLDivElement> }) {
 		const { open } = useRootContext();
+		if (onInteractOutside) mockInteractOutside.push(onInteractOutside);
 		const autofocus = React.useRef(onOpenAutoFocus);
 		// Keep the event callback current without retriggering the primitive's mount event.
 		React.useLayoutEffect(() => {
@@ -244,6 +247,7 @@ beforeEach(() => {
 	mockAutoFocusEvents.length = 0;
 	mockScrimProps.length = 0;
 	mockPressableProps.length = 0;
+	mockInteractOutside.length = 0;
 });
 afterEach(() => jest.useRealTimers());
 
@@ -605,4 +609,29 @@ it('12. keeps the platform boundary in the shell and exports only the new dialog
 	expect(source).not.toMatch(
 		/export\s+(?:(?:function|const)\s+useRootContext|\{[^}]*\buseRootContext\b)|useModal|as Panel/
 	);
+});
+
+it('13. a press on a toast does not dismiss the dialog under it; any other outside press still can', () => {
+	const onInteractOutside = jest.fn();
+	render(
+		<Dialog open onOpenChange={jest.fn()}>
+			<DialogContent inline testID="d" onInteractOutside={onInteractOutside}>
+				Task
+			</DialogContent>
+		</Dialog>
+	);
+	// sonner's web toaster root, holding a toast's action (the register panel's Undo).
+	const toaster = document.createElement('ol');
+	toaster.setAttribute('data-sonner-toaster', 'true');
+	const undo = toaster.appendChild(document.createElement('button'));
+	document.body.appendChild(toaster);
+	const onToast = { target: undo, preventDefault: jest.fn() };
+	const elsewhere = { target: document.body, preventDefault: jest.fn() };
+	const handler = mockInteractOutside.at(-1)!;
+	handler(onToast as unknown as Event);
+	handler(elsewhere as unknown as Event);
+	toaster.remove();
+	expect(onToast.preventDefault).toHaveBeenCalled();
+	expect(elsewhere.preventDefault).not.toHaveBeenCalled();
+	expect(onInteractOutside).toHaveBeenCalledTimes(2);
 });
