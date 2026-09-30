@@ -46,6 +46,29 @@ it('coarse composes visible cells and a caller trailing slot in a pressable row,
 	fireEvent.click(screen.getByTestId('cell-name'));
 	expect(onPress).toHaveBeenCalledTimes(1);
 });
+it('a labelled row is itself a button: a press on its cells is the row press', () => {
+	// #2284: the drill-in variation row names itself, so on web the row pressable renders a
+	// <button>. The inner-control guard found that very button and dropped every click.
+	const onPress = jest.fn();
+	renderTable({
+		renderItem: ({ item }: React.ComponentProps<typeof DataTableRow>) => (
+			<DataTableRow item={item} onPress={onPress} accessibilityLabel="Tea" />
+		),
+	});
+	fireEvent.click(screen.getByTestId('cell-name'));
+	expect(onPress).toHaveBeenCalledTimes(1);
+});
+it('a press on a control inside a cell stays that control’s', () => {
+	const onPress = jest.fn();
+	renderTable({
+		cells: { name: () => <button data-testid="cell-control">edit</button> },
+		renderItem: ({ item }: React.ComponentProps<typeof DataTableRow>) => (
+			<DataTableRow item={item} onPress={onPress} />
+		),
+	});
+	fireEvent.click(screen.getByTestId('cell-control'));
+	expect(onPress).not.toHaveBeenCalled();
+});
 it('keeps the pending search distinct from empty results', () => {
 	state.result = { hits: [], searchActive: true, searchState: 'pending' };
 	renderTable();

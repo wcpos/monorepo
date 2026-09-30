@@ -43,6 +43,8 @@ export function DataTableRow<TData extends RowData>({
 	accessibilityLabel?: string;
 }) {
 	const pointer = usePointer();
+	// On web the pressable's host node: the press guard below must tell it from inner controls.
+	const pressable = React.useRef<React.ElementRef<typeof Pressable>>(null);
 	const cells = item.getVisibleCells();
 	const content = (cell: (typeof cells)[number]) => (
 		<ErrorBoundary key={cell.id}>
@@ -71,6 +73,7 @@ export function DataTableRow<TData extends RowData>({
 			className="border-border flex-row items-center border-b"
 		>
 			<Pressable
+				ref={pressable}
 				// No `accessibilityRole="button"` by default: on web that renders a <button>, and the
 				// cells may carry their own controls (category chips, an edit icon), which may not
 				// nest in one. A caller whose row is the only control names it (`accessibilityLabel`).
@@ -85,12 +88,12 @@ export function DataTableRow<TData extends RowData>({
 									.nativeEvent?.target;
 								// `Element` exists on web only; Hermes has no DOM, and native's responder
 								// system already grants the innermost pressable.
-								if (
-									typeof Element !== 'undefined' &&
-									target instanceof Element &&
-									target.closest('button,[role="button"],a,input,select,textarea')
-								)
-									return;
+								// A labelled row IS a <button> on web, so the row itself is not an inner control.
+								const control =
+									typeof Element !== 'undefined' && target instanceof Element
+										? target.closest('button,[role="button"],a,input,select,textarea')
+										: null;
+								if (control && control !== (pressable.current as unknown)) return;
 								onPress(event);
 							}
 						: undefined

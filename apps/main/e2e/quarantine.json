@@ -33,12 +33,6 @@
 		},
 		{
 			"project": "free-authenticated",
-			"file": "pos-variations-drill-in.spec.ts",
-			"title": "drills into variations, adds a line and returns to products",
-			"group": "G2"
-		},
-		{
-			"project": "free-authenticated",
 			"file": "pos-variations.spec.ts",
 			"title": "POS Variations › should render the variation image the server sent",
 			"group": "G2"
