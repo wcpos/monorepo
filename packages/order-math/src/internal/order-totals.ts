@@ -292,7 +292,8 @@ export function calculateOrderTotals(
 	// set_total_tax / set_total consume them. set_total_tax uses HALF_UP even for inclusive prices.
 	const roundedCartTax = roundHalfUp(fullPrecisionCartTax, getRoundingPrecision(dp));
 	const roundedShippingTax = roundHalfUp(fullPrecisionShippingTax, getRoundingPrecision(dp));
-	// PHP round() pre-rounds to 15 significant digits; snap both sums before dp rounding.
+	// WC 10.1+ NumberUtil::round() normalizes to 6dp (WC_ROUNDING_PRECISION) before rounding to dp
+	// (set_total_tax, set_total), so both sums are snapped to 6dp here too.
 	const roundedTotalTax = taxRoundAtSubtotal
 		? roundHalfUp(roundHalfUp(roundedCartTax + roundedShippingTax, getRoundingPrecision(dp)), dp)
 		: roundTaxTotal(

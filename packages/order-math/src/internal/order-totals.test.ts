@@ -675,7 +675,7 @@ describe('calculateOrderTotals — parity regressions', () => {
 				],
 			});
 
-			// 0.105 + 0.06 = 0.16499999999999998; PHP rounds the midpoint up.
+			// 0.105 + 0.06 = 0.16499999999999998; WC NumberUtil::normalize snaps it to 0.165, which rounds up.
 			// WC total: round(3 + 1.20 + 0.105 + 0.06, 2) = 4.37.
 			expect(result).toMatchObject({
 				total_tax: '0.17',
@@ -703,7 +703,7 @@ describe('calculateOrderTotals — parity regressions', () => {
 				],
 			});
 
-			// 1.13 + 0.105 + 0 = 1.2349999999999999; PHP pre-rounds to the 1.235 midpoint.
+			// 1.13 + 0.105 + 0 = 1.2349999999999999; WC NumberUtil::normalize snaps it to the 1.235 midpoint.
 			expect(result).toMatchObject({ total: '1.24', cart_tax: '0.105', shipping_tax: '0' });
 		});
 
