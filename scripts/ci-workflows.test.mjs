@@ -1404,6 +1404,13 @@ test('the native E2E aggregator exists under the name the merge gate will requir
 	assert.equal(readWorkflow('test.yml').jobs.gallery.name, 'Gallery');
 });
 
+test('the web E2E test step stops before the job limit so the reports still upload', () => {
+	const job = readWorkflow('deploy.yml').jobs.e2e;
+	const step = job.steps.find(({ name }) => name?.startsWith('🧪 Run E2E tests'));
+	assert.equal(typeof step['timeout-minutes'], 'number');
+	assert.ok(step['timeout-minutes'] < job['timeout-minutes']);
+});
+
 test('the shared-store queue stays removed', () => {
 	// The queue job (2026-08-12 → 2026-08-18) starved every merge gate once
 	// 2+ PRs were active: holders kept the store 25–45 min, the gate polls a
