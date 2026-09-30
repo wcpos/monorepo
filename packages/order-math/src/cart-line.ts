@@ -385,7 +385,7 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 	const subtotal = price * quantity;
 
 	// Calculate taxes for total and subtotal
-	const totalTaxResult = calculateTaxesForValue(
+	let totalTaxResult = calculateTaxesForValue(
 		{
 			amount: total,
 			taxClass: lineItem.tax_class ?? '',
@@ -395,7 +395,7 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 		config
 	);
 
-	const subtotalTaxResult = calculateTaxesForValue(
+	let subtotalTaxResult = calculateTaxesForValue(
 		{
 			amount: subtotal,
 			taxClass: lineItem.tax_class ?? '',
@@ -414,6 +414,26 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 		},
 		config
 	);
+
+	// Calculate total and subtotal excluding tax
+	const totalExclTax = pricesIncludeTax ? total - totalTaxResult.total : total;
+	const subtotalExclTax = pricesIncludeTax ? subtotal - subtotalTaxResult.total : subtotal;
+
+	if (pricesIncludeTax && totalTaxResult.taxes.length > 0) {
+		// WC_Order_Item_Product::calculate_taxes → calc_tax( get_total(), rates, false ).
+		// Re-derive taxes from the emitted rounded net, preserving the gross-derived net (#2333 B).
+		const netTotal6 = roundHalfUp(totalExclTax, roundingPrecision);
+		const netSubtotal6 = roundHalfUp(subtotalExclTax, roundingPrecision);
+		const taxClass = lineItem.tax_class ?? '';
+		totalTaxResult = calculateTaxesForValue(
+			{ amount: netTotal6, amountIncludesTax: false, taxClass, taxStatus: tax_status },
+			config
+		);
+		subtotalTaxResult = calculateTaxesForValue(
+			{ amount: netSubtotal6, amountIncludesTax: false, taxClass, taxStatus: tax_status },
+			config
+		);
+	}
 
 	// total_tax / subtotal_tax come from the STORED per-rate array, never from the raw
 	// multi-rate sum — see sumStoredLineTax.
@@ -435,10 +455,6 @@ function computeLineItem(lineItem: LineItemInput, config: CartConfig): LineItemI
 		pricesIncludeTax,
 		taxRoundAtSubtotal
 	);
-
-	// Calculate total and subtotal excluding tax
-	const totalExclTax = pricesIncludeTax ? total - totalTaxResult.total : total;
-	const subtotalExclTax = pricesIncludeTax ? subtotal - subtotalTaxResult.total : subtotal;
 
 	// Calculate price per unit excluding tax
 	const priceWithoutTax = pricesIncludeTax ? price - perUnitTaxResult.total : price;

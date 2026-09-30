@@ -284,6 +284,158 @@ describe('calculateCartLine — line_item', () => {
 	});
 });
 
+describe('inclusive prices: line taxes re-derived from the 6dp net, as WC does (#2333 B)', () => {
+	const rate21: TaxRateInput = {
+		id: 1,
+		rate: '21.0000',
+		compound: false,
+		order: 1,
+		class: 'standard',
+		shipping: true,
+	};
+
+	it.each([
+		{ price: 40, quantity: 2, net: '66.115702', tax: '13.884297' },
+		{ price: 27.5, quantity: 2, net: '45.454545', tax: '9.545454' },
+		{ price: 585, quantity: 1, net: '483.471074', tax: '101.528926' },
+	])('€$price × $quantity, round-at-subtotal ON', ({ price, quantity, net, tax }) => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate21],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.total).toBe(net);
+		expect(line.subtotal).toBe(net);
+		expect(line.taxes).toEqual([{ id: 1, total: tax, subtotal: tax }]);
+		expect(line.total_tax).toBe(tax);
+		expect(line.subtotal_tax).toBe(tax);
+	});
+
+	it('€40 × 2 keeps the cents tax with round-at-subtotal OFF', () => {
+		const config = createCartConfig({ ...baseConfig, rates: [rate21], pricesIncludeTax: true });
+		const lineItem = {
+			quantity: 2,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 40, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(line.price).toBe(33.057851);
+		expect(line.total).toBe('66.115702');
+		expect(line.subtotal).toBe('66.115702');
+		expect(line.taxes).toEqual([{ id: 1, total: '13.884297', subtotal: '13.884297' }]);
+		expect(line.total_tax).toBe('13.88');
+		expect(line.subtotal_tax).toBe('13.88');
+	});
+
+	it('pins the complete output for an exclusive €66.115702 line', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate21],
+			pricesIncludeTax: false,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 1,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 66.115702, tax_status: 'taxable' })],
+		};
+
+		const result = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		expect(result).toEqual({
+			line: {
+				...lineItem,
+				price: 66.115702,
+				total: '66.115702',
+				subtotal: '66.115702',
+				total_tax: '13.884297',
+				subtotal_tax: '13.884297',
+				taxes: [{ id: 1, subtotal: '13.884297', total: '13.884297' }],
+			},
+			warnings: [],
+		});
+	});
+
+	it('re-derives 20% plus 2% compound tax from the inclusive €80 net', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate20, { ...rate20, id: 2, rate: '2.0000', compound: true, order: 2 }],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: true,
+		});
+		const lineItem = {
+			quantity: 2,
+			tax_class: 'standard',
+			meta_data: [posDataMeta({ price: 40, tax_status: 'taxable' })],
+		};
+
+		const { line } = calculateCartLine({ kind: 'line_item', line: lineItem }, config);
+
+		// net6 = round6(80 / 1.02 / 1.20) = 65.359477.
+		// VAT = 65.359477 × 0.20 = 13.0718954 → 13.071895.
+		// Compound = (65.359477 + 13.0718954) × 0.02 = 1.568627448 → 1.568627.
+		expect(line.total).toBe('65.359477');
+		expect(line.subtotal).toBe('65.359477');
+		expect(line.taxes).toEqual([
+			{ id: 1, total: '13.071895', subtotal: '13.071895' },
+			{ id: 2, total: '1.568627', subtotal: '1.568627' },
+		]);
+		expect(line.total_tax).toBe('14.640522');
+		expect(line.subtotal_tax).toBe('14.640522');
+	});
+
+	it('sums the issue’s five reconstructed lines to 154028925 integer microunits', () => {
+		const config = createCartConfig({
+			...baseConfig,
+			rates: [rate21],
+			pricesIncludeTax: true,
+			taxRoundAtSubtotal: true,
+		});
+		const fixtures = [
+			{ price: 585, quantity: 1, net: '483.471074', tax: '101.528926' },
+			{ price: 150, quantity: 1, net: '123.966942', tax: '26.033058' },
+			{ price: 40, quantity: 2, net: '66.115702', tax: '13.884297' },
+			{ price: 17.5, quantity: 1, net: '14.46281', tax: '3.03719' },
+			{ price: 27.5, quantity: 2, net: '45.454545', tax: '9.545454' },
+		];
+		const lines = fixtures.map(
+			({ price, quantity }) =>
+				calculateCartLine(
+					{
+						kind: 'line_item',
+						line: {
+							quantity,
+							tax_class: 'standard',
+							meta_data: [posDataMeta({ price, tax_status: 'taxable' })],
+						},
+					},
+					config
+				).line
+		);
+		const taxMicrounits = lines.reduce(
+			(sum, line) => sum + Math.round(Number(line.total_tax) * 1e6),
+			0
+		);
+
+		expect(taxMicrounits).toBe(154028925);
+		lines.forEach((line, index) => {
+			expect(line.total).toBe(fixtures[index].net);
+			expect(line.total_tax).toBe(fixtures[index].tax);
+		});
+	});
+});
+
 describe('calculateCartLine — fee', () => {
 	it('should correctly calculate fee line tax and totals when prices exclude tax', () => {
 		const config = createCartConfig({ ...baseConfig, rates: [rate20], pricesIncludeTax: false });
