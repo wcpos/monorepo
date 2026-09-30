@@ -103,12 +103,15 @@ function calcExclusiveTax({
  * Returns the calculated array of taxes tax, eg: [{ id: 1, total: 1.2345 }]
  *
  * @param dp - Price decimal places (wc_get_price_decimals), default 2
+ * @param perRatePrecision - Decimals each rate is rounded to. Defaults to the cart-space
+ *   precision below; order-item callers pass `getRoundingPrecision(dp)` (#2344).
  */
 export function calculateTaxes({
 	amount,
 	rates,
 	amountIncludesTax,
 	dp = 2,
+	perRatePrecision,
 }: {
 	amount: number;
 	rates: {
@@ -122,6 +125,7 @@ export function calculateTaxes({
 	}[];
 	amountIncludesTax: boolean;
 	dp?: number;
+	perRatePrecision?: number;
 }) {
 	// Sort rates matching WC_Tax::sort_rates_callback():
 	// 1. tax_rate_priority (ascending) — mapped to `order`
@@ -151,7 +155,7 @@ export function calculateTaxes({
 		if ((aState !== '') !== (bState !== '')) return aState !== '' ? -1 : 1;
 		return a.id - b.id;
 	});
-	const roundingPrecision = dp + getRoundingPrecision(dp);
+	const roundingPrecision = perRatePrecision ?? dp + getRoundingPrecision(dp);
 	const normalizedAmount = removeNumberPrecision(addNumberPrecision(amount, dp), dp);
 
 	const taxes = amountIncludesTax
@@ -159,12 +163,27 @@ export function calculateTaxes({
 		: calcExclusiveTax({ amount: normalizedAmount, rates: sortedRates });
 
 	/**
-	 * WooCommerce calculates in cents space, so WC_Tax::round()'s rounding precision
+	 * WC_Cart_Totals calculates in cents space, so WC_Tax::round()'s rounding precision
 	 * is effectively dp + wc_get_rounding_precision() decimals in currency space.
+	 *
+	 * An ORDER ITEM is different: `WC_Order_Item::calculate_taxes` calls `calc_tax` on the
+	 * currency-unit total, so WC_Tax::round() rounds once at wc_get_rounding_precision().
+	 * Rounding at dp + 6 first and then at 6 made a `…49x` (x ≥ 5) tail a midpoint and put
+	 * ~0.45% of lines at non-integer rates 1 µ above WooCommerce (#2344). Order-item callers
+	 * therefore pass `perRatePrecision`.
+	 *
+	 * That single round first pre-rounds to 15 significant digits, as PHP's round() does
+	 * (`_php_math_round` through PHP 8.3). Without it a true midpoint whose float product
+	 * lands an ulp low — 11.8885 × 5.5% = 0.6538675 → 0.65386749999… — would round down
+	 * where WooCommerce, and the old 8dp step, round up.
 	 */
+	const roundRate = (value: number) =>
+		perRatePrecision === undefined
+			? roundHalfUp(value, roundingPrecision)
+			: roundHalfUp(Number(value.toPrecision(15)), roundingPrecision);
 	const roundedItemizedTaxes = taxes.map((tax) => ({
 		id: tax.id,
-		total: roundHalfUp(tax.total, roundingPrecision),
+		total: roundRate(tax.total),
 	}));
 
 	/**
