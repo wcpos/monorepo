@@ -75,6 +75,59 @@ test.describe('Settings Area', () => {
 			timeout: 10_000,
 		});
 	});
+
+	/**
+	 * roadmap#398 S2: after a write the form's reactive `values` re-bind echoes a change for every
+	 * normalised field (Language, Number of decimals). Marking those echoes moved Saved off the
+	 * edited row (#2343 `savedKeys`, #2349). Sampled every 50 ms from the keystroke until the mark
+	 * clears, so a second mark that shows for a moment is still caught.
+	 */
+	test('should show Saved beside the edited store name only, then clear it', async ({
+		posPage: page,
+	}) => {
+		await openSettings(page);
+		const name = page.getByTestId('settings-general-name');
+		await expect(name).toBeVisible({ timeout: 10_000 });
+		const original = await name.inputValue();
+		const marks = page.locator('[data-testid^="settings-saved-"]');
+		const nameMark = page.getByTestId('settings-saved-name');
+		const seen = new Set<string>();
+
+		try {
+			// Typed, not filled: `fill` dispatches one synthetic input that the re-bind reverts.
+			await name.click();
+			await name.press('End');
+			await name.pressSequentially('x', { delay: 50 });
+			await expect
+				.poll(
+					async () => {
+						const ids = await marks.evaluateAll((els) =>
+							els.map((el) => (el as HTMLElement).dataset.testid ?? '')
+						);
+						ids.forEach((id) => seen.add(id));
+						return seen.has('settings-saved-name') && ids.length === 0;
+					},
+					// Debounced write, then the 1200 ms hold and its fade.
+					{ timeout: 4_000, intervals: [50] }
+				)
+				.toBe(true);
+			expect([...seen]).toEqual(['settings-saved-name']);
+		} finally {
+			if ((await name.inputValue()) !== original) {
+				await name.click();
+				await name.press('End');
+				await name.press('Backspace');
+				await expect(name).toHaveValue(original);
+				// Let the debounced restore write land before the page goes; never fail the test here.
+				await expect(nameMark)
+					.toBeVisible({ timeout: 5_000 })
+					.catch(() => {});
+				await expect(nameMark)
+					.toBeHidden({ timeout: 5_000 })
+					.catch(() => {});
+			}
+		}
+	});
 });
 
 test.describe('Language Settings', () => {

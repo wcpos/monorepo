@@ -99,6 +99,28 @@ describe('NavigationAreaLayout', () => {
 		expect(screen.getByTestId('settings-content')).toBeTruthy();
 	});
 
+	// md is the narrowest wide screen (a tablet in portrait): still the rail, still no crumb.
+	it('keeps the rail beside the screen with no crumb on the bar at md', () => {
+		mockScreenSize = 'md';
+		render(
+			<NavigationAreaLayout
+				items={items}
+				indexHref="/settings"
+				areaLabel="Settings"
+				testID="settings-navigation"
+				screenTestID="settings-screen"
+				barTestID="settings-bar"
+			>
+				<div data-testid="settings-content" />
+			</NavigationAreaLayout>
+		);
+
+		expect(screen.getByTestId('settings-navigation-rail')).toBeTruthy();
+		expect(screen.getByTestId('settings-content')).toBeTruthy();
+		expect(screen.queryByTestId('settings-navigation-back')).toBeNull();
+		expect(screen.getByTestId('settings-bar-title').textContent).toBe('Settings');
+	});
+
 	it('uses the leaf title and a single bar crumb to navigate a phone deep link to the index', () => {
 		mockScreenSize = 'sm';
 		render(
