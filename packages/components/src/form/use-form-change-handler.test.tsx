@@ -5,7 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 
 import { useFormChangeHandler } from './use-form-change-handler';
 
-type Values = { viewMode: string; enabled: boolean; columns?: string[] };
+type Values = { viewMode: string; enabled: boolean };
 
 /**
  * Mirrors the production call sites (the ui-settings forms): `onChange` is an inline
@@ -19,41 +19,17 @@ function Harness({
 	onChange: (changes: Partial<Values>) => void;
 	onRender: () => void;
 }) {
-	const form = useForm<Values>({
-		values: { viewMode: 'table', enabled: false, columns: ['a', 'b'] },
-	});
+	const form = useForm<Values>({ values: { viewMode: 'table', enabled: false } });
 	onRender();
 	useFormChangeHandler({ form, onChange: (changes) => onChange(changes) });
 	// Subscribe this component to the field so the change re-renders it (useWatch, not form.watch: the latter is lint-banned and opts the component out of the compiler).
 	useWatch({ control: form.control, name: 'viewMode' });
 	return (
-		<>
-			<button
-				type="button"
-				data-testid="pick"
-				onClick={() => form.setValue('viewMode', 'grid', { shouldDirty: true })}
-			/>
-			<button
-				type="button"
-				data-testid="echo"
-				onClick={() => form.setValue('viewMode', 'table', { shouldDirty: true })}
-			/>
-			<button
-				type="button"
-				data-testid="toggle-same"
-				onClick={() => form.setValue('enabled', false, { shouldDirty: true })}
-			/>
-			<button
-				type="button"
-				data-testid="columns-same"
-				onClick={() => form.setValue('columns', ['a', 'b'], { shouldDirty: true })}
-			/>
-			<button
-				type="button"
-				data-testid="columns-new"
-				onClick={() => form.setValue('columns', ['a', 'c'], { shouldDirty: true })}
-			/>
-		</>
+		<button
+			type="button"
+			data-testid="pick"
+			onClick={() => form.setValue('viewMode', 'grid', { shouldDirty: true })}
+		/>
 	);
 }
 
@@ -136,25 +112,52 @@ it('does not retarget a pending write to an onChange swapped in after the edit',
 
 /**
  * After a store patch lands, the reset's `values` make react-hook-form emit a NAMED event per
- * control that normalises its value, carrying the value the form already held. Those are not
- * changes and must not be written back (five idempotent writes per edit on General, 2026-09-30).
+ * control that normalises its value, carrying the value the form already holds (five idempotent
+ * writes per edit on General, seen 2026-09-30). `setValue` with an equal value emits nothing in
+ * jsdom, so the sequence observed live is replayed through a stub form's watch callback.
  */
 it('ignores a named event whose value equals the last one seen for that field', () => {
+	type Cb = (values: Record<string, unknown>, info: { name?: string }) => void;
+	let emit: Cb = () => {};
+	const values: Record<string, unknown> = {
+		name: 'Shop',
+		price_num_decimals: 2,
+		locale: 'es_ES',
+		columns: [{ show: true }],
+	};
+	const form = {
+		getValues: () => values,
+		watch: (cb: Cb) => {
+			emit = cb;
+			return { unsubscribe: () => {} };
+		},
+	} as unknown as Parameters<typeof useFormChangeHandler>[0]['form'];
 	const onChange = jest.fn();
-	const view = render(<Harness onChange={onChange} onRender={jest.fn()} />);
+	function Stub() {
+		useFormChangeHandler({ form, onChange, debounceMs: 0 });
+		return null;
+	}
+	render(<Stub />);
 
-	act(() => {
-		view.getByTestId('echo').click(); // viewMode is already 'table'
-		view.getByTestId('toggle-same').click(); // enabled is already false
-		view.getByTestId('columns-same').click(); // a new array, structurally the same
-		jest.advanceTimersByTime(1000);
-	});
-	expect(onChange).not.toHaveBeenCalled();
+	// The user's edit.
+	values.name = 'Shop two';
+	act(() => emit(values, { name: 'name' }));
+	expect(onChange).toHaveBeenCalledWith({ name: 'Shop two' });
 
+	// The store patch lands: a form-level reset, then the echoes — a numeric input's number as a
+	// string, a select's unchanged key — and the name itself again.
 	act(() => {
-		view.getByTestId('columns-new').click();
-		jest.advanceTimersByTime(1000);
+		emit(values, { name: undefined });
+		emit({ ...values, price_num_decimals: '2' }, { name: 'price_num_decimals' });
+		emit(values, { name: 'locale' });
+		emit(values, { name: 'name' });
 	});
 	expect(onChange).toHaveBeenCalledTimes(1);
-	expect(onChange).toHaveBeenCalledWith({ columns: ['a', 'c'] });
+
+	// A nested field that really changes still writes; the same array re-sent does not.
+	act(() => emit({ ...values, columns: [{ show: false }] }, { name: 'columns.0.show' }));
+	expect(onChange).toHaveBeenCalledTimes(2);
+	expect(onChange).toHaveBeenLastCalledWith({ 'columns.0.show': false });
+	act(() => emit({ ...values, columns: [{ show: false }] }, { name: 'columns.0.show' }));
+	expect(onChange).toHaveBeenCalledTimes(2);
 });
