@@ -525,18 +525,6 @@ function createWatchdog(
 	};
 }
 
-const TARGETED_RECOVERY =
-	/targeted recovery failed for (.+): (missing-primary-row|missing-index-row|no-valid-document|index-mismatch|recovered-document-too-large)/;
-function getTargetedRecovery(message: string): RegExpMatchArray | null {
-	if (!message.startsWith('could not requestRemote: {')) return null;
-	try {
-		const workerMessage = JSON.parse(message.slice('could not requestRemote: '.length))?.error
-			?.message;
-		return typeof workerMessage === 'string' ? workerMessage.match(TARGETED_RECOVERY) : null;
-	} catch {
-		return null;
-	}
-}
 /**
  * Classify an error from the RxDB storage layer and log it appropriately.
  * Returns true if the error was handled (callers may provide a fallback value).
@@ -548,11 +536,9 @@ function handleStorageError(
 	context: Record<string, unknown> = {}
 ): boolean {
 	const message = error instanceof Error ? error.message : String(error);
-	const targetedRecovery = getTargetedRecovery(message);
-	const candidate = targetedRecovery ? '' : message;
 
 	// CONFLICT errors (409) -- typically harmless, retried on next sync cycle
-	if (candidate.includes('CONFLICT') || candidate.includes('409')) {
+	if (message.includes('CONFLICT') || message.includes('409')) {
 		storageLogger.warn(`Write conflict in ${methodName}`, {
 			code: ERROR_CODES.RECORD_CONFLICT,
 			context: {
@@ -564,9 +550,9 @@ function handleStorageError(
 
 	// Schema validation errors (COL22)
 	if (
-		candidate.includes('COL22') ||
-		candidate.includes('schema validation') ||
-		candidate.includes('schema mismatch')
+		message.includes('COL22') ||
+		message.includes('schema validation') ||
+		message.includes('schema mismatch')
 	) {
 		storageLogger.warn(`Schema validation failed in ${methodName}`, {
 			code: ERROR_CODES.SCHEMA_MISMATCH,
@@ -578,7 +564,7 @@ function handleStorageError(
 	}
 
 	// IndexedDB key errors (null ID)
-	if (candidate.includes('No key or key range specified') || candidate.includes('No valid key')) {
+	if (message.includes('No key or key range specified') || message.includes('No valid key')) {
 		storageLogger.warn(`Invalid key in ${methodName}`, {
 			code: ERROR_CODES.SYNC_UNEXPECTED,
 			context: {
@@ -625,8 +611,6 @@ function handleStorageError(
 					remoteErrorName: remoteError.name,
 					remoteErrorMessage: remoteError.message,
 					remoteErrorCode: remoteError.code,
-					recoveryDocumentId: targetedRecovery?.[1],
-					recoveryFailure: targetedRecovery?.[2],
 				},
 			}
 		);

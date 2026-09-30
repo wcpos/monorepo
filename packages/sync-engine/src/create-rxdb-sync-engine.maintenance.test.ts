@@ -5,6 +5,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { newRxError } from 'rxdb';
 import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import {
@@ -34,8 +35,6 @@ afterEach(() => {
 
 const SITE = 'https://lab.example.test';
 let uniqueStore = 0;
-
-const refusalError = (reason: string) => new SyntaxError(`index reconciliation refused: ${reason}`);
 
 function freshIdentity(): StoreScopeIdentity {
 	uniqueStore += 1;
@@ -1172,7 +1171,7 @@ describe('maintenance lanes through the public handle', () => {
 		await engine.dispose();
 	});
 
-	it('keeps coverage subscribers live after a ledger rebuild replaces their collections', async () => {
+	it('keeps coverage subscribers live after COL21 reattaches ledger collections', async () => {
 		const diagnostics = vi.fn();
 		const engine = engineWith({ diagnostics, now: () => 1_000_000 });
 		await engine.ready;
@@ -1182,14 +1181,14 @@ describe('maintenance lanes through the public handle', () => {
 			(verdict) => verdicts.push(verdict)
 		);
 		vi.spyOn(RxCoverageRepository.prototype, 'readCoverageDocuments').mockRejectedValueOnce(
-			refusalError('unsorted-primary')
+			newRxError('COL21', { collection: 'coverageRecords' })
 		);
 
 		await expect(engine.sync('coverage-compaction')).resolves.toMatchObject({ status: 'ran' });
 		expect(diagnostics).toHaveBeenCalledWith(
 			expect.objectContaining({
-				type: 'coverage.ledger-rebuilt',
-				fields: { reason: 'unsorted-primary', trigger: 'coverage' },
+				type: 'coverage.ledger-reattached',
+				fields: { reason: 'COL21', trigger: 'coverage' },
 			})
 		);
 		const emissionsAfterRebuild = verdicts.length;
