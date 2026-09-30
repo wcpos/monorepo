@@ -44,7 +44,7 @@ async function firstRowQuantityDigits(page: Page): Promise<string> {
 async function activeOrderTabId(page: Page, notId?: string): Promise<string> {
 	// The register's tab strip (cart/v2/tabs.tsx) marks the active tab with aria-selected;
 	// the old Radix tabs' data-state="active" is gone.
-	const active = page.locator('[data-testid^="open-order-tab-"][aria-selected="true"]');
+	const active = page.getByTestId(/^open-order-tab-/).and(page.locator('[aria-selected="true"]'));
 	await expect
 		.poll(
 			async () => {
