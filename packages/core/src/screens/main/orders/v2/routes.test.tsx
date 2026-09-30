@@ -38,9 +38,11 @@ jest.mock('expo-router', () => ({
 		<a data-testid="redirect" href={`${href.pathname}?order=${href.params.order}`} />
 	),
 }));
-it('switches the protected index to the v2 orders screen', () => {
+// The screen guards its own body (the bar stays reachable on Free), so the route no longer wraps it.
+it('switches the index to the v2 orders screen, unwrapped', () => {
 	render(<OrdersRoute />);
-	expect(screen.getByTestId('guard-orders').contains(screen.getByTestId('new-orders'))).toBe(true);
+	expect(screen.getByTestId('new-orders')).toBeTruthy();
+	expect(screen.queryByTestId('guard-orders')).toBeNull();
 	expect(screen.queryByTestId('old-orders')).toBeNull();
 });
 it('redirects legacy detail links to the list selection', () => {

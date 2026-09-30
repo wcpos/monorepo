@@ -419,6 +419,16 @@ jest.mock('../../../../hooks/use-app-info', () => ({
 	useAppInfo: () => ({ license: { isPro: true } }),
 }));
 jest.mock('../../components/header/upgrade-notice', () => ({ UpgradeNotice: () => null }));
+jest.mock('../../components/pro-guard', () => ({
+	withProAccess: (Component: React.ComponentType<object>, page: string) =>
+		function Guarded(props: object) {
+			return (
+				<div data-testid={`guard-${page}`}>
+					<Component {...props} />
+				</div>
+			);
+		},
+}));
 jest.mock('@wcpos/components/v2/dialog', () => ({
 	Dialog: ({ children }: React.PropsWithChildren) => children,
 	DialogContent: ({ children }: React.PropsWithChildren) => (
@@ -476,4 +486,13 @@ it('ignores reselecting the same row and returns focus there when the pane close
 	} finally {
 		mockBinding.resource = original;
 	}
+});
+
+// A Free user below lg has no permanent rail: the bar's menu must stay outside the preview
+// overlay, which covers whatever the guard wraps.
+it('keeps the management bar outside the Pro guard and the list inside it', () => {
+	render(<OrdersScreen />);
+	const guard = screen.getByTestId('guard-orders');
+	expect(guard.contains(screen.getByTestId('orders-body'))).toBe(true);
+	expect(guard.contains(screen.getByTestId('search-orders'))).toBe(false);
 });

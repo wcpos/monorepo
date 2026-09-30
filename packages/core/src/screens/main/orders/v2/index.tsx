@@ -40,6 +40,7 @@ import { CreatedVia } from '../../components/order/created-via';
 import { Customer } from '../../components/order/customer';
 import { OrderNumber } from '../../components/order/order-number';
 import { PaymentMethod } from '../../components/order/payment-method';
+import { withProAccess } from '../../components/pro-guard';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useReferencedCustomerDemand } from '../../hooks/use-referenced-customer-demand';
 import {
@@ -245,13 +246,13 @@ function OrdersList({
 	);
 }
 
-function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<FiltersOf<'orders'>> }) {
+/** The list and the pane: the part of the page the Free preview overlay covers. */
+function OrdersBody({ initialFilters }: { initialFilters: Partial<FiltersOf<'orders'>> }) {
 	const state = useQueryState<'orders'>();
 	const actions = useQueryStateActions<'orders'>();
 	useBarcode(actions.setSearch);
 	const binding = useCollectionBinding('orders', state);
 	useReferencedCustomerDemand(binding.result$);
-	const { bottom } = useSafeAreaInsets();
 	const t = useT();
 	const phone = useIsPhone();
 	const { width } = useWindowDimensions();
@@ -259,8 +260,6 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 	const { order: selected } = useLocalSearchParams<{ order?: string }>();
 	const router = useRouter();
 	const selectedRow = React.useRef<ViewInstance>(null);
-	const { license } = useAppInfo();
-	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
 	const close = () => {
 		router.setParams({ order: undefined });
 		if (Platform.OS === 'web') selectedRow.current?.focus();
@@ -268,9 +267,8 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 	const pane = selected ? <OrderPane key={selected} selected={selected} onClose={close} /> : null;
 	return (
 		<View
-			testID="screen-orders"
-			className="bg-background flex-1 flex-row"
-			style={{ paddingBottom: bottom || undefined }}
+			testID="orders-body"
+			className="flex-1 flex-row"
 			onKeyDown={
 				Platform.OS === 'web'
 					? (event) => {
@@ -283,20 +281,6 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 			}
 		>
 			<View className="min-w-0 flex-1">
-				<ManagementBar
-					title={t('common.orders')}
-					testID="orders-bar"
-					search={
-						<QuerySearchInput
-							collectionName="orders"
-							testID="search-orders"
-							placeholder={t('orders.search_orders')}
-						/>
-					}
-				>
-					<DisplayOptions />
-				</ManagementBar>
-				{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 				<ErrorBoundary>
 					<Suspense fallback={<DataTableSkeleton id="orders" />}>
 						{/* Beside the pane the list has the pane's width left: below the desktop
@@ -341,6 +325,40 @@ function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<Filte
 						{pane}
 					</Animated.View>
 				))}
+		</View>
+	);
+}
+
+// The guard wraps the body only: on Free the preview overlay must leave the bar's menu, bell
+// and cashier reachable, or a Free user below lg has no way off this page (Codex review).
+const GuardedOrdersBody = withProAccess(OrdersBody, 'orders');
+
+function OrdersScreenContent({ initialFilters }: { initialFilters: Partial<FiltersOf<'orders'>> }) {
+	const { bottom } = useSafeAreaInsets();
+	const t = useT();
+	const { license } = useAppInfo();
+	const { showUpgrade, setShowUpgrade } = React.useContext(UpgradeNoticeContext);
+	return (
+		<View
+			testID="screen-orders"
+			className="bg-background flex-1"
+			style={{ paddingBottom: bottom || undefined }}
+		>
+			<ManagementBar
+				title={t('common.orders')}
+				testID="orders-bar"
+				search={
+					<QuerySearchInput
+						collectionName="orders"
+						testID="search-orders"
+						placeholder={t('orders.search_orders')}
+					/>
+				}
+			>
+				<DisplayOptions />
+			</ManagementBar>
+			{showUpgrade && !license?.isPro && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
+			<GuardedOrdersBody initialFilters={initialFilters} />
 		</View>
 	);
 }
