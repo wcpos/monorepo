@@ -172,8 +172,8 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           git fetch origin main next
-          if ! git merge-base --is-ancestor HEAD origin/main &&
-             ! git merge-base --is-ancestor HEAD origin/next; then
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main &&
+             ! git merge-base --is-ancestor HEAD refs/remotes/origin/next; then
             echo "::error::ref must resolve to a commit on the main or next branch"
             exit 1
           fi

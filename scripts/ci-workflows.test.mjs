@@ -3287,6 +3287,8 @@ cd clone
 git -c user.name=t -c user.email=t@t commit --allow-empty -m main
 git checkout -b next
 git -c user.name=t -c user.email=t@t commit --allow-empty -m next
+git checkout main
+git -c user.name=t -c user.email=t@t commit --allow-empty -m main-only
 git checkout -b stray main
 git -c user.name=t -c user.email=t@t commit --allow-empty -m stray
 git push origin main next`,
@@ -3305,6 +3307,12 @@ git push origin main next`,
 				assert.equal(result.status, 0, `${branch}: ${result.stdout}${result.stderr}`);
 			}
 		}
+
+		const spoof = runShell('git tag origin/next stray && git checkout stray', { cwd: clone });
+		assert.equal(spoof.status, 0, spoof.stdout + spoof.stderr);
+		const result = runShell(step.run, { cwd: clone });
+		assert.notEqual(result.status, 0, result.stdout + result.stderr);
+		assert.match(result.stdout, /must resolve to a commit on the main or next branch/);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
